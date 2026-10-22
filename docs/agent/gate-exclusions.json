@@ -301,13 +301,6 @@
       "symbol": "REF_SKIP_WARNING",
       "reason": "Not an exclusion of the subject but the opposite: the regex names the two warnings `git for-each-ref` prints when it silently SKIPS a ref it cannot read, so that a listing carrying either is treated as a hard failure (an unreadable ref is an unknown, and unknown is not clean) instead of a shorter list that reads as complete.",
       "date": "2026-10-08"
-    },
-    {
-      "path": "scripts/check-verdict-tone-source.mjs",
-      "symbol": "BG_FLOOR_EXEMPT",
-      "reason": "The desktop tree's .bg-status-* floor is waived: outcome-tone.ts failModeTone() returns bg-status-allow/5 and bg-status-deny/5 (rendered by pages/Policies.tsx) while index.css declares no .bg-status-* rules (plan row 153). The waiver HIDES in-scope content (a chip that renders no tint, with fail-closed wearing the allow class). It is printed on every run and a hand is raised (artifacts/raised-hands/2026-10-22-artifacts-signalgrid-desktop-src-lib-outcome-ton.json); delete the entry when the desktop tree is fixed.",
-      "date": "2026-10-22",
-      "finding": true
     }
   ]
 }

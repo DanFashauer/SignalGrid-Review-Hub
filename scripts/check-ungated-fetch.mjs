@@ -84,7 +84,7 @@
 // imports `createEmitterResolver` — so a seventh emitter family is covered the day it
 // is added, and a hand-maintained copy of the list cannot go stale.
 
-import { readFileSync, readdirSync, mkdtempSync, mkdirSync, rmSync, cpSync } from "node:fs";
+import { readFileSync, readdirSync, mkdtempSync, mkdirSync, rmSync, cpSync, lstatSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { execFileSync, spawnSync } from "node:child_process";
 import { resolve, dirname, join } from "node:path";
@@ -188,14 +188,21 @@ function callSitesGated(text, name, gateTokens) {
  * A missing `resolve.ts` (ENOENT) is a legitimate skip — the directory is not a
  * family. Any other read error means a resolve.ts is present but unreadable, so the
  * family list would silently shrink; it is pushed onto `unreadable` for the caller
- * to fail on (same shape as check-emitter-wire-discipline.mjs).
+ * to fail on (same shape as check-emitter-wire-discipline.mjs). `isPresent` (an lstat in
+ * the real call) separates a truly absent resolve.ts from a dangling symlink.
  */
-export function deriveEmitterFamilies(readDir, readFile, unreadable = []) {
+export function deriveEmitterFamilies(readDir, readFile, unreadable = [], isPresent = () => false) {
   const families = [];
   for (const entry of readDir()) {
     let src;
     try { src = readFile(`${entry}/resolve.ts`); }
-    catch (e) { if (e.code !== "ENOENT") unreadable.push(`${entry}/resolve.ts: ${e.message}`); continue; }
+    catch (e) {
+      // ENOENT is "absent" only if nothing is there: a dangling symlink, or a file that vanished after the
+      // directory was listed, is a resolver that is PRESENT but unreadable.
+      if (e.code !== "ENOENT") unreadable.push(`${entry}/resolve.ts: ${e.message}`);
+      else if (isPresent(`${entry}/resolve.ts`)) unreadable.push(`${entry}/resolve.ts: present but unreadable (${e.message})`);
+      continue;
+    }
     if (/createEmitterResolver/.test(src)) families.push(entry);
   }
   return families.sort();
@@ -666,6 +673,31 @@ function selfTest() {
       const fams = deriveEmitterFamilies(() => ["nope"], (rel) => readFileSync(resolve(repoRoot, "nope-no-such-dir", rel), "utf8"), u);
       return u.length === 0 && fams.length === 0;
     })()],
+    ["a read failing with EACCES is reported, not skipped", (() => {
+      const u = [];
+      deriveEmitterFamilies(() => ["x"], () => { throw Object.assign(new Error("denied"), { code: "EACCES" }); }, u);
+      return u.length === 1;
+    })()],
+    ["a read failing with ELOOP is reported, not skipped", (() => {
+      const u = [];
+      deriveEmitterFamilies(() => ["x"], () => { throw Object.assign(new Error("loop"), { code: "ELOOP" }); }, u);
+      return u.length === 1;
+    })()],
+    ["an ENOENT where something IS present (isPresent) is reported", (() => {
+      const u = [];
+      deriveEmitterFamilies(() => ["x"], () => { throw Object.assign(new Error("gone"), { code: "ENOENT" }); }, u, () => true);
+      return u.length === 1 && /present but unreadable/.test(u[0]);
+    })()],
+    ["a real DANGLING symlink resolve.ts is reported (lstat sees it, readFile says ENOENT)", (() => {
+      const root = mkdtempSync(join(tmpdir(), "ungated-fetch-sym-"));
+      try {
+        mkdirSync(join(root, "fam"));
+        symlinkSync(join(root, "no-such-target.ts"), join(root, "fam", "resolve.ts"));
+        const u = [];
+        const fams = deriveEmitterFamilies(() => ["fam"], (rel) => readFileSync(join(root, rel), "utf8"), u, (rel) => { try { lstatSync(join(root, rel)); return true; } catch { return false; } });
+        return u.length === 1 && u[0].startsWith("fam/resolve.ts: ") && fams.length === 0;
+      } finally { rmSync(root, { recursive: true, force: true }); }
+    })()],
     ["an ENOENT that is only a message, with no .code, IS reported (the old fixture shape)",
       (() => { const u = []; deriveEmitterFamilies(() => ["graph"], () => { throw new Error("ENOENT"); }, u); return u.length === 1; })()],
     // The WHOLE gate, run as a child process against a temp git repo holding a copy of
@@ -683,19 +715,27 @@ function selfTest() {
           // report is the only thing that can fail the run (replacing a real family's
           // resolve.ts would also trip that floor and hide a dropped exit).
           const fam = plant ? "zz-planted" : null;
-          if (plant) mkdirSync(join(tmp, SCAN_ROOT, fam, "resolve.ts"), { recursive: true });
+          if (plant === "dir") mkdirSync(join(tmp, SCAN_ROOT, fam, "resolve.ts"), { recursive: true });
           scratchGitOk(tmp, ["init", "-q"]);
           scratchGitOk(tmp, ["add", "-A"]);
+          // After the index is built: a TRACKED dangling file would crash the scan before the derivation report.
+          if (plant === "dangling") {
+            mkdirSync(join(tmp, SCAN_ROOT, fam), { recursive: true });
+            symlinkSync(join(tmp, "no-such-target.ts"), join(tmp, SCAN_ROOT, fam, "resolve.ts"));
+          }
           const r = spawnSync(process.execPath, ["scripts/check-ungated-fetch.mjs"], { cwd: tmp, encoding: "utf8", env: scratchGitEnv() });
           return { status: r.status, text: `${r.stdout}${r.stderr}`, fam };
         } finally { rmSync(tmp, { recursive: true, force: true }); }
       };
       const control = run(false);
-      const planted = run(true);
+      const planted = run("dir");
+      const dangling = run("dangling");
       return [
         ["end to end: the gate over an untouched copy of its roots exits 0 (control)", control.status === 0],
         ["end to end: a DIRECTORY named resolve.ts makes the whole gate exit 1, naming the path",
           planted.status === 1 && planted.text.includes(`${planted.fam}/resolve.ts`) && /EISDIR/.test(planted.text)],
+        ["end to end: a DANGLING SYMLINK resolve.ts makes the whole gate exit 1, naming the path",
+          dangling.status === 1 && dangling.text.includes(`${dangling.fam}/resolve.ts: present but unreadable`)],
       ];
     })(),
     ["the real tree still yields at least six emitter families",
@@ -732,6 +772,7 @@ const EMITTER_FAMILIES = deriveEmitterFamilies(
       .map((d) => d.name),
   (rel) => readFileSync(resolve(repoRoot, SCAN_ROOT, rel), "utf8"),
   unreadableResolvers,
+  (rel) => { try { lstatSync(resolve(repoRoot, SCAN_ROOT, rel)); return true; } catch { return false; } },
 );
 const EMITTER_FAMILY_RE = new RegExp(`/(${EMITTER_FAMILIES.map((f) => f.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})/`);
 

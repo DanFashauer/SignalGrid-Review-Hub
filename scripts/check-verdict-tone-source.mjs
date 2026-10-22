@@ -28,7 +28,7 @@
 // the edit is one reviewable line. Option (b) of row 168, distinct rendered
 // values, is still open.
 
-import { readFileSync, readdirSync, statSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { readFileSync, readdirSync, statSync, mkdtempSync, mkdirSync, writeFileSync, rmSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -520,21 +520,38 @@ export function toneRecordProblems(src, expected = []) {
 
 /**
  * Judge a stylesheet: each `.text-status-X` / `.bg-status-X` rule must resolve to
- * the registry token for X, reading the LAST declaration of each colour property
- * (CSS applies the last); a `.bg-status-X` also judges its text colour and its
- * `border-color`. A selector that names a verdict status class in any shape other
- * than the single canonical class (a selector list, a pseudo or `:where()`
- * override, a Tailwind `@utility`) cannot be judged and is a problem, not a skip.
+ * the registry token for X. Each colour is read as the declaration CSS would apply
+ * (the last one, unless an earlier `!important` wins) and must be, in full, an
+ * `hsl(var(--decision-…))` expression: the tokens are HSL channel triples, so a bare
+ * `var(--decision-…)`, a fallback chain or `color-mix()` is a colour the browser
+ * would drop, and is a problem rather than a match on a substring. A
+ * `.bg-status-X` also judges its text colour and its `border-color`. Not judgeable,
+ * hence problems: a selector naming a verdict status class in any shape other than
+ * the single canonical class (a list, a pseudo or `:where()` override, a Tailwind
+ * `@utility`); a `--decision-*` custom property re-declared inside the rule; a
+ * `background` / `border` / `all` shorthand that could override what was read.
  * `found` is the set of canonical `kind:verdict` rules, for the caller's floor.
  */
+const COLOUR_EXPR = /^hsl\(\s*var\(\s*(--decision-(?:allow|review|deny))(-on-tint)?\s*\)\s*(?:\/\s*[\d.]+%?\s*)?\)$/;
+function effectiveDecl(body, prop) {
+  const decls = [...body.matchAll(new RegExp(`(?<![\\w-])${prop}\\s*:\\s*([^;]*)`, "g"))].map((m) => {
+    const raw = m[1].trim();
+    return { imp: /!\s*important\s*$/i.test(raw), value: raw.replace(/\s*!\s*important\s*$/i, "").trim() };
+  });
+  if (decls.length === 0) return undefined;
+  const important = decls.filter((d) => d.imp);
+  return (important.length > 0 ? important : decls).at(-1).value;
+}
+const tokenOf = (decl, allowOnTint) => {
+  const m = COLOUR_EXPR.exec(decl ?? "");
+  return m && (allowOnTint || !m[2]) ? m[1] : undefined;
+};
 export function cssToneProblems(src) {
   const code = src.replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, ""));
   const problems = [];
   const found = new Set();
   let rules = 0;
   const lineOf = (i) => code.slice(0, i).split("\n").length;
-  const last = (body, prop) => [...body.matchAll(new RegExp(`(?<![\\w-])${prop}\\s*:\\s*([^;]*)`, "g"))].at(-1)?.[1];
-  const tokenOf = (decl) => decl?.match(/var\(\s*(--decision-(?:allow|review|deny))(?:-on-tint)?\s*[,)]/)?.[1];
   for (const m of code.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
     const selector = m[1].trim();
     if (!/\b(?:text|bg|border)-status-(?:allow|step-up|restrict|deny)\b/.test(selector)) continue;
@@ -546,17 +563,78 @@ export function cssToneProblems(src) {
     found.add(`${kind}:${verdict}`);
     const want = VERDICT_REGISTRY[verdict].token;
     const at = `line ${line}: .${kind}-status-${verdict}`;
+    const body = m[2];
+    if (/(?<![\w-])--decision-[\w-]*\s*:/.test(body)) problems.push(`${at} re-declares a --decision-* custom property inside the rule — it cannot be judged`);
+    for (const sh of kind === "bg" ? ["background", "border", "all"] : ["all"]) {
+      if (new RegExp(`(?<![\\w-])${sh}\\s*:`).test(body)) problems.push(`${at} uses the \`${sh}\` shorthand, which can override a colour read here — it cannot be judged`);
+    }
     const checks = kind === "text"
-      ? [["color", last(m[2], "color"), true]]
-      : [["background-color", last(m[2], "background-color"), true], ["color", last(m[2], "color"), true], ["border-color", last(m[2], "border-color"), false]];
-    for (const [prop, decl, required] of checks) {
-      const got = tokenOf(decl);
+      ? [["color", false, true]]
+      : [["background-color", false, true], ["color", true, true], ["border-color", false, false]];
+    for (const [prop, onTint, required] of checks) {
+      const decl = effectiveDecl(body, prop);
       if (decl === undefined && !required) continue;
-      if (!got) problems.push(`${at} ${prop} resolves to no --decision-* token`);
+      const got = tokenOf(decl, onTint);
+      if (!got) problems.push(`${at} ${prop} resolves to no --decision-* token (expected \`hsl(var(${want}))\`)`);
       else if (got !== want) problems.push(`${at} ${prop} paints ${got}, its registry token is ${want}`);
     }
   }
   return { rules, found, problems };
+}
+
+/**
+ * Inside a tone module: a branch on a verdict literal must return that verdict's own
+ * class (`outcome === "deny" ? "text-status-allow"`, `if (outcome === "deny") return …`,
+ * `case "deny": return …`). The Records are judged by `toneRecordProblems`; this is the
+ * same rule for the other shape a tone module's helper can take. The ELSE arm of a
+ * ternary and the `??` fallback are not judged here (the fallback's direction is its
+ * own rule); a verdict choice made by any other construct is a stated ceiling.
+ */
+export function toneArmProblems(src) {
+  const code = stripComments(src);
+  const out = [];
+  const arm = /(?:===|==)\s*(["'])([a-z_-]+)\1\s*(?:\?|\)\s*(?:\{\s*)?return\b)\s*(["'`])((?:\\.|(?!\3)[^\\])*)\3|\bcase\s+(["'])([a-z_-]+)\5\s*:\s*(?:\{\s*)?return\s*(["'`])((?:\\.|(?!\7)[^\\])*)\7/g;
+  for (const m of code.matchAll(arm)) {
+    const key = m[2] ?? m[6];
+    const value = m[4] ?? m[8];
+    const verdict = KEY_VERDICT[key];
+    if (!verdict) continue;
+    for (const c of value.matchAll(/\b(?:text|bg|border)-status-([a-z-]+)/g)) {
+      if (c[1] !== verdict) out.push(`line ${code.slice(0, m.index).split("\n").length}: a branch on "${key}" returns status-${c[1]}, its own class is status-${verdict}`);
+    }
+  }
+  return out;
+}
+
+/**
+ * The stylesheets a tree actually loads: those a source file imports (`import
+ * "./index.css"`, `"@/index.css"`), plus anything those `@import`. A stylesheet that
+ * nothing loads cannot supply the floor, however many rules it holds.
+ */
+export function loadedStylesheets(rootDir, sources, readFile = readFileSync) {
+  const loaded = new Set();
+  const errs = [];
+  const add = (p) => { if (!loaded.has(p)) { loaded.add(p); return true; } return false; };
+  const queue = [];
+  for (const f of sources) {
+    let text;
+    try { text = stripComments(readFile(f, "utf8")); } catch (e) { errs.push(`${f}: ${e.code ?? e.message}`); continue; }
+    for (const m of text.matchAll(/\bimport\s*(?:[^;"'`]*?\bfrom\s*)?["']((?:\.{1,2}\/|@\/)[^"']+\.css)["']/g)) {
+      const p = m[1].startsWith("@/") ? join(rootDir, m[1].slice(2)) : join(dirname(f), m[1]);
+      if (add(p)) queue.push(p);
+    }
+  }
+  while (queue.length > 0) {
+    const css = queue.shift();
+    let text;
+    try { text = readFile(css, "utf8"); } catch (e) { if (e.code !== "ENOENT") errs.push(`${css}: ${e.code ?? e.message}`); continue; }
+    for (const m of text.matchAll(/@import\s+(?:url\()?["']([^"')]+\.css)["']/g)) {
+      if (!/^[./]/.test(m[1])) continue;
+      const p = join(dirname(css), m[1]);
+      if (add(p)) queue.push(p);
+    }
+  }
+  return { loaded, errs };
 }
 
 /**
@@ -574,7 +652,9 @@ function walk(dir, re = /\.tsx?$/, out = [], errs = []) {
   }
   for (const name of entries) {
     const full = join(dir, name);
-    if (statSync(full).isDirectory()) walk(full, re, out, errs);
+    let st;
+    try { st = statSync(full); } catch (e) { errs.push(`${full}: ${e.code ?? e.message}`); continue; }
+    if (st.isDirectory()) walk(full, re, out, errs);
     else if (re.test(full)) out.push(full);
   }
   return { files: out, errs };
@@ -795,17 +875,19 @@ async function selfTest() {
   const e2e = async (label, expectCode, expectInErr, plant = {}) => {
     const dir = mkdtempSync(join(tmpdir(), "tone-gate-"));
     try {
-      const { cssRoots, ...planted } = plant;
-      const files = { "a/src/lib/outcome-tone.ts": e2eTone, "a/src/index.css": e2eCss, ...planted };
+      const { cssRoots, discover, readFile, ...planted } = plant;
+      const files = { "a/src/lib/outcome-tone.ts": e2eTone, "a/src/index.css": e2eCss, "a/src/main.tsx": 'import "./index.css";\n', ...planted };
       for (const [f, text] of Object.entries(files)) {
         mkdirSync(dirname(join(dir, f)), { recursive: true });
-        writeFileSync(join(dir, f), text);
+        if (text !== null && typeof text === "object" && "symlink" in text) symlinkSync(text.symlink, join(dir, f));
+        else writeFileSync(join(dir, f), text);
       }
       const r = await runGate({
         root: dir, trees: ["a/src"], toneModules: { "a/src/lib/outcome-tone.ts": ["OUTCOME_TONE"] },
-        cssRoots: cssRoots ?? ["a/src"], chartMapRequired: new Set(), bgFloorExempt: {},
+        cssRoots: cssRoots ?? ["a/src"], chartMapRequired: new Set(), discover: discover ?? null,
+        readFile: readFile ? (f, enc) => readFile(f, enc, dir) : readFileSync,
       });
-      checks.push([`end to end: ${label}`, r.code === expectCode && r.err.join("\n").includes(expectInErr)]);
+      checks.push([`end to end: ${label}`, r.code === expectCode && [].concat(expectInErr).every((x) => r.err.join("\n").includes(x))]);
     } finally { rmSync(dir, { recursive: true, force: true }); }
   };
   await e2e("a clean temp tree exits 0 (control — the lane is not red by default)", 0, "");
@@ -820,6 +902,62 @@ async function selfTest() {
   await e2e("a selector list exits 1", 1, "canonical single-class shape", { "a/src/index.css": e2eCss.replace(".text-status-deny {", ".text-status-deny, .x {") });
   await e2e("an inline verdict ternary in a page exits 1, naming the page", 1, "a/src/Page.tsx", { "a/src/Page.tsx": 'export const P = ({ d }) => <i className={d.outcome === "deny" ? "text-status-deny" : "text-status-allow"} />;\n' });
   await e2e("a CSS root that is a FILE (readdir ENOTDIR) exits 1, not a quiet skip", 1, "ENOTDIR", { cssRoots: ["a/src", "a/src/index.css"] });
+
+  // ── Round 3 (F1–F13) ────────────────────────────────────────────────────────
+  const TREE_B_CHIP = 'export const C = () => <i className="bg-status-deny" />;\n';
+  await e2e("F1: the Tailwind opacity form `bg-status-allow/5` is a different class and does not demand a bare rule", 0, "", { "a/src/Chip.tsx": 'export const C = () => <i className="border-status-allow/20 bg-status-allow/5 text-status-allow" />;\n' });
+  await e2e("F1: a template form `bg-status-${v}` does demand the bare rules", 1, "no canonical .bg-status-", { "a/src/Chip.tsx": "export const C = ({ v }) => <i className={`bg-status-${v}`} />;\n" });
+  await e2e("F1: a bare use beside the opacity form still demands the rules", 1, "no canonical .bg-status-", { "a/src/Chip.tsx": 'export const C = () => <i className="bg-status-step-up bg-status-allow/5" />;\n' });
+  await e2e("F3: a mis-paired verdict ternary INSIDE a tone module exits 1", 1, "a branch on \"deny\" returns status-allow", { "a/src/lib/outcome-tone.ts": e2eTone + 'export function t2(outcome: string): string { return outcome === "deny" ? "text-status-allow" : outcome === "allow" ? "text-status-deny" : "text-status-restrict"; }\n' });
+  await e2e("F3: a correctly paired helper inside a tone module still exits 0", 0, "", { "a/src/lib/outcome-tone.ts": e2eTone + 'export function t2(outcome: string): string { return outcome === "deny" ? "text-status-deny" : "text-status-restrict"; }\n' });
+  const swappedMarks = 'const OUTCOME_CHART_MARK = { allow: { dataKey: "allow", token: "--decision-deny", pattern: "solid" }, "step-up": { dataKey: "stepUp", token: "--decision-review", pattern: "solid" }, restrict: { dataKey: "restrict", token: "--decision-deny", pattern: "hatch" }, deny: { dataKey: "deny", token: "--decision-allow", pattern: "solid" } };\nconst hatchPatternId = (o: string) => `h-${o}`;\nfunction chartFill(o: string) { const m = (OUTCOME_CHART_MARK as any)[o]; return m.pattern === "hatch" ? `url(#${hatchPatternId(o)})` : `hsl(var(${m.token}))`; }\nconst HATCH_PATTERN = { size: 4, stripeWidth: 2 };\nexport { OUTCOME_CHART_MARK, chartFill, hatchPatternId, HATCH_PATTERN };\n';
+  await e2e("F4: a chart map exported through `export { … }` with swapped tokens exits 1", 1, "not its ratified", { "a/src/lib/outcome-tone.ts": e2eTone + swappedMarks });
+  await e2e("F4: ...and the same module with sound tokens exits 0", 0, "", { "a/src/lib/outcome-tone.ts": e2eTone + swappedMarks.replace('token: "--decision-deny", pattern: "solid" }, "step-up"', 'token: "--decision-allow", pattern: "solid" }, "step-up"').replace('deny: { dataKey: "deny", token: "--decision-allow"', 'deny: { dataKey: "deny", token: "--decision-deny"') });
+  await e2e("F5: a second app tree with a tone module the lists omit exits 1", 1, "missing from the gate's tone-module or tree list", { discover: "d", "d/other/src/lib/outcome-tone.ts": e2eTone, "a/x.txt": "x" });
+  await e2e("F5: a second app tree with verdict CSS the stylesheet roots omit exits 1", 1, "missing from the gate's stylesheet roots", { discover: "d", "d/other/src/index.css": e2eCss });
+  await e2e("F9: rules moved to a stylesheet NOTHING imports do not satisfy the floor", 1, "no canonical .text-status-allow rule in a stylesheet this tree loads", { "a/src/index.css": "/* nothing */", "a/src/index.backup.css": e2eCss });
+  await e2e("F9: rules reached through an @import of the loaded stylesheet do satisfy it", 0, "", { "a/src/index.css": '@import "./tokens.css";\n', "a/src/tokens.css": e2eCss });
+  await e2e("F12: a stylesheet root with sources but no stylesheet at all exits 1", 1, "no canonical .text-status-allow rule", { cssRoots: ["a/src", "b/src"], "b/src/x.tsx": "export const x = 1;\n" });
+  await e2e("F11: a dangling symlink SOURCE file in a stylesheet root outside the trees is reported", 1, "b/src/dangling.tsx", { cssRoots: ["a/src", "b/src"], "b/src/main.tsx": 'import "./index.css";\n', "b/src/index.css": e2eCss, "b/src/dangling.tsx": { symlink: "/nonexistent-target.tsx" } });
+  await e2e("F11: a dangling symlink stylesheet is reported, not skipped", 1, "dangling.css", { "a/src/dangling.css": { symlink: "/nonexistent-target.css" } });
+  const denyRead = (suffix) => (f, enc, dir) => { if (f.endsWith(suffix)) throw Object.assign(new Error("EACCES: denied"), { code: "EACCES" }); return readFileSync(f, enc); };
+  await e2e("F11/F12: an unreadable stylesheet exits 1, naming it", 1, "a/src/index.css — unreadable (EACCES)", { readFile: denyRead("index.css") });
+  await e2e("F11/F12: an unreadable tone module exits 1, naming it", 1, "a/src/lib/outcome-tone.ts — unreadable (EACCES); a tone module that cannot be read", { readFile: denyRead("outcome-tone.ts") });
+  await e2e("F11: an unreadable source file exits 1, reported by the inline scan AND the bg-status-* search", 1, ["a/src/Chip.tsx — unreadable (EACCES); not inline-scanned", "a/src/Chip.tsx — unreadable (EACCES); not searched for bg-status-* use"], { "a/src/Chip.tsx": TREE_B_CHIP, readFile: denyRead("Chip.tsx") });
+  // F5 against the REAL lists: shortening them must fail, and the real run is a control.
+  const real0 = await runGate(REAL_CONFIG);
+  checks.push(["F5: the REAL config exits 0 inside the self-test (control)", real0.code === 0]);
+  const real1 = await runGate({ ...REAL_CONFIG, cssRoots: TREES });
+  checks.push(["F5: dropping signalgrid-app from the stylesheet roots exits 1", real1.code === 1 && real1.err.join("\n").includes("artifacts/signalgrid-app/src")]);
+  const real2 = await runGate({ ...REAL_CONFIG, trees: TREES.filter((t) => !t.includes("mobile-pwa")) });
+  checks.push(["F5: dropping the PWA from the trees exits 1", real2.code === 1 && real2.err.join("\n").includes("artifacts/signalgrid-mobile-pwa/src")]);
+  const { [Object.keys(TONE_EXPECTED)[2]]: _dropped, ...fewer } = TONE_EXPECTED;
+  const real3 = await runGate({ ...REAL_CONFIG, toneModules: fewer });
+  checks.push(["F5: dropping the review tone module from the list exits 1", real3.code === 1 && real3.err.join("\n").includes("artifacts/signalgrid-review/src")]);
+  // F3 units.
+  const armGood = 'export function t(outcome: string) { return outcome === "deny" ? "text-status-deny" : outcome === "allow" ? "text-status-allow" : "text-status-restrict"; }';
+  checks.push(["F3: correctly paired arms pass", toneArmProblems(armGood).length === 0]);
+  checks.push(["F3 MUTANT a mis-paired ternary arm is RED", toneArmProblems(armGood.replace('"deny" ? "text-status-deny"', '"deny" ? "text-status-allow"')).length === 1]);
+  checks.push(["F3 MUTANT a mis-paired `if … return` is RED", toneArmProblems('if (o === "deny") { return "text-status-allow"; }').length === 1 && toneArmProblems('if (o === "deny") return "text-status-allow";').length === 1]);
+  checks.push(["F3 MUTANT a mis-paired `case … return` is RED", toneArmProblems('switch (o) { case "deny": return "text-status-allow"; }').length === 1]);
+  checks.push(["F3: a branch on a non-verdict literal is not judged", toneArmProblems('return m === "fail-closed" ? "text-status-allow" : "text-status-deny";').length === 0]);
+  // F7/F8/F10 units.
+  const cssRule = (decl) => `.text-status-deny { ${decl} }`;
+  checks.push(["F7 MUTANT a bare var(--decision-*) (not a colour) is RED", cp(cssRule("color: var(--decision-deny);")).length === 1]);
+  checks.push(["F7 MUTANT a var() fallback chain is RED", cp(cssRule("color: hsl(var(--evil, var(--decision-deny)));")).length === 1]);
+  checks.push(["F7 MUTANT color-mix() is RED", cp(cssRule("color: color-mix(in srgb, hsl(var(--decision-deny)), red);")).length === 1]);
+  checks.push(["F7 MUTANT a longer token name (--decision-deny-x) is RED", cp(cssRule("color: hsl(var(--decision-deny-x));")).length === 1]);
+  checks.push(["F7 MUTANT a --decision-* re-declared inside the rule is RED", cp(cssRule("--decision-deny: var(--decision-allow); color: hsl(var(--decision-deny));")).some((m) => /re-declares/.test(m))]);
+  checks.push(["F7: an alpha on the colour is accepted", cp(cssRule("color: hsl(var(--decision-deny) / 0.5);")).length === 0]);
+  checks.push(["F8 MUTANT an earlier !important wins over a later plain declaration (RED)", cp(cssRule("color: hsl(var(--decision-allow)) !important; color: hsl(var(--decision-deny));")).some((m) => /paints --decision-allow/.test(m))]);
+  checks.push(["F8: an earlier !important DENY wins over a later wrong plain one (passes)", cp(cssRule("color: hsl(var(--decision-deny)) !important; color: hsl(var(--decision-allow));")).length === 0]);
+  checks.push(["F10 MUTANT a `background` shorthand in a .bg-status-* rule is RED", cp(goodCss.replace(".bg-status-deny { background-color:", ".bg-status-deny { background: red; background-color:")).some((m) => /shorthand/.test(m))]);
+  checks.push(["F10 MUTANT a `border` shorthand in a .bg-status-* rule is RED", cp(goodCss.replace(".bg-status-deny { background-color:", ".bg-status-deny { border: 1px solid hsl(var(--decision-allow)); background-color:")).some((m) => /shorthand/.test(m))]);
+  checks.push(["F10 MUTANT an `all` shorthand in a .text-status-* rule is RED", cp(cssRule("all: unset; color: hsl(var(--decision-deny));")).some((m) => /shorthand/.test(m))]);
+  // F9 unit.
+  const fakeFs = { "/r/main.tsx": 'import "./index.css";', "/r/index.css": '@import "./tok.css";', "/r/tok.css": "", "/r/x.tsx": 'import "@/other.css";', "/r/other.css": "" };
+  const ls = loadedStylesheets("/r", ["/r/main.tsx", "/r/x.tsx"], (f) => { if (f in fakeFs) return fakeFs[f]; throw Object.assign(new Error("ENOENT"), { code: "ENOENT" }); });
+  checks.push(["F9: loaded stylesheets follow imports, `@/` aliases and @import", [...ls.loaded].sort().join() === "/r/index.css,/r/other.css,/r/tok.css" && ls.errs.length === 0]);
 
   // The direction rule must hold on the REAL tone modules, each of which must exist.
   for (const rel of TONE_MODULES) {
@@ -844,18 +982,22 @@ async function selfTest() {
  * The gate itself, over injectable roots so the self-test can run the WHOLE lane
  * against a temp tree holding a planted defect (a gate whose wiring is untested
  * can have its exit condition deleted and still pass its own fixtures).
- *   root            repo root; every other path is relative to it
- *   trees           trees whose sources get the inline-decision scan and chart sites
- *   toneModules     { rel: [expected Record names] }
- *   cssRoots        trees whose stylesheets are judged against the registry
+ *   root              repo root; every other path is relative to it
+ *   trees             trees whose sources get the inline-decision scan and chart sites
+ *   toneModules       { rel: [expected Record names] }
+ *   cssRoots          trees whose stylesheets are judged against the registry
  *   chartMapRequired  tone modules that must carry a chart map
- *   bgFloorExempt   { cssRoot: { since, reason } } — a dated exemption from the .bg-status-* floor
+ *   discover          a directory of app trees to cross-check the lists above against
+ *                     DISK: any app tree under it (its `src` folder) that holds a tone
+ *                     module or verdict status CSS the lists omit fails the run, so the
+ *                     lists cannot be shortened to make a tree stop being judged
+ *   readFile          injectable reader, so a self-test can make a read fail
  */
 export async function runGate(cfg) {
   const out = [], err = [];
   const log = (m = "") => out.push(m);
   const fail = (m = "") => err.push(m);
-  const { root, trees, toneModules, cssRoots, chartMapRequired, bgFloorExempt } = cfg;
+  const { root, trees, toneModules, cssRoots, chartMapRequired, discover = null, readFile = readFileSync } = cfg;
   const rel = (f) => relative(root, f).split("\\").join("/");
 
   const walkErrs = [];
@@ -872,7 +1014,7 @@ export async function runGate(cfg) {
   const problems = [];
   const directionProblems = [];
   const chartProblems = [];
-  const registryProblems = walkErrs.map((e) => `${e} — unreadable directory; its sources were not judged`);
+  const registryProblems = walkErrs.map((e) => `${e} — unreadable; its sources were not judged`);
   let exempted = 0;
 
   /** Trees whose tone module declares a chart map; their chart sites are judged. */
@@ -881,7 +1023,7 @@ export async function runGate(cfg) {
   for (const mod of Object.keys(toneModules)) {
     let src;
     try {
-      src = readFileSync(join(root, mod), "utf8");
+      src = readFile(join(root, mod), "utf8");
     } catch (e) {
       registryProblems.push(`${mod} — unreadable (${e.code ?? e.message}); a tone module that cannot be read cannot be judged`);
       continue;
@@ -890,19 +1032,20 @@ export async function runGate(cfg) {
     recordsJudged += r.records;
     entriesJudged += r.entries;
     for (const msg of r.problems) registryProblems.push(`${mod}:${msg}`);
-    const declaresChart = /\bexport\s+const\s+OUTCOME_CHART_MARK\b/.test(src);
-    if (!declaresChart && !chartMapRequired.has(mod)) continue;
-    let ns;
+    for (const msg of toneArmProblems(src)) registryProblems.push(`${mod}:${msg}`);
+    // Every tone module is imported and its namespace inspected, whatever the spelling of
+    // its export; an import that fails matters only to a module that is required to carry
+    // a chart map or that mentions one.
+    let ns = null;
     try {
       ns = await import(pathToFileURL(join(root, mod)).href);
     } catch (e) {
-      // Fail closed: a chart map (or a required one) that cannot be imported cannot be judged.
-      chartProblems.push(`${mod} — could not be imported to judge its chart map: ${e.message}`);
+      if (chartMapRequired.has(mod) || /\bOUTCOME_CHART_MARK\b/.test(src)) chartProblems.push(`${mod} — could not be imported to judge its chart map: ${e.message}`);
       continue;
     }
     const p = chartModuleProblems(ns);
     if (p === null) {
-      chartProblems.push(`${mod} — required OUTCOME_CHART_MARK is missing`);
+      if (chartMapRequired.has(mod)) chartProblems.push(`${mod} — required OUTCOME_CHART_MARK is missing`);
       continue;
     }
     for (const msg of p) chartProblems.push(`${mod} — ${msg}`);
@@ -910,35 +1053,67 @@ export async function runGate(cfg) {
   }
 
   let cssRules = 0;
-  const exemptions = [];
+  const BARE_BG = /(?<![\w/-])bg-status-(?:allow|step-up|restrict|deny)(?![\w/-])|(?<![\w/-])bg-status-\$\{/;
   for (const cssRoot of cssRoots) {
-    const css = walk(join(root, cssRoot), /\.css$/);
-    for (const e of css.errs) registryProblems.push(`${e} — unreadable directory; its stylesheets were not judged`);
-    const found = new Set();
+    const everything = walk(join(root, cssRoot), /\.(?:tsx?|css)$/);
+    const css = { files: everything.files.filter((f) => f.endsWith(".css")) };
+    const srcs = { files: everything.files.filter((f) => !f.endsWith(".css")) };
+    for (const e of everything.errs) registryProblems.push(`${e} — unreadable; ${cssRoot} was not fully judged`);
+    const judgedCss = new Map();
     for (const f of css.files) {
       let text;
-      try { text = readFileSync(f, "utf8"); } catch (e) { registryProblems.push(`${rel(f)} — unreadable (${e.code ?? e.message})`); continue; }
+      try { text = readFile(f, "utf8"); } catch (e) { registryProblems.push(`${rel(f)} — unreadable (${e.code ?? e.message})`); continue; }
       const r = cssToneProblems(text);
       cssRules += r.rules;
-      for (const k of r.found) found.add(k);
+      judgedCss.set(f, r.found);
       for (const msg of r.problems) registryProblems.push(`${rel(f)}:${msg}`);
     }
-    // The floor: every verdict's text class in every root; the bg classes wherever the tree's sources use them.
+    // The floor is supplied only by stylesheets the tree LOADS, not by any .css file lying under it.
+    const { loaded, errs: loadErrs } = loadedStylesheets(join(root, cssRoot), srcs.files, readFile);
+    for (const e of loadErrs) registryProblems.push(`${e} — unreadable; ${cssRoot}'s loaded stylesheets were not fully judged`);
+    const found = new Set();
+    for (const [f, set] of judgedCss) if (loaded.has(f)) for (const k of set) found.add(k);
+    // The bare class is the one a stylesheet rule can satisfy; the Tailwind opacity form
+    // (`bg-status-allow/5`) is a different class that no `.bg-status-*` rule generates (plan row 153).
+    let usesBg = false;
+    for (const f of srcs.files) {
+      try { if (BARE_BG.test(stripComments(readFile(f, "utf8")))) usesBg = true; }
+      catch (e) { registryProblems.push(`${rel(f)} — unreadable (${e.code ?? e.message}); not searched for bg-status-* use`); }
+    }
     const need = VERDICTS.map((v) => `text:${v}`);
-    const srcs = walk(join(root, cssRoot)).files;
-    const usesBg = srcs.some((f) => { try { return /\bbg-status-/.test(stripComments(readFileSync(f, "utf8"))); } catch { return false; } });
-    if (usesBg && bgFloorExempt[cssRoot]) exemptions.push(`${cssRoot} — .bg-status-* floor waived since ${bgFloorExempt[cssRoot].since}: ${bgFloorExempt[cssRoot].reason}`);
-    else if (usesBg) need.push(...VERDICTS.map((v) => `bg:${v}`));
+    if (usesBg) need.push(...VERDICTS.map((v) => `bg:${v}`));
     for (const k of need) {
-      if (!found.has(k)) registryProblems.push(`${cssRoot} — no canonical .${k.replace(":", "-status-")} rule found; a verdict class with no rule renders no colour`);
+      if (!found.has(k)) registryProblems.push(`${cssRoot} — no canonical .${k.replace(":", "-status-")} rule in a stylesheet this tree loads; a verdict class with no rule renders no colour`);
     }
   }
 
+  if (discover) {
+    let dirs = [];
+    try {
+      dirs = readdirSync(join(root, discover), { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => `${discover}/${d.name}/src`);
+    } catch (e) {
+      if (e.code !== "ENOENT") registryProblems.push(`${discover} — unreadable (${e.code ?? e.message}); the root lists could not be cross-checked against disk`);
+    }
+    for (const src of dirs) {
+      let hasTone = false;
+      try { hasTone = statSync(join(root, src, "lib", "outcome-tone.ts")).isFile(); } catch { /* none here */ }
+      if (hasTone && !(`${src}/lib/outcome-tone.ts` in toneModules && trees.includes(src))) {
+        registryProblems.push(`${src} — holds a tone module but is missing from the gate's tone-module or tree list; it is not judged`);
+      }
+      const w = walk(join(root, src), /\.css$/);
+      for (const e of w.errs) registryProblems.push(`${e} — unreadable; ${src} could not be cross-checked`);
+      const hasVerdictCss = w.files.some((f) => { try { return /\.(?:text|bg)-status-(?:allow|step-up|restrict|deny)\b/.test(readFile(f, "utf8")); } catch { return true; } });
+      if (hasVerdictCss && !cssRoots.includes(src)) registryProblems.push(`${src} — holds verdict status-class CSS but is missing from the gate's stylesheet roots; it is not judged`);
+    }
+  }
+
+  const toneSet = new Set(Object.keys(toneModules));
   for (const file of files) {
     const r = rel(file);
-    const src = readFileSync(file, "utf8");
+    let src;
+    try { src = readFile(file, "utf8"); } catch (e) { registryProblems.push(`${r} — unreadable (${e.code ?? e.message}); not inline-scanned`); continue; }
     const hits = [...offendingLines(src), ...localMapLines(src)];
-    if (TONE_MODULES_OF(toneModules).has(r)) {
+    if (toneSet.has(r)) {
       exempted += hits.length;
       // Inside the one place a map may live, the fallback's DIRECTION is gated.
       for (const p of fallbackProblems(src)) directionProblems.push(`${r}:${p.line} — \`?? "${p.fallback}"\` is not a restrictive token`);
@@ -953,12 +1128,11 @@ export async function runGate(cfg) {
   log(`Verdict tone source — ${files.length} file(s) scanned across ${trees.length} tree(s).`);
   log(
     exempted > 0
-      ? `  ${exempted} occurrence(s) inside the ${Object.keys(toneModules).length} named tone module(s), which is where they belong.`
-      : `  ${Object.keys(toneModules).length} tone module(s) are exempt; none needed the exemption on this run.`,
+      ? `  ${exempted} occurrence(s) inside the ${toneSet.size} named tone module(s), which is where they belong.`
+      : `  ${toneSet.size} tone module(s) are exempt; none needed the exemption on this run.`,
   );
   log(`  chart marks judged in ${chartTrees.length} tree(s) with a chart map: ${chartTrees.join(", ") || "none"}; trees without one are not judged for charts.`);
   log(`  registry: ${recordsJudged} tone Record(s) / ${entriesJudged} verdict entr(ies) and ${cssRules} CSS verdict rule(s) across ${cssRoots.length} stylesheet root(s) judged against VERDICT_REGISTRY.`);
-  for (const e of exemptions) log(`  EXEMPTION (dated): ${e}`);
 
   if (chartProblems.length > 0) {
     fail(`\n✗ ${chartProblems.length} verdict chart problem(s):`);
@@ -991,32 +1165,25 @@ export async function runGate(cfg) {
 
   log("\nVerdict tone source gate passed — every verdict→colour decision is centralised,");
   log("and every tone-module fallback is restrictive.");
-  log("It judges each verdict against VERDICT_REGISTRY: chart-mark tokens, tone Records, and .text-/.bg-status-* CSS. It still does NOT judge:");
+  log("It judges each verdict against VERDICT_REGISTRY: chart-mark tokens, tone Records and their branches, and .text-/.bg-status-* CSS. It still does NOT judge:");
   log("  - restrict vs deny TOKENS: they share --decision-deny by design (DR-005/006); they differ by class suffix and chart pattern only;");
   log("  - badge Records outside the three tone modules, or Records not named in TONE_EXPECTED or typed Record<…Outcome…, string> (e.g. CONNECTOR_DECISION_TONE);");
-  log("  - the desktop tree's chart (it has no chart map) or its tinted chips (it declares no .bg-status-* rules; see the dated EXEMPTION above);");
+  log("  - a verdict choice inside a tone module made by anything other than a Record, a `=== \"verdict\" ? \"…\"` / `if … return` branch or a `case … return` (a switch with fallthrough, a lookup built at runtime);");
+  log("  - the desktop tree's chart (it has no chart map: its Dashboard carries literal fills with a dash pattern of its own) — chart sites are judged only where a tone module exports OUTCOME_CHART_MARK;");
   log("  - signalgrid-app's TSX: its stylesheet is judged (a CSS root), but its sources are not inline-scanned (its LiveDecisionPanel map would trip the scan);");
-  log("  - CSS inside a nested at-rule other than as a flat rule, and Tailwind theme/config colours;");
+  log("  - CSS inside a nested at-rule other than as a flat rule, Tailwind theme/config colours, and the Tailwind opacity forms (`bg-status-allow/5`), which no stylesheet rule generates (plan row 153);");
   log("  - the tokens' own values (check-decision-palette.mjs holds contrast and canon).");
   return { code: 0, out, err };
 }
-const TONE_MODULES_OF = (m) => new Set(Object.keys(m));
 
 const APP_CSS_ROOT = "artifacts/signalgrid-app/src";
-/** Dated exemptions from the `.bg-status-*` floor. Each one is printed on every run. */
-const BG_FLOOR_EXEMPT = {
-  "artifacts/signalgrid-desktop/src": {
-    since: "2026-10-22",
-    reason: "src/lib/outcome-tone.ts failModeTone() returns `bg-status-allow/5` / `bg-status-deny/5` (rendered by pages/Policies.tsx) but index.css declares no .bg-status-* rules (plan row 153) — the chip's tint resolves to nothing, and fail-closed wears the allow class. artifacts/** is out of scope for the gate's author; a hand is raised on the PR.",
-  },
-};
 const REAL_CONFIG = {
   root: repo,
   trees: TREES,
   toneModules: TONE_EXPECTED,
   cssRoots: [...TREES, APP_CSS_ROOT],
   chartMapRequired: CHART_MAP_REQUIRED,
-  bgFloorExempt: BG_FLOOR_EXEMPT,
+  discover: "artifacts",
 };
 
 if (process.argv.includes("--self-test")) process.exit(await selfTest());

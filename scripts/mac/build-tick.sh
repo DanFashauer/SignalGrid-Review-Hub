@@ -107,8 +107,9 @@
 #      because a session can edit hooks.
 #      Anything else raises a hand and leaves the claim in place for a person.
 #   EVERY exit of a real run but six named at finish() heartbeats artifacts/agent-heartbeats/mac-build-tick.json (M1, subject to the
-#   throttle at bt_heartbeat); a signal or a shell error heartbeats `failed` from the EXIT trap; and a capped step (the refresh, the
-#   pipeline, preflight, breadth) heartbeats `working` every HB_PULSE_SECONDS while it runs, so a long session run does not look dead.
+#   throttle at bt_heartbeat); a signal or a shell error heartbeats `failed` from the EXIT trap, which also takes a still-running
+#   capped step down with the run; and a capped step (the refresh, the pipeline, preflight, breadth) heartbeats `working` every
+#   HB_PULSE_SECONDS while it runs, so a long session run does not look dead.
 #   NAMED CEILINGS of the heartbeat, here on purpose:
 #     - a run that cannot enter REPO_ROOT (`cannot enter`) cannot heartbeat: lane-deliver lives there. It exits 1 and says so; the
 #       staleness the row's tolerance reports is the evidence;
@@ -242,6 +243,7 @@ HB_POLL_SECONDS=10
 SESSION_RUN=0
 BT_FINISHED=0
 LOCK_HELD=0
+BT_STEP_PID=""
 ADMIT_GAP_SECONDS=10800
 LAST_ADMITTED="$CACHE/last-admitted-epoch"
 
@@ -331,6 +333,7 @@ bt_pulse_run() {
   if [ "$DRY" = "1" ]; then "$@"; return $?; fi
   "$@" &
   _bpj=$!
+  BT_STEP_PID="$_bpj"
   _bpt="$(bt_now)"
   _bps=1
   while kill -0 "$_bpj" 2>/dev/null; do
@@ -344,13 +347,26 @@ bt_pulse_run() {
     fi
   done
   wait "$_bpj"
+  _bpr=$?
+  BT_STEP_PID=""
+  return "$_bpr"
+}
+
+# Kills $1 and everything below it, deepest first (pgrep -P lists a pid's children on macOS and on Linux). A capped step puts its command in a
+# process group of its own, so a signal to the shell's own group would miss it, and a background step ignores a terminal's Ctrl-C.
+bt_kill_tree() {
+  for _kc in $(pgrep -P "$1" 2>/dev/null); do bt_kill_tree "$_kc"; done
+  kill "$1" 2>/dev/null
+  return 0
 }
 
 # The one EXIT trap, installed below (before step 0, so a signal during the network reads is covered). The build lock is released only by the run
 # that took it (LOCK_HELD, set where the pid is written): a run that skipped because another tick holds it must not remove the holder's pid. A real
 # run that ends WITHOUT reaching finish (a signal, or a shell error under set -u) heartbeats `failed` here; finish() sets BT_FINISHED first, so a
-# normal exit heartbeats once. Best effort: launchd may SIGKILL a run that was asked to stop, and then nothing is written.
+# normal exit heartbeats once. A capped step still running (the run was signalled mid-step) is taken down first, whole tree, so it cannot outlive the lock
+# it ran under. Best effort: launchd may SIGKILL a run that was asked to stop, and then nothing is written.
 bt_on_exit() {
+  if [ -n "$BT_STEP_PID" ]; then bt_kill_tree "$BT_STEP_PID"; BT_STEP_PID=""; fi
   if [ "$LOCK_HELD" = "1" ]; then
     if declare -F sg_host_verify_release >/dev/null; then sg_host_verify_release; fi
     rm -f "$LOCK/pid" "$LOCK/hung-hand" "$CLASSIFIER"

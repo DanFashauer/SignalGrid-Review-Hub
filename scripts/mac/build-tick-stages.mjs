@@ -2915,6 +2915,10 @@ bt_heartbeat() { printf 'HB[%s|%s]\\n' "$1" "$2"; }
     const slow = bash(`${pre}slow() { sleep 5; return 3; }\nbt_pulse_run "a slow step" slow; echo "rc=$?"`);
     const pulses = (slow.stdout.match(/HB\[working: a slow step\|working\]/g) ?? []).length;
     ok("F1 ...a step that runs 5 s under a 2 s pulse heartbeats `working: <label>` (class working) at least twice and still returns its own status (3)", pulses >= 2 && /rc=3/.test(slow.stdout), `${slow.stdout} ${slow.stderr}`);
+    // A clock that moves BACK (an NTP step, a wake from sleep) must restart the pulse interval from the new reading, not wait for the old one to come round.
+    const backDir = join(root, "fu-f1-back"); mkdirSync(backDir, { recursive: true });
+    const back = bash(`DRY=0 STAMP=fixture RUN_LOG=''\nHB_PULSE_SECONDS=2; HB_POLL_SECONDS=1; CF=${q(join(backDir, "n"))}\n${fns("say", "bt_pulse_run")}\nbt_now() { _c=$(cat "$CF" 2>/dev/null || echo 0); echo $((_c + 1)) > "$CF"; case "$_c" in 0) echo 10000 ;; 1) echo 5000 ;; *) echo $((5000 + _c)) ;; esac; }\nbt_heartbeat() { printf 'HB[%s]\\n' "$1"; }\nslow() { sleep 4; }\nbt_pulse_run "a step" slow; echo "rc=$?"`);
+    ok("F1 a clock that moves back (10000 -> 5000) restarts the pulse interval from the new reading: the step still heartbeats, instead of waiting for the old reading to come round", /HB\[working: a step\]/.test(back.stdout) && /rc=0/.test(back.stdout), `${back.stdout} ${back.stderr}`);
     const dry = bash(`DRY=1 STAMP=fixture RUN_LOG=''\nHB_PULSE_SECONDS=1; HB_POLL_SECONDS=1\n${fns("say", "bt_now", "bt_pulse_run")}\nbt_heartbeat() { printf 'HB\\n'; }\nslow() { sleep 2; return 0; }\nbt_pulse_run "x" slow; echo "rc=$?"`);
     ok("F1 ...the dry-run runs the step inline and never heartbeats", /rc=0/.test(dry.stdout) && !/HB/.test(dry.stdout), dry.stdout);
 
@@ -2936,14 +2940,20 @@ ${fns("say", "bt_now", "bt_heartbeat")}
     ok("F1 ...while an ordinary repeat of that result is held as before", lines().length === 3, lines().join(" / "));
   });
 
+  guard2(ok, "F2 bt_kill_tree", () => {
+    const dir = join(root, "fu-f2-tree"); mkdirSync(dir, { recursive: true });
+    const out = bash(`${fns("capped", "bt_kill_tree")}\ncapped 120 sh -c 'sleep 4711 & wait' &\npid=$!\nsleep 1\nbt_kill_tree "$pid"\nsleep 0.5\nps -eo stat=,args= | grep -E 'sleep 4711$' | grep -v '^Z' | grep -v grep | wc -l`);
+    ok("F2 bt_kill_tree takes a capped step's whole tree down, deepest first (the perl launcher, the group it made for the command, the command, and what that started)", out.stdout.trim() === "0", `${out.stdout} ${out.stderr}`);
+  });
+
   // F2. The exit trap: the build lock is released only by the run that holds it, and a run that ends without reaching finish (a signal, a `set -u`
   // abort) heartbeats `failed` from the same trap. The trap is installed before step 0, so a signal there is covered too.
   guard2(ok, "F2 bt_on_exit", () => {
     const dir = join(root, "fu-f2"), lock = join(dir, "lock"), cache = join(dir, "cache");
     mkdirSync(cache, { recursive: true });
     const pre = `STAMP=fixture RUN_LOG=''
-LOCK=${q(lock)}; CLASSIFIER=${q(join(dir, "classifier.mjs"))}
-${fns("bt_on_exit")}
+LOCK=${q(lock)}; CLASSIFIER=${q(join(dir, "classifier.mjs"))}; BT_STEP_PID=''
+${fns("bt_kill_tree", "bt_on_exit")}
 bt_heartbeat() { printf 'HB[%s|%s]\\n' "$1" "$2"; }
 `;
     const withLock = () => { mkdirSync(lock, { recursive: true }); writeFileSync(join(lock, "pid"), "4242"); writeFileSync(join(dir, "classifier.mjs"), "x"); };
@@ -3006,6 +3016,7 @@ if (a[0] === "triage") {
   if (process.env.SG_TRIAGE_HOLD) { writeFileSync(process.env.SG_READY, "x"); execFileSync("sleep", [process.env.SG_TRIAGE_HOLD]); }
   writeFileSync(rd + "/next", "build code\\n");
 } else if (a[0] === "run") {
+  if (process.env.SG_RUN_HOLD) { writeFileSync(process.env.SG_PIDFILE, String(process.pid)); writeFileSync(process.env.SG_READY, "x"); execFileSync("sleep", [process.env.SG_RUN_HOLD]); }
   if (process.env.SG_RUN_SLEEP) execFileSync("sleep", [process.env.SG_RUN_SLEEP]);
   writeFileSync(rd + "/outcome.json", JSON.stringify({ outcome: "hand", reason: "stub" }));
 }\n`);
@@ -3059,6 +3070,18 @@ if (a[0] === "triage") {
     k = t.killed({ SG_LSREMOTE_HOLD: "8" });
     ok("F2 SIGTERM during step 0 (the network read, before the build lock exists): exit 143, no lock directory was created or left, and the trap still heartbeats `failed: the run ended without a result`",
       k.rc === 143 && !existsSync(t.lockDir) && t.hb().length === 1 && /\| failed: the run ended without a result \(a signal or a shell error\) \|/.test(t.hb()[0] ?? ""), `${k.rc}\n${k.out}\n${t.hb().join("\n")}`);
+
+    // ... and during the pipeline: the step runs in the background (so it can be pulsed), so the trap must take its whole process tree down with the run,
+    // or a manual Ctrl-C / `kill` would leave a model session working in the build clone after the lock is released.
+    t = rig("term-pipeline");
+    const alive = (pid) => { const s = spawnSync("ps", ["-o", "stat=", "-p", String(pid)], { encoding: "utf8" }).stdout.trim(); return s !== "" && !s.startsWith("Z"); };
+    const pidFile = join(t.dir, "step.pid");
+    k = t.killed({ SG_RUN_HOLD: "29", SG_PIDFILE: pidFile });
+    const stepPid = Number(existsSync(pidFile) ? readFileSync(pidFile, "utf8") : 0);
+    for (let i = 0; i < 30 && alive(stepPid); i += 1) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 100);
+    const sleepers = spawnSync("pgrep", ["-f", "^sleep 29$"], { encoding: "utf8" }).stdout.split("\n").filter(Boolean).filter((pid) => alive(pid));
+    ok("F2 SIGTERM during the pipeline: the run exits 143, the trap releases the lock AND takes the pipeline step's whole process tree down (the helper and the session it was waiting on), and heartbeats `failed`",
+      k.rc === 143 && stepPid > 0 && !alive(stepPid) && sleepers.length === 0 && !existsSync(t.lockDir) && t.hb().some((l) => /\| failed: the run ended without a result/.test(l)), `${k.rc} step ${stepPid} alive ${alive(stepPid)} sleepers ${sleepers.join(",")}\n${k.out}`);
 
     // F1: the pulses, whole-script, with the pulse shortened to 2 s (a test-only copy of the pinned script) and a pipeline stub that runs 7 s
     t = rig("pulse", { transform: (text) => text.replace(/^HB_PULSE_SECONDS=\d+$/m, "HB_PULSE_SECONDS=2").replace(/^HB_POLL_SECONDS=\d+$/m, "HB_POLL_SECONDS=1") });

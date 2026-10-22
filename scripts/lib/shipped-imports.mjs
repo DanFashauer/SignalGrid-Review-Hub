@@ -21,16 +21,17 @@
 //   - the check is on the HOST FILE: an import is satisfied only when the file shipped at the
 //     resolved container path IS the repo file that import means, not merely some file at that path.
 //
-// WHAT IT DOES NOT MODEL (ceilings, named here, in the gate header, in the PR body and in the
-// backlog row): compose `extends`, `profiles`, `configs:`, `dockerfile_inline`; services are merged
-// across ALL tracked compose files, not per `-f` combination; bind-mount sources are read relative
-// to the REPO ROOT (the project directory), not to the compose file's own directory; `${VAR}` /
-// `$ARG` in a source, destination or WORKDIR (the entry is dropped and reported as "not modelled");
-// a `..` source that leaves the repo; `COPY --from` an external image; `.dockerignore`; heredoc
-// COPY; files present only in a base image; bare-specifier imports (they need node_modules, not a
-// sibling file); `require`/`createRequire`/`new URL` references; only scripts/**/*.{mjs,cjs,js} are
-// read for imports; a RUN is not modelled, so a copied script that is never run is still checked
-// (conservative). A dynamic import whose argument is not a plain string is reported.
+// WHAT IT DOES NOT MODEL (the same list is in the gate header, the PR body and the backlog row):
+// compose `extends`, `profiles`, `configs:` and `dockerfile_inline`; services merged across ALL tracked compose
+// files rather than per `-f` combination; bind-mount sources read relative to the repo root, not to the compose
+// file's own directory; `$VAR`/`$ARG` in a source, destination or WORKDIR and `..` sources leaving the repo
+// (reported as "not modelled"); COPY flags other than --from, --chown, --chmod and --link (`--exclude`,
+// `--parents`: reported as NOT scanned); COPY --from an external image (reported as not modelled); `.dockerignore`;
+// heredoc COPY (reported as not modelled); files present only in a base image; every non-bind mount (named volume,
+// absolute host path, tmpfs) treated as hiding everything the image holds under its target; bare-specifier,
+// `require`, `createRequire` and `new URL` references; imports read only from scripts/**/*.{mjs,cjs,js}; a RUN is
+// not modelled, so a copied script that is never run is still checked. A dynamic import whose argument is not a
+// plain string is reported.
 import { posix } from "node:path";
 import { parse as parseYaml } from "yaml";
 import { codeOnly } from "./code-only.mjs";
@@ -69,30 +70,39 @@ export function parseCompose(name, text) {
   }
   for (const [svc, def] of Object.entries(doc.services)) {
     const entries = [];
+    const hides = []; // container paths a non-repo mount covers: a named volume, an absolute host path, tmpfs, a ${VAR} source
     const dropped = [];
+    const cpath = (t) => posix.normalize(t).replace(/\/$/, "") || "/";
     for (const v of def?.volumes ?? []) {
       let source;
       let target;
+      let bind = true;
       if (typeof v === "string") {
         const m = /^(.*?):(\/[^:]*)(?::[a-zA-Z,]+)?$/.exec(v);
         if (!m) continue;
         [, source, target] = m;
-      } else if (v && typeof v === "object" && (v.type === "bind" || v.type === undefined)) {
+      } else if (v && typeof v === "object") {
         source = v.source;
         target = v.target;
+        bind = v.type === "bind" || v.type === undefined;
       } else continue;
-      const host = repoRelative(source);
       if (typeof target !== "string" || !target.startsWith("/")) continue;
+      const host = bind ? repoRelative(source) : null;
       if (host === null) {
+        // Not a repo file or directory: whatever the image holds under the target is covered (a volume's content is not
+        // the image's, `nocopy` or not; an absolute host path is unknown). Modelled as hiding, so an import that resolves
+        // under it is reported rather than assumed present.
+        hides.push(cpath(target));
         if (typeof source === "string" && /^(\.|\$)/.test(source)) dropped.push(`${source}:${target}`);
         continue;
       }
-      entries.push({ host, container: posix.normalize(target).replace(/\/$/, "") || "/", from: `${name} service ${svc}` });
+      entries.push({ host, container: cpath(target), from: `${name} service ${svc}` });
     }
+    for (const t of [].concat(def?.tmpfs ?? [])) if (typeof t === "string" && t.startsWith("/")) hides.push(cpath(t.split(":")[0]));
     const b = def?.build;
     if (b && typeof b === "object" && b.dockerfile_inline !== undefined) dropped.push("build.dockerfile_inline");
     const build = b === undefined || b === null ? null : typeof b === "string" ? { context: b } : { context: b.context ?? ".", dockerfile: b.dockerfile, target: b.target };
-    out.services.set(svc, { entries, build, dropped });
+    out.services.set(svc, { entries, hides, build, dropped });
   }
   return out;
 }
@@ -119,7 +129,7 @@ export function parseDockerfile(name, text) {
     if (ins === "FROM") {
       const f = /^(?:--\S+\s+)*(\S+)(?:\s+AS\s+(\S+))?/i.exec(rest);
       const base = stages.find((s) => s.name !== null && s.name === f?.[1]?.toLowerCase()) ?? null;
-      cur = { name: f?.[2] ? f[2].toLowerCase() : null, index: stages.length, base, entries: [], dropped: [], workdir: base ? base.workdir : "/" };
+      cur = { name: f?.[2] ? f[2].toLowerCase() : null, index: stages.length, uid: `${name}#${stages.length}`, base, entries: [], dropped: [], problems: [], workdir: base ? base.workdir : "/" };
       knownDirs = new Set(["/", ...(base ? base.knownDirs : [])]);
       cur.knownDirs = knownDirs;
       stages.push(cur);
@@ -134,9 +144,16 @@ export function parseDockerfile(name, text) {
     } else if (ins === "COPY" || ins === "ADD") {
       let flags = "";
       let args = rest;
+      const unmodelled = [];
       for (let f; (f = /^(--\S+)\s+/.exec(args)); ) {
         flags += ` ${f[1]}`;
+        if (!/^--(?:from|chown|chmod|link)(?:=|$)/i.test(f[1])) unmodelled.push(f[1]);
         args = args.slice(f[0].length);
+      }
+      if (unmodelled.length) {
+        // --exclude and --parents change WHICH files land WHERE; applying them is a model of its own, so the instruction fails closed.
+        cur.problems.push(`${name} stage ${cur.name ?? cur.index}: ${ins} flag ${unmodelled.join(" ")} is not modelled - NOT scanned`);
+        continue;
       }
       let parts;
       if (args.startsWith("[")) {
@@ -160,6 +177,8 @@ export function parseDockerfile(name, text) {
       const fromM = /--from=(\S+)/i.exec(flags);
       const absDest = posix.normalize(dest.startsWith("/") ? dest : posix.join(cur.workdir, dest));
       const destIsDir = dest.endsWith("/") || dest === ".." || srcs.length > 1 || knownDirs.has(absDest);
+      // Every ancestor of a destination exists as a directory afterwards (COPY creates the path).
+      for (let d = posix.dirname(absDest); d !== "/" && d !== "."; d = posix.dirname(d)) knownDirs.add(d);
       cur.entries.push({ srcs, dest: absDest, destIsDir, fromStage: fromM ? fromM[1].toLowerCase() : null, from: `${name} stage ${cur.name ?? cur.index}` });
       if (destIsDir) knownDirs.add(absDest);
     }
@@ -187,9 +206,11 @@ export function makeTree({ files, read }) {
 
 /** Resolve a stage to concrete { host, container } pairs (base stage first), following COPY --from. */
 function resolveStage(stages, stage, context, tree, memo) {
-  if (memo.has(stage)) return memo.get(stage);
+  // Keyed by stage AND build context: two services that build the same Dockerfile from different contexts ship different files.
+  const key = `${stage.uid}@${context}`;
+  if (memo.has(key)) return memo.get(key);
   const res = { pairs: [], dropped: [...stage.dropped] };
-  memo.set(stage, res);
+  memo.set(key, res);
   if (stage.base) {
     const b = resolveStage(stages, stage.base, context, tree, memo);
     res.pairs.push(...b.pairs);
@@ -228,19 +249,27 @@ function resolveStage(stages, stage, context, tree, memo) {
   return res;
 }
 
-/** Pure: the relative imports of one script, and any import this model cannot resolve. */
+/**
+ * Pure: the relative imports of one script, and any import this model cannot resolve. A specifier is read ONLY from a
+ * string in an import position (`from "x"`, `import "x"`, `import("x")`, an uninterpolated template in `import(..)`),
+ * located on the string-blanked text and read back from the original at the same offsets, so import-looking text inside
+ * some other string is never an import.
+ */
 export function importsOf(text) {
-  const code = codeOnly(text, true);
+  const marked = codeOnly(text, false);
   const rel = [];
   const unresolved = [];
-  const take = (re, idx) => {
-    for (const m of code.matchAll(re)) if (/^\.{1,2}\//.test(m[idx])) rel.push(m[idx]);
+  const take = (re) => {
+    for (const m of marked.matchAll(re)) {
+      const [lo, hi] = m.indices[2];
+      const spec = text.slice(lo, hi);
+      if (/^\.{1,2}\//.test(spec)) rel.push(spec);
+    }
   };
-  take(/\bfrom\s*(["'])((?:(?!\1).)*)\1/g, 2); // import x from "./y" / export * from "./y"
-  take(/\bimport\s*(["'])((?:(?!\1).)*)\1/g, 2); // import "./y"
-  take(/\bimport\s*\(\s*(["'])((?:(?!\1).)*)\1\s*[,)]/g, 2); // import("./y")
-  take(/\bimport\s*\(\s*`([^`$]*)`\s*[,)]/g, 1); // import(`./y`) with nothing interpolated
-  for (const m of code.matchAll(/\bimport\s*\(\s*(?!["'])(?!`[^`$]*`\s*[,)])/g)) unresolved.push(code.slice(m.index, m.index + 40).replace(/\s+/g, " "));
+  take(/\bfrom\s*(["'])(\s*)\1/dg); // import x from "./y" / export * from "./y"
+  take(/\bimport\s*(["'])(\s*)\1/dg); // import "./y"
+  take(/\bimport\s*\(\s*(["'`])(\s*)\1\s*[,)]/dg); // import("./y"), or an uninterpolated template
+  for (const m of marked.matchAll(/\bimport\s*\(\s*(?!["'`]\s*["'`])/g)) unresolved.push(marked.slice(m.index, m.index + 40).replace(/\s+/g, " "));
   return { rel, unresolved };
 }
 
@@ -256,8 +285,9 @@ export function shippedImportProblems({ composes, dockerfiles, tree }) {
     const parsed = parseCompose(c.name, c.text);
     problems.push(...parsed.problems);
     for (const [svc, def] of parsed.services) {
-      const cur = services.get(svc) ?? { entries: [], builds: [], dropped: [] };
+      const cur = services.get(svc) ?? { entries: [], hides: [], builds: [], dropped: [] };
       cur.entries.push(...def.entries);
+      cur.hides.push(...def.hides);
       if (def.build) cur.builds.push({ ...def.build, in: c.name });
       cur.dropped.push(...def.dropped);
       services.set(svc, cur);
@@ -266,7 +296,7 @@ export function shippedImportProblems({ composes, dockerfiles, tree }) {
   const parsedDocker = new Map(); // tracked path -> stages, or null when it could not be read
   const loadDocker = (name, text) => {
     const r = parseDockerfile(name, text);
-    problems.push(...r.problems);
+    problems.push(...r.problems, ...r.stages.flatMap((st) => st.problems));
     parsedDocker.set(name, r.problems.length ? null : r.stages);
   };
   for (const d of dockerfiles) loadDocker(d.name, d.text);
@@ -302,10 +332,12 @@ export function shippedImportProblems({ composes, dockerfiles, tree }) {
       const r = resolveStage(stages, stage, b.context ?? ".", tree, memo);
       image.push(...r.pairs);
       dropped.push(...r.dropped);
+      const ctx = b.context ?? ".";
       for (const other of stages) {
-        if (other === stage || containers.some((c) => c.id === `${df} stage ${other.name ?? other.index}`)) continue;
-        const o = resolveStage(stages, other, b.context ?? ".", tree, memo);
-        containers.push({ id: `${df} stage ${other.name ?? other.index}`, pairs: o.pairs, mounts: [], dropped: o.dropped });
+        const id = `${df} stage ${other.name ?? other.index}${ctx === "." ? "" : ` (context ${ctx})`}`;
+        if (other === stage || containers.some((c) => c.id === id)) continue;
+        const o = resolveStage(stages, other, ctx, tree, memo);
+        containers.push({ id, pairs: o.pairs, mounts: [], dropped: o.dropped });
       }
     }
     const mounts = [];
@@ -315,7 +347,8 @@ export function shippedImportProblems({ composes, dockerfiles, tree }) {
     }
     // A bind mount wins over an image file at the same path, and a mounted directory hides what the image holds under it.
     const mountedDirs = def.entries.filter((e) => tree.isDir(e.host)).map((e) => e.container);
-    const kept = image.filter((p) => !mountedDirs.some((d) => p.container === d || p.container.startsWith(`${d}/`)));
+    const covered = [...mountedDirs, ...def.hides];
+    const kept = image.filter((p) => !covered.some((d) => p.container === d || p.container.startsWith(`${d}/`)));
     containers.push({ id: `compose service ${svc}`, pairs: [...kept, ...mounts], dropped });
   }
   for (const [df, stages] of parsedDocker) {

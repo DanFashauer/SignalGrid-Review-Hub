@@ -9,6 +9,14 @@ function regexAllowed(out) {
   return /\b(?:return|typeof|case|in|of|delete|void|throw|else)\s*$/.test(out.slice(-12));
 }
 
+/**
+ * Pure: `text` with comments and string, template and regex-literal CONTENT blanked to spaces. Newlines and every offset
+ * are preserved (so a position found in the result is the same position in `text`); string quotes are kept, so a
+ * string is still visible as one; a template's `${expr}` is kept as ` (expr)`. `keepStrings` leaves string and
+ * template literals untouched (to read an import specifier). A regex literal is recognised by the character before
+ * its `/` (regexAllowed), a heuristic: a division after `)` or an identifier reads as a division, which is right for
+ * the code in this tree and wrong for rare shapes.
+ */
 export function codeOnly(text, keepStrings = false) {
   const n = text.length;
   let out = "";
@@ -34,7 +42,10 @@ export function codeOnly(text, keepStrings = false) {
         let j = i + 1;
         while (j < n && text[j] !== c && text[j] !== "\n") j += text[j] === "\\" ? 2 : 1;
         j = Math.min(j + 1, n);
-        out += keepStrings ? text.slice(i, j) : blank(text.slice(i, j));
+        const lit = text.slice(i, j);
+        // Offsets are preserved in every mode (a module specifier can be read back from the original text at the
+        // position the blanked string occupies); the quotes themselves are kept so a string is still VISIBLE as one.
+        out += keepStrings ? lit : lit.length > 1 && lit.endsWith(c) ? c + blank(lit.slice(1, -1)) + c : blank(lit);
         i = j;
       } else if (c === "/" && regexAllowed(out)) {
         // A regex literal: its content (quotes, backticks, braces) is not code and must not start a string.
@@ -68,14 +79,14 @@ export function codeOnly(text, keepStrings = false) {
     return i;
   };
   lexTemplate = (start) => {
-    out += keepStrings ? "`" : " ";
+    out += "`";
     let i = start + 1;
     while (i < n && text[i] !== "`") {
       if (text[i] === "\\") {
         out += keepStrings ? text.slice(i, i + 2) : blank(text.slice(i, i + 2));
         i += 2;
       } else if (text[i] === "$" && text[i + 1] === "{") {
-        out += keepStrings ? "${" : "(";
+        out += keepStrings ? "${" : " (";
         i = lex(i + 2, true);
         out += keepStrings ? "}" : ")";
         i += 1;
@@ -84,7 +95,7 @@ export function codeOnly(text, keepStrings = false) {
         i += 1;
       }
     }
-    out += keepStrings ? "`" : " ";
+    out += "`";
     return i + 1;
   };
   lex(0, false);

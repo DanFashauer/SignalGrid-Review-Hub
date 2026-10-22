@@ -2869,7 +2869,7 @@ process.exit(1);\n`);
     const windows = (text) => {
       const num = (n) => Number(new RegExp(`^${n}=(\\d+)$`, "m").exec(text)?.[1]);
       const pulse = num("HB_PULSE_SECONDS"), poll = num("HB_POLL_SECONDS"), quiet = num("HB_QUIET_SECONDS");
-      const pulsed = (fn) => new RegExp(`^\\s*bt_pulse_run "[^"\\n]+" ${fn}\\b`, "m").test(nonComment(text));
+      const pulsed = (fn) => new RegExp(`^\\s*bt_pulse_run "[^"\\n]+" "[^"\\n]+" ${fn}\\b`, "m").test(nonComment(text));
       const inside = (cap, fn) => (pulsed(fn) ? pulse + poll + SLACK : cap + SLACK);
       return [
         // the refresh is the first long step of an admitted run: the delivery before it can be one throttle period and one launchd interval old
@@ -2884,7 +2884,7 @@ process.exit(1);\n`);
     const w = worst(sh);
     ok("F1 the longest silent window between two heartbeats, derived from the stage caps, HB_PULSE_SECONDS and the launchd interval, is under the row's 3-hour tolerance",
       tolerance === 10800 && Number.isFinite(w[1]) && w[1] < tolerance, `${w[0]}: ${w[1]} s of ${tolerance} s`);
-    const unpulsed = sh.replace(/bt_pulse_run "[^"\n]+" pipeline_step/, "pipeline_step");
+    const unpulsed = sh.replace(/bt_pulse_run "[^"\n]+" "[^"\n]+" pipeline_step/, "pipeline_step");
     ok("F1 MUTANT: the pipeline run without bt_pulse_run leaves a window past the tolerance (build 2 h + review + fix 1 h + review = 4 h), and the same derivation catches it",
       unpulsed !== sh && worst(unpulsed)[1] >= tolerance, `${worst(unpulsed)[0]}: ${worst(unpulsed)[1]} s`);
     const slow = sh.replace(/^HB_PULSE_SECONDS=\d+$/m, "HB_PULSE_SECONDS=9000");
@@ -2894,32 +2894,43 @@ process.exit(1);\n`);
       bare === 3 && (code.match(/\bstages run\b/g) ?? []).length === 1
         && /^refresh_step\(\) \{\n[^}]*capped "\$REFRESH_SECONDS" env [^}]*pr-refresh\.mjs/m.test(code) && /^preflight_step\(\) \{\n[^}]*capped "\$PREFLIGHT_SECONDS" node scripts\/preflight\.mjs/m.test(code)
         && /^breadth_step\(\) \{\n[^}]*capped "\$BREADTH_SECONDS" pnpm run verify:breadth/m.test(code) && /^pipeline_step\(\) \{\n[^}]*stages run /m.test(code)
-        && ["refresh_step", "pipeline_step", "preflight_step", "breadth_step"].every((fn) => new RegExp(`^\\s*bt_pulse_run "[^"\\n]+" ${fn}\\b`, "m").test(code)), `bare capped: ${bare}`);
+        && ["refresh_step", "pipeline_step", "preflight_step", "breadth_step"].every((fn) => new RegExp(`^\\s*bt_pulse_run "[^"\\n]+" "[^"\\n]+" ${fn}\\b`, "m").test(code)), `bare capped: ${bare}`);
+    // Each pulsed step is told its OWN cap: past that cap plus HB_OVERRUN_SECONDS the pulses stop (a step that outlives its cap is not "working within it": silence is the signal).
+    const capArgs = Object.fromEntries([...code.matchAll(/^\s*bt_pulse_run "[^"\n]+" "([^"\n]+)" ([a-z_]+_step)$/gm)].map((m) => [m[2], m[1]]));
+    const pipelineCap = Number(bash(`${consts}\necho $((STAGES_SECONDS - TRIAGE_SECONDS))`).stdout.trim());
+    ok("F1 each pulsed step is given its own cap (the refresh, preflight and breadth budgets; the pipeline's is the helper's worst case without triage), so a step past its cap plus HB_OVERRUN_SECONDS stops claiming `working`",
+      capArgs.refresh_step === "$REFRESH_SECONDS" && capArgs.preflight_step === "$PREFLIGHT_SECONDS" && capArgs.breadth_step === "$BREADTH_SECONDS" && capArgs.pipeline_step === "$((STAGES_SECONDS - TRIAGE_SECONDS))"
+        && pipelineCap === worstCaseStagesSeconds() - STAGES.triage.seconds && /^HB_OVERRUN_SECONDS=\d+$/m.test(sh) && Number(/^HB_OVERRUN_SECONDS=(\d+)$/m.exec(sh)?.[1]) <= 900, JSON.stringify(capArgs));
     const at = (t) => code.indexOf(t);
     ok("F1 an unthrottled `working` heartbeat opens each stretch: in bt_session_start (before triage), after the claim (before the pipeline) and before the gates; each class is `working`, and none carries a pid, sha, stamp or path",
       /bt_heartbeat "working: [^"$]+" working/.test(shFn(sh, "bt_session_start") ?? "")
-        && at('bt_heartbeat "working: the staged pipeline is starting" working') > at("marker|build) claim ;;") && at('bt_heartbeat "working: the staged pipeline is starting" working') < at('bt_pulse_run "the staged pipeline is running" pipeline_step')
-        && at('bt_heartbeat "working: the gates are starting" working') > at('say "committed $HEAD_SHA') && at('bt_heartbeat "working: the gates are starting" working') < at('bt_pulse_run "preflight is running" preflight_step')
+        && at('bt_heartbeat "working: the staged pipeline is starting" working') > at("marker|build) claim ;;") && at('bt_heartbeat "working: the staged pipeline is starting" working') < code.search(/bt_pulse_run "the staged pipeline is running" "[^"\n]+" pipeline_step/)
+        && at('bt_heartbeat "working: the gates are starting" working') > at('say "committed $HEAD_SHA') && at('bt_heartbeat "working: the gates are starting" working') < code.search(/bt_pulse_run "preflight is running" "[^"\n]+" preflight_step/)
         && (code.match(/bt_heartbeat "working: [^"$]+" working/g) ?? []).length === 3 && !/bt_heartbeat "working: [^"]*\$[^"]*" working/.test(code.replace(/^bt_pulse_run\(\) \{[\s\S]*?^\}/m, ""))
-        && (code.match(/^\s*bt_pulse_run "[^"$\n]+" [a-z_]+_step$/gm) ?? []).length === 4);
+        && (code.match(/^\s*bt_pulse_run "[^"$\n]+" "[^"\n]+" [a-z_]+_step$/gm) ?? []).length === 4);
   });
 
   guard2(ok, "F1 bt_pulse_run and the working class", () => {
     const pre = `DRY=0 STAMP=fixture RUN_LOG=''
-HB_PULSE_SECONDS=2; HB_POLL_SECONDS=1
+HB_PULSE_SECONDS=2; HB_POLL_SECONDS=1; HB_OVERRUN_SECONDS=600
 ${fns("say", "bt_now", "bt_pulse_run")}
 bt_heartbeat() { printf 'HB[%s|%s]\\n' "$1" "$2"; }
 `;
-    const quick = bash(`${pre}quick() { return 7; }\nbt_pulse_run "a quick step" quick; echo "rc=$?"`);
+    const quick = bash(`${pre}quick() { return 7; }\nbt_pulse_run "a quick step" 100 quick; echo "rc=$?"`);
     ok("F1 bt_pulse_run returns the step's own exit status (7), and a step that ends before the first pulse heartbeats nothing", /rc=7/.test(quick.stdout) && !/HB\[/.test(quick.stdout), `${quick.stdout} ${quick.stderr}`);
-    const slow = bash(`${pre}slow() { sleep 5; return 3; }\nbt_pulse_run "a slow step" slow; echo "rc=$?"`);
+    const slow = bash(`${pre}slow() { sleep 5; return 3; }\nbt_pulse_run "a slow step" 100 slow; echo "rc=$?"`);
     const pulses = (slow.stdout.match(/HB\[working: a slow step\|working\]/g) ?? []).length;
     ok("F1 ...a step that runs 5 s under a 2 s pulse heartbeats `working: <label>` (class working) at least twice and still returns its own status (3)", pulses >= 2 && /rc=3/.test(slow.stdout), `${slow.stdout} ${slow.stderr}`);
     // A clock that moves BACK (an NTP step, a wake from sleep) must restart the pulse interval from the new reading, not wait for the old one to come round.
     const backDir = join(root, "fu-f1-back"); mkdirSync(backDir, { recursive: true });
-    const back = bash(`DRY=0 STAMP=fixture RUN_LOG=''\nHB_PULSE_SECONDS=2; HB_POLL_SECONDS=1; CF=${q(join(backDir, "n"))}\n${fns("say", "bt_pulse_run")}\nbt_now() { _c=$(cat "$CF" 2>/dev/null || echo 0); echo $((_c + 1)) > "$CF"; case "$_c" in 0) echo 10000 ;; 1) echo 5000 ;; *) echo $((5000 + _c)) ;; esac; }\nbt_heartbeat() { printf 'HB[%s]\\n' "$1"; }\nslow() { sleep 4; }\nbt_pulse_run "a step" slow; echo "rc=$?"`);
+    const back = bash(`DRY=0 STAMP=fixture RUN_LOG=''\nHB_PULSE_SECONDS=2; HB_POLL_SECONDS=1; HB_OVERRUN_SECONDS=600; CF=${q(join(backDir, "n"))}\n${fns("say", "bt_pulse_run")}\nbt_now() { _c=$(cat "$CF" 2>/dev/null || echo 0); echo $((_c + 1)) > "$CF"; case "$_c" in 0) echo 10000 ;; 1) echo 5000 ;; *) echo $((5000 + _c)) ;; esac; }\nbt_heartbeat() { printf 'HB[%s]\\n' "$1"; }\nslow() { sleep 4; }\nbt_pulse_run "a step" 100 slow; echo "rc=$?"`);
     ok("F1 a clock that moves back (10000 -> 5000) restarts the pulse interval from the new reading: the step still heartbeats, instead of waiting for the old reading to come round", /HB\[working: a step\]/.test(back.stdout) && /rc=0/.test(back.stdout), `${back.stdout} ${back.stderr}`);
-    const dry = bash(`DRY=1 STAMP=fixture RUN_LOG=''\nHB_PULSE_SECONDS=1; HB_POLL_SECONDS=1\n${fns("say", "bt_now", "bt_pulse_run")}\nbt_heartbeat() { printf 'HB\\n'; }\nslow() { sleep 2; return 0; }\nbt_pulse_run "x" slow; echo "rc=$?"`);
+    const capDir = join(root, "fu-f1-cap"); mkdirSync(capDir, { recursive: true });
+    const capped = bash(`DRY=0 STAMP=fixture RUN_LOG=''\nHB_PULSE_SECONDS=1; HB_POLL_SECONDS=1; HB_OVERRUN_SECONDS=2; CF=${q(join(capDir, "n"))}\n${fns("say", "bt_pulse_run")}\nbt_now() { _c=$(cat "$CF" 2>/dev/null || echo 0); echo $((_c + 1)) > "$CF"; echo "$_c"; }\nbt_heartbeat() { printf 'AT[%s]\\n' "$((_bpn - _bp0))"; }\nlong() { sleep 9; }\nbt_pulse_run "a step" 3 long; echo "rc=$?"`);
+    const ats = [...capped.stdout.matchAll(/AT\[(\d+)\]/g)].map((m) => Number(m[1]));
+    ok("F1 a step that outlives its own cap plus HB_OVERRUN_SECONDS (3 + 2 on a counter clock) stops pulsing: it pulsed while inside the budget (at least twice, none past 5) and then went silent while the step ran on to its end",
+      ats.length >= 2 && ats.every((x) => x <= 5) && /rc=0/.test(capped.stdout), `${ats.join(",")} ${capped.stdout} ${capped.stderr}`);
+    const dry = bash(`DRY=1 STAMP=fixture RUN_LOG=''\nHB_PULSE_SECONDS=1; HB_POLL_SECONDS=1; HB_OVERRUN_SECONDS=600\n${fns("say", "bt_now", "bt_pulse_run")}\nbt_heartbeat() { printf 'HB\\n'; }\nslow() { sleep 2; return 0; }\nbt_pulse_run "x" 100 slow; echo "rc=$?"`);
     ok("F1 ...the dry-run runs the step inline and never heartbeats", /rc=0/.test(dry.stdout) && !/HB/.test(dry.stdout), dry.stdout);
 
     const dir = join(root, "fu-f1"), repo = join(dir, "repo"), cache = join(dir, "cache"), ldlog = join(dir, "ld.log");

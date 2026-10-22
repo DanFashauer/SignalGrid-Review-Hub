@@ -115,7 +115,9 @@
 #       staleness the row's tolerance reports is the evidence;
 #     - the trap's heartbeat is best effort: launchd may SIGKILL a run it asked to stop, and then nothing is written;
 #     - an UNCAPPED step that hangs (pnpm install, npm install, a clone or a fetch) is silent for as long as it hangs: that silence is the
-#       signal (the lock's HUNG_SECONDS names it), not a gap in the heartbeats.
+#       signal (the lock's HUNG_SECONDS names it), not a gap in the heartbeats;
+#     - a `working` pulse proves the step's process is alive and inside its own cap (plus HB_OVERRUN_SECONDS), not that it is progressing: a
+#       step that stops moving but stays inside its cap keeps pulsing until the cap, and then the silence reports it.
 #
 # Stock macOS bash 3.2: guarded array expansion, here-strings, no mapfile, no ${var,,}.
 # =============================================================================
@@ -240,6 +242,7 @@ HB_QUIET_SECONDS=3600
 HB_CHANGED_SECONDS=900
 HB_PULSE_SECONDS=2700
 HB_POLL_SECONDS=10
+HB_OVERRUN_SECONDS=600
 SESSION_RUN=0
 BT_FINISHED=0
 LOCK_HELD=0
@@ -325,23 +328,27 @@ bt_session_start() {
 }
 
 # F1. Runs the command "$@" in the background and heartbeats `working: $1` every HB_PULSE_SECONDS of wall clock while it runs; returns the
-# command's own exit status. $1 is a fixed label. The dry-run runs the command inline. The command's redirections live INSIDE the step
-# function, so a heartbeat's own output is not swallowed by them. The poll starts at 1 s and doubles to HB_POLL_SECONDS, so a step that ends
-# at once (a refresh with nothing to do) costs a second, not a poll period. A clock that moved back restarts the interval.
+# command's own exit status. $1 is a fixed label, $2 the step's own cap in seconds. A step that has run past that cap plus HB_OVERRUN_SECONDS (the
+# group kill did not take, or the helper hung outside a session) stops pulsing: a pulse says "alive and inside its budget", and silence is then the
+# signal. The dry-run runs the command inline. The command's redirections live INSIDE the step function, so a heartbeat's own output is not
+# swallowed by them. The poll starts at 1 s and doubles to HB_POLL_SECONDS, so a step that ends at once (a refresh with nothing to do) costs a
+# second, not a poll period. A clock that moved back restarts the interval (and the budget) from the new reading.
 bt_pulse_run() {
-  _bpl="$1"; shift
+  _bpl="$1"; _bpc="$2"; shift 2
   if [ "$DRY" = "1" ]; then "$@"; return $?; fi
   "$@" &
   _bpj=$!
   BT_STEP_PID="$_bpj"
-  _bpt="$(bt_now)"
+  _bp0="$(bt_now)"
+  _bpt="$_bp0"
   _bps=1
   while kill -0 "$_bpj" 2>/dev/null; do
     sleep "$_bps"
     _bps=$((_bps * 2)); if [ "$_bps" -gt "$HB_POLL_SECONDS" ]; then _bps="$HB_POLL_SECONDS"; fi
     _bpn="$(bt_now)"
     if [ "$_bpn" -lt "$_bpt" ]; then _bpt="$_bpn"; fi
-    if [ $((_bpn - _bpt)) -ge "$HB_PULSE_SECONDS" ]; then
+    if [ "$_bpn" -lt "$_bp0" ]; then _bp0="$_bpn"; fi
+    if [ $((_bpn - _bp0)) -le $((_bpc + HB_OVERRUN_SECONDS)) ] && [ $((_bpn - _bpt)) -ge "$HB_PULSE_SECONDS" ]; then
       bt_heartbeat "working: $_bpl" working
       _bpt="$(bt_now)"
     fi
@@ -769,7 +776,7 @@ elif git cat-file -e "$MAINLINE_SHA:scripts/mac/pr-refresh.mjs" 2>/dev/null; the
     # and breadth have none, and a hung refresh would hold the lock and starve every later tick.
     # The cap kills the process GROUP (capped above), so pr-refresh's re-exec'd child and the gates
     # it spawned die with the launcher.
-    bt_pulse_run "the PR refresh is running" refresh_step
+    bt_pulse_run "the PR refresh is running" "$REFRESH_SECONDS" refresh_step
     _rc=$?
     say "pr-refresh exited $_rc (142 = the ${REFRESH_SECONDS}s cap; log $CACHE/pr-refresh.log)"
   else
@@ -986,7 +993,7 @@ esac
 # verdict is $RUN_DIR/outcome.json (land | hand | pause).
 say "pipeline starting: path $_verb${_rest:+ ($_rest)}"
 bt_heartbeat "working: the staged pipeline is starting" working
-bt_pulse_run "the staged pipeline is running" pipeline_step
+bt_pulse_run "the staged pipeline is running" "$((STAGES_SECONDS - TRIAGE_SECONDS))" pipeline_step
 [ -s "$RUN_DIR/outcome.json" ] || pause_tick "plan row $PICK_ID: the pipeline wrote no $RUN_DIR/outcome.json" "claim $BRANCH stays until a person deletes it"
 _oc="$(node -e 'const o = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
   process.stdout.write(`${o.outcome}\t${String(o.reason ?? "").replace(/\s+/g, " ")}`);' "$RUN_DIR/outcome.json" 2>&1)" \
@@ -1041,12 +1048,12 @@ if [ "$CLASS" = "OWNER_RESERVED" ]; then
 fi
 say "committed $HEAD_SHA ($CLASS); preflight then breadth"
 bt_heartbeat "working: the gates are starting" working
-bt_pulse_run "preflight is running" preflight_step
+bt_pulse_run "preflight is running" "$PREFLIGHT_SECONDS" preflight_step
 PF=$?
 printf '\nPREFLIGHT_EXIT %s %s\n' "$PF" "$(sgit rev-parse HEAD 2>/dev/null)" >> "$RUN_DIR/preflight.log"
 BR=1
 if [ "$PF" = "0" ]; then
-  bt_pulse_run "breadth is running" breadth_step
+  bt_pulse_run "breadth is running" "$BREADTH_SECONDS" breadth_step
   BR=$?
   printf '\nBREADTH_EXIT %s %s\n' "$BR" "$(sgit rev-parse HEAD 2>/dev/null)" >> "$RUN_DIR/breadth.log"
 fi

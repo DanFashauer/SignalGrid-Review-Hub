@@ -136,8 +136,9 @@ through scripts/lane-deliver.mjs (`--no-wake`; deferred, skipped, paused, cooldo
 buildable, acted or failed: hourly for a repeated result, every 15 minutes when the result
 changes, at once for a run that acted). A signal or a shell error that ends a run first is
 reported from its exit trap (best effort: launchd may kill a run it asked to stop), and while
-a capped step (the PR refresh, the staged pipeline, preflight, breadth) runs, a `working`
-pulse goes out every 45 minutes, so the row's 3-hour tolerance catches a loaded job that never
+a capped step (the PR refresh, the staged pipeline, preflight, breadth) runs inside its cap, a
+`working` pulse goes out every 45 minutes (a step past its cap goes silent, and the silence
+reports it), so the row's 3-hour tolerance catches a loaded job that never
 fires without mistaking a long session for one. A deferral retries every 5 minutes; a run
 that started a model session is followed by at least 3 hours with no admitted run, so
 sessions stay every few hours. Origin unreachable for 12 hours of wall clock raises one

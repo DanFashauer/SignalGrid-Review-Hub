@@ -394,7 +394,10 @@ function build(src) {
     const a = startOf(arg);
     t[startOf(open)] = hasQd ? " " : ".";
     t[a] = " ";
-    for (let k = a + 1; k < arg.end - 1; k++) t[k] = src[k];
+    // The key's COOKED text (`"r\u0061ndom"` is `random`) goes where the raw text was; a cooked key is never
+    // longer than its raw spelling, and what is left over is blanked, so offsets and newlines do not move.
+    let ci = 0;
+    for (let k = a + 1; k < arg.end - 1; k++) if (!EOL.test(src[k])) t[k] = ci < arg.text.length ? arg.text[ci++] : " ";
     t[arg.end - 1] = " ";
     t[startOf(close)] = " ";
   }
@@ -645,6 +648,10 @@ export const CLOCK_TREE_PLANTS = [
   ["wrappers nested ten deep", "const t = ((((((((((Date)))))))))).now();"],
   ["wrappers mixed: as, satisfies, non-null, parens", "const t = ((((Date as any)!) satisfies any) as unknown as DateConstructor).now();"],
   ["a template-literal key: Date[`now`]()", "const t = Date[`now`]();"],
+  ["a unicode-escaped key: Math[\"r\\u0061ndom\"]()", 'const r = Math["r\\u0061ndom"]();'],
+  ["a hex-escaped key: Date[\"no\\x77\"]()", 'const t = Date["no\\x77"]();'],
+  ["a template key with an escape: Date[`no\\u0077`]()", "const t = Date[`no\\u0077`]();"],
+  ["a read after a bracket access sharing its line: crypto.randomUUID(), v = o[ newline \"k\" newline ]; crypto.randomUUID()", 'const a = crypto.randomUUID(), v = o[\n"k"\n]; const b = crypto.randomUUID();'],
   ["a template-literal key across lines", "const t = Date[\n`now`\n]();"],
   ["require( with a space: require (\"crypto\")", 'const { randomBytes: rb } = require ("crypto");\nconst b = rb(4);'],
   ["require( across lines", 'const nc = require(\n"crypto"\n);\nconst b = nc.randomUUID();'],
@@ -858,6 +865,7 @@ export function clockSelfTestChecks(scan = scanSource) {
   checks.push(["a parenthesised receiver spanning lines keeps the line of a later read", at("const v = (\n  foo\n).bar;\nconst t = Date.now();") === "[4]"]);
   checks.push(["a non-null spanning lines keeps the line of a later read", at("const v = foo\n!\n.bar;\nconst t = Date.now();") === "[4]"]);
   checks.push(["a read split across lines is attributed to the line it STARTS on", at("const a = 1;\nconst t = Date\n  .now();\nconst u = 2;") === "[2]"]);
+  checks.push(["two physically distinct reads around a multi-line bracket access stay on their own lines", at('const a = crypto.randomUUID(), v = o[\n"k"\n]; const b = crypto.randomUUID();') === "[1,3]"]);
   checks.push(["lines are numbered by LF: a lone CR does not start a new line", at("const a = 1;\rconst b = 2;\nconst t = Date.now();") === "[2]"]);
   checks.push(["a clean file reports no masker problem", scan("const a = 1 / 2;\nconst s = `x${a}`;\n").problems.length === 0]);
   return checks;

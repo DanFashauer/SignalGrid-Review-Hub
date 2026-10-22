@@ -2742,6 +2742,39 @@ process.exit(1);\n`);
     ok("L2 LABEL= and INTERVAL_SECONDS= stay bare lines", /^LABEL="com\.signalgrid\.lane-tick"$/m.test(readFileSync(join(HERE, "install-launchd.sh"), "utf8")) && /^INTERVAL_SECONDS=300$/m.test(readFileSync(join(HERE, "install-launchd.sh"), "utf8")));
   });
 
+  // ── the registry row and the lane doc, read as the gates read them (M1, M2, M3, M4, M5, TF) ──
+  guard2(ok, "registry and lane doc cross-read", () => {
+    const regText = readFileSync(join(HERE, "../../docs/agent/scheduled-routines.json"), "utf8");
+    const doc = readFileSync(join(HERE, "../../docs/LANE_COORDINATION.md"), "utf8").replace(/\s+/g, " "); // the doc is hard-wrapped
+    const reg = JSON.parse(regText);
+    const row = reg.routines.find((x) => x.id === "mac-build-tick") ?? {};
+    ok("M1 the mac-build-tick row declares the heartbeat path, a 3-hour tolerance (the most a */5 cron may declare) and the instant the path was declared; the null-path reason is gone",
+      row.heartbeatPath === "artifacts/agent-heartbeats/mac-build-tick.json" && row.cadenceToleranceHours === 3 && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}Z$/.test(row.heartbeatSince ?? "") && row.heartbeatPathReason === undefined && row.status === "active", JSON.stringify({ p: row.heartbeatPath, t: row.cadenceToleranceHours, s: row.heartbeatSince }));
+    const ws = row.writeScope ?? "";
+    ok("M1 the row's writeScope names the heartbeat file, lane-deliver heartbeat --no-wake, every exit but six, the hourly throttle and the undelivered-hands queue (five a run, 24 hours); `#1353, not on mainline yet` is byte-identical (N-4)",
+      ws.includes("writes artifacts/agent-heartbeats/mac-build-tick.json through lane-deliver heartbeat --no-wake on every exit of a real run but six named in the script (straight to SignalGrid_Alpha; at most one an hour unless the run acted)")
+        && ws.includes("undelivered-hands/ and retried, at most five a run, for 24 hours") && ws.includes("it is PR #1353, not on mainline yet;") && !ws.includes("and raises hands through lane-deliver batch (straight to SignalGrid_Alpha)."));
+    const eb = row.escalationBoundary ?? "";
+    ok("M3/M4 the row's escalationBoundary replaces the 144-run count with 12 hours of wall clock (measured from the first failing run's epoch), says where a hand lane-deliver could not deliver waits, and names the 3-hour gap after any run that started a model session",
+      !/\b144\b/.test(eb) && eb.includes("origin unreachable for 12 hours of wall clock (measured from the first failing run's epoch in ~/Library/Caches/signalgrid/build-tick/origin-down-since")
+        && eb.includes("undelivered-hands/ and retried, at most five a run and for 24 hours") && eb.includes("a run that started a model session (triage onward), whatever its outcome, is followed by at least 3 hours with no admitted run"));
+    const ae = row.authorizationEvidence ?? "";
+    ok("M4 the row's authorizationEvidence ends with the cadence as built, recorded by the cloud lane and NOT an owner statement (the owner's merge of #1593 carried no words about cadence); the 2026-09-29 owner quote is untouched",
+      ae.includes("Cadence as built, recorded 2026-10-22 by the cloud lane and not an owner statement") && ae.includes("this row records no owner approval of a five-minute interval") && ae.includes("ADMIT_GAP_SECONDS in scripts/mac/build-tick.sh")
+        && ae.includes("~/Library/Caches/signalgrid/build-tick/last-admitted-epoch") && ae.includes("the 2026-09-29 approval's \"every few hours\" bounds the sessions, not the retries")
+        && ae.includes("'Yes, build it (Recommended) — The brain builds its top task unattended and opens PRs.'"));
+    const ev = row.activationEvidence ?? "";
+    const oldEvidence = ["The existing host capacity wrapper retries every five minutes; provider admission, shared-host exclusion, canonical claims, validation and independent review still govern every admitted run.", "This proves a firing, not a completed build or merge."].join(" ");
+    const evidenceOk = (t) => ["mac/build-row-17c-20261021T214648Z", "2026-10-21-plan-row-17c-the-build-session-stopped-and-asked", "Mac-local log observation, not in tree", "scripts/mac/host-verification-lock.sh"].every((m) => t.includes(m))
+      && !["host capacity wrapper", "provider admission", "This proves a firing"].some((m) => t.includes(m));
+    ok("M2 activationEvidence says what the tree shows: the 2026-10-21 claim branch and its hand, the 15:11Z log line marked Mac-local and not in tree, the host verification lock helper as the admission the tree can read; no host capacity wrapper, no provider admission, no 'proves a firing'", evidenceOk(ev), ev.slice(0, 200));
+    ok("M2 CONTROL: the same assertion over the #1593 wording fails (it names the host capacity wrapper and provider admission, and none of the tree's evidence)", !evidenceOk(oldEvidence));
+    ok("TF transcribedFrom records the 2026-10-22 follow-up: the heartbeat path, the 12-hour hand, the 3-hour gap, the narrowed activationEvidence, and that no scheduler re-read was done", reg.transcribedFrom.includes("2026-10-22 (the cloud lane's follow-up to PR #1593; no scheduler re-read: mac-build-tick is a launchd agent, not an account trigger)") && reg.transcribedFrom.includes("heartbeatSince"));
+    ok("M1/M5 the lane doc says a paused tick does nothing but heartbeat, and describes the heartbeat, the 12-hour hand, the 3-hour gap and host-local admission without citing the heartbeat file by path (check-cited-paths fails a path that does not exist yet)",
+      doc.includes("does nothing but heartbeat while it is paused.") && doc.includes("Every real run ends by heartbeating the mac-build-tick file under artifacts/agent-heartbeats") && doc.includes("**Admission is host-local:**")
+        && doc.includes("a reinstall refuses to drop wiring the installed plist has unless `--force`") && !doc.includes("agent-heartbeats/mac-build-tick") && doc.includes("PR #1353, not on mainline yet"));
+  });
+
   // ── FOLLOWUP-NEXT-CHUNK ──
 }
 const guard2 = (ok, name, fn) => { try { fn(); } catch (e) { ok(`${name} threw: ${e.message}`, false); } };

@@ -87,7 +87,7 @@ atomic executable-file pin; the host must protect the runner and its dependencie
 
 The lane tick
 never builds. A second launchd job, `scripts/mac/build-tick.sh`
-(`bash scripts/mac/install-build-tick.sh`, retrying every 5 minutes), does nothing at all
+(`bash scripts/mac/install-build-tick.sh`, retrying every 5 minutes), does nothing but heartbeat
 while it is paused. Each run first pins mainline ONCE: it asks the real remote
 for SignalGrid_Alpha's sha (`git ls-remote`), and every later step (the re-exec of
 its own script, the build clone, the diff the reviewer reads, the changed-path and
@@ -130,6 +130,21 @@ ran, turns, seconds, USD at list price; a figure the CLI did not print is
 to ~/Library/Caches/signalgrid/build-tick/ledger.jsonl. Nothing in it merges; a
 stuck or red run raises a hand and keeps the claim for a person. Registry row:
 `mac-build-tick`.
+
+Every real run ends by heartbeating the mac-build-tick file under artifacts/agent-heartbeats
+through scripts/lane-deliver.mjs (`--no-wake`; deferred, skipped, paused, cooldown, nothing
+buildable, acted or failed; at most one an hour unless it acted), so the row's 3-hour
+tolerance catches a loaded job that never fires. A deferral retries every 5 minutes; a run
+that started a model session is followed by at least 3 hours with no admitted run, so
+sessions stay every few hours. Origin unreachable for 12 hours of wall clock raises one
+hand, and a hand that could not be delivered is retried by the next run that reaches origin.
+**Admission is host-local:** the build lock, the host verification flock
+(`scripts/mac/host-verification-lock.sh`), and whatever the Mac's launchd job carries.
+`SG_STAGE_RUNNER` and a PATH prefix come from the Mac's environment or
+`~/.config/signalgrid/build-tick.env` (outside this tree; read by
+`scripts/mac/install-build-tick.sh`, never sourced); nothing in this repository can show what
+the loaded job carries, and a reinstall refuses to drop wiring the installed plist has unless
+`--force`.
 
 ## The loop as of 2026-09-05, first revision (superseded above; kept for history)
 

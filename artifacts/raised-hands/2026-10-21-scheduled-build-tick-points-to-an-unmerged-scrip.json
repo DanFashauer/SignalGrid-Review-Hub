@@ -1,0 +1,20 @@
+{
+  "id": "2026-10-21-scheduled-build-tick-points-to-an-unmerged-scrip",
+  "raisedAt": "2026-10-21T20:09:27.855Z",
+  "origin": "mac-local-brain-integration",
+  "doing": "Restoring the forward build cycle through the staged local worker integration",
+  "blockedBy": "Scheduled build tick points to an unmerged script; worker integration still requires full validation and mainline landing",
+  "need": "Land the validated staged worker integration and demonstrate an actual bounded build cycle",
+  "whoCanUnblock": "mac lane",
+  "domain": "lane",
+  "status": "resolved",
+  "routedTo": null,
+  "covers": [
+    "heartbeat:forward-build-cycle"
+  ],
+  "takenBy": "mac-local-brain-integration",
+  "takenAt": "2026-10-21T20:09:36.034Z",
+  "resolvedAt": "2026-10-22T11:00:37.557Z",
+  "resolvedBy": "cloud",
+  "resolution": "Stale cover, cleared so the stale-hand rule stops failing --check. The stall this hand covered, heartbeat:forward-build-cycle, ended when the cloud lane delivered that routine's heartbeat in #1581 (merge 3bbb5295, 2026-10-22). The cloud's forward-build routine (trig_01XLv3hGCPob8qcEDsZJ2xM8) fires again; the cloud lane processed no fire between about 2026-10-17T19:20Z and 2026-10-22T10:12Z. The Mac work this hand also named is NOT done: the scheduled build tick still points at an unmerged script, and the staged worker integration still needs validation and a mainline landing. That work is tracked by the mac-build-tick row in docs/agent/scheduled-routines.json, which the routines gate turns fatal on 2026-10-29, and by the 2026-10-22 cloud-to-mac message cloud-mac-build-tick-row-flip-to-active-or-retir. Raise a new hand without a heartbeat cover if it stalls."
+}

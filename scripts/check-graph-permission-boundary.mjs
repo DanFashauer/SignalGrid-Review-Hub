@@ -266,6 +266,8 @@ export function brunoJsonFindings(text) {
 export function collectionRequests(filesByName) {
   const fatal = [];
   const requests = [];
+  // Every request is `auth: inherit`, so collection.bru's auth block is the only source of the Authorization header: deleting the file strips it from all requests.
+  if (typeof filesByName["collection.bru"] !== "string") fatal.push("collection.bru is missing — every request is `auth: inherit`, so the collection-level auth block is the only source of the Authorization header and deleting the file sends them all unauthenticated; absence is not a skip");
   for (const name of Object.keys(filesByName).sort()) {
     if (name === "collection.bru") { fatal.push(...collectionBruFindings(filesByName[name])); continue; }
     if (name.includes("/")) { fatal.push(`${name}: a request file in a subdirectory — only top-level request files are allowed (Bruno skips node_modules, .git and folder.bru)`); continue; }
@@ -574,6 +576,14 @@ function selfTest() {
     ["an unknown meta key", (t) => t.replace("name: x", "name: x\n  tags: y"), "meta key"],
     ["a backtick in a meta name", (t) => t.replace("name: x", "name: `x`"), "braces, backticks"],
   ]) { b = baseBru(); b["b.bru"] = edit(b["b.bru"]); checks.push([`ROUND5: ${label} is FATAL`, has(audit(csrc, b), "b.bru", needle)]); }
+  // ---- review round 16: collection.bru is REQUIRED (backlog row 2634) ----
+  b = baseBru(); delete b["collection.bru"];
+  checks.push(["ROUND16: an absent collection.bru is FATAL and names the file", has(audit(csrc, b), "collection.bru is missing")]);
+  b = baseBru(); b["collection.bru"] = "";
+  checks.push(["ROUND16: an empty collection.bru is FATAL", audit(csrc, b).fatal.some((f) => f.startsWith("collection.bru"))]);
+  b = baseBru(); b["collection.bru"] = "meta {\n  name: x\n}\n";
+  checks.push(["ROUND16: a collection.bru with no auth and auth:bearer blocks is FATAL", has(audit(csrc, b), "collection.bru", "exactly auth then auth:bearer")]);
+
   // ---- review round 6: the other Bruno-evaluated sinks, collection.bru and bruno.json ----
   for (const [label, edit, needle] of [
     ["an indented script:pre-request block in collection.bru", (t) => t + "\n\tscript:pre-request {\n  req.setUrl('x');\n}\n", "outside any block"],

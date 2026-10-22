@@ -29,6 +29,7 @@
 import { createServer } from "node:http";
 import { generateKeyPairSync, sign as cryptoSign } from "node:crypto";
 import { fileURLToPath } from "node:url";
+import { isMainModule } from "./lib/is-main.mjs";
 
 export const KID = "sg-fixture-idp-key-1";
 
@@ -98,7 +99,7 @@ export function createFixtureIdp({
   return { jwks, discovery, mint, handler };
 }
 
-if (process.argv[1] === fileURLToPath(import.meta.url)) {
+if (isMainModule(process.argv[1], import.meta.url)) {
   if (process.argv[2] !== "serve") {
     console.error("usage: node scripts/fixture-idp.mjs serve");
     process.exit(2);

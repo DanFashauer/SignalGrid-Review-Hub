@@ -77,6 +77,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import ts from "typescript";
 import { invokes, maskQuoted, runCommands, stripYamlComments } from "./lib/workflow-invocation.mjs";
+import { isMainModule } from "./lib/is-main.mjs";
 
 const SELF_FILE = fileURLToPath(import.meta.url);
 const REPO = resolve(dirname(SELF_FILE), "..");
@@ -693,7 +694,7 @@ function selfTest() {
 
 // ── main ────────────────────────────────────────────────────────────────────────────────────
 
-if (process.argv[1] && resolve(process.argv[1]) === SELF_FILE) {
+if (isMainModule(process.argv[1], import.meta.url)) {
   if (process.argv.includes("--self-test")) process.exit(selfTest());
   const argv = process.argv.slice(2);
   const val = (flag) => { const i = argv.indexOf(flag); return i >= 0 ? argv[i + 1] : undefined; };

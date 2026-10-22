@@ -41,6 +41,7 @@ import { execSync } from "node:child_process";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { isDatedMeasurement } from "./check-derived-doc-figures.mjs";
+import { isMainModule } from "./lib/is-main.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const AUTHORITY = "docs/RELIABILITY_SLO.md";
@@ -174,7 +175,7 @@ function trackedDocs() {
   return [...new Set(out.trim().split("\n").filter(Boolean))].sort().map((p) => ({ path: p, text: readFileSync(join(ROOT, p), "utf8") }));
 }
 
-const IS_MAIN = process.argv[1] !== undefined && import.meta.url === new URL(`file://${resolve(process.argv[1])}`).href;
+const IS_MAIN = isMainModule(process.argv[1], import.meta.url);
 
 function selfTest() {
   const slo = "| **585 req/sec** |\n1,529 decisions/sec on one core; **5,370/sec aggregate on 4 workers**\n";

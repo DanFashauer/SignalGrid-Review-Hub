@@ -1593,6 +1593,142 @@ raise_hand ${q(text)}`, { HOME: home, SG_HAND_CAPTURE: capture });
     ok("raise_hand preserves the default relative launchd log hint", fallback.status === 0 && fallbackHand.where === "launchd log ~/Library/Logs/signalgrid-build-tick.log");
   });
 
+  guard2(ok, "self-hosted CI host reservation", () => {
+    const wrapper = join(HERE, "ci-host-verification.sh"), helper = join(HERE, "host-verification-lock.sh");
+    const dir = join(root, "sh-ci-host"), repo = join(dir, "repo"), home = join(dir, "home"), events = join(dir, "events");
+    const lock = join(home, "Library/Caches/signalgrid/host-verification.lock"), entered = join(dir, "entered"), go = join(dir, "go");
+    mkdirSync(join(repo, "scripts/mac"), { recursive: true }); mkdirSync(dirname(lock), { recursive: true }); writeFileSync(lock, "");
+    copyFileSync(helper, join(repo, "scripts/mac/host-verification-lock.sh"));
+    writeFileSync(join(repo, "scripts/mac/free-test-port.sh"), '/bin/bash -c \'. "$SG_CI_LOCK_HELPER"; sg_host_verify_acquire "$SG_CI_LOCK_LOCATION"\' >/dev/null 2>&1\n[ "$?" = 75 ] || exit 12\nprintf "teardown\\n" >> "$SG_CI_EVENTS"\nexit "${SG_CI_CLEANUP_EXIT:-0}"\n');
+    G(repo, "init", "-q", "-b", "SignalGrid_Alpha"); G(repo, "add", "-A"); G(repo, "commit", "-q", "-m", "trusted helper fixture");
+    const base = G(repo, "rev-parse", "HEAD"), inode = statSync(lock).ino;
+    const env = { HOME: home, RUNNER_TEMP: dir, SG_CI_EVENTS: events, SG_CI_LOCK_HELPER: helper, SG_CI_LOCK_LOCATION: lock };
+    const run = (body, wait = 2, work = 4, sha = base, extra = {}) => bash(`cd ${q(repo)}
+/bin/bash ${q(wrapper)} ${q(sha)} ${wait} ${work} <<'SG_CI_CHAIN'
+${body}
+SG_CI_CHAIN`, { ...env, ...extra });
+    const body = join(dir, "chain.sh");
+    writeFileSync(body, `printf entered > ${q(entered)}\nwhile [ ! -f ${q(go)} ]; do sleep 0.05; done\nprintf 'body\\n' >> "$SG_CI_EVENTS"\n`);
+    const held = bash(`cd ${q(repo)}
+. ${q(helper)}
+sg_host_verify_acquire ${q(lock)} || exit 2
+/bin/bash ${q(wrapper)} ${q(base)} 4 4 < ${q(body)} > ${q(join(dir, "wait.log"))} 2>&1 &
+ci=$!
+sleep 0.2
+[ ! -f ${q(entered)} ] || exit 3
+sg_host_verify_release
+for i in $(seq 1 60); do [ -f ${q(entered)} ] && break; sleep 0.05; done
+[ -f ${q(entered)} ] || exit 4
+/bin/bash -c ${q(`. ${q(helper)}\nsg_host_verify_acquire ${q(lock)}`)}
+busy=$?
+touch ${q(go)}
+wait "$ci"
+code=$?
+printf 'busy=%s code=%s\\n' "$busy" "$code"`, env);
+    ok("CI waits without work, owns the lock through asserted teardown, and leaves local acquisition nonblocking", held.status === 0
+      && /busy=75 code=0/.test(held.stdout) && readFileSync(events, "utf8") === "body\nteardown\n", `${held.status} ${held.stdout} ${held.stderr}`);
+    ok("CI keeps the same persistent lock inode", statSync(lock).ino === inode);
+    const plain = run('if [ -e /dev/fd/9 ]; then exit 8; fi\nprintf "stdin-body\\n" >> "$SG_CI_EVENTS"');
+    ok("CI executes the actual stdin chain and closes its inherited lock FD only in the workload", plain.status === 0
+      && readFileSync(events, "utf8").endsWith("stdin-body\nteardown\n"), `${plain.status} ${plain.stderr}`);
+    const child = join(dir, "child.pid");
+    const sleeping = `sleep 20 >/dev/null 2>&1 &\nprintf '%s' "$!" > ${q(child)}\n`;
+    const alive = () => {
+      const pid = readFileSync(child, "utf8").trim();
+      const ps = spawnSync("/bin/ps", ["-p", pid, "-o", "state="], { encoding: "utf8" });
+      return ps.status === 0 && ps.stdout.trim() !== "" && !ps.stdout.trim().startsWith("Z");
+    };
+    const probe = () => bash(`. ${q(helper)}\nsg_host_verify_acquire ${q(lock)}\ncode=$?\nsg_host_verify_release\nexit "$code"`, env);
+    for (const [name, tail, expected, work] of [["success", "exit 0", 0, 4], ["failure", "exit 9", 9, 4], ["timeout", "wait", 124, 1]]) {
+      const result = run(sleeping + tail, 2, work);
+      ok(`CI ${name} kills redirected descendants before teardown/release and preserves its outcome`, result.status === expected
+        && !alive() && probe().status === 0 && readFileSync(events, "utf8").endsWith("teardown\n"), `${result.status} ${result.stderr}`);
+    }
+    rmSync(child, { force: true }); writeFileSync(body, sleeping + "wait\n");
+    const cancel = bash(`cd ${q(repo)}
+/bin/bash ${q(wrapper)} ${q(base)} 2 5 < ${q(body)} > ${q(join(dir, "cancel.log"))} 2>&1 &
+ci=$!
+for i in $(seq 1 60); do [ -f ${q(child)} ] && break; sleep 0.05; done
+[ -f ${q(child)} ] || exit 4
+kill -TERM "$ci"
+wait "$ci"
+exit $?`, env);
+    ok("CI cancellation terminates the work group before teardown/release and stays nonzero", cancel.status === 143 && !alive() && probe().status === 0, `${cancel.status} ${cancel.stderr}`);
+    rmSync(entered, { force: true }); writeFileSync(body, `touch ${q(entered)}\n`);
+    const admission = bash(`cd ${q(repo)}
+. ${q(helper)}
+sg_host_verify_acquire ${q(lock)} || exit 2
+/bin/bash ${q(wrapper)} ${q(base)} 1 4 < ${q(body)}
+code=$?
+sg_host_verify_release
+exit "$code"`, env);
+    ok("CI admission timeout fails explicitly without running work", admission.status === 75 && !existsSync(entered)
+      && /admission deadline exceeded; verification did not run/.test(admission.stderr), `${admission.status} ${admission.stderr}`);
+    const missing = run(`touch ${q(entered)}`, 2, 4, "0".repeat(40)), malformed = run(`touch ${q(entered)}`, 2, 4, "HEAD");
+    ok("CI missing or non-SHA trusted helper fails before work", missing.status === 2 && malformed.status === 2 && !existsSync(entered));
+    const notHome = join(dir, "not-a-home"); writeFileSync(notHome, "fixture");
+    const ioFailure = bash(`cd ${q(repo)}\n/bin/bash ${q(wrapper)} ${q(base)} 2 4 < ${q(body)}`, { ...env, HOME: notHome });
+    ok("CI does not retry a lock IO failure as normal contention", ioFailure.status === 2 && !existsSync(entered)
+      && !/waiting for the active host chain/.test(ioFailure.stdout), `${ioFailure.status} ${ioFailure.stderr}`);
+    const replacementMarker = join(dir, "replacement-ran");
+    writeFileSync(join(repo, "scripts/mac/host-verification-lock.sh"), `touch ${q(replacementMarker)}\nexit 2\n`);
+    G(repo, "add", "-A"); G(repo, "commit", "-q", "-m", "untrusted replacement helper");
+    const other = G(repo, "rev-parse", "HEAD"); G(repo, "replace", base, other);
+    const pinned = bash(`cd ${q(repo)}\n/bin/bash ${q(wrapper)} ${q(base)} 2 4 < ${q(body)}`, { ...env, GIT_DIR: join(dir, "wrong-git-dir") });
+    G(repo, "replace", "-d", base);
+    ok("CI reads the exact trusted helper despite Git replacement refs and inherited repository pointers", pinned.status === 0
+      && existsSync(entered) && !existsSync(replacementMarker), `${pinned.status} ${pinned.stderr}`);
+    const teardownFailed = run("exit 9", 2, 4, base, { SG_CI_CLEANUP_EXIT: "11" });
+    const onlyTeardownFailed = run("exit 0", 2, 4, base, { SG_CI_CLEANUP_EXIT: "11" });
+    ok("CI teardown failure never masks an earlier nonzero result or turns success green", teardownFailed.status === 9 && onlyTeardownFailed.status === 11);
+    writeFileSync(join(repo, "validate-sim-macos.sh"), 'printf "harness\\n" >> "$SG_CI_EVENTS"\nexit "$SG_CI_HARNESS_EXIT"\n');
+    chmodSync(join(repo, "validate-sim-macos.sh"), 0o755);
+    const workflowChain = (file) => readFileSync(join(HERE, "../../.github/workflows", file), "utf8")
+      .split("<<'CI_CHAIN'\n")[1].split("\n          CI_CHAIN")[0].replace(/^ {10}/gm, "");
+    const stubTools = `pnpm() {
+  printf 'pnpm:%s\\n' "$*" >> "$SG_CI_EVENTS"
+  case "$*" in 'install --frozen-lockfile') return "$SG_CI_INSTALL_EXIT";; 'run proof:sim-requests') return "$SG_CI_PROOF_EXIT";; 'run verify:all --require-mcp') return "$SG_CI_JOINT_EXIT";; esac
+}
+node() { printf 'preflight\\n' >> "$SG_CI_EVENTS"; echo 'Preflight fixture verdict'; return "$SG_CI_PREFLIGHT_EXIT"; }
+xcodebuild() { echo 'Xcode fixture'; }
+docker() { echo 'docker fixture'; }
+git() {
+  case "$1" in
+    clone) mkdir -p "$4"; printf '%s\\n' 'printf "mcp-verify\\n" >> "$SG_CI_EVENTS"' 'exit "$SG_CI_MCP_EXIT"' > "$4/verify.sh"; chmod +x "$4/verify.sh";;
+    -C) echo fixture;;
+    *) return 2;;
+  esac
+}
+`;
+    const workflowRun = (file, extra) => {
+      writeFileSync(events, "");
+      return run(stubTools + workflowChain(file), 2, 4, base, { SG_CI_LANE: "both", SG_CI_INSTALL_EXIT: "0", SG_CI_PROOF_EXIT: "0", SG_CI_PREFLIGHT_EXIT: "0", SG_CI_HARNESS_EXIT: "0", SG_CI_MCP_EXIT: "0", SG_CI_JOINT_EXIT: "0", ...extra });
+    };
+    const pr = workflowRun("mac-runner-auto.yml", { SG_CI_PROOF_EXIT: "7" });
+    ok("CI actual PR body still runs preflight after a failed provenance proof and retains failure", pr.status === 7
+      && readFileSync(events, "utf8") === "pnpm:install --frozen-lockfile\nteardown\npnpm:run proof:sim-requests\npreflight\nteardown\n", `${pr.status} ${pr.stderr}`);
+    const install = workflowRun("mac-runner-auto.yml", { SG_CI_INSTALL_EXIT: "9" });
+    ok("CI actual PR body stops verification after failed installation and still tears down", install.status === 9
+      && readFileSync(events, "utf8") === "pnpm:install --frozen-lockfile\nteardown\n", `${install.status} ${install.stderr}`);
+    const both = workflowRun("mac-runner-harness.yml", { SG_CI_HARNESS_EXIT: "7" });
+    ok("CI actual nightly body still runs independent preflight after a failed harness", both.status === 7
+      && /harness\npreflight\nteardown\n$/.test(readFileSync(events, "utf8")), `${both.status} ${both.stderr}`);
+    const mcp = workflowRun("mac-runner-harness.yml", { SG_CI_LANE: "mcp", SG_CI_MCP_EXIT: "7" });
+    ok("CI actual MCP body still runs joint verification after a failed sibling check", mcp.status === 7
+      && /mcp-verify\npnpm:run verify:all --require-mcp\nteardown\n$/.test(readFileSync(events, "utf8")), `${mcp.status} ${mcp.stderr}`);
+    const pin = "24eff86a940099e0725d474d1d5520bfbc71d368";
+    for (const [file, total, work] of [["mac-runner-auto.yml", 720, 2400], ["mac-runner-harness.yml", 780, 5400]]) {
+      const workflow = readFileSync(join(HERE, "../../.github/workflows", file), "utf8");
+      const owns = (text) => new RegExp(`^    timeout-minutes: ${total}$`, "m").test(text)
+        && text.includes(`bash scripts/mac/ci-host-verification.sh ${pin} 39600 ${work} <<'CI_CHAIN'`)
+        && !/^ {8}timeout-minutes:/m.test(text) && (text.match(/^ {8}run:/gm) ?? []).length === 1
+        && text.includes("          pnpm install --frozen-lockfile") && text.includes("          bash scripts/mac/free-test-port.sh || exit $?")
+        && text.includes("        if: always()") && text.includes("uses: actions/upload-artifact@");
+      ok(`CI ${file} puts the complete heavy chain in one owning step with separate admission/work bounds`, owns(workflow)
+        && !owns(workflow.replace("bash scripts/mac/ci-host-verification.sh", "bash unguarded.sh")));
+    }
+  });
+
   guard2(ok, "shared host verification lock", () => {
     const helper = join(HERE, "host-verification-lock.sh");
     const dir = join(root, "host-verification"); mkdirSync(dir);

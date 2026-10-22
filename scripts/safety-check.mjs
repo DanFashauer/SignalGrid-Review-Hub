@@ -15,7 +15,7 @@ import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { scanSource, clockSelfTestChecks } from "./lib/clock-spellings.mjs";
+import { scanSource, legacyRawLines, clockSelfTestChecks } from "./lib/clock-spellings.mjs";
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const failures = [];
@@ -26,7 +26,6 @@ const tracked = execFileSync("git", ["ls-files"], { cwd: repo, encoding: "utf8" 
   .split("\n").filter(Boolean);
 const read = (f) => { try { return readFileSync(resolve(repo, f), "utf8"); } catch { return ""; } };
 
-const isCode = (line) => { const t = line.trim(); return !(t.startsWith("//") || t.startsWith("*") || t.startsWith("/*")); };
 
 // 1 — core determinism ────────────────────────────────────────────────────────
 {
@@ -43,12 +42,10 @@ const isCode = (line) => { const t = line.trim(); return !(t.startsWith("//") ||
     const src = read(f);
     const { lines, problems } = scanSource(src);
     const found = new Set(lines);
-    // The masker can only ADD detections: the legacy raw-line scan (comments
-    // skipped by prefix, nothing else masked) stays, so a file the masker misreads
-    // still reports the two original spellings.
-    src.split("\n").forEach((line, i) => {
-      if (isCode(line) && /\b(Date\.now|Math\.random)\s*\(/.test(line)) found.add(i + 1);
-    });
+    // The masker can only ADD detections: the legacy raw-line scan stays (shared in
+    // the lib so its line-terminator rule and optional chaining match the matcher's),
+    // so a file the masker misreads still reports the original spellings.
+    for (const line of legacyRawLines(src)) found.add(line);
     for (const line of [...found].sort((x, y) => x - y)) hits.push(`${f}:${line}`);
     for (const pr of problems) unscannable.push(`${f}:${pr.line} (${pr.what})`);
   }

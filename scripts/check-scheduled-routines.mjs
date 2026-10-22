@@ -42,7 +42,12 @@
 //      untouched by all of this — that case is young, not absent.
 //      `status: "active"` is NOT an escape: a declaration is not evidence, and a
 //      row that asserts it is running while nothing has ever run is the exact
-//      claim this rule exists to disbelieve.
+//      claim this rule exists to disbelieve. Nor is a null heartbeat path: an
+//      explicit `status: "active"` with `heartbeatPath: null` is FATAL (2026-10-22),
+//      because nothing could then ever call the lane overdue.
+//      heartbeatSince (2026-10-22) starts the never-fired clock at the instant a
+//      heartbeat path was declared on a row that ran before it had one; only that
+//      clock reads it, and an unreadable one is FATAL, never a fallback.
 //
 //   2. LAUNCHD TRIGGER PARITY (FATAL). Two fields — `trigger` and `binding` —
 //      were read by nothing. For the four `trig_*` account triggers that is
@@ -282,10 +287,27 @@ export function auditScheduledRoutines(registry, heartbeats, rosterText, listHea
       }
     }
 
+    // heartbeatSince: the instant a heartbeatPath was declared on a row that ran before it had one. Only the never-fired clock below
+    // reads it. Unreadable, in the future, before authorizedOn, or on a row with no heartbeat path is FATAL: a clock nobody can read
+    // must not quietly fall back to another one.
+    let heartbeatSince = NaN;
+    if (r.heartbeatSince !== undefined) {
+      const hs = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?Z$/.test(String(r.heartbeatSince)) ? Date.parse(r.heartbeatSince) : NaN;
+      const auth = Date.parse(r.authorizedOn ?? "");
+      if (!Number.isFinite(hs)) fatal.push(`${name}: heartbeatSince ${JSON.stringify(r.heartbeatSince)} is not an ISO instant (YYYY-MM-DDTHH:MMZ) — an unreadable clock start is never a fallback to authorizedOn`);
+      else if (hs > Date.now() + FUTURE_SKEW_MS) fatal.push(`${name}: heartbeatSince ${r.heartbeatSince} is in the FUTURE — a clock that has not started cannot excuse a missing heartbeat`);
+      else if (Number.isFinite(auth) && hs < auth) fatal.push(`${name}: heartbeatSince ${r.heartbeatSince} is before authorizedOn ${r.authorizedOn} — the heartbeat path cannot predate the authorization`);
+      else if (typeof r.heartbeatPath !== "string") fatal.push(`${name}: heartbeatSince is set but heartbeatPath is not a path — there is no heartbeat for it to start a clock for`);
+      else heartbeatSince = hs;
+    }
     if (r.heartbeatPath === undefined) {
       fatal.push(`${name}: heartbeat path is silently absent — declare a path, or null WITH a reason`);
     } else if (r.heartbeatPath === null) {
       if (!r.heartbeatPathReason) fatal.push(`${name}: heartbeat path is null with no reason — an undocumented gap is a gap twice over`);
+      // An explicitly ACTIVE row with no heartbeat path has no clock at all: nothing below can ever call it overdue (mac-build-tick,
+      // flipped active 2026-10-22 with heartbeatPath null: a probe at +0, +8 and +400 days reported nothing). `active` is a claim this
+      // gate must be able to disbelieve, so it needs a heartbeat. A row with no status stays as it was (the branch-scoped writers).
+      if (r.status === "active") fatal.push(`${name}: status "active" with heartbeatPath null — no clock can ever call this lane overdue; declare a heartbeatPath and a cadenceToleranceHours, or a status that is honestly not active`);
     } else {
       const hb = heartbeats[r.heartbeatPath];
       if (hb === undefined) {
@@ -305,7 +327,10 @@ export function auditScheduledRoutines(registry, heartbeats, rosterText, listHea
         } else if (!(Number.isFinite(r.cadenceToleranceHours) && r.cadenceToleranceHours > 0)) {
           fatal.push(`${name}: active routine with no heartbeat and no positive cadenceToleranceHours — without a bound, "never fired" can never become "overdue"`);
         } else {
-          const since = Date.parse(r.authorizedOn ?? "");
+          // A heartbeat path declared AFTER the authorization starts the never-fired clock at its declaration (heartbeatSince, validated
+          // above): a routine cannot have written a file nobody had named. Without it, the authorization instant is the clock.
+          const since = Number.isFinite(heartbeatSince) ? heartbeatSince : Date.parse(r.authorizedOn ?? "");
+          const baseline = (amount, withDate) => (Number.isFinite(heartbeatSince) ? `its heartbeat path was declared ${amount} ago (heartbeatSince ${r.heartbeatSince})` : `authorized ${amount} ago${withDate ? ` (${r.authorizedOn})` : ""}`);
           if (!Number.isFinite(since)) {
             fatal.push(`${name}: no heartbeat at ${r.heartbeatPath} and no parseable authorizedOn — with neither instant, "not yet" is unmeasurable and would read as fresh forever`);
           } else {
@@ -315,16 +340,16 @@ export function auditScheduledRoutines(registry, heartbeats, rosterText, listHea
               // routine's own tolerance, so a first fire still inside its declared
               // window is never called an undeclared retirement.
               fatal.push(
-                `${name}: UNDECLARED RETIREMENT — authorized ${(ageH / 24).toFixed(1)} days ago (${r.authorizedOn}) and has NEVER fired: ` +
+                `${name}: UNDECLARED RETIREMENT — ${baseline(`${(ageH / 24).toFixed(1)} days`, true)} and has NEVER fired: ` +
                   `no heartbeat has ever existed at ${r.heartbeatPath}. Past ${NEVER_FIRED_FATAL_HOURS}h this is not an asleep lane, it is a ` +
                   `retirement nobody declared, and the registry calls it ALWAYS-ON. Declare the truth: "status": "retired" with ` +
                   `retiredAt/retiredBy/retiredReason, or "status": "awaiting-activation" with awaitingReason and awaitingSince — ` +
                   `or make the trigger fire and let it write its first heartbeat.`,
               );
             } else if (ageH > r.cadenceToleranceHours) {
-              reported.push(`${name}: NEVER fired — authorized ${ageH.toFixed(1)}h ago, tolerance ${r.cadenceToleranceHours}h, no heartbeat at ${r.heartbeatPath} (REPORTED, never silent: the lane is not running)`);
+              reported.push(`${name}: NEVER fired — ${baseline(`${ageH.toFixed(1)}h`)}, tolerance ${r.cadenceToleranceHours}h, no heartbeat at ${r.heartbeatPath} (REPORTED, never silent: the lane is not running)`);
             } else {
-              reported.push(`${name}: no heartbeat written yet at ${r.heartbeatPath} — authorized ${ageH.toFixed(1)}h ago, inside its ${r.cadenceToleranceHours}h tolerance (the next fire writes the first)`);
+              reported.push(`${name}: no heartbeat written yet at ${r.heartbeatPath} — ${baseline(`${ageH.toFixed(1)}h`)}, inside its ${r.cadenceToleranceHours}h tolerance (the next fire writes the first)`);
             }
           }
         }
@@ -580,7 +605,63 @@ function selfTest() {
   r = auditScheduledRoutines({ ...good, routines: [{ ...good.routines[0], trigger: "trig_01XqdtQrmMEtUXTS7pCDr8GS" }, good.routines[1]] }, freshHb, "", noHeads, () => { throw new Error("must not be called"); });
   checks.push(["…and a trig_* account trigger is deliberately NOT checked — this tree cannot read the account scheduler", r.fatal.length === 0]);
 
+  // ── An active row may not opt out of the clock; heartbeatSince starts a newly declared heartbeat's clock ──
+  // mac-build-tick was flipped `active` with heartbeatPath null (2026-10-22): a probe at +0, +8 and +400 days reported nothing, and
+  // pointing the path at a file that did not exist yet would have started the never-fired clock at authorizedOn (2026-09-29) and
+  // failed this very gate at once. The first is closed by the `active` + null FATAL, the second by heartbeatSince.
+  const isoMin = (msAgo) => `${new Date(Date.now() - msAgo).toISOString().slice(0, 16)}Z`;
+  const BUILD_INSTALLER = 'LABEL="com.signalgrid.build-tick"\nINTERVAL_SECONDS=300\n';
+  const buildTick = {
+    ...good.routines[0], id: "m", cron: "*/5 * * * *", cadenceToleranceHours: 3, status: "active",
+    authorizedOn: new Date(Date.now() - 40 * 86_400_000).toISOString().slice(0, 10),
+    trigger: "launchd:com.signalgrid.build-tick (installed by scripts/mac/install-build-tick.sh on the owner's Mac)", heartbeatPath: "artifacts/agent-heartbeats/m.json",
+  };
+  const withRow = (row) => ({ ...good, routines: [row, good.routines[1]] });
+  const audit = (row, hb = {}) => auditScheduledRoutines(withRow(row), hb, "", noHeads, () => BUILD_INSTALLER);
+  const nullPath = { ...buildTick, heartbeatPath: null, heartbeatPathReason: "each run's outcome is a pushed branch" };
+  r = audit(nullPath);
+  checks.push(['AN `active` ROW WITH heartbeatPath null IS FATAL — a reason is not a clock, and the probe at +0/+8/+400 days reported nothing', r.fatal.some((x) => x.includes('status "active" with heartbeatPath null'))]);
+  r = audit({ ...nullPath, status: undefined });
+  checks.push(["…MUTANT control: the same row with no status is not called out (explicit `active` only: the branch-scoped writers are untouched)", !r.fatal.some((x) => x.includes("with heartbeatPath null"))]);
+  r = audit({ ...nullPath, status: "awaiting-activation", awaitingReason: "the launchd agent is not installed on the owner's Mac yet; escalated once", awaitingSince: isoMin(86_400_000) });
+  checks.push(["…and an awaiting-activation row with a null path is not called out either (it says out loud that it is not running)", !r.fatal.some((x) => x.includes("with heartbeatPath null"))]);
+  r = audit({ ...buildTick, heartbeatSince: isoMin(3_600_000) });
+  checks.push(["heartbeatSince 1h ago, no file: REPORTED 'no heartbeat written yet' naming the declaration, not fatal", r.fatal.length === 0 && r.reported.some((x) => x.includes("no heartbeat written yet") && x.includes("declared") && x.includes("inside its 3h")) && !r.reported.some((x) => x.includes("authorized"))]);
+  r = audit({ ...buildTick, heartbeatSince: isoMin(5 * 3_600_000) });
+  checks.push(["heartbeatSince 5h ago, no file: REPORTED 'NEVER fired' against the 3h tolerance, not fatal", r.fatal.length === 0 && r.reported.some((x) => x.includes("NEVER fired") && x.includes("declared 5.0h ago"))]);
+  r = audit({ ...buildTick, heartbeatSince: isoMin(8 * 86_400_000) });
+  checks.push(["heartbeatSince 8 days ago, no file: FATAL UNDECLARED RETIREMENT, and the message names the baseline it measured from (heartbeatSince, not authorizedOn)", r.fatal.some((x) => x.includes("UNDECLARED RETIREMENT") && x.includes("declared 8.0 days ago") && x.includes("heartbeatSince") && !x.includes("authorized 8"))]);
+  r = audit(buildTick);
+  checks.push(["…MUTANT control: without heartbeatSince the same row is measured from authorizedOn (40 days) and is FATAL — heartbeatSince is what starts the clock", r.fatal.some((x) => x.includes("UNDECLARED RETIREMENT") && x.includes("authorized 40"))]);
+  r = audit({ ...buildTick, heartbeatSince: "soon" });
+  checks.push(["an unreadable heartbeatSince is FATAL, never a fallback to authorizedOn", r.fatal.some((x) => x.includes("is not an ISO instant"))]);
+  r = audit({ ...buildTick, heartbeatSince: new Date(Date.now() - 3_600_000).toISOString().slice(0, 10) });
+  checks.push(["…a date without a time is FATAL too (the clock needs an instant)", r.fatal.some((x) => x.includes("is not an ISO instant"))]);
+  r = audit({ ...buildTick, heartbeatSince: `${new Date(Date.now() + 86_400_000).toISOString().slice(0, 16)}Z` });
+  checks.push(["…a heartbeatSince in the FUTURE is FATAL — a clock that has not started cannot excuse a missing heartbeat", r.fatal.some((x) => x.includes("heartbeatSince") && x.includes("in the FUTURE"))]);
+  r = audit({ ...buildTick, heartbeatSince: "2020-01-01T00:00Z" });
+  checks.push(["…one before authorizedOn is FATAL — the path cannot predate the authorization", r.fatal.some((x) => x.includes("before authorizedOn"))]);
+  r = audit({ ...nullPath, status: undefined, heartbeatSince: isoMin(3_600_000) });
+  checks.push(["…and one on a row whose heartbeatPath is null is FATAL — nothing for it to start a clock for", r.fatal.some((x) => x.includes("heartbeatSince is set but heartbeatPath is not a path"))]);
+  const oldMacHb = (days) => ({ "artifacts/agent-heartbeats/m.json": JSON.stringify({ firedAt: new Date(Date.now() - days * 86_400_000).toISOString(), result: "skipped: origin unreachable" }) });
+  r = audit({ ...buildTick, heartbeatSince: isoMin(3_600_000) }, oldMacHb(8));
+  checks.push(["the mac-build-tick shape (cron */5, tolerance 3, launchd trigger) with a heartbeat 8 days old is REPORTED beyond its 3h tolerance — the +8-day probe that reported nothing now reports", r.fatal.length === 0 && r.reported.some((x) => x.includes("beyond its 3h tolerance"))]);
+  r = audit({ ...buildTick, heartbeatSince: isoMin(3_600_000) }, oldMacHb(400));
+  checks.push(["…and 400 days old is REPORTED the same way", r.fatal.length === 0 && r.reported.some((x) => x.includes("beyond its 3h tolerance"))]);
+  r = audit({ ...buildTick, heartbeatSince: isoMin(30 * 86_400_000) }, { "artifacts/agent-heartbeats/m.json": JSON.stringify({ firedAt: new Date().toISOString(), result: "quiet" }) });
+  checks.push(["once a heartbeat exists heartbeatSince is read by nothing else: a fresh heartbeat beside a 30-day-old heartbeatSince is clean", r.fatal.length === 0 && r.reported.length === 0]);
+
   // ── The live registry, read as the gate reads it ──────────────────────────────
+  checks.push([
+    "every `active` row of the live registry declares a string heartbeatPath — the live floor for the active + null FATAL",
+    (() => {
+      try {
+        const live = JSON.parse(readFileSync(REGISTRY, "utf8"));
+        const active = live.routines.filter((x) => x.status === "active");
+        return active.length > 0 && active.every((x) => typeof x.heartbeatPath === "string" && x.heartbeatPath.length > 0);
+      } catch { return false; }
+    })(),
+  ]);
   checks.push([
     "the live registry parses and declares at least three routines — a self-test over an empty registry proves nothing",
     (() => {

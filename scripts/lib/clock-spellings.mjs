@@ -34,9 +34,17 @@
 //   · `break label` / `continue label` followed by a newline and a regex: `label` is
 //     an identifier, so that slash is read as division. (`break`, `continue` and
 //     `debugger` alone before a newline-started regex ARE handled.)
-//   · TypeScript receivers are unwrapped textually (`(Date as any).now()`, `Date!.now()`,
-//     `(<any>Date).now()`, `(Date.now)()`); a cast whose type contains parentheses,
-//     such as `(Date as (typeof D)).now()`, is not.
+//   · TypeScript receivers are unwrapped textually, to any nesting depth: `!+`, a cast or
+//     satisfies in parens (`(Date as any).now()`, `(Date as any)()`, `new (Date as any)()`),
+//     an angle cast (`(<any>Date)`, `(<Array<number>>Date)`), plain parens (`(Date).now()`,
+//     `new(Date)()`) and `(0, Date.now)()`. A cast whose TYPE contains parentheses, such
+//     as `(Date as (typeof D)).now()`, is not unwrapped.
+//   · A line-initial `/` right after an operand is AMBIGUOUS (ASI makes it a regex, a
+//     continued division makes it division) and is reported as a problem, fatal and named.
+//     Write the operator at the end of the previous line or put a `;` before the regex.
+//   · FALSE ALARMS from the textual rewrite and per-line matching: `new` newline `Date(0)`,
+//     `new globalThis . Date(0)` (spaces around the dot), and `foo (Date).now()`.
+//   · A destructure default that contains a comma (`{ a = f(1, now), b }`) is split at it.
 //   · FALSE-ALARM direction too: a function or method NAMED Date (`function Date()`,
 //     an interface member `Date()`) is read as a `Date()` call.
 //   · An uncalled reference (`const c = Date.now`), Reflect.apply / .call,
@@ -184,7 +192,22 @@ export function maskSource(src, blankComments = true) {
         i = e; continue;
       }
       if (c === "/") {
-        if (regexStartsHere(top)) {
+        let startsRegex = regexStartsHere(top);
+        if (!startsRegex) {
+          // A `/` that begins a line right after an operand is ambiguous: ASI ends the
+          // statement (`let x` newline `/re/.test(s)`, `type T = string` newline `/re/`) or
+          // the division continues onto the next line. Guessing division hides the code
+          // between two slashes, guessing regex hides it the other way, so report it
+          // (fatal, fail closed) and read it as a regex when that reading closes.
+          const k0 = prevSig(i);
+          let crossed = false;
+          for (let q = k0 + 1; k0 >= 0 && q < i; q++) if (EOL.test(out[q])) { crossed = true; break; }
+          if (crossed) {
+            problems.push({ line: lineOf(i), what: "a line-initial slash follows an operand, so it is a regex (ASI) or a continued division and cannot be told apart" });
+            startsRegex = true;
+          }
+        }
+        if (startsRegex) {
           let j = i + 1;
           let inClass = false;
           while (j < n && !EOL.test(src[j])) {
@@ -265,28 +288,65 @@ export function maskSource(src, blankComments = true) {
   return { text: out.join(""), visible: vis.join(""), problems };
 }
 
-// Removed text must not move later lines up, so every rewrite re-appends the newlines it
-// swallowed (right after the replacement).
-const nl = (m) => m.replace(/[^\n]/g, "");
+// Rewrites that swallow whitespace must not move later lines up, nor split the rewritten
+// expression across lines. The swallowed newlines are owed and paid back right after the
+// next newline in the text that follows, so `Date[` newline `"now"` newline `]()` becomes
+// `Date.now()` on its own line and the line count is unchanged.
+function rewrite(text, re, fn, boundary = true) {
+  let out = "";
+  let last = 0;
+  let owed = 0;
+  const pay = (seg) => {
+    if (owed > 0) {
+      const at = seg.indexOf("\n");
+      if (at >= 0) { seg = seg.slice(0, at + 1) + "\n".repeat(owed) + seg.slice(at + 1); owed = 0; }
+    }
+    return seg;
+  };
+  for (const m of text.matchAll(re)) {
+    out += pay(text.slice(last, m.index));
+    let r = fn(m);
+    // Keep a word boundary: `return(Date)` must not become `returnDate`.
+    const before = m.index > 0 ? text[m.index - 1] : "";
+    if (boundary && before && /[\w$]/.test(before) && /^[\w$]/.test(r)) r = " " + r;
+    out += r;
+    owed += (m[0].match(/\n/g) || []).length;
+    last = m.index + m[0].length;
+  }
+  out += pay(text.slice(last));
+  return owed > 0 ? out + "\n".repeat(owed) : out;
+}
 
 // `X["name"]`, `X['name']` and `X?.["name"]` are the same access as `X.name`.
 const normalizeBracketAccess = (src) =>
-  src
-    .replace(/\?\.\s*\[\s*(["'])([A-Za-z_$][\w$]*)\1\s*\]/g, (m, q, id) => `?.${id}${nl(m)}`)
-    .replace(/\[\s*(["'])([A-Za-z_$][\w$]*)\1\s*\]/g, (m, q, id) => `.${id}${nl(m)}`);
+  rewrite(
+    rewrite(src, /\?\.\s*\[\s*(["'])([A-Za-z_$][\w$]*)\1\s*\]/g, (m) => `?.${m[2]}`),
+    /\[\s*(["'])([A-Za-z_$][\w$]*)\1\s*\]/g,
+    (m) => `.${m[2]}`,
+  );
 
-// TypeScript wrappers around a receiver do not change what runs: a postfix non-null `!`
-// (`Date!.now()`, `Date.now!()`, `new Date!()`), a cast or satisfies in parens
-// (`(Date as any).now()`, `(<any>Date).now()`), and plain parens (`(Date).now()`,
-// `(Date.now)()`). Applied to the MASKED text, after comments and strings are blanked.
+// TypeScript wrappers around a receiver do not change what runs. Followed, to any nesting
+// depth (each pass peels one layer; a lookahead may be another `)`): a postfix non-null
+// run `!+` (`Date!.now()`, `Date!!.now()`, `Date.now!()`, `new Date!()`), a cast or
+// satisfies in parens (`(Date as any).now()`, `(Date as any)()`, `new (Date as any)()`,
+// `(Date.now as any)()`), an angle cast (`(<any>Date).now()`, `(<Array<number>>Date)`),
+// plain parens (`(Date).now()`, `(Date.now)()`, `new(Date)()`), and the indirect-call idiom
+// `(0, Date.now)()` / `(void 0, Date.now)()`. Applied to the MASKED text, after comments
+// and strings are blanked. NOT followed: a cast whose type contains parentheses.
+const UNWRAP_LOOK = String.raw`(?=\s*(?:\?\.|\.|\(|\)))`;
 const unwrapTs = (text) => {
-  const pass = (t) =>
-    t
-      .replace(/([\w$)\]])\s*!(?=\s*(?:\?\.|\.|\())/g, (m, c) => `${c}${nl(m)}`)
-      .replace(/\(\s*<[^<>()]*>\s*([\w$.]+)\s*\)(?=\s*\??\.)/g, (m, id) => `${id}${nl(m)}`)
-      .replace(/\(\s*([\w$.]+)\s+(?:as|satisfies)\s+[^()]*\)(?=\s*\??\.)/g, (m, id) => `${id}${nl(m)}`)
-      .replace(/\(\s*([A-Za-z_$][\w$.]*)\s*\)(?=\s*(?:\?\.|\.|\())/g, (m, id) => `${id}${nl(m)}`);
-  return pass(pass(text));
+  let t = text;
+  for (let pass = 0; pass < 8; pass++) {
+    const before = t;
+    // This rule's match starts with the operand's own last character, so no boundary is added.
+    t = rewrite(t, new RegExp(String.raw`([\w$)\]])\s*!+${UNWRAP_LOOK}`, "g"), (m) => m[1], false);
+    t = rewrite(t, new RegExp(String.raw`\(\s*<[^()]*>\s*([\w$.]+)\s*\)${UNWRAP_LOOK}`, "g"), (m) => m[1]);
+    t = rewrite(t, new RegExp(String.raw`\(\s*([\w$.]+)\s+(?:as|satisfies)\s+[^()]*\)${UNWRAP_LOOK}`, "g"), (m) => m[1]);
+    t = rewrite(t, new RegExp(String.raw`\(\s*([A-Za-z_$][\w$.]*)\s*\)${UNWRAP_LOOK}`, "g"), (m) => m[1]);
+    t = rewrite(t, /\(\s*(?:void\s+0|\d+)\s*,\s*([A-Za-z_$][\w$.]*)\s*\)(?=\s*(?:\(|\?\.\())/g, (m) => m[1]);
+    if (t === before) break;
+  }
+  return t;
 };
 
 // Member access and call, each with optional chaining: `Date?.now()`, `Date.now?.()`.
@@ -317,17 +377,33 @@ export const LINE_SPELLINGS = [
 
 // `const { now } = Date` and kin, possibly across lines, so these run over the
 // whole text and map the match back to its line.
-const destructure = (name, from) =>
-  new RegExp(String.raw`\{[^{}]*\b(?:${name})\b[^{}]*\}\s*=\s*${G}${from}\b`, "g");
+// `const { now } = Date` and kin, possibly across lines. A name counts only on the PROPERTY
+// side of an element (`{ now: n }` and `{ UTC, now }` are reads, `{ parse: now }` and
+// `{ parse = now }` are not), and the source may be wrapped (`= (Date)`, `= <any>Date`).
 export const DESTRUCTURES = [
-  { label: "{ now } = Date", re: destructure("now", "Date") },
-  { label: "{ random } = Math", re: destructure("random", "Math") },
-  { label: "{ now } = performance", re: destructure("now", "performance") },
-  { label: "{ timeOrigin } = performance", re: destructure("timeOrigin", "performance") },
-  { label: "{ hrtime } = process", re: destructure("hrtime", "process") },
-  { label: "{ uptime } = process", re: destructure("uptime", "process") },
-  { label: "{ random } = crypto", re: destructure(RANDOM_ALT, "crypto") },
+  { label: "{ now } = Date", names: ["now"], from: "Date" },
+  { label: "{ random } = Math", names: ["random"], from: "Math" },
+  { label: "{ now } = performance", names: ["now"], from: "performance" },
+  { label: "{ timeOrigin } = performance", names: ["timeOrigin"], from: "performance" },
+  { label: "{ hrtime } = process", names: ["hrtime"], from: "process" },
+  { label: "{ uptime } = process", names: ["uptime"], from: "process" },
+  { label: "{ random } = crypto", names: RANDOM_FNS, from: "crypto" },
 ];
+// 1-based lines holding a destructure of one of `names` from `from` in masked `text`.
+function destructureLines(text, entries) {
+  const lines = new Set();
+  for (const { names, from } of entries) {
+    const re = new RegExp(
+      String.raw`\{([^{}]*)\}\s*=\s*(?:[\s(]|<[^()<>]*(?:<[^<>]*>[^()<>]*)?>)*${G}(?:${from})\b`,
+      "g",
+    );
+    for (const hit of text.matchAll(re)) {
+      const props = hit[1].split(",").map((el) => el.replace(/\s*=[\s\S]*$/, "").split(":")[0].trim());
+      if (props.some((pr) => names.includes(pr))) lines.add(text.slice(0, hit.index).split("\n").length);
+    }
+  }
+  return [...lines];
+}
 
 // Generators imported by NAME from a package, matched by the (possibly renamed)
 // binding. A package's deterministic exports (uuid v3/v5) are not listed.
@@ -345,8 +421,9 @@ const escId = (s) => s.replace(/[\\^$.*+?()[\]{}|]/g, "\\$&");
 // `{ a, b: c }` of a destructuring: the property name and the local it binds.
 const parseDestructured = (list) =>
   list.split(",").map((x) => x.trim()).filter(Boolean).map((x) => {
-    const m = /^([\w$]+)\s*:\s*([\w$]+)$/.exec(x);
-    return m ? { name: m[1], local: m[2] } : { name: x.replace(/\s*=.*$/, ""), local: x.replace(/\s*=.*$/, "") };
+    const y = x.replace(/\s*=[\s\S]*$/, "");
+    const m = /^([\w$]+)\s*:\s*([\w$]+)$/.exec(y);
+    return m ? { name: m[1], local: m[2] } : { name: y, local: y };
   });
 
 const parseNamed = (list) =>
@@ -396,7 +473,7 @@ function importPatterns(visible) {
     const ns = [...nsLocals].map(escId).join("|");
     line.push(new RegExp(String.raw`(?<![\w$.])(?:${ns})${DOT}(?:(?:default|webcrypto)${DOT})*(?:${RANDOM_ALT})${CALL}`));
     // `const { getRandomValues: grv } = wc`: the destructure itself is the read.
-    text.push(new RegExp(String.raw`\{[^{}]*\b(?:${RANDOM_ALT})\b[^{}]*\}\s*=\s*(?:${ns})\b`, "g"));
+    text.push({ names: RANDOM_FNS, from: ns });
   }
   const gen = new Set();
   for (const m of visible.matchAll(named(String.raw`[^"'\s]+`))) {
@@ -419,11 +496,7 @@ export function scanSource(src) {
   text.split("\n").forEach((ln, idx) => {
     if (LINE_SPELLINGS.some(({ re }) => re.test(ln)) || dyn.line.some((re) => re.test(ln))) lines.add(idx + 1);
   });
-  for (const re of [...DESTRUCTURES.map((d) => d.re), ...dyn.text]) {
-    for (const hit of text.matchAll(new RegExp(re.source, "g"))) {
-      lines.add(text.slice(0, hit.index).split("\n").length);
-    }
-  }
+  for (const ln of destructureLines(text, [...DESTRUCTURES, ...dyn.text])) lines.add(ln);
   return { lines: [...lines].sort((x, y) => x - y), problems: m.problems };
 }
 
@@ -489,6 +562,43 @@ export const CLOCK_FORM_PLANTS = [
   ["an import after a double-quoted string holding an unclosed `import {`", 'const doc = "import {";\nimport { randomBytes as rb9 } from "node:crypto";\nconst b = rb9(4);'],
   ["an import after a template holding an unclosed `import {`", 'const doc = `import {`;\nimport { randomBytes as rb9 } from "node:crypto";\nconst b = rb9(4);'],
   ["an import after a string holding an unclosed `import {`", "const doc = 'import {';\nimport { randomBytes as rb9 } from \"node:crypto\";\nconst b = rb9(4);"],
+  ["nested parens ((Date)).now()", "const t = ((Date)).now();"],
+  ["triple parens (((Date))).now()", "const t = (((Date))).now();"],
+  ["a doubled non-null Date!!.now()", "const t = Date!!.now();"],
+  ["an angle cast around parens (<any>(Date)).now()", "const t = (<any>(Date)).now();"],
+  ["a doubled cast ((Date as any)).now()", "const t = ((Date as any)).now();"],
+  ["a generic angle cast (<Array<number>>Date).now()", "const t = (<Array<number>>Date).now();"],
+  ["a keyword glued to parens: return(Date).now()", "function f() { return(Date).now(); }"],
+  ["a keyword glued to parens: await(Date as any).now()", "async function f() { return await(Date as any).now(); }"],
+  ["a keyword glued to parens: new(Date)()", "const t = new(Date)();"],
+  ["cast then call: (Date as any)()", "const t = (Date as any)();"],
+  ["cast then call: new (Date as any)()", "const t = new (Date as any)();"],
+  ["cast then call: new (<any>Date)()", "const t = new (<any>Date)();"],
+  ["cast then call: (Date.now as any)()", "const t = (Date.now as any)();"],
+  ["cast then call: (rb as any)(4)", 'import { randomBytes as rb } from "node:crypto";\nconst b = (rb as any)(4);'],
+  ["a non-null inside parens: (Date.now!)()", "const t = (Date.now!)();"],
+  ["the indirect-call idiom (void 0, Date.now)()", "const t = (void 0, Date.now)();"],
+  ["the indirect-call idiom (0, Date.now)()", "const t = (0, Date.now)();"],
+  ["a destructure from a parenthesised source", "const { now } = (Date);"],
+  ["a destructure from a cast source", "const { now } = (Date as any);"],
+  ["a destructure from an angle-cast source", "const { now } = <any>Date;"],
+  ["a cast with ?. : (Date as any)?.now()", "const t = (Date as any)?.now();"],
+  ["an angle cast with ?. : (<any>Date)?.now()", "const t = (<any>Date)?.now();"],
+  ["plain parens with ?. : (Date)?.now()", "const t = (Date)?.now();"],
+  ["a non-null in parens: (Date)!.now()", "const t = (Date)!.now();"],
+  ["a non-null before ?. : Date!?.now()", "const t = Date!?.now();"],
+  ["a lowercase parenthesised receiver (crypto).randomUUID()", "const id = (crypto).randomUUID();"],
+  ["a lowercase parenthesised receiver (performance).now()", "const t = (performance).now();"],
+  ["bracket access across lines: Date[ newline \"now\" newline ]()", 'const t = Date[\n"now"\n]();'],
+  ["bracket access across lines: Math[ newline 'random' newline ]()", "const r = Math[\n'random'\n]();"],
+  ["bracket access across lines: crypto[ newline ... ]()", 'const id = crypto[\n"randomUUID"\n]();'],
+  ["optional bracket access across lines: Date?.[ ... ]()", 'const t = Date?.[\n"now"\n]();'],
+  ["a cast spanning lines: (Date as newline any).now()", "const t = (Date as\n any).now();"],
+  ["a renamed require destructure with a default", 'const { randomBytes: bytes = fallback } = require("crypto");\nconst b = bytes(4);'],
+  ["a renamed webcrypto require destructure with a default", 'const { webcrypto: wc = fallback } = require("crypto");\nconst b = wc.getRandomValues(new Uint8Array(4));'],
+  ["a destructure with a renamed local: { now: n } = Date", "const { now: n } = Date;"],
+  ["a destructure among others: { UTC, now } = Date", "const { UTC, now } = Date;"],
+  ["a destructure with a default on the property: { now = fallback } = Date", "const { now = fallback } = Date;"],
   ["Date?.()", "const t = Date?.();"],
   ["Date(0) without new", "const t = Date(0);"],
   ["Date(undefined) without new", "const t = Date(undefined);"],
@@ -553,6 +663,14 @@ export const CLOCK_BLIND_SPOT_PLANTS = [
   ["a read after a regex following a spread", "const arr = [.../a+/.exec(s)]; const t = Date.now() / 2;"],
   ["a read after `typeof of` divided", 'const of = 4; const z = typeof of / 2; const w = "x/y";\nconst t = Date.now();'],
   ["a read after `1./2` divided", 'const z = 1./2; const w = "x/y";\nconst t = Date.now();'],
+  ["a read after a regex following `in` after a member named return", "x.return in /a+/ ? Date.now() / 2 : 0;"],
+  ["a read after a regex following `in` after a member named in", "x.in in /a+/ ? Date.now() / 2 : 0;"],
+  ["a read after a regex following `in` after a member", "x.y in /a+/ ? Date.now() / 2 : 0;"],
+  ["a read after an escaped quote in a string, before a regex with an escaped quote", String.raw`const a = "x\"y"; const t = Date.now(); const re = /\"/;`],
+  ["a read after a regex with an escaped slash", String.raw`const re = /\/=/; const t = Date.now() / 2;`],
+  ["a read after an escaped backtick in a template", "const s = `a\\`b`; const t = Date.now();"],
+  ["a read after plain identifier division", "const v = total / 2 + Date.now() / 3;"],
+  ["a read after a regex whose class closes before an operator", "const ok = /[a]=/.test(s) ? Date.now() / 2 : 0;"],
   ["a read after a regex following `new` after a spread", "const a = [...new /x=/.constructor()]; const t = Date.now() / 2;"],
   ["a read after a regex on the line after `debugger`", "debugger\n/x=/.test(s); const t = Date.now() / 2;"],
   ["a read after a regex on the line after `break`", "for (;;) { break\n/x=/.test(s); const t = Date.now() / 2; }"],
@@ -603,6 +721,11 @@ export const CLOCK_NON_PLANTS = [
   ["a string literal containing new Date()", "const why = 'new Date() reads the clock';"],
   ["a template literal containing performance.now()", "const why = `performance.now() is a clock`;"],
   ["new Date(x) from an argument", "const d = new Date(input.timestamp);"],
+  ["a destructure that renames another property to now", "const { parse: now } = Date;"],
+  ["a destructure that renames another property to random", "const { floor: random } = Math;"],
+  ["a destructure that renames subtle to randomUUID", "const { subtle: randomUUID } = crypto;"],
+  ["a destructure whose default mentions now", "const { parse = now } = Date;"],
+  ["a destructure of createHash renamed to randomBytes", 'import * as nc from "node:crypto";\nconst { createHash: randomBytes } = nc;'],
   ["new Date(0), a fixed instant", "const d = new Date(0);"],
   ["new globalThis.Date(1), a fixed instant", "const d = new globalThis.Date(1);"],
   ["a regex literal naming Date.now()", "const re = /Date.now()/;"],
@@ -619,6 +742,17 @@ export const CLOCK_DESYNC_PLANTS = [
 // A file the masker loses the thread on must be REPORTED and also RECOVERED: the
 // read after the desync is still seen, so one bad string does not blank the file.
 export const CLOCK_RECOVERY_PLANTS = [
+  ["a type alias then a line-initial regex (ASI)", "type Marker = string\n/x=/.test(s); const t = Date.now() / 2;"],
+  ["a union type alias then a line-initial regex", 'type M = "a" | "b"\n/x=/.test(s); const t = Date.now() / 2;'],
+  ["an array type alias then a line-initial regex", "type M = string[]\n/x=/.test(s); const t = Date.now() / 2;"],
+  ["a declare const then a line-initial regex", "declare const x: number\n/x=/.test(s); const t = Date.now() / 2;"],
+  ["a declare function then a line-initial regex", "declare function f(): string\n/x=/.test(s); const t = Date.now() / 2;"],
+  ["a typed let then a line-initial regex", "let x: Foo\n/x=/.test(s); const t = Date.now() / 2;"],
+  ["a plain let then a line-initial regex", "let x\n/x=/.test(s); const t = Date.now() / 2;"],
+  ["an import-from then a line-initial regex", 'import { a } from "b"\n/x=/.test(s); const t = Date.now() / 2;'],
+  ["an export-from then a line-initial regex", 'export { a } from "b"\n/x=/.test(s); const t = Date.now() / 2;'],
+  ["a call then a line-initial regex", "foo()\n/x=/.test(s); const t = Date.now() / 2;"],
+  ["a division continued on the next line", "const r = a\n  / b;\nconst t = Date.now();"],
   ["a quoted string crossing a newline", 'const s = "abc\nconst t = Date.now();'],
   ["a quoted string crossing a lone CR", 'const s = "abc\rconst t = Date.now();'],
 ];
@@ -651,8 +785,8 @@ export function clockSelfTestChecks(scan = scanSource) {
     const e = entries.find((x) => x.label === label);
     const masked = maskSource(normalizeBracketAccess(src), true).text;
     const entryHits = e
-      ? e.re.global
-        ? new RegExp(e.re.source, "g").test(masked)
+      ? e.names
+        ? destructureLines(masked, [e]).length > 0
         : masked.split("\n").some((l) => new RegExp(e.re.source).test(l))
       : false;
     checks.push([`the pattern itself matches its plant: ${label}`, entryHits]);

@@ -110,6 +110,8 @@ const STEPS = [
   { name: "Local worker job-state proofs", cmd: ["node", "scripts/mac/local-brain/test/job-state.test.mjs"] },
   { name: "Local worker task-selector proofs", cmd: ["node", "scripts/mac/local-brain/test/task-selector.test.mjs"] },
   { name: "Local worker proof-policy proofs", cmd: ["node", "scripts/mac/local-brain/test/proof-policy.test.mjs"] },
+  { name: "Local-brain capabilities self-test (one planted violation per rule must fail; the real contract is the control)", cmd: ["node", "scripts/check-local-brain-capabilities.mjs", "--self-test"] },
+  { name: "Local-brain capabilities (every command the Mac's local brain may run exists, every self-test runs in a lane, forbidden patterns hold their controls, JSON and Markdown agree)", cmd: ["node", "scripts/check-local-brain-capabilities.mjs"] },
   // DR-060 rule 3, first slice: docs/agent/mcp-roster.json names which lane or
   // first-party skill may call which MCP server, with signalgrid-mcp's tool count
   // DERIVED from artifacts/mcp-server/src/index.ts, never hand-typed.

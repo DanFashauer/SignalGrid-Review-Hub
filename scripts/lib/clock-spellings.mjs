@@ -18,11 +18,13 @@
 //     after an object literal (`{} / x / y`) can blank the text between the two
 //     slashes. No live site; the masker reports the desync it causes only when a
 //     quote or backtick is swallowed.
-//   · FALSE-ALARM direction (never a hidden read): import discovery reads string
+//   · FALSE-ALARM direction (a false hit, not a hidden read): import discovery reads string
 //     text, so a fixture string holding `import { randomBytes as seeded } from
 //     "crypto"` makes a later `seeded(` a false hit; and `\bcrypto`, `\bperformance`
 //     and `\bprocess` also match after a dot, so `fixture.performance.now()` is a
 //     false hit. No live site for either.
+//   · Import forms not followed: a unicode-letter alias, an inline
+//     `require("crypto").randomBytes(4)`, and `await import("crypto")`.
 //   · An uncalled reference (`const c = Date.now`), Reflect.apply / .call,
 //     Temporal / Intl, require("crypto") destructured with a rename, and unicode
 //     escapes in an identifier are not seen.
@@ -35,10 +37,13 @@
 // PROBLEM, which both gates treat as fatal and name. A file the scanner cannot read
 // is never a clean file.
 
-// Keywords after which a `/` begins a regex. `in` and `of` are deliberately absent:
-// as identifiers (`const of = 4; of / 2`) they are operands, and a regex after the
-// `in`/`of` of a for-loop head is not a shape worth a false hide. A keyword
-// preceded by `.` (`counts.in / a`) is a property name, never a keyword.
+// Keywords after which a `/` begins a regex. `in` and `of` are NOT in this set
+// because they are also identifiers (`const of = 4; of / 2` divides); they are
+// decided by context in regexStartsHere: after a finished operand they are the
+// operators `x of /re/` and `k in /re/` and a regex follows, after an operator or
+// an operator keyword they are a name and the slash divides. A keyword preceded by
+// `.` (`counts.in / a`) is a property name, never a keyword. A spread `.../re/`
+// begins a regex; `1./2` divides.
 const REGEX_AFTER_KEYWORD = new Set([
   "return", "typeof", "case", "void", "delete", "throw", "yield", "await", "else", "do",
 ]);
@@ -98,8 +103,19 @@ export function maskSource(src, blankComments = true) {
     if (IS_WORD.test(p)) {
       const { word, start } = wordBefore(k);
       if (start > 0 && out[start - 1] === ".") return false;
+      if (word === "of" || word === "in") {
+        // The operator `x of /re/`, `k in /re/` follows a finished operand; the
+        // identifier `of` (`= of / 2`) follows an operator or an operator keyword.
+        const b = prevSig(start);
+        if (b < 0) return false;
+        const q = out[b];
+        if (IS_WORD.test(q)) return !REGEX_AFTER_KEYWORD.has(wordBefore(b).word);
+        return q === ")" || q === "]" || q === "}" || q === "'" || q === '"' || q === "`";
+      }
       return REGEX_AFTER_KEYWORD.has(word);
     }
+    // Spread: `.../re/` begins a regex; `1./2` divides.
+    if (p === "." && k >= 2 && out[k - 1] === "." && out[k - 2] === ".") return true;
     return REGEX_AFTER_PUNCT.test(p);
   };
 
@@ -247,8 +263,9 @@ const GENERATOR_PACKAGES = {
   "@paralleldrive/cuid2": ["createId"],
 };
 
-// A binding is an identifier, and `$` is legal in one but is a regex end anchor.
-const escId = (s) => s.replace(/\$/g, "\\$");
+// A binding is an identifier, and `$` is legal in one but is a regex end anchor. Escape
+// every regex metacharacter, not just `$`, so nothing a binding holds can change the pattern.
+const escId = (s) => s.replace(/[\\^$.*+?()[\]{}|]/g, "\\$&");
 
 const parseNamed = (list) =>
   list.split(",").map((s) => s.trim().replace(/^type\s+/, "")).filter(Boolean).map((s) => {
@@ -263,19 +280,32 @@ function importPatterns(visible) {
   const res = [];
   const fnLocals = new Set();
   const nsLocals = new Set();
-  for (const m of visible.matchAll(/\bimport\s*(?:type\s+)?\{([^}]*)\}\s*from\s*(["'])(?:node:)?crypto\2/g)) {
+  const ID = String.raw`[A-Za-z_$][\w$]*`;
+  // A binding list never holds a quote or backtick, so a string that merely
+  // contains an unclosed `import {` cannot swallow a real import after it.
+  const LIST = String.raw`[^}'"\x60]*`;
+  const named = (mod) => new RegExp(String.raw`\bimport\s*(?:type\s+)?(?:${ID}\s*,\s*)?\{(${LIST})\}\s*from\s*(["'])(${mod})\2`, "g");
+  for (const m of visible.matchAll(named(String.raw`(?:node:)?crypto`))) {
     for (const { name, local } of parseNamed(m[1])) {
       if (RANDOM_FNS.includes(name)) fnLocals.add(local);
-      // `webcrypto` is the Web Crypto namespace: a receiver of getRandomValues/randomUUID.
-      if (name === "webcrypto") nsLocals.add(local);
+      // `webcrypto` is the Web Crypto namespace, and `default` is the whole module:
+      // both are receivers of getRandomValues/randomUUID/randomBytes.
+      if (name === "webcrypto" || name === "default") nsLocals.add(local);
     }
   }
-  for (const m of visible.matchAll(/\bimport\s+(?:\*\s+as\s+)?([A-Za-z_$][\w$]*)\s+from\s*(["'])(?:node:)?crypto\2/g)) nsLocals.add(m[1]);
-  for (const m of visible.matchAll(/\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*require\(\s*(["'])(?:node:)?crypto\2\s*\)/g)) nsLocals.add(m[1]);
+  const cryptoMod = String.raw`(?:node:)?crypto`;
+  // `import * as nc from "crypto"`
+  for (const m of visible.matchAll(new RegExp(String.raw`\bimport\s+\*\s+as\s+(${ID})\s+from\s*(["'])${cryptoMod}\2`, "g"))) nsLocals.add(m[1]);
+  // `import nc from "crypto"`, `import nc, * as ns from "crypto"`, `import nc, { a } from "crypto"`
+  for (const m of visible.matchAll(new RegExp(String.raw`\bimport\s+(${ID})\s*(?:,\s*(?:\{${LIST}\}|\*\s+as\s+(${ID})))?\s*from\s*(["'])${cryptoMod}\3`, "g"))) {
+    nsLocals.add(m[1]);
+    if (m[2]) nsLocals.add(m[2]);
+  }
+  for (const m of visible.matchAll(new RegExp(String.raw`\b(?:const|let|var)\s+(${ID})\s*=\s*require\(\s*(["'])${cryptoMod}\2\s*\)`, "g"))) nsLocals.add(m[1]);
   if (fnLocals.size) res.push(new RegExp(String.raw`(?<![\w$.])(?:${[...fnLocals].map(escId).join("|")})\s*\(`));
-  if (nsLocals.size) res.push(new RegExp(String.raw`(?<![\w$.])(?:${[...nsLocals].map(escId).join("|")})\s*\.\s*(?:${RANDOM_ALT})\s*\(`));
+  if (nsLocals.size) res.push(new RegExp(String.raw`(?<![\w$.])(?:${[...nsLocals].map(escId).join("|")})\s*\.\s*(?:webcrypto\s*\.\s*)?(?:${RANDOM_ALT})\s*\(`));
   const gen = new Set();
-  for (const m of visible.matchAll(/\bimport\s*\{([^}]*)\}\s*from\s*(["'])([^"']+)\2/g)) {
+  for (const m of visible.matchAll(named(String.raw`[^"'\s]+`))) {
     const names = GENERATOR_PACKAGES[m[3]];
     if (!names) continue;
     for (const { name, local } of parseNamed(m[1])) if (names.includes(name)) gen.add(local);
@@ -339,6 +369,12 @@ export const CLOCK_FORM_PLANTS = [
   ["$ in a crypto namespace alias", 'import * as $c from "node:crypto";\nconst b = $c.randomBytes(4);'],
   ["$-prefixed uuid generator alias", 'import { v4 as $uuid } from "uuid";\nconst id = $uuid();'],
   ["$ inside a renamed crypto alias", 'import { randomBytes as rand$b } from "node:crypto";\nconst b = rand$b(4);'],
+  ["webcrypto through a namespace import", 'import * as nc from "node:crypto";\nconst b = nc.webcrypto.getRandomValues(new Uint8Array(4));'],
+  ["mixed default and named crypto import", 'import nodeCrypto, { randomBytes as rb } from "node:crypto";\nconst b = rb(4);'],
+  ["default plus namespace crypto import", 'import d, * as nc from "node:crypto";\nconst b = nc.randomBytes(4);'],
+  ["default plus namespace: the default binding", 'import d, * as nc from "node:crypto";\nconst b = d.randomUUID();'],
+  ["{ default as c } crypto import", 'import { default as c } from "node:crypto";\nconst b = c.randomUUID();'],
+  ["an import after a string holding an unclosed `import {`", "const doc = 'import {';\nimport { randomBytes as rb9 } from \"node:crypto\";\nconst b = rb9(4);"],
   ["renamed crypto import", 'import { randomBytes as bytes } from "node:crypto";\nconst b = bytes(4);'],
   ["crypto namespace import", 'import * as nc from "node:crypto";\nconst b = nc.randomBytes(4);'],
   ["crypto default import", 'import nodeCrypto from "crypto";\nconst b = nodeCrypto.randomUUID();'],
@@ -363,6 +399,12 @@ export const CLOCK_BLIND_SPOT_PLANTS = [
   ["a read after a prefix `!` regex holding a quote", 'const ok = !/"/.test(s);\nconst t = Date.now();'],
   ["a read after a division that follows `]`", "const t = counts[k] / sum + Date.now() / 1000;"],
   ["a read after a regex holding a slash in a character class", "const ok = /[/]+/.test(s) ? Date.now() / 2 : 0;"],
+  ["a read after a regex following `of` whose body ends in an operator", "for (const x of /a+/.exec(s) ?? []) { const t = Date.now() / 2; }"],
+  ["a read after a regex following `of` holding `=`", "for (const x of /x=/.exec(s) ?? []) { const t = performance.now() / 2; }"],
+  ["a read after a regex following `in`", 'const ok = "k" in /a+/ ? Date.now() / 2 : 0;'],
+  ["a read after a regex following a spread", "const arr = [.../a+/.exec(s)]; const t = Date.now() / 2;"],
+  ["a read after `typeof of` divided", 'const of = 4; const z = typeof of / 2; const w = "x/y";\nconst t = Date.now();'],
+  ["a read after `1./2` divided", 'const z = 1./2; const w = "x/y";\nconst t = Date.now();'],
   ["a read inside a template expression", "const s = `${Date.now()}`;"],
   ["a read after a URL string on the same line", 'const u = "http://x"; const t = Date.now();'],
   ["a read after a division that follows `}` and sits on a later-slash file", "const a = {}\n  / 2;\nconst t = Date.now();\nconst b = 6 / 3;"],
@@ -390,6 +432,7 @@ export const CONFUSER_WRAPS = [
   ["i++ / 2 then a slash in a string", (code) => `i++ / 2; const s = 'a/b';\n${code}`],
   ["a regex holding a quote after an if", (code) => `if (a) /"/.test(s);\n${code}`],
   ["a regex holding a backtick after else", (code) => `if (a) b(); else /\`/.test(s);\n${code}`],
+  ["a regex after `of` ending in `=` wrapped around it", (code) => `for (const x of /x=/.exec(s) ?? []) { const q = 1 + ${code} / 3; }`],
   ["a `]` division wrapped around it", (code) => `const q = counts[k] / 2 + ${code} / 3;`],
   ["a postfix non-null `!` division wrapped around it", (code) => `const q = m.get(k)! / 2 + ${code} / 3;`],
 ];

@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-10-17T10:15:14.675Z",
-  "result": "acted (2026-10-17; the 09:40Z schedule fired at 09:40:39Z per the trigger record; the keepalive was due - the prior heartbeat at 2026-10-16T10:21:59.466Z was 23.3 h old at the fire - and the sweep freed notable space; delivered inside the 10:10Z forward-build batch, one PR for the routines it carries): freed 590M - 1,595 loose scratch logs and captures older than a day deleted (scripts kept), 141 finished scratch directories cleared with find -depth -delete (355 directories holding a git checkout skipped, 33 more kept for fresh content, a nested checkout or a bare repository; the repository tree never touched), pnpm store prune removed 0 files and 0 packages; free space 4924M before and 5514M after, of 252G (measured 09:50:4xZ to 09:52:53Z); no docker daemon and no /var/lib/docker; owner not escalated (free space is above 1G)."
+  "firedAt": "2026-10-22T10:30:49.406Z",
+  "result": "freed about 637 MB (343 stale reviewer node_modules directories and old logs in the session scratchpad, removed with find -delete; pnpm store prune removed 0 packages) | 4.8 GB free on / (df: 4788 MB); no docker daemon and no /var/lib/docker cache."
 }

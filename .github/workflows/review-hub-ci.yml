@@ -690,8 +690,12 @@ jobs:
         run: node scripts/mac/local-brain/test/proof-policy.test.mjs
       - name: "Local-brain capabilities self-test (one planted violation per rule must fail; the real contract is the control)"
         run: node scripts/check-local-brain-capabilities.mjs --self-test
-      - name: "Local-brain capabilities (every command the Mac's local brain may run exists, every self-test runs in a lane, forbidden patterns hold their controls, JSON and Markdown agree)"
+      - name: "Local-brain capabilities (every command the Mac's local brain may run exists and is the one its text names, every cited line holds its anchor, every self-test runs in a lane, forbidden patterns hold their controls, JSON and Markdown agree)"
         run: node scripts/check-local-brain-capabilities.mjs
+      - name: "Local-brain capabilities mutant harness self-test (a mutant that survives, an anchor that is absent and a copy that cannot run must fail the run)"
+        run: node scripts/check-local-brain-capabilities-mutants.mjs --self-test
+      - name: "Local-brain capabilities gate, mutated (every break of the gate's own source must turn its self-test or the gate red)"
+        run: node scripts/check-local-brain-capabilities-mutants.mjs
       # DR-060 rule 3, first slice: docs/agent/mcp-roster.json names which lane or
       # first-party skill may call which MCP server, with signalgrid-mcp's tool count
       # DERIVED from artifacts/mcp-server/src/index.ts, never hand-typed.

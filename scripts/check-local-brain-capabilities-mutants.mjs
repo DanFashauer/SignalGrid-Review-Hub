@@ -92,7 +92,7 @@ async function runCode(m, dir, src) {
   try { writeFileSync(file, plumb(m.edit(src))); } catch (err) { return { ...m, verdict: "error", detail: err.message }; }
   const st = await run([file, "--self-test"]);
   if (st.timedOut) return { ...m, verdict: "error", detail: "the copy's --self-test timed out" };
-  if (st.status !== 0) return { ...m, verdict: "killed", by: "self-test", detail: (st.stdout.split("\n").find((l) => /PLANTED|CONTROL|CLI|could not|control|threw|FAIL/.test(l)) ?? st.stderr.split("\n")[0] ?? "").trim().slice(0, 140) };
+  if (st.status !== 0) return { ...m, verdict: "killed", by: "self-test", detail: (st.stdout.split("\n").find((l) => /^\s+- /.test(l)) ?? st.stdout.split("\n")[0] ?? st.stderr.split("\n")[0] ?? "").trim().replace(/^- /, "").slice(0, 150) };
   const gt = await run([file]);
   if (gt.timedOut) return { ...m, verdict: "error", detail: "the copy timed out" };
   if (gt.status !== 0) return { ...m, verdict: "killed", by: "gate", detail: (gt.stderr.split("\n").find((l) => l.includes("[R")) ?? "").trim().slice(0, 140) };
@@ -195,7 +195,7 @@ export const CODE = [
   off("R9-prose", "R9 the prose outside the block is scanned", "const hit = line.match(FIGURE_RE) ?? line.match(RATIO_RE);", "const hit = null;"),
   off("R9-ratio", "R9 a pass ratio is a figure", "export const RATIO_RE = /\\b\\d+\\s*\\/\\s*\\d+\\b/;", "export const RATIO_RE = /\\bNEVER-MATCHES\\b/;"),
   off("R9-noun-rules", "R9 rules are counted nouns", "|cases?|rules?|regex", "|cases?|regex"),
-  off("R9-noun-minutes", "R9 minutes are counted nouns", "|days?|hours?|minutes?|", "|days?|hours?|"),
+  off("R9-noun-minutes", "R9 minutes are counted nouns", "|hours?|minutes?)", "|hours?)"),
   off("R9-citation-digits", "R9 a digit run inside a line citation is not a figure", q`(?<![:\-\d.])\b(`, q`\b(`),
   // R10 ceilings
   off("R10-header", "R10 the gate's header carries the ceilings", 'if (typeof m.selfSource !== "string" ||', "if (false &&"),
@@ -282,7 +282,7 @@ export function judge(results) {
   let bad = 0, killed = 0, code = 0, data = 0, equivalent = 0;
   for (const r of results) {
     const tag = r.verdict === "killed" ? "KILLED  " : r.verdict === "survived" ? (r.equivalent ? "EQUIVALENT" : "SURVIVED") : "ERROR   ";
-    lines.push(`${tag.padEnd(10)} ${r.id.padEnd(22)} ${r.label}${r.by ? `  [${r.by}]` : ""}${r.verdict === "killed" ? "" : `  -- ${r.equivalent && r.why ? r.why : r.detail}`}`);
+    lines.push(`${tag.padEnd(10)} ${r.id.padEnd(22)} ${r.label}${r.by ? `  [${r.by}]` : ""}  -- ${r.verdict !== "killed" && r.equivalent && r.why ? r.why : r.detail}`);
     if (r.equivalent) { equivalent += r.verdict === "survived" ? 1 : 0; if (r.verdict === "error") bad += 1; if (r.verdict === "killed") killed += 1; continue; }
     if (r.verdict === "killed") { killed += 1; if (r.rule) data += 1; else code += 1; } else bad += 1;
   }

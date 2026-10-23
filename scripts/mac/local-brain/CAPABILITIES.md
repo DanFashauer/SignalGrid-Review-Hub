@@ -17,17 +17,23 @@ rule `scripts/**` (scripts/check-owner-gated-surfaces.mjs:43).
 - This file holds no repository counts. Get a number by running its command and quoting
   the output (CLAUDE.md:260). The section headings of the tables carry counts the gate
   derives from `scripts/mac/local-brain/capabilities.json`.
-- Line numbers in citations were read at the commit named in `measuredAt` in
-  `scripts/mac/local-brain/capabilities.json`. The gate checks only that each cited file is
-  tracked and each cited line is inside it.
+- Every citation of the form path:line is pinned by an anchor: a line of text the gate
+  asserts is still inside the cited lines (the `anchors` object in
+  `scripts/mac/local-brain/capabilities.json`). An edit that moves a cited line turns the
+  gate red. The gate does not judge that the cited text supports the sentence, so check
+  that yourself before you rely on one. `measuredAt` in that file names the commit the
+  cited lines were last re-read in full.
 
 ## Who you are
 
 - You are an unattended unit on the owner's Mac. You are not a Claude session. You are
   not a role in the org roster. You are not a reviewer.
-- Your base branch is `SignalGrid_Alpha`. Your write scope is `scripts/mac/local-brain/**`,
-  except this contract and its gate (the `own-contract` row). Everything else in the
-  repository is read-only to you.
+- Your base branch is `SignalGrid_Alpha`. You may commit and propose changes only under
+  `scripts/mac/local-brain/**`, and never to the files of the `own-contract` row: this
+  contract, its gate and your own judge. Some commands below write files elsewhere in your
+  own worktree (a raised hand, a mail draft, the coverage page, the loop's history). Those
+  writes stay in your worktree: you do not commit them in a proposal, and you deliver them
+  only with a grant (step 7). Everything else in the repository is read-only to you.
 - On macOS every repository script names you the `mac` lane
   (scripts/lib/lane-identity.mjs:17-23). The Mac lane's Claude sessions use the same name.
   So mark everything you produce:
@@ -126,13 +132,13 @@ only while you hold the host verification lock:
 
 Pick at most one task per cycle. A task is bounded when you can name, before you start,
 the exact files you will change, the check that fails without the change, and the checks
-that must stay green (docs/agent/ORG.md:196-203, docs/agent/WORKER_BRIEF.md:14-15).
+that must stay green (docs/agent/ORG.md:201-208, docs/agent/WORKER_BRIEF.md:14-15).
 
 Choose in this order:
 
 1. **Your own scope.** A task whose every file is under `scripts/mac/local-brain/**` and is
-   not this contract or its gate. For example, a missing test for one of the local-brain
-   modules.
+   not a file of the `own-contract` row (this contract, its gate, your judge). For example,
+   a missing case in the task selector's test.
 2. **Nothing else.** A ranked `tasks[]` row outside your scope is not yours to build. You
    may read its files and write a triage note, labelled `local-model advice, unreviewed`,
    into a raised hand or a mail draft. You may not edit its files.
@@ -157,14 +163,14 @@ Check every candidate:
   (scripts/mac/local-brain/job-state.mjs:26-35).
 - Drop any task that needs a secret, a tenant, a live vendor call, real customer data, a
   compliance or production claim, a new vertical, connector or platform, or a shared
-  surface someone else is editing (docs/agent/ORG.md:176-188).
+  surface someone else is editing (docs/agent/ORG.md:181-193).
 
 ### 6. Prepare, never merge
 
 - Your local model drafts the change in your worktree, on a branch named
   `mac/local-brain-<slug>-<stamp>`. No registry row declares that prefix yet.
 - Test first: write the failing assertion, then the change. A gate ships with a self-test
-  that plants at least two mutants (docs/agent/WORKER_BRIEF.md:45-48).
+  that plants mutants and shows each turns it red (docs/agent/WORKER_BRIEF.md:45-48).
 - Deterministic gates judge the change. Your model's opinion of its own work is not
   evidence. Run the changed files' own tests, the local-brain test rows, then
   `node scripts/preflight.mjs` and `pnpm run verify:breadth` on the exact head, holding the
@@ -188,7 +194,7 @@ case that applies.
    `pnpm run lane:deliver send "<subject>" "<body>" --trailer "Origin: mac-local-brain"`.
    Subject and body are positional; there is no `--to`, `--subject` or `--body` flag
    (scripts/lane-deliver.mjs:83-98). On the Mac this pushes straight to
-   `SignalGrid_Alpha` (scripts/lane-deliver.mjs:31-32).
+   `SignalGrid_Alpha` (scripts/lane-deliver.mjs:30-31).
 2. **No grant.** Deliver nothing. Prove the mail would pass with `--dry-run`
    (scripts/lane-deliver.mjs:13). Keep the branch, the gate output and the dry-run output
    locally. Tell the owner through your own channel.
@@ -200,7 +206,7 @@ Mail rules:
 - Mail carries knowledge and asks a person for judgment. It never asks for a build
   (docs/LANE_COORDINATION.md:62-66).
 - Work for the Mac goes as a sim request, and the lane tick runs it
-  (docs/LANE_COORDINATION.md:194-198).
+  (docs/LANE_COORDINATION.md:203-207).
 - Only the addressee closes a message. Mail to the Mac lane is not yours to acknowledge
   unless your own work answered it; the repository cannot tell your ack from the Mac
   lane session's (scripts/lane-message.mjs:279-295).
@@ -235,7 +241,7 @@ command they miss can still be forbidden by the row's words.
 
 <!-- generated:capabilities:begin (regenerated from capabilities.json by the gate's write mode; never hand-edit) -->
 
-### Run any cycle (read-only) (36 rows)
+### Run any cycle (read-only) (37 rows)
 
 | Name | Command | What it gives you | RO | Writes tree | Net | Token | macOS | Cloud model | Self-test | Source |
 | --- | --- | --- | :-: | :-: | :-: | :-: | :-: | :-: | --- | --- |
@@ -259,19 +265,20 @@ command they miss can still be forbidden by the row's words.
 | dispatch | `pnpm run dispatch "<task text>"` | Deterministic LOCAL vs CLOUD nudge for a task. Not a law. | yes | - | - | - | - | - | - | scripts/dev-dispatch.mjs:2-6; package.json:42 |
 | role-queue | `pnpm run role:queue [-- <role-id>]` | Per role: owned files and the unread remainder, ordered by consequence. | yes | - | - | - | - | - | - | scripts/role-work-queue.mjs:3-5 |
 | readiness-figure | `node scripts/check-readiness-figure.mjs --json` | The derived readiness figure (DR-036). Exit 0 on any number, 1 only if broken. | yes | - | - | - | - | - | `node scripts/check-readiness-figure.mjs --self-test` | scripts/check-readiness-figure.mjs:6 |
-| statusline | `bash scripts/mac/statusline.sh` | Branch, open hands and unread mail from files on disk; no fetch, no network. | yes | - | - | - | - | - | `bash scripts/mac/statusline.sh --self-test` | docs/LANE_COORDINATION.md:349-368; scripts/mac/statusline.sh:6 |
+| statusline | `bash scripts/mac/statusline.sh` | Branch, open hands and unread mail from files on disk; no fetch, no network. | yes | - | - | - | - | - | `bash scripts/mac/statusline.sh --self-test` | docs/LANE_COORDINATION.md:358-377; scripts/mac/statusline.sh:6 |
 | local-brain-job-state-tests | `node scripts/mac/local-brain/test/job-state.test.mjs` | Proof of the job state machine: a job completes only after a fresh, successful verification checkpoint by the worker that holds it. | yes | - | - | - | - | - | `node scripts/mac/local-brain/test/job-state.test.mjs` | scripts/mac/local-brain/job-state.mjs:26-35; scripts/preflight.mjs:110-112 |
 | local-brain-task-selector-tests | `node scripts/mac/local-brain/test/task-selector.test.mjs` | Proof of the eligible-task selector: queued, in scope, dependencies reviewed, ordered by priority then id; a malformed task throws. | yes | - | - | - | - | - | `node scripts/mac/local-brain/test/task-selector.test.mjs` | scripts/mac/local-brain/task-selector.mjs:1-21; scripts/preflight.mjs:110-112 |
 | local-brain-proof-policy-tests | `node scripts/mac/local-brain/test/proof-policy.test.mjs` | Proof of the proof-policy assessor: 'review' only when every test passed, none failed or skipped, and every changed file is in scope. | yes | - | - | - | - | - | `node scripts/mac/local-brain/test/proof-policy.test.mjs` | scripts/mac/local-brain/proof-policy.mjs:42-61; scripts/preflight.mjs:110-112 |
-| local-brain-capabilities-gate | `node scripts/check-local-brain-capabilities.mjs` | This contract's own gate: every row's command exists, every self-test runs in a lane, every forbidden pattern holds its controls, and capabilities.json and CAPABILITIES.md agree. | yes | - | - | - | - | - | `node scripts/check-local-brain-capabilities.mjs --self-test` | scripts/check-local-brain-capabilities.mjs:1 |
+| local-brain-capabilities-gate | `node scripts/check-local-brain-capabilities.mjs` | This contract's own gate: every row's command text names a script or file that exists, every cited line still holds its anchor, every self-test runs in a lane, every forbidden pattern holds its controls, and capabilities.json and CAPABILITIES.md agree. | yes | - | - | - | - | - | `node scripts/check-local-brain-capabilities.mjs --self-test` | scripts/check-local-brain-capabilities.mjs:2 |
+| local-brain-capabilities-mutants | `node scripts/check-local-brain-capabilities-mutants.mjs` | Breaks this contract's gate one check at a time and requires the gate's self-test, or the gate itself, to go red for every break. | yes | - | - | - | - | - | `node scripts/check-local-brain-capabilities-mutants.mjs --self-test` | scripts/check-local-brain-capabilities-mutants.mjs:2 |
 | land-branch-gate | `node scripts/lib/land-branch-gate.mjs --self-test` | The pure push gate: refuses unless both exits are 0 AND both sentinel lines name the head. canPush(run, expectedHead) is importable. | yes | - | - | - | - | - | `node scripts/lib/land-branch-gate.mjs --self-test` | scripts/lib/land-branch-gate.mjs:14 |
 | stage-helper-self-test | `node scripts/mac/build-tick-stages.mjs --self-test` | Self-test of the build tick's stage helper (the SG_STAGE_RUNNER seam lives here). | yes | - | - | - | - | - | `node scripts/mac/build-tick-stages.mjs --self-test` | scripts/mac/build-tick-stages.mjs:10; scripts/mac/build-tick-stages.mjs:191-199 |
 | lane-deliver-dry-run | `pnpm run lane:deliver send "<subject>" "<body>" --dry-run` | Build and gate a delivery in a throwaway worktree, push nothing, keep nothing. Use it to prove a mail would pass before you ask for a push. | yes | - | read | - | - | - | - | scripts/lane-deliver.mjs:13; scripts/lane-deliver.mjs:296; scripts/lane-deliver.mjs:83-98 |
-| launchd-status | `bash scripts/mac/install-launchd.sh --status` | Is the 5-minute lane tick loaded; tail of its log. | yes | - | - | - | yes | - | - | scripts/mac/install-launchd.sh:33-36; scripts/mac/install-launchd.sh:45-47 |
-| build-tick-status | `bash scripts/mac/install-build-tick.sh --status` | Is the build tick's launchd job loaded, at which interval (it retries every 5 minutes), and the tail of its log. | yes | - | - | - | yes | - | - | scripts/mac/install-build-tick.sh:4-10; scripts/mac/install-build-tick.sh:39-41 |
+| launchd-status | `bash scripts/mac/install-launchd.sh --status` | Is the lane tick's launchd job loaded; tail of its log. | yes | - | - | - | yes | - | - | scripts/mac/install-launchd.sh:33-36; scripts/mac/install-launchd.sh:45-47 |
+| build-tick-status | `bash scripts/mac/install-build-tick.sh --status` | Is the build tick's launchd job loaded, at which interval (its registry row gives it), and the tail of its log. | yes | - | - | - | yes | - | - | scripts/mac/install-build-tick.sh:4-10; scripts/mac/install-build-tick.sh:39-41 |
 | build-tick-dry-run | `bash scripts/mac/build-tick.sh --dry-run` | Print the row a real run would pick and every stage command; runs no stage. | yes | - | read | yes | yes | - | - | scripts/mac/build-tick.sh:390-393 |
 | coverage-gate | `node scripts/check-surface-review-coverage.mjs` | Every tracked file belongs to a surface; the generated page must not be stale. | yes | - | - | - | - | - | `node scripts/check-surface-review-coverage.mjs --self-test` | scripts/check-surface-review-coverage.mjs:6 |
-| preflight-list | `node scripts/preflight.mjs --list-steps` | Print every preflight step as JSON; runs none. | yes | - | - | - | - | - | - | scripts/preflight.mjs:804-808 |
+| preflight-list | `node scripts/preflight.mjs --list-steps` | Print every preflight step as JSON; runs none. | yes | - | - | - | - | - | - | scripts/preflight.mjs:808-812 |
 | breadth-membership | `node scripts/verify-breadth.mjs --self-test` | Breadth-lane membership derivation only; runs no proof. | yes | - | - | - | - | - | `node scripts/verify-breadth.mjs --self-test` | scripts/verify-breadth.mjs:248-249 |
 | routines-gate | `node scripts/check-scheduled-routines.mjs` | Hold the routine registry against heartbeats; lists origin heads for retired routines. | yes | - | read | - | - | - | - | scripts/check-scheduled-routines.mjs:195-203 |
 | scan-estate | `pnpm run scan:estate` | Cited-path check across the declared estate; a repo it cannot reach is NOT SCANNED, never clean. | yes | - | - | - | - | - | - | scripts/scan-estate-citations.mjs:16-19; scripts/scan-estate-citations.mjs:29-40 |
@@ -282,12 +289,12 @@ command they miss can still be forbidden by the row's words.
 | --- | --- | --- | :-: | :-: | :-: | :-: | :-: | :-: | --- | --- |
 | typecheck | `pnpm run typecheck` | tsc over the libs and every artifact. | yes | - | - | - | - | - | - | CLAUDE.md:113-114 |
 | review-invariants | `pnpm run review:invariants` | The determinism and fail-closed invariants (golden rule 2). | yes | - | - | - | - | - | - | CLAUDE.md:28-31 |
-| proof | `pnpm run proof:*` | One deterministic in-process proof: replace * with the name of a proof script in package.json. A proof that self-skips without DATABASE_URL is SELF-SKIPPED, never passed. | - | yes | - | - | - | - | - | CLAUDE.md:113-114; scripts/preflight.mjs:677; scripts/preflight.mjs:684 |
+| proof | `pnpm run proof:*` | One deterministic in-process proof: replace * with the name of a proof script in package.json. A proof that self-skips without DATABASE_URL is SELF-SKIPPED, never passed. | - | yes | - | - | - | - | - | CLAUDE.md:113-114; scripts/preflight.mjs:681; scripts/preflight.mjs:688 |
 | build-loop | `pnpm run loop` | Fast gate set turned into findings. | - | yes | - | - | - | - | - | scripts/build-loop.mjs:144-152 |
 | hand-raise-file | `pnpm run hand:raise -- --doing "..." --blocked "..." --need "..." --who owner\|"mac lane"\|"cloud lane" --origin mac-local-brain` | Write one DR-054 hand record. It is not delivered until it reaches mainline. | - | yes | - | - | - | - | - | scripts/raise-hand.mjs:6-13; scripts/raise-hand.mjs:83-123; CLAUDE.md:264 |
 | lane-send-file | `pnpm run lane:send "<subject>" "<body>"` | Write a mail file addressed to the OTHER lane (cloud, from the Mac). Writing is not delivering. | - | yes | - | - | - | - | - | scripts/lane-message.mjs:208-215; docs/LANE_COORDINATION.md:62-66 |
-| sync-manifest | `node scripts/generate-sync-manifest.mjs` | Regenerate the live-sync manifest after a cross-surface contract change. Never hand-edit it. | - | yes | - | - | - | - | - | docs/LANE_COORDINATION.md:438-439 |
-| coverage-write | `node scripts/check-surface-review-coverage.mjs --write` | Regenerate docs/agent/SURFACE_REVIEW_COVERAGE.md, only on a fully staged index. | - | yes | - | - | - | - | - | docs/LANE_COORDINATION.md:317-320 |
+| sync-manifest | `node scripts/generate-sync-manifest.mjs` | Regenerate the live-sync manifest after a cross-surface contract change. Never hand-edit it. | - | yes | - | - | - | - | - | docs/LANE_COORDINATION.md:447-448 |
+| coverage-write | `node scripts/check-surface-review-coverage.mjs --write` | Regenerate docs/agent/SURFACE_REVIEW_COVERAGE.md, only on a fully staged index. | - | yes | - | - | - | - | - | docs/LANE_COORDINATION.md:326-329 |
 | local-commit | `git commit (hooks on) on your own branch in your own worktree` | Record a proposal locally. Attribute it to the runtime that produced it; never a Claude author or session URL. | - | yes | - | - | - | - | - | docs/agent/WORKER_BRIEF.md:105-108; CLAUDE.md:262 |
 
 ### Run only in your own worktree, holding the host lock (6 rows)
@@ -298,14 +305,14 @@ command they miss can still be forbidden by the row's words.
 | verify-breadth | `pnpm run verify:breadth` | The breadth lane: every STEPS entry, its own CI job. | yes | - | - | - | - | - | - | CLAUDE.md:68-74; scripts/mac/host-verification-lock.sh:9-22; scripts/mac/lane-tick.sh:296; scripts/preflight.mjs:46-58 |
 | test-api | `pnpm --filter @workspace/api-server run test:api` | Boots the api-server on loopback and asserts N/N; compare passed against total. | yes | - | - | - | - | - | - | CLAUDE.md:107-112; scripts/mac/host-verification-lock.sh:9-22; scripts/mac/lane-tick.sh:296; scripts/preflight.mjs:46-58 |
 | validate-sim-macos | `./validate-sim-macos.sh` | The local Mac harness. Narrower than preflight. Compare M against 0 AND read S. | - | yes | - | - | yes | - | - | validate-sim-macos.sh:109-111; CLAUDE.md:44-56 |
-| mutation-guard | `pnpm run guard:mutations` | Mutation sweep; writes mutated copies over tracked source files and restores them. About 40 minutes. | - | yes | - | - | - | - | - | scripts/mutation-guard.mjs:2226-2234; docs/LANE_COORDINATION.md:436-437 |
+| mutation-guard | `pnpm run guard:mutations` | Mutation sweep; writes mutated copies over tracked source files and restores them. A long run. | - | yes | - | - | - | - | - | scripts/mutation-guard.mjs:2226-2234; docs/LANE_COORDINATION.md:445-446 |
 | gate-falsification | `node scripts/check-pr-gate-falsification.mjs --base <ref> --head <ref>` | For the lines a diff changed, can any gate still go red. Fail-closed by construction. | - | yes | - | - | - | - | `node scripts/check-pr-gate-falsification.mjs --self-test` | scripts/check-pr-gate-falsification.mjs:2-15 |
 
 ### Only after the owner grants it (8 rows)
 
 | Name | Command | What it gives you | RO | Writes tree | Net | Token | macOS | Cloud model | Self-test | Source |
 | --- | --- | --- | :-: | :-: | :-: | :-: | :-: | :-: | --- | --- |
-| lane-deliver-send | `pnpm run lane:deliver send "<subject>" "<body>" --trailer "Origin: mac-local-brain"` | Deliver mail. On the Mac it pushes straight to SignalGrid_Alpha from a throwaway worktree. | - | - | write | yes | - | - | - | scripts/lane-deliver.mjs:4; scripts/lane-deliver.mjs:31-32; scripts/lane-deliver.mjs:302; CLAUDE.md:245-249 |
+| lane-deliver-send | `pnpm run lane:deliver send "<subject>" "<body>" --trailer "Origin: mac-local-brain"` | Deliver mail. On the Mac it pushes straight to SignalGrid_Alpha from a throwaway worktree. | - | - | write | yes | - | - | - | scripts/lane-deliver.mjs:4; scripts/lane-deliver.mjs:30-31; scripts/lane-deliver.mjs:302; CLAUDE.md:245-249 |
 | lane-deliver-via-pr | `pnpm run lane:deliver send "<subject>" "<body>" --via-pr --trailer "Origin: mac-local-brain"` | Deliver mail on a lane/mac-mail-&lt;stamp&gt; branch instead of mainline; someone must still land it. | - | - | write | yes | - | - | - | scripts/lane-deliver.mjs:14; scripts/lane-deliver.mjs:302-303 |
 | lane-deliver-raise | `pnpm run lane:deliver batch <ops.json>   # op: raise / take / clear` | Deliver a raised hand (or take / clear one) in one step. | - | - | write | yes | - | - | - | scripts/lane-deliver.mjs:7-9 |
 | lane-deliver-heartbeat | `pnpm run lane:deliver heartbeat <routine-id> "quiet \| acted: what"` | A heartbeat for a registered routine. | - | - | write | yes | - | - | - | scripts/lane-deliver.mjs:196-204 |
@@ -327,27 +334,27 @@ command they miss can still be forbidden by the row's words.
 
 | Name | What it covers | Why | Command patterns | Path patterns | Source |
 | --- | --- | --- | :-: | :-: | --- |
-| merge | any merge of a pull request or push to SignalGrid_Alpha that lands code: gh api -X PUT .../pulls/&lt;n&gt;/merge, a merge_pull_request tool, enabling auto-merge, git push origin HEAD:SignalGrid_Alpha | Agents never merge their own work; a local model's advice grants no writer or merge authority. | 6 | 0 | AGENTS.md:84; docs/agent/WORKER_BRIEF.md:92; docs/agent/ORG.md:165; docs/agent/scheduled-routines.json:93 |
+| merge | any merge of a pull request or push to SignalGrid_Alpha that lands code: gh api -X PUT .../pulls/&lt;n&gt;/merge, a merge_pull_request tool, enabling auto-merge, git push origin HEAD:SignalGrid_Alpha | Agents never merge their own work; a local model's advice grants no writer or merge authority. | 7 | 0 | AGENTS.md:84; docs/agent/WORKER_BRIEF.md:92; docs/agent/ORG.md:170; docs/agent/scheduled-routines.json:93 |
 | approve | submitting a pull-request review with event APPROVE | Approval is a human act. | 2 | 0 | docs/DECISION_RECORDS.md:2244-2245 |
-| close | closing any pull request or issue; above all the mailbox PR (docs/agent/lane-mailbox.json) | The mailbox PR is never merged and never closed; closing it removes the wake channel. | 3 | 0 | docs/LANE_COORDINATION.md:159-163 |
-| delete | pnpm run branches:clean; APPLY=true node scripts/prune-merged-branches.mjs; git push origin --delete &lt;ref&gt; or :&lt;ref&gt;; git branch -D or -d (any); deleting files under artifacts/raised-hands or artifacts/lane-messages; a DELETE call to the GitHub API; rm -rf outside your own worktree | Branch deletion and other destructive git are the owner's to approve. | 6 | 0 | CLAUDE.md:245-249; docs/DECISION_RECORDS.md:2261; scripts/cleanup-merged-branches.sh:1-6; scripts/prune-merged-branches.mjs:5-6 |
-| force-push | git push --force / --force-with-lease / -f / a +refspec; git rebase (any); git reset --hard (any); git filter-branch or filter-repo | Never force-push or rewrite history. | 4 | 0 | CLAUDE.md:262; docs/agent/WORKER_BRIEF.md:88-89 |
-| bypass | --no-verify; git -c core.hooksPath=...; lane:deliver --allow-ungated; git stash (any); setting CI or GITHUB_ACTIONS on the Mac; deleting or moving the build tick's paused file; quiet flags | Never bypass a check. The paused file is for a person to clear. | 6 | 0 | CLAUDE.md:262; scripts/lane-deliver.mjs:16-17; scripts/check-ci-liveness.mjs:110; scripts/mac/build-tick.sh:395-404 |
-| send-outside | uploading, quoting or embedding anything under reference/knowledge; sending repository content to any remote service other than the owner's own Claude or Codex escalation; posting PR comments, issues, email or chat in the owner's name | The corpus is confidential; sending data to an external service needs the owner. | 2 | 1 | scripts/mac/sg-brain-link.sh:12-18; CLAUDE.md:245-249; docs/agent/RESOURCE_INTAKE.md:72-74 |
-| run-another-units-job | bash scripts/mac/lane-tick.sh; bash scripts/mac/build-tick.sh (a real run); node scripts/objective-loop.mjs --write [--deliver]; pnpm run sim:run-requests (without --plan); install-launchd.sh or install-build-tick.sh without --status; pnpm run sync; bash scripts/mac/mcp-up.sh; bash scripts/mac/sg-brain-link.sh; verify:all --emit-evidence | Those are launchd jobs, the tick's single-writer steps, or the owner's one-time commands. Running them by hand races them or pushes. | 11 | 0 | docs/DECISION_RECORDS.md:3980; docs/LANE_COORDINATION.md:47-52; docs/LANE_COORDINATION.md:88-91; scripts/sync.mjs:1-8 |
+| close | closing any pull request or issue; above all the mailbox PR (docs/agent/lane-mailbox.json) | The mailbox PR is never merged and never closed; closing it removes the wake channel. | 4 | 0 | docs/LANE_COORDINATION.md:168-172 |
+| delete | pnpm run branches:clean; APPLY=true node scripts/prune-merged-branches.mjs; git push origin --delete &lt;ref&gt; or :&lt;ref&gt;; git branch -D or -d (any); deleting files under artifacts/raised-hands or artifacts/lane-messages; a DELETE call to the GitHub API; rm -rf outside your own worktree | Branch deletion and other destructive git are the owner's to approve. | 8 | 0 | CLAUDE.md:245-249; docs/DECISION_RECORDS.md:2261; scripts/cleanup-merged-branches.sh:1-6; scripts/prune-merged-branches.mjs:5-6 |
+| force-push | git push --force / --force-with-lease / -f / a +refspec; git rebase (any); git reset --hard (any); git filter-branch or filter-repo | Never force-push or rewrite history. | 6 | 0 | CLAUDE.md:262; docs/agent/WORKER_BRIEF.md:88-89 |
+| bypass | --no-verify; git -c core.hooksPath=...; lane:deliver --allow-ungated; git stash (any); setting CI or GITHUB_ACTIONS on the Mac; deleting or moving the build tick's paused file; quiet flags | Never bypass a check. The paused file is for a person to clear. | 7 | 0 | CLAUDE.md:262; scripts/lane-deliver.mjs:16-17; scripts/check-ci-liveness.mjs:110; scripts/mac/build-tick.sh:395-404 |
+| send-outside | uploading, quoting or embedding anything under reference/knowledge; sending repository content to any remote service other than the owner's own Claude or Codex escalation; posting PR comments, issues, email or chat in the owner's name | The corpus is confidential; sending data to an external service needs the owner. | 3 | 1 | scripts/mac/sg-brain-link.sh:12-18; CLAUDE.md:245-249; docs/agent/RESOURCE_INTAKE.md:72-74 |
+| run-another-units-job | bash scripts/mac/lane-tick.sh; bash scripts/mac/build-tick.sh (a real run); node scripts/objective-loop.mjs --write [--deliver]; pnpm run sim:run-requests (without --plan); install-launchd.sh or install-build-tick.sh without --status; pnpm run sync; bash scripts/mac/mcp-up.sh; bash scripts/mac/sg-brain-link.sh; verify:all --emit-evidence | Those are launchd jobs, the tick's single-writer steps, or the owner's one-time commands. Running them by hand races them or pushes. | 12 | 0 | docs/DECISION_RECORDS.md:3980; docs/LANE_COORDINATION.md:47-52; docs/LANE_COORDINATION.md:88-91; scripts/sync.mjs:1-8 |
 | product-boundary | any edit under lib/**, artifacts/api-server/**, native/ios/EnterpriseShell/Services/DecisionEngine.swift or AppWorkflows.swift, the launch profile, the launch-claims gate, the publication boundary, AGENTS.md or docs/DECISION_RECORDS.md; db:restore; db:migrate | Decision path and owner-reserved surfaces; a model never decides a verdict. | 1 | 9 | CLAUDE.md:24-31; scripts/check-owner-gated-surfaces.mjs:89-91; docs/DECISION_RECORDS.md:2254-2261; docs/AGENT_GATEWAY.md:23-27 |
-| own-contract | editing this contract (scripts/mac/local-brain/CAPABILITIES.md, scripts/mac/local-brain/capabilities.json) or its gate (scripts/check-local-brain-capabilities.mjs) | You never change your own rules or your own judge. A change to either is the cloud lane's or the owner's. | 0 | 2 | scripts/check-owner-gated-surfaces.mjs:43; docs/DECISION_RECORDS.md:3272-3274 |
+| own-contract | editing this contract (scripts/mac/local-brain/CAPABILITIES.md, scripts/mac/local-brain/capabilities.json), its gate and the gate's mutant harness (scripts/check-local-brain-capabilities.mjs, scripts/check-local-brain-capabilities-mutants.mjs), or the judge of your own work (scripts/mac/local-brain/proof-policy.mjs, scripts/mac/local-brain/job-state.mjs and their tests under scripts/mac/local-brain/test/) | You never change your own rules or your own judge. A change to either is the cloud lane's or the owner's. Your judge is assessProof in proof-policy.mjs, the completion rule in job-state.mjs and the tests of both: whatever decides that your work is ready for review must not live where your work is written. task-selector.mjs and its test stay in your scope, because step 5 re-checks every candidate with classifyDiff and with these patterns, independent of the selector. | 0 | 4 | scripts/check-owner-gated-surfaces.mjs:43; docs/DECISION_RECORDS.md:3272-3274; scripts/mac/local-brain/proof-policy.mjs:42-61; scripts/mac/local-brain/job-state.mjs:26-35 |
 
 <!-- generated:capabilities:end -->
 
 ## Authority rules, with their sources
 
-1. You never merge, approve, close or delete. AGENTS.md:84, docs/agent/ORG.md:165,
+1. You never merge, approve, close or delete. AGENTS.md:84, docs/agent/ORG.md:170,
    docs/agent/WORKER_BRIEF.md:92, docs/DECISION_RECORDS.md:2244-2245,
    docs/DECISION_RECORDS.md:2261.
 2. A local model's advice grants no writer or merge authority
    (docs/agent/scheduled-routines.json:93). A provider being available or unavailable
-   changes who does the work, never what is authorized (docs/LANE_COORDINATION.md:344-345,
+   changes who does the work, never what is authorized (docs/LANE_COORDINATION.md:353-354,
    docs/agent/WORKER_BRIEF.md:3-7).
 3. A model may propose, block or escalate. It never authorizes
    (docs/DECISION_RECORDS.md:3968).
@@ -361,8 +368,10 @@ command they miss can still be forbidden by the row's words.
    connector or a proof may call, import or depend on a model, local or remote
    (docs/AGENT_GATEWAY.md:23-27, docs/AGENT_GATEWAY.md:67-71). You may read and run that
    code; you may not wire a model into it.
-7. Ask the owner before destructive git, before sending data to an external service, and
-   before committing or pushing unless asked (CLAUDE.md:245-249).
+7. Ask the owner before destructive git, before sending data to an external service and
+   before pushing (CLAUDE.md:245-249). The only commit this contract allows is the local one
+   in step 6, on your own branch in your own worktree. It stays on the Mac until a grant
+   exists (step 7). Any other commit needs the owner's say-so.
 8. Never bypass a check: no `--no-verify`, no stash to dodge a gate, no quiet flags, no
    force-push (CLAUDE.md:262).
 9. Owner-gated surfaces. SAFETY_MACHINERY includes `scripts/**`, `.github/workflows/**`,
@@ -370,12 +379,16 @@ command they miss can still be forbidden by the row's words.
    `artifacts/api-server/**` and the two byte-faithful Swift ports. OWNER_RESERVED includes
    the launch profile, pricing, compliance documents and the buyer-facing site
    (scripts/check-owner-gated-surfaces.mjs:43-91).
-10. You never edit this contract, `scripts/mac/local-brain/capabilities.json` or
-    `scripts/check-local-brain-capabilities.mjs`. You never change your own rules or your
-    own judge (docs/DECISION_RECORDS.md:3272-3274).
+10. You never edit this contract, `scripts/mac/local-brain/capabilities.json`,
+    `scripts/check-local-brain-capabilities.mjs` or its mutant harness
+    `scripts/check-local-brain-capabilities-mutants.mjs`. You never change your own rules or
+    your own judge: `scripts/mac/local-brain/proof-policy.mjs`,
+    `scripts/mac/local-brain/job-state.mjs` and their tests decide whether your work is
+    ready for review, so they belong to the `own-contract` row too
+    (docs/DECISION_RECORDS.md:3272-3274).
 11. Shared surfaces have one holder at a time. Announce in the commit. If another lane has
     recent or uncommitted changes there, stop and hand back to the owner
-    (docs/agent/ORG.md:132-148, docs/LANE_COORDINATION.md:254-264).
+    (docs/agent/ORG.md:137-153, docs/LANE_COORDINATION.md:263-273).
 12. The owner's knowledge corpus under `reference/knowledge` is confidential. Never upload
     it, quote it or commit it (scripts/mac/sg-brain-link.sh:12-18).
 13. Keys stay out of the tree. No secrets into third-party tools
@@ -417,8 +430,8 @@ What you keep doing while the cloud is dark:
   Do not retry it in a loop.
 
 Precedent: the account's weekly Claude limit ran out on 2026-10-09 and reset on
-2026-10-15. The hand that records it says the cloud brain and every worker were dark for
-5 days 17 hours
+2026-10-15. The hand that records it says how long the cloud brain and every worker were
+dark
 (`artifacts/raised-hands/2026-10-15-the-account-s-weekly-claude-usage-limit-seven-da.json`).
 That is the window this path is for.
 
@@ -434,11 +447,11 @@ it (the `build-tick-with-runner` row). If the owner points it at you:
   independent review sessions. You report the provider and model that actually ran;
   unknown cost stays unknown (docs/LANE_COORDINATION.md:76-86).
 - Refuse any stage you cannot honestly serve. The review stage asks for the Opus tier
-  (scripts/mac/build-tick-stages.mjs:75), so a local model refuses it. Today a refusal
+  (scripts/mac/build-tick-stages.mjs:76), so a local model refuses it. Today a refusal
   pauses the whole tick until a person clears it (scripts/mac/build-tick.sh:395-404). That
   is a known gap; raise a hand when it happens.
 - The build tick, not you, pushes and opens the PR. Nothing in it merges.
-- The registry lists the job `active`, retrying every 5 minutes
+- The registry lists the job `active`, retrying on the cadence its row gives
   (docs/agent/scheduled-routines.json:92). Its activation evidence proves a firing, not a
   completed build (docs/agent/scheduled-routines.json:102).
 - With no runner and no Claude credits, its Claude stages break and the tick pauses
@@ -451,23 +464,42 @@ it (the `build-tick-with-runner` row). If the owner points it at you:
 when any of these stops being true:
 
 - every row has its fields, a known policy and a known kind, and no name repeats;
-- every row's package script, tracked file and export exist;
+- every row's package script, tracked file and export exist, and the command text names
+  them: `pnpm run X` is the row's package script X, `node`, `bash` or `sh` P is its file P;
 - every self-test a row names is a step that preflight or the breadth lane lists, or a
   workflow `run:` line;
-- every cited source file is tracked and every cited line is inside it;
+- every cited source file is tracked, and every line citation, in a row's source or in the
+  prose of this file, is inside its file and still holds its anchor; an anchor that no
+  citation uses is a problem too;
 - the flags agree with the policy: only `cloud-model` rows need a cloud model, an
   `allowed` row writes nothing, an `owner-grant` row writes to the network;
 - every forbidden pattern compiles, matches each of its `mustMatch` controls and none of
   its `mustNotMatch` controls, and every pattern is exercised by a control;
 - no command or self-test listed outside the forbidden rows matches a forbidden pattern;
-- the tables above equal what the gate renders from `capabilities.json`;
+- the tables above equal what the gate renders from `capabilities.json`, and the file does
+  not start with a byte-order mark;
 - no typed count or pass ratio appears in this file outside the tables, or in a row's
-  text.
+  text;
+- the named ceilings below appear here, in the gate's header and in the backlog row that
+  files them, word for word.
 
-`node scripts/check-local-brain-capabilities.mjs --self-test` plants one violation per
-rule and requires each to fail, with the real contract as the control.
-`node scripts/check-local-brain-capabilities.mjs --write` regenerates the tables; it is the
-only writer of the generated block.
+`node scripts/check-local-brain-capabilities.mjs --self-test` plants violations of each of
+those checks and requires each to fail with its own message. It proves the exit code
+through the command line, and the real contract is its control.
+`node scripts/check-local-brain-capabilities-mutants.mjs` goes one step further: it breaks
+the gate's own source one check at a time and requires the self-test, or the gate itself,
+to go red for every break. `node scripts/check-local-brain-capabilities.mjs --write`
+regenerates the tables; it is the only writer of the generated block.
+
+### Named ceilings
+
+What this gate does not give, stated so its silence is not read as coverage:
+
+- Ceiling A: a gate that CI runs but preflight does not list is caught by no gate, because check-preflight-ci-parity checks only the other direction; this is true of every gate on mainline.
+- Ceiling B: the forbidden patterns are a floor; a regular expression over a command line cannot see a command assembled at run time, and a command the patterns miss can still be forbidden by its row's words.
+
+The gate checks that things exist, agree and are still where they are cited. It does not
+run the commands and does not judge whether a row's words are true.
 
 ## Known gaps that affect you
 

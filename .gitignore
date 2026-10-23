@@ -173,3 +173,6 @@ docs/handoffs/
 docs/plans/
 build-gate-ledger.md
 .lock-compass/
+
+# Gate-mutant scratch copy (scripts/run-gate-mutants.mjs)
+/scripts/.mutant-*

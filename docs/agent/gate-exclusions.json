@@ -305,7 +305,7 @@
     {
       "path": "scripts/check-verdict-tone-source.mjs",
       "symbol": "IGNORE",
-      "reason": "The context the tone-module branch judge gives an arm it deliberately does not pair to a verdict: the default arm of a verdict branch and a branch whose test names no verdict literal outside a verdict arm. It is an exclusion of the subject, but not a hidden one: every case it covers is a numbered ceiling in the gate's header, in its printed footer and in plan row 168, and the self-test checks those three agree; inside a verdict arm the context is inherited, so nothing under a verdict is skipped.",
+      "reason": "The context the tone-module branch judge gives an arm that no test of a verdict on the verdict parameter selects: the default arm of a verdict branch, the complement arm of a negative test, and a branch whose test names no verdict on the parameter outside a verdict arm. It is an exclusion of the subject, but not a hidden one: each case is part of numbered ceiling 3 in the gate's header, its printed footer and plan row 168, and the self-test checks those agree item by item. Inside a verdict arm nothing is excluded by this context: a nested test narrows the enclosing binding (intersects, never replaces it) and a test that names nothing inherits it.",
       "date": "2026-10-22"
     }
   ]

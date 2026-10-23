@@ -16,18 +16,18 @@
  },
  {
   "name": "C2 reversed operands (right side only)",
-  "find": "const vs = [verdictOf(n.left), verdictOf(n.right)].filter(Boolean);",
-  "replace": "const vs = [verdictOf(n.right)].filter(Boolean);"
+  "find": "const v = lv ?? rv;\n        if (v) {",
+  "replace": "const v = rv;\n        if (v) {"
  },
  {
   "name": "C2 negative test binds the then-arm",
-  "find": "else if (a.mode === \"neg\") { walk(whenTrue, IGNORE); if (whenFalse) walk(whenFalse, bound(a.V)); }",
-  "replace": "else if (a.mode === \"neg\") { walk(whenTrue, bound(a.V)); if (whenFalse) walk(whenFalse, IGNORE); }"
+  "find": "      walk(n.whenTrue, narrow(ctx, r.T, r.tS));\n      walk(n.whenFalse, narrow(ctx, r.F, r.fS));",
+  "replace": "      walk(n.whenTrue, narrow(ctx, r.T, r.tS));\n      walk(n.whenFalse, narrow(ctx, new Set(), false));"
  },
  {
   "name": "C2 free class not flagged",
-  "find": "if (ctx.kind === \"free\") { out.push(",
-  "replace": "if (ctx.kind === \"freeX\") { out.push("
+  "find": "if (ctx.kind === \"free\") { out.push(`line ${lineOf(node)}: status-${m[1]} appears outside a verdict-keyed property or a branch on a verdict literal — it cannot be paired to a verdict`); continue; }",
+  "replace": "if (ctx.kind === \"free\") { continue; }"
  },
  {
   "name": "C2 runtime-built class not flagged",
@@ -36,17 +36,12 @@
  },
  {
   "name": "C2 .includes() not recognised",
-  "find": "if (ts.isCallExpression(n) && ts.isPropertyAccessExpression(n.expression) && n.expression.name.text === \"includes\") {",
-  "replace": "if (false) {"
- },
- {
-  "name": "C2 compound/mixed binds nothing (both arms ignored)",
-  "find": "else { walk(whenTrue, bound(a.V)); if (whenFalse) walk(whenFalse, bound(a.V)); }\n  };",
-  "replace": "else { walk(whenTrue, UNJUDGED); if (whenFalse) walk(whenFalse, UNJUDGED); }\n  };"
+  "find": "      if (ts.isPropertyAccessExpression(c) && (c.name.text === \"includes\" || c.name.text === \"has\") && n.arguments[0]) {\n        const lits = new Set();",
+  "replace": "      if (false) {\n        const lits = new Set();"
  },
  {
   "name": "C2 switch cases not bound",
-  "find": "const c = ts.isDefaultClause(clause) ? inherit(ctx) : pending.size === 0 ? inherit(ctx) : bound(pending);",
+  "find": "const c = ts.isDefaultClause(clause) ? narrow(ctx, new Set()) : narrow(ctx, pending, onSubject && pending.size === 1);",
   "replace": "const c = IGNORE;"
  },
  {
@@ -76,8 +71,8 @@
  },
  {
   "name": "L1 escaped selector not noticed",
-  "find": "|| (/\\\\/.test(prelude) && /status|text-|bg-|border-/i.test(decoded)",
-  "replace": "|| false"
+  "find": "|| (/\\\\/.test(prelude) && /status|text-|bg-|border-/i.test(decoded))",
+  "replace": "|| (false)"
  },
  {
   "name": "L1 attribute selector not noticed",
@@ -161,13 +156,13 @@
  },
  {
   "name": "F1 non-verdict test resets the verdict context",
-  "find": "const inherit = (ctx) => (ctx.kind === \"bound\" ? ctx : IGNORE);",
-  "replace": "const inherit = (ctx) => IGNORE;"
+  "find": "    if (ctx.kind === \"bound\") { if (X.size === 0) return ctx; const I = inter(ctx.V, X); return I.size > 0 ? bound(I, strict && I.size === 1) : ctx; }",
+  "replace": "    if (ctx.kind === \"bound\") { if (X.size === 0) return IGNORE; const I = inter(ctx.V, X); return I.size > 0 ? bound(I, strict && I.size === 1) : IGNORE; }"
  },
  {
   "name": "F2 a set of verdicts accepts any class in the set",
-  "find": "const ok = ctx.V.size === 1 ? ctx.V.has(m[1]) : [...ctx.V].every((v) => VERDICT_REGISTRY[v].token === VERDICT_REGISTRY[m[1]].token);",
-  "replace": "const ok = ctx.V.has(m[1]);"
+  "find": "const ok = ctx.strict && ctx.V.size === 1 ? ctx.V.has(m[1]) : [...ctx.V].every((v) => VERDICT_REGISTRY[v].token === VERDICT_REGISTRY[m[1]].token);",
+  "replace": "const ok = ctx.strict && ctx.V.size === 1 ? ctx.V.has(m[1]) : [...ctx.V].some((v) => VERDICT_REGISTRY[v].token === VERDICT_REGISTRY[m[1]].token);"
  },
  {
   "name": "F3 strings not neutralised before comments",
@@ -191,7 +186,7 @@
  },
  {
   "name": "F4 alpha not checked",
-  "find": "if (!(role === \"text\" ? a === 1 : a > 0)) return undefined;",
+  "find": "if (!(role === \"text\" ? a === 1 : a >= MIN_FILL_ALPHA)) return undefined;",
   "replace": "if (false) return undefined;"
  },
  {
@@ -201,8 +196,8 @@
  },
  {
   "name": "F5 index.html stylesheet link not judged",
-  "find": "if (/\\brel\\s*=\\s*[\"']?stylesheet/i.test(tag) &&",
-  "replace": "if (false &&"
+  "find": "        if (!FONT_HOST.test(href)) registryProblems.push(`${rel(htmlFile)} — links the stylesheet",
+  "replace": "        if (false) registryProblems.push(`${rel(htmlFile)} — links the stylesheet"
  },
  {
   "name": "F5 inline <style> in a source not reported",
@@ -211,8 +206,8 @@
  },
  {
   "name": "F5 unquoted @import url() not followed",
-  "find": "/@import\\s+(?:url\\(\\s*)?[\"']?([^\"')\\s;]+\\.css)[\"']?\\s*\\)?/g",
-  "replace": "/@import\\s+[\"']([^\"')\\s;]+\\.css)[\"']/g"
+  "find": "/@import\\s+(?:url\\(\\s*)?[\"']?([^\"')\\s;]+)[\"']?\\s*\\)?/g",
+  "replace": "/@import\\s+[\"']([^\"')\\s;]+)[\"']/g"
  },
  {
   "name": "F5 dynamic import / require not seen",
@@ -246,8 +241,8 @@
  },
  {
   "name": "F6 Object[\"assign\"] callee not recognised",
-  "find": "ts.isElementAccessExpression(c) ? lit(c.argumentExpression) : null;",
-  "replace": "null;"
+  "find": "else if (ts.isElementAccessExpression(c)) { obj = builtinOf(c.expression); meth = lit(c.argumentExpression); }",
+  "replace": "else if (false) { }"
  },
  {
   "name": "F6 only Object.assign recognised",
@@ -266,13 +261,13 @@
  },
  {
   "name": "F7 a ceiling's footer text cut",
-  "find": "a switch clause that falls into the next with statements; and any",
-  "replace": "and any"
+  "find": "a switch clause that falls into the next with statements; and any verdict choice not made by an object property, a comparison, `.includes()` / `.has()` or a `switch` case",
+  "replace": "and any verdict choice not made by an object property, a comparison, `.includes()` / `.has()` or a `switch` case"
  },
  {
   "name": "F7 an eighth-plus-one header item added",
-  "find": "//   8. an arbitrary-value or important override written beside a status class in a page.\n",
-  "replace": "//   8. an arbitrary-value or important override written beside a status class in a page.\n//   9. an extra item.\n"
+  "find": "//   8. an arbitrary-value, important or opacity override written beside a status class in a page.\n",
+  "replace": "//   8. an arbitrary-value, important or opacity override written beside a status class in a page.\n//   9. an extra item.\n"
  },
  {
   "name": "F8 unlisted four-verdict Record accepted",
@@ -288,11 +283,6 @@
   "name": "F8 export alias not checked",
   "find": "    for (const msg of toneExportProblems(src, Object.keys(expectedMap))) registryProblems.push(`${mod}:${msg}`);\n",
   "replace": ""
- },
- {
-  "name": "F9 negation does not flip polarity",
-  "find": "return { V: inner.V, mode: inner.mode === \"pos\" ? \"neg\" : inner.mode === \"neg\" ? \"pos\" : inner.mode };",
-  "replace": "return { V: inner.V, mode: inner.mode };"
  },
  {
   "name": "F9 switch (true) not recognised",
@@ -325,11 +315,6 @@
   "replace": "if (usesBg) need.push(\"bg:deny\");"
  },
  {
-  "name": "X26 mixed test binds only its true arm",
-  "find": "else { walk(whenTrue, bound(a.V)); if (whenFalse) walk(whenFalse, bound(a.V)); }\n  };",
-  "replace": "else { walk(whenTrue, bound(a.V)); if (whenFalse) walk(whenFalse, IGNORE); }\n  };"
- },
- {
   "name": "L3 `.concat` / `.join` spellings not seen",
   "find": "|(?<![\\w/-])bg-status-(?:\\$\\{|[\"'`]\\s*(?:\\+|\\)?\\s*\\.\\s*concat\\b))|[\"'`]bg-status[\"'`]\\s*,[^\\]]*\\]\\s*\\.\\s*join\\b/;",
   "replace": "|(?<![\\w/-])bg-status-(?:\\$\\{|[\"'`]\\s*\\+)/;"
@@ -338,5 +323,170 @@
   "name": "INFO parse errors not reported",
   "find": "for (const d of sf.parseDiagnostics ?? []) out.push(",
   "replace": "for (const d of []) out.push("
+ },
+ {
+  "name": "C2 a mixed test (conditional used as the test) binds nothing",
+  "find": "const mixed = (n) => { const s = namedAnywhere(n); return { T: s, F: new Set(s), tS: false, fS: false }; };",
+  "replace": "const mixed = (n) => ({ T: new Set(), F: new Set(), tS: false, fS: false });"
+ },
+ {
+  "name": "F1 a nested verdict test REPLACES the enclosing arm",
+  "find": "const I = inter(ctx.V, X); return I.size > 0 ? bound(I, strict && I.size === 1) : ctx; }",
+  "replace": "return bound(X, strict && X.size === 1); }"
+ },
+ {
+  "name": "F2 a single exclusive verdict accepts a class sharing its token",
+  "find": "const ok = ctx.strict && ctx.V.size === 1 ? ctx.V.has(m[1]) :",
+  "replace": "const ok = false ? ctx.V.has(m[1]) :"
+ },
+ {
+  "name": "F2 `&&` false arm not bound",
+  "find": "F: union(union(a.F, b.F), union(a.T, b.T)), fS: false };",
+  "replace": "F: union(a.F, b.F), fS: false };"
+ },
+ {
+  "name": "F2 `&&` true arm takes the union, not the intersection",
+  "find": "T: both ? inter(a.T, b.T) : union(a.T, b.T)",
+  "replace": "T: union(a.T, b.T)"
+ },
+ {
+  "name": "F2 `=== false` does not flip",
+  "find": "          return eq === (rb !== null ? rb : lb) ? inner : flip(inner);",
+  "replace": "          return inner;"
+ },
+ {
+  "name": "F2 non-subject comparison counts as the subject",
+  "find": "          if (!isSubject(lv ? n.right : n.left)) return none();\n",
+  "replace": ""
+ },
+ {
+  "name": "F2 `||` false arm takes the union",
+  "find": "F: both ? inter(a.F, b.F) : union(a.F, b.F), fS: both ? a.fS && b.fS : a.F.size > 0 ? a.fS : b.fS };",
+  "replace": "F: union(a.F, b.F), fS: false };"
+ },
+ {
+  "name": "F2 switch(true) negated case binds nothing",
+  "find": "const comp = r.T.size === 0 && r.F.size > 0 ? new Set([...U].filter((v) => !r.F.has(v))) : r.T;",
+  "replace": "const comp = r.T;"
+ },
+ {
+  "name": "F2 alias of the verdict parameter is not the subject",
+  "find": "if (ts.isVariableDeclaration(n) && ts.isIdentifier(n.name) && n.initializer && isSubject(n.initializer)) scopes.at(-1).add(n.name.text);",
+  "replace": ""
+ },
+ {
+  "name": "F4 fill alpha floor is zero, not MIN_FILL_ALPHA",
+  "find": "const MIN_FILL_ALPHA = 0.05;",
+  "replace": "const MIN_FILL_ALPHA = 0;"
+ },
+ {
+  "name": "F5 font host allowlist unanchored",
+  "find": "const FONT_HOST = /^https:\\/\\/fonts\\.googleapis\\.com\\//;",
+  "replace": "const FONT_HOST = /https:\\/\\/fonts\\.googleapis\\.com\\//;"
+ },
+ {
+  "name": "F5 `rel` must be exactly `stylesheet`",
+  "find": "    if (!tokens.includes(\"stylesheet\")) continue;",
+  "replace": "    if (tokens.join(\" \") !== \"stylesheet\") continue;"
+ },
+ {
+  "name": "F5 stylesheet links in sources not scanned",
+  "find": "      for (const href of stylesheetLinks(text)) if (!FONT_HOST.test(href)) registryProblems.push(`${rel(f)} — renders",
+  "replace": "      for (const href of []) if (!FONT_HOST.test(href)) registryProblems.push(`${rel(f)} — renders"
+ },
+ {
+  "name": "F5 extensionless relative @import not completed to .css",
+  "find": "const p = join(dirname(css), /\\.[a-z]+$/i.test(spec) ? spec : `${spec}.css`);",
+  "replace": "const p = join(dirname(css), spec);"
+ },
+ {
+  "name": "F5 any package @import is let through",
+  "find": "      if (!/^\\.{1,2}\\//.test(spec)) { unresolved.push(`${css}: @import of \"${spec}\"`); continue; }",
+  "replace": "      if (!/^\\.{1,2}\\//.test(spec)) continue;"
+ },
+ {
+  "name": "O13 absolute @import followed as relative",
+  "find": "      if (!/^\\.{1,2}\\//.test(spec)) { unresolved.push(`${css}: @import of \"${spec}\"`); continue; }",
+  "replace": "      if (!/^\\.{0,2}\\//.test(spec)) { unresolved.push(`${css}: @import of \"${spec}\"`); continue; }"
+ },
+ {
+  "name": "O12 the @fontsource exemption dropped on the CSS side",
+  "find": "if (CSS_PACKAGE_IMPORTS.has(spec) || FONT_PACKAGE_CSS.test(spec) || FONT_HOST.test(spec)) continue;",
+  "replace": "if (CSS_PACKAGE_IMPORTS.has(spec) || FONT_HOST.test(spec)) continue;"
+ },
+ {
+  "name": "F6 `.call` / `.apply` not followed",
+  "find": "if (ts.isPropertyAccessExpression(c) && (c.name.text === \"call\" || c.name.text === \"apply\")) { viaCall = c.name.text; c = unwrap(c.expression); }",
+  "replace": ""
+ },
+ {
+  "name": "F6 `globalThis.Object` not recognised",
+  "find": "if (ts.isPropertyAccessExpression(n) && MUT[n.name.text] && ts.isIdentifier(unwrap(n.expression)) && GLOBALS.has(unwrap(n.expression).text)) return n.name.text;",
+  "replace": ""
+ },
+ {
+  "name": "F6 destructured Object methods not followed",
+  "find": "  collectAliases(sf);\n",
+  "replace": ""
+ },
+ {
+  "name": "F6 comma-wrapped targets not unwrapped",
+  "find": "    if (ts.isBinaryExpression(n) && n.operatorToken.kind === K.CommaToken) return unwrap(n.right);\n    return n;\n  };\n  const lit",
+  "replace": "    return n;\n  };\n  const lit"
+ },
+ {
+  "name": "F6 `satisfies` not unwrapped",
+  "find": "ts.isNonNullExpression(n) || ts.isSatisfiesExpression(n) || ts.isTypeAssertionExpression(n)) return unwrap(n.expression);",
+  "replace": "ts.isNonNullExpression(n) || ts.isTypeAssertionExpression(n)) return unwrap(n.expression);"
+ },
+ {
+  "name": "O14 defineProperties not recognised",
+  "find": "Object: new Set([\"assign\", \"defineProperty\", \"defineProperties\", \"setPrototypeOf\"]), Reflect",
+  "replace": "Object: new Set([\"assign\", \"defineProperty\", \"setPrototypeOf\"]), Reflect"
+ },
+ {
+  "name": "O15 Reflect.defineProperty not recognised",
+  "find": "Reflect: new Set([\"set\", \"defineProperty\", \"deleteProperty\", \"setPrototypeOf\"]) };\n  const GLOBALS",
+  "replace": "Reflect: new Set([\"set\", \"deleteProperty\", \"setPrototypeOf\"]) };\n  const GLOBALS"
+ },
+ {
+  "name": "O16 `++` not recognised",
+  "find": "(n.operator === K.PlusPlusToken || n.operator === K.MinusMinusToken)) {\n      for (const nm of names) if (refers(n.operand, nm)) hit(n, nm, \"increment\");",
+  "replace": "(false)) {\n      for (const nm of names) if (refers(n.operand, nm)) hit(n, nm, \"increment\");"
+ },
+ {
+  "name": "O17 logical assignment not recognised",
+  "find": "ts.SyntaxKind.QuestionQuestionEqualsToken, ts.SyntaxKind.BarBarEqualsToken, ts.SyntaxKind.AmpersandAmpersandEqualsToken,",
+  "replace": ""
+ },
+ {
+  "name": "O18 non-null target not unwrapped",
+  "find": "ts.isParenthesizedExpression(n) || ts.isAsExpression(n) || ts.isNonNullExpression(n) || ts.isSatisfiesExpression(n) || ts.isTypeAssertionExpression(n)) return unwrap(n.expression);",
+  "replace": "ts.isParenthesizedExpression(n) || ts.isAsExpression(n) || ts.isSatisfiesExpression(n) || ts.isTypeAssertionExpression(n)) return unwrap(n.expression);"
+ },
+ {
+  "name": "F3 remapped lookup key not refused",
+  "find": "        if (!plain) out.push(`line",
+  "replace": "        if (false) out.push(`line"
+ },
+ {
+  "name": "F3 lookup by a conditional counts as plain",
+  "find": "const plain = lit(k) !== null || ts.isIdentifier(k) ||",
+  "replace": "const plain = true || lit(k) !== null || ts.isIdentifier(k) ||"
+ },
+ {
+  "name": "F8 unlisted export alias of a helper not refused",
+  "find": "const names = [...names0, ...sf.statements.filter((st) => ts.isFunctionDeclaration(st) && st.name && st.modifiers?.some((m) => m.kind === ts.SyntaxKind.ExportKeyword)).map((st) => st.name.text)];",
+  "replace": "const names = [...names0];"
+ },
+ {
+  "name": "O22 a negated NEGATIVE test does not flip",
+  "find": "  if (ts.isPrefixUnaryExpression(n) && n.operator === K.ExclamationToken) return flip(ev(n.operand));",
+  "replace": "  if (false) return flip(ev(n.operand));"
+ },
+ {
+  "name": "F9 `!` does not flip the evaluated sets",
+  "find": "if (ts.isPrefixUnaryExpression(n) && n.operator === K.ExclamationToken) return flip(ev(n.operand));",
+  "replace": "if (ts.isPrefixUnaryExpression(n) && n.operator === K.ExclamationToken) return ev(n.operand);"
  }
 ]

@@ -1738,6 +1738,15 @@ async function selfTest() {
   checks.push(["F4 (INFO): a fill below the minimum alpha (`/ 0.0001`) is RED, 0.08 passes", cp(goodCss.replace("/ 0.08)", "/ 0.0001)")).length >= 1 && cp(goodCss).length === 0]);
   checks.push(["INFO: an alias of an exported helper (`export { failModeTone as outcomeTone }`) is refused", toneExportProblems("export function outcomeTone() {}\nexport function failModeTone() {}\nexport { failModeTone as outcomeTone };", []).length === 1]);
 
+  // Plants for the mutants the first round-6 tally left LIVE (each flips: head count, then the mutant's).
+  checks.push(["C2 (reversed operands): `\"deny\" === outcome ? status-restrict` is RED (exclusive deny arm, not a mixed test)", bp('return "deny" === outcome ? "text-status-restrict" : "text-status-restrict";').length >= 1]);
+  checks.push(["O1 (`==`): `outcome == \"deny\" ? status-restrict` is RED (exclusive deny arm, not a mixed test)", bp('return outcome == "deny" ? "text-status-restrict" : "text-status-restrict";').length >= 1]);
+  checks.push(["F2 (`&&` true arm is an intersection): `[allow, deny].includes(o) && o === \"deny\"` takes the deny class", bp('if (["allow", "deny"].includes(outcome) && outcome === "deny") { return "text-status-deny"; } return "text-status-restrict";').length === 0]);
+  checks.push(["F2 (`||` false arm is an intersection): `o !== \"deny\" || o !== \"restrict\"` binds no else arm", bp('return outcome !== "deny" || outcome !== "restrict" ? "text-status-allow" : "text-status-allow";').length === 0]);
+  checks.push(["L1 MUTANT an escape that decodes to a control character (`.text-status-d\\eny`) is RED", cp(`${goodCss}\n.text-status-d\\eny { color: hsl(var(--decision-allow)); }`).some((m) => /canonical/.test(m))]);
+  checks.push(["F5 MUTANT a font-host URL that merely CONTAINS the host is unresolved; the real host is not", ls5({ "/r/m.tsx": 'import "./i.css";', "/r/i.css": '@import url("https://evil.example/fonts.googleapis.com/x.css");' }, ["/r/m.tsx"]).unresolved.length === 1 && ls5({ "/r/m.tsx": 'import "./i.css";', "/r/i.css": '@import url("https://fonts.googleapis.com/css2?family=Inter");' }, ["/r/m.tsx"]).unresolved.length === 0]);
+  checks.push(["O12: an `@import \"@fontsource/inter/400.css\"` inside a stylesheet is not reported (CSS side)", ls5({ "/r/m.tsx": 'import "./i.css";', "/r/i.css": '@import "@fontsource/inter/400.css";' }, ["/r/m.tsx"]).unresolved.length === 0]);
+
   // The direction rule must hold on the REAL tone modules, each of which must exist.
   for (const rel of TONE_MODULES) {
     let src = null;

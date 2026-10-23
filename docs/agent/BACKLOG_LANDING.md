@@ -22,6 +22,7 @@ number, is the failure this exists to prevent.
 node scripts/backlog-triage.mjs                       # markdown report on stdout
 node scripts/backlog-triage.mjs --json                # the same data, stable key order
 node scripts/backlog-triage.mjs --declared-live 1559,1586:worker B91
+node scripts/backlog-triage.mjs --classify 1608       # one PR's files re-classified; NOT CLASSIFIED and a non-zero exit on any failed read
 node scripts/backlog-triage.mjs --self-test           # fixture cases, no network
 node scripts/backlog-triage.mjs --mutants             # every planted defect must turn the self-test red
 ```
@@ -35,6 +36,16 @@ token is missing or a placeholder (exit 2), when GitHub rejects it or answers as
 client (exit 2), when the rate limit left cannot cover the read (exit 2), or when the pulls
 list, the issues list and the repository's own open count disagree after three reads (exit 3).
 An empty page is "no PRs" only when the repository's count says zero.
+
+`--classify N` is the landing step's re-check, and it refuses to guess. It reads one PR's detail and
+file list and prints `#N CLASSIFIED <tier> | <owner-named surfaces> | k of k file(s) | head <12 characters> | OWNER-GATED (<why>)`
+or `not owner-gated by its files`, exit 0. A read that fails, an empty file list (never read as a PR
+that touches nothing, even when the PR reports 0 files), a list whose length is not the PR's own
+`changed_files`, a file entry with no filename, a 401, a 403 or a 404 each print `#N NOT CLASSIFIED: <why>`
+and exit 2 (token, auth, a missing PR) or 3 (a failed or inconsistent read). It reads the PR's detail
+again after the file list and prints NOT CLASSIFIED when the head moved in between. It says nothing about
+checks, and a push after the second read still moves the head: compare the printed head with the one
+being merged.
 
 Other refusals, each with a message and no queue:
 
@@ -57,7 +68,11 @@ Other refusals, each with a message and no queue:
   whose base branch is missing from both the list item and the detail is not assumed to sit on
   mainline: the blocker reads "base branch not readable". A check that finished `cancelled` or
   `stale`, or with no conclusion, gave no verdict and blocks LAND; `success`, `neutral` and
-  `skipped` are the verdicts of "fine".
+  `skipped` are the verdicts of "fine". A PR whose draft flag is missing or not a boolean in the
+  detail or in the list item is a read error (UNKNOWN); a PR is a draft when the detail, the list
+  item or `mergeable_state: draft` says so. A file entry with no filename is a files read error,
+  and a check run with no numeric `id` is a checks read error, because the newest run of a name is
+  the one with the highest id.
 
 Other flags: `--threads-file` (exact review-thread counts read elsewhere),
 `--declared-live-file`, `--repo`, `--base`, `--repo-dir`, `--no-local-git`, `--now`,
@@ -75,9 +90,9 @@ row keeps what it would otherwise be in its `natural` field.
 | IN-FLIGHT | named by `--declared-live` (the tool cannot see a worker) | leave it alone; its worker owns it |
 | SUPERSEDED | its head is an ancestor of mainline, or a `mac/tick-*` snapshot whose every file was rewritten on mainline after its head commit, or is a sim-request whose result is on mainline | a person closes it; the brain proposes with the evidence the row prints |
 | STALE | idle more than 14 days AND (conflicting OR red: the NEWEST run of the gating check, the Mac-only check or CodeQL failed; an older failed run that a re-run replaced is history; code scanning, `phase-pr-evidence` and the SBOM check are advisory) | the owner decides revive or close |
-| OWNER-MERGE | the diff reaches DECISION_PATH or OWNER_RESERVED (`classifyDiff` in `scripts/check-owner-gated-surfaces.mjs`), an owner-named surface (AGENTS.md, the decision records, the launch profile, the launch-claims gate, the publication boundary), or the branch is Dependabot's, comes from a fork, or is not a lane's own | the owner merges; a lane only keeps it mergeable |
+| OWNER-MERGE | the diff reaches DECISION_PATH or OWNER_RESERVED (`classifyDiff` in `scripts/check-owner-gated-surfaces.mjs`), an owner-named surface (AGENTS.md, the decision records, the launch profile, the launch-claims gate, the publication boundary, and `scripts/lib/ratchet-read.mjs`, the reader both launch gates read their ceiling files through), or the branch is Dependabot's, comes from a fork, or is not a lane's own | the owner merges; a lane only keeps it mergeable |
 | MAC-ASK-NEEDED | any `mac/*` PR no earlier rule placed. DR-037 condition 5 wants the Mac's ask in MAIL, which the tool does not read, so it never prints LAND for a `mac/*` PR. A body line that reads as an ask prints `ask in body; confirm mail`. A `mac/tick-*` PR that is not SUPERSEDED is here too: a stricter reading than `docs/LANE_COORDINATION.md` rule 2, and "Tick PRs" below says why it holds | the Mac asks in mail; the cloud lane confirms the mail and lands only what it names |
-| LAND-UNDER-DR-037 | a cloud-lane branch (`claude/*`, `lane/cloud-*`; never a `mac/*` PR or the mailbox PR) that is landable now: not a draft, not stacked (its base branch is read and is mainline), the gating check's newest run passed on the head, no other check failing, running or with no verdict (cancelled, stale or no conclusion block; neutral and skipped pass), not conflicted, the review comments read in full with no thread it cannot show resolved, body mentions preflight and breadth | the cloud lane, one PR at a time, after DR-037's five conditions are read on the head |
+| LAND-UNDER-DR-037 | a cloud-lane branch (`claude/*`, `lane/cloud-*`; never a `mac/*` PR or the mailbox PR) that is landable now: not a draft, not stacked (its base branch is read and is mainline), the gating check's newest run passed on the head, every current Mac-only job passed, no other check failing, running or with no verdict (cancelled, stale or no conclusion block; neutral and skipped pass), not conflicted, the review comments read in full with no thread it cannot show resolved, body mentions preflight and breadth | the cloud lane, one PR at a time, after DR-037's five conditions are read on the head |
 | UNKNOWN | the rules have no row for what was read, or a fact could not be read (a file list cut short, a check list that failed to load, a mergeable state GitHub has not computed) | nobody lands it; the reason is on the row |
 
 UNKNOWN is never LAND. Unknown tightens (golden rule 2).
@@ -104,13 +119,24 @@ UNKNOWN is never LAND. Unknown tightens (golden rule 2).
   report prints how many branches say `protected: true`, which the prune scripts honour.
 - **Which run of a check name is the verdict.** The tool takes the newest run (highest id) of
   each name. Two workflows that share a job name collapse to the newer; the gating check, the
-  Mac-only check and CodeQL are unique names.
+  Mac-only check and CodeQL are unique names. Mac-only jobs of different names are all current:
+  the Mac-only verdict is the worst of them (a failing job is not hidden by a newer passing job of
+  another name), and among equal states the newest is shown.
 - **Mainline ancestry from a shallow or stale checkout.** Local git saying "yes" is conclusive;
   "no" is conclusive only for a whole checkout whose mainline ref is the live head. The REST
   compare endpoint answers the rest, and the report says how many PRs each source answered.
 
-The read costs about six GET requests per open PR from the account-wide rate limit that every
-session shares. Read it once per sweep.
+The round-3 review of this tool (2026-10-23, 00:51Z, `--no-local-git`, right after mainline moved) made
+1011 GET requests for 80 open PRs, 437 of them to distinct URLs, and took
+465 when the same responses were replayed. No per-URL count was kept, so the surplus is not itemised;
+the likely cause is that the tool re-reads a PR whose mergeability GitHub has not yet computed, and
+GitHub recomputes it when mainline moves. A probe read at 01:39Z the same night made 439 requests for
+79 PRs (the checkout was shallow, so the REST compare endpoint answered ancestry, as it does under
+`--no-local-git`). Before it reads the PRs the tool checks the rate limit against a reserve derived from
+the worst of those: 13 requests per open PR plus 120 (1160 for 80 PRs). It stops with exit 2 and no
+queue when the limit left is lower. The reserve is a measured worst case, not a bound: a read that costs
+more still stops partway with exit 2 and prints no queue. The requests come out of the account-wide rate
+limit that every session shares. Read it once per sweep.
 
 ## Tick PRs: rule 2 and DR-037 condition 5 read differently, and the stricter one holds here
 
@@ -143,7 +169,7 @@ Nine of the branch's first ten commits end with a `Co-Authored-By` trailer that 
 tier DR-047 never assigns to a build or review stage. History cannot change without a
 force-push, which is forbidden, so the fix is at the merge: the owner's squash-merge message
 can leave those trailers out. Later commits carry the attribution of the session that wrote
-them.
+them. The owner's squash merge message should carry the PR title and body, not the per-commit trailers.
 
 ## Checking the tool
 
@@ -172,6 +198,17 @@ Ceilings, named so nobody mistakes them for guarantees:
 - The body-ask detector is a sentence heuristic. A false positive costs one confirming look at
   the mail; the mail is the ask, so a false negative costs only a missed prompt.
 - Reading the newest run of each check name collapses two workflows that share a job name.
+- The owner-named list is a list of names plus one reviewed dependency. The self-test follows the
+  relative imports (`./` and `../`, static or dynamic with a string literal) of every tracked
+  owner-named script, and of the files those pull in, and requires each target to be owner-named;
+  that is how `scripts/lib/ratchet-read.mjs` was found. A specifier built at run time, a script another
+  script starts as a child process, and a data file read by a computed name are not followed. A line of
+  a string that starts like an import is read as one, which can only add a false gap. The reader is also
+  imported by `scripts/check-doc-orphans.mjs` and `scripts/generate-sync-manifest.mjs`, so a PR that
+  changes it for their sake is the owner's too: a false hit, which costs the owner a glance.
+- `--classify` reads the PR's detail before and after its file list. It does not read the head's checks
+  and cannot see a push that lands after the second read, so the printed head is compared with the one
+  being merged.
 - The self-test reads this file's own source for file-writing calls and compares them with the
   three places reviewed (the snapshot page, the `--mutants` copies, the self-test's own temporary
   pages). That is a scan of text: a write made through a child process, or built from strings,

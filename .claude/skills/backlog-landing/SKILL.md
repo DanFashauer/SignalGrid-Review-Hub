@@ -21,9 +21,9 @@ failure this skill exists to prevent (CLAUDE.md, "Truth and completion").
 | --- | --- | --- | --- | --- |
 | GET requests carrying the repository slug, PR and issue numbers, head SHAs and changed-file paths, all of which GitHub already holds. No local file, no file content and no PR text is sent. | `api.github.com` over HTTPS; the host is a constant in `scripts/backlog-triage.mjs` | `GH_TOKEN` or `GITHUB_TOKEN`, sent as the Authorization header to that host only, never printed | Do not run the queue command. `--no-local-git` only stops the tool running git | exit 2 and no queue; a placeholder, a rejected or an anonymous answer is the same |
 
-The `gh api` commands later in this skill are the same kind of read under the harness's own
-credential. The one write the skill asks for is the section 5 comment, and that is the
-brain's act, not the tool's.
+`--classify <n>` (section 3) is the same kind of GET read, for one PR. The `gh api` commands later
+in this skill are the same kind of read under the harness's own credential. The one write the
+skill asks for is the section 5 comment, and that is the brain's act, not the tool's.
 
 ## 1 — Start, then get the queue
 
@@ -53,8 +53,12 @@ It prints, in order: that header, the disposition totals, a disposition-by-lane 
 one row per PR (sorted by disposition, then number), an UNKNOWN section with the reason
 for each unplaced PR, the open issues with same-title groups, and the branches that carry
 no open PR. `--json` is the same data for a script. Save the output and quote every count
-from it. It costs about six requests per open PR from the account-wide rate limit that every
-other session shares: read it once per sweep, not once per PR.
+from it. A read measured 1011 GET requests for 80 open PRs right after mainline moved (465 when
+the same responses were replayed; the surplus is probably re-reads of PRs whose mergeability
+GitHub had not yet computed). Before it reads the PRs the tool reserves 13 per open PR plus 120,
+derived from that worst case, and stops with exit 2 and no queue when the limit left is lower.
+Those requests come out of the account-wide rate limit that every other session shares: read it
+once per sweep, not once per PR.
 
 Tell it what only a person knows: `--declared-live 1559,1586:worker B91` names PRs a
 worker is pushing to now, and `--threads-file` supplies exact review-thread counts you read
@@ -62,7 +66,7 @@ elsewhere (below).
 
 | Disposition | What the tool checked | The brain |
 | --- | --- | --- |
-| LAND-UNDER-DR-037 | a cloud-lane branch (`claude/*`, `lane/cloud-*`) and never a `mac/*` PR or the mailbox PR; no DECISION_PATH, OWNER_RESERVED or owner-named file; not a draft, not stacked; the gating check's newest run passed on the current head; no other check failing, still running or with no verdict (cancelled, stale or no conclusion; neutral and skipped pass); the base branch read and equal to mainline; not conflicted; the review comments read in full (their count equals the PR's own) with no thread it cannot show resolved; the body mentions preflight and breadth | lands it, one at a time (section 3), after the checks in section 3 the tool cannot make |
+| LAND-UNDER-DR-037 | a cloud-lane branch (`claude/*`, `lane/cloud-*`) and never a `mac/*` PR or the mailbox PR; no DECISION_PATH, OWNER_RESERVED or owner-named file; not a draft, not stacked; the gating check's newest run passed on the current head and every current Mac-only job passed; no other check failing, still running or with no verdict (cancelled, stale or no conclusion; neutral and skipped pass); the base branch read and equal to mainline; not conflicted; the review comments read in full (their count equals the PR's own) with no thread it cannot show resolved; the body mentions preflight and breadth | lands it, one at a time (section 3), after the checks in section 3 the tool cannot make |
 | MAC-ASK-NEEDED | any `mac/*` PR no earlier rule placed. The tool never prints LAND for one: DR-037 condition 5 wants the Mac's ask in MAIL, which it does not read. A line in the body that reads as an ask prints `ask in body; confirm mail`. A `mac/tick-*` PR that is not SUPERSEDED is here too: a stricter reading than `docs/LANE_COORDINATION.md` rule 2, and section 4 says why it holds | cloud: confirm the ask in mail (section 3, step 6) and land it under section 3 only when the mail names it; otherwise lands none and sends one mail. Mac: sends the ask in mail |
 | OWNER-MERGE | the diff reaches DECISION_PATH or OWNER_RESERVED, or an owner-named surface (AGENTS.md, the decision records, the launch profile, the launch-claims gate, the publication boundary); or it is a Dependabot PR; or its head is in a fork or its branch prefix is not a lane's own | keeps it mergeable, lists it, never merges it |
 | SUPERSEDED | its head is an ancestor of mainline, or a `mac/tick-*` PR whose every file was rewritten on mainline after its head commit (or is a sim-request whose result is on mainline); the row's evidence lines say which | proposes CLOSE with the evidence, never closes |
@@ -141,21 +145,31 @@ Run `landing-under-dr-037`: its five conditions on the current head, "The merge 
 rule. Do not retype them here. A sweep adds six checks.
 
 1. **Re-classify the head, not the queue's snapshot.** A push can add a file, and the
-   tool's row is as old as the queue. This uses the tool's own classifier and owner-named
-   list, so there is no second copy of either to drift. The `-q` keeps `previous_filename`
-   (the old path of a renamed file), because a file moved out of `lib/**` is still a change
-   to it:
+   tool's row is as old as the queue. The tool re-reads the PR's files itself with its own
+   classifier and owner-named list, so there is no second copy of either to drift, and no
+   `gh` pipeline whose failed read looks like an empty file list:
 
    ```bash
-   gh api "repos/{owner}/{repo}/pulls/<n>/files" --paginate -q '.[] | .filename, (.previous_filename // empty)' > "$SCRATCH/files-<n>.txt"
-   node --input-type=module -e 'import { classifyFiles } from "./scripts/backlog-triage.mjs"; import { readFileSync } from "node:fs"; const r = classifyFiles(readFileSync(process.argv[1], "utf8").split("\n").filter(Boolean).map((filename) => ({ filename }))); console.log(r.tier, "|", r.ownerNamed.map((o) => o.rule).join("; ") || "no owner-named surface");' "$SCRATCH/files-<n>.txt"
+   node scripts/backlog-triage.mjs --classify <n>
    ```
 
-   `autonomous`, or only SAFETY_MACHINERY with no owner-named surface, is landable under
-   the five conditions, with "merged under DR-037" and the check-run id in the PR body. Any
-   DECISION_PATH or OWNER_RESERVED category, or any owner-named surface, is the owner's. The
-   owner-named list is deliberately wider than DR-037's words: a false hit costs the owner a
-   glance, a miss lands a boundary change. A PR that adds a first-party skill edits
+   On success it prints one line and exits 0: `#<n> CLASSIFIED <tier> | <owner-named
+   surfaces, or "no owner-named surface"> | <k> of <k> file(s) | head <12 characters> |
+   OWNER-GATED (<why>)` or `not owner-gated by its files`. It reads the head again after the files
+   (a head that moved in between is NOT CLASSIFIED); check that the printed head is the one you are
+   about to merge. Anything else is `#<n> NOT CLASSIFIED: <why>` with a non-zero exit: a
+   read that failed, an empty file list (never read as a PR that touches nothing), or a list
+   that does not match the PR's own `changed_files`. NOT CLASSIFIED is not landable: run it
+   once more, and if it persists the PR is not landable as it stands. The tool keeps
+   `previous_filename`, so a file moved out of `lib/**` is still a change to it.
+
+   `not owner-gated by its files` (tier `autonomous`, or SAFETY_MACHINERY alone) is landable
+   under the five conditions, with "merged under DR-037" and the check-run id in the PR body.
+   `OWNER-GATED`, for a DECISION_PATH or OWNER_RESERVED category or an owner-named surface, is
+   the owner's. The owner-named list is deliberately wider than DR-037's words (it includes
+   `scripts/lib/ratchet-read.mjs`, the reader both launch gates read their ceiling files
+   through): a false hit costs the owner a glance, a miss lands a boundary change. A PR that
+   adds a first-party skill edits
    `scripts/publication-boundary.mjs`, so it is the owner's too. The PR that added this
    skill (`claude/build-backlog-landing-skill`) is such a PR, and the tool's classifier
    prints an owner-named publication-boundary surface for its files: this PR is the owner's, by the tool's rule.

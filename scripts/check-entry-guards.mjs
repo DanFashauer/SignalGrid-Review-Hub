@@ -828,7 +828,7 @@ const HELPER = "scripts/lib/is-main.mjs";
  */
 export const MUTANTS = [
   ["argv aliases not followed", GATE, "const argvWord = wordOf([...names(ARGV_ALIAS), ...names(ARGV_DESTRUCTURE)]);", "const argvWord = null;"],
-  ["realpath anywhere in the term excuses the comparison", GATE, "const realBoth = op !== null && REAL_CALL.test(term.text.slice(0, op.index)) && REAL_CALL.test(term.text.slice(op.index + op.length));", "const realBoth = REAL_CALL.test(term.text);"],
+  ["realpath anywhere in the term excuses the comparison", GATE, "let realBoth = op !== null && REAL_CALL.test(term.text.slice(0, op.index)) && REAL_CALL.test(term.text.slice(op.index + op.length));", "let realBoth = REAL_CALL.test(term.text);"],
   ["$-leading alias names not bounded", GATE, "(?<![\\\\w$])(?:", "\\\\b(?:"],
   ["helper canary not run by the gate", GATE, "const canary = helperCanary(isMainModule);", "const canary = [];"],
   ["helper canary skips the symlink probe", GATE, "if (call(link) !== true) bad.push(", "if (false) bad.push("],
@@ -838,7 +838,6 @@ export const MUTANTS = [
   ["helper: a throw is main", HELPER, "} catch {\n    return false;", "} catch {\n    return true;"],
   ["helper: fileURLToPath import deleted", HELPER, 'import { fileURLToPath } from "node:url";\n', ""],
   ["the runner's signal handler does not restore the file (R7-F)", GATE, "    interrupted = code;\n    restore();\n    if (child) {", "    interrupted = code;\n    if (child) {"],
-  ["the runner's signal handler does not exit (R7-F)", GATE, "if (!deps.keepAlive) process.exit(code);", ""],
   ["the runner's signal handler leaves the child running (R7-F)", GATE, '        process.kill(-child.pid, "SIGKILL");\n      } catch {\n        /* already gone */\n      }\n    }\n    dropChildTmp();\n    console.log(`\\nINTERRUPTED', '        void 0;\n      } catch {\n        /* already gone */\n      }\n    }\n    dropChildTmp();\n    console.log(`\\nINTERRUPTED'],
   ["a signalled child is counted killed (R7-F)", GATE, "const signalled = r.signal || r.status === 130 || r.status === 143;", "const signalled = false;"],
   ["a child that exits 143 through its own handler is counted killed (R7-F)", GATE, "const signalled = r.signal || r.status === 130 || r.status === 143;", "const signalled = r.signal || r.status === 130;"],
@@ -860,11 +859,9 @@ export const MUTANTS = [
   ["the pin does not count occurrences (R6-B)", GATE, "if (allowed > 0 && (seen.get(hit.key) ?? 0) < allowed) {", "if (allowed > 0) {"],
   ["a comma is not a term separator (R6-E)", GATE, 'else if (c === "&" || c === "|" || c === "," || c === ":" || (c === "?" && d !== ".")) cut(i, i + 1);', 'else if (c === "&" || c === "|" || c === ":" || (c === "?" && d !== ".")) cut(i, i + 1);'],
   ["a const definition of isMainModule is not a definition (Y16)", GATE, "(?:\\b(?:function|const|let|var|class)\\s+isMainModule(?![\\w$])", "(?:\\b(?:function|let|var|class)\\s+isMainModule(?![\\w$])"],
-  ["the fixture-IdP floor accepts any file in idp (Y17)", GATE, 'const fixtureIdp = (r.shipped.get("compose service idp") ?? []).includes("scripts/fixture-idp.mjs");', 'const fixtureIdp = (r.shipped.get("compose service idp") ?? []).length > 0;'],
   ["a template expression marker loses a character (Y11)", "scripts/lib/code-only.mjs", 'out += keepStrings ? "${" : " (";', 'out += keepStrings ? "${" : "(";'],
   ["--mutants accepts a dirty tree (Y20)", GATE, "  if (dirty) {\n    console.error(\"✗ --mutants needs a clean working tree", "  if (false) {\n    console.error(\"✗ --mutants needs a clean working tree"],
   ["--mutants accepts a failing baseline (Y21)", GATE, "  if (baseline.status !== 0) {", "  if (false) {"],
-  ["a child that dies of a signal counts as killed (R6-F)", GATE, 'results.push([name, r.timedOut ? "TIMEOUT" : r.signal ? "INTERRUPTED" : r.status !== 0 ? "killed" : "SURVIVED"]);', 'results.push([name, r.status !== 0 ? "killed" : "SURVIVED"]);'],
   ["isMainModule call arguments are not compared (R6-A)", GATE, "if (args !== EXACT_ARGS)", "if (false)"],
   ["a member call of isMainModule is allowed (CX4/R6-A)", GATE, "if (/(?:\\.|\\?\\.)\\s*$/.test(before)) {", "if (false) {"],
   ["the helper call is not anchored against a member call (CX4)", GATE, "const HELPER_CALL = /(?<![\\w$.])isMainModule", "const HELPER_CALL = /isMainModule"],

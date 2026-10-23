@@ -622,6 +622,7 @@ async function selfTest() {
   const overlayMinus = (re) => GOOD_OVERLAY.split("\n").filter((l) => !re.test(l)).join("\n");
   checks.push(["OVERLAY the fixture-IdP compose overlay must mount BOTH the script and its helper (the round-2 CI red), as non-comment volume lines", fixtureOverlayProblems(GOOD_OVERLAY).length === 0 && fixtureOverlayProblems(overlayMinus(/is-main/)).length === 1 && fixtureOverlayProblems(overlayMinus(/fixture-idp\.mjs:/)).length === 1 && fixtureOverlayProblems(GOOD_OVERLAY.replace(/^(\s*- \.\/scripts\/lib\/is-main.*)$/m, "# $1")).length === 1 && fixtureOverlayProblems(undefined).length === 1 && fixtureOverlayProblems("").length === 2]);
   checks.push(["OVERLAY the scan reports an overlay problem (and an unreadable overlay is a problem, never clean)", scanOf({ overlayText: overlayMinus(/is-main/) }).problems.length === 1 && scanOf({ overlayText: undefined }).problems.length === 1]);
+  checks.push(["OVERLAY a host path carrying a backslash, a `+` and a `.` is compared as text (CodeQL js/incomplete-sanitization, alerts 235 and 236)", hasVolumeLine(["- ./a\\b+c.mjs:/app/x.mjs:ro"], "./a\\b+c.mjs", "/app/x.mjs") && !hasVolumeLine(["- ./a\\b+c.mjs:/app/x.mjs"], "./a\\b+c.mjs", "/app/xymjs") && !hasVolumeLine(["- ./aab+c.mjs:/app/x.mjs"], "./a\\b+c.mjs", "/app/x.mjs") && !hasVolumeLine(["- ./abbc.mjs:/app/x.mjs"], "./ab+c.mjs", "/app/x.mjs") && hasVolumeLine(['- "./s.mjs:/a.mjs"'], "./s.mjs", "/a.mjs")]);
   checks.push(["OVERLAY LIVE: the real overlay is sound", fixtureOverlayProblems(readFileSync(join(repoRoot, FIXTURE_OVERLAY), "utf8")).length === 0]);
   const PLANT = `if (${RAW_URL}) {}\n`;
   checks.push(["R7-D the declared-occurrence key is defined (a detector that sees nothing must fail HERE, not by a crash in a later case)", typeof rawGuards(PLANT)[0]?.key === "string"]);
@@ -852,6 +853,7 @@ export const MUTANTS = [
   ["export clauses are not read (R7-H)", GATE, "const exportClauses = [...code.matchAll(/\\bexport\\s*\\{([^}]*)\\}/g)].map(", "const exportClauses = [].map("],
   ["a trailing comma in the exact call is a finding (R7-H)", GATE, '.replace(/,$/, ""); // a trailing comma is formatting', "; // a trailing comma is formatting"],
   ["the overlay needs only the script mount", GATE, 'if (!has("./scripts/lib/is-main.mjs", "/app/lib/is-main.mjs")) out.push(', "if (false) out.push("],
+  ["the volume-line test escapes only dots before building a RegExp (CodeQL alerts 235 and 236)", GATE, "    return v === `${host}:${container}`;", "    return new RegExp(`^${host.replace(/[.]/g, \"\\\\.\")}:${container.replace(/[.]/g, \"\\\\.\")}$`).test(v);"],
   ["the scan drops the overlay problems", GATE, "  problems.push(...fixtureOverlayProblems(overlayText));\n  // A DECLARATION", "  // A DECLARATION"],
   ["an unreadable overlay is clean", GATE, 'if (typeof text !== "string") return [', 'if (typeof text !== "string") return [] || ['],
   ["the pin compares a 20-character prefix (Y04)", GATE, "declared.hits.filter((h) => h === hit.key).length : 0;", "declared.hits.filter((h) => h.slice(0, 20) === hit.key.slice(0, 20)).length : 0;"],
@@ -1041,6 +1043,19 @@ const IS_ENTRY = (() => {
 const FIXTURE_OVERLAY = "scripts/fixture-idp.compose.yml";
 
 /**
+ * Pure: does one of `lines` (comment-stripped, trimmed) mount `host` at `container`? Compared as strings, never through a
+ * RegExp built from the operands, so a backslash or any other regex metacharacter in a path means itself.
+ */
+export function hasVolumeLine(lines, host, container) {
+  return lines.some((l) => {
+    const m = /^-\s*(["']?)(.*?)\1$/.exec(l);
+    if (!m) return false;
+    const v = m[2].endsWith(":ro") ? m[2].slice(0, -3) : m[2];
+    return v === `${host}:${container}`;
+  });
+}
+
+/**
  * Pure: the fixture-IdP compose overlay bind-mounts ONE script into a bare container, so the helper that script imports
  * has to be mounted beside it or the container dies with ERR_MODULE_NOT_FOUND (round 2's red CI job). The container-level
  * check lives with the shipped-import model; this is the literal assertion the core keeps. Returns problems; [] = both
@@ -1049,7 +1064,7 @@ const FIXTURE_OVERLAY = "scripts/fixture-idp.compose.yml";
 export function fixtureOverlayProblems(text) {
   if (typeof text !== "string") return [`${FIXTURE_OVERLAY}: unreadable - NOT checked`];
   const lines = text.split("\n").map((l) => l.replace(/\s+#.*$/, "").trim()).filter((l) => l !== "" && !l.startsWith("#"));
-  const has = (host, container) => lines.some((l) => new RegExp(`^-\\s*["']?${host.replace(/[.]/g, "\\.")}:${container.replace(/[.]/g, "\\.")}(?::ro)?["']?$`).test(l));
+  const has = (host, container) => hasVolumeLine(lines, host, container);
   const out = [];
   if (!has("./scripts/fixture-idp.mjs", "/app/fixture-idp.mjs")) out.push(`${FIXTURE_OVERLAY}: no volume line mounts ./scripts/fixture-idp.mjs at /app/fixture-idp.mjs`);
   if (!has("./scripts/lib/is-main.mjs", "/app/lib/is-main.mjs")) out.push(`${FIXTURE_OVERLAY}: no volume line mounts ./scripts/lib/is-main.mjs at /app/lib/is-main.mjs - fixture-idp.mjs imports it and the container holds only what is mounted`);

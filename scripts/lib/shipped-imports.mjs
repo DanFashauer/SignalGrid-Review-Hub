@@ -11,31 +11,42 @@
 //     holds the files of its Dockerfile's target stage (any Dockerfile name; a missing file, an unknown `target:` or
 //     an unparseable Dockerfile is a problem, never a skip), and every OTHER stage of that Dockerfile is a container
 //     of its own. Two files that disagree on a build key are a NOT-scanned problem; an overlay that sets no
-//     `context` leaves the earlier one alone. Bind mounts win over image files at the same path, and a mounted
-//     directory hides the image files under it.
+//     `context` leaves the earlier one alone. Mounts are applied parents first (by target depth, as
+//     moby's SortMounts does): a deeper mount - bind, volume or tmpfs - hides whatever the image and any shallower mount
+//     hold under its target, and a deeper bind's files replace them.
 //   - Dockerfile: instructions case-insensitively, backslash continuations joined, JSON-array and shell COPY/ADD
 //     forms, WORKDIR (absolute or relative) applied to relative destinations, `FROM <earlier stage>` inheriting that
 //     stage's files, WORKDIR and known directories, `COPY --from=<stage>` resolved against that stage's files
 //     (relative sources from the filesystem root, wildcards expanded against that stage's files), sources clamped to
-//     the build context (`..` cannot leave it, as BuildKit does), globs expanded against the tree, and a destination
+//     the build context (`..` cannot leave it, as BuildKit does), wildcards expanded against the tree (files AND directories; a
+//     matched directory copies its contents), a Dockerfile no compose service builds read with its own directory as its
+//     context, and a destination
 //     that is `.`, ends in `/`, is a WORKDIR, was created by an earlier COPY (a directory source creates its
 //     destination whether or not it ends in `/`) or is the target of several sources taking the source's basename.
 //   - the check is on the HOST FILE: an import is satisfied only when the file shipped at the resolved container
 //     path IS the repo file that import means, not merely some file at that path.
 //
-// WHAT IT DOES NOT MODEL (the same list is in the gate header, the PR body and the backlog row): compose `extends`,
-// `profiles`, `configs:` and `dockerfile_inline`; services merged across ALL tracked compose files rather than per
-// `-f` combination; bind-mount sources read relative to the repo root, not to the compose file's own directory;
-// `$VAR`/`$ARG` in a source, destination or WORKDIR and `..` sources leaving the repo (reported as "not modelled"; a
-// non-literal volume TARGET, a short volume entry that does not parse and `volumes_from` are NOT-scanned problems);
-// COPY flags other than --from, --chown, --chmod and --link (`--exclude`, `--parents`: reported as NOT scanned);
-// ADD of a URL, a git source or a local archive (reported as NOT scanned); COPY --from an external image (reported
-// as not modelled); `.dockerignore`; heredoc COPY (reported as not modelled); files present only in a base image;
-// every non-bind mount (named volume, absolute host path, tmpfs) treated as hiding everything the image holds under
-// its target; bare-specifier, `require`, `createRequire` and `new URL` references; imports read only from
-// scripts/**/*.{mjs,cjs,js}; a RUN is not modelled, so a copied script that is never run is still checked; the
-// container's command and entrypoint (a volume over the directory an entry file lives in hides it, unreported). A
-// dynamic import whose argument is not a plain string literal, and a specifier written with an escape, are reported.
+// WHAT IT DOES NOT MODEL (the same list is in the gate header, the library header, the backlog row and the PR body):
+// compose `profiles` and `configs:`; compose `secrets:`; the container's `command`, `entrypoint` and node flags (a
+// volume over the directory an entry file lives in hides it, and a `--import` loader is not read); services merged
+// across ALL tracked compose files rather than per `-f` combination; bind-mount sources read relative to the repo
+// root, not to the compose file's own directory; compose files and Dockerfiles found by filename only
+// (`compose*.yml`/`.yaml`, `Dockerfile*`, `Containerfile*`), so one named otherwise, or one only a script's `docker
+// run -v` or `docker build` line names, is not read; a Dockerfile no compose service builds, read with its own
+// directory as the build context; `$VAR`/`$ARG` in a COPY/ADD source, destination or WORKDIR and `..` sources leaving
+// the repo (reported as a "not modelled" note); heredoc COPY (a note); COPY --from an external image (a note); COPY
+// flags other than --from, --chown, --chmod and --link (NOT scanned); ADD of a URL, a git source or a local archive,
+// recognised by extension rather than by content (NOT scanned); `.dockerignore`; files and directories present only
+// in a base image (a destination that only the base image holds as a directory is read as a file path); every
+// non-bind mount (named volume, absolute host path, tmpfs) treated as hiding everything under its target;
+// bare-specifier, absolute and `file:` specifiers, `require`, `createRequire` and `new URL` references; imports read
+// only from scripts/**/*.{mjs,cjs,js}; a RUN is not modelled, so a copied script that is never run is still checked.
+// NOT-scanned problems, never a pass: compose `extends`, `volumes_from` and `dockerfile_inline`; `volumes:` that is
+// not a list; a volume or tmpfs target that is not a literal absolute path or holds a `$`; a short volume entry that
+// does not parse; a dynamic import whose argument is not a plain string literal; a specifier written with an escape;
+// a local COPY/ADD source that is no tracked path or a wildcard that matches nothing. A COPY --from source that
+// matches nothing in the modelled stage is a note, because a RUN may create it. A shape the model does not read at
+// all is in this list and is a silent pass.
 import { posix } from "node:path";
 import { parse as parseYaml } from "yaml";
 import { codeOnly } from "./code-only.mjs";
@@ -87,14 +98,19 @@ export function parseCompose(name, text) {
     const dropped = [];
     const cpath = (t) => posix.normalize(t).replace(/\/$/, "") || "/";
     const bad = (why) => out.problems.push(`${name} service ${svc}: ${why} - NOT scanned`);
+    let seq = 0; // listing order inside this file: mounts of one depth are applied in this order
     if (def?.volumes_from !== undefined) bad("volumes_from is not modelled");
-    for (const v of def?.volumes ?? []) {
+    if (def?.extends !== undefined) bad("extends is not modelled");
+    const vols = def?.volumes ?? [];
+    if (!Array.isArray(vols)) bad(`volumes is not a list (${typeof vols})`);
+    for (const v of Array.isArray(vols) ? vols : []) {
       let source;
       let target;
       let bind = true;
       if (typeof v === "string") {
         if (/^\/[^:]*$/.test(v)) {
-          hides.push(cpath(v)); // an anonymous volume at this path: its content is not the image's
+          if (v.includes("$")) bad(`a volume target ${JSON.stringify(v)} holds a variable`);
+          else hides.push({ path: cpath(v), seq: seq++ }); // an anonymous volume at this path: its content is not the image's
           continue;
         }
         const m = /^(.*?):(\/[^:]*)(?::[a-zA-Z,]+)?$/.exec(v);
@@ -107,28 +123,32 @@ export function parseCompose(name, text) {
         source = v.source;
         target = v.target;
         bind = v.type === "bind" || v.type === undefined;
-        if (typeof target !== "string" || !target.startsWith("/")) {
+        if (typeof target !== "string" || !target.startsWith("/") || target.includes("$")) {
           bad(`a volume target ${JSON.stringify(target)} is not a literal absolute path`);
           continue;
         }
       } else continue;
+      if (target.includes("$")) {
+        bad(`a volume target ${JSON.stringify(target)} holds a variable`);
+        continue;
+      }
       const host = bind ? repoRelative(source) : null;
       if (host === null) {
         // Not a repo file or directory: whatever the image holds under the target is covered (a volume's content is not
         // the image's, `nocopy` or not; an absolute host path is unknown). Modelled as hiding, so an import that resolves
         // under it is reported rather than assumed present.
-        hides.push(cpath(target));
+        hides.push({ path: cpath(target), seq: seq++ });
         if (typeof source === "string" && /^(\.|\$)/.test(source)) dropped.push(`${source}:${target}`);
         continue;
       }
-      entries.push({ host, container: cpath(target), from: `${name} service ${svc}` });
+      entries.push({ host, container: cpath(target), from: `${name} service ${svc}`, seq: seq++ });
     }
     for (const t of [].concat(def?.tmpfs ?? [])) {
-      if (typeof t !== "string" || !t.startsWith("/")) bad(`a tmpfs entry ${JSON.stringify(t)} is not a literal absolute path`);
-      else hides.push(cpath(t.split(":")[0]));
+      if (typeof t !== "string" || !t.startsWith("/") || t.includes("$")) bad(`a tmpfs entry ${JSON.stringify(t)} is not a literal absolute path`);
+      else hides.push({ path: cpath(t.split(":")[0]), seq: seq++ });
     }
     const b = def?.build;
-    if (b && typeof b === "object" && b.dockerfile_inline !== undefined) dropped.push("build.dockerfile_inline");
+    if (b && typeof b === "object" && b.dockerfile_inline !== undefined) bad("build.dockerfile_inline is not modelled");
     // No key is defaulted here: an overlay that sets only `target` must not look as if it set `context`.
     const build = b === undefined || b === null ? null : typeof b === "string" ? { context: b } : { context: b.context, dockerfile: b.dockerfile, target: b.target };
     out.services.set(svc, { entries, hides, build, dropped });
@@ -232,6 +252,11 @@ export function makeTree({ files, read }) {
       const re = globToRegExp(pattern);
       return files.filter((f) => re.test(f));
     },
+    // A wildcard matches files AND directories (the Dockerfile reference: "all files and directories ... ending with .png").
+    globAll: (pattern) => {
+      const re = globToRegExp(pattern);
+      return { files: files.filter((f) => re.test(f)), dirs: [...dirs].filter((d) => re.test(d)) };
+    },
   };
 }
 
@@ -240,12 +265,13 @@ function resolveStage(stages, stage, context, tree, memo) {
   // Keyed by stage AND build context: two services that build the same Dockerfile from different contexts ship different files.
   const key = `${stage.uid}@${context}`;
   if (memo.has(key)) return memo.get(key);
-  const res = { pairs: [], dropped: [...stage.dropped], known: new Set(["/"]) };
+  const res = { pairs: [], dropped: [...stage.dropped], problems: [], known: new Set(["/"]) };
   memo.set(key, res);
   if (stage.base) {
     const b = resolveStage(stages, stage.base, context, tree, memo);
     res.pairs.push(...b.pairs);
     res.dropped.push(...b.dropped);
+    res.problems.push(...b.problems);
     for (const k of b.known) res.known.add(k);
   }
   const markDir = (dir) => {
@@ -267,17 +293,25 @@ function resolveStage(stages, stage, context, tree, memo) {
       }
       const srcPairs = resolveStage(stages, src, context, tree, memo).pairs;
       const srcKnown = resolveStage(stages, src, context, tree, memo).known;
+      const srcDirs = new Set(srcKnown);
+      for (const p of srcPairs) for (let d = posix.dirname(p.container); d !== "/" && d !== "."; d = posix.dirname(d)) srcDirs.add(d);
       for (const s of op.srcs) {
         // A --from source is resolved from the FILESYSTEM ROOT of the source stage, never its WORKDIR.
         const abs = posix.normalize(posix.join("/", s)).replace(/\/$/, "") || "/";
         if (/[*?]/.test(abs)) {
           const re = globToRegExp(abs);
-          for (const hit of srcPairs.filter((p) => re.test(p.container))) res.pairs.push({ host: hit.host, container: posix.join(op.dest, posix.basename(hit.container)) });
+          const matchedFiles = srcPairs.filter((p) => re.test(p.container));
+          const matchedDirs = [...srcDirs].filter((d) => re.test(d));
+          if (matchedFiles.length === 0 && matchedDirs.length === 0) res.dropped.push(`COPY --from=${op.fromStage} ${s} (matches nothing in the modelled stage; a RUN may create it)`);
+          for (const hit of matchedFiles) res.pairs.push({ host: hit.host, container: posix.join(op.dest, posix.basename(hit.container)) });
+          // A wildcard that matches a directory copies that directory's CONTENTS into the destination.
+          for (const d of matchedDirs) for (const hit of srcPairs.filter((p) => p.container.startsWith(`${d}/`))) res.pairs.push({ host: hit.host, container: posix.join(op.dest, posix.relative(d, hit.container)) });
           markDir(op.dest);
           res.known.add(op.dest);
           continue;
         }
         const hits = srcPairs.filter((p) => p.container === abs || p.container.startsWith(`${abs}/`));
+        if (hits.length === 0 && !srcKnown.has(abs)) res.dropped.push(`COPY --from=${op.fromStage} ${s} (matches nothing in the modelled stage; a RUN may create it)`);
         const isDirSrc = srcKnown.has(abs) || hits.some((h) => h.container !== abs);
         for (const hit of hits) {
           const single = op.srcs.length === 1 && !intoDir && !isDirSrc && hit.container === abs;
@@ -290,12 +324,18 @@ function resolveStage(stages, stage, context, tree, memo) {
     for (const s of op.srcs) {
       const rel = norm(posix.join(context, clampToContext(s)));
       if (/[*?]/.test(s)) {
-        for (const f of tree.glob(rel)) res.pairs.push({ host: f, container: posix.join(op.dest, posix.basename(f)) });
+        const { files: gf, dirs: gd } = tree.globAll(rel);
+        if (gf.length === 0 && gd.length === 0) res.problems.push(`${op.from}: COPY source ${s} matches no tracked path - NOT scanned`);
+        for (const f of gf) res.pairs.push({ host: f, container: posix.join(op.dest, posix.basename(f)) });
+        // A wildcard that matches a directory copies that directory's CONTENTS into the destination.
+        for (const d of gd) for (const f of tree.under(d)) res.pairs.push({ host: f, container: posix.join(op.dest, posix.relative(d, f)) });
         res.known.add(op.dest);
       } else if (tree.isDir(rel)) {
         // A directory source puts its CONTENTS into the destination, which is a directory with or without a trailing slash.
         for (const f of tree.under(rel)) res.pairs.push({ host: f, container: posix.join(op.dest, posix.relative(rel, f)) });
         res.known.add(op.dest);
+      } else if (!tree.isFile(rel)) {
+        res.problems.push(`${op.from}: COPY source ${s} is not a tracked path - NOT scanned`);
       } else {
         const single = op.srcs.length === 1 && !intoDir;
         res.pairs.push({ host: rel, container: single ? op.dest : posix.join(op.dest, posix.basename(rel)) });
@@ -343,13 +383,13 @@ export function importsOf(text) {
 export function shippedImportProblems({ composes, dockerfiles, tree }) {
   const problems = [];
   const services = new Map(); // name -> { entries, hides, build, dropped }
-  for (const c of composes) {
+  for (const [fi, c] of composes.entries()) {
     const parsed = parseCompose(c.name, c.text);
     problems.push(...parsed.problems);
     for (const [svc, def] of parsed.services) {
       const cur = services.get(svc) ?? { entries: [], hides: [], build: null, dropped: [] };
-      for (const e of def.entries) cur.entries.push({ ...e, file: c.name });
-      for (const h of def.hides) cur.hides.push({ path: h, file: c.name });
+      for (const e of def.entries) cur.entries.push({ ...e, file: c.name, fi });
+      for (const h of def.hides) cur.hides.push({ ...h, file: c.name, fi });
       if (def.build) {
         // A later file's `build` REPLACES the earlier one key by key (Compose merge rules); the -f order is not known here, so two
         // overlays that disagree on a key are a problem, never a union of both builds' files. A key an overlay does not set is left alone.
@@ -416,31 +456,43 @@ export function shippedImportProblems({ composes, dockerfiles, tree }) {
           const r = resolveStage(stages, stage, ctx, tree, memo);
           image.push(...r.pairs);
           dropped.push(...r.dropped);
+          problems.push(...r.problems);
           for (const other of stages) {
             const id = `${df} stage ${other.name ?? other.index}${ctx === "." ? "" : ` (context ${ctx})`}`;
             if (other === stage || containers.some((c) => c.id === id)) continue;
             const o = resolveStage(stages, other, ctx, tree, memo);
+            problems.push(...o.problems);
             containers.push({ id, pairs: o.pairs, dropped: o.dropped });
           }
         }
       }
     }
-    const mounts = [];
-    for (const e of byTarget.values()) {
-      if (tree.isDir(e.host)) for (const f of tree.under(e.host)) mounts.push({ host: f, container: posix.join(e.container, posix.relative(e.host, f)) });
-      else mounts.push({ host: e.host, container: e.container });
+    // Compose mounts are applied PARENTS FIRST (moby SortMounts: by destination depth); a deeper mount hides whatever the
+    // image and every shallower mount hold under its target, and a deeper bind's files replace them.
+    const depth = (p) => p.split("/").filter(Boolean).length;
+    const layers = [
+      ...[...byTarget.values()].map((e) => ({ kind: "bind", target: e.container, host: e.host, fi: e.fi, seq: e.seq })),
+      ...def.hides.map((h) => ({ kind: "hide", target: h.path, fi: h.fi, seq: h.seq })),
+    ].sort((x, y) => depth(x.target) - depth(y.target) || x.fi - y.fi || x.seq - y.seq);
+    let layered = image;
+    for (const l of layers) {
+      const underTarget = (p) => p.container === l.target || p.container.startsWith(`${l.target}/`);
+      if (l.kind === "bind" && !tree.isDir(l.host)) layered = [...layered.filter((p) => p.container !== l.target), { host: l.host, container: l.target }];
+      else {
+        layered = layered.filter((p) => !underTarget(p));
+        if (l.kind === "bind") for (const f of tree.under(l.host)) layered.push({ host: f, container: posix.join(l.target, posix.relative(l.host, f)) });
+      }
     }
-    // A bind mount wins over an image file at the same path, and a mounted directory hides what the image holds under it.
-    const mountedDirs = [...byTarget.values()].filter((e) => tree.isDir(e.host)).map((e) => e.container);
-    const covered = [...mountedDirs, ...def.hides.map((h) => h.path)];
-    const kept = image.filter((p) => !covered.some((d) => p.container === d || p.container.startsWith(`${d}/`)));
-    containers.push({ id: `compose service ${svc}`, pairs: [...kept, ...mounts], dropped });
+    containers.push({ id: `compose service ${svc}`, pairs: layered, dropped });
   }
   for (const [df, stages] of parsedDocker) {
     if (claimed.has(df) || !stages) continue;
+    // No compose service builds this Dockerfile, so its context is unknown: `docker build <dir>` uses the Dockerfile's own directory.
+    const ctx = posix.dirname(df);
     for (const stage of stages) {
-      const r = resolveStage(stages, stage, ".", tree, memo);
-      containers.push({ id: `${df} stage ${stage.name ?? stage.index}`, pairs: r.pairs, dropped: r.dropped });
+      const r = resolveStage(stages, stage, ctx, tree, memo);
+      problems.push(...r.problems);
+      containers.push({ id: `${df} stage ${stage.name ?? stage.index}${ctx === "." ? "" : ` (context ${ctx})`}`, pairs: r.pairs, dropped: r.dropped });
     }
   }
   let shippedScripts = 0;
@@ -470,5 +522,5 @@ export function shippedImportProblems({ composes, dockerfiles, tree }) {
       }
     }
   }
-  return { problems, containers: containers.length, shippedScripts, shipped, dropped: containers.flatMap((c) => c.dropped.map((d) => `${c.id}: ${d}`)) };
+  return { problems: [...new Set(problems)], containers: containers.length, shippedScripts, shipped, dropped: containers.flatMap((c) => c.dropped.map((d) => `${c.id}: ${d}`)) };
 }

@@ -2,8 +2,8 @@
   "$comment": "Machine twin of scripts/mac/local-brain/CAPABILITIES.md: what the Mac's local brain may run, may run only under conditions, must leave to a cloud model, and must never run. The Markdown tables are generated from this file by node scripts/check-local-brain-capabilities.mjs --write, and the same script gates both. Every path:line citation, in a row's source or in the prose of the Markdown, has an entry in anchors: text the gate asserts is inside the cited lines of the checked-out head, so a line moved by an edit above it turns the gate red. measuredAt names the commit the cited lines were last re-read in full; the anchors, not that commit, are what the gate checks. If this file and the tree disagree, the tree wins: raise a hand.",
   "schemaVersion": 1,
   "measuredAt": {
-    "commit": "db6f4688c77821f79ee382e8f129a4b6ed447898",
-    "date": "2026-10-22"
+    "commit": "0d2592f78b4150fed445adcf57d7e07d67121df1",
+    "date": "2026-10-23"
   },
   "contract": "scripts/mac/local-brain/CAPABILITIES.md",
   "gate": "scripts/check-local-brain-capabilities.mjs",

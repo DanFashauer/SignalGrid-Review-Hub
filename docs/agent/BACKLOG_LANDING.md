@@ -130,9 +130,9 @@ The round-3 review of this tool (2026-10-23, 00:51Z, `--no-local-git`, right aft
 1011 GET requests for 80 open PRs, 437 of them to distinct URLs, and took
 465 when the same responses were replayed. No per-URL count was kept, so the surplus is not itemised;
 the likely cause is that the tool re-reads a PR whose mergeability GitHub has not yet computed, and
-GitHub recomputes it when mainline moves. A probe read at 01:39Z the same night made 439 requests for
-79 PRs (the checkout was shallow, so the REST compare endpoint answered ancestry, as it does under
-`--no-local-git`). Before it reads the PRs the tool checks the rate limit against a reserve derived from
+GitHub recomputes it when mainline moves. The read behind the snapshot below (01:44Z the same night)
+made 432 requests for 79 PRs (the checkout was shallow, so the REST compare endpoint answered ancestry,
+as it does under `--no-local-git`). Before it reads the PRs the tool checks the rate limit against a reserve derived from
 the worst of those: 13 requests per open PR plus 120 (1160 for 80 PRs). It stops with exit 2 and no
 queue when the limit left is lower. The reserve is a measured worst case, not a bound: a read that costs
 more still stops partway with exit 2 and prints no queue. The requests come out of the account-wide rate

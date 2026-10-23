@@ -2146,6 +2146,9 @@ const MUTANTS = [
   { id: "P70", file: "src", what: "an import without an extension, or a directory import, is not resolved (MEDIUM 2)",
     find: "const MODULE_EXTS = [\".mjs\", \".js\", \".cjs\", \".ts\", \".mts\", \".cts\", \".json\"];",
     replace: "const MODULE_EXTS = [];", red: "an import without an extension resolves" },
+  { id: "P71", file: "src", what: "a check run with no numeric id is accepted, so a failing run can lose to a passing one (LOW 3)",
+    find: "if (noId >= 0) throw new ApiError(",
+    replace: "if (false) throw new ApiError(", red: "a failing gating run with no id listed after a passing one" },
 ];
 // <<< mutants-end
 

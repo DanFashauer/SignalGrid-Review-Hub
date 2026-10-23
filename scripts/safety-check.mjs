@@ -5,7 +5,9 @@
 //   node scripts/safety-check.mjs
 //
 // Checks:
-//   1. Core determinism — no Date.now()/Math.random() in the deterministic core.
+//   1. Core determinism — no clock or randomness read (Date.now, new Date(),
+//      Math.random, crypto random, performance.now, hrtime and the other
+//      spellings scripts/lib/clock-spellings.mjs lists) in the deterministic core.
 //   2. No high-confidence secret patterns in tracked source.
 //   3. Postman collection is in sync with the /v1 OpenAPI spec.
 //   4. Public /api demo surface stays fixture-safe (no live-integration default).
@@ -13,6 +15,7 @@ import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { scanSource, legacyRawLines, clockSelfTestChecks } from "./lib/clock-spellings.mjs";
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const failures = [];
@@ -22,19 +25,37 @@ const bad = (m) => { failures.push(m); console.error(`  ✗ ${m}`); };
 const tracked = execFileSync("git", ["ls-files"], { cwd: repo, encoding: "utf8" })
   .split("\n").filter(Boolean);
 const read = (f) => { try { return readFileSync(resolve(repo, f), "utf8"); } catch { return ""; } };
-const isCode = (line) => { const t = line.trim(); return !(t.startsWith("//") || t.startsWith("*") || t.startsWith("/*")); };
+// The core scan must not treat an unreadable file as an empty (clean) one.
+const readStrict = (f) => { try { return { src: readFileSync(resolve(repo, f), "utf8") }; } catch (e) { return { error: e.code ?? e.message }; } };
+
 
 // 1 — core determinism ────────────────────────────────────────────────────────
 {
   const coreFiles = tracked.filter((f) => f.startsWith("lib/signalgrid-core/src/") && f.endsWith(".ts"));
+  // SELF-TEST first: every pattern has a plant that must be caught, masker blind
+  // spots that once hid code must not, and prose naming a spelling (comment,
+  // string) must not count. A matcher nobody has seen fail proves nothing. The
+  // spellings are exactly the tables in scripts/lib/clock-spellings.mjs.
+  const stFailed = clockSelfTestChecks(scanSource).filter(([, k]) => !k);
+  if (stFailed.length) bad(`Core determinism SELF-TEST failed — ${stFailed.map(([n]) => n).join("; ")}`);
   const hits = [];
+  const unscannable = [];
   for (const f of coreFiles) {
-    read(f).split("\n").forEach((line, i) => {
-      if (isCode(line) && /\b(Date\.now|Math\.random)\s*\(/.test(line)) hits.push(`${f}:${i + 1}`);
-    });
+    const r = readStrict(f);
+    if (r.error) { unscannable.push(`${f} (cannot be read: ${r.error})`); continue; }
+    const src = r.src;
+    const { lines, problems } = scanSource(src);
+    const found = new Set(lines);
+    // The masker can only ADD detections: the legacy raw-line scan stays (shared in
+    // the lib so its line-terminator rule and optional chaining match the matcher's),
+    // so a file the masker misreads still reports the original spellings.
+    for (const line of legacyRawLines(src)) found.add(line);
+    for (const line of [...found].sort((x, y) => x - y)) hits.push(`${f}:${line}`);
+    for (const pr of problems) unscannable.push(`${f}:${pr.line} (${pr.what})`);
   }
-  if (hits.length) bad(`Core determinism: Date.now/Math.random in core — ${hits.join(", ")}`);
-  else ok("Core determinism: no Date.now/Math.random in the decision core");
+  if (unscannable.length) bad(`Core determinism: file(s) the scanner cannot follow, so they are NOT verified clean — ${unscannable.join(", ")}`);
+  if (hits.length) bad(`Core determinism: a clock or randomness read in core (a spelling clock-spellings.mjs lists) — ${hits.join(", ")}`);
+  else if (!unscannable.length) ok("Core determinism: no clock or randomness read, in any spelling clock-spellings.mjs lists, in the decision core");
 }
 
 // 2 — secret patterns ─────────────────────────────────────────────────────────

@@ -13,11 +13,15 @@
 // would replace the default action (a SIGTERM would stop terminating the process). A killed run can leave
 // the gitignored scratch file; the next run overwrites and removes it.
 //
-// WHAT THE GUARD DOES NOT TEST. `judgeEquivalent` and `ceilingProblems` have a self-check of their own (run
-// first, below). The call sites and the rest of the run have none, so a mutant of any of these still exits 0:
-// the ceiling check being called at all; the equivalence comparison being given the lib and the mutant (and
-// not the mutant twice); the equivalence problems reaching the report and the tally; the tally adding up;
-// the dirty-tree pathspec; the scratch cleanup; and "a stale entry is fatal".
+// WHAT THE GUARD TESTS OF ITSELF. `judgeEquivalent` and `ceilingProblems` are made of named rules (B_*, A_*).
+// guardSelfCheck runs the cases with every rule on, and then once per rule with that rule alone switched off:
+// each rule must make at least one case fail, so a rule that another rule also covers is reported. That proves
+// the rules can be removed one at a time; it does not prove a rule's CONDITION is right beyond the cases
+// (a first-only, last-only or middle-only plant comparison has a case for each position). The call sites and the
+// rest of the run have no check, so a mutant of any of these still exits 0: the ceiling check being called at
+// all; the equivalence comparison being given the lib and the mutant (and not the mutant twice); the
+// equivalence problems reaching the report and the tally; the tally adding up; the dirty-tree pathspec; the
+// scratch cleanup; and "a stale entry is fatal".
 //
 // It refuses to run when the matcher or this script has uncommitted changes (`--allow-dirty` overrides),
 // because its tally would describe code that is not committed. It also checks that every item of the
@@ -42,66 +46,96 @@ if (!process.argv.includes("--allow-dirty")) {
   }
 }
 
-// The two rules below decide the tally, so they are functions with a self-check (see guardSelfCheck).
+// The two functions below decide the tally. Every rule in them is named and can be switched off through `off`
+// (a Set of rule ids); the self-check uses that to prove each rule has a case in which ONLY that rule fires.
 // Returns { problems, counted }: `counted` is true only when an equivalent entry holds on every plant.
-function judgeEquivalent(equivalent, isRed, scanBase, scanMut) {
-  if (!equivalent.reason || !Array.isArray(equivalent.plants) || !equivalent.plants.length) {
-    return { problems: ["an equivalent entry must give a reason and the plants that were tried"], counted: false };
-  }
-  if (isRed) return { problems: ["marked equivalent but the self-test caught it"], counted: false };
+const JUDGE_RULES = ["B_REASON", "B_PLANTS", "B_RED"];
+function judgeEquivalent(equivalent, isRed, scanBase, scanMut, off = new Set()) {
+  if (!off.has("B_REASON") && !equivalent.reason) return { problems: ["an equivalent entry must give a reason"], counted: false };
+  if (!off.has("B_PLANTS") && (!Array.isArray(equivalent.plants) || !equivalent.plants.length)) return { problems: ["an equivalent entry must list at least one plant that was tried"], counted: false };
+  if (!off.has("B_RED") && isRed) return { problems: ["marked equivalent but the self-test caught it"], counted: false };
   const problems = [];
-  for (const plant of equivalent.plants) {
+  for (const plant of equivalent.plants ?? []) {
     if (JSON.stringify(scanBase(plant)) !== JSON.stringify(scanMut(plant))) {
       problems.push(`marked equivalent but the plant ${JSON.stringify(plant)} scans differently`);
     }
   }
   return { problems, counted: problems.length === 0 };
 }
-// The BUILD_BACKLOG row for the ceiling must be `(1) item1 (2) item2 ...` in order and carry nothing numbered beyond.
-function ceilingProblems(items, backlog) {
-  const rows = backlog.split("\n").filter((l) => l.startsWith("- [ ] **The clock-spelling matcher has a declared ceiling"));
-  if (rows.length !== 1) return [`docs/BUILD_BACKLOG.md has ${rows.length} ceiling rows, not 1`];
+// The BUILD_BACKLOG row for the ceiling must be `(1) item1 (2) item2 ... Fix shape: ...`: each item verbatim, the numbers `(1)`..`(N)` each exactly once in the row outside the items, nothing else numbered.
+const CEILING_RULES = ["A_MARKER", "A_ONE_ROW", "A_ITEM", "A_NUMBERS", "A_FIRST_LINE"];
+function ceilingProblems(items, backlog, off = new Set()) {
+  const marker = off.has("A_MARKER") ? (l) => l.includes("- [ ] **The clock-spelling matcher has a declared ceiling") : (l) => l.startsWith("- [ ] **The clock-spelling matcher has a declared ceiling");
+  const rows = backlog.split("\n").filter(marker);
+  if (rows.length === 0) return ["docs/BUILD_BACKLOG.md has no ceiling row"];
+  if (!off.has("A_ONE_ROW") && rows.length > 1) return [`docs/BUILD_BACKLOG.md has ${rows.length} ceiling rows, not 1`];
   const row = rows[0];
   const problems = [];
-  let at = 0;
+  // Order needs no cursor of its own: each needle carries its own number and the next, and A_NUMBERS requires
+  // the numbers (1)..(N) once each in that order, so two items cannot swap places and keep both rules satisfied.
   items.forEach((item, k) => {
     // Each item is exactly `(k) item`, followed by the next number (or the closing "Fix shape" sentence).
     const needle = `(${k + 1}) ${item} `;
     const next = k + 1 < items.length ? `(${k + 2}) ` : "Fix shape:";
-    const found = row.indexOf(needle + next, at);
-    if (found < 0) problems.push(`the ceiling row does not carry item ${k + 1} verbatim, numbered and in order`);
-    else at = found + needle.length;
+    if (!off.has("A_ITEM") && row.indexOf(needle + next) < 0) problems.push(`the ceiling row does not carry item ${k + 1} verbatim and numbered`);
   });
-  if (row.includes(`(${items.length + 1})`)) problems.push(`the ceiling row carries an item numbered ${items.length + 1}, which CLOCK_CEILING does not have`);
-  if (backlog.split("\n").filter((l) => l.includes(items[0])).length !== 1) problems.push("the first ceiling item appears on more than one line of docs/BUILD_BACKLOG.md");
+  if (!off.has("A_NUMBERS")) {
+    let rest = row;
+    for (const item of items) rest = rest.split(item).join("");
+    const numbers = (rest.match(/\(\d+\)/g) ?? []).join(",");
+    const expected = items.map((_, k) => `(${k + 1})`).join(",");
+    if (numbers !== expected) problems.push(`the ceiling row is numbered ${numbers || "(nothing)"}, not ${expected}`);
+  }
+  if (!off.has("A_FIRST_LINE") && backlog.split("\n").filter((l) => l.includes(items[0])).length !== 1) problems.push("the first ceiling item appears on more than one line of docs/BUILD_BACKLOG.md");
   return problems;
 }
-function guardSelfCheck() {
-  const out = [];
+// Cases for the two functions: [name, run(off) -> true when the function behaved as required].
+function guardCases() {
   const same = () => "x";
-  const diff = (src) => (src === "p" ? "y" : "x");
+  const diffOn = (...bad) => (src) => (bad.includes(src) ? "y" : "x");
   const eq = (plants) => ({ reason: "r", plants });
-  const expect = (name, ok) => { if (!ok) out.push(`guard self-check failed: ${name}`); };
-  expect("an equivalent that holds is counted", judgeEquivalent(eq(["p"]), false, same, same).counted);
-  expect("a differing plant is a problem and is not counted", (() => { const r = judgeEquivalent(eq(["p"]), false, same, diff); return r.problems.length === 1 && !r.counted; })());
-  expect("a caught mutant cannot be equivalent", judgeEquivalent(eq(["p"]), true, same, same).problems.length === 1);
-  expect("a differing SECOND plant is a problem", (() => { const r = judgeEquivalent(eq(["q", "p"]), false, same, diff); return r.problems.length === 1 && !r.counted; })());
-  expect("an equivalent without plants is a problem", judgeEquivalent({ reason: "r" }, false, same, same).problems.length === 1);
-  expect("an equivalent without a reason is a problem", judgeEquivalent({ plants: ["p"] }, false, same, same).problems.length === 1);
-  const row = (body) => `- [ ] **The clock-spelling matcher has a declared ceiling** ${body} Fix shape: x.`;
+  const one = (r, n = 1) => r.problems.length === n;
+  const row = (body, tail = " Fix shape: x.") => `- [ ] **The clock-spelling matcher has a declared ceiling** ${body}${tail}`;
   const long1 = "the first item is a long sentence that is well over forty characters before its ending";
   const long2 = "the second item is also long and only differs from a drifted copy at its very last words";
   const items = [long1, long2];
   const good = row(`(1) ${long1} (2) ${long2}`);
-  expect("a faithful row passes", ceilingProblems(items, good).length === 0);
-  expect("an edit past the 40th character fails", ceilingProblems(items, row(`(1) ${long1} (2) ${long2.replace("last words", "final words")}`)).length === 1);
-  expect("a clause added inside an item fails", ceilingProblems(items, row(`(1) ${long1} and one more clause (2) ${long2}`)).length === 1);
-  expect("an extra numbered item fails", ceilingProblems(items, row(`(1) ${long1} (2) ${long2} (3) c`)).length >= 1);
-  expect("an extra numbered item with no space fails", ceilingProblems(items, row(`(1) ${long1} (2) ${long2} (3)c`)).length >= 1);
-  expect("items out of order fail", ceilingProblems(items, row(`(2) ${long2} (1) ${long1}`)).length >= 1);
-  expect("a missing row fails", ceilingProblems(items, "nothing").length === 1);
-  expect("a second copy of the row fails", ceilingProblems(items, `${good}\n${row(`(1) ${long1} (2) drifted`)}`).length === 1);
-  expect("the first item repeated on another line fails", ceilingProblems(items, `${good}\n${long1}`).length === 1);
+  const cp = (backlog, off) => ceilingProblems(items, backlog, off);
+  return [
+    ["an equivalent that holds is counted", (o) => judgeEquivalent(eq(["p"]), false, same, same, o).counted],
+    ["a differing only plant is a problem", (o) => { const r = judgeEquivalent(eq(["p"]), false, same, diffOn("p"), o); return one(r) && !r.counted; }],
+    ["a differing FIRST plant is a problem", (o) => one(judgeEquivalent(eq(["p", "q", "r"]), false, same, diffOn("p"), o))],
+    ["a differing MIDDLE plant is a problem", (o) => one(judgeEquivalent(eq(["q", "p", "r"]), false, same, diffOn("p"), o))],
+    ["a differing LAST plant is a problem", (o) => one(judgeEquivalent(eq(["q", "r", "p"]), false, same, diffOn("p"), o))],
+    ["a caught mutant cannot be equivalent", (o) => one(judgeEquivalent(eq(["p"]), true, same, same, o))],
+    ["an equivalent without a reason is a problem", (o) => one(judgeEquivalent({ plants: ["p"] }, false, same, same, o))],
+    ["an equivalent without a plants list is a problem", (o) => one(judgeEquivalent({ reason: "r" }, false, same, same, o))],
+    ["an equivalent with an empty plants list is a problem", (o) => one(judgeEquivalent({ reason: "r", plants: [] }, false, same, same, o))],
+    ["a faithful row passes", (o) => cp(good, o).length === 0],
+    ["a missing row fails", (o) => cp("nothing", o).length === 1],
+    ["an edit past the 40th character fails", (o) => cp(row(`(1) ${long1} (2) ${long2.replace("last words", "final words")}`), o).length === 1],
+    ["a clause added inside an item fails", (o) => cp(row(`(1) ${long1} and one more clause (2) ${long2}`), o).length === 1],
+    ["an item added after the Fix-shape sentence with a space fails (only the numbering rule fires)", (o) => cp(row(`(1) ${long1} (2) ${long2}`, " Fix shape: x. (3) c"), o).length === 1],
+    ["an item added after the Fix-shape sentence with no space fails (only the numbering rule fires)", (o) => cp(row(`(1) ${long1} (2) ${long2}`, " Fix shape: x. (3)c"), o).length === 1],
+    ["an item numbered (0) before (1) fails (only the numbering rule fires)", (o) => cp(row(`(0) zero (1) ${long1} (2) ${long2}`), o).length === 1],
+    ["a second (2) after the Fix-shape sentence fails (only the numbering rule fires)", (o) => cp(row(`(1) ${long1} (2) ${long2}`, " Fix shape: x. (2) again"), o).length === 1],
+    ["items out of order fail", (o) => cp(row(`(2) ${long2} Fix shape: x. (1) ${long1} (2) tail`, ""), o).length >= 1],
+    ["a second ceiling row after a faithful one fails (only the one-row rule fires)", (o) => cp(`${good}\n${row("(1) another (2) other")}`, o).length === 1],
+    ["a line that contains but does not start with the marker is not the row (only the marker rule fires)", (o) => cp(`x ${good}`, o).length === 1],
+    ["the first item repeated on another line fails (only the first-line rule fires)", (o) => cp(`${good}\n${long1}`, o).length === 1],
+  ];
+}
+function guardSelfCheck() {
+  const out = [];
+  const cases = guardCases();
+  for (const [name, run] of cases) if (!run(new Set())) out.push(`guard self-check failed: ${name}`);
+  // Every rule must have a case that goes red when ONLY that rule is switched off.
+  for (const rule of [...JUDGE_RULES, ...CEILING_RULES]) {
+    const off = new Set([rule]);
+    let killed = false;
+    for (const [, run] of cases) if (!run(off)) killed = true;
+    if (!killed) out.push(`guard self-check failed: rule ${rule} can be removed and every case still passes`);
+  }
   return out;
 }
 
@@ -219,14 +253,16 @@ try {
       }
       let m;
       let isRed;
+      let ranOk = true;
       try {
         m = await load(good.replace(from, () => to), `m${i}`);
         isRed = m.clockSelfTestChecks(m.scanSource).some(([, ok]) => !ok);
       } catch {
         isRed = true; // a mutant that does not even load or run is caught
+        ranOk = false;
       }
       if (equivalent) {
-        const r = judgeEquivalent(equivalent, isRed, base.scanSource, m.scanSource);
+        const r = ranOk ? judgeEquivalent(equivalent, isRed, base.scanSource, m.scanSource) : { problems: ["marked equivalent but the mutant does not load or run"], counted: false };
         for (const pr of r.problems) problems.push(`${name}: ${pr}`);
         if (r.counted) equivalentOk++;
         console.log(`${r.counted ? "equiv  " : "RED??  "}${name}  [tried ${equivalent.plants?.length ?? 0} plant(s)]`);

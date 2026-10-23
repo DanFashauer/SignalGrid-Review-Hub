@@ -1,0 +1,632 @@
+[
+ {
+  "name": "C1 property names not lower-cased",
+  "find": "prop: raw.slice(0, i).trim().toLowerCase()",
+  "replace": "prop: raw.slice(0, i).trim()"
+ },
+ {
+  "name": "C1 function names case-sensitive",
+  "find": "(?:\\/\\s*([\\d.]+%?)\\s*)?\\)$/i;",
+  "replace": "(?:\\/\\s*([\\d.]+%?)\\s*)?\\)$/;"
+ },
+ {
+  "name": "C2 branch check removed from the lane",
+  "find": "    for (const msg of toneBranchProblems(src, Object.keys(expectedMap))) registryProblems.push(`${mod}:${msg}`);\n",
+  "replace": ""
+ },
+ {
+  "name": "C2 reversed operands (right side only)",
+  "find": "const v = lv ?? rv;\n        if (v) {",
+  "replace": "const v = rv;\n        if (v) {"
+ },
+ {
+  "name": "C2 negative test binds the then-arm",
+  "find": "walk(n.whenFalse, armCtx(ctx, r.RF, r.N));",
+  "replace": "walk(n.whenFalse, armCtx(ctx, r.RT, r.N));"
+ },
+ {
+  "name": "C2 free class not flagged",
+  "find": "if (ctx.kind === \"free\") { out.push(`line ${lineOf(node)}: status-${m[1]} appears outside a verdict-keyed property or a branch on a verdict literal — it cannot be paired to a verdict`); continue; }",
+  "replace": "if (ctx.kind === \"free\") { continue; }"
+ },
+ {
+  "name": "C2 runtime-built class not flagged",
+  "find": "if (/(?:text|bg|border)-status-?$/.test(text)) out.push(",
+  "replace": "if (false) out.push("
+ },
+ {
+  "name": "C2 .includes() not recognised",
+  "find": "      if (ts.isPropertyAccessExpression(c) && (c.name.text === \"includes\" || c.name.text === \"has\") && n.arguments[0]) {\n        const lits = new Set();",
+  "replace": "      if (false) {\n        const lits = new Set();"
+ },
+ {
+  "name": "C2 switch cases not bound",
+  "find": "else c = armCtx(ctx, [...pending].filter((v) => d.includes(v)), pending);",
+  "replace": "else c = IGNORE;"
+ },
+ {
+  "name": "C2 concatenation not folded",
+  "find": "if (ts.isBinaryExpression(n) && n.operatorToken.kind === K.PlusToken) {\n      const a = strOf(n.left), b = strOf(n.right);\n      return a !== null && b !== null ? a + b : null;\n    }",
+  "replace": "if (false) { return null; }"
+ },
+ {
+  "name": "C3 exact-token requirement removed",
+  "find": "if (tokens.length !== 1 || (want ?",
+  "replace": "if (false && (want ?"
+ },
+ {
+  "name": "C3 non-canonical token not reported",
+  "find": "} else if (/status-/.test(tok)) {",
+  "replace": "} else if (false) {"
+ },
+ {
+  "name": "L1 nested rules not reported",
+  "find": "if (node.children.length > 0) problems.push(",
+  "replace": "if (false) problems.push("
+ },
+ {
+  "name": "L1 nested-in-style not reported",
+  "find": "} else if (parentIsStyle) {",
+  "replace": "} else if (false) {"
+ },
+ {
+  "name": "L1 escaped selector not noticed",
+  "find": "|| (/\\\\/.test(prelude) && /status|text-|bg-|border-/i.test(decoded))",
+  "replace": "|| (false)"
+ },
+ {
+  "name": "L1 attribute selector not noticed",
+  "find": "|| (/\\[\\s*(?:[\\w*-]*\\|)?\\s*class\\s*[~|^$*]?=/i.test(decoded) && node.body.length > 0)",
+  "replace": "|| false"
+ },
+ {
+  "name": "L1 property allowlist disabled",
+  "find": "else if (!ALLOWED_PROPS[kind].has(d.prop)) problems.push(",
+  "replace": "else if (false) problems.push("
+ },
+ {
+  "name": "L1 unbalanced braces not reported",
+  "find": "if (!balanced) problems.push(",
+  "replace": "if (false) problems.push("
+ },
+ {
+  "name": "L2 outside-root stylesheets not judged",
+  "find": "for (const f of new Set([...css.files, ...loaded])) {",
+  "replace": "for (const f of new Set([...css.files])) {"
+ },
+ {
+  "name": "L2 missing imported stylesheet silent",
+  "find": "else registryProblems.push(`${rel(f)} — imported by ${cssRoot} but does not exist`); continue; }",
+  "replace": "continue; }"
+ },
+ {
+  "name": "L4 runtime mutation not reported",
+  "find": "    for (const msg of mutationProblems(src, expectedNames, file)) registryProblems.push(`${r}:${msg}`);\n",
+  "replace": ""
+ },
+ {
+  "name": "O12 chart-site lane deleted",
+  "find": "      for (const msg of chartSiteProblems(src)) chartProblems.push(`${r} — ${msg}`);\n",
+  "replace": ""
+ },
+ {
+  "name": "O16 direction lane deleted",
+  "find": "      for (const p of fallbackProblems(src)) directionProblems.push(`${r}:${p.line} — \\`?? \"${p.fallback}\"\\` is not a restrictive token`);\n",
+  "replace": ""
+ },
+ {
+  "name": "O13 empty-scan refusal deleted",
+  "find": "  if (files.length === 0 && walkErrs.length === 0) {",
+  "replace": "  if (false) {"
+ },
+ {
+  "name": "O8 discover unreadable css treated as absent",
+  "find": "catch { return true; } });",
+  "replace": "catch { return false; } });"
+ },
+ {
+  "name": "O19 discover readdir error swallowed",
+  "find": "if (e.code !== \"ENOENT\") registryProblems.push(`${discover} — unreadable",
+  "replace": "if (false) registryProblems.push(`${discover} — unreadable"
+ },
+ {
+  "name": "O9 loaded stylesheet read errors swallowed",
+  "find": "try { text = readFile(css, \"utf8\"); } catch (e) { if (e.code !== \"ENOENT\") errs.push(`${css}: ${e.code ?? e.message}`); continue; }",
+  "replace": "try { text = readFile(css, \"utf8\"); } catch (e) { continue; }"
+ },
+ {
+  "name": "O11 walk ENOENT guard widened",
+  "find": "if (e.code !== \"ENOENT\") errs.push(`${dir}: ${e.code ?? e.message}`);\n    return { files: out, errs };",
+  "replace": "if (e.code !== \"ENOENT\" && e.code !== \"EACCES\") errs.push(`${dir}: ${e.code ?? e.message}`);\n    return { files: out, errs };"
+ },
+ {
+  "name": "O4 on-tint allowed everywhere",
+  "find": "if (!m || (m[2] && !allowOnTint)) return undefined;",
+  "replace": "if (!m) return undefined;"
+ },
+ {
+  "name": "O1 `==` operator not recognised",
+  "find": "const eq = k === K.EqualsEqualsEqualsToken || k === K.EqualsEqualsToken;",
+  "replace": "const eq = k === K.EqualsEqualsEqualsToken;"
+ },
+ {
+  "name": "F5 discover disabled",
+  "find": "  if (discover) {",
+  "replace": "  if (false) {"
+ },
+ {
+  "name": "F1 non-verdict test resets the verdict context",
+  "find": "if (R.length === 0 || !touches || R.length === ctx.V.size) return ctx;",
+  "replace": "if (R.length === 0 || !touches || R.length === ctx.V.size) return IGNORE;"
+ },
+ {
+  "name": "F2 a set of verdicts accepts any class in the set",
+  "find": "const ok = ctx.strict && ctx.V.size === 1 ? ctx.V.has(m[1]) : [...ctx.V].every((v) => VERDICT_REGISTRY[v].token === VERDICT_REGISTRY[m[1]].token);",
+  "replace": "const ok = ctx.strict && ctx.V.size === 1 ? ctx.V.has(m[1]) : [...ctx.V].some((v) => VERDICT_REGISTRY[v].token === VERDICT_REGISTRY[m[1]].token);"
+ },
+ {
+  "name": "F3 strings not neutralised before comments",
+  "find": "} else if (c === '\"' || c === \"'\") {",
+  "replace": "} else if (false) {"
+ },
+ {
+  "name": "F3 selector escapes not decoded",
+  "find": "const decoded = decodeCssEscapes(prelude);",
+  "replace": "const decoded = prelude;"
+ },
+ {
+  "name": "F3 namespaced attribute selector not matched",
+  "find": "/\\[\\s*(?:[\\w*-]*\\|)?\\s*class\\s*[~|^$*]?=/i.test(decoded)",
+  "replace": "/\\[\\s*class\\s*[~|^$*]?=/i.test(decoded)"
+ },
+ {
+  "name": "F3 unterminated string/comment not reported",
+  "find": "if (bad) problems.push(",
+  "replace": "if (false) problems.push("
+ },
+ {
+  "name": "F4 alpha not checked",
+  "find": "if (!(role === \"text\" ? a === 1 : a >= MIN_FILL_ALPHA)) return undefined;",
+  "replace": "if (false) return undefined;"
+ },
+ {
+  "name": "F5 package-specifier import not reported",
+  "find": "else if (!FONT_PACKAGE_CSS.test(spec)) unresolved.push(",
+  "replace": "else if (false) unresolved.push("
+ },
+ {
+  "name": "F5 index.html stylesheet link not judged",
+  "find": "        if (!FONT_HOST.test(href)) registryProblems.push(`${rel(htmlFile)} — links the stylesheet",
+  "replace": "        if (false) registryProblems.push(`${rel(htmlFile)} — links the stylesheet"
+ },
+ {
+  "name": "F5 inline <style> in a source not reported",
+  "find": "if (/<style[\\s>]/.test(text)) registryProblems.push(",
+  "replace": "if (false) registryProblems.push("
+ },
+ {
+  "name": "F5 unquoted @import url() not followed",
+  "find": "/@import\\s+(?:url\\(\\s*)?[\"']?([^\"')\\s;]+)[\"']?\\s*\\)?/g",
+  "replace": "/@import\\s+[\"']([^\"')\\s;]+)[\"']/g"
+ },
+ {
+  "name": "F5 dynamic import / require not seen",
+  "find": "|\\bimport\\s*\\(\\s*[\"']([^\"']+\\.(?:css|pcss|postcss)(?:[?#][^\"']*)?)[\"']\\s*\\)|\\brequire\\s*\\(\\s*[\"']([^\"']+\\.(?:css|pcss|postcss)(?:[?#][^\"']*)?)[\"']\\s*\\)/g;",
+  "replace": "/g;"
+ },
+ {
+  "name": "F6 Reflect.* not recognised",
+  "find": "Reflect: new Set([\"set\", \"defineProperty\", \"deleteProperty\", \"setPrototypeOf\"])",
+  "replace": "Reflect: new Set([])"
+ },
+ {
+  "name": "F6 destructuring targets not followed",
+  "find": "if (ts.isArrayLiteralExpression(n)) return n.elements.flatMap(targets);",
+  "replace": "if (false) return [];"
+ },
+ {
+  "name": "F6 namespace member not followed",
+  "find": "if (ts.isPropertyAccessExpression(n)) return n.name.text === name || refers(n.expression, name);",
+  "replace": "if (ts.isPropertyAccessExpression(n)) return refers(n.expression, name);"
+ },
+ {
+  "name": "F6 bracketed write not followed",
+  "find": "if (ts.isElementAccessExpression(n)) return lit(n.argumentExpression) === name || refers(n.expression, name);",
+  "replace": "if (ts.isElementAccessExpression(n)) return refers(n.expression, name);"
+ },
+ {
+  "name": "F6 delete not recognised",
+  "find": "} else if (ts.isDeleteExpression(n)) {",
+  "replace": "} else if (false) {"
+ },
+ {
+  "name": "F6 Object[\"assign\"] callee not recognised",
+  "find": "else if (ts.isElementAccessExpression(c)) { obj = builtinOf(c.expression); meth = lit(c.argumentExpression); }",
+  "replace": "else if (false) { }"
+ },
+ {
+  "name": "F6 only Object.assign recognised",
+  "find": "Object: new Set([\"assign\", \"defineProperty\", \"defineProperties\", \"setPrototypeOf\"])",
+  "replace": "Object: new Set([\"assign\"])"
+ },
+ {
+  "name": "F6 .js/.jsx files not walked",
+  "find": "const r = walk(join(root, t), /\\.(?:[cm]?js|jsx|tsx?)$/",
+  "replace": "const r = walk(join(root, t), /\\.tsx?$/"
+ },
+ {
+  "name": "F7 a CEILINGS entry deleted",
+  "find": "  { phrases: [\"tokens' own values\"], text: \"the tokens' own values (check-decision-palette.mjs holds contrast and canon)\" },\n",
+  "replace": ""
+ },
+ {
+  "name": "F7 a ceiling's footer text cut",
+  "find": "a switch clause that falls into the next with statements; and any verdict choice not made by an object property, a comparison, `.includes()` / `.has()` or a `switch` case",
+  "replace": "and any verdict choice not made by an object property, a comparison, `.includes()` / `.has()` or a `switch` case"
+ },
+ {
+  "name": "F7 an eighth-plus-one header item added",
+  "find": "\n// Option (b) of row 168, distinct",
+  "replace": "\n//   9. an extra item\n// Option (b) of row 168, distinct"
+ },
+ {
+  "name": "F8 unlisted four-verdict Record accepted",
+  "find": "if (Object.keys(expected).length > 0 && !(name in expected)) problems.push(",
+  "replace": "if (false) problems.push("
+ },
+ {
+  "name": "F8 unkinded expected Record accepted",
+  "find": "if (kind !== \"text\" && kind !== \"bg\") registryProblems.push(",
+  "replace": "if (false) registryProblems.push("
+ },
+ {
+  "name": "F8 export alias not checked",
+  "find": "    for (const msg of toneExportProblems(src, Object.keys(expectedMap))) registryProblems.push(`${mod}:${msg}`);\n",
+  "replace": ""
+ },
+ {
+  "name": "F9 switch (true) not recognised",
+  "find": "const onTrue = unwrap(n.expression).kind === K.TrueKeyword;",
+  "replace": "const onTrue = false;"
+ },
+ {
+  "name": "X1 loose != not recognised",
+  "find": "const ne = k === K.ExclamationEqualsEqualsToken || k === K.ExclamationEqualsToken;",
+  "replace": "const ne = k === K.ExclamationEqualsEqualsToken;"
+ },
+ {
+  "name": "X3 first important wins",
+  "find": "return (important.length > 0 ? important : mine).at(-1).value;",
+  "replace": "return (important.length > 0 ? important : mine).at(important.length > 0 ? 0 : -1).value;"
+ },
+ {
+  "name": "X4 text rules may set background-color",
+  "find": "text: new Set([\"color\"])",
+  "replace": "text: new Set([\"color\", \"background-color\"])"
+ },
+ {
+  "name": "X13 complete-token anchor dropped",
+  "find": "const canon = /^(text|bg|border)-status-([a-z-]+)$/.exec(tok);",
+  "replace": "const canon = /^(text|bg|border)-status-([a-z-]+)/.exec(tok);"
+ },
+ {
+  "name": "X24 bg floor demands only deny",
+  "find": "if (usesBg) need.push(...VERDICTS.map((v) => `bg:${v}`));",
+  "replace": "if (usesBg) need.push(\"bg:deny\");"
+ },
+ {
+  "name": "L3 `.concat` / `.join` spellings not seen",
+  "find": "|(?<![\\w/-])bg-status-(?:\\$\\{|[\"'`]\\s*(?:\\+|\\)?\\s*\\.\\s*concat\\b))|[\"'`]bg-status[\"'`]\\s*,[^\\]]*\\]\\s*\\.\\s*join\\b/;",
+  "replace": "|(?<![\\w/-])bg-status-(?:\\$\\{|[\"'`]\\s*\\+)/;"
+ },
+ {
+  "name": "INFO parse errors not reported",
+  "find": "for (const d of sf.parseDiagnostics ?? []) out.push(",
+  "replace": "for (const d of []) out.push("
+ },
+ {
+  "name": "F11 a nested verdict test REPLACES the enclosing arm instead of narrowing",
+  "find": "const domain = (ctx) => (ctx.kind === \"bound\" ? [...ctx.V] : [...VERDICTS]);",
+  "replace": "const domain = () => [...VERDICTS];"
+ },
+ {
+  "name": "F2 a single exclusive verdict accepts a class sharing its token",
+  "find": "const ok = ctx.strict && ctx.V.size === 1 ? ctx.V.has(m[1]) :",
+  "replace": "const ok = false ? ctx.V.has(m[1]) :"
+ },
+ {
+  "name": "F2 `&&` false arm not bound",
+  "find": "return a === false || b === false ? false : a === true && b === true ? true : null; }\n      if (k === K.BarBarToken)",
+  "replace": "return a === true && b === true ? true : null; }\n      if (k === K.BarBarToken)"
+ },
+ {
+  "name": "F2 `&&` true arm takes the union, not the intersection",
+  "find": "return a === false || b === false ? false : a === true && b === true ? true : null; }\n      if (k === K.BarBarToken)",
+  "replace": "return a === false || b === false ? false : a === true || b === true ? true : null; }\n      if (k === K.BarBarToken)"
+ },
+ {
+  "name": "F2 `=== false` does not flip",
+  "find": "return a !== null && b !== null ? (eq ? a === b : a !== b) : null;",
+  "replace": "return null;"
+ },
+ {
+  "name": "F2 non-subject comparison counts as the subject",
+  "find": "if (v) { if (!isSubject(lv ? n.right : n.left)) return null; return eq ? s === v : s !== v; }",
+  "replace": "if (v) { return eq ? s === v : s !== v; }"
+ },
+ {
+  "name": "F2 `||` false arm takes the union",
+  "find": "return a === true || b === true ? true : a === false && b === false ? false : null; }",
+  "replace": "return a === true || b === true ? true : a === false || b === false ? false : null; }"
+ },
+ {
+  "name": "F2 switch(true) negated case binds nothing",
+  "find": "if (onTrue) { d.filter((v) => tv(clause.expression, v) !== false).forEach((v) => pending.add(v)); }",
+  "replace": "if (onTrue) { d.filter((v) => tv(clause.expression, v) === true).forEach((v) => pending.add(v)); }"
+ },
+ {
+  "name": "F2 alias of the verdict parameter is not the subject",
+  "find": "if (ts.isVariableDeclaration(m) && ts.isIdentifier(m.name) && m.initializer) { const k = keyOf(m.initializer); if (k !== null) frames.at(-1).aliases.set(m.name.text, k); }\n",
+  "replace": ""
+ },
+ {
+  "name": "F4 fill alpha floor is zero, not MIN_FILL_ALPHA",
+  "find": "const MIN_FILL_ALPHA = 0.05;",
+  "replace": "const MIN_FILL_ALPHA = 0;"
+ },
+ {
+  "name": "F5 font host allowlist unanchored",
+  "find": "const FONT_HOST = /^https:\\/\\/fonts\\.googleapis\\.com\\//;",
+  "replace": "const FONT_HOST = /https:\\/\\/fonts\\.googleapis\\.com\\//;"
+ },
+ {
+  "name": "F5 `rel` must be exactly `stylesheet`",
+  "find": "    if (!tokens.includes(\"stylesheet\")) continue;",
+  "replace": "    if (tokens.join(\" \") !== \"stylesheet\") continue;"
+ },
+ {
+  "name": "F5 stylesheet links in sources not scanned",
+  "find": "      for (const href of stylesheetLinks(text)) if (!FONT_HOST.test(href)) registryProblems.push(`${rel(f)} — renders",
+  "replace": "      for (const href of []) if (!FONT_HOST.test(href)) registryProblems.push(`${rel(f)} — renders"
+ },
+ {
+  "name": "F5 extensionless relative @import not completed to .css",
+  "find": "const p = join(dirname(css), /\\.[a-z]+$/i.test(spec) ? spec : `${spec}.css`);",
+  "replace": "const p = join(dirname(css), spec);"
+ },
+ {
+  "name": "F5 any package @import is let through",
+  "find": "      if (!/^\\.{1,2}\\//.test(spec)) { unresolved.push(`${css}: @import of \"${spec}\"`); continue; }",
+  "replace": "      if (!/^\\.{1,2}\\//.test(spec)) continue;"
+ },
+ {
+  "name": "O13 absolute @import followed as relative",
+  "find": "      if (!/^\\.{1,2}\\//.test(spec)) { unresolved.push(`${css}: @import of \"${spec}\"`); continue; }",
+  "replace": "      if (!/^\\.{0,2}\\//.test(spec)) { unresolved.push(`${css}: @import of \"${spec}\"`); continue; }"
+ },
+ {
+  "name": "O12 the @fontsource exemption dropped on the CSS side",
+  "find": "if (CSS_PACKAGE_IMPORTS.has(spec) || FONT_PACKAGE_CSS.test(spec) || FONT_HOST.test(spec)) continue;",
+  "replace": "if (CSS_PACKAGE_IMPORTS.has(spec) || FONT_HOST.test(spec)) continue;"
+ },
+ {
+  "name": "F6 `.call` / `.apply` not followed",
+  "find": "if (ts.isPropertyAccessExpression(c) && (c.name.text === \"call\" || c.name.text === \"apply\" || c.name.text === \"bind\")) { viaCall = c.name.text; c = unwrap(c.expression); }\n",
+  "replace": ""
+ },
+ {
+  "name": "F6 `globalThis.Object` not recognised",
+  "find": "if (ts.isPropertyAccessExpression(n) && MUT[n.name.text] && ts.isIdentifier(unwrap(n.expression)) && GLOBALS.has(unwrap(n.expression).text)) return n.name.text;",
+  "replace": ""
+ },
+ {
+  "name": "F6 destructured Object methods not followed",
+  "find": "  collectAliases(sf);\n",
+  "replace": ""
+ },
+ {
+  "name": "F6 comma-wrapped targets not unwrapped",
+  "find": "    if (ts.isBinaryExpression(n) && n.operatorToken.kind === K.CommaToken) return unwrap(n.right);\n    return n;\n  };\n  const lit",
+  "replace": "    return n;\n  };\n  const lit"
+ },
+ {
+  "name": "F6 `satisfies` not unwrapped",
+  "find": "ts.isNonNullExpression(n) || ts.isSatisfiesExpression(n) || ts.isTypeAssertionExpression(n)) return unwrap(n.expression);",
+  "replace": "ts.isNonNullExpression(n) || ts.isTypeAssertionExpression(n)) return unwrap(n.expression);"
+ },
+ {
+  "name": "O14 defineProperties not recognised",
+  "find": "Object: new Set([\"assign\", \"defineProperty\", \"defineProperties\", \"setPrototypeOf\"]), Reflect",
+  "replace": "Object: new Set([\"assign\", \"defineProperty\", \"setPrototypeOf\"]), Reflect"
+ },
+ {
+  "name": "O15 Reflect.defineProperty not recognised",
+  "find": "Reflect: new Set([\"set\", \"defineProperty\", \"deleteProperty\", \"setPrototypeOf\"]) };\n  const GLOBALS",
+  "replace": "Reflect: new Set([\"set\", \"deleteProperty\", \"setPrototypeOf\"]) };\n  const GLOBALS"
+ },
+ {
+  "name": "O16 `++` not recognised",
+  "find": "(n.operator === K.PlusPlusToken || n.operator === K.MinusMinusToken)) {\n      for (const nm of names) if (refers(n.operand, nm)) hit(n, nm, \"increment\");",
+  "replace": "(false)) {\n      for (const nm of names) if (refers(n.operand, nm)) hit(n, nm, \"increment\");"
+ },
+ {
+  "name": "O17 logical assignment not recognised",
+  "find": "ts.SyntaxKind.QuestionQuestionEqualsToken, ts.SyntaxKind.BarBarEqualsToken, ts.SyntaxKind.AmpersandAmpersandEqualsToken,",
+  "replace": ""
+ },
+ {
+  "name": "O18 non-null target not unwrapped",
+  "find": "ts.isParenthesizedExpression(n) || ts.isAsExpression(n) || ts.isNonNullExpression(n) || ts.isSatisfiesExpression(n) || ts.isTypeAssertionExpression(n)) return unwrap(n.expression);",
+  "replace": "ts.isParenthesizedExpression(n) || ts.isAsExpression(n) || ts.isSatisfiesExpression(n) || ts.isTypeAssertionExpression(n)) return unwrap(n.expression);"
+ },
+ {
+  "name": "F3 remapped lookup key not refused",
+  "find": "        if (!plain) out.push(`line",
+  "replace": "        if (false) out.push(`line"
+ },
+ {
+  "name": "F3 lookup by a conditional counts as plain",
+  "find": "const plain = lit(k) !== null || ts.isIdentifier(k) ||",
+  "replace": "const plain = true || lit(k) !== null || ts.isIdentifier(k) ||"
+ },
+ {
+  "name": "F8 unlisted export alias of a helper not refused",
+  "find": "const names = [...names0, ...sf.statements.filter((st) => ts.isFunctionDeclaration(st) && st.name && st.modifiers?.some((m) => m.kind === ts.SyntaxKind.ExportKeyword)).map((st) => st.name.text)];",
+  "replace": "const names = [...names0];"
+ },
+ {
+  "name": "O22 a negated NEGATIVE test does not flip",
+  "find": "{ const v = tv(n.operand, s); return v === null ? null : !v; }",
+  "replace": "{ const v = tv(n.operand, s); return v; }"
+ },
+ {
+  "name": "F9 `!` does not flip the evaluated sets",
+  "find": "RT: d.filter((s) => tv(test, s) !== false), RF: d.filter((s) => tv(test, s) !== true)",
+  "replace": "RT: d.filter((s) => tv(test, s) === true), RF: d.filter((s) => tv(test, s) === false)"
+ },
+ {
+  "name": "F10 `||` true arm is not the union of both sides",
+  "find": "return a === true || b === true ? true : a === false && b === false ? false : null; }",
+  "replace": "return a === false && b === false ? false : null; }"
+ },
+ {
+  "name": "F10 `||` unknown side counts as false (De Morgan)",
+  "find": "return a === true || b === true ? true : a === false && b === false ? false : null; }",
+  "replace": "return a === true || b === true ? true : false; }"
+ },
+ {
+  "name": "F11 an arm reached by unnamed verdicts is ignored",
+  "find": "const touches = R.some((s) => N.has(s));",
+  "replace": "const touches = R.length > 0 && R.every((s) => N.has(s));"
+ },
+ {
+  "name": "F12 the toned subject defaults to the first parameter",
+  "find": "frame.key = findSubjectKey(n) ?? frame.first;",
+  "replace": "frame.key = frame.first;"
+ },
+ {
+  "name": "F12 any member chain counts as the subject",
+  "find": "const isSubject = (n) => { const k = keyOf(n); return k !== null && k === subjectKey(); };",
+  "replace": "const isSubject = (n) => keyOf(n) !== null;"
+ },
+ {
+  "name": "F12 normalising calls are not transparent",
+  "find": "if (ts.isPropertyAccessExpression(c) && NORMALISERS.has(c.name.text) && n.arguments.length === 0) return keyOf(c.expression);\n",
+  "replace": "\n"
+ },
+ {
+  "name": "F12 String(x) is not transparent",
+  "find": "if (ts.isIdentifier(c) && c.text === \"String\" && n.arguments.length === 1) return keyOf(n.arguments[0]);\n",
+  "replace": "\n"
+ },
+ {
+  "name": "F13 a lookup by another key is allowed",
+  "find": "if (lit === null && !isSubject(n.argumentExpression)) out.push(",
+  "replace": "if (false) out.push("
+ },
+ {
+  "name": "F13 computed destructuring of a judged Record is allowed",
+  "find": "if (ts.isVariableDeclaration(n) && ts.isObjectBindingPattern(n.name) && n.initializer && isJudgedRef(n.initializer) &&",
+  "replace": "if (false && ts.isVariableDeclaration(n) && ts.isObjectBindingPattern(n.name) && n.initializer && isJudgedRef(n.initializer) &&"
+ },
+ {
+  "name": "F13 reassigning the verdict parameter is allowed",
+  "find": "ASSIGN_TOKENS.has(n.operatorToken.kind) && isSubject(n.left)) out.push(",
+  "replace": "ASSIGN_TOKENS.has(n.operatorToken.kind) && false) out.push("
+ },
+ {
+  "name": "F13 `++` on the verdict parameter is allowed",
+  "find": "n.operator === K.MinusMinusToken) && isSubject(n.operand)) out.push(",
+  "replace": "n.operator === K.MinusMinusToken) && false) out.push("
+ },
+ {
+  "name": "A1 a single-verdict arm is not strict",
+  "find": "return bound(new Set(R), R.length === 1);\n    }\n    return R.length > 0 && touches ? bound(new Set(R), R.length === 1) : IGNORE;",
+  "replace": "return bound(new Set(R), false);\n    }\n    return R.length > 0 && touches ? bound(new Set(R), false) : IGNORE;"
+ },
+ {
+  "name": "B3 a switch(true) clause is not strict",
+  "find": "c = bound(new Set([...pending].filter((v) => d.includes(v))), pending.size === 1);",
+  "replace": "c = bound(new Set([...pending].filter((v) => d.includes(v))), false);"
+ },
+ {
+  "name": "B4 a bare default return is not judged",
+  "find": "strOf(n.expression) !== null && ctx.kind === \"free\") {",
+  "replace": "strOf(n.expression) !== null && ctx.kind === \"free\" && false) {"
+ },
+ {
+  "name": "F14 .pcss / .postcss imports are not followed",
+  "find": "const IMPORT_CSS = /\\bimport\\s*(?:[^;\"'`]*?\\bfrom\\s*)?[\"']([^\"']+\\.(?:css|pcss|postcss)",
+  "replace": "const IMPORT_CSS = /\\bimport\\s*(?:[^;\"'`]*?\\bfrom\\s*)?[\"']([^\"']+\\.(?:css)"
+ },
+ {
+  "name": "F14 .pcss files are not treated as stylesheets",
+  "find": "const isCssFile = (f) => /\\.(?:css|pcss|postcss)$/.test(f);",
+  "replace": "const isCssFile = (f) => /\\.css$/.test(f);"
+ },
+ {
+  "name": "F14 a template-literal rel is not read",
+  "find": "const rel = /\\brel\\s*=\\s*(?:\"([^\"]*)\"|'([^']*)'|\\{\\s*[\"'`]([^\"'`]*)[\"'`]\\s*\\}|",
+  "replace": "const rel = /\\brel\\s*=\\s*(?:\"([^\"]*)\"|'([^']*)'|\\{\\s*[\"']([^\"']*)[\"']\\s*\\}|"
+ },
+ {
+  "name": "F14 runtime-built stylesheets are not reported",
+  "find": ".test(text)) registryProblems.push(`${rel(f)} — builds a stylesheet at runtime",
+  "replace": ".test(text) && false) registryProblems.push(`${rel(f)} — builds a stylesheet at runtime"
+ },
+ {
+  "name": "F15 spread arguments are not followed",
+  "find": "if (spread && !(target && !ts.isSpreadElement(target))) out.push(",
+  "replace": "if (false) out.push("
+ },
+ {
+  "name": "F15 a spread array target is not unpacked",
+  "find": "if (target && ts.isSpreadElement(target)) target = arr0(target.expression) ?? target;\n",
+  "replace": "\n"
+ },
+ {
+  "name": "F15 Reflect.apply(Object.assign, …) is not followed",
+  "find": "if (inner && tgt) for (const nm of names)",
+  "replace": "if (false && inner && tgt) for (const nm of names)"
+ },
+ {
+  "name": "F15 .bind is not followed",
+  "find": "c.name.text === \"apply\" || c.name.text === \"bind\")) { viaCall",
+  "replace": "c.name.text === \"apply\")) { viaCall"
+ },
+ {
+  "name": "F15 aliases of Object are not followed",
+  "find": "if (b) builtinAlias.set(n.name.text, b);",
+  "replace": "if (b) void 0;"
+ },
+ {
+  "name": "F15 aliases of Object.assign are not followed",
+  "find": "else if (ts.isPropertyAccessExpression(init) && builtinOf(init.expression) && MUT[",
+  "replace": "else if (false && ts.isPropertyAccessExpression(init) && builtinOf(init.expression) && MUT["
+ },
+ {
+  "name": "F16 the row comparison checks only a prefix",
+  "find": "if (rowItems[i] !== want) problems.push(",
+  "replace": "if ((rowItems[i] ?? \"\").slice(0, 40) !== want.slice(0, 40)) problems.push("
+ },
+ {
+  "name": "F16 the header comparison checks only a prefix",
+  "find": "normItem(items[i][2]) !== want) problems.push(",
+  "replace": "normItem(items[i][2]).slice(0, 40) !== want.slice(0, 40)) problems.push("
+ },
+ {
+  "name": "F16 the header count is not checked",
+  "find": "if (items.length !== ceilings.length) problems.push(",
+  "replace": "if (false) problems.push("
+ },
+ {
+  "name": "F16 the row count is not checked",
+  "find": "if (rowItems.length !== ceilings.length || !marks.every((m, i) => m === i + 1)) problems.push(",
+  "replace": "if (false) problems.push("
+ },
+ {
+  "name": "F16 the backlog row is not checked",
+  "find": "if (c.backlog && !c.phrases.some((ph) => backlogRow.includes(ph))) problems.push(",
+  "replace": "if (false) problems.push("
+ }
+]

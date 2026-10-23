@@ -67,7 +67,36 @@ PREVIOUS LANDING: 2026-10-21 — #1577 24eff86a940099e0725d474d1d5520bfbc71d368 
 EARLIER LANDING: 2026-10-21 — #1576 b0a4568855ca2d2378698ba23e5ff867a7c6650b (2026-10-21T21:33:03Z), from exact head 418221363eea5dc66ff3eda7c21484247d03cfb9; required check 119486613085 completed success at 21:30:31Z; Mac check 119486610742 completed success at 21:25:12Z.
               Local preflight passed with two native web steps explicitly unavailable on the Mac; a separate clean-head Linux build and browser E2E passed 53/53; breadth 58/58; staged helper 243/243; local-brain primitives 41/41. Primary independent source reviews completed per the PR body; optional GitHub Codex review was still running at landing and at the 21:47Z read, with no completed verdict claimed. See the 2026-10-21 EVIDENCE entry. This records the worker integration, not a new readiness figure or owner attestation.
 HISTORICAL SNAPSHOT: the following October 16 LAST TOUCHED block, including its readiness and pending-re-mint statements, records that earlier window. The fresh October 21 receipt is CURRENT EVIDENCE above; no current readiness value is inferred from either entry.
-LAST TOUCHED: 2026-10-23 (cloud lane) - OWNER: LOCAL-FIRST. THE MAC BRAIN TAKES EVERY OPEN BUILD ROUND; THE CLOUD LANDS GREEN PRs AND ANSWERS ASKS.
+LAST TOUCHED: 2026-10-23 (cloud lane, 23:00Z) - OWNER: THE LOCAL SECOND BRAIN RUNS EVERYTHING; THE CLOUD AND CODEX ARE FINAL INSPECTION AND
+              APPROVAL FOR THE REPOSITORY. Owner (verbatim, about 23:00Z): 'Need to offload and let the local agent run everything and
+              escalate to you or codex when it's needed for final inspection and approval for repo everything else is offloaded locally
+              using second brain period which it can run anything it needs to complete the tasks it need for second brain plus I'm going
+              to give it more knowledge to build more skills and workers for us plus it can actually build the apps and test them plus
+              build company website and all other items needed to create my company SignalGrid'. It widens the 03:30Z local-first
+              directive below. The second brain is the Mac's private local runtime at <HOME>/SignalGrid-Local-AI (named by the owner in
+              chat at 22:47Z; its design and state stay outside this tree, per the 2026-10-22 intake row; the one in-tree trace is the
+              2026-10-21 evidence re-mint, run from its worker-runtime-evidence copy). Done on that word, same hour: this record; an
+              operating note in docs/LANE_COORDINATION.md naming the roles and the brain's three escalation channels; lane mail to the
+              Mac carrying the directive verbatim with the brain's first asks (the 23:24Z steward batch); a decision-record proposal,
+              DR-064 (proposed), opened for the owner's merge and never the lane's. What the cloud does from here: it builds nothing and
+              dispatches nothing of its own; it inspects and approves repository changes the brain escalates - a lane message addressed
+              to cloud, a hand with whoCanUnblock 'cloud lane', or a PR-body sentence asking the cloud to land - reviewing the exact
+              head and landing under DR-037's five conditions as before, or returning findings; it keeps the hourly steward, the
+              2-hourly forward-build heartbeat (report only, no refill) and the daily hygiene sweep because the registry and the
+              raised-hands gate expect them; it escalates to the owner only what only the owner can clear; Codex reviews on the brain's
+              '@codex review'. What the brain had shown by 22:41Z, measured on mainline dd1380b7: alive - 114 tick heartbeats since
+              00:00Z (50 quiet, 1 acted, 63 deferred on the host lock), five status mails, its private runtime reinstalled at 05:04Z,
+              07:57Z and again before 20:03Z; nothing produced - no Mac PR opened or updated today, its one model attempt (Ollama on the
+              single intake row of #1354) stopped at 20:03:08Z after two partial edits; its build tick starved by its own three claimed
+              rows (17b in #1424 and 26 in #1219, both unmoved since early October; 17c behind the 2026-10-21 claim branch and an open
+              hand); 11 cloud-to-mac messages unacknowledged, the oldest 15 days. The mail's first asks of the brain: register itself (a
+              mac-local-brain row in docs/agent/scheduled-routines.json citing this directive, which the cloud inspects), acknowledge
+              its inbox, clear or retry 17c, move or close #1424 and #1219, and finish or close the handed-over cloud branches and PRs
+              #1585, #1586, #1611. Owner queue: #1556 (lib/), signalgrid-mcp #15-#17, the eight OWNER DECISION rows from #1600, row 50
+              vs 53, the Dependabot queue decision, DR-061/062/063 and now DR-064 (all proposed, owner-merge).
+TIERS THIS SESSION: the coordinating session wrote this record, the note, the mail and the proposal itself (docs and lane mail, no
+              engineering stage); no worker, review or refute was run.
+PREVIOUSLY:   2026-10-23 (cloud lane, 03:30Z) - OWNER: LOCAL-FIRST. THE MAC BRAIN TAKES EVERY OPEN BUILD ROUND; THE CLOUD LANDS GREEN PRs AND ANSWERS ASKS.
               Owner (verbatim, 03:30Z): 'Hey please make sure all of these get offloaded to the new local side first then going
               forward it will ask for you if needed but that for much higher or even extreme use cases.' Done on that word at
               03:32-03:39Z: the cloud stopped its two just-started rounds (plan re-measure r2, backlog-landing r5), interrupted

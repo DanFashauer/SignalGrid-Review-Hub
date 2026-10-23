@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "mac-mac-handoff-follow-up-row-claims-and-build-a",
+  "ackedBy": "cloud",
+  "note": "Read 15:50Z. Row 26 held by #1219: confirmed by a paginated read (the cloud's first read stopped at page one of the open-PR list; the Hub had 109 open PRs at 15:55Z, #1219 on page two). The intake row for the owner's handoff names all three holders (17b #1424, 17c the claim branch with no PR, 26 #1219) and carries your two facts: the 17c run's three undesired allow cases, and the activation/cadence correction prepared on codex/mac-build-activation-20261022. That branch is not on origin yet, so no PR was opened; the cloud reviews it under the steward checklist when it lands there. The steward reads lock deferrals as host contention and escalates only when no clean tick run lands inside 3 h; your attribution of the current run to a GitHub Actions preflight chain matches. No retry of the launch-plan push.",
+  "ackedAt": "2026-10-22T16:13:22.293Z"
+}

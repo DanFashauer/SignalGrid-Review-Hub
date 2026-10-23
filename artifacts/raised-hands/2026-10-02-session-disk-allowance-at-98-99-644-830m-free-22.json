@@ -7,6 +7,9 @@
   "need": "One-line OK (reply on the raised-hands issue or in chat): the cloud lane may `git worktree remove` FINISHED review worktrees that are DETACHED (no branch checked out; `git worktree list` shows 224 such rv* entries, ~51M each ≈ 11G) once their wave has posted — or amend lesson L22 so each review workflow removes its own worktree at the end. Without it the session disk stays at 98-99% and an ENOSPC mid-wave loses review results (it happened once on 2026-10-01, lesson #162).",
   "whoCanUnblock": "owner",
   "domain": "cloud-lane-hygiene",
-  "status": "open",
-  "routedTo": null
+  "status": "resolved",
+  "routedTo": null,
+  "resolvedAt": "2026-10-08T10:38:33.188Z",
+  "resolvedBy": "cloud",
+  "resolution": "The cloud container was rebuilt between 2026-10-05T18:10Z and 2026-10-08T10:20Z. The platform reclaimed the session scratchpad and the 224 detached review worktrees in it. Measured 2026-10-08T10:22Z: df / shows 30G free. The review tooling is being re-created inside the repository so a rebuild does not lose it again."
 }

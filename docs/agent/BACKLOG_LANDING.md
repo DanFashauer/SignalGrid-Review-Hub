@@ -47,9 +47,17 @@ Other refusals, each with a message and no queue:
   rest of the queue still prints.
 - **A short page.** The branch list is read against a count from `per_page=1` and the `Link`
   header, as the closed-PR list is; fewer branches read than the repository reports is exit 3.
-  Each PR's review comments are read against the PR's own `review_comments` count: a different
-  number, or no count, makes that PR's comments unreadable, which blocks LAND (it does not stop
-  the report).
+  A count read that returns one row and no `Link` header is checked by asking for page 2: a row
+  there means the Link header is missing and the total cannot be read, which is exit 3 (not
+  "one page"). Each PR's review comments are read against the PR's own `review_comments` count: a
+  different number, or no count, makes that PR's comments unreadable, which blocks LAND (it
+  does not stop the report).
+- **Facts GitHub did not give tighten the answer.** A check-runs envelope with no `total_count`
+  cannot be checked for completeness: that PR's checks are unreadable and it is not LAND. A PR
+  whose base branch is missing from both the list item and the detail is not assumed to sit on
+  mainline: the blocker reads "base branch not readable". A check that finished `cancelled` or
+  `stale`, or with no conclusion, gave no verdict and blocks LAND; `success`, `neutral` and
+  `skipped` are the verdicts of "fine".
 
 Other flags: `--threads-file` (exact review-thread counts read elsewhere),
 `--declared-live-file`, `--repo`, `--base`, `--repo-dir`, `--no-local-git`, `--now`,
@@ -69,7 +77,7 @@ row keeps what it would otherwise be in its `natural` field.
 | STALE | idle more than 14 days AND (conflicting OR red: the NEWEST run of the gating check, the Mac-only check or CodeQL failed; an older failed run that a re-run replaced is history; code scanning, `phase-pr-evidence` and the SBOM check are advisory) | the owner decides revive or close |
 | OWNER-MERGE | the diff reaches DECISION_PATH or OWNER_RESERVED (`classifyDiff` in `scripts/check-owner-gated-surfaces.mjs`), an owner-named surface (AGENTS.md, the decision records, the launch profile, the launch-claims gate, the publication boundary), or the branch is Dependabot's, comes from a fork, or is not a lane's own | the owner merges; a lane only keeps it mergeable |
 | MAC-ASK-NEEDED | any `mac/*` PR no earlier rule placed. DR-037 condition 5 wants the Mac's ask in MAIL, which the tool does not read, so it never prints LAND for a `mac/*` PR. A body line that reads as an ask prints `ask in body; confirm mail`. A `mac/tick-*` PR that is not SUPERSEDED is here too: a stricter reading than `docs/LANE_COORDINATION.md` rule 2, and "Tick PRs" below says why it holds | the Mac asks in mail; the cloud lane confirms the mail and lands only what it names |
-| LAND-UNDER-DR-037 | a cloud-lane branch (`claude/*`, `lane/cloud-*`; never a `mac/*` PR or the mailbox PR) that is landable now: not a draft, not stacked, the gating check's newest run passed on the head, nothing failing or running, not conflicted, the review comments read in full with no thread it cannot show resolved, body mentions preflight and breadth | the cloud lane, one PR at a time, after DR-037's five conditions are read on the head |
+| LAND-UNDER-DR-037 | a cloud-lane branch (`claude/*`, `lane/cloud-*`; never a `mac/*` PR or the mailbox PR) that is landable now: not a draft, not stacked (its base branch is read and is mainline), the gating check's newest run passed on the head, no other check failing, running or with no verdict (cancelled, stale or no conclusion block; neutral and skipped pass), not conflicted, the review comments read in full with no thread it cannot show resolved, body mentions preflight and breadth | the cloud lane, one PR at a time, after DR-037's five conditions are read on the head |
 | UNKNOWN | the rules have no row for what was read, or a fact could not be read (a file list cut short, a check list that failed to load, a mergeable state GitHub has not computed) | nobody lands it; the reason is on the row |
 
 UNKNOWN is never LAND. Unknown tightens (golden rule 2).
@@ -131,27 +139,43 @@ DR-037 says the same in its own words: the lane does not "merge anything that ch
 profile, the launch-claims gate or the publication boundary". A lane keeps this PR mergeable and
 does not land it. The same holds for any later PR that adds a first-party skill.
 
+Nine of the branch's first ten commits end with a `Co-Authored-By` trailer that names a model
+tier DR-047 never assigns to a build or review stage. History cannot change without a
+force-push, which is forbidden, so the fix is at the merge: the owner's squash-merge message
+can leave those trailers out. Later commits carry the attribution of the session that wrote
+them.
+
 ## Checking the tool
 
 `node scripts/backlog-triage.mjs --self-test` runs the fixture cases against an in-memory GitHub,
 each rule beside a control that lands the other way. `node scripts/backlog-triage.mjs --mutants`
 plants each defect in `MUTANTS` (a rule removed, a guard turned off, a doc line reverted) in a
 temporary copy and demands that the self-test turn red for it; the normal self-test also checks
-that every row of that table still applies, so the table cannot drift from the source.
-Preflight and the CI job run both.
+that every row of that table still applies, so the table cannot drift from the source. A P row
+also names the case it was written for and counts as killed only when that case turns red:
+red in some other case (a broken copy, an unrelated check) is reported as WRONG-RED. Preflight
+and the CI job run both.
 
 Ceilings, named so nobody mistakes them for guarantees:
 
 - The planted defects are text substitutions that someone chose. They show that these removals
-  are caught, not that every defect is.
-- The branch and closed-PR counts trust the `Link` header's last page. GitHub sends it through
-  the agent proxy (checked 2026-10-22: 224 branches); a proxy that stripped it would read as one
-  page and blind the short-page guard.
+  are caught, not that every defect is. The M and N rows record the first case that turned red,
+  not a case they were written for; only the P rows are held to theirs.
+- The branch and closed-PR counts trust the `Link` header's last page when it is present. A
+  proxy that strips it is caught only when the list holds more than one row (the page-2 read
+  above); a header that is present and wrong is not caught. GitHub sends it through the agent
+  proxy (checked 2026-10-22: 224 branches). The counts are compared with "fewer than", not
+  "not equal": a repository that gains a branch or a closed PR during the minutes a read takes
+  would otherwise fail every run.
 - The review-comment count check is exact. A comment posted between the PR read and the comment
   read makes the two differ, and that PR reads as UNKNOWN for that run: fail-closed, not wrong.
 - The body-ask detector is a sentence heuristic. A false positive costs one confirming look at
   the mail; the mail is the ask, so a false negative costs only a missed prompt.
 - Reading the newest run of each check name collapses two workflows that share a job name.
+- The self-test reads this file's own source for file-writing calls and compares them with the
+  three places reviewed (the snapshot page, the `--mutants` copies, the self-test's own temporary
+  pages). That is a scan of text: a write made through a child process, or built from strings,
+  would pass it. The test that only GET reaches the API is separate and runs the real requests.
 
 ## Snapshot
 
@@ -160,7 +184,7 @@ and by nothing else. It is a dated reading, not a live view: re-generate before 
 
 <!-- backlog-triage:snapshot:begin - generated by `node scripts/backlog-triage.mjs --markdown --snapshot docs/agent/BACKLOG_LANDING.md`; never hand-edit between the markers -->
 
-_Snapshot read 2026-10-22T22:58:37.958Z from DanFashauer/SignalGrid-Review-Hub; mainline SignalGrid_Alpha @ 93e8a90fc. It is a dated reading, not a live view: re-generate before acting on it._
+_Snapshot read 2026-10-23T00:09:05.652Z from DanFashauer/SignalGrid-Review-Hub; mainline SignalGrid_Alpha @ 49d895bb9. It is a dated reading, not a live view: re-generate before acting on it._
 
 | Disposition | Count |
 | --- | --- |
@@ -194,7 +218,7 @@ Branches: 224 total, 78 with an open PR, 145 without (4 PRUNABLE, 6 TIP-MOVED, 1
 How this was read:
 
 - Open items: 78 PRs + 6 issues = 84; the repository's open count says 84 (agree).
-- Mainline ancestry: local git: this checkout is shallow, its origin/SignalGrid_Alpha is the live head; it answered 0 PR(s), the REST compare endpoint 75, 0 left unread.
+- Mainline ancestry: local git: this checkout is shallow, its origin/SignalGrid_Alpha is NOT the live head; it answered 0 PR(s), the REST compare endpoint 75, 0 left unread.
 - Review threads: REST heuristic: root review comments and which have a reply, each list checked against the PR's own review_comments count (a different number makes that PR's comments unreadable, which blocks LAND). GitHub shows resolution through GraphQL only, which this tool does not call, so any PR with a review thread counts as having an open one.
 - Declared in-flight: #1559 #1585 #1586.
 - Mac lane mail is not read by this tool, and a line in a mac/* PR body is never the Mac's ask: the tool prints no LAND for a mac/* PR (a body ask reads "ask in body; confirm mail").

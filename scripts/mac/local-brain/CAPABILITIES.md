@@ -17,12 +17,15 @@ rule `scripts/**` (scripts/check-owner-gated-surfaces.mjs:43).
 - This file holds no repository counts. Get a number by running its command and quoting
   the output (CLAUDE.md:260). The section headings of the tables carry counts the gate
   derives from `scripts/mac/local-brain/capabilities.json`.
-- Every citation of the form path:line is pinned by an anchor: a line of text the gate
-  asserts is still inside the cited lines (the `anchors` object in
-  `scripts/mac/local-brain/capabilities.json`). An edit that moves a cited line turns the
-  gate red. The gate does not judge that the cited text supports the sentence, so check
-  that yourself before you rely on one. `measuredAt` in that file names the commit the
-  cited lines were last re-read in full.
+- Every citation of the form path:line or path:from-to is pinned by anchors in the
+  `anchors` object of `scripts/mac/local-brain/capabilities.json`: one line of text for a
+  line, a first-line text and a last-line text for a range. The gate requires each text to
+  sit on exactly the cited line and on no other line of its file, so an edit that inserts
+  or removes a line at or above the end of a cited range turns the gate red. An edit that
+  rewords a line between a range's first and last line does not, and the gate does not
+  judge that the cited text supports the sentence that cites it. Check that yourself
+  before you rely on one. `measuredAt` in that file names the commit the cited lines were
+  last re-read in full.
 
 ## Who you are
 
@@ -65,9 +68,9 @@ Run `git fetch origin SignalGrid_Alpha` and write down the full sha of
   (docs/agent/WORKER_BRIEF.md:33-37).
 - If the fetch fails, you are offline. Do steps 2 to 4 against the last fetched sha, label
   every output `offline, as of <sha>`, and make no proposal. Preflight cannot pass
-  offline: the routines gate treats an unreachable origin as fatal
-  (scripts/check-scheduled-routines.mjs:195-203), and the stall gate needs the local
-  origin ref (scripts/raised-hands.mjs:312).
+  offline: for a retired routine with no heartbeat, the routines gate treats an
+  origin it cannot list as fatal (scripts/check-scheduled-routines.mjs:195-203), and the
+  stall gate needs the local origin ref (scripts/raised-hands.mjs:312).
 - Read this file again from the new sha. If it changed, follow the new text.
 
 ### 2. Read the objective state
@@ -75,7 +78,7 @@ Run `git fetch origin SignalGrid_Alpha` and write down the full sha of
 - Run `node scripts/objective-loop.mjs --json`. It derives the verdict and the ranked
   queue and writes nothing (scripts/objective-loop.mjs:3).
 - If you read `docs/agent/objective-state.json` directly, trust its `verdict` only
-  through `readVerdict(state, { heartbeat, nowIso })` (scripts/objective-loop.mjs:400-408).
+  through `readVerdict(state, { heartbeat, nowIso })` (scripts/objective-loop.mjs:400-407).
   The verdict is `unknown` unless `artifacts/agent-heartbeats/mac-lane-tick.json` is
   younger than `staleAfterHours` AND its `result` names `objective: <verdict>`
   (docs/DECISION_RECORDS.md:3982). `unknown` means escalate. Never build on it.
@@ -111,7 +114,7 @@ only while you hold the host verification lock:
   `git show <sha>:scripts/mac/host-verification-lock.sh`, source it in the shell that will
   run the chain, then call
   `sg_host_verify_acquire "$HOME/Library/Caches/signalgrid/host-verification.lock"`
-  (scripts/mac/lane-tick.sh:285-298, scripts/mac/host-verification-lock.sh:9-22).
+  (scripts/mac/lane-tick.sh:285-296, scripts/mac/host-verification-lock.sh:9-20).
 - The lock lives on file descriptor 9 of that shell. Run the heavy chain as children of
   that shell, and call `sg_host_verify_release` as soon as the chain ends.
 - A non-zero return means another chain holds the lock. Skip the heavy rows this cycle.
@@ -126,13 +129,13 @@ only while you hold the host verification lock:
   (docs/DECISION_RECORDS.md:3980).
 - A check that could not run is reported as "could not run", never as a pass
   (docs/DECISION_RECORDS.md:4033). A skip is not a pass. Compare failures against 0 AND
-  read the skips (CLAUDE.md:44-56).
+  read the skips (CLAUDE.md:44-54).
 
 ### 5. Pick one bounded task
 
 Pick at most one task per cycle. A task is bounded when you can name, before you start,
 the exact files you will change, the check that fails without the change, and the checks
-that must stay green (docs/agent/ORG.md:201-208, docs/agent/WORKER_BRIEF.md:14-15).
+that must stay green (docs/agent/ORG.md:202-207, docs/agent/WORKER_BRIEF.md:14-15).
 
 Choose in this order:
 
@@ -160,7 +163,7 @@ Check every candidate:
   honestly is not eligible.
 - Track the task with `JobState` (scripts/mac/local-brain/job-state.mjs:50). It completes
   only after a fresh verification checkpoint by you, with exit code 0 and `passed` above 0
-  (scripts/mac/local-brain/job-state.mjs:26-35).
+  (scripts/mac/local-brain/job-state.mjs:26-34).
 - Drop any task that needs a secret, a tenant, a live vendor call, real customer data, a
   compliance or production claim, a new vertical, connector or platform, or a shared
   surface someone else is editing (docs/agent/ORG.md:181-193).
@@ -170,16 +173,21 @@ Check every candidate:
 - Your local model drafts the change in your worktree, on a branch named
   `mac/local-brain-<slug>-<stamp>`. No registry row declares that prefix yet.
 - Test first: write the failing assertion, then the change. A gate ships with a self-test
-  that plants mutants and shows each turns it red (docs/agent/WORKER_BRIEF.md:45-48).
+  that plants mutants and shows each turns it red (docs/agent/WORKER_BRIEF.md:45-47).
 - Deterministic gates judge the change. Your model's opinion of its own work is not
   evidence. Run the changed files' own tests, the local-brain test rows, then
   `node scripts/preflight.mjs` and `pnpm run verify:breadth` on the exact head, holding the
   lock (CLAUDE.md:68-74). Quote each final line.
 - Then run `assessProof({ exitCode, tests, pass, fail, skipped, command, changedFiles },
-  "scripts/mac/local-brain")` (scripts/mac/local-brain/proof-policy.mjs:42-61). `review`
+  "scripts/mac/local-brain")` (scripts/mac/local-brain/proof-policy.mjs:42-60). `review`
   means ready for a reviewer. It never means ready to merge. `blocked` means stop.
-- Before you run any shell command, test it against the `commandPatterns` of every
-  forbidden row. A match means you do not run it.
+- Before you run any shell command, test the whole line against the `commandPatterns` of
+  every forbidden row, and then each program on it: a chain with `&&`, `||` or `;`, a pipe,
+  a subshell and `$( )` are lines of several programs. The patterns read through git's
+  global options (`git -C <dir>`, `-c`, `--git-dir`), so a path or a config in front of the
+  subcommand is no way round them. A match means you do not run it. The patterns are a
+  floor (Ceiling B below): a command they miss can still be forbidden by the words of its
+  row.
 - Commit locally with the git hooks on. Push nothing unless the grant in step 7 exists.
 
 ### 7. Deliver
@@ -209,7 +217,7 @@ Mail rules:
   (docs/LANE_COORDINATION.md:203-207).
 - Only the addressee closes a message. Mail to the Mac lane is not yours to acknowledge
   unless your own work answered it; the repository cannot tell your ack from the Mac
-  lane session's (scripts/lane-message.mjs:279-295).
+  lane session's (scripts/lane-message.mjs:280-295).
 
 ### 8. Raise a hand when stuck
 
@@ -255,30 +263,30 @@ command they miss can still be forbidden by the row's words.
 | sim-requests-gate | `pnpm run sim:requests` | Every sim result binds to a request; pending is reported, never green. | yes | - | - | - | - | - | `node scripts/check-sim-requests.mjs --self-test` | scripts/check-sim-requests.mjs:4 |
 | sim-plan | `pnpm run sim:run-requests --plan` | What the Mac owes: one PENDING line per request; runs and writes nothing. | yes | - | - | - | - | - | `node scripts/mac/run-requests.mjs --self-test` | scripts/mac/run-requests.mjs:293; scripts/mac/run-requests.mjs:327; package.json:237 |
 | hands | `pnpm run hands` | Everything stuck, grouped by who can clear it. | yes | - | - | - | - | - | - | scripts/raised-hands.mjs:312-314; package.json:278 |
-| hands-stall-gate | `node scripts/raised-hands.mjs --check` | Exit 1 when a stall is past 3x its limit with no hand covering it. | yes | - | - | - | - | - | `node scripts/raised-hands.mjs --self-test` | scripts/raised-hands.mjs:6; scripts/raised-hands.mjs:790-797; docs/agent/WORKER_BRIEF.md:38-44 |
+| hands-stall-gate | `node scripts/raised-hands.mjs --check` | Exit 1 when a stall is past 3x its limit with no hand covering it. | yes | - | - | - | - | - | `node scripts/raised-hands.mjs --self-test` | scripts/raised-hands.mjs:6; scripts/raised-hands.mjs:790-795; docs/agent/WORKER_BRIEF.md:38-44 |
 | hands-register | `node scripts/check-raised-hands.mjs --json` | Validate every hand file and route it to a role, lane, tool or a named GAP. | yes | - | - | - | - | - | `node scripts/check-raised-hands.mjs --self-test` | scripts/check-raised-hands.mjs:6 |
 | hands-list | `node scripts/raise-hand.mjs --list` | List open hands from the local ledger. | yes | - | - | - | - | - | - | scripts/raise-hand.mjs:18 |
-| classify-diff | `node --input-type=module -e 'import {classifyDiff} from "./scripts/check-owner-gated-surfaces.mjs"; console.log(JSON.stringify(classifyDiff(process.argv.slice(1))))' <path>...` | Tier of the files you would touch: autonomous or owner-gated (DECISION_PATH, SAFETY_MACHINERY, OWNER_RESERVED). The CLI of that script does NOT classify; use the import. | yes | - | - | - | - | - | - | scripts/check-owner-gated-surfaces.mjs:119-129; scripts/check-owner-gated-surfaces.mjs:318-323; scripts/check-owner-gated-surfaces.mjs:43 |
+| classify-diff | `node --input-type=module -e 'import {classifyDiff} from "./scripts/check-owner-gated-surfaces.mjs"; console.log(JSON.stringify(classifyDiff(process.argv.slice(1))))' <path>...` | Tier of the files you would touch: autonomous or owner-gated (DECISION_PATH, SAFETY_MACHINERY, OWNER_RESERVED). The CLI of that script does NOT classify; use the import. | yes | - | - | - | - | - | - | scripts/check-owner-gated-surfaces.mjs:119-129; scripts/check-owner-gated-surfaces.mjs:319-323; scripts/check-owner-gated-surfaces.mjs:43 |
 | owner-gated-manifest | `node scripts/check-owner-gated-surfaces.mjs --self-test` | Validate the owner-gated manifest itself. | yes | - | - | - | - | - | `node scripts/check-owner-gated-surfaces.mjs --self-test` | scripts/check-owner-gated-surfaces.mjs:8; scripts/check-owner-gated-surfaces.mjs:321-323 |
-| check-absence | `pnpm run check:absence <topic>` | Four probes before any sentence of the form 'X does not exist'. Exit 0 corroborated, 1 refuted, 2 inconclusive. | yes | - | - | - | - | - | `node scripts/agent/absence-check.mjs --self-test` | scripts/agent/absence-check.mjs:3-9; package.json:232 |
+| check-absence | `pnpm run check:absence <topic>` | Four probes before any sentence of the form 'X does not exist'. Exit 0 corroborated, 1 refuted, 2 inconclusive. | yes | - | - | - | - | - | `node scripts/agent/absence-check.mjs --self-test` | scripts/agent/absence-check.mjs:3-8; package.json:232 |
 | docs-retrieve | `pnpm run docs:retrieve -- "<question>"` | Local-embedding retrieval over tracked docs: returns paths and line ranges, a pointer, never a fact. No key, no LLM. | yes | - | - | - | - | - | - | scripts/docs-retrieval.mjs:2; scripts/docs-retrieval.mjs:7; package.json:276 |
 | dispatch | `pnpm run dispatch "<task text>"` | Deterministic LOCAL vs CLOUD nudge for a task. Not a law. | yes | - | - | - | - | - | - | scripts/dev-dispatch.mjs:2-6; package.json:42 |
 | role-queue | `pnpm run role:queue [-- <role-id>]` | Per role: owned files and the unread remainder, ordered by consequence. | yes | - | - | - | - | - | - | scripts/role-work-queue.mjs:3-5 |
 | readiness-figure | `node scripts/check-readiness-figure.mjs --json` | The derived readiness figure (DR-036). Exit 0 on any number, 1 only if broken. | yes | - | - | - | - | - | `node scripts/check-readiness-figure.mjs --self-test` | scripts/check-readiness-figure.mjs:6 |
 | statusline | `bash scripts/mac/statusline.sh` | Branch, open hands and unread mail from files on disk; no fetch, no network. | yes | - | - | - | - | - | `bash scripts/mac/statusline.sh --self-test` | docs/LANE_COORDINATION.md:358-377; scripts/mac/statusline.sh:6 |
-| local-brain-job-state-tests | `node scripts/mac/local-brain/test/job-state.test.mjs` | Proof of the job state machine: a job completes only after a fresh, successful verification checkpoint by the worker that holds it. | yes | - | - | - | - | - | `node scripts/mac/local-brain/test/job-state.test.mjs` | scripts/mac/local-brain/job-state.mjs:26-35; scripts/preflight.mjs:110-112 |
+| local-brain-job-state-tests | `node scripts/mac/local-brain/test/job-state.test.mjs` | Proof of the job state machine: a job completes only after a fresh, successful verification checkpoint by the worker that holds it. | yes | - | - | - | - | - | `node scripts/mac/local-brain/test/job-state.test.mjs` | scripts/mac/local-brain/job-state.mjs:26-34; scripts/preflight.mjs:110-112 |
 | local-brain-task-selector-tests | `node scripts/mac/local-brain/test/task-selector.test.mjs` | Proof of the eligible-task selector: queued, in scope, dependencies reviewed, ordered by priority then id; a malformed task throws. | yes | - | - | - | - | - | `node scripts/mac/local-brain/test/task-selector.test.mjs` | scripts/mac/local-brain/task-selector.mjs:1-21; scripts/preflight.mjs:110-112 |
-| local-brain-proof-policy-tests | `node scripts/mac/local-brain/test/proof-policy.test.mjs` | Proof of the proof-policy assessor: 'review' only when every test passed, none failed or skipped, and every changed file is in scope. | yes | - | - | - | - | - | `node scripts/mac/local-brain/test/proof-policy.test.mjs` | scripts/mac/local-brain/proof-policy.mjs:42-61; scripts/preflight.mjs:110-112 |
+| local-brain-proof-policy-tests | `node scripts/mac/local-brain/test/proof-policy.test.mjs` | Proof of the proof-policy assessor: 'review' only when every test passed, none failed or skipped, and every changed file is in scope. | yes | - | - | - | - | - | `node scripts/mac/local-brain/test/proof-policy.test.mjs` | scripts/mac/local-brain/proof-policy.mjs:42-60; scripts/preflight.mjs:110-112 |
 | local-brain-capabilities-gate | `node scripts/check-local-brain-capabilities.mjs` | This contract's own gate: every row's command text names a script or file that exists, every cited line still holds its anchor, every self-test runs in a lane, every forbidden pattern holds its controls, and capabilities.json and CAPABILITIES.md agree. | yes | - | - | - | - | - | `node scripts/check-local-brain-capabilities.mjs --self-test` | scripts/check-local-brain-capabilities.mjs:2 |
 | local-brain-capabilities-mutants | `node scripts/check-local-brain-capabilities-mutants.mjs` | Breaks this contract's gate one check at a time and requires the gate's self-test, or the gate itself, to go red for every break. | yes | - | - | - | - | - | `node scripts/check-local-brain-capabilities-mutants.mjs --self-test` | scripts/check-local-brain-capabilities-mutants.mjs:2 |
 | land-branch-gate | `node scripts/lib/land-branch-gate.mjs --self-test` | The pure push gate: refuses unless both exits are 0 AND both sentinel lines name the head. canPush(run, expectedHead) is importable. | yes | - | - | - | - | - | `node scripts/lib/land-branch-gate.mjs --self-test` | scripts/lib/land-branch-gate.mjs:14 |
 | stage-helper-self-test | `node scripts/mac/build-tick-stages.mjs --self-test` | Self-test of the build tick's stage helper (the SG_STAGE_RUNNER seam lives here). | yes | - | - | - | - | - | `node scripts/mac/build-tick-stages.mjs --self-test` | scripts/mac/build-tick-stages.mjs:10; scripts/mac/build-tick-stages.mjs:191-199 |
 | lane-deliver-dry-run | `pnpm run lane:deliver send "<subject>" "<body>" --dry-run` | Build and gate a delivery in a throwaway worktree, push nothing, keep nothing. Use it to prove a mail would pass before you ask for a push. | yes | - | read | - | - | - | - | scripts/lane-deliver.mjs:13; scripts/lane-deliver.mjs:296; scripts/lane-deliver.mjs:83-98 |
-| launchd-status | `bash scripts/mac/install-launchd.sh --status` | Is the lane tick's launchd job loaded; tail of its log. | yes | - | - | - | yes | - | - | scripts/mac/install-launchd.sh:33-36; scripts/mac/install-launchd.sh:45-47 |
-| build-tick-status | `bash scripts/mac/install-build-tick.sh --status` | Is the build tick's launchd job loaded, at which interval (its registry row gives it), and the tail of its log. | yes | - | - | - | yes | - | - | scripts/mac/install-build-tick.sh:4-10; scripts/mac/install-build-tick.sh:39-41 |
-| build-tick-dry-run | `bash scripts/mac/build-tick.sh --dry-run` | Print the row a real run would pick and every stage command; runs no stage. | yes | - | read | yes | yes | - | - | scripts/mac/build-tick.sh:390-393 |
+| launchd-status | `bash scripts/mac/install-launchd.sh --status` | Is the lane tick's launchd job loaded; tail of its log. | yes | - | - | - | yes | - | - | scripts/mac/install-launchd.sh:33-34; scripts/mac/install-launchd.sh:46-47 |
+| build-tick-status | `bash scripts/mac/install-build-tick.sh --status` | Is the build tick's launchd job loaded, at which interval (its registry row gives it), and the tail of its log. | yes | - | - | - | yes | - | - | scripts/mac/install-build-tick.sh:4-9; scripts/mac/install-build-tick.sh:39-40 |
+| build-tick-dry-run | `bash scripts/mac/build-tick.sh --dry-run` | Print the row a real run would pick and every stage command; runs no stage. | yes | - | read | yes | yes | - | - | scripts/mac/build-tick.sh:390-392 |
 | coverage-gate | `node scripts/check-surface-review-coverage.mjs` | Every tracked file belongs to a surface; the generated page must not be stale. | yes | - | - | - | - | - | `node scripts/check-surface-review-coverage.mjs --self-test` | scripts/check-surface-review-coverage.mjs:6 |
-| preflight-list | `node scripts/preflight.mjs --list-steps` | Print every preflight step as JSON; runs none. | yes | - | - | - | - | - | - | scripts/preflight.mjs:808-812 |
+| preflight-list | `node scripts/preflight.mjs --list-steps` | Print every preflight step as JSON; runs none. | yes | - | - | - | - | - | - | scripts/preflight.mjs:808-811 |
 | breadth-membership | `node scripts/verify-breadth.mjs --self-test` | Breadth-lane membership derivation only; runs no proof. | yes | - | - | - | - | - | `node scripts/verify-breadth.mjs --self-test` | scripts/verify-breadth.mjs:248-249 |
 | routines-gate | `node scripts/check-scheduled-routines.mjs` | Hold the routine registry against heartbeats; lists origin heads for retired routines. | yes | - | read | - | - | - | - | scripts/check-scheduled-routines.mjs:195-203 |
 | scan-estate | `pnpm run scan:estate` | Cited-path check across the declared estate; a repo it cannot reach is NOT SCANNED, never clean. | yes | - | - | - | - | - | - | scripts/scan-estate-citations.mjs:16-19; scripts/scan-estate-citations.mjs:29-40 |
@@ -289,9 +297,9 @@ command they miss can still be forbidden by the row's words.
 | --- | --- | --- | :-: | :-: | :-: | :-: | :-: | :-: | --- | --- |
 | typecheck | `pnpm run typecheck` | tsc over the libs and every artifact. | yes | - | - | - | - | - | - | CLAUDE.md:113-114 |
 | review-invariants | `pnpm run review:invariants` | The determinism and fail-closed invariants (golden rule 2). | yes | - | - | - | - | - | - | CLAUDE.md:28-31 |
-| proof | `pnpm run proof:*` | One deterministic in-process proof: replace * with the name of a proof script in package.json. A proof that self-skips without DATABASE_URL is SELF-SKIPPED, never passed. | - | yes | - | - | - | - | - | CLAUDE.md:113-114; scripts/preflight.mjs:681; scripts/preflight.mjs:688 |
-| build-loop | `pnpm run loop` | Fast gate set turned into findings. | - | yes | - | - | - | - | - | scripts/build-loop.mjs:144-152 |
-| hand-raise-file | `pnpm run hand:raise -- --doing "..." --blocked "..." --need "..." --who owner\|"mac lane"\|"cloud lane" --origin mac-local-brain` | Write one DR-054 hand record. It is not delivered until it reaches mainline. | - | yes | - | - | - | - | - | scripts/raise-hand.mjs:6-13; scripts/raise-hand.mjs:83-123; CLAUDE.md:264 |
+| proof | `pnpm run proof:*` | One deterministic in-process proof: replace * with the name of a proof script in package.json. A proof that self-skips without DATABASE_URL is SELF-SKIPPED, never passed. | - | yes | - | - | - | - | - | CLAUDE.md:113-114; scripts/preflight.mjs:671-677 |
+| build-loop | `pnpm run loop` | Fast gate set turned into findings. | - | yes | - | - | - | - | - | scripts/build-loop.mjs:144-151 |
+| hand-raise-file | `pnpm run hand:raise -- --doing "..." --blocked "..." --need "..." --who owner\|"mac lane"\|"cloud lane" --origin mac-local-brain` | Write one DR-054 hand record. It is not delivered until it reaches mainline. | - | yes | - | - | - | - | - | scripts/raise-hand.mjs:6-12; scripts/raise-hand.mjs:83-123; CLAUDE.md:264 |
 | lane-send-file | `pnpm run lane:send "<subject>" "<body>"` | Write a mail file addressed to the OTHER lane (cloud, from the Mac). Writing is not delivering. | - | yes | - | - | - | - | - | scripts/lane-message.mjs:208-215; docs/LANE_COORDINATION.md:62-66 |
 | sync-manifest | `node scripts/generate-sync-manifest.mjs` | Regenerate the live-sync manifest after a cross-surface contract change. Never hand-edit it. | - | yes | - | - | - | - | - | docs/LANE_COORDINATION.md:447-448 |
 | coverage-write | `node scripts/check-surface-review-coverage.mjs --write` | Regenerate docs/agent/SURFACE_REVIEW_COVERAGE.md, only on a fully staged index. | - | yes | - | - | - | - | - | docs/LANE_COORDINATION.md:326-329 |
@@ -301,10 +309,10 @@ command they miss can still be forbidden by the row's words.
 
 | Name | Command | What it gives you | RO | Writes tree | Net | Token | macOS | Cloud model | Self-test | Source |
 | --- | --- | --- | :-: | :-: | :-: | :-: | :-: | :-: | --- | --- |
-| preflight | `node scripts/preflight.mjs` | The per-push lane CI mirrors. Stops at the first failure; classifies each pass as ok, SELF-SKIPPED, NOT VERIFIED, REPORTED or UNAVAILABLE. | - | yes | read | optional | - | - | - | CLAUDE.md:68-74; docs/agent/WORKER_BRIEF.md:58-62; scripts/mac/host-verification-lock.sh:9-22; scripts/mac/lane-tick.sh:296; scripts/preflight.mjs:46-58 |
-| verify-breadth | `pnpm run verify:breadth` | The breadth lane: every STEPS entry, its own CI job. | yes | - | - | - | - | - | - | CLAUDE.md:68-74; scripts/mac/host-verification-lock.sh:9-22; scripts/mac/lane-tick.sh:296; scripts/preflight.mjs:46-58 |
-| test-api | `pnpm --filter @workspace/api-server run test:api` | Boots the api-server on loopback and asserts N/N; compare passed against total. | yes | - | - | - | - | - | - | CLAUDE.md:107-112; scripts/mac/host-verification-lock.sh:9-22; scripts/mac/lane-tick.sh:296; scripts/preflight.mjs:46-58 |
-| validate-sim-macos | `./validate-sim-macos.sh` | The local Mac harness. Narrower than preflight. Compare M against 0 AND read S. | - | yes | - | - | yes | - | - | validate-sim-macos.sh:109-111; CLAUDE.md:44-56 |
+| preflight | `node scripts/preflight.mjs` | The per-push lane CI mirrors. Stops at the first failure; classifies each pass as ok, SELF-SKIPPED, NOT VERIFIED, REPORTED or UNAVAILABLE. | - | yes | read | optional | - | - | - | CLAUDE.md:68-74; docs/agent/WORKER_BRIEF.md:58-62; scripts/mac/host-verification-lock.sh:9-20; scripts/mac/lane-tick.sh:296; scripts/preflight.mjs:46-58 |
+| verify-breadth | `pnpm run verify:breadth` | The breadth lane: every STEPS entry, its own CI job. | yes | - | - | - | - | - | - | CLAUDE.md:68-74; scripts/mac/host-verification-lock.sh:9-20; scripts/mac/lane-tick.sh:296; scripts/preflight.mjs:46-58 |
+| test-api | `pnpm --filter @workspace/api-server run test:api` | Boots the api-server on loopback and asserts N/N; compare passed against total. | yes | - | - | - | - | - | - | CLAUDE.md:107-111; scripts/mac/host-verification-lock.sh:9-20; scripts/mac/lane-tick.sh:296; scripts/preflight.mjs:46-58 |
+| validate-sim-macos | `./validate-sim-macos.sh` | The local Mac harness. Narrower than preflight. Compare M against 0 AND read S. | - | yes | - | - | yes | - | - | validate-sim-macos.sh:109-111; CLAUDE.md:44-54 |
 | mutation-guard | `pnpm run guard:mutations` | Mutation sweep; writes mutated copies over tracked source files and restores them. A long run. | - | yes | - | - | - | - | - | scripts/mutation-guard.mjs:2226-2234; docs/LANE_COORDINATION.md:445-446 |
 | gate-falsification | `node scripts/check-pr-gate-falsification.mjs --base <ref> --head <ref>` | For the lines a diff changed, can any gate still go red. Fail-closed by construction. | - | yes | - | - | - | - | `node scripts/check-pr-gate-falsification.mjs --self-test` | scripts/check-pr-gate-falsification.mjs:2-15 |
 
@@ -316,10 +324,10 @@ command they miss can still be forbidden by the row's words.
 | lane-deliver-via-pr | `pnpm run lane:deliver send "<subject>" "<body>" --via-pr --trailer "Origin: mac-local-brain"` | Deliver mail on a lane/mac-mail-&lt;stamp&gt; branch instead of mainline; someone must still land it. | - | - | write | yes | - | - | - | scripts/lane-deliver.mjs:14; scripts/lane-deliver.mjs:302-303 |
 | lane-deliver-raise | `pnpm run lane:deliver batch <ops.json>   # op: raise / take / clear` | Deliver a raised hand (or take / clear one) in one step. | - | - | write | yes | - | - | - | scripts/lane-deliver.mjs:7-9 |
 | lane-deliver-heartbeat | `pnpm run lane:deliver heartbeat <routine-id> "quiet \| acted: what"` | A heartbeat for a registered routine. | - | - | write | yes | - | - | - | scripts/lane-deliver.mjs:196-204 |
-| lane-deliver-ack | `pnpm run lane:deliver ack <message-id> "<what you did>"` | Close a message addressed to the Mac lane. | - | - | write | yes | - | - | - | scripts/lane-message.mjs:279-295 |
+| lane-deliver-ack | `pnpm run lane:deliver ack <message-id> "<what you did>"` | Close a message addressed to the Mac lane. | - | - | write | yes | - | - | - | scripts/lane-message.mjs:280-295 |
 | push-own-branch | `git push origin HEAD:refs/heads/mac/local-brain-<slug>-<stamp>` | Publish a proposal branch. Never SignalGrid_Alpha, never another unit's branch, never forced. | - | - | write | yes | - | - | - | CLAUDE.md:245-249; docs/agent/WORKER_BRIEF.md:88-92 |
 | open-draft-pr | `open a DRAFT pull request against SignalGrid_Alpha with the WORKER_BRIEF headings` | Carry a proposal to review. Under '## Owner decision needed' state the classifyDiff tier of every file. | - | - | write | yes | - | - | - | docs/agent/WORKER_BRIEF.md:63-76; AGENTS.md:73-82 |
-| build-tick-with-runner | `be the host executable named by SG_STAGE_RUNNER (protocol 1: one JSON request on stdin, one result envelope on stdout)` | The in-tree seam that lets a host executable replace the claude CLI for each build-tick stage, once the owner points SG_STAGE_RUNNER at it. The build tick, not the runner, pushes and opens the PR; nothing merges. | - | - | write | yes | yes | - | - | scripts/mac/build-tick-stages.mjs:191-199; scripts/mac/build-tick-stages.mjs:222-258; docs/LANE_COORDINATION.md:76-86; docs/agent/scheduled-routines.json:92-93; docs/agent/scheduled-routines.json:101-102 |
+| build-tick-with-runner | `be the host executable named by SG_STAGE_RUNNER (protocol 1: one JSON request on stdin, one result envelope on stdout)` | The in-tree seam that lets a host executable replace the claude CLI for each build-tick stage, once the owner points SG_STAGE_RUNNER at it. The build tick, not the runner, pushes and opens the PR; nothing merges. | - | - | write | yes | yes | - | - | scripts/mac/build-tick-stages.mjs:191-199; scripts/mac/build-tick-stages.mjs:222-258; docs/LANE_COORDINATION.md:76-86; docs/agent/scheduled-routines.json:91-93; docs/agent/scheduled-routines.json:100-102 |
 
 ### Your floor: these need a cloud model (4 rows)
 
@@ -327,23 +335,23 @@ command they miss can still be forbidden by the row's words.
 | --- | --- | --- | :-: | :-: | :-: | :-: | :-: | :-: | --- | --- |
 | review-stage | `independent review of a proposal (DR-060 rule 1: review runs on Opus)` | The judgment a landing needs. When the Opus tier is unavailable, the review WAITS; it is never downgraded. | yes | - | - | - | - | yes | - | docs/DECISION_RECORDS.md:4122; docs/DECISION_RECORDS.md:3159; docs/agent/WORKER_BRIEF.md:21-23 |
 | dr037-landing | `landing a product PR under DR-037` | The cloud lane's conditional merge: five conditions, including reading review threads and judging bot findings. | - | - | write | yes | - | yes | - | docs/DECISION_RECORDS.md:2230-2261; .claude/skills/landing-under-dr-037/SKILL.md:13-34 |
-| land-branch-workflow | `.claude/workflows/land-branch.js (Claude Workflow tool)` | Generic landing workflow run by Claude worker agents. | - | yes | write | yes | - | yes | - | .claude/workflows/land-branch.js:1-45 |
+| land-branch-workflow | `.claude/workflows/land-branch.js (Claude Workflow tool)` | Generic landing workflow run by Claude worker agents. | - | yes | write | yes | - | yes | - | .claude/workflows/land-branch.js:1-44 |
 | brain-cycle-board | `node scripts/brain-cycle.mjs --board <dir>` | Decide and report over an audit board that Claude lens agents wrote; the script cannot spawn the lenses, and its routine is retired. | - | yes | read | - | - | yes | `node scripts/brain-cycle.mjs --self-test` | scripts/brain-cycle.mjs:1-19; docs/agent/scheduled-routines.json:105 |
 
 ### Never run or change these (10 rows)
 
 | Name | What it covers | Why | Command patterns | Path patterns | Source |
 | --- | --- | --- | :-: | :-: | --- |
-| merge | any merge of a pull request or push to SignalGrid_Alpha that lands code: gh api -X PUT .../pulls/&lt;n&gt;/merge, a merge_pull_request tool, enabling auto-merge, git push origin HEAD:SignalGrid_Alpha | Agents never merge their own work; a local model's advice grants no writer or merge authority. | 7 | 0 | AGENTS.md:84; docs/agent/WORKER_BRIEF.md:92; docs/agent/ORG.md:170; docs/agent/scheduled-routines.json:93 |
+| merge | any merge of a pull request or push to SignalGrid_Alpha that lands code: gh api -X PUT .../pulls/&lt;n&gt;/merge, a merge_pull_request tool (also by its mcp__github__ name), enabling auto-merge, git push origin HEAD:SignalGrid_Alpha (also git -C &lt;dir&gt; push, a push_files or create_or_update_file tool on that branch, an API update of its ref) | Agents never merge their own work; a local model's advice grants no writer or merge authority. | 9 | 0 | AGENTS.md:84; docs/agent/WORKER_BRIEF.md:92; docs/agent/ORG.md:170; docs/agent/scheduled-routines.json:93 |
 | approve | submitting a pull-request review with event APPROVE | Approval is a human act. | 2 | 0 | docs/DECISION_RECORDS.md:2244-2245 |
-| close | closing any pull request or issue; above all the mailbox PR (docs/agent/lane-mailbox.json) | The mailbox PR is never merged and never closed; closing it removes the wake channel. | 4 | 0 | docs/LANE_COORDINATION.md:168-172 |
-| delete | pnpm run branches:clean; APPLY=true node scripts/prune-merged-branches.mjs; git push origin --delete &lt;ref&gt; or :&lt;ref&gt;; git branch -D or -d (any); deleting files under artifacts/raised-hands or artifacts/lane-messages; a DELETE call to the GitHub API; rm -rf outside your own worktree | Branch deletion and other destructive git are the owner's to approve. | 8 | 0 | CLAUDE.md:245-249; docs/DECISION_RECORDS.md:2261; scripts/cleanup-merged-branches.sh:1-6; scripts/prune-merged-branches.mjs:5-6 |
-| force-push | git push --force / --force-with-lease / -f / a +refspec; git rebase (any); git reset --hard (any); git filter-branch or filter-repo | Never force-push or rewrite history. | 6 | 0 | CLAUDE.md:262; docs/agent/WORKER_BRIEF.md:88-89 |
-| bypass | --no-verify; git -c core.hooksPath=...; lane:deliver --allow-ungated; git stash (any); setting CI or GITHUB_ACTIONS on the Mac; deleting or moving the build tick's paused file; quiet flags | Never bypass a check. The paused file is for a person to clear. | 7 | 0 | CLAUDE.md:262; scripts/lane-deliver.mjs:16-17; scripts/check-ci-liveness.mjs:110; scripts/mac/build-tick.sh:395-404 |
-| send-outside | uploading, quoting or embedding anything under reference/knowledge; sending repository content to any remote service other than the owner's own Claude or Codex escalation; posting PR comments, issues, email or chat in the owner's name | The corpus is confidential; sending data to an external service needs the owner. | 3 | 1 | scripts/mac/sg-brain-link.sh:12-18; CLAUDE.md:245-249; docs/agent/RESOURCE_INTAKE.md:72-74 |
+| close | closing any pull request or issue; above all the mailbox PR (docs/agent/lane-mailbox.json) | The mailbox PR is never merged and never closed; closing it removes the wake channel. | 3 | 0 | docs/LANE_COORDINATION.md:168-172 |
+| delete | pnpm run branches:clean; APPLY=true node scripts/prune-merged-branches.mjs; bash scripts/cleanup-merged-branches.sh --apply; git push origin --delete &lt;ref&gt; or :&lt;ref&gt; or --prune; git branch -D or -d (any, also -df, also under git -C &lt;dir&gt;); git update-ref -d; deleting or moving files under artifacts/raised-hands or artifacts/lane-messages; a DELETE call to the GitHub API (also gh issue delete and the like, a GraphQL delete mutation, a delete_file tool); rm -rf outside your own worktree | Branch deletion and other destructive git are the owner's to approve. | 13 | 0 | CLAUDE.md:245-249; docs/DECISION_RECORDS.md:2261; scripts/cleanup-merged-branches.sh:1-5; scripts/prune-merged-branches.mjs:5-6 |
+| force-push | git push --force / --force-with-lease / -f (also in a cluster such as -fu) / --mirror / a +refspec; git rebase (any); git reset --hard (any); git filter-branch or filter-repo; git pull --rebase; each also under git -C &lt;dir&gt; and the other global options | Never force-push or rewrite history. | 5 | 0 | CLAUDE.md:262; docs/agent/WORKER_BRIEF.md:88-89 |
+| bypass | --no-verify; git -c core.hooksPath=...; lane:deliver --allow-ungated; git stash (any); setting CI or GITHUB_ACTIONS on the Mac; deleting or moving the build tick's paused file; quiet flags | Never bypass a check. The paused file is for a person to clear. | 7 | 0 | CLAUDE.md:262; scripts/lane-deliver.mjs:16-17; scripts/check-ci-liveness.mjs:110; scripts/mac/build-tick.sh:395-403 |
+| send-outside | uploading, quoting or embedding anything under reference/knowledge; sending repository content to any remote service other than the owner's own Claude or Codex escalation (curl or wget with data, scp, rsync to a host, a mail program); posting PR comments, issues, email or chat in the owner's name (gh pr comment, gh issue create or comment, gh gist create, gh api with fields to a comments or issues endpoint, the GitHub and mail tools that post) | The corpus is confidential; sending data to an external service needs the owner. | 13 | 1 | scripts/mac/sg-brain-link.sh:12-18; CLAUDE.md:245-249; docs/agent/RESOURCE_INTAKE.md:72-73 |
 | run-another-units-job | bash scripts/mac/lane-tick.sh; bash scripts/mac/build-tick.sh (a real run); node scripts/objective-loop.mjs --write [--deliver]; pnpm run sim:run-requests (without --plan); install-launchd.sh or install-build-tick.sh without --status; pnpm run sync; bash scripts/mac/mcp-up.sh; bash scripts/mac/sg-brain-link.sh; verify:all --emit-evidence | Those are launchd jobs, the tick's single-writer steps, or the owner's one-time commands. Running them by hand races them or pushes. | 12 | 0 | docs/DECISION_RECORDS.md:3980; docs/LANE_COORDINATION.md:47-52; docs/LANE_COORDINATION.md:88-91; scripts/sync.mjs:1-8 |
-| product-boundary | any edit under lib/**, artifacts/api-server/**, native/ios/EnterpriseShell/Services/DecisionEngine.swift or AppWorkflows.swift, the launch profile, the launch-claims gate, the publication boundary, AGENTS.md or docs/DECISION_RECORDS.md; db:restore; db:migrate | Decision path and owner-reserved surfaces; a model never decides a verdict. | 1 | 9 | CLAUDE.md:24-31; scripts/check-owner-gated-surfaces.mjs:89-91; docs/DECISION_RECORDS.md:2254-2261; docs/AGENT_GATEWAY.md:23-27 |
-| own-contract | editing this contract (scripts/mac/local-brain/CAPABILITIES.md, scripts/mac/local-brain/capabilities.json), its gate and the gate's mutant harness (scripts/check-local-brain-capabilities.mjs, scripts/check-local-brain-capabilities-mutants.mjs), or the judge of your own work (scripts/mac/local-brain/proof-policy.mjs, scripts/mac/local-brain/job-state.mjs and their tests under scripts/mac/local-brain/test/) | You never change your own rules or your own judge. A change to either is the cloud lane's or the owner's. Your judge is assessProof in proof-policy.mjs, the completion rule in job-state.mjs and the tests of both: whatever decides that your work is ready for review must not live where your work is written. task-selector.mjs and its test stay in your scope, because step 5 re-checks every candidate with classifyDiff and with these patterns, independent of the selector. | 0 | 4 | scripts/check-owner-gated-surfaces.mjs:43; docs/DECISION_RECORDS.md:3272-3274; scripts/mac/local-brain/proof-policy.mjs:42-61; scripts/mac/local-brain/job-state.mjs:26-35 |
+| product-boundary | any edit under lib/**, artifacts/api-server/**, native/ios/EnterpriseShell/Services/DecisionEngine.swift or AppWorkflows.swift, the launch profile, the launch-claims gate, the publication boundary, AGENTS.md or docs/DECISION_RECORDS.md; db:restore; db:migrate | Decision path and owner-reserved surfaces; a model never decides a verdict. | 1 | 9 | CLAUDE.md:24-31; scripts/check-owner-gated-surfaces.mjs:89-91; docs/DECISION_RECORDS.md:2254-2261; docs/AGENT_GATEWAY.md:23-26 |
+| own-contract | editing this contract (scripts/mac/local-brain/CAPABILITIES.md, scripts/mac/local-brain/capabilities.json), its gate and the gate's mutant harness (scripts/check-local-brain-capabilities.mjs, scripts/check-local-brain-capabilities-mutants.mjs), or the judge of your own work (scripts/mac/local-brain/proof-policy.mjs, scripts/mac/local-brain/job-state.mjs and their tests under scripts/mac/local-brain/test/) | You never change your own rules or your own judge. A change to either is the cloud lane's or the owner's. Your judge is assessProof in proof-policy.mjs, the completion rule in job-state.mjs and the tests of both: whatever decides that your work is ready for review must not live where your work is written. task-selector.mjs and its test stay in your scope, because step 5 re-checks every candidate with classifyDiff and with these patterns, independent of the selector. | 0 | 4 | scripts/check-owner-gated-surfaces.mjs:43; docs/DECISION_RECORDS.md:3272-3274; scripts/mac/local-brain/proof-policy.mjs:42-60; scripts/mac/local-brain/job-state.mjs:26-34 |
 
 <!-- generated:capabilities:end -->
 
@@ -366,7 +374,7 @@ command they miss can still be forbidden by the row's words.
    later. Never drop it (docs/DECISION_RECORDS.md:3160).
 6. No model enters the decision path. Nothing under `lib/*`, the `/v1` decision path, a
    connector or a proof may call, import or depend on a model, local or remote
-   (docs/AGENT_GATEWAY.md:23-27, docs/AGENT_GATEWAY.md:67-71). You may read and run that
+   (docs/AGENT_GATEWAY.md:23-26, docs/AGENT_GATEWAY.md:67-71). You may read and run that
    code; you may not wire a model into it.
 7. Ask the owner before destructive git, before sending data to an external service and
    before pushing (CLAUDE.md:245-249). The only commit this contract allows is the local one
@@ -392,7 +400,7 @@ command they miss can still be forbidden by the row's words.
 12. The owner's knowledge corpus under `reference/knowledge` is confidential. Never upload
     it, quote it or commit it (scripts/mac/sg-brain-link.sh:12-18).
 13. Keys stay out of the tree. No secrets into third-party tools
-    (docs/AGENT_GATEWAY.md:28-30, docs/agent/RESOURCE_INTAKE.md:72-74).
+    (docs/AGENT_GATEWAY.md:28-30, docs/agent/RESOURCE_INTAKE.md:72-73).
 14. Truth: never claim pass, exists, fixed or absent without running the command and
     quoting its output (CLAUDE.md:260). Before writing "X does not exist", run
     `pnpm run check:absence <topic>`. The accuracy doctrine binds you
@@ -448,14 +456,14 @@ it (the `build-tick-with-runner` row). If the owner points it at you:
   unknown cost stays unknown (docs/LANE_COORDINATION.md:76-86).
 - Refuse any stage you cannot honestly serve. The review stage asks for the Opus tier
   (scripts/mac/build-tick-stages.mjs:76), so a local model refuses it. Today a refusal
-  pauses the whole tick until a person clears it (scripts/mac/build-tick.sh:395-404). That
+  pauses the whole tick until a person clears it (scripts/mac/build-tick.sh:395-403). That
   is a known gap; raise a hand when it happens.
 - The build tick, not you, pushes and opens the PR. Nothing in it merges.
 - The registry lists the job `active`, retrying on the cadence its row gives
-  (docs/agent/scheduled-routines.json:92). Its activation evidence proves a firing, not a
+  (docs/agent/scheduled-routines.json:91-93). Its activation evidence proves a firing, not a
   completed build (docs/agent/scheduled-routines.json:102).
 - With no runner and no Claude credits, its Claude stages break and the tick pauses
-  itself until a person deletes the paused file (scripts/mac/build-tick.sh:395-404). That
+  itself until a person deletes the paused file (scripts/mac/build-tick.sh:395-403). That
   file is not yours to delete.
 
 ## How this contract is checked
@@ -465,30 +473,37 @@ when any of these stops being true:
 
 - every row has its fields, a known policy and a known kind, and no name repeats;
 - every row's package script, tracked file and export exist, and the command text names
-  them: `pnpm run X` is the row's package script X, `node`, `bash` or `sh` P is its file P;
+  them. On a line of several programs (a chain with `&&`, `||` or `;`, a pipe, a subshell,
+  `$( )`, a `cd` that moves where later paths are read from) the first `pnpm run X` is the
+  row's package script X and the first `node`, `bash` or `sh` P is its file P; every further
+  script or file on the line exists too; a program the gate cannot check (`pnpm exec`,
+  `npx`, any tool outside a short list of system programs) needs a row with no `exists` and
+  a note saying why;
 - every self-test a row names is a step that preflight or the breadth lane lists, or a
   workflow `run:` line;
 - every cited source file is tracked, and every line citation, in a row's source or in the
-  prose of this file, is inside its file and still holds its anchor; an anchor that no
-  citation uses is a problem too;
+  prose of this file, is inside its file with its anchors on its first and last cited line
+  and on no other line of that file; an anchor that no citation uses is a problem too;
 - the flags agree with the policy: only `cloud-model` rows need a cloud model, an
   `allowed` row writes nothing, an `owner-grant` row writes to the network;
 - every forbidden pattern compiles, matches each of its `mustMatch` controls and none of
   its `mustNotMatch` controls, and every pattern is exercised by a control;
-- no command or self-test listed outside the forbidden rows matches a forbidden pattern;
+- no command or self-test listed outside the forbidden rows, in any policy, matches a
+  forbidden pattern;
 - the tables above equal what the gate renders from `capabilities.json`, and the file does
   not start with a byte-order mark;
-- no typed count or pass ratio appears in this file outside the tables, or in a row's
-  text;
+- no typed count or pass ratio appears in this file outside the tables, or in any text a
+  table shows (a row's command, what it gives you, note and self-test);
 - the named ceilings below appear here, in the gate's header and in the backlog row that
   files them, word for word.
 
-`node scripts/check-local-brain-capabilities.mjs --self-test` plants violations of each of
+`node scripts/check-local-brain-capabilities.mjs --self-test` plants a violation of each of
 those checks and requires each to fail with its own message. It proves the exit code
 through the command line, and the real contract is its control.
 `node scripts/check-local-brain-capabilities-mutants.mjs` goes one step further: it breaks
-the gate's own source one check at a time and requires the self-test, or the gate itself,
-to go red for every break. `node scripts/check-local-brain-capabilities.mjs --write`
+the gate's own source one check at a time, for every break someone wrote down, and requires
+the self-test, or the gate itself, to go red for each. A check nobody wrote a break for can
+still be missing from both. `node scripts/check-local-brain-capabilities.mjs --write`
 regenerates the tables; it is the only writer of the generated block.
 
 ### Named ceilings
@@ -499,7 +514,8 @@ What this gate does not give, stated so its silence is not read as coverage:
 - Ceiling B: the forbidden patterns are a floor; a regular expression over a command line cannot see a command assembled at run time, and a command the patterns miss can still be forbidden by its row's words.
 
 The gate checks that things exist, agree and are still where they are cited. It does not
-run the commands and does not judge whether a row's words are true.
+run the commands, does not judge whether a row's words are true, and does not see an edit
+that rewords a line between a cited range's first and last line.
 
 ## Known gaps that affect you
 

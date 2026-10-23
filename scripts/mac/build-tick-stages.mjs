@@ -2983,7 +2983,15 @@ ${fns("say", "bt_now", "bt_heartbeat")}
   guard2(ok, "F2 bt_kill_tree", () => {
     const dir = join(root, "fu-f2-tree"); mkdirSync(dir, { recursive: true });
     const out = bash(`${fns("capped", "bt_kill_tree")}\ncapped 120 sh -c 'sleep 4711 & wait' &\npid=$!\nsleep 1\nbt_kill_tree "$pid"\nsleep 0.5\nps -eo stat=,args= | grep -E 'sleep 4711$' | grep -v '^Z' | grep -v grep | wc -l`);
-    ok("F2 bt_kill_tree takes a capped step's whole tree down, deepest first (the perl launcher, the group it made for the command, the command, and what that started)", out.stdout.trim() === "0", `${out.stdout} ${out.stderr}`);
+    ok("F2 bt_kill_tree takes a capped step's whole tree down (the perl launcher, the group it made for the command, the command, and what that started)", out.stdout.trim() === "0", `${out.stdout} ${out.stderr}`);
+    // I2: the helper's spawnSync returns the moment its session child dies and spawns the next stage at once, so a parent killed AFTER its child can start a
+    // replacement first. The tree is collected before anything is signalled and killed from the top: every parent gets its signal before any of its children.
+    const hold = 4000 + (process.pid % 4000); // unique to this run, like the triage test's
+    const order = bash(`${fns("bt_kill_tree")}\nkill() { echo "$*" >> ${q(join(dir, "kills"))}; builtin kill "$@"; }\nsh -c 'sh -c "sleep ${hold} & wait" & wait' &\ntop=$!\nsleep 2\nbt_kill_tree "$top"\nsleep 0.3\necho "$top"\nps -eo stat=,args= | grep -E 'sleep ${hold}$' | grep -v '^Z' | grep -v grep | wc -l`);
+    const killed = existsSync(join(dir, "kills")) ? readFileSync(join(dir, "kills"), "utf8").split("\n").filter(Boolean).map((l) => l.split(" ").at(-1)) : [];
+    const [topPid, leftover] = order.stdout.trim().split("\n");
+    ok("I2 bt_kill_tree signals the TOP of the tree first and every parent before its children (three levels: the top shell, its shell, the sleeper), and leaves nothing running",
+      killed.length >= 3 && killed[0] === topPid && leftover === "0", `${killed.join(",")} top ${topPid} left ${leftover} / ${order.stderr}`);
   });
 
   // F2. The exit trap: the build lock is released only by the run that holds it, and a run that ends without reaching finish (a signal, a `set -u`

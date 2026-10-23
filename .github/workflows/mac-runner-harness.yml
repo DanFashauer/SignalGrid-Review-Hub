@@ -37,68 +37,58 @@ jobs:
   mac-harness:
     name: Mac harness on the SignalGrid Mac
     runs-on: [self-hosted, macOS, ARM64, signalgrid-mac]
-    timeout-minutes: 90
+    # 660m admission, 90m work (the previous job bound), 30m setup/upload margin.
+    # Keep the owning step free of a declared timeout (step maximum is 360m).
+    timeout-minutes: 780
     steps:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
-      - name: Free the api-server test ports (runner-owned orphans from a prior killed job)
-        run: bash scripts/mac/free-test-port.sh
-
-      - name: Toolchain present on this Mac (report, never install here)
-        run: |
-          node -v; pnpm -v; xcodebuild -version | head -1 || true
-          echo "docker: $(docker version --format '{{.Server.Version}}' 2>/dev/null || echo absent)"
-
-      - name: Install (frozen lockfile — what CI installs with)
-        id: install
-        run: pnpm install --frozen-lockfile
-
-      - name: Full harness (proofs + web build; darwin binaries supplied for the run, manifests restored)
-        if: ${{ inputs.lane == 'harness' || inputs.lane == 'both' }}
-        run: |
-          code=0; ./validate-sim-macos.sh > harness.log 2>&1 || code=$?
-          tail -40 harness.log; exit "$code"
-
-      - name: Preflight (every non-proof gate)
-        # Independent of the harness: a failing harness must not hide preflight's verdict
-        # (the first dispatched run showed only half an answer). Gated on the install
-        # instead of always(), so a broken checkout cannot produce a misleading failure.
-        if: ${{ !cancelled() && steps.install.outcome == 'success' && (inputs.lane == 'preflight' || inputs.lane == 'both') }}
-        # preflight runs check-ci-liveness.mjs, which is FATAL in CI without a token (2026-09-26):
-        # Actions does not export GITHUB_TOKEN by itself, so the step hands it over.
+      - name: Install and verify under the shared host reservation
         env:
           GITHUB_TOKEN: ${{ github.token }}
+          SG_CI_LANE: ${{ inputs.lane }}
         run: |
-          code=0; node scripts/preflight.mjs > preflight.log 2>&1 || code=$?
-          grep -E "Preflight (PASSED|FAILED)|FAILED at" preflight.log || true; exit "$code"
-
-      - name: MCP lane — signalgrid-mcp on real macOS, then both halves against the shared contract
-        # The MCP repo's own CI is ubuntu smoke-only by design (its probes answer only on a
-        # Mac). This is the real check, runnable by either lane on demand: clone the public
-        # sibling OUTSIDE the checkout (a nested dir would dirty the Review-Hub tree and trip
-        # provenance) into RUNNER_TEMP, which is fresh per job; let verify.sh pick a Python
-        # >= 3.10 (it prefers python3.12; Apple's python3 is 3.9); then verify:all binds its
-        # contract test to THIS repo's posture-report.contract.json. --emit-evidence is
-        # deliberately absent: verify-all refuses to mint on CI, and Mac-minted evidence
-        # from a runner is a separate decision record.
-        if: ${{ !cancelled() && steps.install.outcome == 'success' && inputs.lane == 'mcp' }}
-        run: |
+          bash scripts/mac/ci-host-verification.sh 24eff86a940099e0725d474d1d5520bfbc71d368 39600 5400 <<'CI_CHAIN'
           set -u
-          MCP="$RUNNER_TEMP/signalgrid-mcp"
-          git clone -q https://github.com/DanFashauer/signalgrid-mcp "$MCP"
-          echo "signalgrid-mcp @ $(git -C "$MCP" rev-parse --short HEAD)"
+          case "$SG_CI_LANE" in harness|preflight|both|mcp) ;; *) echo 'invalid Mac harness lane' >&2; exit 2;; esac
+          node -v; pnpm -v; xcodebuild -version | head -1 || true
+          echo "docker: $(docker version --format '{{.Server.Version}}' 2>/dev/null || echo absent)"
           code=0
-          ( cd "$MCP" && ./verify.sh ) > mcp-verify.log 2>&1 || code=$?
-          grep -E "passed|failed|error|== [0-9]/3" mcp-verify.log | tail -6
-          SIGNALGRID_MCP_PATH="$MCP" pnpm run verify:all --require-mcp > verify-all.log 2>&1 || code=$?
-          grep -E "mcp tool count|Review-Hub preflight|Review-Hub breadth|signalgrid-mcp:|shared contract" verify-all.log || true
+          install_code=0
+          pnpm install --frozen-lockfile || install_code=$?
+          [ "$install_code" = 0 ] || exit "$install_code"
+          bash scripts/mac/free-test-port.sh || exit $?
+          if [ "$SG_CI_LANE" = harness ] || [ "$SG_CI_LANE" = both ]; then
+            harness_code=0
+            ./validate-sim-macos.sh > harness.log 2>&1 || harness_code=$?
+            tail -40 harness.log
+            [ "$harness_code" = 0 ] || code="$harness_code"
+          fi
+          # Run even after a failing harness; preserve both verdicts and either failure.
+          if [ "$SG_CI_LANE" = preflight ] || [ "$SG_CI_LANE" = both ]; then
+            preflight_code=0
+            node scripts/preflight.mjs > preflight.log 2>&1 || preflight_code=$?
+            grep -E "Preflight (PASSED|FAILED)|FAILED at" preflight.log || true
+            [ "$preflight_code" = 0 ] || code="$preflight_code"
+          fi
+          if [ "$SG_CI_LANE" = mcp ]; then
+            # Keep the sibling outside the checkout; this verifies, never mints evidence.
+            MCP="$RUNNER_TEMP/signalgrid-mcp"
+            git clone -q https://github.com/DanFashauer/signalgrid-mcp "$MCP" || exit $?
+            echo "signalgrid-mcp @ $(git -C "$MCP" rev-parse --short HEAD)"
+            mcp_code=0
+            ( cd "$MCP" && ./verify.sh ) > mcp-verify.log 2>&1 || mcp_code=$?
+            grep -E "passed|failed|error|== [0-9]/3" mcp-verify.log | tail -6 || true
+            [ "$mcp_code" = 0 ] || code="$mcp_code"
+            verify_code=0
+            SIGNALGRID_MCP_PATH="$MCP" pnpm run verify:all --require-mcp > verify-all.log 2>&1 || verify_code=$?
+            grep -E "mcp tool count|Review-Hub preflight|Review-Hub breadth|signalgrid-mcp:|shared contract" verify-all.log || true
+            [ "$verify_code" = 0 ] || code="$verify_code"
+          fi
           exit "$code"
-
-      - name: Free the api-server test ports (teardown — do not orphan one for the next job)
-        if: always()
-        run: bash scripts/mac/free-test-port.sh
+          CI_CHAIN
 
       - name: Upload logs
         if: always()

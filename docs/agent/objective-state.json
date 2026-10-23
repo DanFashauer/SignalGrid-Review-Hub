@@ -10,9 +10,9 @@
     {
       "id": "readiness-floor",
       "scope": "machine",
-      "state": "unmet",
+      "state": "met",
       "measured": {
-        "headline": 0,
+        "headline": 100,
         "floor": 80
       },
       "source": "scripts/check-readiness-figure.mjs --json (headline, floor)"
@@ -20,10 +20,10 @@
     {
       "id": "evidence-fresh",
       "scope": "machine",
-      "state": "unmet",
+      "state": "met",
       "measured": {
-        "pct": 0,
-        "reason": "0/20 bound proofs/steps current — evidence covers manifest 3c69fedd7754, tree is aa9ce381438e; refresh on the Mac; launch items fully current 0/28"
+        "pct": 100,
+        "reason": "20/20 bound proofs/steps current (passed, matching manifest fingerprint and, for proofs, source digest) — green on both halves, 1 day(s) old, manifest aa9ce381438e; launch items fully current 28/28"
       },
       "source": "scripts/check-readiness-figure.mjs --json (.details.evidence)"
     },
@@ -50,8 +50,6 @@
     }
   ],
   "unmet": [
-    "readiness-floor",
-    "evidence-fresh",
     "owner-real-in-hand"
   ],
   "unknown": [],
@@ -60,14 +58,14 @@
       "rank": 1,
       "rowId": "17b",
       "title": "Drive access-governance against the Keycloak lab that already exists",
-      "role": "iam-domain",
-      "executor": "skill:signalgrid-core",
+      "role": "mac-lane-steward",
+      "executor": "skill:signalgrid-native",
       "kind": "role",
       "source": {
         "path": "docs/COMPANY_BUILD_PLAN.md",
         "section": "Global backlog"
       },
-      "firstRankedAt": "2026-10-01T16:57:45.498Z"
+      "firstRankedAt": "2026-10-22T12:28:51.447Z"
     },
     {
       "rank": 2,
@@ -80,7 +78,7 @@
         "path": "docs/COMPANY_BUILD_PLAN.md",
         "section": "Global backlog"
       },
-      "firstRankedAt": "2026-10-08T14:30:18.591Z"
+      "firstRankedAt": "2026-10-22T12:28:51.447Z"
     },
     {
       "rank": 3,
@@ -93,90 +91,128 @@
         "path": "docs/COMPANY_BUILD_PLAN.md",
         "section": "Global backlog"
       },
-      "firstRankedAt": "2026-10-01T16:57:45.498Z"
+      "firstRankedAt": "2026-10-22T12:28:51.447Z"
     }
   ],
   "needsExecutor": [],
-  "unmeasured": [],
+  "unmeasured": [
+    {
+      "rowId": "29",
+      "title": "Assurance-pass advisories, batch one (2026-08-21)",
+      "measuredAt": "2026-10-09",
+      "reason": "stamp 2026-10-09 is older than 14 days"
+    },
+    {
+      "rowId": "43",
+      "title": "Falsifiability is enforced only for the connector tier",
+      "measuredAt": "2026-10-09",
+      "reason": "stamp 2026-10-09 is older than 14 days"
+    },
+    {
+      "rowId": "50",
+      "title": "Operability claims without live evidence",
+      "measuredAt": "2026-10-09",
+      "reason": "stamp 2026-10-09 is older than 14 days"
+    },
+    {
+      "rowId": "80",
+      "title": "The Rust Assist client is the strongest of the three, and it is worth recording that a clean read happened.",
+      "measuredAt": "2026-10-09",
+      "reason": "stamp 2026-10-09 is older than 14 days"
+    },
+    {
+      "rowId": "180",
+      "title": "The permission gate credits a call inside `if (false)`.",
+      "measuredAt": "2026-10-09",
+      "reason": "stamp 2026-10-09 is older than 14 days"
+    }
+  ],
   "awaiting": [
     {
       "rowId": "17",
       "title": "Run the two remaining wire-truth shifts and bind the records to the code",
       "kind": "lab",
-      "blocker": "ITSM lab for the seven vendor adapters; shift-context live source - both NON-PRODUCTION with synthetic data, read-only; owner hand raised 2026-10-08",
-      "markedAt": "2026-10-08"
+      "blocker": "ITSM lab for the seven vendor adapters; shift-context live source - both NON-PRODUCTION with synthetic data, read-only; owner hand re-raised 2026-10-22",
+      "markedAt": "2026-10-22"
     },
     {
       "rowId": "18",
       "title": "Make iOS port parity behavioral, not textual",
       "kind": "owner",
       "blocker": "the ruling was given 2026-09-29 as DR-061 in #1246; still owner-only: the #1246 merge and the #1118 unsafe-allow repair shape, asked in the 2026-09-28 hand",
-      "markedAt": "2026-10-08"
+      "markedAt": "2026-10-22"
     },
     {
       "rowId": "22",
       "title": "Stand up the cost model and shift economics",
       "kind": "owner",
       "blocker": "a deployment decision - docs/COST_MODEL.md closes the VM and backup hosting lines at deployment-decision time and the Fleet Premium per-device line only when the Premium decision is live, and neither trigger exists today",
-      "markedAt": "2026-10-08"
+      "markedAt": "2026-10-22"
     },
     {
       "rowId": "24",
       "title": "Stage the ledger-truncation article for your review",
       "kind": "owner",
-      "blocker": "#1190 draft-4 review; owner hand raised 2026-10-08",
-      "markedAt": "2026-10-08"
+      "blocker": "#1190 draft-4 review; owner hand re-raised 2026-10-22",
+      "markedAt": "2026-10-22"
     },
     {
       "rowId": "38",
       "title": "Free-tier proprietary validation targets",
       "kind": "owner",
       "blocker": "a pilot whose stack matches the row's trigger - the discovery log records 0 of 15 conversations",
-      "markedAt": "2026-10-08"
+      "markedAt": "2026-10-22"
+    },
+    {
+      "rowId": "49",
+      "title": "Assessor-facing overstatement",
+      "kind": "owner",
+      "blocker": "a ruling on the 3 known failures that check-security-controls-matrix lists in the owner-reserved docs/SECURITY_CONTROLS_MATRIX.md",
+      "markedAt": "2026-10-22"
     }
   ],
   "escalations": [
     {
+      "id": "plan-rows-unmeasured",
+      "clears": "cloud",
+      "asks": "5 open row(s) in docs/COMPANY_BUILD_PLAN.md carry no `re-measured YYYY-MM-DD` stamp within 14 days and were ranked from nothing — a row nobody measured against the tree is an unknown input: 29, 43, 50, 80, 180. Measure each against the tree; close it, or restamp it with what was measured (a row whose AWAITING OWNER / BLOCKED ON LAB marker is expired or future-dated needs the blocker re-checked and the marker re-dated or removed — restamping alone does not rank it)",
+      "since": "2026-10-23T00:27:33.214Z"
+    },
+    {
       "id": "awaiting-owner-row-17",
       "clears": "owner",
-      "asks": "row 17 (\"Run the two remaining wire-truth shifts and bind the records to the code\") in docs/COMPANY_BUILD_PLAN.md is parked, not ranked, because only the owner or a lab can unblock it: lab (ITSM lab for the seven vendor adapters; shift-context live source - both NON-PRODUCTION with synthetic data, read-only; owner hand raised 2026-10-08), checked 2026-10-08. Clear the blocker, or remove its marker once cleared",
-      "since": "2026-10-01T16:57:45.498Z"
+      "asks": "row 17 (\"Run the two remaining wire-truth shifts and bind the records to the code\") in docs/COMPANY_BUILD_PLAN.md is parked, not ranked, because only the owner or a lab can unblock it: lab (ITSM lab for the seven vendor adapters; shift-context live source - both NON-PRODUCTION with synthetic data, read-only; owner hand re-raised 2026-10-22), checked 2026-10-22. Clear the blocker, or remove its marker once cleared",
+      "since": "2026-10-22T12:28:51.447Z"
     },
     {
       "id": "awaiting-owner-row-18",
       "clears": "owner",
-      "asks": "row 18 (\"Make iOS port parity behavioral, not textual\") in docs/COMPANY_BUILD_PLAN.md is parked, not ranked, because only the owner or a lab can unblock it: owner (the ruling was given 2026-09-29 as DR-061 in #1246; still owner-only: the #1246 merge and the #1118 unsafe-allow repair shape, asked in the 2026-09-28 hand), checked 2026-10-08. Clear the blocker, or remove its marker once cleared",
-      "since": "2026-10-01T16:57:45.498Z"
+      "asks": "row 18 (\"Make iOS port parity behavioral, not textual\") in docs/COMPANY_BUILD_PLAN.md is parked, not ranked, because only the owner or a lab can unblock it: owner (the ruling was given 2026-09-29 as DR-061 in #1246; still owner-only: the #1246 merge and the #1118 unsafe-allow repair shape, asked in the 2026-09-28 hand), checked 2026-10-22. Clear the blocker, or remove its marker once cleared",
+      "since": "2026-10-22T12:28:51.447Z"
     },
     {
       "id": "awaiting-owner-row-22",
       "clears": "owner",
-      "asks": "row 22 (\"Stand up the cost model and shift economics\") in docs/COMPANY_BUILD_PLAN.md is parked, not ranked, because only the owner or a lab can unblock it: owner (a deployment decision - docs/COST_MODEL.md closes the VM and backup hosting lines at deployment-decision time and the Fleet Premium per-device line only when the Premium decision is live, and neither trigger exists today), checked 2026-10-08. Clear the blocker, or remove its marker once cleared",
-      "since": "2026-10-08T14:30:18.591Z"
+      "asks": "row 22 (\"Stand up the cost model and shift economics\") in docs/COMPANY_BUILD_PLAN.md is parked, not ranked, because only the owner or a lab can unblock it: owner (a deployment decision - docs/COST_MODEL.md closes the VM and backup hosting lines at deployment-decision time and the Fleet Premium per-device line only when the Premium decision is live, and neither trigger exists today), checked 2026-10-22. Clear the blocker, or remove its marker once cleared",
+      "since": "2026-10-22T12:28:51.447Z"
     },
     {
       "id": "awaiting-owner-row-24",
       "clears": "owner",
-      "asks": "row 24 (\"Stage the ledger-truncation article for your review\") in docs/COMPANY_BUILD_PLAN.md is parked, not ranked, because only the owner or a lab can unblock it: owner (#1190 draft-4 review; owner hand raised 2026-10-08), checked 2026-10-08. Clear the blocker, or remove its marker once cleared",
-      "since": "2026-10-01T16:57:45.498Z"
+      "asks": "row 24 (\"Stage the ledger-truncation article for your review\") in docs/COMPANY_BUILD_PLAN.md is parked, not ranked, because only the owner or a lab can unblock it: owner (#1190 draft-4 review; owner hand re-raised 2026-10-22), checked 2026-10-22. Clear the blocker, or remove its marker once cleared",
+      "since": "2026-10-22T12:28:51.447Z"
     },
     {
       "id": "awaiting-owner-row-38",
       "clears": "owner",
-      "asks": "row 38 (\"Free-tier proprietary validation targets\") in docs/COMPANY_BUILD_PLAN.md is parked, not ranked, because only the owner or a lab can unblock it: owner (a pilot whose stack matches the row's trigger - the discovery log records 0 of 15 conversations), checked 2026-10-08. Clear the blocker, or remove its marker once cleared",
-      "since": "2026-10-08T14:30:18.591Z"
+      "asks": "row 38 (\"Free-tier proprietary validation targets\") in docs/COMPANY_BUILD_PLAN.md is parked, not ranked, because only the owner or a lab can unblock it: owner (a pilot whose stack matches the row's trigger - the discovery log records 0 of 15 conversations), checked 2026-10-22. Clear the blocker, or remove its marker once cleared",
+      "since": "2026-10-22T12:28:51.447Z"
     },
     {
-      "id": "stalled-top-task",
-      "clears": "cloud",
-      "asks": "row 17b (\"Drive access-governance against the Keycloak lab that already exists\") has been ranked #1 for over 7 days with no change in docs/COMPANY_BUILD_PLAN.md — build it, re-rank it, or record why it waits",
-      "since": "2026-10-08T16:59:26.594Z"
-    },
-    {
-      "id": "readiness-floor-no-clearing-op",
-      "clears": "mac",
-      "asks": "readiness fell below the DR-036 floor — read the dimension that fell and re-mint or repair it",
-      "since": "2026-10-16T02:53:39.408Z"
+      "id": "awaiting-owner-row-49",
+      "clears": "owner",
+      "asks": "row 49 (\"Assessor-facing overstatement\") in docs/COMPANY_BUILD_PLAN.md is parked, not ranked, because only the owner or a lab can unblock it: owner (a ruling on the 3 known failures that check-security-controls-matrix lists in the owner-reserved docs/SECURITY_CONTROLS_MATRIX.md), checked 2026-10-22. Clear the blocker, or remove its marker once cleared",
+      "since": "2026-10-22T12:28:51.447Z"
     },
     {
       "id": "owner-real-in-hand",
@@ -185,28 +221,20 @@
       "since": "2026-09-24T14:47:57.548Z"
     }
   ],
-  "queue": [
-    {
-      "criterionId": "evidence-fresh",
-      "op": "evidence",
-      "clears": "artifacts/live-evidence/mac-run.json",
-      "id": "objective-loop-evidence-fresh-2026-10-17",
-      "queuedAs": "origin/mac/tick-20260930T204503Z (objective-loop-evidence-fresh-2026-09-30-4.json)"
-    }
-  ],
+  "queue": [],
   "probeErrors": [],
   "report": {
     "pendingSimRequests": [],
     "badRequestFiles": [],
     "needsExecutorCount": 0,
-    "unmeasuredCount": 0,
-    "awaitingCount": 5,
+    "unmeasuredCount": 5,
+    "awaitingCount": 6,
     "openRows": 52,
     "partialRows": 5
   },
   "staleAfterHours": 3,
-  "derivedAt": "2026-10-17T00:00:32.100Z",
-  "derivedAtCommit": "a7059b93e9a053726240a97dd78f5448a85d056b",
+  "derivedAt": "2026-10-23T00:27:33.214Z",
+  "derivedAtCommit": "9f2990ae12d3ec8446cc377f8daba2d48b87305e",
   "workingTreeCleanAtEntry": true,
-  "decisionAddress": "5b5e127657be3484b153ba0a77030f55c0cdbfa1a53765151a4fb419f99e79dd"
+  "decisionAddress": "181184f7c7e1ba757bca62fe8f64bf61459df899a8a07eb86e74bbfdfffccf3e"
 }

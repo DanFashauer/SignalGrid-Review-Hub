@@ -57,6 +57,7 @@ if (process.argv.includes("--self-test")) {
   if (MODE === "flip") { console.log("self-test FAILED (2/3)"); process.exit(1); }
   if (MODE === "liar") { console.log("self-test FAILED (2/3)"); process.exit(0); }
   if (MODE === "forged") { console.log("self-test passed (3/3)"); process.exit(1); }
+  if (MODE === "equal") { console.log("self-test FAILED (3/3)"); process.exit(1); }
   process.exit(1);
 }
 `;
@@ -71,6 +72,7 @@ async function selfTestRunner() {
       ["a flipped result is red (exit 1, FAILED 2/3)", FIXTURE_GATE.replace('const MODE = "ok"', 'const MODE = "flip"'), "red"],
       ["a FAILED tally with exit 0 is BROKEN, not red", FIXTURE_GATE.replace('const MODE = "ok"', 'const MODE = "liar"'), "BROKEN"],
       ["a passed tally with exit 1 is BROKEN, not LIVE", FIXTURE_GATE.replace('const MODE = "ok"', 'const MODE = "forged"'), "BROKEN"],
+      ["a FAILED tally whose N equals M is BROKEN, not red", FIXTURE_GATE.replace('const MODE = "ok"', 'const MODE = "equal"'), "BROKEN"],
       ["no tally at all (exit 1) is BROKEN, not red", FIXTURE_GATE.replace('const MODE = "ok"', 'const MODE = "silent"'), "BROKEN"],
       ["a throw at load is BROKEN, not red", FIXTURE_GATE.replace('const MODE = "ok"', 'const MODE = "throw"'), "BROKEN"],
     ];

@@ -69,6 +69,7 @@ import {
   sha256,
   trackedFiles,
 } from './render-preview-assets.mjs';
+import { isMainModule } from './lib/is-main.mjs';
 
 /**
  * Floor on the derivation, not a scope list. The tree currently derives exactly
@@ -424,7 +425,7 @@ function main(argv) {
 }
 
 const invokedDirectly =
-  process.argv[1] && pathToFileURL(path.resolve(process.argv[1])).href === import.meta.url;
+  isMainModule(process.argv[1], import.meta.url);
 if (invokedDirectly) {
   try {
     process.exit(main(process.argv.slice(2)));

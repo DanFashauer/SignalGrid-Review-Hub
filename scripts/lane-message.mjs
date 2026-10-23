@@ -29,6 +29,7 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { currentLane, otherLane, LANES } from "./lib/lane-identity.mjs";
+import { isMainModule } from "./lib/is-main.mjs";
 
 // SIGNALGRID_LANE_REPO lets lane-deliver.mjs point this CLI at a throwaway
 // worktree, so the artifact lands where the delivery commit is built and the
@@ -355,4 +356,4 @@ if (cmd === "send") {
 }
 }
 
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) runCli();
+if (isMainModule(process.argv[1], import.meta.url)) runCli();

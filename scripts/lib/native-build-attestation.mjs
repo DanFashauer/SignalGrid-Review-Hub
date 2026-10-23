@@ -24,6 +24,7 @@
 // same way it does for a natively-run one, so a stale attestation cannot read as current.
 import { readFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
+import { isMainModule } from "./is-main.mjs";
 
 export const SCHEMA = "signalgrid-native-build-attestation/v1";
 
@@ -82,7 +83,7 @@ function selfTest() {
   return failed.length ? 1 : 0;
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (isMainModule(process.argv[1], import.meta.url)) {
   if (process.argv.includes("--self-test")) process.exit(selfTest());
   console.log("usage: node scripts/lib/native-build-attestation.mjs --self-test");
   process.exit(2);

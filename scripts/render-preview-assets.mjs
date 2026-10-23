@@ -58,6 +58,7 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { isMainModule } from './lib/is-main.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 export const REPO_ROOT = path.resolve(HERE, '..');
@@ -351,7 +352,7 @@ async function main(argv) {
 }
 
 const invokedDirectly =
-  process.argv[1] && pathToFileURL(path.resolve(process.argv[1])).href === import.meta.url;
+  isMainModule(process.argv[1], import.meta.url);
 if (invokedDirectly) {
   main(process.argv.slice(2))
     .then((code) => process.exit(code))

@@ -20,6 +20,7 @@ import { execSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { isMainModule } from "./lib/is-main.mjs";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 export const STATUS_WORDS = /\b(engaged|active|covered|hired|staffed|certified|retained|contracted)\b/i;
@@ -72,7 +73,7 @@ function selfTest() {
   return failed.length === 0 ? 0 : 1;
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (isMainModule(process.argv[1], import.meta.url)) {
   if (process.argv.includes("--self-test")) process.exit(selfTest());
   const r = auditRoleHeadings(loadDocs());
   console.log(`Role headings — ${r.headings} heading(s) across ${r.docs} docs/company/ROLE_*.md file(s).`);

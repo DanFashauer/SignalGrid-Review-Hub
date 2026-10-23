@@ -129,6 +129,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { execSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { fencedLineFlags, maskNonProse } from "./lib/markdown-scope.mjs";
+import { isMainModule } from "./lib/is-main.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -523,7 +524,7 @@ function main() {
 
 // Guarded so `import { parseLinks } from "./check-index-banner-parity.mjs"` does not run
 // the gate — a module that audits the repo on import cannot be reused or unit-tested.
-const isEntry = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
+const isEntry = isMainModule(process.argv[1], import.meta.url);
 if (isEntry) {
   if (process.argv.includes("--self-test")) selfTest();
   else main();

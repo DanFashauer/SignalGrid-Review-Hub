@@ -29,6 +29,7 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { isMainModule } from "./lib/is-main.mjs";
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const AGENTS_DIR = join(repo, ".claude/agents");
@@ -123,4 +124,4 @@ function main() {
   console.log(`check-agent-raise-hand: ok — ${own} first-party agent definition(s) carry the raise-your-hand contract; ${files.length - own} vendored inherit it from CLAUDE.md (DR-054)`);
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main();
+if (isMainModule(process.argv[1], import.meta.url)) main();

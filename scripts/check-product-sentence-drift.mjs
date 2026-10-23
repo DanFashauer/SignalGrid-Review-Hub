@@ -70,6 +70,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { readBanner, trackedDocs } from "./check-index-banner-parity.mjs";
 import { maskNonProse } from "./lib/markdown-scope.mjs";
+import { isMainModule } from "./lib/is-main.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -410,7 +411,7 @@ function main() {
   console.log("\nREPORT complete — nothing above is a failure. docs/PURPOSE.md §2 is canonical (DR-020); DR-019 ratified no category label.");
 }
 
-const isEntry = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
+const isEntry = isMainModule(process.argv[1], import.meta.url);
 if (isEntry) {
   if (process.argv.includes("--self-test")) selfTest();
   else main();

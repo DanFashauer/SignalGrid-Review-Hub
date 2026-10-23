@@ -32,6 +32,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { isMainModule } from "./lib/is-main.mjs";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const BASE_REF = "origin/SignalGrid_Alpha";
@@ -165,7 +166,7 @@ function run() {
   console.log(`Brain-freshness gate passed — this lane's brain (${tracked.length} tracked files) matches ${BASE_REF}.`);
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (isMainModule(process.argv[1], import.meta.url)) {
   if (process.argv.includes("--self-test")) process.exit(selfTest());
   run();
 }

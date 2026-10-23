@@ -68,6 +68,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { isMainModule } from "./lib/is-main.mjs";
 
 const SELF_TEST = process.argv.includes("--self-test");
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -589,7 +590,7 @@ function selfTest() {
 
 /* --------------------------------------------------------------------- main */
 
-const IS_MAIN = process.argv[1] !== undefined && import.meta.url === pathToFileURL(resolve(process.argv[1])).href;
+const IS_MAIN = isMainModule(process.argv[1], import.meta.url);
 if (IS_MAIN) main();
 
 function main() {

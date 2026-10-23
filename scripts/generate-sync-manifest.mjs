@@ -38,6 +38,7 @@ import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { readRatchetFile, refusalLines } from "./lib/ratchet-read.mjs";
+import { isMainModule } from "./lib/is-main.mjs";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 export const MANIFEST_PATH = resolve(repoRoot, "artifacts/sync/live-sync-manifest.json");
@@ -220,6 +221,6 @@ function main() {
 }
 
 // Run only when invoked directly (check-live-sync imports the extractors above).
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (isMainModule(process.argv[1], import.meta.url)) {
   main();
 }

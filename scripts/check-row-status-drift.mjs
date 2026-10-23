@@ -132,6 +132,7 @@ import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { CLOSED_MARKERS, PARTIAL_MARKERS, marks, parseRows, statusText } from "./check-backlog-ownership.mjs";
 import { SCRATCH_GIT_SCRUB, scratchGitOk, scrubProcessGitEnv } from "./lib/scratch-git.mjs";
+import { isMainModule } from "./lib/is-main.mjs";
 
 export const LEDGERS = ["docs/COMPANY_BUILD_PLAN.md", "docs/BUILD_BACKLOG.md"];
 const HIGH_WATER_WINDOW = 50;
@@ -1295,13 +1296,7 @@ function selfTest() {
   return failed === 0 && checks.length === 128;
 }
 
-let isMain = false;
-try {
-  isMain = !!process.argv[1] && pathToFileURL(realpathSync(process.argv[1])).href === pathToFileURL(realpathSync(fileURLToPath(import.meta.url))).href;
-} catch {
-  // realpath failed: fall back to the unresolved comparison rather than to silence.
-  isMain = !!process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.meta.url;
-}
+const isMain = isMainModule(process.argv[1], import.meta.url);
 if (isMain) {
   if (process.argv.includes("--ping")) {
     console.log("row-status-drift: entry ran");

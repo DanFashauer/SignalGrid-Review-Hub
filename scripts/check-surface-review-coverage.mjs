@@ -102,6 +102,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, 
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { isMainModule } from "./lib/is-main.mjs";
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const LEDGER_REL = "docs/agent/SURFACE_REVIEW_COVERAGE.json";
@@ -1322,7 +1323,7 @@ function main({ write }) {
 // Importable: `scripts/loop-state.mjs` reuses the derivation for its one-line row, and a
 // module that ran its own gate on import would turn that reuse into a second full run
 // with a second exit code. Same guard `check-review-coverage.mjs` uses, for the same reason.
-const runAsCli = process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+const runAsCli = isMainModule(process.argv[1], import.meta.url);
 if (runAsCli) {
   const argv = process.argv.slice(2);
   if (argv.includes("--self-test")) selfTest();

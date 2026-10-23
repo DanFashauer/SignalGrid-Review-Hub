@@ -23,6 +23,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { BANNER } from "./check-index-banner-parity.mjs";
 import { vendoredSkillPrefixes } from "./lib/skill-plane.mjs";
+import { isMainModule } from "./lib/is-main.mjs";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 /** The set the launch-claims gate scans fatally — send-ready copy belongs there. */
@@ -135,7 +136,7 @@ function selfTest() {
   return failed.length === 0 ? 0 : 1;
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (isMainModule(process.argv[1], import.meta.url)) {
   if (process.argv.includes("--self-test")) process.exit(selfTest());
   const r = auditSendCopy(loadDocs());
   console.log(`Send-copy banner — ${r.templates} document(s) hold a \`Subject:\` template: ${r.scanned} inside ${SCANNED_PREFIX} (claim-scanned), ${r.bannered} bannered do-not-send.`);

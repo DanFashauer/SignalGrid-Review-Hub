@@ -62,7 +62,7 @@ elsewhere (below).
 
 | Disposition | What the tool checked | The brain |
 | --- | --- | --- |
-| LAND-UNDER-DR-037 | a cloud-lane branch (`claude/*`, `lane/cloud-*`) and never a `mac/*` PR or the mailbox PR; no DECISION_PATH, OWNER_RESERVED or owner-named file; not a draft, not stacked; the gating check's newest run passed on the current head; nothing failing or still running; not conflicted; the review comments read in full (their count equals the PR's own) with no thread it cannot show resolved; the body mentions preflight and breadth | lands it, one at a time (section 3), after the checks in section 3 the tool cannot make |
+| LAND-UNDER-DR-037 | a cloud-lane branch (`claude/*`, `lane/cloud-*`) and never a `mac/*` PR or the mailbox PR; no DECISION_PATH, OWNER_RESERVED or owner-named file; not a draft, not stacked; the gating check's newest run passed on the current head; no other check failing, still running or with no verdict (cancelled, stale or no conclusion; neutral and skipped pass); the base branch read and equal to mainline; not conflicted; the review comments read in full (their count equals the PR's own) with no thread it cannot show resolved; the body mentions preflight and breadth | lands it, one at a time (section 3), after the checks in section 3 the tool cannot make |
 | MAC-ASK-NEEDED | any `mac/*` PR no earlier rule placed. The tool never prints LAND for one: DR-037 condition 5 wants the Mac's ask in MAIL, which it does not read. A line in the body that reads as an ask prints `ask in body; confirm mail`. A `mac/tick-*` PR that is not SUPERSEDED is here too: a stricter reading than `docs/LANE_COORDINATION.md` rule 2, and section 4 says why it holds | cloud: confirm the ask in mail (section 3, step 6) and land it under section 3 only when the mail names it; otherwise lands none and sends one mail. Mac: sends the ask in mail |
 | OWNER-MERGE | the diff reaches DECISION_PATH or OWNER_RESERVED, or an owner-named surface (AGENTS.md, the decision records, the launch profile, the launch-claims gate, the publication boundary); or it is a Dependabot PR; or its head is in a fork or its branch prefix is not a lane's own | keeps it mergeable, lists it, never merges it |
 | SUPERSEDED | its head is an ancestor of mainline, or a `mac/tick-*` PR whose every file was rewritten on mainline after its head commit (or is a sim-request whose result is on mainline); the row's evidence lines say which | proposes CLOSE with the evidence, never closes |
@@ -83,6 +83,11 @@ it. UNKNOWN is never LAND: unknown tightens (golden rule 2).
   error, which also blocks LAND. Read the exact count the way
   `landing-under-dr-037` does, then pass it as `--threads-file` (`{"1321":{"total":79,"unresolved":0}}`)
   if you want that PR to place as LAND.
+- *Facts GitHub did not give.* A check-runs envelope without `total_count`, a PR whose base
+  branch is missing from the response, and a branch or closed-PR count read that comes back
+  without its `Link` header on a multi-page list are read errors, not passes: the PR is
+  UNKNOWN (checks unreadable, base branch not readable) or the run stops with exit 3 and no
+  queue.
 - *Mac mail.* The tool does not read it. A body line that reads as an ask is flagged,
   never trusted: a body has no provenance (every lane pushes as one account, and a body
   can be rewritten). Section 3, step 6 confirms the ask in mail.
@@ -97,9 +102,10 @@ it. UNKNOWN is never LAND: unknown tightens (golden rule 2).
 ## 2 — Order of work
 
 Dispatch the bulk by the stage table in `orchestrator-over-workers` (DR-047, DR-060),
-naming a tier on every spawn: job-list and log parsing on Haiku; reads that feed a
-decision and every PR comment on Sonnet; the judgment on each close or owner proposal
-on Opus. The coordinator runs none of the bulk.
+naming a tier on every spawn (that table names the models; this skill names only the
+tiers): job-list and log parsing on the bulk tier; reads that feed a decision and every PR
+comment on the read tier; the judgment on each close or owner proposal on the judgment
+tier. The coordinator runs none of the bulk.
 
 1. **Land LAND-UNDER-DR-037 one at a time, newest-green first.** Each landing moves the
    manifest and the coverage page, so rebuild the next PR on the new mainline
@@ -195,7 +201,7 @@ A stacked PR (base is not `SignalGrid_Alpha`) waits for its base to land, then m
 are IN-FLIGHT only when you declare them. Declare every one whose worker is mid-round,
 or the tool will place it as an ordinary PR. The reviewer is not the author.
 
-- Review the report against the spec: Sonnet reads every PR, Opus refutes DR-037
+- Review the report against the spec: the read tier reads every PR, the judgment tier refutes DR-037
   landings and decision-path ones. Quote the verdict.
 - Send defects back as a PR comment so the worker pushes a NEW commit. Never push into
   its branch, amend, or rebase it, and never land it while its worker is running.
@@ -237,8 +243,8 @@ or the tool will place it as an ordinary PR. The reviewer is not the author.
   head sha; the tier and the rule that matched; the gating check-run id for that head,
   or "none"; `mergeable_state`; the open-thread count and which method counted it; the
   next action and who owns it. Each figure is pasted from command output with the command.
-  Never write an id from memory (lesson L16: a PR body invented a check-run id). Sonnet
-  writes the comments, not Haiku.
+  Never write an id from memory (lesson L16: a PR body invented a check-run id). The read
+  tier writes the comments, not the bulk tier.
 - **Look before you create.** List the PR's comments first. If your last sweep comment
   names the same head and disposition, post nothing. A comment write is content
   creation: pace the loop. GitHub's secondary limit does not show in `rate_limit`, and a
@@ -276,8 +282,9 @@ older one stopped being refreshed when the next appeared. Re-running the same lo
 25 times that day returned the open issues every time; the empty answers coincided with
 GitHub incidents, which correlates and does not prove the cause. The seven older issues
 were then closed as `duplicate` by the shared account, leaving #1597. The backlog row is
-in `docs/BUILD_BACKLOG.md` ("Raised-hands issue: a lookup that returns nothing during a
-GitHub incident opens a duplicate").
+in `docs/BUILD_BACKLOG.md`, titled:
+> A `raised-hands.yml` label lookup that returns nothing opens a second "Raised hands" issue, and the workflow has no second look
+
 
 - Re-derive before you act: the queue's issue section groups same-title open issues, and
   `gh api "repos/{owner}/{repo}/issues?state=open&labels=raised-hands"` lists the labelled ones.
@@ -358,7 +365,7 @@ will not tolerate.
 | Tiers and categories; SAFETY_MACHINERY landable under the five conditions | `scripts/check-owner-gated-surfaces.mjs`; DR-037, "What stays owner-gated" |
 | `AGENTS.md`, decision records, launch profile, launch-claims gate, publication boundary stay the owner's | DR-037, "What stays owner-gated"; the owner-named list in `scripts/backlog-triage.mjs` |
 | The dispositions, their order, the 14-day window and what counts as red | `scripts/backlog-triage.mjs` (its header and `--self-test`); `docs/agent/BACKLOG_LANDING.md` |
-| Sonnet reads every PR; Opus refutes DR-037 landings and decision-path ones | `docs/agent/LOOP.md`, the forward-build routine record |
+| The read tier reads every PR; the judgment tier does the refute for DR-037 landings and decision-path ones | `docs/agent/LOOP.md`, the forward-build routine record |
 | Dependabot merges stay the owner's | `docs/agent/scheduled-routines.json`, `dependabot-queue-review` (retired 2026-10-15; its `writeScope` records the rule and no routine merges them) |
 | Mac PRs only on an ask; never approve; never delete branches | DR-037, condition 5 and "What stays owner-gated" |
 | Mac proposes, cloud reviews | DR-050 |

@@ -40,7 +40,9 @@
 // A STALE or SUPERSEDED or IN-FLIGHT row keeps the class it would have in `natural`.
 //
 // WHAT IT NEVER DOES: guess. A fact it cannot read (a file list cut short, a check list that
-// failed to load, a mergeable_state GitHub has not computed) tightens the answer; where the
+// failed to load, a mergeable_state GitHub has not computed, a check-runs envelope with no
+// total_count, a base branch the response omits, a check that ended cancelled, stale or with no
+// conclusion, a count read without its Link header on a multi-page list) tightens the answer; where the
 // rules above have no row for what it read, the disposition is UNKNOWN with the reason, and
 // UNKNOWN is never LAND. An empty page is not "no PRs" unless the repository's own open
 // count says so (open_issues_count = open PRs + open issues). A missing or placeholder
@@ -71,8 +73,9 @@
 // EXIT CODES: 0 report printed (UNKNOWN rows are part of a report) · 1 self-test or --mutants
 // failed · 2 usage, token, auth or rate-limit refusal (a 401, a 403 that is not a rate limit, or
 // a 404 on a read the whole queue depends on is an auth refusal) · 3 the read was inconsistent
-// (counts disagree after re-reads, a short branch or closed-PR page, a listing missing the
-// default branch, a read that failed after retries) · 4 --snapshot could not be written.
+// (counts disagree after re-reads, a short branch or closed-PR page, a count read whose Link
+// header is missing from a multi-page list, a listing missing the default branch, a read that
+// failed after retries) · 4 --snapshot could not be written.
 
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync } from "node:fs";
@@ -114,20 +117,27 @@ const PENDING = new Set(["queued", "in_progress", "waiting", "pending", "request
 const NATIVE_CHECK_RE = /^(Dock firmware|Desktop shell|SignalGridMobile|Assist core|Shared Assist vectors|EnterpriseShell|macOS native|Android app)/;
 const NATIVE_PATH_RE = /^native\/(shared|android|desktop|ios)\//;
 const isCodeQL = (name) => /^CodeQL$/.test(name) || /^Analyze \(/.test(name);
+/** The only conclusions that are a verdict of "fine". cancelled, stale and a missing conclusion are
+ *  not a verdict at all, so a check in one of them is never read as passing. */
+const VERDICT_OK = new Set(["success", "neutral", "skipped"]);
 
 /**
  * Surfaces DR-037 keeps with the owner that the path classifier files only as ordinary
  * SAFETY_MACHINERY (scripts/**) or as plain docs. Fail-closed: the patterns are wider than
  * DR-037's words, because a false hit costs the owner a glance and a miss lands a boundary change.
+ * The extension list is every JS/TS module form ([cm]?[jt]s: js, mjs, cjs, ts, mts, cts, and so
+ * .d.mts, the file that declares the launch profile's shape) plus json. The self-test runs every
+ * TRACKED file whose name holds one of these words through the list, so a file of a form the list
+ * does not know fails the self-test rather than passing as ordinary SAFETY_MACHINERY.
  */
 export const OWNER_NAMED = [
   { rule: "AGENTS.md (DR-037: not edited on the lane's authority)", re: /^AGENTS\.md$/ },
   { rule: "decision records (DR-037: edited only on owner authority)", re: /^docs\/DECISION_RECORDS\.md$/ },
   { rule: "launch profile (docs)", re: /^docs\/LAUNCH_PROFILE\.md$/ },
-  { rule: "launch profile (code)", re: /(^|\/)(check-)?launch[-_]profile[\w.-]*\.(mjs|ts|js|json)$/i },
-  { rule: "launch-claims gate", re: /(^|\/)(check-)?launch[-_]claims[\w.-]*\.(mjs|ts|js|json)$/i },
-  { rule: "launch proof bindings", re: /(^|\/)(check-)?launch[-_]proof[-_]bindings[\w.-]*\.(mjs|ts|js|json)$/i },
-  { rule: "publication boundary", re: /(^|\/)(check-)?publication[-_]boundary[\w.-]*\.(mjs|ts|js|json|md)$/i },
+  { rule: "launch profile (code)", re: /(^|\/)(check-)?launch[-_]profile[\w.-]*\.([cm]?[jt]s|json)$/i },
+  { rule: "launch-claims gate", re: /(^|\/)(check-)?launch[-_]claims[\w.-]*\.([cm]?[jt]s|json)$/i },
+  { rule: "launch proof bindings", re: /(^|\/)(check-)?launch[-_]proof[-_]bindings[\w.-]*\.([cm]?[jt]s|json)$/i },
+  { rule: "publication boundary", re: /(^|\/)(check-)?publication[-_]boundary[\w.-]*\.([cm]?[jt]s|json|md)$/i },
 ];
 
 // ── small pure helpers ───────────────────────────────────────────────────────────────────
@@ -136,6 +146,8 @@ const DAY_MS = 86_400_000;
 export const daysBetween = (fromIso, now) => (now.getTime() - new Date(fromIso).getTime()) / DAY_MS;
 export const round1 = (x) => Math.round(x * 10) / 10;
 const sortNum = (a, b) => a - b;
+/** A base branch name, or null when GitHub did not give one: a PR whose base cannot be read is never assumed to sit on mainline. */
+const baseRef = (x) => (typeof x === "string" && x !== "" ? x : null);
 const uniqSorted = (xs) => [...new Set(xs)].sort();
 
 /** Lane from the head branch prefix. user.login cannot tell: every lane pushes as one account. */
@@ -285,18 +297,20 @@ export async function listAll(api, path, { perPage = 100, maxPages = 300 } = {})
   throw new ApiError(`${path}: more than ${maxPages} pages; refusing to loop further`);
 }
 
-/** The check runs on one commit. The envelope's total_count is the check on an empty page. */
+/** The check runs on one commit. The envelope's total_count is the check on an empty page, and it
+ *  is required: an envelope without it cannot be checked, so it is a read error, not a pass. */
 export async function listCheckRuns(api, repo, sha) {
   const runs = [];
   let total = null;
   for (let page = 1; page <= 50; page++) {
     const body = await api.json(`/repos/${repo}/commits/${sha}/check-runs?per_page=100&page=${page}`);
     if (!body || !Array.isArray(body.check_runs)) throw new ApiError(`check-runs for ${sha.slice(0, 9)} was not a check_runs envelope`);
-    total = body.total_count ?? total;
+    if (typeof body.total_count !== "number") throw new ApiError(`check-runs for ${sha.slice(0, 9)} carried no total_count, so the list cannot be checked for completeness`);
+    total = body.total_count;
     runs.push(...body.check_runs);
     if (body.check_runs.length < 100) break;
   }
-  if (typeof total === "number" && runs.length < total) throw new ApiError(`check-runs for ${sha.slice(0, 9)}: read ${runs.length} of total_count ${total}`);
+  if (runs.length < total) throw new ApiError(`check-runs for ${sha.slice(0, 9)}: read ${runs.length} of total_count ${total}`);
   return runs;
 }
 
@@ -348,6 +362,7 @@ export function summarizeChecks(runs) {
   const label = (r) => `${r.name}=${stateOfRun(r)}`;
   const failingRuns = current.filter((r) => FAILED.has(stateOfRun(r)));
   const pendingRuns = current.filter((r) => PENDING.has(stateOfRun(r)));
+  const noVerdictRuns = current.filter((r) => !FAILED.has(stateOfRun(r)) && !PENDING.has(stateOfRun(r)) && !VERDICT_OK.has(stateOfRun(r)));
   const isRedName = (n) => n === GATING_CHECK || MAC_ONLY_CHECK_RE.test(n) || isCodeQL(n);
   return {
     total: runs.length,
@@ -358,6 +373,7 @@ export function summarizeChecks(runs) {
     red: uniqSorted(failingRuns.filter((r) => isRedName(r.name)).map(label)),
     advisory: uniqSorted(failingRuns.filter((r) => !isRedName(r.name)).map(label)),
     pending: uniqSorted(pendingRuns.map(label)),
+    noVerdict: uniqSorted(noVerdictRuns.map(label)),
     native: uniqSorted(current.filter((r) => NATIVE_CHECK_RE.test(r.name)).map(label)),
   };
 }
@@ -454,7 +470,8 @@ export function makeLocalGit({ dir, base, exec }) {
       const localSha = sha.stdout.trim();
       info = { available: true, ref, shallow, localSha, current: localSha === liveBaseSha, reason: "" };
     } catch (e) {
-      info = { available: false, reason: `git unavailable: ${e?.message ?? e}` };
+      // the code only: an exception's message can carry the checkout's path, and the reason is printed to a committed page
+      info = { available: false, reason: `git unavailable (${e?.code ?? "error"})` };
     }
     return info;
   };
@@ -548,7 +565,7 @@ export async function gatherPr(ctx, item) {
     url: item.html_url ?? `https://github.com/${repo}/pull/${item.number}`,
     headRef: item.head?.ref ?? "",
     headSha: item.head?.sha ?? "",
-    base: item.base?.ref ?? base,
+    base: baseRef(item.base?.ref),
     author: item.user?.login ?? "",
     draft: item.draft === true,
     createdAt: item.created_at,
@@ -588,7 +605,7 @@ export async function gatherPr(ctx, item) {
   const detail = await guard("pr", () => getPrDetail(api, repo, item.number, sleep));
   if (detail) {
     f.headSha = detail.head?.sha ?? f.headSha;
-    f.base = detail.base?.ref ?? f.base;
+    f.base = baseRef(detail.base?.ref) ?? f.base;
     f.draft = detail.draft === true;
     f.updatedAt = detail.updated_at ?? f.updatedAt;
     f.idleDays = daysBetween(f.updatedAt, now);
@@ -680,7 +697,8 @@ const nameOf = (label) => label.replace(/=[^=]*$/, "");
 export function landingBlockers(f, baseName) {
   const b = [];
   if (f.draft) b.push("draft");
-  if (f.base !== baseName) b.push(`stacked on ${f.base}, not on ${baseName}`);
+  if (f.base === null) b.push("base branch not readable (a stacked PR cannot be ruled out)");
+  else if (f.base !== baseName) b.push(`stacked on ${f.base}, not on ${baseName}`);
   if (f.conflicting === true) b.push(`conflicting with ${baseName} (mergeable_state=dirty)`);
   else if (f.conflicting === null) b.push("mergeable_state not computed by GitHub");
   if (!f.checks) {
@@ -693,6 +711,8 @@ export function landingBlockers(f, baseName) {
     if (other.length) b.push(`other failing checks: ${other.join(", ")}`);
     const pend = c.pending.filter((x) => nameOf(x) !== GATING_CHECK && !MAC_ONLY_CHECK_RE.test(nameOf(x)));
     if (pend.length) b.push(`checks not finished: ${pend.join(", ")}`);
+    const nov = c.noVerdict.filter((x) => nameOf(x) !== GATING_CHECK && !MAC_ONLY_CHECK_RE.test(nameOf(x)));
+    if (nov.length) b.push(`checks with no verdict (cancelled, stale or no conclusion): ${nov.join(", ")}`);
     if (f.touchesNative) {
       const bad = c.native.filter((x) => !/=(success|skipped|neutral)$/.test(x));
       if (c.native.length === 0) b.push("native client suites absent (the PR touches native/**)");
@@ -1155,12 +1175,20 @@ export function parseThreadsFile(text) {
 
 /** How many rows a list endpoint holds, by asking for one row per page and reading the Link
  *  header's last page: a number that does not depend on the pages `listAll` reads, so a short
- *  page in the middle of that read is caught by comparing the two. */
+ *  page in the middle of that read is caught by comparing the two. One row and no Link header is
+ *  either exactly one row or a header something stripped, and the two read the same, so page 2 is
+ *  asked for: any row there means the header is missing and the total cannot be read (exit 3). */
 async function countOf(api, path) {
   const r = await api.get(withQuery(path, "per_page=1"));
+  if (!Array.isArray(r.json)) throw new ToolError(`${path}: the per_page=1 count read was not a JSON array, so the list cannot be checked against a total`, 3);
   const last = /[?&]page=(\d+)>;\s*rel="last"/.exec(r.headers?.get?.("link") ?? "");
   if (last) return Number(last[1]);
-  return Array.isArray(r.json) ? r.json.length : 0;
+  if (r.json.length === 1) {
+    const next = await api.json(withQuery(path, "per_page=1&page=2"));
+    if (!Array.isArray(next)) throw new ToolError(`${path}: page 2 of the per_page=1 count read was not a JSON array, so the list cannot be checked against a total`, 3);
+    if (next.length > 0) throw new ToolError(`${path}: the per_page=1 count read carried no Link header with a last page although page 2 holds rows, so the total cannot be read and the list cannot be checked against it (a proxy that strips Link headers does this). Re-run, or read through a path that passes the header.`, 3);
+  }
+  return r.json.length;
 }
 
 /** The open PRs and issues, accepted only when the pulls list, the issues list and the
@@ -1464,8 +1492,10 @@ function reexecForProxy() {
 // the skill, or the page) outside the table, `replace` is what it becomes. `--mutants` writes
 // each mutated copy to a temporary directory, runs its --self-test, and demands RED (exit 1 and a
 // "self-test FAILED" report); a copy that passes SURVIVED, one that crashes is BROKEN, a row
-// whose `find` no longer occurs once DOES-NOT-APPLY, and any of those exits 1. The normal
-// self-test also checks that every row still applies, so the table cannot rot unseen.
+// whose `find` no longer occurs once DOES-NOT-APPLY, and any of those exits 1. A row with a `red`
+// string (every P row has one) must turn red in a case whose name holds that string: red anywhere
+// else is WRONG-RED, not a kill. The normal self-test also checks that every row still applies,
+// so the table cannot rot unseen.
 // Nothing here touches the checkout: the copies live in a directory this function removes.
 
 const MUT_BEGIN = "// >>> mutants" + "-begin";
@@ -1478,6 +1508,39 @@ function withoutMutantTable(text) {
   const b = text.indexOf(MUT_END);
   return a >= 0 && b > a ? text.slice(0, a) + text.slice(b + MUT_END.length) : text;
 }
+
+// What the tool may write to disk. The names are built from parts so this source never holds
+// the very token the scan looks for, and so the scan reads the whole file, not around itself.
+const FS_WRITE_CALLS = ["writeFile", "appendFile", "rename", "copyFile", "cp", "mkdir", "mkdtemp", "rm", "rmdir", "unlink", "truncate", "symlink", "link", "open", "write", "chmod", "chown", "utimes"].map((n) => `${n}Sync`).concat(["create" + "WriteStream"]);
+const FS_WRITE_RE = new RegExp(`\\b(${FS_WRITE_CALLS.join("|")})\\b`, "g");
+/** Where `text` calls a file-writing function: { top-level name -> sorted distinct calls }, imports under "<import>". */
+export function fsWriteSites(text) {
+  const out = {};
+  let cur = "<top>";
+  for (const line of String(text).split("\n")) {
+    let name;
+    if (/^import\s/.test(line)) name = "<import>";
+    else {
+      const d = /^(?:export\s+)?(?:async\s+)?function\s+(\w+)/.exec(line) ?? /^(?:export\s+)?(?:const|let|var|class)\s+(\w+)/.exec(line);
+      if (d) cur = d[1];
+      name = cur;
+    }
+    for (const m of line.matchAll(FS_WRITE_RE)) (out[name] ??= new Set()).add(m[1].replace(/Sync$/, ""));
+  }
+  return Object.fromEntries(Object.keys(out).sort().map((k) => [k, [...out[k]].sort()]));
+}
+/** The writes this tool is reviewed to make: the snapshot page, the --mutants copies, the self-test's own temp pages. */
+const EXPECTED_FS_WRITES = {
+  "<import>": ["mkdtemp", "rename", "rm", "writeFile"],
+  runMutants: ["mkdtemp", "rm", "writeFile"],
+  runSelfTest: ["mkdtemp", "rm", "writeFile"],
+  writeSnapshot: ["rename", "writeFile"],
+};
+const importsOf = (text) => [...String(text).matchAll(/^import\s[^;]*?\sfrom\s+"([^"]+)";/gm)]
+  .map((m) => (/\/check-owner-gated-surfaces\.mjs$/.test(m[1]) ? "./check-owner-gated-surfaces.mjs" : m[1])) // the --mutants copy imports it by file URL
+  .sort();
+/** Model-family words and a versioned model name: the skill, the page and this file use tier words instead. */
+const MODEL_WORDS_RE = new RegExp(`\\b(?:${["Hai" + "ku", "Son" + "net", "Op" + "us", "Fa" + "ble", "Myth" + "os"].join("|")})\\b|\\bClaude \\d`);
 
 /** Apply one row to `texts` = { src, skill, page }. Never applies a row that is ambiguous or inert. */
 function applyMutant(m, texts) {
@@ -1528,8 +1591,12 @@ function runMutants(io) {
       const out = `${r.stdout ?? ""}`;
       if (r.status === 0) rows.push({ id: m.id, what: m.what, verdict: "SURVIVED", detail: "the self-test still passed" });
       else if (r.status === 1 && /self-test FAILED/.test(out)) {
-        const first = out.split("\n").find((l) => l.startsWith("  FAIL ")) ?? "";
-        rows.push({ id: m.id, what: m.what, verdict: "killed", detail: first.replace(/^ {2}FAIL /, "").slice(0, 110) });
+        const fails = out.split("\n").filter((l) => l.startsWith("  FAIL ")).map((l) => l.replace(/^ {2}FAIL /, ""));
+        // a row that names the case it was written for is killed only by THAT case: any other red (a
+        // broken copy, an unrelated check) would let a defect nothing tests pass as "killed"
+        const hit = typeof m.red === "string" ? fails.find((f) => f.includes(m.red)) : fails[0];
+        if (hit === undefined) rows.push({ id: m.id, what: m.what, verdict: "WRONG-RED", detail: `red, but not in the case it was written for (${JSON.stringify(m.red)}); first red: ${fails[0] ?? ""}`.slice(0, 220) });
+        else rows.push({ id: m.id, what: m.what, verdict: "killed", detail: hit.slice(0, 110) });
       } else rows.push({ id: m.id, what: m.what, verdict: "BROKEN", detail: `exit ${r.status}: ${String(r.stderr ?? "").split("\n").find(Boolean) ?? out.split("\n")[0]}`.slice(0, 160) });
     }
   } finally {
@@ -1614,7 +1681,7 @@ const MUTANTS = [
     find: "f.filesComplete = f.filesExpected === null ? false :",
     replace: "f.filesComplete = f.filesExpected === null ? true :" },
   { id: "M23", file: "src", what: "the check-runs total_count cross-check is removed (O8)",
-    find: "if (typeof total === \"number\" && runs.length < total) throw",
+    find: "if (runs.length < total) throw",
     replace: "if (false) throw" },
   { id: "M24", file: "src", what: "a failed or running Mac-only check does not block (O9)",
     find: "if (c.macOnly.state !== \"absent\" && c.macOnly.state !== \"success\") b.push",
@@ -1736,6 +1803,108 @@ const MUTANTS = [
   { id: "N27", file: "page", what: "the page does not say this PR is the owner's (finding 1)",
     find: "this PR is the owner's, by the tool's rule",
     replace: "this PR can be landed" },
+  { id: "P01", file: "src", what: "the launch-profile pattern forgets .mts, .cts and .d.mts (finding 1)",
+    find: "launch[-_]profile[\\w.-]*\\.([cm]?[jt]s|json)$/i",
+    replace: "launch[-_]profile[\\w.-]*\\.(mjs|ts|js|json)$/i", red: "every module extension" },
+  { id: "P02", file: "src", what: "the launch-claims pattern forgets .mts and .cts (finding 1)",
+    find: "launch[-_]claims[\\w.-]*\\.([cm]?[jt]s|json)$/i",
+    replace: "launch[-_]claims[\\w.-]*\\.(mjs|ts|js|json)$/i", red: "every module extension" },
+  { id: "P03", file: "src", what: "the launch-proof-bindings pattern forgets .mts and .cts (finding 1)",
+    find: "launch[-_]proof[-_]bindings[\\w.-]*\\.([cm]?[jt]s|json)$/i",
+    replace: "launch[-_]proof[-_]bindings[\\w.-]*\\.(mjs|ts|js|json)$/i", red: "every module extension" },
+  { id: "P04", file: "src", what: "the publication-boundary pattern forgets .mts and .cts (finding 1)",
+    find: "publication[-_]boundary[\\w.-]*\\.([cm]?[jt]s|json|md)$/i",
+    replace: "publication[-_]boundary[\\w.-]*\\.(mjs|ts|js|json|md)$/i", red: "every module extension" },
+  { id: "P05", file: "src", what: "the owner-named list is judged on a renamed file's new path only (K04)",
+    find: "for (const n of uniqSorted(names)) {",
+    replace: "for (const n of uniqSorted(files.map((f) => f.filename))) {", red: "renamed away from an owner-named gate" },
+  { id: "P06", file: "src", what: "the native-path test looks at a renamed file's new path only (K05)",
+    find: "touchesNative: names.some((n) => NATIVE_PATH_RE.test(n)),",
+    replace: "touchesNative: files.some((f) => NATIVE_PATH_RE.test(f.filename)),", red: "renamed out of native" },
+  { id: "P07", file: "src", what: "the mailbox branch named in lane-mailbox.json is ignored (K11)",
+    find: "const mailboxBranch = ctx.standing?.branch ?? MAILBOX_BRANCH;",
+    replace: "const mailboxBranch = MAILBOX_BRANCH;", red: "the mailbox branch is the one lane-mailbox.json names" },
+  { id: "P08", file: "src", what: "a PR that reports 0 review comments is never listed (K02)",
+    find: "const comments = await guard(\"comments\", () => listAll(",
+    replace: "const comments = f.commentsExpected === 0 ? [] : await guard(\"comments\", () => listAll(", red: "reports 0 review comments but whose list holds 2" },
+  { id: "P09", file: "src", what: "the checkout's path is printed when local git cannot be used (K19)",
+    find: "localNote = `not used (${p.reason})`;",
+    replace: "localNote = `not used (${p.reason}) in ${opts.repoDir}`;", red: "not a git checkout the ancestry line" },
+  { id: "P10", file: "src", what: "the text of a git exception is printed (it can hold the checkout's path)",
+    find: "reason: `git unavailable (${e?.code ?? \"error\"})`",
+    replace: "reason: `git unavailable: ${e?.message ?? e}`", red: "when running git throws" },
+  { id: "P11", file: "src", what: "STANDING does not need the PR to have no files (K09)",
+    find: "f.filesComplete && f.files.length === 0) {",
+    replace: "f.filesComplete) {", red: "draft that carries a file" },
+  { id: "P12", file: "src", what: "STANDING does not need the PR to be a draft (K10)",
+    find: "f.number === ctx.standing.pr && f.draft &&",
+    replace: "f.number === ctx.standing.pr &&", red: "marked ready with no files" },
+  { id: "P13", file: "src", what: "STANDING does not need the file list to be read in full",
+    find: "&& f.draft && f.filesComplete &&",
+    replace: "&& f.draft &&", red: "could not be read in full (0 listed of 2)" },
+  { id: "P14", file: "src", what: "the closed-PR count guard is removed (K16)",
+    find: "if (closed.length < closedTotal) throw",
+    replace: "if (false) throw", red: "short closed-PR page" },
+  { id: "P15", file: "src", what: "the default-branch guard on the branch listing is removed (K17)",
+    find: "if (!branchList.some((b) => b.name === base)) throw",
+    replace: "if (false) throw", red: "does not contain the default branch" },
+  { id: "P16", file: "src", what: "an inconsistent read (exit 3) no longer stamps the snapshot page (K20)",
+    find: "if (opts.snapshot && e.exitCode !== 4) {",
+    replace: "if (opts.snapshot && e.exitCode === 2) {", red: "inconsistent read (exit 3)" },
+  { id: "P17", file: "src", what: "a failed Mac-only check no longer counts as red (K12)",
+    find: "const isRedName = (n) => n === GATING_CHECK || MAC_ONLY_CHECK_RE.test(n) || isCodeQL(n);",
+    replace: "const isRedName = (n) => n === GATING_CHECK || isCodeQL(n);", red: "Mac-only check whose newest run failed" },
+  { id: "P18", file: "src", what: "pending is read from every run, not the newest of each check name (K13)",
+    find: "const pendingRuns = current.filter((r) => PENDING.has(stateOfRun(r)));",
+    replace: "const pendingRuns = runs.filter((r) => PENDING.has(stateOfRun(r)));", red: "older run is still in progress" },
+  { id: "P19", file: "src", what: "'never' no longer negates an ask (K07)",
+    find: "\\b(not|never|no|",
+    replace: "\\b(not|no|", red: "never later" },
+  { id: "P20", file: "src", what: "'no' no longer negates an ask",
+    find: "never|no|cannot",
+    replace: "never|cannot", red: "no questions" },
+  { id: "P21", file: "src", what: "'cannot' no longer negates an ask",
+    find: "|cannot|can't",
+    replace: "|can't", red: "the Mac cannot" },
+  { id: "P22", file: "src", what: "'without' no longer negates an ask",
+    find: "|do not|without)",
+    replace: "|do not)", red: "without delay" },
+  { id: "P23", file: "src", what: "'not' no longer negates an ask",
+    find: "\\b(not|never",
+    replace: "\\b(never", red: "not later" },
+  { id: "P24", file: "src", what: "a check-runs envelope with no total_count is accepted (finding 3)",
+    find: "if (typeof body.total_count !== \"number\") throw new ApiError(",
+    replace: "if (false) throw new ApiError(", red: "no total_count" },
+  { id: "P25", file: "src", what: "a base branch that cannot be read is assumed to be mainline (finding 3)",
+    find: "base: baseRef(item.base?.ref),",
+    replace: "base: item.base?.ref ?? base,", red: "base branch cannot be read" },
+  { id: "P26", file: "src", what: "cancelled and stale count as verdicts of 'fine' (finding 3)",
+    find: "const VERDICT_OK = new Set([\"success\", \"neutral\", \"skipped\"]);",
+    replace: "const VERDICT_OK = new Set([\"success\", \"neutral\", \"skipped\", \"cancelled\", \"stale\"]);", red: "finished cancelled" },
+  { id: "P27", file: "src", what: "a check with no verdict does not block (finding 3)",
+    find: "if (nov.length) b.push(",
+    replace: "if (false) b.push(", red: "finished cancelled" },
+  { id: "P28", file: "src", what: "a missing Link header on a multi-page list is not noticed (finding 3)",
+    find: "if (next.length > 0) throw new ToolError(",
+    replace: "if (false) throw new ToolError(", red: "no Link header, on a list of 250" },
+  { id: "P29", file: "src", what: "a count read that is not a list is counted as zero (finding 3)",
+    find: "if (!Array.isArray(r.json)) throw new ToolError(`${path}: the per_page=1 count read",
+    replace: "if (false) throw new ToolError(`${path}: the per_page=1 count read", red: "not a list at all" },
+  { id: "P30", file: "src", what: "a run writes a file beside the tool (finding 6)",
+    find: "const authSummary = ",
+    replace: "writeFileSync(join(dirname(SELF_FILE), \"wrote-this-file\"), \"x\"); const authSummary = ", red: "writes to disk only in" },
+  { id: "P31", file: "skill", what: "the skill quotes a backlog row title that does not exist (finding 5)",
+    find: "label lookup that returns nothing opens a second",
+    replace: "lookup that returns nothing during a GitHub incident opens a duplicate", red: "backlog row title the skill quotes" },
+  { id: "P32", file: "skill", what: "the skill names a model family again (finding 4)",
+    find: "the judgment tier refutes",
+    replace: "Op" + "us refutes", red: "name no model" },
+  { id: "P33", file: "page", what: "the page does not say what a squash-merge message can leave out (finding 4)",
+    find: "squash-merge message",
+    replace: "merge message", red: "squash-merge message" },
+  { id: "P34", file: "skill", what: "the skill does not say a check with no verdict blocks LAND (finding 3)",
+    find: "no verdict",
+    replace: "no color", red: "say a check with no verdict" },
 ];
 // <<< mutants-end
 
@@ -1789,6 +1958,9 @@ function prFx(n, o = {}) {
     omitChangedFiles: o.omitChangedFiles ?? false,
     checks: o.checks ?? checksFx({ mac: "success" }),
     checksTotal: o.checksTotal,
+    omitChecksTotal: o.omitChecksTotal ?? false,
+    omitBase: o.omitBase ?? false,
+    omitBaseInList: o.omitBaseInList ?? false,
     comments: o.comments ?? [],
     reportedComments: o.reportedComments,
     omitReviewComments: o.omitReviewComments ?? false,
@@ -1804,6 +1976,7 @@ function worldFx(over = {}) {
     prs: [], issues: [], branches: [{ name: BASE_FX, commit: { sha: BASE_SHA_FX }, protected: true }], closed: [],
     rate: { limit: 5000, remaining: 4000, reset: 1792700000 },
     commitsByPath: {}, contents: new Set(), headDate: {}, fail: [], countOverride: undefined, latency: null, branchCut: null,
+    closedCut: null, noLinkHeader: false,
     ...over,
   };
 }
@@ -1825,7 +1998,7 @@ function fakeGitHub(w) {
   };
   const listItem = (p) => ({
     number: p.number, title: p.title, html_url: `https://github.com/${REPO_FX}/pull/${p.number}`,
-    head: { ref: p.ref, sha: p.sha, repo: { full_name: p.fork ? "someone/fork" : REPO_FX } }, base: { ref: p.base },
+    head: { ref: p.ref, sha: p.sha, repo: { full_name: p.fork ? "someone/fork" : REPO_FX } }, base: p.omitBase || p.omitBaseInList ? undefined : { ref: p.base },
     user: { login: "DanFashauer" }, draft: p.draft, created_at: p.created, updated_at: p.updated,
   });
   const nonPrIssues = () => w.issues.filter((i) => !i.pull_request);
@@ -1843,7 +2016,7 @@ function fakeGitHub(w) {
     if (path === `${R}/branches/${BASE_FX}`) return respond(200, { commit: { sha: BASE_SHA_FX } });
     if (path === `${R}/branches`) {
       if (q.get("per_page") === "1") {
-        return respond(200, w.branches.slice(0, 1), w.branches.length > 1 ? { link: `<https://api.github.com/x?per_page=1&page=${w.branches.length}>; rel="last"` } : {});
+        return respond(200, pageOf(w.branches, q), w.branches.length > 1 && !w.noLinkHeader ? { link: `<https://api.github.com/x?per_page=1&page=${w.branches.length}>; rel="last"` } : {});
       }
       // branchCut = { page, keep }: that page of the list comes back short (a GitHub hiccup)
       const cut = w.branchCut && Number(q.get("page") ?? 1) === w.branchCut.page ? w.branchCut.keep : null;
@@ -1855,8 +2028,11 @@ function fakeGitHub(w) {
       if (state === "open") return respond(200, pageOf([...w.prs].sort((a, b) => a.number - b.number).map(listItem), q));
       if (state === "closed") {
         const rows = [...w.closed].sort((a, b) => a.number - b.number);
-        if (q.get("per_page") === "1") return respond(200, rows.slice(0, 1), rows.length > 1 ? { link: `<https://api.github.com/x?state=closed&per_page=1&page=${rows.length}>; rel="last"` } : {});
-        return respond(200, pageOf(rows, q));
+        if (q.get("per_page") === "1") return respond(200, pageOf(rows, q), rows.length > 1 && !w.noLinkHeader ? { link: `<https://api.github.com/x?state=closed&per_page=1&page=${rows.length}>; rel="last"` } : {});
+        // closedCut = { page, keep }: that page of the closed list comes back short
+        const cut = w.closedCut && Number(q.get("page") ?? 1) === w.closedCut.page ? w.closedCut.keep : null;
+        const rowsOfPage = pageOf(rows, q);
+        return respond(200, cut === null ? rowsOfPage : rowsOfPage.slice(0, cut));
       }
     }
     if (path === `${R}/issues`) {
@@ -1870,7 +2046,7 @@ function fakeGitHub(w) {
       const unknown = (p.unknownReads ?? 0) > 0;
       if (unknown) p.unknownReads -= 1;
       return respond(200, {
-        ...listItem(p), body: p.body, mergeable_state: unknown ? "unknown" : p.mergeable_state,
+        ...listItem(p), base: p.omitBase ? undefined : { ref: p.base }, body: p.body, mergeable_state: unknown ? "unknown" : p.mergeable_state,
         changed_files: p.omitChangedFiles ? undefined : (p.changedFiles ?? p.files.length),
         review_comments: p.omitReviewComments ? undefined : (p.reportedComments ?? p.comments.length),
       });
@@ -1886,7 +2062,7 @@ function fakeGitHub(w) {
     if ((m = new RegExp(`^${R}/commits/([0-9a-f]{40})/check-runs$`).exec(path))) {
       const p = w.prs.find((x) => x.sha === m[1]);
       const runs = p ? p.checks : [];
-      return respond(200, { total_count: p?.checksTotal ?? runs.length, check_runs: pageOf(runs, q) });
+      return respond(200, { total_count: p?.omitChecksTotal ? undefined : (p?.checksTotal ?? runs.length), check_runs: pageOf(runs, q) });
     }
     if ((m = new RegExp(`^${R}/commits/([0-9a-f]{40})$`).exec(path))) {
       return respond(200, { sha: m[1], commit: { committer: { date: w.headDate[m[1]] ?? agoIso(10) } } });
@@ -1950,6 +2126,7 @@ async function runSelfTest(io) {
     const broken = MUTANTS.map((m) => ({ m, r: applyMutant(m, texts) })).filter((x) => !x.r.ok).map((x) => `${x.m.id}: ${x.r.why}`);
     t(`all ${MUTANTS.length} planted defects (--mutants) still apply to the source, skill and page they were written against`, broken.length === 0, broken.join("; "));
     t("planted-defect ids are unique", new Set(MUTANTS.map((m) => m.id)).size === MUTANTS.length);
+    t("every P row names the case it must turn red", MUTANTS.filter((m) => /^P/.test(m.id)).every((m) => typeof m.red === "string" && m.red.length >= 8), MUTANTS.filter((m) => /^P/.test(m.id) && !(typeof m.red === "string" && m.red.length >= 8)).map((m) => m.id).join(", "));
   }
 
   // ── tokens fail closed ──
@@ -2377,6 +2554,186 @@ async function runSelfTest(io) {
     t("the page documents the 403 behaviour and the comment-count check", /403/.test(page) && /review_comments/.test(page));
   }
 
+  // ── round 3: the third refute's findings, each beside a control ──
+  {
+    // finding 1: every launch-profile, launch-claims, launch-proof-bindings and publication-boundary file is owner-named, whatever its module extension
+    const families = [
+      ["launch profile (code)", "scripts/launch-profile"],
+      ["launch-claims gate", "scripts/check-launch-claims"],
+      ["launch proof bindings", "scripts/check-launch-proof-bindings"],
+      ["publication boundary", "scripts/publication-boundary"],
+    ];
+    const missing = [];
+    for (const [rule, stem] of families) {
+      for (const ext of [".mjs", ".cjs", ".js", ".ts", ".mts", ".cts", ".d.ts", ".d.mts", ".d.cts", ".json"]) {
+        const got = classifyFiles([{ filename: `${stem}${ext}` }]).ownerNamed.map((o) => o.rule);
+        if (!got.includes(rule)) missing.push(`${stem}${ext} -> ${got.join("+") || "NONE"}`);
+      }
+    }
+    t("every module extension (.mjs .cjs .js .ts .mts .cts .d.ts .d.mts .d.cts .json) of the four owner-named code families is owner-named", missing.length === 0, missing.join("; "));
+    t("control: files of another name with those extensions are not owner-named", classifyFiles([{ filename: "scripts/launch-pad.d.mts" }, { filename: "scripts/check-something.mts" }, { filename: "scripts/profile-launch.cts" }]).ownerNamed.length === 0);
+    const listed = realGitExec(["-C", REPO_ROOT, "ls-files"]);
+    const tracked = listed.status === 0 ? listed.stdout.split("\n").filter(Boolean) : [];
+    const named = tracked.filter((p) => /launch[-_]profile|launch[-_]claims|launch[-_]proof[-_]bindings|publication[-_]boundary/i.test(p.split("/").pop()));
+    const uncovered = named.filter((p) => classifyFiles([{ filename: p }]).ownerNamed.length === 0);
+    t(`every tracked file whose name holds launch-profile, launch-claims, launch-proof-bindings or publication-boundary (${named.length} of them) is owner-named`, listed.status === 0 && ["scripts/launch-profile.d.mts", "scripts/launch-profile.mjs", "scripts/publication-boundary.mjs"].every((p) => named.includes(p)) && uncovered.length === 0, listed.status !== 0 ? "git ls-files failed, so the tracked files could not be listed" : `not owner-named: ${uncovered.join(", ")}`);
+    const w = worldFx({ prs: [prFx(400, { files: [{ filename: "scripts/launch-profile.d.mts" }] }), prFx(401, { files: [{ filename: "scripts/launch-profile.mjs" }] }), prFx(402, { files: [{ filename: "scripts/launch-pad.d.mts" }] })] });
+    const res = await runFx_(w, []);
+    t("a PR that changes only scripts/launch-profile.d.mts (the file that declares the profile's shape) is OWNER-MERGE, never LAND", rowOf(res, 400)?.disposition === "OWNER-MERGE" && rowOf(res, 400).reason === "owner-named-surface", JSON.stringify(rowOf(res, 400)));
+    t("control: scripts/launch-profile.mjs is OWNER-MERGE the same way", rowOf(res, 401)?.disposition === "OWNER-MERGE" && rowOf(res, 401).reason === "owner-named-surface");
+    t("control: an ordinary .d.mts of another name lands (only the name makes a file owner-named)", landable(res, 402), JSON.stringify(rowOf(res, 402)));
+  }
+  {
+    // finding 2: the previous names of a renamed file count for the owner-named list and for the native-path test
+    const w = worldFx({
+      prs: [
+        prFx(410, { files: [{ filename: "scripts/check-x.mjs", status: "renamed", previous: "scripts/check-launch-claims.mjs" }] }),
+        prFx(411, { files: [{ filename: "scripts/check-x.mjs", status: "renamed", previous: "scripts/check-y.mjs" }] }),
+        prFx(412, { files: [{ filename: "docs/app.md", status: "renamed", previous: "native/ios/EnterpriseShell/App.swift" }] }),
+        prFx(413, { files: [{ filename: "docs/app.md", status: "renamed", previous: "docs/old-app.md" }] }),
+        prFx(414, { files: [{ filename: "docs/app.md", status: "renamed", previous: "native/ios/EnterpriseShell/App.swift" }], checks: checksFx({ mac: "success", extra: [{ name: "Android app (assembleDebug)", state: "success" }] }) }),
+      ],
+    });
+    const res = await runFx_(w, []);
+    t("a file renamed away from an owner-named gate (launch-claims) is OWNER-MERGE: the owner-named list is judged on the old path too", rowOf(res, 410)?.disposition === "OWNER-MERGE" && rowOf(res, 410).reason === "owner-named-surface", JSON.stringify(rowOf(res, 410)));
+    t("control: a rename between two ordinary gates lands", landable(res, 411), JSON.stringify(rowOf(res, 411)));
+    t("a file renamed out of native/** is still a native change: no client suites, not LAND", rowOf(res, 412)?.disposition === "UNKNOWN" && rowOf(res, 412).blockers.some((b) => /native client suites absent/.test(b)), JSON.stringify(rowOf(res, 412)));
+    t("control: a rename between two docs files lands", landable(res, 413), JSON.stringify(rowOf(res, 413)));
+    t("control: the native rename with a green client suite lands", landable(res, 414), JSON.stringify(rowOf(res, 414)));
+  }
+  {
+    // finding 2: the mailbox PR is the one lane-mailbox.json names (number and branch), and every part of STANDING is required
+    const mailboxPr = (n, o = {}) => prFx(n, { ref: "lane/mailbox", draft: true, files: [], changedFiles: 0, title: "Lane mailbox", ...o });
+    const wake = { pr: 500, branch: "lane/cloud-wake" };
+    const named = await runFx_(worldFx({ prs: [prFx(500, { ref: "lane/cloud-wake" })] }), [], { mailbox: wake });
+    t("the mailbox branch is the one lane-mailbox.json names: #500 from lane/cloud-wake, ready with a file, is UNKNOWN, never LAND", rowOf(named, 500)?.disposition === "UNKNOWN" && /standing mailbox branch \(lane\/cloud-wake\)/.test(rowOf(named, 500).reason) && rowOf(named, 500).natural === null, JSON.stringify(rowOf(named, 500)));
+    const plain = await runFx_(worldFx({ prs: [prFx(500, { ref: "lane/cloud-wake" })] }), []);
+    t("control: with the default mailbox file the same PR is an ordinary cloud-lane PR and lands", landable(plain, 500), JSON.stringify(rowOf(plain, 500)));
+    const standing = await runFx_(worldFx({ prs: [prFx(500, { ref: "lane/cloud-wake", draft: true, files: [], changedFiles: 0 })] }), [], { mailbox: wake });
+    t("control: the same PR as a draft with no files is STANDING", rowOf(standing, 500)?.disposition === "STANDING", JSON.stringify(rowOf(standing, 500)));
+    const oneFile = await runFx_(worldFx({ prs: [mailboxPr(439, { files: [{ filename: "docs/notes.md" }], changedFiles: 1 })] }), []);
+    t("the mailbox PR as a draft that carries a file is UNKNOWN, not STANDING", rowOf(oneFile, 439)?.disposition === "UNKNOWN" && /carries 1 changed file/.test(rowOf(oneFile, 439).reason), JSON.stringify(rowOf(oneFile, 439)));
+    const ready = await runFx_(worldFx({ prs: [mailboxPr(439, { draft: false })] }), []);
+    t("the mailbox PR marked ready with no files is UNKNOWN, not STANDING", rowOf(ready, 439)?.disposition === "UNKNOWN" && /not a draft/.test(rowOf(ready, 439).reason), JSON.stringify(rowOf(ready, 439)));
+    const unread = await runFx_(worldFx({ prs: [mailboxPr(439, { changedFiles: 2 })] }), []);
+    t("the mailbox PR whose file list could not be read in full (0 listed of 2) is UNKNOWN, not STANDING", rowOf(unread, 439)?.disposition === "UNKNOWN" && /could not be read in full/.test(rowOf(unread, 439).reason), JSON.stringify(rowOf(unread, 439)));
+    const ok = await runFx_(worldFx({ prs: [mailboxPr(439)] }), []);
+    t("control: the draft with no files and the right number and branch is STANDING", rowOf(ok, 439)?.disposition === "STANDING");
+  }
+  {
+    // finding 2: a PR that reports 0 review comments is still read; and red and pending are taken from the newest run
+    const two = [{ id: 1, in_reply_to_id: null }, { id: 2, in_reply_to_id: 1 }];
+    const gate = (id, state) => runFx(id, GATING_CHECK, state);
+    const lint = (id, state) => runFx(id, "lint", state);
+    const macName = "PR — Mac-only checks (full-clone provenance, preflight on macOS)";
+    const w = worldFx({
+      prs: [
+        prFx(420, { comments: two, reportedComments: 0 }),
+        prFx(421, { comments: [], reportedComments: 0 }),
+        prFx(430, { idle: 20, checks: checksFx({ mac: "failure" }) }),
+        prFx(431, { idle: 20, checks: checksFx({ mac: "success" }) }),
+        prFx(432, { checks: [gate(1000, "success"), runFx(1001, macName, "success"), lint(2000, "in_progress"), lint(2001, "success")] }),
+        prFx(433, { checks: [gate(1000, "success"), runFx(1001, macName, "success"), lint(2000, "success"), lint(2001, "in_progress")] }),
+      ],
+    });
+    const res = await runFx_(w, []);
+    t("a PR that reports 0 review comments but whose list holds 2 is a read error: UNKNOWN, never LAND", rowOf(res, 420)?.disposition === "UNKNOWN" && rowOf(res, 420).readErrors.some((e) => /^comments: read 2 review comment\(s\) but the PR reports 0/.test(e)), JSON.stringify(rowOf(res, 420)));
+    t("control: 0 reported and 0 listed lands", landable(res, 421), JSON.stringify(rowOf(res, 421)));
+    t("a Mac-only check whose newest run failed makes an idle PR red: STALE (idle-over-14d-red)", rowOf(res, 430)?.disposition === "STALE" && rowOf(res, 430).reason === "idle-over-14d-red" && rowOf(res, 430).redChecks.some((c) => /Mac-only checks.*=failure$/.test(c)), JSON.stringify(rowOf(res, 430)));
+    t("control: the same idle PR with a passing Mac-only check is not STALE", rowOf(res, 431)?.disposition !== "STALE" && landable(res, 431), JSON.stringify(rowOf(res, 431)));
+    t("a check whose older run is still in progress and whose newest run passed is not 'not finished': LAND", landable(res, 432), JSON.stringify(rowOf(res, 432)));
+    t("control: the NEWEST run of that check still running blocks LAND", rowOf(res, 433)?.disposition === "UNKNOWN" && rowOf(res, 433).blockers.some((b) => /checks not finished: lint=in_progress/.test(b)), JSON.stringify(rowOf(res, 433)));
+  }
+  {
+    // finding 2: every negator the ask detector knows turns a sentence that would be an ask into a non-ask
+    const base = "The cloud lane may land this PR now";
+    t(`ask detector (control): ${JSON.stringify(base)} is an ask`, bodyAsksCloudToLand(base) === true);
+    for (const tail of ["not later", "never later", "no questions", "the Mac cannot", "the Mac can't", "the Mac won't", "the Mac don't", "the Mac do not", "without delay", "the Mac isn't"]) {
+      t(`ask detector: ${JSON.stringify(`${base}, ${tail}`)} is not an ask`, bodyAsksCloudToLand(`${base}, ${tail}`) === false);
+    }
+  }
+  {
+    // finding 2 (K19) and finding 11: the report names no path when local git cannot be used, whatever the reason
+    const shown = (r) => `${r.report.sources.ancestry}\n${renderSnapshot(r.report)}\n${renderMarkdown(r.report)}`;
+    const w = worldFx({ prs: [prFx(1)] });
+    const none = await runFx_(w, []);
+    const noneElsewhere = await runFx_(w, ["--repo-dir", "/virtual/other-checkout"]);
+    t("when the directory is not a git checkout the ancestry line says so and names no path", /local git: not used \(not a git checkout\); /.test(none.report.sources.ancestry) && !shown(none).includes(REPO_ROOT) && !shown(noneElsewhere).includes("/virtual/other-checkout"), none.report.sources.ancestry);
+    const noRef = await runFx_(w, [], { gitExec: (args) => (args.slice(2)[1] === "--is-inside-work-tree" ? { status: 0, stdout: "true\n" } : { status: 1, stdout: "" }) });
+    t("when the checkout has no local mainline ref the reason names the ref, not the checkout", /not used \(no local refs\/remotes\/origin\/SignalGrid_Alpha\)/.test(noRef.report.sources.ancestry) && !shown(noRef).includes(REPO_ROOT), noRef.report.sources.ancestry);
+    const thrown = await runFx_(w, [], { gitExec: () => { throw Object.assign(new Error(`spawn failed in ${REPO_ROOT}`), { code: "ENOENT" }); } });
+    t("when running git throws, the reason is the error code and never the message (which can hold the checkout's path)", /not used \(git unavailable \(ENOENT\)\)/.test(thrown.report.sources.ancestry) && !shown(thrown).includes(REPO_ROOT), thrown.report.sources.ancestry);
+  }
+  {
+    // finding 2: the short-page guards, each with the control that reads in full
+    const closedRows = (n) => Array.from({ length: n }, (_, i) => ({ number: 1000 + i, state: "closed", merged_at: null, head: { ref: `claude/old-${i}`, sha: shaFx(9000 + i), repo: { full_name: REPO_FX } } }));
+    const cut = await runFx_(worldFx({ prs: [prFx(1)], closed: closedRows(150), closedCut: { page: 2, keep: 20 } }), []);
+    t("a short closed-PR page (page 2 of 150 returns 20) is refused: exit 3, no queue, the counts named", cut.code === 3 && cut.stdout === "" && /read 120 closed PRs but the list reports 150/.test(cut.stderr), cut.stderr);
+    const whole = await runFx_(worldFx({ prs: [prFx(1)], closed: closedRows(150) }), []);
+    t("control: the same 150 closed PRs read in full print a queue", whole.code === 0 && whole.report?.prs.length === 1, whole.stderr);
+    const noBase = await runFx_(worldFx({ prs: [prFx(1)], branches: [{ name: "claude/a", commit: { sha: shaFx(1) }, protected: false }, { name: "claude/b", commit: { sha: shaFx(2) }, protected: false }] }), []);
+    t("a branch listing that does not contain the default branch is refused: exit 3, no queue", noBase.code === 3 && noBase.stdout === "" && /does not contain SignalGrid_Alpha/.test(noBase.stderr), noBase.stderr);
+  }
+  {
+    // finding 3: four facts the tool cannot read tighten the answer instead of loosening it
+    const w = worldFx({
+      prs: [
+        prFx(440, { omitChecksTotal: true }),
+        prFx(441),
+        prFx(442, { omitBase: true }),
+        prFx(443, { omitBaseInList: true }),
+        prFx(444, { checks: checksFx({ mac: "success", extra: [{ name: "lint", state: "cancelled" }] }) }),
+        prFx(445, { checks: checksFx({ mac: "success", extra: [{ name: "lint", state: "stale" }] }) }),
+        prFx(446, { checks: checksFx({ mac: "success", extra: [{ name: "lint", state: null }] }) }),
+        prFx(447, { checks: checksFx({ mac: "success", extra: [{ name: "lint", state: "neutral" }, { name: "docs", state: "skipped" }] }) }),
+        prFx(448, { checks: checksFx({ gating: "cancelled", mac: "success" }) }),
+      ],
+    });
+    const res = await runFx_(w, []);
+    t("a check-runs envelope with no total_count cannot be checked for completeness: a read error, not LAND", rowOf(res, 440)?.disposition === "UNKNOWN" && rowOf(res, 440).readErrors.some((e) => /^checks: .*carried no total_count/.test(e)) && rowOf(res, 440).blockers.some((b) => /checks unreadable/.test(b)), JSON.stringify(rowOf(res, 440)));
+    t("control: the same PR with its total_count lands", landable(res, 441), JSON.stringify(rowOf(res, 441)));
+    t("a PR whose base branch cannot be read (missing from the list item and the detail) is not assumed to sit on mainline: not LAND", rowOf(res, 442)?.disposition === "UNKNOWN" && rowOf(res, 442).base === null && rowOf(res, 442).blockers.some((b) => /base branch not readable/.test(b)), JSON.stringify(rowOf(res, 442)));
+    t("control: a base missing only from the list item and read from the detail lands", landable(res, 443) && rowOf(res, 443).base === BASE_FX, JSON.stringify(rowOf(res, 443)));
+    for (const [n, what] of [[444, "cancelled"], [445, "stale"], [446, "unknown"]]) {
+      t(`a non-gating check that finished ${what === "unknown" ? "with no conclusion" : what} gave no verdict: not LAND, and the blocker names it`, rowOf(res, n)?.disposition === "UNKNOWN" && rowOf(res, n).blockers.some((b) => b.includes(`checks with no verdict`) && b.includes(`lint=${what}`)), JSON.stringify(rowOf(res, n)));
+    }
+    t("control: neutral and skipped are verdicts, and the PR lands", landable(res, 447), JSON.stringify(rowOf(res, 447)));
+    t("a cancelled gating check is not a pass", rowOf(res, 448)?.disposition === "UNKNOWN" && rowOf(res, 448).blockers.includes("gating check cancelled"), JSON.stringify(rowOf(res, 448)));
+    // a Link header that never arrives must not read as "one page"
+    const many = (n) => [{ name: BASE_FX, commit: { sha: BASE_SHA_FX }, protected: true }, ...Array.from({ length: n - 1 }, (_, i) => ({ name: `claude/b-${String(i).padStart(3, "0")}`, commit: { sha: shaFx(5000 + i) }, protected: false }))];
+    const closedRows = (n) => Array.from({ length: n }, (_, i) => ({ number: 1000 + i, state: "closed", merged_at: null, head: { ref: `claude/old-${i}`, sha: shaFx(9000 + i), repo: { full_name: REPO_FX } } }));
+    const noLinkBranches = await runFx_(worldFx({ prs: [prFx(1)], branches: many(250), branchCut: { page: 2, keep: 50 }, noLinkHeader: true }), []);
+    t("a branch count read with no Link header, on a list of 250 whose page 2 is short, is refused (exit 3) and says the header is missing", noLinkBranches.code === 3 && noLinkBranches.stdout === "" && /no Link header/.test(noLinkBranches.stderr), noLinkBranches.stderr);
+    const noLinkClosed = await runFx_(worldFx({ prs: [prFx(1)], closed: closedRows(3), noLinkHeader: true }), []);
+    t("a closed-PR count read with no Link header on a multi-page list is refused (exit 3)", noLinkClosed.code === 3 && noLinkClosed.stdout === "" && /state=closed/.test(noLinkClosed.stderr) && /no Link header/.test(noLinkClosed.stderr), noLinkClosed.stderr);
+    const oneBranch = await runFx_(worldFx({ prs: [prFx(1)], noLinkHeader: true }), []);
+    t("control: with no Link header a list that really holds one row (only mainline) is read, since page 2 is empty", oneBranch.code === 0 && oneBranch.report.counts.branches.total === 1, oneBranch.stderr);
+    const notArray = await runFx_(worldFx({ prs: [prFx(1)], fail: [{ match: /\/branches$/, status: 200 }] }), []);
+    t("a count read that is not a list at all is refused (exit 3), never counted as zero", notArray.code === 3 && notArray.stdout === "" && /count read was not a JSON array/.test(notArray.stderr), notArray.stderr);
+  }
+  {
+    // finding 6: where the tool can write to disk is part of what the self-test checks
+    const source = withoutMutantTable(readFileSync(SELF_FILE, "utf8"));
+    eq("the source writes to disk only in the snapshot writer, the --mutants copies and the self-test's own temp pages", fsWriteSites(source), EXPECTED_FS_WRITES);
+    eq("the source imports only the modules it was reviewed with (no promises API, no other writer)", importsOf(source), ["./check-owner-gated-surfaces.mjs", "node:child_process", "node:fs", "node:os", "node:path", "node:url"]);
+    t("the source has no dynamic import and no require", !/\bimport\s*\(|\brequire\s*\(/.test(source));
+    t("control: the scan sees a write planted in the report path", JSON.stringify(fsWriteSites(`export async function collectReport() {\n  ${"writeFile"}${"Sync"}("x", "");\n}\n`)) === JSON.stringify({ collectReport: ["writeFile"] }));
+    t("control: the scan reads a write inside a top-level arrow function too", JSON.stringify(fsWriteSites(`const quiet = () => {\n  ${"rm"}${"Sync"}("x");\n};\n`)) === JSON.stringify({ quiet: ["rm"] }));
+  }
+  {
+    // findings 4 and 5: no model names in the skill, the page or the tool, and the backlog row the skill quotes exists
+    const skill = readFileSync(SKILL_FILE, "utf8");
+    const page = readFileSync(PAGE_FILE, "utf8");
+    const named = [["skill", skill], ["page", page], ["tool", withoutMutantTable(readFileSync(SELF_FILE, "utf8"))]].filter(([, text]) => MODEL_WORDS_RE.test(text)).map(([name]) => name);
+    t("the skill, the page and the tool name no model: the DR-047 tiers are the bulk tier, the read tier and the judgment tier", named.length === 0, `model names in: ${named.join(", ")}`);
+    const backlog = readFileSync(resolve(REPO_ROOT, "docs/BUILD_BACKLOG.md"), "utf8");
+    const quoted = /docs\/BUILD_BACKLOG\.md`[^\n]*\n>\s*(.+)\n/.exec(skill)?.[1] ?? "";
+    t("the backlog row title the skill quotes is a row title in docs/BUILD_BACKLOG.md", quoted.length > 40 && backlog.includes(`**${quoted} (`), `quoted: ${JSON.stringify(quoted)}`);
+    t("the page says what a squash-merge message can leave out and that the earlier commits cannot change", /squash/.test(page) && /Co-Authored-By/.test(page) && /force-push/.test(page));
+    t("the skill and the page say a check with no verdict (cancelled, stale, no conclusion) blocks LAND", /no verdict/.test(skill) && /no verdict/.test(page) && /cancelled/.test(skill) && /cancelled/.test(page));
+    t("the page says what a missing Link header, a missing total_count and an unreadable base do", /Link header/.test(page) && /total_count/.test(page) && /base branch/.test(page));
+  }
+
   // ── issues and branches ──
   {
     const iss = (number, title, labels = []) => ({ number, title, labels: labels.map((name) => ({ name })), user: { login: "github-actions[bot]" }, created_at: agoIso(10 - number % 5), updated_at: agoIso(1), comments: 0 });
@@ -2477,6 +2834,10 @@ async function runSelfTest(io) {
       writeFileSync(forbiddenPage, `${SNAPSHOT_BEGIN}\n\n${SNAPSHOT_END}\n`);
       const forbiddenRun = await runFx_(worldFx({ prs: [prFx(1)], fail: [forbiddenList] }), ["--snapshot", forbiddenPage]);
       t("on a 403 that is not a rate limit an empty snapshot section is filled with 'not generated here: ...403'", forbiddenRun.code === 2 && /not generated here: .*403/.test(readFileSync(forbiddenPage, "utf8")), readFileSync(forbiddenPage, "utf8"));
+      const driftPage = join(dir, "drift.md");
+      writeFileSync(driftPage, `${SNAPSHOT_BEGIN}\n\n${SNAPSHOT_END}\n`);
+      const driftRun = await runFx_(worldFx({ prs: [prFx(1), prFx(2)], countOverride: 5 }), ["--snapshot", driftPage]);
+      t("on an inconsistent read (exit 3) an empty snapshot section is filled with 'not generated here: ...disagree'", driftRun.code === 3 && /not generated here: .*disagree/.test(readFileSync(driftPage, "utf8")), readFileSync(driftPage, "utf8"));
       const keep = join(dir, "keep.md");
       writeFileSync(keep, after);
       const kept = await runFx_(worldFx({ fail: [{ match: /rate_limit/, status: 401 }] }), ["--snapshot", keep], { env: { GITHUB_TOKEN: "proxy-injected" } });

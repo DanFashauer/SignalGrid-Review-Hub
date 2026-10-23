@@ -2759,6 +2759,26 @@ process.exit(1);\n`);
     r = run("install-build-tick.sh", [], { SG_STAGE_RUNNER: join(host, "link-fine") });
     ok("M5 F4 control: a symlink to an executable OUTSIDE the checkout and its build clone is accepted (the path as given goes into the plist)", r.status === 0 && plistText().includes(`<string>${join(host, "link-fine")}</string>`), `${r.status} ${r.stderr}`);
 
+    // R2-1: the kernel (launchd, execvp) resolves `..` PHYSICALLY: behind a symlinked directory it is the target's parent, not the link's. A logical
+    // `cd` collapses it textually first, so a path that climbs out of the build clone through a link looked like one that never went in.
+    mkdirSync(join(`${repo}.build`, "sub"), { recursive: true });
+    writeFileSync(join(`${repo}.build`, "evil"), "#!/bin/sh\n"); chmodSync(join(`${repo}.build`, "evil"), 0o755);
+    symlinkSync("../evil", join(`${repo}.build`, "sub", "run"));
+    symlinkSync(join(`${repo}.build`, "sub"), join(host, "dirlink-sub"));
+    mkdirSync(join(host, "plain"), { recursive: true });
+    reset();
+    let dd = run("install-build-tick.sh", [], { SG_STAGE_RUNNER: `${host}/dirlink-sub/run` });
+    ok("M5 R2-1 a runner reached through a symlinked directory and a relative link that climbs out with `..` (host/dirlink-sub/run -> ../evil, dirlink-sub being a directory inside the build clone, so the file is <repo>.build/evil) is refused with exit 2 and writes nothing",
+      dd.status === 2 && /outside this checkout/.test(dd.stderr) && !existsSync(plistPath) && lcLines().length === 0, `${dd.status} ${dd.stderr}`);
+    reset();
+    dd = run("install-build-tick.sh", [], { SG_BUILD_TICK_PATH_PREFIX: `${host}/dirlink-sub/..` });
+    ok("M5 R2-1 a PATH prefix `host/dirlink-sub/..` (physically the build clone itself) is refused with exit 2 (`inside this checkout or its build clone`) and writes nothing",
+      dd.status === 2 && /inside this checkout or its build clone/.test(dd.stderr) && !existsSync(plistPath) && lcLines().length === 0, `${dd.status} ${dd.stderr}`);
+    reset();
+    dd = run("install-build-tick.sh", [], { SG_STAGE_RUNNER: `${host}/plain/../runner`, SG_BUILD_TICK_PATH_PREFIX: `${host}/plain/..` });
+    ok("M5 R2-1 control: `..` behind a real (not linked) directory still resolves to where it reads (host/plain/../runner, host/plain/..): both accepted, and the paths as given go into the plist",
+      dd.status === 0 && plistText().includes(`<string>${host}/plain/../runner</string>`) && plistText().includes(`<key>PATH</key><string>${host}/plain/..:`), `${dd.status} ${dd.stderr}`);
+
     // (g4) F9b: an env file that is not a readable regular file is a refusal, never an ignored file or an accident of `set -u`
     reset(); mkdirSync(envFile, { recursive: true });
     r = run("install-build-tick.sh");

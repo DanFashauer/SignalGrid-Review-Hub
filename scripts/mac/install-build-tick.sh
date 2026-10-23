@@ -114,6 +114,9 @@ PATH_PREFIX="${SG_BUILD_TICK_PATH_PREFIX:-$FILE_PREFIX}"
 REPO_REAL="$(cd "$REPO_ROOT" && pwd -P)" || { echo "install-build-tick.sh: cannot enter $REPO_ROOT" >&2; exit 1; }
 # The physical path of $1 with every symlink in the chain followed (plain `readlink`, no -f: stock macOS bash 3.2 and BSD readlink). Prints
 # nothing and fails on a loop or an unreadable link. `cd && pwd -P` alone resolves the DIRECTORY of a path, never a link in its last component.
+# The directory is entered with `cd -P`: the kernel (launchd, execvp) resolves `..` PHYSICALLY, so behind a symlinked directory it names the
+# target's parent. A logical `cd` collapses it textually first, and a path that climbs out of the build clone through a link then reads as one
+# that never went in (R2-1).
 resolve_path() {
   _rp="$1"; _hops=0
   while [ -L "$_rp" ]; do
@@ -121,7 +124,7 @@ resolve_path() {
     _lt="$(readlink "$_rp")" || return 1
     case "$_lt" in /*) _rp="$_lt" ;; *) _rp="$(dirname "$_rp")/$_lt" ;; esac
   done
-  _rd="$(cd "$(dirname "$_rp")" && pwd -P)" || return 1
+  _rd="$(cd -P -- "$(dirname "$_rp")" && pwd -P)" || return 1
   printf '%s/%s\n' "$_rd" "$(basename "$_rp")"
 }
 # Inside the checkout or the build clone (<repo>.build) a model session could rewrite it: a physical path, compared by prefix.
@@ -146,7 +149,7 @@ if [ -n "$PATH_PREFIX" ]; then
   _old_ifs="$IFS"; set -f; IFS=:
   for _entry in $PATH_PREFIX; do
     case "$_entry" in /*) ;; *) refuse_wiring "SG_BUILD_TICK_PATH_PREFIX entry is not an absolute path: $_entry" ;; esac
-    _edir="$(cd "$_entry" 2>/dev/null && pwd -P)" || _edir=""
+    _edir="$(cd -P -- "$_entry" 2>/dev/null && pwd -P)" || _edir=""   # physical, like resolve_path: `dirlink/..` is the link target's parent
     [ -n "$_edir" ] || refuse_wiring "SG_BUILD_TICK_PATH_PREFIX entry is not an existing directory: $_entry"
     if under_checkout "$_edir"; then refuse_wiring "SG_BUILD_TICK_PATH_PREFIX entry is inside this checkout or its build clone: $_entry"; fi
   done

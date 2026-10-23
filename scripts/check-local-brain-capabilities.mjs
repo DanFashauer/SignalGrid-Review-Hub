@@ -26,7 +26,7 @@
 //                  exists.export is exported by that file; a command row with no exists says why in note;
 //                  AND the command TEXT names what exists says: `pnpm run X` is exists.packageScript X
 //                  (or starts with the prefix), `node|bash|sh P` and `./P` are exists.file P, an import
-//                  or workflow row's command contains exists.file
+//                  or workflow row names exists.file and its command contains it
 //   R3-selftest    a row's selfTest is a step `node scripts/preflight.mjs --list-steps` or
 //                  `node scripts/verify-breadth.mjs --list-steps` prints, or a run: line of
 //                  .github/workflows/review-hub-ci.yml - a self-test no lane runs keeps nothing honest
@@ -275,8 +275,9 @@ export function validate(m) {
         } else if (t?.file !== undefined && ex.file !== t.file) {
           add("R2-exists", `${id}: the command runs ${t.file} but exists names ${ex.file === undefined ? "no file" : ex.file}`);
         }
-      } else if ((c.kind === "import" || c.kind === "workflow") && ex.file !== undefined && !c.command.includes(ex.file)) {
-        add("R2-exists", `${id}: the ${c.kind} row's command does not contain ${ex.file}, the file exists names`);
+      } else if (c.kind === "import" || c.kind === "workflow") {
+        if (ex.file === undefined) add("R2-exists", `${id}: an ${c.kind} row must name, in exists.file, the file it imports or runs`);
+        else if (!c.command.includes(ex.file)) add("R2-exists", `${id}: the ${c.kind} row's command does not contain ${ex.file}, the file exists names`);
       }
     }
 
@@ -343,9 +344,9 @@ export function validate(m) {
   }
 
   // R8 the tables equal the rendering; R9 no typed figure outside them; the prose's line citations join R4
-  let outsideText = "";
   if (typeof m.md !== "string") add("R8-markdown", `${MD_PATH} cannot be read`);
   else {
+    let citeText = m.md; // a broken block leaves nothing to separate, so every citation in the file is judged
     if (m.md.charCodeAt(0) === 0xfeff) add("R8-markdown", `${MD_PATH}: starts with a byte-order mark`);
     const span = blockSpan(m.md);
     if (typeof span === "string") add("R8-markdown", `${MD_PATH}: ${span}`);
@@ -353,13 +354,13 @@ export function validate(m) {
       let rendered = null;
       try { rendered = expectedBlock(json); } catch (err) { add("R8-markdown", `the tables cannot be rendered: ${err.message}`); }
       if (rendered !== null && m.md.slice(span[0], span[1]) !== rendered) add("R8-markdown", `${MD_PATH}: the generated block differs from capabilities.json; run node ${GATE_PATH} --write`);
-      outsideText = m.md.slice(0, span[0]) + "\n" + m.md.slice(span[1]);
-      outsideText.split("\n").forEach((line) => {
+      citeText = m.md.slice(0, span[0]) + "\n" + m.md.slice(span[1]);
+      citeText.split("\n").forEach((line) => {
         const hit = line.match(FIGURE_RE) ?? line.match(RATIO_RE);
         if (hit) add("R9-figures", `${MD_PATH}: "${hit[0]}" is a typed figure outside the generated block: "${line.trim()}"`);
       });
-      for (const t of outsideText.matchAll(CITE_RE)) noteCite(t[0], `${MD_PATH} prose`);
     }
+    for (const t of citeText.matchAll(CITE_RE)) noteCite(t[0], `${MD_PATH} prose`);
   }
 
   // R4 every line citation, wherever it is made: inside the file, and its anchor still inside the cited lines
@@ -502,6 +503,7 @@ function selfTest() {
     ["R2-exists", "a node command whose text names another file", (mm) => { find(mm, "objective-queue").command = "node scripts/objective-loops.mjs --json"; }, "the command runs scripts/objective-loops.mjs"],
     ["R2-exists", "a ./ command whose text names another file", (mm) => { find(mm, "validate-sim-macos").command = "./validate-sim-macoss.sh"; }, "the command runs validate-sim-macoss.sh"],
     ["R2-exists", "a glob command outside its script prefix", (mm) => { find(mm, "proof").command = "pnpm run prof:*"; }, "the command runs pnpm script"],
+    ["R2-exists", "an import row with no exists", (mm) => { find(mm, "classify-diff").exists = null; }, "must name, in exists.file, the file it imports or runs"],
     ["R2-exists", "an import command that lacks the file exists names", (mm) => { find(mm, "objective-read-verdict").command = "import { readVerdict } from './scripts/other.mjs'"; }, "does not contain"],
     ["R3-selftest", "a self-test no lane runs", (mm) => { find(mm, "lane-messages-gate").selfTest = "node scripts/check-lane-messages.mjs --self-tst"; }, "is no preflight or breadth step"],
     ["R3-selftest", "a quoted self-test", (mm) => { find(mm, "lane-messages-gate").selfTest = "node scripts/check-lane-messages.mjs --self-test 'x'"; }, "unquoted command"],
@@ -540,7 +542,7 @@ function selfTest() {
     ["R8-markdown", "a missing end marker", (mm) => { mm.md = mm.md.replace(END, ""); }, "markers are missing"],
     ["R8-markdown", "markers in the wrong order", (mm) => { mm.md = mm.md.replace(BEGIN, "@@B@@").replace(END, BEGIN).replace("@@B@@", END); }, "comes before"],
     ["R8-markdown", "a duplicated end marker", (mm) => { mm.md = mm.md.replace(END, `${END}\n${END}`); }, "appears more than once"],
-    ["R8-markdown", "a byte-order mark", (mm) => { mm.md = `﻿${mm.md}`; }, "byte-order mark"],
+    ["R8-markdown", "a byte-order mark", (mm) => { mm.md = String.fromCharCode(0xfeff) + mm.md; }, "byte-order mark"],
     ["R9-figures", "a typed count in the prose", (mm) => { proseLine(mm, "This contract lists 68 rows."); }, "typed figure outside the generated block"],
     ["R9-figures", "a typed number word in the prose", (mm) => { proseLine(mm, "The gate enforces nine rules."); }, "typed figure outside the generated block"],
     ["R9-figures", "a typed duration in the prose", (mm) => { proseLine(mm, "The job retries every 5 minutes."); }, "typed figure outside the generated block"],

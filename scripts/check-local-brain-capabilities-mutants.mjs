@@ -145,7 +145,8 @@ export const CODE = [
   off("R2-text-script", "R2 the pnpm script equals exists.packageScript", "ex.packageScript !== undefined ? ex.packageScript !== t.script :", "ex.packageScript !== undefined ? false :"),
   off("R2-text-prefix", "R2 a glob command starts with exists.packageScriptPrefix", "|| !t.script.startsWith(ex.packageScriptPrefix)", "|| false"),
   off("R2-text-file", "R2 the file a node, bash or sh command runs equals exists.file", "} else if (t?.file !== undefined && ex.file !== t.file) {", "} else if (false) {"),
-  off("R2-text-import", "R2 an import or workflow row's command contains exists.file", "&& ex.file !== undefined && !c.command.includes(ex.file)) {", "&& false) {"),
+  off("R2-text-import", "R2 an import or workflow row's command contains exists.file", "else if (!c.command.includes(ex.file)) add(", "else if (false) add("),
+  off("R2-import-file", "R2 an import or workflow row names exists.file", 'if (ex.file === undefined) add("R2-exists", `${id}: an ${c.kind} row must name', 'if (false) add("R2-exists", `${id}: an ${c.kind} row must name'),
   off("R2-target-pnpm", "R2 commandTarget reads pnpm run", "let m = PNPM_RUN_RE.exec(c);", "let m = null;"),
   off("R2-target-dot", "R2 commandTarget reads ./script", "m = DOT_SLASH_RE.exec(c);", "m = null;"),
   off("R2-target-runner", "R2 commandTarget reads node, bash and sh", "m = RUNNER_RE.exec(c);", "m = null;"),
@@ -163,7 +164,7 @@ export const CODE = [
   off("R4-anchor-required", "R4 a line citation has an anchor", "if (!anchorsOk || !has(anchors, s)) {", "if (false) {"),
   off("R4-anchor-inside", "R4 the anchor is inside the cited lines", '!lines.slice(pc.lo - 1, pc.hi).join("\\n").includes(a)', "false"),
   off("R4-orphan", "R4 an anchor nobody cites is a problem", "if (anchorsOk) for (const k of Object.keys(anchors).sort()) if (!cites.has(k)) add(", "if (false) for (const k of Object.keys(anchors).sort()) if (!cites.has(k)) add("),
-  off("R4-prose", "R4 the prose's citations are checked", "for (const t of outsideText.matchAll(CITE_RE)) noteCite(", "for (const t of []) noteCite("),
+  off("R4-prose", "R4 the prose's citations are checked", "for (const t of citeText.matchAll(CITE_RE)) noteCite(", "for (const t of []) noteCite("),
   // R5 flags
   off("R5-cloud", "R5 cloudModelNeeded exactly when cloud-model", 'if (c.cloudModelNeeded !== (c.policy === "cloud-model")) add(', "if (false) add("),
   off("R5-allowed", "R5 an allowed row is read-only", 'if (c.policy === "allowed" && !(c.readOnly === true', "if (false && !(c.readOnly === true"),

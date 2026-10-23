@@ -1878,6 +1878,13 @@ async function selfTest() {
     ["an alias of Object (`const O = Object; O.assign(…)`)", 'const O = Object; O.assign(OUTCOME_TONE, { deny: "x" });'],
     ["an alias of the method (`const a = Object.assign; a(…)`)", 'const a = Object.assign; a(OUTCOME_TONE, { deny: "x" });'],
   ]) checks.push([`F15 MUTANT ${label} is RED`, mp(code).length >= 1]);
+  // F17 (second pass): the mutants that survived the first runner tally.
+  checks.push(["F17: a nested test NARROWS the enclosing arm — `outcome !== deny` inside {restrict, deny} owns only restrict", bp('if (outcome === "deny" || outcome === "restrict") { if (outcome !== "deny") return "text-status-restrict"; return "text-status-deny"; } return lookup(outcome);').length === 0]);
+  checks.push(["F17: a comparison of ANOTHER parameter (`previous === allow`) is unknown, never the toned subject", toneBranchProblems('export function t(outcome: string, previous: string): string { if (outcome === "deny" && previous === "allow") return "text-status-allow"; return "text-status-restrict"; }').length >= 1]);
+  checks.push(["F17: `switch (true)` with an UNKNOWN case (`outcome === deny && flag`) still binds deny", bp('switch (true) { case outcome === "deny" && flag: return "text-status-allow"; default: return "text-status-restrict"; }').length >= 1]);
+  checks.push(["F17: a single-verdict `switch (true)` clause is strict (restrict returning status-deny is RED)", bp('switch (true) { case outcome === "restrict": return "text-status-deny"; default: return "text-status-restrict"; }').length >= 1]);
+  checks.push(["F17: `Object.assign(...[X, …])` names X as mutated (not only the generic spread refusal)", mp('Object.assign(...[OUTCOME_TONE, { deny: "x" }]);').some((m) => /OUTCOME_TONE is mutated at runtime/.test(m))]);
+  await e2e("F17: an unimported `.pcss` lying in the tree is judged like a `.css` (wrong token exits 1)", 1, "a/src/stray.pcss", { "a/src/stray.pcss": ".text-status-deny { color: hsl(var(--decision-allow)); }\n" });
   // F17: the surviving mutants, each with the plant that flips it.
   checks.push(["A1: `deny && flag` true arm is exclusive to deny (status-restrict is RED)", bp('return outcome === "deny" && flag ? "text-status-restrict" : lookup(outcome);').length >= 1]);
   checks.push(["A2: `!== deny || flag` false arm is exclusive to deny (status-restrict is RED)", bp('return outcome !== "deny" || flag ? lookup(outcome) : "text-status-restrict";').length >= 1]);

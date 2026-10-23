@@ -596,8 +596,8 @@
  },
  {
   "name": "F15 aliases of Object are not followed",
-  "find": "if (b) builtinAlias.set(n.name.text, b);\n",
-  "replace": "\n"
+  "find": "if (b) builtinAlias.set(n.name.text, b);",
+  "replace": "if (b) void 0;"
  },
  {
   "name": "F15 aliases of Object.assign are not followed",
@@ -607,7 +607,7 @@
  {
   "name": "F16 the row comparison checks only a prefix",
   "find": "if (rowItems[i] !== want) problems.push(",
-  "replace": "if (rowItems[i].slice(0, 40) !== want.slice(0, 40)) problems.push("
+  "replace": "if ((rowItems[i] ?? \"\").slice(0, 40) !== want.slice(0, 40)) problems.push("
  },
  {
   "name": "F16 the header comparison checks only a prefix",

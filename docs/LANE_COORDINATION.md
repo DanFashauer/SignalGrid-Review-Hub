@@ -133,12 +133,12 @@ stuck or red run raises a hand and keeps the claim for a person. Registry row:
 
 **The Mac's local brain.** The owner's Mac also runs a local operating brain: an
 unattended unit that is neither lane's Claude session and is meant to keep the checks
-running when neither Claude nor Codex has credits. It works only inside
-`scripts/mac/local-brain/**` and reads `scripts/mac/local-brain/CAPABILITIES.md` (its
-machine twin is `scripts/mac/local-brain/capabilities.json`, and
-`scripts/check-local-brain-capabilities.mjs` gates both) on every pull for the order of
-its cycle, the commands it may run without a cloud model, the ones it must never run, and
-the rule that it prepares and never merges.
+running when neither Claude nor Codex has credits. It may commit and propose changes only
+inside `scripts/mac/local-brain/**` (what its own commands write elsewhere stays in its
+worktree), and it reads `scripts/mac/local-brain/CAPABILITIES.md` (its machine twin is
+`scripts/mac/local-brain/capabilities.json`, and `scripts/check-local-brain-capabilities.mjs`
+gates both) on every pull for the order of its cycle, the commands it may run without a
+cloud model, the ones it must never run, and the rule that it prepares and never merges.
 
 ## The loop as of 2026-09-05, first revision (superseded above; kept for history)
 

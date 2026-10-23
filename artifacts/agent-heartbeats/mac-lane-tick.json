@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-10-23T03:40:57.379Z",
-  "result": "quiet; objective: escalate; unread=10 oldest=14d to mac; raised-hands=15 overdue=11"
+  "firedAt": "2026-10-23T03:46:06.360Z",
+  "result": "deferred: another SignalGrid verification chain holds the host lock; sim requests and objective evaluation not run; unread=10 oldest=14d to mac; raised-hands=15 overdue=11"
 }

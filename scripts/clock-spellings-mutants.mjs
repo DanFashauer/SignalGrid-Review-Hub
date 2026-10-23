@@ -13,9 +13,11 @@
 // would replace the default action (a SIGTERM would stop terminating the process). A killed run can leave
 // the gitignored scratch file; the next run overwrites and removes it.
 //
-// WHAT THE GUARD DOES NOT TEST: only the equivalence rule and the ceiling comparison have a self-check of
-// their own (run first, below). The dirty-tree pathspec, the scratch cleanup and "a stale entry is fatal"
-// have none.
+// WHAT THE GUARD DOES NOT TEST. `judgeEquivalent` and `ceilingProblems` have a self-check of their own (run
+// first, below). The call sites and the rest of the run have none, so a mutant of any of these still exits 0:
+// the ceiling check being called at all; the equivalence comparison being given the lib and the mutant (and
+// not the mutant twice); the equivalence problems reaching the report and the tally; the tally adding up;
+// the dirty-tree pathspec; the scratch cleanup; and "a stale entry is fatal".
 //
 // It refuses to run when the matcher or this script has uncommitted changes (`--allow-dirty` overrides),
 // because its tally would describe code that is not committed. It also checks that every item of the
@@ -57,17 +59,21 @@ function judgeEquivalent(equivalent, isRed, scanBase, scanMut) {
 }
 // The BUILD_BACKLOG row for the ceiling must be `(1) item1 (2) item2 ...` in order and carry nothing numbered beyond.
 function ceilingProblems(items, backlog) {
-  const row = backlog.split("\n").find((l) => l.startsWith("- [ ] **The clock-spelling matcher has a declared ceiling"));
-  if (!row) return ["docs/BUILD_BACKLOG.md has no ceiling row"];
+  const rows = backlog.split("\n").filter((l) => l.startsWith("- [ ] **The clock-spelling matcher has a declared ceiling"));
+  if (rows.length !== 1) return [`docs/BUILD_BACKLOG.md has ${rows.length} ceiling rows, not 1`];
+  const row = rows[0];
   const problems = [];
   let at = 0;
   items.forEach((item, k) => {
-    const needle = `(${k + 1}) ${item}`;
-    const found = row.indexOf(needle, at);
+    // Each item is exactly `(k) item`, followed by the next number (or the closing "Fix shape" sentence).
+    const needle = `(${k + 1}) ${item} `;
+    const next = k + 1 < items.length ? `(${k + 2}) ` : "Fix shape:";
+    const found = row.indexOf(needle + next, at);
     if (found < 0) problems.push(`the ceiling row does not carry item ${k + 1} verbatim, numbered and in order`);
     else at = found + needle.length;
   });
-  if (row.includes(`(${items.length + 1}) `)) problems.push(`the ceiling row carries an item numbered ${items.length + 1}, which CLOCK_CEILING does not have`);
+  if (row.includes(`(${items.length + 1})`)) problems.push(`the ceiling row carries an item numbered ${items.length + 1}, which CLOCK_CEILING does not have`);
+  if (backlog.split("\n").filter((l) => l.includes(items[0])).length !== 1) problems.push("the first ceiling item appears on more than one line of docs/BUILD_BACKLOG.md");
   return problems;
 }
 function guardSelfCheck() {
@@ -79,14 +85,23 @@ function guardSelfCheck() {
   expect("an equivalent that holds is counted", judgeEquivalent(eq(["p"]), false, same, same).counted);
   expect("a differing plant is a problem and is not counted", (() => { const r = judgeEquivalent(eq(["p"]), false, same, diff); return r.problems.length === 1 && !r.counted; })());
   expect("a caught mutant cannot be equivalent", judgeEquivalent(eq(["p"]), true, same, same).problems.length === 1);
+  expect("a differing SECOND plant is a problem", (() => { const r = judgeEquivalent(eq(["q", "p"]), false, same, diff); return r.problems.length === 1 && !r.counted; })());
   expect("an equivalent without plants is a problem", judgeEquivalent({ reason: "r" }, false, same, same).problems.length === 1);
   expect("an equivalent without a reason is a problem", judgeEquivalent({ plants: ["p"] }, false, same, same).problems.length === 1);
-  const row = (body) => `- [ ] **The clock-spelling matcher has a declared ceiling** ${body}`;
-  expect("a faithful row passes", ceilingProblems(["a", "b"], row("(1) a (2) b")).length === 0);
-  expect("an edited item fails", ceilingProblems(["a", "b"], row("(1) a (2) c")).length === 1);
-  expect("an extra numbered item fails", ceilingProblems(["a", "b"], row("(1) a (2) b (3) c")).length === 1);
-  expect("items out of order fail", ceilingProblems(["a", "b"], row("(2) b (1) a")).length >= 1);
-  expect("a missing row fails", ceilingProblems(["a"], "nothing").length === 1);
+  const row = (body) => `- [ ] **The clock-spelling matcher has a declared ceiling** ${body} Fix shape: x.`;
+  const long1 = "the first item is a long sentence that is well over forty characters before its ending";
+  const long2 = "the second item is also long and only differs from a drifted copy at its very last words";
+  const items = [long1, long2];
+  const good = row(`(1) ${long1} (2) ${long2}`);
+  expect("a faithful row passes", ceilingProblems(items, good).length === 0);
+  expect("an edit past the 40th character fails", ceilingProblems(items, row(`(1) ${long1} (2) ${long2.replace("last words", "final words")}`)).length === 1);
+  expect("a clause added inside an item fails", ceilingProblems(items, row(`(1) ${long1} and one more clause (2) ${long2}`)).length === 1);
+  expect("an extra numbered item fails", ceilingProblems(items, row(`(1) ${long1} (2) ${long2} (3) c`)).length >= 1);
+  expect("an extra numbered item with no space fails", ceilingProblems(items, row(`(1) ${long1} (2) ${long2} (3)c`)).length >= 1);
+  expect("items out of order fail", ceilingProblems(items, row(`(2) ${long2} (1) ${long1}`)).length >= 1);
+  expect("a missing row fails", ceilingProblems(items, "nothing").length === 1);
+  expect("a second copy of the row fails", ceilingProblems(items, `${good}\n${row(`(1) ${long1} (2) drifted`)}`).length === 1);
+  expect("the first item repeated on another line fails", ceilingProblems(items, `${good}\n${long1}`).length === 1);
   return out;
 }
 
@@ -119,9 +134,9 @@ const M = [
   ["template tail not protected from the comment scan", "      case K.TemplateTail: {\n        const a = startOf(node);\n        prot.push([a, node.end]);", "      case K.TemplateTail: {\n        const a = startOf(node);"],
   ["template head/middle not protected from the comment scan", "      case K.TemplateMiddle: {\n        const a = startOf(node);\n        prot.push([a, node.end]);", "      case K.TemplateMiddle: {\n        const a = startOf(node);"],
   ["generator named-default binding dropped", 'if (imported === "default") {\n        if (!b.genNs.has(base)) b.genNs.set(base, new Set());', 'if (false) {\n        if (!b.genNs.has(base)) b.genNs.set(base, new Set());'],
-  ["uuid v6 dropped from the generator list", 'uuid: ["v1", "v4", "v6", "v7"],', 'uuid: ["v1", "v4", "v7"],'],
-  ["ulid monotonicFactory dropped from the generator list", 'ulid: ["ulid", "monotonicFactory"],', 'ulid: ["ulid"],'],
-  ["cuid2 dropped from the generator list", '"@paralleldrive/cuid2": ["createId"],', ""],
+  ["uuid v6 dropped from the generator list", '\n  uuid: ["v1", "v4", "v6", "v7"],', '\n  uuid: ["v1", "v4", "v7"],'],
+  ["ulid monotonicFactory dropped from the generator list", '\n  ulid: ["ulid", "monotonicFactory"],', '\n  ulid: ["ulid"],'],
+  ["cuid2 dropped from the generator list", '\n  "@paralleldrive/cuid2": ["createId"],', ""],
   ["require/import module argument must be a plain string", "ts.isStringLiteralLike(e.arguments[0])) return e.arguments[0].text;", "e.arguments[0].kind === K.StringLiteral) return e.arguments[0].text;"],
   ["closing > of type arguments not searched for", 'while (gt < t.length && t[gt] !== ">") gt++;', "/*m*/"],
   [".default hop dropped from the generator namespace pattern", "${DOT}(?:default${DOT})?(?:${members.map", "${DOT}(?:${members.map"],

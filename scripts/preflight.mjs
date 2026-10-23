@@ -87,7 +87,7 @@ const STEPS = [
   { name: "Docker carries every install-hook entrypoint", cmd: ["node", "scripts/check-docker-lifecycle-copy.mjs"] },
   { name: "Invariant review self-test (a default-less switch / stray clock read must fail)", cmd: ["node", "scripts/review-invariants.mjs", "--self-test"] },
   { name: "Invariant review (fail-closed / determinism / Assist / truth)", cmd: ["node", "scripts/review-invariants.mjs"] },
-  { name: "Clock-spelling matcher mutation guard (every mutant of the shared matcher must fail its self-test)", cmd: ["node", "scripts/clock-spellings-mutants.mjs"] },
+  { name: "Clock-spelling matcher mutation guard (every listed mutant of the shared matcher must fail its self-test)", cmd: ["node", "scripts/clock-spellings-mutants.mjs"] },
   // Shell was the only language here with no static analysis: CodeQL takes JS/TS,
   // tsc takes types, gitleaks takes secrets, the proofs take behaviour. See
   // scripts/check-shell.mjs for why the floor is `warning` and why the Mac lane's

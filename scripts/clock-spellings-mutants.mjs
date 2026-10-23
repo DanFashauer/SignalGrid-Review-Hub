@@ -8,11 +8,19 @@
 // mutant and FAILS unless the two scans are identical, and FAILS if a self-test catches the mutant (the
 // reason would be wrong). Any other entry that stays green, or whose target text is no longer in the lib
 // (STALE), fails the run. The scratch copy is written next to the lib so `typescript` resolves (it is
-// gitignored) and is removed afterwards, also on SIGINT/SIGTERM.
+// gitignored) and is removed when a run completes. There are no SIGINT/SIGTERM handlers on purpose: the
+// run never yields to the event loop, so a handler would not run before the run ended, and installing one
+// would replace the default action (a SIGTERM would stop terminating the process). A killed run can leave
+// the gitignored scratch file; the next run overwrites and removes it.
+//
+// WHAT THE GUARD DOES NOT TEST: only the equivalence rule and the ceiling comparison have a self-check of
+// their own (run first, below). The dirty-tree pathspec, the scratch cleanup and "a stale entry is fatal"
+// have none.
 //
 // It refuses to run when the matcher or this script has uncommitted changes (`--allow-dirty` overrides),
 // because its tally would describe code that is not committed. It also checks that every item of the
-// lib's CLOCK_CEILING appears verbatim in docs/BUILD_BACKLOG.md.
+// lib's CLOCK_CEILING appears, in order and numbered, in the BUILD_BACKLOG row that carries it, and that
+// the row carries no further numbered item.
 import { readFileSync, writeFileSync, rmSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { dirname, resolve } from "node:path";
@@ -31,7 +39,56 @@ if (!process.argv.includes("--allow-dirty")) {
     process.exit(2);
   }
 }
-for (const sig of ["SIGINT", "SIGTERM"]) process.on(sig, () => { rmSync(SCRATCH, { force: true }); process.exit(130); });
+
+// The two rules below decide the tally, so they are functions with a self-check (see guardSelfCheck).
+// Returns { problems, counted }: `counted` is true only when an equivalent entry holds on every plant.
+function judgeEquivalent(equivalent, isRed, scanBase, scanMut) {
+  if (!equivalent.reason || !Array.isArray(equivalent.plants) || !equivalent.plants.length) {
+    return { problems: ["an equivalent entry must give a reason and the plants that were tried"], counted: false };
+  }
+  if (isRed) return { problems: ["marked equivalent but the self-test caught it"], counted: false };
+  const problems = [];
+  for (const plant of equivalent.plants) {
+    if (JSON.stringify(scanBase(plant)) !== JSON.stringify(scanMut(plant))) {
+      problems.push(`marked equivalent but the plant ${JSON.stringify(plant)} scans differently`);
+    }
+  }
+  return { problems, counted: problems.length === 0 };
+}
+// The BUILD_BACKLOG row for the ceiling must be `(1) item1 (2) item2 ...` in order and carry nothing numbered beyond.
+function ceilingProblems(items, backlog) {
+  const row = backlog.split("\n").find((l) => l.startsWith("- [ ] **The clock-spelling matcher has a declared ceiling"));
+  if (!row) return ["docs/BUILD_BACKLOG.md has no ceiling row"];
+  const problems = [];
+  let at = 0;
+  items.forEach((item, k) => {
+    const needle = `(${k + 1}) ${item}`;
+    const found = row.indexOf(needle, at);
+    if (found < 0) problems.push(`the ceiling row does not carry item ${k + 1} verbatim, numbered and in order`);
+    else at = found + needle.length;
+  });
+  if (row.includes(`(${items.length + 1}) `)) problems.push(`the ceiling row carries an item numbered ${items.length + 1}, which CLOCK_CEILING does not have`);
+  return problems;
+}
+function guardSelfCheck() {
+  const out = [];
+  const same = () => "x";
+  const diff = (src) => (src === "p" ? "y" : "x");
+  const eq = (plants) => ({ reason: "r", plants });
+  const expect = (name, ok) => { if (!ok) out.push(`guard self-check failed: ${name}`); };
+  expect("an equivalent that holds is counted", judgeEquivalent(eq(["p"]), false, same, same).counted);
+  expect("a differing plant is a problem and is not counted", (() => { const r = judgeEquivalent(eq(["p"]), false, same, diff); return r.problems.length === 1 && !r.counted; })());
+  expect("a caught mutant cannot be equivalent", judgeEquivalent(eq(["p"]), true, same, same).problems.length === 1);
+  expect("an equivalent without plants is a problem", judgeEquivalent({ reason: "r" }, false, same, same).problems.length === 1);
+  expect("an equivalent without a reason is a problem", judgeEquivalent({ plants: ["p"] }, false, same, same).problems.length === 1);
+  const row = (body) => `- [ ] **The clock-spelling matcher has a declared ceiling** ${body}`;
+  expect("a faithful row passes", ceilingProblems(["a", "b"], row("(1) a (2) b")).length === 0);
+  expect("an edited item fails", ceilingProblems(["a", "b"], row("(1) a (2) c")).length === 1);
+  expect("an extra numbered item fails", ceilingProblems(["a", "b"], row("(1) a (2) b (3) c")).length === 1);
+  expect("items out of order fail", ceilingProblems(["a", "b"], row("(2) b (1) a")).length >= 1);
+  expect("a missing row fails", ceilingProblems(["a"], "nothing").length === 1);
+  return out;
+}
 
 const R = String.raw;
 const M = [
@@ -61,6 +118,18 @@ const M = [
   ["destructure line taken from the initializer", "sites.push({ line: lineAt(starts, startOf(pattern)),", "sites.push({ line: lineAt(starts, startOf(init)),"],
   ["template tail not protected from the comment scan", "      case K.TemplateTail: {\n        const a = startOf(node);\n        prot.push([a, node.end]);", "      case K.TemplateTail: {\n        const a = startOf(node);"],
   ["template head/middle not protected from the comment scan", "      case K.TemplateMiddle: {\n        const a = startOf(node);\n        prot.push([a, node.end]);", "      case K.TemplateMiddle: {\n        const a = startOf(node);"],
+  ["generator named-default binding dropped", 'if (imported === "default") {\n        if (!b.genNs.has(base)) b.genNs.set(base, new Set());', 'if (false) {\n        if (!b.genNs.has(base)) b.genNs.set(base, new Set());'],
+  ["uuid v6 dropped from the generator list", 'uuid: ["v1", "v4", "v6", "v7"],', 'uuid: ["v1", "v4", "v7"],'],
+  ["ulid monotonicFactory dropped from the generator list", 'ulid: ["ulid", "monotonicFactory"],', 'ulid: ["ulid"],'],
+  ["cuid2 dropped from the generator list", '"@paralleldrive/cuid2": ["createId"],', ""],
+  ["require/import module argument must be a plain string", "ts.isStringLiteralLike(e.arguments[0])) return e.arguments[0].text;", "e.arguments[0].kind === K.StringLiteral) return e.arguments[0].text;"],
+  ["closing > of type arguments not searched for", 'while (gt < t.length && t[gt] !== ">") gt++;', "/*m*/"],
+  [".default hop dropped from the generator namespace pattern", "${DOT}(?:default${DOT})?(?:${members.map", "${DOT}(?:${members.map"],
+  ["awaited operand not peeled", "if (e.kind === K.AwaitExpression) e = peel(e.expression, true);", "if (e.kind === K.AwaitExpression) e = e.expression;"],
+  ["any void operand counts as trivial", "(n.kind === K.VoidExpression && n.expression.kind === K.NumericLiteral)", "(n.kind === K.VoidExpression)"],
+  ["Date() call line taken from node.pos", "if (isDateRef(node.expression)) dateLines.push(lineAt(starts, startOf(node)));\n        if (node.typeArguments?.length) typeArgLists.push(node.typeArguments);\n        break;\n      case K.TaggedTemplateExpression:", "if (isDateRef(node.expression)) dateLines.push(lineAt(starts, node.pos));\n        if (node.typeArguments?.length) typeArgLists.push(node.typeArguments);\n        break;\n      case K.TaggedTemplateExpression:"],
+  ["generator namespace pattern loses optional chaining on the member", '.join("|")})${CALL}`, "g"));\n    dynDestructures.push({ names: members', '.join("|")})\\s*\\(`, "g"));\n    dynDestructures.push({ names: members'],
+  ["generator namespace pattern loses optional chaining on the dot", "${L}(?:${alt(names)})${DOT}(?:default", "${L}(?:${alt(names)})\\s*\\.\\s*(?:default"],
   ["globalThis.Date ignored", 'return r.kind === K.Identifier && r.text === "globalThis";', "return false;"],
   ["isDateRef does not follow any comma", "const p = peel(e, true);\n  if (p.kind === K.Identifier) return p.text === \"Date\";", "const p = peel(e);\n  if (p.kind === K.Identifier) return p.text === \"Date\";"],
   ["receiverOf does not follow any comma", "function receiverOf(e) {\n  const p = peel(e, true);", "function receiverOf(e) {\n  const p = peel(e);"],
@@ -111,13 +180,11 @@ let red = 0;
 let equivalentOk = 0;
 const problems = [];
 
-// The ceiling lists in the lib and in docs/BUILD_BACKLOG.md must be the same words.
+problems.push(...guardSelfCheck());
+// The ceiling list in the lib and the BUILD_BACKLOG row must be the same words.
 {
   const lib = await import(pathToFileURL(LIB).href);
-  const backlog = readFileSync(resolve(REPO, "docs/BUILD_BACKLOG.md"), "utf8");
-  lib.CLOCK_CEILING.forEach((item, k) => {
-    if (!backlog.includes(item)) problems.push(`docs/BUILD_BACKLOG.md does not carry CLOCK_CEILING item ${k + 1} verbatim`);
-  });
+  problems.push(...ceilingProblems(lib.CLOCK_CEILING, readFileSync(resolve(REPO, "docs/BUILD_BACKLOG.md"), "utf8")));
 }
 
 try {
@@ -144,19 +211,10 @@ try {
         isRed = true; // a mutant that does not even load or run is caught
       }
       if (equivalent) {
-        if (!equivalent.reason || !Array.isArray(equivalent.plants) || !equivalent.plants.length) {
-          problems.push(`${name}: an equivalent entry must give a reason and the plants that were tried`);
-        } else if (isRed) {
-          problems.push(`${name}: marked equivalent but the self-test caught it`);
-        } else {
-          for (const plant of equivalent.plants) {
-            if (JSON.stringify(base.scanSource(plant)) !== JSON.stringify(m.scanSource(plant))) {
-              problems.push(`${name}: marked equivalent but the plant ${JSON.stringify(plant)} scans differently`);
-            }
-          }
-          equivalentOk++;
-        }
-        console.log(`${isRed ? "RED?? " : "equiv "} ${name}  [tried ${equivalent.plants?.length ?? 0} plant(s)]`);
+        const r = judgeEquivalent(equivalent, isRed, base.scanSource, m.scanSource);
+        for (const pr of r.problems) problems.push(`${name}: ${pr}`);
+        if (r.counted) equivalentOk++;
+        console.log(`${r.counted ? "equiv  " : "RED??  "}${name}  [tried ${equivalent.plants?.length ?? 0} plant(s)]`);
       } else {
         if (isRed) red++;
         else problems.push(`${name}: survives the self-test`);

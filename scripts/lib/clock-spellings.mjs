@@ -50,7 +50,7 @@ export const CLOCK_CEILING = [
   "Pins count LINES, not reads: two reads on one line are one hit, so a second read on an already-counted line does not move a pin (two live lines carry two reads each: `lib/webauthn/src/stepUpStore.ts:119`, `lib/webauthn/src/webauthn/store.ts:228`).",
   "Lines are numbered by LF, as git, grep and the pins count them: a CR-only file is one line to a pin, though its `//` comments end at the CR.",
   "FALSE-ALARM direction (a hit that is not a read, not a hidden read): `\\bcrypto`, `\\bperformance` and `\\bprocess` also match after a dot, so `fixture.performance.now()` is a false hit; a bare imported name such as `randomInt(` is flagged anywhere, including an unrelated local function of that name; a spread-only argument list is flagged although the spread may be non-empty (`new Date(...[1])`); a shadowed local named `Date` or `$Date`; and, inherited from mainline, safety-check's legacy raw-line union also flags a string or template that names `Date.now()` in the decision core (the legacy scan reads literal text, the parser-based scan does not).",
-  "HIDDEN-READ direction, not followed (the list is not exhaustive; the followed forms are the ones the plants name): a computed key whose parenthesised expression has a non-trivial left operand (`Date[(f(), \"now\")]()`); a unicode-letter alias; a string-named import specifier (`import { \"randomBytes\" as rb }`); an inline `require(\"crypto\").randomBytes(4)`, `(await import(\"crypto\")).randomBytes(4)` or `import(\"crypto\").then(...)`; `const { webcrypto } = nc` (a receiver taken from a namespace); a reassigned `require`; a variable key (`Date[k]()`); receiver aliases (`const D = Date; D.now()`, `const p = performance; p.now()`); `Reflect.get(Date, \"now\")()`, `Function(\"return Date.now()\")()` and `eval(...)` (review-invariants misses them; safety-check catches a string-held one in the core only, through the legacy raw-line scan); `new globalThis[\"Date\"]()` and `new window.Date()`; `Date.prototype.constructor()`; a nested destructure from `globalThis`; a tagged template of a function other than Date (`Date.now` followed by a template literal); `performance.mark().startTime`, `os.uptime()`, `crypto.subtle.generateKey` and `generateKeyPair*`.",
+  "HIDDEN-READ direction, not followed (the list is not exhaustive; the followed forms are the ones the plants name): a computed key whose parenthesised expression has a non-trivial left operand (`Date[(f(), \"now\")]()`); a unicode-letter alias; a string-named import specifier (`import { \"randomBytes\" as rb }`); an inline `require(\"crypto\").randomBytes(4)`, `(await import(\"crypto\")).randomBytes(4)` or `import(\"crypto\").then(...)`; `const { webcrypto } = nc` (a receiver taken from a namespace); a reassigned `require`; a variable key (`Date[k]()`); receiver aliases (`const D = Date; D.now()`, `const p = performance; p.now()`); `Reflect.get(Date, \"now\")()`, `Function(\"return Date.now()\")()` and `eval(...)` (review-invariants misses them; safety-check catches a string-held one in the core only, through the legacy raw-line scan); `new globalThis[\"Date\"]()` and `new window.Date()`; `Date.prototype.constructor()`; a nested destructure from `globalThis`; a destructure through a generator `.default` (`const { v4 } = ids.default`, `const { default: { v4 } } = ids`); a computed key built from a template (``Date[`${\"now\"}`]()``); `require(\"uuid\").default`; `let nc; nc = require(\"crypto\")`; `await import(\"node:crypto\", {})`; `require(\"uuid\", 2)`; `const { ...r } = require(\"uuid\")`; a binding re-exported through a local module (`export * as ids from \"uuid\"`, used in another file; a per-file scan cannot see it); subpath and factory exports (`nanoid/non-secure`, `customAlphabet`); `crypto.getRandomValues<T,>(x)` (tsc rejects the trailing comma, TS1009); a tagged template of a function other than Date (`Date.now` followed by a template literal); `performance.mark().startTime`, `os.uptime()`, `crypto.subtle.generateKey` and `generateKeyPair*`.",
   "Not seen at all: an uncalled reference (`const c = Date.now`), `Reflect.apply` / `.call`, `Temporal` / `Intl`, and unicode escapes in an identifier.",
   "Cost: a 2 MB scoped file takes about 7 s in review-invariants and 4 s in safety-check (mainline about 2 s each); slow, not a hang.",
   "An unreadable file is a named problem in both gates: ENOENT and EISDIR are exercised; EACCES takes the same catch but cannot be exercised as root.",
@@ -786,6 +786,16 @@ export const CLOCK_TREE_PLANTS = [
   ["a template tail holding // before a read on the same line", "const s = `${a}//`; export const t = Date.now();"],
   ["a template tail holding /* hiding a line until a later */", "const s = `${a}/*`;\nexport const t = Date.now();\nconst u = `*/`;"],
   ["a template middle holding // before a read on the same line", "const s = `${a}//${b}`; export const t = Date.now();"],
+  // Round 12.
+  ["a named default of a generator package: { default: ids } = require", 'const { default: ids } = require("uuid");\nexport const id = ids.v4();'],
+  ["a generator namespace .default hop: ids.default.v4()", 'const ids = require("uuid");\nexport const id = ids.default.v4();'],
+  ["a template-literal module argument: require(`node:crypto`)", "const nc = require(`node:crypto`);\nexport const b = nc.randomUUID();"],
+  ["a space before the closing > of type arguments", "crypto.getRandomValues<Uint8Array<ArrayBuffer> >(new Uint8Array(4));"],
+  ["a comment before the closing > of type arguments", "(crypto.getRandomValues<Uint8Array<ArrayBuffer> /* c */>)(new Uint8Array(4));"],
+  ["an awaited parenthesised import: await (import(...))", 'const nc = await (import("node:crypto"));\nexport const b = nc.randomUUID();'],
+  ["a read on the left of a void: (void Date.now(), 0)", "export const t = (void Date.now(), 0);"],
+  ["a generator namespace with ?. : ids?.v4()", 'import * as ids from "uuid";\nexport const id = ids?.v4();'],
+  ["a generator namespace call with ?.(): ids.v4?.()", 'import * as ids from "uuid";\nexport const id = ids.v4?.();'],
   ["a multi-line destructure", "const {\n  UTC,\n  now,\n} = Date;"],
   ["a read after a bracket access that spans two physical lines", 'const v = x\n[\n"k"\n];\nconst t = Date.now();'],
 ];
@@ -985,6 +995,18 @@ export function clockSelfTestChecks(scan = scanSource) {
   checks.push(["a non-null spanning lines keeps the line of a later read", at("const v = foo\n!\n.bar;\nconst t = Date.now();") === "[4]"]);
   checks.push(["a read split across lines is attributed to the line it STARTS on", at("const a = 1;\nconst t = Date\n  .now();\nconst u = 2;") === "[2]"]);
   checks.push(["two physically distinct reads around a multi-line bracket access stay on their own lines", at('const a = crypto.randomUUID(), v = o[\n"k"\n]; const b = crypto.randomUUID();') === "[1,3]"]);
+  checks.push(["a Date() call on the line after a previous read keeps its own line", at("export const a = Date.now(), b =\nDate();") === "[1,2]"]);
+  // One plant per listed generator member, both as a named import and through a namespace: a member
+  // dropped from GENERATOR_PACKAGES turns this red.
+  // The members are written out here (not read from the table) so that dropping one from the table fails.
+  const LISTED_GENERATORS = { uuid: ["v1", "v4", "v6", "v7"], nanoid: ["nanoid"], ulid: ["ulid", "monotonicFactory"], "@paralleldrive/cuid2": ["createId"] };
+  checks.push(["the generator table lists exactly the members the plants name", JSON.stringify(GENERATOR_PACKAGES) === JSON.stringify(LISTED_GENERATORS)]);
+  for (const [pkg, members] of Object.entries(LISTED_GENERATORS)) {
+    for (const m of members) {
+      checks.push([`a generator member is flagged as a named import: ${pkg} ${m}`, flagged(`import { ${m} } from "${pkg}";\nexport const id = ${m}();`)]);
+      checks.push([`a generator member is flagged through a namespace: ${pkg} ${m}`, flagged(`import * as ids from "${pkg}";\nexport const id = ids.${m}();`)]);
+    }
+  }
   checks.push(["a new Date on the line after a previous read keeps its own line", at("export const a = Date.now(), b =\nnew Date();") === "[1,2]"]);
   checks.push(["a destructure is attributed to the line its pattern starts on", at("const a = 1;\nconst {\n  now,\n} = Date;") === "[2]"]);
   checks.push(["a read in column 0 is not merged into the line above", at("const a = Date.now();\nDate.now();") === "[1,2]"]);

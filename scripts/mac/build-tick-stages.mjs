@@ -2949,6 +2949,8 @@ ${fns("say", "bt_now", "bt_heartbeat")}
     ok("F1 ...and the result that follows a `working` heartbeat is delivered at once, so the file never keeps saying `working` after the run is over", lines().length === 3 && /failed: the run failed/.test(lines()[2]), lines().join(" / "));
     hb(T0 + 20, "failed: the run failed");
     ok("F1 ...while an ordinary repeat of that result is held as before", lines().length === 3, lines().join(" / "));
+    hb(T0 + 5000, "cooldown: a model session ended under 3 h ago"); hb(T0 + 5060, "working: a model session is starting");
+    ok("F1 ...and a `working` heartbeat is delivered even a minute after a different, non-working one (the session start must not wait for the 15-minute rule)", lines().length === 5 && /working: a model session is starting/.test(lines()[4] ?? ""), lines().join(" / "));
   });
 
   guard2(ok, "F2 bt_kill_tree", () => {

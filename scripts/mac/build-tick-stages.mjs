@@ -2468,7 +2468,7 @@ bt_heartbeat() { printf 'heartbeat:%s\\n' "$1"; }
       at('[ -f "$PAUSED" ]') > 0 && at('[ -f "$PAUSED" ]') < at('_gap="$(session_gap_left 1)"') && at('_gap="$(session_gap_left 1)"') < at("if ! sg_host_verify_acquire")
         && /finish cooldown "[^"$]*" 0/.test(code) && /session_gap_left 0/.test(code) && /dry-run: a real run would stop here: cooldown/.test(code));
     ok("M4 bt_session_start is called once, immediately before the triage session, and only on the real-run path (after the dry-run's exit)",
-      callLine("bt_session_start").length === 1 && /bt_session_start\nstages triage >> "\$RUN_LOG" 2>&1 < \/dev\/null/.test(code) && at("\nbt_session_start\n") > at("sed 's/^/dry-run: /'"));
+      callLine("bt_session_start").length === 1 && /bt_session_start\nbt_pulse_run "triage is running" "\$TRIAGE_SECONDS" triage_step\n/.test(code) && at("\nbt_session_start\n") > at("sed 's/^/dry-run: /'"));
     ok("M4 ADMIT_GAP_SECONDS is the 3-hour (10800 s) gap the registry row's authorizationEvidence names", /^ADMIT_GAP_SECONDS=10800$/m.test(sh));
   }
 
@@ -2846,7 +2846,7 @@ process.exit(1);\n`);
     const pulseMin = hbNum("HB_PULSE_SECONDS") / 60, changedMin = hbNum("HB_CHANGED_SECONDS") / 60, quietH = hbNum("HB_QUIET_SECONDS") / 3600;
     ok("M1 the row's writeScope names the heartbeat file, lane-deliver heartbeat --no-wake, every exit but six, the exit trap, the working pulse and every throttle (read from the script's own constants: the pulse interval, the changed-result interval, the hour); `#1353, not on mainline yet` is byte-identical (N-4)",
       ws.includes("writes artifacts/agent-heartbeats/mac-build-tick.json through lane-deliver heartbeat --no-wake on every exit of a real run but six named in the script, from the EXIT trap when a signal or a shell error ends a run first (best effort), and every " + pulseMin + " minutes while a capped step (the PR refresh, the staged pipeline, preflight, breadth) runs")
-        && ws.includes("(straight to SignalGrid_Alpha; a repeated result at most once every " + quietH + " hour, a changed result at most once every " + changedMin + " minutes, and at once for a run that acted, for a working pulse and for the result that follows one)")
+        && ws.includes("(straight to SignalGrid_Alpha; a repeated result at most once every " + quietH + " hour, a changed result at most once every " + changedMin + " minutes, and at once for a run that acted, for a working pulse, for the result that follows one and for the exit trap's failed result when it differs from the last one delivered)")
         && !ws.includes("at most one an hour unless the run acted") && pulseMin === 45 && changedMin === 15 && quietH === 1
         && ws.includes("undelivered-hands/ and retried, at most five a run, for 24 hours") && ws.includes("it is PR #1353, not on mainline yet;") && !ws.includes("and raises hands through lane-deliver batch (straight to SignalGrid_Alpha)."));
     const eb = row.escalationBoundary ?? "";
@@ -2869,7 +2869,7 @@ process.exit(1);\n`);
     ok("M1/M5 the lane doc says a paused tick does nothing but heartbeat, and describes the heartbeat, the 12-hour hand, the 3-hour gap and host-local admission without citing the heartbeat file by path (check-cited-paths fails a path that does not exist yet)",
       doc.includes("does nothing but heartbeat while it is paused.") && doc.includes("Every real run ends by heartbeating the mac-build-tick file under artifacts/agent-heartbeats") && doc.includes("**Admission is host-local:**")
         && doc.includes("hourly for a repeated result, every 15 minutes when the result changes, at once for a run that acted") && !doc.includes("at most one an hour unless it acted")
-        && doc.includes("signal or a shell error that ends a run first is reported from its exit trap (best effort:") && doc.includes("a `working` pulse goes out every " + pulseMin + " minutes")
+        && doc.includes("signal or a shell error that ends a run first is reported from its exit trap (at once unless the same report went out within the hour; best effort:") && doc.includes("a `working` pulse goes out every " + pulseMin + " minutes")
         && doc.includes("a reinstall refuses to drop or change any key the installed plist has other than its interval (its arguments, working directory, log paths, KeepAlive, Nice and the rest) unless `--force`") && !doc.includes("agent-heartbeats/mac-build-tick") && doc.includes("PR #1353, not on mainline yet"));
   });
 
@@ -2911,15 +2911,15 @@ process.exit(1);\n`);
     ok("F1 MUTANT: a pulse interval of 9000 s leaves a window past the tolerance, and the same derivation catches it", slow !== sh && worst(slow)[1] >= tolerance, `${worst(slow)[0]}: ${worst(slow)[1]} s`);
     const bare = [...code.replace(shFn(code, "capped") ?? "", "").matchAll(/\bcapped "\$[A-Z_]+"/g)].length;
     ok("F1 every `capped` call and the pipeline's `stages run` sits inside its own step function (refresh_step, preflight_step, breadth_step, pipeline_step), and each step is called through bt_pulse_run",
-      bare === 3 && (code.match(/\bstages run\b/g) ?? []).length === 1
+      bare === 3 && (code.match(/\bstages run\b/g) ?? []).length === 1 && (code.match(/\bstages triage\b/g) ?? []).length === 1 && /^triage_step\(\) \{\n[^}]*stages triage /m.test(code)
         && /^refresh_step\(\) \{\n[^}]*capped "\$REFRESH_SECONDS" env [^}]*pr-refresh\.mjs/m.test(code) && /^preflight_step\(\) \{\n[^}]*capped "\$PREFLIGHT_SECONDS" node scripts\/preflight\.mjs/m.test(code)
         && /^breadth_step\(\) \{\n[^}]*capped "\$BREADTH_SECONDS" pnpm run verify:breadth/m.test(code) && /^pipeline_step\(\) \{\n[^}]*stages run /m.test(code)
-        && ["refresh_step", "pipeline_step", "preflight_step", "breadth_step"].every((fn) => new RegExp(`^\\s*bt_pulse_run "[^"\\n]+" "[^"\\n]+" ${fn}\\b`, "m").test(code)), `bare capped: ${bare}`);
+        && ["refresh_step", "triage_step", "pipeline_step", "preflight_step", "breadth_step"].every((fn) => new RegExp(`^\\s*bt_pulse_run "[^"\\n]+" "[^"\\n]+" ${fn}\\b`, "m").test(code)), `bare capped: ${bare}`);
     // Each pulsed step is told its OWN cap: past that cap plus HB_OVERRUN_SECONDS the pulses stop (a step that outlives its cap is not "working within it": silence is the signal).
     const capArgs = Object.fromEntries([...code.matchAll(/^\s*bt_pulse_run "[^"\n]+" "([^"\n]+)" ([a-z_]+_step)$/gm)].map((m) => [m[2], m[1]]));
     const pipelineCap = Number(bash(`${consts}\necho $((STAGES_SECONDS - TRIAGE_SECONDS))`).stdout.trim());
     ok("F1 each pulsed step is given its own cap (the refresh, preflight and breadth budgets; the pipeline's is the helper's worst case without triage), so a step past its cap plus HB_OVERRUN_SECONDS stops claiming `working`",
-      capArgs.refresh_step === "$REFRESH_SECONDS" && capArgs.preflight_step === "$PREFLIGHT_SECONDS" && capArgs.breadth_step === "$BREADTH_SECONDS" && capArgs.pipeline_step === "$((STAGES_SECONDS - TRIAGE_SECONDS))"
+      capArgs.refresh_step === "$REFRESH_SECONDS" && capArgs.triage_step === "$TRIAGE_SECONDS" && capArgs.preflight_step === "$PREFLIGHT_SECONDS" && capArgs.breadth_step === "$BREADTH_SECONDS" && capArgs.pipeline_step === "$((STAGES_SECONDS - TRIAGE_SECONDS))"
         && pipelineCap === worstCaseStagesSeconds() - STAGES.triage.seconds && /^HB_OVERRUN_SECONDS=\d+$/m.test(sh) && Number(/^HB_OVERRUN_SECONDS=(\d+)$/m.exec(sh)?.[1]) <= 900, JSON.stringify(capArgs));
     const at = (t) => code.indexOf(t);
     ok("F1 an unthrottled `working` heartbeat opens each stretch: in bt_session_start (before triage), after the claim (before the pipeline) and before the gates; each class is `working`, and none carries a pid, sha, stamp or path",
@@ -2927,7 +2927,7 @@ process.exit(1);\n`);
         && at('bt_heartbeat "working: the staged pipeline is starting" working') > at("marker|build) claim ;;") && at('bt_heartbeat "working: the staged pipeline is starting" working') < code.search(/bt_pulse_run "the staged pipeline is running" "[^"\n]+" pipeline_step/)
         && at('bt_heartbeat "working: the gates are starting" working') > at('say "committed $HEAD_SHA') && at('bt_heartbeat "working: the gates are starting" working') < code.search(/bt_pulse_run "preflight is running" "[^"\n]+" preflight_step/)
         && (code.match(/bt_heartbeat "working: [^"$]+" working/g) ?? []).length === 3 && !/bt_heartbeat "working: [^"]*\$[^"]*" working/.test(code.replace(/^bt_pulse_run\(\) \{[\s\S]*?^\}/m, ""))
-        && (code.match(/^\s*bt_pulse_run "[^"$\n]+" "[^"\n]+" [a-z_]+_step$/gm) ?? []).length === 4);
+        && (code.match(/^\s*bt_pulse_run "[^"$\n]+" "[^"\n]+" [a-z_]+_step$/gm) ?? []).length === 5);
   });
 
   guard2(ok, "F1 bt_pulse_run and the working class", () => {
@@ -2962,15 +2962,22 @@ ${vars("HB_QUIET_SECONDS", "HB_CHANGED_SECONDS")}
 ${fns("say", "bt_now", "bt_heartbeat")}
 `;
     const T0 = 1761170000, lines = () => readFileSync(ldlog, "utf8").split("\n").filter(Boolean);
-    const hb = (clock, text) => bash(`${hbPre}bt_heartbeat ${q(text)} ${q(text.split(":")[0])}`, { SG_NOW: String(clock), SG_LD_LOG: ldlog });
+    const hb = (clock, text, mode = "") => bash(`${hbPre}bt_heartbeat ${q(text)} ${q(text.split(":")[0])} ${q(mode)}`, { SG_NOW: String(clock), SG_LD_LOG: ldlog });
     hb(T0, "working: the staged pipeline is running"); hb(T0 + 5, "working: the staged pipeline is running");
     ok("F1 a `working` heartbeat is never held by the throttle (the pulse interval paces it): the same text 5 s apart is delivered twice", lines().length === 2, lines().join(" / "));
     hb(T0 + 10, "failed: the run failed");
     ok("F1 ...and the result that follows a `working` heartbeat is delivered at once, so the file never keeps saying `working` after the run is over", lines().length === 3 && /failed: the run failed/.test(lines()[2]), lines().join(" / "));
     hb(T0 + 20, "failed: the run failed");
     ok("F1 ...while an ordinary repeat of that result is held as before", lines().length === 3, lines().join(" / "));
-    hb(T0 + 5000, "cooldown: a model session ended under 3 h ago"); hb(T0 + 5060, "working: a model session is starting");
-    ok("F1 ...and a `working` heartbeat is delivered even a minute after a different, non-working one (the session start must not wait for the 15-minute rule)", lines().length === 5 && /working: a model session is starting/.test(lines()[4] ?? ""), lines().join(" / "));
+    const TRAP = "failed: the run ended without a result (a signal or a shell error)";
+    hb(T0 + 4000, "cooldown: a model session ended under 3 h ago"); hb(T0 + 4060, TRAP, "fresh");
+    ok("I1 the exit trap's `failed: the run ended without a result` is delivered a minute after a DIFFERENT result (the 15-minute changed-result rule does not hold it: a run that died must say so now)", lines().length === 5 && lines()[4].includes(TRAP), lines().join(" / "));
+    hb(T0 + 4120, TRAP, "fresh");
+    ok("I1 ...but a REPEAT of the trap's text inside the hour is still held (a shell error that aborts every 5-minute run must not become a mainline commit every 5 minutes)", lines().length === 5, lines().join(" / "));
+    hb(T0 + 4060 + 3600, TRAP, "fresh");
+    ok("I1 ...and the hour after its last delivery it goes again", lines().length === 6 && lines()[5].includes(TRAP), lines().join(" / "));
+    hb(T0 + 5000 + 3600, "cooldown: a model session ended under 3 h ago"); hb(T0 + 5060 + 3600, "working: a model session is starting");
+    ok("F1 ...and a `working` heartbeat is delivered even a minute after a different, non-working one (the session start must not wait for the 15-minute rule)", lines().length === 8 && /working: a model session is starting/.test(lines()[7] ?? ""), lines().join(" / "));
   });
 
   guard2(ok, "F2 bt_kill_tree", () => {
@@ -3000,6 +3007,8 @@ bt_heartbeat() { printf 'HB[%s|%s]\\n' "$1" "$2"; }
     ok("F2 a real run that never reached finish heartbeats `failed: the run ended without a result (a signal or a shell error)` once, from the trap", (x.stdout.match(/HB\[/g) ?? []).length === 1 && x.stdout.includes("HB[failed: the run ended without a result (a signal or a shell error)|failed]"), `${x.stdout} ${x.stderr}`);
     x = bash(`${pre}DRY=1 LOCK_HELD=0 BT_FINISHED=0; bt_on_exit`);
     ok("F2 ...a dry-run never does", !/HB\[/.test(x.stdout) && x.status === 0, x.stdout);
+    ok("I1 the trap's report is the only `fresh` heartbeat in the script (the flag that lifts the 15-minute changed-result rule), and the trap passes it",
+      (nonComment(sh).match(/bt_heartbeat "[^\n]*" \w+ fresh\b/g) ?? []).length === 1 && /bt_heartbeat "failed: the run ended without a result \(a signal or a shell error\)" failed fresh\n/.test(shFn(sh, "bt_on_exit") ?? ""), (shFn(sh, "bt_on_exit") ?? "").slice(-200));
     const f = shFn(sh, "finish") ?? "";
     ok("F2 finish() marks the run as finished BEFORE it heartbeats (so the trap does not report a second, false failure on the way out)", /BT_FINISHED=1/.test(f) && f.indexOf("BT_FINISHED=1") < f.indexOf("bt_heartbeat"), f.slice(0, 200));
     const trapAt = sh.search(/^trap bt_on_exit EXIT$/m);
@@ -3046,7 +3055,7 @@ import { execFileSync } from "node:child_process";
 const a = process.argv.slice(2), arg = (k) => a[a.indexOf(k) + 1];
 const rd = arg("--run-dir"); mkdirSync(rd, { recursive: true });
 if (a[0] === "triage") {
-  if (process.env.SG_TRIAGE_HOLD) { writeFileSync(process.env.SG_READY, "x"); execFileSync("sleep", [process.env.SG_TRIAGE_HOLD]); }
+  if (process.env.SG_TRIAGE_HOLD) { if (process.env.SG_PIDFILE) writeFileSync(process.env.SG_PIDFILE, String(process.pid)); writeFileSync(process.env.SG_READY, "x"); execFileSync("sleep", [process.env.SG_TRIAGE_HOLD]); }
   writeFileSync(rd + "/next", "build code\\n");
 } else if (a[0] === "run") {
   if (process.env.SG_RUN_HOLD) { writeFileSync(process.env.SG_PIDFILE, String(process.pid)); writeFileSync(process.env.SG_READY, "x"); execFileSync("sleep", [process.env.SG_RUN_HOLD]); }
@@ -3093,9 +3102,17 @@ if (a[0] === "triage") {
 
     // F2: a signal. During triage (a session run: the stamp must stay `running`, the lock must be released) ...
     t = rig("term-triage");
-    let k = t.killed({ SG_TRIAGE_HOLD: "8" });
+    const aliveT = (pid) => { const s = spawnSync("ps", ["-o", "stat=", "-p", String(pid)], { encoding: "utf8" }).stdout.trim(); return s !== "" && !s.startsWith("Z"); };
+    const triagePidFile = join(t.dir, "triage.pid");
+    const triageHold = String(4000 + (process.pid % 4000)); // a length no other run of this test shares (the box runs several): the pgrep below counts only this run's sleeper
+    let k = t.killed({ SG_TRIAGE_HOLD: triageHold, SG_PIDFILE: triagePidFile });
+    const triagePid = Number(existsSync(triagePidFile) ? readFileSync(triagePidFile, "utf8") : 0);
+    for (let i = 0; i < 30 && aliveT(triagePid); i += 1) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 100);
+    const triageSleepers = spawnSync("pgrep", ["-f", `^sleep ${triageHold}$`], { encoding: "utf8" }).stdout.split("\n").filter(Boolean).filter((pid) => aliveT(pid));
     ok("F2 SIGTERM during triage: the run exits 143, the trap releases the build lock, and it heartbeats `failed: the run ended without a result (a signal or a shell error)` (once)",
       k.rc === 143 && !existsSync(t.lockDir) && t.hb().filter((l) => /\| failed: the run ended without a result \(a signal or a shell error\) \|/.test(l)).length === 1, `${k.rc}\n${k.out}\n${t.hb().join("\n")}`);
+    ok("F2/R2-2 ...and the triage session does not outlive the run: the helper's pid and the process it was waiting on are gone once the lock is released (a model session left running with no lock held would be a second tick's worth of work in the same clone)",
+      triagePid > 0 && !aliveT(triagePid) && triageSleepers.length === 0, `triage ${triagePid} alive ${aliveT(triagePid)} sleepers ${triageSleepers.join(",")}\n${k.out}`);
     ok("F2 ...the session stamp is left at `running` (an interrupted session run restarts the gap as unrecorded; the trap does not invent an outcome), and the session-start heartbeat (`working`) came first",
       /^\d+ running$/.test(readFileSync(join(t.cache, "last-admitted-epoch"), "utf8")) && /\| working: a model session is starting \|/.test(t.hb()[0] ?? ""), `${readFileSync(join(t.cache, "last-admitted-epoch"), "utf8")} / ${t.hb().join(" / ")}`);
     // ... and during step 0, before the lock exists
@@ -3103,6 +3120,13 @@ if (a[0] === "triage") {
     k = t.killed({ SG_LSREMOTE_HOLD: "8" });
     ok("F2 SIGTERM during step 0 (the network read, before the build lock exists): exit 143, no lock directory was created or left, and the trap still heartbeats `failed: the run ended without a result`",
       k.rc === 143 && !existsSync(t.lockDir) && t.hb().length === 1 && /\| failed: the run ended without a result \(a signal or a shell error\) \|/.test(t.hb()[0] ?? ""), `${k.rc}\n${k.out}\n${t.hb().join("\n")}`);
+
+    // I1, whole script: the last delivery was a minute ago under another text, then the run is signalled during step 0: the trap's `failed` still goes out
+    t = rig("term-step0-recent");
+    writeFileSync(join(t.cache, "heartbeat-last"), String(now() - 60)); writeFileSync(join(t.cache, "heartbeat-last-result"), "cooldown: a model session ended under 3 h ago");
+    k = t.killed({ SG_LSREMOTE_HOLD: "8" });
+    ok("I1 SIGTERM during step 0 with the last heartbeat delivered a minute ago under another text: the trap's `failed: the run ended without a result` is DELIVERED (not held by the 15-minute rule)",
+      k.rc === 143 && t.hb().length === 1 && /\| failed: the run ended without a result \(a signal or a shell error\) \|/.test(t.hb()[0] ?? "") && !/heartbeat held/.test(k.out), `${k.rc}\n${k.out}\n${t.hb().join("\n")}`);
 
     // ... and during the pipeline: the step runs in the background (so it can be pulsed), so the trap must take its whole process tree down with the run,
     // or a manual Ctrl-C / `kill` would leave a model session working in the build clone after the lock is released.

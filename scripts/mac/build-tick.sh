@@ -107,9 +107,11 @@
 #      because a session can edit hooks.
 #      Anything else raises a hand and leaves the claim in place for a person.
 #   EVERY exit of a real run but six named at finish() heartbeats artifacts/agent-heartbeats/mac-build-tick.json (M1, subject to the
-#   throttle at bt_heartbeat); a signal or a shell error heartbeats `failed` from the EXIT trap, which also takes a still-running
-#   capped step down with the run; and a capped step (the refresh, the pipeline, preflight, breadth) heartbeats `working` every
-#   HB_PULSE_SECONDS while it runs, so a long session run does not look dead.
+#   throttle at bt_heartbeat); a signal or a shell error heartbeats `failed` from the EXIT trap (a changed result goes at once, the
+#   15-minute rule does not hold it; a repeat of it inside the hour is still held), which also takes a still-running capped step (the
+#   refresh, the triage session, the pipeline, preflight, breadth) down with the run; and a capped step whose cap is longer than the
+#   pulse (the refresh, the pipeline, preflight, breadth) heartbeats `working` every HB_PULSE_SECONDS while it runs, so a long session
+#   run does not look dead (triage, whose cap is below the pulse, is opened by the session-start heartbeat and never pulses).
 #   NAMED CEILINGS of the heartbeat, here on purpose:
 #     - a run that cannot enter REPO_ROOT (`cannot enter`) cannot heartbeat: lane-deliver lives there. It exits 1 and says so; the
 #       staleness the row's tolerance reports is the evidence;
@@ -230,12 +232,13 @@ fail() { say "result: failed: $1"; raise_hand "$1"; finish failed "${BT_FAIL_HB:
 # (--no-wake: a staleness record, never mail). Six exits do not, by design: the non-Mac refusal, the three usage refusals,
 # a cache directory that cannot be made (unreachable under launchd: the launcher's own mktemp there fails first) and the
 # dry-run's end. A signal or a shell error (set -u) ends a run WITHOUT reaching finish: the EXIT trap (bt_on_exit) heartbeats
-# `failed` for that, best effort. The text is a fixed vocabulary (no pid, sha, stamp, path or log name) so a repeat can be
+# `failed` for that, best effort (a changed result goes at once, see bt_heartbeat). The text is a fixed vocabulary (no pid, sha, stamp, path or log name) so a repeat can be
 # held: at most one an hour for a repeated result, one every HB_CHANGED_SECONDS when the result changes, and
 # every run that acted. A delivery that fails never fails the run.
 # A model session can run for hours and the row's tolerance is 3 hours, so a heartbeat written only at exit would make a long
-# run look dead. Every capped step (the PR refresh, the staged pipeline, preflight, breadth) therefore runs under bt_pulse_run,
-# which heartbeats `working: <what>` every HB_PULSE_SECONDS while the step runs, and each stretch opens with an unthrottled
+# run look dead. Every capped step (the PR refresh, the triage session, the staged pipeline, preflight, breadth) therefore runs under bt_pulse_run,
+# which heartbeats `working: <what>` every HB_PULSE_SECONDS while the step runs (a step capped below the pulse, triage, never
+# reaches one; it runs under bt_pulse_run so the exit trap can take it down), and each stretch opens with an unthrottled
 # `working` heartbeat (the session start, the pipeline start, the gates start). build-tick-stages.mjs derives the longest silent
 # window from these constants and the stage caps and fails if it can reach the tolerance.
 HB_QUIET_SECONDS=3600
@@ -262,8 +265,9 @@ bt_now() {
 
 # One heartbeat per exit, through lane-deliver. Held: a repeat of the last delivered text inside an hour, and a CHANGED text inside
 # HB_CHANGED_SECONDS (15 min) of the last delivery. Never held: a run that ACTED, a `working` pulse (bt_pulse_run paces it), and the
-# result that follows a `working` heartbeat (so the file never keeps saying `working` after the run is over). $1 the text
-# ("<class>: <fixed words>"), $2 the class. Never fails the run.
+# result that follows a `working` heartbeat (so the file never keeps saying `working` after the run is over). $3 = fresh (the exit trap's
+# report) lifts the 15-minute rule only: a run that died says so at once, but a shell error that aborts every 5-minute run still waits the
+# hour for a REPEAT, so it cannot become a mainline commit every 5 minutes. $1 the text ("<class>: <fixed words>"), $2 the class. Never fails the run.
 bt_heartbeat() {
   if [ "$DRY" = "1" ]; then say "dry-run: would heartbeat: $1"; return 0; fi
   _hn="$(bt_now)"
@@ -271,11 +275,13 @@ bt_heartbeat() {
   _hr="$(cat "$CACHE/heartbeat-last-result" 2>/dev/null)"
   case "$_hl" in ''|*[!0-9]*|0[0-9]*) _hl="" ;; esac   # a leading zero would be octal in $(( )): unreadable
   _hp=0
+  _hq="$HB_CHANGED_SECONDS"
+  if [ "${3:-}" = "fresh" ]; then _hq=0; fi
   case "$2" in acted|working) _hp=1 ;; esac
   case "$_hr" in working:*) _hp=1 ;; esac
   if [ "$_hp" = "0" ] && [ -n "$_hl" ] && [ "$_hl" -le "$_hn" ]; then
     _ha=$((_hn - _hl))
-    if [ "$_ha" -lt "$HB_QUIET_SECONDS" ] && { [ "$1" = "$_hr" ] || [ "$_ha" -lt "$HB_CHANGED_SECONDS" ]; }; then
+    if [ "$_ha" -lt "$HB_QUIET_SECONDS" ] && { [ "$1" = "$_hr" ] || [ "$_ha" -lt "$_hq" ]; }; then
       say "heartbeat held ($((_ha / 60)) min since the last one): $1"
       return 0
     fi
@@ -370,8 +376,9 @@ bt_kill_tree() {
 # The one EXIT trap, installed below (before step 0, so a signal during the network reads is covered). The build lock is released only by the run
 # that took it (LOCK_HELD, set where the pid is written): a run that skipped because another tick holds it must not remove the holder's pid. A real
 # run that ends WITHOUT reaching finish (a signal, or a shell error under set -u) heartbeats `failed` here; finish() sets BT_FINISHED first, so a
-# normal exit heartbeats once. A capped step still running (the run was signalled mid-step) is taken down first, whole tree, so it cannot outlive the lock
-# it ran under. Best effort: launchd may SIGKILL a run that was asked to stop, and then nothing is written.
+# normal exit heartbeats once. A capped step still running (the run was signalled mid-step: the refresh, the triage session, the pipeline, preflight or
+# breadth, each of which runs under bt_pulse_run) is taken down first, whole tree, so it cannot outlive the lock it ran under. The `failed` report is
+# not held by the 15-minute changed-result rule (I1). Best effort: launchd may SIGKILL a run that was asked to stop, and then nothing is written.
 bt_on_exit() {
   if [ -n "$BT_STEP_PID" ]; then bt_kill_tree "$BT_STEP_PID"; BT_STEP_PID=""; fi
   if [ "$LOCK_HELD" = "1" ]; then
@@ -381,7 +388,7 @@ bt_on_exit() {
   fi
   if [ "$DRY" = "0" ] && [ "$BT_FINISHED" != "1" ]; then
     BT_FINISHED=1
-    bt_heartbeat "failed: the run ended without a result (a signal or a shell error)" failed
+    bt_heartbeat "failed: the run ended without a result (a signal or a shell error)" failed fresh
   fi
   return 0
 }
@@ -955,6 +962,9 @@ stages() {
   node scripts/mac/build-tick-stages.mjs "$_sub" --row "$PICK_ID" --title "$PICK_TITLE" --branch "$BRANCH" \
     --run-dir "$RUN_DIR" --cache "$CACHE" --today "$TODAY" --stamp "$STAMP" --base "$MAINLINE_SHA" "$@"
 }
+triage_step() {
+  stages triage >> "$RUN_LOG" 2>&1 < /dev/null
+}
 pipeline_step() {
   stages run --path "$_verb" --kind "${_rest:-none}" >> "$RUN_LOG" 2>&1 < /dev/null
 }
@@ -972,7 +982,7 @@ claim() {
 rm -f "$RUN_DIR/next" "$RUN_DIR/outcome.json"
 say "triage starting (read-only; tier and cap are the helper's stage table), no git/GitHub credentials"
 bt_session_start
-stages triage >> "$RUN_LOG" 2>&1 < /dev/null
+bt_pulse_run "triage is running" "$TRIAGE_SECONDS" triage_step
 _next="$(head -1 "$RUN_DIR/next" 2>/dev/null)"
 [ -n "$_next" ] || pause_tick "plan row $PICK_ID: triage wrote no $RUN_DIR/next — not claiming a row it could not read" "NO claim was pushed, so this row is still unclaimed"
 _verb="${_next%% *}"

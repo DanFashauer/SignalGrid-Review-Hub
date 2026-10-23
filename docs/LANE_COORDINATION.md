@@ -135,7 +135,8 @@ Every real run ends by heartbeating the mac-build-tick file under artifacts/agen
 through scripts/lane-deliver.mjs (`--no-wake`; deferred, skipped, paused, cooldown, nothing
 buildable, acted or failed: hourly for a repeated result, every 15 minutes when the result
 changes, at once for a run that acted). A signal or a shell error that ends a run first is
-reported from its exit trap (best effort: launchd may kill a run it asked to stop), and while
+reported from its exit trap (at once unless the same report went out within the hour; best
+effort: launchd may kill a run it asked to stop), and while
 a capped step (the PR refresh, the staged pipeline, preflight, breadth) runs inside its cap, a
 `working` pulse goes out every 45 minutes (a step past its cap goes silent, and the silence
 reports it), so the row's 3-hour tolerance catches a loaded job that never

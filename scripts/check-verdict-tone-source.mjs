@@ -1710,7 +1710,7 @@ async function selfTest() {
   await e2e("F5: an extensionless package @import exits 1", 1, "cannot resolve", { "a/src/index.css": `@import "@workspace/verdict-overrides";\n${e2eCss}` });
   await e2e("F5: tailwindcss and tw-animate-css @imports still exit 0", 0, "", { "a/src/index.css": `@import "tailwindcss";\n@import "tw-animate-css";\n${e2eCss}` });
   await e2e("F5: a React 19 <link rel=stylesheet precedence> in a page exits 1", 1, "renders a <link rel=stylesheet>", { "a/src/Page.tsx": 'export const P = () => <link rel="stylesheet" href="/overrides.css" precedence="high" />;\n' });
-  await e2e("O25: an index.html stylesheet link whose URL merely CONTAINS the font host exits 1", 1, "which this gate cannot judge", { "a/index.html": '<link rel="stylesheet" href="https://evil.example/fonts.googleapis.com/x.css">' });
+  await e2e("O25: an index.html stylesheet link whose URL merely CONTAINS the font host exits 1", 1, "which this gate cannot judge", { "a/index.html": '<link rel="stylesheet" href="https://evil.example/?u=https://fonts.googleapis.com/x.css">' });
   await e2e("O26: `rel=\" stylesheet\"` in index.html exits 1", 1, "which this gate cannot judge", { "a/index.html": '<link rel=" stylesheet" href="/overrides.css">' });
   // F6: spellings of a runtime write.
   for (const [label, code] of [
@@ -1744,7 +1744,7 @@ async function selfTest() {
   checks.push(["F2 (`&&` true arm is an intersection): `[allow, deny].includes(o) && o === \"deny\"` takes the deny class", bp('if (["allow", "deny"].includes(outcome) && outcome === "deny") { return "text-status-deny"; } return "text-status-restrict";').length === 0]);
   checks.push(["F2 (`||` false arm is an intersection): `o !== \"deny\" || o !== \"restrict\"` binds no else arm", bp('return outcome !== "deny" || outcome !== "restrict" ? "text-status-allow" : "text-status-allow";').length === 0]);
   checks.push(["L1 MUTANT an escape that decodes to a control character (`.text-status-d\\eny`) is RED", cp(`${goodCss}\n.text-status-d\\eny { color: hsl(var(--decision-allow)); }`).some((m) => /canonical/.test(m))]);
-  checks.push(["F5 MUTANT a font-host URL that merely CONTAINS the host is unresolved; the real host is not", ls5({ "/r/m.tsx": 'import "./i.css";', "/r/i.css": '@import url("https://evil.example/fonts.googleapis.com/x.css");' }, ["/r/m.tsx"]).unresolved.length === 1 && ls5({ "/r/m.tsx": 'import "./i.css";', "/r/i.css": '@import url("https://fonts.googleapis.com/css2?family=Inter");' }, ["/r/m.tsx"]).unresolved.length === 0]);
+  checks.push(["F5 MUTANT a font-host URL that merely CONTAINS the host is unresolved; the real host is not", ls5({ "/r/m.tsx": 'import "./i.css";', "/r/i.css": '@import url("https://evil.example/?u=https://fonts.googleapis.com/x.css");' }, ["/r/m.tsx"]).unresolved.length === 1 && ls5({ "/r/m.tsx": 'import "./i.css";', "/r/i.css": '@import url("https://fonts.googleapis.com/css2?family=Inter");' }, ["/r/m.tsx"]).unresolved.length === 0]);
   checks.push(["O12: an `@import \"@fontsource/inter/400.css\"` inside a stylesheet is not reported (CSS side)", ls5({ "/r/m.tsx": 'import "./i.css";', "/r/i.css": '@import "@fontsource/inter/400.css";' }, ["/r/m.tsx"]).unresolved.length === 0]);
 
   // The direction rule must hold on the REAL tone modules, each of which must exist.

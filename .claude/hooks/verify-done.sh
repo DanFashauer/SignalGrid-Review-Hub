@@ -73,7 +73,26 @@ if [ "$LOCAL" != "$REMOTE" ]; then
     exit 0
   fi
   if [ "$UNPUSHED" != "0" ]; then
-    jq -nc --arg b "$BRANCH" --arg n "$UNPUSHED" '{decision:"block", reason:("\($n) local commit(s) on \($b) are not on origin. Run git push origin HEAD, re-verify with git ls-remote.")}'
+    # ON ORIGIN UNDER ANOTHER NAME (fixed 2026-10-24, fired on every stop of a session for
+    # days). A same-named remote branch can be STALE RESIDUE that the local branch no longer
+    # descends from: the cloud container's checkout sat at a mainline snapshot while
+    # origin/<branch> was a closed PR's September head with 35 commits of its own, so the
+    # count read "50 unpushed" and then, after a fast-forward to mainline, "4813" — while
+    # every one of those commits was on origin under the default branch. The remedy the
+    # message names, `git push origin HEAD`, is a non-fast-forward there, and a force is
+    # forbidden. The missing-branch arm above already treats "HEAD is an ancestor of the
+    # remote default branch" as the success case (the work IS on origin); the same test
+    # decides here. UNKNOWN STAYS FATAL: a default branch git cannot name or fetch, or an
+    # ancestry git cannot prove, falls through to the block below. A branch carrying a
+    # commit no remote ref holds is an ancestor of nothing on origin and still blocks.
+    DEFAULT=$(git ls-remote --symref origin HEAD 2>/dev/null | awk '/^ref:/ {sub("refs/heads/","",$2); print $2}')
+    if [ -n "$DEFAULT" ]; then
+      git fetch -q origin "$DEFAULT" 2>/dev/null
+      if git merge-base --is-ancestor "$LOCAL" "refs/remotes/origin/$DEFAULT" 2>/dev/null; then
+        exit 0
+      fi
+    fi
+    jq -nc --arg b "$BRANCH" --arg n "$UNPUSHED" '{decision:"block", reason:("\($n) local commit(s) on \($b) are not on origin (and HEAD is not on the default branch either). Run git push origin HEAD, re-verify with git ls-remote.")}'
     exit 0
   fi
   # Behind only: nothing of this session's is unpushed, so this is not a done violation.

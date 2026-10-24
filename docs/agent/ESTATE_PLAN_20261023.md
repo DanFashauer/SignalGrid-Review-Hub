@@ -523,7 +523,7 @@ Done when: Each refreshed PR: mergeable_state clean, gating success on its new h
 
 ```bash
 #1165: on the Mac, gh run view 39954968059 --log-failed (real gh CLI) or the Actions UI; find the CRITICAL CVE with a fix in the api image; bump the base layer or dependency; PR; the cloud lands it under DR-037.
-#338: build the SIGNALGRID_MACOS_POSTURE=live flag and a live-posture reader in lib/integrations/src/integrations/macos-posture; force an unreadable probe and show assurance rises; lib/ means the owner merges unless DR-061 is accepted.
+#338: build the live-posture flag the issue names (the macOS posture environment variable, set to live; a proposed flag, nothing reads it yet) and a live-posture reader in lib/integrations/src/integrations/macos-posture; force an unreadable probe and show assurance rises; lib/ means the owner merges unless DR-061 is accepted.
 #1546: post progress on this plan there; keep open.
 #1597: pnpm run hands; pnpm run hand:clear -- <id> "<what unblocked it>" for each hand this plan clears; never close the issue.
 ```

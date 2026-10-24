@@ -49,11 +49,19 @@ REMOTE=$(git ls-remote origin "refs/heads/$BRANCH" | awk '{print $1}')
 # session whose commits were on NO remote branch). The test therefore reads FETCH_HEAD, the
 # object the remote served in this very call, never a remote-tracking ref that may be stale or
 # that a restricted fetch refspec never updates. UNKNOWN STAYS FATAL (golden rule 2).
+# Return codes: 0 on origin's default branch; 1 provably not; 2 could not be checked (no
+# default branch named, or the fetch failed) — the block message must not state an unknown
+# as a negative fact. The fetch names the ref as "refs/heads/<name>" after "--", so a default
+# branch whose name begins with "-" (a remote HEAD pointing at "--upload-pack=…") is a ref,
+# never an option.
 on_remote_default() {
   DEFAULT=$(git ls-remote --symref origin HEAD 2>/dev/null | awk '/^ref:/ {sub("refs/heads/","",$2); print $2}')
-  [ -n "$DEFAULT" ] || return 1
-  git fetch -q origin "refs/heads/$DEFAULT" 2>/dev/null || return 1
+  [ -n "$DEFAULT" ] || return 2
+  git fetch -q origin -- "refs/heads/$DEFAULT" 2>/dev/null || return 2
   git merge-base --is-ancestor "$1" FETCH_HEAD 2>/dev/null
+}
+default_branch_clause() { # $1 = on_remote_default's return code
+  if [ "$1" = "2" ]; then echo "and origin's default branch could not be checked (not named, or its fetch failed)"; else echo "and HEAD is not on origin's default branch either"; fi
 }
 
 if [ -z "$REMOTE" ]; then
@@ -62,10 +70,11 @@ if [ -z "$REMOTE" ]; then
   # fired on the first fully-landed session it ever watched. If HEAD is
   # already an ancestor of the remote default branch, the work is on origin
   # and this is the success case, not the failure case.
-  if on_remote_default "$LOCAL"; then
+  on_remote_default "$LOCAL"; RC=$?
+  if [ "$RC" = "0" ]; then
     exit 0
   fi
-  jq -nc --arg b "$BRANCH" '{decision:"block", reason:("Branch \($b) is not on origin and HEAD is not on the default branch either. Push it, then re-verify with git ls-remote before declaring done.")}'
+  jq -nc --arg b "$BRANCH" --arg c "$(default_branch_clause "$RC")" '{decision:"block", reason:("Branch \($b) is not on origin, \($c). Push it, then re-verify with git ls-remote before declaring done.")}'
   exit 0
 fi
 if [ "$LOCAL" != "$REMOTE" ]; then
@@ -98,10 +107,13 @@ if [ "$LOCAL" != "$REMOTE" ]; then
     # default branch git cannot name or fetch, or an ancestry git cannot prove, falls through
     # to the block below. A branch carrying a commit no remote ref holds is an ancestor of
     # nothing on origin and still blocks.
-    if on_remote_default "$LOCAL"; then
+    on_remote_default "$LOCAL"; RC=$?
+    if [ "$RC" = "0" ]; then
       exit 0
     fi
-    jq -nc --arg b "$BRANCH" --arg n "$UNPUSHED" '{decision:"block", reason:("\($n) local commit(s) on \($b) are not on origin (and HEAD is not on the default branch either). Run git push origin HEAD, re-verify with git ls-remote.")}'
+    # The count is REMOTE..LOCAL against the same-named branch, so against a diverged twin it
+    # can exceed the commits missing from every remote ref; it is the count the push would move.
+    jq -nc --arg b "$BRANCH" --arg n "$UNPUSHED" --arg c "$(default_branch_clause "$RC")" '{decision:"block", reason:("\($n) local commit(s) on \($b) are not on origin/\($b), \($c). Run git push origin HEAD, re-verify with git ls-remote.")}'
     exit 0
   fi
   # Behind only: nothing of this session's is unpushed, so this is not a done violation.

@@ -405,7 +405,9 @@ export function checkLiveRegions(files, defaultPolls, generated = new Set()) {
   // path outside the tree) — there it is followed by name and fails closed. A
   // local identifier that merely shares a polling export's name (`state`) is not.
   const carried = (target, orig) => (target ? polls.has(target) && (exportsOf.get(target)?.has(orig) ?? false) : names.has(orig));
-  const usesPolling = (f) => {
+  // The local names in `f` that carry polling (imported polling hooks/values, or a
+  // polling name used unbound), restricted to those the file actually uses.
+  const pollingLocals = (f) => {
     const local = new Set();
     // `import * as NS from "./polling"`: NS.default carries a followable default.
     for (const m of f.code.matchAll(/import\s+(?:([A-Za-z_$][\w$]*)\s*,\s*)?\*\s+as\s+([A-Za-z_$][\w$]*)\s+from\s*["']([^"']+)["']/g)) {
@@ -431,8 +433,9 @@ export function checkLiveRegions(files, defaultPolls, generated = new Set()) {
     for (const m of f.code.matchAll(/import\s+(?:type\s+)?([^;]*?)\s+from\s*["'][^"']+["']/g)) for (const id of m[1].match(/[A-Za-z_$][\w$]*/g) ?? []) bound.add(id);
     const declares = (n) => new RegExp(`(?:\\b(?:const|let|var|function\\*?|class)\\s+${escapeRegExp(n)}(?![\\w$])|\\b(?:const|let|var)\\s*[\\[{][^=]*(?<![\\w$.])${escapeRegExp(n)}(?![\\w$])[^=]*[\\]}]\\s*=)`).test(body);
     for (const n of names) if (!bound.has(n) && !declares(n)) local.add(n);
-    return [...local].some((n) => new RegExp(`(?<![\\w$])${escapeRegExp(n)}(?![\\w$])`).test(body));
+    return new Set([...local].filter((n) => new RegExp(`(?<![\\w$])${escapeRegExp(n)}(?![\\w$])`).test(body)));
   };
+  const usesPolling = (f) => pollingLocals(f).size > 0;
   for (let changed = true; changed; ) {
     changed = false;
     for (const f of parsed) {
@@ -486,7 +489,14 @@ export function checkLiveRegions(files, defaultPolls, generated = new Set()) {
         ? `${f.rel}: polls but announces through a raw aria-live element — use <LiveRegion> so the gate can check its message and alert against the polled queries (failing closed, WCAG 4.1.3)`
         : `${f.rel}: polls but renders no <LiveRegion> — WCAG 4.1.3`);
     }
-    else failures.push(...checkUnannouncedQueries(f.rel, f.code, queryHookNames(f.code, generated).isHook, defaultPolls, shellSpoken));
+    else {
+      // A wrapper the view imports (`useFeed`, carrying a refetchInterval from its own
+      // module) is a polled query hook here too: its result and failure must reach the
+      // region like a direct `useQuery({ refetchInterval })` call's would.
+      const carriers = new Set([...pollingLocals(f)].flatMap((n) => [n, n.split(".").pop()]));
+      const isHook = queryHookNames(f.code, generated).isHook;
+      failures.push(...checkUnannouncedQueries(f.rel, f.code, (n) => isHook(n) || carriers.has(n), defaultPolls, shellSpoken, carriers));
+    }
   }
   return { polling, failures };
 }
@@ -641,7 +651,11 @@ export function valueRead(expr, src) {
   return false;
 }
 
-export function checkUnannouncedQueries(rel, code, isHook, defaultPolls, shellSpoken = new Set()) {
+export function checkUnannouncedQueries(rel, code, isHook, defaultPolls, shellSpoken = new Set(), carriers = new Set()) {
+  // A call polls when the tree's defaults poll, its own arguments set refetchInterval,
+  // it IS a polling carrier (an imported polling wrapper), or its arguments pass one.
+  const polled = (callee, args) => defaultPolls || /\brefetchInterval\b/.test(args) || carriers.has(callee) ||
+    [...carriers].some((n) => new RegExp(`(?<![\\w$.])${escapeRegExp(n)}(?![\\w$])`).test(args));
   const tags = [];
   for (const m of code.matchAll(/<LiveRegion\b/g)) {
     const t = openingTag(code, m.index);
@@ -665,7 +679,7 @@ export function checkUnannouncedQueries(rel, code, isHook, defaultPolls, shellSp
     if (bound.has(open)) continue;
     const { spans } = callSpans(code.slice(open), /\(/g);
     const args = spans.length ? code.slice(open).slice(spans[0][0], spans[0][1]) : "";
-    if (!defaultPolls && !/\brefetchInterval\b/.test(args)) continue;
+    if (!polled(c[1], args)) continue;
     failures.push(`${rel}:${code.slice(0, c.index).split("\n").length}: polled ${c[1]}() is not bound to a name (\`const { data, isError } = ${c[1]}(…)\`) — the gate cannot follow its result or failure into the <LiveRegion>; failing closed (WCAG 4.1.3)`);
   }
   for (const b of hookBindings(code)) {
@@ -673,7 +687,7 @@ export function checkUnannouncedQueries(rel, code, isHook, defaultPolls, shellSp
     if (!isHook(m[2])) continue;
     const { spans } = callSpans(code.slice(b.open), /\(/g);
     const args = spans.length ? code.slice(b.open).slice(spans[0][0], spans[0][1]) : "";
-    if (!defaultPolls && !/\brefetchInterval\b/.test(args)) continue;
+    if (!polled(m[2], args)) continue;
     // Only state a background refetch changes counts: the result and its error.
     // `isLoading`/`isPending` stay false while a poll refetches, so a region reading
     // only them stays silent through new data and through a failed refresh.
@@ -2148,6 +2162,12 @@ function selfTest() {
       checkChartMotion("c.tsx", 'import { Area } from "recharts";\nconst MyArea = styled(Area)``;\nreturn <MyArea />;').length === 1 &&
       checkIconButtons("x.tsx", 'import * as UI from "@/components/ui/button";\n<UI.Button><Trash2 /></UI.Button>').length === 1 &&
       checkIconButtons("x.tsx", 'const header = <Button>Save</Button>;\n<header><Logo /></header>').length === 0],
+    ["a polling query behind an imported wrapper hook must reach the live region",
+      (() => {
+        const hook = view("t/src/hooks/feed.ts", 'export function useFeed() { return useQuery({ queryKey: ["f"], queryFn: f, refetchInterval: 5000 }); }');
+        return checkLiveRegions([hook, view("t/src/pages/A.tsx", 'import { useFeed } from "../hooks/feed";\nconst { data, isError } = useFeed();\nreturn <LiveRegion message="Ready" alert="" />;')], false).failures.length > 0 &&
+          checkLiveRegions([hook, view("t/src/pages/A.tsx", 'import { useFeed } from "../hooks/feed";\nconst { data, isError } = useFeed();\nreturn <LiveRegion message={`${data?.id}`} alert={isError ? "Down." : ""} />;')], false).failures.length === 0;
+      })()],
     ["stylesheet with reduced-motion passes",
       checkReducedMotion("a.css", "@media (prefers-reduced-motion: reduce) { *, ::before, ::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; } }").length === 0],
   ];

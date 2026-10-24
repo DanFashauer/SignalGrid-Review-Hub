@@ -19807,9 +19807,9 @@
     {
       "type": "library",
       "name": "zod",
-      "version": "3.25.76",
-      "bom-ref": "pkg:npm/zod@3.25.76",
-      "purl": "pkg:npm/zod@3.25.76",
+      "version": "4.6.5",
+      "bom-ref": "pkg:npm/zod@4.6.5",
+      "purl": "pkg:npm/zod@4.6.5",
       "licenses": [
         {
           "license": {

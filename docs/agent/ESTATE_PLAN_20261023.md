@@ -289,7 +289,7 @@ DR-037's five conditions, all on the current head: (1) gating check-run passed; 
 | PR | head | gating check-run | next |
 | --- | --- | --- | --- |
 | #1225 Mac shell scripts: bash-3.2 rule and Darwin-guard rule in th | mac/sim-scripts-bash32-darwin @ 216d0dc4 | 110401326290 (success) | refresh (11 ahead, 2691 behind); fix the round-4 fix-needed findings (refuter overturned ship) |
-| #1323 Live demo: pnpm run demo:live plays signal → decision → tick | mac/demo-live @ 79945354 | 110234300580 (success) | refresh (7 ahead, 2764 behind); resolve 1 thread; fix CodeQL and phase-pr-evidence |
+| #1323 Live demo: pnpm run demo:live plays signal → decision → tick | mac/demo-live @ 79945354 | 110234300580 (success) | refresh (7 ahead, 2764 behind); resolve 1 thread; fix CodeQL and phase-pr-evidence; the demo:live script in the title no longer exists in any package.json (historical) |
 | #1353 pr-refresh: a no-model bot that re-merges mainline into dirt | mac/pr-refresh @ cb62b1bd | 110239541864 (success) | refresh (5 ahead, 2758 behind); resolve 2 CodeQL threads; fix the round-1 fix-needed review |
 | #1354 docs: RESOURCE_INTAKE row for the Cole Medin team-brain vide | mac/intake-row-cole-medin-team-brain @ 1c857ef1 | 110242829040 (success) | mergeable clean; fix the two documentation findings (round-1 fix-needed) and phase-pr-evidence; the Mac holds it exclusively (lane mail 2026-10-23T20:03Z) |
 | #1356 scan:estate finds sibling checkouts and scans one only when  | mac/scan-estate-sibling-locator @ 03462b7e | 110430902495 (success) | refresh (9 ahead, 2671 behind); fix the round-2 fix-needed findings |

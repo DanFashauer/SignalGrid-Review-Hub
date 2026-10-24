@@ -40,18 +40,30 @@ fi
 BRANCH=$(git rev-parse --abbrev-ref HEAD)
 LOCAL=$(git rev-parse HEAD)
 REMOTE=$(git ls-remote origin "refs/heads/$BRANCH" | awk '{print $1}')
+
+# on_remote_default <sha>: succeeds ONLY when origin names a default branch, that branch is
+# fetched NOW, and the tip just fetched contains <sha>. Every other outcome is a failure —
+# including a fetch that fails (Codex on PR #1648, reproduced: with the remote default REWOUND
+# past the local tip and the fetch failing, the stale remote-tracking ref still held the tip,
+# so an unchecked fetch followed by a test against refs/remotes/origin/<default> passed a
+# session whose commits were on NO remote branch). The test therefore reads FETCH_HEAD, the
+# object the remote served in this very call, never a remote-tracking ref that may be stale or
+# that a restricted fetch refspec never updates. UNKNOWN STAYS FATAL (golden rule 2).
+on_remote_default() {
+  DEFAULT=$(git ls-remote --symref origin HEAD 2>/dev/null | awk '/^ref:/ {sub("refs/heads/","",$2); print $2}')
+  [ -n "$DEFAULT" ] || return 1
+  git fetch -q origin "refs/heads/$DEFAULT" 2>/dev/null || return 1
+  git merge-base --is-ancestor "$1" FETCH_HEAD 2>/dev/null
+}
+
 if [ -z "$REMOTE" ]; then
   # The branch ref being gone from origin is NOT always an unpushed branch:
   # GitHub deletes the head branch when its PR merges, and this hook then
   # fired on the first fully-landed session it ever watched. If HEAD is
   # already an ancestor of the remote default branch, the work is on origin
   # and this is the success case, not the failure case.
-  DEFAULT=$(git ls-remote --symref origin HEAD 2>/dev/null | awk '/^ref:/ {sub("refs/heads/","",$2); print $2}')
-  if [ -n "$DEFAULT" ]; then
-    git fetch -q origin "$DEFAULT" 2>/dev/null
-    if git merge-base --is-ancestor "$LOCAL" "refs/remotes/origin/$DEFAULT" 2>/dev/null; then
-      exit 0
-    fi
+  if on_remote_default "$LOCAL"; then
+    exit 0
   fi
   jq -nc --arg b "$BRANCH" '{decision:"block", reason:("Branch \($b) is not on origin and HEAD is not on the default branch either. Push it, then re-verify with git ls-remote before declaring done.")}'
   exit 0
@@ -82,15 +94,12 @@ if [ "$LOCAL" != "$REMOTE" ]; then
     # message names, `git push origin HEAD`, is a non-fast-forward there, and a force is
     # forbidden. The missing-branch arm above already treats "HEAD is an ancestor of the
     # remote default branch" as the success case (the work IS on origin); the same test
-    # decides here. UNKNOWN STAYS FATAL: a default branch git cannot name or fetch, or an
-    # ancestry git cannot prove, falls through to the block below. A branch carrying a
-    # commit no remote ref holds is an ancestor of nothing on origin and still blocks.
-    DEFAULT=$(git ls-remote --symref origin HEAD 2>/dev/null | awk '/^ref:/ {sub("refs/heads/","",$2); print $2}')
-    if [ -n "$DEFAULT" ]; then
-      git fetch -q origin "$DEFAULT" 2>/dev/null
-      if git merge-base --is-ancestor "$LOCAL" "refs/remotes/origin/$DEFAULT" 2>/dev/null; then
-        exit 0
-      fi
+    # (on_remote_default, one definition for both arms) decides here. UNKNOWN STAYS FATAL: a
+    # default branch git cannot name or fetch, or an ancestry git cannot prove, falls through
+    # to the block below. A branch carrying a commit no remote ref holds is an ancestor of
+    # nothing on origin and still blocks.
+    if on_remote_default "$LOCAL"; then
+      exit 0
     fi
     jq -nc --arg b "$BRANCH" --arg n "$UNPUSHED" '{decision:"block", reason:("\($n) local commit(s) on \($b) are not on origin (and HEAD is not on the default branch either). Run git push origin HEAD, re-verify with git ls-remote.")}'
     exit 0

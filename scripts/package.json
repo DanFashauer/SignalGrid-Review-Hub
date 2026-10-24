@@ -215,7 +215,7 @@
     "@workspace/verdict-attestation": "workspace:*",
     "@workspace/webauthn": "workspace:*",
     "@workspace/work-context": "workspace:*",
-    "ioredis": "^5.4.1",
+    "ioredis": "^6.0.0",
     "pg": "^8.23.0",
     "@workspace/secrets": "workspace:*"
   },

@@ -100,6 +100,9 @@ function estateSpecFromEnv(): Omit<EstateSpec, "subjects" | "connector"> {
   };
 }
 
+/** Largest whole-second interval whose millisecond form fits Node's timer (TIMEOUT_MAX = 2^31-1). */
+const ESTATE_REFRESH_MAX_SECONDS = Math.floor(2147483647 / 1000);
+
 /**
  * `SIGNALGRID_ESTATE_REFRESH_SECONDS` — how often the estate core RE-READS posture.
  *
@@ -107,15 +110,18 @@ function estateSpecFromEnv(): Omit<EstateSpec, "subjects" | "connector"> {
  * before this knob existed. Anything else must be a positive integer and REFUSES AT
  * BOOT otherwise — a deploy that believed it was refreshing hourly and was not is the
  * silent failure this whole file is written against. A floor of 30s keeps a typo
- * (`5` meant as minutes) from hammering the source.
+ * (`5` meant as minutes) from hammering the source. A ceiling of 2147483s keeps
+ * `seconds * 1000` within Node's `setInterval` limit (2^31-1 ms): past it Node clamps the
+ * delay to 1ms, so a "monthly" 2592000 would re-read the source ~1000x a second, defeating
+ * the floor. Refused, never silently clamped.
  */
 export function estateRefreshSecondsFromEnv(env: NodeJS.ProcessEnv = process.env): number | undefined {
   const raw = env["SIGNALGRID_ESTATE_REFRESH_SECONDS"];
   if (raw === undefined || raw.trim() === "") return undefined;
   const text = raw.trim();
-  if (!/^\d+$/.test(text) || Number(text) < 30) {
+  if (!/^\d+$/.test(text) || Number(text) < 30 || Number(text) > ESTATE_REFRESH_MAX_SECONDS) {
     throw new Error(
-      `SIGNALGRID_ESTATE_REFRESH_SECONDS must be an integer of at least 30 seconds, got "${raw}" — ` +
+      `SIGNALGRID_ESTATE_REFRESH_SECONDS must be an integer of 30 to ${ESTATE_REFRESH_MAX_SECONDS} seconds, got "${raw}" — ` +
         "refusing to start rather than running with a refresh interval nobody meant.",
     );
   }

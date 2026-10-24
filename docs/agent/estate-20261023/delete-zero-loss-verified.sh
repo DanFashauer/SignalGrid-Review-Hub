@@ -15,6 +15,9 @@ REPO="DanFashauer/SignalGrid-Review-Hub"
 MAIN="origin/SignalGrid_Alpha"
 APPLY=0; [ "${1:-}" = "--apply" ] && APPLY=1
 git fetch --prune origin >/dev/null 2>&1 || { echo "REFUSE: git fetch failed; nothing done"; exit 2; }
+# Every zero-loss check below compares against mainline. In a single-branch clone the fetch succeeds
+# but $MAIN never exists; git cherry / rev-list then FAIL, and a failed check must never read as a pass.
+git rev-parse --verify --quiet "$MAIN^{commit}" >/dev/null 2>&1 || { echo "REFUSE: $MAIN does not resolve in this checkout (single-branch clone?); the zero-loss checks need mainline. Nothing done"; exit 2; }
 [ "$(git rev-parse --is-shallow-repository 2>/dev/null)" = "true" ] && echo "WARN: shallow clone; a refusal here may be conservative, a pass is reliable"
 remote_sha() { # exact ref match; peeled sha for an annotated tag, else the direct sha; exit 2 when the read FAILED
   out=$(git ls-remote origin "$1" </dev/null 2>/dev/null) || return 2
@@ -28,13 +31,21 @@ while read -r b tip; do
   if [ "$live" != "$tip" ]; then echo "SKIP    $b tip moved: $live != measured $tip"; SKIPPED=$((SKIPPED+1)); continue; fi
   n=$(gh api "repos/$REPO/pulls?state=open&head=DanFashauer:$b&per_page=100" --jq 'length' </dev/null 2>/dev/null) || n="ERR"
   if [ "$n" != "0" ]; then echo "SKIP    $b open-PR check: $n (an error is not an empty result)"; SKIPPED=$((SKIPPED+1)); continue; fi
-  if ! git merge-base --is-ancestor "$tip" "$MAIN" 2>/dev/null; then
-    plus=$(git cherry "$MAIN" "$tip" | grep -c '^+')
+  # Each history command's exit status is checked on its own: a command that FAILS (unknown ref,
+  # missing object, bad clone) is a SKIP, never an empty answer that counts as "nothing unique".
+  if git merge-base --is-ancestor "$tip" "$MAIN" 2>/dev/null; then :; else
+    rc=$?
+    if [ "$rc" != "1" ]; then echo "SKIP    $b merge-base failed (exit $rc); a failed check is not a pass"; SKIPPED=$((SKIPPED+1)); continue; fi
+    cherry=$(git cherry "$MAIN" "$tip" 2>/dev/null) || { echo "SKIP    $b git cherry failed; a failed check is not a pass"; SKIPPED=$((SKIPPED+1)); continue; }
+    plus=$(printf '%s\n' "$cherry" | grep -c '^+')
     if [ "$plus" != "0" ]; then echo "SKIP    $b has $plus unapplied patch(es)"; SKIPPED=$((SKIPPED+1)); continue; fi
+    merges=$(git rev-list --merges "$MAIN..$tip" 2>/dev/null) || { echo "SKIP    $b git rev-list failed; a failed check is not a pass"; SKIPPED=$((SKIPPED+1)); continue; }
     bad=0
-    for m in $(git rev-list --merges "$MAIN..$tip"); do
-      [ -n "$(git diff-tree --cc --no-commit-id "$m")" ] && bad=1
+    for m in $merges; do
+      hunk=$(git diff-tree --cc --no-commit-id "$m" 2>/dev/null) || { bad=2; break; }
+      [ -n "$hunk" ] && bad=1
     done
+    if [ "$bad" = "2" ]; then echo "SKIP    $b git diff-tree failed; a failed check is not a pass"; SKIPPED=$((SKIPPED+1)); continue; fi
     if [ "$bad" = "1" ]; then echo "SKIP    $b a merge commit carries its own hunk"; SKIPPED=$((SKIPPED+1)); continue; fi
   fi
   if [ "$APPLY" != "1" ]; then echo "WOULD   $b (tag archive/$b at $tip, then delete)"; WOULD=$((WOULD+1)); continue; fi

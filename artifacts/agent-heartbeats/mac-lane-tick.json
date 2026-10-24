@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-10-24T06:24:49.494Z",
-  "result": "skipped: origin unreachable (offline?); unread=16 oldest=15d to mac; raised-hands=17 overdue=11"
+  "firedAt": "2026-10-24T06:29:59.483Z",
+  "result": "quiet; objective: escalate; unread=16 oldest=15d to mac; raised-hands=17 overdue=11"
 }

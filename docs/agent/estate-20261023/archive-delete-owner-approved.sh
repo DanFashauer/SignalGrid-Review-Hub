@@ -4,7 +4,8 @@
 # i.e. the uncommented "<branch> <tip>" lines of the file given as $1 (owner-abandon-candidates.txt).
 # Each: tip must equal the measured tip; no open PR may use it; never SignalGrid_Alpha, lane/mailbox,
 # mac/build-row-*, dependabot/*. The tip is tagged archive/<branch> and READ BACK before the delete
-# (docs/BRANCH_HYGIENE.md); a tag that fails leaves the branch alone. Idempotent. Bash 3.2 safe.
+# (docs/BRANCH_HYGIENE.md); a tag that fails leaves the branch alone. The delete itself carries a lease
+# on the approved tip, so a branch that moved after the read is refused, never deleted. Idempotent. Bash 3.2 safe.
 #   bash archive-delete-owner-approved.sh owner-abandon-candidates.txt "owner said X at <UTC>"           # dry run
 #   bash archive-delete-owner-approved.sh owner-abandon-candidates.txt "owner said X at <UTC>" --apply
 set -u
@@ -31,10 +32,16 @@ while read -r b tip rest; do
   have=$(remote_sha "refs/tags/$tag") || have="ERR"
   if [ -z "$have" ]; then git push origin "$tip:refs/tags/$tag" </dev/null >/dev/null 2>&1; have=$(remote_sha "refs/tags/$tag") || have="ERR"; fi
   if [ "$have" != "$tip" ]; then echo "SKIP    $b archive tag missing or wrong"; SKIPPED=$((SKIPPED+1)); continue; fi
-  git push origin --delete "$b" </dev/null >/dev/null 2>&1
+  # The delete carries a LEASE on the approved tip: if any lane pushed to the branch between the
+  # read above and this push, the remote refuses it ("stale info") and nothing is deleted.
+  if ! git push --force-with-lease="refs/heads/$b:$tip" origin ":refs/heads/$b" </dev/null >/dev/null 2>&1; then
+    echo "SKIP    $b delete refused: the remote tip moved after the read, or the push failed (lease on $tip); nothing deleted"; SKIPPED=$((SKIPPED+1)); continue
+  fi
   still=$(remote_sha "refs/heads/$b") || still="ERR"
   if [ -n "$still" ]; then echo "FAIL    $b still present"; SKIPPED=$((SKIPPED+1)); continue; fi
-  echo "DELETED $b (restore: git push origin $tag:refs/heads/$b)"; DELETED=$((DELETED+1))
+  # The restore command must resolve in ANY clone: fetch the archive tag (the tip's object) first, then
+  # push the saved tip sha as the source. A remote-only tag name is not a valid local push source.
+  echo "DELETED $b (restore: git fetch origin refs/tags/$tag:refs/tags/$tag && git push origin $tip:refs/heads/$b)"; DELETED=$((DELETED+1))
 done < "$F"
 echo "== abandoned ($WHO): deleted=$DELETED done-already=$DONE would-delete=$WOULD skipped=$SKIPPED"
 [ "$SKIPPED" = "0" ] || exit 1

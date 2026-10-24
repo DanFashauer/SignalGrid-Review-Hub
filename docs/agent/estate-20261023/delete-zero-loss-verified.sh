@@ -5,10 +5,11 @@
 # Each branch is re-checked at run time and SKIPPED (fail closed) on any doubt:
 #   tip moved since measuredAt | an open PR uses it as head | a PR lookup errored |
 #   not an ancestor of mainline AND git cherry shows a '+' | a merge commit in its unique
-#   range carries a hunk neither parent has | the archive tag cannot be created or read back.
+#   range carries a hunk neither parent has | the archive tag cannot be created or read back |
+#   the remote tip moved between the read and the delete (the delete carries a lease on the measured tip).
 # Idempotent: a branch already gone prints DONE. Bash 3.2 safe. Commands in the loop read /dev/null so they cannot eat the list.
 #   bash delete-zero-loss-verified.sh           # dry run, deletes nothing
-#   bash delete-zero-loss-verified.sh --apply   # archive tag archive/<branch>, read it back, then delete
+#   bash delete-zero-loss-verified.sh --apply   # archive tag archive/<branch>, read it back, then delete under lease
 set -u
 REPO="DanFashauer/SignalGrid-Review-Hub"
 MAIN="origin/SignalGrid_Alpha"
@@ -41,10 +42,16 @@ while read -r b tip; do
   have=$(remote_sha "refs/tags/$tag") || have="ERR"
   if [ -z "$have" ]; then git push origin "$tip:refs/tags/$tag" </dev/null >/dev/null 2>&1; have=$(remote_sha "refs/tags/$tag") || have="ERR"; fi
   if [ "$have" != "$tip" ]; then echo "SKIP    $b archive tag missing or wrong ($have)"; SKIPPED=$((SKIPPED+1)); continue; fi
-  git push origin --delete "$b" </dev/null >/dev/null 2>&1
+  # The delete carries a LEASE on the measured tip: if any lane pushed to the branch between the
+  # read above and this push, the remote refuses it ("stale info") and nothing is deleted.
+  if ! git push --force-with-lease="refs/heads/$b:$tip" origin ":refs/heads/$b" </dev/null >/dev/null 2>&1; then
+    echo "SKIP    $b delete refused: the remote tip moved after the read, or the push failed (lease on $tip); nothing deleted"; SKIPPED=$((SKIPPED+1)); continue
+  fi
   still=$(remote_sha "refs/heads/$b") || still="ERR"
   if [ -n "$still" ]; then echo "FAIL    $b still present after delete"; SKIPPED=$((SKIPPED+1)); continue; fi
-  echo "DELETED $b (restore: git push origin $tag:refs/heads/$b)"; DELETED=$((DELETED+1))
+  # The restore command must resolve in ANY clone: fetch the archive tag (the tip's object) first, then
+  # push the saved tip sha as the source. A remote-only tag name is not a valid local push source.
+  echo "DELETED $b (restore: git fetch origin refs/tags/$tag:refs/tags/$tag && git push origin $tip:refs/heads/$b)"; DELETED=$((DELETED+1))
 done <<'LIST'
 claude/build-carrier-topology-finding d68b4916cbc59905c9113fb4ccd6b14c170a3012
 claude/build-gate-survivors-liveness-scratch-git 531e141fdc7a4a1ce9b5154baa43c6f1e4254a49

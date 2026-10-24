@@ -48,6 +48,8 @@
 // metadata. CIS benchmark rule content is licensed and is not reproduced anywhere
 // in this repository. No CIS certification, conformance, or partnership is claimed.
 
+import type { FamilyAction } from "../action-ladder";
+
 /** Which page of the published catalog a row is filed under. PRESENTATION ONLY —
  *  carried as evidence, never part of identity. The catalog files "Microsoft
  *  Windows Server 2019 STIG" v3.0.0 under the base section and its successor
@@ -283,7 +285,7 @@ export type BenchmarkSelectionPosture =
   | "assessment_empty" // the counts reconcile and nothing was evaluated
   | "selection_unverified"; // any axis unknown / malformed / uncovered
 
-export type BenchmarkSelectionAction = "none" | "monitor" | "step_up" | "alert" | "restrict" | "escalate";
+export type BenchmarkSelectionAction = FamilyAction;
 
 export type BenchmarkSelectionReasonCode =
   | "GRADED_AGAINST_REQUIRED_BENCHMARK"

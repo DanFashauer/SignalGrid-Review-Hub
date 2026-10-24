@@ -40,6 +40,8 @@
 // follows the HR Open Standards vocabulary (worker, shift, punch, site) so a
 // future canonical-schema mapping is a rename, not a redesign.
 
+import type { FamilyAction } from "../action-ladder";
+
 /** Where the worker stands against their reported shift window, at the caller's
  *  reference instant. DERIVED, never believed. */
 export type ScheduleStanding =
@@ -117,7 +119,7 @@ export type ShiftContextPosture =
   | "site_mismatch" // the shift places the worker at a different site
   | "labor_unverified"; // any axis unknown / malformed / uncovered
 
-export type ShiftContextAction = "none" | "monitor" | "step_up" | "alert" | "restrict" | "escalate";
+export type ShiftContextAction = FamilyAction;
 
 export type ShiftContextReasonCode =
   | "ON_SHIFT_AND_ON_CLOCK"

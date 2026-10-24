@@ -21,6 +21,8 @@
 // posture. It takes no action of its own: distribution and enforcement stay with
 // MDM; SignalGrid gates.
 
+import type { FamilyAction } from "../action-ladder";
+
 /** Where the installed app came from, as REPORTED BY MDM (never self-measured by
  *  the app — an app attesting to its own provenance proves nothing). `managed` =
  *  installed through the managed channel (MDM InstallApplication / ABM). */
@@ -112,7 +114,7 @@ export type AppUpdatePosture =
   | "version_unknown" // currency could not be positively established
   | "unverified"; // malformed / unreadable report
 
-export type AppUpdateAction = "none" | "monitor" | "step_up" | "alert" | "restrict" | "escalate";
+export type AppUpdateAction = FamilyAction;
 
 export type AppUpdateReasonCode =
   | "CURRENT_MANAGED"

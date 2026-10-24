@@ -12,6 +12,7 @@
 // confirmed state and for nothing else. A single unconfirmed input reaching a grant is a
 // mismatch, and the proof fails.
 import {
+  DUAL_CONTROL_OUTCOMES,
   evaluateDualControl,
   normalizeDualControlRequest,
   type AuthorizerAttestationRaw,
@@ -404,6 +405,6 @@ const d1 = normalizeDualControlRequest("det", CONFIRMED);
 check("evaluator is deterministic", JSON.stringify(evaluateDualControl(d1)) === JSON.stringify(evaluateDualControl(d1)));
 
 const total = passed + failures.length;
-console.log(`figures=normalizedCombos=${normRes.combos},rawCombos=${rawRes.combos},grantingCombos=${normRes.noneCount},authorizers=2,ladderRungs=3`);
+console.log(`figures=normalizedCombos=${normRes.combos},rawCombos=${rawRes.combos},grantingCombos=${normRes.noneCount},authorizers=2,ladderRungs=${DUAL_CONTROL_OUTCOMES.length}`);
 console.log(`summary=${failures.length === 0 ? "pass" : "fail"} (${passed}/${total})`);
 if (failures.length > 0) { console.error("Failed checks:"); for (const f of failures) console.error(`  - ${f}`); process.exitCode = 1; }

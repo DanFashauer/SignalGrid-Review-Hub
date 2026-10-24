@@ -34,6 +34,8 @@
 // this normalized model. This dimension grades the method/registration/policy
 // posture an MDM or the grid-collected macOS report can actually observe.
 
+import type { FamilyAction } from "../action-ladder";
+
 /** How far Platform SSO registration has progressed on this Mac. `device_only` =
  *  the device is registered but this user's credential is not established. */
 export type PssoRegistration = "user" | "device_only" | "none" | "unknown";
@@ -105,7 +107,7 @@ export type PlatformSsoPosture =
   | "registration_partial"
   | "unverified";
 
-export type PlatformSsoAction = "none" | "monitor" | "step_up" | "alert" | "restrict" | "escalate";
+export type PlatformSsoAction = FamilyAction;
 
 export type PlatformSsoReasonCode =
   | "PHISHING_RESISTANT_CONFIRMED"

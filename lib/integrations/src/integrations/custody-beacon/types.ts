@@ -28,6 +28,8 @@
 // It normalizes an already-resolved beacon reading + the device's reachability. It takes
 // no action of its own; it reports a posture the fabric fuses fail-closed.
 
+import type { FamilyAction } from "../action-ladder";
+
 /** The recovery beacon's coarse zone verdict, relative to the device's custody
  *  boundary (facility/ward/depot geofence the beacon network resolves against).
  *  `departing` = moving away from the zone but not yet clear of it. */
@@ -79,7 +81,7 @@ export type CustodyBeaconPosture =
   | "location_unknown"
   | "unverified"; // malformed / unreadable
 
-export type CustodyBeaconAction = "none" | "monitor" | "step_up" | "alert" | "restrict" | "escalate";
+export type CustodyBeaconAction = FamilyAction;
 
 export type CustodyBeaconReasonCode =
   | "CUSTODY_CONFIRMED"

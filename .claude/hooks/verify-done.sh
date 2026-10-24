@@ -58,10 +58,16 @@ on_remote_default() {
   DEFAULT=$(git ls-remote --symref origin HEAD 2>/dev/null | awk '/^ref:/ {sub("refs/heads/","",$2); print $2}')
   [ -n "$DEFAULT" ] || return 2
   git fetch -q origin -- "refs/heads/$DEFAULT" 2>/dev/null || return 2
-  git merge-base --is-ancestor "$1" FETCH_HEAD 2>/dev/null
+  git merge-base --is-ancestor "$1" FETCH_HEAD 2>/dev/null; rc=$?
+  [ "$rc" = "0" ] && return 0
+  # rc 1 is "provably not" only in a full clone: a shallow clone's graft can cut the ancestry
+  # between the tip and the fetched default, so there rc 1 means "cannot see", and any rc other
+  # than 0 or 1 is an error. Both are "could not be checked" (round-2 refute of PR #1648, N1).
+  if [ "$rc" != "1" ] || [ "$(git rev-parse --is-shallow-repository 2>/dev/null)" = "true" ]; then return 2; fi
+  return 1
 }
 default_branch_clause() { # $1 = on_remote_default's return code
-  if [ "$1" = "2" ]; then echo "and origin's default branch could not be checked (not named, or its fetch failed)"; else echo "and HEAD is not on origin's default branch either"; fi
+  if [ "$1" = "2" ]; then echo "and origin's default branch could not be checked (not named, its fetch failed, or this clone is shallow)"; else echo "and HEAD is not on origin's default branch either"; fi
 }
 
 if [ -z "$REMOTE" ]; then

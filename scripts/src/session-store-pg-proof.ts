@@ -61,6 +61,31 @@ async function main() {
   check("end marks ended", (await store.end("tenant_northwind", "sess_pg_a"))?.status === "ended");
   check("tenant isolation: cross-tenant end returns null", (await store.end("tenant_atlas", "sess_pg_b")) === null);
 
+  // ── refresh RACING end: the losing refresh reports nothing ───────────────────
+  // refresh() reads the row, then UPDATEs. Force end() to commit exactly between
+  // the two (deterministic, not timing-dependent). Without `AND status='active'`
+  // the UPDATE still matched, and the response echoed an `active` session that
+  // had already ended — which the route then audited as a session.refresh.
+  await store.start(mk("sess_pg_race", "tenant_northwind", 900));
+  const realGet = store.get.bind(store);
+  let endedInWindow = false;
+  (store as any).get = async (t: string, i: string, n: number) => {
+    const s = await realGet(t, i, n);
+    if (!endedInWindow && i === "sess_pg_race") {
+      endedInWindow = true;
+      await store.end(t, i);
+    }
+    return s;
+  };
+  const lost = await store.refresh("tenant_northwind", "sess_pg_race", 1800, T0 + 5_000);
+  (store as any).get = realGet;
+  check("race: end() committed between refresh's read and write", endedInWindow);
+  check("race: the losing refresh returns null, never an `active` session", lost === null);
+  const raced = await admin.query("SELECT status, expires_at FROM sessions WHERE id = 'sess_pg_race'");
+  check("race: the row ends `ended`", raced.rows[0]?.status === "ended");
+  check("race: the losing refresh did not move expires_at",
+    raced.rows[0] && new Date(raced.rows[0].expires_at).getTime() === T0 + 900 * 1000);
+
   // ── CONCURRENCY: N parallel starts all persist ──────────────────────────────
   await admin.query("TRUNCATE sessions");
   const N = 20;

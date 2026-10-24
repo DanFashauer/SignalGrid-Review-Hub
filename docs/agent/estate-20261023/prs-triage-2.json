@@ -3,7 +3,7 @@
  "repository": "DanFashauer/SignalGrid-Review-Hub",
  "mainlineBranch": "SignalGrid_Alpha",
  "mainlineShaLocalRef": "2a46fd16fdc61c144c3f42e4bcc3b5389ae94f07",
- "mainlineShaApiAtRun": "4057f56b912edd168d81689628f33e1196f29fca",
+ "mainlineShaAtRun": "4057f56b912edd168d81689628f33e1196f29fca",
  "mainlineNote": "API mainline is one heartbeat-only commit (artifacts/agent-heartbeats/mac-lane-tick.json) past the local origin ref used for cherry/ancestor checks; no PR here touches that file.",
  "classifierWorktree": "wt-alpha detached at 077dc308816bd7306b93b0f1c894c2cb26c80019",
  "precedenceUsed": "OWNER > MAC > NEEDS_WORK > LAND_DR037 (the task fixed OWNER>LAND, NEEDS_WORK>LAND, MAC>NEEDS_WORK; OWNER vs MAC and OWNER vs NEEDS_WORK were unspecified and resolved OWNER first, as in prs-triage-1.json; CLOSE_CANDIDATE was applied to #1336 only where superseded evidence is shown). The OWNER list in the task also names launch-claims, the launch profile and docs/DECISION_RECORDS.md, which the classifier reports as SAFETY_MACHINERY only for #1337, #1338 and #1322; those were treated as OWNER on the task's rule. See alsoApplies on each record.",

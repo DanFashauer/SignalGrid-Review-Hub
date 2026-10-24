@@ -24,10 +24,18 @@ import { dirname, resolve } from "node:path";
 // `handedOut` is the run's own ledger: freePort never repeats a number within one run
 // (the OS may re-offer a just-closed probe port), and the port-hygiene check at the
 // end reads this ledger instead of scanning the file's text for constants.
+// The probe binds the WILDCARD address, the same one the server binds (`app.listen(port)`
+// is 0.0.0.0 / ::), never a fixed 127.0.0.1. A port can be free on loopback and taken on
+// the wildcard: an outbound connection from the box's own interface holds <eth0>:p, so
+// bind(127.0.0.1:p) succeeds while the server's bind(0.0.0.0:p) reads EADDRINUSE and the
+// test's fetch ECONNREFUSED. Measured 2026-10-02 23:0xZ on the cloud box: a sibling
+// process held 15,509 ESTABLISHED sockets (55% of the ephemeral range) and every
+// secondary server in this file lost its port in four runs out of four; probing the
+// wildcard made the same file pass 486/486.
 const handedOut = [];
 const freePort = () => new Promise((resolvePort) => {
   const probe = netCreateServer();
-  probe.listen(0, "127.0.0.1", () => {
+  probe.listen(0, () => {
     const p = probe.address().port;
     probe.close(() => {
       if (handedOut.includes(p)) return resolvePort(freePort());

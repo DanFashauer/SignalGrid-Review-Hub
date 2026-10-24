@@ -777,6 +777,7 @@ export const SURFACES = [
   ],
     deferred: [
       "mcp-server",
+      "signalgrid-cli",
       "ios:SignalGridOperator",
       // The v4 additions. Each is real and proven where it can be (Android core
       // unit-tested without an emulator; dock firmware CI-compiled for its real

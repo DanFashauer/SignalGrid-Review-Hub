@@ -537,6 +537,10 @@
         }
       ]
     },
+    "artifacts/signalgrid-cli": {
+      "path": "artifacts/signalgrid-cli",
+      "reads": []
+    },
     "artifacts/signalgrid-desktop": {
       "path": "artifacts/signalgrid-desktop",
       "reads": [

@@ -1,0 +1,12 @@
+{
+  "id": "2026-10-24-repository-ruleset-25774497-brain-canonical-ci-a",
+  "raisedAt": "2026-10-24T08:12:22.477Z",
+  "origin": "cloud",
+  "doing": "Landing green lane PRs under DR-037 (steward keepalive #1654, forward-build heartbeats, the plan re-measure #1655) and keeping the routine heartbeats within their tolerance.",
+  "blockedBy": "Repository ruleset 25774497 'Brain canonical CI and approval gate' (created 2026-10-24T07:43:11Z on refs/heads/SignalGrid_Alpha, bypass_actors empty) requires an approving review from someone other than the last pusher plus strict up-to-date status checks; every actor in this repository is the one account DanFashauer, bot reviews are not approvals, and the lane never approves (DR-037 c5). PUT /pulls/1654/merge returned 405 at 07:47Z. The pull_request rule also refuses the Mac tick's direct heartbeat pushes (none has landed since 07:30:41Z).",
+  "need": "Owner: delete or disable ruleset 25774497, or add a bypass actor for the owner/admin role or the lanes' GitHub App and remove require_last_push_approval and the strict up-to-date policy. Until then no PR can merge and the steward (10:30Z), Mac tick (10:30Z) and forward-build (12:12Z) heartbeats pass their tolerances.",
+  "whoCanUnblock": "owner",
+  "domain": "repository-rules",
+  "status": "open",
+  "routedTo": null
+}

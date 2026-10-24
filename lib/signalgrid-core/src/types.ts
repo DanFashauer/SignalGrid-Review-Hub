@@ -889,11 +889,13 @@ export interface WebhookDelivery {
  * downstream could tell. The union is derived from this array instead, so the
  * compile-time and run-time answers cannot disagree.
  *
- * The first seven are the original ledger plus the step_up answer (#869). The last eight are the session-puck
- * lifecycle (DR-043): a credential presented, a dock seated, an identity proven, a
- * posture read, a session opened, the dock broken, the session suspended, the
- * credential revoked. Each is what the system KNEW at that instant, recorded once and
- * never rewritten — the chain digest is over the canonical body, as it already was.
+ * The first seven are the original ledger plus the step_up answer (#869). The last nine are the session-puck
+ * lifecycle (DR-043, Puck 6): a credential presented, a dock seated, an identity proven, a
+ * posture read, a session opened, the dock broken, the device RETURNED by its holder
+ * (Puck 6 — a planned return is not a removal, so it is not recorded as one), the session
+ * suspended, the credential revoked. Each is what the system KNEW at that instant,
+ * recorded once and never rewritten — the chain digest is over the canonical body, as it
+ * already was.
  */
 export const AUDIT_EVENT_TYPES = [
   "decision.evaluated",
@@ -909,6 +911,7 @@ export const AUDIT_EVENT_TYPES = [
   "posture.observed",
   "session.opened",
   "dock.removed",
+  "dock.returned",
   "session.suspended",
   "credential.revoked",
 ] as const;
@@ -916,7 +919,7 @@ export const AUDIT_EVENT_TYPES = [
 export type AuditEventType = (typeof AUDIT_EVENT_TYPES)[number];
 
 /**
- * The eight puck-lifecycle members. They carry a stricter admission rule than the
+ * The nine puck-lifecycle members. They carry a stricter admission rule than the
  * original seven (see `appendAudit`): each must name the decision it evidences, because
  * a lifecycle event with no decision behind it is a log line, not a ledger entry.
  */
@@ -927,6 +930,7 @@ export const PUCK_LIFECYCLE_EVENT_TYPES = [
   "posture.observed",
   "session.opened",
   "dock.removed",
+  "dock.returned",
   "session.suspended",
   "credential.revoked",
 ] as const;

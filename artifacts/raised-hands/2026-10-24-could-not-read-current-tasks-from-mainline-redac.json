@@ -1,0 +1,13 @@
+{
+  "id": "2026-10-24-could-not-read-current-tasks-from-mainline-redac",
+  "raisedAt": "2026-10-24T00:06:26.462Z",
+  "origin": "mac",
+  "doing": "the unattended build tick (scripts/mac/build-tick.sh)",
+  "blockedBy": "could not read current tasks[] from mainline <REDACTED-BLOB>:docs/agent/objective-state.json: objective intake refuses unknown: the tick heartbeat does not name verdict \"escalate\" — this state is not what the Mac is deriving",
+  "need": "a person on the Mac to read the log named in where, fix the cause or re-rank the row, and delete the claim branch it names when the row should be retried",
+  "whoCanUnblock": "mac lane",
+  "domain": "lane",
+  "status": "open",
+  "routedTo": null,
+  "where": "launchd log ~/Library/Logs/signalgrid-build-tick.log"
+}

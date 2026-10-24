@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { useGetDashboardMetrics, useListLatestSignals } from "@workspace/api-client-react";
+import { LiveRegion } from "@/components/LiveRegion";
 import {
   LayoutDashboard, Activity, Shield, Puzzle, Settings, Bell,
   ChevronRight, Wifi, Database, Clock, AlertTriangle, CheckCircle2,
@@ -20,7 +21,7 @@ export default function DesktopLayout({ children }: { children: React.ReactNode 
   const [location] = useLocation();
   const [time, setTime] = useState(new Date());
   const [notifOpen, setNotifOpen] = useState(false);
-  const { data: metrics } = useGetDashboardMetrics({ window: "1h" });
+  const { data: metrics, isError: metricsError } = useGetDashboardMetrics({ window: "1h" });
   const { data: signals, isError: feedUnreachable, isLoading: feedLoading } = useListLatestSignals({ limit: 5 });
 
   useEffect(() => {
@@ -40,6 +41,19 @@ export default function DesktopLayout({ children }: { children: React.ReactNode 
 
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-background">
+      {/* The shell polls the signal feed on every page: its alert count and an
+          unreachable feed are announced here, not only drawn on the bell. */}
+      <LiveRegion
+        message={[
+          alertsKnown ? `${anomalous.length} active ${anomalous.length === 1 ? "alert" : "alerts"}${anomalous[0] ? `; first listed: ${anomalous[0].status} ${anomalous[0].signalType} on ${anomalous[0].deviceId}, received ${new Date(anomalous[0].receivedAt).toLocaleTimeString()}` : ""}.` : "",
+          // The status bar's catalog, latency and decision figures poll too.
+          metrics && !metricsError ? `Last hour: ${metrics.activeIntegrations}/${metrics.totalIntegrations} integrations active, ${metrics.totalDecisions.toLocaleString()} decisions, ${(metrics.allowRate * 100).toFixed(1)}% allow, ${Math.round(metrics.avgLatencyMs)}ms average latency.` : "",
+        ].filter(Boolean).join(" ")}
+        alert={[
+          feedUnreachable ? "Signal feed unreachable — alert state unknown." : "",
+          metricsError ? "Status-bar metrics could not be refreshed — catalog, latency and decision figures may be stale." : "",
+        ].filter(Boolean).join(" ")}
+      />
 
       {/* Title bar */}
       <div className="titlebar h-9 bg-[hsl(222.2_84%_3.2%)] border-b border-border flex items-center px-3 gap-3 shrink-0 select-none">
@@ -77,6 +91,8 @@ export default function DesktopLayout({ children }: { children: React.ReactNode 
           {/* Notification bell */}
           <button
             onClick={() => setNotifOpen(o => !o)}
+            aria-label={!alertsKnown ? "Alerts, state unknown" : `Alerts, ${anomalous.length} active`}
+            aria-expanded={notifOpen}
             className="relative p-1 rounded hover:bg-muted/50 transition-colors"
           >
             <Bell className="w-3.5 h-3.5 text-muted-foreground" />
@@ -154,7 +170,7 @@ export default function DesktopLayout({ children }: { children: React.ReactNode 
           <div className="absolute right-0 top-0 w-80 h-full bg-card border-l border-border flex flex-col z-50">
             <div className="flex items-center justify-between p-4 border-b border-border">
               <span className="text-sm font-semibold">Alerts</span>
-              <button onClick={() => setNotifOpen(false)} className="text-muted-foreground hover:text-foreground text-xs">✕</button>
+              <button onClick={() => setNotifOpen(false)} aria-label="Close alerts" className="text-muted-foreground hover:text-foreground text-xs">✕</button>
             </div>
             <div className="flex-1 overflow-auto p-3 space-y-2">
               {feedUnreachable ? (

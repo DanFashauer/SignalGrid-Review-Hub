@@ -4,9 +4,11 @@ import { formatNumber, formatLatency, formatRate } from "@/lib/format";
 import { ResponsiveContainer, BarChart, Bar, Legend, Tooltip, XAxis } from "recharts";
 import { StatusDot } from "@/components/StatusDot";
 import { FixtureLabel } from "@/components/FixtureLabel";
+import { usePrefersReducedMotion } from "@/hooks/use-reduced-motion";
 import { HATCH_PATTERN, OUTCOME_CHART_MARK, OUTCOME_ORDER, chartFill, hatchPatternId, type Outcome } from "@/lib/outcome-tone";
 
 export default function Overview() {
+  const reduceMotion = usePrefersReducedMotion();
   const [time, setTime] = useState(new Date().toLocaleTimeString());
 
   useEffect(() => {
@@ -71,6 +73,7 @@ export default function Overview() {
                 {OUTCOME_ORDER.map(o => (
                   <Bar
                     key={o}
+                    isAnimationActive={!reduceMotion}
                     dataKey={OUTCOME_CHART_MARK[o].dataKey}
                     name={OUTCOME_CHART_MARK[o].label}
                     stackId="a"

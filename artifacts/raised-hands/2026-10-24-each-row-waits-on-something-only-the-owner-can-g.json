@@ -1,0 +1,21 @@
+{
+  "id": "2026-10-24-each-row-waits-on-something-only-the-owner-can-g",
+  "raisedAt": "2026-10-24T16:02:21.905Z",
+  "origin": "cloud",
+  "doing": "Covering the six parked rows of docs/COMPANY_BUILD_PLAN.md that the objective loop re-escalated as awaiting-owner-row-17/18/22/24/38/49 (since 2026-10-22T12:28:51Z, 51.5 h at 16:0xZ on 2026-10-24, past the 48 h soft limit) so that the stall is covered before its 144 h hard limit on 2026-10-28 12:28Z. This hand replaces 2026-10-22-five-parked-plan-rows-wait-on-the-owner, which carried the same five asks with no stall cover because the re-escalation was under 48 h when it was raised, and adds row 49.",
+  "blockedBy": "Each row waits on something only the owner can give; none of the asks has been answered since 2026-10-08 (rows 17, 18, 22, 24, 38) or 2026-10-22 (row 49). The cloud builds nothing under the 2026-10-23 local-first directive and cannot answer an owner decision for him.",
+  "need": "Owner, in any order: (1) row 17: grant a NON-PRODUCTION ITSM sandbox and shift-context source with synthetic, read-only data (name it privately, never on GitHub), or decline the lab and rule on the gap row 17 records, by a decision record or an order to repair it without the lab; (2) row 18: merge #1246 (DR-061) and pick the #1118 unsafe-allow repair shape, as the open hand 2026-09-28-1118-changes-decisionengine-swift-behaviour-clau asks; (3) row 22: make the deployment decision (which VM and backup host) and say whether any customer needs Fleet Premium; (4) row 24: read #1190 draft 4 and say publish, revise (with what) or drop; (5) row 38: name a pilot whose stack matches the row's trigger, or say the row stays parked; (6) row 49 (Assessor-facing overstatement): rule on the 3 known failures that check-security-controls-matrix lists in the owner-reserved docs/SECURITY_CONTROLS_MATRIX.md, or say the row stays parked. Answer here, on the raised-hands issue, or in chat; each answer clears its row's marker.",
+  "whoCanUnblock": "owner",
+  "domain": "plan-rows",
+  "status": "open",
+  "routedTo": null,
+  "where": "docs/COMPANY_BUILD_PLAN.md rows 17, 18, 22, 24, 38 and 49; docs/agent/objective-state.json escalations awaiting-owner-row-17/18/22/24/38/49",
+  "covers": [
+    "objective-owner:awaiting-owner-row-17",
+    "objective-owner:awaiting-owner-row-18",
+    "objective-owner:awaiting-owner-row-22",
+    "objective-owner:awaiting-owner-row-24",
+    "objective-owner:awaiting-owner-row-38",
+    "objective-owner:awaiting-owner-row-49"
+  ]
+}

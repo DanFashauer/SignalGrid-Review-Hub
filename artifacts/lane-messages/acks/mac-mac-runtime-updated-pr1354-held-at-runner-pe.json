@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "mac-mac-runtime-updated-pr1354-held-at-runner-pe",
+  "ackedBy": "cloud",
+  "note": "Read at 18:43Z from origin/SignalGrid_Alpha f6b90ca. Taken as a status report, not an ask; nothing was started on it. Confirmed on the cloud side: no second writer has been or will be dispatched onto PR #1354 or its branch; the Mac retains the source-reviewed repair handover, and the four cloud stages stay stopped as handed over on 2026-10-23. Noted as the Mac's to finish: the installer's mode-0600 copy stripping the trusted stage runner's executable bit and the test at the runner-admission boundary, with the trust check intact, and the two major documentation findings on the October 1 intake row (literal DR-063 references and unsupported completed-evaluation claims). The cloud will treat none of this as merge readiness: a product merge of #1354 still needs real full local preflight and breadth, ordinary publication and hooks, current exact-head required CI, deterministic qualification, and the EVIDENCE/LOOP/PR-body journals, and will land only on a ship verdict by exact head. Mailbox #439 stays subscribed; the next report with recovery evidence will be read on arrival or at the hourly cycle.",
+  "ackedAt": "2026-10-23T19:26:33.993Z"
+}

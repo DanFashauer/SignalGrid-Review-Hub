@@ -4723,3 +4723,67 @@ Recorded final review/workflow disposition: Independent primary source review re
 Recorded merge process: Normal merge commit using fresh full expected head SHA; no author approval, force push, branch deletion or check bypass.
 
 Verdict: holds for the pinned merge identity, source and prior-landing ancestry, and declared wrapper/helper configuration. Git committedAt is 2026-10-22T00:05:38Z; the recorded GitHub server merged_at is 2026-10-22T00:05:39Z. The recorded exact-head local gates, final check results and independent review support the landing within their stated coverage; these fixed reads do not rerun them. The local graph/source reads, the recorded local gates, the GitHub check/merge receipts and the live host observations are distinct evidence. This landing does not re-mint the existing artifact f3b55f7173ed5d5365a102ebadadef2e0e1dfcea, measured on clean source a70c36b3e0e897d8a80a863e7228417f729e487f. Manifest v97 remains aa9ce381438ecb26874cdbe60b82a9339821d6b540f176e122291202a6b3885b in that receipt; its 141 passed proof records, two notRecorded proofs, three stepsExcluded entries, and Linux-VM native attestation on exact a70 remain the earlier receipt's coverage, not new measurements of D or its merge. No new overall readiness, owner-real-in-hand attestation, completion of pending product/PR work, or later journal landing is asserted.
+
+
+## 2026-10-22 — #1593 aligns the Mac build tick's retry cadence, outage hand and loaded-status record, landed at 69258e30433f1a20c31975d50d746065032097c4 from head 79c403004707627f7b0431725c48dd713775af18
+
+Recorded exact-head local pre-push commands and receipt output:
+```text
+head=79c403004707627f7b0431725c48dd713775af18
+node scripts/preflight.mjs
+Preflight PASSED — everything it runs is green.
+PREFLIGHT_EXIT=0 duration_seconds=957.95 finished=2026-10-22T19:27:26.501852Z
+pnpm run verify:breadth
+Breadth lane PASSED — 58 breadth proofs green (deferred families, doctrine documents, and the DR-005 decision-palette design gate).
+BREADTH_EXIT=0 duration_seconds=36.34 finished=2026-10-22T19:28:02.915113Z
+```
+The retained clean-head snapshots bracket both gates and normal publication; all four operational source hashes stayed unchanged from reviewed source-fix head 6a3b7b18e771f5a5ee704e93d74cee65dcd485ff. The branch incorporated canonical 07ce83a0a30d79c49c948da05890160011b8c793 by a normal merge before those gates. Both repository generators exited 0 and produced no changed outputs. An ordinary push with hooks intact exited 0, and the remote was verified at that exact head at 2026-10-22T19:28:07.918305Z. The enclosing shared-host guardian completed normal cleanup; no other host holder was stopped or bypassed. These receipts do not rerun the commands here.
+
+Local coverage ceiling: Build (all packages) and Browser E2E (review console, website, admin) were unavailable on darwin-arm64 and did not run. Backup/restore and DB-role-split self-skipped with DATABASE_URL unset; the workflow-red-streak report self-skipped with GITHUB_TOKEN unset. None is counted as passed by the local run. The earlier interrupted validation and the publication guard's refusal remain unsuccessful historical attempts; they do not supply this combined-head result. Both fresh gates used project-pinned offline pnpm 10.28.1 and approved esbuild 0.28.2 without changing dependencies or the lockfile.
+
+Recorded GitHub API observations, separate from local commands (final pre-merge receipt at 2026-10-22T19:51:55.884173+00:00; merge/default-branch confirmation at 2026-10-22T19:52:50.633445+00:00):
+```text
+#1593 head=79c403004707627f7b0431725c48dd713775af18 final-premerge-unresolved-threads=0
+120039369859 Typecheck, build, and proof scaffold head=79c403004707627f7b0431725c48dd713775af18 status=completed conclusion=success completed=2026-10-22T19:50:15Z workflow=39840335177
+120039369379 Required docs and unsafe-claim sanity: completed / success
+120039369834 Breadth lane (deferred families + doctrine docs): completed / success
+120039369798 Durable persistence (Postgres audit ledger): completed / success
+120039369843 Prod stack (Podman): completed / success
+120039369933 Prod stack (Docker compose smoke): completed / success
+120039362022 PR — Mac-only checks (full-clone provenance, preflight on macOS): queued / no conclusion at final pre-merge observation
+rollup: 18 contexts fully enumerated; 14 success, 3 skipped, 1 queued; no failure conclusion
+#1593 state=MERGED merged=true merge=69258e30433f1a20c31975d50d746065032097c4 merged_at=2026-10-22T19:52:31Z
+merge-parents=fcdf27323337ac9dbacc997f7838b31eb1aba984 79c403004707627f7b0431725c48dd713775af18
+canonical-at-confirmation=69258e30433f1a20c31975d50d746065032097c4
+git-object-committedDate=2026-10-22T19:52:30Z
+```
+The three skipped contexts were Nightly — full harness + preflight, Nightly — MCP lane, and CycloneDX SBOM sync (dependabot); skips are not passes. The optional Mac-only job was queued, not passed, at this observation. All six jobs in the main SignalGrid CI run completed success on the tested head. The three source-review threads were resolved. The sole formal Codex review in the recorded review list names earlier head 100682a473ab4ca662baed7c0f73d78fb75e8370; it is not represented as a new review of 79c40300. The final compare receipt found only artifacts/agent-heartbeats/mac-lane-tick.json between the tested canonical pin 07ce83a0 and pre-merge fcdf2732, with no counted-surface movement. The merge call used the freshly re-read full expected head; no author approval, force push, branch deletion or check bypass is recorded. Git committedDate and GitHub merged_at differ by one second.
+
+Fixed Git graph/source reads executed at 2026-10-22T20:07:29.153449+00:00; the following fixed commands each exited 0:
+Command:
+```bash
+git --no-replace-objects show --no-patch --format='commit=%H%nparents=%P%ncommittedAt=%cI%nsubject=%s' 69258e30433f1a20c31975d50d746065032097c4
+git --no-replace-objects merge-base --is-ancestor 79c403004707627f7b0431725c48dd713775af18 69258e30433f1a20c31975d50d746065032097c4
+git --no-replace-objects merge-base --is-ancestor fcdf27323337ac9dbacc997f7838b31eb1aba984 69258e30433f1a20c31975d50d746065032097c4
+git --no-replace-objects merge-base --is-ancestor 3c892ad96dded5d8e4630d4dc63c12e3fcf02bb0 69258e30433f1a20c31975d50d746065032097c4
+git --no-replace-objects show 79c403004707627f7b0431725c48dd713775af18:scripts/mac/build-tick.sh | shasum -a 256
+git --no-replace-objects show 79c403004707627f7b0431725c48dd713775af18:scripts/mac/install-build-tick.sh | shasum -a 256
+git --no-replace-objects show 79c403004707627f7b0431725c48dd713775af18:docs/LANE_COORDINATION.md | shasum -a 256
+git --no-replace-objects show 79c403004707627f7b0431725c48dd713775af18:docs/agent/scheduled-routines.json | shasum -a 256
+```
+Output:
+```text
+commit=69258e30433f1a20c31975d50d746065032097c4
+parents=fcdf27323337ac9dbacc997f7838b31eb1aba984 79c403004707627f7b0431725c48dd713775af18
+committedAt=2026-10-22T15:52:30-04:00
+subject=Merge pull request #1593: align Mac build-tick cadence and loaded status
+d3caf9b528fb609a98aab7d2799b20a3a98cf37cf761f8d38fe4243d9a6d37fc  -
+165fdb63aa634bab8d34c63ccd844faa8ae613e2b9fa3b308ebcd3ed38caa66a  -
+8b1f10fbfb04c23f6220f20af9156a2f707a22f22d8127ffb8da52653fccfdf5  -
+f439e1aecf147d834bcfca3a12e3243f8d290fedbe1470337b160dab4802f7fd  -
+```
+Recorded exits: commands 1–8 each exited 0; all stderr was empty. Commands 2–4 have no stdout on successful ancestry checks. These reads identify the graph and source; they do not repeat preflight, breadth or a loaded-service observation.
+
+The four operational files set a five-minute build retry, align the origin-outage hand to 144 consecutive failed scheduled attempts, update the active registry/coordination record, and make installer status distinguish configured, installed and actually loaded intervals. The 12-hour figure assumes scheduled five-minute attempts; host sleep, delays and missed firings can extend elapsed time. The dated 2026-10-22T15:11:45Z activation firing found all three ranked tasks already claimed: it witnesses a firing, not a completed product build. Source alone does not establish current loaded service state, continuous execution or unattended success. This landing does not run the installer or alter host-specific admission wiring.
+
+Verdict: the recorded local and GitHub receipts support the exact landing and its stated coverage; the fixed Git reads independently confirm the graph and unchanged four-file source. This entry records #1593; it makes no claim that the later record-publishing PR has merged or passed its own checks. It does not re-mint artifact f3b55f7173ed5d5365a102ebadadef2e0e1dfcea, measured on clean a70c36b3e0e897d8a80a863e7228417f729e487f. Its 141 passed proof records, two notRecorded proofs, three stepsExcluded entries and Linux-VM native attestation remain that earlier receipt's coverage. No new readiness figure, owner-real-in-hand attestation, production claim, completion of other PR/backlog work, or validation of the later record-publishing head is inferred.

@@ -23,7 +23,7 @@
       "state": "met",
       "measured": {
         "pct": 100,
-        "reason": "20/20 bound proofs/steps current (passed, matching manifest fingerprint and, for proofs, source digest) — green on both halves, 1 day(s) old, manifest aa9ce381438e; launch items fully current 28/28"
+        "reason": "20/20 bound proofs/steps current (passed, matching manifest fingerprint and, for proofs, source digest) — green on both halves, 0 day(s) old, manifest aa9ce381438e; launch items fully current 28/28"
       },
       "source": "scripts/check-readiness-figure.mjs --json (.details.evidence)"
     },
@@ -95,7 +95,38 @@
     }
   ],
   "needsExecutor": [],
-  "unmeasured": [],
+  "unmeasured": [
+    {
+      "rowId": "29",
+      "title": "Assurance-pass advisories, batch one (2026-08-21)",
+      "measuredAt": "2026-10-09",
+      "reason": "stamp 2026-10-09 is older than 14 days"
+    },
+    {
+      "rowId": "43",
+      "title": "Falsifiability is enforced only for the connector tier",
+      "measuredAt": "2026-10-09",
+      "reason": "stamp 2026-10-09 is older than 14 days"
+    },
+    {
+      "rowId": "50",
+      "title": "Operability claims without live evidence",
+      "measuredAt": "2026-10-09",
+      "reason": "stamp 2026-10-09 is older than 14 days"
+    },
+    {
+      "rowId": "80",
+      "title": "The Rust Assist client is the strongest of the three, and it is worth recording that a clean read happened.",
+      "measuredAt": "2026-10-09",
+      "reason": "stamp 2026-10-09 is older than 14 days"
+    },
+    {
+      "rowId": "180",
+      "title": "The permission gate credits a call inside `if (false)`.",
+      "measuredAt": "2026-10-09",
+      "reason": "stamp 2026-10-09 is older than 14 days"
+    }
+  ],
   "awaiting": [
     {
       "rowId": "17",
@@ -141,6 +172,12 @@
     }
   ],
   "escalations": [
+    {
+      "id": "plan-rows-unmeasured",
+      "clears": "cloud",
+      "asks": "5 open row(s) in docs/COMPANY_BUILD_PLAN.md carry no `re-measured YYYY-MM-DD` stamp within 14 days and were ranked from nothing — a row nobody measured against the tree is an unknown input: 29, 43, 50, 80, 180. Measure each against the tree; close it, or restamp it with what was measured (a row whose AWAITING OWNER / BLOCKED ON LAB marker is expired or future-dated needs the blocker re-checked and the marker re-dated or removed — restamping alone does not rank it)",
+      "since": "2026-10-23T00:27:33.214Z"
+    },
     {
       "id": "awaiting-owner-row-17",
       "clears": "owner",
@@ -190,14 +227,14 @@
     "pendingSimRequests": [],
     "badRequestFiles": [],
     "needsExecutorCount": 0,
-    "unmeasuredCount": 0,
+    "unmeasuredCount": 5,
     "awaitingCount": 6,
     "openRows": 52,
     "partialRows": 5
   },
   "staleAfterHours": 3,
-  "derivedAt": "2026-10-23T02:32:21.260Z",
-  "derivedAtCommit": "03155d2f9547f439fa3bf1962f6d96de3fcce622",
-  "workingTreeCleanAtEntry": true,
-  "decisionAddress": "97a0c6a50d6dd43d89c10db480f1a267af7d676c5b71bfee439877216f4c21d6"
+  "derivedAt": "2026-10-24T05:59:09.523Z",
+  "derivedAtCommit": "27bf4fb785ffbccb9e2a27c38b8e3486e5216a24",
+  "workingTreeCleanAtEntry": false,
+  "decisionAddress": "181184f7c7e1ba757bca62fe8f64bf61459df899a8a07eb86e74bbfdfffccf3e"
 }

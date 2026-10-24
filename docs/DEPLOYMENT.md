@@ -348,12 +348,64 @@ see `docs/BACKUP_AND_RESTORE.md` § "The runtime role"). The sequence is:
 database it re-applies the idempotent role split, so a dropped grant is fixed
 by exactly the command the error messages name.
 
+**Upgrading a database an earlier revision migrated: re-run `db:migrate`
+before rolling the new image.** Decisions and evidence snapshots are now
+immutable by privilege — the runtime role holds `SELECT, INSERT` on them,
+no longer `UPDATE` — and `/readyz` refuses while the runtime still holds a
+forbidden privilege (`UPDATE`, `DELETE`, `TRUNCATE`, `REFERENCES` or
+`TRIGGER` on those tables; `DELETE`, `TRUNCATE`, `REFERENCES` or `TRIGGER`
+on `sessions`). A database not re-migrated still grants `UPDATE` on the
+decision tables, so under the new image `/readyz` answers 503 and every
+route that reads or writes decisions (`/v1/decisions/evaluate`,
+`/v1/authorize`, the decision reads) answers 500 until `pnpm run db:migrate`
+runs. Neither response body names the cause; the server log carries the
+`FORBIDDEN` error when a decision route hits it. Migrate before rolling the
+image (§ "Upgrade and rollback" names the window that leaves for old pods).
+The same re-apply revokes `TEMPORARY` on the database from `PUBLIC`:
+every non-owner role loses ambient temp tables (the same radius as the
+`CREATE` revoke), so grant `TEMPORARY` explicitly to any other role that
+needs it. The split now also refuses any trigger on a managed table and any
+grant (inherited from `PUBLIC` or column-level included) that lets the
+runtime role read or write a relation outside the four managed tables and
+the ledger sequence. It names each one; revoke or drop it, then re-run.
+
+One behavior change follows from immutability. The demo core runs on a
+fixed clock and its decision ids come from a per-process counter, so a
+restarted demo process mints the same ids again. Re-saving an identical
+decision still answers 200; a different decision under a re-minted id now
+fails with a 500 (the server log names the immutable-record collision)
+instead of silently overwriting the stored one.
+
 ## Upgrade and rollback
 
 Upgrades: migrate first (admin credential), then roll the API image. The
 migration runner applies only versions the database has not recorded.
 
-Rollbacks: rolling the API image back is always safe against the same schema.
+The release that made decisions immutable leaves a window in that order. From
+the migrate until the last old pod is replaced, an old-image process runs
+against a runtime role that no longer holds `UPDATE` on `decisions` and
+`evidence_snapshots`: the old image checks for that `UPDATE` and its upsert
+needs it, so its `/readyz` answers 503 and every route that writes a decision
+fails. An old pod that restarts inside the window fails its startup check, so
+it fails decision reads too. The other order is no better (the new image on an
+un-migrated database is the 503 described above), so replace the old pods
+promptly, or stop them before migrating if failed decision writes are not
+acceptable.
+
+Rollbacks: rolling the API image back is safe against the same schema **and the
+same runtime grants**. The grants moved with that release, so rolling the image
+back to one from before it, with the database left migrated, fails every
+rolled-back pod: each is a fresh process, so `/readyz` answers 503 and every
+route that reads or writes decisions answers 500 until the runtime role holds
+`UPDATE` on those two tables again. Roll back in the same order as the upgrade,
+database first and image second: run the previous release's `pnpm run
+db:migrate` with the admin credential (its role split re-grants `SELECT,
+INSERT, UPDATE` on both tables; the immutability release added no schema
+version, so this is a grants change, not a restore), then roll the image. That
+order leaves a window of its own: until the last new-image pod is replaced, a
+new pod already running answers `/readyz` 503 but still serves decisions, and
+a new pod that restarts fails every decision route, so roll the image promptly.
+
 Rolling back **past a migration** is a restore, not a downgrade — migrations
 have no down path by design, and `db:migrate` refuses a database from the
 future. Use `pnpm run db:restore` with the pre-upgrade backup

@@ -244,3 +244,12 @@ block; a stage run on the wrong tier is a lesson here.
 - **evidence:** A fresh pinned local candidate performed complete reads, assertion RED, a real file write and all39 GREEN checks; the parent independently verified the one-expression diff, all65536 UTF-16 code units and unchanged frozen tests. All prior failures remain retained.
 - **landing:** pending — the C0 scope validator and frozen regression still require complete protected source delivery; a successful isolated coding trial does not install a daemon adapter or prove next-task continuity.
 - **status:** pending
+
+
+### L27 — A passing regression must be reached by both regular runners
+- **date:** 2026-10-27
+- **lane:** mac
+- **incident:** The new C0 test passed directly but full preflight correctly refused it because no regular runner reached the file.
+- **evidence:** The unchanged test-execution gate reproduced one unreachable-file problem before wiring and zero afterward; explicit unchanged33-test and six original-test commands passed, and preflight-CI parity passed.
+- **landing:** pending — explicit new test commands in preflight and review-hub CI; the original command and regression bytes remain unchanged.
+- **status:** pending

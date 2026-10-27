@@ -226,3 +226,12 @@ block; a stage run on the wrong tier is a lesson here.
 - **evidence:** on a scratch extraction of 764cb99d, `node scripts/check-scheduled-routines.mjs` exits 1 with `✗ dependabot-queue-review: awaiting-activation since 2026-09-12 — 33.5 days, past the 30-day bound.` as its only incoherence (33.5 is the reading at about 12:35Z on 2026-10-15; the figure is the wall clock, and the re-run of the recorded command at 15:56Z read 33.7), and the same extraction with that row's `awaitingSince` set to 2026-10-15 exits 0 and asks for no fallback; gating jobs 114610006992, 115062679308, 115604960364 and 116171542140 (#1509 to #1512) each failed at step 59 "Scheduled routines (every always-on lane declared, authorized, scoped, evidenced)" while job 114344648506 (#1508) passed; the `brain-cycle` precedent is the resolved hand `artifacts/raised-hands/2026-10-09-scripts-check-scheduled-routines-mjs-fails-on-ma.json`; the first `## 2026-10-15` entry in `docs/agent/EVIDENCE.md` is the full record, and its actions/runs listing shows the five "SignalGrid CI" runs created between the bound and #1513's merge: those four failures and #1513's own passing run.
 - **landing:** pending — the open `docs/BUILD_BACKLOG.md` row "A routine-registry row that is `awaiting-activation` on an owner go names, before its 30-day bound, what happens at the bound" (the owner picks the fallback shape: the row's option (a), a fallback the gate applies at the bound, closes the class, and its option (b), a lead-time hand, only notifies); #1513 retired this one row and changes nothing for the next.
 - **status:** pending
+
+
+### L25 — a fresh clone needs workspace dependency links before preflight
+- **date:** 2026-10-27
+- **lane:** mac
+- **incident:** The new coordination-source clone linked only the repository-root dependency directory. It did not have the scripts package's workspace links, so full preflight stopped at the readiness derivation before breadth. This was clone setup, not a simulator assertion failure.
+- **evidence:** The direct unchanged-source command `node --import tsx src/readiness-scenarios.ts` from scripts returned `ERR_MODULE_NOT_FOUND` for tsx. A pinned offline frozen-lockfile workspace install restored the links; the readiness derivation then exited 0.
+- **landing:** recorded only — in every fresh clone, complete the pinned frozen-lockfile workspace installation before full preflight; preserve the initial setup failure and check the real failing child command rather than its final Node version line.
+- **status:** landed

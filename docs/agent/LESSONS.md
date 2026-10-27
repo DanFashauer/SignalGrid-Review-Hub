@@ -262,3 +262,12 @@ block; a stage run on the wrong tier is a lesson here.
 - **evidence:** The direct unchanged gate named the exact stale sentence and measured968lines. Correcting that number alone made both the original line-count check and its self-test pass.
 - **landing:** pending — one measured number in the company plan, with all other source bytes retained and the gate/exemptions unchanged.
 - **status:** pending
+
+
+### L29 — Run pinned canonical generators after changing the tracked file inventory
+- **date:** 2026-10-27
+- **lane:** mac
+- **incident:** Adding the real regression changed the tracked surface inventory while its generated Markdown view still described the prior tree; full preflight refused the stale view.
+- **evidence:** The original surface-review-coverage check named the stale derived page. The existing pinned generators rederived only allowed output, with review-history JSON and actual model/test source hashes unchanged.
+- **landing:** pending — regenerate the current-tree view through the canonical generator; no invented source read, fresh timestamp or altered history is used.
+- **status:** pending

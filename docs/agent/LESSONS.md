@@ -253,3 +253,12 @@ block; a stage run on the wrong tier is a lesson here.
 - **evidence:** The unchanged test-execution gate reproduced one unreachable-file problem before wiring and zero afterward; explicit unchanged33-test and six original-test commands passed, and preflight-CI parity passed.
 - **landing:** pending — explicit new test commands in preflight and review-hub CI; the original command and regression bytes remain unchanged.
 - **status:** pending
+
+
+### L28 — Refresh bound figures when a runner change changes their source
+- **date:** 2026-10-27
+- **lane:** mac
+- **incident:** The new regular regression command added one preflight line while the company plan still quoted its prior967-line measurement; full preflight refused the drift.
+- **evidence:** The direct unchanged gate named the exact stale sentence and measured968lines. Correcting that number alone made both the original line-count check and its self-test pass.
+- **landing:** pending — one measured number in the company plan, with all other source bytes retained and the gate/exemptions unchanged.
+- **status:** pending

@@ -4833,3 +4833,18 @@ Before wiring: one problem; no runner reached the new regression.
 After wiring: zero test-execution problems; preflight-CI parity green; all33 new checks pass.
 ```
 Verdict: the first full preflight on the combined candidate stopped at the test-execution gate. The same unchanged regression now has an explicit command in both preflight and review-hub CI. The original task-selector command stays present. No test exemption, check removal, gate weakening or source/test rewrite was used. Full local validation and source/public delivery are still separate requirements.
+
+
+## 2026-10-27 — Refresh the measured preflight line count after runner wiring
+
+Command:
+```bash
+node scripts/check-doc-line-counts.mjs
+node scripts/check-doc-line-counts.mjs --self-test
+```
+Output:
+```text
+Before correction: COMPANY_BUILD_PLAN quoted967lines for the now968-line preflight.
+After the one-number source correction: zero line-count drift; self-test10/10.
+```
+Verdict: adding the missing explicit test runner row changed the measured preflight line count. Only the stale numeric citation is corrected; no line-count matcher, exemption, floor or gate is altered. The failed full preflight and the direct exact diagnostic remain retained.

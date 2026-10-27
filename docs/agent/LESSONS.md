@@ -235,3 +235,12 @@ block; a stage run on the wrong tier is a lesson here.
 - **evidence:** The direct unchanged-source command `node --import tsx src/readiness-scenarios.ts` from scripts returned `ERR_MODULE_NOT_FOUND` for tsx. A pinned offline frozen-lockfile workspace install restored the links; the readiness derivation then exited 0.
 - **landing:** recorded only — in every fresh clone, complete the pinned frozen-lockfile workspace installation before full preflight; preserve the initial setup failure and check the real failing child command rather than its final Node version line.
 - **status:** landed
+
+
+### L26 — Qualify the complete local coding path with actual tools and checks
+- **date:** 2026-10-27
+- **lane:** mac
+- **incident:** Earlier small-model runs ended without a qualified edit, while CLI exit status and generated prose could have hidden the missing implementation. V2 tool paths also required relative permission resources.
+- **evidence:** A fresh pinned local candidate performed complete reads, assertion RED, a real file write and all39 GREEN checks; the parent independently verified the one-expression diff, all65536 UTF-16 code units and unchanged frozen tests. All prior failures remain retained.
+- **landing:** pending — the C0 scope validator and frozen regression still require complete protected source delivery; a successful isolated coding trial does not install a daemon adapter or prove next-task continuity.
+- **status:** pending

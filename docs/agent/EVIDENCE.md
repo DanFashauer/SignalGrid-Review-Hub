@@ -4864,3 +4864,20 @@ Full preflight detected a stale generated surface page after adding the new test
 Canonical pinned generators rederived their outputs; the review-history JSON is unchanged.
 ```
 Verdict: the generated current-tree view is refreshed through the existing preparation contract. No review date, read claim, JSON history, matcher, exemption or gate is changed. Earlier full-preflight failures remain retained; new-head full validation and protected delivery remain required.
+
+
+## 2026-10-27 — Require a complete C0 proof execution envelope
+
+Command:
+```bash
+node scripts/mac/local-brain/test/task-selector-control-scope.test.mjs
+node scripts/check-local-worker-task-selector-proof.mjs --self-test
+node scripts/check-local-worker-task-selector-proof.mjs
+```
+Output:
+```text
+Before envelope, with the control loop forced to zero: exit0; one ordinary test passed; zero C0 cases executed.
+C0 proof envelope self-test PASSED: 1 positive / 12 negative / 0 skipped
+C0 task-selector proof PASSED: 32 control cases, 39 total tests, 0 skipped
+```
+Verdict: actual falsification found an empty-enumeration gap in the newly registered regression. The checked runner requires all32 named C0 assertions and zero missing/deferred results. The existing direct proof commands remain; an additional checked command is wired into both preflight and CI. The model implementation and both frozen tests are unchanged. These are initial source checks; final-source falsification, full local gates, fresh source lenses, publication, current CI and protected delivery remain separate requirements.

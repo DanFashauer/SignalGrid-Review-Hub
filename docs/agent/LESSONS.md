@@ -271,3 +271,12 @@ block; a stage run on the wrong tier is a lesson here.
 - **evidence:** The original surface-review-coverage check named the stale derived page. The existing pinned generators rederived only allowed output, with review-history JSON and actual model/test source hashes unchanged.
 - **landing:** pending — regenerate the current-tree view through the canonical generator; no invented source read, fresh timestamp or altered history is used.
 - **status:** pending
+
+
+### L30 — a regression runner must reject an empty required domain
+- **date:** 2026-10-27
+- **lane:** mac
+- **incident:** In a complete isolated94a tree, setting the new C0 loop to zero still exited0 with one ordinary passing test.
+- **evidence:** The direct registered command accepted zero control cases; the checked runner self-test and actual39test run are quoted in EVIDENCE. The original model selector and both test files stay byte-identical.
+- **landing:** pending — scripts/check-local-worker-task-selector-proof.mjs requires every C0 case exactly once and rejects missing, failed, skipped, cancelled or deferred proof; both preflight and CI run it.
+- **status:** pending

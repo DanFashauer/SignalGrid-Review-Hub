@@ -280,3 +280,12 @@ block; a stage run on the wrong tier is a lesson here.
 - **evidence:** The direct registered command accepted zero control cases; the checked runner self-test and actual39test run are quoted in EVIDENCE. The original model selector and both test files stay byte-identical.
 - **landing:** pending — scripts/check-local-worker-task-selector-proof.mjs requires every C0 case exactly once and rejects missing, failed, skipped, cancelled or deferred proof; both preflight and CI run it.
 - **status:** pending
+
+
+### L31 — Match optional runtime flags to the declared CI runtime
+- **date:** 2026-10-28
+- **lane:** mac
+- **incident:** The checked C0 runner used an optional flag renamed in Node23.6 while CI declares Node22; local Node24 success did not establish CI compatibility.
+- **evidence:** The official Node CLI flag history identifies the rename; removing the unnecessary option produced actual39GREEN and all13 envelope self-tests with zero skips, recorded in EVIDENCE. Node22 execution is still checked by current-head CI rather than inferred from local Node24.
+- **landing:** pending — scripts/check-local-worker-task-selector-proof.mjs uses normal default test isolation, preserving every frozen assertion and the required-domain rejection.
+- **status:** pending

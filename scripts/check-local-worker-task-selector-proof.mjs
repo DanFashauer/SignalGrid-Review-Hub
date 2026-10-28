@@ -54,7 +54,7 @@ if(process.argv[1]&&fileURLToPath(import.meta.url)===resolve(process.argv[1])){
   const tested=selfTest();
   console.log(`C0 proof envelope self-test PASSED: ${tested.positive} positive / ${tested.negative} negative / 0 skipped`);
   if(process.argv[2]!=='--self-test'){
-    const result=spawnSync(process.execPath,['--test','--test-isolation=none','--test-reporter=tap',
+    const result=spawnSync(process.execPath,['--test','--test-reporter=tap',
       'scripts/mac/local-brain/test/task-selector-control-scope.test.mjs',
       'scripts/mac/local-brain/test/task-selector.test.mjs'],
       {cwd:resolve(fileURLToPath(new URL('..',import.meta.url))),encoding:'utf8',timeout:60000,maxBuffer:2_000_000});

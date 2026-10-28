@@ -4946,3 +4946,26 @@ doc line counts: 32 figure(s) across 2 document(s), 4 in dated records (exempt, 
 Doc line-count gate passed — every `path (N)` figure matches the file it names.
 ```
 Verdict: the checked C0 proof-envelope step added a second preflight row after the historical 968-line measurement. The final scripts/preflight.mjs now has969lines, and docs/COMPANY_BUILD_PLAN.md cites969. The actual line-count gate above confirms zero drift. The earlier dated968-line evidence and lesson L28 remain unchanged as historical records. The security source review's missing-measurement finding is accepted. This measurement does not claim fresh full preflight, source clearance, GitHub CI, merge or whole-system completion.
+
+
+## 2026-10-28 — R6p1d constructs its missing tracking reference explicitly
+
+Canonical SignalGrid CI [40624043339](https://github.com/DanFashauer/SignalGrid-Review-Hub/actions/runs/40624043339) on `8329d4f553f3b0f20a2f102b10e335d7273d8b64` failed R6p1d and nested R12 with Git2.56.0. The [official pinned release notes](https://github.com/git/git/blob/a018953688f1b10bddf91bff8747068f5f4746a4/Documentation/RelNotes/2.56.0.adoc) describe URL pushes updating tracking refs when the URL uniquely matches a configured remote. The fixture had inferred absence from URL syntax.
+
+The correction explicitly removes only the temporary fixture's `origin/other` tracking ref after its local bare-fixture push. The complete existing assertion, local `mine` branch and bare fixture's `other` branch are unchanged. Production seam logic and every unrelated executable source byte remain unchanged. A planted-state probe also verified the old required-absence assertion fails, then the missing-ref scenario passes without changing either branch tip.
+
+Command on the installed AppleGit2.54.0/Node24.18.0 toolchain:
+```sh
+node scripts/loop-state.mjs --self-test
+```
+Output, verbatim final summary:
+```text
+self-test: 6 case(s) SKIPPED, listed above; a skip asserted nothing and is in neither number below
+self-test passed (309/309)
+```
+
+A bounded build of the exact Git2.56 source also reproduced the original R6p1d failure and the corrected full R6p1d assertion passed. That resource trial is LIMITED, not generally qualified: its original complete run passed300/309 and corrected run301/309, with6explicit skips and8other failures retained, including the nested R12 aggregate. Its C-only build omits the installed HTTPS helper and uses an owned executable/template layout; the sole causes of all8other failures are not established. These runs are not full Git2.56 GREEN or equivalent to current-head GitHub CI.
+
+Resource preparation failures remain retained: missing dyld literal root-directory read, denied system-make xcrun-cache write followed by generic license text, unavailable Cargo before choosing Git2.56's officially supported optional C build, and absent standard init templates in a first partial trial. No Rust/toolchain installation, license acceptance, global Git/template/default change or private-source/network build grant was made. A surrounding verifier also assumed the Linux case count; the applicable Mac result above is the actual measurement.
+
+Verdict: holds for the complete applicable installed-toolchain self-test and the specific Git2.56 R6p1d assertion. Six platform-unavailable cases are not passes; two other unavailable platform preconditions still asserted their guarded answers on the installed toolchain. Full local preflight/breadth, fresh same-head source reviews and exact-current-head GitHub CI remain required for protected landing. No gate exemption, real remote branch deletion, source clearance or merge is claimed here.

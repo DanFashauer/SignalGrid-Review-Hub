@@ -4809,7 +4809,10 @@ Verdict: the current branch explicitly records all 13 measured stalls with their
 
 Command:
 ```bash
-node --test scripts/mac/local-brain/test/task-selector-control-scope.test.mjs scripts/mac/local-brain/test/task-selector.test.mjs
+# RED: complete proposed tree with only the original validator restored from8243280; frozen tests unchanged.
+node --test --test-reporter=tap scripts/mac/local-brain/test/task-selector-control-scope.test.mjs
+# GREEN: corrected validator with the same frozen tests.
+node --test --test-reporter=tap scripts/mac/local-brain/test/task-selector-control-scope.test.mjs scripts/mac/local-brain/test/task-selector.test.mjs
 ```
 Output:
 ```text
@@ -4902,12 +4905,30 @@ Verdict: the added runner originally used an optional isolation flag whose renam
 
 Command:
 ```bash
-git diff -- docs/agent/LOOP.md
+git diff c2b1bfe5e3420ea7e48208299797d815c88b5aae HEAD -- docs/agent/LOOP.md
 ```
 Output:
 ```text
+Source-comparison observations (interpretation, not literal Git output):
 The canonical2026-10-21 CURRENT EVIDENCE line and its original continuation are verbatim and adjacent.
 The new short preparation note has its own PENDING SOURCE PREPARATION label below the complete record.
 Every other LOOP byte is preserved after removing the exact old/new preparation lines.
 ```
 Verdict: the first genuine native Ponytail source lens returned FIX for an ambiguous insertion between an older measurement and its continuation. The finding is accepted and corrected; the other three source lenses did not run. The original older artifact/source/coverage remain one dated record. No code, frozen test, workflow, proof floor or old evidence is changed by this correction. New-head full local checks, all four fresh source lenses, publication, current CI and protected landing remain required.
+
+
+## 2026-10-28 — Pair each recorded count with the command that executed it
+
+Command:
+```bash
+# RED: complete proposed tree, only the original validator restored; frozen tests unchanged.
+node --test --test-reporter=tap scripts/mac/local-brain/test/task-selector-control-scope.test.mjs
+# GREEN: corrected validator, same frozen tests.
+node --test --test-reporter=tap scripts/mac/local-brain/test/task-selector-control-scope.test.mjs scripts/mac/local-brain/test/task-selector.test.mjs
+```
+Output:
+```text
+Single-file RED:33tests/2pass/31fail/0skipped, exit1.
+Two-file GREEN:39tests/39pass/0fail/0skipped, exit0.
+```
+Verdict: the genuine Ponytail review of2382d7f4 returned FIX because a single-file RED result was listed beneath a two-file command. The finding is accepted; separate exact command reproductions confirm both recorded totals. No original model trial, failed job or helper was replayed. The inherited implementation and both frozen tests remain byte-identical, and previous source versions/reviews remain retained. These source checks do not establish new-head full validation, four-source-lens clearance, publication, CI, merge or issue1546 completion.

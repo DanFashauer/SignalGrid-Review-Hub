@@ -298,3 +298,12 @@ block; a stage run on the wrong tier is a lesson here.
 - **evidence:** A genuine first Ponytail lens returned FIX; direct byte comparison now proves both original measurement lines are verbatim and adjacent, with all unrelated LOOP bytes preserved. EVIDENCE records the accepted finding; the other three lenses were unrun.
 - **landing:** pending — docs/agent/LOOP.md gives the short pending preparation note its own label after the complete old record, pointing to the source-preparation entries.
 - **status:** pending
+
+
+### L33 — A recorded test count belongs to its exact command
+- **date:** 2026-10-28
+- **lane:** mac
+- **incident:** A new evidence entry put the33-test single-file RED result beneath a command that ran both test files.
+- **evidence:** A genuine Ponytail source lens returned FIX; exact independent reproductions now show33/2/31/0skipped for the single-file frozen-validator RED and39/39/0/0skipped for the corrected two-file GREEN.
+- **landing:** pending — docs/agent/EVIDENCE.md cites the actual RED and GREEN commands separately; inherited implementation and frozen tests remain unchanged.
+- **status:** pending

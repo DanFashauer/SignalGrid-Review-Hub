@@ -4787,3 +4787,162 @@ Recorded exits: commands 1–8 each exited 0; all stderr was empty. Commands 2�
 The four operational files set a five-minute build retry, align the origin-outage hand to 144 consecutive failed scheduled attempts, update the active registry/coordination record, and make installer status distinguish configured, installed and actually loaded intervals. The 12-hour figure assumes scheduled five-minute attempts; host sleep, delays and missed firings can extend elapsed time. The dated 2026-10-22T15:11:45Z activation firing found all three ranked tasks already claimed: it witnesses a firing, not a completed product build. Source alone does not establish current loaded service state, continuous execution or unattended success. This landing does not run the installer or alter host-specific admission wiring.
 
 Verdict: the recorded local and GitHub receipts support the exact landing and its stated coverage; the fixed Git reads independently confirm the graph and unchanged four-file source. This entry records #1593; it makes no claim that the later record-publishing PR has merged or passed its own checks. It does not re-mint artifact f3b55f7173ed5d5365a102ebadadef2e0e1dfcea, measured on clean a70c36b3e0e897d8a80a863e7228417f729e487f. Its 141 passed proof records, two notRecorded proofs, three stepsExcluded entries and Linux-VM native attestation remain that earlier receipt's coverage. No new readiness figure, owner-real-in-hand attestation, production claim, completion of other PR/backlog work, or validation of the later record-publishing head is inferred.
+
+
+## 2026-10-27 — Source preparation for delegated execution and truthful coordination
+
+Command:
+```bash
+node scripts/raised-hands.mjs --check
+node scripts/check-raised-hands.mjs
+```
+Output:
+```text
+Before new records: Raised hands check FAILED: 13 problem(s): 11 mail stalls and two heartbeat stalls.
+After three explicit open records: Raised hands check passed.
+Raised-hand schema and routing check: exit 0.
+```
+Verdict: the current branch explicitly records all 13 measured stalls with their actual responders. The mail work and both witnesses remain unfinished: no acknowledgment, Cloud run, fresh heartbeat, full validation, source-review clearance, publication, CI or merge is asserted by a covering hand. AGENTS and LOOP guidance now reflect the owner's delegated local-first workflow while preserving all protected-delivery conditions. This entry is source preparation; canonical state is unchanged until protected delivery.
+
+
+## 2026-10-27 — Source-pinned local coding capability and task-scope repair
+
+Command:
+```bash
+# RED: complete proposed tree with only the original validator restored from8243280; frozen tests unchanged.
+node --test --test-reporter=tap scripts/mac/local-brain/test/task-selector-control-scope.test.mjs
+# GREEN: corrected validator with the same frozen tests.
+node --test --test-reporter=tap scripts/mac/local-brain/test/task-selector-control-scope.test.mjs scripts/mac/local-brain/test/task-selector.test.mjs
+```
+Output:
+```text
+Frozen original source: 33 tests, 2 pass, 31 assertion failures, zero skips.
+Model-written implementation: 39 new and original checks pass, zero failures, zero skips.
+```
+Verdict: a bounded local OpenCode/Ollama coding trial read the complete implementation and both test files, ran assertion RED, wrote one expression and ran GREEN. The frozen tests remained unchanged. Independent comparison covered all65536 UTF-16 code units and four non-ASCII paths. Five sandbox-negative probes denied private access, source writes during checks, subprocesses and network. The local model/harness is qualified for this source trial only; the default worker is unchanged. This is not daemon build-to-PR integration, current-head CI, physical testing or issue1546 end-to-end acceptance. The13 coordination stalls remain open work, covered by the existing three correctly routed hands on this proposed source.
+
+
+## 2026-10-27 — Wire the C0 regression into both actual runners
+
+Command:
+```bash
+node scripts/check-test-execution.mjs
+node scripts/check-preflight-ci-parity.mjs
+node scripts/mac/local-brain/test/task-selector-control-scope.test.mjs
+```
+Output:
+```text
+Before wiring: one problem; no runner reached the new regression.
+After wiring: zero test-execution problems; preflight-CI parity green; all33 new checks pass.
+```
+Verdict: the first full preflight on the combined candidate stopped at the test-execution gate. The same unchanged regression now has an explicit command in both preflight and review-hub CI. The original task-selector command stays present. No test exemption, check removal, gate weakening or source/test rewrite was used. Full local validation and source/public delivery are still separate requirements.
+
+
+## 2026-10-27 — Refresh the measured preflight line count after runner wiring
+
+Command:
+```bash
+node scripts/check-doc-line-counts.mjs
+node scripts/check-doc-line-counts.mjs --self-test
+```
+Output:
+```text
+Before correction: COMPANY_BUILD_PLAN quoted967lines for the now968-line preflight.
+After the one-number source correction: zero line-count drift; self-test10/10.
+```
+Verdict: adding the missing explicit test runner row changed the measured preflight line count. Only the stale numeric citation is corrected; no line-count matcher, exemption, floor or gate is altered. The failed full preflight and the direct exact diagnostic remain retained.
+
+
+## 2026-10-27 — Regenerate the current surface inventory after adding a regression
+
+Command:
+```bash
+node scripts/generate-sync-manifest.mjs
+node scripts/check-surface-review-coverage.mjs --write
+node scripts/check-surface-review-coverage.mjs
+```
+Output:
+```text
+Full preflight detected a stale generated surface page after adding the new test file.
+Canonical pinned generators rederived their outputs; the review-history JSON is unchanged.
+```
+Verdict: the generated current-tree view is refreshed through the existing preparation contract. No review date, read claim, JSON history, matcher, exemption or gate is changed. Earlier full-preflight failures remain retained; new-head full validation and protected delivery remain required.
+
+
+## 2026-10-27 — Require a complete C0 proof execution envelope
+
+Command:
+```bash
+node scripts/mac/local-brain/test/task-selector-control-scope.test.mjs
+node scripts/check-local-worker-task-selector-proof.mjs --self-test
+node scripts/check-local-worker-task-selector-proof.mjs
+```
+Output:
+```text
+Before envelope, with the control loop forced to zero: exit0; one ordinary test passed; zero C0 cases executed.
+C0 proof envelope self-test PASSED: 1 positive / 12 negative / 0 skipped
+C0 task-selector proof PASSED: 32 control cases, 39 total tests, 0 skipped
+```
+Verdict: actual falsification found an empty-enumeration gap in the newly registered regression. The checked runner requires all32 named C0 assertions and zero missing/deferred results. The existing direct proof commands remain; an additional checked command is wired into both preflight and CI. The model implementation and both frozen tests are unchanged. These are initial source checks; final-source falsification, full local gates, fresh source lenses, publication, current CI and protected delivery remain separate requirements.
+
+
+## 2026-10-28 — Keep the checked proof compatible with the CI Node line
+
+Command:
+```bash
+node scripts/check-local-worker-task-selector-proof.mjs --self-test
+node scripts/check-local-worker-task-selector-proof.mjs
+```
+Output:
+```text
+C0 proof envelope self-test PASSED: 1 positive / 12 negative / 0 skipped
+C0 task-selector proof PASSED: 32 control cases, 39 total tests, 0 skipped
+```
+Verdict: the added runner originally used an optional isolation flag whose rename is recorded at Node23.6 in the official Node CLI history, while this repository's workflow uses Node22. The unnecessary flag is removed; the normal test runner's default isolation executes every frozen assertion and the checked envelope still refuses an empty domain. No Node version, workflow setup, model implementation, frozen test, proof floor or permission is changed. This is a local source correction; final-head full validation, fresh source review and exact-head CI remain separate requirements.
+
+
+## 2026-10-28 — Keep pending preparation outside an existing evidence record
+
+Command:
+```bash
+git diff c2b1bfe5e3420ea7e48208299797d815c88b5aae HEAD -- docs/agent/LOOP.md
+```
+Output:
+```text
+Source-comparison observations (interpretation, not literal Git output):
+The canonical2026-10-21 CURRENT EVIDENCE line and its original continuation are verbatim and adjacent.
+The new short preparation note has its own PENDING SOURCE PREPARATION label below the complete record.
+Every other LOOP byte is preserved after removing the exact old/new preparation lines.
+```
+Verdict: the first genuine native Ponytail source lens returned FIX for an ambiguous insertion between an older measurement and its continuation. The finding is accepted and corrected; the other three source lenses did not run. The original older artifact/source/coverage remain one dated record. No code, frozen test, workflow, proof floor or old evidence is changed by this correction. New-head full local checks, all four fresh source lenses, publication, current CI and protected landing remain required.
+
+
+## 2026-10-28 — Pair each recorded count with the command that executed it
+
+Command:
+```bash
+# RED: complete proposed tree, only the original validator restored; frozen tests unchanged.
+node --test --test-reporter=tap scripts/mac/local-brain/test/task-selector-control-scope.test.mjs
+# GREEN: corrected validator, same frozen tests.
+node --test --test-reporter=tap scripts/mac/local-brain/test/task-selector-control-scope.test.mjs scripts/mac/local-brain/test/task-selector.test.mjs
+```
+Output:
+```text
+Single-file RED:33tests/2pass/31fail/0skipped, exit1.
+Two-file GREEN:39tests/39pass/0fail/0skipped, exit0.
+```
+Verdict: the genuine Ponytail review of2382d7f4 returned FIX because a single-file RED result was listed beneath a two-file command. The finding is accepted; separate exact command reproductions confirm both recorded totals. No original model trial, failed job or helper was replayed. The inherited implementation and both frozen tests remain byte-identical, and previous source versions/reviews remain retained. These source checks do not establish new-head full validation, four-source-lens clearance, publication, CI, merge or issue1546 completion.
+
+
+## 2026-10-28 — Record the final preflight measurement after envelope wiring
+
+Command:
+```bash
+node scripts/check-doc-line-counts.mjs
+```
+Output:
+```text
+doc line counts: 32 figure(s) across 2 document(s), 4 in dated records (exempt, 1 exemption(s) each with a reason), 0 drifted
+Doc line-count gate passed — every `path (N)` figure matches the file it names.
+```
+Verdict: the checked C0 proof-envelope step added a second preflight row after the historical 968-line measurement. The final scripts/preflight.mjs now has969lines, and docs/COMPANY_BUILD_PLAN.md cites969. The actual line-count gate above confirms zero drift. The earlier dated968-line evidence and lesson L28 remain unchanged as historical records. The security source review's missing-measurement finding is accepted. This measurement does not claim fresh full preflight, source clearance, GitHub CI, merge or whole-system completion.

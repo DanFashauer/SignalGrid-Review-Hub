@@ -226,3 +226,93 @@ block; a stage run on the wrong tier is a lesson here.
 - **evidence:** on a scratch extraction of 764cb99d, `node scripts/check-scheduled-routines.mjs` exits 1 with `✗ dependabot-queue-review: awaiting-activation since 2026-09-12 — 33.5 days, past the 30-day bound.` as its only incoherence (33.5 is the reading at about 12:35Z on 2026-10-15; the figure is the wall clock, and the re-run of the recorded command at 15:56Z read 33.7), and the same extraction with that row's `awaitingSince` set to 2026-10-15 exits 0 and asks for no fallback; gating jobs 114610006992, 115062679308, 115604960364 and 116171542140 (#1509 to #1512) each failed at step 59 "Scheduled routines (every always-on lane declared, authorized, scoped, evidenced)" while job 114344648506 (#1508) passed; the `brain-cycle` precedent is the resolved hand `artifacts/raised-hands/2026-10-09-scripts-check-scheduled-routines-mjs-fails-on-ma.json`; the first `## 2026-10-15` entry in `docs/agent/EVIDENCE.md` is the full record, and its actions/runs listing shows the five "SignalGrid CI" runs created between the bound and #1513's merge: those four failures and #1513's own passing run.
 - **landing:** pending — the open `docs/BUILD_BACKLOG.md` row "A routine-registry row that is `awaiting-activation` on an owner go names, before its 30-day bound, what happens at the bound" (the owner picks the fallback shape: the row's option (a), a fallback the gate applies at the bound, closes the class, and its option (b), a lead-time hand, only notifies); #1513 retired this one row and changes nothing for the next.
 - **status:** pending
+
+
+### L25 — a fresh clone needs workspace dependency links before preflight
+- **date:** 2026-10-27
+- **lane:** mac
+- **incident:** The new coordination-source clone linked only the repository-root dependency directory. It did not have the scripts package's workspace links, so full preflight stopped at the readiness derivation before breadth. This was clone setup, not a simulator assertion failure.
+- **evidence:** The direct unchanged-source command `node --import tsx src/readiness-scenarios.ts` from scripts returned `ERR_MODULE_NOT_FOUND` for tsx. A pinned offline frozen-lockfile workspace install restored the links; the readiness derivation then exited 0.
+- **landing:** recorded only — in every fresh clone, complete the pinned frozen-lockfile workspace installation before full preflight; preserve the initial setup failure and check the real failing child command rather than its final Node version line.
+- **status:** landed
+
+
+### L26 — Qualify the complete local coding path with actual tools and checks
+- **date:** 2026-10-27
+- **lane:** mac
+- **incident:** Earlier small-model runs ended without a qualified edit, while CLI exit status and generated prose could have hidden the missing implementation. V2 tool paths also required relative permission resources.
+- **evidence:** A fresh pinned local candidate performed complete reads, assertion RED, a real file write and all39 GREEN checks; the parent independently verified the one-expression diff, all65536 UTF-16 code units and unchanged frozen tests. All prior failures remain retained.
+- **landing:** pending — the C0 scope validator and frozen regression still require complete protected source delivery; a successful isolated coding trial does not install a daemon adapter or prove next-task continuity.
+- **status:** pending
+
+
+### L27 — A passing regression must be reached by both regular runners
+- **date:** 2026-10-27
+- **lane:** mac
+- **incident:** The new C0 test passed directly but full preflight correctly refused it because no regular runner reached the file.
+- **evidence:** The unchanged test-execution gate reproduced one unreachable-file problem before wiring and zero afterward; explicit unchanged33-test and six original-test commands passed, and preflight-CI parity passed.
+- **landing:** pending — explicit new test commands in preflight and review-hub CI; the original command and regression bytes remain unchanged.
+- **status:** pending
+
+
+### L28 — Refresh bound figures when a runner change changes their source
+- **date:** 2026-10-27
+- **lane:** mac
+- **incident:** The new regular regression command added one preflight line while the company plan still quoted its prior967-line measurement; full preflight refused the drift.
+- **evidence:** The direct unchanged gate named the exact stale sentence and measured968lines. Correcting that number alone made both the original line-count check and its self-test pass.
+- **landing:** pending — one measured number in the company plan, with all other source bytes retained and the gate/exemptions unchanged.
+- **status:** pending
+
+
+### L29 — Run pinned canonical generators after changing the tracked file inventory
+- **date:** 2026-10-27
+- **lane:** mac
+- **incident:** Adding the real regression changed the tracked surface inventory while its generated Markdown view still described the prior tree; full preflight refused the stale view.
+- **evidence:** The original surface-review-coverage check named the stale derived page. The existing pinned generators rederived only allowed output, with review-history JSON and actual model/test source hashes unchanged.
+- **landing:** pending — regenerate the current-tree view through the canonical generator; no invented source read, fresh timestamp or altered history is used.
+- **status:** pending
+
+
+### L30 — a regression runner must reject an empty required domain
+- **date:** 2026-10-27
+- **lane:** mac
+- **incident:** In a complete isolated94a tree, setting the new C0 loop to zero still exited0 with one ordinary passing test.
+- **evidence:** The direct registered command accepted zero control cases; the checked runner self-test and actual39test run are quoted in EVIDENCE. The original model selector and both test files stay byte-identical.
+- **landing:** pending — scripts/check-local-worker-task-selector-proof.mjs requires every C0 case exactly once and rejects missing, failed, skipped, cancelled or deferred proof; both preflight and CI run it.
+- **status:** pending
+
+
+### L31 — Match optional runtime flags to the declared CI runtime
+- **date:** 2026-10-28
+- **lane:** mac
+- **incident:** The checked C0 runner used an optional flag renamed in Node23.6 while CI declares Node22; local Node24 success did not establish CI compatibility.
+- **evidence:** The official Node CLI flag history identifies the rename; removing the unnecessary option produced actual39GREEN and all13 envelope self-tests with zero skips, recorded in EVIDENCE. Node22 execution is still checked by current-head CI rather than inferred from local Node24.
+- **landing:** pending — scripts/check-local-worker-task-selector-proof.mjs uses normal default test isolation, preserving every frozen assertion and the required-domain rejection.
+- **status:** pending
+
+
+### L32 — Keep a dated evidence record contiguous
+- **date:** 2026-10-28
+- **lane:** mac
+- **incident:** A new source-preparation sentence split the old CURRENT EVIDENCE measurement from its continuation, blurring which source its pass figures described.
+- **evidence:** A genuine first Ponytail lens returned FIX; direct byte comparison now proves both original measurement lines are verbatim and adjacent, with all unrelated LOOP bytes preserved. EVIDENCE records the accepted finding; the other three lenses were unrun.
+- **landing:** pending — docs/agent/LOOP.md gives the short pending preparation note its own label after the complete old record, pointing to the source-preparation entries.
+- **status:** pending
+
+
+### L33 — A recorded test count belongs to its exact command
+- **date:** 2026-10-28
+- **lane:** mac
+- **incident:** A new evidence entry put the33-test single-file RED result beneath a command that ran both test files.
+- **evidence:** A genuine Ponytail source lens returned FIX; exact independent reproductions now show33/2/31/0skipped for the single-file frozen-validator RED and39/39/0/0skipped for the corrected two-file GREEN.
+- **landing:** pending — docs/agent/EVIDENCE.md cites the actual RED and GREEN commands separately; inherited implementation and frozen tests remain unchanged.
+- **status:** pending
+
+
+### L34 — Record a second measurement when later wiring changes a cited count
+- **date:** 2026-10-28
+- **lane:** mac
+- **incident:** The historical968-line preflight measurement stayed true for its source, but the later C0 envelope step made the final source969lines without a separate measurement record.
+- **evidence:** A genuine security source lens returned FIX. The actual `node scripts/check-doc-line-counts.mjs` invocation reports32figures across2documents,4dated exemptions and0drift; scripts/preflight.mjs has969lines and the plan cites969.
+- **landing:** pending — docs/agent/EVIDENCE.md records the new measurement separately; prior evidence and lesson L28 remain byte-preserved.
+- **status:** pending

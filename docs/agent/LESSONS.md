@@ -307,3 +307,12 @@ block; a stage run on the wrong tier is a lesson here.
 - **evidence:** A genuine Ponytail source lens returned FIX; exact independent reproductions now show33/2/31/0skipped for the single-file frozen-validator RED and39/39/0/0skipped for the corrected two-file GREEN.
 - **landing:** pending — docs/agent/EVIDENCE.md cites the actual RED and GREEN commands separately; inherited implementation and frozen tests remain unchanged.
 - **status:** pending
+
+
+### L34 — Record a second measurement when later wiring changes a cited count
+- **date:** 2026-10-28
+- **lane:** mac
+- **incident:** The historical968-line preflight measurement stayed true for its source, but the later C0 envelope step made the final source969lines without a separate measurement record.
+- **evidence:** A genuine security source lens returned FIX. The actual `node scripts/check-doc-line-counts.mjs` invocation reports32figures across2documents,4dated exemptions and0drift; scripts/preflight.mjs has969lines and the plan cites969.
+- **landing:** pending — docs/agent/EVIDENCE.md records the new measurement separately; prior evidence and lesson L28 remain byte-preserved.
+- **status:** pending

@@ -4932,3 +4932,17 @@ Single-file RED:33tests/2pass/31fail/0skipped, exit1.
 Two-file GREEN:39tests/39pass/0fail/0skipped, exit0.
 ```
 Verdict: the genuine Ponytail review of2382d7f4 returned FIX because a single-file RED result was listed beneath a two-file command. The finding is accepted; separate exact command reproductions confirm both recorded totals. No original model trial, failed job or helper was replayed. The inherited implementation and both frozen tests remain byte-identical, and previous source versions/reviews remain retained. These source checks do not establish new-head full validation, four-source-lens clearance, publication, CI, merge or issue1546 completion.
+
+
+## 2026-10-28 — Record the final preflight measurement after envelope wiring
+
+Command:
+```bash
+node scripts/check-doc-line-counts.mjs
+```
+Output:
+```text
+doc line counts: 32 figure(s) across 2 document(s), 4 in dated records (exempt, 1 exemption(s) each with a reason), 0 drifted
+Doc line-count gate passed — every `path (N)` figure matches the file it names.
+```
+Verdict: the checked C0 proof-envelope step added a second preflight row after the historical 968-line measurement. The final scripts/preflight.mjs now has969lines, and docs/COMPANY_BUILD_PLAN.md cites969. The actual line-count gate above confirms zero drift. The earlier dated968-line evidence and lesson L28 remain unchanged as historical records. The security source review's missing-measurement finding is accepted. This measurement does not claim fresh full preflight, source clearance, GitHub CI, merge or whole-system completion.

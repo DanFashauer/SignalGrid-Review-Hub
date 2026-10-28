@@ -289,3 +289,12 @@ block; a stage run on the wrong tier is a lesson here.
 - **evidence:** The official Node CLI flag history identifies the rename; removing the unnecessary option produced actual39GREEN and all13 envelope self-tests with zero skips, recorded in EVIDENCE. Node22 execution is still checked by current-head CI rather than inferred from local Node24.
 - **landing:** pending — scripts/check-local-worker-task-selector-proof.mjs uses normal default test isolation, preserving every frozen assertion and the required-domain rejection.
 - **status:** pending
+
+
+### L32 — Keep a dated evidence record contiguous
+- **date:** 2026-10-28
+- **lane:** mac
+- **incident:** A new source-preparation sentence split the old CURRENT EVIDENCE measurement from its continuation, blurring which source its pass figures described.
+- **evidence:** A genuine first Ponytail lens returned FIX; direct byte comparison now proves both original measurement lines are verbatim and adjacent, with all unrelated LOOP bytes preserved. EVIDENCE records the accepted finding; the other three lenses were unrun.
+- **landing:** pending — docs/agent/LOOP.md gives the short pending preparation note its own label after the complete old record, pointing to the source-preparation entries.
+- **status:** pending

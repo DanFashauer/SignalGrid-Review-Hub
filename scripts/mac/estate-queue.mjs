@@ -131,7 +131,9 @@ function gatingOf(sha) {
 
 function unresolvedOf(number) {
   const t = tryGh([`repos/${REPO}/pulls/${number}/ccr/review_threads`]);
-  if (Array.isArray(t)) return t.filter((x) => !x.isResolved && !x.is_resolved).length;
+  // The cloud proxy's route names the field `resolved`; a thread with none of the three
+  // readings counts as unresolved (fail-closed).
+  if (Array.isArray(t)) return t.filter((x) => (x.resolved ?? x.isResolved ?? x.is_resolved) !== true).length;
   // Outside the cloud proxy there is no ccr route; GraphQL is the only exact source.
   const q = `query{repository(owner:"${REPO.split("/")[0]}",name:"${REPO.split("/")[1]}"){pullRequest(number:${number}){reviewThreads(first:100){pageInfo{hasNextPage} nodes{isResolved}}}}}`;
   const g = tryGh(["graphql", "-f", `query=${q}`]);

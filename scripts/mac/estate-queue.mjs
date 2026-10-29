@@ -3,7 +3,9 @@
 // ONE next action, and carry out only the two actions that cannot lose work.
 //
 //   node scripts/mac/estate-queue.mjs plan [--json]          # read-only; the queue
-//   node scripts/mac/estate-queue.mjs execute [--max N]      # act on at most N safe items (default 3)
+//   node scripts/mac/estate-queue.mjs execute [--max N] [--cursor-file F]
+//                                                            # act on at most N safe items (default 3),
+//                                                            # starting after the PR number kept in F
 //   node scripts/mac/estate-queue.mjs --self-test
 //
 // WHY THIS EXISTS. The owner's cleanup directive (2026-10-23, restated 2026-10-29 on
@@ -33,6 +35,7 @@
 // action are unchanged. Requires an authenticated `gh` (REST only, like gh-pr.mjs).
 
 import { spawnSync } from "node:child_process";
+import { readFileSync, writeFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import { classifyDiff } from "../check-owner-gated-surfaces.mjs";
 
@@ -211,9 +214,18 @@ function act(item) {
   return { number: item.number, done: false, why: `${item.action} is not executable here` };
 }
 
-export function execute(items, max) {
+/** Executable items in rotation order: numbers after `after` first, then wrap. Without
+ *  this the lowest-numbered few take the whole budget every run while mainline keeps
+ *  moving, and the rest of the estate never gets a turn. */
+export function rotate(items, after) {
+  const ex = items.filter((i) => EXECUTABLE.has(i.action)).sort((a, b) => a.number - b.number);
+  if (!Number.isSafeInteger(after)) return ex;
+  return [...ex.filter((i) => i.number > after), ...ex.filter((i) => i.number <= after)];
+}
+
+export function execute(items, max, after = null) {
   const out = [];
-  for (const item of items.filter((i) => EXECUTABLE.has(i.action))) {
+  for (const item of rotate(items, after)) {
     if (out.filter((o) => o.done).length >= max) break;
     try { out.push(act(item)); } catch (e) { out.push({ number: item.number, done: false, why: String(e.message ?? e) }); }
   }
@@ -282,8 +294,16 @@ function selfTest() {
   const ex = execute([{ number: 1, action: "land-ready" }, { number: 2, action: "owner" }, { number: 3, action: "fix" }], 3);
   const okEx = ex.length === 0;
   if (!okEx) console.error(`FAIL execute acted on a non-executable action: ${JSON.stringify(ex)}`);
-  const total = cases.length + 1;
-  const got = pass + (okEx ? 1 : 0);
+  const q = [5, 9, 2, 7].map((number) => ({ number, action: "refresh" })).concat([{ number: 4, action: "fix" }]);
+  const order = (after) => rotate(q, after).map((i) => i.number).join(",");
+  const rot = [[null, "2,5,7,9"], [5, "7,9,2,5"], [9, "2,5,7,9"], [1, "2,5,7,9"]];
+  let okRot = 0;
+  for (const [after, want] of rot) {
+    if (order(after) === want) okRot++;
+    else console.error(`FAIL rotate after ${after}: ${order(after)}, want ${want}`);
+  }
+  const total = cases.length + 1 + rot.length;
+  const got = pass + (okEx ? 1 : 0) + okRot;
   console.log(`estate-queue self-test: ${got}/${total} passed`);
   return got === total;
 }
@@ -298,13 +318,26 @@ function main(argv) {
   let items;
   try { items = plan(); } catch (e) { console.error(`estate: could not read open PRs: ${e.message}`); return 1; }
   if (cmd === "plan") {
-    if (argv.includes("--json")) console.log(JSON.stringify(items, null, 2));
-    else for (const i of items) console.log(`#${i.number}\t${i.action}\t${i.why}\t${i.headRef ?? ""}`);
-    console.log(summarize(items));
+    if (argv.includes("--json")) {
+      // stdout stays one JSON document; the summary goes to stderr.
+      console.log(JSON.stringify(items, null, 2));
+      console.error(summarize(items));
+    } else {
+      for (const i of items) console.log(`#${i.number}\t${i.action}\t${i.why}\t${i.headRef ?? ""}`);
+      console.log(summarize(items));
+    }
     return 0;
   }
   if (cmd === "execute") {
-    const done = execute(items, max);
+    // --cursor-file <path>: where the last acted PR number is kept between runs, so the
+    // next run starts after it. Unreadable or absent → start from the lowest number.
+    const cIdx = argv.indexOf("--cursor-file");
+    const cursorFile = cIdx >= 0 ? argv[cIdx + 1] : null;
+    let after = null;
+    if (cursorFile) { try { const n = Number(readFileSync(cursorFile, "utf8").trim()); if (Number.isSafeInteger(n)) after = n; } catch {} }
+    const done = execute(items, max, after);
+    const last = done.filter((d) => d.done).at(-1);
+    if (cursorFile && last) { try { writeFileSync(cursorFile, `${last.number}\n`); } catch (e) { console.error(`WARN could not write ${cursorFile}: ${e.message}`); } }
     for (const d of done) console.log(`#${d.number}\t${d.done ? d.did : `skipped: ${d.why}`}`);
     console.log(summarize(items, done));
     return done.some((d) => !d.done && !/changed since the plan/.test(d.why)) ? 1 : 0;

@@ -27,6 +27,7 @@
 //               (preflight + breadth on the head first). This script NEVER merges.
 //   owner       touches DECISION_PATH or OWNER_RESERVED, or a dependency bump → owner
 //   wait        checks still running, or a draft
+//   stale       behind mainline with no real commit in STALE_DAYS; reported, not refreshed
 //
 // Every executed action re-reads the PR first and acts only if the head sha and the
 // action are unchanged. Requires an authenticated `gh` (REST only, like gh-pr.mjs).
@@ -95,7 +96,7 @@ export function classify(pr) {
   // non-fast-forward (force-push is forbidden).
   if (pr.mergeableState === "behind") {
     if (pr.draft) return { action: "wait", why: "draft (behind mainline; not refreshed)" };
-    if (pr.ageDays > STALE_DAYS) return { action: "fix", why: `behind mainline and idle ${Math.floor(pr.ageDays)} days; not refreshed` };
+    if (pr.ageDays > STALE_DAYS) return { action: "stale", why: `behind mainline and idle ${Math.floor(pr.ageDays)} days; not refreshed` };
     return { action: "refresh", why: "behind mainline, no conflict" };
   }
   if (pr.gating !== "success") return { action: "wait", why: `gating check ${pr.gating}` };
@@ -195,8 +196,12 @@ function act(item) {
     // Close FIRST: a failed close then leaves no "Closed by…" comment on an open PR for
     // the next run to repeat.
     gh([`repos/${REPO}/pulls/${item.number}`, "-X", "PATCH", "-f", "state=closed"]);
-    gh([`repos/${REPO}/issues/${item.number}/comments`, "-X", "POST", "--input", "-"],
+    try {
+      gh([`repos/${REPO}/issues/${item.number}/comments`, "-X", "POST", "--input", "-"],
       JSON.stringify({ body: `Closed by the local brain's estate queue (scripts/mac/estate-queue.mjs): every commit on this PR's head as read, \`${item.headSha}\`, is already on \`${BASE}\`. The branch is kept (branch pruning is branch-prune.yml's job); reopen if commits arrived after that read.` }));
+    } catch (e) {
+      return { number: item.number, done: true, did: `closed (superseded); WARN the explaining comment failed: ${String(e.message ?? e).slice(0, 120)}` };
+    }
     return { number: item.number, done: true, did: "closed (superseded)" };
   }
   if (item.action === "refresh") {
@@ -261,7 +266,7 @@ function selfTest() {
     [{ ...base, files: ["tools/engine.ts", "lib/signalgrid-core/src/engine.ts"] }, "owner"],
     [{ ...base, mergeableState: "behind", draft: true }, "wait"],
     [{ ...base, mergeableState: "behind", gating: "failure" }, "fix"],
-    [{ ...base, mergeableState: "behind", ageDays: 30 }, "fix"],
+    [{ ...base, mergeableState: "behind", ageDays: 30 }, "stale"],
     [{ ...base, ageDays: null }, "unknown"],
     [{ ...base, mergeableState: "blocked" }, "fix"],
     [{ ...base, mergeableState: "unstable" }, "fix"],

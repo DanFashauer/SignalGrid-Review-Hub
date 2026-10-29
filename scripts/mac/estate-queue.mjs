@@ -36,7 +36,7 @@
 // action are unchanged. Requires an authenticated `gh` (REST only, like gh-pr.mjs).
 
 import { spawnSync } from "node:child_process";
-import { readFileSync, writeFileSync, openSync, writeSync, fsyncSync, closeSync, mkdirSync, mkdtempSync } from "node:fs";
+import { readFileSync, writeFileSync, openSync, writeSync, fsyncSync, closeSync, mkdirSync, mkdtempSync, fstatSync, statSync, realpathSync, linkSync, symlinkSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -230,13 +230,28 @@ export const LEDGER_PATH = process.env.SIGNALGRID_ESTATE_LEDGER
   ?? join(process.env.SIGNALGRID_STATE_DIR ?? join(homedir(), ".local", "state", "signalgrid"), "estate-attempts.jsonl");
 const LEDGER_HEADER = { ledger: "estate-queue-attempts", version: 1, repo: REPO };
 
+/** The ledger's identity: ONE file reached by ONE name. A hard link would give the same
+ *  inode a second name and with it a second claims directory, so two runs could each hold
+ *  a claim for the same (PR, action, head); a symlink is resolved to its target. */
+function ledgerIdentity(fd, path) {
+  const st = fstatSync(fd);
+  if (!st.isFile()) throw new Error(`attempt ledger at ${path} is not a regular file`);
+  if (st.nlink !== 1) throw new Error(`attempt ledger at ${path} has ${st.nlink} hard links; refusing an aliased ledger`);
+  const real = realpathSync(path);
+  const byName = statSync(real);
+  if (byName.dev !== st.dev || byName.ino !== st.ino) throw new Error(`attempt ledger at ${path} changed while it was opened`);
+  return { real, dev: st.dev, ino: st.ino };
+}
+
 export function fileLedger(path = LEDGER_PATH) {
-  // One read, no separate existence check: a check-then-read can see two different files.
-  let text;
-  try { text = readFileSync(path, "utf8"); } catch (e) {
+  // One open, no separate existence check: a check-then-read can see two different files.
+  let fd;
+  try { fd = openSync(path, "r"); } catch (e) {
     if (e.code === "ENOENT") throw new Error(`attempt ledger missing at ${path}; run \`estate-queue.mjs init\` once, by hand, after checking nothing is in flight`);
     throw e;
   }
+  let text, id;
+  try { id = ledgerIdentity(fd, path); text = readFileSync(fd, "utf8"); } finally { closeSync(fd); }
   const lines = text.split("\n").filter(Boolean);
   const head = JSON.parse(lines[0] ?? "null");
   if (head?.ledger !== LEDGER_HEADER.ledger || head.version !== 1 || head.repo !== REPO) throw new Error(`attempt ledger at ${path} has no valid header for ${REPO}`);
@@ -248,15 +263,24 @@ export function fileLedger(path = LEDGER_PATH) {
   // The CLAIM is one file per (PR, action, head) created with O_EXCL ("wx"): the kernel
   // lets exactly one process create it, so two runs that both loaded the ledger before
   // either recorded cannot both pass. `has` is only a fast path; the claim is the fence.
-  const claims = `${path}.claims`;
+  // The claims directory is named from the ledger's REAL path, so every name for it that
+  // is allowed (only symlinks) shares one fence.
+  const claims = `${id.real}.claims`;
   return {
     has: (k) => keys.has(k),
     record: (entry) => {
       const key = `${entry.number}:${entry.action}:${entry.head}`;
+      // Re-checked at write time: a link made after this reader opened the ledger.
+      const lfd = openSync(id.real, "a");
+      try {
+        const now = ledgerIdentity(lfd, id.real);
+        if (now.dev !== id.dev || now.ino !== id.ino) throw new Error("attempt ledger was replaced since it was opened");
+      } catch (e) { closeSync(lfd); throw e; }
+      closeSync(lfd);
       mkdirSync(claims, { recursive: true });
       const cfd = openSync(join(claims, key.replace(/:/g, "-")), "wx"); // EEXIST → already claimed
       try { writeSync(cfd, JSON.stringify(entry) + "\n"); fsyncSync(cfd); } finally { closeSync(cfd); }
-      const fd = openSync(path, "a");
+      const fd = openSync(id.real, "a");
       try { writeSync(fd, JSON.stringify(entry) + "\n"); fsyncSync(fd); } finally { closeSync(fd); }
       keys.add(key);
     },
@@ -511,6 +535,29 @@ function selfTest() {
     const [b] = execute(one, 3, null, st.forge, B);
     check("two preloaded readers: the second run is refused by the claim, not by a fresh read (1 marker POST total)",
       st.calls.comment === 1 && a.attempted && !b.attempted && /claimed/.test(b.why ?? ""));
+  }
+  {
+    // A hard link of the SAME ledger inode under a second name: refused at open, and a link
+    // made after a reader opened it is refused at record time. One marker POST at most.
+    const dir = mkdtempSync(join(process.env.TMPDIR ?? "/tmp", "estate-ledger-alias-"));
+    const a = join(dir, "a.jsonl"), b = join(dir, "b.jsonl"), c = join(dir, "c.jsonl");
+    initLedger(a);
+    const A = fileLedger(a);
+    linkSync(a, b);
+    let aliasRefused = false; try { fileLedger(b); } catch { aliasRefused = true; }
+    let reopenRefused = false; try { fileLedger(a); } catch { reopenRefused = true; }
+    const st = mkForge({ markerLost: true });
+    const one = [{ number: 32, action: "refresh", headSha: fsha(32) }];
+    const [ra] = execute(one, 3, null, st.forge, A);
+    initLedger(c); symlinkSync(c, join(dir, "s.jsonl"));
+    const C = fileLedger(c), S = fileLedger(join(dir, "s.jsonl"));
+    const st2 = mkForge({ markerLost: true });
+    const two = [{ number: 33, action: "refresh", headSha: fsha(33) }];
+    const [rc] = execute(two, 3, null, st2.forge, C);
+    const [rs] = execute(two, 3, null, st2.forge, S);
+    check("an aliased ledger is refused: a hard link at open and at record (0 POSTs); a symlink shares one claim (1 POST)",
+      aliasRefused && reopenRefused && st.calls.comment === 0 && !ra.attempted
+      && st2.calls.comment === 1 && rc.attempted && !rs.attempted);
   }
   {
     const st = mkForge({ commentsUnreadable: true });

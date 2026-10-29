@@ -36,7 +36,7 @@
 // action are unchanged. Requires an authenticated `gh` (REST only, like gh-pr.mjs).
 
 import { spawnSync } from "node:child_process";
-import { readFileSync, writeFileSync, openSync, writeSync, fsyncSync, closeSync, mkdirSync, existsSync } from "node:fs";
+import { readFileSync, writeFileSync, openSync, writeSync, fsyncSync, closeSync, mkdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -231,8 +231,13 @@ export const LEDGER_PATH = process.env.SIGNALGRID_ESTATE_LEDGER
 const LEDGER_HEADER = { ledger: "estate-queue-attempts", version: 1, repo: REPO };
 
 export function fileLedger(path = LEDGER_PATH) {
-  if (!existsSync(path)) throw new Error(`attempt ledger missing at ${path}; run \`estate-queue.mjs init\` once, by hand, after checking nothing is in flight`);
-  const lines = readFileSync(path, "utf8").split("\n").filter(Boolean);
+  // One read, no separate existence check: a check-then-read can see two different files.
+  let text;
+  try { text = readFileSync(path, "utf8"); } catch (e) {
+    if (e.code === "ENOENT") throw new Error(`attempt ledger missing at ${path}; run \`estate-queue.mjs init\` once, by hand, after checking nothing is in flight`);
+    throw e;
+  }
+  const lines = text.split("\n").filter(Boolean);
   const head = JSON.parse(lines[0] ?? "null");
   if (head?.ledger !== LEDGER_HEADER.ledger || head.version !== 1 || head.repo !== REPO) throw new Error(`attempt ledger at ${path} has no valid header for ${REPO}`);
   const keys = new Set(lines.slice(1).map((l) => {
@@ -251,9 +256,10 @@ export function fileLedger(path = LEDGER_PATH) {
 }
 
 export function initLedger(path = LEDGER_PATH) {
-  if (existsSync(path)) throw new Error(`attempt ledger already exists at ${path}; refusing to overwrite it`);
   mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, JSON.stringify({ ...LEDGER_HEADER, createdAt: new Date().toISOString() }) + "\n", { flag: "wx" });
+  // "wx" creates or fails atomically; there is no window in which an existing ledger is replaced.
+  try { writeFileSync(path, JSON.stringify({ ...LEDGER_HEADER, createdAt: new Date().toISOString() }) + "\n", { flag: "wx" }); }
+  catch (e) { throw e.code === "EEXIST" ? new Error(`attempt ledger already exists at ${path}; refusing to overwrite it`) : e; }
 }
 
 /** The durable attempt record. It lives ON the PR (a comment), not on this machine, so a
@@ -296,13 +302,24 @@ export function act(item, forge = ghForge, ledger) {
     return { ...base, attempted: true, done: true, did: "merged mainline into the branch" };
   }
   if (item.action === "superseded") {
-    try { forge.close(item.number); } catch (e) { return uncertain(e); }
-    // The close is not conditional on the head, so read it back: a push that landed between
-    // the read and the close must not stay closed as "superseded".
+    // The close is not conditional on the head, so ALWAYS read it back, a lost response
+    // included: a push that landed between the read and the close must not stay closed, and
+    // a closed PR drops out of every later plan (plan() lists open PRs only).
+    let closeErr = null;
+    try { forge.close(item.number); } catch (e) { closeErr = e; }
     const after = forge.headOf(item.number);
-    if (after?.headSha === item.headSha) return { ...base, attempted: true, done: true, did: "closed (superseded)" };
+    if (!after) {
+      return closeErr ? uncertain(closeErr)
+        : { ...base, attempted: true, failed: true, why: `closed, but #${item.number} could not be read back: a person must check its head` };
+    }
+    if (after.state !== "closed") {
+      // The close did not take (or someone reopened it). Never retried: the head is fenced.
+      return closeErr ? uncertain(closeErr) : { ...base, attempted: true, why: "close sent but the PR still reads open; read-only at this head" };
+    }
+    const lost = closeErr ? " (response lost; confirmed by readback)" : "";
+    if (after.headSha === item.headSha) return { ...base, attempted: true, done: true, did: `closed (superseded)${lost}` };
     if (after?.headSha && forge.contained(after.headSha) === true) {
-      return { ...base, attempted: true, done: true, did: `closed (superseded; head moved to ${after.headSha.slice(0, 8)}, also on ${BASE})` };
+      return { ...base, attempted: true, done: true, did: `closed (superseded; head moved to ${after.headSha.slice(0, 8)}, also on ${BASE})${lost}` };
     }
     try { forge.reopen(item.number); } catch (e) {
       return { ...base, attempted: true, failed: true, why: `head moved during the close and the REOPEN FAILED (${String(e.message ?? e).slice(0, 80)}): a person must reopen #${item.number}` };
@@ -487,6 +504,16 @@ function selfTest() {
     const st = mkForge({ compare: "behind", state: "clean", moveAfterClose: true, movedContained: true });
     const [d] = execute(sup, 3, null, st.forge, st.ledger);
     check("a head that moved to already-merged work stays closed", st.calls.reopen === 0 && d.done);
+  }
+  {
+    const st = mkForge({ compare: "behind", state: "clean", moveAfterClose: true, lose: true });
+    const [d] = execute(sup, 3, null, st.forge, st.ledger);
+    check("a close whose response was lost is still read back, and a moved uncontained head is reopened", st.calls.reopen === 1 && !d.done && d.attempted);
+  }
+  {
+    const st = mkForge({ compare: "behind", state: "clean", lose: true });
+    const [d] = execute(sup, 3, null, st.forge, st.ledger);
+    check("a close whose response was lost but which took is confirmed by readback, not left uncertain", d.done && st.calls.reopen === 0 && st.calls.close === 1);
   }
   {
     const st = mkForge({ compare: "behind", state: "clean", moveAfterClose: true, reopenFails: true });

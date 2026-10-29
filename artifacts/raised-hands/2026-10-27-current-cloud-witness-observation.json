@@ -7,10 +7,13 @@
   "need": "The registry Cloud owner must supply an actual fresh witness or source-backed blocked outcome; the steward can carry verified source through protected delivery. This open hand records observation, not a Cloud run or completed work.",
   "whoCanUnblock": "cloud lane",
   "domain": "lane",
-  "status": "open",
+  "status": "resolved",
   "routedTo": null,
   "where": "Issue #1546; current canonical coordination state",
   "covers": [
     "heartbeat:forward-build-cycle"
-  ]
+  ],
+  "resolvedAt": "2026-10-29T11:01:31.098Z",
+  "resolvedBy": "cloud",
+  "resolution": "Cloud lane delivered a fresh forward-build-cycle heartbeat in PR #1678 (merged bcb506e5); the stall is no longer measured"
 }

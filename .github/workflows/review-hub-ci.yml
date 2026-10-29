@@ -688,6 +688,10 @@ jobs:
         run: node scripts/mac/local-brain/test/job-state.test.mjs
       - name: "Local worker task-selector proofs"
         run: node scripts/mac/local-brain/test/task-selector.test.mjs
+      - name: "Local worker task-selector C0 regressions"
+        run: node scripts/mac/local-brain/test/task-selector-control-scope.test.mjs
+      - name: "Local worker task-selector C0 proof envelope"
+        run: node scripts/check-local-worker-task-selector-proof.mjs
       - name: "Local worker proof-policy proofs"
         run: node scripts/mac/local-brain/test/proof-policy.test.mjs
       # DR-060 rule 3, first slice: docs/agent/mcp-roster.json names which lane or

@@ -28,23 +28,23 @@ individually reported success.
 
 ---
 
-## Which tool for what
+## Which role and harness for what
 
-| Tool | Use it for | Do not use it for |
-| --- | --- | --- |
-| **Chat** | Thinking, strategy, research, reviewing evidence, arguing back | Editing the repo |
-| **Claude Code** | Patches, gates, tests, anything touching files | Deciding what to build |
-| **Cowork** | Documents, discovery notes, spreadsheets, non-repo work | Code |
+Routine bounded selection and execution are delegated to the local second brain
+and its repository steward. A supervised local coding harness may inspect source,
+select eligible work, and make and test isolated edits within actual grants and
+exclusive ownership. Local Ollama is primary; Claude/Codex supply necessary
+escalation and genuine source review within saved limits.
 
-**The rule that matters:** the tool that *decides* is never the tool that
-*builds*. Decisions come from the owner or from a chat session; Claude Code
-executes them. That separation is what stopped the freeze dying quietly when a
-well-argued networking proposal arrived.
+Tool brands do not create permissions or require the owner to route every task.
+Current owner directions, source scope, independent source review, full applicable
+local checks, current-head CI, findings disposition and DR-037 control delivery.
+Owner-reserved decisions and the publication boundary remain in force. Source
+review is evidence, never an invented approving vote.
 
-**A plain chat window has no repo checkout.** If a session cannot find this
-file, it is not lost - clone the repo, or attach it.
-Plain chat sessions have no repo checkout — attach LOOP.md to the chat or
-clone `SignalGrid_Alpha`; `git pull` is not available there.
+Verify the actual checkout path, origin, canonical branch and full head before
+acting. A session without repository access needs an attached source or checkout;
+conversation context alone is not a repository or execution proof.
 
 ---
 
@@ -59,6 +59,8 @@ PHASE:        Build / execution (past Customer Discovery, DR-033 2026-09-10).
 CURRENT EVIDENCE: 2026-10-21 — immutable artifact f3b55f7173ed5d5365a102ebadadef2e0e1dfcea records mint 22:14:07.453Z and request completion 22:14:10.153Z, passed/exit 0 in 1196548 ms, on clean source a70c36b3e0e897d8a80a863e7228417f729e487f.
               reviewHubPass=true; mcpPass=true; MCP commit 343339c436dea47818fa17cf3be486782e62d912 is clean; manifest v97 aa9ce381438ecb26874cdbe60b82a9339821d6b540f176e122291202a6b3885b; 141 passed proof records. The two native web steps are Linux-VM attested on that exact source, so stepsNotRun=[]; two proof names remain notRecorded and three steps remain stepsExcluded. The separate fresh-evidence EVIDENCE entry names those ceilings and the contract hash. No new readiness figure or owner-real-in-hand attestation is asserted.
 EVIDENCE PUBLICATION: #1577 carried artifact f3b55f7173ed5d5365a102ebadadef2e0e1dfcea onto canonical mainline at 24eff86a940099e0725d474d1d5520bfbc71d368; the mint and its Linux attestation remain measurements of clean a70c36b3e0e897d8a80a863e7228417f729e487f, not new measurements of the later redaction head or merge.
+PENDING SOURCE PREPARATION: 2026-10-28 — see the 2026-10-27/28 EVIDENCE source-preparation entries for delegated policy, the C0 proof and open coordination covers; no new mint, completed witness or public qualification is claimed.
+PENDING CI FIX: 2026-10-28 — R6p1d explicitly constructs its missing tracking ref; EVIDENCE records applicable local checks, targeted Git2.56 evidence and limited-resource failures. Full current-head source/CI/preflight qualification remains pending.
 LATEST LANDING UPDATE: 2026-10-22 — #1593 69258e30433f1a20c31975d50d746065032097c4 (GitHub merged_at 2026-10-22T19:52:31Z; Git committedDate 19:52:30Z), from exact tested head 79c403004707627f7b0431725c48dd713775af18; five-minute build retry, 144-failure scheduled outage threshold, active registry/coordination record, and configured/installed/loaded cadence reporting.
               Required check 120039369859 completed success at 19:50:15Z; all six main SignalGrid CI jobs succeeded. The 18-context final rollup had 14 success, 3 skipped and optional Mac check 120039362022 queued, not passed. Exact clean-head local preflight passed in 957.95s with two web build/browser steps unavailable and three checks self-skipped; breadth passed 58 proofs in 36.34s. All three recorded review threads resolved; the formal Codex review was on earlier 100682a4, not a new 79c review. The final canonical delta was one uncounted heartbeat file.
               See the separate #1593 EVIDENCE record; the later record-publishing head requires its own ordinary checks and landing, neither claimed here. CURRENT EVIDENCE/EVIDENCE PUBLICATION above remain historical f3/a70 measurements. No new mint, readiness, owner attestation, other landing or private-runtime claim is asserted.

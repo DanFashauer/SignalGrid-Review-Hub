@@ -36,7 +36,7 @@
 // action are unchanged. Requires an authenticated `gh` (REST only, like gh-pr.mjs).
 
 import { spawnSync } from "node:child_process";
-import { readFileSync, writeFileSync, openSync, writeSync, fsyncSync, closeSync, mkdirSync } from "node:fs";
+import { readFileSync, writeFileSync, openSync, writeSync, fsyncSync, closeSync, mkdirSync, mkdtempSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -245,12 +245,20 @@ export function fileLedger(path = LEDGER_PATH) {
     if (!Number.isSafeInteger(e.number) || typeof e.action !== "string" || !/^[0-9a-f]{40}$/.test(e.head)) throw new Error("attempt ledger has a malformed entry");
     return `${e.number}:${e.action}:${e.head}`;
   }));
+  // The CLAIM is one file per (PR, action, head) created with O_EXCL ("wx"): the kernel
+  // lets exactly one process create it, so two runs that both loaded the ledger before
+  // either recorded cannot both pass. `has` is only a fast path; the claim is the fence.
+  const claims = `${path}.claims`;
   return {
     has: (k) => keys.has(k),
     record: (entry) => {
+      const key = `${entry.number}:${entry.action}:${entry.head}`;
+      mkdirSync(claims, { recursive: true });
+      const cfd = openSync(join(claims, key.replace(/:/g, "-")), "wx"); // EEXIST → already claimed
+      try { writeSync(cfd, JSON.stringify(entry) + "\n"); fsyncSync(cfd); } finally { closeSync(cfd); }
       const fd = openSync(path, "a");
       try { writeSync(fd, JSON.stringify(entry) + "\n"); fsyncSync(fd); } finally { closeSync(fd); }
-      keys.add(`${entry.number}:${entry.action}:${entry.head}`);
+      keys.add(key);
     },
   };
 }
@@ -287,6 +295,7 @@ export function act(item, forge = ghForge, ledger) {
   }
   // The local record goes first and must succeed: from here on a write may reach GitHub.
   try { ledger.record({ number: item.number, action: item.action, head: item.headSha }); } catch (e) {
+    if (e?.code === "EEXIST") return { ...base, why: "already claimed at this head by another run; read-only" };
     return { ...base, why: `could not record the attempt locally (${String(e.message ?? e).slice(0, 80)}); no write sent` };
   }
   const text = item.action === "superseded"
@@ -475,7 +484,7 @@ function selfTest() {
   }
   {
     // The file ledger itself: missing refuses, init creates once, a corrupt line refuses.
-    const dir = join(process.env.TMPDIR ?? "/tmp", `estate-ledger-selftest-${process.pid}`);
+    const dir = mkdtempSync(join(process.env.TMPDIR ?? "/tmp", "estate-ledger-selftest-"));
     const f = join(dir, "attempts.jsonl");
     let missingRefused = false; try { fileLedger(f); } catch { missingRefused = true; }
     initLedger(f);
@@ -488,6 +497,20 @@ function selfTest() {
     let headerRefused = false; try { fileLedger(f); } catch { headerRefused = true; }
     check("file ledger: missing, double init, corrupt entry and wrong header all refuse; a record survives a re-open",
       missingRefused && initTwiceRefused && reread && corruptRefused && headerRefused);
+  }
+  {
+    // Two runs that both loaded the ledger BEFORE either recorded; A's marker POST loses its
+    // response and the comments readback stays empty. B must not post a second marker.
+    const dir = mkdtempSync(join(process.env.TMPDIR ?? "/tmp", "estate-ledger-race-"));
+    const f = join(dir, "attempts.jsonl");
+    initLedger(f);
+    const A = fileLedger(f), B = fileLedger(f);
+    const st = mkForge({ markerLost: true });
+    const one = [{ number: 31, action: "refresh", headSha: fsha(31) }];
+    const [a] = execute(one, 3, null, st.forge, A);
+    const [b] = execute(one, 3, null, st.forge, B);
+    check("two preloaded readers: the second run is refused by the claim, not by a fresh read (1 marker POST total)",
+      st.calls.comment === 1 && a.attempted && !b.attempted && /claimed/.test(b.why ?? ""));
   }
   {
     const st = mkForge({ commentsUnreadable: true });

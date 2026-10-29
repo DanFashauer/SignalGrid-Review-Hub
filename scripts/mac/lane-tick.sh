@@ -470,7 +470,9 @@ if [ -f scripts/mac/estate-queue.mjs ] && command -v gh >/dev/null 2>&1; then
       _est="$(node scripts/mac/estate-queue.mjs execute --max "$ESTATE_MAX" 2>&1)"
       _est_rc=$?
       printf '%s\n' "$_est" | while IFS= read -r _l; do say "  $_l"; done
-      touch "$ESTATE_STAMP" 2>/dev/null || true
+      # Without the stamp the hourly throttle is gone and the queue runs every tick.
+      mkdir -p node_modules 2>/dev/null || true
+      touch "$ESTATE_STAMP" 2>/dev/null || say "WARN could not write $ESTATE_STAMP; the estate queue will re-run next tick"
       if [ "$_est_rc" = "0" ]; then
         RESULT="$RESULT; $(printf '%s\n' "$_est" | tail -1)"
       else

@@ -43,11 +43,18 @@ const BOTS = new Set(["dependabot[bot]", "renovate[bot]"]);
 const EXECUTABLE = new Set(["superseded", "refresh"]);
 /** Surfaces a lane never self-merges (landing-under-dr-037, condition 5; the forward-build
  *  routine's NEVER list) beyond classifyDiff's two owner-gated categories. */
+// Matched by NAME anywhere in the path, not by a retyped file list, so a gate's ceiling
+// file or proof (docs/agent/launch-claims-*-ceiling.json, scripts/src/launch-profile-proof.ts)
+// cannot read autonomous just because nobody added it here. Over-matching only escalates.
 const NEVER_LAND = [
-  /^docs\/DECISION_RECORDS\.md$/,
-  /^docs\/(LAUNCH_PROFILE|PUBLICATION_BOUNDARY)\.md$/,
-  /^scripts\/(check-launch-claims|check-launch-profile|launch-profile|check-publication-boundary|publication-boundary)\.(mjs|d\.mts)$/,
+  /(^|\/)DECISION_RECORDS\.md$/,
+  /launch[-_]?(claims|profile)/i,
+  /publication[-_]?boundary/i,
+  /(^|\/)ratchet-read\.mjs$/,
 ];
+/** A behind PR untouched this long is left alone: refreshing an abandoned branch every
+ *  hour spends CI and never makes it landable. */
+const STALE_DAYS = 14;
 
 /** One PR's facts → one action. Any missing fact is `unknown`, which never acts. */
 export function classify(pr) {
@@ -67,6 +74,7 @@ export function classify(pr) {
     return { action: "unknown", why: `compare status ${pr.compareStatus}` };
   }
   if (BOTS.has(pr.user)) return { action: "owner", why: "dependency bump (dependabot queue is the owner's)" };
+  if (!Number.isFinite(pr.ageDays)) return { action: "unknown", why: "unread: ageDays" };
 
   const cats = new Set(classifyDiff(pr.files).matched.map((m) => m.category));
   const reserved = pr.files.filter((f) => NEVER_LAND.some((re) => re.test(String(f).replace(/^\.\//, ""))));
@@ -76,14 +84,20 @@ export function classify(pr) {
   switch (pr.mergeableState) {
     case "dirty":
       return { action: "fix", why: "conflicts with mainline" };
-    case "behind":
-      return { action: "refresh", why: "behind mainline, no conflict" };
     case "unknown":
       return { action: "unknown", why: "GitHub has not computed mergeability" };
     default:
       break;
   }
   if (pr.gating === "failure") return { action: "fix", why: "gating check failed on the head" };
+  // Refresh only after draft and a failed gate are ruled out: a draft may be a branch
+  // another lane is still pushing to, and a merge commit under it makes that push
+  // non-fast-forward (force-push is forbidden).
+  if (pr.mergeableState === "behind") {
+    if (pr.draft) return { action: "wait", why: "draft (behind mainline; not refreshed)" };
+    if (pr.ageDays > STALE_DAYS) return { action: "fix", why: `behind mainline and idle ${Math.floor(pr.ageDays)} days; not refreshed` };
+    return { action: "refresh", why: "behind mainline, no conflict" };
+  }
   if (pr.gating !== "success") return { action: "wait", why: `gating check ${pr.gating}` };
   if (pr.draft) return { action: "wait", why: "draft" };
   if (pr.unresolvedThreads > 0) return { action: "fix", why: `${pr.unresolvedThreads} unresolved thread(s)` };
@@ -102,7 +116,9 @@ const tryGh = (args) => { try { return gh(args); } catch { return null; } };
 
 function gatingOf(sha) {
   const runs = tryGh([`repos/${REPO}/commits/${sha}/check-runs?per_page=100`]);
-  if (!runs) return null;
+  if (!runs || !Array.isArray(runs.check_runs)) return null;
+  // A second page could hold a failing gating run; an unread page is an unread fact.
+  if (runs.total_count > runs.check_runs.length) return null;
   const mine = runs.check_runs.filter((c) => c.name === GATING);
   if (!mine.length) return "missing";
   if (mine.some((c) => c.status !== "completed")) return "pending";
@@ -113,10 +129,23 @@ function unresolvedOf(number) {
   const t = tryGh([`repos/${REPO}/pulls/${number}/ccr/review_threads`]);
   if (Array.isArray(t)) return t.filter((x) => !x.isResolved && !x.is_resolved).length;
   // Outside the cloud proxy there is no ccr route; GraphQL is the only exact source.
-  const q = `query{repository(owner:"${REPO.split("/")[0]}",name:"${REPO.split("/")[1]}"){pullRequest(number:${number}){reviewThreads(first:100){nodes{isResolved}}}}}`;
+  const q = `query{repository(owner:"${REPO.split("/")[0]}",name:"${REPO.split("/")[1]}"){pullRequest(number:${number}){reviewThreads(first:100){pageInfo{hasNextPage} nodes{isResolved}}}}}`;
   const g = tryGh(["graphql", "-f", `query=${q}`]);
-  const nodes = g?.data?.repository?.pullRequest?.reviewThreads?.nodes;
-  return Array.isArray(nodes) ? nodes.filter((n) => !n.isResolved).length : null;
+  const rt = g?.data?.repository?.pullRequest?.reviewThreads;
+  if (!rt || rt.pageInfo?.hasNextPage !== false || !Array.isArray(rt.nodes)) return null;
+  return rt.nodes.filter((n) => !n.isResolved).length;
+}
+
+/** Days since the newest NON-merge commit unique to the head. A refresh (a merge of
+ *  mainline) is not work, so refreshing never makes an abandoned branch look active. */
+function workAgeDays(cmp) {
+  if (!Array.isArray(cmp?.commits) || cmp.commits.length === 0) return null;
+  if (Number.isSafeInteger(cmp.total_commits) && cmp.total_commits > cmp.commits.length) return null;
+  const dates = cmp.commits
+    .filter((c) => Array.isArray(c.parents) && c.parents.length < 2)
+    .map((c) => Date.parse(c.commit?.committer?.date ?? ""))
+    .filter(Number.isFinite);
+  return dates.length ? (Date.now() - Math.max(...dates)) / 86400000 : null;
 }
 
 export function readPr(number) {
@@ -137,14 +166,19 @@ export function readPr(number) {
     compareStatus: cmp?.status ?? null,
     gating: gatingOf(p.head.sha),
     unresolvedThreads: unresolvedOf(number),
+    ageDays: workAgeDays(cmp),
     // 100 files is the page; a PR with more is judged on the first page plus a sentinel
     // that classifyDiff treats as owner-gated, so a long diff can never read autonomous.
-    files: Array.isArray(files) ? [...files.map((f) => f.filename), ...(files.length >= 100 ? ["docs/DECISION_RECORDS.md"] : [])] : null,
+    // A rename is judged on BOTH paths: moving an owner-gated file away is touching it.
+    files: Array.isArray(files)
+      ? [...files.flatMap((f) => [f.filename, f.previous_filename].filter(Boolean)), ...(files.length >= 100 ? ["docs/DECISION_RECORDS.md"] : [])]
+      : null,
   };
 }
 
 export function plan() {
   const open = gh([`repos/${REPO}/pulls?state=open&per_page=100&base=${BASE}`]);
+  if (!Array.isArray(open) || open.length >= 100) throw new Error("open-PR list missing or at the 100 page cap; refusing a partial queue");
   return open
     .map((p) => p.number)
     .sort((a, b) => a - b)
@@ -158,9 +192,11 @@ function act(item) {
     return { number: item.number, done: false, why: `changed since the plan (now ${now.action})` };
   }
   if (item.action === "superseded") {
-    gh([`repos/${REPO}/issues/${item.number}/comments`, "-X", "POST", "--input", "-"],
-      JSON.stringify({ body: `Closed by the local brain's estate queue (scripts/mac/estate-queue.mjs): every commit on this PR's head \`${item.headSha}\` is already on \`${BASE}\`, so nothing is lost. The branch is kept; branch pruning is branch-prune.yml's job.` }));
+    // Close FIRST: a failed close then leaves no "Closed by…" comment on an open PR for
+    // the next run to repeat.
     gh([`repos/${REPO}/pulls/${item.number}`, "-X", "PATCH", "-f", "state=closed"]);
+    gh([`repos/${REPO}/issues/${item.number}/comments`, "-X", "POST", "--input", "-"],
+      JSON.stringify({ body: `Closed by the local brain's estate queue (scripts/mac/estate-queue.mjs): every commit on this PR's head as read, \`${item.headSha}\`, is already on \`${BASE}\`. The branch is kept (branch pruning is branch-prune.yml's job); reopen if commits arrived after that read.` }));
     return { number: item.number, done: true, did: "closed (superseded)" };
   }
   if (item.action === "refresh") {
@@ -191,7 +227,7 @@ export function summarize(items, done = []) {
 function selfTest() {
   const sha = "a".repeat(40);
   const base = { number: 7, user: "DanFashauer", headSha: sha, mergeableState: "clean", compareStatus: "ahead",
-    gating: "success", unresolvedThreads: 0, files: ["docs/agent/NOTE.md"], draft: false, labels: [] };
+    gating: "success", unresolvedThreads: 0, files: ["docs/agent/NOTE.md"], draft: false, labels: [], ageDays: 1 };
   const cases = [
     [{ ...base }, "land-ready"],
     [{ ...base, number: 439 }, "keep"],
@@ -217,6 +253,16 @@ function selfTest() {
     [{ ...base, files: ["scripts/x.mjs"] }, "land-ready"],
     [{ ...base, files: ["scripts/check-launch-claims.mjs"] }, "owner"],
     [{ ...base, files: ["./docs/PUBLICATION_BOUNDARY.md"] }, "owner"],
+    [{ ...base, files: ["docs/agent/launch-claims-docs-ceiling.json"] }, "owner"],
+    [{ ...base, files: ["docs/agent/launch-claims-retired-labels-ceiling.json"] }, "owner"],
+    [{ ...base, files: ["scripts/src/launch-profile-proof.ts"] }, "owner"],
+    [{ ...base, files: ["scripts/lib/ratchet-read.mjs"] }, "owner"],
+    [{ ...base, files: ["docs/archive/LP.md", "docs/LAUNCH_PROFILE.md"] }, "owner"],
+    [{ ...base, files: ["tools/engine.ts", "lib/signalgrid-core/src/engine.ts"] }, "owner"],
+    [{ ...base, mergeableState: "behind", draft: true }, "wait"],
+    [{ ...base, mergeableState: "behind", gating: "failure" }, "fix"],
+    [{ ...base, mergeableState: "behind", ageDays: 30 }, "fix"],
+    [{ ...base, ageDays: null }, "unknown"],
     [{ ...base, mergeableState: "blocked" }, "fix"],
     [{ ...base, mergeableState: "unstable" }, "fix"],
     [null, "unknown"],

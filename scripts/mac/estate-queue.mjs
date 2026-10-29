@@ -191,29 +191,74 @@ export function plan() {
     .map((n) => { const pr = readPr(n); return { ...pr, ...classify(pr) }; });
 }
 
-function act(item) {
-  const fresh = readPr(item.number);
+/** The forge, as the executor sees it. Injectable so the self-test can lose responses
+ *  and move heads mid-action without touching GitHub. */
+export const ghForge = {
+  readPr,
+  comments: (n) => {
+    const c = tryGh([`repos/${REPO}/issues/${n}/comments?per_page=100`]);
+    // A full page may hide an older marker; an unread page is an unread fact.
+    return Array.isArray(c) && c.length < 100 ? c.map((x) => String(x.body ?? "")) : null;
+  },
+  comment: (n, body) => gh([`repos/${REPO}/issues/${n}/comments`, "-X", "POST", "--input", "-"], JSON.stringify({ body })),
+  close: (n) => gh([`repos/${REPO}/pulls/${n}`, "-X", "PATCH", "-f", "state=closed"]),
+  reopen: (n) => gh([`repos/${REPO}/pulls/${n}`, "-X", "PATCH", "-f", "state=open"]),
+  updateBranch: (n, sha) => gh([`repos/${REPO}/pulls/${n}/update-branch`, "-X", "PUT", "-f", `expected_head_sha=${sha}`]),
+  contained: (sha) => {
+    const c = tryGh([`repos/${REPO}/compare/${BASE}...${sha}`]);
+    return c?.status === "identical" || c?.status === "behind" ? true : c ? false : null;
+  },
+};
+
+/** The durable attempt record. It lives ON the PR (a comment), not on this machine, so a
+ *  lost local state, a restart or a second Mac cannot make the same mutation look new. */
+export const attemptMarker = (action, sha) => `<!-- estate-queue:attempt action=${action} head=${sha} -->`;
+
+/**
+ * One item. Returns { number, attempted, done, why|did, failed? }. `attempted` is true from
+ * the moment a write MAY have reached GitHub (the marker included), and it is what the
+ * budget counts; a lost response is an attempt, never a free retry.
+ */
+export function act(item, forge = ghForge) {
+  const base = { number: item.number, attempted: false, done: false };
+  const fresh = forge.readPr(item.number);
   const now = classify(fresh);
   if (fresh.headSha !== item.headSha || now.action !== item.action) {
-    return { number: item.number, done: false, why: `changed since the plan (now ${now.action})` };
+    return { ...base, why: `changed since the plan (now ${now.action})` };
+  }
+  const marker = attemptMarker(item.action, item.headSha);
+  const bodies = forge.comments(item.number);
+  if (!Array.isArray(bodies)) return { ...base, why: "could not read the PR's comments; not acting" };
+  if (bodies.some((b) => b.includes(marker))) {
+    return { ...base, why: "already attempted at this head; read-only until the head moves" };
+  }
+  const text = item.action === "superseded"
+    ? `The local brain's estate queue (scripts/mac/estate-queue.mjs) is closing this PR: every commit on its head as read, \`${item.headSha}\`, is already on \`${BASE}\`. The branch is kept (branch pruning is branch-prune.yml's job). If new commits arrive the PR is reopened.`
+    : `The local brain's estate queue (scripts/mac/estate-queue.mjs) is merging \`${BASE}\` into this branch (head as read: \`${item.headSha}\`), because it was behind with no conflict. A merge, never a rebase.`;
+  try { forge.comment(item.number, `${marker}\n${text}`); } catch (e) {
+    // The marker may or may not exist now. No mutation is sent this run either way.
+    return { ...base, attempted: true, why: `attempt record uncertain (${String(e.message ?? e).slice(0, 80)}); no write sent` };
+  }
+  const uncertain = (e) => ({ ...base, attempted: true, why: `write outcome uncertain (${String(e.message ?? e).slice(0, 80)}); recorded, read-only at this head` });
+  if (item.action === "refresh") {
+    try { forge.updateBranch(item.number, item.headSha); } catch (e) { return uncertain(e); }
+    return { ...base, attempted: true, done: true, did: "merged mainline into the branch" };
   }
   if (item.action === "superseded") {
-    // Close FIRST: a failed close then leaves no "Closed by…" comment on an open PR for
-    // the next run to repeat.
-    gh([`repos/${REPO}/pulls/${item.number}`, "-X", "PATCH", "-f", "state=closed"]);
-    try {
-      gh([`repos/${REPO}/issues/${item.number}/comments`, "-X", "POST", "--input", "-"],
-      JSON.stringify({ body: `Closed by the local brain's estate queue (scripts/mac/estate-queue.mjs): every commit on this PR's head as read, \`${item.headSha}\`, is already on \`${BASE}\`. The branch is kept (branch pruning is branch-prune.yml's job); reopen if commits arrived after that read.` }));
-    } catch (e) {
-      return { number: item.number, done: true, did: `closed (superseded); WARN the explaining comment failed: ${String(e.message ?? e).slice(0, 120)}` };
+    try { forge.close(item.number); } catch (e) { return uncertain(e); }
+    // The close is not conditional on the head, so read it back: a push that landed between
+    // the read and the close must not stay closed as "superseded".
+    const after = forge.readPr(item.number);
+    if (after?.headSha === item.headSha) return { ...base, attempted: true, done: true, did: "closed (superseded)" };
+    if (after?.headSha && forge.contained(after.headSha) === true) {
+      return { ...base, attempted: true, done: true, did: `closed (superseded; head moved to ${after.headSha.slice(0, 8)}, also on ${BASE})` };
     }
-    return { number: item.number, done: true, did: "closed (superseded)" };
+    try { forge.reopen(item.number); } catch (e) {
+      return { ...base, attempted: true, failed: true, why: `head moved during the close and the REOPEN FAILED (${String(e.message ?? e).slice(0, 80)}): a person must reopen #${item.number}` };
+    }
+    return { ...base, attempted: true, why: "head moved during the close; reopened" };
   }
-  if (item.action === "refresh") {
-    gh([`repos/${REPO}/pulls/${item.number}/update-branch`, "-X", "PUT", "-f", `expected_head_sha=${item.headSha}`]);
-    return { number: item.number, done: true, did: "merged mainline into the branch" };
-  }
-  return { number: item.number, done: false, why: `${item.action} is not executable here` };
+  return { ...base, why: `${item.action} is not executable here` };
 }
 
 /** Executable items in rotation order: numbers after `after` first, then wrap. Without
@@ -225,11 +270,15 @@ export function rotate(items, after) {
   return [...ex.filter((i) => i.number > after), ...ex.filter((i) => i.number <= after)];
 }
 
-export function execute(items, max, after = null) {
+export function execute(items, max, after = null, forge = ghForge) {
   const out = [];
   for (const item of rotate(items, after)) {
-    if (out.filter((o) => o.done).length >= max) break;
-    try { out.push(act(item)); } catch (e) { out.push({ number: item.number, done: false, why: String(e.message ?? e) }); }
+    // The budget is ATTEMPTS, not successes: a write whose response was lost still spent it.
+    if (out.filter((o) => o.attempted).length >= max) break;
+    try { out.push(act(item, forge)); } catch (e) {
+      // An unexpected throw cannot prove nothing was sent; count it as an attempt.
+      out.push({ number: item.number, attempted: true, done: false, failed: true, why: String(e.message ?? e) });
+    }
   }
   return out;
 }
@@ -239,7 +288,8 @@ export function summarize(items, done = []) {
   for (const i of items) count[i.action] = (count[i.action] ?? 0) + 1;
   const parts = Object.keys(count).sort().map((k) => `${k}=${count[k]}`);
   const acted = done.filter((d) => d.done).length;
-  return `estate: ${items.length} open (${parts.join(" ")})${done.length ? `; acted ${acted}/${done.length}` : ""}`;
+  const tried = done.filter((d) => d.attempted).length;
+  return `estate: ${items.length} open (${parts.join(" ")})${done.length ? `; acted ${acted}, attempted ${tried}, considered ${done.length}` : ""}`;
 }
 
 // ── self-test ─────────────────────────────────────────────────────────────────
@@ -304,8 +354,71 @@ function selfTest() {
     if (order(after) === want) okRot++;
     else console.error(`FAIL rotate after ${after}: ${order(after)}, want ${want}`);
   }
-  const total = cases.length + 1 + rot.length;
-  const got = pass + (okEx ? 1 : 0) + okRot;
+  // Fake forge: comments persist across runs (they are the durable attempt record), and any
+  // write can be made to "succeed but lose its response".
+  const fsha = (n) => String(n).padStart(40, "c");
+  const mkForge = (opts = {}) => {
+    const st = { calls: { comment: 0, update: 0, close: 0, reopen: 0 }, comments: {}, heads: {} };
+    const pr = (n) => ({ ...base, number: n, headSha: st.heads[n] ?? fsha(n), mergeableState: opts.state ?? "behind",
+      compareStatus: opts.compare ?? "ahead" });
+    st.forge = {
+      readPr: (n) => { const p = pr(n); if (opts.moveAfterClose && st.calls.close) p.headSha = "d".repeat(40); return p; },
+      comments: (n) => opts.commentsUnreadable ? null : [...(st.comments[n] ?? [])],
+      comment: (n, b) => { st.calls.comment++; if (opts.markerLost) throw new Error("socket hang up"); (st.comments[n] ??= []).push(b); },
+      updateBranch: () => { st.calls.update++; if (opts.lose) throw new Error("timeout"); },
+      close: () => { st.calls.close++; if (opts.lose) throw new Error("timeout"); },
+      reopen: () => { st.calls.reopen++; if (opts.reopenFails) throw new Error("502"); },
+      contained: () => opts.movedContained ?? false,
+    };
+    return st;
+  };
+  const items7 = [11, 12, 13, 14, 15, 16, 17].map((n) => ({ number: n, action: "refresh", headSha: fsha(n) }));
+  const fx = [];
+  const check = (name, ok) => { fx.push(ok); if (!ok) console.error(`FAIL forge: ${name}`); };
+  {
+    const st = mkForge({ lose: true });
+    const r1 = execute(items7, 3, null, st.forge);
+    check("lost responses still spend the budget (3 writes, not 7)", st.calls.update === 3 && r1.filter((d) => d.attempted).length === 3);
+    execute(items7, 3, null, st.forge);
+    check("a re-run at the same heads never resends to the first three", st.calls.update === 6 &&
+      Object.keys(st.comments).length === 6);
+    const r3 = execute(items7.slice(0, 3), 3, null, st.forge);
+    check("an attempted head is read-only on every later run", st.calls.update === 6 && r3.every((d) => !d.attempted));
+  }
+  {
+    const st = mkForge({ markerLost: true });
+    const r = execute(items7, 3, null, st.forge);
+    check("a lost attempt record sends no write and still spends the budget", st.calls.update === 0 && r.filter((d) => d.attempted).length === 3);
+  }
+  {
+    const st = mkForge({ commentsUnreadable: true });
+    const r = execute(items7, 3, null, st.forge);
+    check("unreadable comments: no write, nothing attempted", st.calls.update === 0 && st.calls.comment === 0 && r.every((d) => !d.attempted));
+  }
+  const sup = [{ number: 21, action: "superseded", headSha: fsha(21) }];
+  {
+    const st = mkForge({ compare: "behind", state: "clean", moveAfterClose: true });
+    const [d] = execute(sup, 3, null, st.forge);
+    check("a head that moved to uncontained work during the close is reopened, not counted done", st.calls.reopen === 1 && !d.done && d.attempted);
+  }
+  {
+    const st = mkForge({ compare: "behind", state: "clean", moveAfterClose: true, movedContained: true });
+    const [d] = execute(sup, 3, null, st.forge);
+    check("a head that moved to already-merged work stays closed", st.calls.reopen === 0 && d.done);
+  }
+  {
+    const st = mkForge({ compare: "behind", state: "clean", moveAfterClose: true, reopenFails: true });
+    const [d] = execute(sup, 3, null, st.forge);
+    check("a failed reopen is a loud failure", d.failed === true && !d.done);
+  }
+  {
+    const st = mkForge({ compare: "behind", state: "clean" });
+    const [d] = execute(sup, 3, null, st.forge);
+    check("a clean close is done, with its record written first", d.done && st.calls.comment === 1 && st.calls.close === 1);
+  }
+  const okFx = fx.filter(Boolean).length;
+  const total = cases.length + 1 + rot.length + fx.length;
+  const got = pass + (okEx ? 1 : 0) + okRot + okFx;
   console.log(`estate-queue self-test: ${got}/${total} passed`);
   return got === total;
 }
@@ -338,11 +451,13 @@ function main(argv) {
     let after = null;
     if (cursorFile) { try { const n = Number(readFileSync(cursorFile, "utf8").trim()); if (Number.isSafeInteger(n)) after = n; } catch {} }
     const done = execute(items, max, after);
-    const last = done.filter((d) => d.done).at(-1);
+    const last = done.filter((d) => d.attempted).at(-1);
     if (cursorFile && last) { try { writeFileSync(cursorFile, `${last.number}\n`); } catch (e) { console.error(`WARN could not write ${cursorFile}: ${e.message}`); } }
     for (const d of done) console.log(`#${d.number}\t${d.done ? d.did : `skipped: ${d.why}`}`);
     console.log(summarize(items, done));
-    return done.some((d) => !d.done && !/changed since the plan/.test(d.why)) ? 1 : 0;
+    // Failure = a write that may have gone out without a confirmed outcome, or a reopen that
+    // failed. A skip (changed, already attempted, unreadable comments) is not a failure.
+    return done.some((d) => d.failed || (d.attempted && !d.done)) ? 1 : 0;
   }
   console.error(`unknown command ${cmd}; use plan | execute | --self-test`);
   return 2;

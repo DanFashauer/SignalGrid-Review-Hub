@@ -316,3 +316,12 @@ block; a stage run on the wrong tier is a lesson here.
 - **evidence:** A genuine security source lens returned FIX. The actual `node scripts/check-doc-line-counts.mjs` invocation reports32figures across2documents,4dated exemptions and0drift; scripts/preflight.mjs has969lines and the plan cites969.
 - **landing:** pending — docs/agent/EVIDENCE.md records the new measurement separately; prior evidence and lesson L28 remain byte-preserved.
 - **status:** pending
+
+
+### L35 — Construct a missing tracking reference explicitly in a fixture
+- **date:** 2026-10-28
+- **lane:** mac
+- **incident:** Mainline CI failed R6p1d and nested R12 when Git2.56 wrote a tracking ref for a URL push that older Git left absent.
+- **evidence:** Actual CI and pinned release behavior are linked in EVIDENCE. The specific original/fixed R6p1d assertion is RED/GREEN on a limited exact-source Git2.56 build. The installed-toolchain full self-test passes309applicable cases with6platform skips; the limited resource's8other failures stay explicit.
+- **landing:** pending — scripts/loop-state.mjs constructs its promised missing-ref scenario; production seam logic, the complete assertion and real remote branches are unchanged. Current-head source/CI/full-preflight gates still apply.
+- **status:** pending

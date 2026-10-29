@@ -6,6 +6,7 @@
 //   node scripts/mac/estate-queue.mjs execute [--max N] [--cursor-file F]
 //                                                            # act on at most N safe items (default 3),
 //                                                            # starting after the PR number kept in F
+//   node scripts/mac/estate-queue.mjs init                   # once per machine, by a person: the attempt ledger
 //   node scripts/mac/estate-queue.mjs --self-test
 //
 // WHY THIS EXISTS. The owner's cleanup directive (2026-10-23, restated 2026-10-29 on
@@ -35,7 +36,9 @@
 // action are unchanged. Requires an authenticated `gh` (REST only, like gh-pr.mjs).
 
 import { spawnSync } from "node:child_process";
-import { readFileSync, writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync, openSync, writeSync, fsyncSync, closeSync, mkdirSync, existsSync } from "node:fs";
+import { homedir } from "node:os";
+import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { classifyDiff } from "../check-owner-gated-surfaces.mjs";
 
@@ -208,7 +211,50 @@ export const ghForge = {
     const c = tryGh([`repos/${REPO}/compare/${BASE}...${sha}`]);
     return c?.status === "identical" || c?.status === "behind" ? true : c ? false : null;
   },
+  // readPr() deliberately answers only {number, state} for a closed PR (a closed PR is
+  // never admitted for action). The post-close readback needs the head whatever the state.
+  headOf: (n) => {
+    const p = tryGh([`repos/${REPO}/pulls/${n}`]);
+    return p && /^[0-9a-f]{40}$/.test(p.head?.sha ?? "") ? { state: p.state, headSha: p.head.sha } : null;
+  },
 };
+
+/**
+ * The machine-local attempt ledger: one line per (PR, action, head) ever attempted,
+ * written and fsync'd BEFORE the first write to GitHub (the marker comment is itself a
+ * write, and its response can be lost too). Outside the checkout, so no reset or clean
+ * touches it. A missing or unparseable ledger refuses every write: losing the record
+ * must never look like a first run. `init` creates it, by a person, once.
+ */
+export const LEDGER_PATH = process.env.SIGNALGRID_ESTATE_LEDGER
+  ?? join(process.env.SIGNALGRID_STATE_DIR ?? join(homedir(), ".local", "state", "signalgrid"), "estate-attempts.jsonl");
+const LEDGER_HEADER = { ledger: "estate-queue-attempts", version: 1, repo: REPO };
+
+export function fileLedger(path = LEDGER_PATH) {
+  if (!existsSync(path)) throw new Error(`attempt ledger missing at ${path}; run \`estate-queue.mjs init\` once, by hand, after checking nothing is in flight`);
+  const lines = readFileSync(path, "utf8").split("\n").filter(Boolean);
+  const head = JSON.parse(lines[0] ?? "null");
+  if (head?.ledger !== LEDGER_HEADER.ledger || head.version !== 1 || head.repo !== REPO) throw new Error(`attempt ledger at ${path} has no valid header for ${REPO}`);
+  const keys = new Set(lines.slice(1).map((l) => {
+    const e = JSON.parse(l);
+    if (!Number.isSafeInteger(e.number) || typeof e.action !== "string" || !/^[0-9a-f]{40}$/.test(e.head)) throw new Error("attempt ledger has a malformed entry");
+    return `${e.number}:${e.action}:${e.head}`;
+  }));
+  return {
+    has: (k) => keys.has(k),
+    record: (entry) => {
+      const fd = openSync(path, "a");
+      try { writeSync(fd, JSON.stringify(entry) + "\n"); fsyncSync(fd); } finally { closeSync(fd); }
+      keys.add(`${entry.number}:${entry.action}:${entry.head}`);
+    },
+  };
+}
+
+export function initLedger(path = LEDGER_PATH) {
+  if (existsSync(path)) throw new Error(`attempt ledger already exists at ${path}; refusing to overwrite it`);
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, JSON.stringify({ ...LEDGER_HEADER, createdAt: new Date().toISOString() }) + "\n", { flag: "wx" });
+}
 
 /** The durable attempt record. It lives ON the PR (a comment), not on this machine, so a
  *  lost local state, a restart or a second Mac cannot make the same mutation look new. */
@@ -219,7 +265,7 @@ export const attemptMarker = (action, sha) => `<!-- estate-queue:attempt action=
  * the moment a write MAY have reached GitHub (the marker included), and it is what the
  * budget counts; a lost response is an attempt, never a free retry.
  */
-export function act(item, forge = ghForge) {
+export function act(item, forge = ghForge, ledger) {
   const base = { number: item.number, attempted: false, done: false };
   const fresh = forge.readPr(item.number);
   const now = classify(fresh);
@@ -229,8 +275,13 @@ export function act(item, forge = ghForge) {
   const marker = attemptMarker(item.action, item.headSha);
   const bodies = forge.comments(item.number);
   if (!Array.isArray(bodies)) return { ...base, why: "could not read the PR's comments; not acting" };
-  if (bodies.some((b) => b.includes(marker))) {
+  const key = `${item.number}:${item.action}:${item.headSha}`;
+  if (ledger.has(key) || bodies.some((b) => b.includes(marker))) {
     return { ...base, why: "already attempted at this head; read-only until the head moves" };
+  }
+  // The local record goes first and must succeed: from here on a write may reach GitHub.
+  try { ledger.record({ number: item.number, action: item.action, head: item.headSha }); } catch (e) {
+    return { ...base, why: `could not record the attempt locally (${String(e.message ?? e).slice(0, 80)}); no write sent` };
   }
   const text = item.action === "superseded"
     ? `The local brain's estate queue (scripts/mac/estate-queue.mjs) is closing this PR: every commit on its head as read, \`${item.headSha}\`, is already on \`${BASE}\`. The branch is kept (branch pruning is branch-prune.yml's job). If new commits arrive the PR is reopened.`
@@ -248,7 +299,7 @@ export function act(item, forge = ghForge) {
     try { forge.close(item.number); } catch (e) { return uncertain(e); }
     // The close is not conditional on the head, so read it back: a push that landed between
     // the read and the close must not stay closed as "superseded".
-    const after = forge.readPr(item.number);
+    const after = forge.headOf(item.number);
     if (after?.headSha === item.headSha) return { ...base, attempted: true, done: true, did: "closed (superseded)" };
     if (after?.headSha && forge.contained(after.headSha) === true) {
       return { ...base, attempted: true, done: true, did: `closed (superseded; head moved to ${after.headSha.slice(0, 8)}, also on ${BASE})` };
@@ -270,12 +321,12 @@ export function rotate(items, after) {
   return [...ex.filter((i) => i.number > after), ...ex.filter((i) => i.number <= after)];
 }
 
-export function execute(items, max, after = null, forge = ghForge) {
+export function execute(items, max, after = null, forge = ghForge, ledger) {
   const out = [];
   for (const item of rotate(items, after)) {
     // The budget is ATTEMPTS, not successes: a write whose response was lost still spent it.
     if (out.filter((o) => o.attempted).length >= max) break;
-    try { out.push(act(item, forge)); } catch (e) {
+    try { out.push(act(item, forge, ledger)); } catch (e) {
       // An unexpected throw cannot prove nothing was sent; count it as an attempt.
       out.push({ number: item.number, attempted: true, done: false, failed: true, why: String(e.message ?? e) });
     }
@@ -361,8 +412,16 @@ function selfTest() {
     const st = { calls: { comment: 0, update: 0, close: 0, reopen: 0 }, comments: {}, heads: {} };
     const pr = (n) => ({ ...base, number: n, headSha: st.heads[n] ?? fsha(n), mergeableState: opts.state ?? "behind",
       compareStatus: opts.compare ?? "ahead" });
+    const keys = new Set();
+    st.ledger = {
+      has: (k) => keys.has(k),
+      record: (e) => { if (opts.ledgerFails) throw new Error("EROFS"); keys.add(`${e.number}:${e.action}:${e.head}`); },
+    };
+    const headNow = (n) => (opts.moveAfterClose && st.calls.close ? "d".repeat(40) : pr(n).headSha);
     st.forge = {
-      readPr: (n) => { const p = pr(n); if (opts.moveAfterClose && st.calls.close) p.headSha = "d".repeat(40); return p; },
+      // The REAL shape: readPr answers only {number, state} once a PR is closed.
+      readPr: (n) => (st.calls.close && !st.calls.reopen ? { number: n, state: "closed" } : pr(n)),
+      headOf: (n) => ({ state: st.calls.close && !st.calls.reopen ? "closed" : "open", headSha: headNow(n) }),
       comments: (n) => opts.commentsUnreadable ? null : [...(st.comments[n] ?? [])],
       comment: (n, b) => { st.calls.comment++; if (opts.markerLost) throw new Error("socket hang up"); (st.comments[n] ??= []).push(b); },
       updateBranch: () => { st.calls.update++; if (opts.lose) throw new Error("timeout"); },
@@ -377,44 +436,67 @@ function selfTest() {
   const check = (name, ok) => { fx.push(ok); if (!ok) console.error(`FAIL forge: ${name}`); };
   {
     const st = mkForge({ lose: true });
-    const r1 = execute(items7, 3, null, st.forge);
+    const r1 = execute(items7, 3, null, st.forge, st.ledger);
     check("lost responses still spend the budget (3 writes, not 7)", st.calls.update === 3 && r1.filter((d) => d.attempted).length === 3);
-    execute(items7, 3, null, st.forge);
+    execute(items7, 3, null, st.forge, st.ledger);
     check("a re-run at the same heads never resends to the first three", st.calls.update === 6 &&
       Object.keys(st.comments).length === 6);
-    const r3 = execute(items7.slice(0, 3), 3, null, st.forge);
+    const r3 = execute(items7.slice(0, 3), 3, null, st.forge, st.ledger);
     check("an attempted head is read-only on every later run", st.calls.update === 6 && r3.every((d) => !d.attempted));
   }
   {
     const st = mkForge({ markerLost: true });
-    const r = execute(items7, 3, null, st.forge);
-    check("a lost attempt record sends no write and still spends the budget", st.calls.update === 0 && r.filter((d) => d.attempted).length === 3);
+    const r = execute(items7, 3, null, st.forge, st.ledger);
+    check("a lost marker response sends no further write and still spends the budget", st.calls.update === 0 && st.calls.comment === 3 && r.filter((d) => d.attempted).length === 3);
+    execute(items7.slice(0, 3), 3, null, st.forge, st.ledger);
+    check("a lost marker with no visible marker on readback is never posted again (the ledger fences it)", st.calls.comment === 3);
+  }
+  {
+    const st = mkForge({ ledgerFails: true });
+    const r = execute(items7, 3, null, st.forge, st.ledger);
+    check("a ledger that cannot record means no write of any kind", st.calls.comment === 0 && st.calls.update === 0 && r.every((d) => !d.attempted));
+  }
+  {
+    // The file ledger itself: missing refuses, init creates once, a corrupt line refuses.
+    const dir = join(process.env.TMPDIR ?? "/tmp", `estate-ledger-selftest-${process.pid}`);
+    const f = join(dir, "attempts.jsonl");
+    let missingRefused = false; try { fileLedger(f); } catch { missingRefused = true; }
+    initLedger(f);
+    let initTwiceRefused = false; try { initLedger(f); } catch { initTwiceRefused = true; }
+    const L = fileLedger(f); L.record({ number: 5, action: "refresh", head: fsha(5) });
+    const reread = fileLedger(f).has(`5:refresh:${fsha(5)}`);
+    writeFileSync(f, readFileSync(f, "utf8") + "{not json\n");
+    let corruptRefused = false; try { fileLedger(f); } catch { corruptRefused = true; }
+    writeFileSync(f, "{}\n");
+    let headerRefused = false; try { fileLedger(f); } catch { headerRefused = true; }
+    check("file ledger: missing, double init, corrupt entry and wrong header all refuse; a record survives a re-open",
+      missingRefused && initTwiceRefused && reread && corruptRefused && headerRefused);
   }
   {
     const st = mkForge({ commentsUnreadable: true });
-    const r = execute(items7, 3, null, st.forge);
+    const r = execute(items7, 3, null, st.forge, st.ledger);
     check("unreadable comments: no write, nothing attempted", st.calls.update === 0 && st.calls.comment === 0 && r.every((d) => !d.attempted));
   }
   const sup = [{ number: 21, action: "superseded", headSha: fsha(21) }];
   {
     const st = mkForge({ compare: "behind", state: "clean", moveAfterClose: true });
-    const [d] = execute(sup, 3, null, st.forge);
+    const [d] = execute(sup, 3, null, st.forge, st.ledger);
     check("a head that moved to uncontained work during the close is reopened, not counted done", st.calls.reopen === 1 && !d.done && d.attempted);
   }
   {
     const st = mkForge({ compare: "behind", state: "clean", moveAfterClose: true, movedContained: true });
-    const [d] = execute(sup, 3, null, st.forge);
+    const [d] = execute(sup, 3, null, st.forge, st.ledger);
     check("a head that moved to already-merged work stays closed", st.calls.reopen === 0 && d.done);
   }
   {
     const st = mkForge({ compare: "behind", state: "clean", moveAfterClose: true, reopenFails: true });
-    const [d] = execute(sup, 3, null, st.forge);
+    const [d] = execute(sup, 3, null, st.forge, st.ledger);
     check("a failed reopen is a loud failure", d.failed === true && !d.done);
   }
   {
     const st = mkForge({ compare: "behind", state: "clean" });
-    const [d] = execute(sup, 3, null, st.forge);
-    check("a clean close is done, with its record written first", d.done && st.calls.comment === 1 && st.calls.close === 1);
+    const [d] = execute(sup, 3, null, st.forge, st.ledger);
+    check("a clean close is done and NOT reopened, read back through the closed-PR shape", d.done && st.calls.comment === 1 && st.calls.close === 1 && st.calls.reopen === 0);
   }
   const okFx = fx.filter(Boolean).length;
   const total = cases.length + 1 + rot.length + fx.length;
@@ -427,9 +509,18 @@ function selfTest() {
 function main(argv) {
   if (argv.includes("--self-test")) return selfTest() ? 0 : 1;
   const cmd = argv[0] ?? "plan";
+  if (cmd === "init") {
+    try { initLedger(); console.log(`created the attempt ledger at ${LEDGER_PATH}`); return 0; }
+    catch (e) { console.error(`estate: ${e.message}`); return 1; }
+  }
   const maxIdx = argv.indexOf("--max");
   const max = maxIdx >= 0 ? Number(argv[maxIdx + 1]) : 3;
   if (!Number.isSafeInteger(max) || max < 0) { console.error("--max must be a non-negative integer"); return 2; }
+  // The ledger is opened before anything else on an execute: no ledger, no writes at all.
+  let ledger = null;
+  if (cmd === "execute") {
+    try { ledger = fileLedger(); } catch (e) { console.error(`estate queue FAILED: ${e.message}`); return 1; }
+  }
   let items;
   try { items = plan(); } catch (e) { console.error(`estate: could not read open PRs: ${e.message}`); return 1; }
   if (cmd === "plan") {
@@ -450,7 +541,7 @@ function main(argv) {
     const cursorFile = cIdx >= 0 ? argv[cIdx + 1] : null;
     let after = null;
     if (cursorFile) { try { const n = Number(readFileSync(cursorFile, "utf8").trim()); if (Number.isSafeInteger(n)) after = n; } catch {} }
-    const done = execute(items, max, after);
+    const done = execute(items, max, after, ghForge, ledger);
     const last = done.filter((d) => d.attempted).at(-1);
     if (cursorFile && last) { try { writeFileSync(cursorFile, `${last.number}\n`); } catch (e) { console.error(`WARN could not write ${cursorFile}: ${e.message}`); } }
     for (const d of done) console.log(`#${d.number}\t${d.done ? d.did : `skipped: ${d.why}`}`);
@@ -459,7 +550,7 @@ function main(argv) {
     // failed. A skip (changed, already attempted, unreadable comments) is not a failure.
     return done.some((d) => d.failed || (d.attempted && !d.done)) ? 1 : 0;
   }
-  console.error(`unknown command ${cmd}; use plan | execute | --self-test`);
+  console.error(`unknown command ${cmd}; use plan | execute | init | --self-test`);
   return 2;
 }
 

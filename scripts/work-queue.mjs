@@ -6,7 +6,7 @@
 //                                      → prints {task, token}; keep the token, it is the holder's proof
 //   node scripts/work-queue.mjs move   --lane <lane> --token <t> --task <id> --state <s> [--pr N --head <sha>]
 //   node scripts/work-queue.mjs review --lane codex|cloud-claude --task <id> --pr N --head <sha>
-//   node scripts/work-queue.mjs recover --lane owner --task <id> --witness "<what proves it stopped>"
+//   node scripts/work-queue.mjs recover --lane owner --task <id> --witness "<what was checked>"   (annotates; never frees)
 //   node scripts/work-queue.mjs --self-test
 //
 // WHY THIS EXISTS. The owner's /goal (2026-10-29): "the second brain [should have] a
@@ -32,15 +32,17 @@
 //
 // A LEASE NEVER FREES A CLAIM. An expired lease only marks the claim STALE in `list`:
 // the old run may still be working, or a request it sent may still land, so elapsed time
-// is not evidence that it stopped. A stale claim is freed only by its holder releasing
-// it (with the token), or by the owner's `recover`, which records the witness a person
-// checked (the process is gone, the PR's state). The lease runs from the holder's own
+// is not evidence that it stopped. A claim is freed ONLY by its holder releasing it with
+// the token. The owner's `recover` records on a STALE claim what a person checked, but
+// frees nothing: a typed note is not proof that the old attempt ended, and until a trusted
+// recovery check exists (one that verifies the exact attempt and its process/provider
+// outcome) a dead holder's task stays held and is listed for a person. The lease runs from the holder's own
 // last claim/move commit (`leaseFrom` when a review has written on top), so a review
 // never makes a dead holder look alive.
 //
 // LIFECYCLE (the owner's flow), enforced as a transition table:
 //   claimed → built → pr → merged → done        (any of the first three → released;
-//                                                 owner `recover` → released)
+//                                                 owner `recover` annotates only)
 //   pr needs --pr and --head; merged needs BOTH reviews recorded against that same PR and
 //   head; done only follows merged; released hands the task back to the queue.
 //   A review is recorded by its own lane (codex / cloud-claude) only while the claim is at
@@ -107,7 +109,7 @@ export function parseClaim(message, taskId) {
     if (!nullOr(c.pr, Number.isSafeInteger) || !nullOr(c.headSha, (h) => SHA.test(h)) || !nullOr(c.leaseFrom, (h) => SHA.test(h))) return null;
     if (c.state === "pr" && !(Number.isSafeInteger(c.pr) && SHA.test(c.headSha ?? ""))) return null;
     if (!nullOr(c.reviews, (rv) => typeof rv === "object" && !Array.isArray(rv) && Object.entries(rv).every(([k, v]) => REVIEW_LANES.has(k) && validReview(v)))) return null;
-    if (!nullOr(c.recovered, (x) => typeof x === "object" && typeof x.witness === "string" && x.witness.length > 0 && x.witness.length <= 200)) return null;
+    if (!nullOr(c.recoveryNote, (x) => typeof x === "object" && typeof x.witness === "string" && x.witness.length > 0 && x.witness.length <= 200)) return null;
     return c;
   } catch { return null; }
 }
@@ -301,7 +303,7 @@ export function move({ lane, token, taskId, state, pr = null, headSha = null, le
   if (!(TRANSITIONS[r.claim.state] ?? []).includes(state)) return { ok: false, why: `${r.claim.state} → ${state} is not an allowed move` };
   const next = { ...r.claim, state };
   delete next.leaseFrom; // this move is the holder's own write: the lease restarts here
-  delete next.recovered;
+  delete next.recoveryNote;
   if (state === "pr") {
     const p = pr ?? r.claim.pr, h = headSha ?? r.claim.headSha;
     if (!Number.isSafeInteger(p) || !SHA.test(h ?? "")) return { ok: false, why: "pr needs --pr N and --head <40-char sha>" };
@@ -327,17 +329,20 @@ export function review({ lane, taskId, pr, headSha, forge = ghForge }) {
   return write(taskId, r, { ...r.claim, leaseFrom: r.claim.leaseFrom ?? r.sha, reviews: { ...(r.claim.reviews ?? {}), [lane]: { pr, headSha } } }, forge);
 }
 
-/** The owner settles a stale claim after a person has checked the old run is gone.
- *  The witness is what they checked; it is recorded on the claim and the claim is released. */
-export function recover({ lane, taskId, witness, forge = ghForge }) {
-  if (lane !== "owner") return { ok: false, why: "only the owner recovers a claim (after checking the old run stopped)" };
+/** The owner annotates a STALE claim with what a person checked. It frees nothing: the
+ *  claim stays held, with the same holder and state, until the holder releases it. A note
+ *  is not a trusted witness that the old attempt ended, so it never authorises a new one. */
+export function recover({ lane, taskId, witness, now = Date.now(), forge = ghForge }) {
+  if (lane !== "owner") return { ok: false, why: "only the owner annotates a stale claim" };
   if (!validTaskId(taskId) || typeof witness !== "string" || !witness.trim() || witness.length > 200) return { ok: false, why: "recover needs --task and --witness \"<what was checked>\" (1–200 chars)" };
   let r; try { r = readOne(taskId, forge); } catch { return { ok: false, why: "could not read the claim" }; }
   if (!r.claim) return { ok: false, why: r.held ? "claim unreadable or for another task; held (fix the record by hand)" : `task ${taskId} is not claimed` };
   if (FINAL.has(r.claim.state) || r.claim.state === "released") return { ok: false, why: `nothing to recover (state ${r.claim.state})` };
-  const next = { ...r.claim, state: "released", recovered: { witness: witness.trim(), from: r.claim.state, lane: r.claim.lane } };
-  delete next.leaseFrom;
-  return write(taskId, r, next, forge);
+  if (!isStale(r, now)) return { ok: false, why: "the claim's lease has not expired; only its holder can act on it" };
+  // leaseFrom is kept: the note is not the holder's write and must not renew the lease.
+  const next = { ...r.claim, leaseFrom: r.claim.leaseFrom ?? r.sha, recoveryNote: { witness: witness.trim(), state: r.claim.state } };
+  const w = write(taskId, r, next, forge);
+  return w.ok ? { ...w, note: "annotated; the claim is still held until its holder releases it" } : w;
 }
 
 // ── self-test: an in-memory forge with create-once, fast-forward-only and server time ──
@@ -392,22 +397,31 @@ function selfTest() {
     const q = readQueue(T, f, f.clock).find((t) => t.id === "hand:x");
     const notOwner = recover({ lane: "codex", taskId: "hand:x", witness: "looked", forge: f });
     const noWitness = recover({ lane: "owner", taskId: "hand:x", witness: " ", forge: f });
-    const rec = recover({ lane: "owner", taskId: "hand:x", witness: "mac-brain process gone; no PR opened", forge: f });
+    const rec = recover({ lane: "owner", taskId: "hand:x", witness: "mac-brain process gone; no PR opened", now: f.clock, forge: f });
     const after = claim({ tasks: T, lane: "codex", taskId: "hand:x", now: f.clock, forge: f });
-    check("elapsed time never frees a claim: an expired one is STALE, held until the owner recovers it with a witness",
-      !early.ok && !late.ok && q.stale && !q.free && !notOwner.ok && !noWitness.ok && rec.ok && rec.claim.recovered.from === "claimed" && after.ok);
+    const q2 = readQueue(T, f, f.clock).find((t) => t.id === "hand:x");
+    check("elapsed time never frees a claim, and neither does an owner note: STALE and annotated is still held",
+      !early.ok && !late.ok && q.stale && !q.free && !notOwner.ok && !noWitness.ok && rec.ok && rec.claim.recoveryNote.state === "claimed" && rec.claim.lane === "mac-brain" && !after.ok && q2.stale && !q2.free);
+  }
+  {
+    // Codex's counterexample: an UNEXPIRED live claim, an owner note with unverified text.
+    const f = mk();
+    claim({ tasks: T, lane: "mac-brain", taskId: "hand:x", leaseMin: 60, now: f.clock, forge: f });
+    const rec = recover({ lane: "owner", taskId: "hand:x", witness: "unverified text", now: f.clock + 60000, forge: f });
+    const take = claim({ tasks: T, lane: "codex", taskId: "hand:x", now: f.clock + 60000, forge: f });
+    check("an unexpired claim cannot be recovered, and a codex claim of it is refused", !rec.ok && !take.ok && tip(f, "hand:x").lane === "mac-brain");
   }
   {
     const f = mk();
-    claim({ tasks: T, lane: "mac-brain", taskId: "hand:x", leaseMin: 5, now: f.clock, forge: f });
-    recover({ lane: "owner", taskId: "hand:x", witness: "checked: gone", forge: f });
+    const c0 = claim({ tasks: T, lane: "mac-brain", taskId: "hand:x", leaseMin: 5, now: f.clock, forge: f });
+    move({ lane: "mac-brain", token: c0.token, taskId: "hand:x", state: "released", now: f.clock, forge: f });
     const later = f.clock + 6 * 60000;
     const oldTip = f.refs.get(refName("hand:x")); const oldMsg = f.commits.get(oldTip).message; const oldAt = f.commits.get(oldTip).at;
     claim({ tasks: T, lane: "codex", taskId: "hand:x", now: later, forge: f });
     const realRead = f.read; f.read = (name) => (name === refName("hand:x") ? { sha: oldTip, message: oldMsg, date: new Date(oldAt).toISOString() } : realRead(name));
     const second = claim({ tasks: T, lane: "cloud-claude", taskId: "hand:x", now: later, forge: f });
     f.read = realRead;
-    check("a takeover race after recovery: a taker that read the OLD tip is refused; nothing overwritten", !second.ok && tip(f, "hand:x").lane === "codex");
+    check("a takeover race after a release: a taker that read the OLD tip is refused; nothing overwritten", !second.ok && tip(f, "hand:x").lane === "codex");
   }
   {
     const f = mk(); const now = f.clock;
@@ -446,12 +460,14 @@ function selfTest() {
     move({ lane: "mac-brain", token: c.token, taskId: "hand:x", state: "pr", pr: 7, headSha: H, now, forge: f });
     review({ lane: "codex", taskId: "hand:x", pr: 7, headSha: H, forge: f });
     const early = claim({ tasks: T, lane: "codex", taskId: "hand:x", now: now + 6 * 60000, forge: f });
-    recover({ lane: "owner", taskId: "hand:x", witness: "PR #7 open, builder gone", forge: f });
+    recover({ lane: "owner", taskId: "hand:x", witness: "PR #7 open, builder gone", now: now + 6 * 60000, forge: f });
+    const noted = claim({ tasks: T, lane: "codex", taskId: "hand:x", now: now + 6 * 60000, forge: f });
+    move({ lane: "mac-brain", token: c.token, taskId: "hand:x", state: "released", now: now + 6 * 60000, forge: f });
     const t = claim({ tasks: T, lane: "codex", taskId: "hand:x", now: now + 6 * 60000, forge: f });
     const stale = move({ lane: "mac-brain", token: c.token, taskId: "hand:x", state: "built", now: now + 6 * 60000, forge: f });
     const back = move({ lane: "codex", token: t.token, taskId: "hand:x", state: "pr", now: now + 6 * 60000, forge: f });
-    check("a recovered PR-stage claim, claimed again, keeps the PR, head and reviews; the old holder is fenced out",
-      !early.ok && t.ok && t.claim.pr === 7 && t.claim.headSha === H && t.claim.reviews.codex?.headSha === H && !stale.ok && back.ok && back.claim.pr === 7);
+    check("a released PR-stage claim, claimed again, keeps the PR, head and reviews; a note alone frees nothing; the old holder is fenced out",
+      !early.ok && !noted.ok && t.ok && t.claim.pr === 7 && t.claim.headSha === H && t.claim.reviews.codex?.headSha === H && !stale.ok && back.ok && back.claim.pr === 7);
   }
   {
     const f = mk(); const now = f.clock;
@@ -585,7 +601,7 @@ async function main(argv) {
     console.log(JSON.stringify(r)); return r.ok ? 0 : 3;
   }
   if (cmd === "recover") {
-    const r = recover({ lane, taskId: arg(argv, "--task"), witness: arg(argv, "--witness") });
+    const r = recover({ lane, taskId: arg(argv, "--task"), witness: arg(argv, "--witness"), now: Date.now() });
     console.log(JSON.stringify(r)); return r.ok ? 0 : 3;
   }
   if (cmd === "review") {
@@ -597,7 +613,7 @@ async function main(argv) {
     const q = readQueue(tasks, ghForge);
     if (q === null) { console.error("work-queue: could not read the claims"); return 1; }
     if (argv.includes("--json")) { console.log(JSON.stringify(q, null, 2)); return 0; }
-    for (const t of q) console.log(`${t.held ? "held(unreadable)" : t.claim ? `${t.claim.state}@${t.claim.lane}${t.stale ? " (STALE: holder release or owner recover)" : ""}` : "free"}\t${t.priority}\t${t.id}\t${t.title ?? ""}`);
+    for (const t of q) console.log(`${t.held ? "held(unreadable)" : t.claim ? `${t.claim.state}@${t.claim.lane}${t.stale ? " (STALE: held; only the holder's release frees it)" : ""}` : "free"}\t${t.priority}\t${t.id}\t${t.title ?? ""}`);
     console.error(`work-queue: ${q.length} task(s), ${q.filter((t) => t.free).length} free`);
     return 0;
   }

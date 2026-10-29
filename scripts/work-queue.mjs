@@ -23,7 +23,12 @@
 //   never overwrites. Nothing is ever deleted. Claim refs sit outside refs/heads, so the
 //   branch estate does not grow.
 // - The commit message is the claim, as one JSON line. Its time is the SERVER's commit
-//   date (no client clock is written), and the lease runs from it.
+//   date (no client clock is written). The lease runs from the holder's own last
+//   claim/move commit (`leaseFrom` when a review has written on top), so a review never
+//   keeps a dead holder's lease alive.
+// - A PR task id is stable (pr:N:action). A `done` claim is final at its head; when the
+//   same PR needs the same action at a NEW head, the task is free again and the new
+//   claim fast-forwards on top of the old record.
 //
 // LIFECYCLE (the owner's flow), enforced as a transition table:
 //   claimed → built → pr → merged → done        (any of the first three → released)
@@ -71,7 +76,8 @@ export const LEASE_MIN = { min: 5, max: 720, default: 120 };
 const SHA = /^[0-9a-f]{40}$/;
 
 // ── ids ──────────────────────────────────────────────────────────────────────
-export const validTaskId = (id) => typeof id === "string" && id.length <= 200 && /^[a-z][a-z0-9-]*:[!-~]+$/.test(id);
+// 120 characters → 240 hex: stays inside one ref path component on every filesystem.
+export const validTaskId = (id) => typeof id === "string" && id.length <= 120 && /^[a-z][a-z0-9-]*:[!-~]+$/.test(id);
 export const refName = (id) => {
   if (!validTaskId(id)) throw new TypeError(`invalid task id: ${JSON.stringify(id)}`);
   return CLAIM_PREFIX + Buffer.from(id, "utf8").toString("hex");
@@ -82,7 +88,7 @@ const hash = (token) => createHash("sha256").update(String(token)).digest("hex")
 export function parseClaim(message, taskId) {
   try {
     const c = JSON.parse(String(message).split("\n")[0]);
-    if (c?.v !== 2 || c.task !== taskId || !LANES.has(c.lane) || !(c.state in TRANSITIONS) || !/^[0-9a-f]{64}$/.test(c.holder ?? "")) return null;
+    if (c?.v !== 2 || c.task !== taskId || !LANES.has(c.lane) || !Object.hasOwn(TRANSITIONS, c.state) || !/^[0-9a-f]{64}$/.test(c.holder ?? "")) return null;
     if (!Number.isFinite(c.leaseMin)) return null;
     return c;
   } catch { return null; }
@@ -160,6 +166,8 @@ export const ghForge = {
     const c = gh([`repos/${REPO}/git/commits/${ref.object.sha}`]);
     return { sha: ref.object.sha, message: c.message, date: c.committer?.date ?? null };
   },
+  /** The server date of one commit (the lease's starting commit, when it is not the tip). */
+  commitDate: (sha) => gh([`repos/${REPO}/git/commits/${sha}`]).committer?.date ?? null,
   // No author/committer in the payload: GitHub stamps the commit with ITS time.
   commit: (message, tree, parent) => gh([`repos/${REPO}/git/commits`, "-X", "POST", "--input", "-"], JSON.stringify({ message, tree, parents: [parent] })).sha,
   createRef: (name, sha) => gh([`repos/${REPO}/git/refs`, "-X", "POST", "--input", "-"], JSON.stringify({ ref: `refs/${name}`, sha })),
@@ -170,19 +178,29 @@ export const ghForge = {
 /** {claim, sha, date, held} for one task. held = unreadable or names another task. */
 function readOne(id, forge) {
   const raw = forge.read(refName(id)); // may throw: the caller decides
-  if (!raw) return { claim: null, sha: null, date: null, held: false };
+  if (!raw) return { claim: null, sha: null, date: null, leaseDate: null, held: false };
   const claim = parseClaim(raw.message, id);
-  return { claim, sha: raw.sha, date: raw.date, held: claim === null };
+  // A review writes a new tip but must not renew the holder's lease: the lease runs from
+  // the commit named in `leaseFrom` (the holder's last claim/move), not from the tip.
+  let leaseDate = raw.date;
+  if (claim?.leaseFrom) {
+    if (!/^[0-9a-f]{40}$/.test(claim.leaseFrom)) return { claim: null, sha: raw.sha, date: raw.date, leaseDate: null, held: true };
+    leaseDate = forge.commitDate(claim.leaseFrom); // may throw
+  }
+  return { claim, sha: raw.sha, date: raw.date, leaseDate, held: claim === null };
 }
 
 function expired(r, now) {
-  const t = Date.parse(r.date ?? "");
+  const t = Date.parse(r.leaseDate ?? "");
   return Number.isFinite(t) && t + r.claim.leaseMin * 60000 <= now;
 }
-function isFree(r, now) {
+/** Free for `task`: no claim, released, an expired non-final lease, or — for a PR task —
+ *  a finished claim on an OLDER head (the same PR needs the same action again). */
+function isFree(r, now, task = null) {
   if (r.held) return false;
   if (!r.claim) return true;
   if (r.claim.state === "released") return true;
+  if (r.claim.state === "done" && task?.headSha && r.claim.headSha && task.headSha !== r.claim.headSha) return true;
   return !FINAL.has(r.claim.state) && expired(r, now);
 }
 
@@ -191,7 +209,7 @@ export function readQueue(tasks, forge, now = Date.now()) {
   for (const t of tasks) {
     let r;
     try { r = readOne(t.id, forge); } catch { return null; }
-    out.push({ ...t, claim: r.claim, held: r.held, free: isFree(r, now), claimSha: r.sha, claimedAt: r.date });
+    out.push({ ...t, claim: r.claim, held: r.held, free: isFree(r, now, t), claimSha: r.sha, claimedAt: r.date });
   }
   return out;
 }
@@ -214,10 +232,11 @@ export function claim({ tasks, lane, taskId = null, model = null, leaseMin, now 
   for (const t of list) {
     let r;
     try { r = readOne(t.id, forge); } catch { return { ok: false, why: "could not read the claims; not claiming (an unread claim may be someone else's)" }; }
-    if (!isFree(r, now)) continue;
+    if (!isFree(r, now, t)) continue;
     base ??= forge.mainline();
     // A takeover inherits the PR, head and reviews: an open PR must not be orphaned.
-    const inherit = r.claim && r.claim.state !== "released"
+    const newCycle = r.claim?.state === "done";
+    const inherit = r.claim && r.claim.state !== "released" && !newCycle
       ? { state: r.claim.state === "pr" ? "pr" : "claimed", pr: r.claim.pr ?? null, headSha: r.claim.headSha ?? null, reviews: r.claim.reviews ?? {} }
       : { state: "claimed", pr: null, headSha: t.headSha ?? null, reviews: {} };
     const body = { v: 2, task: t.id, lane, holder: hash(token), model, leaseMin: lease, ...inherit };
@@ -257,6 +276,7 @@ export function move({ lane, token, taskId, state, pr = null, headSha = null, le
   if (!FINAL.has(r.claim.state) && r.claim.state !== "released" && expired(r, now)) return { ok: false, why: "your lease expired; claim it again" };
   if (!(TRANSITIONS[r.claim.state] ?? []).includes(state)) return { ok: false, why: `${r.claim.state} → ${state} is not an allowed move` };
   const next = { ...r.claim, state };
+  delete next.leaseFrom; // this move is the holder's own write: the lease restarts here
   if (state === "pr") {
     const p = pr ?? r.claim.pr, h = headSha ?? r.claim.headSha;
     if (!Number.isSafeInteger(p) || !SHA.test(h ?? "")) return { ok: false, why: "pr needs --pr N and --head <40-char sha>" };
@@ -278,7 +298,8 @@ export function review({ lane, taskId, pr, headSha, forge = ghForge }) {
   if (!r.claim) return { ok: false, why: "not claimed, or held unreadable" };
   if (r.claim.state !== "pr") return { ok: false, why: `reviews are recorded only at state pr (now ${r.claim.state})` };
   if (r.claim.pr !== pr || r.claim.headSha !== headSha) return { ok: false, why: `the claim is at PR #${r.claim.pr} head ${String(r.claim.headSha).slice(0, 8)}, not the one reviewed` };
-  return write(taskId, r, { ...r.claim, reviews: { ...(r.claim.reviews ?? {}), [lane]: { pr, headSha } } }, forge);
+  // leaseFrom pins the lease to the holder's last own commit; a review never moves it.
+  return write(taskId, r, { ...r.claim, leaseFrom: r.claim.leaseFrom ?? r.sha, reviews: { ...(r.claim.reviews ?? {}), [lane]: { pr, headSha } } }, forge);
 }
 
 // ── self-test: an in-memory forge with create-once, fast-forward-only and server time ──
@@ -296,6 +317,7 @@ function selfTest() {
         return sha ? { sha, message: commits.get(sha).message, date: new Date(commits.get(sha).at).toISOString() } : null;
       },
       commit: (message, tree, parent) => { const sha = String(++n).padStart(40, "0"); commits.set(sha, { message, parent, at: f.clock }); return sha; },
+      commitDate: (sha) => { const c = commits.get(sha); if (!c) throw Object.assign(new Error("404"), { status: 404 }); return new Date(c.at).toISOString(); },
       createRef: (name, sha) => { f.calls.create++; if (refs.has(name)) throw Object.assign(new Error("422 exists"), { status: 422 }); refs.set(name, sha); if (f.loseResponse) throw Object.assign(new Error("timeout"), { status: null }); },
       fastForward: (name, sha) => { f.calls.ff++; if (commits.get(sha)?.parent !== refs.get(name)) throw Object.assign(new Error("422 not ff"), { status: 422 }); refs.set(name, sha); },
       refs, commits,
@@ -418,12 +440,41 @@ function selfTest() {
     check("leases are clamped to 5–720 minutes; a non-number is refused", a.claim.leaseMin === 5 && b.claim.leaseMin === 720 && !c.ok);
   }
   {
+    // A moving clock: holder claims at t0 with a 5-minute lease and dies; a review at t+4
+    // must NOT keep the lease alive, so a takeover at t+6 succeeds.
+    const f = mk(); const t0 = f.clock;
+    const c = claim({ tasks: T, lane: "mac-brain", taskId: "hand:x", leaseMin: 5, now: t0, forge: f });
+    move({ lane: "mac-brain", token: c.token, taskId: "hand:x", state: "pr", pr: 9, headSha: H, now: t0, forge: f });
+    f.clock = t0 + 4 * 60000; review({ lane: "codex", taskId: "hand:x", pr: 9, headSha: H, forge: f });
+    f.clock = t0 + 4.5 * 60000; review({ lane: "codex", taskId: "hand:x", pr: 9, headSha: H, forge: f });
+    f.clock = t0 + 6 * 60000;
+    const take = claim({ tasks: T, lane: "cloud-claude", taskId: "hand:x", now: f.clock, forge: f });
+    check("reviews never renew the holder's lease (moving clock)", take.ok && take.claim.reviews.codex?.headSha === H);
+  }
+  {
+    // A recurring PR task: done at head H; the estate later asks for the same action at H2.
+    const f = mk(); const now = f.clock;
+    const PT = [{ id: "pr:10:refresh", priority: 30, headSha: H }];
+    const c = claim({ tasks: PT, lane: "mac-brain", now, forge: f });
+    move({ lane: "mac-brain", token: c.token, taskId: "pr:10:refresh", state: "pr", pr: 10, headSha: H, now, forge: f });
+    review({ lane: "codex", taskId: "pr:10:refresh", pr: 10, headSha: H, forge: f });
+    review({ lane: "cloud-claude", taskId: "pr:10:refresh", pr: 10, headSha: H, forge: f });
+    move({ lane: "mac-brain", token: c.token, taskId: "pr:10:refresh", state: "merged", now, forge: f });
+    move({ lane: "mac-brain", token: c.token, taskId: "pr:10:refresh", state: "done", now, forge: f });
+    const sameHead = claim({ tasks: PT, lane: "codex", now, forge: f });
+    const newHead = claim({ tasks: [{ ...PT[0], headSha: H2 }], lane: "codex", now, forge: f });
+    check("a done PR task is final at its head, but a NEW head starts a fresh cycle (record kept)",
+      !sameHead.ok && newHead.ok && newHead.claim.state === "claimed" && newHead.claim.headSha === H2 && Object.keys(newHead.claim.reviews).length === 0 && f.commits.get(f.refs.get(refName("pr:10:refresh"))).parent !== null);
+  }
+  check("a hand-written state like toString is rejected, not thrown on",
+    parseClaim(JSON.stringify({ v: 2, task: "hand:x", lane: "codex", holder: "0".repeat(64), state: "toString", leaseMin: 5 }), "hand:x") === null);
+  {
     const ids = ["hand-:x", "hand:-x", "pr:5:fix", "hand:a/b..c"];
     const names = ids.map(refName);
     const skipped = [];
-    const kept = orderTasks([{ id: "hand:ok", priority: 1 }, { id: "hand:has space", priority: 1 }, { id: "../x", priority: 1 }], (m) => skipped.push(m));
-    check("ids map to refs one-to-one and back; invalid ids are skipped, not fatal",
-      new Set(names).size === ids.length && ids.every((id, i) => idOfRef(names[i]) === id) && kept.length === 1 && skipped.length === 2 && names.every((x) => /^queue\/claims\/[0-9a-f]+$/.test(x)));
+    const kept = orderTasks([{ id: "hand:ok", priority: 1 }, { id: "hand:has space", priority: 1 }, { id: "../x", priority: 1 }, { id: "hand:" + "y".repeat(130), priority: 1 }], (m) => skipped.push(m));
+    check("ids map to refs one-to-one and back; invalid or over-long ids are skipped, not fatal",
+      new Set(names).size === ids.length && ids.every((id, i) => idOfRef(names[i]) === id) && kept.length === 1 && skipped.length === 3 && names.every((x) => /^queue\/claims\/[0-9a-f]+$/.test(x)));
   }
   check("estate PR task ids do not change when the PR's head moves",
     tasksFromEstate([{ number: 3, action: "fix", headSha: H }])[0].id === tasksFromEstate([{ number: 3, action: "fix", headSha: H2 }])[0].id);

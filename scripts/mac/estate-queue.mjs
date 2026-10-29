@@ -270,18 +270,18 @@ export function fileLedger(path = LEDGER_PATH) {
     has: (k) => keys.has(k),
     record: (entry) => {
       const key = `${entry.number}:${entry.action}:${entry.head}`;
-      // Re-checked at write time: a link made after this reader opened the ledger.
-      const lfd = openSync(id.real, "a");
-      try {
-        const now = ledgerIdentity(lfd, id.real);
-        if (now.dev !== id.dev || now.ino !== id.ino) throw new Error("attempt ledger was replaced since it was opened");
-      } catch (e) { closeSync(lfd); throw e; }
-      closeSync(lfd);
-      mkdirSync(claims, { recursive: true });
-      const cfd = openSync(join(claims, key.replace(/:/g, "-")), "wx"); // EEXIST → already claimed
-      try { writeSync(cfd, JSON.stringify(entry) + "\n"); fsyncSync(cfd); } finally { closeSync(cfd); }
+      // ONE handle for the check and the append: the identity is read from the open file
+      // (fstat), never re-resolved by name, so what was checked is what is written. A link
+      // made after this reader opened the ledger refuses the claim before any POST.
       const fd = openSync(id.real, "a");
-      try { writeSync(fd, JSON.stringify(entry) + "\n"); fsyncSync(fd); } finally { closeSync(fd); }
+      try {
+        const st = fstatSync(fd);
+        if (!st.isFile() || st.nlink !== 1 || st.dev !== id.dev || st.ino !== id.ino) throw new Error("attempt ledger was linked or replaced since it was opened; refusing");
+        mkdirSync(claims, { recursive: true });
+        const cfd = openSync(join(claims, key.replace(/:/g, "-")), "wx"); // EEXIST → already claimed
+        try { writeSync(cfd, JSON.stringify(entry) + "\n"); fsyncSync(cfd); } finally { closeSync(cfd); }
+        writeSync(fd, JSON.stringify(entry) + "\n"); fsyncSync(fd);
+      } finally { closeSync(fd); }
       keys.add(key);
     },
   };

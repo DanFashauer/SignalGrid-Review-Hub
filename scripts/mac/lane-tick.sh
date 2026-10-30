@@ -452,6 +452,38 @@ fi
 
 RESULT="$RESULT; objective: $LOOP_VERDICT"
 
+# ── d2. the estate queue, at most hourly ─────────────────────────────────────
+# The owner gave the Mac brain the estate (2026-10-23; #1546, 2026-10-29). The queue
+# is scripts/mac/estate-queue.mjs: it closes a PR whose head is already on mainline
+# and merges mainline into a PR that is behind without conflict, at most ESTATE_MAX
+# per run, and only reports everything else (it never merges a PR). Hourly, so a
+# 5-minute tick does not re-run CI on the same PRs every few minutes; the stamp lives
+# in node_modules (gitignored) like the heartbeat's.
+ESTATE_STAMP="node_modules/.sg-estate-last"
+ESTATE_MAX="${SIGNALGRID_ESTATE_MAX:-3}"
+if [ -f scripts/mac/estate-queue.mjs ] && command -v gh >/dev/null 2>&1; then
+  if [ -z "$(find "$ESTATE_STAMP" -mmin -60 2>/dev/null)" ]; then
+    if [ "$DRY" = "1" ]; then
+      _est="$(node scripts/mac/estate-queue.mjs plan 2>&1 | tail -1)"
+      say "dry-run: would execute the estate queue (max $ESTATE_MAX); plan: $_est"
+    else
+      mkdir -p node_modules 2>/dev/null || true
+      _est="$(node scripts/mac/estate-queue.mjs execute --max "$ESTATE_MAX" --cursor-file node_modules/.sg-estate-cursor 2>&1)"
+      _est_rc=$?
+      printf '%s\n' "$_est" | while IFS= read -r _l; do say "  $_l"; done
+      # Without the stamp the hourly throttle is gone and the queue runs every tick.
+      touch "$ESTATE_STAMP" 2>/dev/null || say "WARN could not write $ESTATE_STAMP; the estate queue will re-run next tick"
+      if [ "$_est_rc" = "0" ]; then
+        RESULT="$RESULT; $(printf '%s\n' "$_est" | tail -1)"
+      else
+        RESULT="$RESULT; estate queue FAILED (exit $_est_rc): $(printf '%s\n' "$_est" | tail -1)"
+      fi
+    fi
+  fi
+else
+  say "estate queue not run: scripts/mac/estate-queue.mjs or gh missing"
+fi
+
 # ── e. heartbeat, always ─────────────────────────────────────────────────────
 heartbeat
 exit 0

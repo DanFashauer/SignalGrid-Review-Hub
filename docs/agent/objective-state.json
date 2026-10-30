@@ -23,7 +23,7 @@
       "state": "met",
       "measured": {
         "pct": 100,
-        "reason": "20/20 bound proofs/steps current (passed, matching manifest fingerprint and, for proofs, source digest) — green on both halves, 0 day(s) old, manifest aa9ce381438e; launch items fully current 28/28"
+        "reason": "20/20 bound proofs/steps current (passed, matching manifest fingerprint and, for proofs, source digest) — green on both halves, 5 day(s) old, manifest aa9ce381438e; launch items fully current 28/28"
       },
       "source": "scripts/check-readiness-figure.mjs --json (.details.evidence)"
     },
@@ -178,6 +178,12 @@
       "since": "2026-10-22T12:28:51.447Z"
     },
     {
+      "id": "stalled-top-task",
+      "clears": "cloud",
+      "asks": "row 17b (\"Drive access-governance against the Keycloak lab that already exists\") has been ranked #1 for over 7 days with no change in docs/COMPANY_BUILD_PLAN.md — build it, re-rank it, or record why it waits",
+      "since": "2026-10-29T13:42:17.316Z"
+    },
+    {
       "id": "owner-real-in-hand",
       "clears": "owner",
       "asks": "Owner decision: is something real in hand for partners/collaborators (DR-033)? If yes, add a decision record carrying the attestation token and point attestedIn at it; if no, the loop keeps building the ranked queue.",
@@ -196,8 +202,8 @@
     "partialRows": 5
   },
   "staleAfterHours": 3,
-  "derivedAt": "2026-10-22T12:28:51.447Z",
-  "derivedAtCommit": "1ba8b50732508b1b51dfe1e865f80daae15aab4d",
+  "derivedAt": "2026-10-29T13:42:17.316Z",
+  "derivedAtCommit": "807cc244dc467c1381c14743806baa9ddae48423",
   "workingTreeCleanAtEntry": true,
-  "decisionAddress": "97a0c6a50d6dd43d89c10db480f1a267af7d676c5b71bfee439877216f4c21d6"
+  "decisionAddress": "41feb4eac4e867bbedde8fe63ac8c1f3c513d50218b948ff9c162de5ec623eaa"
 }

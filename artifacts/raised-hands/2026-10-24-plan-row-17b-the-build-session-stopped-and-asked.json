@@ -1,0 +1,13 @@
+{
+  "id": "2026-10-24-plan-row-17b-the-build-session-stopped-and-asked",
+  "raisedAt": "2026-10-24T00:20:19.228Z",
+  "origin": "mac",
+  "doing": "the unattended build tick (scripts/mac/build-tick.sh)",
+  "blockedBy": "plan row 17b: the build session stopped and asked for a hand: Plan row 17b (docs/COMPANY_BUILD_PLAN.md:54) is still open, but this unattended build session cannot finish it because the row's deliverable is a live result that only a running Keycloak lab can supply. The row requires driving the sg-keycloak container (scripts/run-live-lanes.sh; KEYCLOAK_URL such as <URL> per scripts/src/live-keycloak-proof.ts:33-54), building a bridge from the live realm's users, roles and groups into AccessGovernanceReportRaw, and then recording the fixture-vs-wire result as a dated entry in docs/agent/wire-truth-ledger.json. In this session, every probe o. Claim mac/build-row-17b-20261024T001639Z stays until a person deletes it",
+  "need": "a person on the Mac to read the log named in where, fix the cause or re-rank the row, and delete the claim branch it names when the row should be retried",
+  "whoCanUnblock": "mac lane",
+  "domain": "lane",
+  "status": "open",
+  "routedTo": null,
+  "where": "<HOME>/Library/Logs/signalgrid/build-tick-20261024T001639Z.log"
+}

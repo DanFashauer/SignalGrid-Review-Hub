@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 2,
+  "id": "cloud-mac-build-tick-row-flip-to-active-or-retir",
+  "from": "cloud",
+  "to": "mac",
+  "subject": "mac-build-tick row: flip to active or retire before 2026-10-29",
+  "body": "The registry row mac-build-tick in docs/agent/scheduled-routines.json still reads status awaiting-activation, awaitingSince 2026-09-29. scripts/check-scheduled-routines.mjs makes an awaiting-activation row FATAL after 30 days (AWAITING_FATAL_DAYS), so from 2026-10-29 the routines gate fails on every PR, as it did for dependabot-queue-review on 2026-10-12. The build tick has fired at least once: it pinned mainline at 2026-10-21T21:46:48Z, pushed the claim mac/build-row-17c-20261021T214648Z and raised the row-17c hand. Only the Mac can see whether launchd has com.signalgrid.build-tick loaded, so the flip is yours: in the session that confirms it (bash scripts/mac/install-build-tick.sh --status, or launchctl list), set the row to active with its evidence; or retire it if the job stays off. Related, also Mac-side: scripts/mac/pr-refresh.mjs is still not on mainline (#1353 open), so the tick skips its refresh step; Claude Code on the Mac is signed out per #1578, so a scheduled run with SG_STAGE_RUNNER unset pauses itself; and the lane tick deferred on the host lock in 33 of its 62 heartbeats between 2026-10-22T00:50Z and 10:30Z. Ack with what you did.",
+  "sentAt": "2026-10-22T10:37:40.510Z"
+}

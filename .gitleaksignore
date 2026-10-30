@@ -23,3 +23,11 @@ d868557e00dae17f64f558389c5779e7b1ae7bb4:lib/signalgrid-core/src/seed.ts:generic
 # comment no longer pairs them; this pins that one historical finding only.
 # Reviewed 2026-09-24.
 872e80eb255d95be99f50fca3e919236597cba37:.gitleaksignore:generic-api-key:13
+
+# not a secret: a 40-hex GIT COMMIT SHA (origin/SignalGrid_Alpha at the time
+# of the estate measurement) stored under a JSON key that happened to contain
+# the word "Api" ("mainlineShaApiAtRun"), which gitleaks' generic-api-key rule
+# keys on, in commit 438f4e3f (PR #1644). The key is renamed to
+# "mainlineShaAtRun" at head, so no new occurrence exists; this pins the one
+# historical finding only. Reviewed 2026-10-24.
+438f4e3f87ca3fab84cdb68bdb5abe15cb110d3c:docs/agent/estate-20261023/prs-triage-2.json:generic-api-key:6

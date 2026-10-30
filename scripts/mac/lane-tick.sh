@@ -3,9 +3,9 @@
 # SignalGrid — the Mac lane's automatic tick. Runs WITHOUT a person and WITHOUT a
 # Claude session, from launchd (scripts/mac/install-launchd.sh); the interval is the
 # installer's (default 5 min). A short interval picks up queued sim requests fast; to
-# keep that from flooding SignalGrid_Alpha with heartbeat commits, a QUIET tick
-# heartbeats at most once per QUIET_HEARTBEAT_MIN minutes (a tick that ACTED, SKIPPED
-# or FAILED always heartbeats). The steward's 3-hour staleness window stays satisfied.
+# keep protected mail PRs paced, an unchanged outcome gets a two-hour keepalive.
+# A changed outcome is submitted immediately. The work poll remains five minutes;
+# canonical delivery is pending until the PR passes its checks and merges.
 #
 #   bash scripts/mac/lane-tick.sh            # one tick, prints what it did
 #   bash scripts/mac/lane-tick.sh --dry-run  # say what would run, run nothing
@@ -37,7 +37,7 @@
 #   d. commit + push any new results on a `mac/tick-<stamp>` branch (the cloud
 #      steward opens the PR within the hour; if `gh` is on PATH the PR is opened
 #      here) and return the checkout to SignalGrid_Alpha;
-#   e. HEARTBEAT every tick, quiet or not, through `lane:deliver` — so "the Mac
+#   e. HEARTBEAT on a changed outcome or the keepalive through `lane:deliver` — so "the Mac
 #      ran and had nothing to do" is distinguishable from "the Mac never ran",
 #      and the cloud steward escalates to the owner when this stops arriving.
 #
@@ -97,10 +97,9 @@ printf '%s' "$$" > "$TICK_LOCK/pid"
 trap 'if declare -F sg_host_verify_release >/dev/null; then sg_host_verify_release; fi; rm -f "$TICK_LOCK/pid"; rmdir "$TICK_LOCK" 2>/dev/null' EXIT
 
 # An UNCHANGED tick heartbeats at most once per this many minutes, so a short launchd
-# interval does not push a heartbeat commit to Alpha every run. Override with
-# SIGNALGRID_QUIET_HEARTBEAT_MIN. The local stamp sits beside the install stamp in
-# node_modules (gitignored, never pushed); its mtime is the last delivered heartbeat
-# and the sibling file holds the RESULT that heartbeat carried.
+# interval does not create a protected PR every run. The default leaves an hour
+# for CI within the steward's three-hour tolerance. The local stamp and result
+# record the last attempted submission, not a claim that canonical delivery happened.
 #
 # "Unchanged", not "quiet" (2026-09-12): the throttle used to exempt every skipped
 # and failed result, so a checkout parked on a landing branch for an hour pushed
@@ -109,9 +108,11 @@ trap 'if declare -F sg_host_verify_release >/dev/null; then sg_host_verify_relea
 # between them exhausting the repository's GITHUB_TOKEN budget until the CI liveness
 # gate failed a product PR on a 403. A repeated result is not news; a CHANGED result
 # is, and still delivers at once — including the first skip and the first failure.
-QUIET_HEARTBEAT_MIN="${SIGNALGRID_QUIET_HEARTBEAT_MIN:-25}"
+QUIET_HEARTBEAT_MIN="${SIGNALGRID_QUIET_HEARTBEAT_MIN:-120}"
 HB_STAMP="node_modules/.sg-last-heartbeat"
 HB_LAST_RESULT="node_modules/.sg-last-heartbeat-result"
+HB_LAST_ATTEMPT="node_modules/.sg-last-heartbeat-attempt"
+ESTATE_RESULT="node_modules/.sg-estate-result"
 
 # The heartbeat is the tick's ONLY obligation on every path, including failure
 # paths: a tick that died silently is exactly what this script exists to prevent.
@@ -165,16 +166,42 @@ append_raised_hands_state() {
 heartbeat() {
   append_unread_state
   append_raised_hands_state
+  # Keep the last actual estate outcome present between hourly runs. This avoids
+  # a success-summary flip and retains a failure until another outcome is recorded.
+  if [ -e "$ESTATE_RESULT" ] || [ -L "$ESTATE_RESULT" ]; then
+    if [ ! -L "$ESTATE_RESULT" ] && _estate_result="$(cat "$ESTATE_RESULT" 2>/dev/null)" && [ -n "$_estate_result" ]; then
+      RESULT="$RESULT; last estate: $_estate_result"
+    else
+      RESULT="$RESULT; last estate: UNKNOWN (record unreadable)"
+    fi
+  fi
   if [ "$DRY" = "1" ]; then say "dry-run: would heartbeat: $RESULT"; return 0; fi
-  # Throttle a result IDENTICAL to the last delivered one ("quiet" again, the same
+  # An independent parent-written terminal, not child output or a PID check,
+  # closes an attempt. Unknown/interrupted mutations remain readback-only.
+  if [ -e "$HB_LAST_ATTEMPT" ] || [ -L "$HB_LAST_ATTEMPT" ]; then
+    _hb_previous="$(cat "$HB_LAST_ATTEMPT" 2>/dev/null)"
+    if [ -L "$HB_LAST_ATTEMPT" ] || ! [[ "$_hb_previous" =~ ^[0-9]{8}T[0-9]{6}Z-[0-9]+$ ]]; then
+      say "WARN unknown heartbeat receipt; READBACK ONLY, no submission"; return 1
+    fi
+    _hb_previous_log="node_modules/.sg-heartbeat-${_hb_previous}.log"
+    _hb_previous_exit="node_modules/.sg-heartbeat-${_hb_previous}.exit"
+    if [ ! -f "$_hb_previous_log" ] || [ -L "$_hb_previous_log" ] || [ ! -f "$_hb_previous_exit" ] || [ -L "$_hb_previous_exit" ]; then
+      say "WARN unfinished heartbeat receipt; READBACK ONLY, no submission"; return 1
+    fi
+    case "$(cat "$_hb_previous_exit" 2>/dev/null)" in
+      0|1|2) ;;
+      *) say "WARN unconfirmed heartbeat submission; READBACK ONLY, no submission"; return 1 ;;
+    esac
+  fi
+  # Throttle a result IDENTICAL to the last attempted one ("quiet" again, the same
   # "skipped: …" again, the same failure again) inside the window; anything that
-  # differs from what Alpha already carries delivers now. A tick that ACTED names
-  # what it did, so its result differs and always delivers. `find -mmin -N` and the
+  # differs from the previous attempt submits now. A tick that ACTED names
+  # what it did, so its result differs and submits immediately. `find -mmin -N` and the
   # `cat` comparison are BSD/bash-3.2 safe; a missing result file compares unequal.
   LAST_RESULT=""
   [ -f "$HB_LAST_RESULT" ] && LAST_RESULT="$(cat "$HB_LAST_RESULT" 2>/dev/null)"
   if [ "$RESULT" = "$LAST_RESULT" ] && [ -f "$HB_STAMP" ] && [ -n "$(find "$HB_STAMP" -mmin -"$QUIET_HEARTBEAT_MIN" 2>/dev/null)" ]; then
-    say "unchanged ($RESULT), last heartbeat <${QUIET_HEARTBEAT_MIN}m ago — tick ran, not re-pushing (avoids flooding Alpha)"
+    say "unchanged ($RESULT), last submission attempt <${QUIET_HEARTBEAT_MIN}m ago — tick ran, no new mail PR"
     return 0
   fi
   # --no-wake: the tick heartbeat is a STALENESS record, read from the heartbeat
@@ -182,14 +209,54 @@ heartbeat() {
   # mail (append_unread_state reports THIS lane's inbox, mac's), so it must not
   # post the mailbox-PR comment that wakes the cloud lane. Real cloud mail travels
   # on a separate `lane-deliver send` (no --no-wake), which still wakes at once;
-  # new mac/* branches are reviewed by the steward within the hour. This ends the
+  # mail topics pass their required checks before merging. This ends the
   # every-tick quiet wake that flooded the cloud session (owner decision 2026-09-23).
-  if node scripts/lane-deliver.mjs heartbeat mac-lane-tick "$RESULT" --no-wake >/dev/null 2>&1; then
-    touch "$HB_STAMP" 2>/dev/null || true
-    printf '%s' "$RESULT" > "$HB_LAST_RESULT" 2>/dev/null || true
-    say "heartbeat delivered: $RESULT"
+  # Sync the intent before calling a mutating child, and its independent terminal
+  # afterwards. Existing receipts remain immutable; no automatic unknown override.
+  _hb_record() {
+    python3 - "$@" <<'PY'
+import json, os, stat, sys
+def write(path, data, exclusive=False):
+    flags = os.O_WRONLY | os.O_CREAT | os.O_NOFOLLOW
+    if exclusive: flags |= os.O_EXCL
+    fd = os.open(path, flags, 0o600)
+    try:
+        info = os.fstat(fd)
+        if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
+            raise PermissionError("owned regular receipt required")
+        os.ftruncate(fd, 0)
+        with os.fdopen(fd, "wb", closefd=False) as stream:
+            stream.write(data); stream.flush(); os.fsync(fd)
+    finally: os.close(fd)
+mode, attempt, value = sys.argv[1:4]
+prefix = "node_modules/.sg-heartbeat-" + attempt
+if mode == "prepare":
+    pointer, key, stamp = sys.argv[4:7]
+    write(prefix + ".log", (json.dumps({"attempt": attempt, "result": value}) + "\n").encode(), True)
+    write(pointer, attempt.encode()); write(key, value.encode()); write(stamp, b"")
+else:
+    code = int(value)
+    if not 0 <= code <= 255: raise ValueError("invalid actual child exit")
+    write(prefix + ".exit", (str(code) + "\n").encode(), True)
+PY
+  }
+  _hb_attempt="${STAMP}-$$"
+  _hb_log="node_modules/.sg-heartbeat-${_hb_attempt}.log"
+  if ! mkdir -p node_modules || ! _hb_record prepare "$_hb_attempt" "$RESULT" "$HB_LAST_ATTEMPT" "$HB_LAST_RESULT" "$HB_STAMP"; then
+    say "WARN could not preserve heartbeat intent; no submission"; return 1
+  fi
+  if node scripts/lane-deliver.mjs heartbeat mac-lane-tick "$RESULT" --no-wake >>"$_hb_log" 2>&1; then
+    _hb_exit=0
   else
-    say "WARN heartbeat delivery FAILED (push refused or offline): $RESULT"
+    _hb_exit=$?
+  fi
+  if ! _hb_record terminal "$_hb_attempt" "$_hb_exit"; then
+    say "WARN heartbeat terminal not recorded; READBACK ONLY: $_hb_log"; return 1
+  fi
+  if [ "$_hb_exit" = "0" ]; then
+    say "heartbeat submitted for protected PR merge: $RESULT"
+  else
+    say "WARN heartbeat submission not confirmed (exit $_hb_exit); receipt $_hb_log: $RESULT"
   fi
 }
 
@@ -473,11 +540,9 @@ if [ -f scripts/mac/estate-queue.mjs ] && command -v gh >/dev/null 2>&1; then
       printf '%s\n' "$_est" | while IFS= read -r _l; do say "  $_l"; done
       # Without the stamp the hourly throttle is gone and the queue runs every tick.
       touch "$ESTATE_STAMP" 2>/dev/null || say "WARN could not write $ESTATE_STAMP; the estate queue will re-run next tick"
-      if [ "$_est_rc" = "0" ]; then
-        RESULT="$RESULT; $(printf '%s\n' "$_est" | tail -1)"
-      else
-        RESULT="$RESULT; estate queue FAILED (exit $_est_rc): $(printf '%s\n' "$_est" | tail -1)"
-      fi
+      _estate_result="$(printf '%s\n' "$_est" | tail -1)"
+      if [ "$_est_rc" != "0" ]; then _estate_result="estate queue FAILED (exit $_est_rc): $_estate_result"; fi
+      if ! printf '%s\n' "$_estate_result" > "$ESTATE_RESULT"; then RESULT="$RESULT; estate outcome could not be retained"; fi
     fi
   fi
 else

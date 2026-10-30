@@ -330,7 +330,7 @@ block; a stage run on the wrong tier is a lesson here.
 ### L36 — A ruleset refusal is not a moved canonical branch
 - **date:** 2026-10-30
 - **lane:** mac
-- **incident:** The Mac delivery path pushed heartbeat/mail/ack commits directly to the protected canonical branch. Its generic rejected-push handler retried a policy refusal five times, while the scheduled tick still exited0.
-- **evidence:** The actual canonical heartbeat readback remained2026-10-24T07:30:38.430Z; active ruleset25774497 requires a PR and strict checks with no bypass. Disposable-Git original-source regression is5pass/2fail; corrected source is7pass/0fail/0skip. These fixtures do not establish a real remote delivery. The first full preflight refused the new fixture until its Git setup used the existing scratchGit helper; no guard or PENDING debt row was relaxed.
+- **incident:** The Mac delivery path pushed heartbeat/mail/ack commits directly to the protected canonical branch. Its generic rejected-push handler retried a policy refusal five times, while the scheduled tick still exited 0.
+- **evidence:** The actual canonical heartbeat readback remained 2026-10-24T07:30:38.430Z; active ruleset 25774497 requires a PR and strict checks with no bypass. Disposable-Git original-source regression is 5 pass / 2 fail; corrected source is 7 pass / 0 fail / 0 skip. These fixtures do not establish a real remote delivery. The first full preflight refused the new fixture until its Git setup used the existing scratchGit helper; no guard or PENDING debt row was relaxed.
 - **landing:** pending — both lanes publish a mail topic and use the existing protected PR route; refused pushes stop, and uncertain responses get exact remote readback without a resend. Full current-head validation/review/CI and canonical heartbeat restoration remain owed.
 - **status:** pending

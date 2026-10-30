@@ -49,7 +49,7 @@ edit in the commit and the lane message, per protocol rule 2.
 (`bash scripts/mac/install-launchd.sh`, once, on the Mac): fetch, refuse a dirty
 or non-Alpha checkout, run every pending sim request, push results on a
 `mac/tick-<stamp>` branch, and HEARTBEAT (the mac-lane-tick file under artifacts/agent-heartbeats,
-written by the first tick) on every path — quiet, acted, skipped and why. The cloud steward opens the PR for
+written through a protected lane/mac-mail-* PR) on every path — quiet, acted, skipped and why. Changed outcomes submit immediately; an unchanged outcome gets a two-hour keepalive, leaving an hour inside the three-hour tolerance for CI and merge. A successful submission is pending until that PR lands. An unconfirmed mutation blocks further submissions for exact readback. The cloud steward opens the PR for
 each `mac/tick-*` branch within the hour and, when that heartbeat is older than
 three hours, escalates to the owner once with the one install command: a Mac
 that has gone silent is a signal, not a mystery. Before merging a tick PR that

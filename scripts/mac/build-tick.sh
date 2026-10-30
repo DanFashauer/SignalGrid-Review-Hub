@@ -162,7 +162,7 @@ say() {
   return 0
 }
 
-# A hand through lane-deliver (straight to mainline on the Mac), never only a file in the
+# A hand through lane-deliver's protected mail PR, never only a file in the
 # build clone — that clone is reset next run. raise-hand.mjs keys a hand on the day
 # and its `blocked` text.
 raise_hand() {
@@ -185,7 +185,7 @@ raise_hand() {
       require("fs").writeFileSync(f, JSON.stringify([hand]));' \
       "$_ops" "$1" "${RUN_LOG:-launchd log ~/Library/Logs/signalgrid-build-tick.log}" \
     && node "$REPO_ROOT/scripts/lane-deliver.mjs" batch "$_ops" >> "${RUN_LOG:-/dev/null}" 2>&1; then
-    say "raised a hand: $1"
+    say "hand submitted for protected PR merge: $1"
   else
     say "WARN could not deliver a hand (already raised today, or lane-deliver refused): $1"
     printf '%s  %s\n' "$STAMP" "$1" >> "$CACHE/undelivered-hands.log"

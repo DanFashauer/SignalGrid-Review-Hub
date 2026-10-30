@@ -86,7 +86,8 @@ const ROUTINES_REL = "docs/agent/scheduled-routines.json";
 const REQ_DIR_REL = "artifacts/sim-requests";
 const RES_DIR_REL = "artifacts/sim-results";
 const EVIDENCE_REL = "artifacts/live-evidence/mac-run.json";
-/** The tick's liveness record, delivered straight to mainline by lane-deliver at least every ~25 min:
+/** The tick's liveness record, submitted through a protected mail PR on a changed
+ *  outcome or a two-hour keepalive (canonical freshness depends on that PR merging):
  *  the FRESHNESS WITNESS every reader bounds on (the state itself is rewritten only on a decision). */
 const HEARTBEAT_REL = "artifacts/agent-heartbeats/mac-lane-tick.json";
 /** What this machine last DELIVERED (decision address + mailed escalation ids). Lives under the
@@ -391,8 +392,9 @@ export function finalize(evaluation, ranked) {
 /**
  * How a READER must treat a committed state. The state file is rewritten only when the DECISION
  * changes (quiet by design), so its own instant cannot say whether the Mac is still deriving it.
- * The FRESHNESS WITNESS is the tick's heartbeat — delivered to mainline at least every ~25 min while
- * the tick runs, and carrying the loop's verdict in its result string since DR-056. A state is
+ * The FRESHNESS WITNESS is the tick's canonical heartbeat — submitted on changed outcomes or a
+ * two-hour keepalive, subject to its protected PR landing. Its result string carries the loop's
+ * verdict since DR-056. A state is
  * current only when that witness is within the state's bound AND names the same verdict; anything
  * else (no heartbeat, a stale one, one naming a different verdict, an unparseable instant) reads
  * `unknown` — never the recorded verdict. Pure.
@@ -609,7 +611,7 @@ function emit(state, { write, deliver }) {
     for (const e of state.escalations) {
       if (delivered.has(e.id)) continue;
       const r = spawnSync(process.execPath, [join(ROOT, "scripts/lane-deliver.mjs"), "send", `objective-loop: ${e.id} — needs ${e.clears}`, `${e.asks}\n\n(Raised by scripts/objective-loop.mjs on the Mac tick, DR-056. Verdict ${state.verdict}; state ${STATE_REL} @ ${state.derivedAtCommit ?? "?"}. Sent once, on the first tick this escalation appeared; it stays in the state file until cleared.)`], { cwd: ROOT, encoding: "utf8" });
-      lines.push(r.status === 0 ? `mailed new escalation ${e.id}` : `WARN could not mail escalation ${e.id} (lane-deliver exit ${r.status})`);
+      lines.push(r.status === 0 ? `escalation ${e.id} submitted for protected PR merge` : `WARN escalation ${e.id} submission unconfirmed (lane-deliver exit ${r.status}); read back its original attempt`);
       if (r.status === 0) delivered.add(e.id);
     }
   }

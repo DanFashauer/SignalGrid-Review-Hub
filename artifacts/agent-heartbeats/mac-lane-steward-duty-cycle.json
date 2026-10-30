@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-10-30T15:30:10.139Z",
-  "result": "quiet keepalive (last heartbeat 2026-10-30T13:28:39Z, now >2h). Diagnostics 15:30Z: no new or moved mac/* branch (newest mac/tick-20261029T124839Z, unchanged); no mail to cloud; sim loop passed; manifest no drift. Mac tick heartbeat still 2026-10-24T07:30:38Z (owner told; not re-escalated). Live evidence 2026-10-24 (refresh already asked). Work-queue PR #1682 threads resolved on owner instruction; landing in progress."
+  "firedAt": "2026-10-30T18:27:10.936Z",
+  "result": "keepalive (last 2026-10-30T15:30:10Z, now >2h) plus action: work-queue PR #1682 landed under DR-037 (eb24084a); Mac lane mailed. Diagnostics 18:27Z: no new or moved mac/* branch; no mail to cloud; the Mac runner is live (it ran #1682's Mac-only check, run 124172951292, green). Mac tick heartbeat still 2026-10-24T07:30:38Z (owner told; not re-escalated). Live evidence 2026-10-24 (refresh already asked)."
 }

@@ -328,7 +328,7 @@ let pushedSha = null;
       const pr = run("gh", ["pr", "create", "--repo", repoSlug, "--base", MAINLINE, "--head", target, "--title", title, "--body", bodyLines.join("\n")], { cwd: wt });
       if (pr.code === 0) {
         console.log(`  pr          ${pr.out.trim().split("\n").pop()}`);
-        const am = run("gh", ["pr", "merge", "--repo", repoSlug, "--auto", "--merge", target], { cwd: wt });
+        const am = run("gh", ["pr", "merge", "--repo", repoSlug, "--auto", "--merge", "--match-head-commit", pushedSha, target], { cwd: wt });
         console.log(am.code === 0 ? "  auto-merge  enabled" : `  auto-merge  not enabled (${(am.err || am.out).trim().split("\n").pop()}) — merge it when the gating check is green`);
       } else {
         console.log(`  pr          gh could not open it (${(pr.err || pr.out).trim().split("\n").pop()}) — use the compare link`);

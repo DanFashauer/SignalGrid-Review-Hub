@@ -2321,3 +2321,6 @@ something alongside a life.
 Everything else in this repository is finished enough. If a month passes and
 both are still zero, the problem is not the product, the doctrine, the gates or
 the plan - and no amount of work in any tool will fix it.
+
+
+PENDING MAC MAIL EXPECTED-HEAD BINDING (2026-10-30): local unpublished correction binds the shared auto-merge request to the complete published SHA; the frozen real-CLI extension failed2controls before and passedall7after with0skips. Source review, current validation/CI/DR-037 landing and actual canonical heartbeat remain pending. This is operator source work, not native coding success or whole-program completion.

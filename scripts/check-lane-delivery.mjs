@@ -74,7 +74,13 @@ for (const lane of ["mac", "cloud"]) control(`${lane} delivery uses a PR topic w
   assert.equal(f.pushes().length, 1);
   assert.match(f.pushes()[0].at(-1), new RegExp(`^HEAD:refs/heads/lane/${lane}-mail-`));
   assert.ok(f.ghCalls().some((a) => a[0] === "pr" && a[1] === "create"));
-  assert.ok(f.ghCalls().some((a) => a[0] === "pr" && a[1] === "merge" && a.includes("--auto")));
+  const merge = f.ghCalls().find((a) => a[0] === "pr" && a[1] === "merge" && a.includes("--auto"));
+  assert.ok(merge);
+  const topic = f.pushes()[0].at(-1).slice("HEAD:".length);
+  const published = f.git(["rev-parse", topic], join(f.root, "remote.git"));
+  assert.match(published, /^[0-9a-f]{40}$/);
+  assert.ok(merge.includes("--match-head-commit"), "auto-merge must bind the exact published head");
+  assert.equal(merge[merge.indexOf("--match-head-commit") + 1], published);
 });
 control("Mac --via-pr remains compatible", {}, (f) => {
   const r = f.run(["--via-pr"]); assert.equal(r.status, 0, r.stderr);

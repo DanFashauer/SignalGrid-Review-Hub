@@ -87,6 +87,7 @@ const STEPS = [
   { name: "Docker carries every install-hook entrypoint", cmd: ["node", "scripts/check-docker-lifecycle-copy.mjs"] },
   { name: "Invariant review self-test (a default-less switch / stray clock read must fail)", cmd: ["node", "scripts/review-invariants.mjs", "--self-test"] },
   { name: "Invariant review (fail-closed / determinism / Assist / truth)", cmd: ["node", "scripts/review-invariants.mjs"] },
+  { name: "Clock-spelling matcher mutation guard (every listed mutant of the shared matcher must fail its self-test)", cmd: ["node", "scripts/clock-spellings-mutants.mjs"] },
   // Shell was the only language here with no static analysis: CodeQL takes JS/TS,
   // tsc takes types, gitleaks takes secrets, the proofs take behaviour. See
   // scripts/check-shell.mjs for why the floor is `warning` and why the Mac lane's
@@ -106,6 +107,12 @@ const STEPS = [
   // script-side gate says so; this proves the gate refuses a missing, non-zero or
   // stale (previous-run, wrong-sha) sentinel.
   { name: "Land-branch push gate self-test (a missing, non-zero or stale sentinel must refuse the push)", cmd: ["node", "scripts/lib/land-branch-gate.mjs", "--self-test"] },
+  { name: "Staged Mac worker self-test (triage, review, limits and transport)", cmd: ["node", "scripts/mac/build-tick-stages.mjs", "--self-test"] },
+  { name: "Local worker job-state proofs", cmd: ["node", "scripts/mac/local-brain/test/job-state.test.mjs"] },
+  { name: "Local worker task-selector proofs", cmd: ["node", "scripts/mac/local-brain/test/task-selector.test.mjs"] },
+  { name: "Local worker task-selector C0 regressions", cmd: ["node", "scripts/mac/local-brain/test/task-selector-control-scope.test.mjs"] },
+  { name: "Local worker task-selector C0 proof envelope", cmd: ["node", "scripts/check-local-worker-task-selector-proof.mjs"] },
+  { name: "Local worker proof-policy proofs", cmd: ["node", "scripts/mac/local-brain/test/proof-policy.test.mjs"] },
   // DR-060 rule 3, first slice: docs/agent/mcp-roster.json names which lane or
   // first-party skill may call which MCP server, with signalgrid-mcp's tool count
   // DERIVED from artifacts/mcp-server/src/index.ts, never hand-typed.
@@ -337,6 +344,8 @@ const STEPS = [
   { name: "iOS restriction defaults (a DLP restriction may not default to permitted on an unknown session)", cmd: ["node", "scripts/check-ios-restriction-defaults.mjs"] },
   { name: "Shell backend paths self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-shell-backend-paths.mjs", "--self-test"] },
   { name: "Shell backend paths (every path EnterpriseShell's control-plane client builds is a declared /v1 path — no silent device 404)", cmd: ["node", "scripts/check-shell-backend-paths.mjs"] },
+  { name: "Screen inventory self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-screen-inventory.mjs", "--self-test"] },
+  { name: "Screen inventory (every page file listed; every stated launch status is launch-profile.mjs's)", cmd: ["node", "scripts/check-screen-inventory.mjs"] },
   { name: "Sim-script self-check self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-sim-scripts-selfcheck.mjs", "--self-test"] },
   { name: "Sim-script self-check (a queued Mac operation must name a script that runs)", cmd: ["node", "scripts/check-sim-scripts-selfcheck.mjs"] },
   { name: "Sim-request runner self-test (a result awaiting landing on a tick branch is never re-run; refused/unreadable stays pending)", cmd: ["node", "scripts/mac/run-requests.mjs", "--self-test"] },

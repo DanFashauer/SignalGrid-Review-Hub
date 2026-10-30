@@ -65,7 +65,7 @@
 // check-lane-messages treats an unparseable sentAt.
 import { spawnSync } from "node:child_process";
 import { scratchGit, scratchGitEnv, scratchGitOk, scrubProcessGitEnv } from "./lib/scratch-git.mjs";
-import { cpSync, existsSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, mkdirSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, lstatSync, readlinkSync, symlinkSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, mkdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -73,6 +73,28 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 const repo = process.env.SIGNALGRID_LANE_REPO
   ? resolve(process.env.SIGNALGRID_LANE_REPO)
   : resolve(dirname(fileURLToPath(import.meta.url)), "..");
+/**
+ * Copy the git-TRACKED files under `dirs` from `src` into `dst`, and nothing else. A developer
+ * checkout can hold minutes of untracked material under `.claude/worktrees/` or
+ * `scripts/node_modules`; copying whole directories then made the e2e `git add -A` time out
+ * (the 2026-10-17 Mac `evidence` failure). Fail closed: an unlistable repo or a tracked file that
+ * cannot be copied throws a message naming it, never a partial fixture.
+ */
+export function copyTrackedInto(src, dst, dirs) {
+  const ls = spawnSync("git", ["-C", src, "ls-files", "-z", "--", ...dirs], { encoding: "utf8", env: scratchGitEnv(process.env), timeout: 60000, maxBuffer: 64 * 1024 * 1024 });
+  if (ls.error || ls.status !== 0) throw new Error(`git ls-files ${dirs.join(" ")} failed in ${src}: status=${ls.status} signal=${ls.signal}${ls.error ? ` error=${ls.error.message}` : ""} stderr=${(ls.stderr || "").trim()}`);
+  const files = ls.stdout.split("\0").filter(Boolean);
+  if (files.length === 0) throw new Error(`git ls-files ${dirs.join(" ")} listed no tracked file in ${src}`);
+  for (const f of files) {
+    try {
+      const st = lstatSync(join(src, f)); // a tracked path deleted from the work tree is an error, not a skipped file
+      mkdirSync(dirname(join(dst, f)), { recursive: true });
+      if (st.isSymbolicLink()) symlinkSync(readlinkSync(join(src, f)), join(dst, f)); // a tracked link is copied as a link
+      else cpSync(join(src, f), join(dst, f));
+    } catch (x) { throw new Error(`cannot copy tracked file ${f} from ${src}: ${x.message}`); }
+  }
+  return files.length;
+}
 export const LEDGER_DIR = "artifacts/raised-hands";
 export const ROUTING_FILE = "docs/agent/hand-routing.json";
 /** Group order on the owner's page: him first, then the lanes, then roles, tools and gaps. */
@@ -604,15 +626,39 @@ async function selfTest() {
   try { scratchGitOk(bare, ["init", "-q"]); let missing = false; try { openTip(bare); } catch (x) { missing = x instanceof TipMissing && x.message.includes("does not exist"); } checks.push(["a MISSING origin ref fails closed (TipMissing), never reads as no-stall", missing]); }
   finally { rmSync(bare, { recursive: true, force: true }); }
 
+  // the e2e fixture holds ONLY tracked files, and a scratch-git timeout is named
+  {
+    const src = mkdtempSync(join(realpathSync(tmpdir()), "rh-src-")); const dst = mkdtempSync(join(realpathSync(tmpdir()), "rh-dst-"));
+    try {
+      scratchGitOk(src, ["init", "-q"]);
+      for (const f of ["scripts/a.mjs", ".claude/b.md"]) { mkdirSync(dirname(join(src, f)), { recursive: true }); writeFileSync(join(src, f), "x"); }
+      scratchGitOk(src, ["add", "-A"]); scratchGitOk(src, ["commit", "-qm", "t"]);
+      for (const f of [".claude/worktrees/plant/node_modules/p/i.js", "scripts/node_modules/q/j.js"]) { mkdirSync(dirname(join(src, f)), { recursive: true }); writeFileSync(join(src, f), "u"); }
+      const n = copyTrackedInto(src, dst, ["scripts", ".claude"]);
+      checks.push(["copyTrackedInto copies the tracked files and no untracked tree (.claude/worktrees, scripts/node_modules)", n === 2 && existsSync(join(dst, "scripts/a.mjs")) && existsSync(join(dst, ".claude/b.md")) && !existsSync(join(dst, ".claude/worktrees")) && !existsSync(join(dst, "scripts/node_modules"))]);
+      const whole = mkdtempSync(join(realpathSync(tmpdir()), "rh-whole-"));
+      try { cpSync(join(src, ".claude"), join(whole, ".claude"), { recursive: true }); checks.push(["…mutant: the old whole-directory cpSync DOES carry the untracked tree (the plant can fail the copy)", existsSync(join(whole, ".claude/worktrees"))]); }
+      finally { rmSync(whole, { recursive: true, force: true }); }
+      rmSync(join(src, "scripts/a.mjs"));
+      let named = ""; try { copyTrackedInto(src, join(dst, "missing-file"), ["scripts", ".claude"]); } catch (x) { named = x.message; }
+      checks.push(["…a tracked file missing from the work tree FAILS the copy and names the file (fail closed)", named.includes("scripts/a.mjs")]);
+      let notRepo = ""; try { copyTrackedInto(dst, join(dst, "not-a-repo"), ["scripts"]); } catch (x) { notRepo = x.message; }
+      checks.push(["…a source that lists no tracked file FAILS the copy (never an empty fixture passed as complete)", notRepo.includes("ls-files")]);
+      // A deliberately slow alias must time out on a fast machine too. Its child is bounded
+      // to one second even if git is killed before it can reap it.
+      let t = ""; try { scratchGitOk(src, ["-c", "alias.sg-timeout=!sleep 1", "sg-timeout"], { timeout: 10 }); } catch (x) { t = x.message; }
+      checks.push(["a scratch-git TIMEOUT is named (status, signal, error), never an empty message", /status=null/.test(t) && /signal=/.test(t) && /ETIMEDOUT/.test(t)]);
+    } finally { rmSync(src, { recursive: true, force: true }); rmSync(dst, { recursive: true, force: true }); }
+  }
+
   // main() end to end: a temp git repo holding a copy of the scripts, run as the real CLI. The cases
   // above call openTip/evaluate directly and never see main's wiring (the TipMissing exit, the tip root,
   // the stale rule reaching checkOutcome, the printed source line).
   const e2e = mkdtempSync(join(realpathSync(tmpdir()), "rh-e2e-"));
   try {
-    const g2 = (...a) => { const r = scratchGit(e2e, a); if (r.status !== 0) throw new Error(`git ${a.join(" ")}: ${r.stderr}`); return r.stdout.trim(); };
+    const g2 = (...a) => scratchGitOk(e2e, a); // names status, signal and error: a timeout never reads as an empty message
     g2("init", "-q");
-    cpSync(join(repo, "scripts"), join(e2e, "scripts"), { recursive: true });
-    cpSync(join(repo, ".claude"), join(e2e, ".claude"), { recursive: true });
+    copyTrackedInto(repo, e2e, ["scripts", ".claude"]);
     mkdirSync(join(e2e, "docs/agent"), { recursive: true }); mkdirSync(join(e2e, "artifacts/agent-heartbeats"), { recursive: true }); mkdirSync(join(e2e, LEDGER_DIR), { recursive: true });
     for (const f of ["org-roster.json", "hand-routing.json"]) cpSync(join(repo, "docs/agent", f), join(e2e, "docs/agent", f));
     writeFileSync(join(e2e, "docs/agent/scheduled-routines.json"), JSON.stringify({ routines: [{ id: "x-tick", status: "active", heartbeatPath: "artifacts/agent-heartbeats/x.json", cadenceToleranceHours: 3 }] }));

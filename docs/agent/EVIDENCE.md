@@ -4585,3 +4585,387 @@ Output:   #1460 head=6945ab1a merge=cc910439 merged=2026-10-16T00:28:14Z state=c
           116735582504 Typecheck, build, and proof scaffold head=6945ab1a completed success completed=2026-10-16T00:12:12Z
           116735581757 PR — Mac-only checks (full-clone provenance, preflight on macOS) head=6945ab1a completed success completed=2026-10-16T00:23:24Z
 Verdict:  holds for the merge, the merged head, the merged time and both check runs (read above). The review rounds and any refute on this PR are not read here, and the title's "plan row 43 remainder" is quoted from the PR, not checked against the plan.
+
+
+## 2026-10-21 — "#1576 (restore staged Mac builders and align local worker verification) landed under DR-037 at b0a4568855ca2d2378698ba23e5ff867a7c6650b from head 418221363eea5dc66ff3eda7c21484247d03cfb9"
+Command:  git show --no-patch --format='commit=%H%nparents=%P%ncommittedAt=%cI%nsubject=%s' b0a4568855ca2d2378698ba23e5ff867a7c6650b; git merge-base --is-ancestor 418221363eea5dc66ff3eda7c21484247d03cfb9 b0a4568855ca2d2378698ba23e5ff867a7c6650b
+Output:   commit=b0a4568855ca2d2378698ba23e5ff867a7c6650b
+          parents=70075bd67b02f525b402b09820824f37663b93a7 418221363eea5dc66ff3eda7c21484247d03cfb9
+          committedAt=2026-10-21T17:33:02-04:00
+          subject=Merge pull request #1576 from DanFashauer/codex/project-worker-alignment-20261021
+          git show: exit 0; git merge-base --is-ancestor: exit 0, no stdout.
+Recorded GitHub API reads (snapshot at 2026-10-21T21:47Z; mutable receipts, not re-runnable commands):  gh api repos/DanFashauer/SignalGrid-Review-Hub/pulls/1576 --jq '"#\(.number) head=\(.head.sha) merge=\(.merge_commit_sha) merged=\(.merged_at) state=\(.state)"'; gh api repos/DanFashauer/SignalGrid-Review-Hub/check-runs/119486613085 --jq '"\(.id) \(.name) head=\(.head_sha) \(.status) \(.conclusion) completed=\(.completed_at)"'; gh api repos/DanFashauer/SignalGrid-Review-Hub/check-runs/119486610742 --jq '"\(.id) \(.name) head=\(.head_sha) \(.status) \(.conclusion) completed=\(.completed_at)"'; gh api repos/DanFashauer/SignalGrid-Review-Hub/pulls/1576 --jq '.body'
+Recorded API output:   #1576 head=418221363eea5dc66ff3eda7c21484247d03cfb9 merge=b0a4568855ca2d2378698ba23e5ff867a7c6650b merged=2026-10-21T21:33:03Z state=closed
+          119486613085 Typecheck, build, and proof scaffold head=418221363eea5dc66ff3eda7c21484247d03cfb9 completed success completed=2026-10-21T21:30:31Z
+          119486610742 PR — Mac-only checks (full-clone provenance, preflight on macOS) head=418221363eea5dc66ff3eda7c21484247d03cfb9 completed success completed=2026-10-21T21:25:12Z
+          Body, Validation: "Staged-worker self-test: **243/243**." / "Local worker primitives: **41/41**." / "Full local preflight: **PASSED — everything it runs is green**. Two web steps were unavailable on darwin-arm64; the separate Linux run below covers them." / "Full breadth: **PASSED — 58 breadth proofs green**." / "Linux all-package build and browser E2E: **exit 0; 53/53 passed**. Attestation binds this exact clean head."
+          Retained local preflight receipt: "Preflight PASSED — everything it runs is green." / "2 step(s) did NOT run — unavailable on darwin-arm64, not passed:"; the named steps are Build (all packages) and Browser E2E (review console, website, admin).
+          Retained breadth receipt: "Breadth lane PASSED — 58 breadth proofs green (deferred families, doctrine documents, and the DR-005 decision-palette design gate)."
+          Retained Linux browser receipt: "53 passed (1.3m)"; the separate native-build attestation records status=passed, treeSha=418221363eea5dc66ff3eda7c21484247d03cfb9, treeClean=true, ranAt=2026-10-21T21:00:53.277Z and runner=apple-container/amd64/node:22 for both named steps.
+          Body, Owner decision needed: "Completed independent primary source reviews and a final pre-merge API read found zero unresolved threads or posted bot findings. The optional GitHub Codex review was still running at landing; it is not claimed as completed review evidence."
+Verdict:  the pinned local reads confirm the merge parents, source-head ancestry and commit timestamp. The recorded API snapshot supplies the server merge time and both completed-success check runs on that exact head; the commit timestamp is 21:33:02Z and API merged_at is 21:33:03Z. The local results are the coordinator's recorded pre-push runs on that head, cross-checked against retained final logs and the clean-head Linux attestation; the graph reads do not rerun or independently prove those gate outcomes. The Mac preflight's two unavailable steps are not counted as passed by that run. Independent primary source review and the still-running optional review at landing are recorded from the PR body. This record closes at merge b0a4568855ca2d2378698ba23e5ff867a7c6650b; later review observations are recorded separately below. This landing restores development machinery and worker proof boundaries; it does not re-mint live evidence or assert a new product-readiness figure, owner attestation or merge authority.
+
+## 2026-10-21 — Post-landing optional Codex observation at 21:47Z for #1576
+Command:  git show --no-patch --format='head=%H%nsubject=%s' 418221363eea5dc66ff3eda7c21484247d03cfb9
+Output:   head=418221363eea5dc66ff3eda7c21484247d03cfb9
+          subject=Use shared hermetic Git fixtures for staged worker proofs
+Recorded GitHub API read (snapshot at 2026-10-21T21:47Z; mutable receipt, not a re-runnable command): gh api repos/DanFashauer/SignalGrid-Review-Hub/issues/comments/6326581589 --jq '{id,updated_at,body}'
+Recorded API output: Optional Codex comment 6326581589, re-read 2026-10-21T21:47Z: code_review.commit_sha=418221363eea5dc66ff3eda7c21484247d03cfb9, status=running, has_any_findings=null, has_unresolved_findings=null; updated_at=2026-10-21T21:07:48Z.
+Verdict:  this is a later observation after the b0a4568855ca2d2378698ba23e5ff867a7c6650b landing window. The pinned local read identifies the source commit named in the recorded comment; it does not reproduce that mutable API state. At the recorded read the optional review was running, and null finding fields are not a completed no-findings verdict. No completed Codex review is claimed.
+
+## 2026-10-21 — Post-landing fresh Mac and MCP evidence is committed at f3b55f7173ed5d5365a102ebadadef2e0e1dfcea, measured on clean source a70c36b3e0e897d8a80a863e7228417f729e487f
+Command:
+```bash
+git show f3b55f7173ed5d5365a102ebadadef2e0e1dfcea:artifacts/live-evidence/mac-run.json | node --input-type=module -e 'import fs from "node:fs"; const e=JSON.parse(fs.readFileSync(0,"utf8")), p=e.proofs, c=e.preflightCoverage, a=c.nativeBuildAttestation; console.log("schema="+e.schema+" mintedAt="+e.mintedAt+" platform="+e.platform); console.log("manifestVersion="+e.manifestVersion+" manifestFingerprint="+e.manifestFingerprint); console.log("reviewHubPass="+e.reviewHubPass+" mcpPass="+e.mcpPass+" mcpCheckoutFound="+e.mcpCheckoutFound); console.log("mcpCommit="+e.mcpCommit+" mcpDirty="+e.mcpDirty+" mcpTrackedModified="+e.mcpTrackedModified+" mcpUntrackedSource="+e.mcpUntrackedSource); console.log("contractSha="+e.contractSha); console.log("passedProofRecords="+Object.values(p.passed).filter(x=>x.status==="passed").length+" sourceCommits="+JSON.stringify([...new Set(Object.values(p.passed).map(x=>x.reviewHubCommit))])); console.log("notRecorded="+JSON.stringify(p.notRecorded)); console.log("recordedSteps="+Object.keys(p.steps).length+" stepsExcluded="+JSON.stringify(p.stepsExcluded)); console.log("nativeBuildExcluded="+c.nativeBuildExcluded+" target="+c.target+" stepsNotRun="+JSON.stringify(c.stepsNotRun)); console.log("nativeAttestedSteps="+JSON.stringify(a.steps)+" treeSha="+a.treeSha+" ranAt="+a.ranAt+" runner="+JSON.stringify(a.runner));'
+git show f3b55f7173ed5d5365a102ebadadef2e0e1dfcea:artifacts/sim-results/objective-loop-evidence-fresh-2026-10-17-2.json | node --input-type=module -e 'import fs from "node:fs"; const r=JSON.parse(fs.readFileSync(0,"utf8")); console.log("schemaVersion="+r.schemaVersion+" requestId="+r.requestId+" completedAt="+r.completedAt); console.log("sourceCommit="+r.provenance.commit+" workingTreeClean="+r.provenance.workingTreeClean+" platform="+r.provenance.platform+" arch="+r.provenance.arch); console.log("runs="+JSON.stringify(r.runs.map(({operation,status,exitCode,durationMs})=>({operation,status,exitCode,durationMs}))));'
+```
+Output:
+```text
+schema=signalgrid-live-evidence/v1 mintedAt=2026-10-21T22:14:07.453Z platform=darwin
+manifestVersion=97 manifestFingerprint=aa9ce381438ecb26874cdbe60b82a9339821d6b540f176e122291202a6b3885b
+reviewHubPass=true mcpPass=true mcpCheckoutFound=true
+mcpCommit=343339c436dea47818fa17cf3be486782e62d912 mcpDirty=false mcpTrackedModified=0 mcpUntrackedSource=0
+contractSha=ba32d196e154173d21f246b19364fd4b8f6a1d0f7d79db8082f195ac011d9e81
+passedProofRecords=141 sourceCommits=["a70c36b3e0e897d8a80a863e7228417f729e487f"]
+notRecorded=["proof:backup-restore","proof:db-role-split"]
+recordedSteps=411 stepsExcluded=["Mainline workflow red streaks (report-only — names every non-gating workflow red 3+ runs in a row; own errors REPORTED here, fatal only in CI)","Proof: backup-restore (the restore path, exercised not assumed)","Proof: db-role-split (the ledger append-only by privilege)"]
+nativeBuildExcluded=true target=darwin-arm64 stepsNotRun=[]
+nativeAttestedSteps=["Browser E2E (review console, website, admin)","Build (all packages)"] treeSha=a70c36b3e0e897d8a80a863e7228417f729e487f ranAt=2026-10-21T21:56:53.283Z runner={"kind":"apple-container","arch":"amd64","image":"node:22","host":"darwin"}
+schemaVersion=1 requestId=objective-loop-evidence-fresh-2026-10-17-2 completedAt=2026-10-21T22:14:10.153Z
+sourceCommit=a70c36b3e0e897d8a80a863e7228417f729e487f workingTreeClean=true platform=darwin arch=arm64
+runs=[{"operation":"evidence","status":"passed","exitCode":0,"durationMs":1196548}]
+```
+Verdict:  holds for the fields recorded in these two immutable JSON blobs: the evidence mint completed at 22:14:07.453Z and its request completed at 22:14:10.153Z with status passed, exit 0 and duration 1196548 ms. All 141 passed proof records name the clean source commit a70c36b3e0e897d8a80a863e7228417f729e487f; reviewHubPass and mcpPass are true, with the clean MCP commit and contract hash shown above. Native web build remains excluded on darwin-arm64 itself, but both native steps are attested from the amd64 Linux VM on that exact source commit, so preflightCoverage.stepsNotRun is empty. That does not erase the two notRecorded proof names or the three stepsExcluded entries quoted above; none is counted as passed here. These pinned reads verify the stored receipt and do not rerun its gates, evaluate a current readiness figure, or supply the owner-real-in-hand attestation. This is a post-landing evidence refresh, separate from the #1576 merge and the later optional-review observation.
+
+## 2026-10-21 — #1577 publishes the fresh-evidence receipt and public raised-hand redaction at 24eff86a940099e0725d474d1d5520bfbc71d368 from head e8fa4a6a64bc0ae937e56685cd0eaa3aac0afda5
+Command:
+```bash
+git show --no-patch --format='commit=%H%nparents=%P%ncommittedAt=%cI%nsubject=%s' 24eff86a940099e0725d474d1d5520bfbc71d368
+git merge-base --is-ancestor e8fa4a6a64bc0ae937e56685cd0eaa3aac0afda5 24eff86a940099e0725d474d1d5520bfbc71d368
+git merge-base --is-ancestor f3b55f7173ed5d5365a102ebadadef2e0e1dfcea e8fa4a6a64bc0ae937e56685cd0eaa3aac0afda5
+git show f3b55f7173ed5d5365a102ebadadef2e0e1dfcea:artifacts/live-evidence/mac-run.json | node --input-type=module -e 'import fs from "node:fs"; const e=JSON.parse(fs.readFileSync(0,"utf8")); console.log("mintedAt="+e.mintedAt+" manifestVersion="+e.manifestVersion+" manifestFingerprint="+e.manifestFingerprint);'
+git show f3b55f7173ed5d5365a102ebadadef2e0e1dfcea:artifacts/sim-results/objective-loop-evidence-fresh-2026-10-17-2.json | node --input-type=module -e 'import fs from "node:fs"; const r=JSON.parse(fs.readFileSync(0,"utf8")); console.log("completedAt="+r.completedAt+" sourceCommit="+r.provenance.commit+" workingTreeClean="+r.provenance.workingTreeClean);'
+git show 491bcaafcad47ad77f3b103994caa0c386d3ff6c:artifacts/lane-messages/acks/cloud-one-live-evidence-re-mint-after-today-s-la.json | node --input-type=module -e 'import fs from "node:fs"; import {createHash} from "node:crypto"; const b=fs.readFileSync(0), a=JSON.parse(b); console.log("ack sha256="+createHash("sha256").update(b).digest("hex")+" ackedBy="+a.ackedBy+" ackedAt="+a.ackedAt);'
+git show 24eff86a940099e0725d474d1d5520bfbc71d368:artifacts/lane-messages/acks/cloud-one-live-evidence-re-mint-after-today-s-la.json | node --input-type=module -e 'import fs from "node:fs"; import {createHash} from "node:crypto"; const b=fs.readFileSync(0), a=JSON.parse(b); console.log("ack sha256="+createHash("sha256").update(b).digest("hex")+" ackedBy="+a.ackedBy+" ackedAt="+a.ackedAt);'
+git show 491bcaafcad47ad77f3b103994caa0c386d3ff6c:artifacts/raised-hands/2026-10-21-the-last-evidence-remint-failed-in-scratch-copyi.json | node --input-type=module -e 'import fs from "node:fs"; import {createHash} from "node:crypto"; const b=fs.readFileSync(0), h=JSON.parse(b); console.log("hand sha256="+createHash("sha256").update(b).digest("hex")+" status="+h.status+" resolvedBy="+h.resolvedBy+" resolvedAt="+h.resolvedAt+" covers="+JSON.stringify(h.covers));'
+git show 24eff86a940099e0725d474d1d5520bfbc71d368:artifacts/raised-hands/2026-10-21-the-last-evidence-remint-failed-in-scratch-copyi.json | node --input-type=module -e 'import fs from "node:fs"; import {createHash} from "node:crypto"; const b=fs.readFileSync(0), h=JSON.parse(b); console.log("hand sha256="+createHash("sha256").update(b).digest("hex")+" status="+h.status+" resolvedBy="+h.resolvedBy+" resolvedAt="+h.resolvedAt+" covers="+JSON.stringify(h.covers));'
+```
+Output:
+```text
+commit=24eff86a940099e0725d474d1d5520bfbc71d368
+parents=491bcaafcad47ad77f3b103994caa0c386d3ff6c e8fa4a6a64bc0ae937e56685cd0eaa3aac0afda5
+committedAt=2026-10-21T19:10:52-04:00
+subject=Merge pull request #1577 from DanFashauer/codex/worker-runtime-evidence-20261021
+mintedAt=2026-10-21T22:14:07.453Z manifestVersion=97 manifestFingerprint=aa9ce381438ecb26874cdbe60b82a9339821d6b540f176e122291202a6b3885b
+completedAt=2026-10-21T22:14:10.153Z sourceCommit=a70c36b3e0e897d8a80a863e7228417f729e487f workingTreeClean=true
+ack sha256=2efd86f3c084758b96cfb1ca55c05d407475be9c1064dbf61f20144b00d6ba0b ackedBy=mac ackedAt=2026-10-21T23:08:53.841Z
+ack sha256=2efd86f3c084758b96cfb1ca55c05d407475be9c1064dbf61f20144b00d6ba0b ackedBy=mac ackedAt=2026-10-21T23:08:53.841Z
+hand sha256=91f20ddbc262bb121e74eaefe91006378f980ef5ad858b94c630d2fdf6386bf0 status=resolved resolvedBy=mac resolvedAt=2026-10-21T23:08:53.869Z covers=["mail:cloud-one-live-evidence-re-mint-after-today-s-la"]
+hand sha256=91f20ddbc262bb121e74eaefe91006378f980ef5ad858b94c630d2fdf6386bf0 status=resolved resolvedBy=mac resolvedAt=2026-10-21T23:08:53.869Z covers=["mail:cloud-one-live-evidence-re-mint-after-today-s-la"]
+```
+Both `git merge-base --is-ancestor` commands returned exit 0 with no stdout. Each JSON projection returned exit 0. The paired acknowledgement and hand hashes are, respectively, their bytes at the canonical mail-delivery commit 491bcaafcad47ad77f3b103994caa0c386d3ff6c and the #1577 merge; both records survived unchanged.
+
+Recorded GitHub API observations (the coordinator's pre-merge checks and merge confirmation, separate from the immutable local commands above; no API retrieval instant is inferred):
+```text
+#1577 head=e8fa4a6a64bc0ae937e56685cd0eaa3aac0afda5 merge=24eff86a940099e0725d474d1d5520bfbc71d368 merged=2026-10-21T23:10:53Z state=closed
+119530076408 Typecheck, build, and proof scaffold head=e8fa4a6a64bc0ae937e56685cd0eaa3aac0afda5 completed success started=2026-10-21T22:47:04Z completed=2026-10-21T23:09:01Z duration=21m57s
+119530076293 PR — Mac-only checks (full-clone provenance, preflight on macOS) head=e8fa4a6a64bc0ae937e56685cd0eaa3aac0afda5 completed success started=2026-10-21T22:47:04Z completed=2026-10-21T23:04:16Z duration=17m12s
+```
+The coordinator's retained pre-push receipts on that exact clean e8fa4a6a64bc0ae937e56685cd0eaa3aac0afda5 head record full local preflight passed in 937.51 seconds and breadth passed, 58 proofs, in 36.83 seconds. The Mac preflight explicitly excluded Build (all packages) and Browser E2E (review console, website, admin) as unavailable on darwin-arm64; neither is counted as passed by that run. The earlier Linux-VM attestation in the mint remains bound to source a70c36b3e0e897d8a80a863e7228417f729e487f and is not new native proof for the later redaction head.
+
+Recorded review and delivery observations: independent primary source review was clear. The optional GitHub Codex review completed with two findings. Finding 4342780962 was refuted by a fresh non-shallow fetch of the published branch: the coordinator's 2026-10-21T23:06:04.168254Z record reports f3b55f7173ed5d5365a102ebadadef2e0e1dfcea as an ancestor of published e8fa4a6a64bc0ae937e56685cd0eaa3aac0afda5 and successful fixed-commit reads of both JSON blobs. The immutable commands above reproduce that ancestry and those reads locally; they do not reproduce the historical network observation. Finding 4342780970 was addressed by the actual Mac reader's scoped acknowledgement and resolution of its covering remint-failure hand in canonical mail delivery 491bcaafcad47ad77f3b103994caa0c386d3ff6c. At their exact 23:08:53.841Z and 23:08:53.869Z timestamps, the records truthfully called #1577 pending merge; the later 23:10:53Z merge retained those historical statements unchanged. This covered only that one refresh message, not the separate multi-item unread messages or the old cloud scheduler.
+
+The coordinator's pre-merge observations recorded all review threads resolved and all triggered workflows successful, including the body-edit phase 39691582074. The landing used no author approval, force push, branch deletion or check bypass. These are recorded process observations, not conclusions produced by the local graph reads.
+
+Verdict: holds for the immutable merge identity, source-head and artifact ancestry, readable stored receipts, and unchanged scoped mail-resolution records. The Git commit timestamp is 23:10:52Z; the recorded GitHub server merge time is 23:10:53Z. The recorded checks and local gates support this landing on e8fa4a6a64bc0ae937e56685cd0eaa3aac0afda5 within their stated coverage; the graph reads do not rerun them. Publication carries the already-recorded mint (141 passed proof records, Review Hub and MCP pass) onto canonical mainline; it does not re-mint on e8fa4a6a64bc0ae937e56685cd0eaa3aac0afda5 or 24eff86a940099e0725d474d1d5520bfbc71d368. The earlier receipt's two notRecorded proofs (backup-restore and db-role-split), its three stepsExcluded entries, and its source-bound Linux attestation remain explicit ceilings. No new overall readiness figure, owner-real-in-hand attestation or later follow-up landing is asserted.
+
+## 2026-10-22 — #1578 makes self-hosted Mac CI share the local workers' host reservation, landed at 3c892ad96dded5d8e4630d4dc63c12e3fcf02bb0 from head 2493b26d100d398bd178ddc5a0052d8b5787e481
+Command:
+```bash
+git show --no-patch --format='commit=%H%nparents=%P%ncommittedAt=%cI%nsubject=%s' 3c892ad96dded5d8e4630d4dc63c12e3fcf02bb0
+git merge-base --is-ancestor 2493b26d100d398bd178ddc5a0052d8b5787e481 3c892ad96dded5d8e4630d4dc63c12e3fcf02bb0
+git merge-base --is-ancestor 24eff86a940099e0725d474d1d5520bfbc71d368 3c892ad96dded5d8e4630d4dc63c12e3fcf02bb0
+git show 2493b26d100d398bd178ddc5a0052d8b5787e481:scripts/mac/ci-host-verification.sh | shasum -a 256
+git show 24eff86a940099e0725d474d1d5520bfbc71d368:scripts/mac/host-verification-lock.sh | shasum -a 256
+git show 2493b26d100d398bd178ddc5a0052d8b5787e481:.github/workflows/mac-runner-auto.yml | node --input-type=module -e 'import fs from "node:fs"; for (const l of fs.readFileSync(0,"utf8").split("\n")) if (/^    timeout-minutes:/.test(l) || l.includes("bash scripts/mac/ci-host-verification.sh")) console.log(l.trim());'
+git show 2493b26d100d398bd178ddc5a0052d8b5787e481:.github/workflows/mac-runner-harness.yml | node --input-type=module -e 'import fs from "node:fs"; for (const l of fs.readFileSync(0,"utf8").split("\n")) if (/^    timeout-minutes:/.test(l) || l.includes("bash scripts/mac/ci-host-verification.sh")) console.log(l.trim());'
+```
+Output:
+```text
+commit=3c892ad96dded5d8e4630d4dc63c12e3fcf02bb0
+parents=733beff264aad52081e758469052f7bcc056ae9e 2493b26d100d398bd178ddc5a0052d8b5787e481
+committedAt=2026-10-21T20:05:38-04:00
+subject=Merge pull request #1578 from DanFashauer/codex/worker-runtime-final-record-20261021
+e3fdd47695514d06d8d900faba4014fa372a9bd2efa81f2ac0f8891ee873f068  -
+3e3b6f62fc74dd48a65bae03353a1ef225f520592d17f5a7772fbcae23f8d1c0  -
+timeout-minutes: 720
+bash scripts/mac/ci-host-verification.sh 24eff86a940099e0725d474d1d5520bfbc71d368 39600 2400 <<'CI_CHAIN'
+timeout-minutes: 780
+bash scripts/mac/ci-host-verification.sh 24eff86a940099e0725d474d1d5520bfbc71d368 39600 5400 <<'CI_CHAIN'
+```
+Recorded fixed-command exits: all seven commands returned exit 0; both ancestry checks produced no stdout. The SHA256 lines identify, in order, D's CI wrapper and the published C helper it pins; the following workflow projections name their declared job/admission/work budgets. The source reads identify the mechanism; they do not execute its timing, cancellation or process cleanup paths.
+
+Recorded GitHub API observations (the coordinator's final check and merge-confirmation receipts, separate from the fixed local source reads; no API retrieval instant is inferred):
+```text
+#1578 head=2493b26d100d398bd178ddc5a0052d8b5787e481 merge=3c892ad96dded5d8e4630d4dc63c12e3fcf02bb0 merged=2026-10-22T00:05:39Z state=closed
+119552326565 Typecheck, build, and proof scaffold head=2493b26d100d398bd178ddc5a0052d8b5787e481 status=completed conclusion=success started=2026-10-21T23:47:35Z completed=2026-10-22T00:03:04Z workflow=39695673531
+119552323893 PR — Mac-only checks (full-clone provenance, preflight on macOS) head=2493b26d100d398bd178ddc5a0052d8b5787e481 status=completed conclusion=success started=2026-10-21T23:47:33Z completed=2026-10-22T00:05:12Z workflow=39695672972
+```
+The coordinator's retained pre-push receipts on exact clean head 2493b26d100d398bd178ddc5a0052d8b5787e481 record full local preflight passed in 941.32 seconds and breadth passed, 58 proofs, in 36.78 seconds. Build (all packages) and Browser E2E (review console, website, admin) were unavailable on darwin-arm64, not passed by that local run. Three checks also self-skipped: backup-restore and db-role-split (DATABASE_URL unset), and the report-only Mainline workflow red streaks check (GITHUB_TOKEN unset); none is counted as passed by that local run. The new CI wrapper encloses install, initial port cleanup, selected proof chains and final teardown in one lock-owning shell; it waits only on busy exit 75, caps admitted PR work at 2400 seconds and harness work at 5400 seconds, and keeps normal local ticks nonblocking. Its helper source is pinned to published commit 24eff86a940099e0725d474d1d5520bfbc71d368. These source and validation claims do not grant new merge or product authority.
+
+Recorded live host observations (sanitized coordinator receipts, not re-runnable Git proof and not model-quality evidence):
+- At 2026-10-21T23:48:06.801950Z, the normal local audit was active; a Python worker held the persistent host-lock file, and a nonblocking Python lock probe observed contention. The manual validation guard had already been released before CI.
+- At 2026-10-21T23:49:29.148312Z, that audit had finished (44 reviewed units, no running audit). The self-hosted Actions Bash wrapper and Perl guardian held FD 9 on the **same persistent inode**, and a nonblocking Python lock probe again observed contention. No manual CI reservation existed and these observations triggered no model inference.
+
+The paired observations record local-worker ownership followed by CI ownership at the measured instants; they are not a continuous process census and do not substitute for either check's final conclusion. The Python probe recorded a Boolean contention result; the shell helper's exit-75 behavior is a separate source/fixture property. Raw PIDs, inode values, absolute home paths and private log locations are deliberately omitted.
+
+Recorded final review/workflow disposition: Independent primary source review recorded at 2026-10-21T23:31:42.805472Z was clear on exact head 2493b26d100d398bd178ddc5a0052d8b5787e481, with required validation still pending at that review. The subsequent local validation and both checks above completed before merge. The Codex review completed at 2026-10-21T23:50:31.644020Z on that exact head with no findings, per the coordinator's later pre-merge read. The final pre-merge read at 2026-10-22T00:05Z found zero review threads. All five PR-triggered workflows completed success before merge, including the main validation workflow 39695673531 and Mac workflow 39695672972.
+Recorded merge process: Normal merge commit using fresh full expected head SHA; no author approval, force push, branch deletion or check bypass.
+
+Verdict: holds for the pinned merge identity, source and prior-landing ancestry, and declared wrapper/helper configuration. Git committedAt is 2026-10-22T00:05:38Z; the recorded GitHub server merged_at is 2026-10-22T00:05:39Z. The recorded exact-head local gates, final check results and independent review support the landing within their stated coverage; these fixed reads do not rerun them. The local graph/source reads, the recorded local gates, the GitHub check/merge receipts and the live host observations are distinct evidence. This landing does not re-mint the existing artifact f3b55f7173ed5d5365a102ebadadef2e0e1dfcea, measured on clean source a70c36b3e0e897d8a80a863e7228417f729e487f. Manifest v97 remains aa9ce381438ecb26874cdbe60b82a9339821d6b540f176e122291202a6b3885b in that receipt; its 141 passed proof records, two notRecorded proofs, three stepsExcluded entries, and Linux-VM native attestation on exact a70 remain the earlier receipt's coverage, not new measurements of D or its merge. No new overall readiness, owner-real-in-hand attestation, completion of pending product/PR work, or later journal landing is asserted.
+
+
+## 2026-10-22 — #1593 aligns the Mac build tick's retry cadence, outage hand and loaded-status record, landed at 69258e30433f1a20c31975d50d746065032097c4 from head 79c403004707627f7b0431725c48dd713775af18
+
+Recorded exact-head local pre-push commands and receipt output:
+```text
+head=79c403004707627f7b0431725c48dd713775af18
+node scripts/preflight.mjs
+Preflight PASSED — everything it runs is green.
+PREFLIGHT_EXIT=0 duration_seconds=957.95 finished=2026-10-22T19:27:26.501852Z
+pnpm run verify:breadth
+Breadth lane PASSED — 58 breadth proofs green (deferred families, doctrine documents, and the DR-005 decision-palette design gate).
+BREADTH_EXIT=0 duration_seconds=36.34 finished=2026-10-22T19:28:02.915113Z
+```
+The retained clean-head snapshots bracket both gates and normal publication; all four operational source hashes stayed unchanged from reviewed source-fix head 6a3b7b18e771f5a5ee704e93d74cee65dcd485ff. The branch incorporated canonical 07ce83a0a30d79c49c948da05890160011b8c793 by a normal merge before those gates. Both repository generators exited 0 and produced no changed outputs. An ordinary push with hooks intact exited 0, and the remote was verified at that exact head at 2026-10-22T19:28:07.918305Z. The enclosing shared-host guardian completed normal cleanup; no other host holder was stopped or bypassed. These receipts do not rerun the commands here.
+
+Local coverage ceiling: Build (all packages) and Browser E2E (review console, website, admin) were unavailable on darwin-arm64 and did not run. Backup/restore and DB-role-split self-skipped with DATABASE_URL unset; the workflow-red-streak report self-skipped with GITHUB_TOKEN unset. None is counted as passed by the local run. The earlier interrupted validation and the publication guard's refusal remain unsuccessful historical attempts; they do not supply this combined-head result. Both fresh gates used project-pinned offline pnpm 10.28.1 and approved esbuild 0.28.2 without changing dependencies or the lockfile.
+
+Recorded GitHub API observations, separate from local commands (final pre-merge receipt at 2026-10-22T19:51:55.884173+00:00; merge/default-branch confirmation at 2026-10-22T19:52:50.633445+00:00):
+```text
+#1593 head=79c403004707627f7b0431725c48dd713775af18 final-premerge-unresolved-threads=0
+120039369859 Typecheck, build, and proof scaffold head=79c403004707627f7b0431725c48dd713775af18 status=completed conclusion=success completed=2026-10-22T19:50:15Z workflow=39840335177
+120039369379 Required docs and unsafe-claim sanity: completed / success
+120039369834 Breadth lane (deferred families + doctrine docs): completed / success
+120039369798 Durable persistence (Postgres audit ledger): completed / success
+120039369843 Prod stack (Podman): completed / success
+120039369933 Prod stack (Docker compose smoke): completed / success
+120039362022 PR — Mac-only checks (full-clone provenance, preflight on macOS): queued / no conclusion at final pre-merge observation
+rollup: 18 contexts fully enumerated; 14 success, 3 skipped, 1 queued; no failure conclusion
+#1593 state=MERGED merged=true merge=69258e30433f1a20c31975d50d746065032097c4 merged_at=2026-10-22T19:52:31Z
+merge-parents=fcdf27323337ac9dbacc997f7838b31eb1aba984 79c403004707627f7b0431725c48dd713775af18
+canonical-at-confirmation=69258e30433f1a20c31975d50d746065032097c4
+git-object-committedDate=2026-10-22T19:52:30Z
+```
+The three skipped contexts were Nightly — full harness + preflight, Nightly — MCP lane, and CycloneDX SBOM sync (dependabot); skips are not passes. The optional Mac-only job was queued, not passed, at this observation. All six jobs in the main SignalGrid CI run completed success on the tested head. The three source-review threads were resolved. The sole formal Codex review in the recorded review list names earlier head 100682a473ab4ca662baed7c0f73d78fb75e8370; it is not represented as a new review of 79c40300. The final compare receipt found only artifacts/agent-heartbeats/mac-lane-tick.json between the tested canonical pin 07ce83a0 and pre-merge fcdf2732, with no counted-surface movement. The merge call used the freshly re-read full expected head; no author approval, force push, branch deletion or check bypass is recorded. Git committedDate and GitHub merged_at differ by one second.
+
+Fixed Git graph/source reads executed at 2026-10-22T20:07:29.153449+00:00; the following fixed commands each exited 0:
+Command:
+```bash
+git --no-replace-objects show --no-patch --format='commit=%H%nparents=%P%ncommittedAt=%cI%nsubject=%s' 69258e30433f1a20c31975d50d746065032097c4
+git --no-replace-objects merge-base --is-ancestor 79c403004707627f7b0431725c48dd713775af18 69258e30433f1a20c31975d50d746065032097c4
+git --no-replace-objects merge-base --is-ancestor fcdf27323337ac9dbacc997f7838b31eb1aba984 69258e30433f1a20c31975d50d746065032097c4
+git --no-replace-objects merge-base --is-ancestor 3c892ad96dded5d8e4630d4dc63c12e3fcf02bb0 69258e30433f1a20c31975d50d746065032097c4
+git --no-replace-objects show 79c403004707627f7b0431725c48dd713775af18:scripts/mac/build-tick.sh | shasum -a 256
+git --no-replace-objects show 79c403004707627f7b0431725c48dd713775af18:scripts/mac/install-build-tick.sh | shasum -a 256
+git --no-replace-objects show 79c403004707627f7b0431725c48dd713775af18:docs/LANE_COORDINATION.md | shasum -a 256
+git --no-replace-objects show 79c403004707627f7b0431725c48dd713775af18:docs/agent/scheduled-routines.json | shasum -a 256
+```
+Output:
+```text
+commit=69258e30433f1a20c31975d50d746065032097c4
+parents=fcdf27323337ac9dbacc997f7838b31eb1aba984 79c403004707627f7b0431725c48dd713775af18
+committedAt=2026-10-22T15:52:30-04:00
+subject=Merge pull request #1593: align Mac build-tick cadence and loaded status
+d3caf9b528fb609a98aab7d2799b20a3a98cf37cf761f8d38fe4243d9a6d37fc  -
+165fdb63aa634bab8d34c63ccd844faa8ae613e2b9fa3b308ebcd3ed38caa66a  -
+8b1f10fbfb04c23f6220f20af9156a2f707a22f22d8127ffb8da52653fccfdf5  -
+f439e1aecf147d834bcfca3a12e3243f8d290fedbe1470337b160dab4802f7fd  -
+```
+Recorded exits: commands 1–8 each exited 0; all stderr was empty. Commands 2–4 have no stdout on successful ancestry checks. These reads identify the graph and source; they do not repeat preflight, breadth or a loaded-service observation.
+
+The four operational files set a five-minute build retry, align the origin-outage hand to 144 consecutive failed scheduled attempts, update the active registry/coordination record, and make installer status distinguish configured, installed and actually loaded intervals. The 12-hour figure assumes scheduled five-minute attempts; host sleep, delays and missed firings can extend elapsed time. The dated 2026-10-22T15:11:45Z activation firing found all three ranked tasks already claimed: it witnesses a firing, not a completed product build. Source alone does not establish current loaded service state, continuous execution or unattended success. This landing does not run the installer or alter host-specific admission wiring.
+
+Verdict: the recorded local and GitHub receipts support the exact landing and its stated coverage; the fixed Git reads independently confirm the graph and unchanged four-file source. This entry records #1593; it makes no claim that the later record-publishing PR has merged or passed its own checks. It does not re-mint artifact f3b55f7173ed5d5365a102ebadadef2e0e1dfcea, measured on clean a70c36b3e0e897d8a80a863e7228417f729e487f. Its 141 passed proof records, two notRecorded proofs, three stepsExcluded entries and Linux-VM native attestation remain that earlier receipt's coverage. No new readiness figure, owner-real-in-hand attestation, production claim, completion of other PR/backlog work, or validation of the later record-publishing head is inferred.
+
+
+## 2026-10-27 — Source preparation for delegated execution and truthful coordination
+
+Command:
+```bash
+node scripts/raised-hands.mjs --check
+node scripts/check-raised-hands.mjs
+```
+Output:
+```text
+Before new records: Raised hands check FAILED: 13 problem(s): 11 mail stalls and two heartbeat stalls.
+After three explicit open records: Raised hands check passed.
+Raised-hand schema and routing check: exit 0.
+```
+Verdict: the current branch explicitly records all 13 measured stalls with their actual responders. The mail work and both witnesses remain unfinished: no acknowledgment, Cloud run, fresh heartbeat, full validation, source-review clearance, publication, CI or merge is asserted by a covering hand. AGENTS and LOOP guidance now reflect the owner's delegated local-first workflow while preserving all protected-delivery conditions. This entry is source preparation; canonical state is unchanged until protected delivery.
+
+
+## 2026-10-27 — Source-pinned local coding capability and task-scope repair
+
+Command:
+```bash
+# RED: complete proposed tree with only the original validator restored from8243280; frozen tests unchanged.
+node --test --test-reporter=tap scripts/mac/local-brain/test/task-selector-control-scope.test.mjs
+# GREEN: corrected validator with the same frozen tests.
+node --test --test-reporter=tap scripts/mac/local-brain/test/task-selector-control-scope.test.mjs scripts/mac/local-brain/test/task-selector.test.mjs
+```
+Output:
+```text
+Frozen original source: 33 tests, 2 pass, 31 assertion failures, zero skips.
+Model-written implementation: 39 new and original checks pass, zero failures, zero skips.
+```
+Verdict: a bounded local OpenCode/Ollama coding trial read the complete implementation and both test files, ran assertion RED, wrote one expression and ran GREEN. The frozen tests remained unchanged. Independent comparison covered all65536 UTF-16 code units and four non-ASCII paths. Five sandbox-negative probes denied private access, source writes during checks, subprocesses and network. The local model/harness is qualified for this source trial only; the default worker is unchanged. This is not daemon build-to-PR integration, current-head CI, physical testing or issue1546 end-to-end acceptance. The13 coordination stalls remain open work, covered by the existing three correctly routed hands on this proposed source.
+
+
+## 2026-10-27 — Wire the C0 regression into both actual runners
+
+Command:
+```bash
+node scripts/check-test-execution.mjs
+node scripts/check-preflight-ci-parity.mjs
+node scripts/mac/local-brain/test/task-selector-control-scope.test.mjs
+```
+Output:
+```text
+Before wiring: one problem; no runner reached the new regression.
+After wiring: zero test-execution problems; preflight-CI parity green; all33 new checks pass.
+```
+Verdict: the first full preflight on the combined candidate stopped at the test-execution gate. The same unchanged regression now has an explicit command in both preflight and review-hub CI. The original task-selector command stays present. No test exemption, check removal, gate weakening or source/test rewrite was used. Full local validation and source/public delivery are still separate requirements.
+
+
+## 2026-10-27 — Refresh the measured preflight line count after runner wiring
+
+Command:
+```bash
+node scripts/check-doc-line-counts.mjs
+node scripts/check-doc-line-counts.mjs --self-test
+```
+Output:
+```text
+Before correction: COMPANY_BUILD_PLAN quoted967lines for the now968-line preflight.
+After the one-number source correction: zero line-count drift; self-test10/10.
+```
+Verdict: adding the missing explicit test runner row changed the measured preflight line count. Only the stale numeric citation is corrected; no line-count matcher, exemption, floor or gate is altered. The failed full preflight and the direct exact diagnostic remain retained.
+
+
+## 2026-10-27 — Regenerate the current surface inventory after adding a regression
+
+Command:
+```bash
+node scripts/generate-sync-manifest.mjs
+node scripts/check-surface-review-coverage.mjs --write
+node scripts/check-surface-review-coverage.mjs
+```
+Output:
+```text
+Full preflight detected a stale generated surface page after adding the new test file.
+Canonical pinned generators rederived their outputs; the review-history JSON is unchanged.
+```
+Verdict: the generated current-tree view is refreshed through the existing preparation contract. No review date, read claim, JSON history, matcher, exemption or gate is changed. Earlier full-preflight failures remain retained; new-head full validation and protected delivery remain required.
+
+
+## 2026-10-27 — Require a complete C0 proof execution envelope
+
+Command:
+```bash
+node scripts/mac/local-brain/test/task-selector-control-scope.test.mjs
+node scripts/check-local-worker-task-selector-proof.mjs --self-test
+node scripts/check-local-worker-task-selector-proof.mjs
+```
+Output:
+```text
+Before envelope, with the control loop forced to zero: exit0; one ordinary test passed; zero C0 cases executed.
+C0 proof envelope self-test PASSED: 1 positive / 12 negative / 0 skipped
+C0 task-selector proof PASSED: 32 control cases, 39 total tests, 0 skipped
+```
+Verdict: actual falsification found an empty-enumeration gap in the newly registered regression. The checked runner requires all32 named C0 assertions and zero missing/deferred results. The existing direct proof commands remain; an additional checked command is wired into both preflight and CI. The model implementation and both frozen tests are unchanged. These are initial source checks; final-source falsification, full local gates, fresh source lenses, publication, current CI and protected delivery remain separate requirements.
+
+
+## 2026-10-28 — Keep the checked proof compatible with the CI Node line
+
+Command:
+```bash
+node scripts/check-local-worker-task-selector-proof.mjs --self-test
+node scripts/check-local-worker-task-selector-proof.mjs
+```
+Output:
+```text
+C0 proof envelope self-test PASSED: 1 positive / 12 negative / 0 skipped
+C0 task-selector proof PASSED: 32 control cases, 39 total tests, 0 skipped
+```
+Verdict: the added runner originally used an optional isolation flag whose rename is recorded at Node23.6 in the official Node CLI history, while this repository's workflow uses Node22. The unnecessary flag is removed; the normal test runner's default isolation executes every frozen assertion and the checked envelope still refuses an empty domain. No Node version, workflow setup, model implementation, frozen test, proof floor or permission is changed. This is a local source correction; final-head full validation, fresh source review and exact-head CI remain separate requirements.
+
+
+## 2026-10-28 — Keep pending preparation outside an existing evidence record
+
+Command:
+```bash
+git diff c2b1bfe5e3420ea7e48208299797d815c88b5aae HEAD -- docs/agent/LOOP.md
+```
+Output:
+```text
+Source-comparison observations (interpretation, not literal Git output):
+The canonical2026-10-21 CURRENT EVIDENCE line and its original continuation are verbatim and adjacent.
+The new short preparation note has its own PENDING SOURCE PREPARATION label below the complete record.
+Every other LOOP byte is preserved after removing the exact old/new preparation lines.
+```
+Verdict: the first genuine native Ponytail source lens returned FIX for an ambiguous insertion between an older measurement and its continuation. The finding is accepted and corrected; the other three source lenses did not run. The original older artifact/source/coverage remain one dated record. No code, frozen test, workflow, proof floor or old evidence is changed by this correction. New-head full local checks, all four fresh source lenses, publication, current CI and protected landing remain required.
+
+
+## 2026-10-28 — Pair each recorded count with the command that executed it
+
+Command:
+```bash
+# RED: complete proposed tree, only the original validator restored; frozen tests unchanged.
+node --test --test-reporter=tap scripts/mac/local-brain/test/task-selector-control-scope.test.mjs
+# GREEN: corrected validator, same frozen tests.
+node --test --test-reporter=tap scripts/mac/local-brain/test/task-selector-control-scope.test.mjs scripts/mac/local-brain/test/task-selector.test.mjs
+```
+Output:
+```text
+Single-file RED:33tests/2pass/31fail/0skipped, exit1.
+Two-file GREEN:39tests/39pass/0fail/0skipped, exit0.
+```
+Verdict: the genuine Ponytail review of2382d7f4 returned FIX because a single-file RED result was listed beneath a two-file command. The finding is accepted; separate exact command reproductions confirm both recorded totals. No original model trial, failed job or helper was replayed. The inherited implementation and both frozen tests remain byte-identical, and previous source versions/reviews remain retained. These source checks do not establish new-head full validation, four-source-lens clearance, publication, CI, merge or issue1546 completion.
+
+
+## 2026-10-28 — Record the final preflight measurement after envelope wiring
+
+Command:
+```bash
+node scripts/check-doc-line-counts.mjs
+```
+Output:
+```text
+doc line counts: 32 figure(s) across 2 document(s), 4 in dated records (exempt, 1 exemption(s) each with a reason), 0 drifted
+Doc line-count gate passed — every `path (N)` figure matches the file it names.
+```
+Verdict: the checked C0 proof-envelope step added a second preflight row after the historical 968-line measurement. The final scripts/preflight.mjs now has969lines, and docs/COMPANY_BUILD_PLAN.md cites969. The actual line-count gate above confirms zero drift. The earlier dated968-line evidence and lesson L28 remain unchanged as historical records. The security source review's missing-measurement finding is accepted. This measurement does not claim fresh full preflight, source clearance, GitHub CI, merge or whole-system completion.
+
+
+## 2026-10-28 — R6p1d constructs its missing tracking reference explicitly
+
+Canonical SignalGrid CI [40624043339](https://github.com/DanFashauer/SignalGrid-Review-Hub/actions/runs/40624043339) on `8329d4f553f3b0f20a2f102b10e335d7273d8b64` failed R6p1d and nested R12 with Git2.56.0. The [official pinned release notes](https://github.com/git/git/blob/a018953688f1b10bddf91bff8747068f5f4746a4/Documentation/RelNotes/2.56.0.adoc) describe URL pushes updating tracking refs when the URL uniquely matches a configured remote. The fixture had inferred absence from URL syntax.
+
+The correction explicitly removes only the temporary fixture's `origin/other` tracking ref after its local bare-fixture push. The complete existing assertion, local `mine` branch and bare fixture's `other` branch are unchanged. Production seam logic and every unrelated executable source byte remain unchanged. A planted-state probe also verified the old required-absence assertion fails, then the missing-ref scenario passes without changing either branch tip.
+
+Command on the installed AppleGit2.54.0/Node24.18.0 toolchain:
+```sh
+node scripts/loop-state.mjs --self-test
+```
+Output, verbatim final summary:
+```text
+self-test: 6 case(s) SKIPPED, listed above; a skip asserted nothing and is in neither number below
+self-test passed (309/309)
+```
+
+A bounded build of the exact Git2.56 source also reproduced the original R6p1d failure and the corrected full R6p1d assertion passed. That resource trial is LIMITED, not generally qualified: its original complete run passed300/309 and corrected run301/309, with6explicit skips and8other failures retained, including the nested R12 aggregate. Its C-only build omits the installed HTTPS helper and uses an owned executable/template layout; the sole causes of all8other failures are not established. These runs are not full Git2.56 GREEN or equivalent to current-head GitHub CI.
+
+Resource preparation failures remain retained: missing dyld literal root-directory read, denied system-make xcrun-cache write followed by generic license text, unavailable Cargo before choosing Git2.56's officially supported optional C build, and absent standard init templates in a first partial trial. No Rust/toolchain installation, license acceptance, global Git/template/default change or private-source/network build grant was made. A surrounding verifier also assumed the Linux case count; the applicable Mac result above is the actual measurement.
+
+Verdict: holds for the complete applicable installed-toolchain self-test and the specific Git2.56 R6p1d assertion. Six platform-unavailable cases are not passes; two other unavailable platform preconditions still asserted their guarded answers on the installed toolchain. Full local preflight/breadth, fresh same-head source reviews and exact-current-head GitHub CI remain required for protected landing. No gate exemption, real remote branch deletion, source clearance or merge is claimed here.

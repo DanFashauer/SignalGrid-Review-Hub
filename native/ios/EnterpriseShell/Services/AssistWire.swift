@@ -51,9 +51,12 @@ enum Assist: String {
     /// NO SPELLING ALIASES: the wire vocabulary is exactly four values; "stepup" or
     /// "step-up" is a gate this client does not understand, and mapping it to STEP_UP
     /// would offer a route to proceeding that DENY does not.
+    /// ASCII WHITESPACE ONLY is trimmed (space, tab, LF, FF, CR — Rust's
+    /// `is_ascii_whitespace`): `.whitespacesAndNewlines` also strips NBSP, U+3000 and
+    /// U+0085, which let a padded `allow` proceed where the shared vectors say DENY.
     static func parse(_ raw: String?) -> Assist? {
         guard let raw = raw else { return nil }
-        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmed = raw.trimmingCharacters(in: Self.asciiWhitespace)
         if trimmed.isEmpty { return nil }
         switch trimmed.lowercased() {
         case "allow": return .allow
@@ -63,6 +66,8 @@ enum Assist: String {
         default: return .deny
         }
     }
+
+    private static let asciiWhitespace = CharacterSet(charactersIn: " \t\n\u{0C}\r")
 }
 
 /// A decision as this client understands it.

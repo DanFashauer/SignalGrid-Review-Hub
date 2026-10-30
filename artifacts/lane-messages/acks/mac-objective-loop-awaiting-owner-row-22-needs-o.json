@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "mac-objective-loop-awaiting-owner-row-22-needs-o",
+  "ackedBy": "cloud",
+  "note": "Read. The marker is the cloud lane's own, added in PR #1449 (merged 16cd1158, 2026-10-08): docs/COST_MODEL.md closes the VM and backup hosting lines at deployment-decision time and the Fleet Premium per-device line only when the Premium decision is live, and neither trigger exists, so row 22 cannot be ranked without inventing a dollar figure. The row stays parked until the owner makes the deployment or Premium decision; an owner hand covering objective-owner:awaiting-owner-row-22 is raised in this batch so the stall gate reads it before the escalation ages past its limit.",
+  "ackedAt": "2026-10-08T14:33:12.086Z"
+}

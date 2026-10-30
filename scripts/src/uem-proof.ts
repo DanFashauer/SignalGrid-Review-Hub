@@ -14,9 +14,11 @@
 //      boundary the type system cannot express and a future edit could quietly
 //      reintroduce.
 
-import { readFileSync, readdirSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { readFileSync } from "node:fs";
+import { createServer, type AddressInfo } from "node:net";
+import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { classifyVendorCallLine, scanForVendorCalls, vendorCallScanSelfTest } from "./lib/no-vendor-call.js";
 import {
   cellularHardwareFrom,
   evaluateUem,
@@ -295,6 +297,14 @@ check("Jamf's 'no compliance evaluated' is NOT reported as compliant",
   normalizeJamfDevice({ computer: { general: { id: 7, remote_management: { managed: true }, supervised: true } } }).compliance === "not_evaluated");
 check("...and it grades as step_up, not none",
   evaluateUem(normalizeJamfDevice({ computer: { general: { id: 7, remote_management: { managed: true }, supervised: true } } })).recommendedAction === "step_up");
+// Graph's two affirmative managementState members, each ISOLATED — the brace-less
+// mapping lines the sweep reaches with `oneLine: true`. Without them both fall to
+// `unknown`: a managed device could never read as enrolled, and a discovered-only one
+// would lose its affirmative "not enrolled".
+check("Intune managementState 'managed' → enrolled",
+  normalizeIntuneDevice({ id: "x", managementState: "managed" }).enrollment === "enrolled");
+check("Intune managementState 'discovered' (seen, never fully enrolled) → not_enrolled, affirmatively — not unknown",
+  normalizeIntuneDevice({ id: "x", managementState: "discovered" }).enrollment === "not_enrolled");
 check("an Intune device being retired is not reported as enrolled",
   normalizeIntuneDevice({ id: "x", managementState: "retirePending" }).enrollment === "retired");
 check("an unrecognised Intune complianceState falls to unknown, never a pass",
@@ -318,67 +328,30 @@ check("evaluation is deterministic",
 {
   const here = dirname(fileURLToPath(import.meta.url));
   const dir = resolve(here, "../../lib/integrations/src/integrations/uem");
-  // RECURSIVE. The previous scan used a flat readdirSync, so a subdirectory could
-  // hold anything at all and the guarantee would still print green.
-  const walk = (d: string): string[] =>
-    readdirSync(d, { withFileTypes: true }).flatMap((e) =>
-      e.isDirectory() ? walk(join(d, e.name)) : e.name.endsWith(".ts") ? [join(d, e.name)] : []);
-  const files = walk(dir);
-  const offenders: string[] = [];
-
-  // WHAT THIS BANS, and the claim is now narrowed to what it actually checks.
-  //
-  // THE OLD VERSION PRINTED A FALSE GUARANTEE. It said "no network I/O in any
-  // source" while matching only fetch/axios/got/undici/https.request and a mutating
-  // `method:` literal. Adversarial review found `nac/store.ts` doing
-  // `await import("ioredis")` and opening a TCP connection to Redis — real network
-  // I/O, invisible to every pattern in the list. The scan was reporting success over
-  // something it had stopped looking at, which this repo's own guard-registry header
-  // calls WORSE than no guard.
-  //
-  // Two changes. (1) The claim is now "no VENDOR-API call", which is the property
-  // that actually matters here — Redis is configuration storage, not a device
-  // actuator, and banning it outright would be theatre. (2) The pattern list gained
-  // dynamic import of network clients, node:net/http/https/tls, XHR, WebSocket and
-  // aliased fetch, so the next thing that sneaks in has fewer doors.
-  const banned = [
-    /\b(?:fetch|XMLHttpRequest|WebSocket|EventSource)\s*\(/i,
-    /\b(?:const|let|var)\s+\w+\s*=\s*fetch\b/i,            // aliased fetch
-    /\brequire\s*\(\s*['"](?:axios|got|undici|node-fetch|superagent|request|ioredis|redis|pg|mysql2|mongodb)['"]/i,
-    /\bimport\s*\(\s*['"](?:axios|got|undici|node-fetch|superagent|request|ioredis|redis|pg|mysql2|mongodb)['"]/i,
-    /\bfrom\s+['"](?:axios|got|undici|node-fetch|superagent|request)['"]/i,
-    /\bfrom\s+['"]node:(?:net|http|https|tls|dgram)['"]/i,
-    /\bhttps?\.(?:request|get)\s*\(/i,
-    /\bnet\.(?:connect|createConnection)\s*\(/i,
-    /method:\s*['"](?:POST|PUT|PATCH|DELETE)['"]/i,
-  ];
   // store.ts is EXEMPT and NAMED, not silently skipped. It talks to Redis to persist
   // connector configuration — configuration storage, not a vendor API call and not a
-  // device action. Listing it here is the honest form: the exemption is visible,
-  // scoped to one file, and a reader can disagree with it.
-  //
-  // Both this family and nac/ were found doing `await import("ioredis")` while their
-  // proofs printed "no network I/O". The broadened scan caught uem/ on its first run
-  // after the rewrite, which is the check earning its keep immediately.
+  // device action. The exemption is SCOPED TO THE REASON (row 119): it used to be a
+  // whole-file `allowed(rel)` evaluated before the pattern test, which switched all nine
+  // patterns off for store.ts — the shape nac-proof was already fixed for after a
+  // planted ISE quarantine call hid behind it. Now only a Redis-client load is skipped.
   const CONFIG_STORAGE_FILES = new Set(["store.ts"]);
-  const allowed = (rel: string): boolean => CONFIG_STORAGE_FILES.has(rel);
-  for (const f of files) {
-    const rel = f.slice(dir.length + 1);
-    readFileSync(f, "utf8").split("\n").forEach((line, i) => {
-      const t = line.trim();
-      if (t.startsWith("//") || t.startsWith("*") || t.startsWith("/*")) return;
-      if (allowed(rel) ) return;
-      if (banned.some((re) => re.test(line))) offenders.push(`${rel}:${i + 1}`);
-    });
-  }
+  // The scan is the SHARED one (scripts/src/lib/no-vendor-call.ts, row 119): five
+  // proofs carried five copies of this pattern list and one drifted permissive.
+  // RECURSIVE over every file, with a non-empty floor — a scan of nothing is green.
+  const { files, offenders, exempted } = scanForVendorCalls(dir, CONFIG_STORAGE_FILES);
   if (offenders.length) console.log(`      offenders: ${offenders.join(", ")}`);
+  console.log(`      config-storage exemptions taken (REPORTED): ${exempted.length ? exempted.join(", ") : "none"}`);
   check(`no VENDOR-API call in any uem/ source — an actuator cannot return (${files.length} files scanned recursively)`,
     files.length >= 6 && offenders.length === 0);
-  // NON-VACUITY: the scan must be able to FAIL. Without this, deleting the pattern
-  // list would leave the assertion green and nobody would notice.
-  check("...and the scan actually detects a planted vendor call",
-    banned.some((re) => re.test(`await fetch("https://vendor/api", { method: "POST" })`)) &&
-    banned.some((re) => re.test(`const { Redis } = await import("ioredis");`)));
+  // NON-VACUITY: the scan must be able to FAIL — against one planted control PER
+  // PATTERN CLASS, not a single `fetch(`. The shared self-test also requires the drifted
+  // six-pattern list to fail those controls (scripts/src/lib/no-vendor-call.ts, row 119).
+  const selfTest = vendorCallScanSelfTest();
+  check(`...and the scan actually detects a planted vendor call of every pattern class${selfTest.length ? `: ${selfTest.join("; ")}` : ""}`,
+    selfTest.length === 0);
+  check("...and the store.ts exemption is scoped to the REASON: a planted vendor call in the EXEMPT file is still an offender",
+    classifyVendorCallLine("store.ts", `  await fetch("https://graph.microsoft.com/v1.0/deviceManagement/managedDevices/x/retire", { method: "POST" });`, CONFIG_STORAGE_FILES) === "offender" &&
+    classifyVendorCallLine("store.ts", `  const { Redis } = await import("ioredis");`, CONFIG_STORAGE_FILES) === "exempt");
 
   // ── THE FRESHNESS AXIS IS GONE, and this is the assertion that can say so ──
   //
@@ -664,6 +637,47 @@ check("a Redis WRITE fault is reported too",
   redisFaults.some((f) => f.startsWith("write failed")));
 check("...and the config still falls back to the process-local value, so the fault is audible WITHOUT being fatal",
   (await getUEMConfig("tenant-fault", () => undefined))?.provider === "jamf");
+// A HEALTHY Redis is the source of truth, not the process-local copy — the brace-less
+// `if (data) return …` in getUEMConfig, which the sweep reaches with `oneLine: true`.
+// Removing it would read the stored config and then serve the stale in-memory one.
+// Nothing tested it because no proof reached a Redis that ANSWERS; this is a minimal
+// RESP responder on loopback (INFO for ioredis's ready check, GET → the stored JSON,
+// anything else → +OK), so the check needs no server and makes no external call.
+const redisServed: string[] = [];
+const fakeRedis = createServer((sock) => {
+  let buf = "";
+  sock.on("data", (chunk) => {
+    buf += chunk.toString("utf8");
+    for (;;) {
+      const m = /^\*(\d+)\r\n/.exec(buf);
+      if (!m) return;
+      let at = m[0].length;
+      const args: string[] = [];
+      for (let i = 0; i < Number(m[1]); i += 1) {
+        const lm = /^\$(\d+)\r\n/.exec(buf.slice(at));
+        if (!lm || buf.length < at + lm[0].length + Number(lm[1]) + 2) return;
+        at += lm[0].length;
+        args.push(buf.slice(at, at + Number(lm[1])));
+        at += Number(lm[1]) + 2;
+      }
+      buf = buf.slice(at);
+      const cmd = (args[0] ?? "").toUpperCase();
+      redisServed.push(cmd);
+      const bulk = (s: string) => `$${Buffer.byteLength(s)}\r\n${s}\r\n`;
+      if (cmd === "INFO") sock.write(bulk("# Server\r\nredis_version:7.0.0\r\nloading:0\r\n"));
+      else if (cmd === "GET") sock.write(bulk(JSON.stringify({ provider: "intune", enabled: false })));
+      else if (cmd === "QUIT") sock.end("+OK\r\n");
+      else sock.write("+OK\r\n");
+    }
+  });
+});
+await new Promise<void>((r) => fakeRedis.listen(0, "127.0.0.1", () => r()));
+process.env["REDIS_URL"] = `redis://127.0.0.1:${(fakeRedis.address() as AddressInfo).port}`;
+const liveFaults: string[] = [];
+const fromRedis = await getUEMConfig("tenant-fault", (m) => liveFaults.push(m));
+await new Promise<void>((r) => fakeRedis.close(() => r()));
+check("a config Redis ANSWERS with is served from Redis, never the stale process-local copy (in-memory holds jamf/enabled)",
+  fromRedis?.provider === "intune" && fromRedis.enabled === false && liveFaults.length === 0 && redisServed.includes("GET"));
 if (priorRedisUrl === undefined) delete process.env["REDIS_URL"];
 else process.env["REDIS_URL"] = priorRedisUrl;
 // NON-VACUITY: with no REDIS_URL there is nothing to fault, and silence is correct.

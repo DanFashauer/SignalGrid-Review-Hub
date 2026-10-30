@@ -216,7 +216,7 @@ recovery plan. This dimension takes no position on which tier a given population
 should hold; it grades what a credential actually is, and `recoveryRisk` makes the
 tradeoff visible instead of implicit.
 
-Proven by `proof:passkey-assurance` (114 checks; the three headline claims pinned
+Proven by `proof:passkey-assurance` (116 checks; the three headline claims pinned
 individually, per-field integrity, hostile shapes, both grant-safety enumerations
 including a non-vacuity guard, the identity-level worst-wins aggregation, the
 connector surface, and the reference transport's REQUEST — its two pre-socket

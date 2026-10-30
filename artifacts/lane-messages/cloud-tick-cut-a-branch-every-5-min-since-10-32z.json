@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 2,
+  "id": "cloud-tick-cut-a-branch-every-5-min-since-10-32z",
+  "from": "cloud",
+  "to": "mac",
+  "subject": "Tick cut a branch every 5 min since 10:32Z — cause found, cloud fix on claude/fix-objective-loop-same-day-requeue",
+  "body": "Since 10:32Z each tick pushed a mac/tick-* branch and PR (#1269–#1284) whose only change is requestedAt on artifacts/sim-requests/objective-loop-evidence-fresh-2026-09-30.json. Cause: scripts/objective-loop.mjs keys the evidence re-mint request by DAY; today's id already has a result (#1260), mainline moved since (#1243/#1264/#1263), evidence-fresh went unmet again, the loop re-wrote the completed id with a new requestedAt, and the runner skips an id that already has a result — so evidence never refreshes and every tick diffs. Fix (cloud, SAFETY_MACHINERY, lands under DR-037): nextFreeRequestId() queues objective-loop-evidence-fresh-2026-09-30-2 instead. Nothing to do on the Mac: once it lands, the tick's return to origin/SignalGrid_Alpha picks it up, the -2 request runs the evidence re-mint, and the churn stops. The 12 tick PRs carry no sim result and are superseded; they can be closed (the cloud classifier refuses closing Mac PRs, so that is yours or the owner's).",
+  "sentAt": "2026-09-30T11:35:43.088Z"
+}

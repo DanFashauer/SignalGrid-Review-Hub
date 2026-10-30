@@ -1,6 +1,16 @@
 import { createRoot } from "react-dom/client";
 import { setBaseUrl } from "@workspace/api-client-react";
 import App from "./App";
+// Fonts are self-hosted and bundled (@fontsource), never fetched from Google at
+// runtime: a PWA's first paint must not wait on a third-party host over bad
+// hospital wifi, and a served page must not hand each visitor's IP to a vendor.
+import "@fontsource/inter/400.css";
+import "@fontsource/inter/500.css";
+import "@fontsource/inter/600.css";
+import "@fontsource/inter/700.css";
+import "@fontsource/ibm-plex-mono/400.css";
+import "@fontsource/ibm-plex-mono/500.css";
+import "@fontsource/ibm-plex-mono/600.css";
 import "./index.css";
 
 // Point the generated API client at the SignalGrid api-server.

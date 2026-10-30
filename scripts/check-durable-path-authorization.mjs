@@ -71,14 +71,11 @@ const files = execFileSync("git", ["ls-files", ROUTE_ROOT], { cwd: repo, encodin
   .split("\n")
   .filter((f) => f.endsWith(".ts") && !f.endsWith(".test.ts"));
 
-const findings = [];
-const exempted = [];
-let contextSites = 0;
-let durableReads = 0;
-let authorizedReads = 0;
-
-for (const file of files) {
-  const lines = readFileSync(resolve(repo, file), "utf8").split("\n");
+/** The verdict for ONE route file, as a pure function of its source: every
+ *  core.context() that feeds a durable store read without an authorization beside it. */
+function scanRouteSource(file, source) {
+  const r = { contextSites: 0, durableReads: 0, authorizedReads: 0, findings: [], exempted: [] };
+  const lines = source.split("\n");
   // Track the nearest preceding `router.<verb>("<path>"` so a finding can name its route.
   let currentRoute = "(unknown route)";
   for (let i = 0; i < lines.length; i += 1) {
@@ -87,7 +84,7 @@ for (const file of files) {
 
     if (!/\bcore\.context\s*\(/.test(lines[i])) continue;
     if (/^\s*(\/\/|\*)/.test(lines[i])) continue;
-    contextSites += 1;
+    r.contextSites += 1;
 
     // Does this context() feed a durable store read within the window?
     //
@@ -101,7 +98,7 @@ for (const file of files) {
     const boundStoreRead = /\bstore\.\w+\s*\(/.test(window);
     const inlineStoreRead = /\bget\w*Store\s*\(\s*\)\s*\.\w+\s*\(/.test(window);
     if (!boundStoreRead && !inlineStoreRead) continue;
-    durableReads += 1;
+    r.durableReads += 1;
 
     // What clears a finding: an explicit authorization in the same window —
     // either the core's authorizedContext() (context + permission in one call)
@@ -111,17 +108,61 @@ for (const file of files) {
     // 403 assertions in test/api.test.mjs are for.
     const codeWindow = stripComments(window);
     if (/\bauthorizedContext\s*\(/.test(codeWindow) || /\bauthorize\s*\(/.test(codeWindow)) {
-      authorizedReads += 1;
+      r.authorizedReads += 1;
       continue;
     }
 
     const exemptKey = [...EXEMPT.keys()].find((k) => currentRoute.startsWith(k));
     if (exemptKey) {
-      exempted.push(`${currentRoute} (${file}:${i + 1})`);
+      r.exempted.push(`${currentRoute} (${file}:${i + 1})`);
       continue;
     }
-    findings.push({ file, line: i + 1, route: currentRoute, src: lines[i].trim().slice(0, 78) });
+    r.findings.push({ file, line: i + 1, route: currentRoute, src: lines[i].trim().slice(0, 78) });
   }
+  return r;
+}
+
+// ── in-run control ───────────────────────────────────────────────────────────
+// The exact shape this gate was written for (authenticate, then read the store) must
+// be a finding; the same read with an authorize() beside it must be cleared — and
+// must have been SEEN as a durable read, so the pass is not the detector missing it.
+{
+  const head = 'router.get("/v1/control", async (req, res) => {\n  const store = getDecisionStore();\n  if (store) {\n';
+  const read = "    const decisions = await store.listDecisions(tenantId);\n    res.json(decisions); return;\n  }\n});\n";
+  const bad = scanRouteSource("control.ts", `${head}    const tenantId = core.context(token(req)).tenant.id;\n${read}`);
+  const good = scanRouteSource(
+    "control.ts",
+    `${head}    const principal = core.context(token(req));\n    authorize(principal, "decision:read");\n    const tenantId = principal.tenant.id;\n${read}`,
+  );
+  // An authorize() that exists only in a comment must NOT clear the read.
+  const commented = scanRouteSource(
+    "control.ts",
+    `${head}    const tenantId = core.context(token(req)).tenant.id;\n    // authorize(principal, "decision:read") is done upstream\n${read}`,
+  );
+  if (bad.findings.length !== 1 || commented.findings.length !== 1 || good.findings.length !== 0 || good.durableReads !== 1 || good.authorizedReads !== 1) {
+    console.error(
+      `✗ SELF-TEST FAILED — unauthorized durable read caught: ${bad.findings.length}/1; commented-out ` +
+        `authorize() caught: ${commented.findings.length}/1; authorized read ` +
+        `findings ${good.findings.length} (want 0), seen ${good.durableReads}/1, cleared ${good.authorizedReads}/1. ` +
+        "The verdict can no longer tell an authenticate-only read from an authorized one.",
+    );
+    process.exit(1);
+  }
+}
+
+const findings = [];
+const exempted = [];
+let contextSites = 0;
+let durableReads = 0;
+let authorizedReads = 0;
+
+for (const file of files) {
+  const r = scanRouteSource(file, readFileSync(resolve(repo, file), "utf8"));
+  contextSites += r.contextSites;
+  durableReads += r.durableReads;
+  authorizedReads += r.authorizedReads;
+  findings.push(...r.findings);
+  exempted.push(...r.exempted);
 }
 
 console.log("Durable-path authorization — a durable read must authorize, not just authenticate\n");
@@ -171,4 +212,4 @@ console.log(
     "  textual proximity scan — it proves no durable read takes its tenant from an\n" +
     "  authenticate-only call, which is necessary, not sufficient.",
 );
-console.log("\nDurable-path authorization passed — every durable read names a permission.");
+console.log("\nDurable-path authorization passed — every durable read names a permission; in-run control green.");

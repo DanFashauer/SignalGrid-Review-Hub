@@ -19,6 +19,10 @@
 //      other assertion would still pass.
 //   3. INTEGRITY     — a single flipped byte in the archive is REFUSED, not restored.
 //   4. HONEST GAPS   — a missing manifest is refused; a size mismatch is refused.
+//   5. ARCHIVE SHAPE — a checksum-valid archive carrying a TRIGGER, RULE, POLICY or
+//      ROW SECURITY on a managed table, or an EVENT TRIGGER, is refused BEFORE
+//      pg_restore replaces anything, proven by a sentinel row on the live ledger
+//      that a restore would have erased.
 
 import { mkdtemp, readFile, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -174,8 +178,97 @@ async function main() {
       acceptedGood = false;
     }
     check("a good archive is ACCEPTED (the verifier is not simply refusing everything)", acceptedGood);
+
+    // ── Archive shape: foreign machinery is refused UP FRONT ────────────────
+    // The archive is checksum-valid and manifest-valid — it is the SHAPE that is
+    // wrong: machinery that pg_restore would install on a managed table, or
+    // database-wide. A live check runs only after `pg_restore --clean` has already
+    // replaced the database. The proof of "BEFORE" is a sentinel row appended to the
+    // live ledger after the backup: a restore that ran would erase it.
+    //
+    // EVENT TRIGGER needs a superuser to create. CI's role is one (it is the
+    // POSTGRES_USER of the postgres service); a role that is not fails here, loudly,
+    // rather than skipping the case.
+    //
+    // `unplant` is idempotent and runs twice: once before the restore attempt (the
+    // live database must not hold the object, or the refusal proves nothing) and once
+    // at the end of the case, so a regression that lets one object leak cannot lie
+    // to the next case.
+    const shapes = [
+      {
+        kind: "RULE",
+        plant: ["CREATE RULE sg_r AS ON DELETE TO public.audit_ledger DO INSTEAD NOTHING"],
+        unplant: ["DROP RULE IF EXISTS sg_r ON public.audit_ledger"],
+      },
+      {
+        kind: "TRIGGER",
+        plant: [
+          "CREATE FUNCTION public.sg_t() RETURNS trigger LANGUAGE plpgsql AS $fn$ BEGIN RETURN NEW; END $fn$",
+          "CREATE TRIGGER sg_t BEFORE INSERT ON public.audit_ledger FOR EACH ROW EXECUTE FUNCTION public.sg_t()",
+        ],
+        unplant: ["DROP TRIGGER IF EXISTS sg_t ON public.audit_ledger", "DROP FUNCTION IF EXISTS public.sg_t() CASCADE"],
+      },
+      {
+        kind: "EVENT TRIGGER",
+        plant: [
+          "CREATE FUNCTION public.sg_evt() RETURNS event_trigger LANGUAGE plpgsql AS $fn$ BEGIN NULL; END $fn$",
+          "CREATE EVENT TRIGGER sg_evt ON ddl_command_end EXECUTE FUNCTION public.sg_evt()",
+        ],
+        unplant: ["DROP EVENT TRIGGER IF EXISTS sg_evt", "DROP FUNCTION IF EXISTS public.sg_evt() CASCADE"],
+      },
+      {
+        kind: "POLICY",
+        plant: ["CREATE POLICY sg_p ON public.audit_ledger USING (true)"],
+        unplant: ["DROP POLICY IF EXISTS sg_p ON public.audit_ledger"],
+      },
+      {
+        kind: "ROW SECURITY",
+        plant: ["ALTER TABLE public.audit_ledger ENABLE ROW LEVEL SECURITY"],
+        unplant: ["ALTER TABLE public.audit_ledger DISABLE ROW LEVEL SECURITY"],
+      },
+    ];
+    for (const { kind, plant, unplant } of shapes) {
+      const shaped = join(workdir, `shaped-${kind.replace(/ /g, "-")}.dump`);
+      for (const sql of plant) await admin.query(sql);
+      await createBackup(url!, shaped, "2026-08-08T00:00:00Z");
+      for (const sql of unplant) await admin.query(sql);
+      await appendAuditRecord("policy.matched", { type: "system" }, { meta: { sentinel: kind } });
+      const live = await describeDatabase(url!);
+      let refusal: unknown;
+      try {
+        await restoreBackup(url!, shaped);
+      } catch (e) {
+        refusal = e;
+      }
+      check(
+        `an archive carrying ${kind} is REFUSED (BackupError naming ${kind})`,
+        refusal instanceof BackupError && String(refusal).includes(kind),
+      );
+      const kept = await describeDatabase(url!);
+      check(
+        `…and refused BEFORE pg_restore replaced anything (${kind} case: ledger and sentinel unchanged)`,
+        kept.auditCount === live.auditCount && kept.auditHeadHash === live.auditHeadHash,
+      );
+      const leaked = await admin.query(
+        `SELECT (SELECT count(*) FROM pg_rewrite r JOIN pg_class c ON c.oid = r.ev_class
+                  WHERE c.relname = 'audit_ledger' AND r.rulename <> '_RETURN')
+              + (SELECT count(*) FROM pg_trigger WHERE tgrelid = 'public.audit_ledger'::regclass AND NOT tgisinternal)
+              + (SELECT count(*) FROM pg_event_trigger)
+              + (SELECT count(*) FROM pg_policy WHERE polrelid = 'public.audit_ledger'::regclass)
+              + (SELECT count(*) FROM pg_class WHERE oid = 'public.audit_ledger'::regclass AND relrowsecurity) AS n`,
+      );
+      check(`…and the ${kind} did not leak into the live database`, Number(leaked.rows[0].n) === 0);
+      for (const sql of unplant) await admin.query(sql);
+    }
   } finally {
+    // On a failed run the planted objects may still stand, and the next proof in CI
+    // order must start clean. The event trigger goes first: it is database-wide, so a
+    // leaked one would fire on every later proof's DDL. Dropping the ledger removes its
+    // rules, triggers, policies and the sentinel rows; the functions outlive it.
+    await admin.query("DROP EVENT TRIGGER IF EXISTS sg_evt").catch(() => {});
     await admin.query("DROP TABLE IF EXISTS audit_ledger").catch(() => {});
+    await admin.query("DROP FUNCTION IF EXISTS public.sg_evt() CASCADE").catch(() => {});
+    await admin.query("DROP FUNCTION IF EXISTS public.sg_t() CASCADE").catch(() => {});
     await admin.end().catch(() => {});
     await rm(workdir, { recursive: true, force: true }).catch(() => {});
   }

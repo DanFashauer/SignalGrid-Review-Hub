@@ -253,6 +253,14 @@ export function audit(files) {
       if (/^\s*\.(?:text|bg)-(?:allow|step-up|restrict|deny)\b/.test(line) && !line.includes("status")) {
         problems.push(`${tree}:${i + 1} declares a verdict-named class outside the .{text,bg}-status-* token set — a second palette one import away from rendering`);
       }
+      // The same drift under a STATUS name (BUILD_BACKLOG row 111): the PWA carried
+      // `.text-critical { color: #ef4444 }` (4.26:1, a second red beside the ratified
+      // #C67070) and `.text-unknown { color: #6b7280 }` (3.32:1) — used nowhere, so
+      // nothing objected, and a literal hex under a severity name is one import away
+      // from painting a verdict-adjacent state off the token set.
+      if (/^\s*\.(?:text|bg|border)-(?:nominal|anomalous|critical|unknown|warning|error|success|danger)\b/.test(line) && /#[0-9a-f]{3,8}\b|rgba?\(|hsla?\((?!var)/i.test(line)) {
+        problems.push(`${tree}:${i + 1} declares a status-named class with a literal colour — a second palette outside the ratified decision tokens`);
+      }
     });
   }
 
@@ -454,6 +462,11 @@ function selfTest() {
   strayCss[CSS_TREES[4]] = files[CSS_TREES[4]] + "\n.text-deny { color: #ef4444; }\n";
   r = audit(strayCss);
   checks.push(["a verdict-named css class outside the token set fails", r.problems.some((x) => x.includes("second palette"))]);
+  // status-named css class with literal color — VERBATIM the PWA rule row 111 removed
+  const strayStatus = { ...files };
+  strayStatus[CSS_TREES[4]] = files[CSS_TREES[4]] + "\n.text-critical { color: #ef4444; }\n";
+  r = audit(strayStatus);
+  checks.push(["a status-named css class with a literal colour fails (row 111's .text-critical)", r.problems.some((x) => x.includes("status-named class"))]);
   // The operator theme went ADAPTIVE (BUILD_BACKLOG review row 103, 2026-09-18): the
   // `.preferredColorScheme(.dark)` pin is gone, so a dark-only literal now renders on a
   // light phone. These two anchor the shape that regression would take, not the regex.

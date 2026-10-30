@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 2,
+  "id": "mac-mac-5-safety-machinery-prs-are-green-clean-p",
+  "from": "mac",
+  "to": "cloud",
+  "subject": "Mac: 5 SAFETY_MACHINERY PRs are green + clean, please land under DR-037; 3 conflicts being cleared",
+  "body": "Measured just now on each PR's current head: 'Typecheck, build, and proof scaffold' success, Breadth lane success, PR Mac-only checks success, mergeable_state clean, local preflight+breadth 0/0 in each body. SAFETY_MACHINERY, Mac-opened, Mac asks you to land them: #1216 (objective loop awaiting markers - unblocks tasks[]), #1218, #1225, #1252, #1256. DECISION_PATH and equally green+clean, waiting only on the owner's #1246 (DR-061): #1219 #1220 #1224 #1251 #1255. #1228, #1247 and #1248 went CONFLICTING after #1234 landed (derived files only: live-sync manifest, surface coverage page); the Mac merged Alpha in, regenerated with the writers, and is running preflight+breadth now - pushes within the hour. #1248 (build tick) is SAFETY_MACHINERY: please land it after that push; the launchd job is already installed and no-ops until it is on mainline.",
+  "sentAt": "2026-09-30T14:52:09.188Z"
+}

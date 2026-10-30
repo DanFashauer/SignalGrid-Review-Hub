@@ -13,9 +13,10 @@
 //      not claim one.
 //   4. NO NETWORK I/O in the family, so a quarantine actuator cannot return.
 
-import { readFileSync, readdirSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { createServer, type Socket } from "node:net";
+import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { classifyVendorCallLine, scanForVendorCalls, vendorCallScanSelfTest } from "./lib/no-vendor-call.js";
 import {
   clearPassStatus,
   lookupNacFixture,
@@ -167,102 +168,38 @@ check("no fixture carries a wall-clock timestamp",
 {
   const here = dirname(fileURLToPath(import.meta.url));
   const dir = resolve(here, "../../lib/integrations/src/integrations/nac");
-  // RECURSIVE. The previous scan used a flat readdirSync, so a subdirectory could
-  // hold anything at all and the guarantee would still print green.
-  const walk = (d: string): string[] =>
-    readdirSync(d, { withFileTypes: true }).flatMap((e) =>
-      e.isDirectory() ? walk(join(d, e.name)) : e.name.endsWith(".ts") ? [join(d, e.name)] : []);
-  const files = walk(dir);
-  const offenders: string[] = [];
-
-  // WHAT THIS BANS, and the claim is now narrowed to what it actually checks.
-  //
-  // THE OLD VERSION PRINTED A FALSE GUARANTEE. It said "no network I/O in any
-  // source" while matching only fetch/axios/got/undici/https.request and a mutating
-  // `method:` literal. Adversarial review found `nac/store.ts` doing
-  // `await import("ioredis")` and opening a TCP connection to Redis — real network
-  // I/O, invisible to every pattern in the list. The scan was reporting success over
-  // something it had stopped looking at, which this repo's own guard-registry header
-  // calls WORSE than no guard.
-  //
-  // Two changes. (1) The claim is now "no VENDOR-API call", which is the property
-  // that actually matters here — Redis is configuration storage, not a device
-  // actuator, and banning it outright would be theatre. (2) The pattern list gained
-  // dynamic import of network clients, node:net/http/https/tls, XHR, WebSocket and
-  // aliased fetch, so the next thing that sneaks in has fewer doors.
-  // The two client-module patterns are named because the store.ts exemption below is
-  // scoped to THEM and to nothing else; an anonymous array index would be a fossil the
-  // first reordering breaks.
-  const CLIENT_MODULE_REQUIRE = /\brequire\s*\(\s*['"](?:axios|got|undici|node-fetch|superagent|request|ioredis|redis|pg|mysql2|mongodb)['"]/i;
-  const CLIENT_MODULE_IMPORT = /\bimport\s*\(\s*['"](?:axios|got|undici|node-fetch|superagent|request|ioredis|redis|pg|mysql2|mongodb)['"]/i;
-  const banned = [
-    /\b(?:fetch|XMLHttpRequest|WebSocket|EventSource)\s*\(/i,
-    /\b(?:const|let|var)\s+\w+\s*=\s*fetch\b/i,            // aliased fetch
-    CLIENT_MODULE_REQUIRE,
-    CLIENT_MODULE_IMPORT,
-    /\bfrom\s+['"](?:axios|got|undici|node-fetch|superagent|request)['"]/i,
-    /\bfrom\s+['"]node:(?:net|http|https|tls|dgram)['"]/i,
-    /\bhttps?\.(?:request|get)\s*\(/i,
-    /\bnet\.(?:connect|createConnection)\s*\(/i,
-    /method:\s*['"](?:POST|PUT|PATCH|DELETE)['"]/i,
-  ];
   // store.ts is EXEMPT and named, not silently skipped. It talks to Redis to persist
   // which NAC provider is configured — configuration storage, not a vendor API call
-  // and not a device action. Listing it here is the honest form: the exemption is
-  // visible, scoped to one file, and a reader can disagree with it.
-  //
-  // THE EXEMPTION IS SCOPED TO THE REASON, NOT TO THE FILE. It used to be
-  // `allowed(rel)`, evaluated BEFORE the pattern test, which switched all nine
-  // patterns off for store.ts — `fetch(` and `method: "POST"` included. A live ISE ANC
-  // quarantine call planted in store.ts was invisible and this section printed green,
-  // in the family whose entire subject is that an actuator cannot return. Now a line in
-  // an exempted file is skipped only when EVERY banned pattern it matches is one of the
-  // two client-module patterns AND the module it names is a Redis client; anything else
-  // in that file is an offender like anywhere else, and each skip is printed.
+  // and not a device action. THE EXEMPTION IS SCOPED TO THE REASON, NOT TO THE FILE:
+  // it used to switch all nine patterns off for store.ts, and a live ISE ANC quarantine
+  // call planted there was invisible. A line in an exempted file is now skipped only
+  // when it loads a Redis client and matches nothing else; each skip is printed.
   const CONFIG_STORAGE_FILES = new Set(["store.ts"]);
-  const REDIS_CLIENT_MODULE = /\b(?:require|import)\s*\(\s*['"](?:ioredis|redis)['"]\s*\)/i;
-  const CONFIG_STORAGE_PATTERNS = new Set<RegExp>([CLIENT_MODULE_REQUIRE, CLIENT_MODULE_IMPORT]);
-  const exempted: string[] = [];
-  /** "clean" = no banned pattern; "exempt" = config-storage Redis client only; "offender" = everything else. */
-  const classify = (rel: string, line: string): "clean" | "exempt" | "offender" => {
-    const hits = banned.filter((re) => re.test(line));
-    if (hits.length === 0) return "clean";
-    if (
-      CONFIG_STORAGE_FILES.has(rel) &&
-      REDIS_CLIENT_MODULE.test(line) &&
-      hits.every((re) => CONFIG_STORAGE_PATTERNS.has(re))
-    ) return "exempt";
-    return "offender";
-  };
-  for (const f of files) {
-    const rel = f.slice(dir.length + 1);
-    readFileSync(f, "utf8").split("\n").forEach((line, i) => {
-      const t = line.trim();
-      if (t.startsWith("//") || t.startsWith("*") || t.startsWith("/*")) return;
-      const verdict = classify(rel, line);
-      if (verdict === "exempt") exempted.push(`${rel}:${i + 1}`);
-      else if (verdict === "offender") offenders.push(`${rel}:${i + 1}`);
-    });
-  }
+  // The scan is the SHARED one (scripts/src/lib/no-vendor-call.ts, row 119): five
+  // proofs carried five copies of this pattern list and one drifted permissive.
+  // RECURSIVE over every file, with a non-empty floor — a scan of nothing is green.
+  const { files, offenders, exempted } = scanForVendorCalls(dir, CONFIG_STORAGE_FILES);
   if (offenders.length) console.log(`      offenders: ${offenders.join(", ")}`);
   // REPORTED, not gated: every line the config-storage exemption swallowed, so a reader
   // can see exactly what the claim below does not cover.
   console.log(`      config-storage exemptions taken (REPORTED): ${exempted.length ? exempted.join(", ") : "none"}`);
   check(`no VENDOR-API call in any nac/ source — an actuator cannot return (${files.length} files scanned recursively)`,
-    offenders.length === 0);
-  // NON-VACUITY: the scan must be able to FAIL. Without this, deleting the pattern
-  // list would leave the assertion green and nobody would notice.
-  check("...and the scan actually detects a planted vendor call",
-    banned.some((re) => re.test(`await fetch("https://vendor/api", { method: "POST" })`)) &&
-    banned.some((re) => re.test(`const { Redis } = await import("ioredis");`)));
-  // SELF-TEST of the EXEMPTION, run through the same `classify` the loop uses. The old
-  // whole-file form passes the check above and fails this one: it grades the planted ISE
-  // quarantine call in store.ts "clean".
+    files.length > 0 && offenders.length === 0);
+  // NON-VACUITY: the scan must be able to FAIL — against one planted control PER
+  // PATTERN CLASS, not a single `fetch(`. The shared self-test also requires the drifted
+  // six-pattern list to fail those controls (scripts/src/lib/no-vendor-call.ts, row 119).
+  const selfTest = vendorCallScanSelfTest();
+  check(`...and the scan actually detects a planted vendor call of every pattern class${selfTest.length ? `: ${selfTest.join("; ")}` : ""}`,
+    selfTest.length === 0);
+  // SELF-TEST of the EXEMPTION, run through the same classifier the scan uses. The old
+  // whole-file form grades the planted ISE quarantine call in store.ts "clean".
+  const classify = (rel: string, line: string) => classifyVendorCallLine(rel, line, CONFIG_STORAGE_FILES);
   check("...and the store.ts exemption is scoped to the REASON: a planted vendor call in the EXEMPT file is still an offender",
     classify("store.ts", `  await fetch("https://ise.vendor/ers/config/ancendpoint/apply", { method: "POST" });`) === "offender" &&
     classify("store.ts", `  await adapter.quarantineEndpoint(mac, { method: "POST" });`) === "offender" &&
     classify("index.ts", `  await fetch("https://ise.vendor/ers/config/ancendpoint/apply", { method: "POST" });`) === "offender" &&
     classify("index.ts", `  const { Redis } = await import("ioredis");`) === "offender" &&
+    classify("store.ts", `  const r = await import("redis"); const a = require("axios");`) === "offender" &&
     classify("store.ts", `  const { Redis } = await import("ioredis");`) === "exempt");
 }
 
@@ -312,6 +249,116 @@ check("with no REDIS_URL configured there is no fault to report, so the checks a
   quietFaults.length === 0);
 
 
+
+// BRACE-LESS GUARDS IN THE IDENTIFIER VALIDATOR (joined the brace-less sweep, wave 9).
+// `nac/identifier.ts` lines 48, 49 and 58 survived `if (false)` with this proof green: the
+// per-kind regex refuses the same hostile value a moment later, so every earlier check saw
+// `ok === false` either way. What differs is WHICH refusal answered, and the reason is what an
+// operator reads. So each guard is pinned by its reason, and by the boundary it draws.
+{
+  const reason = (v: unknown, t: "mac" | "serial" | "cert"): string | null => {
+    const r = validateNacIdentifier(v, t);
+    return r.ok ? null : r.reason;
+  };
+  for (const t of ["mac", "serial", "cert"] as const) {
+    check(`nac: an empty or all-whitespace ${t} identifier is refused as EMPTY, not as malformed`,
+      reason("", t) === "identifier is empty" && reason("   ", t) === "identifier is empty");
+    check(`nac: a ${t} identifier over 256 characters is refused as TOO LONG, not as malformed`,
+      reason("a".repeat(257), t) === "identifier exceeds 256 characters");
+  }
+  check("nac: the 256-character bound is inclusive — 256 passes the length guard and meets the kind check instead",
+    reason("a".repeat(256), "mac") === "not a well-formed MAC address" &&
+    reason("a".repeat(256), "serial") === "not a well-formed serial");
+  check("nac: a serial with a character outside [0-9a-z_-] is refused, with the serial reason",
+    ["sn 123", "sn;drop", "sn'x", "sn/../x", "ser\u00e9ial"].every((v) => reason(v, "serial") === "not a well-formed serial"));
+  check("nac: a 65-character serial is refused (the bound is 64) and a 64-character one is accepted",
+    reason("a".repeat(65), "serial") === "not a well-formed serial" && validateNacIdentifier("a".repeat(64), "serial").ok === true);
+}
+
+// THE REDIS READ-HIT PATH — `nac/store.ts` line 81 (`if (data) return ...parse(...)`) survived
+// `if (false)`: every earlier check ran with NO Redis (client null) or a CLOSED port (fault), so
+// the branch where Redis HAS the config never executed, and a store that always fell through to
+// the process-local map would have passed. Driven here against a loopback RESP server that holds
+// one value in a Map: no real Redis, no clock, no randomness (OS-assigned port).
+{
+  const kv = new Map<string, string>();
+  const sockets = new Set<Socket>();
+  const parseCommands = (buf: Buffer): { cmds: string[][]; rest: Buffer } => {
+    const cmds: string[][] = [];
+    let off = 0;
+    for (;;) {
+      if (buf[off] !== 0x2a) break; // "*"
+      let nl = buf.indexOf("\r\n", off);
+      if (nl < 0) break;
+      const n = Number.parseInt(buf.toString("utf8", off + 1, nl), 10);
+      let cur = nl + 2;
+      const args: string[] = [];
+      let complete = true;
+      for (let i = 0; i < n; i += 1) {
+        nl = buf.indexOf("\r\n", cur);
+        if (nl < 0) { complete = false; break; }
+        const len = Number.parseInt(buf.toString("utf8", cur + 1, nl), 10);
+        if (buf.length < nl + 2 + len + 2) { complete = false; break; }
+        args.push(buf.toString("utf8", nl + 2, nl + 2 + len));
+        cur = nl + 2 + len + 2;
+      }
+      if (!complete) break;
+      cmds.push(args);
+      off = cur;
+    }
+    return { cmds, rest: buf.subarray(off) };
+  };
+  const server = createServer((sock) => {
+    sockets.add(sock);
+    sock.on("close", () => sockets.delete(sock));
+    sock.on("error", () => undefined);
+    let pending: Buffer = Buffer.alloc(0);
+    sock.on("data", (chunk) => {
+      const { cmds, rest } = parseCommands(Buffer.concat([pending, typeof chunk === "string" ? Buffer.from(chunk) : chunk]));
+      pending = Buffer.from(rest);
+      for (const [cmd, ...args] of cmds) {
+        switch (cmd?.toLowerCase()) {
+          case "info": { const b = "# Server\r\nloading:0\r\n"; sock.write(`$${Buffer.byteLength(b)}\r\n${b}\r\n`); break; }
+          case "get": { const v = kv.get(args[0] ?? ""); sock.write(v === undefined ? "$-1\r\n" : `$${Buffer.byteLength(v)}\r\n${v}\r\n`); break; }
+          case "set": kv.set(args[0] ?? "", args[1] ?? ""); sock.write("+OK\r\n"); break;
+          case "quit": sock.write("+OK\r\n"); sock.end(); break;
+          default: sock.write("+OK\r\n");
+        }
+      }
+    });
+  });
+  await new Promise<void>((res) => server.listen(0, "127.0.0.1", () => res()));
+  const addr = server.address();
+  const port = typeof addr === "object" && addr ? addr.port : 0;
+  const priorUrl = process.env["REDIS_URL"];
+  process.env["REDIS_URL"] = `redis://127.0.0.1:${port}`;
+  const faults: string[] = [];
+  try {
+    __resetNacConfigForTests();
+    await setNACConfig("tenant-redis", { provider: "clearpass", enabled: false }, (m) => faults.push(m));
+    check("nac: a config written through Redis lands in the Redis store (the fake server received the SET)",
+      [...kv.keys()].length === 1 && faults.length === 0);
+    // Drop the process-local copy: the ONLY place the config now lives is Redis.
+    __resetNacConfigForTests();
+    const fromRedis = await getNACConfig("tenant-redis", (m) => faults.push(m));
+    check("nac: a config present in Redis is READ from Redis when the process-local copy is gone",
+      fromRedis?.provider === "clearpass" && fromRedis?.enabled === false && faults.length === 0);
+    check("nac: a key Redis does not hold falls through to the (empty) process-local map, as null",
+      (await getNACConfig("tenant-absent", (m) => faults.push(m))) === null && faults.length === 0);
+    // A stored value that fails the strict schema is a FAULT (audible), never a silent default.
+    kv.set([...kv.keys()][0]!, JSON.stringify({ provider: "ise", enabld: true }));
+    __resetNacConfigForTests();
+    const bad = await getNACConfig("tenant-redis", (m) => faults.push(m));
+    check("nac: a corrupt stored config is reported as a read fault and yields null, not a default-on config",
+      bad === null && faults.some((f) => f.startsWith("read failed")));
+  } finally {
+    if (priorUrl === undefined) delete process.env["REDIS_URL"];
+    else process.env["REDIS_URL"] = priorUrl;
+    for (const sk of sockets) sk.destroy();
+    await new Promise<void>((res) => server.close(() => res()));
+    __resetNacConfigForTests();
+  }
+}
 
 // CERTIFICATE-SERIAL FORMAT — the `cert` arm's format check survived mutation
 // until 2026-08-25: every identifier test here used `mac` or `serial`, so the cert

@@ -128,44 +128,48 @@ const dockerfiles = execFileSync("git", ["ls-files"], { cwd: repo, encoding: "ut
   .split("\n")
   .filter((f) => /(^|\/)Dockerfile(\.|$)/.test(f));
 
-const failures = [];
-const ok = (m) => console.log(`  ✓ ${m}`);
-const bad = (m) => { failures.push(m); console.error(`  ✗ ${m}`); };
-
-let checked = 0;
-for (const file of dockerfiles) {
-  for (const st of stagesOf(read(file))) {
+/** The stage verdict, as a pure function of one Dockerfile's text: for every stage
+ *  that runs a bundler build, an ok or a failure. */
+function stageFindings(file, text) {
+  const out = [];
+  for (const st of stagesOf(text)) {
     if (!st.builds) continue;
-    checked += 1;
-    const label = `${file}:${st.line} (${st.as ?? "unnamed stage"}, ${st.image})`;
-
-    if (!st.platform) {
-      bad(`${label} runs a bundler build with no --platform pin — the triple would be the build host's. ` +
-          `The workspace ships a complete native set for linux ${supported.join(", ") || "(none)"} only; ` +
-          `pin it so the image builds the same everywhere.`);
-      continue;
-    }
-
-    const m = st.platform.match(/^([a-z0-9]+)\/([a-z0-9]+)/i);
-    if (!m) { bad(`${label} has an unparseable --platform=${st.platform}`); continue; }
-    const os = m[1].toLowerCase();
-    // Docker's platform vocabulary is not npm's: amd64→x64, 386→ia32.
-    const arch = ({ amd64: "x64", 386: "ia32" })[m[2].toLowerCase()] ?? m[2].toLowerCase();
-    const libc = libcOf(st.image);
-
-    const missing = FAMILIES
-      .map((f) => ({ parent: f.parent, pkg: f.name(os, arch, libc) }))
-      .filter((c) => isStripped(c.parent, c.pkg));
-
-    if (missing.length) {
-      bad(`${label} targets ${os}-${arch}-${libc}, for which pnpm-workspace.yaml strips ` +
-          `${missing.map((b) => b.pkg).join(", ")}. The workspace ships a complete native set only for ` +
-          `linux ${supported.join(", ") || "(none)"} — target that (e.g. --platform=linux/amd64 on a glibc base), ` +
-          `or widen the overrides and regenerate the lockfile.`);
-    } else {
-      ok(`${label} → ${os}-${arch}-${libc}: the workspace ships every native binary this triple needs`);
-    }
+    out.push(...buildStageFinding(file, st));
   }
+  return out;
+}
+
+function buildStageFinding(file, st) {
+  const out = [];
+  const label = `${file}:${st.line} (${st.as ?? "unnamed stage"}, ${st.image})`;
+
+  if (!st.platform) {
+    out.push({ ok: false, msg: `${label} runs a bundler build with no --platform pin — the triple would be the build host's. ` +
+        `The workspace ships a complete native set for linux ${supported.join(", ") || "(none)"} only; ` +
+        `pin it so the image builds the same everywhere.` });
+    return out;
+  }
+
+  const m = st.platform.match(/^([a-z0-9]+)\/([a-z0-9]+)/i);
+  if (!m) { out.push({ ok: false, msg: `${label} has an unparseable --platform=${st.platform}` }); return out; }
+  const os = m[1].toLowerCase();
+  // Docker's platform vocabulary is not npm's: amd64→x64, 386→ia32.
+  const arch = ({ amd64: "x64", 386: "ia32" })[m[2].toLowerCase()] ?? m[2].toLowerCase();
+  const libc = libcOf(st.image);
+
+  const missing = FAMILIES
+    .map((f) => ({ parent: f.parent, pkg: f.name(os, arch, libc) }))
+    .filter((c) => isStripped(c.parent, c.pkg));
+
+  if (missing.length) {
+    out.push({ ok: false, msg: `${label} targets ${os}-${arch}-${libc}, for which pnpm-workspace.yaml strips ` +
+        `${missing.map((b) => b.pkg).join(", ")}. The workspace ships a complete native set only for ` +
+        `linux ${supported.join(", ") || "(none)"} — target that (e.g. --platform=linux/amd64 on a glibc base), ` +
+        `or widen the overrides and regenerate the lockfile.` });
+  } else {
+    out.push({ ok: true, msg: `${label} → ${os}-${arch}-${libc}: the workspace ships every native binary this triple needs` });
+  }
+  return out;
 }
 
 // ── Every base image must name its registry ──────────────────────────────────
@@ -183,8 +187,9 @@ for (const file of dockerfiles) {
 // file simply did not enforce it on the images it reads, so three FROMs drifted.
 // Fully qualified works identically on both engines.
 const FROM_LINE = /^FROM\s+(?:--\S+\s+)*(\S+)/;
-for (const file of dockerfiles) {
-  const text = read(file);
+/** The registry verdict, as a pure function of one Dockerfile's text. */
+function registryFindings(file, text) {
+  const out = [];
   text.split("\n").forEach((line, i) => {
     const m = FROM_LINE.exec(line);
     if (!m) return;
@@ -195,19 +200,58 @@ for (const file of dockerfiles) {
     // `FROM builder` — a reference to an earlier named stage — is not an image.
     const isStageRef = !image.includes("/") && !image.includes(":");
     if (qualified || isStageRef) return;
-    bad(
-      `${file}:${i + 1} — base image "${image}" has no registry. Which registry it ` +
+    out.push({
+      ok: false,
+      msg:
+        `${file}:${i + 1} — base image "${image}" has no registry. Which registry it ` +
         `resolves to is then decided by host config (docker implies docker.io; podman ` +
         `uses a shortnames alias file). Write it out: docker.io/library/${image}`,
-    );
+    });
   });
+  return out;
 }
+
+// ── in-run control ───────────────────────────────────────────────────────────
+// On every invocation, against the REAL workspace overrides: a pinned amd64 builder
+// on a musl (alpine) base must fail — the exact defect this gate exists for — and the
+// same builder on a glibc base must pass, with the build stage actually seen. A
+// verdict that stopped reading the strip list would otherwise pass every Dockerfile.
+{
+  const builder = (image) => `FROM --platform=linux/amd64 docker.io/library/${image} AS build\nRUN pnpm run build\n`;
+  const musl = [...stageFindings("Dockerfile.control", builder("node:22-alpine")), ...registryFindings("Dockerfile.control", builder("node:22-alpine"))];
+  const glibc = [...stageFindings("Dockerfile.control", builder("node:22-bookworm-slim")), ...registryFindings("Dockerfile.control", builder("node:22-bookworm-slim"))];
+  const muslBad = musl.filter((f) => !f.ok).length;
+  const glibcBad = glibc.filter((f) => !f.ok).length;
+  const glibcSeen = glibc.filter((f) => f.ok).length;
+  if (muslBad !== 1 || glibcBad !== 0 || glibcSeen !== 1) {
+    console.error(
+      `✗ SELF-TEST FAILED — musl builder caught: ${muslBad}/1; glibc builder failures ${glibcBad} (want 0), ` +
+        `build stage seen ${glibcSeen}/1. The verdict can no longer tell a base the workspace ships ` +
+        "binaries for from one it strips.",
+    );
+    process.exit(1);
+  }
+}
+
+const failures = [];
+const report = (f) => {
+  if (f.ok) console.log(`  ✓ ${f.msg}`);
+  else { failures.push(f.msg); console.error(`  ✗ ${f.msg}`); }
+};
+
+let checked = 0;
+for (const file of dockerfiles) {
+  const found = stageFindings(file, read(file));
+  checked += found.length;
+  found.forEach(report);
+}
+for (const file of dockerfiles) registryFindings(file, read(file)).forEach(report);
 
 if (checked === 0) {
   // Zero build stages found means the parser stopped matching reality, not that
   // the repo stopped shipping images. A guard that silently checks nothing is
   // worse than no guard.
-  bad("No bundler build stage found in any Dockerfile — the detector is stale, not the repo clean.");
+  report({ ok: false, msg: "No bundler build stage found in any Dockerfile — the detector is stale, not the repo clean." });
 }
 
 console.log("");
@@ -216,7 +260,7 @@ if (failures.length) {
   process.exit(1);
 }
 console.log(
-  `Container native-base check passed — ${checked} build stage${checked === 1 ? "" : "s"} target a supported triple.\n` +
+  `Container native-base check passed — ${checked} build stage${checked === 1 ? "" : "s"} target a supported triple; in-run control green.\n` +
     "  NOT established: that these images BUILD. A missing COPY is invisible to a static\n" +
     "  read of the Dockerfile, and exactly that shipped past an earlier green here. The\n" +
     "  deploy-stack job builds them for real; this is the cheap check, not the answer.",

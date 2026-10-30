@@ -1,0 +1,15 @@
+{
+  "id": "2026-09-29-objective-loop-owner-real-in-hand",
+  "raisedAt": "2026-09-29T22:24:59.223Z",
+  "origin": "mac",
+  "doing": "standing up the objective-owner detector so owner-only escalations in docs/agent/objective-state.json reach this page; the loop has asked one since 2026-09-24",
+  "blockedBy": "owner decision under DR-033: is something real in hand for partners and collaborators? The escalation owner-real-in-hand (clears owner) has no lane to read it, so it sat in the state file with no hand raised",
+  "need": "the owner answers the escalation: yes means a decision record carrying the attestation token with attestedIn pointed at it; no means the loop keeps building the ranked queue",
+  "whoCanUnblock": "owner",
+  "domain": "",
+  "status": "open",
+  "routedTo": null,
+  "covers": [
+    "objective-owner:owner-real-in-hand"
+  ]
+}

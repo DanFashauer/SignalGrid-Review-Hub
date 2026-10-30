@@ -71,7 +71,7 @@ if (!claude) {
   warn("no `claude` CLI; not registered.");
   results.skipped.push("context7 (no claude CLI)");
 } else if (runInstaller("scripts/install-context7.mjs")) {
-  ok(`Context7 registered (pinned ${CONTEXT7_PINNED}).`);
+  ok(`Context7 registered (pinned ${CONTEXT7_PINNED}) — reference only: its output is not a pure function of the tree (keyless, rate-limited: the same query has returned a quota error and then real docs on consecutive runs), so it is never cited in a gate, a proof, a fixture or a doc figure.`);
   results.registered.push("context7");
 } else {
   bad("Context7 registration failed — see the output above.");

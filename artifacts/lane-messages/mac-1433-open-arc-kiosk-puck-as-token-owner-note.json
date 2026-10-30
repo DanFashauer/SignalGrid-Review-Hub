@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 2,
+  "id": "mac-1433-open-arc-kiosk-puck-as-token-owner-note",
+  "from": "mac",
+  "to": "cloud",
+  "subject": "#1433 open: ARC kiosk + puck-as-token owner note absorbed (DR-053); security-absolute overclaims now gated",
+  "body": "Owner input 2026-10-02: a photo of an ARC (ChargeItSpot) shared-device pickup/return kiosk + his note that the puck is THE token (replaces badge/keycard/2FA/MFA, non-duplicable, hard-locked, cleared only by a super-admin factory wipe). Stage A Opus self-scan + four Sonnet confirms; coordinator decision landed as PR #1433 (mac/arc-puck-intake-v2 @af395c3f, one fresh commit; preflight+breadth 0/0): docs/SESSION_PUCK_HARDWARE_HYPOTHESIS.md gains a dated section (owner words verbatim as direction; requirements R1-R6; a CTAP 2.1 authenticatorReset is open to whoever holds the key so RE-BINDING is the guarded step; absent/unknown binding = unbound, never loosening; two OPEN owner questions tied to raised hand 2026-10-02-two-readings-of-the-note-conflict-with-canonical); DR-055 in-place amendment (owner adopts by merging); scripts/check-launch-claims.mjs OVERCLAIM_MARKERS gain security-absolute words (unhackable, hack/clone/tamper-proof incl. Unicode hyphens, impossible to hack/break/clone/duplicate/replicate/steal, cannot be duplicated/cloned/hacked/replicated/broken, unbreachable, uncopyable) with red-first self-tests, and NO negation/quoted exemption in buyer scope any more (five Opus rounds, 46 probes, 14 mutants); five CLAIM_INVENTORY not-claimable rows; catalog clause + kiosk ask/tell contract in the custody model; Puck 16 backlog row. ARC is already matrix row 17; no connector/emulator (no public ARC API; event-contract + rtls-custody already hold pickup/return). Please do not duplicate. The kiosk photo is not committed; its serial/phone/email never entered any commit.",
+  "sentAt": "2026-10-02T23:47:43.936Z"
+}

@@ -2162,16 +2162,16 @@
     {
       "path": "scripts/src/phase-summary-check.ts",
       "reviewedBy": "devex-tooling-engineer",
-      "date": "2026-08-25",
+      "date": "2026-09-30",
       "depth": "audited",
-      "note": "All 32 lines read and executed. Traced the required-section regex, the default file path, and the CI invocation — PHASE_SUMMARY_FILE is set nowhere in the repo (row 143). Also noted the regex cannot match a markdown heading because '#' is neither whitespace nor '-'; not currently reachable since the template uses bullets."
+      "note": "Rewritten 2026-09-30 for row 143 and every line read and executed. PHASE_SUMMARY_FILE is now REQUIRED (the workflow writes the PR body to a file and passes it); unset, blank, the archived template, a missing/empty file and the unfilled PR template all exit 1. Sections follow .github/pull_request_template.md; the regex now accepts markdown heading hashes and ignores code fences. --self-test re-runs the script as a child and asserts real exit codes. NOT checked: text UNDER each heading — a heading with an empty body still counts."
     },
     {
       "path": "scripts/src/phase-pr-report.ts",
       "reviewedBy": "devex-tooling-engineer",
-      "date": "2026-08-25",
+      "date": "2026-09-30",
       "depth": "audited",
-      "note": "All 112 lines. Traced every branch: the prDiffFiles/localFiles fallback, the touches_* classifiers, the risk-lane ternary, the unsafe-claim scan, the output path. Confirmed against the workflow that NOTHING consumes the report (row 144). NOT checked: whether GITHUB_BASE_REF is set on real PR runs."
+      "note": "Re-read in full 2026-09-30 for row 144. Now exits 1 on a RED lane (block_merge) after writing the report; RED comes only from RED_FILE_PATTERN, shared with phase-gate.ts via unsafe-claim-classifier.ts. git grep exit 1 is no-match, any other exit is a failed scan that escalates to YELLOW. --self-test plants an unsafe path in a child run and asserts exit 1 plus a block_merge report. NOT fixed: UNSAFE_CLAIM_SOURCE still lacks the four regulated-framework phrases docs-sanity.mjs carries."
     },
     {
       "path": "scripts/src/generate-sbom.ts",

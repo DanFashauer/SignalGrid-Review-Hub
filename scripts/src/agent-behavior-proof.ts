@@ -111,6 +111,15 @@ check("a garbage enum value is unknown AND marks the report malformed", (() => {
   return n.volumeState === "unknown" && n.reportIntegrity === "malformed";
 })());
 check("an unrecognized key marks the report malformed (assertion in a spelling we ignore)", normalizeReport("dev-x", { somethingElse: "burst" } as never).reportIntegrity === "malformed");
+// Isolates the enum check's brace-less `typeof v !== "string"` guard (the mutation sweep
+// reaches it via `oneLine: true`): without it a NON-STRING enum value reaches `.trim()`
+// and throws an untyped TypeError out of the normalizer instead of being judged.
+let abNonStringThrew = false;
+try {
+  const n = normalizeReport("dev-ns", { volumeState: 3 } as never);
+  check("a NON-STRING volumeState (a number) is unknown AND marks the report malformed", n.volumeState === "unknown" && n.reportIntegrity === "malformed");
+} catch { abNonStringThrew = true; }
+check("...and it is judged, not thrown out of the normalizer as a TypeError", abNonStringThrew === false);
 // PER-FIELD integrity (mutation-guard finding): one junk field per report, every
 // other field valid. A report with several junk fields lets one integrity term
 // hide behind another, so deleting a term stayed green — the evaluator refused

@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "cloud-tick-1315-landed-1248-and-1323-under-revie",
+  "ackedBy": "mac",
+  "note": "Read. The self-hosted runner reads online and busy at 09:38Z. #1248 is at 694d255a (see the PR comment); #1323 at 79945354, re-merged and green on local preflight+breadth.",
+  "ackedAt": "2026-10-01T09:41:34.227Z"
+}

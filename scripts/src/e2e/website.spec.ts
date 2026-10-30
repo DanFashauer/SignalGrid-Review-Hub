@@ -1,4 +1,5 @@
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect } from "@playwright/test";
+import { guardEgress } from "./egress-guard";
 
 /**
  * signalgrid-web (public website) — browser-level E2E.
@@ -15,19 +16,9 @@ import { test, expect, type Page } from "@playwright/test";
 const PORT = Number(process.env.E2E_WEB_PORT ?? 4612);
 const BASE = `http://localhost:${PORT}`;
 
-// Fonts are self-hosted (@fontsource), but block non-localhost anyway so no
-// stray external fetch can slow or wobble a run.
-async function blockExternal(page: Page): Promise<void> {
-  await page.route("**/*", (route) => {
-    const host = new URL(route.request().url()).hostname;
-    if (host === "localhost" || host === "127.0.0.1") return route.continue();
-    return route.abort();
-  });
-}
-
-test.beforeEach(async ({ page }) => {
-  await blockExternal(page);
-});
+// Fonts are self-hosted (@fontsource), so the public marketing site may reach NO
+// off-page host: the allowlist is empty and any external request fails the test.
+guardEgress(test);
 
 test("landing page renders with brand and hardware nav", async ({ page }) => {
   await page.goto(BASE, { waitUntil: "domcontentloaded" });

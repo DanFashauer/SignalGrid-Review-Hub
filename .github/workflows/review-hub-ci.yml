@@ -279,6 +279,8 @@ jobs:
         run: node scripts/check-scheduled-routines.mjs --self-test
       - name: Scheduled routines (every always-on lane declared, authorized, scoped, evidenced)
         run: node scripts/check-scheduled-routines.mjs
+      - name: Lane delivery (protected PR topics and one-attempt readback)
+        run: node scripts/check-lane-delivery.mjs
       - name: iOS dynamic type self-test (the gate must be able to fail)
         run: node scripts/check-ios-dynamic-type.mjs --self-test
       - name: iOS dynamic type (no raw system font outside DesignSystem.swift)

@@ -4969,3 +4969,16 @@ A bounded build of the exact Git2.56 source also reproduced the original R6p1d f
 Resource preparation failures remain retained: missing dyld literal root-directory read, denied system-make xcrun-cache write followed by generic license text, unavailable Cargo before choosing Git2.56's officially supported optional C build, and absent standard init templates in a first partial trial. No Rust/toolchain installation, license acceptance, global Git/template/default change or private-source/network build grant was made. A surrounding verifier also assumed the Linux case count; the applicable Mac result above is the actual measurement.
 
 Verdict: holds for the complete applicable installed-toolchain self-test and the specific Git2.56 R6p1d assertion. Six platform-unavailable cases are not passes; two other unavailable platform preconditions still asserted their guarded answers on the installed toolchain. Full local preflight/breadth, fresh same-head source reviews and exact-current-head GitHub CI remain required for protected landing. No gate exemption, real remote branch deletion, source clearance or merge is claimed here.
+
+
+## 2026-10-30 — Mac delivery must use a protected PR; a topic push is not canonical delivery
+Command:
+```
+node scripts/check-lane-delivery.mjs
+node scripts/check-preflight-ci-parity.mjs
+git diff --check
+```
+Output: Original-source regression: `lane-delivery regression: 5 passed, 2 failed, 0 skipped`. The Mac path tried the protected canonical branch five times; a lost successful topic-push response was also resent five times. Corrected-source regression: `lane-delivery regression: 7 passed, 0 failed, 0 skipped`. Preflight/CI parity reported `0 unwired`; diff check exited0.
+Verdict: The regression runs the actual delivery CLI against disposable local bare Git remotes, with protocol-only gh and schema-gate fixtures and kernel network denial on the Mac. It verifies both lane topic targets, one-attempt refusal, exact readback after a lost push response, compatibility, dry-run and unchanged gate refusal. These are transport checks, not a fresh GitHub heartbeat or product delivery. The first fixture diagnostic (4pass/3fail) included an expanded local transport URL and is retained separately; the corrected fixture presents its explicit test repository identity while all transport remains local. Full current-head local validation, independent own-system source review, current CI and protected landing remain pending. Canonical heartbeat readback is required before reporting restoration.
+
+The added lane-delivery test registration makes `scripts/preflight.mjs`970lines on this candidate; the earlier969line measurement remains historical. `docs/COMPANY_BUILD_PLAN.md` records the current figure.

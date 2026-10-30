@@ -325,3 +325,12 @@ block; a stage run on the wrong tier is a lesson here.
 - **evidence:** Actual CI and pinned release behavior are linked in EVIDENCE. The specific original/fixed R6p1d assertion is RED/GREEN on a limited exact-source Git2.56 build. The installed-toolchain full self-test passes309applicable cases with6platform skips; the limited resource's8other failures stay explicit.
 - **landing:** pending — scripts/loop-state.mjs constructs its promised missing-ref scenario; production seam logic, the complete assertion and real remote branches are unchanged. Current-head source/CI/full-preflight gates still apply.
 - **status:** pending
+
+
+### L36 — A ruleset refusal is not a moved canonical branch
+- **date:** 2026-10-30
+- **lane:** mac
+- **incident:** The Mac delivery path pushed heartbeat/mail/ack commits directly to the protected canonical branch. Its generic rejected-push handler retried a policy refusal five times, while the scheduled tick still exited0.
+- **evidence:** The actual canonical heartbeat readback remained2026-10-24T07:30:38.430Z; active ruleset25774497 requires a PR and strict checks with no bypass. Disposable-Git original-source regression is5pass/2fail; corrected source is7pass/0fail/0skip. These fixtures do not establish a real remote delivery.
+- **landing:** pending — both lanes publish a mail topic and use the existing protected PR route; refused pushes stop, and uncertain responses get exact remote readback without a resend. Full current-head validation/review/CI and canonical heartbeat restoration remain owed.
+- **status:** pending

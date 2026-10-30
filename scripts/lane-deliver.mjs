@@ -11,7 +11,7 @@
 //   The commit carries the mail directories and, when a message file was added,
 //   the regenerated docs/agent/SURFACE_REVIEW_COVERAGE.md (its file count moved).
 //   flags: --dry-run        build and gate the commit, push nothing, keep nothing
-//          --via-pr         push a lane/<lane>-mail-<stamp> branch even on the Mac
+//          --via-pr         compatibility flag; both lanes already use a mail PR
 //          --trailer "K: v" append a commit trailer (repeatable)
 //          --allow-ungated  deliver even when mainline lacks a gate script (named
 //                           in the output; never the default — see step 3)
@@ -27,18 +27,14 @@
 // until the task finished. So this script does the whole delivery itself, from a
 // throwaway worktree at origin/SignalGrid_Alpha:
 //
-//   Mac lane   → the worktree commit is pushed STRAIGHT to SignalGrid_Alpha, the
-//                same thing the Mac lane's own mail commits have always done.
-//   Cloud lane → the worktree commit is pushed to lane/cloud-mail-<stamp>; the
-//                cloud session then opens the PR and enables auto-merge (it has
-//                the GitHub tools; this script has none). A direct push from the
-//                cloud lane's credentials is refused by policy, so the branch is
-//                not a preference, it is the only path.
+//   Both lanes → push lane/<lane>-mail-<stamp>, open a PR and request auto-merge
+//                when gh is available. Canonical branch rules apply equally to
+//                Mac and cloud credentials. A published branch is still pending
+//                until its PR passes the required checks and actually merges.
 //
 // The caller's checkout is never modified: no branch switch, no stash, no
 // commit on the branch the caller is working on. After the push the caller's
-// own SignalGrid_Alpha (if that is what they have checked out) is one commit
-// behind origin — `git pull --ff-only` when convenient.
+// own SignalGrid_Alpha is never pushed by this command.
 //
 // FAIL CLOSED. Every artifact is gated inside the worktree by the same checks CI
 // runs (`check-lane-messages.mjs`; `check-scheduled-routines.mjs` for a
@@ -298,44 +294,32 @@ let pushedSha = null;
     process.exit(0);
   }
 
-  // ── 5. the push: direct on the Mac, a mail branch on the cloud ──────────────
-  const direct = lane === "mac" && !flags.viaPr;
+  // ── 5. one topic push; canonical changes go through the protected PR ────────
   const mailBranch = `lane/${lane}-mail-${stamp}`;
-  const target = direct ? MAINLINE : mailBranch;
-  const delays = [0, 2000, 4000, 8000, 16000];
-  let pushed = null;
-  for (let attempt = 0; attempt < delays.length; attempt += 1) {
-    if (delays[attempt] > 0) {
-      console.log(`  push        retrying in ${delays[attempt] / 1000}s`);
-      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, delays[attempt]);
+  const target = mailBranch;
+  const pushed = git(["push", "origin", `HEAD:refs/heads/${target}`], wt);
+  let confirmed = null;
+  if (pushed.code !== 0) {
+    const text = `${pushed.err}${pushed.out}`;
+    if (/denied|protected|GH006|GH013|policy|rule/i.test(text)) {
+      die(`the push to ${target} was REFUSED by the remote's rules — no retry or other ref was tried:\n${text.trim()}`, 1);
     }
-    const r = git(["push", "origin", `HEAD:refs/heads/${target}`], wt);
-    if (r.code === 0) { pushed = r; break; }
-    const text = `${r.err}${r.out}`;
-    if (/non-fast-forward|fetch first|rejected/.test(text) && direct) {
-      // Mainline moved between the fetch and the push. The commit is rebuilt on
-      // the new tip rather than force-pushed over somebody else's delivery.
-      console.log("  push        mainline moved; rebasing the delivery onto the new tip");
-      const f = git(["fetch", "--quiet", "origin", MAINLINE], wt);
-      const rb = f.code === 0 ? git(["rebase", "--quiet", `origin/${MAINLINE}`], wt) : f;
-      if (rb.code !== 0) die(`could not rebase onto the moved mainline:\n${rb.err}${rb.out}`, 1);
-      continue;
-    }
-    if (/denied|protected|GH006|policy|rule/i.test(text)) {
-      die(`the push to ${target} was REFUSED by the remote's rules — no other ref was tried:\n${text.trim()}\n(the cloud lane must deliver via a lane/cloud-mail-* branch: rerun with --via-pr)`, 1);
-    }
-    console.log(`  push        attempt ${attempt + 1} failed: ${text.trim().split("\n").pop()}`);
+    // A transport failure may have lost the success response. Read the exact
+    // topic once; never resend, rebase, force, or fall back to canonical.
+    const readback = git(["ls-remote", "origin", `refs/heads/${target}`], wt);
+    confirmed = readback.code === 0 ? readback.out.trim().split(/\s+/)[0] : null;
+    if (confirmed !== sha) die(`push outcome for ${target} is unconfirmed — no retry was attempted; preserve it for readback:\n${text.trim()}`, 1);
+    console.log(`  push        response failed; exact remote ${sha.slice(0, 7)} confirms the original push`);
   }
-  if (!pushed) die(`push to ${target} failed after ${delays.length} attempts`, 1);
   pushedRef = target;
   pushedSha = mustGit(["rev-parse", "HEAD"], wt, "reading the pushed commit");
 
   // ── 6. confirm on the remote — local-only is not delivered ──────────────────
-  const remoteSha = mustGit(["ls-remote", "origin", `refs/heads/${target}`], wt, "confirming").split(/\s+/)[0] ?? "";
+  const remoteSha = confirmed ?? mustGit(["ls-remote", "origin", `refs/heads/${target}`], wt, "confirming").split(/\s+/)[0] ?? "";
   if (remoteSha !== pushedSha) die(`origin/${target} is ${remoteSha.slice(0, 7)}, not the pushed ${pushedSha.slice(0, 7)} — NOT delivered`, 1);
-  console.log(`  delivered   origin/${target} @ ${pushedSha.slice(0, 7)} (confirmed with git ls-remote)`);
+  console.log(`  published   origin/${target} @ ${pushedSha.slice(0, 7)} (confirmed with git ls-remote; pending protected PR merge)`);
 
-  if (!direct) {
+  {
     const compare = repoSlug ? `https://github.com/${repoSlug}/compare/${MAINLINE}...${encodeURIComponent(target)}?expand=1` : `(compare ${MAINLINE}...${target})`;
     console.log(`  next        open the PR for ${target} → ${MAINLINE} and enable auto-merge:`);
     console.log(`              ${compare}`);
@@ -350,9 +334,6 @@ let pushedSha = null;
         console.log(`  pr          gh could not open it (${(pr.err || pr.out).trim().split("\n").pop()}) — use the compare link`);
       }
     }
-  } else {
-    const me = git(["branch", "--show-current"], repo).out.trim();
-    if (me === MAINLINE) console.log(`  note        your checkout of ${MAINLINE} is now behind origin by this commit — git pull --ff-only`);
   }
 
   // ── 7. wake the other lane: a comment on the standing mailbox PR ────────────

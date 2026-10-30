@@ -159,9 +159,11 @@ function loadHands() {
 async function loadTasks() {
   const tasks = tasksFromHands(loadHands());
   const estate = join(ROOT, "scripts", "mac", "estate-queue.mjs");
-  if (existsSync(estate)) {
+  if (!existsSync(estate)) {
+    console.error("work-queue: WARNING estate source scripts/mac/estate-queue.mjs is absent in this checkout; PR tasks are NOT listed (raised hands only)");
+  } else {
     try { const m = await import(pathToFileURL(estate).href); tasks.push(...tasksFromEstate(m.plan())); }
-    catch (e) { console.error(`work-queue: estate source skipped (${String(e.message ?? e).slice(0, 120)})`); }
+    catch (e) { console.error(`work-queue: WARNING estate source failed (${String(e.message ?? e).slice(0, 120)}); PR tasks are NOT listed`); }
   }
   return orderTasks(tasks, (m) => console.error(`work-queue: ${m}`));
 }
@@ -261,10 +263,16 @@ export function claim({ tasks, lane, taskId = null, model = null, leaseMin, now 
     // Claiming a RELEASED task that already had a PR carries the PR, head and reviews: an
     // open PR must not be orphaned. A done claim starts a fresh cycle.
     const carry = r.claim?.state === "released" && Number.isSafeInteger(r.claim.pr);
+    // The PR is kept; the head is the one the task NOW names, and reviews of any other
+    // head are dropped, so a handoff can never satisfy the same-head review gate with
+    // evidence about a head nobody reviewed.
+    const head = carry ? (t.headSha ?? r.claim.headSha ?? null) : (t.headSha ?? null);
     const inherit = carry
-      ? { state: "claimed", pr: r.claim.pr, headSha: r.claim.headSha ?? null, reviews: r.claim.reviews ?? {} }
-      : { state: "claimed", pr: null, headSha: t.headSha ?? null, reviews: {} };
+      ? { state: "claimed", pr: r.claim.pr, headSha: head, reviews: head === r.claim.headSha ? (r.claim.reviews ?? {}) : {} }
+      : { state: "claimed", pr: null, headSha: head, reviews: {} };
     const body = { v: 2, task: t.id, action: t.action ?? null, lane, holder: hash(token), model, leaseMin: lease, ...inherit };
+    // Never write a claim this file would itself refuse to read: it would hold the task for good.
+    if (parseClaim(JSON.stringify(body), t.id) === null) return { ok: false, why: "the claim would be invalid as stored (check --model ≤80 chars and the task's fields); nothing written" };
     let ours = null;
     try {
       ours = forge.commit(JSON.stringify(body), base.tree, r.sha ?? base.sha);
@@ -280,6 +288,7 @@ export function claim({ tasks, lane, taskId = null, model = null, leaseMin, now 
 }
 
 function write(id, r, next, forge) {
+  if (parseClaim(JSON.stringify(next), id) === null) return { ok: false, why: "the update would be invalid as stored; nothing written" };
   const base = forge.mainline();
   let ours = null;
   try {
@@ -307,6 +316,8 @@ export function move({ lane, token, taskId, state, pr = null, headSha = null, le
   if (state === "pr") {
     const p = pr ?? r.claim.pr, h = headSha ?? r.claim.headSha;
     if (!Number.isSafeInteger(p) || !SHA.test(h ?? "")) return { ok: false, why: "pr needs --pr N and --head <40-char sha>" };
+    const bound = /^pr:(\d+)$/.exec(taskId);
+    if (bound && Number(bound[1]) !== p) return { ok: false, why: `task ${taskId} is PR #${bound[1]}; it cannot record PR #${p}` };
     next.pr = p; next.headSha = h;
   }
   if (state === "merged") {
@@ -337,6 +348,13 @@ export function recover({ lane, taskId, witness, now = Date.now(), forge = ghFor
   if (!validTaskId(taskId) || typeof witness !== "string" || !witness.trim() || witness.length > 200) return { ok: false, why: "recover needs --task and --witness \"<what was checked>\" (1–200 chars)" };
   let r; try { r = readOne(taskId, forge); } catch { return { ok: false, why: "could not read the claim" }; }
   if (!r.claim) return { ok: false, why: r.held ? "claim unreadable or for another task; held (fix the record by hand)" : `task ${taskId} is not claimed` };
+  if (r.claim.state === "merged") {
+    // The merge already happened (both reviews on the head were required to record it);
+    // `done` is bookkeeping and replays nothing, so the owner may finalise an abandoned one.
+    const fin = { ...r.claim, state: "done", leaseFrom: r.claim.leaseFrom ?? r.sha, recoveryNote: { witness: witness.trim(), state: "merged" } };
+    const w = write(taskId, r, fin, forge);
+    return w.ok ? { ...w, note: "finalised a merged claim as done; nothing was re-run" } : w;
+  }
   if (FINAL.has(r.claim.state) || r.claim.state === "released") return { ok: false, why: `nothing to recover (state ${r.claim.state})` };
   if (!isStale(r, now)) return { ok: false, why: "the claim's lease has not expired; only its holder can act on it" };
   // leaseFrom is kept: the note is not the holder's write and must not renew the lease.
@@ -565,6 +583,48 @@ function selfTest() {
       return q.held && !q.free && !claim({ tasks: T, lane: "mac-brain", taskId: "hand:x", now: f.clock, forge: f }).ok;
     });
     check("a stored claim with leaseMin -1/0/7.5/721 or a malformed pr/head/review/leaseFrom/action is held, not free", held.every(Boolean));
+  }
+  {
+    // Codex P1: released at H with reviews, PR advanced to H2; the next claim takes H2 and drops H's reviews.
+    const f = mk(); const now = f.clock;
+    const c = claim({ tasks: tasksFromEstate([{ number: 40, action: "fix", headSha: H }]), lane: "mac-brain", now, forge: f });
+    move({ lane: "mac-brain", token: c.token, taskId: "pr:40", state: "pr", pr: 40, headSha: H, now, forge: f });
+    review({ lane: "codex", taskId: "pr:40", pr: 40, headSha: H, forge: f });
+    review({ lane: "cloud-claude", taskId: "pr:40", pr: 40, headSha: H, forge: f });
+    move({ lane: "mac-brain", token: c.token, taskId: "pr:40", state: "released", now, forge: f });
+    const t = claim({ tasks: tasksFromEstate([{ number: 40, action: "fix", headSha: H2 }]), lane: "codex", now, forge: f });
+    move({ lane: "codex", token: t.token, taskId: "pr:40", state: "pr", now, forge: f });
+    const merged = move({ lane: "codex", token: t.token, taskId: "pr:40", state: "merged", now, forge: f });
+    check("a reclaimed released PR task takes the NEW head and drops reviews of the old one; merged is refused",
+      t.ok && t.claim.pr === 40 && t.claim.headSha === H2 && Object.keys(t.claim.reviews).length === 0 && !merged.ok);
+  }
+  {
+    // Codex P2: invalid metadata is refused before the lock is taken.
+    const f = mk();
+    const bad = claim({ tasks: T, lane: "mac-brain", taskId: "hand:x", model: "m".repeat(81), now: f.clock, forge: f });
+    const good = claim({ tasks: T, lane: "mac-brain", taskId: "hand:x", model: "m".repeat(80), now: f.clock, forge: f });
+    check("a claim the reader would refuse is never written (model >80 chars); nothing is locked", !bad.ok && f.calls.create === 1 && good.ok);
+  }
+  {
+    // Codex P2: a pr:N task cannot record another PR's number.
+    const f = mk(); const now = f.clock;
+    const c = claim({ tasks: tasksFromEstate([{ number: 1, action: "fix", headSha: H }]), lane: "mac-brain", now, forge: f });
+    const wrong = move({ lane: "mac-brain", token: c.token, taskId: "pr:1", state: "pr", pr: 2, headSha: H, now, forge: f });
+    const right = move({ lane: "mac-brain", token: c.token, taskId: "pr:1", state: "pr", pr: 1, headSha: H, now, forge: f });
+    check("a pr:N task records only PR #N", !wrong.ok && right.ok);
+  }
+  {
+    // Codex P2: holder lost after merged; the owner may finalise to done (nothing re-run).
+    const f = mk(); const now = f.clock;
+    const c = claim({ tasks: T, lane: "mac-brain", taskId: "hand:x", now, forge: f });
+    move({ lane: "mac-brain", token: c.token, taskId: "hand:x", state: "pr", pr: 5, headSha: H, now, forge: f });
+    review({ lane: "codex", taskId: "hand:x", pr: 5, headSha: H, forge: f });
+    review({ lane: "cloud-claude", taskId: "hand:x", pr: 5, headSha: H, forge: f });
+    move({ lane: "mac-brain", token: c.token, taskId: "hand:x", state: "merged", now, forge: f });
+    const notOwner = recover({ lane: "codex", taskId: "hand:x", witness: "PR #5 merged", now, forge: f });
+    const fin = recover({ lane: "owner", taskId: "hand:x", witness: "PR #5 merged at H", now, forge: f });
+    check("an abandoned merged claim is finalised to done by the owner only; holder and PR kept",
+      !notOwner.ok && fin.ok && fin.claim.state === "done" && fin.claim.lane === "mac-brain" && fin.claim.pr === 5);
   }
   check("a hand-written state like toString is rejected, not thrown on",
     parseClaim(JSON.stringify({ v: 2, task: "hand:x", lane: "codex", holder: "0".repeat(64), state: "toString", leaseMin: 5 }), "hand:x") === null);

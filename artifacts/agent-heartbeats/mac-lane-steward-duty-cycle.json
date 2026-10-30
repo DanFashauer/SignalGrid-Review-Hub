@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-10-30T03:26:29.273Z",
-  "result": "quiet keepalive (last heartbeat 2026-10-29T10:16Z, >2h). Diagnostics 2026-10-30 ~03:25Z on origin/SignalGrid_Alpha 9bb21ddb: no new or moved mac/* branch (newest mac/tick-20261029T124839Z already handled via closed #1679); no mail to cloud; sim requests bind clean; sync manifest no drift. Mac tick heartbeat last firedAt 2026-10-24T07:30:38Z (stale; owner already told, not re-escalated inside 24h). Live evidence last minted 2026-10-24; refresh asks to mac already unread, no new send. Cloud hand-off mail #1683 in CI with auto-merge on."
+  "firedAt": "2026-10-30T05:26:47.877Z",
+  "result": "quiet keepalive (last heartbeat 2026-10-30T03:26Z, now >2h). Diagnostics ~05:26Z: no new or moved mac/* branch; no mail to cloud; manifest no drift. Mac tick heartbeat still 2026-10-24T07:30:38Z (owner told; raised hand landed in #1685; not re-escalated). Live evidence 2026-10-24; refresh asks to mac already unread. Mac CI runner (signalgrid-mac) is online. Forward-build heartbeat in flight as #1686."
 }

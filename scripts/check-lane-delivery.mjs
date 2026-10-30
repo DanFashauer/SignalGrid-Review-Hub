@@ -6,6 +6,7 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, wr
 import { dirname, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
+import { scratchGit } from "./lib/scratch-git.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const BASE = "SignalGrid_Alpha";
@@ -22,7 +23,7 @@ function fixture({ lane = "mac", reject = false, loseResponse = false, gateFails
     TMPDIR: root, LANG: "C", GIT_CONFIG_NOSYSTEM: "1", GIT_CONFIG_GLOBAL: "/dev/null",
     GIT_TERMINAL_PROMPT: "0", SIGNALGRID_LANE: lane };
   function git(args, cwd = repo) {
-    const r = spawnSync(GIT, args, { cwd, env, encoding: "utf8" });
+    const r = scratchGit(cwd, args, { env });
     assert.equal(r.status, 0, `fixture git ${args.join(" ")}: ${r.stderr}`);
     return r.stdout.trim();
   }

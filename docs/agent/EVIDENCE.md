@@ -4982,3 +4982,16 @@ Output: Original-source regression: `lane-delivery regression: 5 passed, 2 faile
 Verdict: The regression runs the actual delivery CLI against disposable local bare Git remotes, with protocol-only gh and schema-gate fixtures and kernel network denial on the Mac. It verifies both lane topic targets, one-attempt refusal, exact readback after a lost push response, compatibility, dry-run and unchanged gate refusal. These are transport checks, not a fresh GitHub heartbeat or product delivery. The first fixture diagnostic (4pass/3fail) included an expanded local transport URL and is retained separately; the corrected fixture presents its explicit test repository identity while all transport remains local. Full current-head local validation, independent own-system source review, current CI and protected landing remain pending. Canonical heartbeat readback is required before reporting restoration.
 
 The added lane-delivery test registration makes `scripts/preflight.mjs`970lines on this candidate; the earlier969line measurement remains historical. `docs/COMPANY_BUILD_PLAN.md` records the current figure.
+
+
+## 2026-10-30 — Full preflight held the delivery test at the scratch-Git boundary
+Command:
+```
+node scripts/preflight.mjs
+node scripts/check-lane-delivery.mjs
+node scripts/check-scratch-git-hygiene.mjs
+node scripts/check-entry-guards.mjs
+node scripts/check-gate-self-tests-run.mjs
+```
+Output: On a32a263f406135cd4764fb0e984284ca486950e1, full preflight exited1 with `Preflight FAILED at: Scratch-repo self-tests spawn git through one hermetic helper. Fix before pushing.` The new fixture's Git setup now uses the existing `scratchGit` helper. Independent rerun: `lane-delivery regression: 7 passed, 0 failed, 0 skipped`; hygiene `creators=17 migrated=12 pending=5`; entry guards `0 problem(s)`; self-test reachability `0 with neither`.
+Verdict: The guard held before publication. Production delivery code and the existing guard/debt list are unchanged by this integration correction. The original full failure remains retained, and this updated source still needs its own full preflight/breadth, independent same-head reviews, current CI and protected landing. The Mac web build was explicitly unavailable on the first run because its platform binaries are excluded; that is not a zero-skip product pass.

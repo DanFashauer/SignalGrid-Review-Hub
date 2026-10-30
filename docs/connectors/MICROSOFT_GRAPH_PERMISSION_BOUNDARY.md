@@ -85,5 +85,7 @@ pnpm run proof:graph-wire                                          # throttling,
 node scripts/check-graph-permission-boundary.mjs                    # the tables above ⇔ the connector's reads, both directions
 ```
 
+The same gate also holds the lab collection (`artifacts/lab-collections/microsoft-graph/`) and its `permissions.json` to the connector's reads: the second record a tenant admin consents from cannot drift from this page's tables either.
+
 Until 2026-09-06 this paragraph said no gate read this document. It drifted once
 more in that window (the third read above), which is why the gate exists now.

@@ -1,5 +1,5 @@
 {
-  "$comment": "The least-privilege application-permission set the launch Graph transport requires — the record a tenant admin consents from. Derived from the connector's real requests (see README table); recorded 2026-08-21. Adding a permission here without a matching connector call is the drift this file exists to make visible.",
+  "$comment": "The least-privilege application-permission set the launch Graph transport requires — the record a tenant admin consents from. Derived from the connector's real requests (see README table); recorded 2026-08-21, IdentityRiskyUser.Read.All added 2026-10-08. Held to the connector by scripts/check-graph-permission-boundary.mjs in both directions: a permission or usedBy entry the connector never needs, or a connector read or scope missing here, fails the gate. Adding a permission here without a matching connector call is the drift this file exists to make visible.",
   "application": [
     {
       "permission": "DeviceManagementManagedDevices.Read.All",
@@ -15,6 +15,13 @@
         "GET /users?$select=id,userPrincipalName,accountEnabled"
       ],
       "why": "identity enablement only; $select limits the read to the three fields the engine consumes"
+    },
+    {
+      "permission": "IdentityRiskyUser.Read.All",
+      "usedBy": [
+        "GET /identityProtection/riskyUsers?$select=id,riskLevel,riskState"
+      ],
+      "why": "user risk, joined to /users by id; without it Graph answers 403 and every subject grades userRisk unknown (never none)"
     }
   ],
   "delegated": [],

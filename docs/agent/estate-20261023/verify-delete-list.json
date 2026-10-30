@@ -1,0 +1,406 @@
+{
+ "measuredAt": "2026-10-23T23:05:00Z",
+ "verifiedWith": {
+  "mainlineRef": "origin/SignalGrid_Alpha",
+  "mainlineTipUsed": "9ce88fa092054e92f4d7cd6381ae53a7d9c65556",
+  "mainlineTipInBranchesJson": "2a46fd16fdc61c144c3f42e4bcc3b5389ae94f07",
+  "claimedTipIsAncestorOfUsedTip": true,
+  "openPrsRefetched": 30,
+  "openPrHeadsAmong11": 0,
+  "openPrBasesAmong11": 0,
+  "caveats": [
+   "checkout is a SHALLOW clone (.git/shallow has 2 boundary commits); positive ancestor results and cherry '=' matches are reliable, negatives would be conservative; all 4 non-ancestor entries still had a merge-base",
+   "git cherry ignores merge commits so for the 3 entries whose unique range contains merges the content was re-tested with git diff-tree --cc",
+   "All 229 live branches report protected=true because the only ruleset ('Default', rule copilot_code_review, target ~ALL) matches them; it has no deletion/non_fast_forward rule, and branch protection API returns 404 for land/1052, so this does not block git push --delete",
+   "Open PR heads fell from 79 (23:05Z file) to 30 now: 51 PRs closed/merged since; the 'open-pr-head' category in branches.json is stale, and 2 new PR heads appeared (claude/local-brain-primary-20261023, lane/cloud-mail-20261023-232656Z)"
+  ]
+ },
+ "checked": 11,
+ "confirmedZeroLoss": [
+  "claude/build-carrier-topology-finding",
+  "claude/build-gate-survivors-liveness-scratch-git",
+  "claude/land-mac-tier1-downgrade",
+  "claude/loop-state-20260914-1700Z",
+  "land/1052",
+  "land/1061",
+  "land/1067",
+  "lane/cloud-puck1-attach-domain-20260912-1040Z",
+  "lane/cloud-puck4-smart-charging-20260912-1040Z",
+  "mac/pr-1216-fix-backup"
+ ],
+ "refuted": [
+  {
+   "name": "claude/land-mac-1248",
+   "why": "merge commit 7a76ed44d carries a conflict-resolution hunk (docs/agent/SURFACE_REVIEW_COVERAGE.md derived counts 2988/477) that neither parent nor any Alpha commit contains; git cherry skips merge commits so its empty output is vacuous | Detail: both parents (ff70eeca3, a108c09d6) ARE ancestors of Alpha and PR #1248 itself merged 2026-10-21 (head 694d255a, merge 0abb8f79), so the only content not on Alpha is a regenerable derived file-count line; low value, waivable by the orchestrator, but refuted by default rule."
+  }
+ ],
+ "sampleUnmergedConfirmed": [
+  "lane/cloud-mail-20260919-094113Z",
+  "lane/cloud-mail-20260920-092707Z",
+  "claude/intake-airllm",
+  "lane/cloud-runbook-partials-20260911-154128Z",
+  "archive/launch-plan-emxm01-local-a83a16fd"
+ ],
+ "sampleUnmergedRefuted": [],
+ "sampleUnmergedNotes": {
+  "claude/intake-airllm": "git cherry: 2 '+' 1 '-' so it has unapplied patches, but 196 of 200 added lines are already on Alpha (decision-path-purity gate landed); the 4 absent lines are reworded backlog prose and a count. Treat as near-landed squash-with-edits: owner/human diff before deleting, not a zero-loss deletion.",
+  "lane/cloud-mail-20260919-094113Z and lane/cloud-mail-20260920-092707Z": "each carries one stale heartbeat JSON (2 added lines absent on Alpha) - unapplied by patch, but superseded by newer heartbeats; low value, still not zero-loss by the stated test"
+ },
+ "perBranchEvidence": {
+  "claude/build-carrier-topology-finding": {
+   "method": "ancestor of origin/SignalGrid_Alpha (0 unique commits)",
+   "liveTipEqualsMeasuredTip": true,
+   "prsAnyState": [
+    {
+     "n": 749,
+     "state": "closed",
+     "merged": true
+    }
+   ]
+  },
+  "claude/build-gate-survivors-liveness-scratch-git": {
+   "method": "not ancestor; 1 unique commit(s) of which 1 merge; cherry: 0 '+' / 0 '-'",
+   "liveTipEqualsMeasuredTip": true,
+   "prsAnyState": [
+    {
+     "n": 1501,
+     "state": "closed",
+     "merged": true
+    }
+   ],
+   "extra": "Single unique commit is a merge (531e141fd); git diff-tree --cc patch is 0 bytes (no hunk absent from both parents); both parents are ancestors of Alpha."
+  },
+  "claude/land-mac-1248": {
+   "method": "not ancestor; 1 unique commit(s) of which 1 merge; cherry: 0 '+' / 0 '-'",
+   "liveTipEqualsMeasuredTip": true,
+   "prsAnyState": []
+  },
+  "claude/land-mac-tier1-downgrade": {
+   "method": "ancestor of origin/SignalGrid_Alpha (0 unique commits)",
+   "liveTipEqualsMeasuredTip": true,
+   "prsAnyState": []
+  },
+  "claude/loop-state-20260914-1700Z": {
+   "method": "not ancestor; 1 unique commit(s) of which 0 merge; cherry: 0 '+' / 1 '-'",
+   "liveTipEqualsMeasuredTip": true,
+   "prsAnyState": [
+    {
+     "n": 752,
+     "state": "closed",
+     "merged": true
+    }
+   ],
+   "extra": "1 unique non-merge commit a7349016b is patch-equivalent (git log --cherry-mark '=') to Alpha commit 609dde06c (#752)."
+  },
+  "land/1052": {
+   "method": "ancestor of origin/SignalGrid_Alpha (0 unique commits)",
+   "liveTipEqualsMeasuredTip": true,
+   "prsAnyState": []
+  },
+  "land/1061": {
+   "method": "ancestor of origin/SignalGrid_Alpha (0 unique commits)",
+   "liveTipEqualsMeasuredTip": true,
+   "prsAnyState": []
+  },
+  "land/1067": {
+   "method": "ancestor of origin/SignalGrid_Alpha (0 unique commits)",
+   "liveTipEqualsMeasuredTip": true,
+   "prsAnyState": []
+  },
+  "lane/cloud-puck1-attach-domain-20260912-1040Z": {
+   "method": "ancestor of origin/SignalGrid_Alpha (0 unique commits)",
+   "liveTipEqualsMeasuredTip": true,
+   "prsAnyState": []
+  },
+  "lane/cloud-puck4-smart-charging-20260912-1040Z": {
+   "method": "ancestor of origin/SignalGrid_Alpha (0 unique commits)",
+   "liveTipEqualsMeasuredTip": true,
+   "prsAnyState": []
+  },
+  "mac/pr-1216-fix-backup": {
+   "method": "not ancestor; 4 unique commit(s) of which 1 merge; cherry: 0 '+' / 3 '-'",
+   "liveTipEqualsMeasuredTip": true,
+   "prsAnyState": [],
+   "extra": "3 non-merge commits patch-equivalent to Alpha f43af89f0/e5d917f60/d0173173c; merge c98ca3b79 --cc patch 0 bytes, both parents on Alpha; PR #1216 merged 2026-10-01T16:54:30Z; lane message says deletable once #1216 head is pushed (steward ack kept it off the prune list 'until the Mac says otherwise')."
+  }
+ },
+ "sampleDetail": [
+  {
+   "name": "lane/cloud-mail-20260919-094113Z",
+   "claimedUnapplied": 1,
+   "claimedTip": "d0481401cb429648d4b8e933a06d99a510b9f935",
+   "tipMatchesClaim": true,
+   "isAncestor": false,
+   "mergeBase": "c1614d0413b807c9f229e53d8ebb6473334957f7",
+   "cherryPlus": 1,
+   "cherryMinus": 0,
+   "plusIsShallowBoundary": [],
+   "plusCommits": [
+    {
+     "commit": "d0481401c",
+     "when_subject": "2026-09-19T09:41:16+00:00|Lane mail (cloud): heartbeat cloud-lane-hygiene-sweep",
+     "files": [
+      "artifacts/agent-heartbeats/cloud-lane-hygiene-sweep.json"
+     ],
+     "addedNonBlankLines": 2,
+     "addedLinesAbsentOnAlpha": 2,
+     "filesAbsentOnAlpha": 0
+    }
+   ],
+   "addedLinesAbsentOnAlphaTotal": 2,
+   "addedLinesTotal": 2,
+   "confirmedUnmerged": true
+  },
+  {
+   "name": "lane/cloud-mail-20260920-092707Z",
+   "claimedUnapplied": 1,
+   "claimedTip": "73fbdcf4962d43bbe20e2a685a69a0e49e943bab",
+   "tipMatchesClaim": true,
+   "isAncestor": false,
+   "mergeBase": "c437653bac76e3094174b6947b0854f78a37f16e",
+   "cherryPlus": 1,
+   "cherryMinus": 0,
+   "plusIsShallowBoundary": [],
+   "plusCommits": [
+    {
+     "commit": "73fbdcf49",
+     "when_subject": "2026-09-20T09:27:10+00:00|Lane mail (cloud): heartbeat mac-lane-steward-duty-cycle",
+     "files": [
+      "artifacts/agent-heartbeats/mac-lane-steward-duty-cycle.json"
+     ],
+     "addedNonBlankLines": 2,
+     "addedLinesAbsentOnAlpha": 2,
+     "filesAbsentOnAlpha": 0
+    }
+   ],
+   "addedLinesAbsentOnAlphaTotal": 2,
+   "addedLinesTotal": 2,
+   "confirmedUnmerged": true
+  },
+  {
+   "name": "claude/intake-airllm",
+   "claimedUnapplied": 2,
+   "claimedTip": "01ef4ce802ba187d8cc84dae2af06b28ee053bcb",
+   "tipMatchesClaim": true,
+   "isAncestor": false,
+   "mergeBase": "4d174f9bf3ac97299c850c79ccc0aca2c34b0237",
+   "cherryPlus": 2,
+   "cherryMinus": 1,
+   "plusIsShallowBoundary": [],
+   "plusCommits": [
+    {
+     "commit": "fcdafae8e",
+     "when_subject": "2026-09-17T17:22:58+00:00|Fence the decision path before an inference runtime arrives",
+     "files": [
+      ".github/workflows/review-hub-ci.yml",
+      "docs/BUILD_BACKLOG.md",
+      "docs/COMPANY_BUILD_PLAN.md",
+      "docs/agent/RESOURCE_INTAKE.md",
+      "scripts/check-decision-path-purity.mjs",
+      "scripts/preflight.mjs"
+     ],
+     "addedNonBlankLines": 189,
+     "addedLinesAbsentOnAlpha": 4,
+     "filesAbsentOnAlpha": 0
+    },
+    {
+     "commit": "01ef4ce80",
+     "when_subject": "2026-09-17T18:27:20+00:00|The latency question is answered: 0.1 tok/s, measured on the Mac",
+     "files": [
+      "docs/BUILD_BACKLOG.md"
+     ],
+     "addedNonBlankLines": 11,
+     "addedLinesAbsentOnAlpha": 0,
+     "filesAbsentOnAlpha": 0
+    }
+   ],
+   "addedLinesAbsentOnAlphaTotal": 4,
+   "addedLinesTotal": 200,
+   "confirmedUnmerged": true
+  },
+  {
+   "name": "lane/cloud-runbook-partials-20260911-154128Z",
+   "claimedUnapplied": 13,
+   "claimedTip": "a63e81fc7d554369b66a9304a6710a32698dca36",
+   "tipMatchesClaim": true,
+   "isAncestor": false,
+   "mergeBase": "5822cc16af086e5638ada5b519d1a9416eccc851",
+   "cherryPlus": 13,
+   "cherryMinus": 0,
+   "plusIsShallowBoundary": [],
+   "plusCommits": [
+    {
+     "commit": "33816c8ac",
+     "when_subject": "2026-09-11T16:13:53+00:00|feat: model the last two runbook partials \u2014 supervision-identity lifecycle and the iOS update / device-prep workfl",
+     "files": [
+      "artifacts/sync/live-sync-manifest.json",
+      "docs/APP_UPDATE_CURRENCY.md",
+      "docs/INTEGRATION_CATALOG.md",
+      "docs/LIVE_SYNC_LOOP.md",
+      "docs/agent/EVIDENCE.md",
+      "docs/agent/LOOP.md"
+     ],
+     "addedNonBlankLines": 1144,
+     "addedLinesAbsentOnAlpha": 115,
+     "filesAbsentOnAlpha": 0
+    },
+    {
+     "commit": "14374600a",
+     "when_subject": "2026-09-11T16:14:52+00:00|docs(evidence): quote preflight's actual summary line in the runbook-partials entry",
+     "files": [
+      "docs/agent/EVIDENCE.md"
+     ],
+     "addedNonBlankLines": 1,
+     "addedLinesAbsentOnAlpha": 0,
+     "filesAbsentOnAlpha": 0
+    },
+    {
+     "commit": "ae0a9cff0",
+     "when_subject": "2026-09-11T16:19:13+00:00|chore: queue the Mac re-mint as a sim request riding manifest v70; fix a stale \"pending\" in LOOP.md STATE",
+     "files": [
+      "artifacts/sim-requests/2026-09-11-re-mint-evidence-manifest-v70.json",
+      "docs/agent/LOOP.md",
+      "docs/agent/SURFACE_REVIEW_COVERAGE.md"
+     ],
+     "addedNonBlankLines": 20,
+     "addedLinesAbsentOnAlpha": 18,
+     "filesAbsentOnAlpha": 1
+    },
+    {
+     "commit": "f46ba95bd",
+     "when_subject": "2026-09-11T16:30:32+00:00|docs(evidence): bind the 288-state figure to proof:device-attestation (figure guard)",
+     "files": [
+      "docs/agent/EVIDENCE.md"
+     ],
+     "addedNonBlankLines": 1,
+     "addedLinesAbsentOnAlpha": 0,
+     "filesAbsentOnAlpha": 0
+    },
+    {
+     "commit": "e2881cbaa",
+     "when_subject": "2026-09-11T16:47:26+00:00|fix: address three Codex findings on the runbook partials \u2014 own-property reads, invalid mintedAt is Infinity, advi",
+     "files": [
+      "artifacts/sync/live-sync-manifest.json",
+      "docs/APP_UPDATE_CURRENCY.md",
+      "docs/INTEGRATION_CATALOG.md",
+      "docs/agent/EVIDENCE.md",
+      "docs/agent/LOOP.md",
+      "lib/integrations/src/integrations/app-update/device-prep.ts"
+     ],
+     "addedNonBlankLines": 264,
+     "addedLinesAbsentOnAlpha": 29,
+     "filesAbsentOnAlpha": 0
+    },
+    {
+     "commit": "cfdf454ab",
+     "when_subject": "2026-09-11T16:52:37+00:00|docs(evidence): name the manifest version the chain failed to read (manifestVersion 71)",
+     "files": [
+      "docs/agent/EVIDENCE.md"
+     ],
+     "addedNonBlankLines": 1,
+     "addedLinesAbsentOnAlpha": 0,
+     "filesAbsentOnAlpha": 0
+    }
+   ],
+   "addedLinesAbsentOnAlphaTotal": 162,
+   "addedLinesTotal": 1431,
+   "confirmedUnmerged": true
+  },
+  {
+   "name": "archive/launch-plan-emxm01-local-a83a16fd",
+   "claimedUnapplied": 30,
+   "claimedTip": "a83a16fdb09a7a087a17c25d7a42de2f5ed204e5",
+   "tipMatchesClaim": true,
+   "isAncestor": false,
+   "mergeBase": "f9742753563bf1f53e9f0e253b4f1eeec69940d6",
+   "cherryPlus": 30,
+   "cherryMinus": 0,
+   "plusIsShallowBoundary": [],
+   "plusCommits": [
+    {
+     "commit": "7e2512778",
+     "when_subject": "2026-07-27T17:51:52+00:00|Adaptive proposals: the grid can suggest, but never activate itself",
+     "files": [
+      ".github/workflows/review-hub-ci.yml",
+      "artifacts/sync/live-sync-manifest.json",
+      "docs/ADAPTIVE_PROPOSALS.md",
+      "lib/adaptive-proposals/package.json",
+      "lib/adaptive-proposals/src/index.ts",
+      "lib/adaptive-proposals/src/lifecycle.ts"
+     ],
+     "addedNonBlankLines": 1010,
+     "addedLinesAbsentOnAlpha": 22,
+     "filesAbsentOnAlpha": 0
+    },
+    {
+     "commit": "d74f9a0ff",
+     "when_subject": "2026-07-27T20:38:56+00:00|docs: branch policy + 2026-07-27 audit record (44 branches classified)",
+     "files": [
+      "docs/BRANCHES.md"
+     ],
+     "addedNonBlankLines": 35,
+     "addedLinesAbsentOnAlpha": 4,
+     "filesAbsentOnAlpha": 0
+    },
+    {
+     "commit": "2636ce41f",
+     "when_subject": "2026-07-27T23:02:15+00:00|feat(self-audit): a self-aware, self-healing checklist over backend/frontend/API",
+     "files": [
+      ".github/workflows/review-hub-ci.yml",
+      "artifacts/sync/live-sync-manifest.json",
+      "docs/SELF_AUDIT.md",
+      "lib/self-audit/package.json",
+      "lib/self-audit/src/audit.ts",
+      "lib/self-audit/src/checklist.ts"
+     ],
+     "addedNonBlankLines": 859,
+     "addedLinesAbsentOnAlpha": 29,
+     "filesAbsentOnAlpha": 0
+    },
+    {
+     "commit": "8b46b1d79",
+     "when_subject": "2026-07-27T23:09:15+00:00|feat(self-audit): plain-language admin layer + real system checklist; fix review findings",
+     "files": [
+      "artifacts/sync/live-sync-manifest.json",
+      "docs/SELF_AUDIT.md",
+      "lib/self-audit/src/checklist.ts",
+      "lib/self-audit/src/defaults.ts",
+      "lib/self-audit/src/index.ts",
+      "lib/self-audit/src/summarize.ts"
+     ],
+     "addedNonBlankLines": 333,
+     "addedLinesAbsentOnAlpha": 9,
+     "filesAbsentOnAlpha": 0
+    },
+    {
+     "commit": "b588b6e00",
+     "when_subject": "2026-07-27T23:14:15+00:00|feat(admin): plain-language \"System health\" screen over the self-audit engine",
+     "files": [
+      "artifacts/api-server/package.json",
+      "artifacts/api-server/src/routes/control-plane.ts",
+      "artifacts/api-server/test/api.test.mjs",
+      "artifacts/signalgrid-app/src/App.tsx",
+      "artifacts/signalgrid-app/src/components/layout/AppLayout.tsx",
+      "artifacts/signalgrid-app/src/lib/control-plane.ts"
+     ],
+     "addedNonBlankLines": 200,
+     "addedLinesAbsentOnAlpha": 9,
+     "filesAbsentOnAlpha": 0
+    },
+    {
+     "commit": "cb2363192",
+     "when_subject": "2026-07-27T23:20:14+00:00|docs(positioning): the trust control plane \u2014 the hub-and-spoke analogy",
+     "files": [
+      "docs/ECOSYSTEM_POSITIONING.md"
+     ],
+     "addedNonBlankLines": 30,
+     "addedLinesAbsentOnAlpha": 0,
+     "filesAbsentOnAlpha": 0
+    }
+   ],
+   "addedLinesAbsentOnAlphaTotal": 73,
+   "addedLinesTotal": 2467,
+   "confirmedUnmerged": true
+  }
+ ]
+}

@@ -1,0 +1,1275 @@
+{
+ "measuredAt": "2026-10-23T23:05:00Z",
+ "repository": "DanFashauer/SignalGrid-Review-Hub",
+ "mainlineBranch": "SignalGrid_Alpha",
+ "mainlineShaLive": "9ce88fa092054e92f4d7cd6381ae53a7d9c65556",
+ "classifierWorktree": "wt-alpha, HEAD == origin/SignalGrid_Alpha at 055fb2a0 (clean) when classified",
+ "apiReadNote": "All API reads were taken 2026-10-23 ~23:15-23:28Z, after the 23:05Z stamp. Mainline advanced twice in that window, each by a one-file commit that touches none of the nine PRs' files: #1638 (lane mail, 23:22:27Z, 055fb2a0) and a Mac heartbeat (23:27:00Z, 9ce88fa0). Tier classification used a clean checkout at 055fb2a0.",
+ "precedenceUsed": "OWNER > LAND_DR037, NEEDS_WORK > LAND_DR037, MAC > NEEDS_WORK as specified; DEPENDABOT kept as its own list; CLOSE_CANDIDATE applied where mainline or a newer PR demonstrably supersedes the change (same call as prs-triage-2 made for #1336), with the other applicable dispositions listed in 'applies' so a consumer can re-sort.",
+ "counts": {
+  "byDisposition": {
+   "CLOSE_CANDIDATE": 4,
+   "OWNER": 1,
+   "DEPENDABOT": 1,
+   "LAND_DR037": 2,
+   "NEEDS_WORK": 1
+  }
+ },
+ "prs": [
+  {
+   "number": 1510,
+   "title": "Mac tick 20261013T000348Z: sim results (0 request(s)); objective loop: escalate",
+   "state": "open",
+   "lane": "mac",
+   "author": "DanFashauer",
+   "head": {
+    "ref": "mac/tick-20261013T000348Z",
+    "sha": "3deddcf5835230d27be94217a05f10ca3e51aca4"
+   },
+   "tier": "autonomous",
+   "matchedCategories": [],
+   "matched": [],
+   "gating": {
+    "name": "Typecheck, build, and proof scaffold",
+    "checkRunId": 115062679308,
+    "status": "completed",
+    "conclusion": "failure"
+   },
+   "mergeable": false,
+   "mergeableState": "dirty",
+   "mergeableSource": "re-read 2026-10-23T23:2xZ after the 23:22:27Z mainline advance",
+   "threads": 1,
+   "threadsTotal": 1,
+   "codex": {
+    "present": true,
+    "summaryUpdatedAt": "2026-10-13T00:07:06Z",
+    "status": "completed",
+    "has_unresolved_findings": null,
+    "reviewedCommit": "3deddcf5",
+    "reviewedIsHead": true,
+    "usageLimitNotices": 0,
+    "note": "legacy summary format without state JSON; findings are the inline review threads"
+   },
+   "draft": false,
+   "ageDays": 11.0,
+   "createdAt": "2026-10-13T00:03:55Z",
+   "updatedAt": "2026-10-13T00:07:06Z",
+   "changedFiles": 1,
+   "files": [
+    "docs/agent/objective-state.json"
+   ],
+   "aheadBy": 1,
+   "behindMainline": 1614,
+   "failingOtherChecks": [
+    "PR \u2014 Mac-only checks (full-clone provenance, preflight on macOS)"
+   ],
+   "bodyMergedUnderDR037": false,
+   "bodyAsksCloudLand": false,
+   "lastComments": [
+    {
+     "date": "2026-10-13T00:04:05Z",
+     "login": "github-actions[bot]",
+     "text": "<!-- signalgrid-triage --> ### \ud83e\udded PR triage - **Areas:** `area:docs` - **Size:** `size:S` (36 lines across 1 files) CI runs the full gate suite (build, typecheck"
+    },
+    {
+     "date": "2026-10-13T00:04:06Z",
+     "login": "chatgpt-codex-connector[bot]",
+     "text": "<!-- codex-pull-request-review-summary --> ## Codex Review Summary This comment shows the latest Codex review activity on this pull request. | Review | Status |"
+    }
+   ],
+   "disposition": "CLOSE_CANDIDATE",
+   "applies": [
+    "CLOSE_CANDIDATE",
+    "MAC",
+    "NEEDS_WORK"
+   ],
+   "reason": "Its only file, the generated docs/agent/objective-state.json snapshot derived 2026-10-13 (\"evidence is 10 day(s) old\"), is superseded by mainline's rewrite (derivedAt 2026-10-23T00:27:33Z, last commit 94aada541 Mac tick 20261023T002730Z) and by open tick #1569, and the PR itself has gating run 115062679308 failed, mergeable false/dirty (1 ahead, 1614 behind) and 1 unresolved thread.",
+   "caveat": "Mac lane owns the branch (mac/tick-*); the Mac lane or the owner closes it. The file is rewritten whole by the loop, so nothing unique is lost."
+  },
+  {
+   "number": 1511,
+   "title": "Mac tick 20261014T000011Z: sim results (0 request(s)); objective loop: escalate",
+   "state": "open",
+   "lane": "mac",
+   "author": "DanFashauer",
+   "head": {
+    "ref": "mac/tick-20261014T000011Z",
+    "sha": "21bc1f85b8997bbc876d34ccf8ffe663dff9750e"
+   },
+   "tier": "autonomous",
+   "matchedCategories": [],
+   "matched": [],
+   "gating": {
+    "name": "Typecheck, build, and proof scaffold",
+    "checkRunId": 115604960364,
+    "status": "completed",
+    "conclusion": "failure"
+   },
+   "mergeable": false,
+   "mergeableState": "dirty",
+   "mergeableSource": "re-read 2026-10-23T23:2xZ after the 23:22:27Z mainline advance",
+   "threads": 2,
+   "threadsTotal": 2,
+   "codex": {
+    "present": true,
+    "summaryUpdatedAt": "2026-10-14T00:04:55Z",
+    "status": "completed",
+    "has_unresolved_findings": null,
+    "reviewedCommit": "21bc1f85",
+    "reviewedIsHead": true,
+    "usageLimitNotices": 0,
+    "note": "legacy summary format without state JSON; findings are the inline review threads"
+   },
+   "draft": false,
+   "ageDays": 10.0,
+   "createdAt": "2026-10-14T00:00:18Z",
+   "updatedAt": "2026-10-14T00:04:55Z",
+   "changedFiles": 1,
+   "files": [
+    "docs/agent/objective-state.json"
+   ],
+   "aheadBy": 1,
+   "behindMainline": 1614,
+   "failingOtherChecks": [
+    "PR \u2014 Mac-only checks (full-clone provenance, preflight on macOS)"
+   ],
+   "bodyMergedUnderDR037": false,
+   "bodyAsksCloudLand": false,
+   "lastComments": [
+    {
+     "date": "2026-10-14T00:00:27Z",
+     "login": "chatgpt-codex-connector[bot]",
+     "text": "<!-- codex-pull-request-review-summary --> ## Codex Review Summary This comment shows the latest Codex review activity on this pull request. | Review | Status |"
+    },
+    {
+     "date": "2026-10-14T00:00:33Z",
+     "login": "github-actions[bot]",
+     "text": "<!-- signalgrid-triage --> ### \ud83e\udded PR triage - **Areas:** `area:docs` - **Size:** `size:S` (53 lines across 1 files) CI runs the full gate suite (build, typecheck"
+    }
+   ],
+   "disposition": "CLOSE_CANDIDATE",
+   "applies": [
+    "CLOSE_CANDIDATE",
+    "MAC",
+    "NEEDS_WORK"
+   ],
+   "reason": "Its only file, the generated docs/agent/objective-state.json snapshot derived 2026-10-14 (\"evidence is 11 day(s) old\"), is superseded by mainline's rewrite (derivedAt 2026-10-23T00:27:33Z, last commit 94aada541 Mac tick 20261023T002730Z) and by open tick #1569, and the PR itself has gating run 115604960364 failed, mergeable false/dirty (1 ahead, 1614 behind) and 2 unresolved threads.",
+   "caveat": "Mac lane owns the branch (mac/tick-*); the Mac lane or the owner closes it. The file is rewritten whole by the loop, so nothing unique is lost."
+  },
+  {
+   "number": 1556,
+   "title": "integrations: the webhook URL guard refuses the ::ffff:0: translated IPv6 form and trailing-dot localhost; pins for the #1504 residue (backlog rows)",
+   "state": "open",
+   "lane": "cloud-worker",
+   "author": "DanFashauer",
+   "head": {
+    "ref": "claude/build-url-guard-translated-form-trailing-dot",
+    "sha": "d607c5c901d8ef7e7d9c328fd7ae7c11a1d9f58b"
+   },
+   "tier": "owner-gated",
+   "matchedCategories": [
+    "DECISION_PATH",
+    "SAFETY_MACHINERY"
+   ],
+   "matched": [
+    {
+     "file": "lib/integrations/src/integrations/adapters/url-guard.ts",
+     "category": "DECISION_PATH",
+     "rule": "the decision core / connectors / flows (lib/*)"
+    },
+    {
+     "file": "scripts/src/emitter-discipline-proof.ts",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/src/emitter-discipline-proof.ts",
+     "category": "SAFETY_MACHINERY",
+     "rule": "any proof harness"
+    }
+   ],
+   "gating": {
+    "name": "Typecheck, build, and proof scaffold",
+    "checkRunId": 117410603878,
+    "status": "completed",
+    "conclusion": "success"
+   },
+   "mergeable": true,
+   "mergeableState": "clean",
+   "mergeableSource": "re-read 2026-10-23T23:2xZ after the 23:22:27Z mainline advance",
+   "threads": 0,
+   "threadsTotal": 0,
+   "codex": {
+    "present": true,
+    "summaryUpdatedAt": "2026-10-17T13:50:33Z",
+    "status": "completed",
+    "has_unresolved_findings": false,
+    "reviewedCommit": "d607c5c9",
+    "reviewedIsHead": true,
+    "usageLimitNotices": 0
+   },
+   "draft": false,
+   "ageDays": 6.5,
+   "createdAt": "2026-10-17T12:08:32Z",
+   "updatedAt": "2026-10-17T14:21:54Z",
+   "changedFiles": 5,
+   "files": [
+    "artifacts/sync/live-sync-manifest.json",
+    "docs/BUILD_BACKLOG.md",
+    "docs/INTEGRATION_CATALOG.md",
+    "lib/integrations/src/integrations/adapters/url-guard.ts",
+    "scripts/src/emitter-discipline-proof.ts"
+   ],
+   "aheadBy": 8,
+   "behindMainline": 859,
+   "failingOtherChecks": [],
+   "bodyMergedUnderDR037": false,
+   "bodyAsksCloudLand": false,
+   "lastComments": [
+    {
+     "date": "2026-10-17T13:43:03Z",
+     "login": "chatgpt-codex-connector[bot]",
+     "text": "<!-- codex-pull-request-review-summary --> <!-- codex-review-state:v1 {\"code_review\":{\"commit_sha\":\"d607c5c901d8ef7e7d9c328fd7ae7c11a1d9f58b\",\"has_any_findings\""
+    },
+    {
+     "date": "2026-10-17T14:21:54Z",
+     "login": "DanFashauer",
+     "text": "**Coordinator verdict on head `d607c5c901d8ef7e7d9c328fd7ae7c11a1d9f58b`: ship. Reviewed and ready for the owner's merge.** - Round 1's MEDIUM is closed: `127.."
+    }
+   ],
+   "disposition": "OWNER",
+   "applies": [
+    "OWNER"
+   ],
+   "reason": "lib/integrations/src/integrations/adapters/url-guard.ts matches DECISION_PATH (plus scripts/src/emitter-discipline-proof.ts as SAFETY_MACHINERY), so only the owner merges it, although gating run 117410603878 is success on d607c5c9, it is mergeable clean, has 0 threads, Codex completed with no findings on the head, the coordinator verdict is \"ship ... ready for the owner's merge\", and the ::ffff:0: translated-form fix is absent from mainline's url-guard.ts.",
+   "caveat": "Ready for the owner's one-click merge (859 behind mainline but GitHub reports clean); shares only docs/BUILD_BACKLOG.md with #1585/#1586/#1611."
+  },
+  {
+   "number": 1562,
+   "title": "deps: bump the npm-minor-and-patch group across 1 directory with 35 updates",
+   "state": "open",
+   "lane": "dependabot",
+   "author": "dependabot[bot]",
+   "head": {
+    "ref": "dependabot/npm_and_yarn/npm-minor-and-patch-bca47db88a",
+    "sha": "dbdaeb2e9d2ab9eba7e8f4fa1f8c41985745f589"
+   },
+   "tier": "owner-gated",
+   "matchedCategories": [
+    "DECISION_PATH",
+    "OWNER_RESERVED",
+    "SAFETY_MACHINERY"
+   ],
+   "matched": [
+    {
+     "file": "artifacts/api-server/package.json",
+     "category": "DECISION_PATH",
+     "rule": "the /v1 decision API server"
+    },
+    {
+     "file": "artifacts/mcp-server/package.json",
+     "category": "SAFETY_MACHINERY",
+     "rule": "artifacts/mcp-server/** (the MCP server .mcp.json launches in every session)"
+    },
+    {
+     "file": "artifacts/signalgrid-review/package.json",
+     "category": "OWNER_RESERVED",
+     "rule": "buyer-facing site & outreach"
+    },
+    {
+     "file": "artifacts/signalgrid-web/package.json",
+     "category": "OWNER_RESERVED",
+     "rule": "buyer-facing site & outreach"
+    },
+    {
+     "file": "lib/api-spec/package.json",
+     "category": "DECISION_PATH",
+     "rule": "the decision core / connectors / flows (lib/*)"
+    },
+    {
+     "file": "lib/audit/package.json",
+     "category": "DECISION_PATH",
+     "rule": "the decision core / connectors / flows (lib/*)"
+    },
+    {
+     "file": "lib/persistence/package.json",
+     "category": "DECISION_PATH",
+     "rule": "the decision core / connectors / flows (lib/*)"
+    },
+    {
+     "file": "pnpm-lock.yaml",
+     "category": "SAFETY_MACHINERY",
+     "rule": "workspace/lockfile"
+    },
+    {
+     "file": "pnpm-workspace.yaml",
+     "category": "SAFETY_MACHINERY",
+     "rule": "workspace/lockfile"
+    },
+    {
+     "file": "scripts/package.json",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    }
+   ],
+   "gating": {
+    "name": "Typecheck, build, and proof scaffold",
+    "checkRunId": 117432738558,
+    "status": "completed",
+    "conclusion": "success"
+   },
+   "mergeable": true,
+   "mergeableState": "unstable",
+   "mergeableSource": "re-read 2026-10-23T23:2xZ after the 23:22:27Z mainline advance",
+   "threads": 2,
+   "threadsTotal": 2,
+   "codex": {
+    "present": true,
+    "summaryUpdatedAt": "2026-10-17T15:34:11Z",
+    "status": "completed",
+    "has_unresolved_findings": true,
+    "reviewedCommit": "dbdaeb2e",
+    "reviewedIsHead": true,
+    "usageLimitNotices": 0
+   },
+   "draft": false,
+   "ageDays": 6.3,
+   "createdAt": "2026-10-17T15:29:54Z",
+   "updatedAt": "2026-10-17T15:34:11Z",
+   "changedFiles": 13,
+   "files": [
+    "artifacts/api-server/package.json",
+    "artifacts/mcp-server/package.json",
+    "artifacts/signalgrid-app/package.json",
+    "artifacts/signalgrid-desktop/package.json",
+    "artifacts/signalgrid-review/package.json",
+    "artifacts/signalgrid-web/package.json",
+    "lib/api-spec/package.json",
+    "lib/audit/package.json",
+    "lib/persistence/package.json",
+    "package.json",
+    "pnpm-lock.yaml",
+    "pnpm-workspace.yaml",
+    "scripts/package.json"
+   ],
+   "aheadBy": 1,
+   "behindMainline": 766,
+   "failingOtherChecks": [
+    "PR \u2014 Mac-only checks (full-clone provenance, preflight on macOS)",
+    "phase-pr-evidence",
+    "CycloneDX SBOM"
+   ],
+   "bodyMergedUnderDR037": false,
+   "bodyAsksCloudLand": false,
+   "lastComments": [
+    {
+     "date": "2026-10-17T15:30:08Z",
+     "login": "github-actions[bot]",
+     "text": "<!-- signalgrid-triage --> ### \ud83e\udded PR triage - **Areas:** `area:api` `area:mcp` `area:apps` `area:tooling` - **Size:** `size:XL` (3868 lines across 13 files) CI r"
+    },
+    {
+     "date": "2026-10-17T15:30:14Z",
+     "login": "chatgpt-codex-connector[bot]",
+     "text": "<!-- codex-pull-request-review-summary --> <!-- codex-review-state:v1 {\"code_review\":{\"commit_sha\":\"dbdaeb2e9d2ab9eba7e8f4fa1f8c41985745f589\",\"has_any_findings\""
+    }
+   ],
+   "disposition": "DEPENDABOT",
+   "applies": [
+    "DEPENDABOT",
+    "OWNER"
+   ],
+   "reason": "Dependabot author (npm-minor-and-patch group, 35 updates, 13 files: 11 package.json plus pnpm-lock.yaml and pnpm-workspace.yaml); the owner's 2026-10-15 dependabot decision is pending, and on the head dbdaeb2e gating run 117432738558 is success but mergeable_state is unstable with Mac-only checks, phase-pr-evidence and CycloneDX SBOM failing, 2 unresolved threads, Codex has_unresolved_findings true, and 766 commits behind mainline.",
+   "caveat": "Manifest paths classify as DECISION_PATH, OWNER_RESERVED and SAFETY_MACHINERY, so even a clean dependabot PR would be owner-gated; listed under DEPENDABOT per the instruction."
+  },
+  {
+   "number": 1569,
+   "title": "Mac tick 20261017T182020Z: sim results (1 request(s)); objective loop: escalate",
+   "state": "open",
+   "lane": "mac",
+   "author": "DanFashauer",
+   "head": {
+    "ref": "mac/tick-20261017T182020Z",
+    "sha": "4d0599ccdedeb2b87dc88c2af03cb28d40d738c0"
+   },
+   "tier": "autonomous",
+   "matchedCategories": [],
+   "matched": [],
+   "gating": {
+    "name": "Typecheck, build, and proof scaffold",
+    "checkRunId": 117477480952,
+    "status": "completed",
+    "conclusion": "success"
+   },
+   "mergeable": false,
+   "mergeableState": "dirty",
+   "mergeableSource": "re-read 2026-10-23T23:2xZ after the 23:22:27Z mainline advance",
+   "threads": 0,
+   "threadsTotal": 0,
+   "codex": {
+    "present": true,
+    "summaryUpdatedAt": "2026-10-17T19:00:28Z",
+    "status": "failed",
+    "has_unresolved_findings": true,
+    "reviewedCommit": "4d0599cc",
+    "reviewedIsHead": true,
+    "usageLimitNotices": 1
+   },
+   "draft": false,
+   "ageDays": 6.2,
+   "createdAt": "2026-10-17T19:00:21Z",
+   "updatedAt": "2026-10-17T19:00:32Z",
+   "changedFiles": 4,
+   "files": [
+    "artifacts/live-evidence/mac-run.json",
+    "artifacts/sim-results/objective-loop-evidence-fresh-2026-10-17-2.json",
+    "docs/agent/SURFACE_REVIEW_COVERAGE.md",
+    "docs/agent/objective-state.json"
+   ],
+   "aheadBy": 1,
+   "behindMainline": 734,
+   "failingOtherChecks": [],
+   "bodyMergedUnderDR037": false,
+   "bodyAsksCloudLand": false,
+   "lastComments": [
+    {
+     "date": "2026-10-17T19:00:30Z",
+     "login": "chatgpt-codex-connector[bot]",
+     "text": "You have reached your Codex usage limits for code reviews. You can see your limits in the [Codex usage dashboard](https://chatgpt.com/codex/cloud/settings/usage"
+    },
+    {
+     "date": "2026-10-17T19:00:32Z",
+     "login": "github-actions[bot]",
+     "text": "<!-- signalgrid-triage --> ### \ud83e\udded PR triage - **Areas:** `area:docs` `area:lanes` - **Size:** `size:XL` (1500 lines across 4 files) CI runs the full gate suite ("
+    }
+   ],
+   "disposition": "CLOSE_CANDIDATE",
+   "applies": [
+    "CLOSE_CANDIDATE",
+    "MAC",
+    "NEEDS_WORK"
+   ],
+   "reason": "All four files have newer versions on mainline: live-evidence/mac-run.json was re-minted 2026-10-21T22:14:07Z (f3b55f717) over this PR's 2026-10-17 mint, the same-named sim-result objective-loop-evidence-fresh-2026-10-17-2.json on mainline is the 2026-10-21T22:14:10Z run, objective-state.json was re-derived 2026-10-23T00:27:33Z, and the coverage page has been regenerated since; the PR is also mergeable false/dirty (1 ahead, 734 behind) although gating run 117477480952 is success with 0 threads.",
+   "caveat": "Mac lane owns the branch. Caveat: closing it drops the record of the 2026-10-17 evidence execution (provenance commit 117b41dd), because mainline's file at that path now holds the 10-21 execution; the Mac lane should confirm it does not want that record kept."
+  },
+  {
+   "number": 1585,
+   "title": "gates: pair each verdict with its own token; report an unreadable resolve.ts",
+   "state": "open",
+   "lane": "cloud-worker",
+   "author": "DanFashauer",
+   "head": {
+    "ref": "claude/build-tone-pairing-and-fetch-unreadable",
+    "sha": "93288d4cb3becf95cb9c459f214a8df87bfbef0b"
+   },
+   "tier": "owner-gated",
+   "matchedCategories": [
+    "SAFETY_MACHINERY"
+   ],
+   "matched": [
+    {
+     "file": "scripts/check-ungated-fetch.mjs",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/check-verdict-tone-source.mjs",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/lib/gate-mutants/check-ungated-fetch.json",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/lib/gate-mutants/check-verdict-tone-source.json",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/lib/gate-mutants/run-gate-mutants.json",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/run-gate-mutants.mjs",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    }
+   ],
+   "gating": {
+    "name": "Typecheck, build, and proof scaffold",
+    "checkRunId": 120228729764,
+    "status": "completed",
+    "conclusion": "success"
+   },
+   "mergeable": true,
+   "mergeableState": "clean",
+   "mergeableSource": "re-read 2026-10-23T23:2xZ after the 23:22:27Z mainline advance",
+   "threads": 0,
+   "threadsTotal": 10,
+   "codex": {
+    "present": true,
+    "summaryUpdatedAt": "2026-10-23T03:45:34Z",
+    "status": "failed",
+    "has_unresolved_findings": true,
+    "reviewedCommit": "93288d4c",
+    "reviewedIsHead": true,
+    "usageLimitNotices": 2
+   },
+   "draft": false,
+   "ageDays": 1.4,
+   "createdAt": "2026-10-22T13:15:50Z",
+   "updatedAt": "2026-10-23T03:50:05Z",
+   "changedFiles": 11,
+   "files": [
+    ".gitignore",
+    "docs/BUILD_BACKLOG.md",
+    "docs/COMPANY_BUILD_PLAN.md",
+    "docs/agent/SURFACE_REVIEW_COVERAGE.md",
+    "docs/agent/gate-exclusions.json",
+    "scripts/check-ungated-fetch.mjs",
+    "scripts/check-verdict-tone-source.mjs",
+    "scripts/lib/gate-mutants/check-ungated-fetch.json",
+    "scripts/lib/gate-mutants/check-verdict-tone-source.json",
+    "scripts/lib/gate-mutants/run-gate-mutants.json",
+    "scripts/run-gate-mutants.mjs"
+   ],
+   "aheadBy": 35,
+   "behindMainline": 162,
+   "failingOtherChecks": [],
+   "bodyMergedUnderDR037": false,
+   "bodyAsksCloudLand": true,
+   "lastComments": [
+    {
+     "date": "2026-10-23T03:45:36Z",
+     "login": "chatgpt-codex-connector[bot]",
+     "text": "You have reached your Codex usage limits for code reviews. You can see your limits in the [Codex usage dashboard](https://chatgpt.com/codex/cloud/settings/usage"
+    },
+    {
+     "date": "2026-10-23T03:50:05Z",
+     "login": "DanFashauer",
+     "text": "Round 7 pushed at `93288d4cb3becf95cb9c459f214a8df87bfbef0b` (mainline merged, no rebase; on origin per `git ls-remote`). - `Preflight PASSED \u2014 everything it ru"
+    }
+   ],
+   "disposition": "LAND_DR037",
+   "applies": [
+    "LAND_DR037"
+   ],
+   "reason": "Gating run 120228729764 is completed/success on head 93288d4c, mergeable clean (re-read ~23:28Z, after the 23:22Z mainline advance), 0 of 10 review threads unresolved, only SAFETY_MACHINERY files (scripts/check-ungated-fetch.mjs, check-verdict-tone-source.mjs, run-gate-mutants.mjs, gate-mutant recordings, docs), cloud-worker head, not dependabot or mac, so it is a candidate for the cloud to land after its own inspection.",
+   "caveat": "The cloud's inspection is still owed and is not a formality: the last coordinator landing refute (round 6, d925cf5f) was fix-needed and none exists yet for the round-7 head 93288d4c; Codex could not review it (summary status failed, usage-limit notices at 01:11Z and 03:45Z) so there is no independent review on this head. Body says \"the cloud lane lands under DR-037 after review\". Shares docs/BUILD_BACKLOG.md and the coverage page with #1586 and #1611 (land one, merge mainline into the next and regenerate the coverage page)."
+  },
+  {
+   "number": 1586,
+   "title": "Gates: realpath entry guard so a symlinked start cannot skip a gate body",
+   "state": "open",
+   "lane": "cloud-worker",
+   "author": "DanFashauer",
+   "head": {
+    "ref": "claude/build-gate-symlink-entry-guard",
+    "sha": "6d11676083b057c66b6d923977b527a81ba0a61d"
+   },
+   "tier": "owner-gated",
+   "matchedCategories": [
+    "SAFETY_MACHINERY"
+   ],
+   "matched": [
+    {
+     "file": "scripts/brain-cycle-decide.mjs",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/brain-cycle-merge-decide.mjs",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/brain-cycle.mjs",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/check-action-pinning.mjs",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/check-agent-raise-hand.mjs",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/check-api-collection.mjs",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/check-assist-wire-served.mjs",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/check-backlog-ownership.mjs",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/check-brain-freshness.mjs",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/check-ci-liveness.mjs",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/check-cited-commands.mjs",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/check-cited-paths.mjs",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/check-cited-symbols.mjs",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/check-claim-inventory-anchors.mjs",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/check-cost-figures.mjs",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/check-cross-doc-banner-parity.mjs",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/check-decision-palette.mjs",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/check-derived-doc-figures.mjs",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/check-entry-guards.mjs",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/check-env-doc-readers.mjs",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/check-gate-self-tests-run.mjs",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/check-graph-permission-boundary.mjs",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/check-image-build-hardening.mjs",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/check-index-banner-parity.mjs",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/check-inspiration-catalog-structure.mjs",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/check-known-false-claims.mjs",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/check-lab-collections.mjs",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/check-lab-registry.mjs",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/check-lessons.mjs",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/check-licence-policy.mjs",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/check-mainline-workflow-streaks.mjs",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/check-markdown-links.mjs",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/check-mcp-roster.mjs",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/check-memory-freshness.mjs",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/check-org-roster.mjs",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/check-performance-figures.mjs",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/check-plugin-manifest.mjs",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/check-pr-gate-falsification.mjs",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/check-product-sentence-drift.mjs",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/check-proof-figures.mjs",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/check-proof-figures.mjs",
+     "category": "SAFETY_MACHINERY",
+     "rule": "any proof harness"
+    },
+    {
+     "file": "scripts/check-raised-hands.mjs",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/check-readiness-figure.mjs",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/check-reason-codes.mjs",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/check-remediation-allow-conformance.mjs",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/check-rendered-assets.mjs",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/check-resource-scan-binding.mjs",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/check-review-coverage.mjs",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/check-role-coverage.mjs",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/check-role-heading-status.mjs",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/check-row-status-drift.mjs",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/check-scheduled-routines.mjs",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/check-screen-inventory.mjs",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/check-send-copy-banner.mjs",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/check-skill-plane-conformance.mjs",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/check-stamp-citations.mjs",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/check-surface-ownership.mjs",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/check-surface-review-coverage.mjs",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/check-svg-outcome-ladder.mjs",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/check-swiftlint-rules.mjs",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/check-v1-refusal-coverage.mjs",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/check-wire-truth-ledger.mjs",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/check-workspace-cycles.mjs",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/fixture-idp.compose.yml",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/fixture-idp.mjs",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/gen-reason-codes.mjs",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/generate-sync-manifest.mjs",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/lane-message.mjs",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/lib/code-only.mjs",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/lib/is-main.mjs",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/lib/land-branch-gate.mjs",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/lib/native-build-attestation.mjs",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/loop-state.mjs",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/mac/build-tick-stages.mjs",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/mac/build-tick.sh",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/mac/gh-pr.mjs",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/objective-loop.mjs",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/raised-hands.mjs",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/render-preview-assets.mjs",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/src/lane-messages-proof.ts",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/src/lane-messages-proof.ts",
+     "category": "SAFETY_MACHINERY",
+     "rule": "any proof harness"
+    }
+   ],
+   "gating": {
+    "name": "Typecheck, build, and proof scaffold",
+    "checkRunId": 120212588268,
+    "status": "completed",
+    "conclusion": "success"
+   },
+   "mergeable": true,
+   "mergeableState": "clean",
+   "mergeableSource": "re-read 2026-10-23T23:2xZ after the 23:22:27Z mainline advance",
+   "threads": 0,
+   "threadsTotal": 26,
+   "codex": {
+    "present": true,
+    "summaryUpdatedAt": "2026-10-23T02:49:21Z",
+    "status": "failed",
+    "has_unresolved_findings": true,
+    "reviewedCommit": "6d116760",
+    "reviewedIsHead": true,
+    "usageLimitNotices": 2
+   },
+   "draft": false,
+   "ageDays": 1.4,
+   "createdAt": "2026-10-22T13:48:15Z",
+   "updatedAt": "2026-10-23T02:50:07Z",
+   "changedFiles": 81,
+   "files": [
+    "docs/BUILD_BACKLOG.md",
+    "docs/agent/SURFACE_REVIEW_COVERAGE.md",
+    "scripts/brain-cycle-decide.mjs",
+    "scripts/brain-cycle-merge-decide.mjs",
+    "scripts/brain-cycle.mjs",
+    "scripts/check-action-pinning.mjs",
+    "scripts/check-agent-raise-hand.mjs",
+    "scripts/check-api-collection.mjs",
+    "scripts/check-assist-wire-served.mjs",
+    "scripts/check-backlog-ownership.mjs",
+    "scripts/check-brain-freshness.mjs",
+    "scripts/check-ci-liveness.mjs",
+    "scripts/check-cited-commands.mjs",
+    "scripts/check-cited-paths.mjs",
+    "scripts/check-cited-symbols.mjs",
+    "scripts/check-claim-inventory-anchors.mjs",
+    "scripts/check-cost-figures.mjs",
+    "scripts/check-cross-doc-banner-parity.mjs",
+    "scripts/check-decision-palette.mjs",
+    "scripts/check-derived-doc-figures.mjs",
+    "scripts/check-entry-guards.mjs",
+    "scripts/check-env-doc-readers.mjs",
+    "scripts/check-gate-self-tests-run.mjs",
+    "scripts/check-graph-permission-boundary.mjs",
+    "scripts/check-image-build-hardening.mjs",
+    "scripts/check-index-banner-parity.mjs",
+    "scripts/check-inspiration-catalog-structure.mjs",
+    "scripts/check-known-false-claims.mjs",
+    "scripts/check-lab-collections.mjs",
+    "scripts/check-lab-registry.mjs",
+    "scripts/check-lessons.mjs",
+    "scripts/check-licence-policy.mjs",
+    "scripts/check-mainline-workflow-streaks.mjs",
+    "scripts/check-markdown-links.mjs",
+    "scripts/check-mcp-roster.mjs",
+    "scripts/check-memory-freshness.mjs",
+    "scripts/check-org-roster.mjs",
+    "scripts/check-performance-figures.mjs",
+    "scripts/check-plugin-manifest.mjs",
+    "scripts/check-pr-gate-falsification.mjs",
+    "scripts/check-product-sentence-drift.mjs",
+    "scripts/check-proof-figures.mjs",
+    "scripts/check-raised-hands.mjs",
+    "scripts/check-readiness-figure.mjs",
+    "scripts/check-reason-codes.mjs",
+    "scripts/check-remediation-allow-conformance.mjs",
+    "scripts/check-rendered-assets.mjs",
+    "scripts/check-resource-scan-binding.mjs",
+    "scripts/check-review-coverage.mjs",
+    "scripts/check-role-coverage.mjs",
+    "scripts/check-role-heading-status.mjs",
+    "scripts/check-row-status-drift.mjs",
+    "scripts/check-scheduled-routines.mjs",
+    "scripts/check-screen-inventory.mjs",
+    "scripts/check-send-copy-banner.mjs",
+    "scripts/check-skill-plane-conformance.mjs",
+    "scripts/check-stamp-citations.mjs",
+    "scripts/check-surface-ownership.mjs",
+    "scripts/check-surface-review-coverage.mjs",
+    "scripts/check-svg-outcome-ladder.mjs",
+    "scripts/check-swiftlint-rules.mjs",
+    "scripts/check-v1-refusal-coverage.mjs",
+    "scripts/check-wire-truth-ledger.mjs",
+    "scripts/check-workspace-cycles.mjs",
+    "scripts/fixture-idp.compose.yml",
+    "scripts/fixture-idp.mjs",
+    "scripts/gen-reason-codes.mjs",
+    "scripts/generate-sync-manifest.mjs",
+    "scripts/lane-message.mjs",
+    "scripts/lib/code-only.mjs",
+    "scripts/lib/is-main.mjs",
+    "scripts/lib/land-branch-gate.mjs",
+    "scripts/lib/native-build-attestation.mjs",
+    "scripts/loop-state.mjs",
+    "scripts/mac/build-tick-stages.mjs",
+    "scripts/mac/build-tick.sh",
+    "scripts/mac/gh-pr.mjs",
+    "scripts/objective-loop.mjs",
+    "scripts/raised-hands.mjs",
+    "scripts/render-preview-assets.mjs",
+    "scripts/src/lane-messages-proof.ts"
+   ],
+   "aheadBy": 29,
+   "behindMainline": 226,
+   "failingOtherChecks": [],
+   "bodyMergedUnderDR037": false,
+   "bodyAsksCloudLand": true,
+   "lastComments": [
+    {
+     "date": "2026-10-23T02:49:23Z",
+     "login": "chatgpt-codex-connector[bot]",
+     "text": "You have reached your Codex usage limits for code reviews. You can see your limits in the [Codex usage dashboard](https://chatgpt.com/codex/cloud/settings/usage"
+    },
+    {
+     "date": "2026-10-23T02:50:07Z",
+     "login": "DanFashauer",
+     "text": "Round 8 pushed at `6d11676083b057c66b6d923977b527a81ba0a61d` \u2014 split; the shipped-import model is PR #1611. - Self-test: `check-entry-guards.mjs --self-test` pa"
+    }
+   ],
+   "disposition": "LAND_DR037",
+   "applies": [
+    "LAND_DR037"
+   ],
+   "reason": "Gating run 120212588268 is completed/success on head 6d116760, mergeable clean (re-read ~23:28Z, after the 23:22Z mainline advance), 0 of 26 review threads unresolved, SAFETY_MACHINERY only across 81 files (gate scripts converted to the realpath entry guard, scripts/lib/is-main.mjs and land-branch-gate.mjs, three scripts/mac/ files), cloud-worker head, not dependabot or mac, so it is a candidate for the cloud to land after its own inspection.",
+   "caveat": "The cloud's inspection is still owed and is larger than the file count suggests: six coordinator landing refutes (rounds 1, 3, 4, 5, 6, 7) were all fix-needed (last: round 7 on acd8161e) and none exists yet for the round-8 head 6d116760, which split the shipped-import model out to #1611; Codex could not review it (summary status failed, usage-limit notices at 01:30Z and 02:49Z). It edits scripts/lib/land-branch-gate.mjs (the landing gate itself) and Mac-lane scripts (scripts/mac/gh-pr.mjs, build-tick.sh, build-tick-stages.mjs). Body says \"Lands under DR-037 by the cloud lane after review\". Shares docs/BUILD_BACKLOG.md and the coverage page with #1585/#1611 and scripts/lib/code-only.mjs (identical blob) with #1611."
+  },
+  {
+   "number": 1611,
+   "title": "Container shipped-import model: a script shipped alone must have its relative imports shipped beside it",
+   "state": "open",
+   "lane": "cloud-worker",
+   "author": "DanFashauer",
+   "head": {
+    "ref": "claude/build-shipped-import-model",
+    "sha": "c8451bfba538ed2f97811d06c50bb262d922e016"
+   },
+   "tier": "owner-gated",
+   "matchedCategories": [
+    "SAFETY_MACHINERY"
+   ],
+   "matched": [
+    {
+     "file": ".github/workflows/review-hub-ci.yml",
+     "category": "SAFETY_MACHINERY",
+     "rule": ".github/workflows/**"
+    },
+    {
+     "file": "scripts/check-shipped-imports.mjs",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/lib/code-only.mjs",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/lib/shipped-imports.mjs",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/preflight.mjs",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    }
+   ],
+   "gating": {
+    "name": "Typecheck, build, and proof scaffold",
+    "checkRunId": 120227820357,
+    "status": "completed",
+    "conclusion": "success"
+   },
+   "mergeable": true,
+   "mergeableState": "clean",
+   "mergeableSource": "re-read 2026-10-23T23:2xZ after the 23:22:27Z mainline advance",
+   "threads": 0,
+   "threadsTotal": 0,
+   "codex": null,
+   "draft": true,
+   "ageDays": 0.9,
+   "createdAt": "2026-10-23T02:06:30Z",
+   "updatedAt": "2026-10-23T03:42:21Z",
+   "changedFiles": 8,
+   "files": [
+    ".github/workflows/review-hub-ci.yml",
+    "docs/BUILD_BACKLOG.md",
+    "docs/COMPANY_BUILD_PLAN.md",
+    "docs/agent/SURFACE_REVIEW_COVERAGE.md",
+    "scripts/check-shipped-imports.mjs",
+    "scripts/lib/code-only.mjs",
+    "scripts/lib/shipped-imports.mjs",
+    "scripts/preflight.mjs"
+   ],
+   "aheadBy": 9,
+   "behindMainline": 162,
+   "failingOtherChecks": [
+    "phase-pr-evidence"
+   ],
+   "bodyMergedUnderDR037": false,
+   "bodyAsksCloudLand": false,
+   "lastComments": [
+    {
+     "date": "2026-10-23T03:06:28Z",
+     "login": "DanFashauer",
+     "text": "**Coordinator verdict, round 1, head `4e25a736c29ceefb51a9fb10e6a601fc33e17986`: fix-needed (round 2).** This is an independent landing refute of this head. I b"
+    },
+    {
+     "date": "2026-10-23T03:42:18Z",
+     "login": "DanFashauer",
+     "text": "Round 2 pushed at `c8451bfba538ed2f97811d06c50bb262d922e016` Merged origin/SignalGrid_Alpha first (no rebase, no amend, no force); the coverage page was regener"
+    }
+   ],
+   "disposition": "NEEDS_WORK",
+   "applies": [
+    "NEEDS_WORK"
+   ],
+   "reason": "It is a draft (draft true) even though gating run 120227820357 is completed/success on c8451bfb, mergeable clean, 0 threads and SAFETY_MACHINERY only (workflow, scripts/preflight.mjs, shipped-imports library and gate), with phase-pr-evidence cancelled and no Codex review at all.",
+   "caveat": "Split out of #1586; the round-1 coordinator verdict on 4e25a736 was fix-needed and round 2 (c8451bfb) has no verdict yet. It edits .github/workflows/review-hub-ci.yml and scripts/preflight.mjs, so the tier is owner-gated for SAFETY_MACHINERY only (still DR-037-eligible once ready for review). Mark ready only after its landing refute passes."
+  },
+  {
+   "number": 1638,
+   "title": "Lane mail (cloud): PR #1321 open decisions handed to the Mac lane",
+   "state": "closed (merged 2026-10-23T23:22:27Z)",
+   "lane": "lane-mail",
+   "author": "DanFashauer",
+   "head": {
+    "ref": "lane/cloud-mail-20261023-225852Z",
+    "sha": "c2b74fee5823d9d81647eb1f20b7a25eb8eb95ca"
+   },
+   "tier": "autonomous",
+   "matchedCategories": [],
+   "matched": [],
+   "gating": {
+    "name": "Typecheck, build, and proof scaffold",
+    "checkRunId": 120698809379,
+    "status": "completed",
+    "conclusion": "success"
+   },
+   "mergeable": null,
+   "mergeableState": "unknown",
+   "mergeableSource": "collected 2026-10-23 ~23:2xZ (retried once after 5 s)",
+   "threads": 0,
+   "threadsTotal": 0,
+   "codex": {
+    "present": true,
+    "summaryUpdatedAt": "2026-10-23T22:59:48Z",
+    "status": "completed",
+    "has_unresolved_findings": false,
+    "reviewedCommit": "c2b74fee",
+    "reviewedIsHead": true,
+    "usageLimitNotices": 0
+   },
+   "draft": false,
+   "ageDays": 0.0,
+   "createdAt": "2026-10-23T22:59:06Z",
+   "updatedAt": "2026-10-23T23:22:30Z",
+   "changedFiles": 1,
+   "files": [
+    "artifacts/lane-messages/cloud-pr-1321-signalgrid-cli-two-open-decisions-.json"
+   ],
+   "aheadBy": 0,
+   "behindMainline": 4,
+   "failingOtherChecks": [],
+   "bodyMergedUnderDR037": false,
+   "bodyAsksCloudLand": false,
+   "lastComments": [
+    {
+     "date": "2026-10-23T22:59:14Z",
+     "login": "chatgpt-codex-connector[bot]",
+     "text": "<!-- codex-pull-request-review-summary --> <!-- codex-review-state:v1 {\"code_review\":{\"commit_sha\":\"c2b74fee5823d9d81647eb1f20b7a25eb8eb95ca\",\"has_any_findings\""
+    },
+    {
+     "date": "2026-10-23T22:59:16Z",
+     "login": "github-actions[bot]",
+     "text": "<!-- signalgrid-triage --> ### \ud83e\udded PR triage - **Areas:** `area:lanes` - **Size:** `size:XS` (9 lines across 1 files) CI runs the full gate suite (build, typechec"
+    }
+   ],
+   "disposition": "CLOSE_CANDIDATE",
+   "applies": [
+    "CLOSE_CANDIDATE"
+   ],
+   "reason": "Already merged: PR #1638 was merged at 2026-10-23T23:22:27Z as 055fb2a0 (the live SignalGrid_Alpha tip), its head c2b74fee is an ancestor of origin/SignalGrid_Alpha, its one file's blob is identical on mainline, and the lane/cloud-mail-20261023-225852Z branch is already deleted (404), so there is nothing left to land or close.",
+   "caveat": "State is closed/merged, not open: it merged 17 minutes after the 23:05Z stamp, so prs-open.json still lists it. mergeable is null/unknown only because it is merged. Drop it from the open list; no action."
+  }
+ ]
+}

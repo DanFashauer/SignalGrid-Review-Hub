@@ -210,3 +210,118 @@ block; a stage run on the wrong tier is a lesson here.
 - **evidence:** `scripts/loop-state.mjs` (`branchesInAgentWorktrees`, the seam that names unpushed branches, and its rule against pushing attack reproductions); PR #1154's raised hand.
 - **landing:** `.claude/skills/orchestrator-over-workers/SKILL.md` "Briefs, reviews and records" — to free disk, delete an agent worktree's build output (`node_modules`, `dist`) and keep the worktree until its scratch branches are deleted with the owner's OK; keep a finished worktree only for that reason, after pushing or landing any real work in it, since `scripts/loop-state.mjs` treats every branch in a kept worktree's reflog as ephemeral.
 - **status:** landed
+
+### L23 — The coordinator edited the registry row and the hands itself, on the wrong tier
+- **date:** 2026-10-15
+- **lane:** cloud
+- **incident:** On the first fire after the 5d17h weekly-usage-limit outage (2026-10-09T16:40Z to 2026-10-15T10:00Z), with every validation that ran after the dependabot-queue-review row's 30-day bound red, the coordinating session (creative tier) wrote the row's retirement and the raised hands directly and authored the commits itself for two rounds, instead of handing the edits to a Sonnet builder and the commit message to Haiku as DR-060 rule 1 requires. Both review rounds (a Sonnet reviewer and an Opus refuter) found untrue sentences in those direct edits (the Mac tick was alive, a provenance read time later than the commit, a duty-performed claim the heartbeats contradict), which is the defect the rule exists to prevent.
+- **evidence:** Commits 2f5c8809 and 50bb19d7 on branch `fix/retire-dependabot-queue-review-row` (trailer "Co-Authored-By: Claude Fable 5.1"); the review verdicts' trailer notes; `docs/DECISION_RECORDS.md` DR-060 rule 1.
+- **landing:** recorded only — the rule already exists (DR-060 rule 1); round 3 of the same change was built by a Sonnet builder and this row is the record that the two direct rounds were the defect, so the next repo-wide red is handed to a builder on its first round
+- **status:** landed
+
+### L24 — an awaiting-activation row that needs an owner go, with a hard 30-day bound and no fallback, turned a silent owner and a dark lane into a red on every new validation
+- **date:** 2026-10-15
+- **lane:** cloud
+- **incident:** `docs/agent/scheduled-routines.json` carried `dependabot-queue-review` as `awaiting-activation` since 2026-09-12, and its contract forbade the cloud lane from creating the trigger without an explicit owner go that was never recorded. `scripts/check-scheduled-routines.mjs` makes such a row FATAL once it is more than 30 days old by the wall clock, and its one exit ("install it, or retire the row with evidence") is an edit someone has to make. The bound passed at 2026-10-12T00:00Z, inside the weekly-usage-limit outage (2026-10-09T16:40Z to 2026-10-15T10:00Z; instants recorded from the owner hand, not re-measured), with the cloud lane dark and nobody else retiring the row: every validation that ran after the bound went red (tick PRs #1509 to #1512 failed at the step "Scheduled routines"; #1508 had passed on 2026-10-11), while a check that had completed before the bound kept its result (#1501's gating run 113898621289 completed 2026-10-09T15:58:12Z, stayed success, and the PR merged on it at 12:31:32Z on 2026-10-15), and no new lane-deliver heartbeat delivery could pass the gate until #1513 merged at 12:04Z on 2026-10-15, about 3.5 days after the bound (mainline's tip did not move between f3dccd957 and the merge of #1506, a forward-build heartbeat PR whose gating check had passed on 2026-10-09, as 764cb99d at 10:22:23Z on 2026-10-15). The same bound had already gone red once, for `brain-cycle` on 2026-10-09; that time a lane was awake and #1480 retired the row at 02:43:48Z, which is why the missing fallback did not show.
+- **evidence:** on a scratch extraction of 764cb99d, `node scripts/check-scheduled-routines.mjs` exits 1 with `✗ dependabot-queue-review: awaiting-activation since 2026-09-12 — 33.5 days, past the 30-day bound.` as its only incoherence (33.5 is the reading at about 12:35Z on 2026-10-15; the figure is the wall clock, and the re-run of the recorded command at 15:56Z read 33.7), and the same extraction with that row's `awaitingSince` set to 2026-10-15 exits 0 and asks for no fallback; gating jobs 114610006992, 115062679308, 115604960364 and 116171542140 (#1509 to #1512) each failed at step 59 "Scheduled routines (every always-on lane declared, authorized, scoped, evidenced)" while job 114344648506 (#1508) passed; the `brain-cycle` precedent is the resolved hand `artifacts/raised-hands/2026-10-09-scripts-check-scheduled-routines-mjs-fails-on-ma.json`; the first `## 2026-10-15` entry in `docs/agent/EVIDENCE.md` is the full record, and its actions/runs listing shows the five "SignalGrid CI" runs created between the bound and #1513's merge: those four failures and #1513's own passing run.
+- **landing:** pending — the open `docs/BUILD_BACKLOG.md` row "A routine-registry row that is `awaiting-activation` on an owner go names, before its 30-day bound, what happens at the bound" (the owner picks the fallback shape: the row's option (a), a fallback the gate applies at the bound, closes the class, and its option (b), a lead-time hand, only notifies); #1513 retired this one row and changes nothing for the next.
+- **status:** pending
+
+
+### L25 — a fresh clone needs workspace dependency links before preflight
+- **date:** 2026-10-27
+- **lane:** mac
+- **incident:** The new coordination-source clone linked only the repository-root dependency directory. It did not have the scripts package's workspace links, so full preflight stopped at the readiness derivation before breadth. This was clone setup, not a simulator assertion failure.
+- **evidence:** The direct unchanged-source command `node --import tsx src/readiness-scenarios.ts` from scripts returned `ERR_MODULE_NOT_FOUND` for tsx. A pinned offline frozen-lockfile workspace install restored the links; the readiness derivation then exited 0.
+- **landing:** recorded only — in every fresh clone, complete the pinned frozen-lockfile workspace installation before full preflight; preserve the initial setup failure and check the real failing child command rather than its final Node version line.
+- **status:** landed
+
+
+### L26 — Qualify the complete local coding path with actual tools and checks
+- **date:** 2026-10-27
+- **lane:** mac
+- **incident:** Earlier small-model runs ended without a qualified edit, while CLI exit status and generated prose could have hidden the missing implementation. V2 tool paths also required relative permission resources.
+- **evidence:** A fresh pinned local candidate performed complete reads, assertion RED, a real file write and all39 GREEN checks; the parent independently verified the one-expression diff, all65536 UTF-16 code units and unchanged frozen tests. All prior failures remain retained.
+- **landing:** pending — the C0 scope validator and frozen regression still require complete protected source delivery; a successful isolated coding trial does not install a daemon adapter or prove next-task continuity.
+- **status:** pending
+
+
+### L27 — A passing regression must be reached by both regular runners
+- **date:** 2026-10-27
+- **lane:** mac
+- **incident:** The new C0 test passed directly but full preflight correctly refused it because no regular runner reached the file.
+- **evidence:** The unchanged test-execution gate reproduced one unreachable-file problem before wiring and zero afterward; explicit unchanged33-test and six original-test commands passed, and preflight-CI parity passed.
+- **landing:** pending — explicit new test commands in preflight and review-hub CI; the original command and regression bytes remain unchanged.
+- **status:** pending
+
+
+### L28 — Refresh bound figures when a runner change changes their source
+- **date:** 2026-10-27
+- **lane:** mac
+- **incident:** The new regular regression command added one preflight line while the company plan still quoted its prior967-line measurement; full preflight refused the drift.
+- **evidence:** The direct unchanged gate named the exact stale sentence and measured968lines. Correcting that number alone made both the original line-count check and its self-test pass.
+- **landing:** pending — one measured number in the company plan, with all other source bytes retained and the gate/exemptions unchanged.
+- **status:** pending
+
+
+### L29 — Run pinned canonical generators after changing the tracked file inventory
+- **date:** 2026-10-27
+- **lane:** mac
+- **incident:** Adding the real regression changed the tracked surface inventory while its generated Markdown view still described the prior tree; full preflight refused the stale view.
+- **evidence:** The original surface-review-coverage check named the stale derived page. The existing pinned generators rederived only allowed output, with review-history JSON and actual model/test source hashes unchanged.
+- **landing:** pending — regenerate the current-tree view through the canonical generator; no invented source read, fresh timestamp or altered history is used.
+- **status:** pending
+
+
+### L30 — a regression runner must reject an empty required domain
+- **date:** 2026-10-27
+- **lane:** mac
+- **incident:** In a complete isolated94a tree, setting the new C0 loop to zero still exited0 with one ordinary passing test.
+- **evidence:** The direct registered command accepted zero control cases; the checked runner self-test and actual39test run are quoted in EVIDENCE. The original model selector and both test files stay byte-identical.
+- **landing:** pending — scripts/check-local-worker-task-selector-proof.mjs requires every C0 case exactly once and rejects missing, failed, skipped, cancelled or deferred proof; both preflight and CI run it.
+- **status:** pending
+
+
+### L31 — Match optional runtime flags to the declared CI runtime
+- **date:** 2026-10-28
+- **lane:** mac
+- **incident:** The checked C0 runner used an optional flag renamed in Node23.6 while CI declares Node22; local Node24 success did not establish CI compatibility.
+- **evidence:** The official Node CLI flag history identifies the rename; removing the unnecessary option produced actual39GREEN and all13 envelope self-tests with zero skips, recorded in EVIDENCE. Node22 execution is still checked by current-head CI rather than inferred from local Node24.
+- **landing:** pending — scripts/check-local-worker-task-selector-proof.mjs uses normal default test isolation, preserving every frozen assertion and the required-domain rejection.
+- **status:** pending
+
+
+### L32 — Keep a dated evidence record contiguous
+- **date:** 2026-10-28
+- **lane:** mac
+- **incident:** A new source-preparation sentence split the old CURRENT EVIDENCE measurement from its continuation, blurring which source its pass figures described.
+- **evidence:** A genuine first Ponytail lens returned FIX; direct byte comparison now proves both original measurement lines are verbatim and adjacent, with all unrelated LOOP bytes preserved. EVIDENCE records the accepted finding; the other three lenses were unrun.
+- **landing:** pending — docs/agent/LOOP.md gives the short pending preparation note its own label after the complete old record, pointing to the source-preparation entries.
+- **status:** pending
+
+
+### L33 — A recorded test count belongs to its exact command
+- **date:** 2026-10-28
+- **lane:** mac
+- **incident:** A new evidence entry put the33-test single-file RED result beneath a command that ran both test files.
+- **evidence:** A genuine Ponytail source lens returned FIX; exact independent reproductions now show33/2/31/0skipped for the single-file frozen-validator RED and39/39/0/0skipped for the corrected two-file GREEN.
+- **landing:** pending — docs/agent/EVIDENCE.md cites the actual RED and GREEN commands separately; inherited implementation and frozen tests remain unchanged.
+- **status:** pending
+
+
+### L34 — Record a second measurement when later wiring changes a cited count
+- **date:** 2026-10-28
+- **lane:** mac
+- **incident:** The historical968-line preflight measurement stayed true for its source, but the later C0 envelope step made the final source969lines without a separate measurement record.
+- **evidence:** A genuine security source lens returned FIX. The actual `node scripts/check-doc-line-counts.mjs` invocation reports32figures across2documents,4dated exemptions and0drift; scripts/preflight.mjs has969lines and the plan cites969.
+- **landing:** pending — docs/agent/EVIDENCE.md records the new measurement separately; prior evidence and lesson L28 remain byte-preserved.
+- **status:** pending
+
+
+### L35 — Construct a missing tracking reference explicitly in a fixture
+- **date:** 2026-10-28
+- **lane:** mac
+- **incident:** Mainline CI failed R6p1d and nested R12 when Git2.56 wrote a tracking ref for a URL push that older Git left absent.
+- **evidence:** Actual CI and pinned release behavior are linked in EVIDENCE. The specific original/fixed R6p1d assertion is RED/GREEN on a limited exact-source Git2.56 build. The installed-toolchain full self-test passes309applicable cases with6platform skips; the limited resource's8other failures stay explicit.
+- **landing:** pending — scripts/loop-state.mjs constructs its promised missing-ref scenario; production seam logic, the complete assertion and real remote branches are unchanged. Current-head source/CI/full-preflight gates still apply.
+- **status:** pending

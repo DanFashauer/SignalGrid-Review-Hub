@@ -87,10 +87,6 @@ const workflowBlob = readdirSync(workflowDir)
   .map((f) => readFileSync(join(workflowDir, f), "utf8"))
   .join("\n");
 const breadthWired = workflowBlob.includes("verify:breadth") || workflowBlob.includes("verify-breadth.mjs");
-const ciEffective = new Set(ci.keys());
-if (breadthWired) for (const p of breadth) ciEffective.add(p);
-const local = new Set([...pf, ...breadth]);
-
 console.log("CI ↔ preflight proof-coverage drift check — both lists derived from source\n");
 
 let failures = 0;
@@ -107,29 +103,72 @@ if (pf.size < 50) fail(`only ${pf.size} proofs found in preflight.mjs — the pr
 if (breadth.size < 30) fail(`only ${breadth.size} proofs found in verify-breadth.mjs — the breadth scan is broken, not the repo`);
 if (!breadthWired) fail(`no workflow invokes verify:breadth — the breadth lane cannot fail a pull request, so its ${breadth.size} proofs gate nothing`);
 
-const missingFromLocal = [...ciEffective].filter((p) => !local.has(p) && !CI_ONLY.has(p));
-const missingFromCi = [...local].filter((p) => !ciEffective.has(p) && !PREFLIGHT_ONLY.has(p));
-const inBothLanes = [...pf].filter((p) => breadth.has(p));
+/** The verdict, as a pure function of the derived sets: every drift between the CI
+ *  workflows and the two local lanes, plus every exemption that no longer applies. */
+function driftFindings({ ci, pf, breadth, breadthWired, ciOnly, preflightOnly }) {
+  const out = [];
+  const ciEffective = new Set(ci.keys());
+  if (breadthWired) for (const p of breadth) ciEffective.add(p);
+  const local = new Set([...pf, ...breadth]);
 
-for (const p of missingFromLocal) {
-  fail(`${p} runs in CI (${[...(ci.get(p) ?? ["breadth lane"])].join(", ")}) but in NEITHER local lane — a red build would pass "Safe to push"`);
-}
-for (const p of missingFromCi) {
-  fail(`${p} runs locally (preflight or breadth) but in NO workflow — it is verified only on a developer machine`);
-}
-for (const p of inBothLanes) {
-  fail(`${p} runs in BOTH preflight and the breadth lane — the per-push tax the lane exists to remove is returning; pick one`);
+  const missingFromLocal = [...ciEffective].filter((p) => !local.has(p) && !ciOnly.has(p));
+  const missingFromCi = [...local].filter((p) => !ciEffective.has(p) && !preflightOnly.has(p));
+  const inBothLanes = [...pf].filter((p) => breadth.has(p));
+
+  for (const p of missingFromLocal) {
+    out.push(`${p} runs in CI (${[...(ci.get(p) ?? ["breadth lane"])].join(", ")}) but in NEITHER local lane — a red build would pass "Safe to push"`);
+  }
+  for (const p of missingFromCi) {
+    out.push(`${p} runs locally (preflight or breadth) but in NO workflow — it is verified only on a developer machine`);
+  }
+  for (const p of inBothLanes) {
+    out.push(`${p} runs in BOTH preflight and the breadth lane — the per-push tax the lane exists to remove is returning; pick one`);
+  }
+
+  // An exemption that no longer applies is itself drift: it silences a check for something
+  // that is now covered, and the next reader trusts the list.
+  for (const [p, why] of ciOnly) {
+    if (!ci.has(p)) out.push(`CI_ONLY lists ${p} ("${why}") but no workflow runs it — stale exemption`);
+    else if (local.has(p)) out.push(`CI_ONLY lists ${p} as un-runnable locally, but a local lane runs it — stale exemption`);
+  }
+  for (const [p] of preflightOnly) {
+    if (!local.has(p)) out.push(`PREFLIGHT_ONLY lists ${p} but no local lane runs it — stale exemption`);
+  }
+  return out;
 }
 
-// An exemption that no longer applies is itself drift: it silences a check for something
-// that is now covered, and the next reader trusts the list.
-for (const [p, why] of CI_ONLY) {
-  if (!ci.has(p)) fail(`CI_ONLY lists ${p} ("${why}") but no workflow runs it — stale exemption`);
-  else if (local.has(p)) fail(`CI_ONLY lists ${p} as un-runnable locally, but a local lane runs it — stale exemption`);
+// ── in-run control ───────────────────────────────────────────────────────────
+// A proof wired into one lane only must be drift; the same proof in both must not.
+// Run on every invocation so a verdict that stopped comparing the two sides fails
+// here instead of reporting "no drift" about everything.
+{
+  const none = new Map();
+  const oneLane = driftFindings({
+    ci: new Map([["proof:control-a", new Set(["control.yml"])], ["proof:control-b", new Set(["control.yml"])]]),
+    pf: new Set(["proof:control-b"]),
+    breadth: new Set(),
+    breadthWired: true,
+    ciOnly: none,
+    preflightOnly: none,
+  });
+  const bothLanes = driftFindings({
+    ci: new Map([["proof:control-a", new Set(["control.yml"])]]),
+    pf: new Set(["proof:control-a"]),
+    breadth: new Set(),
+    breadthWired: true,
+    ciOnly: none,
+    preflightOnly: none,
+  });
+  if (oneLane.length !== 1 || !oneLane[0].startsWith("proof:control-a ") || bothLanes.length !== 0) {
+    console.error(
+      `✗ SELF-TEST FAILED — proof in one lane only caught: ${oneLane.length}/1, proof in both lanes ` +
+        `findings: ${bothLanes.length} (want 0). The verdict can no longer see drift between the lanes.`,
+    );
+    process.exit(1);
+  }
 }
-for (const [p] of PREFLIGHT_ONLY) {
-  if (!local.has(p)) fail(`PREFLIGHT_ONLY lists ${p} but no local lane runs it — stale exemption`);
-}
+
+for (const f of driftFindings({ ci, pf, breadth, breadthWired, ciOnly: CI_ONLY, preflightOnly: PREFLIGHT_ONLY })) fail(f);
 
 console.log(`  proofs in workflows:  ${ci.size} (+ ${breadth.size} via the wired breadth lane)`);
 console.log(`  proofs in preflight:  ${pf.size}`);
@@ -141,4 +180,4 @@ if (failures > 0) {
   console.error(`\nCI ↔ preflight drift check FAILED (${failures} issue${failures === 1 ? "" : "s"}).`);
   process.exit(1);
 }
-console.log("\nDrift check passed — every proof runs in both places, or is exempt by name with a reason.");
+console.log("\nDrift check passed — every proof runs in both places, or is exempt by name with a reason; in-run control green.");

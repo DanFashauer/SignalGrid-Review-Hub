@@ -1,5 +1,5 @@
 import { CORE_NORMALIZATION_VERSION } from "./core-normalization-version";
-import { canonicalJson, deterministicId, digest } from "./util";
+import { DIGEST_ALG, canonicalJson, deterministicId, digest } from "./util";
 import { OWNER_TYPES, RISK_TIERS } from "./types";
 import type {
   BadgeBindingState,
@@ -185,7 +185,7 @@ type SnapshotDigestFields = Pick<
   | "policyVersionId"
   | "policyVersion"
   | "sourceReferences"
-> & Pick<EvidenceSnapshot, "coreNormalizationVersion">;
+> & Pick<EvidenceSnapshot, "coreNormalizationVersion" | "digestAlg">;
 
 function snapshotDigestBody(fields: SnapshotDigestFields): string {
   return canonicalJson({
@@ -206,7 +206,19 @@ function snapshotDigestBody(fields: SnapshotDigestFields): string {
     ...(fields.coreNormalizationVersion === undefined
       ? {}
       : { coreNormalizationVersion: fields.coreNormalizationVersion }),
+    // Same conditional-spread migration: an unmarked (pre-fix) row's body is byte-identical.
+    ...(fields.digestAlg === undefined ? {} : { digestAlg: fields.digestAlg }),
   });
+}
+
+/** The pre-fix digest: FNV-1a 64 over the LOW BYTE of each UTF-16 code unit. Verifies rows
+ *  minted before `digestAlg` existed and nothing else — never used to mint. */
+function legacyLowByteDigest(input: string): string {
+  let hash = 0xcbf29ce484222325n;
+  for (let i = 0; i < input.length; i++) {
+    hash = ((hash ^ BigInt(input.charCodeAt(i) & 0xff)) * 0x100000001b3n) & 0xffffffffffffffffn;
+  }
+  return hash.toString(16).padStart(16, "0");
 }
 
 export function buildSnapshot(
@@ -231,6 +243,7 @@ export function buildSnapshot(
     policyVersion: version.version,
     sourceReferences,
     coreNormalizationVersion: CORE_NORMALIZATION_VERSION,
+    digestAlg: DIGEST_ALG,
   };
   return {
     id,
@@ -241,7 +254,11 @@ export function buildSnapshot(
 
 /** Recompute a snapshot digest to confirm it has not been altered. */
 export function verifySnapshot(snapshot: EvidenceSnapshot): boolean {
-  return digest(snapshotDigestBody(snapshot)) === snapshot.digest;
+  const fn =
+    snapshot.digestAlg === undefined ? legacyLowByteDigest
+    : snapshot.digestAlg === DIGEST_ALG ? digest
+    : null; // an algorithm this build does not know verifies false — fail closed
+  return fn !== null && fn(snapshotDigestBody(snapshot)) === snapshot.digest;
 }
 
 /**

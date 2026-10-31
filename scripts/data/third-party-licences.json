@@ -1705,6 +1705,30 @@
       "licence": "Apache-2.0",
       "basis": "POM <licenses> at https://repo1.maven.org/maven2/org/jetbrains/kotlinx/kotlinx-serialization-json/1.7.3/kotlinx-serialization-json-1.7.3.pom, recorded 2026-08-21 (POM names it 'The Apache Software License, Version 2.0' — normalised to its SPDX id)"
     },
+    "pkg:maven/com.android.application/com.android.application.gradle.plugin@8.7.3": {
+      "licence": "Apache-2.0",
+      "basis": "POM <licenses> at https://dl.google.com/android/maven2/com/android/application/com.android.application.gradle.plugin/8.7.3/com.android.application.gradle.plugin-8.7.3.pom, recorded 2026-09-30 (POM names it 'The Apache Software License, Version 2.0' — normalised to its SPDX id) (plugin marker for com.android.tools.build:gradle:8.7.3, whose POM names the same licence)"
+    },
+    "pkg:maven/org.jetbrains.kotlin.android/org.jetbrains.kotlin.android.gradle.plugin@2.1.0": {
+      "licence": "Apache-2.0",
+      "basis": "Gradle plugin marker https://plugins.gradle.org/m2/org/jetbrains/kotlin/android/org.jetbrains.kotlin.android.gradle.plugin/2.1.0/org.jetbrains.kotlin.android.gradle.plugin-2.1.0.pom resolves to org.jetbrains.kotlin:kotlin-gradle-plugin:2.1.0; POM <licenses> at https://repo.maven.apache.org/maven2/org/jetbrains/kotlin/kotlin-gradle-plugin/2.1.0/kotlin-gradle-plugin-2.1.0.pom, recorded 2026-09-30 (POM names it 'The Apache License, Version 2.0' — normalised to its SPDX id)"
+    },
+    "pkg:maven/org.jetbrains.kotlin.jvm/org.jetbrains.kotlin.jvm.gradle.plugin@2.1.0": {
+      "licence": "Apache-2.0",
+      "basis": "Gradle plugin marker https://plugins.gradle.org/m2/org/jetbrains/kotlin/jvm/org.jetbrains.kotlin.jvm.gradle.plugin/2.1.0/org.jetbrains.kotlin.jvm.gradle.plugin-2.1.0.pom resolves to org.jetbrains.kotlin:kotlin-gradle-plugin:2.1.0; POM <licenses> at https://repo.maven.apache.org/maven2/org/jetbrains/kotlin/kotlin-gradle-plugin/2.1.0/kotlin-gradle-plugin-2.1.0.pom, recorded 2026-09-30 (POM names it 'The Apache License, Version 2.0' — normalised to its SPDX id)"
+    },
+    "pkg:maven/org.jetbrains.kotlin.plugin.compose/org.jetbrains.kotlin.plugin.compose.gradle.plugin@2.1.0": {
+      "licence": "Apache-2.0",
+      "basis": "Gradle plugin marker https://plugins.gradle.org/m2/org/jetbrains/kotlin/plugin/compose/org.jetbrains.kotlin.plugin.compose.gradle.plugin/2.1.0/org.jetbrains.kotlin.plugin.compose.gradle.plugin-2.1.0.pom resolves to org.jetbrains.kotlin:compose-compiler-gradle-plugin:2.1.0; POM <licenses> at https://repo.maven.apache.org/maven2/org/jetbrains/kotlin/compose-compiler-gradle-plugin/2.1.0/compose-compiler-gradle-plugin-2.1.0.pom, recorded 2026-09-30 (POM names it 'The Apache License, Version 2.0' — normalised to its SPDX id)"
+    },
+    "pkg:maven/org.jetbrains.kotlin.plugin.serialization/org.jetbrains.kotlin.plugin.serialization.gradle.plugin@2.1.0": {
+      "licence": "Apache-2.0",
+      "basis": "Gradle plugin marker https://plugins.gradle.org/m2/org/jetbrains/kotlin/plugin/serialization/org.jetbrains.kotlin.plugin.serialization.gradle.plugin/2.1.0/org.jetbrains.kotlin.plugin.serialization.gradle.plugin-2.1.0.pom resolves to org.jetbrains.kotlin:kotlin-serialization:2.1.0; POM <licenses> at https://repo.maven.apache.org/maven2/org/jetbrains/kotlin/kotlin-serialization/2.1.0/kotlin-serialization-2.1.0.pom, recorded 2026-09-30 (POM names it 'The Apache License, Version 2.0' — normalised to its SPDX id)"
+    },
+    "pkg:maven/org.jetbrains.kotlin/kotlin-test@2.1.0": {
+      "licence": "Apache-2.0",
+      "basis": "POM <licenses> at https://repo.maven.apache.org/maven2/org/jetbrains/kotlin/kotlin-test/2.1.0/kotlin-test-2.1.0.pom, recorded 2026-09-30 (POM names it 'The Apache License, Version 2.0' — normalised to its SPDX id)"
+    },
     "pkg:npm/%40esbuild/win32-arm64@0.27.3": {
       "licence": "MIT",
       "basis": "registry.npmjs.org manifest for @esbuild/win32-arm64@0.27.3 (platform binary not installed under the workspace overrides), recorded 2026-08-21"

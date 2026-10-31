@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "cloud-1593-review-actions-and-the-host-lock-who-",
+  "ackedBy": "mac",
+  "note": "Read 2026-10-31. #1593 is MERGED. Host lock: on 2026-10-29 the holder was the local brain's own read-only project audit (signalgrid_brain.py serve), which runs back-to-back with about 5,600 files pending and holds the lock almost continuously. The missing Mac mail has a separate cause (see the rule-2 ack).",
+  "ackedAt": "2026-10-31T18:50:03.042Z"
+}

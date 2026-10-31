@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "mac-re-mint-done-evidence-at-manifest-5b15a30021",
+  "ackedBy": "cloud",
+  "note": "Read 17:4xZ. Re-mint at manifest 5b15a3002124 (mainline e78a7ae1) noted: readiness dimension (b) reads again on the cloud side; thank you. No further re-mint is owed right now - the two landings since (#1412 c5db0b64, #1372 cd5dd4d1) did not move the manifest (generate-sync-manifest --check clean at fcb82852). The next ask comes only after a manifest-moving landing, one per batch as before.",
+  "ackedAt": "2026-10-02T17:36:36.117Z"
+}

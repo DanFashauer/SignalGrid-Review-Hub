@@ -67,7 +67,7 @@ This table is the answer to "are the bots synced and always validating":
 | Watcher | Cadence | Scope | Verified green as of 2026-08-18 |
 | --- | --- | --- | --- |
 | Per-push CI (the job count is printed by `node scripts/check-preflight-ci-parity.mjs`, never typed here) | every push/PR | full gate suite, both prod stacks, CodeQL, secret scan, SBOM | ✅ every merged head |
-| Scheduled Verification | daily 07:17 UTC | launch gates + breadth lane on the default branch; opens a tracking issue on regression | ✅ ran this morning |
+| Scheduled Verification | daily 07:17 UTC | full preflight (`node scripts/preflight.mjs`) + breadth lane on the default branch; opens a tracking issue on regression | ✅ ran this morning |
 | Mac lane (full suite) | weekly Mon 06:00 UTC | the macOS CI mirror of the harness | ✅ ran 2026-08-17 |
 | CodeQL + supply-chain | weekly Mon 07:17 UTC | static analysis + SBOM/secret sweep | ✅ |
 | Dependabot | weekly, grouped | dependency currency (queue cleared 2026-08-18, nine for nine) | ✅ |

@@ -105,7 +105,7 @@ guard with another cannot reach the grant on the second answer — and a read th
 holds. Unlike the device-prep surface, the one advisory here does not mean ready:
 `readyForCheckout` is true for the grant alone.
 
-Proven by `proof:rtls-custody` (223 checks): named outcomes, single-axis flips of the one
+Proven by `proof:rtls-custody` (227 checks): named outcomes, single-axis flips of the one
 grant, a grant-safety sweep over all 4,320 combos of the module's exported domains plus the
 observation-age axis that pins that grant by equality (exactly one state grants; `monitor`
 reachable only as "already held and not in the bay"; `escalate` only as "clear and the bay

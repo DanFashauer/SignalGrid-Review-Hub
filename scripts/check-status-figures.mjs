@@ -46,6 +46,33 @@ const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const STATUS = join(repo, "docs/STATUS.md");
 
 const GENERATOR = join(repo, "scripts/status-summary.mjs");
+const E2E_README = join(repo, "scripts/src/e2e/README.md");
+
+/**
+ * Live test-count claims in the e2e README (plan row 148). It said the suite "has
+ * since grown to 35", then "41 `test(` declarations", while `playwright test --list`
+ * reported 53 — two of the specs generate tests in a loop, so even a careful hand
+ * count of declarations undercounts. The section making the claim is the one whose
+ * lesson is that a README describing a test's live state is a hand-maintained claim.
+ * A number here that no gate reads has two stable states, absent or wrong, so this
+ * gate holds it at absent: the README points at `--list` instead. A dated historical
+ * snapshot in `N/N` form ("15/15 at that point") is not a live count and is allowed.
+ */
+const NUMBER_WORD =
+  "(?:(?:twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety)(?:-(?:one|two|three|four|five|six|seven|eight|nine))?|" +
+  "one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|" +
+  "seventeen|eighteen|nineteen|hundred|dozen)";
+// A number (digits or words, not one half of an `N/N` snapshot) followed within three
+// words by a test-ish noun, or "grown to N". Broad on purpose: the phrasing this gate
+// has to stop is whichever one the next hand-count reaches for, not the last one used.
+const COUNT_CLAIM = new RegExp(
+  `(?<![\\w/])(?:\\d+|${NUMBER_WORD})(?![\\w/])(?:[\\s\\x60*(]+[\\w\\x60().:-]+){0,3}?[\\s\\x60*(]+` +
+    `(?:e2e\\s+)?(?:tests?|specs?|spec\\s+files?|cases?|scenarios?|declarations?)\\b|\\bgrown\\s+to\\s+(?:\\d+|${NUMBER_WORD})\\b`,
+  "gi",
+);
+export function e2eReadmeCountClaims(src) {
+  return [...src.matchAll(COUNT_CLAIM)].map((m) => m[0]);
+}
 
 /**
  * The live-vendor lane count, DERIVED the way the generator derives it: the keys of
@@ -149,6 +176,16 @@ function main() {
     );
     process.exit(1);
   }
+  const claims = existsSync(E2E_README) ? e2eReadmeCountClaims(readFileSync(E2E_README, "utf8")) : [];
+  if (claims.length) {
+    console.error(
+      `\nscripts/src/e2e/README.md types a live test count (${claims.map((c) => `"${c}"`).join(", ")}).` +
+        `\n  No gate can keep that true; point at \`playwright test --list\` instead (plan row 148).\n`,
+    );
+    process.exit(1);
+  }
+  console.log("  ok   — scripts/src/e2e/README.md types no live test count (it points at --list)");
+
   console.log("\nSTATUS.md figure gate passed — the inventory line matches the tree.");
   console.log("  NOT checked here: the commit sha STATUS.md names, or its gate verdicts. The sha is the");
   console.log("  file's own staleness tell and cannot be gated by regeneration (see the header).");
@@ -193,6 +230,21 @@ function selfTest() {
     {
       name: "a generator whose LANE_ENV cannot be parsed yields null, so the gate REFUSES rather than comparing against 0",
       run: () => liveLaneCount("const OTHER = { a: 1 };", { "proof:live-edr": "x" }) === null && liveLaneCount("const LANE_ENV = {\n};", {}) === null,
+    },
+    {
+      name: "the e2e README's retired count phrasings are caught, and a dated N/N snapshot is not",
+      run: () =>
+        e2eReadmeCountClaims("the suite has since grown to 35").length === 1 &&
+        e2eReadmeCountClaims("41 `test(` declarations across 10 spec files").length === 2 &&
+        e2eReadmeCountClaims("Total: 53 tests in 10 files").length === 1 &&
+        e2eReadmeCountClaims("green — 15/15 **at that point**").length === 0 &&
+        ["53 e2e tests", "53 Playwright tests", "fifty-three tests", "41 cases", "Forty-one `test(` declarations"].every(
+          (x) => e2eReadmeCountClaims(x).length === 1,
+        ),
+    },
+    {
+      name: "the real e2e README types no live count",
+      run: () => e2eReadmeCountClaims(readFileSync(E2E_README, "utf8")).length === 0,
     },
     {
       name: "a lane declared in LANE_ENV but absent from package.json is NOT counted",

@@ -226,18 +226,15 @@ console.log(`lane-deliver — this machine is the ${lane.toUpperCase()} lane`);
 const fetched = git(["fetch", "--quiet", "origin", MAINLINE]);
 if (fetched.code !== 0) die(`cannot fetch origin/${MAINLINE}: ${fetched.err.trim()} — a delivery needs the remote`, 1);
 const base = mustGit(["rev-parse", `origin/${MAINLINE}`], repo, "resolving mainline");
-let wt = mkdtempSync(join(tmpdir(), "sg-lane-deliver-"));
+const wt = mkdtempSync(join(tmpdir(), "sg-lane-deliver-"));
 // The exit hook covers success, refusals and dry runs. A cleanup failure after
 // publication keeps the original attempt readback-only; an abrupt kill may leave it.
-function cleanup() {
-  if (!wt) return;
-  git(["worktree", "remove", "--force", wt], repo);
-  rmSync(wt, { recursive: true, force: true });
-  git(["worktree", "prune"], repo);
-  wt = null;
-}
 process.on("exit", () => {
-  try { cleanup(); }
+  try {
+    git(["worktree", "remove", "--force", wt], repo);
+    rmSync(wt, { recursive: true, force: true });
+    git(["worktree", "prune"], repo);
+  }
   catch (error) {
     process.exitCode = publicationAttempted ? 3 : 1;
     console.error(`lane-deliver: owned worktree cleanup failed: ${error.message}; ${publicationAttempted ? "READBACK ONLY, no resend" : "no publication attempted"}`);

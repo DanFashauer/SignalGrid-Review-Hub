@@ -176,21 +176,53 @@ heartbeat() {
     fi
   fi
   if [ "$DRY" = "1" ]; then say "dry-run: would heartbeat: $RESULT"; return 0; fi
+
+  _hb_hold() {
+    say "RAISED HAND: $1; READBACK ONLY, no submission (see docs/LANE_COORDINATION.md, held deliveries)"
+    python3 - "${_hb_previous:-missing}" "$1" <<'PY'
+import hashlib,json,os,sys
+key,reason=sys.argv[1:3]
+path='node_modules/.sg-heartbeat-'+hashlib.sha256(key.encode()).hexdigest()+'.hand.json'
+try:fd=os.open(path,os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,0o600)
+except FileExistsError:pass
+else:
+    with os.fdopen(fd,'w')as f:
+        json.dump({'kind':'held-delivery','attempt':key,'reason':reason,'need':'Exact GET-only original submission readback; never delete receipts or resend the old attempt','remote_notification_verified':False},f)
+        f.flush();os.fsync(f.fileno())
+PY
+    return 1
+  }
+
+  _hb_window="$QUIET_HEARTBEAT_MIN"
   # An independent parent-written terminal, not child output or a PID check,
   # closes an attempt. Unknown/interrupted mutations remain readback-only.
   if [ -e "$HB_LAST_ATTEMPT" ] || [ -L "$HB_LAST_ATTEMPT" ]; then
     _hb_previous="$(cat "$HB_LAST_ATTEMPT" 2>/dev/null)"
     if [ -L "$HB_LAST_ATTEMPT" ] || ! [[ "$_hb_previous" =~ ^[0-9]{8}T[0-9]{6}Z-[0-9]+$ ]]; then
-      say "WARN unknown heartbeat receipt; READBACK ONLY, no submission"; return 1
+      _hb_hold "unknown heartbeat receipt"; return 1
     fi
     _hb_previous_log="node_modules/.sg-heartbeat-${_hb_previous}.log"
     _hb_previous_exit="node_modules/.sg-heartbeat-${_hb_previous}.exit"
-    if [ ! -f "$_hb_previous_log" ] || [ -L "$_hb_previous_log" ] || [ ! -f "$_hb_previous_exit" ] || [ -L "$_hb_previous_exit" ]; then
-      say "WARN unfinished heartbeat receipt; READBACK ONLY, no submission"; return 1
+    if [ ! -f "$_hb_previous_log" ] || [ -L "$_hb_previous_log" ] || [ -L "$_hb_previous_exit" ]; then
+      _hb_hold "unfinished heartbeat receipt"; return 1
     fi
     case "$(cat "$_hb_previous_exit" 2>/dev/null)" in
-      0|1|2) ;;
-      *) say "WARN unconfirmed heartbeat submission; READBACK ONLY, no submission"; return 1 ;;
+      1|2) _hb_window=10 ;; # known prepublication refusal: a fresh observation after ten minutes
+      *)
+        _hb_submission="node_modules/.sg-heartbeat-${_hb_previous}.submission.json"
+        if [ ! -f "$_hb_submission" ] || [ -L "$_hb_submission" ]; then
+          _hb_hold "unconfirmed/unfinished heartbeat lacks its exact submission binding"; return 1
+        fi
+        if _hb_readback="$(node scripts/lane-deliver.mjs readback "$_hb_submission" 2>&1)"; then
+          say "$_hb_readback"
+        else
+          _hb_readback_exit=$?
+          if [ "$_hb_readback_exit" = "4" ]; then
+            say "$_hb_readback"; return 0
+          fi
+          _hb_hold "original heartbeat canonical readback is unavailable"; return 1
+        fi
+        ;;
     esac
   fi
   # Throttle a result IDENTICAL to the last attempted one ("quiet" again, the same
@@ -200,8 +232,8 @@ heartbeat() {
   # `cat` comparison are BSD/bash-3.2 safe; a missing result file compares unequal.
   LAST_RESULT=""
   [ -f "$HB_LAST_RESULT" ] && LAST_RESULT="$(cat "$HB_LAST_RESULT" 2>/dev/null)"
-  if [ "$RESULT" = "$LAST_RESULT" ] && [ -f "$HB_STAMP" ] && [ -n "$(find "$HB_STAMP" -mmin -"$QUIET_HEARTBEAT_MIN" 2>/dev/null)" ]; then
-    say "unchanged ($RESULT), last submission attempt <${QUIET_HEARTBEAT_MIN}m ago — tick ran, no new mail PR"
+  if [ "$RESULT" = "$LAST_RESULT" ] && [ -f "$HB_STAMP" ] && [ -n "$(find "$HB_STAMP" -mmin -"$_hb_window" 2>/dev/null)" ]; then
+    say "unchanged ($RESULT), last submission attempt <${_hb_window}m ago — tick ran, no new mail PR"
     return 0
   fi
   # --no-wake: the tick heartbeat is a STALENESS record, read from the heartbeat
@@ -245,7 +277,7 @@ PY
   if ! mkdir -p node_modules || ! _hb_record prepare "$_hb_attempt" "$RESULT" "$HB_LAST_ATTEMPT" "$HB_LAST_RESULT" "$HB_STAMP"; then
     say "WARN could not preserve heartbeat intent; no submission"; return 1
   fi
-  if node scripts/lane-deliver.mjs heartbeat mac-lane-tick "$RESULT" --no-wake >>"$_hb_log" 2>&1; then
+  if node scripts/lane-deliver.mjs heartbeat mac-lane-tick "$RESULT" --no-wake --receipt "node_modules/.sg-heartbeat-${_hb_attempt}.submission.json" >>"$_hb_log" 2>&1; then
     _hb_exit=0
   else
     _hb_exit=$?
@@ -499,7 +531,8 @@ if [ -n "$(git status --porcelain -- artifacts/sim-results artifacts/live-eviden
         rm -f docs/agent/objective-state.json
       fi
       git clean -fq -- "artifacts/sim-requests/objective-loop-*.json" >/dev/null 2>&1 || true
-      # ...and forget the delivery stamp, so the next tick re-derives AND re-delivers.
+      # ...and re-derive the decision next tick. Independent per-escalation attempt
+      # records remain intact: forgetting this stamp never permits re-submission.
       rm -f node_modules/.sg-objective-loop-last.json
     fi
     if [ "$IN_TICK_WT" = "1" ]; then

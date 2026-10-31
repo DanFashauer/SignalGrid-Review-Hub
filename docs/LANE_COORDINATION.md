@@ -49,7 +49,7 @@ edit in the commit and the lane message, per protocol rule 2.
 (`bash scripts/mac/install-launchd.sh`, once, on the Mac): fetch, refuse a dirty
 or non-Alpha checkout, run every pending sim request, push results on a
 `mac/tick-<stamp>` branch, and HEARTBEAT (the mac-lane-tick file under artifacts/agent-heartbeats,
-written through a protected lane/mac-mail-* PR) on every path — quiet, acted, skipped and why. Changed outcomes submit immediately; an unchanged outcome gets a two-hour keepalive, leaving an hour inside the three-hour tolerance for CI and merge. A successful submission is pending until that PR lands. An unconfirmed mutation blocks further submissions for exact readback. The cloud steward opens the PR for
+written through a protected lane/mac-mail-* PR) on every path — quiet, acted, skipped and why. Changed outcomes submit when the previous attempt has closed. An unchanged outcome gets a two-hour keepalive; a known prepublication refusal permits a fresh observation after ten minutes. Pending PRs hold later heartbeat submissions until exact canonical readback, and unresolved evidence raises a durable local hand. Submission is distinct from canonical delivery. The cloud steward opens the PR for
 each `mac/tick-*` branch within the hour and, when that heartbeat is older than
 three hours, escalates to the owner once with the one install command: a Mac
 that has gone silent is a signal, not a mystery. Before merging a tick PR that
@@ -150,7 +150,7 @@ What changed, and what each lane does now:
 
 | | Mac lane | Cloud lane |
 | --- | --- | --- |
-| Write + deliver mail, an ack, a heartbeat | `pnpm run lane:deliver send\|ack\|heartbeat …` — published to **`lane/mac-mail-<stamp>`** from a throwaway worktree, then PR + auto-merge request when `gh` is available; your checkout is untouched. Required checks and landing conditions remain. Publication is pending until the PR merges; never direct-push canonical or resend a refused/uncertain push. | same protected PR route using **`lane/cloud-mail-<stamp>`**. Never the code branch. |
+| Write + deliver mail, an ack, a heartbeat | `pnpm run lane:deliver send\|ack\|heartbeat …` — published to **`lane/mac-mail-<stamp>-<nonce>`** from a throwaway worktree, then PR + auto-merge request when `gh` is available; your checkout is untouched. Required checks and landing conditions remain. Publication is pending until the PR merges; never direct-push canonical or resend a refused/uncertain push. | same protected PR route using **`lane/cloud-mail-<stamp>-<nonce>`**. Never the code branch. |
 | Wake the other lane now | after a delivery, `lane:deliver` comments on the **mailbox PR** (`docs/agent/lane-mailbox.json`, PR #439) if `gh` is on PATH, else prints its URL — one comment there, from any device, wakes the cloud session | subscribed to the mailbox PR every session start and every cycle |
 | A topic branch pushed for review | push `mac/<name>`; `lane:inbox` lists your branches mainline does not carry yet | **hourly** cycle opens a DRAFT PR for every unmerged `mac/*` branch at once (CI starts before the review), subscribes to it, reviews, lands or comments the blocker |
 | How long has this waited | `lane:inbox` shows it per message; `check-lane-messages` names it on every run; unread beyond 24h is STALE (reported, never fatal) — for EVERY message: a message with no `sentAt` ages by the commit that delivered it (since 2026-09-06; before that it could never be stale) | same |
@@ -472,3 +472,39 @@ needed. Both entries are real, both cost real time.
    If a future pair of lanes measures the same thing twice, rule 4 applies and
    one of them is redundant; if they measure different things, both stay AND
    each must name what it is not.
+
+
+## Held deliveries: original receipt readback
+
+Each unattended heartbeat, objective escalation and build hand records its parent
+intent before invoking the delivery child. The delivery writes an exclusive
+submission receipt before its sole topic push, containing the repository, base,
+unique topic, full head and exact changed Git blobs. Authentication is checked
+before a Mac push. A reset of tracked objective state or its old decision stamp
+does not remove the independent escalation attempts. The build-hand cause also
+has one attempt record; repeating the tick never resends an uncertain hand.
+
+Run this in the exact checkout that produced the original receipt, using the
+path recorded in its local log:
+
+```sh
+node scripts/lane-deliver.mjs readback <original-submission-receipt>
+```
+
+This is GET/fetch only. It saves the raw response before parsing and verifies the
+PR's exact head/base, MERGED state and full merge SHA, fresh canonical ancestry,
+topic ancestry and every recorded changed blob. Exit 0 verifies that delivery;
+exit 4 means the exact open PR still has auto-merge pending; exit 3 means held.
+It never pushes, creates another PR, repeats auto-merge or deletes a branch.
+
+The heartbeat uses this command on later ticks, including after an interrupted
+parent. A verified canonical merge permits a new heartbeat observation. A
+pending PR waits. Missing, malformed or incompatible evidence stays readback
+only, with an immutable `.sg-heartbeat-*.hand.json` in the producing checkout's
+`node_modules` and a `RAISED HAND` line in its log. Objective/build attempts name
+their original submission receipt in their local warnings. If no receipt exists,
+inspect the preserved parent intent and raw child log before choosing a separate
+scoped repair; do not erase the pointer or rerun the old mutation. A local hand
+does not certify that the blocked outbound channel notified GitHub. Keep private
+logs and receipt files local. This publication readback establishes no generic
+provider or host quiescence, product qualification or native coding success.

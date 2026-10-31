@@ -16,6 +16,8 @@
 //          --allow-ungated  deliver even when mainline lacks a gate script (named
 //                           in the output; never the default — see step 3)
 //          --no-wake        skip the mailbox-PR comment
+//          --receipt <file> persist exact submission binding before the push
+//   lane:deliver readback <receipt> verifies canonical landing without mutations
 //
 // WHY THIS EXISTS (2026-09-05, owner: "this is not working and causing delay").
 // The channel's law was "the push is the delivery", and three things made the
@@ -46,7 +48,8 @@
 // branch it tried, never retried into a different ref. Nothing here reads the
 // clock except to stamp the artifact instant and name the branch.
 import { spawnSync } from "node:child_process";
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { randomBytes } from "node:crypto";
+import { closeSync, constants, cpSync, existsSync, fstatSync, fsyncSync, mkdirSync, mkdtempSync, openSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -88,7 +91,11 @@ for (let i = 0; i < argv.length; i += 1) {
   else if (a === "--via-pr") continue;
   else if (a === "--no-wake") flags.noWake = true;
   else if (a === "--allow-ungated") flags.allowUngated = true;
-  else if (a === "--trailer") {
+  else if (a === "--receipt") {
+    const v = argv[++i];
+    if (!v || v.startsWith("--")) die("--receipt needs an unused local file");
+    flags.receipt = resolve(v);
+  } else if (a === "--trailer") {
     const v = argv[i + 1];
     if (!v) die("--trailer needs a value");
     flags.trailers.push(v);
@@ -133,6 +140,62 @@ function parseOps() {
     return ops;
   }
   die(`unknown command "${cmd ?? ""}". Try: send | ack | heartbeat | batch`);
+}
+
+
+// Immutable private receipts bind a caller's one attempt to its exact Git data.
+// Readback uses GET/fetch only; it never repeats a publication mutation.
+function receiptWrite(path, value) {
+  const fd = openSync(path, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600);
+  try { writeFileSync(fd, JSON.stringify(value) + "\n"); fsyncSync(fd); }
+  finally { closeSync(fd); }
+}
+function receiptRead(path) {
+  const fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW);
+  try {
+    const st = fstatSync(fd);
+    if (!st.isFile() || st.nlink !== 1 || st.size > 1024 * 1024) throw Error("owned regular receipt required");
+    return JSON.parse(readFileSync(fd, "utf8"));
+  } finally { closeSync(fd); }
+}
+function readback(path) {
+  try {
+    const r = receiptRead(path);
+    if (r.version !== 1 || !/^[\w.-]+\/[\w.-]+$/.test(r.repository)
+      || !/^lane\/(mac|cloud)-mail-\d{8}-\d{6}Z-[a-f0-9]{12}$/.test(r.target)
+      || !/^[a-f0-9]{40}$/.test(r.head) || !/^[a-f0-9]{40}$/.test(r.base)
+      || !Array.isArray(r.blobs) || !r.blobs.length
+      || r.blobs.some(b => typeof b.path !== "string" || b.path.includes("..") || !/^[a-f0-9]{40}$/.test(b.oid)
+        || ![...MAIL_DIRS, COVERAGE_PAGE].some(p => b.path === p || b.path.startsWith(p + "/")))) throw Error("invalid submission binding");
+    const remote = git(["remote", "get-url", "origin"]);
+    const slug = /github\.com[:/]([^/]+)\/([^/.]+)(?:\.git)?$/.exec(remote.out.trim());
+    if (remote.code || !slug || `${slug[1]}/${slug[2]}` !== r.repository) throw Error("receipt repository differs");
+    const query = run("gh", ["pr", "view", r.target, "--repo", r.repository, "--json", "number,url,state,headRefOid,baseRefName,mergeCommit,autoMergeRequest"]);
+    const observation = `${path}.readback-${Date.now()}-${randomBytes(6).toString("hex")}.json`;
+    receiptWrite(observation, { at: new Date().toISOString(), target: r.target, head: r.head,
+      exit: query.code, stdout: query.out, stderr: query.err }); // raw before parsing
+    if (query.code) throw Error("PR readback unavailable; original attempt stays held");
+    const pr = JSON.parse(query.out);
+    if (pr.headRefOid !== r.head || pr.baseRefName !== MAINLINE) throw Error("PR binding differs");
+    if (pr.state === "OPEN" && pr.autoMergeRequest) {
+      console.log(`original PR ${pr.number} is still pending protected merge; no new submission`);
+      return 4;
+    }
+    if (pr.state !== "MERGED" || !/^[a-f0-9]{40}$/.test(pr.mergeCommit?.oid ?? "")) throw Error(`PR ${pr.number} is ${pr.state}; canonical delivery remains unverified`);
+    const fetched = git(["fetch", "--no-tags", "origin", `refs/heads/${MAINLINE}`]);
+    receiptWrite(`${observation}.fetch.json`, { exit: fetched.code, stdout: fetched.out, stderr: fetched.err });
+    if (fetched.code || git(["merge-base", "--is-ancestor", pr.mergeCommit.oid, "FETCH_HEAD"]).code || git(["merge-base", "--is-ancestor", r.head, pr.mergeCommit.oid]).code) throw Error("merge is not verified in freshly fetched canonical ancestry");
+    for (const b of r.blobs) {
+      const actual = git(["rev-parse", `${pr.mergeCommit.oid}:${b.path}`]);
+      if (actual.code || actual.out.trim() !== b.oid) throw Error(`canonical blob differs: ${b.path}`);
+    }
+    console.log(`canonical merge verified: PR ${pr.number} @ ${pr.mergeCommit.oid}; original topic ${r.target} @ ${r.head}`);
+    return 0;
+  } catch (e) { console.error(`RAISED HAND: ${e.message}; READBACK ONLY, no mutation`); return 3; }
+}
+if (cmd === "readback") {
+  if (rest.length !== 1) die("usage: lane:deliver readback <original-submission-receipt>");
+  process.exit(readback(resolve(rest[0])));
 }
 
 const ops = parseOps();
@@ -300,8 +363,10 @@ let pushedSha = null;
 
   // ── 5. one topic push; canonical changes go through the protected PR ────────
   const ghAvailable = run("gh", ["--version"]).code === 0;
-  if (lane === "mac" && (!ghAvailable || !repoSlug)) die("unattended Mac delivery requires gh and a GitHub origin; no push was attempted", 1);
-  const target = `lane/${lane}-mail-${stamp}`;
+  if (lane === "mac" && (!ghAvailable || !repoSlug || run("gh", ["auth", "status", "--hostname", "github.com"]).code !== 0)) die("unattended Mac delivery requires authenticated gh and a GitHub origin; no push was attempted", 1);
+  const target = `lane/${lane}-mail-${stamp}-${randomBytes(6).toString("hex")}`;
+  if (flags.receipt) receiptWrite(flags.receipt, { version: 1, at: now.toISOString(), repository: repoSlug,
+    base, head: sha, target, blobs: staged.map(path => ({ path, oid: mustGit(["rev-parse", `${sha}:${path}`], wt, "binding the submission blob") })) });
   const pushed = git(["push", "origin", `HEAD:refs/heads/${target}`], wt);
   const pushResponse = `${pushed.err}${pushed.out}`.trim();
   if (pushed.code !== 0 && /GH006|GH013|remote rejected|protected branch|permission .+ denied/i.test(pushResponse)) {

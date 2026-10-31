@@ -334,3 +334,12 @@ block; a stage run on the wrong tier is a lesson here.
 - **evidence:** The actual canonical heartbeat readback remained 2026-10-24T07:30:38.430Z; active ruleset 25774497 requires a PR and strict checks with no bypass. Disposable-Git original-source regression is 5 pass / 2 fail; corrected source is 7 pass / 0 fail / 0 skip. These fixtures do not establish a real remote delivery. The first full preflight refused the new fixture until its Git setup used the existing scratchGit helper; no guard or PENDING debt row was relaxed.
 - **landing:** pending — both lanes publish a mail topic and use the existing protected PR route; refused pushes stop, and uncertain responses get exact remote readback without a resend. Full current-head validation/review/CI and canonical heartbeat restoration remain owed.
 - **status:** pending
+
+
+### L37 — A pending or uncertain mail attempt must survive the next tick
+- **date:** 2026-10-31
+- **lane:** mac
+- **incident:** Only exit 0 was remembered by objective mail; failed or unconfirmed children could create another topic each tick. The heartbeat held unknowns without recovery, and a failure assertion still checked obsolete success wording.
+- **evidence:** New frozen controls reproduced 12 failures on be1. Corrected source passes 37 controls with zero failures/skips; a separate actual Bash control reproduces old refusal pacing. Receipt-aware I/O fixed one fixture failure without weakening the estate-clearance assertion. Four deliberate false-success/ID mutants are rejected.
+- **landing:** pending — exact immutable submission readback, authentication before Mac push, unique topics and independent parent attempts; source-head qualification and canonical heartbeat proof belong to PR #1698.
+- **status:** pending

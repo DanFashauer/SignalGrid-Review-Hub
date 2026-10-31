@@ -220,7 +220,6 @@ heartbeat() {
 
   _hb_hold() {
     say "RAISED HAND: $1; READBACK ONLY, no submission (see docs/LANE_COORDINATION.md, held deliveries)"
-
   }
 
   _hb_window="$QUIET_HEARTBEAT_MIN"

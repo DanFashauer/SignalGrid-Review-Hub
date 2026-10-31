@@ -491,35 +491,28 @@ path recorded in its local log:
 node scripts/lane-deliver.mjs readback <original-submission-receipt>
 ```
 
-This is GET/fetch only. It saves the raw response before parsing and verifies the
-PR's exact head/base, MERGED state and full merge SHA, the exact ls-remote canonical SHA,
-merge/topic ancestry and every recorded changed blob using real Git objects.
-Concurrent FETCH_HEAD changes and local replacement refs or grafts are not proof. Exit 0 verifies that delivery;
-exit 4 means the exact open PR still has auto-merge pending; exit 3 means held.
-It never pushes, creates another PR, repeats auto-merge or deletes a branch.
+This is GET/fetch only. It saves the raw response before parsing, verifies the
+PR repository/base and MERGED state, pins the exact current canonical SHA, and
+uses real Git objects to prove the merge and ORIGINAL topic commit are in
+canonical ancestry with every recorded payload blob unchanged. An estate/steward
+refresh may advance the PR head without changing that original commit or payload.
+Concurrent FETCH_HEAD changes, replacement refs and grafts are not proof.
 
-The heartbeat uses this command on later ticks, including after an interrupted
-parent. A verified canonical merge permits a new heartbeat observation. A
-pending PR waits. Missing, malformed or incompatible evidence stays readback
-only, preserving the original immutable intent/child log/terminal in the producing
-checkout's `node_modules` and a `RAISED HAND` line in its private tick log. Objective/build attempts name
-their original submission receipt in their local warnings. If no receipt exists,
-inspect the preserved parent intent and raw child log before choosing a separate
-scoped repair; do not erase the pointer or rerun the old mutation. A local hand
-does not certify that the blocked outbound channel notified GitHub. Keep private
-logs and receipt files local.
+Exit 0 verifies that delivery; exit 4 means its open PR still has auto-merge
+pending; exit 3 means held. A due or changed heartbeat observation checks its
+original submission first; identical observations inside the keepalive window
+remain quiet. A verified canonical merge permits a new observation. Objective
+and build warnings identify their original consumed attempt; they are local
+warnings and do not certify that GitHub received new mail.
 
-A behind mail PR may be updated through the existing qualified estate/steward
-route. Readback then proves the ORIGINAL commit is an ancestor of the real
-canonical merge and every recorded payload blob is unchanged; the refreshed PR
-head need not equal the original commit. A pending PR is checked only when a
-new heartbeat observation is due, rather than on every five-minute work poll.
-A CLOSED/unmerged PR, disabled auto-merge, or unavailable original receipt stays
-held. From the producing checkout, run `node scripts/lane-deliver.mjs readback
-<receipt>` and preserve its exact observations with the parent intent/log. Hand
-the cause to a separately source/ownership/grant-qualified repair; no automatic
-pointer deletion, resend, approving vote or bypass is a recovery step. A UTC day
-change alone never authorizes repeating an unknown objective/build hand. Only
-actual canonical proof closes the original delivery. Estate failures persist in
-the heartbeat as a coarse exit status; full diagnostics stay in the private log,
-and a later actual successful estate run clears that failure.
+Missing, malformed, edited or incompatible intent/log/terminal/submission
+evidence, a CLOSED/unmerged PR, disabled auto-merge or unavailable canonical
+proof stays readback-only. Preserve the original immutable evidence in the
+producing checkout's `node_modules`; use the command above there and hand the
+cause to a separate source/ownership/grant-qualified repair. Never erase its
+pointer, resend, infer cleanup from process-group defaults, manufacture an
+approving vote or bypass protection. A UTC day change does not renew an unknown
+attempt. Keep private logs and receipts local. Only actual canonical proof closes
+the original delivery. Estate failures persist as coarse exit status; detailed
+diagnostics stay in the private log, and an actual successful estate run clears
+the owned failure record.

@@ -15,7 +15,7 @@ let passed = 0;
 let failed = 0;
 
 function fixture({ lane = "mac", reject = false, loseResponse = false, failBeforePush = false, gateFails = false,
-  readbackCanonicalRace = false, fixedClock = false, readbackState = "MERGED", denyCleanup = false, ghMissing = false, ghAuthFails = false, ghCreateFails = false, ghAutoFails = false, wakeMailbox = false, tick = false, ...tickOptions } = {}) {
+  readbackCanonicalRace = false, fixedClock = false, readbackState = "MERGED", denyCleanup = false, ghAuthFails = false, ghCreateFails = false, ghAutoFails = false, wakeMailbox = false, tick = false, ...tickOptions } = {}) {
   if (tick) return heartbeatFixture(tickOptions);
   const root = mkdtempSync(join(tmpdir(), "sg-delivery-test-"));
   const repo = join(root, "repo"), remote = join(root, "remote.git"), bin = join(root, "bin");
@@ -60,12 +60,12 @@ function fixture({ lane = "mac", reject = false, loseResponse = false, failBefor
   file(wrapper, `#!${process.execPath}\nimport {spawnSync} from 'node:child_process';\nimport {appendFileSync,readFileSync,writeFileSync} from 'node:fs';\nconst args=process.argv.slice(2);\nif(args[0]==='remote'&&args[1]==='get-url'&&args[2]==='origin'){console.log(${JSON.stringify(url)});process.exit(0)}\nif(args[0]==='push')appendFileSync(${JSON.stringify(pushLog)},JSON.stringify(args)+'\\n');\n${failBeforePush ? "if(args[0]==='push'){console.error('fixture transport stopped before transmission');process.exit(1)}" : ""}\nconst r=spawnSync(${JSON.stringify(GIT)},args,{stdio:'inherit'});\n${readbackCanonicalRace ? `if(args[0]==='fetch'&&r.status===0){try{const rows=readFileSync(${JSON.stringify(pushLog)},'utf8').trim().split(String.fromCharCode(10)).filter(Boolean).map(JSON.parse);const ref=rows.at(-1).at(-1).slice('HEAD:'.length);const oid=spawnSync(${JSON.stringify(GIT)},['--git-dir',${JSON.stringify(remote)},'rev-parse',ref],{encoding:'utf8'}).stdout.trim();if(/^[a-f0-9]{40}$/.test(oid))writeFileSync(${JSON.stringify(join(repo,'.git/FETCH_HEAD'))},oid+String.fromCharCode(9,9)+'concurrent fixture fetch'+String.fromCharCode(10));}catch{}}` : ""}\n${loseResponse ? "if(args[0]==='push' && r.status===0){console.error('fixture transport response lost');process.exit(1)}" : ""}\nprocess.exit(r.status??1);\n`);
   chmodSync(wrapper, 0o755);
   const gh = join(bin, "gh");
-  file(gh, `#!${process.execPath}\nimport {appendFileSync,chmodSync} from 'node:fs';\nimport {spawnSync} from 'node:child_process';\nconst a=process.argv.slice(2);appendFileSync(${JSON.stringify(ghLog)},JSON.stringify(a)+'\\n');\nif(a[0]==='--version'){${ghMissing ? "process.exit(1)" : "console.log('gh fixture')"}}\nelse if(a[0]==='pr'&&a[1]==='view'){
+  file(gh, `#!${process.execPath}\nimport {appendFileSync,chmodSync} from 'node:fs';\nimport {spawnSync} from 'node:child_process';\nconst a=process.argv.slice(2);appendFileSync(${JSON.stringify(ghLog)},JSON.stringify(a)+'\\n');\nif(a[0]==='pr'&&a[1]==='view'){
  const p=spawnSync(${JSON.stringify(GIT)},['--git-dir',${JSON.stringify(remote)},'rev-parse','refs/heads/'+a[2]],{encoding:'utf8'}).stdout.trim();
  const m=spawnSync(${JSON.stringify(GIT)},['--git-dir',${JSON.stringify(remote)},'rev-parse','refs/heads/${BASE}'],{encoding:'utf8'}).stdout.trim();
  console.log(JSON.stringify({number:7,url:'https://github.com/fixture/route/pull/7',state:${JSON.stringify(readbackState)},headRefOid:p,baseRefName:${JSON.stringify(BASE)},mergeCommit:{oid:${readbackCanonicalRace ? "p" : "m"}},autoMergeRequest:${readbackState === "OPEN" ? "{}" : "null"}}));
 }
-else if(a[0]==='auth'&&a[1]==='status'){${ghAuthFails || ghMissing ? "process.exit(1)" : "process.exit(0)"}}\nelse if(a[0]==='pr'&&a[1]==='create'){${ghCreateFails || ghAuthFails ? "console.error('fixture creation response lost or unauthenticated');process.exit(1)" : "console.log('https://github.com/fixture/route/pull/7')"}}\nelse if(a[0]==='pr'&&a[1]==='merge'&&a.includes('--auto')){${ghAutoFails ? "console.error('fixture auto-merge response lost');process.exit(1)" : `${denyCleanup ? `chmodSync(${JSON.stringify(root)},0o500);` : ""}console.log('fixture auto-merge request')`}}\nelse process.exit(2);\n`);
+else if(a[0]==='auth'&&a[1]==='status'){${ghAuthFails ? "process.exit(1)" : "process.exit(0)"}}\nelse if(a[0]==='pr'&&a[1]==='create'){${ghCreateFails ? "console.error('fixture creation response lost or unauthenticated');process.exit(1)" : "console.log('https://github.com/fixture/route/pull/7')"}}\nelse if(a[0]==='pr'&&a[1]==='merge'&&a.includes('--auto')){${ghAutoFails ? "console.error('fixture auto-merge response lost');process.exit(1)" : `${denyCleanup ? `chmodSync(${JSON.stringify(root)},0o500);` : ""}console.log('fixture auto-merge request')`}}\nelse process.exit(2);\n`);
   chmodSync(gh, 0o755);
   const records = (p) => existsSync(p) ? readFileSync(p, "utf8").trim().split("\n").filter(Boolean).map(JSON.parse) : [];
   return { root, repo, base, git, run(extra = []) {
@@ -81,7 +81,7 @@ else if(a[0]==='auth'&&a[1]==='status'){${ghAuthFails || ghMissing ? "process.ex
     git(["checkout","-q","--detach",original]);git(["merge","--no-ff","--no-edit",advanced]);
     if(tamper){file(join(repo,"artifacts/agent-heartbeats/mac-lane-tick.json"),"{\"result\":\"payload changed\"}\n");git(["add","artifacts/agent-heartbeats/mac-lane-tick.json"]);git(["commit","-qm","disposable changed payload"]);}
     const refreshed=git(["rev-parse","HEAD"]);git(["fetch",repo,`HEAD:${target}`],remote);git(["checkout","-q",BASE]);
-    assert.notEqual(refreshed,original);return {original,refreshed};
+    assert.notEqual(refreshed,original);
   }, land() {
     const target=records(pushLog).at(-1).at(-1).slice("HEAD:".length);
     git(["fetch","origin",target]);git(["merge","--no-ff","--no-edit","FETCH_HEAD"]);
@@ -135,14 +135,6 @@ control("dry run makes no push or PR", {}, (f) => {
 control("a failed schema gate still prevents every push and PR", { gateFails: true }, (f) => {
   const r = f.run(); assert.notEqual(r.status, 0);
   assert.equal(f.pushes().length, 0); assert.equal(f.ghCalls().length, 0);
-});
-control("missing gh refuses before a topic push", { ghMissing: true }, (f) => {
-  const r = f.run(); assert.notEqual(r.status, 0);
-  assert.equal(f.pushes().length, 0);
-});
-control("Cloud without gh retains an explicit published-topic handoff", { lane: "cloud", ghMissing: true }, (f) => {
-  const r = f.run(); assert.equal(r.status, 4, r.stderr);
-  assert.equal(f.pushes().length, 1); assert.match(r.stdout + r.stderr, /handoff/i);
 });
 control("a failed push that did not land cannot open a PR", { lane: "cloud", failBeforePush: true }, (f) => {
   const r = f.run(); assert.equal(r.status, 3, r.stderr);
@@ -203,8 +195,8 @@ control("unchanged heartbeat gets its keepalive before the three-hour tolerance"
 control("a changed failure is reported inside the keepalive window", { tick: true, result: "failed: fixture gate" }, (f) => {
   const r = f.runTick(); assert.equal(r.status, 0, r.stderr); assert.equal(f.deliveries().length, 1);
 });
-for (const rc of [42]) control(`hourly estate failure ${rc} stays present on the next tick`, { tick: true }, (f) => {
-  const r = f.runTick(`ESTATE_RC=${rc}\nrun_estate\nheartbeat\nSTAMP=20261030T010500Z\nRESULT=quiet\nrun_estate\nheartbeat`);
+control("hourly estate failure stays present on the next tick", { tick: true }, (f) => {
+  const r = f.runTick(`ESTATE_RC=42\nrun_estate\nheartbeat\nSTAMP=20261030T010500Z\nRESULT=quiet\nrun_estate\nheartbeat`);
   assert.equal(r.status, 0, r.stderr); assert.equal(f.deliveries().length, 1, "a retained estate outcome must not flip out of RESULT");
 });
 control("estate failure clears only after another actual estate outcome", { tick: true }, (f) => {

@@ -45,13 +45,13 @@
 // FAIL CLOSED. Every artifact is gated inside the worktree by the same checks CI
 // runs (`check-lane-messages.mjs`; `check-scheduled-routines.mjs` for a
 // heartbeat) BEFORE the commit exists. A rejected push is reported with the
-// branch it tried, never retried into a different ref. Nothing here reads the
-// clock except to stamp the artifact instant and name the branch.
+// branch it tried, never retried into a different ref. The clock stamps artifact
+// instants, branch names and readback observations; it never authorizes replay.
 import { spawnSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { closeSync, constants, cpSync, existsSync, fstatSync, fsyncSync, mkdirSync, mkdtempSync, openSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { closeSync, constants, existsSync, fstatSync, mkdirSync, mkdtempSync, openSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join, relative, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { currentLane } from "./lib/lane-identity.mjs";
 
@@ -150,12 +150,15 @@ function parseOps() {
 }
 
 
+// Resolve repository identity once; unknown identity never grants a fallback.
+const remoteUrl = git(["remote", "get-url", "origin"]);
+const slugMatch = /github\.com[:/]([^/]+)\/([^/.]+)(?:\.git)?$/.exec(remoteUrl.out.trim());
+const repoSlug = remoteUrl.code === 0 && slugMatch ? `${slugMatch[1]}/${slugMatch[2]}` : null;
+
 // Immutable private receipts bind a caller's one attempt to its exact Git data.
 // Readback uses GET/fetch only; it never repeats a publication mutation.
 function receiptWrite(path, value) {
-  const fd = openSync(path, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600);
-  try { writeFileSync(fd, JSON.stringify(value) + "\n"); fsyncSync(fd); }
-  finally { closeSync(fd); }
+  writeFileSync(path, JSON.stringify(value) + "\n", { flag: "wx", mode: 0o600, flush: true });
 }
 function receiptRead(path) {
   const fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW);
@@ -173,10 +176,8 @@ function readback(path) {
       || !Array.isArray(r.blobs) || !r.blobs.length
       || r.blobs.some(b => typeof b.path !== "string" || b.path.includes("..") || !/^[a-f0-9]{40}$/.test(b.oid)
         || ![...MAIL_DIRS, COVERAGE_PAGE].some(p => b.path === p || b.path.startsWith(p + "/")))) throw Error("invalid submission binding");
-    const remote = git(["remote", "get-url", "origin"]);
-    const slug = /github\.com[:/]([^/]+)\/([^/.]+)(?:\.git)?$/.exec(remote.out.trim());
-    if (remote.code || !slug || `${slug[1]}/${slug[2]}` !== r.repository) throw Error("receipt repository differs");
-    const query = run("gh", ["pr", "view", r.target, "--repo", r.repository, "--json", "number,url,state,headRefOid,baseRefName,mergeCommit,autoMergeRequest"]);
+    if (!repoSlug || repoSlug !== r.repository) throw Error("receipt repository differs");
+    const query = run("gh", ["pr", "view", r.target, "--repo", r.repository, "--json", "number,state,baseRefName,mergeCommit,autoMergeRequest"]);
     const observation = `${path}.readback-${Date.now()}-${randomBytes(6).toString("hex")}.json`;
     receiptWrite(observation, { at: new Date().toISOString(), target: r.target, head: r.head,
       exit: query.code, stdout: query.out, stderr: query.err }); // raw before parsing
@@ -215,11 +216,6 @@ const ops = parseOps();
 const lane = currentLane();
 const now = new Date();
 const stamp = now.toISOString().replace(/[-:]/g, "").replace(/\.\d+Z$/, "Z").replace("T", "-");
-
-// ── remote identity, for URLs in the output ───────────────────────────────────
-const remoteUrl = mustGit(["remote", "get-url", "origin"], repo, "reading origin");
-const slugMatch = /github\.com[:/]([^/]+)\/([^/.]+)(?:\.git)?$/.exec(remoteUrl);
-const repoSlug = slugMatch ? `${slugMatch[1]}/${slugMatch[2]}` : null;
 
 // ── 1. a throwaway worktree at the CURRENT mainline ───────────────────────────
 console.log(`lane-deliver — this machine is the ${lane.toUpperCase()} lane`);

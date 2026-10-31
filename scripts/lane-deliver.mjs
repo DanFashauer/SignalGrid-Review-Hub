@@ -11,11 +11,14 @@
 //   The commit carries the mail directories and, when a message file was added,
 //   the regenerated docs/agent/SURFACE_REVIEW_COVERAGE.md (its file count moved).
 //   flags: --dry-run        build and gate the commit, push nothing, keep nothing
-//          --via-pr         push a lane/<lane>-mail-<stamp> branch even on the Mac
+//          --via-pr         compatibility flag; both lanes already use a mail PR
 //          --trailer "K: v" append a commit trailer (repeatable)
 //          --allow-ungated  deliver even when mainline lacks a gate script (named
 //                           in the output; never the default — see step 3)
 //          --no-wake        skip the mailbox-PR comment
+//          --receipt <file> persist exact submission binding before the push
+//   lane:deliver readback <receipt> verifies canonical landing without mutations
+//   add --resolved-hand <id> to require that exact hand is now resolved in canonical
 //
 // WHY THIS EXISTS (2026-09-05, owner: "this is not working and causing delay").
 // The channel's law was "the push is the delivery", and three things made the
@@ -27,28 +30,29 @@
 // until the task finished. So this script does the whole delivery itself, from a
 // throwaway worktree at origin/SignalGrid_Alpha:
 //
-//   Mac lane   → the worktree commit is pushed STRAIGHT to SignalGrid_Alpha, the
-//                same thing the Mac lane's own mail commits have always done.
-//   Cloud lane → the worktree commit is pushed to lane/cloud-mail-<stamp>; the
-//                cloud session then opens the PR and enables auto-merge (it has
-//                the GitHub tools; this script has none). A direct push from the
-//                cloud lane's credentials is refused by policy, so the branch is
-//                not a preference, it is the only path.
+//   Both lanes → push lane/<lane>-mail-<stamp>, open a PR and request auto-merge
+//                when gh is available. Canonical branch rules apply equally to
+//                Mac and cloud credentials. A published branch is still pending
+//                until its PR passes the required checks and actually merges.
 //
 // The caller's checkout is never modified: no branch switch, no stash, no
-// commit on the branch the caller is working on. After the push the caller's
-// own SignalGrid_Alpha (if that is what they have checked out) is one commit
-// behind origin — `git pull --ff-only` when convenient.
+// commit on the branch the caller is working on.
+//
+// Exit 0 means the PR and its auto-merge request were accepted, still pending
+// canonical merge. Exit 3 requires readback of an unconfirmed mutation. A cloud
+// session without gh can publish the topic and receives exit 4 for its PR-tool
+// handoff. An unattended Mac requires gh before it pushes anything.
 //
 // FAIL CLOSED. Every artifact is gated inside the worktree by the same checks CI
 // runs (`check-lane-messages.mjs`; `check-scheduled-routines.mjs` for a
 // heartbeat) BEFORE the commit exists. A rejected push is reported with the
-// branch it tried, never retried into a different ref. Nothing here reads the
-// clock except to stamp the artifact instant and name the branch.
+// branch it tried, never retried into a different ref. The clock stamps artifact
+// instants, branch names and readback observations; it never authorizes replay.
 import { spawnSync } from "node:child_process";
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { randomBytes } from "node:crypto";
+import { closeSync, constants, existsSync, fstatSync, mkdirSync, mkdtempSync, openSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join, relative, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { currentLane } from "./lib/lane-identity.mjs";
 
@@ -59,6 +63,13 @@ const COVERAGE_SCRIPT = "scripts/check-surface-review-coverage.mjs";
 const COVERAGE_PAGE = "docs/agent/SURFACE_REVIEW_COVERAGE.md";
 const MAILBOX_FILE = "docs/agent/lane-mailbox.json";
 const ROUTINES_FILE = "docs/agent/scheduled-routines.json";
+
+let publicationAttempted = false;
+process.on("uncaughtException", (error) => {
+  const code = publicationAttempted ? 3 : 1;
+  console.error(`lane-deliver: unexpected error: ${error.message}; ${publicationAttempted ? "READBACK ONLY, no resend" : "no publication attempted"}`);
+  process.exit(code);
+});
 
 function die(msg, code = 2) {
   console.error(`lane-deliver: ${msg}`);
@@ -80,15 +91,24 @@ function mustGit(args, cwd, what) {
 
 // ── argument parsing ──────────────────────────────────────────────────────────
 const argv = process.argv.slice(2);
-const flags = { dryRun: false, viaPr: false, noWake: false, allowUngated: false, trailers: [] };
+const flags = { dryRun: false, noWake: false, allowUngated: false, trailers: [] };
 const positional = [];
 for (let i = 0; i < argv.length; i += 1) {
   const a = argv[i];
   if (a === "--dry-run") flags.dryRun = true;
-  else if (a === "--via-pr") flags.viaPr = true;
+  else if (a === "--via-pr") continue;
   else if (a === "--no-wake") flags.noWake = true;
   else if (a === "--allow-ungated") flags.allowUngated = true;
-  else if (a === "--trailer") {
+  else if (a === "--resolved-hand") {
+    const id = argv[++i];
+    if (!/^[a-z0-9][a-z0-9-]{0,127}$/.test(id ?? "")) die("--resolved-hand requires an exact safe hand id");
+    flags.resolvedHand = id;
+  }
+  else if (a === "--receipt") {
+    const v = argv[++i];
+    if (!v || v.startsWith("--")) die("--receipt needs an unused local file");
+    flags.receipt = resolve(v);
+  } else if (a === "--trailer") {
     const v = argv[i + 1];
     if (!v) die("--trailer needs a value");
     flags.trailers.push(v);
@@ -96,6 +116,7 @@ for (let i = 0; i < argv.length; i += 1) {
   } else positional.push(a);
 }
 const [cmd, ...rest] = positional;
+if (flags.resolvedHand && cmd !== "readback") die("--resolved-hand is readback-only");
 const ALLOW_UNGATED = flags.allowUngated;
 
 /** @returns {Array<{op:string,[k:string]:string}>} */
@@ -135,39 +156,111 @@ function parseOps() {
   die(`unknown command "${cmd ?? ""}". Try: send | ack | heartbeat | batch`);
 }
 
+
+// Resolve repository identity once; unknown identity never grants a fallback.
+const remoteUrl = git(["remote", "get-url", "origin"]);
+const slugMatch = /github\.com[:/]([^/]+)\/([^/.]+)(?:\.git)?$/.exec(remoteUrl.out.trim());
+const repoSlug = remoteUrl.code === 0 && slugMatch ? `${slugMatch[1]}/${slugMatch[2]}` : null;
+
+// Immutable private receipts bind a caller's one attempt to its exact Git data.
+// Readback uses GET/fetch only; it never repeats a publication mutation.
+function receiptWrite(path, value) {
+  writeFileSync(path, JSON.stringify(value) + "\n", { flag: "wx", mode: 0o600, flush: true });
+}
+function receiptRead(path) {
+  const fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW);
+  try {
+    const st = fstatSync(fd);
+    if (!st.isFile() || st.nlink !== 1 || st.size > 1024 * 1024) throw Error("owned regular receipt required");
+    return JSON.parse(readFileSync(fd, "utf8"));
+  } finally { closeSync(fd); }
+}
+function readback(path) {
+  try {
+    const r = receiptRead(path);
+    if (r.version !== 1 || !/^lane\/(mac|cloud)-mail-\d{8}-\d{6}Z-[a-f0-9]{12}$/.test(r.target)
+      || !/^[a-f0-9]{40}$/.test(r.head)
+      || !Array.isArray(r.blobs) || !r.blobs.length
+      || r.blobs.some(b => typeof b.path !== "string" || b.path.includes("..") || !/^[a-f0-9]{40}$/.test(b.oid)
+        || ![...MAIL_DIRS, COVERAGE_PAGE].some(p => b.path === p || b.path.startsWith(p + "/")))) throw Error("invalid submission binding");
+    if (!repoSlug || repoSlug !== r.repository) throw Error("receipt repository differs");
+    const query = run("gh", ["pr", "view", r.target, "--repo", r.repository, "--json", "number,state,baseRefName,mergeCommit,autoMergeRequest"]);
+    const observation = `${path}.readback-${Date.now()}-${randomBytes(6).toString("hex")}.json`;
+    receiptWrite(observation, { at: new Date().toISOString(), target: r.target, head: r.head,
+      exit: query.code, stdout: query.out, stderr: query.err }); // raw before parsing
+    if (query.code) throw Error("PR readback unavailable; original attempt stays held");
+    const pr = JSON.parse(query.out);
+    if (pr.baseRefName !== MAINLINE) throw Error("PR binding differs");
+    if (pr.state === "OPEN" && pr.autoMergeRequest) {
+      console.log(`original PR ${pr.number} is still pending protected merge; no new submission`);
+      return 4;
+    }
+    if (pr.state !== "MERGED" || !/^[a-f0-9]{40}$/.test(pr.mergeCommit?.oid ?? "")) throw Error(`PR ${pr.number} is ${pr.state}; canonical delivery remains unverified`);
+    const named = git(["ls-remote", "origin", `refs/heads/${MAINLINE}`]);
+    receiptWrite(`${observation}.canonical.json`, { exit: named.code, stdout: named.out, stderr: named.err });
+    const row = named.out.trim().split(/\s+/);
+    if (named.code || row.length !== 2 || !/^[a-f0-9]{40}$/.test(row[0]) || row[1] !== `refs/heads/${MAINLINE}`) throw Error("exact current canonical OID unavailable");
+    const canonical = row[0]; // immutable; another fetch may change FETCH_HEAD
+    const truthGit = (args) => run("git", ["--no-replace-objects", "-c", "core.fsmonitor=false", ...args],
+      { cwd: repo, env: { ...process.env, GIT_GRAFT_FILE: "/dev/null" } });
+    const fetched = git(["fetch", "--no-tags", "origin", canonical]);
+    receiptWrite(`${observation}.fetch.json`, { exit: fetched.code, stdout: fetched.out, stderr: fetched.err });
+    if (fetched.code || truthGit(["merge-base", "--is-ancestor", pr.mergeCommit.oid, canonical]).code || truthGit(["merge-base", "--is-ancestor", r.head, pr.mergeCommit.oid]).code) throw Error("merge is not verified in freshly fetched canonical ancestry");
+    for (const b of r.blobs) {
+      const actual = truthGit(["rev-parse", `${pr.mergeCommit.oid}:${b.path}`]);
+      if (actual.code || actual.out.trim() !== b.oid) throw Error(`canonical blob differs: ${b.path}`);
+    }
+    if (flags.resolvedHand) {
+      const path = `artifacts/raised-hands/${flags.resolvedHand}.json`;
+      const hands = r.blobs.filter(b => b.path.startsWith("artifacts/raised-hands/"));
+      if (hands.length !== 1 || hands[0].path !== path) throw Error("original hand identity differs");
+      const object = truthGit(["rev-parse", `${canonical}:${path}`]);
+      receiptWrite(`${observation}.resolved-oid.json`, { canonical, path, exit: object.code, stdout: object.out, stderr: object.err });
+      const oid = object.out.trim();
+      if (object.code || !/^[a-f0-9]{40}$/.test(oid)) throw Error("current hand object unavailable");
+      const body = truthGit(["cat-file", "blob", oid]);
+      receiptWrite(`${observation}.resolved-hand.json`, { canonical, path, oid, exit: body.code, stdout: body.out, stderr: body.err });
+      if (body.code) throw Error("current hand body unavailable");
+      const hand = JSON.parse(body.out);
+      if (hand.id !== flags.resolvedHand || hand.status !== "resolved" || typeof hand.resolution !== "string" || !hand.resolution.trim() || typeof hand.resolvedAt !== "string" || !Number.isFinite(Date.parse(hand.resolvedAt))) throw Error("current canonical hand is not resolved with evidence");
+      console.log(`resolved hand ${oid}`);
+    }
+    console.log(`canonical merge verified: PR ${pr.number} @ ${pr.mergeCommit.oid}; original topic ${r.target} @ ${r.head}`);
+    return 0;
+  } catch (e) { console.error(`RAISED HAND: ${e.message}; READBACK ONLY, no mutation`); return 3; }
+}
+if (cmd === "readback") {
+  if (rest.length !== 1) die("usage: lane:deliver readback <original-submission-receipt>");
+  process.exit(readback(resolve(rest[0])));
+}
+
 const ops = parseOps();
 const lane = currentLane();
 const now = new Date();
 const stamp = now.toISOString().replace(/[-:]/g, "").replace(/\.\d+Z$/, "Z").replace("T", "-");
-
-// ── remote identity, for URLs in the output ───────────────────────────────────
-const remoteUrl = mustGit(["remote", "get-url", "origin"], repo, "reading origin");
-const slugMatch = /github\.com[:/]([^/]+)\/([^/.]+)(?:\.git)?$/.exec(remoteUrl);
-const repoSlug = slugMatch ? `${slugMatch[1]}/${slugMatch[2]}` : null;
 
 // ── 1. a throwaway worktree at the CURRENT mainline ───────────────────────────
 console.log(`lane-deliver — this machine is the ${lane.toUpperCase()} lane`);
 const fetched = git(["fetch", "--quiet", "origin", MAINLINE]);
 if (fetched.code !== 0) die(`cannot fetch origin/${MAINLINE}: ${fetched.err.trim()} — a delivery needs the remote`, 1);
 const base = mustGit(["rev-parse", `origin/${MAINLINE}`], repo, "resolving mainline");
-let wt = mkdtempSync(join(tmpdir(), "sg-lane-deliver-"));
-// The worktree is removed on EVERY exit — a refusal (`die` → process.exit), a
-// dry run, a crash — not only on the happy path. `finally` does not run past
-// process.exit; an exit handler does, and spawnSync is synchronous inside it.
-// Left-behind worktrees were the first defect this script shipped with.
-function cleanup() {
-  if (!wt) return;
-  git(["worktree", "remove", "--force", wt], repo);
-  rmSync(wt, { recursive: true, force: true });
-  git(["worktree", "prune"], repo);
-  wt = null;
-}
-process.on("exit", cleanup);
+const wt = mkdtempSync(join(tmpdir(), "sg-lane-deliver-"));
+// The exit hook covers success, refusals and dry runs. A cleanup failure after
+// publication keeps the original attempt readback-only; an abrupt kill may leave it.
+process.on("exit", () => {
+  try {
+    git(["worktree", "remove", "--force", wt], repo);
+    rmSync(wt, { recursive: true, force: true });
+    git(["worktree", "prune"], repo);
+  }
+  catch (error) {
+    process.exitCode = publicationAttempted ? 3 : 1;
+    console.error(`lane-deliver: owned worktree cleanup failed: ${error.message}; ${publicationAttempted ? "READBACK ONLY, no resend" : "no publication attempted"}`);
+  }
+});
 mustGit(["worktree", "add", "--quiet", "--detach", wt, base], repo, "creating the worktree");
-console.log(`  worktree    ${wt} @ ${base.slice(0, 7)} (origin/${MAINLINE})`);
+console.log(`  worktree    ${wt} @ ${base} (origin/${MAINLINE})`);
 
-let pushedRef = null;
-let pushedSha = null;
 {
   // ── 2. the operations, written INTO the worktree by the caller's own CLI ────
   // SIGNALGRID_LANE_REPO points lane-message.mjs at the worktree, so the file
@@ -284,13 +377,13 @@ let pushedSha = null;
   if (outside.length > 0) die(`refusing to deliver files outside the lane directories: ${outside.join(", ")}`, 1);
   const title = `Lane mail (${lane}): ${summary.join(", ")}`.slice(0, 120);
   const bodyLines = [
-    `Delivered by scripts/lane-deliver.mjs from a worktree at origin/${MAINLINE} ${base.slice(0, 7)}.`,
+    `Submitted by scripts/lane-deliver.mjs from a worktree at origin/${MAINLINE} ${base}.`,
     ...staged.map((f) => `  ${f}`),
   ];
   if (flags.trailers.length > 0) bodyLines.push("", ...flags.trailers);
   mustGit(["commit", "--quiet", "-m", title, "-m", bodyLines.join("\n")], wt, "committing");
   const sha = mustGit(["rev-parse", "HEAD"], wt, "reading the commit");
-  console.log(`  commit      ${sha.slice(0, 7)} — ${title}`);
+  console.log(`  commit      ${sha} — ${title}`);
   for (const f of staged) console.log(`              ${f}`);
 
   if (flags.dryRun) {
@@ -298,80 +391,51 @@ let pushedSha = null;
     process.exit(0);
   }
 
-  // ── 5. the push: direct on the Mac, a mail branch on the cloud ──────────────
-  const direct = lane === "mac" && !flags.viaPr;
-  const mailBranch = `lane/${lane}-mail-${stamp}`;
-  const target = direct ? MAINLINE : mailBranch;
-  const delays = [0, 2000, 4000, 8000, 16000];
-  let pushed = null;
-  for (let attempt = 0; attempt < delays.length; attempt += 1) {
-    if (delays[attempt] > 0) {
-      console.log(`  push        retrying in ${delays[attempt] / 1000}s`);
-      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, delays[attempt]);
-    }
-    const r = git(["push", "origin", `HEAD:refs/heads/${target}`], wt);
-    if (r.code === 0) { pushed = r; break; }
-    const text = `${r.err}${r.out}`;
-    if (/non-fast-forward|fetch first|rejected/.test(text) && direct) {
-      // Mainline moved between the fetch and the push. The commit is rebuilt on
-      // the new tip rather than force-pushed over somebody else's delivery.
-      console.log("  push        mainline moved; rebasing the delivery onto the new tip");
-      const f = git(["fetch", "--quiet", "origin", MAINLINE], wt);
-      const rb = f.code === 0 ? git(["rebase", "--quiet", `origin/${MAINLINE}`], wt) : f;
-      if (rb.code !== 0) die(`could not rebase onto the moved mainline:\n${rb.err}${rb.out}`, 1);
-      continue;
-    }
-    if (/denied|protected|GH006|policy|rule/i.test(text)) {
-      die(`the push to ${target} was REFUSED by the remote's rules — no other ref was tried:\n${text.trim()}\n(the cloud lane must deliver via a lane/cloud-mail-* branch: rerun with --via-pr)`, 1);
-    }
-    console.log(`  push        attempt ${attempt + 1} failed: ${text.trim().split("\n").pop()}`);
+  // ── 5. one topic push; canonical changes go through the protected PR ────────
+  const ghAuthenticated = run("gh", ["auth", "status", "--hostname", "github.com"]).code === 0;
+  if (lane === "mac" && (!ghAuthenticated || !repoSlug)) die("unattended Mac delivery requires authenticated gh and a GitHub origin; no push was attempted", 1);
+  const target = `lane/${lane}-mail-${stamp}-${randomBytes(6).toString("hex")}`;
+  if (flags.receipt) receiptWrite(flags.receipt, { version: 1, at: now.toISOString(), repository: repoSlug,
+    base, head: sha, target, blobs: staged.map(path => ({ path, oid: mustGit(["rev-parse", `${sha}:${path}`], wt, "binding the submission blob") })) });
+  publicationAttempted = true;
+  const pushed = git(["push", "origin", `HEAD:refs/heads/${target}`], wt);
+  const pushResponse = `${pushed.err}${pushed.out}`.trim();
+  if (pushed.code !== 0 && /GH006|GH013|remote rejected|protected branch|permission .+ denied/i.test(pushResponse)) {
+    die(`the push to ${target} was REFUSED by the remote — no retry or other ref was tried:\n${pushResponse}`, 1);
   }
-  if (!pushed) die(`push to ${target} failed after ${delays.length} attempts`, 1);
-  pushedRef = target;
-  pushedSha = mustGit(["rev-parse", "HEAD"], wt, "reading the pushed commit");
 
   // ── 6. confirm on the remote — local-only is not delivered ──────────────────
-  const remoteSha = mustGit(["ls-remote", "origin", `refs/heads/${target}`], wt, "confirming").split(/\s+/)[0] ?? "";
-  if (remoteSha !== pushedSha) die(`origin/${target} is ${remoteSha.slice(0, 7)}, not the pushed ${pushedSha.slice(0, 7)} — NOT delivered`, 1);
-  console.log(`  delivered   origin/${target} @ ${pushedSha.slice(0, 7)} (confirmed with git ls-remote)`);
+  const remoteRef = git(["ls-remote", "origin", `refs/heads/${target}`], wt);
+  const remoteSha = remoteRef.code === 0 ? remoteRef.out.trim().split(/\s+/)[0] : null;
+  if (remoteSha !== sha) die(`push outcome for ${target} @ ${sha} is unconfirmed; preserve it for readback, never resend:\n${pushResponse}\n${remoteRef.err.trim()}`, 3);
+  if (pushed.code !== 0) console.log(`  push        response failed; exact remote ${sha} confirms the original push`);
+  console.log(`  published   origin/${target} @ ${sha} (confirmed with git ls-remote; pending protected PR merge)`);
 
-  if (!direct) {
-    const compare = repoSlug ? `https://github.com/${repoSlug}/compare/${MAINLINE}...${encodeURIComponent(target)}?expand=1` : `(compare ${MAINLINE}...${target})`;
-    console.log(`  next        open the PR for ${target} → ${MAINLINE} and enable auto-merge:`);
-    console.log(`              ${compare}`);
-    const gh = run("gh", ["--version"]);
-    if (gh.code === 0 && repoSlug) {
-      const pr = run("gh", ["pr", "create", "--repo", repoSlug, "--base", MAINLINE, "--head", target, "--title", title, "--body", bodyLines.join("\n")], { cwd: wt });
-      if (pr.code === 0) {
-        console.log(`  pr          ${pr.out.trim().split("\n").pop()}`);
-        const am = run("gh", ["pr", "merge", "--repo", repoSlug, "--auto", "--merge", target], { cwd: wt });
-        console.log(am.code === 0 ? "  auto-merge  enabled" : `  auto-merge  not enabled (${(am.err || am.out).trim().split("\n").pop()}) — merge it when the gating check is green`);
-      } else {
-        console.log(`  pr          gh could not open it (${(pr.err || pr.out).trim().split("\n").pop()}) — use the compare link`);
-      }
-    }
-  } else {
-    const me = git(["branch", "--show-current"], repo).out.trim();
-    if (me === MAINLINE) console.log(`  note        your checkout of ${MAINLINE} is now behind origin by this commit — git pull --ff-only`);
-  }
+  const compare = repoSlug ? `https://github.com/${repoSlug}/compare/${MAINLINE}...${encodeURIComponent(target)}?expand=1` : `(compare ${MAINLINE}...${target})`;
+  console.log(`  next        PR ${target} → ${MAINLINE}: ${compare}`);
+  if (!ghAuthenticated || !repoSlug) die(`published cloud topic ${target} @ ${sha}; explicit PR-tool handoff required — do not push it again`, 4);
+  const pr = run("gh", ["pr", "create", "--repo", repoSlug, "--base", MAINLINE, "--head", target, "--title", title, "--body", bodyLines.join("\n")], { cwd: wt });
+  if (pr.code !== 0) die(`PR creation for ${target} @ ${sha} is unconfirmed; readback only, never repost:\n${pr.err || pr.out}`, 3);
+  console.log(`  pr          ${pr.out.trim().split("\n").pop()}`);
+  const am = run("gh", ["pr", "merge", "--repo", repoSlug, "--auto", "--merge", "--match-head-commit", sha, target], { cwd: wt });
+  if (am.code !== 0) die(`auto-merge request for ${target} @ ${sha} is unconfirmed; readback only, never repeat:\n${am.err || am.out}`, 3);
+  console.log("  auto-merge  enabled; canonical delivery remains pending");
 
   // ── 7. wake the other lane: a comment on the standing mailbox PR ────────────
   if (!flags.noWake) {
-    const mailboxPath = join(repo, MAILBOX_FILE);
-    const mailbox = existsSync(mailboxPath) ? JSON.parse(readFileSync(mailboxPath, "utf8")) : null;
-    const prNumber = mailbox && Number.isInteger(mailbox.pr) && mailbox.pr > 0 ? mailbox.pr : null;
-    const url = prNumber && repoSlug ? `https://github.com/${repoSlug}/pull/${prNumber}` : null;
-    if (!url) {
-      console.log(`  wake        no mailbox PR declared in ${MAILBOX_FILE} — the other lane learns of this on its next fetch`);
-    } else {
-      const line = `${lane} lane delivered: ${summary.join(", ")} — origin/${target} @ ${pushedSha.slice(0, 7)}`;
-      const gh = run("gh", ["--version"]);
-      const posted = gh.code === 0 ? run("gh", ["pr", "comment", String(prNumber), "--repo", repoSlug, "--body", line]) : null;
-      if (posted && posted.code === 0) console.log(`  wake        commented on the mailbox PR #${prNumber} — the other lane wakes on it`);
-      else console.log(`  wake        ${gh.code === 0 ? "gh could not comment" : "no gh on PATH"}; to wake the other lane NOW, comment on ${url}\n              (otherwise it sees this on its next hourly cycle)`);
+    try {
+      const prNumber = JSON.parse(readFileSync(join(repo, MAILBOX_FILE), "utf8"))?.pr;
+      if (!Number.isInteger(prNumber) || prNumber <= 0) {
+        console.log(`  wake        no usable mailbox PR found in ${MAILBOX_FILE} — the other lane learns of this on its next fetch`);
+      } else {
+        const line = `${lane} lane published, pending protected merge: ${summary.join(", ")} — origin/${target} @ ${sha}`;
+        const posted = run("gh", ["pr", "comment", String(prNumber), "--repo", repoSlug, "--body", line]);
+        if (posted.code === 0) console.log(`  wake        commented on the mailbox PR #${prNumber} — the other lane wakes on it`);
+        else console.log(`  wake        gh could not comment; to wake the other lane NOW, comment on https://github.com/${repoSlug}/pull/${prNumber}\n              (otherwise it sees this on its next hourly cycle)`);
+      }
+    } catch {
+      console.log("  wake        optional wake unavailable; protected PR submission remains pending; the other lane sees it on its next fetch");
     }
   }
+  console.log(`lane-deliver: submitted — ${target} @ ${sha}; canonical merge pending`);
 }
-
-cleanup();
-if (pushedRef) console.log(`lane-deliver: done — ${pushedRef} @ ${pushedSha.slice(0, 7)}`);

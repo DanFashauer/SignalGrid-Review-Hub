@@ -325,3 +325,93 @@ block; a stage run on the wrong tier is a lesson here.
 - **evidence:** Actual CI and pinned release behavior are linked in EVIDENCE. The specific original/fixed R6p1d assertion is RED/GREEN on a limited exact-source Git2.56 build. The installed-toolchain full self-test passes309applicable cases with6platform skips; the limited resource's8other failures stay explicit.
 - **landing:** pending — scripts/loop-state.mjs constructs its promised missing-ref scenario; production seam logic, the complete assertion and real remote branches are unchanged. Current-head source/CI/full-preflight gates still apply.
 - **status:** pending
+
+
+### L36 — A ruleset refusal is not a moved canonical branch
+- **date:** 2026-10-30
+- **lane:** mac
+- **incident:** The Mac delivery path pushed heartbeat/mail/ack commits directly to the protected canonical branch. Its generic rejected-push handler retried a policy refusal five times, while the scheduled tick still exited 0.
+- **evidence:** The actual canonical heartbeat readback remained 2026-10-24T07:30:38.430Z; active ruleset 25774497 requires a PR and strict checks with no bypass. Disposable-Git original-source regression is 5 pass / 2 fail; corrected source is 7 pass / 0 fail / 0 skip. These fixtures do not establish a real remote delivery. The first full preflight refused the new fixture until its Git setup used the existing scratchGit helper; no guard or PENDING debt row was relaxed.
+- **landing:** pending — both lanes publish a mail topic and use the existing protected PR route; refused pushes stop, and uncertain responses get exact remote readback without a resend. Full current-head validation/review/CI and canonical heartbeat restoration remain owed.
+- **status:** pending
+
+
+### L37 — A pending or uncertain mail attempt must survive the next tick
+- **date:** 2026-10-31
+- **lane:** mac
+- **incident:** Only exit 0 was remembered by objective mail; failed or unconfirmed children could create another topic each tick. The heartbeat held unknowns without recovery, and a failure assertion still checked obsolete success wording.
+- **evidence:** New frozen controls reproduced 12 failures on be1. Corrected source passes 37 controls with zero failures/skips; a separate actual Bash control reproduces old refusal pacing. Receipt-aware I/O fixed one fixture failure without weakening the estate-clearance assertion. Four deliberate false-success/ID mutants are rejected.
+- **landing:** pending — exact immutable submission readback, authentication before Mac push, unique topics and independent parent attempts; source-head qualification and canonical heartbeat proof belong to PR #1698.
+- **status:** pending
+
+
+### L38 — Preserve the caller prefix and existing private delivery log
+- **date:** 2026-10-31
+- **lane:** mac
+- **incident:** The new receipt option was placed before `batch`, breaking existing protocol consumers, while captured delivery output stopped being appended to the established private run log. Full preflight held at the staged worker (246/248 before the aborted tail).
+- **evidence:** The unchanged staged-worker assertions now pass 265/265; caller controls pass 37 with zero failures/skips, and objective-loop passes 136/136. The full 3c015fc failure remains a separate measurement.
+- **landing:** pending — preserve the original leading command arguments, append the receipt option and keep both private output records; final source-head qualification and canonical heartbeat proof remain in PR #1698.
+- **status:** pending
+
+
+### L39 — A readback must pin canonical and read real objects
+- **date:** 2026-10-31
+- **lane:** mac
+- **incident:** Readback could attest an unmerged topic after concurrent FETCH_HEAD replacement or a local Git replacement ref, despite the remote canonical branch remaining unchanged.
+- **evidence:** New controls were 0/2 before correction and 1/1 after only pinning canonical; complete correction passes 39 caller controls with zero failures/skips.
+- **landing:** pending — exact remote canonical SHA plus real-object ancestry/blob reads, leaving local metadata untouched; new-head qualification and actual heartbeat proof remain in PR #1698.
+- **status:** pending
+
+
+### L40 — JSON quoting is not shell escaping in a test harness
+- **date:** 2026-10-31
+- **lane:** mac
+- **incident:** CodeQL found an environment-derived executable/path embedded in a Bash fixture with JSON.stringify; the original fixture failed under a special-character path.
+- **evidence:** Actual original block0/1; corrected integrated suite40/40, with real plain/special-path one-attempt assertions and no command-substitution markers.
+- **landing:** pending — pass dynamic paths as environment values and reference quoted variables; current-head qualification and actual heartbeat proof remain in PR #1698.
+- **status:** pending
+
+
+### L41 — A late optional observation cannot undo an accepted submission
+- **date:** 2026-10-31
+- **lane:** mac
+- **incident:** Malformed or unreadable wake metadata threw after a PR and auto-merge request were accepted, falsely classifying the delivery as a prepublication failure.
+- **evidence:** Actual frozen CLI baseline 40/2; final 42/0 under network denial, asserting successful push/create/merge before the outcome boundary. No source assertion relaxed.
+- **landing:** pending — optional wake errors warn, retain pending submission semantics and never cause a resend; PR #1698 still requires current-head gates and natural heartbeat readback.
+- **status:** pending
+
+
+### L42 — A maintained PR head is not the original payload identity
+- **date:** 2026-10-31
+- **lane:** mac
+- **incident:** Exact PR-head equality permanently held a mail attempt after a lawful behind-branch refresh, even when the original commit and payload reached canonical.
+- **evidence:** Real Git refresh/merge and cleanup-permission counterexamples drove frozen48 from40/8 to48/0 under network denial; original-payload changes still refuse, unknown mutations never resend.
+- **landing:** pending — prove original ancestry and blobs, pace readbacks, and preserve independent fsynced records; PR #1698 still needs a canonical refresh, full current-head gates and natural heartbeat proof.
+- **status:** pending
+
+
+### L43 — Attempt ownership follows the machine, not a disposable checkout
+- **date:** 2026-10-31
+- **lane:** mac
+- **incident:** Cwd-relative dependency caches split one machine's pending heartbeat and escalation into separate chains when the tick switched to its linked worktree; clearing dependencies also erased the fence.
+- **evidence:** Frozen cross-checkout baseline0/4 became4/0. Current61/0 under actual Mac network denial covers shared paths, real distinct-TMPDIR locking, parent-terminal completeness, damaged-store refusal and inherited Git environment binding.
+- **landing:** pending — preserve all old receipts, separately initialize the shared store only after exact legacy-attempt inventory and qualified release gates; PR #1698 still requires all current-head reviews/CI and natural canonical heartbeat proof.
+- **status:** pending
+
+
+### L44 — A pinned reader includes its imports and remains a library
+- **date:** 2026-10-31
+- **lane:** mac
+- **incident:** Adding a store import to the objective module broke the build tick's standalone pinned reader, first through an incomplete file list and then a CLI guard that treated a node-e label as a filename.
+- **evidence:** Actual full failure and import RED retained; corrected current62 delivery controls pass under network denial, all265 staged checks pass in the supported process-inspection environment, with unchanged assertions. Unsupported sandbox CI-cleanup failures and exact own kernel-exit cleanup remain separate evidence.
+- **landing:** pending — copy the complete dependency closure from the same pinned Git tree and keep import free of CLI state initialization; PR #1698 still needs all current-head gates and natural canonical delivery proof.
+- **status:** pending
+
+
+### L45 — Notification clearance is a new episode, never a task retry
+- **date:** 2026-10-31
+- **lane:** mac
+- **incident:** A permanent per-cause fence correctly held unknown notifications but also suppressed a recurrence after the original hand was landed and resolved.
+- **evidence:** Frozen5/3 RED became8/0; current74/0 under actual network denial includes real Git original-merge/current-clearance binding, distinct successor IDs, wrong-ID refusal and no publication during readback. Existing staged265/265 assertions remain unchanged.
+- **landing:** pending — only an independent complete parent and exact canonical cleared-hand blob permit one different notification; no coding-task, grant or budget is renewed. PR #1698 still requires full current-head gates and natural canonical delivery proof.
+- **status:** pending

@@ -440,7 +440,7 @@ async function loadPrs(api) {
     // never as a quiet pending (below, a rename that blanks EVERY PR throws).
     const state = full.mergeable_state === "dirty" ? "conflict" : !run ? "nocheck" : run.conclusion === "failure" ? "red" : run.conclusion === "success" ? "green" : "pending";
     const ref = p.head?.ref ?? "";
-    const lane = ref.startsWith("mac/") ? "mac" : "cloud"; // claude/*, lane/cloud-*, dependabot/* are the cloud lane's to drive
+    const lane = ref.startsWith("mac/") || ref.startsWith("lane/mac-mail-") ? "mac" : "cloud"; // claude/*, lane/cloud-*, dependabot/* are the cloud lane's to drive
     prs.push({ number: p.number, title: p.title, url: p.html_url, updatedAt: p.updated_at, state, lane });
   }
   if (prs.length >= 3 && prs.every((p) => p.state === "nocheck")) {
@@ -455,6 +455,17 @@ async function selfTest() {
   const T = Date.parse("2026-09-23T12:00:00Z");
   const ago = (h) => new Date(T - h * H).toISOString();
   const checks = [];
+  const refs = ["mac/tick-fixture", "lane/mac-mail-fixture", "lane/cloud-mail-fixture", "claude/build-fixture"];
+  const listedPrs = refs.map((ref, i) => ({ number: 8 + i, head: { ref, sha: "a".repeat(40) },
+    draft: false, title: ref, html_url: "https://example.invalid/pr", updated_at: ago(12) }));
+  const loadedPrs = await loadPrs(async (path) => {
+    if (path.startsWith("/pulls?")) return listedPrs;
+    if (/^\/pulls\/\d+$/.test(path)) return { mergeable_state: "clean" };
+    if (path.startsWith("/commits/")) return { check_runs: [{ conclusion: "success" }] };
+    throw new Error(`unexpected PR fixture request: ${path}`);
+  });
+  checks.push(["Mac mail PRs belong to the Mac lane", loadedPrs[1].lane === "mac"]);
+  checks.push(["existing Mac topics stay Mac; cloud mail and code stay cloud", loadedPrs[0].lane === "mac" && loadedPrs[2].lane === "cloud" && loadedPrs[3].lane === "cloud"]);
   const hand = (x = {}) => ({ id: "h1", __file: "h1.json", raisedAt: ago(1), origin: "cloud", doing: "d", blockedBy: "b", need: "n", whoCanUnblock: "owner", status: "open", ...x });
   const route = (h) => (String(h.whoCanUnblock).startsWith("owner") ? { kind: "human" } : String(h.whoCanUnblock).includes("lane") ? { kind: "lane" } : { kind: "gap" });
 

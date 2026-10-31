@@ -492,8 +492,9 @@ node scripts/lane-deliver.mjs readback <original-submission-receipt>
 ```
 
 This is GET/fetch only. It saves the raw response before parsing and verifies the
-PR's exact head/base, MERGED state and full merge SHA, fresh canonical ancestry,
-topic ancestry and every recorded changed blob. Exit 0 verifies that delivery;
+PR's exact head/base, MERGED state and full merge SHA, the exact ls-remote canonical SHA,
+merge/topic ancestry and every recorded changed blob using real Git objects.
+Concurrent FETCH_HEAD changes and local replacement refs or grafts are not proof. Exit 0 verifies that delivery;
 exit 4 means the exact open PR still has auto-merge pending; exit 3 means held.
 It never pushes, creates another PR, repeats auto-merge or deletes a branch.
 

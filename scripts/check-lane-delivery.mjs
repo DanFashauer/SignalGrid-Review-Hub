@@ -15,7 +15,7 @@ let passed = 0;
 let failed = 0;
 
 function fixture({ lane = "mac", reject = false, loseResponse = false, failBeforePush = false, gateFails = false,
-  fixedClock = false, readbackState = "MERGED", readbackMismatch = false, ghMissing = false, ghAuthFails = false, ghCreateFails = false, ghAutoFails = false, tick = false, ...tickOptions } = {}) {
+  readbackCanonicalRace = false, fixedClock = false, readbackState = "MERGED", readbackMismatch = false, ghMissing = false, ghAuthFails = false, ghCreateFails = false, ghAutoFails = false, tick = false, ...tickOptions } = {}) {
   if (tick) return heartbeatFixture(tickOptions);
   const root = mkdtempSync(join(tmpdir(), "sg-delivery-test-"));
   const repo = join(root, "repo"), remote = join(root, "remote.git"), bin = join(root, "bin");
@@ -55,13 +55,13 @@ function fixture({ lane = "mac", reject = false, loseResponse = false, failBefor
   chmodSync(hook, 0o755);
   // The wrapper always uses the real local Git. No request can reach GitHub.
   const wrapper = join(bin, "git");
-  file(wrapper, `#!${process.execPath}\nimport {spawnSync} from 'node:child_process';\nimport {appendFileSync} from 'node:fs';\nconst args=process.argv.slice(2);\nif(args[0]==='remote'&&args[1]==='get-url'&&args[2]==='origin'){console.log(${JSON.stringify(url)});process.exit(0)}\nif(args[0]==='push')appendFileSync(${JSON.stringify(pushLog)},JSON.stringify(args)+'\\n');\n${failBeforePush ? "if(args[0]==='push'){console.error('fixture transport stopped before transmission');process.exit(1)}" : ""}\nconst r=spawnSync(${JSON.stringify(GIT)},args,{stdio:'inherit'});\n${loseResponse ? "if(args[0]==='push' && r.status===0){console.error('fixture transport response lost');process.exit(1)}" : ""}\nprocess.exit(r.status??1);\n`);
+  file(wrapper, `#!${process.execPath}\nimport {spawnSync} from 'node:child_process';\nimport {appendFileSync,readFileSync,writeFileSync} from 'node:fs';\nconst args=process.argv.slice(2);\nif(args[0]==='remote'&&args[1]==='get-url'&&args[2]==='origin'){console.log(${JSON.stringify(url)});process.exit(0)}\nif(args[0]==='push')appendFileSync(${JSON.stringify(pushLog)},JSON.stringify(args)+'\\n');\n${failBeforePush ? "if(args[0]==='push'){console.error('fixture transport stopped before transmission');process.exit(1)}" : ""}\nconst r=spawnSync(${JSON.stringify(GIT)},args,{stdio:'inherit'});\n${readbackCanonicalRace ? `if(args[0]==='fetch'&&r.status===0){try{const rows=readFileSync(${JSON.stringify(pushLog)},'utf8').trim().split(String.fromCharCode(10)).filter(Boolean).map(JSON.parse);const ref=rows.at(-1).at(-1).slice('HEAD:'.length);const oid=spawnSync(${JSON.stringify(GIT)},['--git-dir',${JSON.stringify(remote)},'rev-parse',ref],{encoding:'utf8'}).stdout.trim();if(/^[a-f0-9]{40}$/.test(oid))writeFileSync(${JSON.stringify(join(repo,'.git/FETCH_HEAD'))},oid+String.fromCharCode(9,9)+'concurrent fixture fetch'+String.fromCharCode(10));}catch{}}` : ""}\n${loseResponse ? "if(args[0]==='push' && r.status===0){console.error('fixture transport response lost');process.exit(1)}" : ""}\nprocess.exit(r.status??1);\n`);
   chmodSync(wrapper, 0o755);
   const gh = join(bin, "gh");
   file(gh, `#!${process.execPath}\nimport {appendFileSync} from 'node:fs';\nimport {spawnSync} from 'node:child_process';\nconst a=process.argv.slice(2);appendFileSync(${JSON.stringify(ghLog)},JSON.stringify(a)+'\\n');\nif(a[0]==='--version'){${ghMissing ? "process.exit(1)" : "console.log('gh fixture')"}}\nelse if(a[0]==='pr'&&a[1]==='view'){
  const p=spawnSync(${JSON.stringify(GIT)},['--git-dir',${JSON.stringify(remote)},'rev-parse','refs/heads/'+a[2]],{encoding:'utf8'}).stdout.trim();
  const m=spawnSync(${JSON.stringify(GIT)},['--git-dir',${JSON.stringify(remote)},'rev-parse','refs/heads/${BASE}'],{encoding:'utf8'}).stdout.trim();
- console.log(JSON.stringify({number:7,url:'https://github.com/fixture/route/pull/7',state:${JSON.stringify(readbackState)},headRefOid:${readbackMismatch ? "'f'.repeat(40)" : "p"},baseRefName:${JSON.stringify(BASE)},mergeCommit:{oid:m},autoMergeRequest:${readbackState === "OPEN" ? "{}" : "null"}}));
+ console.log(JSON.stringify({number:7,url:'https://github.com/fixture/route/pull/7',state:${JSON.stringify(readbackState)},headRefOid:${readbackMismatch ? "'f'.repeat(40)" : "p"},baseRefName:${JSON.stringify(BASE)},mergeCommit:{oid:${readbackCanonicalRace ? "p" : "m"}},autoMergeRequest:${readbackState === "OPEN" ? "{}" : "null"}}));
 }
 else if(a[0]==='auth'&&a[1]==='status'){${ghAuthFails ? "process.exit(1)" : "process.exit(0)"}}\nelse if(a[0]==='pr'&&a[1]==='create'){${ghCreateFails ? "console.error('fixture creation response lost');process.exit(1)" : "console.log('https://github.com/fixture/route/pull/7')"}}\nelse if(a[0]==='pr'&&a[1]==='merge'&&a.includes('--auto')){${ghAutoFails ? "console.error('fixture auto-merge response lost');process.exit(1)" : "console.log('fixture auto-merge request')"}}\nelse process.exit(2);\n`);
   chmodSync(gh, 0o755);
@@ -312,6 +312,24 @@ control("a pending heartbeat PR holds changed results until exact canonical read
  const r=f.runTick("heartbeat\\nSTAMP=20261030T010500Z\\nRESULT='changed fixture'\\nREADBACK_RC=4\\nheartbeat\\nSTAMP=20261030T011000Z\\nREADBACK_RC=0\\nheartbeat".replaceAll("\\n","\n"));
  assert.equal(r.status,0,r.stderr);assert.equal(f.deliveries().length,2);
  assert.match(r.stdout,/still pending/);assert.match(r.stdout,/canonical fixture merge verified/);
+});
+
+
+control("a concurrent FETCH_HEAD change cannot attest an unmerged canonical blob",{readbackCanonicalRace:true},f=>{
+ const receipt=join(f.root,"submission.json");const sent=f.run(["--receipt",receipt]);assert.equal(sent.status,0,sent.stderr);
+ const before=f.pushes().length,r=f.readback(receipt);
+ assert.equal(r.status,3,"canonical must be the immutable remote OID, never concurrent FETCH_HEAD");
+ assert.doesNotMatch(r.stdout,/canonical merge verified/);assert.equal(f.pushes().length,before);
+ assert.equal(f.git(["rev-parse",`refs/heads/${BASE}`],join(f.root,"remote.git")),f.base);
+});
+
+
+control("local replace refs cannot attest a topic absent from canonical",{readbackCanonicalRace:true},f=>{
+ const receipt=join(f.root,"submission.json");const sent=f.run(["--receipt",receipt]);assert.equal(sent.status,0,sent.stderr);
+ const p=JSON.parse(readFileSync(receipt,"utf8")),tree=f.git(["rev-parse",p.head+"^{tree}"]);
+ const forged=f.git(["commit-tree",tree,"-p",p.head,"-m","disposable local graph shadow"]);
+ f.git(["replace",f.base,forged]);
+ const r=f.readback(receipt);assert.equal(r.status,3,"canonical ancestry must read real Git objects");assert.doesNotMatch(r.stdout,/canonical merge verified/);
 });
 
 console.log(`lane-delivery regression: ${passed} passed, ${failed} failed, 0 skipped`);

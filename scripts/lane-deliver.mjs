@@ -182,11 +182,18 @@ function readback(path) {
       return 4;
     }
     if (pr.state !== "MERGED" || !/^[a-f0-9]{40}$/.test(pr.mergeCommit?.oid ?? "")) throw Error(`PR ${pr.number} is ${pr.state}; canonical delivery remains unverified`);
-    const fetched = git(["fetch", "--no-tags", "origin", `refs/heads/${MAINLINE}`]);
+    const named = git(["ls-remote", "origin", `refs/heads/${MAINLINE}`]);
+    receiptWrite(`${observation}.canonical.json`, { exit: named.code, stdout: named.out, stderr: named.err });
+    const row = named.out.trim().split(/\s+/);
+    if (named.code || row.length !== 2 || !/^[a-f0-9]{40}$/.test(row[0]) || row[1] !== `refs/heads/${MAINLINE}`) throw Error("exact current canonical OID unavailable");
+    const canonical = row[0]; // immutable; another fetch may change FETCH_HEAD
+    const truthGit = (args) => run("git", ["--no-replace-objects", "-c", "core.fsmonitor=false", ...args],
+      { cwd: repo, env: { ...process.env, GIT_GRAFT_FILE: "/dev/null" } });
+    const fetched = git(["fetch", "--no-tags", "origin", canonical]);
     receiptWrite(`${observation}.fetch.json`, { exit: fetched.code, stdout: fetched.out, stderr: fetched.err });
-    if (fetched.code || git(["merge-base", "--is-ancestor", pr.mergeCommit.oid, "FETCH_HEAD"]).code || git(["merge-base", "--is-ancestor", r.head, pr.mergeCommit.oid]).code) throw Error("merge is not verified in freshly fetched canonical ancestry");
+    if (fetched.code || truthGit(["merge-base", "--is-ancestor", pr.mergeCommit.oid, canonical]).code || truthGit(["merge-base", "--is-ancestor", r.head, pr.mergeCommit.oid]).code) throw Error("merge is not verified in freshly fetched canonical ancestry");
     for (const b of r.blobs) {
-      const actual = git(["rev-parse", `${pr.mergeCommit.oid}:${b.path}`]);
+      const actual = truthGit(["rev-parse", `${pr.mergeCommit.oid}:${b.path}`]);
       if (actual.code || actual.out.trim() !== b.oid) throw Error(`canonical blob differs: ${b.path}`);
     }
     console.log(`canonical merge verified: PR ${pr.number} @ ${pr.mergeCommit.oid}; original topic ${r.target} @ ${r.head}`);

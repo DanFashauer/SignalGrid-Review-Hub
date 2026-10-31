@@ -352,3 +352,12 @@ block; a stage run on the wrong tier is a lesson here.
 - **evidence:** The unchanged staged-worker assertions now pass 265/265; caller controls pass 37 with zero failures/skips, and objective-loop passes 136/136. The full 3c015fc failure remains a separate measurement.
 - **landing:** pending — preserve the original leading command arguments, append the receipt option and keep both private output records; final source-head qualification and canonical heartbeat proof remain in PR #1698.
 - **status:** pending
+
+
+### L39 — A readback must pin canonical and read real objects
+- **date:** 2026-10-31
+- **lane:** mac
+- **incident:** Readback could attest an unmerged topic after concurrent FETCH_HEAD replacement or a local Git replacement ref, despite the remote canonical branch remaining unchanged.
+- **evidence:** New controls were 0/2 before correction and 1/1 after only pinning canonical; complete correction passes 39 caller controls with zero failures/skips.
+- **landing:** pending — exact remote canonical SHA plus real-object ancestry/blob reads, leaving local metadata untouched; new-head qualification and actual heartbeat proof remain in PR #1698.
+- **status:** pending

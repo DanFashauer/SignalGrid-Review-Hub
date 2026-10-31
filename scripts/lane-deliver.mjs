@@ -236,8 +236,6 @@ process.on("exit", cleanup);
 mustGit(["worktree", "add", "--quiet", "--detach", wt, base], repo, "creating the worktree");
 console.log(`  worktree    ${wt} @ ${base} (origin/${MAINLINE})`);
 
-let pushedRef = null;
-let pushedSha = null;
 {
   // ── 2. the operations, written INTO the worktree by the caller's own CLI ────
   // SIGNALGRID_LANE_REPO points lane-message.mjs at the worktree, so the file
@@ -384,10 +382,8 @@ let pushedSha = null;
   const readback = git(["ls-remote", "origin", `refs/heads/${target}`], wt);
   const remoteSha = readback.code === 0 ? readback.out.trim().split(/\s+/)[0] : null;
   if (remoteSha !== sha) die(`push outcome for ${target} @ ${sha} is unconfirmed; preserve it for readback, never resend:\n${pushResponse}\n${readback.err.trim()}`, 3);
-  pushedRef = target;
-  pushedSha = sha;
   if (pushed.code !== 0) console.log(`  push        response failed; exact remote ${sha} confirms the original push`);
-  console.log(`  published   origin/${target} @ ${pushedSha} (confirmed with git ls-remote; pending protected PR merge)`);
+  console.log(`  published   origin/${target} @ ${sha} (confirmed with git ls-remote; pending protected PR merge)`);
 
   const compare = repoSlug ? `https://github.com/${repoSlug}/compare/${MAINLINE}...${encodeURIComponent(target)}?expand=1` : `(compare ${MAINLINE}...${target})`;
   console.log(`  next        PR ${target} → ${MAINLINE}: ${compare}`);
@@ -395,7 +391,7 @@ let pushedSha = null;
   const pr = run("gh", ["pr", "create", "--repo", repoSlug, "--base", MAINLINE, "--head", target, "--title", title, "--body", bodyLines.join("\n")], { cwd: wt });
   if (pr.code !== 0) die(`PR creation for ${target} @ ${sha} is unconfirmed; readback only, never repost:\n${pr.err || pr.out}`, 3);
   console.log(`  pr          ${pr.out.trim().split("\n").pop()}`);
-  const am = run("gh", ["pr", "merge", "--repo", repoSlug, "--auto", "--merge", "--match-head-commit", pushedSha, target], { cwd: wt });
+  const am = run("gh", ["pr", "merge", "--repo", repoSlug, "--auto", "--merge", "--match-head-commit", sha, target], { cwd: wt });
   if (am.code !== 0) die(`auto-merge request for ${target} @ ${sha} is unconfirmed; readback only, never repeat:\n${am.err || am.out}`, 3);
   console.log("  auto-merge  enabled; canonical delivery remains pending");
 
@@ -408,14 +404,13 @@ let pushedSha = null;
     if (!url) {
       console.log(`  wake        no mailbox PR declared in ${MAILBOX_FILE} — the other lane learns of this on its next fetch`);
     } else {
-      const line = `${lane} lane published, pending protected merge: ${summary.join(", ")} — origin/${target} @ ${pushedSha}`;
+      const line = `${lane} lane published, pending protected merge: ${summary.join(", ")} — origin/${target} @ ${sha}`;
       const gh = run("gh", ["--version"]);
       const posted = gh.code === 0 ? run("gh", ["pr", "comment", String(prNumber), "--repo", repoSlug, "--body", line]) : null;
       if (posted && posted.code === 0) console.log(`  wake        commented on the mailbox PR #${prNumber} — the other lane wakes on it`);
       else console.log(`  wake        ${gh.code === 0 ? "gh could not comment" : "no gh on PATH"}; to wake the other lane NOW, comment on ${url}\n              (otherwise it sees this on its next hourly cycle)`);
     }
   }
+  cleanup();
+  console.log(`lane-deliver: submitted — ${target} @ ${sha}; canonical merge pending`);
 }
-
-cleanup();
-if (pushedRef) console.log(`lane-deliver: submitted — ${pushedRef} @ ${pushedSha}; canonical merge pending`);

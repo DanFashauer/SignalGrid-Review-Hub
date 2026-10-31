@@ -73,7 +73,6 @@ else if(a[0]==='auth'&&a[1]==='status'){${ghAuthFails ? "process.exit(1)" : "pro
   }, land() {
     const target=records(pushLog).at(-1).at(-1).slice("HEAD:".length);
     git(["fetch","origin",target]);git(["merge","--no-ff","--no-edit","FETCH_HEAD"]);
-    const merge=git(["rev-parse","HEAD"]);
     git(["fetch",repo,`HEAD:refs/heads/${BASE}`],remote); // disposable fixture's simulated protected merge
   }, pushes: () => records(pushLog), ghCalls: () => records(ghLog), refs: () => git(["for-each-ref", "--format=%(refname)", "refs/heads"], remote).split("\n") };
 }

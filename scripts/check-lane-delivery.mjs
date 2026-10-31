@@ -719,6 +719,7 @@ for(const code of [1,2])control(`exit${code} with a durable submission receipt n
  const first=f.runTick();assert.equal(first.status,0,first.stderr);assert.equal(f.deliveries().length,1);
  const cache=join(f.root,"node_modules"),attempt=readFileSync(join(cache,".sg-last-heartbeat-attempt"),"utf8").trim();
  const names=[".sg-last-heartbeat-attempt",".sg-last-heartbeat-result",...readdirSync(cache).filter(n=>n.startsWith(`.sg-heartbeat-${attempt}.`))];
+ if (names.length < 5) throw Error("snapshot omitted original heartbeat evidence");
  const before=names.map(n=>[n,readFileSync(join(cache,n))]);
  const second=f.runTick("RESULT='different current observation'\nREADBACK_RC=3\nheartbeat");
  assert.equal(second.status,0,second.stderr);assert.equal(f.deliveries().length,1,"the original publication boundary forbids a new topic");

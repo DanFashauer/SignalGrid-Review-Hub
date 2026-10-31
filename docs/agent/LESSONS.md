@@ -442,3 +442,12 @@ block; a stage run on the wrong tier is a lesson here.
 - **evidence:** Actual network-denied45/45 private,12/12 independent guard and96/96 portable controls, zero failures/errors/skips. The frozen receipt-boundary RED reproduced6 failures in12 cases using real disposable local Git. Original assertions and all failed histories are preserved.
 - **landing:** pending — require the new Mac caller contract before Git; honor any original receipt before classifying1/2; use GET-only pending diagnostics and at most one distinct, original-owner-bound Cloud hand. No replay of the original send or unknown notification. New-head full qualification and protected landing precede audited separate activation.
 - **status:** pending
+
+
+### L49 — Preservation snapshots must refuse missing original evidence
+- **date:** 2026-10-31
+- **lane:** mac
+- **incident:** A new preservation test enumerated original records without requiring its five expected records; the unchanged walker gate caught the missing floor during full preflight.
+- **evidence:** Frozen filesystem RED2/3 became GREEN3/3; delivery96/96 and unchanged walker16/16 pass. The01fc full489.746s failure remains failed. Runtime and previous assertions are byte-identical.
+- **landing:** pending — require at least five original evidence records before snapshotting; no gate or ceiling change. New full/breadth, protected landing and separate activation remain required.
+- **status:** pending

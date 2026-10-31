@@ -211,6 +211,25 @@ async function main() {
   check("PG: …and the moved row now shows in the other tenant's view — the read is honest, the chain is the alarm",
     (await getAuditRecordsForTenant("t-a", 10, 0)).length === 3);
 
+  // ── 6b. A SUPPRESSED INSERT IS NOT AN APPEND ──────────────────────────────
+  // A BEFORE INSERT trigger that RETURNs NULL makes the INSERT succeed with ZERO
+  // rows written — no error, so appendWithChain used to COMMIT and hand back a
+  // record the ledger never stored. SECURITY INVOKER on purpose: suppression
+  // needs no owner rights.
+  await admin.query(`
+    CREATE OR REPLACE FUNCTION public.sg_suppress_probe() RETURNS trigger LANGUAGE plpgsql SECURITY INVOKER AS
+      $fn$ BEGIN RETURN NULL; END $fn$;
+    CREATE TRIGGER sg_suppress_trg BEFORE INSERT ON public.audit_ledger
+      FOR EACH ROW EXECUTE FUNCTION public.sg_suppress_probe();
+  `);
+  const beforeSuppressed = (await getAuditRecords()).length;
+  const suppressed = await appendAuditRecord("decision.evaluated", { type: "system" }, { meta: { n: 5 } })
+    .then(() => "resolved", (err: unknown) => String((err as Error)?.message ?? err));
+  check("PG: an append a trigger SUPPRESSED (RETURN NULL, zero rows) REJECTS instead of reporting an unwritten record",
+    suppressed !== "resolved" && suppressed.includes("0 rows"));
+  check("PG: …and the ledger count is unchanged", (await getAuditRecords()).length === beforeSuppressed);
+  await admin.query("DROP TRIGGER sg_suppress_trg ON public.audit_ledger; DROP FUNCTION public.sg_suppress_probe();");
+
   // ── 7. READINESS vs a PRE-v3 SCHEMA ───────────────────────────────────────
   // `CREATE TABLE IF NOT EXISTS` is a no-op against an older shape, so a pre-v3
   // ledger let ping() resolve and /readyz report READY while `GET /v1/audit`

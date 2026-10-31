@@ -61,6 +61,37 @@ async function main() {
   check("end marks ended", (await store.end("tenant_northwind", "sess_pg_a"))?.status === "ended");
   check("tenant isolation: cross-tenant end returns null", (await store.end("tenant_atlas", "sess_pg_b")) === null);
 
+  // ── UNKNOWN STATUS: a value outside the enum reads as expired ─────────────
+  // The column is TEXT; a blind cast handed 'zombie' to callers, and withExpiry
+  // only expires 'active', so the past expires_at was never applied.
+  await admin.query(
+    `INSERT INTO sessions (id, tenant_id, identity_ref, device_ref, workflow_key, status, outcome, decision_id, created_at, last_seen_at, expires_at)
+     VALUES ('sess_pg_z', 'tenant_northwind', 'nurse.compliant', 'ipad-ward-01', 'clinical-session', 'zombie', 'maybe', 'dec_test', $1, $1, $2)`,
+    [iso(T0 - 120_000), iso(T0 - 60_000)],
+  );
+  check("an unknown stored status ('zombie', past expiry) reads as EXPIRED, never passed through",
+    (await store.get("tenant_northwind", "sess_pg_z", T0 + 1000))?.status === "expired");
+  check("…and it cannot be refreshed", (await store.refresh("tenant_northwind", "sess_pg_z", 900, T0 + 1000)) === null);
+  check("…and an unknown stored outcome ('maybe') reads as DENY, never passed through",
+    (await store.get("tenant_northwind", "sess_pg_z", T0 + 1000))?.outcome === "deny");
+
+  // ── REFRESH RACING END: the UPDATE itself must require status='active' ─────
+  // End the session between refresh's read and its write. The UPDATE used to
+  // match on id alone and return the stale 'active' read — the route then
+  // answered 200 and audited a session.refresh for an ended session.
+  await store.start(mk("sess_pg_r", "tenant_northwind", 900));
+  const realGet = store.get.bind(store);
+  (store as any).get = async (tenantId: string, id: string, nowMs: number) => {
+    const s = await realGet(tenantId, id, nowMs);
+    await admin.query("UPDATE sessions SET status = 'ended' WHERE id = $1", [id]);
+    return s;
+  };
+  const raced = await store.refresh("tenant_northwind", "sess_pg_r", 900, T0 + 1000);
+  delete (store as any).get;
+  check("refresh racing an end returns null (nothing active was refreshed)", raced === null);
+  const racedRow = await admin.query("SELECT status FROM sessions WHERE id = 'sess_pg_r'");
+  check("…and the session stays ENDED", racedRow.rows[0]?.status === "ended");
+
   // ── CONCURRENCY: N parallel starts all persist ──────────────────────────────
   await admin.query("TRUNCATE sessions");
   const N = 20;

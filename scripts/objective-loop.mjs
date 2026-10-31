@@ -68,6 +68,7 @@
 // rides the tick PR; DR-037 decides), and not the decision core (lib/*, /v1, native ports untouched).
 import { createHash } from "node:crypto";
 import { execFileSync, spawnSync } from "node:child_process";
+import { deliveryRecordDirectory } from "./lib/lane-attempt-store.mjs";
 import { existsSync, readFileSync, readdirSync, writeFileSync, mkdirSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -611,13 +612,13 @@ function emit(state, { write, deliver }) {
   if (deliver) {
     for (const e of state.escalations) {
       if (submitted.has(e.id)) continue;
-      const attempt = join(ROOT, "node_modules/.sg-objective-deliveries", createHash("sha256").update(e.id).digest("hex"));
+      let attempt;
       try {
-        mkdirSync(dirname(attempt), { recursive: true });
+        attempt = join(deliveryRecordDirectory(ROOT), "objective-" + createHash("sha256").update(e.id).digest("hex"));
         writeFileSync(attempt + ".attempt.json", JSON.stringify({ at: state.derivedAt, escalation: e.id,
           state: "attempted; pending exact readback", receipt: attempt + ".submission.json" }) + "\n", { flag: "wx", mode: 0o600, flush: true });
       } catch {
-        lines.push(`RAISED HAND: escalation ${e.id} already attempted or its intent cannot be preserved; READBACK ONLY (${attempt}.submission.json)`);
+        lines.push(`RAISED HAND: escalation ${e.id} already attempted or its intent cannot be preserved; READBACK ONLY (${attempt ? attempt + ".submission.json" : "shared record store unavailable"})`);
         continue;
       }
       const r = spawnSync(process.execPath, [join(ROOT, "scripts/lane-deliver.mjs"), "send", `objective-loop: ${e.id} — needs ${e.clears}`, `${e.asks}\n\n(Raised by scripts/objective-loop.mjs on the Mac tick, DR-056. Verdict ${state.verdict}; state ${STATE_REL} @ ${state.derivedAtCommit ?? "?"}. Sent once, on the first tick this escalation appeared; it stays in the state file until cleared.)`, "--receipt", attempt + ".submission.json"], { cwd: ROOT, encoding: "utf8" });

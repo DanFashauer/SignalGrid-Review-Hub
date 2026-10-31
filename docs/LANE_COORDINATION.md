@@ -49,7 +49,7 @@ edit in the commit and the lane message, per protocol rule 2.
 (`bash scripts/mac/install-launchd.sh`, once, on the Mac): fetch, refuse a dirty
 or non-Alpha checkout, run every pending sim request, push results on a
 `mac/tick-<stamp>` branch, and HEARTBEAT (the mac-lane-tick file under artifacts/agent-heartbeats,
-written through a protected lane/mac-mail-* PR) on every path — quiet, acted, skipped and why. Changed outcomes submit when the previous attempt has closed. An unchanged outcome gets a two-hour keepalive; a known prepublication refusal permits a fresh observation after ten minutes. Pending PRs hold later heartbeat submissions until exact canonical readback, and unresolved evidence raises a durable local hand. Submission is distinct from canonical delivery. The cloud steward opens the PR for
+written through a protected lane/mac-mail-* PR) on every path — quiet, acted, skipped and why. See [Held deliveries](#held-deliveries-original-receipt-readback) for cadence, durable records and canonical readback. The cloud steward opens the PR for
 each `mac/tick-*` branch within the hour and, when that heartbeat is older than
 three hours, escalates to the owner once with the one install command: a Mac
 that has gone silent is a signal, not a mystery. Before merging a tick PR that
@@ -150,7 +150,7 @@ What changed, and what each lane does now:
 
 | | Mac lane | Cloud lane |
 | --- | --- | --- |
-| Write + deliver mail, an ack, a heartbeat | `pnpm run lane:deliver send\|ack\|heartbeat …` — published to **`lane/mac-mail-<stamp>-<nonce>`** from a throwaway worktree, then PR + auto-merge request when `gh` is available; your checkout is untouched. Required checks and landing conditions remain. Publication is pending until the PR merges; never direct-push canonical or resend a refused/uncertain push. | same protected PR route using **`lane/cloud-mail-<stamp>-<nonce>`**. Never the code branch. |
+| Write + deliver mail, an ack, a heartbeat | `pnpm run lane:deliver send\|ack\|heartbeat …` — published to **`lane/mac-mail-<stamp>-<nonce>`** from a throwaway worktree, then PR + auto-merge request using authenticated `gh`; your checkout is untouched. Required checks and landing conditions remain. Publication is pending until the PR merges; never direct-push canonical or resend a refused/uncertain push. | same protected PR route using **`lane/cloud-mail-<stamp>-<nonce>`**. Never the code branch. |
 | Wake the other lane now | after a delivery, `lane:deliver` comments on the **mailbox PR** (`docs/agent/lane-mailbox.json`, PR #439) if `gh` is on PATH, else prints its URL — one comment there, from any device, wakes the cloud session | subscribed to the mailbox PR every session start and every cycle |
 | A topic branch pushed for review | push `mac/<name>`; `lane:inbox` lists your branches mainline does not carry yet | **hourly** cycle opens a DRAFT PR for every unmerged `mac/*` branch at once (CI starts before the review), subscribes to it, reviews, lands or comments the blocker |
 | How long has this waited | `lane:inbox` shows it per message; `check-lane-messages` names it on every run; unread beyond 24h is STALE (reported, never fatal) — for EVERY message: a message with no `sentAt` ages by the commit that delivered it (since 2026-09-06; before that it could never be stale) | same |
@@ -484,8 +484,8 @@ before a Mac push. A reset of tracked objective state or its old decision stamp
 does not remove the independent escalation attempts. The build-hand cause also
 has one attempt record; repeating the tick never resends an uncertain hand.
 
-Run this in the exact checkout that produced the original receipt, using the
-path recorded in its local log:
+Run this from any linked checkout sharing the original Git object store, using
+the absolute receipt path recorded in its local log:
 
 ```sh
 node scripts/lane-deliver.mjs readback <original-submission-receipt>
@@ -508,11 +508,18 @@ warnings and do not certify that GitHub received new mail.
 Missing, malformed, edited or incompatible intent/log/terminal/submission
 evidence, a CLOSED/unmerged PR, disabled auto-merge or unavailable canonical
 proof stays readback-only. Preserve the original immutable evidence in the
-producing checkout's `node_modules`; use the command above there and hand the
+shared Git common-directory store; use the command above and hand the
 cause to a separate source/ownership/grant-qualified repair. Never erase its
-pointer, resend, infer cleanup from process-group defaults, manufacture an
-approving vote or bypass protection. A UTC day change does not renew an unknown
+pointer, resend, infer cleanup from process-group defaults. A UTC day change does not renew an unknown
 attempt. Keep private logs and receipts local. Only actual canonical proof closes
-the original delivery. Estate failures persist as coarse exit status; detailed
-diagnostics stay in the private log, and an actual successful estate run clears
-the owned failure record.
+the original delivery.
+
+The shared store is `<git-common-dir>/signalgrid-lane-records`, pinned by a sibling
+identity marker. Before activating this source, preserve and inspect legacy
+heartbeat/objective records in every linked checkout and build-hand cache. After
+all owned attempts are terminal or separately held, initialize ONCE with
+`node scripts/lib/lane-attempt-store.mjs init <checkout>`. Normal ticks only read
+the marker; missing or replaced state refuses delivery. Never initialize to
+repair lost evidence, delete old receipts, or treat Generated content as authority.
+Per-cause build-hand fencing still requires a separately qualified repair for a
+known resolved blocker's recurrence; it is not an automatic reopen mechanism.

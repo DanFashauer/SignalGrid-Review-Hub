@@ -77,12 +77,15 @@ STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 LOG_PREFIX="lane-tick $STAMP"
 say() { printf '%s  %s\n' "$LOG_PREFIX" "$1"; }
 
+# Resolve once before use_tick_worktree can change cwd. Missing state never means first run.
+RECORD_DIR="$(node "$REPO_ROOT/scripts/lib/lane-attempt-store.mjs" path "$REPO_ROOT")" || exit 1
+
 # ── one tick at a time ───────────────────────────────────────────────────────
 # launchd never overlaps its own label, but a PERSON running this script by hand while
 # the launchd tick is mid-run would race it on one whole-file JSON state (DR-056). mkdir
 # is atomic and needs no flock (bash 3.2). A lock whose holder is DEAD is stale and is
 # cleared here — a crashed tick must never latch every later tick into silence.
-TICK_LOCK="${TMPDIR:-/tmp}/signalgrid-lane-tick.lock"
+TICK_LOCK="$RECORD_DIR/tick.lock"
 if ! mkdir "$TICK_LOCK" 2>/dev/null; then
   _holder="$(cat "$TICK_LOCK/pid" 2>/dev/null || true)"
   if [ -n "$_holder" ] && kill -0 "$_holder" 2>/dev/null; then
@@ -109,10 +112,9 @@ trap 'if declare -F sg_host_verify_release >/dev/null; then sg_host_verify_relea
 # gate failed a product PR on a 403. A repeated result is not news; a CHANGED result
 # is, and still delivers at once — including the first skip and the first failure.
 QUIET_HEARTBEAT_MIN="${SIGNALGRID_QUIET_HEARTBEAT_MIN:-120}"
-HB_STAMP="node_modules/.sg-last-heartbeat"
-HB_LAST_RESULT="node_modules/.sg-last-heartbeat-result"
-HB_LAST_ATTEMPT="node_modules/.sg-last-heartbeat-attempt"
-ESTATE_RESULT="node_modules/.sg-estate-result"
+HB_LAST_RESULT="$RECORD_DIR/.sg-last-heartbeat-result"
+HB_LAST_ATTEMPT="$RECORD_DIR/.sg-last-heartbeat-attempt"
+ESTATE_RESULT="$RECORD_DIR/.sg-estate-result"
 
 # Node is already required by the tick. Keep private cache writes and immutable
 # attempt records on the same regular-file, no-follow, fsynced primitive.
@@ -128,30 +130,28 @@ function write(path, data, exclusive = false) {
   const fd = fs.openSync(path, fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_NOFOLLOW | (exclusive ? fs.constants.O_EXCL : 0), 0o600);
   try {
     check(fd);
-    if (data === null) { const now = new Date(); fs.futimesSync(fd, now, now); }
-    else { fs.ftruncateSync(fd, 0); fs.writeFileSync(fd, data); }
+    fs.ftruncateSync(fd, 0); fs.writeFileSync(fd, data);
     fs.fsyncSync(fd);
   } finally { fs.closeSync(fd); }
 }
 if (mode === "prepare") {
-  write("node_modules/.sg-heartbeat-" + a + ".log", JSON.stringify({attempt:a,result:b}) + "\n", true);
-  write(c, a); write(d, b); write(e, null);
-} else if (mode === "terminal") {
+  write(a, JSON.stringify({attempt:b,result:c}) + "\n", true);
+  write(d, b); write(e, c);
+} else {
   const code = Number(b);
   if (!Number.isInteger(code) || code < 0 || code > 255) throw Error("invalid actual child exit");
-  write("node_modules/.sg-heartbeat-" + a + ".exit", code + "\n", true);
-} else if (mode === "estate") {
-  const code = Number(b);
-  if (!Number.isInteger(code) || code < 0 || code > 255) throw Error("invalid estate exit");
-  if (code) write(a, `estate queue FAILED (exit ${code}); see private tick log\n`);
-  else {
-    try {
-      const fd = fs.openSync(a, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW);
-      try { check(fd); } finally { fs.closeSync(fd); }
-      fs.unlinkSync(a);
-    } catch (error) { if (error.code !== "ENOENT") throw error; }
-  }
-} else throw Error("invalid private record mode");
+  if (mode === "terminal") write(a, code + "\n", true);
+  else if (mode === "estate") {
+    if (code) write(a, `estate queue FAILED (exit ${code}); see private tick log\n`);
+    else {
+      try {
+        const fd = fs.openSync(a, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW);
+        try { check(fd); } finally { fs.closeSync(fd); }
+        fs.unlinkSync(a);
+      } catch (error) { if (error.code !== "ENOENT") throw error; }
+    }
+  } else throw Error("invalid private record mode");
+}
 JS
 }
 
@@ -231,20 +231,25 @@ heartbeat() {
     if [ -L "$HB_LAST_ATTEMPT" ] || ! [[ "$_hb_previous" =~ ^[0-9]{8}T[0-9]{6}Z-[0-9]+$ ]]; then
       _hb_hold "unknown heartbeat receipt"; return 1
     fi
-    _hb_previous_log="node_modules/.sg-heartbeat-${_hb_previous}.log"
-    _hb_previous_exit="node_modules/.sg-heartbeat-${_hb_previous}.exit"
-    if [ ! -f "$_hb_previous_log" ] || [ -L "$_hb_previous_log" ] || [ -L "$_hb_previous_exit" ]; then
+    _hb_previous_log="$RECORD_DIR/.sg-heartbeat-${_hb_previous}.log"
+    _hb_previous_exit="$RECORD_DIR/.sg-heartbeat-${_hb_previous}.exit"
+    if [ ! -f "$_hb_previous_log" ] || [ -L "$_hb_previous_log" ] || [ ! -f "$_hb_previous_exit" ] || [ -L "$_hb_previous_exit" ]; then
       _hb_hold "unfinished heartbeat receipt"; return 1
     fi
     case "$(cat "$_hb_previous_exit" 2>/dev/null)" in
       1|2) _hb_window=10 ;; # known prepublication refusal: a fresh observation after ten minutes
-      *)
-        _hb_submission="node_modules/.sg-heartbeat-${_hb_previous}.submission.json"
+      0|3|4)
+        _hb_submission="$RECORD_DIR/.sg-heartbeat-${_hb_previous}.submission.json"
         if [ ! -f "$_hb_submission" ] || [ -L "$_hb_submission" ]; then
           _hb_hold "unconfirmed/unfinished heartbeat lacks its exact submission binding"; return 1
         fi
         ;;
+      *) _hb_hold "invalid independent heartbeat terminal"; return 1 ;;
     esac
+  fi
+  # A lost pointer alongside existing attempt evidence is damage, never a first run.
+  if [ ! -e "$HB_LAST_ATTEMPT" ] && [ -n "$(find "$RECORD_DIR" -maxdepth 1 -name '.sg-heartbeat-*' -print -quit)" ]; then
+    _hb_hold "heartbeat pointer missing beside original attempt evidence"; return 1
   fi
   # Throttle a result IDENTICAL to the last attempted one ("quiet" again, the same
   # "skipped: …" again, the same failure again) inside the window; anything that
@@ -253,7 +258,7 @@ heartbeat() {
   # `cat` comparison are BSD/bash-3.2 safe; a missing result file compares unequal.
   LAST_RESULT=""
   [ -f "$HB_LAST_RESULT" ] && LAST_RESULT="$(cat "$HB_LAST_RESULT" 2>/dev/null)"
-  if [ "$RESULT" = "$LAST_RESULT" ] && [ -f "$HB_STAMP" ] && [ -n "$(find "$HB_STAMP" -mmin -"$_hb_window" 2>/dev/null)" ]; then
+  if [ "$RESULT" = "$LAST_RESULT" ] && [ -f "$HB_LAST_ATTEMPT" ] && [ -n "$(find "$HB_LAST_ATTEMPT" -mmin -"$_hb_window" 2>/dev/null)" ]; then
     say "unchanged ($RESULT), last submission attempt <${_hb_window}m ago — no new mail PR; original submission not rechecked"
     return 0
   fi
@@ -281,16 +286,16 @@ heartbeat() {
   # afterwards. Existing receipts remain immutable; no automatic unknown override.
 
   _hb_attempt="${STAMP}-$$"
-  _hb_log="node_modules/.sg-heartbeat-${_hb_attempt}.log"
-  if ! mkdir -p node_modules || ! tick_record prepare "$_hb_attempt" "$RESULT" "$HB_LAST_ATTEMPT" "$HB_LAST_RESULT" "$HB_STAMP"; then
+  _hb_log="$RECORD_DIR/.sg-heartbeat-${_hb_attempt}.log"
+  if ! tick_record prepare "$_hb_log" "$_hb_attempt" "$RESULT" "$HB_LAST_ATTEMPT" "$HB_LAST_RESULT"; then
     say "WARN could not preserve heartbeat intent; no submission"; return 1
   fi
-  if node scripts/lane-deliver.mjs heartbeat mac-lane-tick "$RESULT" --no-wake --receipt "node_modules/.sg-heartbeat-${_hb_attempt}.submission.json" >>"$_hb_log" 2>&1; then
+  if node scripts/lane-deliver.mjs heartbeat mac-lane-tick "$RESULT" --no-wake --receipt "$RECORD_DIR/.sg-heartbeat-${_hb_attempt}.submission.json" >>"$_hb_log" 2>&1; then
     _hb_exit=0
   else
     _hb_exit=$?
   fi
-  if ! tick_record terminal "$_hb_attempt" "$_hb_exit"; then
+  if ! tick_record terminal "$RECORD_DIR/.sg-heartbeat-${_hb_attempt}.exit" "$_hb_exit"; then
     say "WARN heartbeat terminal not recorded; READBACK ONLY: $_hb_log"; return 1
   fi
   if [ "$_hb_exit" = "0" ]; then
@@ -569,8 +574,8 @@ RESULT="$RESULT; objective: $LOOP_VERDICT"
 # and merges mainline into a PR that is behind without conflict, at most ESTATE_MAX
 # per run, and only reports everything else (it never merges a PR). Hourly, so a
 # 5-minute tick does not re-run CI on the same PRs every few minutes; the stamp lives
-# in node_modules (gitignored) like the heartbeat's.
-ESTATE_STAMP="node_modules/.sg-estate-last"
+# in the shared private store, like the heartbeat's.
+ESTATE_STAMP="$RECORD_DIR/.sg-estate-last"
 ESTATE_MAX="${SIGNALGRID_ESTATE_MAX:-3}"
 if [ -f scripts/mac/estate-queue.mjs ] && command -v gh >/dev/null 2>&1; then
   if [ -z "$(find "$ESTATE_STAMP" -mmin -60 2>/dev/null)" ]; then
@@ -579,7 +584,7 @@ if [ -f scripts/mac/estate-queue.mjs ] && command -v gh >/dev/null 2>&1; then
       say "dry-run: would execute the estate queue (max $ESTATE_MAX); plan: $_est"
     else
       mkdir -p node_modules 2>/dev/null || true
-      _est="$(node scripts/mac/estate-queue.mjs execute --max "$ESTATE_MAX" --cursor-file node_modules/.sg-estate-cursor 2>&1)"
+      _est="$(node scripts/mac/estate-queue.mjs execute --max "$ESTATE_MAX" --cursor-file "$RECORD_DIR/.sg-estate-cursor" 2>&1)"
       _est_rc=$?
       printf '%s\n' "$_est" | while IFS= read -r _l; do say "  $_l"; done
       # Without the stamp the hourly throttle is gone and the queue runs every tick.

@@ -355,7 +355,7 @@ console.log(`  worktree    ${wt} @ ${base} (origin/${MAINLINE})`);
   if (outside.length > 0) die(`refusing to deliver files outside the lane directories: ${outside.join(", ")}`, 1);
   const title = `Lane mail (${lane}): ${summary.join(", ")}`.slice(0, 120);
   const bodyLines = [
-    `Submitted by scripts/lane-deliver.mjs from a worktree at origin/${MAINLINE} ${base}. Canonical merge pending.`,
+    `Submitted by scripts/lane-deliver.mjs from a worktree at origin/${MAINLINE} ${base}.`,
     ...staged.map((f) => `  ${f}`),
   ];
   if (flags.trailers.length > 0) bodyLines.push("", ...flags.trailers);

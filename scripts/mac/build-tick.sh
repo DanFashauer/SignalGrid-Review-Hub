@@ -167,6 +167,7 @@ say() {
 # attempt for each redacted cause, even across a UTC day change.
 raise_hand() {
   if [ "$DRY" = "1" ]; then say "dry-run: would raise a hand: $1"; return 0; fi
+  _hand_records="$(node "$REPO_ROOT/scripts/lib/lane-attempt-store.mjs" path "$REPO_ROOT")" || { say "RAISED HAND: shared delivery records unavailable; READBACK ONLY"; return 0; }
   _ops="$(mktemp "$CACHE/hand.XXXXXX")" || { say "WARN could not raise a hand (mktemp)"; return 0; }
   if _hand_attempt="$(node -e 'const [f, blocked, where, cache, stamp] = process.argv.slice(1);
       // Same public-diagnostic policy as run-requests.mjs; private shell logs stay verbatim.
@@ -184,12 +185,11 @@ raise_hand() {
       for (const key of ["doing", "blocked", "need", "where"]) hand[key] = redact(hand[key]);
       const fs = require("fs"), path = require("path");
       const key = require("crypto").createHash("sha256").update(hand.blocked).digest("hex");
-      const attempt = path.join(cache, "hand-attempts", key);
-      fs.mkdirSync(path.dirname(attempt), { recursive: true });
+      const attempt = path.join(cache, "hand-" + key);
       fs.writeFileSync(attempt + ".attempt.json", JSON.stringify({ at: stamp, state: "attempted; pending exact readback", receipt: attempt + ".submission.json" }), { flag: "wx", mode: 0o600, flush: true });
       fs.writeFileSync(f, JSON.stringify([hand]));
       process.stdout.write(attempt);' \
-      "$_ops" "$1" "${RUN_LOG:-launchd log ~/Library/Logs/signalgrid-build-tick.log}" "$CACHE" "$STAMP" 2>/dev/null)"; then
+      "$_ops" "$1" "${RUN_LOG:-launchd log ~/Library/Logs/signalgrid-build-tick.log}" "$_hand_records" "$STAMP" 2>/dev/null)"; then
     if (umask 077; set -C; node "$REPO_ROOT/scripts/lane-deliver.mjs" batch "$_ops" --receipt "${_hand_attempt}.submission.json" >"${_hand_attempt}.output" 2>&1); then _hand_exit=0; else _hand_exit=$?; fi
     if [ -n "$RUN_LOG" ]; then cat "${_hand_attempt}.output" >> "$RUN_LOG"; fi
     node -e 'require("fs").writeFileSync(process.argv[1], process.argv[2]+"\n", {flag:"wx",mode:0o600,flush:true})' "${_hand_attempt}.exit" "$_hand_exit" || say "RAISED HAND: terminal receipt unavailable; READBACK ONLY"

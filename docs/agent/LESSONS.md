@@ -388,3 +388,12 @@ block; a stage run on the wrong tier is a lesson here.
 - **evidence:** Real Git refresh/merge and cleanup-permission counterexamples drove frozen48 from40/8 to48/0 under network denial; original-payload changes still refuse, unknown mutations never resend.
 - **landing:** pending — prove original ancestry and blobs, pace readbacks, and preserve independent fsynced records; PR #1698 still needs a canonical refresh, full current-head gates and natural heartbeat proof.
 - **status:** pending
+
+
+### L43 — Attempt ownership follows the machine, not a disposable checkout
+- **date:** 2026-10-31
+- **lane:** mac
+- **incident:** Cwd-relative dependency caches split one machine's pending heartbeat and escalation into separate chains when the tick switched to its linked worktree; clearing dependencies also erased the fence.
+- **evidence:** Frozen cross-checkout baseline0/4 became4/0. Current61/0 under actual Mac network denial covers shared paths, real distinct-TMPDIR locking, parent-terminal completeness, damaged-store refusal and inherited Git environment binding.
+- **landing:** pending — preserve all old receipts, separately initialize the shared store only after exact legacy-attempt inventory and qualified release gates; PR #1698 still requires all current-head reviews/CI and natural canonical heartbeat proof.
+- **status:** pending

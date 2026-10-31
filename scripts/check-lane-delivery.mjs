@@ -1,8 +1,8 @@
 // Exercise the actual delivery CLI against disposable Git repositories only.
 // Schema-gate and gh fixtures isolate transport; the real gates run separately.
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
-import { chmodSync, existsSync, linkSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, utimesSync, writeFileSync } from "node:fs";
+import { spawn, spawnSync } from "node:child_process";
+import { chmodSync, existsSync, linkSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, renameSync, statSync, symlinkSync, utimesSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
@@ -147,32 +147,46 @@ for (const failure of ["ghCreateFails", "ghAutoFails"]) control(`${failure} is u
   assert.match(r.stderr, /readback|unconfirmed/i);
 });
 
+for (const damaged of ["missing", "malformed"]) control(`a ${damaged} independent terminal with a child receipt cannot admit new work`, {tick:true,age:130,priorAttempt:"interrupted",result:"changed fixture"},f=>{
+ const base=join(f.root,"node_modules/.sg-heartbeat-20261030T000000Z-999999");
+ writeFileSync(base+".submission.json",'{"fixtureSubmission":true}\n');
+ if(damaged==="malformed")writeFileSync(base+".exit","not-a-parent-exit\n");
+ const r=f.runTick();assert.equal(r.status,0,r.stderr);assert.equal(f.deliveries().length,0);assert.match(r.stdout,/RAISED HAND/);
+});
 // Execute the real heartbeat function and estate block, with only their I/O
 // dependencies replaced. This is a Bash/file control, not a launchd or live-gh proof.
-function heartbeatFixture({ age = 30, lastResult = "quiet", result = "quiet", dry = false,
-  deliveryCode = 0, priorAttempt = null } = {}) {
+function heartbeatFixture({ age = 30, result = "quiet", dry = false,
+  deliveryCode = 0, priorAttempt = null, agedPrior = false } = {}) {
   const root = mkdtempSync(join(tmpdir(), "sg-heartbeat-test-"));
   const cache = join(root, "node_modules"), deliveries = join(root, "deliveries"), readbacks = join(root,"readbacks");
   mkdirSync(cache); mkdirSync(join(root, "scripts/mac"), { recursive: true });
   writeFileSync(join(root, "scripts/mac/estate-queue.mjs"), "fixture\n");
-  writeFileSync(join(cache, ".sg-last-heartbeat-result"), lastResult);
-  const stamp = join(cache, ".sg-last-heartbeat"); writeFileSync(stamp, "");
-  const aged = new Date(Date.now() - age * 60000); utimesSync(stamp, aged, aged);
+  writeFileSync(join(cache, ".sg-last-heartbeat-result"), "quiet");
+  const stamp = join(cache, ".sg-last-heartbeat-attempt");
+  const aged = new Date(Date.now() - age * 60000); if (existsSync(stamp)) utimesSync(stamp, aged, aged);
+  if (!priorAttempt && (age < 120 || agedPrior)) {
+    const id="20261030T000000Z-999998";
+    writeFileSync(stamp,id); writeFileSync(join(cache,`.sg-heartbeat-${id}.log`),"frozen prior intent\n");
+    writeFileSync(join(cache,`.sg-heartbeat-${id}.exit`),"0\n");
+    writeFileSync(join(cache,`.sg-heartbeat-${id}.submission.json`),'{"fixtureSubmission":true}\n');
+    utimesSync(stamp,aged,aged);
+  }
   if (priorAttempt) {
     const id = priorAttempt === "malformed" ? "invalid-id" : "20261030T000000Z-999999";
     writeFileSync(join(cache, ".sg-last-heartbeat-attempt"), id);
     writeFileSync(join(cache, `.sg-heartbeat-${id}.log`), "untrusted output: exit_code=0\n");
     if (priorAttempt !== "interrupted") writeFileSync(join(cache, `.sg-heartbeat-${id}.exit`), priorAttempt === "malformed" ? "1\n" : "3\n");
   }
+  if (existsSync(stamp)) utimesSync(stamp, aged, aged);
   const tick = readFileSync(join(ROOT, "scripts/mac/lane-tick.sh"), "utf8");
   const start = tick.indexOf("heartbeat() {");
   const end = tick.indexOf("\n}\n", start) + 3;
   assert.ok(start >= 0 && end > start, "actual heartbeat implementation must be present");
   const heartbeat = tick.slice(start, end);
   const writerStart=tick.indexOf("tick_record() {"),writerTerminator="\nJS\n}\n";
-  const writerEnd=writerStart<0?-1:tick.indexOf(writerTerminator,writerStart)+writerTerminator.length;
-  assert.ok(writerStart<0||writerEnd>writerStart,"actual shared record writer must have its complete heredoc");
-  const recordHelper=writerStart<0?"":tick.slice(writerStart,writerEnd);
+  const writerEnd=tick.indexOf(writerTerminator,writerStart)+writerTerminator.length;
+  assert.ok(writerStart>=0&&writerEnd>writerStart,"actual shared record writer must have its complete heredoc");
+  const recordHelper=tick.slice(writerStart,writerEnd);
   const estateStart = tick.indexOf('ESTATE_STAMP="');
   const estateEnd = tick.indexOf("# ── e. heartbeat", estateStart);
   assert.ok(estateStart >= 0 && estateEnd > estateStart, "actual estate block must be present");
@@ -180,7 +194,7 @@ function heartbeatFixture({ age = 30, lastResult = "quiet", result = "quiet", dr
   const declarations = tick.split("\n").filter((line) => /^(QUIET_HEARTBEAT_MIN|HB_[A-Z_]+|ESTATE_RESULT)=/.test(line)).join("\n");
   const quote = (s) => `'${String(s).replaceAll("'", "'\\''")}'`;
   return { root, runTick(body = "heartbeat") {
-    const script = `set -u\n${declarations}\nSTAMP=20261030T010000Z\nDRY=${dry ? 1 : 0}\nRESULT=${quote(result)}\nDELIVERY_RC=${deliveryCode}\nESTATE_RC=0\nESTATE_OUTPUT='estate: 0 open ()'\nsay(){ printf '%s\\n' "$1"; }\nappend_unread_state(){ :; }\nappend_raised_hands_state(){ :; }\ngh(){ return 0; }\nnode(){ if [ "$1" = scripts/lane-deliver.mjs ]; then if [ "$2" = readback ]; then printf 'readback\\n' >> "$FIXTURE_READBACK_LOG"; if [ "\${READBACK_RC:-$DELIVERY_RC}" = 0 ]; then printf 'canonical fixture merge verified\\n'; else printf 'original fixture PR still pending or unavailable\\n'; fi; return "\${READBACK_RC:-$DELIVERY_RC}"; fi; printf '%s\\n' "$*" >> ${quote(deliveries)}; for _arg in "$@"; do if [ "\${_want_receipt:-0}" = 1 ]; then printf '{"fixtureSubmission":true}\\n' > "$_arg"; _want_receipt=0; fi; if [ "$_arg" = --receipt ]; then _want_receipt=1; fi; done; printf 'untrusted fixture output: exit_code=0\\n'; return "$DELIVERY_RC"; elif [ "$1" = scripts/mac/estate-queue.mjs ]; then printf '%s\\n' "$ESTATE_OUTPUT"; return "$ESTATE_RC"; else "$FIXTURE_NODE" "$@"; fi; }\n${recordHelper}\n${heartbeat}\nrun_estate(){\n${estate}\n}\n${body}\ntrue\n`;
+    const script = `set -u\nRECORD_DIR=${quote(cache)}\n${declarations}\nSTAMP=20261030T010000Z\nDRY=${dry ? 1 : 0}\nRESULT=${quote(result)}\nDELIVERY_RC=${deliveryCode}\nESTATE_RC=0\nESTATE_OUTPUT='estate: 0 open ()'\nsay(){ printf '%s\\n' "$1"; }\nappend_unread_state(){ :; }\nappend_raised_hands_state(){ :; }\ngh(){ return 0; }\nnode(){ if [ "$1" = scripts/lane-deliver.mjs ]; then if [ "$2" = readback ]; then printf 'readback\\n' >> "$FIXTURE_READBACK_LOG"; if [ "\${READBACK_RC:-$DELIVERY_RC}" = 0 ]; then printf 'canonical fixture merge verified\\n'; else printf 'original fixture PR still pending or unavailable\\n'; fi; return "\${READBACK_RC:-$DELIVERY_RC}"; fi; printf '%s\\n' "$*" >> ${quote(deliveries)}; for _arg in "$@"; do if [ "\${_want_receipt:-0}" = 1 ]; then printf '{"fixtureSubmission":true}\\n' > "$_arg"; _want_receipt=0; fi; if [ "$_arg" = --receipt ]; then _want_receipt=1; fi; done; printf 'untrusted fixture output: exit_code=0\\n'; return "$DELIVERY_RC"; elif [ "$1" = scripts/mac/estate-queue.mjs ]; then printf '%s\\n' "$ESTATE_OUTPUT"; return "$ESTATE_RC"; else "$FIXTURE_NODE" "$@"; fi; }\n${recordHelper}\n${heartbeat}\nrun_estate(){\n${estate}\n}\n${body}\ntrue\n`;
     return spawnSync("/bin/bash", ["-c", script], { cwd: root,
       env: { PATH: "/usr/bin:/bin", HOME: root, LANG: "C", FIXTURE_NODE:process.execPath, FIXTURE_READBACK_LOG:readbacks }, encoding: "utf8", timeout: 10000 });
   }, deliveries: () => existsSync(deliveries) ? readFileSync(deliveries, "utf8").trim().split("\n") : [], readbacks:()=>existsSync(readbacks)?readFileSync(readbacks,"utf8").trim().split("\n"):[] };
@@ -217,17 +231,17 @@ control("heartbeat dry run writes no submission receipt or stamp", { tick: true,
   const before = readFileSync(join(f.root, "node_modules/.sg-last-heartbeat-result"), "utf8");
   const r = f.runTick(); assert.equal(r.status, 0, r.stderr); assert.equal(f.deliveries().length, 0);
   assert.equal(readFileSync(join(f.root, "node_modules/.sg-last-heartbeat-result"), "utf8"), before);
-  assert.equal(existsSync(join(f.root, "node_modules/.sg-last-heartbeat-attempt")), false);
+  assert.equal(existsSync(join(f.root,"node_modules/.sg-last-heartbeat-attempt")),false);
 });
 
 control("expired Mac gh authentication refuses before every topic push", { ghAuthFails: true }, (f) => {
   const r=f.run(); assert.equal(r.status,1,r.stderr); assert.equal(f.pushes().length,0);
   assert.ok(f.ghCalls().some(a=>a[0]==="auth"&&a[1]==="status"));
 });
-control("a real successful heartbeat advances the APFS keepalive timestamp", { tick:true,age:130 }, f=>{
-  const p=join(f.root,"node_modules/.sg-last-heartbeat");
+control("a real successful heartbeat advances the APFS keepalive timestamp", { tick:true,age:130,agedPrior:true }, f=>{
+  const p=join(f.root,"node_modules/.sg-last-heartbeat-attempt");
   const before=statSync(p).mtimeMs; const r=f.runTick();assert.equal(r.status,0,r.stderr);
-  assert.ok(statSync(p).mtimeMs>before+60000,"the stamp must actually advance");
+  assert.ok(statSync(p).mtimeMs>before+60000,"the attempt pointer must actually advance");
 });
 
 function objectiveCaller(rc) {
@@ -242,7 +256,7 @@ function objectiveCaller(rc) {
 import {mkdirSync,readFileSync,rmSync,writeFileSync} from 'node:fs';
 import {dirname,join} from 'node:path';
 import {createHash} from 'node:crypto';
-const ROOT=${JSON.stringify(root)},STATE_REL='state.json',STAMP_REL='node_modules/.sg-objective-loop-last.json';
+const deliveryRecordDirectory=()=>${JSON.stringify(join(root,'node_modules'))};\nconst ROOT=${JSON.stringify(root)},STATE_REL='state.json',STAMP_REL='node_modules/.sg-objective-loop-last.json';
 const calls=[];
 function spawnSync(){calls.push(1);return {status:${rc},stdout:'fixture raw output',stderr:''};}
 ${source.slice(start,end)}
@@ -277,7 +291,7 @@ for (const suffix of ["plain", "space 'single' \"double\" $(touch shell-path-mar
     const start=source.indexOf('raise_hand() {'),end=source.indexOf('\nfail() {',start);
     assert.ok(start>=0&&end>start);
     const calls=join(root,'calls');
-    const script=`set -u\nDRY=0\nCACHE="$FIXTURE_ROOT"\nREPO_ROOT="$FIXTURE_ROOT"\nSTAMP=20261031T000000Z\nRUN_LOG="$FIXTURE_RUN_LOG"\nsay(){ printf '%s\\n' "$1"; }\nnode(){ if [ "$1" = "$REPO_ROOT/scripts/lane-deliver.mjs" ]; then printf 'call\\n' >> "$FIXTURE_CALLS"; return 3; else "$FIXTURE_NODE" "$@"; fi; }\n${source.slice(start,end)}\nraise_hand 'fixture failure'\nraise_hand 'fixture failure'\nraise_hand 'fixture failure'\ntrue\n`;
+    const script=`set -u\nDRY=0\nCACHE="$FIXTURE_ROOT"\nREPO_ROOT="$FIXTURE_ROOT"\nSTAMP=20261031T000000Z\nRUN_LOG="$FIXTURE_RUN_LOG"\nsay(){ printf '%s\\n' "$1"; }\nnode(){ if [ "$1" = "$REPO_ROOT/scripts/lib/lane-attempt-store.mjs" ]; then printf '%s\\n' "$FIXTURE_ROOT"; elif [ "$1" = "$REPO_ROOT/scripts/lane-deliver.mjs" ]; then printf 'call\\n' >> "$FIXTURE_CALLS"; return 3; else "$FIXTURE_NODE" "$@"; fi; }\n${source.slice(start,end)}\nraise_hand 'fixture failure'\nraise_hand 'fixture failure'\nraise_hand 'fixture failure'\ntrue\n`;
     const r=spawnSync('/bin/bash',['-c',script],{cwd:root,env:{PATH:'/usr/bin:/bin',HOME:root,FIXTURE_ROOT:root,FIXTURE_RUN_LOG:join(root,'run.log'),FIXTURE_CALLS:calls,FIXTURE_NODE:process.execPath},encoding:'utf8'});
     assert.equal(existsSync(join(root,'shell-path-marker')),false,'path command substitution must never execute');
     assert.equal(existsSync(join(root,'backtick-marker')),false,'path backticks must never execute');
@@ -389,6 +403,82 @@ control("a hardlinked heartbeat pointer cannot truncate its other inode name",{t
   const r=spawnSync('/bin/bash',['-c',script],{encoding:'utf8',env:{PATH:'/usr/bin:/bin'}});assert.equal(r.status,0,r.stderr);assert.match(r.stdout,/RAISED HAND: original delivery held/);assert.match(r.stdout,/WARN fixture terminal recording failed/);
   passed++;console.log('PASS successful objective summary preserves its held-delivery warnings');
  }catch(e){failed++;console.error('FAIL successful objective warning visibility: '+e.message);}
+}
+
+{
+const sourceRoot=ROOT,git=GIT;
+const q=s=>"'"+s.replaceAll("'","'\\''")+"'";
+function run(cmd,args,cwd,extra={}){return spawnSync(cmd,args,{cwd,encoding:'utf8',env:{PATH:dirname(process.execPath)+':/usr/bin:/bin',GIT_CONFIG_NOSYSTEM:'1',GIT_CONFIG_GLOBAL:'/dev/null',GIT_TERMINAL_PROMPT:'0',...extra}})}
+function setup(){const parent=mkdtempSync(join(tmpdir(),'sg-shared-record-test-')),root=join(parent,'primary'),linked=join(parent,'tick');mkdirSync(root);
+ const g=a=>{const r=run(git,a,root);assert.equal(r.status,0,r.stderr)};
+ g(['init','-q','-b','fixture']);g(['config','user.name','Fixture']);g(['config','user.email','fixture@example.invalid']);
+ mkdirSync(join(root,'scripts/lib'),{recursive:true});const module=join(sourceRoot,'scripts/lib/lane-attempt-store.mjs');
+ if(existsSync(module))writeFileSync(join(root,'scripts/lib/lane-attempt-store.mjs'),readFileSync(module));
+ writeFileSync(join(root,'fixture'),'fixture');g(['add','.']);g(['commit','-qm','fixture']);g(['worktree','add','-q','--detach',linked]);
+ if(existsSync(module)){const r=run(process.execPath,[join(root,'scripts/lib/lane-attempt-store.mjs'),'init',root],root);assert.equal(r.status,0,r.stderr)}
+ return {parent,root,linked,hasModule:existsSync(module)};
+}
+function check(label,fn){const f=setup();try{fn(f);passed++;console.log('PASS '+label)}catch(e){failed++;console.error('FAIL '+label+': '+e.message)}finally{rmSync(f.parent,{recursive:true,force:true})}}
+function heartbeat(f,cwd){mkdirSync(join(cwd,'node_modules'),{recursive:true});const tick=readFileSync(join(sourceRoot,'scripts/mac/lane-tick.sh'),'utf8');
+ const start=tick.indexOf('heartbeat() {'),end=tick.indexOf('\n}\n',start)+3,ws=tick.indexOf('tick_record() {'),we=tick.indexOf('\nJS\n}\n',ws)+7;
+ assert.ok(start>=0&&end>start&&ws>=0&&we>ws);
+ const declarations=tick.split('\n').filter(l=>/^(QUIET_HEARTBEAT_MIN|HB_[A-Z_]+|ESTATE_RESULT)=/.test(l)).join('\n');
+ const script=`set -u\nRECORD_DIR=${f.hasModule?'$("$FIXTURE_NODE" '+q(join(cwd,'scripts/lib/lane-attempt-store.mjs'))+' path '+q(cwd)+')':q(join(cwd,'node_modules'))}\n${declarations}\nSTAMP=20261031T010000Z\nDRY=0\nRESULT=quiet\nsay(){ printf '%s\\n' "$1"; }\nappend_unread_state(){ :; }\nappend_raised_hands_state(){ :; }\nnode(){ if [ "$1" = scripts/lane-deliver.mjs ]; then if [ "$2" = readback ]; then return 4; fi; printf 'mutation\\n' >> "$FIXTURE_CALLS"; for _arg in "$@"; do if [ "\${want:-0}" = 1 ]; then printf '{"fixture":true}\\n' > "$_arg"; want=0; fi; if [ "$_arg" = --receipt ]; then want=1; fi; done; return 0; else "$FIXTURE_NODE" "$@"; fi; }\n${tick.slice(ws,we)}\n${tick.slice(start,end)}\nheartbeat\ntrue\n`;
+ const r=run('/bin/bash',['-c',script],cwd,{FIXTURE_NODE:process.execPath,FIXTURE_CALLS:join(f.parent,'calls')});assert.equal(r.status,0,r.stderr);
+}
+function calls(f){return readFileSync(join(f.parent,'calls'),'utf8').trim().split('\n').length}
+check('pending heartbeat is one chain across primary and linked tick worktree',f=>{heartbeat(f,f.root);heartbeat(f,f.linked);assert.equal(calls(f),1)});
+check('removing both node_modules cannot erase a pending heartbeat fence',f=>{heartbeat(f,f.root);rmSync(join(f.root,'node_modules'),{recursive:true});heartbeat(f,f.root);assert.equal(calls(f),1)});
+for(const purge of [false,true])check('one escalation across '+(purge?'dependency purge':'linked checkouts'),f=>{
+ const source=readFileSync(join(sourceRoot,'scripts/objective-loop.mjs'),'utf8');const a=source.indexOf('function emit(state,'),b=source.indexOf('// ── --check:',a);assert.ok(a>=0&&b>a);
+ const harness=join(f.parent,'objective.mjs');writeFileSync(harness,`import {mkdirSync,readFileSync,rmSync,writeFileSync} from 'node:fs';import {dirname,join} from 'node:path';import {createHash} from 'node:crypto';${f.hasModule?"import {deliveryRecordDirectory} from "+JSON.stringify('file://'+join(f.root,'scripts/lib/lane-attempt-store.mjs'))+";":''}\nlet ROOT=${JSON.stringify(f.root)};const STATE_REL='state.json',STAMP_REL='node_modules/stamp.json';let calls=0;function spawnSync(){calls++;return {status:3,stdout:'raw fixture',stderr:''}}\n${source.slice(a,b)}\nconst state={decisionAddress:'d',derivedAt:'2026-10-31T01:00:00Z',queue:[],escalations:[{id:'same-source-escalation',clears:'cloud',asks:'repair'}],criteria:[],tasks:[],verdict:'building'};emit(state,{write:true,deliver:true});rmSync(join(ROOT,STATE_REL),{force:true});${purge?"rmSync(join(ROOT,'node_modules'),{recursive:true,force:true});":"ROOT="+JSON.stringify(f.linked)+";"}emit(state,{write:true,deliver:true});console.log(calls);`);
+ const r=run(process.execPath,[harness],f.root);assert.equal(r.status,0,r.stderr);assert.equal(Number(r.stdout.trim()),1);
+});
+
+check('inherited Git environment cannot redirect the shared attempt store',f=>{
+ const other=setup();
+ try {
+  const module=join(f.root,'scripts/lib/lane-attempt-store.mjs');
+  const expected=run(process.execPath,[module,'path',f.root],f.root);assert.equal(expected.status,0,expected.stderr);
+  const actual=run(process.execPath,[module,'path',f.root],f.root,{GIT_DIR:join(other.root,'.git'),GIT_COMMON_DIR:join(other.root,'.git'),GIT_WORK_TREE:f.root});
+  assert.equal(actual.status,0,actual.stderr);assert.equal(actual.stdout,expected.stdout,'caller Git variables cannot fork the store into another repository');
+ }finally{rmSync(other.parent,{recursive:true,force:true});}
+});
+for(const kind of ['missing-marker','corrupt-marker','missing-directory','replaced-directory','symlink-marker','hardlinked-marker','double-init'])check('shared record store refuses '+kind,f=>{
+ const module=join(f.root,'scripts/lib/lane-attempt-store.mjs');
+ const observed=run(process.execPath,[module,'path',f.root],f.root);assert.equal(observed.status,0,observed.stderr);
+ const directory=observed.stdout.trim(),marker=directory+'.json',original=readFileSync(marker);
+ if(kind==='missing-marker')rmSync(marker);
+ if(kind==='corrupt-marker')writeFileSync(marker,'{');
+ if(kind==='missing-directory')rmSync(directory,{recursive:true});
+ if(kind==='replaced-directory'){renameSync(directory,directory+'.preserved');mkdirSync(directory);}
+ if(kind==='symlink-marker'){renameSync(marker,marker+'.preserved');symlinkSync(marker+'.preserved',marker);}
+ if(kind==='hardlinked-marker')linkSync(marker,marker+'.alias');
+ const response=run(process.execPath,[module,kind==='double-init'?'init':'path',f.linked],f.linked);
+ assert.equal(response.status,1,'damaged/existing state cannot initialize itself: '+response.stdout);
+ assert.match(response.stderr,/READBACK ONLY/);
+ if(kind==='missing-directory')assert.equal(existsSync(directory),false,'read path must not recreate lost state');
+ if(kind==='double-init')assert.deepEqual(readFileSync(marker),original,'second init must preserve the original marker');
+});
+{
+ const f=setup();let child,closed;
+ try {
+  const tick=readFileSync(join(ROOT,'scripts/mac/lane-tick.sh'),'utf8');
+  const start=tick.indexOf('TICK_LOCK='),end=tick.indexOf('# An UNCHANGED tick',start);assert.ok(start>=0&&end>start);
+  const observed=run(process.execPath,[join(f.root,'scripts/lib/lane-attempt-store.mjs'),'path',f.root],f.root);assert.equal(observed.status,0,observed.stderr);
+  const prefix=`set -u\nRECORD_DIR=${q(observed.stdout.trim())}\nsay(){ printf '%s\\n' "$1"; }\n${tick.slice(start,end)}`;
+  const one=join(f.parent,'tmp-one'),two=join(f.parent,'tmp-two');mkdirSync(one);mkdirSync(two);
+  child=spawn('/bin/bash',['-c',prefix+"printf 'OWNED_LOCK_READY\\n'\nread -r release\n"],{cwd:f.root,env:{PATH:'/usr/bin:/bin',TMPDIR:one},stdio:['pipe','pipe','pipe']});
+  closed=new Promise((resolve,reject)=>{child.on('error',reject);child.on('exit',code=>resolve(code));});
+  await new Promise((resolve,reject)=>{let text='';child.stdout.on('data',bytes=>{text+=bytes;if(text.includes('OWNED_LOCK_READY'))resolve();});child.on('error',reject);child.on('exit',code=>reject(Error('original owned lock child exited before readiness: '+code)));});
+  const other=run('/bin/bash',['-c',prefix+"printf 'SECOND_ACQUIRED\\n'\n"],f.linked,{TMPDIR:two});
+  assert.equal(other.status,0,other.stderr);assert.match(other.stdout,/another tick/);assert.doesNotMatch(other.stdout,/SECOND_ACQUIRED/);
+  child.stdin.end('release\n');assert.equal(await closed,0,'original owned lock child must complete normally');
+  passed++;console.log('PASS primary and linked tick with distinct TMPDIR share one actual live lock');
+ } catch(error){failed++;console.error('FAIL shared live tick lock: '+error.message);}
+ finally {if(child&&!child.stdin.destroyed)child.stdin.end('release\n');if(closed)await closed;rmSync(f.parent,{recursive:true,force:true});}
+}
+
 }
 
 console.log(`lane-delivery regression: ${passed} passed, ${failed} failed, 0 skipped`);

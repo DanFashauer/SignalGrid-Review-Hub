@@ -1,6 +1,7 @@
 // Exercise the actual delivery CLI against disposable Git repositories only.
 // Schema-gate and gh fixtures isolate transport; the real gates run separately.
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { spawn, spawnSync } from "node:child_process";
 import { chmodSync, existsSync, linkSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, renameSync, statSync, symlinkSync, utimesSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
@@ -15,7 +16,7 @@ let passed = 0;
 let failed = 0;
 
 function fixture({ lane = "mac", reject = false, loseResponse = false, failBeforePush = false, gateFails = false,
-  readbackCanonicalRace = false, fixedClock = false, readbackState = "MERGED", denyCleanup = false, ghAuthFails = false, ghCreateFails = false, ghAutoFails = false, wakeMailbox = false, hand = false, tick = false, ...tickOptions } = {}) {
+  readbackCanonicalRace = false, fixedClock = false, readbackState = "MERGED", readbackObservation = null, denyCleanup = false, ghAuthFails = false, ghCreateFails = false, ghAutoFails = false, wakeMailbox = false, hand = false, tick = false, omitReceipt = false, ...tickOptions } = {}) {
   if (tick) return heartbeatFixture(tickOptions);
   const root = mkdtempSync(join(tmpdir(), "sg-delivery-test-"));
   const repo = join(root, "repo"), remote = join(root, "remote.git"), bin = join(root, "bin");
@@ -67,13 +68,36 @@ function fixture({ lane = "mac", reject = false, loseResponse = false, failBefor
   const gh = join(bin, "gh");
   file(gh, `#!${process.execPath}\nimport {appendFileSync,chmodSync,existsSync,readFileSync} from 'node:fs';\nimport {spawnSync} from 'node:child_process';\nconst a=process.argv.slice(2);appendFileSync(${JSON.stringify(ghLog)},JSON.stringify(a)+'\\n');\nif(a[0]==='pr'&&a[1]==='view'){
  const m=${readbackState === "MERGED"} && spawnSync(${JSON.stringify(GIT)},['--git-dir',${JSON.stringify(remote)},'rev-parse',existsSync(${JSON.stringify(mergeOID)}) ? readFileSync(${JSON.stringify(mergeOID)},'utf8').trim() : ${readbackCanonicalRace ? "'refs/heads/'+a[2]" : JSON.stringify('refs/heads/'+BASE)}],{encoding:'utf8'}).stdout.trim();
- console.log(JSON.stringify({number:7,state:${JSON.stringify(readbackState)},baseRefName:${JSON.stringify(BASE)},mergeCommit:m?{oid:m}:null,autoMergeRequest:${readbackState === "OPEN" ? "{}" : "null"}}));
+ const head=spawnSync(${JSON.stringify(GIT)},['--git-dir',${JSON.stringify(remote)},'rev-parse','refs/heads/'+a[2]],{encoding:'utf8'}).stdout.trim();
+ console.log(JSON.stringify({number:7,state:${JSON.stringify(readbackState)},baseRefName:${JSON.stringify(BASE)},headRefName:a[2],headRefOid:/^[a-f0-9]{40}$/.test(head)?head:null,mergeCommit:m?{oid:m}:null,autoMergeRequest:${readbackState === "OPEN" ? "{}" : "null"},createdAt:new Date(Date.now()-60000).toISOString(),mergeStateStatus:'CLEAN',statusCheckRollup:[{__typename:'CheckRun',name:'fixture-ci',status:'COMPLETED',conclusion:'SUCCESS'}],...${JSON.stringify(readbackObservation ?? {})}}));
 }
 else if(a[0]==='auth'&&a[1]==='status'){${ghAuthFails ? "process.exit(1)" : "process.exit(0)"}}\nelse if(a[0]==='pr'&&a[1]==='create'){${ghCreateFails ? "console.error('fixture creation response lost or unauthenticated');process.exit(1)" : "console.log('https://github.com/fixture/route/pull/7')"}}\nelse if(a[0]==='pr'&&a[1]==='merge'&&a.includes('--auto')){${ghAutoFails ? "console.error('fixture auto-merge response lost');process.exit(1)" : `${denyCleanup ? `chmodSync(${JSON.stringify(root)},0o500);` : ""}console.log('fixture auto-merge request')`}}\nelse process.exit(2);\n`);
   chmodSync(gh, 0o755);
   const records = (p) => existsSync(p) ? readFileSync(p, "utf8").trim().split("\n").filter(Boolean).map(JSON.parse) : [];
+  let runNumber = 0;
   return { root, repo, base, git, run(extra = []) {
+    if (lane === "mac" && !omitReceipt && !extra.includes("--receipt")) {
+      const receipt = join(root, `fixture-${++runNumber}.submission.json`);
+      writeFileSync(receipt + ".attempt.json", JSON.stringify({state:"one fixture attempt",receipt}) + "\n", {flag:"wx",mode:0o600,flush:true});
+      extra = [...extra, "--receipt", receipt];
+    }
     return spawnSync(process.execPath, [join(repo, "scripts/lane-deliver.mjs"), ...(hand ? ["batch",handOps] : ["heartbeat", "mac-lane-tick", "acted: fixture"]), ...(wakeMailbox ? [] : ["--no-wake"]), ...extra], { cwd: repo, env, encoding: "utf8", timeout: 90000 });
+  }, runLegacyHeartbeat() {
+    const cli = join(repo,"scripts/lane-deliver.mjs"), modern = readFileSync(cli);
+    writeFileSync(cli,"// Fixture old JS is replaced after the old Bash is loaded.\nprocess.exit(99);\n");
+    git(["add","scripts/lane-deliver.mjs"]);git(["commit","-qm","disposable legacy JS tree"]);
+    const legacy = git(["rev-parse","HEAD"]);
+    writeFileSync(cli,modern);git(["add","scripts/lane-deliver.mjs"]);git(["commit","-qm","disposable canonical JS advance"]);
+    const advanced = git(["rev-parse","HEAD"]);
+    git(["fetch",repo,`HEAD:refs/heads/${BASE}`],remote);
+    const expectedRefs = git(["for-each-ref","--format=%(refname)","refs/heads"],remote).split("\n");
+    git(["checkout","-q","--detach",legacy]);
+    // Verbatim receipt-less producer ABI; loaded BEFORE the real Git transition.
+    const loadedHeartbeat = "heartbeat() {\n  append_unread_state\n  append_raised_hands_state\n  if [ \"$DRY\" = \"1\" ]; then say \"dry-run: would heartbeat: $RESULT\"; return 0; fi\n  # Throttle a result IDENTICAL to the last delivered one (\"quiet\" again, the same\n  # \"skipped: \u2026\" again, the same failure again) inside the window; anything that\n  # differs from what Alpha already carries delivers now. A tick that ACTED names\n  # what it did, so its result differs and always delivers. `find -mmin -N` and the\n  # `cat` comparison are BSD/bash-3.2 safe; a missing result file compares unequal.\n  LAST_RESULT=\"\"\n  [ -f \"$HB_LAST_RESULT\" ] && LAST_RESULT=\"$(cat \"$HB_LAST_RESULT\" 2>/dev/null)\"\n  if [ \"$RESULT\" = \"$LAST_RESULT\" ] && [ -f \"$HB_STAMP\" ] && [ -n \"$(find \"$HB_STAMP\" -mmin -\"$QUIET_HEARTBEAT_MIN\" 2>/dev/null)\" ]; then\n    say \"unchanged ($RESULT), last heartbeat <${QUIET_HEARTBEAT_MIN}m ago \u2014 tick ran, not re-pushing (avoids flooding Alpha)\"\n    return 0\n  fi\n  # --no-wake: the tick heartbeat is a STALENESS record, read from the heartbeat\n  # FILE by the cloud steward's hourly cycle \u2014 it never carries cloud-addressed\n  # mail (append_unread_state reports THIS lane's inbox, mac's), so it must not\n  # post the mailbox-PR comment that wakes the cloud lane. Real cloud mail travels\n  # on a separate `lane-deliver send` (no --no-wake), which still wakes at once;\n  # new mac/* branches are reviewed by the steward within the hour. This ends the\n  # every-tick quiet wake that flooded the cloud session (owner decision 2026-09-23).\n  if node scripts/lane-deliver.mjs heartbeat mac-lane-tick \"$RESULT\" --no-wake >/dev/null 2>&1; then\n    touch \"$HB_STAMP\" 2>/dev/null || true\n    printf '%s' \"$RESULT\" > \"$HB_LAST_RESULT\" 2>/dev/null || true\n    say \"heartbeat delivered: $RESULT\"\n  else\n    say \"WARN heartbeat delivery FAILED (push refused or offline): $RESULT\"\n  fi\n}\n";
+    const script = `set -u\nDRY=0\nRESULT='new legacy producer observation'\nQUIET_HEARTBEAT_MIN=120\nHB_LAST_RESULT="$FIXTURE_ROOT/legacy-result"\nHB_STAMP="$FIXTURE_ROOT/legacy-stamp"\nsay(){ printf '%s\\n' "$1"; }\nappend_unread_state(){ :; }\nappend_raised_hands_state(){ :; }\n` + loadedHeartbeat + `\n"$FIXTURE_REAL_GIT" -c core.hooksPath=/dev/null checkout -q --detach "$FIXTURE_ADVANCED"\nheartbeat\n`;
+    const file = join(root,"loaded-legacy-heartbeat.sh");writeFileSync(file,script,{flag:"wx",mode:0o600});
+    const result = spawnSync("/bin/bash",[file],{cwd:repo,env:{...env,FIXTURE_ROOT:root,FIXTURE_REAL_GIT:GIT,FIXTURE_ADVANCED:advanced},encoding:"utf8"});
+    return {...result,expectedRefs,advanced,legacy};
   }, readback(path, extra = []) {
     return spawnSync(process.execPath,[join(repo,"scripts/lane-deliver.mjs"),"readback",path,...extra],{cwd:repo,env,encoding:"utf8",timeout:90000});
   }, refresh({tamper=false}={}) {
@@ -206,7 +230,7 @@ function heartbeatFixture({ age = 30, result = "quiet", dry = false,
   const declarations = tick.split("\n").filter((line) => /^(QUIET_HEARTBEAT_MIN|HB_[A-Z_]+|ESTATE_RESULT)=/.test(line)).join("\n");
   const quote = (s) => `'${String(s).replaceAll("'", "'\\''")}'`;
   return { root, runTick(body = "heartbeat") {
-    const script = `set -u\nRECORD_DIR=${quote(cache)}\n${declarations}\nSTAMP=20261030T010000Z\nDRY=${dry ? 1 : 0}\nRESULT=${quote(result)}\nDELIVERY_RC=${deliveryCode}\nESTATE_RC=0\nESTATE_OUTPUT='estate: 0 open ()'\nsay(){ printf '%s\\n' "$1"; }\nappend_unread_state(){ :; }\nappend_raised_hands_state(){ :; }\ngh(){ return 0; }\nnode(){ if [ "$1" = scripts/lane-deliver.mjs ]; then if [ "$2" = readback ]; then printf 'readback\\n' >> "$FIXTURE_READBACK_LOG"; if [ "\${READBACK_RC:-$DELIVERY_RC}" = 0 ]; then printf 'canonical fixture merge verified\\n'; else printf 'original fixture PR still pending or unavailable\\n'; fi; return "\${READBACK_RC:-$DELIVERY_RC}"; fi; printf '%s\\n' "$*" >> ${quote(deliveries)}; for _arg in "$@"; do if [ "\${_want_receipt:-0}" = 1 ]; then printf '{"fixtureSubmission":true}\\n' > "$_arg"; _want_receipt=0; fi; if [ "$_arg" = --receipt ]; then _want_receipt=1; fi; done; printf 'untrusted fixture output: exit_code=0\\n'; return "$DELIVERY_RC"; elif [ "$1" = scripts/mac/estate-queue.mjs ]; then printf '%s\\n' "$ESTATE_OUTPUT"; return "$ESTATE_RC"; else "$FIXTURE_NODE" "$@"; fi; }\n${recordHelper}\n${heartbeat}\nrun_estate(){\n${estate}\n}\n${body}\ntrue\n`;
+    const script = `set -u\nREPO_ROOT=${quote(root)}\nRECORD_DIR=${quote(cache)}\n${declarations}\nSTAMP=20261030T010000Z\nDRY=${dry ? 1 : 0}\nRESULT=${quote(result)}\nDELIVERY_RC=${deliveryCode}\nESTATE_RC=0\nESTATE_OUTPUT='estate: 0 open ()'\nsay(){ printf '%s\\n' "$1"; }\nappend_unread_state(){ :; }\nappend_raised_hands_state(){ :; }\ngh(){ return 0; }\nnode(){ if [ "$1" = scripts/lane-deliver.mjs ]; then if [ "$2" = readback ]; then printf 'readback\\n' >> "$FIXTURE_READBACK_LOG"; if [ "\${READBACK_RC:-$DELIVERY_RC}" = 0 ]; then printf 'canonical fixture merge verified\\n'; else printf 'original fixture PR still pending or unavailable\\n'; fi; return "\${READBACK_RC:-$DELIVERY_RC}"; fi; printf '%s\\n' "$*" >> ${quote(deliveries)}; for _arg in "$@"; do if [ "\${_want_receipt:-0}" = 1 ]; then printf '{"fixtureSubmission":true}\\n' > "$_arg"; _want_receipt=0; fi; if [ "$_arg" = --receipt ]; then _want_receipt=1; fi; done; printf 'untrusted fixture output: exit_code=0\\n'; return "$DELIVERY_RC"; elif [ "$1" = scripts/mac/estate-queue.mjs ]; then printf '%s\\n' "$ESTATE_OUTPUT"; return "$ESTATE_RC"; else "$FIXTURE_NODE" "$@"; fi; }\n${recordHelper}\n${heartbeat}\nrun_estate(){\n${estate}\n}\n${body}\ntrue\n`;
     return spawnSync("/bin/bash", ["-c", script], { cwd: root,
       env: { PATH: "/usr/bin:/bin", HOME: root, LANG: "C", FIXTURE_NODE:process.execPath, FIXTURE_READBACK_LOG:readbacks }, encoding: "utf8", timeout: 10000 });
   }, deliveries: () => existsSync(deliveries) ? readFileSync(deliveries, "utf8").trim().split("\n") : [], readbacks:()=>existsSync(readbacks)?readFileSync(readbacks,"utf8").trim().split("\n"):[] };
@@ -673,6 +697,67 @@ control("a different exact hand id cannot borrow another hand's clearance",{hand
 control("a heartbeat receipt never authorizes a hand notification episode",{},f=>{
  const receipt=join(f.root,"heartbeat.submission.json");assert.equal(f.run(["--receipt",receipt]).status,0);f.land();
  const r=f.readback(receipt,["--resolved-hand","fixture-build-hand"]);assert.equal(r.status,3);assert.doesNotMatch(r.stdout,/resolved hand/);
+});
+
+
+control("legacy Mac heartbeat without a receipt cannot enter protected publication",{omitReceipt:true},f=>{
+ const before=f.refs(),r=f.run();assert.equal(r.status,1,r.stderr);assert.match(r.stderr,/Mac mutation requires --receipt before repository access/);
+ assert.equal(f.pushes().length,0);assert.equal(f.ghCalls().length,0);assert.deepEqual(f.refs(),before);
+});
+control("legacy Mac hand batch without a receipt cannot enter protected publication",{hand:true,omitReceipt:true},f=>{
+ const before=f.refs(),r=f.run();assert.equal(r.status,1,r.stderr);assert.match(r.stderr,/Mac mutation requires --receipt before repository access/);
+ assert.equal(f.pushes().length,0);assert.equal(f.ghCalls().length,0);assert.deepEqual(f.refs(),before);
+});
+control("already-loaded legacy Bash cannot publish after canonical JS advances",{omitReceipt:true},f=>{
+ const r=f.runLegacyHeartbeat();assert.notEqual(r.advanced,r.legacy);assert.equal(r.status,0,r.stderr);assert.match(r.stdout,/heartbeat delivery FAILED/);
+ assert.doesNotMatch(r.stdout,/heartbeat delivered:/);assert.equal(f.pushes().length,0);assert.equal(f.ghCalls().length,0);assert.deepEqual(f.refs(),r.expectedRefs);
+});
+
+
+// Publication-boundary receipts survive refused push/cleanup exit statuses.
+for(const code of [1,2])control(`exit${code} with a durable submission receipt never starts another heartbeat`,{tick:true,age:130,deliveryCode:code},f=>{
+ const first=f.runTick();assert.equal(first.status,0,first.stderr);assert.equal(f.deliveries().length,1);
+ const cache=join(f.root,"node_modules"),attempt=readFileSync(join(cache,".sg-last-heartbeat-attempt"),"utf8").trim();
+ const names=[".sg-last-heartbeat-attempt",".sg-last-heartbeat-result",...readdirSync(cache).filter(n=>n.startsWith(`.sg-heartbeat-${attempt}.`))];
+ const before=names.map(n=>[n,readFileSync(join(cache,n))]);
+ const second=f.runTick("RESULT='different current observation'\nREADBACK_RC=3\nheartbeat");
+ assert.equal(second.status,0,second.stderr);assert.equal(f.deliveries().length,1,"the original publication boundary forbids a new topic");
+ assert.equal(f.readbacks().length,1,"only original GET-only readback is allowed");assert.match(second.stdout,/READBACK ONLY/);
+ for(const[name,raw]of before)assert.deepEqual(readFileSync(join(cache,name)),raw,"original parent/receipt evidence changed");
+ assert.equal(readdirSync(cache).filter(n=>n.startsWith(".sg-heartbeat-")).length,names.length-2);
+});
+for(const damage of ["partial","symlink"])control(`${damage} receipt after exit1 stays held without a fresh observation`,{tick:true,age:130,priorAttempt:"unknown",result:"different observation"},f=>{
+ const cache=join(f.root,"node_modules"),stem=join(cache,".sg-heartbeat-20261030T000000Z-999999"),receipt=stem+".submission.json";
+ writeFileSync(stem+".exit","1\n");const human=join(f.root,"preserved-receipt-source");
+ if(damage==="symlink"){writeFileSync(human,'{"held":true}\n');symlinkSync(human,receipt);}else writeFileSync(receipt,'{"version":1,');
+ const raw=readFileSync(receipt),pointer=readFileSync(join(cache,".sg-last-heartbeat-attempt"));
+ const result=f.runTick("READBACK_RC=3\nheartbeat");assert.equal(result.status,0,result.stderr);
+ assert.equal(f.deliveries().length,0,"damaged receipt cannot establish prepublication refusal");assert.match(result.stdout,/READBACK ONLY/);
+ assert.deepEqual(readFileSync(receipt),raw);assert.deepEqual(readFileSync(join(cache,".sg-last-heartbeat-attempt")),pointer);
+ if(damage==="symlink"){assert.ok(lstatSync(receipt).isSymbolicLink());assert.deepEqual(readFileSync(human),raw);}
+});
+
+
+// The real CLI emits exact source-bound pending metadata; these are Git/GET fixtures.
+for(const item of [
+ {name:"current young",createdAt:"2026-10-30T23:59:00.000Z",mergeStateStatus:"CLEAN",statusCheckRollup:[{__typename:"CheckRun",name:"ci",status:"COMPLETED",conclusion:"SUCCESS"}],age:60,check:"success"},
+ {name:"behind",createdAt:"2026-10-30T23:59:00.000Z",mergeStateStatus:"BEHIND",statusCheckRollup:[{__typename:"CheckRun",name:"ci",status:"COMPLETED",conclusion:"SUCCESS"}],age:60,check:"success"},
+ {name:"terminal failed check",createdAt:"2026-10-30T23:59:00.000Z",mergeStateStatus:"BLOCKED",statusCheckRollup:[{__typename:"CheckRun",name:"ci",status:"COMPLETED",conclusion:"FAILURE"}],age:60,check:"failed"},
+ {name:"aged pending",createdAt:"2026-10-30T22:00:00.000Z",mergeStateStatus:"CLEAN",statusCheckRollup:[{__typename:"CheckRun",name:"ci",status:"IN_PROGRESS",conclusion:null}],age:7200,check:"pending"},
+ {name:"unknown time and checks",createdAt:"not-a-time",mergeStateStatus:"CLEAN",statusCheckRollup:[],age:null,check:"unknown"}
+])control(`pending ${item.name} metadata binds exact receipt and Git head without publication`,{readbackState:"OPEN",fixedClock:true,readbackObservation:{createdAt:item.createdAt,mergeStateStatus:item.mergeStateStatus,statusCheckRollup:item.statusCheckRollup}},f=>{
+ const receipt=join(f.root,"bound-pending.submission.json"),sent=f.run(["--receipt",receipt]);assert.equal(sent.status,0,sent.stderr);
+ const raw=readFileSync(receipt),binding=JSON.parse(raw),beforePushes=f.pushes().length,beforeMutations=f.ghCalls().filter(a=>a[0]==="pr"&&["create","merge"].includes(a[1])).length;
+ const result=f.readback(receipt);assert.equal(result.status,4,result.stderr);
+ const lines=result.stdout.trim().split("\n").filter(l=>l.startsWith("pending delivery observation "));assert.equal(lines.length,1);
+ const observed=JSON.parse(lines[0].slice("pending delivery observation ".length));
+ assert.equal(observed.version,1);assert.equal(observed.repository,binding.repository);assert.equal(observed.target,binding.target);assert.equal(observed.original_head,binding.head);
+ assert.equal(observed.receipt_sha256,createHash("sha256").update(raw).digest("hex"));assert.equal(observed.pr_number,7);assert.equal(observed.base,BASE);
+ assert.equal(observed.pr_head,f.git(["rev-parse","refs/heads/"+binding.target],join(f.root,"remote.git")));
+ assert.equal(observed.created_at,item.age===null?null:item.createdAt);assert.equal(observed.age_seconds,item.age);assert.equal(observed.observed_at,"2026-10-31T00:00:00.000Z");
+ assert.equal(observed.merge_state,item.mergeStateStatus);assert.equal(observed.check_state,item.check);assert.equal(observed.auto_merge_requested,true);
+ assert.equal(f.pushes().length,beforePushes);assert.equal(f.ghCalls().filter(a=>a[0]==="pr"&&["create","merge"].includes(a[1])).length,beforeMutations);assert.deepEqual(readFileSync(receipt),raw);
+ const readbacks=readdirSync(f.root).filter(n=>n.startsWith("bound-pending.submission.json.readback-")&&n.endsWith(".json"));assert.ok(readbacks.length>=1,"raw GET response remains durable");
 });
 
 console.log(`lane-delivery regression: ${passed} passed, ${failed} failed, 0 skipped`);

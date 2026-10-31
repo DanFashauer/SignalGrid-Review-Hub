@@ -2335,3 +2335,10 @@ L46 has actual84 portable delivery controls and12 independent Mac subprocess con
 ## Mac transport test contract — L47
 
 Linked-checkout heartbeat tests now execute the production RECORD_DIR startup assignment; a planted node_modules regression fails both related controls. The staged checker executes the actual descriptor-finalization Bash function, including host-release order, exact token/root/entry-status arguments, nonzero work status and interrupted OPEN retention. Delivery84/84 and staged267/267 pass. The earlier full264/265 result remains FAILED, not replaced by isolated checks. Runtime guard bytes are unchanged. New exact-head full/breadth, complete source reviews, protected landing, preservation audit and separate activation remain owed; no fresh canonical Mac heartbeat is claimed.
+
+
+## Mac transport producer and receipt boundary — L48
+
+The new transport refuses receipt-less Mac mutations before Git, including old Bash loaded before canonical JS advances. Existing submission evidence always selects original readback, even when its parent status is1/2; no rejected push is retried through another topic. A true prepublication refusal without a receipt remains a different observation, while unknown or damaged evidence holds.
+
+Pending readback binds the original receipt/head, PR age and checks. Behind, failed or one-hour-pending PRs may raise one distinct Cloud hand through the actual producing checkout after rechecking the original FD8/token/store. Unknown or partial notification evidence remains readback-only. Source45/45, independent guard12/12 and delivery96/96 pass, zero failures/errors/skips. These checks do not activate source or prove the complete local coding/delivery loop; new-head full/breadth, protected source reviews/CI/landing and a separate preservation audit/activation remain owed.

@@ -212,6 +212,26 @@ function readSlot(binding) {
 
 export function tickGuardPath(root) { return tickBinding(root).guardPath; }
 
+// Recheck the actual current Bash lease before a DIFFERENT notification. This
+// reads original OPEN evidence; it never admits/finalizes a tick or grants work.
+export function checkTickOwner(root, token, shellPid) {
+  if (typeof token !== "string" || !TOKEN.test(token)) throw Error("exact active tick token required");
+  const { binding, shellPid: pid } = ownedGuard(root, shellPid);
+  const slot = readTickJson(join(binding.directory, "tick.slot.json"));
+  keysExactly(slot.value, OPEN_KEYS);
+  assertBinding(slot.value, binding);
+  if (slot.value.state !== "OPEN" || slot.value.token !== token || slot.value.shellPid !== pid || !HASH.test(slot.value.openedSha256)) {
+    throw Error("notification has no exact active original tick");
+  }
+  const owner = readTickJson(join(binding.directory, `tick-${token}.opened.json`));
+  assertOwner(owner, binding, token, pid);
+  if (digest(owner.raw) !== slot.value.openedSha256) throw Error("active tick owner bytes differ");
+  originalTickBinding(root, binding);
+  return Object.freeze({ directory: binding.directory, token, shellPid: pid,
+    store: Object.freeze({ ...binding.store }), guard: Object.freeze({ ...binding.guard }),
+    openedSha256: slot.value.openedSha256 });
+}
+
 export function acquireTick(root, shellPid) {
   const owned = ownedGuard(root, shellPid);
   const { binding } = owned;

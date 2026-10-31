@@ -542,3 +542,10 @@ The operator correction has84 passing portable delivery controls and12 independe
 ### Startup and cleanup regression coverage (L47)
 
 The linked-checkout heartbeat tests execute the tick's actual startup RECORD_DIR assignment. A planted regression back to node_modules escaped the earlier fixture but now fails both linked-checkout and dependency-purge cases. The staged worker checks execute the actual Bash finalization function: release the host descriptor first, pass the exact owned token/root/status to tick-release, preserve known nonzero work status, and leave an interrupted OPEN lease unfinished. These tests do not certify an eventual parent exit or provider cleanup. The current delivery84 and staged267 checks pass; the earlier current-head full264/265 failure remains recorded. A new exact-head full/breadth and all protected publication/activation requirements still apply.
+
+
+### Mixed-producer publication and pending handoff (L48)
+
+Mac mutation entry now requires a fresh private receipt path before any Git access. An already-loaded receipt-less Bash producer is refused if its checkout later acquires the new transport. The receipt pathname is a caller contract, not an execution grant. Any existing exact submission receipt takes precedence over exit1/2: publication may already have been attempted, so the original remains readback-only. Malformed evidence and unknown parent terminals hold. Only a genuine prepublication1/2 with no receipt can permit a different observation.
+
+A pending original PR gets GET-only age/head/check diagnostics. A behind PR, terminal failed check or one-hour delay may produce one distinct durable Cloud hand, bound to the original attempt. The actual producing checkout and original FD8/token/store are rechecked before its intent and publication. Partial or unknown notifications never repeat. This does not resend or close the original PR. Current source qualification:45 private cases,12 independent guard cases and96 portable delivery controls pass with zero failures/errors/skips. Protected landing and audited separate activation still precede natural heartbeat proof.

@@ -433,3 +433,12 @@ block; a stage run on the wrong tier is a lesson here.
 - **evidence:** Actual startup mutation controls: the old fixture passed2/2 on the bad assignment; the corrected fixture failed2/2 on that same mutant and passed2/2 on actual source. Current network-denied delivery84/84 and supported staged267/267 pass. The original full264/265 failure and separate reproducing diagnostic remain failed; runtime guard and independent12 source acceptance bytes are unchanged.
 - **landing:** pending — execute the exact startup assignment and actual Bash finalization/status contract; keep the previous host-path/order checks and add interrupted/nonzero status controls. New exact-head full qualification, protected landing and audited separate activation still precede natural heartbeat proof.
 - **status:** pending
+
+
+### L48 — A publication receipt outranks an exit-code shortcut
+- **date:** 2026-10-31
+- **lane:** mac
+- **incident:** An old loaded Bash producer could acquire new publication JS without its new receipt contract. Separately, a refused push returned1 after persisting its receipt, while the tick treated every1/2 as prepublication. Pending PRs also lacked a bounded repair handoff.
+- **evidence:** Actual network-denied45/45 private,12/12 independent guard and96/96 portable controls, zero failures/errors/skips. The frozen receipt-boundary RED reproduced6 failures in12 cases using real disposable local Git. Original assertions and all failed histories are preserved.
+- **landing:** pending — require the new Mac caller contract before Git; honor any original receipt before classifying1/2; use GET-only pending diagnostics and at most one distinct, original-owner-bound Cloud hand. No replay of the original send or unknown notification. New-head full qualification and protected landing precede audited separate activation.
+- **status:** pending

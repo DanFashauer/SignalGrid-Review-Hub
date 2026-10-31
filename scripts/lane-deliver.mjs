@@ -16,7 +16,8 @@
 //          --allow-ungated  deliver even when mainline lacks a gate script (named
 //                           in the output; never the default — see step 3)
 //          --no-wake        skip the mailbox-PR comment
-//          --receipt <file> persist exact submission binding before the push
+//          --receipt <file> required for Mac mutation entry; persist exact
+//                           submission binding before the push
 //   lane:deliver readback <receipt> verifies canonical landing without mutations
 //   add --resolved-hand <id> to require that exact hand is now resolved in canonical
 //
@@ -49,8 +50,8 @@
 // branch it tried, never retried into a different ref. The clock stamps artifact
 // instants, branch names and readback observations; it never authorizes replay.
 import { spawnSync } from "node:child_process";
-import { randomBytes } from "node:crypto";
-import { closeSync, constants, existsSync, fstatSync, mkdirSync, mkdtempSync, openSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { createHash, randomBytes } from "node:crypto";
+import { closeSync, constants, existsSync, fstatSync, lstatSync, mkdirSync, mkdtempSync, openSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -157,6 +158,34 @@ function parseOps() {
 }
 
 
+// Old loaded Bash can acquire new JS through its canonical checkout. Require its
+// new caller ABI before even inspecting Git, rather than letting it publish
+// without an independent parent attempt. A filename is not an execution grant;
+// the caller still owns its durable one-attempt intent and exact finalization.
+const mutationLane = ["send", "ack", "heartbeat", "batch"].includes(cmd) ? currentLane() : null;
+if (mutationLane === "mac") {
+  if (!flags.receipt) die("Mac mutation requires --receipt before repository access; legacy caller held", 1);
+  try {
+    try {
+      lstatSync(flags.receipt);
+      throw Error("receipt path was already used");
+    } catch (error) {
+      if (error.code !== "ENOENT") throw error;
+    }
+    const parent = dirname(flags.receipt);
+    const fd = openSync(parent, constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW);
+    try {
+      const actual = fstatSync(fd), named = lstatSync(parent);
+      if (!actual.isDirectory() || !named.isDirectory() || actual.dev !== named.dev || actual.ino !== named.ino
+          || (typeof process.getuid === "function" && actual.uid !== process.getuid()) || (actual.mode & 0o022)) {
+        throw Error("receipt parent is not an owned private directory");
+      }
+    } finally { closeSync(fd); }
+  } catch {
+    die("Mac mutation receipt destination is unavailable or already used; READBACK ONLY, no repository access", 1);
+  }
+}
+
 // Resolve repository identity once; unknown identity never grants a fallback.
 const remoteUrl = git(["remote", "get-url", "origin"]);
 const slugMatch = /github\.com[:/]([^/]+)\/([^/.]+)(?:\.git)?$/.exec(remoteUrl.out.trim());
@@ -172,27 +201,52 @@ function receiptRead(path) {
   try {
     const st = fstatSync(fd);
     if (!st.isFile() || st.nlink !== 1 || st.size > 1024 * 1024) throw Error("owned regular receipt required");
-    return JSON.parse(readFileSync(fd, "utf8"));
+    const raw = readFileSync(fd);
+    const after = fstatSync(fd);
+    if (["dev", "ino", "size", "mtimeMs", "ctimeMs"].some(key => st[key] !== after[key]) || raw.length !== st.size) throw Error("receipt changed during read");
+    return { value: JSON.parse(raw.toString("utf8")), sha256: createHash("sha256").update(raw).digest("hex") };
   } finally { closeSync(fd); }
 }
 function readback(path) {
   try {
-    const r = receiptRead(path);
+    const receipt = receiptRead(path), r = receipt.value;
     if (r.version !== 1 || !/^lane\/(mac|cloud)-mail-\d{8}-\d{6}Z-[a-f0-9]{12}$/.test(r.target)
       || !/^[a-f0-9]{40}$/.test(r.head)
       || !Array.isArray(r.blobs) || !r.blobs.length
       || r.blobs.some(b => typeof b.path !== "string" || b.path.includes("..") || !/^[a-f0-9]{40}$/.test(b.oid)
         || ![...MAIL_DIRS, COVERAGE_PAGE].some(p => b.path === p || b.path.startsWith(p + "/")))) throw Error("invalid submission binding");
     if (!repoSlug || repoSlug !== r.repository) throw Error("receipt repository differs");
-    const query = run("gh", ["pr", "view", r.target, "--repo", r.repository, "--json", "number,state,baseRefName,mergeCommit,autoMergeRequest"]);
+    const query = run("gh", ["pr", "view", r.target, "--repo", r.repository, "--json", "number,state,baseRefName,headRefName,headRefOid,mergeCommit,autoMergeRequest,createdAt,mergeStateStatus,statusCheckRollup"]);
     const observation = `${path}.readback-${Date.now()}-${randomBytes(6).toString("hex")}.json`;
     receiptWrite(observation, { at: new Date().toISOString(), target: r.target, head: r.head,
       exit: query.code, stdout: query.out, stderr: query.err }); // raw before parsing
     if (query.code) throw Error("PR readback unavailable; original attempt stays held");
     const pr = JSON.parse(query.out);
-    if (pr.baseRefName !== MAINLINE) throw Error("PR binding differs");
+    if (pr.baseRefName !== MAINLINE || !Number.isInteger(pr.number) || pr.number <= 0) throw Error("PR binding differs");
+    if (pr.headRefName !== undefined && pr.headRefName !== null && pr.headRefName !== r.target) throw Error("PR topic binding differs");
     if (pr.state === "OPEN" && pr.autoMergeRequest) {
+      const observed = new Date(), createdMs = typeof pr.createdAt === "string" && /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d{3})?Z$/.test(pr.createdAt) ? Date.parse(pr.createdAt) : NaN;
+      const knownTime = Number.isFinite(createdMs) && createdMs <= observed.getTime();
+      const states = Array.isArray(pr.statusCheckRollup) ? pr.statusCheckRollup.map(check => {
+        if (check?.__typename === "CheckRun") {
+          if (check.status !== "COMPLETED") return ["QUEUED", "IN_PROGRESS", "WAITING", "REQUESTED", "PENDING"].includes(check.status) ? "pending" : "unknown";
+          if (["FAILURE", "TIMED_OUT", "CANCELLED", "ACTION_REQUIRED", "STARTUP_FAILURE", "STALE"].includes(check.conclusion)) return "failed";
+          return check.conclusion === "SUCCESS" ? "success" : "unknown";
+        }
+        if (check?.__typename === "StatusContext") return ({ SUCCESS: "success", PENDING: "pending", FAILURE: "failed", ERROR: "failed" })[check.state] ?? "unknown";
+        return "unknown";
+      }) : [];
+      const checkState = states.includes("failed") ? "failed" : states.includes("unknown") || !states.length ? "unknown" : states.includes("pending") ? "pending" : "success";
+      const mergeState = ["BEHIND", "BLOCKED", "CLEAN", "DIRTY", "DRAFT", "HAS_HOOKS", "UNKNOWN", "UNSTABLE"].includes(pr.mergeStateStatus) ? pr.mergeStateStatus : "UNKNOWN";
+      const bound = pr.headRefName === r.target && typeof pr.headRefOid === "string" && /^[a-f0-9]{40}$/.test(pr.headRefOid);
       console.log(`original PR ${pr.number} is still pending protected merge; no new submission`);
+      console.log("pending delivery observation " + JSON.stringify({ version: 1, repository: r.repository,
+        target: bound ? r.target : null, original_head: r.head, receipt_sha256: receipt.sha256,
+        pr_number: pr.number, base: MAINLINE, pr_head: bound ? pr.headRefOid : null,
+        created_at: knownTime ? pr.createdAt : null, observed_at: observed.toISOString(),
+        age_seconds: knownTime ? Math.floor((observed.getTime() - createdMs) / 1000) : null,
+        merge_state: mergeState, check_state: checkState,
+        auto_merge_requested: typeof pr.autoMergeRequest === "object" && !Array.isArray(pr.autoMergeRequest) ? true : null }));
       return 4;
     }
     if (pr.state !== "MERGED" || !/^[a-f0-9]{40}$/.test(pr.mergeCommit?.oid ?? "")) throw Error(`PR ${pr.number} is ${pr.state}; canonical delivery remains unverified`);
@@ -235,7 +289,7 @@ if (cmd === "readback") {
 }
 
 const ops = parseOps();
-const lane = currentLane();
+const lane = mutationLane ?? currentLane();
 const now = new Date();
 const stamp = now.toISOString().replace(/[-:]/g, "").replace(/\.\d+Z$/, "Z").replace("T", "-");
 

@@ -249,6 +249,115 @@ heartbeat() {
     say "RAISED HAND: $1; READBACK ONLY, no submission (see docs/LANE_COORDINATION.md, held deliveries)"
   }
 
+  # A stuck pending PR may need Cloud inspection. This is one DIFFERENT hand,
+  # never a resend/requeue/close/auto-merge request for the original heartbeat.
+  _hb_pending_hand() {
+    node - "$_hb_submission" "$1" "$RECORD_DIR" "$_hb_previous" "${TICK_LOCK_ROOT:-}" "${TICK_OWNER_TOKEN:-}" "$$" <<'JS'
+  const fs = require("node:fs"), path = require("node:path"), crypto = require("node:crypto");
+  const { spawnSync } = require("node:child_process");
+  const [originalPath, output, records, attempt, guardRoot, guardToken, shellPid] = process.argv.slice(2);
+  const repo = process.cwd(); // same producing checkout as the original readback
+  const sha = raw => crypto.createHash("sha256").update(raw).digest("hex");
+  const own = st => st.isFile() && st.nlink === 1 && (typeof process.getuid !== "function" || st.uid === process.getuid());
+  function read(file) {
+    const fd = fs.openSync(file, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW | fs.constants.O_NONBLOCK);
+    try {
+      const before = fs.fstatSync(fd);
+      if (!own(before) || before.size > 1024 * 1024) throw Error("owned bounded record required");
+      const raw = fs.readFileSync(fd), after = fs.fstatSync(fd);
+      if (raw.length !== before.size || ["dev", "ino", "size", "mtimeMs", "ctimeMs"].some(key => before[key] !== after[key])) throw Error("record changed");
+      return raw;
+    } finally { fs.closeSync(fd); }
+  }
+  function write(file, value) {
+    fs.writeFileSync(file, JSON.stringify(value) + "\n", { flag: "wx", mode: 0o600, flush: true });
+  }
+  function exists(file) { try { fs.lstatSync(file); return true; } catch (error) { if (error.code === "ENOENT") return false; throw error; } }
+  (async () => {
+    if (!/^[0-9]{8}T[0-9]{6}Z-[0-9]+$/.test(attempt) || Buffer.byteLength(output) > 32768) throw Error("pending input differs");
+    const raw = read(originalPath), original = JSON.parse(raw.toString("utf8"));
+    if (original.version !== 1 || !/^[a-f0-9]{40}$/.test(original.head ?? "") ||
+        !/^lane\/mac-mail-\d{8}-\d{6}Z-[a-f0-9]{12}$/.test(original.target ?? "") ||
+        !/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(original.repository ?? "")) throw Error("original binding differs");
+    const prefix = "pending delivery observation ";
+    const lines = output.split("\n").filter(line => line.startsWith(prefix));
+    if (lines.length !== 1) throw Error("one original pending observation required");
+    const text = lines[0].slice(prefix.length), observed = JSON.parse(text);
+    const keys = ["version", "repository", "target", "original_head", "receipt_sha256", "pr_number", "base", "pr_head", "created_at", "observed_at", "age_seconds", "merge_state", "check_state", "auto_merge_requested"];
+    const literalKeys = [...text.matchAll(/(?:^|[,{])\s*"([A-Za-z_][A-Za-z_0-9]*)"\s*:/g)].map(match => match[1]);
+    if (!observed || typeof observed !== "object" || Array.isArray(observed) ||
+        Object.keys(observed).sort().join("\n") !== [...keys].sort().join("\n") ||
+        literalKeys.length !== keys.length || new Set(literalKeys).size !== keys.length ||
+        literalKeys.some(key => !keys.includes(key))) throw Error("pending scalar schema differs");
+    const created = typeof observed.created_at === "string" ? Date.parse(observed.created_at) : NaN;
+    const at = typeof observed.observed_at === "string" ? Date.parse(observed.observed_at) : NaN;
+    if (observed.version !== 1 || observed.repository !== original.repository || observed.target !== original.target ||
+        observed.original_head !== original.head || observed.receipt_sha256 !== sha(raw) || observed.base !== "SignalGrid_Alpha" ||
+        typeof observed.pr_head !== "string" || !/^[a-f0-9]{40}$/.test(observed.pr_head) || !Number.isInteger(observed.pr_number) || observed.pr_number <= 0 ||
+        !Number.isFinite(created) || !Number.isFinite(at) || created > at || at > Date.now() || Date.now() - at > 300000 ||
+        !Number.isInteger(observed.age_seconds) || observed.age_seconds < 0 || observed.age_seconds !== Math.floor((at - created) / 1000) ||
+        !["BEHIND", "BLOCKED", "CLEAN", "DIRTY", "DRAFT", "HAS_HOOKS", "UNSTABLE"].includes(observed.merge_state) ||
+        !["failed", "pending", "success"].includes(observed.check_state) || observed.auto_merge_requested !== true) throw Error("pending metadata missing, stale or foreign");
+    const reason = observed.check_state === "failed" ? "terminal failed check" : observed.merge_state === "BEHIND" ? "behind canonical" : observed.age_seconds >= 3600 ? "pending at least one hour" : null;
+    if (!reason) { console.log("pending heartbeat metadata is current; no new notification needed"); process.exit(0); }
+    const { checkTickOwner } = await import(require("node:url").pathToFileURL(path.join(repo, "scripts/lib/lane-attempt-store.mjs")).href);
+    if (typeof checkTickOwner !== "function") throw Error("qualified read-only owner check unavailable");
+    function activeOwner() {
+      const owner = checkTickOwner(guardRoot, guardToken, shellPid), named = fs.lstatSync(records);
+      if (owner.directory !== records || owner.token !== guardToken || owner.shellPid !== Number(shellPid) ||
+          !named.isDirectory() || named.dev !== owner.store.dev || named.ino !== owner.store.ino ||
+          (typeof process.getuid === "function" && named.uid !== process.getuid()) || (named.mode & 0o022)) throw Error("original notification store or owner changed");
+      return owner;
+    }
+    const active = activeOwner(), store = active.store;
+    function stillActive() {
+      const current = activeOwner();
+      if (current.openedSha256 !== active.openedSha256 || current.guard.dev !== active.guard.dev || current.guard.ino !== active.guard.ino ||
+          current.store.dev !== active.store.dev || current.store.ino !== active.store.ino) throw Error("original active lease changed");
+    }
+    const id = "pending-heartbeat-" + sha(attempt), root = path.join(records, id);
+    const files = { intent: root + ".attempt.json", ops: root + ".ops.json", output: root + ".output", terminal: root + ".terminal.json", receipt: root + ".submission.json" };
+    const binding = { version: 1, kind: "pending-heartbeat-notification", attempt, receipt_sha256: sha(raw), repository: original.repository,
+      target: original.target, original_head: original.head, pr_number: observed.pr_number, store: { dev: store.dev, ino: store.ino } };
+    if (Object.values(files).some(exists)) {
+      const prior = JSON.parse(read(files.intent).toString("utf8"));
+      if (JSON.stringify(prior.binding) !== JSON.stringify(binding)) throw Error("notification intent binding differs");
+      read(files.ops); read(files.output);
+      const terminal = JSON.parse(read(files.terminal).toString("utf8"));
+      if (!Number.isInteger(terminal.status) || terminal.status < 0 || terminal.status > 255 || terminal.signal !== null || terminal.error !== null) throw Error("notification parent terminal unknown");
+      read(files.receipt);
+      console.log("pending heartbeat notification was already attempted; READBACK ONLY, no new hand");
+      process.exit(0);
+    }
+    const url = `https://github.com/${original.repository}/pull/${observed.pr_number}`;
+    const op = { op: "raise", id, who: "cloud lane", domain: "lane", where: url,
+      doing: "canonical delivery of a Mac heartbeat",
+      blocked: `Protected heartbeat PR #${observed.pr_number} is ${reason}; original topic ${original.target} @ ${original.head}.`,
+      need: "Cloud lane: inspect the current PR checks and source, then repair or land only through the existing protected review/CI route. This hand does not authorize resending, reposting or closing the original attempt." };
+    stillActive();
+    write(files.intent, { at: new Date().toISOString(), binding, state: "one distinct notification attempted; original heartbeat unchanged", receipt: files.receipt });
+    write(files.ops, [op]);
+    const fd = fs.openSync(files.output, fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL | fs.constants.O_NOFOLLOW, 0o600);
+    let result;
+    try {
+      if (!own(fs.fstatSync(fd))) throw Error("owned notification output required");
+      stillActive();
+      result = spawnSync(process.execPath, [path.join(repo, "scripts/lane-deliver.mjs"), "batch", files.ops, "--receipt", files.receipt],
+        { cwd: repo, stdio: ["ignore", fd, fd] });
+      fs.fsyncSync(fd);
+    } finally { fs.closeSync(fd); }
+    write(files.terminal, { at: new Date().toISOString(), status: result.status, signal: result.signal ?? null,
+      error: result.error?.code ?? null, pid: result.pid ?? null, readback_only: true });
+    if (result.status !== 0 || result.signal || result.error) throw Error("new notification remains unconfirmed");
+    read(files.receipt);
+    console.log(`pending heartbeat PR #${observed.pr_number}: one distinct Cloud hand submitted; canonical merge unverified`);
+  })().catch(() => {
+    console.log("RAISED HAND: pending heartbeat diagnostic or notification remains held; READBACK ONLY, no retry");
+    process.exitCode = 1;
+  });
+JS
+  }
+
   _hb_window="$QUIET_HEARTBEAT_MIN"
   _hb_submission=""
   # An independent parent-written terminal, not child output or a PID check,
@@ -263,16 +372,24 @@ heartbeat() {
     if [ ! -f "$_hb_previous_log" ] || [ -L "$_hb_previous_log" ] || [ ! -f "$_hb_previous_exit" ] || [ -L "$_hb_previous_exit" ]; then
       _hb_hold "unfinished heartbeat receipt"; return 1
     fi
-    case "$(cat "$_hb_previous_exit" 2>/dev/null)" in
-      1|2) _hb_window=10 ;; # known prepublication refusal: a fresh observation after ten minutes
-      0|3|4)
-        _hb_submission="$RECORD_DIR/.sg-heartbeat-${_hb_previous}.submission.json"
-        if [ ! -f "$_hb_submission" ] || [ -L "$_hb_submission" ]; then
-          _hb_hold "unconfirmed/unfinished heartbeat lacks its exact submission binding"; return 1
-        fi
-        ;;
+    _hb_previous_status="$(cat "$_hb_previous_exit" 2>/dev/null)"
+    case "$_hb_previous_status" in
+      0|1|2|3|4) ;;
       *) _hb_hold "invalid independent heartbeat terminal"; return 1 ;;
     esac
+    # The immutable receipt is written BEFORE push. A refused push or later
+    # cleanup can still exit 1/2; that receipt always binds the ORIGINAL attempt.
+    _hb_submission="$RECORD_DIR/.sg-heartbeat-${_hb_previous}.submission.json"
+    if [ -e "$_hb_submission" ] || [ -L "$_hb_submission" ]; then
+      if [ ! -f "$_hb_submission" ] || [ -L "$_hb_submission" ]; then
+        _hb_hold "original heartbeat submission binding is not a regular owned receipt"; return 1
+      fi
+    elif [ "$_hb_previous_status" = "1" ] || [ "$_hb_previous_status" = "2" ]; then
+      _hb_submission=""
+      _hb_window=10 # no publication binding: a DIFFERENT eligible observation
+    else
+      _hb_hold "unconfirmed/unfinished heartbeat lacks its exact submission binding"; return 1
+    fi
   fi
   # A lost pointer alongside existing attempt evidence is damage, never a first run.
   if [ ! -e "$HB_LAST_ATTEMPT" ] && [ -n "$(find "$RECORD_DIR" -maxdepth 1 -name '.sg-heartbeat-*' -print -quit)" ]; then
@@ -297,7 +414,9 @@ heartbeat() {
     else
       _hb_readback_exit=$?
       if [ "$_hb_readback_exit" = "4" ]; then
-        say "$_hb_readback"; return 0
+        say "$_hb_readback"
+        _hb_pending_hand "$_hb_readback" || _hb_hold "pending heartbeat has no new qualified notification"
+        return 0
       fi
       _hb_hold "original heartbeat canonical readback is unavailable"; return 1
     fi

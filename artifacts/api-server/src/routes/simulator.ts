@@ -1,11 +1,11 @@
-import { randomUUID } from "node:crypto";
-import { Router, type IRouter } from "express";
+import { Router, type IRouter, type Request } from "express";
 import {
   getSimulatorScenario,
   listSimulatorScenarios,
   runSimulatorScenario,
   type AuditEvidence,
 } from "@workspace/signalgrid-simulator";
+import { logger } from "../lib/logger";
 
 const router: IRouter = Router();
 // Bounded in-memory demo ledger. Capped so repeated unauthenticated
@@ -14,24 +14,24 @@ const router: IRouter = Router();
 const MAX_LEDGER_ENTRIES = 500;
 const auditLedger: AuditEvidence[] = [];
 
-router.get("/simulator/scenarios", (_req, res) => {
-  res.json(envelope({ scenarios: listSimulatorScenarios() }));
+router.get("/simulator/scenarios", (req, res) => {
+  res.json(envelope(req, { scenarios: listSimulatorScenarios() }));
 });
 
 router.get("/simulator/scenarios/:id", (req, res) => {
   const scenario = getSimulatorScenario(req.params.id);
   if (!scenario) {
-    res.status(404).json(envelope({ error: "not_found", message: "Simulator scenario not found." }));
+    res.status(404).json(envelope(req, { error: "not_found", message: "Simulator scenario not found." }));
     return;
   }
 
-  res.json(envelope({ scenario }));
+  res.json(envelope(req, { scenario }));
 });
 
 router.post("/simulator/run", (req, res) => {
   const scenarioId = typeof req.body?.scenarioId === "string" ? req.body.scenarioId : "";
   if (!scenarioId) {
-    res.status(400).json(envelope({ error: "validation", message: "scenarioId is required." }));
+    res.status(400).json(envelope(req, { error: "validation", message: "scenarioId is required." }));
     return;
   }
 
@@ -40,7 +40,7 @@ router.post("/simulator/run", (req, res) => {
   // found" to every failure inside runScenario, so an internal defect would
   // have been reported to the client as a confident negative existence claim.
   if (!getSimulatorScenario(scenarioId)) {
-    res.status(404).json(envelope({ error: "not_found", message: "Simulator scenario not found." }));
+    res.status(404).json(envelope(req, { error: "not_found", message: "Simulator scenario not found." }));
     return;
   }
   try {
@@ -49,24 +49,27 @@ router.post("/simulator/run", (req, res) => {
     if (auditLedger.length > MAX_LEDGER_ENTRIES) {
       auditLedger.splice(0, auditLedger.length - MAX_LEDGER_ENTRIES);
     }
-    res.json(envelope(result));
+    res.json(envelope(req, result));
   } catch (err) {
-    res.status(500).json(envelope({ error: "simulator_error", message: err instanceof Error ? err.message : "Simulator run failed." }));
+    // Never forward a library's error string into a body: it is unfiltered text
+    // from code this route does not own. It goes to the log under the requestId.
+    logger.error({ err, requestId: req.requestId }, "simulator run failed");
+    res.status(500).json(envelope(req, { error: "simulator_error", message: "Simulator run failed." }));
   }
 });
 
-router.get("/simulator/audit", (_req, res) => {
-  res.json(envelope({ auditEvidence: auditLedger }));
+router.get("/simulator/audit", (req, res) => {
+  res.json(envelope(req, { auditEvidence: auditLedger }));
 });
 
-router.post("/simulator/reset", (_req, res) => {
+router.post("/simulator/reset", (req, res) => {
   auditLedger.splice(0, auditLedger.length);
-  res.json(envelope({ status: "reset", auditEvidence: auditLedger }));
+  res.json(envelope(req, { status: "reset", auditEvidence: auditLedger }));
 });
 
-function envelope<T extends object>(data: T) {
+function envelope<T extends object>(req: Request, data: T) {
   return {
-    requestId: randomUUID(),
+    requestId: req.requestId ?? null,
     timestamp: new Date().toISOString(),
     ...data,
   };

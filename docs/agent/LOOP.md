@@ -2352,3 +2352,10 @@ The preservation fixture requires its five original records before snapshotting.
 ## Fixture snapshot file binding — L50
 
 Regular fixture bytes now come from the exact opened descriptor whose identity was checked before and after reading. Symlink/regular path swaps refuse wrong bytes; original descriptor reads and close-on-error behavior are covered. Frozen5/5 and delivery96/96 pass, zero failures/errors/skips, with runtime and prior assertions unchanged. This is test correctness hardening, not native delivery or a security-boundary certification. The changed head requires new full/breadth, CodeQL/currentCI, protected reviews/landing and separate activation.
+
+
+## Original push evidence and refusal repair — L51
+
+The producer captures raw Git output and a source-bound terminal before parsing. A known failed push alone does not prove no publication: GET-only readback also requires the exact original topic to be absent. Foreign, incomplete, signaled, failed-GET or ambiguous evidence holds without replay. Historical producer bytes are checked against their committed Git blob.
+
+The actual tick owner may create one distinct Cloud repair hand using the original attempt's stable notification identity. Changing diagnostic timing or cause never creates a second hand; failed/unknown notifications stay consumed. Unknown legacy locks remain held. Frozen31/31 and unchanged delivery96/96 pass under real network denial, zero failures/errors/skips. This source correction remains subject to new full/breadth, complete own-system reviews, current CI/findings, protected landing and separate preservation/activation before natural canonical delivery proof.

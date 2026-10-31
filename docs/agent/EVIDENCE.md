@@ -5161,3 +5161,9 @@ Verdict: The01fc full489.746s failure at Walker-floor is retained as FAILED; bre
 Command: Frozen filesystem boundary controls and current portable delivery checker, network-denied.
 Output: Pre-open symlink and regular-object swaps exposed2 failures in5 frozen cases. Descriptor-bound reads pass5/5 and delivery96/96 with zero failures/errors/skips; post-open binding, recursive metadata, existing symlinks, hardlinks and owned-descriptor cleanup remain covered. Runtime source and all prior assertion lines are unchanged.
 Verdict: CodeQL flagged the previous test snapshot's separate path check/read. Static scope tracing found no lower-trust product entrypoint, but the correctness gap was hardened rather than suppressed. No alert dismissal or security/containment success is claimed; new-head CodeQL/full/CI/reviews remain owed. The previous Fef6 full1051.8714s/breadth58 passed with its recorded exclusions, not as this changed head's qualification.
+
+
+## 2026-10-31 — Preserve the original push terminal before repair classification (L51)
+Command: Frozen original-push/refusal boundary controls and unchanged portable delivery checker, network-denied.
+Output: The original31 controls reproduced8 failures and23 passes. Exact raw capture, committed-source/ref binding and bounded handoff pass31/31; unchanged delivery96/96 also passes, zero failures/errors/skips. Original assertions and failed histories remain preserved. Signal/spawn errors, missing or foreign records, ambiguous ref results and consumed notification failures remain held.
+Verdict: Independent operator source correction. An exact absent-topic GET plus a known original refusal permits one distinct repair hand under the actual tick owner; it never retries the original push or reaps an uncertain lock. This is focused source qualification, not full changed-head preflight, accepted native coding, formal source-panel clearance, public CI, landing or activation.

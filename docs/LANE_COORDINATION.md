@@ -559,3 +559,10 @@ The test snapshot now refuses fewer than its five required original records befo
 ### Descriptor-bound fixture snapshots (L50)
 
 The regression helper reads each regular fixture file through one no-follow, nonblocking descriptor, checks opened identity against its original metadata, verifies identity after the read and closes that descriptor on every path. Directory ordering and existing symlink/hardlink metadata remain unchanged. Five real filesystem boundary controls and delivery96 pass, zero failures/errors/skips. This strengthens a controlled test snapshot; it is not a generic filesystem-containment claim. The corrected head still requires full qualification and CodeQL reevaluation.
+
+
+### Original push result and bounded refusal repair (L51)
+
+The producer writes exact original Git stdout/stderr bytes and its terminal result before decoding output. The result binds the submission receipt, committed producer source, original head and target. GET-only readback can classify a remote refusal only after a normal failed push and one exact successful observation that its original topic is absent. Partial, foreign, signaled or ambiguous evidence remains held. A failed GET remains consumed and unknown; no rejected push is retried.
+
+A qualified current tick owner may send one distinct Cloud repair hand bound to that original attempt. The same stable notification identity covers pending and refused observations; a failed or unknown hand remains readback-only. Legacy locks are not reaped from process absence or elapsed time. Frozen31 and unchanged delivery96 pass, zero failures/errors/skips, under real network denial. Full changed-head qualification, protected review/CI/landing and a separate preservation audit/activation remain required.

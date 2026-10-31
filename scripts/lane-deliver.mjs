@@ -84,6 +84,17 @@ function run(cmd, args, opts = {}) {
 function git(args, cwd = repo) {
   return run("git", args, { cwd });
 }
+function gitCapture(args, cwd = repo) {
+  const r = spawnSync("git", args, { cwd, maxBuffer: 16 * 1024 * 1024 });
+  return { status: r.status ?? null, signal: r.signal ?? null, error: r.error ? (r.error.code ?? r.error.name ?? "unknown") : null,
+    stdout: Buffer.from(r.stdout ?? ""), stderr: Buffer.from(r.stderr ?? "") };
+}
+const digest = raw => createHash("sha256").update(raw).digest("hex");
+function exactText(raw) {
+  const text = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(raw);
+  if (!Buffer.from(text).equals(raw)) throw Error("Git output is not exact UTF-8");
+  return text;
+}
 function mustGit(args, cwd, what) {
   const r = git(args, cwd);
   if (r.code !== 0) die(`${what}: git ${args.join(" ")} failed\n${r.err || r.out}`, 1);
@@ -166,11 +177,9 @@ const mutationLane = ["send", "ack", "heartbeat", "batch"].includes(cmd) ? curre
 if (mutationLane === "mac") {
   if (!flags.receipt) die("Mac mutation requires --receipt before repository access; legacy caller held", 1);
   try {
-    try {
-      lstatSync(flags.receipt);
-      throw Error("receipt path was already used");
-    } catch (error) {
-      if (error.code !== "ENOENT") throw error;
+    for (const path of [flags.receipt, ...[".push.json", ".push.raw.json", ".push-ref.json", ".push-ref.raw.json"].map(suffix => flags.receipt + suffix)]) {
+      try { lstatSync(path); throw Error("receipt or original push evidence was already used"); }
+      catch (error) { if (error.code !== "ENOENT") throw error; }
     }
     const parent = dirname(flags.receipt);
     const fd = openSync(parent, constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW);
@@ -196,7 +205,7 @@ const repoSlug = remoteUrl.code === 0 && slugMatch ? `${slugMatch[1]}/${slugMatc
 function receiptWrite(path, value) {
   writeFileSync(path, JSON.stringify(value) + "\n", { flag: "wx", mode: 0o600, flush: true });
 }
-function receiptRead(path) {
+function receiptRead(path, canonical = false) {
   const fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW);
   try {
     const st = fstatSync(fd);
@@ -204,8 +213,81 @@ function receiptRead(path) {
     const raw = readFileSync(fd);
     const after = fstatSync(fd);
     if (["dev", "ino", "size", "mtimeMs", "ctimeMs"].some(key => st[key] !== after[key]) || raw.length !== st.size) throw Error("receipt changed during read");
-    return { value: JSON.parse(raw.toString("utf8")), sha256: createHash("sha256").update(raw).digest("hex") };
+    const value = JSON.parse(exactText(raw));
+    if (canonical && !Buffer.from(JSON.stringify(value) + "\n").equals(raw)) throw Error("captured Git record is not its exact representation");
+    return { value, sha256: digest(raw) };
   } finally { closeSync(fd); }
+}
+// Raw buffers are committed before UTF-8 decoding or refusal/GET interpretation.
+// A partial capture is evidence, never permission to publish with another ID.
+function captureWrite(prefix, binding, command, result) {
+  const raw = { ...binding, kind: binding.kind + "-raw", command,
+    status: result.status, signal: result.signal, error: result.error,
+    stdout_base64: result.stdout.toString("base64"), stderr_base64: result.stderr.toString("base64"),
+    stdout_sha256: digest(result.stdout), stderr_sha256: digest(result.stderr) };
+  receiptWrite(prefix + ".raw.json", raw);
+  let stdout = null, stderr = null, valid = false;
+  try { stdout = exactText(result.stdout); stderr = exactText(result.stderr); valid = true; } catch { /* raw evidence remains exact */ }
+  const terminal = { ...binding, command, status: result.status, signal: result.signal, error: result.error,
+    stdout, stderr, stdout_sha256: raw.stdout_sha256, stderr_sha256: raw.stderr_sha256,
+    raw_capture_sha256: digest(Buffer.from(JSON.stringify(raw) + "\n")), utf8_valid: valid };
+  receiptWrite(prefix + ".json", terminal);
+  return terminal;
+}
+function captureRead(prefix) {
+  const terminal = receiptRead(prefix + ".json", true), raw = receiptRead(prefix + ".raw.json", true);
+  const p = terminal.value, b = raw.value;
+  if (p.raw_capture_sha256 !== raw.sha256 || b.kind !== p.kind + "-raw") throw Error("original raw Git capture differs");
+  for (const key of ["version", "receipt_sha256", "repository", "base", "head", "target", "producer_head", "producer_source_sha256", "push_result_sha256", "command", "status", "signal", "error", "stdout_sha256", "stderr_sha256"]) {
+    if (JSON.stringify(p[key]) !== JSON.stringify(b[key])) throw Error("raw Git capture binding differs");
+  }
+  for (const name of ["stdout", "stderr"]) {
+    const encoded = b[name + "_base64"];
+    if (typeof encoded !== "string") throw Error("raw Git bytes missing");
+    const bytes = Buffer.from(encoded, "base64");
+    if (bytes.toString("base64") !== encoded || digest(bytes) !== b[name + "_sha256"] || p.utf8_valid !== true || exactText(bytes) !== p[name]) throw Error("raw Git output or UTF-8 differs");
+  }
+  return terminal;
+}
+function present(path) {
+  try { lstatSync(path); return true; } catch (error) { if (error.code === "ENOENT") return false; throw error; }
+}
+function originalPushRefusal(path, receipt) {
+  if (!present(path + ".push.json")) {
+    if (present(path + ".push.raw.json")) throw Error("original push capture is incomplete");
+    return null; // Older receipt: only ordinary GET/canonical readback can resolve it.
+  }
+  const r = receipt.value, push = captureRead(path + ".push"), p = push.value;
+  if (p.version !== 1 || p.kind !== "original-lane-push-terminal" || p.receipt_sha256 !== receipt.sha256 || !/^[a-f0-9]{40}$/.test(r.base ?? "") ||
+      ["repository", "base", "head", "target", "producer_head", "producer_source_sha256"].some(key => p[key] !== r[key]) ||
+      !/^[a-f0-9]{40}$/.test(p.producer_head ?? "") || !/^[a-f0-9]{64}$/.test(p.producer_source_sha256 ?? "") ||
+      JSON.stringify(p.command) !== JSON.stringify(["git", "push", "origin", `HEAD:refs/heads/${r.target}`])) throw Error("original push terminal belongs to different source/receipt/ref");
+  const source = gitCapture(["--no-replace-objects", "-c", "core.fsmonitor=false", "show", `${p.producer_head}:scripts/lane-deliver.mjs`]);
+  if (source.status !== 0 || source.signal || source.error || digest(source.stdout) !== p.producer_source_sha256) throw Error("original producing source unavailable or changed");
+  if (!Number.isInteger(p.status) || p.status <= 0 || p.status > 255 || p.signal !== null || p.error !== null ||
+      !/GH006|GH013|remote rejected|protected branch|permission .+ denied/i.test(p.stderr + p.stdout)) return null;
+  const prefix = path + ".push-ref";
+  let observed;
+  if (present(prefix + ".json")) observed = captureRead(prefix);
+  else {
+    if (present(prefix + ".raw.json")) throw Error("exact original ref capture is incomplete");
+    const args = ["ls-remote", "origin", `refs/heads/${r.target}`], result = gitCapture(args);
+    const binding = { version: 1, kind: "original-lane-push-ref-readback", receipt_sha256: receipt.sha256,
+      push_result_sha256: push.sha256, repository: r.repository, head: r.head, target: r.target,
+      producer_head: p.producer_head, producer_source_sha256: p.producer_source_sha256 };
+    captureWrite(prefix, binding, ["git", ...args], result);
+    observed = captureRead(prefix);
+  }
+  const q = observed.value;
+  if (q.version !== 1 || q.kind !== "original-lane-push-ref-readback" || q.receipt_sha256 !== receipt.sha256 || q.push_result_sha256 !== push.sha256 ||
+      ["repository", "head", "target", "producer_head", "producer_source_sha256"].some(key => q[key] !== p[key]) ||
+      JSON.stringify(q.command) !== JSON.stringify(["git", "ls-remote", "origin", `refs/heads/${r.target}`]) ||
+      q.status !== 0 || q.signal !== null || q.error !== null || q.stdout !== "") throw Error("exact original ref absence remains UNKNOWN");
+  return { version: 1, kind: "original-push-refused", repository: r.repository, target: r.target,
+    original_head: r.head, base: r.base, receipt_sha256: receipt.sha256, push_result_sha256: push.sha256,
+    ref_readback_sha256: observed.sha256, remote_ref_state: "ABSENT", remote_oid: null,
+    producer_head: p.producer_head, producer_source_sha256: p.producer_source_sha256,
+    original_push_exit: p.status, publication_state: "KNOWN_REFUSED", no_replay: true, repair_only: true };
 }
 function readback(path) {
   try {
@@ -216,6 +298,12 @@ function readback(path) {
       || r.blobs.some(b => typeof b.path !== "string" || b.path.includes("..") || !/^[a-f0-9]{40}$/.test(b.oid)
         || ![...MAIL_DIRS, COVERAGE_PAGE].some(p => b.path === p || b.path.startsWith(p + "/")))) throw Error("invalid submission binding");
     if (!repoSlug || repoSlug !== r.repository) throw Error("receipt repository differs");
+    const refusal = originalPushRefusal(path, receipt);
+    if (refusal) {
+      console.log("original Git push was refused and its exact topic was observed absent; no resend or remote-quiet claim");
+      console.log("refused delivery observation " + JSON.stringify(refusal));
+      return 5;
+    }
     const query = run("gh", ["pr", "view", r.target, "--repo", r.repository, "--json", "number,state,baseRefName,headRefName,headRefOid,mergeCommit,autoMergeRequest,createdAt,mergeStateStatus,statusCheckRollup"]);
     const observation = `${path}.readback-${Date.now()}-${randomBytes(6).toString("hex")}.json`;
     receiptWrite(observation, { at: new Date().toISOString(), target: r.target, head: r.head,
@@ -449,13 +537,27 @@ console.log(`  worktree    ${wt} @ ${base} (origin/${MAINLINE})`);
   const ghAuthenticated = run("gh", ["auth", "status", "--hostname", "github.com"]).code === 0;
   if (lane === "mac" && (!ghAuthenticated || !repoSlug)) die("unattended Mac delivery requires authenticated gh and a GitHub origin; no push was attempted", 1);
   const target = `lane/${lane}-mail-${stamp}-${randomBytes(6).toString("hex")}`;
+  let producer = {};
+  if (flags.receipt) {
+    const head = mustGit(["--no-replace-objects", "-c", "core.fsmonitor=false", "rev-parse", "HEAD"], repo, "binding producing source");
+    const source = readFileSync(fileURLToPath(import.meta.url)), blob = gitCapture(["--no-replace-objects", "-c", "core.fsmonitor=false", "show", `${head}:scripts/lane-deliver.mjs`]);
+    if (!/^[a-f0-9]{40}$/.test(head) || blob.status !== 0 || blob.signal || blob.error || !blob.stdout.equals(source)) die("exact committed producing source unavailable; no push attempted", 1);
+    producer = { producer_head: head, producer_source_sha256: digest(source) };
+  }
   if (flags.receipt) receiptWrite(flags.receipt, { version: 1, at: now.toISOString(), repository: repoSlug,
-    base, head: sha, target, blobs: staged.map(path => ({ path, oid: mustGit(["rev-parse", `${sha}:${path}`], wt, "binding the submission blob") })) });
+    base, head: sha, target, ...producer, blobs: staged.map(path => ({ path, oid: mustGit(["rev-parse", `${sha}:${path}`], wt, "binding the submission blob") })) });
+  const receiptSha = flags.receipt ? receiptRead(flags.receipt).sha256 : null;
   publicationAttempted = true;
-  const pushed = git(["push", "origin", `HEAD:refs/heads/${target}`], wt);
+  const args = ["push", "origin", `HEAD:refs/heads/${target}`], actualPush = gitCapture(args, wt);
+  if (flags.receipt) captureWrite(flags.receipt + ".push", { version: 1, kind: "original-lane-push-terminal",
+    receipt_sha256: receiptSha, repository: repoSlug, base, head: sha, target, ...producer }, ["git", ...args], actualPush);
+  let pushed;
+  try { pushed = { code: actualPush.status ?? -1, out: exactText(actualPush.stdout), err: exactText(actualPush.stderr) }; }
+  catch { die(`original push output encoding is UNKNOWN; ${flags.receipt ? "raw bytes retained" : "no durable raw receipt was requested"}; READBACK ONLY, no retry`, 3); }
   const pushResponse = `${pushed.err}${pushed.out}`.trim();
+  if (actualPush.signal || actualPush.error || actualPush.status === null) die(`original push parent terminal is UNKNOWN; ${flags.receipt ? "raw evidence retained" : "no durable raw receipt was requested"}; READBACK ONLY, no retry`, 3);
   if (pushed.code !== 0 && /GH006|GH013|remote rejected|protected branch|permission .+ denied/i.test(pushResponse)) {
-    die(`the push to ${target} was REFUSED by the remote — no retry or other ref was tried:\n${pushResponse}`, 1);
+    die(`Git reported REFUSED for ${target}; publication remains unverified pending exact GET readback — no retry or other ref was tried:\n${pushResponse}`, 1);
   }
 
   // ── 6. confirm on the remote — local-only is not delivered ──────────────────

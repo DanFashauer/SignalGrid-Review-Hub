@@ -460,3 +460,12 @@ block; a stage run on the wrong tier is a lesson here.
 - **evidence:** Real filesystem RED2/5 became GREEN5/5; delivery96/96 passes with prior assertions and runtime bytes preserved.
 - **landing:** pending — no-follow/nonblocking open, original/opened identity checks, descriptor read, post-read identity checks and guaranteed owned close. Preserve recursive fixture metadata; no scanner waiver or generic containment claim. New full/CI/CodeQL and protected reviews still apply.
 - **status:** pending
+
+
+### L51 — Bind refusal repair to the original push, not its error text alone
+- **date:** 2026-10-31
+- **lane:** mac
+- **incident:** A rejected push left no exact durable child terminal, so subsequent readback could not distinguish a known refusal from an unknown publication attempt or request bounded repair.
+- **evidence:** Frozen RED8/31 became GREEN31/31; unchanged delivery96/96 passes with zero failures/errors/skips. Raw Git bytes are retained before interpretation and independently bound to the original source, receipt, target and exact ref observation.
+- **landing:** pending — one stable, original-owner-bound repair hand only after a normal original refusal and exact topic absence. Failed/unknown hands remain consumed; no original resend, legacy reaping or gate waiver. New full/breadth, formal reviews/current CI and protected landing precede separate audited activation.
+- **status:** pending

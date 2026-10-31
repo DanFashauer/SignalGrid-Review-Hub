@@ -249,8 +249,8 @@ heartbeat() {
     say "RAISED HAND: $1; READBACK ONLY, no submission (see docs/LANE_COORDINATION.md, held deliveries)"
   }
 
-  # A stuck pending PR may need Cloud inspection. This is one DIFFERENT hand,
-  # never a resend/requeue/close/auto-merge request for the original heartbeat.
+  # A pending PR or a source-bound refused original push may need Cloud repair.
+  # One DIFFERENT hand only; never resend/requeue/close the original heartbeat.
   _hb_pending_hand() {
     node - "$_hb_submission" "$1" "$RECORD_DIR" "$_hb_previous" "${TICK_LOCK_ROOT:-}" "${TICK_OWNER_TOKEN:-}" "$$" <<'JS'
   const fs = require("node:fs"), path = require("node:path"), crypto = require("node:crypto");
@@ -279,16 +279,57 @@ heartbeat() {
     if (original.version !== 1 || !/^[a-f0-9]{40}$/.test(original.head ?? "") ||
         !/^lane\/mac-mail-\d{8}-\d{6}Z-[a-f0-9]{12}$/.test(original.target ?? "") ||
         !/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(original.repository ?? "")) throw Error("original binding differs");
-    const prefix = "pending delivery observation ";
+    const refusedPrefix = "refused delivery observation ", pendingPrefix = "pending delivery observation ";
+    const refused = output.split("\n").some(line => line.startsWith(refusedPrefix));
+    const prefix = refused ? refusedPrefix : pendingPrefix;
     const lines = output.split("\n").filter(line => line.startsWith(prefix));
-    if (lines.length !== 1) throw Error("one original pending observation required");
+    if (lines.length !== 1 || output.split("\n").some(line => line.startsWith(refused ? pendingPrefix : refusedPrefix))) throw Error("one original delivery observation required");
     const text = lines[0].slice(prefix.length), observed = JSON.parse(text);
-    const keys = ["version", "repository", "target", "original_head", "receipt_sha256", "pr_number", "base", "pr_head", "created_at", "observed_at", "age_seconds", "merge_state", "check_state", "auto_merge_requested"];
+    const keys = refused ? ["version", "kind", "repository", "target", "original_head", "base", "receipt_sha256", "push_result_sha256", "ref_readback_sha256", "remote_ref_state", "remote_oid", "producer_head", "producer_source_sha256", "original_push_exit", "publication_state", "no_replay", "repair_only"] :
+      ["version", "repository", "target", "original_head", "receipt_sha256", "pr_number", "base", "pr_head", "created_at", "observed_at", "age_seconds", "merge_state", "check_state", "auto_merge_requested"];
     const literalKeys = [...text.matchAll(/(?:^|[,{])\s*"([A-Za-z_][A-Za-z_0-9]*)"\s*:/g)].map(match => match[1]);
     if (!observed || typeof observed !== "object" || Array.isArray(observed) ||
         Object.keys(observed).sort().join("\n") !== [...keys].sort().join("\n") ||
         literalKeys.length !== keys.length || new Set(literalKeys).size !== keys.length ||
         literalKeys.some(key => !keys.includes(key))) throw Error("pending scalar schema differs");
+    let reason;
+    if (refused) {
+      function capture(prefix) {
+        const terminalBytes = read(prefix + ".json"), rawBytes = read(prefix + ".raw.json");
+        const p = JSON.parse(terminalBytes.toString("utf8")), b = JSON.parse(rawBytes.toString("utf8"));
+        if (!Buffer.from(JSON.stringify(p) + "\n").equals(terminalBytes) || !Buffer.from(JSON.stringify(b) + "\n").equals(rawBytes) ||
+            p.raw_capture_sha256 !== sha(rawBytes) || b.kind !== p.kind + "-raw" || p.utf8_valid !== true) throw Error("raw refusal capture differs");
+        for (const key of ["version", "receipt_sha256", "repository", "base", "head", "target", "producer_head", "producer_source_sha256", "push_result_sha256", "command", "status", "signal", "error", "stdout_sha256", "stderr_sha256"]) {
+          if (JSON.stringify(p[key]) !== JSON.stringify(b[key])) throw Error("raw refusal binding differs");
+        }
+        for (const name of ["stdout", "stderr"]) {
+          if (typeof b[name + "_base64"] !== "string") throw Error("raw refusal bytes missing");
+          const bytes = Buffer.from(b[name + "_base64"], "base64"), decoded = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(bytes);
+          if (bytes.toString("base64") !== b[name + "_base64"] || sha(bytes) !== p[name + "_sha256"] || !Buffer.from(decoded).equals(bytes) || decoded !== p[name]) throw Error("raw refusal bytes or UTF-8 differ");
+        }
+        return { value: p, sha256: sha(terminalBytes) };
+      }
+      const push = capture(originalPath + ".push"), ref = capture(originalPath + ".push-ref"), p = push.value, q = ref.value;
+      if (observed.version !== 1 || observed.kind !== "original-push-refused" || observed.repository !== original.repository || observed.target !== original.target ||
+          observed.original_head !== original.head || observed.base !== original.base || !/^[a-f0-9]{40}$/.test(original.base ?? "") || observed.receipt_sha256 !== sha(raw) ||
+          observed.push_result_sha256 !== push.sha256 || observed.ref_readback_sha256 !== ref.sha256 ||
+          observed.remote_ref_state !== "ABSENT" || observed.remote_oid !== null || observed.publication_state !== "KNOWN_REFUSED" ||
+          observed.no_replay !== true || observed.repair_only !== true || p.version !== 1 || p.kind !== "original-lane-push-terminal" ||
+          p.receipt_sha256 !== sha(raw) || ["repository", "base", "head", "target", "producer_head", "producer_source_sha256"].some(key => p[key] !== original[key]) ||
+          !/^[a-f0-9]{40}$/.test(p.producer_head ?? "") || !/^[a-f0-9]{64}$/.test(p.producer_source_sha256 ?? "") ||
+          observed.producer_head !== p.producer_head || observed.producer_source_sha256 !== p.producer_source_sha256 ||
+          !Number.isInteger(p.status) || p.status <= 0 || p.status > 255 || p.signal !== null || p.error !== null || observed.original_push_exit !== p.status ||
+          !/GH006|GH013|remote rejected|protected branch|permission .+ denied/i.test(p.stderr + p.stdout) ||
+          JSON.stringify(p.command) !== JSON.stringify(["git", "push", "origin", "HEAD:refs/heads/" + original.target]) ||
+          q.version !== 1 || q.kind !== "original-lane-push-ref-readback" || q.receipt_sha256 !== sha(raw) || q.push_result_sha256 !== push.sha256 ||
+          ["repository", "head", "target", "producer_head", "producer_source_sha256"].some(key => q[key] !== p[key]) ||
+          JSON.stringify(q.command) !== JSON.stringify(["git", "ls-remote", "origin", "refs/heads/" + original.target]) ||
+          q.status !== 0 || q.signal !== null || q.error !== null || q.stdout !== "") throw Error("original refusal or exact ref absence remains UNKNOWN");
+      const source = spawnSync("git", ["--no-replace-objects", "-c", "core.fsmonitor=false", "show", p.producer_head + ":scripts/lane-deliver.mjs"],
+        { cwd: repo, maxBuffer: 16 * 1024 * 1024 });
+      if (source.status !== 0 || source.signal || source.error || !Buffer.isBuffer(source.stdout) || sha(source.stdout) !== p.producer_source_sha256) throw Error("original producing source differs");
+      reason = "original Git push refused; exact original topic observed absent";
+    } else {
     const created = typeof observed.created_at === "string" ? Date.parse(observed.created_at) : NaN;
     const at = typeof observed.observed_at === "string" ? Date.parse(observed.observed_at) : NaN;
     if (observed.version !== 1 || observed.repository !== original.repository || observed.target !== original.target ||
@@ -298,7 +339,8 @@ heartbeat() {
         !Number.isInteger(observed.age_seconds) || observed.age_seconds < 0 || observed.age_seconds !== Math.floor((at - created) / 1000) ||
         !["BEHIND", "BLOCKED", "CLEAN", "DIRTY", "DRAFT", "HAS_HOOKS", "UNSTABLE"].includes(observed.merge_state) ||
         !["failed", "pending", "success"].includes(observed.check_state) || observed.auto_merge_requested !== true) throw Error("pending metadata missing, stale or foreign");
-    const reason = observed.check_state === "failed" ? "terminal failed check" : observed.merge_state === "BEHIND" ? "behind canonical" : observed.age_seconds >= 3600 ? "pending at least one hour" : null;
+    reason = observed.check_state === "failed" ? "terminal failed check" : observed.merge_state === "BEHIND" ? "behind canonical" : observed.age_seconds >= 3600 ? "pending at least one hour" : null;
+    }
     if (!reason) { console.log("pending heartbeat metadata is current; no new notification needed"); process.exit(0); }
     const { checkTickOwner } = await import(require("node:url").pathToFileURL(path.join(repo, "scripts/lib/lane-attempt-store.mjs")).href);
     if (typeof checkTickOwner !== "function") throw Error("qualified read-only owner check unavailable");
@@ -317,7 +359,13 @@ heartbeat() {
     }
     const id = "pending-heartbeat-" + sha(attempt), root = path.join(records, id);
     const files = { intent: root + ".attempt.json", ops: root + ".ops.json", output: root + ".output", terminal: root + ".terminal.json", receipt: root + ".submission.json" };
-    const binding = { version: 1, kind: "pending-heartbeat-notification", attempt, receipt_sha256: sha(raw), repository: original.repository,
+    // The cause identity excludes GET timing, transient output and ref snapshots.
+    // Reusing the existing original-attempt ID also prevents another hand when a
+    // later observation changes category. Failure/UNKNOWN never creates a new ID.
+    const binding = refused ? { version: 1, kind: "refused-heartbeat-notification", attempt, receipt_sha256: sha(raw), repository: original.repository,
+      target: original.target, original_head: original.head, producer_head: observed.producer_head, producer_source_sha256: observed.producer_source_sha256,
+      push_result_sha256: observed.push_result_sha256, store: { dev: store.dev, ino: store.ino } } :
+      { version: 1, kind: "pending-heartbeat-notification", attempt, receipt_sha256: sha(raw), repository: original.repository,
       target: original.target, original_head: original.head, pr_number: observed.pr_number, store: { dev: store.dev, ino: store.ino } };
     if (Object.values(files).some(exists)) {
       const prior = JSON.parse(read(files.intent).toString("utf8"));
@@ -329,10 +377,11 @@ heartbeat() {
       console.log("pending heartbeat notification was already attempted; READBACK ONLY, no new hand");
       process.exit(0);
     }
-    const url = `https://github.com/${original.repository}/pull/${observed.pr_number}`;
+    const url = refused ? `https://github.com/${original.repository}/compare/SignalGrid_Alpha...${encodeURIComponent(original.target)}` : `https://github.com/${original.repository}/pull/${observed.pr_number}`;
     const op = { op: "raise", id, who: "cloud lane", domain: "lane", where: url,
       doing: "canonical delivery of a Mac heartbeat",
-      blocked: `Protected heartbeat PR #${observed.pr_number} is ${reason}; original topic ${original.target} @ ${original.head}.`,
+      blocked: refused ? `Original heartbeat ${reason}; source ${observed.producer_head}; original topic ${original.target} @ ${original.head}.` :
+        `Protected heartbeat PR #${observed.pr_number} is ${reason}; original topic ${original.target} @ ${original.head}.`,
       need: "Cloud lane: inspect the current PR checks and source, then repair or land only through the existing protected review/CI route. This hand does not authorize resending, reposting or closing the original attempt." };
     stillActive();
     write(files.intent, { at: new Date().toISOString(), binding, state: "one distinct notification attempted; original heartbeat unchanged", receipt: files.receipt });
@@ -350,7 +399,7 @@ heartbeat() {
       error: result.error?.code ?? null, pid: result.pid ?? null, readback_only: true });
     if (result.status !== 0 || result.signal || result.error) throw Error("new notification remains unconfirmed");
     read(files.receipt);
-    console.log(`pending heartbeat PR #${observed.pr_number}: one distinct Cloud hand submitted; canonical merge unverified`);
+    console.log(refused ? "refused original heartbeat: one distinct Cloud repair hand submitted; canonical merge unverified" : `pending heartbeat PR #${observed.pr_number}: one distinct Cloud hand submitted; canonical merge unverified`);
   })().catch(() => {
     console.log("RAISED HAND: pending heartbeat diagnostic or notification remains held; READBACK ONLY, no retry");
     process.exitCode = 1;
@@ -413,7 +462,7 @@ JS
       say "$_hb_readback"
     else
       _hb_readback_exit=$?
-      if [ "$_hb_readback_exit" = "4" ]; then
+      if [ "$_hb_readback_exit" = "4" ] || [ "$_hb_readback_exit" = "5" ]; then
         say "$_hb_readback"
         _hb_pending_hand "$_hb_readback" || _hb_hold "pending heartbeat has no new qualified notification"
         return 0

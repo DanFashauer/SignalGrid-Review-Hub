@@ -66,7 +66,6 @@ const ROUTINES_FILE = "docs/agent/scheduled-routines.json";
 let publicationAttempted = false;
 process.on("uncaughtException", (error) => {
   const code = publicationAttempted ? 3 : 1;
-  process.exitCode = code;
   console.error(`lane-deliver: unexpected error: ${error.message}; ${publicationAttempted ? "READBACK ONLY, no resend" : "no publication attempted"}`);
   process.exit(code);
 });

@@ -435,12 +435,14 @@ const audienceDocs = [];
 // Hyphen-like separators: word processors swap "-" for U+2010 (hyphen), U+2011 (non-breaking hyphen) or U+2013 (en dash).
 const HY = "\\-\u2010\u2011\u2013";
 const SECURITY_ABSOLUTE =
-  `(?:un[${HY}]?(?:hack|clone?|break|breach|copy)able|(?:hack|clone|tamper|breach|phishing)[\\s${HY}]?proof|impossible[\\s${HY}]to[\\s${HY}](?:hack|break|clone|copy|duplicate|replicate|steal)|can(?:\\s?not|'t|\u2019t|\\s+never)(?:\\s+ever)? be (?:copied|duplicated|cloned|hacked|replicated|broken))`;
+  `(?:un[${HY}]?(?:hack|clone?|break|breach|copy)able|(?:hack|clone|tamper|breach|phishing)[\\s${HY}]?proof|impossible[\\s${HY}]to[\\s${HY}](?:hack|break|clone|copy|duplicate|replicate|steal)|can(?:\\s?not|'t|\u2019t|\\s+never)(?:\\s+ever)?\\s+be\\s+(?:copied|duplicated|cloned|hacked|replicated|broken))`;
 const OVERCLAIM_MARKERS = [
   /evaluated[\s-]today/i,
   /evaluated:\s*true/i,
   /\b([4-9]|\d{2,})\s+(?:evaluated[\s-]today\s+)?signal dimensions/i,
-  new RegExp(`\\b${SECURITY_ABSOLUTE}\\b`, "i"),
+  // GLOBAL, and counted per match (Codex review of 2026-10-02): one non-global marker tested once made N
+  // absolutes in a doc one mention against the docs ceiling, so a new absolute in a flagged doc was free.
+  new RegExp(`\\b${SECURITY_ABSOLUTE}\\b`, "gi"),
 ];
 const LAUNCH_IDS = new Set(["device-posture", "management-health", "local-authority"]);
 // `zone` IS WORD-ANCHORED ON BOTH SIDES, and it was anchored on the right only.
@@ -545,7 +547,7 @@ const CLAIM_VERB = "(?:claim|say|call|describe|promise|state|assert|market|label
 // (but/yet/just), so a negated claim verb governs ITS clause and shelters nothing after the turn
 // ("I'm not saying it's perfect, but it's unhackable"; "never promised a rose garden, just an
 // unhackable token"; review of 2026-10-02). `{0,30}`/`{0,40}` below are the verb's reach in it.
-const CLAUSE_CH = "(?:(?!\\b(?:but|yet|just)\\b)[^.<\\n:;,\u2014\u2013])";
+const CLAUSE_CH = "(?:(?!\\b(?:but|yet|just|and)\\b)[^.<\\n:;,\u2014\u2013])";
 // The one adverb the is/are-not form may carry ("not entirely unhackable") excludes the additive
 // focusers: "not only/simply/merely unhackable" ASSERTS it and adds more (same review).
 const NEG_ADVERB = "(?:(?!(?:only|just|simply|merely)\\b)\\w+ly\\s+)?";
@@ -555,7 +557,36 @@ const NEGATED_ABSOLUTE = new RegExp(
   "gi",
 );
 const QUOTED_ABSOLUTE = new RegExp(`(?<!\\w)["\u201c][^"\u201c\u201d\\n]{0,1500}?${SECURITY_ABSOLUTE}[^"\u201c\u201d\\n]{0,1500}?["\u201d](?!\\w)`, "gi");
-const stripQuoted = (t) => t.replace(QUOTED_ABSOLUTE, " ");
+// The quoted exemption needs a CONTEXT that makes the quote a name (Codex review of 2026-10-02: every quoted
+// span was stripped, so `Customers call our puck "unhackable".` passed): a never-claim / will-not-claim list,
+// the owner's direction, or a vendor's attributed wording — in the quote's block, the block before it (a list's
+// lead-in), or its nearest heading. Anywhere else a quoted absolute is still the copy.
+const QUOTE_NAME_CONTEXT = new RegExp(
+  "never[\\s-]claim|do-not-claim|not claimable|will not (?:claim|make|use|say|adopt)|does not adopt" +
+    "|what this (?:\\w+ )?(?:does|will) not claim|" + AVOID_LIST.source +
+    "|\\bowner(?:'s|\u2019s)? (?:[\\w-]+ ){0,3}?(?:direction|note|words)|vendor(?:'s|\u2019s) (?:own |marketing )?(?:phrase|word|wording)|\\w+(?:'s|\u2019s) own (?:phrase|wording)",
+  "i",
+);
+const stripQuoted = (t) => {
+  const lines = t.split("\n");
+  let heading = "", prev = "", block = [];
+  const out = [];
+  const flush = () => {
+    if (block.length === 0) return;
+    const text = block.join("\n");
+    const ok = QUOTE_NAME_CONTEXT.test(text) || QUOTE_NAME_CONTEXT.test(prev) || QUOTE_NAME_CONTEXT.test(heading);
+    out.push(ok ? text.replace(QUOTED_ABSOLUTE, " ") : text);
+    prev = text;
+    block = [];
+  };
+  for (const l of lines) {
+    if (l.trim() === "") { flush(); out.push(l); continue; }
+    if (/^#{1,6}\s/.test(l)) { flush(); heading = l; prev = ""; out.push(l); continue; }
+    block.push(l);
+  }
+  flush();
+  return out.join("\n");
+};
 const stripNegated = (body, name = "", buyer = false) => {
   let t = body
     .replace(/\bnot\b[^.<\n]{0,60}?evaluated[\s-]today/gi, " ")
@@ -619,7 +650,8 @@ function violationsIn(name, body, hedgeBody = body, commentOnlyHedges = null, bu
   const out = [];
   const scannable = stripNegated(body, name, buyer);
   for (const re of OVERCLAIM_MARKERS) {
-    if (re.test(scannable)) out.push(`${name}: overclaim marker ${re} — the shipped defect's exact shape`);
+    const hits = re.global ? [...scannable.matchAll(re)].length : re.test(scannable) ? 1 : 0;
+    for (let k = 0; k < hits; k++) out.push(`${name}: overclaim marker ${re} — the shipped defect's exact shape`);
   }
   for (const m of body.matchAll(/limitedGA:\s*true/g)) {
     const before = body.slice(0, m.index);
@@ -1032,7 +1064,11 @@ function ceilingMentions(name, body, exempt = ENGINEERING_DOCS_EXEMPT) {
     // … and a QUOTED string in prose names the phrase (a never-claim list, an owner's verbatim
     // note) without asserting it. Markdown only: in markup or code the same string is the copy.
     violationsIn("stS6.md", 'Never-claim list: "unhackable", "clone-proof".').length === 0 &&
-    violationsIn("stS7.md", '> "making it impossible to break and or hack."').length === 0 &&
+    violationsIn("stS7.md", 'The owner\'s direction, verbatim:\n\n> "making it impossible to break and or hack."').length === 0 &&
+    // Codex review of 2026-10-02: a quote names the phrase only in a never-claim / owner-direction /
+    // attributed-vendor context; a bare quote (or a quoted testimonial) is still the copy.
+    violationsIn("stS7b.md", '> "making it impossible to break and or hack."').length > 0 &&
+    violationsIn("stS7c.md", '## What this repository will not claim\n\nIntro.\n\n- "Unhackable", "clone-proof".').length === 0 &&
     violationsIn("stS8.tsx", '<p>"unhackable"</p>').length > 0 &&
     // The negation-precision cases below are named .md on purpose: the negation exemption now lives ONLY in the
     // docs path (non-buyer markdown), so that is the one place its precision can still be wrong.
@@ -1059,7 +1095,7 @@ function ceilingMentions(name, body, exempt = ENGINEERING_DOCS_EXEMPT) {
     // still the copy, and so is a quoted list item: there is no avoid-list exemption there.
     violationsIn("stS13.md", 'Customers call it "unhackable".', undefined, null, true).length > 0 &&
     violationsIn("stS14.md", 'Words to avoid: "unhackable", "clone-proof".', undefined, null, true).length > 0 &&
-    violationsIn("stS15.md", 'Customers call it "unhackable".').length === 0 &&
+    violationsIn("stS15.md", 'Customers call our puck "unhackable".').length > 0 &&
     violationsIn("stS16.md", 'Avoid breaches. Do not say maybe: our puck is "unhackable".', undefined, null, true).length > 0 &&
     violationsIn("stS17.md", '### Words to avoid\n"unhackable", "clone-proof".', undefined, null, true).length > 0 &&
     // Review of 2026-10-02 (planted first, each measured exit 0 before the fix): additive focusers are
@@ -1099,6 +1135,14 @@ function ceilingMentions(name, body, exempt = ENGINEERING_DOCS_EXEMPT) {
     violationsIn("stB6.tsx", "<p>We never claim perfection! It is unhackable.</p>", undefined, null, true).length > 0 &&
     // The docs path (non-buyer markdown) keeps the exemption — the never-claim list stays legal there …
     violationsIn("stB7.md", "Never call it clone-proof.").length === 0 &&
+    // Codex review of 2026-10-02: an additive "and" ends the governed clause in the docs path too.
+    violationsIn("stB7c.md", "We never claim perfection and our puck is unhackable.").length > 0 &&
+    // … the separator before "be" is any whitespace (a wrapped line, a double space) …
+    violationsIn("stW0.md", "The token cannot\nbe duplicated.", undefined, null, true).length > 0 &&
+    violationsIn("stW1.md", "The token cannot  be cloned.", undefined, null, true).length > 0 &&
+    // … and every absolute counts, so a new one in an already-flagged doc raises the docs ceiling.
+    violationsIn("stM0.md", "The puck is unhackable. It is tamper-proof. It is clone-proof.").length === 3 &&
+    ceilingMentions("stM1.md", "The puck is unhackable. It is tamper-proof.") === 2 &&
     violationsIn("stB7b.md", "We do not claim the puck is unhackable, and we never call it tamper-proof.").length === 0 &&
     // … and nowhere else: a non-markdown, non-buyer source takes no negation exemption either.
     violationsIn("stB8.txt", "Never call it clone-proof.").length > 0 &&

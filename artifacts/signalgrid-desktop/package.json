@@ -10,6 +10,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "devDependencies": {
+    "@fontsource/ibm-plex-mono": "^5.3.0",
+    "@fontsource/inter": "^5.3.0",
     "@radix-ui/react-tooltip": "^1.2.16",
     "@tailwindcss/vite": "catalog:",
     "@tanstack/react-query": "catalog:",

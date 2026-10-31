@@ -2347,3 +2347,8 @@ Pending readback binds the original receipt/head, PR age and checks. Behind, fai
 ## Original-evidence non-vacuity — L49
 
 The preservation fixture requires its five original records before snapshotting. Actual2-record and4-record negative cases refuse; complete5 succeeds. Current3 filesystem controls,96 delivery checks and16 unchanged walker self-tests pass. Runtime and previous assertions are unchanged. The01fc full failure remains FAILED and its breadth unstarted; a new exact-head full/breadth must precede protected publication and separate activation.
+
+
+## Fixture snapshot file binding — L50
+
+Regular fixture bytes now come from the exact opened descriptor whose identity was checked before and after reading. Symlink/regular path swaps refuse wrong bytes; original descriptor reads and close-on-error behavior are covered. Frozen5/5 and delivery96/96 pass, zero failures/errors/skips, with runtime and prior assertions unchanged. This is test correctness hardening, not native delivery or a security-boundary certification. The changed head requires new full/breadth, CodeQL/currentCI, protected reviews/landing and separate activation.

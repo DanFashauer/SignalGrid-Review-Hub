@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { spawn, spawnSync } from "node:child_process";
-import { chmodSync, existsSync, linkSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, renameSync, statSync, symlinkSync, utimesSync, writeFileSync } from "node:fs";
+import { closeSync, constants, fstatSync, openSync, chmodSync, existsSync, linkSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, renameSync, statSync, symlinkSync, utimesSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
@@ -532,8 +532,18 @@ for(const kind of ['missing-marker','corrupt-marker','missing-directory','replac
 function leaseTree(path) {
  if(!existsSync(path))return null;
  const entries=[];
+ const sameFile=(a,b)=>a.dev===b.dev&&a.ino===b.ino&&a.mode===b.mode&&a.nlink===b.nlink&&a.size===b.size&&a.mtimeMs===b.mtimeMs&&a.ctimeMs===b.ctimeMs;
  function visit(p,relative){const s=lstatSync(p),row={path:relative,dev:s.dev,ino:s.ino,mode:s.mode,nlink:s.nlink};
-  if(s.isFile())row.bytes=readFileSync(p).toString('hex');
+  if(s.isFile()){
+   const fd=openSync(p,constants.O_RDONLY|constants.O_NOFOLLOW|constants.O_NONBLOCK);
+   try{
+    const opened=fstatSync(fd);
+    if(!opened.isFile()||!sameFile(s,opened))throw Error('lease snapshot file identity changed before read');
+    const raw=readFileSync(fd),after=fstatSync(fd);
+    if(raw.length!==opened.size||!sameFile(opened,after)||!sameFile(after,lstatSync(p)))throw Error('lease snapshot file binding changed during read');
+    row.bytes=raw.toString('hex');
+   }finally{closeSync(fd);}
+  }
   else if(s.isDirectory())for(const name of readdirSync(p).sort())visit(join(p,name),relative+'/'+name);
   entries.push(row);
  }

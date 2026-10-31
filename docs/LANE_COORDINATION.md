@@ -554,3 +554,8 @@ A pending original PR gets GET-only age/head/check diagnostics. A behind PR, ter
 ### Original-evidence snapshot floor (L49)
 
 The test snapshot now refuses fewer than its five required original records before comparing preserved bytes. Real filesystem controls refuse two pointers alone and four records without the submission receipt, while accepting all five;3/3 pass. Delivery96 and the unchanged walker gate/self-test16 also pass. Runtime source and previous assertions are unchanged. The earlier01fc full failed at this missing non-vacuity check and remains failed; new-head full qualification is required.
+
+
+### Descriptor-bound fixture snapshots (L50)
+
+The regression helper reads each regular fixture file through one no-follow, nonblocking descriptor, checks opened identity against its original metadata, verifies identity after the read and closes that descriptor on every path. Directory ordering and existing symlink/hardlink metadata remain unchanged. Five real filesystem boundary controls and delivery96 pass, zero failures/errors/skips. This strengthens a controlled test snapshot; it is not a generic filesystem-containment claim. The corrected head still requires full qualification and CodeQL reevaluation.

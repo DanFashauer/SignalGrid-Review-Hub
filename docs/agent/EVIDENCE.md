@@ -5155,3 +5155,9 @@ Verdict: Independent operator source correction, not native coding or deployment
 Command: Source-derived filesystem controls, portable delivery suite and unchanged walker gate/self-test.
 Output: The incomplete2-record and4-record fixtures failed their expected refusal before correction (RED2/3); the complete5-record case passed. With one minimum-five guard,3/3 controls,96/96 delivery checks and16/16 walker self-tests pass; the regular walker gate also passes. Runtime bytes and every prior assertion remain unchanged.
 Verdict: The01fc full489.746s failure at Walker-floor is retained as FAILED; breadth did not start. This fixes the new test's non-vacuity contract without a gate waiver. New exact-head full/breadth and all protected review/CI/activation requirements remain owed.
+
+
+## 2026-10-31 — Bind fixture file checks and reads to one descriptor (L50)
+Command: Frozen filesystem boundary controls and current portable delivery checker, network-denied.
+Output: Pre-open symlink and regular-object swaps exposed2 failures in5 frozen cases. Descriptor-bound reads pass5/5 and delivery96/96 with zero failures/errors/skips; post-open binding, recursive metadata, existing symlinks, hardlinks and owned-descriptor cleanup remain covered. Runtime source and all prior assertion lines are unchanged.
+Verdict: CodeQL flagged the previous test snapshot's separate path check/read. Static scope tracing found no lower-trust product entrypoint, but the correctness gap was hardened rather than suppressed. No alert dismissal or security/containment success is claimed; new-head CodeQL/full/CI/reviews remain owed. The previous Fef6 full1051.8714s/breadth58 passed with its recorded exclusions, not as this changed head's qualification.

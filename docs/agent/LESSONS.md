@@ -451,3 +451,12 @@ block; a stage run on the wrong tier is a lesson here.
 - **evidence:** Frozen filesystem RED2/3 became GREEN3/3; delivery96/96 and unchanged walker16/16 pass. The01fc full489.746s failure remains failed. Runtime and previous assertions are byte-identical.
 - **landing:** pending — require at least five original evidence records before snapshotting; no gate or ceiling change. New full/breadth, protected landing and separate activation remain required.
 - **status:** pending
+
+
+### L50 — Snapshot a checked file through its opened object
+- **date:** 2026-10-31
+- **lane:** mac
+- **incident:** CodeQL identified the fixture snapshot's separate lstat/path-read operations. Controlled path replacement could make the snapshot associate original metadata with different bytes.
+- **evidence:** Real filesystem RED2/5 became GREEN5/5; delivery96/96 passes with prior assertions and runtime bytes preserved.
+- **landing:** pending — no-follow/nonblocking open, original/opened identity checks, descriptor read, post-read identity checks and guaranteed owned close. Preserve recursive fixture metadata; no scanner waiver or generic containment claim. New full/CI/CodeQL and protected reviews still apply.
+- **status:** pending

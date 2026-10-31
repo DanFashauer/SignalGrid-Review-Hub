@@ -1,5 +1,6 @@
 import type { Role } from "@workspace/signalgrid-core";
 import type { ClaimMapping } from "./claims";
+import { MAX_CLOCK_TOLERANCE_SEC } from "./jwt";
 
 /**
  * Enterprise (OIDC) auth is GATED OFF by default. It turns on only when the
@@ -82,6 +83,12 @@ export function loadEnterpriseAuthConfig(env: NodeJS.ProcessEnv = process.env): 
   const toleranceTrimmed = env.OIDC_CLOCK_TOLERANCE_SEC?.trim();
   const toleranceRaw = toleranceTrimmed ? Number(toleranceTrimmed) : NaN;
   const clockToleranceSec = Number.isFinite(toleranceRaw) && toleranceRaw >= 0 ? Math.floor(toleranceRaw) : 60;
+  if (clockToleranceSec > MAX_CLOCK_TOLERANCE_SEC) {
+    return {
+      status: "invalid",
+      reason: `OIDC_CLOCK_TOLERANCE_SEC must be at most ${MAX_CLOCK_TOLERANCE_SEC} seconds (got ${clockToleranceSec}); it allows for clock skew, it does not extend a token's lifetime.`,
+    };
+  }
 
   return {
     status: "enabled",

@@ -415,3 +415,12 @@ block; a stage run on the wrong tier is a lesson here.
 - **evidence:** Frozen5/3 RED became8/0; current74/0 under actual network denial includes real Git original-merge/current-clearance binding, distinct successor IDs, wrong-ID refusal and no publication during readback. Existing staged265/265 assertions remain unchanged.
 - **landing:** pending — only an independent complete parent and exact canonical cleared-hand blob permit one different notification; no coding-task, grant or budget is renewed. PR #1698 still requires full current-head gates and natural canonical delivery proof.
 - **status:** pending
+
+
+### L46 — An available kernel guard is not permission to replay an unfinished tick
+- **date:** 2026-10-31
+- **lane:** mac
+- **incident:** A second linked-checkout tick could steal the directory between mkdir and PID publication; the original EXIT trap could then remove another holder. PID absence also erased unresolved ownership.
+- **evidence:** Independent disposable source acceptance first failed11 of12 cases, then passed12/12 with actual Mac network denial and positively awaited original children. The portable delivery checker passed84/84, zero skips, preserving all original assertion expressions. Its first77/7 result remains failed: command-string Bash fixture launches were corrected to actual script files matching production; the runtime parent-identity check was retained.
+- **landing:** pending — a separately initialized persistent FD8 guard and immutable ownership records fence the tick. Legacy locks and OPEN/corrupt slots stay held. CLOSED records authorized lease finalization, not an independent parent exit, accepted task, provider cleanup or retry grant. Full current-head qualification and protected landing precede separate activation and natural heartbeat proof.
+- **status:** pending

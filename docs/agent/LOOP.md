@@ -2321,3 +2321,12 @@ something alongside a life.
 Everything else in this repository is finished enough. If a month passes and
 both are still zero, the problem is not the product, the doctrine, the gates or
 the plan - and no amount of work in any tool will fix it.
+
+
+## Mac transport guard — source correction L46
+
+The shared record store also contains a persistent identity-pinned tick guard. Only the separate explicit store initializer creates it. Normal ticks open that file read-only and retain FD8 while the existing Perl/Fcntl primitive serializes linked checkouts; they never unlink the shared guard or reap a PID file.
+
+An existing legacy tick.lock, missing/corrupt ownership, or an unfinished OPEN slot refuses work even if the kernel guard is available. OPEN is committed and read back before work. Exact original ownership and immutable finalization records precede CLOSED. Signals observed before normal finalization retain OPEN. CLOSED is lease finalization, not an independently observed parent terminal, task acceptance, provider quiet, canonical delivery or authority to retry an old attempt; those remain separately evidenced.
+
+L46 has actual84 portable delivery controls and12 independent Mac subprocess controls, all zero-fail/skip. These are source checks, not native coding or installed operation. Full current-head validation, fresh source reviews, protected landing, preservation audit and separate activation remain required; restoration needs a fresh natural canonical heartbeat.

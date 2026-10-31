@@ -528,3 +528,12 @@ GET/fetch-only and returns the cleared Git blob identity. That identity fences o
 new hand; old records remain immutable. Unknown, missing or unconfirmed attempts
 stay held across dates. Notification clearance never retries a coding task or
 renews its source, ownership, grant or model budget.
+
+
+### Shared tick serialization (L46)
+
+The one-time record-store initializer additionally creates tick.guard, its immutable identity marker and the initial ownership slot. A normal tick opens the guard read-only and retains its locked FD8; a missing or replaced guard is never recreated. Legacy tick.lock evidence is held without a PID liveness probe or automatic reaping.
+
+OPEN ownership is durably committed before work. Its exact token, caller, store and guard bind immutable opened/finalization records; only the original normal finalization can close that lease. Unknown or interrupted-before-finalization ownership remains held despite later kernel capacity. No shared guard pathname is deleted. The recorded exitTrapStatus is the status entering finalization, not an independent eventual-parent terminal or provider/delivery witness. Per-attempt no-replay fences remain unchanged.
+
+The operator correction has84 passing portable delivery controls and12 independent passing Mac subprocess cases with zero failures/skips. It does not initialize production state, activate the source, prove native coding or restore a heartbeat. Preserve legacy evidence, complete all current-head source/CI/protection requirements, then separately audit and activate before observing a natural canonical Mac heartbeat.

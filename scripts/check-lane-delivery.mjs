@@ -2,7 +2,7 @@
 // Schema-gate and gh fixtures isolate transport; the real gates run separately.
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
-import { chmodSync, existsSync, linkSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, renameSync, statSync, symlinkSync, utimesSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, linkSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, renameSync, statSync, symlinkSync, utimesSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
@@ -483,20 +483,147 @@ for(const kind of ['missing-marker','corrupt-marker','missing-directory','replac
  const f=setup();let child,closed;
  try {
   const tick=readFileSync(join(ROOT,'scripts/mac/lane-tick.sh'),'utf8');
-  const start=tick.indexOf('TICK_LOCK='),end=tick.indexOf('# An UNCHANGED tick',start);assert.ok(start>=0&&end>start);
+  const start=tick.indexOf('# ── one tick at a time'),end=tick.indexOf('# An UNCHANGED tick',start);assert.ok(start>=0&&end>start);
   const observed=run(process.execPath,[join(f.root,'scripts/lib/lane-attempt-store.mjs'),'path',f.root],f.root);assert.equal(observed.status,0,observed.stderr);
-  const prefix=`set -u\nRECORD_DIR=${q(observed.stdout.trim())}\nsay(){ printf '%s\\n' "$1"; }\n${tick.slice(start,end)}`;
+  const prefix=`set -u\nREPO_ROOT="$FIXTURE_CHECKOUT"\nRECORD_DIR=${q(observed.stdout.trim())}\nsay(){ printf '%s\\n' "$1"; }\n${tick.slice(start,end)}`;
   const one=join(f.parent,'tmp-one'),two=join(f.parent,'tmp-two');mkdirSync(one);mkdirSync(two);
-  child=spawn('/bin/bash',['-c',prefix+"printf 'OWNED_LOCK_READY\\n'\nread -r release\n"],{cwd:f.root,env:{PATH:'/usr/bin:/bin',TMPDIR:one},stdio:['pipe','pipe','pipe']});
+  const ownerScript=join(f.parent,'live-lock-owner.sh'),contenderScript=join(f.parent,'live-lock-contender.sh');
+  writeFileSync(ownerScript,prefix+"printf 'OWNED_LOCK_READY\\n'\nread -r release\n",{flag:'wx',mode:0o600});
+  writeFileSync(contenderScript,prefix+"printf 'SECOND_ACQUIRED\\n'\n",{flag:'wx',mode:0o600});
+  child=spawn('/bin/bash',[ownerScript],{cwd:f.root,env:{PATH:dirname(process.execPath)+':/usr/bin:/bin',TMPDIR:one,FIXTURE_CHECKOUT:f.root},stdio:['pipe','pipe','pipe']});
   closed=new Promise((resolve,reject)=>{child.on('error',reject);child.on('exit',code=>resolve(code));});
   await new Promise((resolve,reject)=>{let text='';child.stdout.on('data',bytes=>{text+=bytes;if(text.includes('OWNED_LOCK_READY'))resolve();});child.on('error',reject);child.on('exit',code=>reject(Error('original owned lock child exited before readiness: '+code)));});
-  const other=run('/bin/bash',['-c',prefix+"printf 'SECOND_ACQUIRED\\n'\n"],f.linked,{TMPDIR:two});
+  const other=run('/bin/bash',[contenderScript],f.linked,{TMPDIR:two,FIXTURE_CHECKOUT:f.linked});
   assert.equal(other.status,0,other.stderr);assert.match(other.stdout,/another tick/);assert.doesNotMatch(other.stdout,/SECOND_ACQUIRED/);
   child.stdin.end('release\n');assert.equal(await closed,0,'original owned lock child must complete normally');
   passed++;console.log('PASS primary and linked tick with distinct TMPDIR share one actual live lock');
  } catch(error){failed++;console.error('FAIL shared live tick lock: '+error.message);}
  finally {if(child&&!child.stdin.destroyed)child.stdin.end('release\n');if(closed)await closed;rmSync(f.parent,{recursive:true,force:true});}
 }
+
+// Real FD8 ownership regressions use only the disposable linked checkouts above.
+// The separate host suite supplies local heavyweight admission. These metadata
+// fixtures do not claim provider containment, host admission, or network denial.
+function leaseTree(path) {
+ if(!existsSync(path))return null;
+ const entries=[];
+ function visit(p,relative){const s=lstatSync(p),row={path:relative,dev:s.dev,ino:s.ino,mode:s.mode,nlink:s.nlink};
+  if(s.isFile())row.bytes=readFileSync(p).toString('hex');
+  else if(s.isDirectory())for(const name of readdirSync(p).sort())visit(join(p,name),relative+'/'+name);
+  entries.push(row);
+ }
+ visit(path,'.');return entries;
+}
+function leaseContext(f){
+ const module=join(f.root,'scripts/lib/lane-attempt-store.mjs');
+ const found=run(process.execPath,[module,'path',f.root],f.root);assert.equal(found.status,0,found.stderr);
+ const store=found.stdout.trim(),guard=join(store,'tick.guard'),slot=join(store,'tick.slot.json');
+ const source=readFileSync(join(ROOT,'scripts/mac/lane-tick.sh'),'utf8');
+ const a=source.indexOf('# ── one tick at a time'),b=source.indexOf('# An UNCHANGED tick',a);assert.ok(a>=0&&b>a);
+ const preload=join(f.parent,'ownership-gate.cjs');
+ // Instrument only the boundary BEFORE a real source write. Kernel flock and
+ // every filesystem operation/decision remain actual. One gate spans the
+ // synchronous helper processes of this single Bash invocation.
+ writeFileSync(preload,`const fs=require('node:fs'),open=fs.openSync,write=fs.writeFileSync,close=fs.closeSync;
+ const store=process.env.TICK_TEST_STORE+'/',mode=process.env.TICK_TEST_GATE_MODE;
+ function gate(p){if(typeof p!=='string'||!p.startsWith(store)||!mode)return;
+  if(mode==='owner'&&!/^tick-[0-9a-f]{32}\\.opened\\.json$/.test(p.slice(store.length)))return;
+  try{const fd=open(process.env.TICK_TEST_GATE_USED,'wx',0o600);close(fd)}catch(e){if(e.code==='EEXIST')return;throw e}
+  fs.writeSync(4,JSON.stringify({event:mode==='owner'?'BEFORE_OWNER':'BEFORE_SLOT',path:p})+'\\n');
+  const c=Buffer.alloc(1);while(true){if(!fs.readSync(0,c,0,1,null))throw Error('fixture acquisition gate closed');if(c[0]===10)break;}
+ }
+ fs.openSync=function(...v){const f=v[1],w=typeof f==='number'?Boolean(f&(fs.constants.O_WRONLY|fs.constants.O_RDWR|fs.constants.O_CREAT)):/[wa+]/.test(String(f));if(w)gate(v[0]);return Reflect.apply(open,this,v)};
+ fs.writeFileSync=function(...v){gate(v[0]);return Reflect.apply(write,this,v)};
+ require('node:module').syncBuiltinESMExports();\n`);
+ const children=[];
+ function start(label,{checkout=f.root,gate=''}={}){
+  const temp=join(f.parent,label+'-tmp');mkdirSync(temp);
+  const script=`set -u\nREPO_ROOT="$FIXTURE_CHECKOUT"\nRECORD_DIR="$TICK_TEST_STORE"\nsay(){ printf '%s\\n' "$1"; }\n${source.slice(a,b)}\nprintf '{"event":"ENTER"}\\n' >&4\nread -r release\nexit 0\n`;
+  const env={PATH:dirname(process.execPath)+':/usr/bin:/bin',HOME:f.parent,TMPDIR:temp,
+   GIT_CONFIG_NOSYSTEM:'1',GIT_CONFIG_GLOBAL:'/dev/null',FIXTURE_CHECKOUT:checkout,
+   TICK_TEST_STORE:store,TICK_TEST_GATE_MODE:gate,TICK_TEST_GATE_USED:join(f.parent,label+'-gate-used'),
+   NODE_OPTIONS:'--require='+preload};
+  // Match the real launchd entry and the independent subprocess acceptance:
+  // Bash reads a file, so command substitution retains the original shell PPID.
+  const scriptFile=join(f.parent,label+'-tick-lock.sh');writeFileSync(scriptFile,script,{flag:'wx',mode:0o600});
+  const child=spawn('/bin/bash',[scriptFile],{cwd:checkout,env,stdio:['pipe','pipe','pipe','ignore','pipe']});
+  const state={child,events:[],pending:[],stdout:'',stderr:'',result:null};children.push(state);
+  state.closed=new Promise((resolve,reject)=>{child.on('error',reject);child.on('close',(code,signal)=>{
+   state.result={code,signal};for(const waiter of state.pending.splice(0))waiter({event:'CLOSED',code,signal});resolve(state.result);
+  });});
+  child.stdout.on('data',bytes=>{state.stdout+=bytes});child.stderr.on('data',bytes=>{state.stderr+=bytes});
+  let buffer='';child.stdio[4].on('data',bytes=>{buffer+=bytes;let at;
+   while((at=buffer.indexOf('\n'))>=0){const line=buffer.slice(0,at);buffer=buffer.slice(at+1);const event=JSON.parse(line);
+    if(state.pending.length)state.pending.shift()(event);else state.events.push(event);
+   }
+  });
+  state.next=()=>{if(state.events.length)return Promise.resolve(state.events.shift());if(state.result)return Promise.resolve({event:'CLOSED',...state.result});
+   return new Promise((resolve,reject)=>{let done=false;const timer=setTimeout(()=>{if(!done){done=true;reject(Error('original fixture event not obtained: '+label));}},20000);
+    state.pending.push(event=>{if(!done){done=true;clearTimeout(timer);resolve(event)}});
+   });};
+  state.resume=()=>{if(!child.stdin.destroyed)child.stdin.write('continue\n')};
+  return state;
+ }
+ return {store,guard,slot,children,start,
+  state:()=>JSON.parse(readFileSync(slot,'utf8')).state,
+  kernelAvailable:()=>{const r=run('/usr/bin/perl',['-MFcntl=:flock','-e','open(my $f,"<",$ARGV[0]) or die $!; exit(flock($f,LOCK_EX|LOCK_NB)?0:17);',guard],f.root);assert.equal(r.status,0,r.stderr)},
+  async cleanup(){
+   if(existsSync(store))chmodSync(store,0o700);
+   for(const item of children)if(!item.child.stdin.destroyed)item.child.stdin.end('continue\n'.repeat(4));
+   // Original close handles include stdio completion. No PID probing, detached
+   // replacement, timeout cleanup claim, forced signal, or unknown replay.
+   await Promise.all(children.map(item=>item.closed));
+  }
+ };
+}
+async function leaseControl(label,verify){
+ const f=setup();let c;
+ try{c=leaseContext(f);await verify(f,c);passed++;console.log('PASS '+label)}
+ catch(error){failed++;console.error('FAIL '+label+': '+error.message);if(c)for(const item of c.children)console.error(item.stdout+item.stderr)}
+ finally{if(c)await c.cleanup();rmSync(f.parent,{recursive:true,force:true})}
+}
+await leaseControl('actual FD8 excludes another checkout before the first ownership write',async(f,c)=>{
+ const a=c.start('startup-A',{gate:'slot'});assert.equal((await a.next()).event,'BEFORE_SLOT');assert.equal(c.state(),'READY');
+ const original=leaseTree(c.store),b=c.start('startup-B',{checkout:f.linked});assert.equal((await b.next()).event,'CLOSED');await b.closed;
+ assert.deepEqual(leaseTree(c.store),original);a.resume();assert.equal((await a.next()).event,'ENTER');a.resume();assert.equal((await a.closed).code,0);assert.equal(c.state(),'CLOSED');
+});
+for(const kind of ['missing','corrupt','known-finished'])await leaseControl('preexisting legacy tick lock stays held with '+kind+' PID',async(f,c)=>{
+ const old=join(c.store,'tick.lock');mkdirSync(old);
+ if(kind==='corrupt')writeFileSync(join(old,'pid'),'not-a-pid\n');
+ if(kind==='known-finished'){const r=run('/usr/bin/true',[],f.root);assert.equal(r.status,0,r.stderr);writeFileSync(join(old,'pid'),String(r.pid)+'\n')}
+ const original=leaseTree(c.store),b=c.start('unknown-'+kind);assert.equal((await b.next()).event,'CLOSED');await b.closed;
+ assert.deepEqual(leaseTree(c.store),original,'an existing unknown lock is never reaped from PID evidence');
+});
+await leaseControl('failed immutable owner publication leaves OPEN and denies later work',async(f,c)=>{
+ const a=c.start('owner-failure-A',{gate:'owner'});assert.equal((await a.next()).event,'BEFORE_OWNER');assert.equal(c.state(),'OPEN');
+ chmodSync(c.store,0o500);a.resume();assert.equal((await a.next()).event,'CLOSED');await a.closed;chmodSync(c.store,0o700);
+ assert.equal(c.state(),'OPEN');c.kernelAvailable();const original=leaseTree(c.store),b=c.start('owner-failure-B');assert.equal((await b.next()).event,'CLOSED');await b.closed;assert.deepEqual(leaseTree(c.store),original);
+});
+await leaseControl('normal exit cannot alter another owner after persistent-store replacement',async(f,c)=>{
+ const a=c.start('replacement-A');assert.equal((await a.next()).event,'ENTER');
+ const kept=c.store+'.preserved';renameSync(c.store,kept);renameSync(c.store+'.json',kept+'.json');
+ const initialized=run(process.execPath,[join(f.root,'scripts/lib/lane-attempt-store.mjs'),'init',f.root],f.root);assert.equal(initialized.status,0,initialized.stderr);
+ const b=c.start('replacement-B',{checkout:f.linked});assert.equal((await b.next()).event,'ENTER');const original=leaseTree(c.store);
+ a.resume();await a.closed;assert.deepEqual(leaseTree(c.store),original,'original owner cannot release a replacement namespace');
+ const d=c.start('replacement-C');assert.equal((await d.next()).event,'CLOSED');await d.closed;
+ b.resume();assert.equal((await b.closed).code,0);assert.equal(c.state(),'CLOSED');assert.equal(JSON.parse(readFileSync(join(kept,'tick.slot.json'),'utf8')).state,'OPEN');
+});
+for(const [signal,number]of [['SIGKILL',9],['SIGTERM',15]])await leaseControl('actual '+signal+' before terminal never clears OPEN',async(f,c)=>{
+ const a=c.start('signal-A');assert.equal((await a.next()).event,'ENTER');assert.equal(c.state(),'OPEN');
+ // ENTER is after all synchronous ownership helpers; only this exact owned
+ // Bash is waiting in the fixture body. It has no task/provider/model child.
+ assert.equal(a.child.kill(signal),true);const terminal=await a.closed;assert.ok(terminal.signal===signal||terminal.code===128+number);
+ assert.equal(c.state(),'OPEN');c.kernelAvailable();const original=leaseTree(c.store),b=c.start('signal-B',{checkout:f.linked});assert.equal((await b.next()).event,'CLOSED');await b.closed;assert.deepEqual(leaseTree(c.store),original);
+});
+await leaseControl('malformed durable ownership slot stays held with kernel capacity available',async(f,c)=>{
+ writeFileSync(c.slot,'{"state":');const original=leaseTree(c.store);c.kernelAvailable();const b=c.start('malformed-slot');assert.equal((await b.next()).event,'CLOSED');await b.closed;assert.deepEqual(leaseTree(c.store),original);
+});
+await leaseControl('normal own completion retains guard identity and admits the next linked-checkout tick',async(f,c)=>{
+ const guard=leaseTree(c.guard),a=c.start('normal-A');assert.equal((await a.next()).event,'ENTER');assert.equal(c.state(),'OPEN');
+ const original=leaseTree(c.store),b=c.start('normal-B',{checkout:f.linked});assert.equal((await b.next()).event,'CLOSED');await b.closed;assert.deepEqual(leaseTree(c.store),original);
+ a.resume();assert.equal((await a.closed).code,0);assert.equal(c.state(),'CLOSED');assert.deepEqual(leaseTree(c.guard),guard);
+ const d=c.start('normal-C',{checkout:f.linked});assert.equal((await d.next()).event,'ENTER');d.resume();assert.equal((await d.closed).code,0);assert.equal(c.state(),'CLOSED');assert.deepEqual(leaseTree(c.guard),guard);
+});
 
 }
 

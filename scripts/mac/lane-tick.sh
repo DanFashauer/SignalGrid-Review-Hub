@@ -81,23 +81,50 @@ say() { printf '%s  %s\n' "$LOG_PREFIX" "$1"; }
 RECORD_DIR="$(node "$REPO_ROOT/scripts/lib/lane-attempt-store.mjs" path "$REPO_ROOT")" || exit 1
 
 # ── one tick at a time ───────────────────────────────────────────────────────
-# launchd never overlaps its own label, but a PERSON running this script by hand while
-# the launchd tick is mid-run would race it on one whole-file JSON state (DR-056). mkdir
-# is atomic and needs no flock (bash 3.2). A lock whose holder is DEAD is stale and is
-# cleared here — a crashed tick must never latch every later tick into silence.
-TICK_LOCK="$RECORD_DIR/tick.lock"
-if ! mkdir "$TICK_LOCK" 2>/dev/null; then
-  _holder="$(cat "$TICK_LOCK/pid" 2>/dev/null || true)"
-  if [ -n "$_holder" ] && kill -0 "$_holder" 2>/dev/null; then
-    say "another tick (pid $_holder) holds $TICK_LOCK — exiting; the running tick delivers the heartbeat"
+# BEGIN OWNED TICK GUARD
+# Linked checkouts share a persistent, identity-pinned descriptor lock. Only
+# explicit store initialization creates it; opening read-only cannot recreate it.
+# An unfinished ownership record or an old tick.lock stays held for exact readback.
+# A PID, process absence or an available kernel lock never clears that evidence.
+# CLOSED records authorized lease finalization, not an independent parent exit,
+# accepted task, canonical delivery or provider-cleanup witness.
+TICK_LOCK_ROOT="$REPO_ROOT"
+TICK_LOCK_HELPER="$REPO_ROOT/scripts/lib/lane-attempt-store.mjs"
+TICK_GUARD_PATH="$(node "$TICK_LOCK_HELPER" tick-guard "$TICK_LOCK_ROOT")" || exit 1
+exec 8<"$TICK_GUARD_PATH" || { say "tick guard cannot be opened; READBACK ONLY"; exit 1; }
+TICK_OWNER_TOKEN="$(node "$TICK_LOCK_HELPER" tick-acquire "$TICK_LOCK_ROOT" "$$")"
+_tick_acquire_status=$?
+if [ "$_tick_acquire_status" != "0" ]; then
+  exec 8<&-
+  if [ "$_tick_acquire_status" = "75" ]; then
+    say "another tick owns the shared guard; no work started"
     exit 0
   fi
-  say "stale tick lock (holder ${_holder:-unknown} is gone) — clearing it"
-  rm -f "$TICK_LOCK/pid"; rmdir "$TICK_LOCK" 2>/dev/null || true
-  mkdir "$TICK_LOCK" 2>/dev/null || { say "could not take $TICK_LOCK — exiting"; exit 0; }
+  say "tick ownership is held or incomplete; no work started; READBACK ONLY"
+  exit 1
 fi
-printf '%s' "$$" > "$TICK_LOCK/pid"
-trap 'if declare -F sg_host_verify_release >/dev/null; then sg_host_verify_release; fi; rm -f "$TICK_LOCK/pid"; rmdir "$TICK_LOCK" 2>/dev/null' EXIT
+TICK_INTERRUPTED=0
+sg_tick_guard_cleanup() {
+  local _tick_exit=$?
+  trap - EXIT
+  if declare -F sg_host_verify_release >/dev/null; then sg_host_verify_release; fi
+  if [ "$TICK_INTERRUPTED" = "0" ] && [ "$_tick_exit" -lt 128 ]; then
+    if ! node "$TICK_LOCK_HELPER" tick-release "$TICK_LOCK_ROOT" "$TICK_OWNER_TOKEN" "$$" "$_tick_exit"; then
+      say "tick terminal ownership could not be committed; READBACK ONLY"
+      [ "$_tick_exit" != "0" ] || _tick_exit=1
+    fi
+  else
+    say "tick interrupted; original OPEN ownership remains held for readback"
+  fi
+  # Never unlink a shared guard or another owner's pathname.
+  exec 8<&-
+  exit "$_tick_exit"
+}
+trap 'TICK_INTERRUPTED=1; exit 129' HUP
+trap 'TICK_INTERRUPTED=1; exit 130' INT
+trap 'TICK_INTERRUPTED=1; exit 143' TERM
+trap sg_tick_guard_cleanup EXIT
+# END OWNED TICK GUARD
 
 # An UNCHANGED tick heartbeats at most once per this many minutes, so a short launchd
 # interval does not create a protected PR every run. The default leaves an hour

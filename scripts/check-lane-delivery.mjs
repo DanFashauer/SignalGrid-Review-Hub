@@ -15,7 +15,7 @@ let passed = 0;
 let failed = 0;
 
 function fixture({ lane = "mac", reject = false, loseResponse = false, failBeforePush = false, gateFails = false,
-  readbackCanonicalRace = false, fixedClock = false, readbackState = "MERGED", readbackMismatch = false, ghMissing = false, ghAuthFails = false, ghCreateFails = false, ghAutoFails = false, tick = false, ...tickOptions } = {}) {
+  readbackCanonicalRace = false, fixedClock = false, readbackState = "MERGED", readbackMismatch = false, ghMissing = false, ghAuthFails = false, ghCreateFails = false, ghAutoFails = false, wakeMailbox = false, tick = false, ...tickOptions } = {}) {
   if (tick) return heartbeatFixture(tickOptions);
   const root = mkdtempSync(join(tmpdir(), "sg-delivery-test-"));
   const repo = join(root, "repo"), remote = join(root, "remote.git"), bin = join(root, "bin");
@@ -45,6 +45,8 @@ function fixture({ lane = "mac", reject = false, loseResponse = false, failBefor
   file(join(repo, "docs/agent/SURFACE_REVIEW_COVERAGE.md"), "fixture\n");
   file(join(repo, "docs/agent/scheduled-routines.json"), JSON.stringify({ routines: [{ id: "mac-lane-tick", heartbeatPath: "artifacts/agent-heartbeats/mac-lane-tick.json" }] }));
   file(join(repo, "artifacts/agent-heartbeats/mac-lane-tick.json"), JSON.stringify({ firedAt: "2026-10-24T07:30:38Z", result: "old fixture" }));
+  if(wakeMailbox==="malformed")file(join(repo,"docs/agent/lane-mailbox.json"),"{");
+  if(wakeMailbox==="directory")file(join(repo,"docs/agent/lane-mailbox.json/.keep"),"fixture\n");
   git(["add", "."]); git(["commit", "-qm", "fixture baseline"]);
   const base = git(["rev-parse", "HEAD"]);
   git(["init", "-q", "--bare", remote]);
@@ -67,7 +69,7 @@ else if(a[0]==='auth'&&a[1]==='status'){${ghAuthFails ? "process.exit(1)" : "pro
   chmodSync(gh, 0o755);
   const records = (p) => existsSync(p) ? readFileSync(p, "utf8").trim().split("\n").filter(Boolean).map(JSON.parse) : [];
   return { root, repo, base, git, run(extra = []) {
-    return spawnSync(process.execPath, [join(repo, "scripts/lane-deliver.mjs"), "heartbeat", "mac-lane-tick", "acted: fixture", "--no-wake", ...extra], { cwd: repo, env, encoding: "utf8", timeout: 90000 });
+    return spawnSync(process.execPath, [join(repo, "scripts/lane-deliver.mjs"), "heartbeat", "mac-lane-tick", "acted: fixture", ...(wakeMailbox ? [] : ["--no-wake"]), ...extra], { cwd: repo, env, encoding: "utf8", timeout: 90000 });
   }, readback(path) {
     return spawnSync(process.execPath,[join(repo,"scripts/lane-deliver.mjs"),"readback",path],{cwd:repo,env,encoding:"utf8",timeout:90000});
   }, land() {
@@ -333,6 +335,17 @@ control("local replace refs cannot attest a topic absent from canonical",{readba
  const forged=f.git(["commit-tree",tree,"-p",p.head,"-m","disposable local graph shadow"]);
  f.git(["replace",f.base,forged]);
  const r=f.readback(receipt);assert.equal(r.status,3,"canonical ancestry must read real Git objects");assert.doesNotMatch(r.stdout,/canonical merge verified/);
+});
+
+for(const kind of ["malformed","directory"])control(`unusable optional wake metadata ${kind} preserves accepted submission`,{wakeMailbox:kind},f=>{
+ const r=f.run();
+ assert.equal(f.pushes().length,1);
+ assert.equal(f.ghCalls().filter(a=>a[0]==="pr"&&a[1]==="create").length,1);
+ assert.equal(f.ghCalls().filter(a=>a[0]==="pr"&&a[1]==="merge").length,1);
+ assert.equal(r.status,0,"already accepted PR submission is pending, never a prepublication refusal: "+r.stderr);
+ assert.equal(f.ghCalls().filter(a=>a[0]==="pr"&&a[1]==="comment").length,0);
+ assert.match(r.stdout,/wake.*(unavailable|no usable)/);
+ assert.match(r.stdout,/submitted.*canonical merge pending/);
 });
 
 console.log(`lane-delivery regression: ${passed} passed, ${failed} failed, 0 skipped`);

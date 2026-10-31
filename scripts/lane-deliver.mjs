@@ -221,10 +221,8 @@ const fetched = git(["fetch", "--quiet", "origin", MAINLINE]);
 if (fetched.code !== 0) die(`cannot fetch origin/${MAINLINE}: ${fetched.err.trim()} — a delivery needs the remote`, 1);
 const base = mustGit(["rev-parse", `origin/${MAINLINE}`], repo, "resolving mainline");
 let wt = mkdtempSync(join(tmpdir(), "sg-lane-deliver-"));
-// The worktree is removed on EVERY exit — a refusal (`die` → process.exit), a
-// dry run, a crash — not only on the happy path. `finally` does not run past
-// process.exit; an exit handler does, and spawnSync is synchronous inside it.
-// Left-behind worktrees were the first defect this script shipped with.
+// Refusals and dry runs use process.exit, so finally cannot clean their worktree.
+// The exit hook covers those exits; an abrupt kill may leave the owned worktree.
 function cleanup() {
   if (!wt) return;
   git(["worktree", "remove", "--force", wt], repo);
@@ -397,18 +395,18 @@ console.log(`  worktree    ${wt} @ ${base} (origin/${MAINLINE})`);
 
   // ── 7. wake the other lane: a comment on the standing mailbox PR ────────────
   if (!flags.noWake) {
-    const mailboxPath = join(repo, MAILBOX_FILE);
-    const mailbox = existsSync(mailboxPath) ? JSON.parse(readFileSync(mailboxPath, "utf8")) : null;
-    const prNumber = mailbox && Number.isInteger(mailbox.pr) && mailbox.pr > 0 ? mailbox.pr : null;
-    const url = prNumber && repoSlug ? `https://github.com/${repoSlug}/pull/${prNumber}` : null;
-    if (!url) {
-      console.log(`  wake        no mailbox PR declared in ${MAILBOX_FILE} — the other lane learns of this on its next fetch`);
-    } else {
-      const line = `${lane} lane published, pending protected merge: ${summary.join(", ")} — origin/${target} @ ${sha}`;
-      const gh = run("gh", ["--version"]);
-      const posted = gh.code === 0 ? run("gh", ["pr", "comment", String(prNumber), "--repo", repoSlug, "--body", line]) : null;
-      if (posted && posted.code === 0) console.log(`  wake        commented on the mailbox PR #${prNumber} — the other lane wakes on it`);
-      else console.log(`  wake        ${gh.code === 0 ? "gh could not comment" : "no gh on PATH"}; to wake the other lane NOW, comment on ${url}\n              (otherwise it sees this on its next hourly cycle)`);
+    try {
+      const prNumber = JSON.parse(readFileSync(join(repo, MAILBOX_FILE), "utf8"))?.pr;
+      if (!Number.isInteger(prNumber) || prNumber <= 0) {
+        console.log(`  wake        no usable mailbox PR found in ${MAILBOX_FILE} — the other lane learns of this on its next fetch`);
+      } else {
+        const line = `${lane} lane published, pending protected merge: ${summary.join(", ")} — origin/${target} @ ${sha}`;
+        const posted = run("gh", ["pr", "comment", String(prNumber), "--repo", repoSlug, "--body", line]);
+        if (posted.code === 0) console.log(`  wake        commented on the mailbox PR #${prNumber} — the other lane wakes on it`);
+        else console.log(`  wake        gh could not comment; to wake the other lane NOW, comment on https://github.com/${repoSlug}/pull/${prNumber}\n              (otherwise it sees this on its next hourly cycle)`);
+      }
+    } catch {
+      console.log("  wake        optional wake unavailable; protected PR submission remains pending; the other lane sees it on its next fetch");
     }
   }
   cleanup();

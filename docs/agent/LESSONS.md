@@ -370,3 +370,12 @@ block; a stage run on the wrong tier is a lesson here.
 - **evidence:** Actual original block0/1; corrected integrated suite40/40, with real plain/special-path one-attempt assertions and no command-substitution markers.
 - **landing:** pending — pass dynamic paths as environment values and reference quoted variables; current-head qualification and actual heartbeat proof remain in PR #1698.
 - **status:** pending
+
+
+### L41 — A late optional observation cannot undo an accepted submission
+- **date:** 2026-10-31
+- **lane:** mac
+- **incident:** Malformed or unreadable wake metadata threw after a PR and auto-merge request were accepted, falsely classifying the delivery as a prepublication failure.
+- **evidence:** Actual frozen CLI baseline 40/2; final 42/0 under network denial, asserting successful push/create/merge before the outcome boundary. No source assertion relaxed.
+- **landing:** pending — optional wake errors warn, retain pending submission semantics and never cause a resend; PR #1698 still requires current-head gates and natural heartbeat readback.
+- **status:** pending

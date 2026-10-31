@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-10-31T14:11:18.254Z",
-  "result": "acted: no cloud wave (builds route through the local brain queue, DR-064). Owner-requested cloud help: Claude review of #1698 d94a6f25 posted FIX-NEEDED (6544375189 + 6544383769; owner decision (a) recover-by-itself not yet in code; tick.lock race confirmed); read-only estate triage of 71 open PRs + 186 PR-less branches handed to the brain on #439 (6544423459): 1 merge-ready after refresh (#1354), 1 stale (#1569), 37 owner-decision, 30 needs-work, 26 branches safe to prune; in flight H/S/O = 0/0/0; owner queue: dependabot batch (10), DR PRs #1050 #1083 #1246 #1322 #1357 #1433; #1698 Mac-owned, draft"
+  "firedAt": "2026-10-31T16:11:00.521Z",
+  "result": "acted: no cloud wave (builds route through the local brain queue). Dependabot recreate (owner decision 14:15Z) rebuilt all 9 at 14:18Z: #1562 npm minor+patch group gating SUCCESS (brain to land via the normal flow); #1379 github-actions group gating FAILURE (brain to diagnose); the 7 majors #1381-#1387 have NO gating run on their rebuilt heads (workflow not triggered for them; brain to check why before any landing). #1698 unchanged at d94a6f25 (Mac exclusive tick.lock fix in progress; cloud re-review queued on the next head per owner). in flight H/S/O = 0/0/0; owner queue: DR PRs #1050 #1083 #1246 #1322 #1357 #1433"
 }

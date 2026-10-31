@@ -42,6 +42,28 @@
 // gate that quietly degrades to a weaker credential is the fail-open shape golden
 // rule 2 forbids, so `tokenProblem` below refuses to run unauthenticated in CI.
 //
+// A FILTERED LISTING IS NOT THE LIST OF RUNS (2026-10-22). At 16:17Z the gating job
+// failed on PR #1592 (job 119941251839) with "the Actions API returned NO completed
+// runs" while the sweep was healthy. Measured at 16:23Z, the same repository answered
+// `workflows/scheduled-verification.yml/runs?status=completed` with total_count=0 and
+// the identical query WITHOUT the filter with total_count=110, the first 30 runs all
+// `status: "completed"` when read client-side. mac-lane.yml read 0 against 15, and
+// `status=failure` read 0; only the repo-wide `/actions/runs?status=completed` still
+// answered (2500). Re-measured at 16:25Z the filter had flapped back (110 on three
+// tries) while the repo-wide one read 0 once and 2500 after — so GitHub's `status`
+// query parameter is intermittently empty here, a failure that no retry in this file
+// recovers (the 200 is a SUCCESS, just an empty one) and that reddens every open PR
+// while it lasts. The cause is GitHub's and is not established here.
+//
+// So the listing carries no `status` parameter and the completed subset is taken
+// CLIENT-SIDE (`completedRuns`), in the first listing and in the `created>=` second
+// one — the second query shared the filter, so it could never overturn the first.
+// An unfiltered page can hold queued and in-progress runs at its head, so the page is
+// requested at twice the window (capped at GitHub's 100) and the first RUNS_TO_INSPECT
+// COMPLETED runs of it are inspected: the inspected window stays what it was. Fail-closed
+// is unchanged: an empty listing, or one holding no completed run (a run with no
+// `status` field does not count as completed), is "could not determine", never a pass.
+//
 // WHAT THIS DELIBERATELY DOES NOT DO. It does not judge whether the sweep's
 // FINDINGS are acceptable — only that the sweep ran and succeeded recently
 // enough. A sweep that runs daily and reports real failures is healthy by this
@@ -72,6 +94,18 @@ const STALE_AFTER_HOURS = 48;
 // runs is over a week of history; if no success appears in that window the
 // harness has been dark long enough that the exact age stops mattering.
 const RUNS_TO_INSPECT = 10;
+
+// The listing is requested WITHOUT a `status` filter (see the 2026-10-22 note in the
+// header), so queued and in-progress runs share the page with the completed ones. Ask
+// for twice the window, capped at GitHub's page maximum of 100, and take the first
+// RUNS_TO_INSPECT completed runs from it — in-progress runs at the head of the page
+// then cost nothing from the inspected window unless they outnumber the completed ones.
+const LISTING_PAGE_SIZE = Math.min(100, RUNS_TO_INSPECT * 2);
+
+// Tally for `--self-test`: every self-test block below adds what it ran and what held.
+// A block that fails exits 1 before the tally is printed, so the printed N/N is only
+// reached when nothing failed. It is a count of checks that ran, not a pinned total.
+const SELF_TEST = { ran: 0, passed: 0 };
 
 const IN_CI = Boolean(process.env.CI || process.env.GITHUB_ACTIONS);
 const TOKEN = process.env.GITHUB_TOKEN || process.env.GH_TOKEN || "";
@@ -127,6 +161,8 @@ export function evaluateLiveness({ lastSuccessIso, nowMs, staleAfterHours }) {
     const p = tokenProblem(input);
     if ((p === null) !== expectNull || (p !== null && !/github\.token/.test(p))) bad.push([name]);
   }
+  SELF_TEST.ran += cases.length + 4;
+  SELF_TEST.passed += cases.length + 4 - bad.length;
   if (bad.length > 0) {
     console.error(
       "✗ SELF-TEST FAILED — these cases did not behave as required:\n" +
@@ -319,8 +355,10 @@ async function api(path) {
   };
 
   const t = async (name, run) => {
+    SELF_TEST.ran += 1;
     try {
       await run();
+      SELF_TEST.passed += 1;
     } catch (err) {
       failures.push(`${name}: ${err.message}`);
     }
@@ -500,10 +538,148 @@ export function latestSweepSuccessInRun(jobs, prefix = SWEEP_JOB_PREFIX) {
     ],
   ];
   const bad = cases.filter(([, got, want]) => JSON.stringify(got) !== JSON.stringify(want));
+  SELF_TEST.ran += cases.length;
+  SELF_TEST.passed += cases.length - bad.length;
   if (bad.length > 0) {
     console.error(
       "✗ SELF-TEST FAILED — the shard rule no longer behaves as required:\n" +
         bad.map(([name, got]) => `    · ${name}: got ${JSON.stringify(got)}`).join("\n"),
+    );
+    process.exit(1);
+  }
+}
+
+// Self-test for the stale-listing confirmation — a fake API, no network.
+{
+  const NOW = Date.parse("2026-09-30T14:30:00Z");
+  const jobsFor = (at) => ({ jobs: [{ name: `${SWEEP_JOB_PREFIX} (0)`, conclusion: "success", completed_at: at }] });
+  const fake = (primaryRuns, confirmRuns) => {
+    const calls = [];
+    const f = async (path) => {
+      calls.push(path);
+      const m = path.match(/\/runs\/(\d+)\/jobs/);
+      if (m) return jobsFor(m[1] === "1" ? "2026-09-03T16:50:00Z" : "2026-09-29T14:20:00Z");
+      return { workflow_runs: path.includes("created=") ? confirmRuns : primaryRuns };
+    };
+    return { f, calls };
+  };
+  // `status: "completed"` is on the fixtures because the listing is no longer filtered
+  // server-side: a run without it is not counted as completed (see `completedRuns`).
+  const stale = [{ id: 1, status: "completed", created_at: "2026-09-03T16:38:00Z" }];
+  const fresh = [{ id: 2, status: "completed", created_at: "2026-09-29T14:06:00Z" }];
+  const run = async (p, c) => {
+    const fk = fake(p, c);
+    const got = await resolveSweep(fk.f, { nowMs: NOW, staleAfterHours: 48, log: () => {} });
+    return { iso: got?.iso ?? null, listings: fk.calls.filter((x) => !x.includes("/jobs")).length };
+  };
+  const cases = [
+    ["a STALE first listing is confirmed against a second, which carries the fresh success", await run(stale, fresh), { iso: "2026-09-29T14:20:00Z", listings: 2 }],
+    ["a fresh first listing is never re-queried", await run(fresh, stale), { iso: "2026-09-29T14:20:00Z", listings: 1 }],
+    ["an EMPTY second listing leaves the red verdict standing", await run(stale, []), { iso: "2026-09-03T16:50:00Z", listings: 2 }],
+    ["an equally stale second listing leaves the red verdict standing", await run(stale, stale), { iso: "2026-09-03T16:50:00Z", listings: 2 }],
+    ["the confirming query is a DIFFERENT URL, carrying the created>= window", listingPath({ sinceIso: "2026-09-28T14:30:00Z" }).endsWith("&created=%3E%3D2026-09-28T14%3A30%3A00Z") && listingPath() !== listingPath({ sinceIso: "x" }), true],
+  ];
+  const bad = cases.filter(([, got, want]) => JSON.stringify(got) !== JSON.stringify(want));
+  SELF_TEST.ran += cases.length;
+  SELF_TEST.passed += cases.length - bad.length;
+  if (bad.length > 0) {
+    console.error(
+      "✗ SELF-TEST FAILED — the stale-listing confirmation no longer behaves as required:\n" +
+        bad.map(([name, got]) => `    · ${name}: got ${JSON.stringify(got)}`).join("\n"),
+    );
+    process.exit(1);
+  }
+}
+
+// Self-test for the listing SHAPE (2026-10-22) — a fake API that behaves like the one
+// measured that day: a listing path carrying ANY `status=` parameter answers an empty
+// 200 (`total_count: 0`), the unfiltered path answers the real runs. A gate that puts
+// the filter back is therefore handed nothing, exactly as it was live, and these cases
+// go red — a self-test that stays green without the fix would prove nothing.
+{
+  const NOW = Date.parse("2026-10-22T16:30:00Z");
+  const sweepJobs = (at) => ({ jobs: [{ name: `${SWEEP_JOB_PREFIX} (0)`, conclusion: "success", completed_at: at }] });
+  const otherJobs = { jobs: [{ name: "Daily verification", conclusion: "success", completed_at: "2026-10-22T12:00:00Z" }] };
+  const run = (id, status, at = "2026-10-22T04:00:00Z") => ({ id, status, created_at: at });
+  const isListing = (path) => !/\/runs\/\d+\/jobs/.test(path);
+  // `listings` is [first, second]; `jobsByRun` maps run id → jobs payload.
+  const fake = (listings, jobsByRun) => {
+    const paths = [];
+    const inspected = [];
+    const f = async (path) => {
+      paths.push(path);
+      const m = path.match(/\/runs\/(\d+)\/jobs/);
+      if (m) {
+        inspected.push(Number(m[1]));
+        return jobsByRun[m[1]] ?? { jobs: [] };
+      }
+      if (/[?&]status=/.test(path)) return { total_count: 0, workflow_runs: [] }; // the measured behaviour
+      const mine = path.includes("created=") ? listings[1] ?? [] : listings[0] ?? [];
+      return { total_count: mine.length, workflow_runs: mine };
+    };
+    return { f, paths, inspected, listingPaths: () => paths.filter(isListing) };
+  };
+  const resolve1 = async (fk) => resolveSweep(fk.f, { nowMs: NOW, staleAfterHours: 48, log: () => {} });
+
+  // (a) queued / in_progress / completed mixed: only the completed runs are inspected,
+  //     and the sweep success on the right one is found.
+  const mixed = fake(
+    [[run(101, "queued"), run(102, "in_progress"), run(103, "completed"), run(104, "completed")]],
+    { 101: sweepJobs("2026-10-22T16:00:00Z"), 102: sweepJobs("2026-10-22T16:00:00Z"), 103: otherJobs, 104: sweepJobs("2026-10-22T04:20:00Z") },
+  );
+  const mixedGot = await resolve1(mixed);
+
+  // (a2) the window is RUNS_TO_INSPECT COMPLETED runs even with in-progress runs at the
+  //      head: 3 in progress + 12 completed, none carrying a sweep job → exactly 10 inspected.
+  const headHeavy = fake(
+    [[run(1, "in_progress"), run(2, "queued"), run(3, "waiting"), ...Array.from({ length: 12 }, (_, i) => run(10 + i, "completed"))]],
+    {},
+  );
+  const headGot = await resolve1(headHeavy);
+
+  // (b) a non-empty listing holding no completed run fails closed as "could not determine",
+  //     inspects nothing, and a run with no `status` field does not count as completed.
+  const noneDone = fake([[run(201, "queued"), run(202, "in_progress"), run(203, "waiting"), { id: 204, created_at: "2026-10-22T03:00:00Z" }]], {});
+  const noneGot = await resolve1(noneDone);
+  const emptyListing = fake([[]], {});
+  const emptyGot = await resolve1(emptyListing);
+
+  // (c) the stale-listing confirmation: first listing stale, second (created>=) fresh.
+  //     NEITHER listing path may carry a status parameter, and both ask for the wide page.
+  const confirm = fake(
+    [[run(301, "completed", "2026-09-03T16:38:00Z")], [run(302, "completed", "2026-10-22T04:06:00Z")]],
+    { 301: sweepJobs("2026-09-03T16:50:00Z"), 302: sweepJobs("2026-10-22T04:20:00Z") },
+  );
+  const confirmGot = await resolve1(confirm);
+  const confirmListings = confirm.listingPaths();
+
+  const cases = [
+    ["(a) mixed statuses: only the COMPLETED runs are inspected", mixed.inspected, [103, 104]],
+    ["(a) mixed statuses: the success on the completed run is found", mixedGot?.iso ?? null, "2026-10-22T04:20:00Z"],
+    ["(a) the listing is requested without ANY status parameter", mixed.listingPaths().every((p) => !/[?&]status=/.test(p)), true],
+    ["(a) the page is requested at twice the window, capped at 100", listingPath().includes(`per_page=${LISTING_PAGE_SIZE}`) && LISTING_PAGE_SIZE === Math.min(100, RUNS_TO_INSPECT * 2), true],
+    ["(a2) 3 in-progress at the head + 12 completed → exactly RUNS_TO_INSPECT completed runs inspected", headHeavy.inspected.length, RUNS_TO_INSPECT],
+    ["(a2) …and the inspected ones are the first completed runs, not the in-progress heads", headHeavy.inspected.slice(0, 3), [10, 11, 12]],
+    ["(a2) no sweep job anywhere → could-not-look, not dark", headGot?.status, "could-not-look"],
+    ["(b) a non-empty listing with NO completed run → could-not-look", noneGot?.status, "could-not-look"],
+    ["(b) …naming that no completed run was among the listed ones", /4 run\(s\).*NO completed runs/.test(noneGot?.why ?? ""), true],
+    ["(b) …without inspecting a single run's jobs", noneDone.inspected.length, 0],
+    ["(b) an EMPTY listing still → could-not-look, naming NO completed runs", [emptyGot?.status, /NO completed runs/.test(emptyGot?.why ?? "")], ["could-not-look", true]],
+    ["(c) the stale first listing is confirmed and the second one's fresh success wins", [confirmGot?.iso ?? null, confirmListings.length], ["2026-10-22T04:20:00Z", 2]],
+    ["(c) NEITHER the first nor the created>= listing carries a status parameter", confirmListings.every((p) => !/[?&]status=/.test(p)), true],
+    ["(c) the second listing carries created>= and the same page size", [confirmListings[1]?.includes("created=%3E%3D"), confirmListings.every((p) => p.includes(`per_page=${LISTING_PAGE_SIZE}`))], [true, true]],
+    ["completedRuns: keeps order, drops non-completed and status-less runs, caps at the limit", completedRuns([run(1, "queued"), run(2, "completed"), { id: 3 }, run(4, "completed"), run(5, "completed")], 2).map((r) => r.id), [2, 4]],
+    ["completedRuns: a missing or malformed listing is empty, not a throw", [completedRuns(undefined), completedRuns({}), completedRuns(null)], [[], [], []]],
+  ];
+  const bad = cases.filter(([, got, want]) => JSON.stringify(got) !== JSON.stringify(want));
+  SELF_TEST.ran += cases.length;
+  SELF_TEST.passed += cases.length - bad.length;
+  if (bad.length > 0) {
+    console.error(
+      "✗ SELF-TEST FAILED — the listing shape no longer behaves as required:\n" +
+        bad.map(([name, got]) => `    · ${name}: got ${JSON.stringify(got)}`).join("\n") +
+        "\n  Either a server-side `status=` filter is back in the listing (GitHub answered it with an empty 200 on\n" +
+        "  2026-10-22, which this gate read as a dark API), or `completedRuns` no longer filters client-side.",
     );
     process.exit(1);
   }
@@ -539,10 +715,57 @@ export function latestSweepSuccessInRun(jobs, prefix = SWEEP_JOB_PREFIX) {
  * and nothing to read back. That silence is what made the live failure take an API
  * cross-check to diagnose instead of a glance at the log.
  */
-async function lastSweepSuccess() {
-  const runs = await api(
-    `/repos/${REPO}/actions/workflows/${WORKFLOW_FILE}/runs?per_page=${RUNS_TO_INSPECT}&status=completed`,
-  );
+// NO `status` PARAMETER, ON PURPOSE (2026-10-22 note in the header). The completed
+// subset is taken client-side by `completedRuns`; the page is LISTING_PAGE_SIZE so
+// in-progress runs at its head do not eat the RUNS_TO_INSPECT window.
+export function listingPath({ sinceIso } = {}) {
+  const base = `/repos/${REPO}/actions/workflows/${WORKFLOW_FILE}/runs?per_page=${LISTING_PAGE_SIZE}`;
+  return sinceIso ? `${base}&created=${encodeURIComponent(`>=${sinceIso}`)}` : base;
+}
+
+/**
+ * The completed runs of an UNFILTERED listing, in the order the API returned them
+ * (newest first), at most `limit` of them. `status` is read from each run, and a run
+ * without one is NOT completed: what cannot be read cannot be trusted, so a payload
+ * that lost the field reads as "no completed run" (could-not-look → fatal in CI) and
+ * never as a window full of finished runs. A non-array input is an empty list.
+ */
+export function completedRuns(runs, limit = RUNS_TO_INSPECT) {
+  if (!Array.isArray(runs)) return [];
+  return runs.filter((r) => r?.status === "completed").slice(0, limit);
+}
+
+/**
+ * A STALE LISTING IS NOT A DARK SWEEP (2026-09-30). The runs listing came back frozen
+ * at 2026-09-03 on PR #1237 (twice), heartbeat #1306 and tick #1300, reading "last
+ * success 644h ago", while the same query from outside CI returned the 2026-09-29
+ * success at index 0. A re-run passed each time. So a red verdict is confirmed ONCE
+ * against a differently-shaped query (a `created>=` window, a different cache key)
+ * before it fails the build. Only a sweep success read from the jobs API on the
+ * second listing can overturn it; an empty or equally stale second listing leaves
+ * the first verdict standing. Fail-closed is unchanged: nothing here turns a red
+ * into a pass without positive evidence.
+ */
+export async function resolveSweep(apiFn, { nowMs, staleAfterHours, log = console.log }) {
+  const first = await lastSweepSuccess(apiFn, listingPath(), log);
+  const firstVerdict = evaluateLiveness({
+    lastSuccessIso: first?.status === "found" ? first.iso : null,
+    nowMs,
+    staleAfterHours,
+  });
+  if (firstVerdict.ok || first?.status === "could-not-look") return first;
+  const sinceIso = new Date(nowMs - staleAfterHours * 3_600_000).toISOString().slice(0, 19) + "Z";
+  log(`  · confirming a red verdict against a second listing (created >= ${sinceIso})`);
+  const second = await lastSweepSuccess(apiFn, listingPath({ sinceIso }), log);
+  if (second?.status === "found" && evaluateLiveness({ lastSuccessIso: second.iso, nowMs, staleAfterHours }).ok) {
+    log("  · the first listing was STALE; the second carries a fresh sweep success");
+    return second;
+  }
+  return first;
+}
+
+async function lastSweepSuccess(apiFn = api, path = listingPath(), log = console.log) {
+  const runs = await apiFn(path);
   // WHAT THE WINDOW ACTUALLY CONTAINED. This line exists because on 2026-09-17 the
   // gate returned OPPOSITE verdicts on the identical commit 19704f65 — attempt 1
   // said the sweep had been dark 291h, attempt 2 passed, nothing pushed between
@@ -559,21 +782,28 @@ async function lastSweepSuccess() {
   // reasoning from outside could recover, and it is the difference between the next
   // occurrence being another dead end and being a diagnosis. A gate that can fail
   // for a reason its own output cannot express is a gate nobody can repair.
-  const list = runs.workflow_runs ?? [];
+  //
+  // The listing is UNFILTERED (2026-10-22): `listed` is everything the page held and
+  // `list` the completed runs among it, capped at the window. Both counts are logged
+  // so a page full of queued/in-progress runs reads as that, not as an empty API.
+  const listed = Array.isArray(runs.workflow_runs) ? runs.workflow_runs : [];
+  const list = completedRuns(listed);
   let runsWithSweep = 0;
-  console.log(
-    `  window: ${list.length} completed run(s) of ${WORKFLOW_FILE} — ` +
-      (list.length === 0
+  log(
+    `  window: ${list.length} completed run(s) of ${WORKFLOW_FILE} (${listed.length} listed) — ` +
+      (listed.length === 0
         ? "EMPTY (the API returned no runs at all)"
-        : list.map((r) => `${r.id}@${String(r.created_at ?? "?").slice(0, 16)}Z`).join(", ")),
+        : list.length === 0
+          ? `NONE of the ${listed.length} listed run(s) is completed`
+          : list.map((r) => `${r.id}@${String(r.created_at ?? "?").slice(0, 16)}Z`).join(", ")),
   );
 
   for (const run of list) {
-    const jobs = await api(`/repos/${REPO}/actions/runs/${run.id}/jobs?per_page=30`);
+    const jobs = await apiFn(`/repos/${REPO}/actions/runs/${run.id}/jobs?per_page=30`);
     const sweep = latestSweepSuccessInRun(jobs.jobs);
     // One line per INSPECTED run — including the ones carrying no sweep job, which
     // is precisely the case a red verdict most needs evidence for.
-    console.log(
+    log(
       `  · run ${run.id} (${String(run.created_at ?? "").slice(0, 16)}Z): ` +
         (sweep.present ? `${sweep.succeeded}/${sweep.total} sweep shard(s) succeeded` : "no sweep job in this run"),
     );
@@ -585,7 +815,7 @@ async function lastSweepSuccess() {
       return { status: "found", iso: sweep.iso, runUrl: run.html_url, runConclusion: run.conclusion };
     }
   }
-  return classifyScan({ runsInspected: list.length, runsWithSweep });
+  return classifyScan({ runsInspected: list.length, runsWithSweep, runsListed: listed.length });
 }
 
 /**
@@ -593,9 +823,16 @@ async function lastSweepSuccess() {
  * without a network. Only the THIRD case is "the sweep is dark"; the first two are
  * "this gate could not see", and conflating them produced the 2026-09-14 false red.
  */
-export function classifyScan({ runsInspected, runsWithSweep }) {
+export function classifyScan({ runsInspected, runsWithSweep, runsListed = 0 }) {
   if (runsInspected === 0) {
-    return { status: "could-not-look", why: `the Actions API returned NO completed runs for ${WORKFLOW_FILE}` };
+    // `runsListed` (2026-10-22) tells an empty API from a page of only unfinished runs.
+    return {
+      status: "could-not-look",
+      why:
+        runsListed > 0
+          ? `the Actions API returned ${runsListed} run(s) for ${WORKFLOW_FILE} and NO completed runs among them`
+          : `the Actions API returned NO completed runs for ${WORKFLOW_FILE}`,
+    };
   }
   if (runsWithSweep === 0) {
     return {
@@ -619,6 +856,13 @@ if (!invokedDirectly) {
   // imported for its pure function only
 } else {
 
+// `--self-test`: the self-test blocks above already ran at load and exit 1 on a failure,
+// so reaching this line means they held. Print the tally and stop BEFORE any network call.
+if (process.argv.includes("--self-test")) {
+  console.log(`ci-liveness self-test: ${SELF_TEST.passed}/${SELF_TEST.ran} checks passed (no network call made)`);
+  process.exit(SELF_TEST.passed === SELF_TEST.ran ? 0 : 1);
+}
+
 console.log("CI liveness — a sweep that stops running must fail a build, not go quiet\n");
 
 {
@@ -632,7 +876,7 @@ console.log("CI liveness — a sweep that stops running must fail a build, not g
 
 let found;
 try {
-  found = await lastSweepSuccess();
+  found = await resolveSweep(api, { nowMs: Date.now(), staleAfterHours: STALE_AFTER_HOURS });
 } catch (err) {
   const msg = `could not reach the GitHub Actions API: ${err.message}`;
   if (IN_CI) {

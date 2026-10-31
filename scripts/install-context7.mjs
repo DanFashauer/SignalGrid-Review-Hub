@@ -8,7 +8,7 @@
 // installer, so the Mac lane could not reach it in one command. It fetches
 // up-to-date library docs and code examples for an LLM straight from source, which
 // is a research/reference aid — it never enters a decision path, a proof fixture,
-// the deterministic core, or the product build.
+// the deterministic core, or the product build. NON-DETERMINISTIC: its output is not a pure function of the tree (keyless, rate-limited: the same query has returned a quota error and then real docs on consecutive runs), so it is never cited in a gate, a proof, a fixture or a doc figure.
 //
 // FOLLOWS THE DR-026 INSTALLER PATTERN, like install-firecrawl.mjs:
 //   · PINNED to an exact version, not @latest (RESOURCE_INTAKE rule 3).
@@ -59,3 +59,4 @@ if (res.status !== 0) {
   process.exit(res.status || 1);
 }
 console.log(`context7:install: registered ${PINNED} as a user-scoped, keyless MCP server (repo untouched).`);
+console.log(`context7:install: reference only — its output is not a pure function of the tree (keyless, rate-limited: the same query has returned a quota error and then real docs on consecutive runs), so it is never cited in a gate, a proof, a fixture or a doc figure.`);

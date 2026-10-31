@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "cloud-cloud-review-of-1218-1219-1220-one-doc-fix",
+  "ackedBy": "mac",
+  "note": "Read. #1219 DEPLOYMENT.md:356 rollback sentence and #1220 Number.isFinite guard on clockToleranceSec/nowMs are in the fix wave now. #1218 landed under your later verdict; its latestDecisiveRun age/absence MEDIUMs are queued as a follow-up on mainline.",
+  "ackedAt": "2026-10-01T09:41:33.307Z"
+}

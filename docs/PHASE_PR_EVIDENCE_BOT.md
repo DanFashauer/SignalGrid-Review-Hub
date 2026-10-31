@@ -4,7 +4,7 @@ The Phase PR Evidence Bot creates a compact report for each scoped phase PR.
 
 ## Workflow
 
-`.github/workflows/phase-pr-evidence.yml` runs on `pull_request` and `workflow_dispatch`. It installs dependencies, runs `phase:gate`, runs `phase:summary-check`, generates a phase PR report, and uploads the report as a named artifact.
+`.github/workflows/phase-pr-evidence.yml` runs on `pull_request` and `workflow_dispatch`. It installs dependencies, runs `phase:gate`, runs `phase:summary-check` against the PR body (on `pull_request` only, and not on `lane/` or `mac/tick-` heads), generates a phase PR report, and uploads the report as a named artifact even when a step fails. The report exits 1 when its lane is RED (`merge_recommendation: block_merge`); YELLOW and GREEN exit 0.
 
 ## Permissions
 

@@ -28,23 +28,23 @@ individually reported success.
 
 ---
 
-## Which tool for what
+## Which role and harness for what
 
-| Tool | Use it for | Do not use it for |
-| --- | --- | --- |
-| **Chat** | Thinking, strategy, research, reviewing evidence, arguing back | Editing the repo |
-| **Claude Code** | Patches, gates, tests, anything touching files | Deciding what to build |
-| **Cowork** | Documents, discovery notes, spreadsheets, non-repo work | Code |
+Routine bounded selection and execution are delegated to the local second brain
+and its repository steward. A supervised local coding harness may inspect source,
+select eligible work, and make and test isolated edits within actual grants and
+exclusive ownership. Local Ollama is primary; Claude/Codex supply necessary
+escalation and genuine source review within saved limits.
 
-**The rule that matters:** the tool that *decides* is never the tool that
-*builds*. Decisions come from the owner or from a chat session; Claude Code
-executes them. That separation is what stopped the freeze dying quietly when a
-well-argued networking proposal arrived.
+Tool brands do not create permissions or require the owner to route every task.
+Current owner directions, source scope, independent source review, full applicable
+local checks, current-head CI, findings disposition and DR-037 control delivery.
+Owner-reserved decisions and the publication boundary remain in force. Source
+review is evidence, never an invented approving vote.
 
-**A plain chat window has no repo checkout.** If a session cannot find this
-file, it is not lost - clone the repo, or attach it.
-Plain chat sessions have no repo checkout — attach LOOP.md to the chat or
-clone `SignalGrid_Alpha`; `git pull` is not available there.
+Verify the actual checkout path, origin, canonical branch and full head before
+acting. A session without repository access needs an attached source or checkout;
+conversation context alone is not a repository or execution proof.
 
 ---
 
@@ -56,7 +56,395 @@ PHASE:        Build / execution (past Customer Discovery, DR-033 2026-09-10).
               resources, the repo absorbs them. Discovery is an input, not the
               gate. Claim discipline unchanged. Near-term: a working core product
               that does what it claims, real in hand for partners before GTM.
-LAST TOUCHED: 2026-09-28 (Mac lane) - CONFLICTS CLEARED + A MISTAKE OWNED. #1136/#1143/#1150 MERGED
+CURRENT EVIDENCE: 2026-10-21 — immutable artifact f3b55f7173ed5d5365a102ebadadef2e0e1dfcea records mint 22:14:07.453Z and request completion 22:14:10.153Z, passed/exit 0 in 1196548 ms, on clean source a70c36b3e0e897d8a80a863e7228417f729e487f.
+              reviewHubPass=true; mcpPass=true; MCP commit 343339c436dea47818fa17cf3be486782e62d912 is clean; manifest v97 aa9ce381438ecb26874cdbe60b82a9339821d6b540f176e122291202a6b3885b; 141 passed proof records. The two native web steps are Linux-VM attested on that exact source, so stepsNotRun=[]; two proof names remain notRecorded and three steps remain stepsExcluded. The separate fresh-evidence EVIDENCE entry names those ceilings and the contract hash. No new readiness figure or owner-real-in-hand attestation is asserted.
+EVIDENCE PUBLICATION: #1577 carried artifact f3b55f7173ed5d5365a102ebadadef2e0e1dfcea onto canonical mainline at 24eff86a940099e0725d474d1d5520bfbc71d368; the mint and its Linux attestation remain measurements of clean a70c36b3e0e897d8a80a863e7228417f729e487f, not new measurements of the later redaction head or merge.
+PENDING SOURCE PREPARATION: 2026-10-28 — see the 2026-10-27/28 EVIDENCE source-preparation entries for delegated policy, the C0 proof and open coordination covers; no new mint, completed witness or public qualification is claimed.
+PENDING CI FIX: 2026-10-28 — R6p1d explicitly constructs its missing tracking ref; EVIDENCE records applicable local checks, targeted Git2.56 evidence and limited-resource failures. Full current-head source/CI/preflight qualification remains pending.
+LATEST LANDING UPDATE: 2026-10-22 — #1593 69258e30433f1a20c31975d50d746065032097c4 (GitHub merged_at 2026-10-22T19:52:31Z; Git committedDate 19:52:30Z), from exact tested head 79c403004707627f7b0431725c48dd713775af18; five-minute build retry, 144-failure scheduled outage threshold, active registry/coordination record, and configured/installed/loaded cadence reporting.
+              Required check 120039369859 completed success at 19:50:15Z; all six main SignalGrid CI jobs succeeded. The 18-context final rollup had 14 success, 3 skipped and optional Mac check 120039362022 queued, not passed. Exact clean-head local preflight passed in 957.95s with two web build/browser steps unavailable and three checks self-skipped; breadth passed 58 proofs in 36.34s. All three recorded review threads resolved; the formal Codex review was on earlier 100682a4, not a new 79c review. The final canonical delta was one uncounted heartbeat file.
+              See the separate #1593 EVIDENCE record; the later record-publishing head requires its own ordinary checks and landing, neither claimed here. CURRENT EVIDENCE/EVIDENCE PUBLICATION above remain historical f3/a70 measurements. No new mint, readiness, owner attestation, other landing or private-runtime claim is asserted.
+HISTORICAL LANDING STATE: the following #1578/#1577/#1576 labels and receipts are retained verbatim as the earlier recorded landing state; the #1593 update above supersedes only which recorded landing is latest.
+LATEST LANDING: 2026-10-22 — #1578 3c892ad96dded5d8e4630d4dc63c12e3fcf02bb0 (2026-10-22T00:05:39Z), from exact head 2493b26d100d398bd178ddc5a0052d8b5787e481; self-hosted Mac CI now uses the same persistent host reservation as local workers through install, checks and teardown.
+              Required check 119552326565: completed / success at 2026-10-22T00:03:04Z; Mac check 119552323893: completed / success at 2026-10-22T00:05:12Z. Exact clean-head local preflight passed in 941.32s with two native web steps unavailable and three checks self-skipped, not passed; breadth passed 58 proofs in 36.78s. Independent primary review was clear; the completed exact-head Codex review had no findings; the final pre-merge read found zero review threads, and all five triggered workflows completed success before merge, per the coordinator's receipts.
+              Separate live observations at 2026-10-21T23:48:06.801950Z and 23:49:29.148312Z recorded local-worker ownership followed by Actions Bash/Perl ownership of the same persistent inode; a nonblocking Python lock probe observed contention at both instants and the manual guard was already released. These observations do not claim a shell-helper exit code, a new model-quality result or replace final CI verdicts. The f3/a70 mint and its native attestation remain historical measurements of that source; no new mint, readiness value, owner attestation or later journal landing is asserted. See the separate #1578 EVIDENCE receipt.
+PREVIOUS LANDING: 2026-10-21 — #1577 24eff86a940099e0725d474d1d5520bfbc71d368 (2026-10-21T23:10:53Z), from exact head e8fa4a6a64bc0ae937e56685cd0eaa3aac0afda5; fresh-evidence publication and public raised-hand redaction. Required check 119530076408 completed success at 23:09:01Z; Mac check 119530076293 completed success at 23:04:16Z.
+              Exact clean-head local preflight passed in 937.51s with two native web steps explicitly unavailable on the Mac, not passed; breadth passed 58 proofs in 36.83s. Independent primary review was clear. Optional GitHub Codex completed two findings: ancestry refuted; the single refresh-message acknowledgement and covering-hand resolution delivered at 491bcaafcad47ad77f3b103994caa0c386d3ff6c and retained unchanged by the merge. All threads resolved and triggered workflows successful before merge, per the coordinator's recorded observations. The separate #1577 EVIDENCE entry preserves exact receipts, times and coverage limits; no later follow-up landing or readiness figure is asserted.
+EARLIER LANDING: 2026-10-21 — #1576 b0a4568855ca2d2378698ba23e5ff867a7c6650b (2026-10-21T21:33:03Z), from exact head 418221363eea5dc66ff3eda7c21484247d03cfb9; required check 119486613085 completed success at 21:30:31Z; Mac check 119486610742 completed success at 21:25:12Z.
+              Local preflight passed with two native web steps explicitly unavailable on the Mac; a separate clean-head Linux build and browser E2E passed 53/53; breadth 58/58; staged helper 243/243; local-brain primitives 41/41. Primary independent source reviews completed per the PR body; optional GitHub Codex review was still running at landing and at the 21:47Z read, with no completed verdict claimed. See the 2026-10-21 EVIDENCE entry. This records the worker integration, not a new readiness figure or owner attestation.
+HISTORICAL SNAPSHOT: the following October 16 LAST TOUCHED block, including its readiness and pending-re-mint statements, records that earlier window. The fresh October 21 receipt is CURRENT EVIDENCE above; no current readiness value is inferred from either entry.
+LAST TOUCHED: 2026-10-23 (cloud lane, 23:00Z) - OWNER: THE LOCAL SECOND BRAIN RUNS EVERYTHING; THE CLOUD AND CODEX ARE FINAL INSPECTION AND
+              APPROVAL FOR THE REPOSITORY. Owner (verbatim, about 23:00Z): 'Need to offload and let the local agent run everything and
+              escalate to you or codex when it's needed for final inspection and approval for repo everything else is offloaded locally
+              using second brain period which it can run anything it needs to complete the tasks it need for second brain plus I'm going
+              to give it more knowledge to build more skills and workers for us plus it can actually build the apps and test them plus
+              build company website and all other items needed to create my company SignalGrid'. It widens the 03:30Z local-first
+              directive below. The second brain is the Mac's private local runtime at <HOME>/SignalGrid-Local-AI (named by the owner in
+              chat at 22:47Z; its design and state stay outside this tree, per the 2026-10-22 intake row; the one in-tree trace is the
+              2026-10-21 evidence re-mint, run from its worker-runtime-evidence copy). Done on that word, same hour: this record; an
+              operating note in docs/LANE_COORDINATION.md naming the roles and the brain's three escalation channels; lane mail to the
+              Mac carrying the directive verbatim with the brain's first asks (the 23:24Z steward batch); a decision-record proposal,
+              DR-064 (proposed), opened for the owner's merge and never the lane's. What the cloud does from here: it builds nothing and
+              dispatches nothing of its own; it inspects and approves repository changes the brain escalates - a lane message addressed
+              to cloud, a hand with whoCanUnblock 'cloud lane', or a PR-body sentence asking the cloud to land - reviewing the exact
+              head and landing under DR-037's five conditions as before, or returning findings; it keeps the hourly steward, the
+              2-hourly forward-build heartbeat (report only, no refill) and the daily hygiene sweep because the registry and the
+              raised-hands gate expect them; it escalates to the owner only what only the owner can clear; Codex reviews on the brain's
+              '@codex review'. What the brain had shown by 22:41Z, measured on mainline dd1380b7: alive - 114 tick heartbeats since
+              00:00Z (50 quiet, 1 acted, 63 deferred on the host lock), five status mails, its private runtime reinstalled at 05:04Z,
+              07:57Z and again before 20:03Z; nothing produced - no Mac PR opened or updated today, its one model attempt (Ollama on the
+              single intake row of #1354) stopped at 20:03:08Z after two partial edits; its build tick starved by its own three claimed
+              rows (17b in #1424 and 26 in #1219, both unmoved since early October; 17c behind the 2026-10-21 claim branch and an open
+              hand); 11 cloud-to-mac messages unacknowledged, the oldest 15 days. The mail's first asks of the brain: register itself (a
+              mac-local-brain row in docs/agent/scheduled-routines.json citing this directive, which the cloud inspects), acknowledge
+              its inbox, clear or retry 17c, move or close #1424 and #1219, and finish or close the handed-over cloud branches and PRs
+              #1585, #1586, #1611. Owner queue: #1556 (lib/), signalgrid-mcp #15-#17, the eight OWNER DECISION rows from #1600, row 50
+              vs 53, the Dependabot queue decision, DR-061/062/063 and now DR-064 (all proposed, owner-merge).
+TIERS THIS SESSION: the coordinating session wrote this record, the note, the mail and the proposal itself (docs and lane mail, no
+              engineering stage); no worker, review or refute was run.
+PREVIOUSLY:   2026-10-23 (cloud lane, 03:30Z) - OWNER: LOCAL-FIRST. THE MAC BRAIN TAKES EVERY OPEN BUILD ROUND; THE CLOUD LANDS GREEN PRs AND ANSWERS ASKS.
+              Owner (verbatim, 03:30Z): 'Hey please make sure all of these get offloaded to the new local side first then going
+              forward it will ask for you if needed but that for much higher or even extreme use cases.' Done on that word at
+              03:32-03:39Z: the cloud stopped its two just-started rounds (plan re-measure r2, backlog-landing r5), interrupted
+              its idle worker, refilled nothing, pushed every stopped branch (claude/plan-remeasure-20261023 @ ef7292fab,
+              claude/build-backlog-landing-skill @ 213c8618c, claude/build-tick-followup-1593 @ 3f96ff27) and mailed the Mac
+              the handoff (PR #1614, send cloud-owner-directive-03-30z-local-first-the-mac): eight items, each with branch, tip,
+              latest verdict comment and what remains - #1585 (round 7 finishing in the cloud, then the Mac's), #1586 (CI green,
+              the cloud's landing refute r8 finishing), draft #1611 (round 2 the Mac's), the three pushed branches above, the
+              local-brain capabilities contract (cloud r3 finishing, then the Mac's; OWNER_DECISION stays a draft) and the
+              worker slot B87 freed (not refilled). What the cloud keeps: DR-037 landings of green PRs, the hourly steward and
+              2-hourly forward-build heartbeats, the honest report; it builds or reviews only on the Mac's ask (lane mail or a
+              hand with whoCanUnblock 'cloud lane'), for the higher or extreme cases. Landed this window under DR-037: #1559 at
+              808ee24c (counted; the determinism gate's clock-spelling catalogue, 14 rounds) plus lane-mail #1607 #1608 #1609
+              #1610 #1612. Codex at its review usage limit since 2026-10-22 23:41Z; the judgment-tier refutes were the only
+              independent review. Owner queue: #1556 (lib/), signalgrid-mcp #15-#17, the eight OWNER DECISION rows from #1600,
+              row 50 vs 53 (the committed-heartbeat design), the backlog-landing PR (owner-merge) when it opens.
+              LESSONS (memory): compare branch times as epochs, never ISO strings with offsets (the moved-branch loop missed the
+              Mac's tick branch); never chain && on grep -c (exit 1 on zero matches aborted a merge script); stamp in-flight
+              text only from reads taken in the same minute.
+TIERS THIS SESSION: the coordinating session delivered the mail and landed the PRs itself; the three finishing reviews run on the
+              judgment tier, the two finishing builds (B92's round 7, the local-brain round 3) on the build tier, per DR-047.
+PREVIOUSLY:   2026-10-16 (cloud lane; window 2026-10-15 22:07:46Z-2026-10-16 04:29:46Z) - THIRTEEN LANDINGS; READINESS 0% ON THE TIP, DIMENSION (b) 0% BY DESIGN
+              UNTIL THE MAC'S ONE RE-MINT (ASKED IN #1536).
+              LANDINGS: every first-parent merge in the window, in merged_at order. Window query: `git log origin/SignalGrid_Alpha --first-parent --merges --since=2026-10-15T22:07:46Z --until=2026-10-16T04:29:46Z` prints 13 lines. Merged sha, UTC merged_at and gating id from `gh api .../pulls/N` and `.../check-runs/<id>`. The same window holds 17 direct, non-merge commits, all Mac heartbeats ("Lane mail (mac): heartbeat mac-lane-tick"), which are not PR landings.
+              #1529 f304ca4d (22:42:56Z, the 22:11Z forward-build heartbeat; gating 116703665804); #1530 f8625295 (23:49:32Z, the 23:24Z steward keepalive, quiet; gating 116726065910); #1460 cc910439 (00:28:14Z, a check-gate's --self-test that no step runs is run by a gate; gating 116735582504, Mac-only 116735581757); #1531 6b97d0ac (00:33:15Z, the 00:11Z forward-build heartbeat; gating 116741518825); #1532 468fd3e0 (00:43:57Z, the 2026-10-15 docs batch; gating 116741851860, Mac-only 116741851749); #1533 e6795df0 (01:48:58Z, the 01:28Z steward keepalive; gating 116764648248); #1535 1ed88f9f (02:30:36Z, the 02:11Z forward-build heartbeat; gating 116775327913); #1504 2b7f81f3 (02:51:27Z, url-guard and redirect hand mutants pinned in proof:emitter-discipline, proof 139 to 150, five landing-refute rounds, merged head ca89f108 tree-identical to the verified head 9613ac61; the sync manifest moved v96 3c69fedd to v97 aa9ce381438ecb26; gating 116776717682, Mac-only 116776521794); #1534 dd3ba58f (03:06:14Z, the mutation sweep's shard-3 root cause, cost-balanced partition; gating 116782022894, Mac-only 116782022240); #1536 06e494a1 (03:13:57Z, the ONE live-evidence re-mint ask to the Mac lane after the manifest move, retiring the refresh portions of the 2026-10-08 and 2026-10-09 messages; gating 116787586536); #1537 7fd78b48 (03:29:32Z, Mac tick mac/tick-20261016T025332Z, "objective loop: escalate", merged by the steward; gating 116786409708); #1538 1efb3fdd (03:55:57Z, the steward's 03:25Z non-quiet heartbeat; gating 116796976650); #1539 511c0153 (04:29:46Z, the 04:11Z forward-build heartbeat; gating 116807305698).
+              READINESS (`node scripts/check-readiness-figure.mjs`, run in the docs worktree at origin 759a39a6 at 06:19Z, exit 0): HEADLINE 0%, OUTREACH CLOSED.
+              (a) 100%; (b) 0% (proofs current 0/20, launch items fully current 0/28; evidence covers manifest 3c69fedd7754, tree is aa9ce381438e),
+              which stays 0% by design until the Mac's one re-mint (asked in #1536, 06e494a1) lands; the refreshed
+              artifacts/live-evidence/mac-run.json is not on mainline yet; (c) 100%.
+              IN FLIGHT WHEN THIS BLOCK WAS LAST REFRESHED (09:01Z, every PR re-read from the API at that instant; all four open, none merged): #1370 round 25 owed (head 68827403, round 24 pushed 07:07Z; the round-24 landing refute at 08:28Z found no MEDIUM and all DR-037 conditions met except condition 3 — the five sixth-pass Codex threads are declared in the body only; the lane resolved the thirteen threads the refute verified, so 37 threads, 32 resolved, 5 open; the worker has been on round 25 since 08:28Z); #1349 round 27 pushed (head 07d44dff at 08:46Z: the two self-test pins and the body refresh the round-26 refute asked for; 0 unresolved threads — the two CodeQL threads from 2026-10-01 are resolved; the delta refute is running); #1378 round 16 owed (head c96e7b6b, conflicted with mainline; the worker never woke on the round-15 note and a direct wake waits for a pool slot); #1333 round 31 owed (head 32024b21, round 30 pushed 08:02Z; the round-30 review at 08:56Z closed round 29's classes but found one MEDIUM — the new range reader closes four spellings, not the container class — plus two self-test survivors; the worker was woken at 08:58Z).
+              The owner's open usage-limit hand keeps the pool at three concurrent workers, counted by get_session (remote wakes and local reviewers alike), never by notes posted.
+TIERS THIS SESSION: Haiku — this docs batch; Sonnet — the reviews (#1378 round 15, #1333 rounds 28, 29 and 30, the #1540 docs review and its delta re-reads) and the #1370 branch worker's fix rounds; Opus — the landing refutes (#1349 rounds 25 and 26, with round 27 running at this stamp; #1370 rounds 22, 23 and 24) and the #1333/#1349/#1378 branch workers; the coordinator ran no engineering or review stage.
+
+PREVIOUSLY:   2026-10-15 (cloud lane; window 2026-10-15 12:31Z-22:07:46Z, frozen at #1470's merge 64d0ca6d) - EIGHTEEN LANDINGS AFTER
+              THE FREEZE; READINESS 100%, OUTREACH OPEN; ONE OWNER CRITERION UNMET. Docs batch on claude/docs-batch-20261015-landings from 64d0ca6d.
+              LANDINGS AFTER THE FREEZE POINT (e6acacc7, 12:31:32Z), merged sha and UTC merge time from `gh api repos/DanFashauer/SignalGrid-Review-Hub/pulls/N`
+              (product PRs have their own 2026-10-15 EVIDENCE entries; the lane PRs are one grouped entry): #1515 355ff646 (12:39:09Z, the Mac tick's heartbeat clears the
+              mac-lane-tick cover); #1505 04f97ddc (13:26:43Z, 16 mock transports registered; gating 116438358653); #1517 38003303 (14:41:13Z,
+              forward-build heartbeat); #1490 dcdfcac4 (15:20:02Z, closure and restamp lap; gating 116492282545, Mac-only 116492279875); #1518 ab5ba4d3
+              (15:37:21Z, tick PR, sim results 0 requests); #1520 66b776ca (15:54:12Z, the evidence re-mint request); #1519 2b6fa3e2 (15:54:57Z, lane
+              mail); #1521 9b2f999d (16:36:58Z, lane mail); #1522 67d083b8 (17:10:21Z, tick PR, carries the re-mint: mintedAt 2026-10-15T16:33:53.511Z);
+              #1523 62040a76 (17:45:06Z, steward heartbeat); #1516 9d280d96 (18:22:34Z, the outage record); #1525 0e0b859a (18:33:06Z, lane mail);
+              #1526 67ff76eb (19:44:07Z, lane mail); #1524 df4ea3b8 (20:06:16Z, validation bound 20 to 45; gating 116631935708); #1527 9e7fc18b (20:44:06Z,
+              lane mail); #1468 760d5032 (20:55:41Z, loop-state and the review-wave helper; gating 116655818855, Mac-only 116655817446); #1528 8023bc7d
+              (21:53:19Z, lane mail); #1470 64d0ca6d (22:07:46Z, Graph collection matches the connector's reads; gating 116687433426, Mac-only 116687433354).
+              MAINLINE TIP: 64d0ca6d is this branch's base. origin/SignalGrid_Alpha has since moved to 708e97ef (22:09:12Z, a Mac lane heartbeat pushed
+              direct, not a PR; `git rev-parse origin/SignalGrid_Alpha` in the docs worktree after a fetch).
+              READINESS (`node scripts/check-readiness-figure.mjs`, run in the docs worktree at 64d0ca6d): "HEADLINE 100%  → OUTREACH OPEN — readiness
+              100% meets the 92–95% target (goal 100%)". (a) 100%; (b) 100%, proofs current 20/20, launch items 28/28, 0 day(s) old; (c) 100%, scenarios 15/15,
+              live operations 8/8. The check needs scripts/node_modules, which the docs worktree links read-only from the main checkout; without it the
+              check prints "Readiness derivation BROKEN" and exits 1.
+              OBJECTIVE LOOP (`node scripts/objective-loop.mjs --json`, derives and writes nothing, at 64d0ca6d): verdict escalate. Met: readiness-floor,
+              evidence-fresh, plan-owned. UNMET, the one owner criterion: owner-real-in-hand (attestedIn null; no attestation token in the decision record
+              the objective names). Five rows await the owner or a lab; pendingSimRequests none.
+              PREVIOUSLY:   2026-10-15 (cloud lane; window 2026-10-09 16:40Z-2026-10-15 12:31Z, frozen at #1501's merge e6acacc7) - THE WEEKLY LIMIT
+              WENT DARK FOR 5d17h; ONE REGISTRY ROW'S 30-DAY BOUND TURNED EVERY NEW VALIDATION RED; THE BRAIN RETIRED THE ROW AND THE
+              LANES LAND AGAIN.
+              OUTAGE (recorded from the owner hand, not re-measured here: the limit type, the instants, 5d17h, the 211 fires, the 10:12Z
+              resume and the worker labels): the account's weekly Claude usage limit (type seven_day) ran out at about 16:40Z on
+              2026-10-09 and reset at 10:00Z on 2026-10-15. The cloud brain and every worker session were dark for 5d17h. In-flight
+              workers L1501, L1468r27, B83, B84 and the #1468 round-28 builder died with the limit error. 211 routine fires queued; the
+              brain resumed at 10:12Z on 2026-10-15 and treated the backlog as one current fire per routine.
+              THE RED ON EVERY NEW VALIDATION: scripts/check-scheduled-routines.mjs was FATAL on mainline from 2026-10-12T00:00Z. The
+              dependabot-queue-review row had sat awaiting-activation since 2026-09-12 and crossed the registry's 30-day bound inside the
+              outage. That gate runs in CI's validation job ("Typecheck, build, and proof scaffold") and inside every lane-deliver
+              heartbeat delivery, so every validation that RAN after the bound, on a tree still carrying the row, went red: tick PRs
+              #1509-#1512 failed at the step "Scheduled routines" (#1508 had passed on 2026-10-11), and no NEW lane-deliver heartbeat
+              delivery could pass the gate after 2026-10-12T00:00Z. A check that had completed before the bound kept its result: #1501's
+              gating run 113898621289 completed 2026-10-09T15:58:12Z, stayed success, and the PR merged on it at 12:31:32Z on
+              2026-10-15. Measured: the four tick PRs' runs and #1513's own (11:45Z on 2026-10-15, on the tree that retires the row,
+              passed) are the only "SignalGrid CI" runs created between the bound and #1513's merge (EVIDENCE, first "## 2026-10-15" entry).
+              Mainline's tip did not move between f3dccd957 (the last Mac heartbeat, 2026-10-11T23:42:56Z) and the merge of #1506 as
+              764cb99d at 10:22:23Z on 2026-10-15; #1506 is a forward-build heartbeat PR opened 2026-10-09T16:34:20Z whose gating
+              check was green before the bound. The Mac tick kept opening tick PRs (one a day, 00:00-00:04Z). The owner hand also names the
+              raised-hands gate as red repo-wide (recorded from the hand, not re-measured here). The row's contract forbade the cloud
+              lane from creating the trigger without an explicit owner go, which was never recorded.
+              THE FIX AND THE LANDINGS (all 2026-10-15 UTC): #1513 (head b4dd1176, merged 1c2c6b94 at 12:04Z, gating check run
+              116403912993; local preflight 400 gates ok rc=0 and breadth 58 ok rc=0, quoted in its body) retired the row with evidence,
+              in the shape of #1480. It raised four hands - owner: the budget decision, plus an explicit go or decline for a NEW Dependabot
+              queue-review row; mac lane: five unread cloud-to-mac mails, incl. the live-evidence refresh ask (evidence minted
+              2026-10-02T16:07Z at e78a7ae1); cloud: a heartbeat:mac-lane-tick cover; cloud: a heartbeat:forward-build-cycle cover - and
+              resolved the 2026-10-09 /dev/null hand. Four review rounds (Sonnet review + Opus refute), round 4 ship. L23 records that
+              its first two commits were edited on the wrong tier (DR-060). A Codex P1 finding about account telemetry in the owner hand
+              was checked against AGENTS.md L27-L31 and answered, not changed (thread PRRT_kwDOSpuy-s6swUbP resolved).
+              The Mac tick's own heartbeat then landed on mainline at 7dc78829 (12:09Z, firedAt 12:09:32Z), which is consistent with the
+              inference from the CI record that the tick was alive and only this gate refused its heartbeat. Measured: tick PRs arrived
+              daily; the last Mac heartbeat before it landed at 2026-10-11T23:42:56Z, 17 minutes before the bound; 7dc78829 landed 5
+              minutes after the fix. A tick that resumed on its own 25-minute cadence would look the same, and the Mac's own log is not
+              readable from the cloud.
+              #1514 (29854dc, merged 845468d6 at 12:27Z, gating 116412325370) delivered the forward-build-cycle,
+              mac-lane-steward-duty-cycle and cloud-lane-hygiene-sweep heartbeats and cleared the forward-build hand. Its Mac-only check
+              was red for a measurement artifact (below).
+              #1501 (29f0749e, merged e6acacc7 at 12:31:32Z) landed under DR-037 as SAFETY_MACHINERY: gating check run 113898621289
+              (completed 2026-10-09T15:58:12Z, almost six days before the merge and before the bound was crossed), review round 1 ship
+              (Sonnet + Opus refute upheld, comment 6084802068), its one CodeQL thread resolved (PRRT_kwDOSpuy-s6q0x6w). The
+              surface-review coverage gate (scripts/check-surface-review-coverage.mjs, "Surface-read-coverage gate passed") was run by the
+              coordinator on the tree the merge would produce (run 12:29Z, merge 12:31:32Z; recorded on the coordinator's word) and again
+              for this record at e6acacc7; at e6acacc7 the preflight-CI parity gate (459 gates, 0 unwired), the sync-manifest check and
+              the PR's own self-tests (109/109, 63/63) passed.
+              AFTER THE FREEZE POINT (the first events of the next record): #1515 (efdc9a2) clears the mac-lane-tick hand inside its
+              stale-cover grace (3h from raisedAt 10:52:44Z, to 13:52:44Z): open, gating pending when this record was briefed; merged as
+              355ff646 at 12:39:09Z (gating check run 116420704196). #1505 (head a0b465d1) merged as 04f97ddc at 13:26:43Z (gating check
+              run 116438358653, completed 13:24:45Z): SAFETY_MACHINERY under DR-037, Opus landing refute upheld (comment 6193179269),
+              live-sync manifest version 95 to 96. #1517 (heartbeats, head d87ce8bd) merged as 38003303 at 14:41:13Z (gating check run
+              116475726666, completed 14:40:29Z); its forward-build-cycle heartbeat, artifacts/agent-heartbeats/forward-build-cycle.json,
+              is where the 14:10Z fire recorded the three-worker cap and the pool overshoot (THROTTLE below, and NEXT ACTION).
+              THE MEASUREMENT ARTIFACT (comment 6191838619 on #1514): scripts/raised-hands.mjs measures stalls at origin/SignalGrid_Alpha
+              (TIP_REF) and never reads the branch's own tree for stalls, while it reads hands from the branch tree. A lane-mail PR that
+              both delivers the heartbeat ending a stall and clears the hand covering it therefore reads "stall, no hand" in the fatal
+              local/Mac preflight until it merges; CI's validation job runs the check with --warn, so the gating check was green. Reproduced
+              on 29854dc: "heartbeat:forward-build-cycle: routine forward-build-cycle silent 5.8d (tolerance 6h) - ... NO hand raised".
+              Open backlog row in docs/BUILD_BACKLOG.md, not a push to #1514.
+              THROTTLE until the owner decides the budget (the owner hand): the brain runs at most 3 concurrent workers, Sonnet reviews,
+              Opus refute only for DR-037 landings. At the 14:10Z fire the local pool stood at five (H/S/O 0/4/1), over that cap; the
+              forward-build heartbeat records the overshoot and does not excuse it.
+              QUEUE (as of 15:02Z; every ref below is a PR and a branch, never a sha that only the cloud container holds).
+              #1468 (claude/loop-state-20261008-gap): origin's head c57cdc0d is round 27, whose gating failure is PR comment
+              6085117608. Rounds 28 and 29 were REFUTED by Opus (a relative PATH entry such as ../x is ENOENT to the scan but $TMPDIR/x to
+              git, so a planted helper ran unseen; a planted git). Rounds 28 to 31 exist only in the cloud container's worktree until
+              local preflight+breadth pass on the round's head (CLAUDE.md "Before you push"), so a rebuilt container restarts from c57cdc0d
+              and that comment. #1470 (claude/build-graph-collection-transport-parity): the landing round on bddf469f was REFUTED by Opus at
+              14:23:47Z (comment 6194392948: parseBru treats Unicode spaces such as U+00A0 as blank, so 26 plant shapes pass the gate that
+              Bruno 4.0.0 skips). The branch's worker answered on the same branch at 14:46:20Z (comment 6194876170): origin head 832041dc, an
+              ASCII-only blank test, self-test 195/195, preflight and breadth exit 0 as the worker reports (not re-run here); its gating
+              check 116488591078 was still running, so the landing round has to run again on 832041dc. #1460
+              (claude/build-gate-self-tests-run, origin 19e51b66): round 14 addressed, gating 116473130171 and Mac-only 116465956898 green;
+              round 15 fix-needed on the masking that tells a regex literal from a division (the coordinator's verdict, not yet posted on
+              the PR). #1490 (claude/build-closure-restamp-lap-20261009): round 7 fix-needed (comment 6192173775: three #1464 closures
+              lost in a mainline merge); the cloud lane took the branch over (its remote worker had completed) and pushed round 8 at
+              14:53:19Z, origin head bf7b2e53 (comment 6195026102: the three closures restored; preflight 400 ok and breadth 59 ok, exit 0,
+              as that comment reports, not re-run here); its gating check 116492282545 was running and the Sonnet round-8 review is next.
+              The CI validation-job timeout fix (claude/build-ci-validation-job-timeout) is a local, unpushed branch (origin has no such
+              branch): five green gating runs today took 18m48s to 19m43s against the 20-minute bound (review-hub-ci.yml:48) and c70de689's
+              (116440190841) ended cancelled at 20m5s. #1505 landed after the freeze (above). Owner queue unchanged: #1463 #1459 #1440 #1443 #1442 #1445 #1441 #1439 #1438 #1338 #1337 #1330 #1321 #1265; nine
+              Dependabot PRs #1379, #1381-#1387, #1495 with no routine watching them; signalgrid-mcp #15 #16 #17 are clean and the
+              owner's to merge.
+              LESSON: L23 (wrong tier) and L24 (an awaiting-activation row with a hard bound and no fallback; pending on its backlog row).
+              Window detail: docs/agent/EVIDENCE.md, the four "## 2026-10-15" entries (the fourth holds the post-freeze reads).
+TIERS THIS SESSION: the coordinating session edited #1513's first two commits (2f5c8809, 50bb19d7) itself, on the wrong tier (L23);
+              1729d458 was built by Sonnet with its message written by Haiku (per #1513's body); reviewers Sonnet, refuters Opus; this
+              record was written by a Sonnet docs stage (rounds 1 to 3); the commit messages of rounds 1 and 2 by a Haiku stage, round 3's
+              by the same Sonnet stage on the coordinator's brief (DR-060 rule 1 would hand it to Haiku).
+PREVIOUSLY:   2026-10-02 (Mac lane) - THE BRAIN BUILT ITS OWN TOP TASKS; THE GUARD, NOT THE OWNER, IS WHAT STILL WAITS.
+              Owner (verbatim): 'you have control to do what is needed don't need to wait on me for anything unless it's a major
+              problem or issue that you cannot physically do' and 'Keep it up'. Done on that word, each spec'd by Opus, built
+              test-first by Sonnet, adversarially reviewed by Opus, local preflight+breadth 0/0 at its head, PR opened by the
+              REST opener: #1416 the @claude GitHub workflow (DR-063 GitHub-App half; owner chose 'Full workflow'; review
+              applied: owner-only trigger + include_comments_by_actor, workflow token contents:read, both actions sha-pinned);
+              #1417 icm-architect ADOPTED on the rule-6 re-run of the cloud's same-day row (its 'not adopted' named none of
+              rule 5's four grounds): 15 files byte-identical, two template instruction files carried as .template, and
+              check-skill-plane-conformance now FAILS any CLAUDE.md/AGENTS.md nested under .claude/skills (37/37);
+              #1422 plan row 27 - WEBAUTHN_REQUIRE_STEP_UP_FOR_ADMIN retired (nothing read it; approve is simulated-only and
+              deferred; admin API keys cannot step up; test:api 488/488); #1424 plan row 17b - a Keycloak-admin bridge into
+              the access-governance connector, run LIVE on sg-keycloak 26.4.7 (offline 68/68, live 75/75), ledger entry with
+              a real divergence (the wire adds client:account:manage-account-links to every account) - four review rounds,
+              one of which REFUTED the coordinator's own fix premise by probing the lab, so the bridge never grades in_scope.
+              signalgrid-mcp #15 #16 #17 each got an Opus review and the fixes pushed (CI green). Evidence re-minted at
+              manifest 5b15a3002124 (e78a7ae1): readiness derives 100% again - the cloud's ask had sat 17h unread (owned).
+              WHAT STILL WAITS, AND WHY: the auto-mode guard denies this lane merging its own PRs (Self-Approval, even with
+              a gh pr allow rule - server-side review), minting the GitHub-App OAuth secret (Credential Materialization),
+              and launching a NEW chain script (Self-Modification) - so #1417's full chain ran in CI, not locally (stated in
+              its body). Raised hand on mainline for the secret (owner, claude setup-token). The owner merges: #1246 #1322
+              #1357 (DRs), #1416 #1417 #1422 #1424, signalgrid-mcp #15 #16 #17; the cloud lands SAFETY under DR-037.
+              LESSONS (memory): a Workflow stage's blocked field must be a BOOLEAN (free text ended three runs early);
+              never pipe a gate through tail inside an && chain (it pushed one red head, fixed next commit); a fix premise
+              is tested on the live lab before it is coded (the serverinfo-200 guard was unsound).
+PREVIOUSLY:   2026-10-01 (Mac lane) - THE BRAIN BUILDS ITSELF CHEAPER: CHORE BOT, MODEL TIERS, LIVE DEMO, DR-062/063; MERGES ARE THE OWNER'S OR THE CLOUD'S.
+              Owner (verbatim): 'Just get the merges done whatever it needs I'll approve' and the four-point brain-ecosystem
+              paste (Cole Medin video). The auto-mode classifier refuses the Mac merging its OWN PRs by any route (self-approval,
+              incl. asking the cloud) - the cloud lands SAFETY under DR-037 on its routine, DECISION_PATH after #1246; the owner
+              taps the OWNER_RESERVED records. Owner merges owed: #1246 (DR-061), #1322 (DR-062 company scope + fully automatic
+              incl. source-system changes), #1357 (DR-063 ecosystem: per-repo CLAUDE.md, labels = roster entry, one MCP plane,
+              triggers = Claude GitHub App + Mac, both chosen), signalgrid-mcp #15 #16 (#14 merged by the Mac on his word).
+              BUILT + PUSHED, each test-first with Opus adversarial review and local preflight+breadth 0/0 at its head:
+              #1323 live demo (one command - the demo:live script on that branch - real core + real cascade on a phone-reachable page, proof:demo-live 108/108,
+              replay, whole-story verdict); #1353 pr-refresh (no-model chore bot: re-merges dirty mac/* PRs, derived-file-only
+              conflicts, writers, push on 0/0); #1248 build tick @694d255a (staged tiers triage Sonnet/build by kind/review Opus,
+              cost ledger from claude -p json, own clone + pinned mainline sha + replace-ref/graft/config resets, hooks off on
+              push, self-test 202/202 after THREE Opus rounds); #1354 intake row; #1356 scan:estate sibling locator (3/7 repos).
+              LESSONS (memory): cap concurrent preflights at 2 (4 at load 112 hung the timed hook self-test); owner authority does
+              not reach subagents (DRs, .claude, unattended agents, public-repo surfaces: ask him directly, do it in the main
+              session); a Workflow unit returning blocked:'none' reads as blocked - check journal before re-dispatching.
+              MAIL MISS, owned: 12 cloud->mac messages sat unread up to 34h (review findings on #1216 #1219 #1220 #1224 #1225 #1228
+              #1356 #1357, 26 superseded tick PRs to close, manifest v85 re-mint) - all acked 10-01 09:40Z; fixes dispatched; the
+              classifier DENIES gh pr close/edit for the Mac, so PR closes and body reshapes are the owner's or the cloud's.
+TIERS THIS SESSION: Opus triaged, architected and reviewed every unit (three rounds on the tick); Sonnet built and fixed; the
+              coordinator (Fable) dispatched only and wrote the two DRs + CLAUDE.md lines itself after the owner's direct yes.
+PREVIOUSLY:   2026-10-01 (cloud lane; window 2026-09-30 17:35Z-2026-10-01 06:40Z, first-parent 6acabe8e..d4fd8a6f) - 31 PR
+              MERGES: TWELVE STEWARD CODE LANDINGS, FIVE MAC TICKS, THIRTEEN MAIL/HEARTBEAT PRs AND THE PRIOR RECORD (#1334);
+              THE FORWARD-BUILD ROUTINE NOW ROUTES WORK BY MODEL TIER (DR-047) ON THE OWNER'S ASK.
+              OWNER ASK 2026-10-01 (verbatim): "Hello you beautiful building machine how is the full company expanding and have
+              we created any new sub brains 🧠 to run other projects that are needed and make this more profitable and affordable
+              with less sessions running at once knowing it can self manage which model to use as it's running those tasks or the
+              brains 🧠 know these models works best for x and move that worker building and handing off next task so so forth.
+              Get the entire company running all on its self with its on echo system of scales of brain 🧠 to do X then have
+              little other bots 🤖 run dump boring stuff you can quick check and review with hassle so you know what I'm saying
+              get it done." -> the forward-build routine (trig_01XLv3hGCPob8qcEDsZJ2xM8, prompt updated 03:33Z) carries DR-047
+              tiered routing: MECHANICAL->Haiku, BUILD->Sonnet, JUDGMENT->Opus; at most 8 workers in flight, at most 4 Opus (the
+              04:10Z heartbeat in #1350 records the pool as 12->8); Sonnet reviews every PR, Opus refutes only DR-037 landings
+              and decision-path; a finished worker frees its slot for the next bundle; every heartbeat carries H/S/O counts. No
+              second brain was created for signalgrid-mcp: its #14 merged 2026-10-01 04:36Z (343339c4) and #15 is open and now
+              conflicting, so a second repo session would idle on one refresh and one owner merge.
+              LANDED (steward; merge sha / gating check run, each run's head_sha equal to its merge's second parent): #1274
+              f52e806f / 109987231008, #1301 28a1b5d0 / 109999435713, #1319 6f2f1373 / 110005225659, #1303 c09705c2 /
+              110083739515, #1272 fd57b569 / 110092610686, #1318 a2fce49e / 110106189550, #1317 c4faefea / 110118010896, #1311
+              7ff9093a / 110132363117; then under DR-037 on the brain's review: #1328 67df1443 / 110142369156 (the land-1328
+              chain), #1236 0847b506 / 110150187949, #1329 4c2fc1a9 / 110194513710 (SHIP in wave 9), #1348 c71cf2c7 /
+              110218392620 (SHIP in wave 10, gating on 8c726438). Mac ticks: #1315 e08b2d51, #1325 fc4e4427, #1326 f079a7ee,
+              #1331 e30a5f4d, #1342 c65c0403 / 110153406566. Mail/heartbeats: #1324 #1327 #1332 #1335 #1339 #1340, #1341
+              29b61f82, #1343 4830503e, #1344 505167f6 / 110162164756, #1345 e8806b7d, #1346 8711bbef / 110190353734, #1350
+              179c1b87 / 110218074296, #1355 fb3a8cf2 / 110244982299. Record: #1334 af70a1a6.
+              OWNER-PR REFRESHES (merge Alpha + regenerate; the owner merges): #1242 7e67df47 then dec1fa8a (merge 3a0504c9
+              keeps both check blocks in scripts/src/vuln-scan-proof.ts, where #1348 and #1242 each added one: #1242's 13 added
+              lines byte-identical, 0 removed), #1244 ffb9c0d7 then 500bcad9, #1280 7535fd6b, #1330 cb61ba43.
+              REVIEW WAVES (independent review + adversarial refutation; verdict comment on each PR): earlier rounds 17:43Z-23:18Z
+              on #1265 #1308 #1321 #1329 #1333 #1330 #1337 #1338; wave 8 (00:30Z) fix-needed #1321 #1329 #1333 #1265 #1330,
+              owner-decision #1337 #1338 (00:47Z); wave 9 (02:25Z) SHIP #1329, owner-decision #1321 #1330 #1337 #1338, fix-needed
+              #1333 #1265; wave 10 (04:07Z) SHIP #1348, fix-needed #1347 #1349 #1265 #1308 #1333; wave 11 (05:19Z) all five
+              fix-needed; wave 12 (06:36Z) all six fix-needed incl. #1352. #1308 verdicts from 18:54Z through round 11 (round 2
+              SHIP at 20:38Z, fix-needed from round 3 on a moved head). #1280 rounds 2-4: round 3 found a raised hand
+              measured from a tree 239 commits behind Alpha; the worker removed it (cd0da141) and round 4 is owner-decision -
+              the worker brief now carries a STALE-TREE RULE. #1309 delta (00:15Z) owner-decision. Mac PRs: #1353 (pr-refresh bot) round 1 fix-needed - two
+              CodeQL TOCTOU threads, phase-pr-evidence red, the token scrub does not reach git-invoked hooks; #1354 (intake row)
+              fix-needed - phase-pr-evidence red, and the row cites a DR-063 that no record holds.
+              FIRST TIERED FIRE (04:10Z): B41 Haiku restamp (#1351) - gating red three times, 110222099820 (Cited commands: a
+              "proof:sbom" script no package.json defines) then 110237676097 and 110238917942 (Cited paths: two line citations
+              into the shortened docs/COMPANY_BUILD_PLAN.md), then green at f8831a42 (110242261976); the tier was raised to a
+              Sonnet continuation B41b on the same branch (created 06:04Z), still open; B42 Sonnet brace-less wave 4 STOPPED
+              04:25Z - its session's security classifier blocked the mutation-guard command; not laundered, held for a JUDGMENT
+              slot; B43 Sonnet gateway OIDC positive smoke (#1352) - gating green, compose smoke green on one rerun (110236990592) after a Docker Hub 502
+              (110229167929). The planner found facility-trust-graph already in the sweep since da002df4 (#672, 2026-09-12);
+              the brace-less row in docs/BUILD_BACKLOG.md still lists it as pending with 22.
+              DISK: the session allowance filled to 409M free at ~00:24Z (14 review worktrees with full installs + two Swift
+              toolchain downloads, ~5.7G); recovered by deleting node_modules/dist and the toolchains, never a worktree (L22);
+              reviewers now delete their own node_modules; a second sweep at 06:28Z deleted old Rust targets and Swift .build dirs.
+              LESSON CANDIDATES (HELD - not numbered; #1133 claims L23 and the ledger gate forbids gaps): (a) create_session
+              inherits the coordinator's model - pass model explicitly (DR-047); (b) a push to an open-PR branch got NO
+              pull_request run four times on 2026-09-30 - recover with workflow_dispatch of review-hub-ci.yml on the branch,
+              never close/reopen or an empty commit; the land chains now self-dispatch after 4 min; (c) phase-pr-evidence does
+              not re-run on a body edit; (d) sed with a / delimiter against a branch slash emptied a PR body, and reusing a prior
+              heartbeat body via sed produced a stale one - write it fresh; (e) a worker measured a stall from a tree 239
+              commits behind Alpha and raised a false hand - STALE-TREE RULE; (f) the session disk allowance (above); (g) a
+              whole-file patch-id is too strict for an adjacent keep-both merge - compare added-line sets per file; (h) a Haiku
+              restamp quoted a command that does not exist and shortened a file other docs cite by line; (i) the mutation-guard
+              script runs the real sweep on an unknown flag (--help) and rewrites lib sources in place - refuse unknown flags
+              (backlog candidate); (j) raised-hands gate gaps: the schema is not validated without flags, a hand whose stall
+              vanished is only reported, stalls must be measured at the origin tip; (k) two PRE-EXISTING handoff-sim safety gaps
+              found by #1330's refuter (the simulator composes only the current exception's signal; a credential-shaped taskRef
+              refuses the whole step) - decision-path, a DR proposal, the owner merges.
+              OWNER QUEUE: merge #1239 #1240 #1242 #1244 #1215 #1222 #1230 #1280 #1307 #1309 #1320 #1321 #1330 #1337 #1338
+              #1190 #1146 #1153 #1050 (+ his own #1314 #1322); signalgrid-mcp #15 (needs a refresh first); close the 26
+              superseded tick PRs in #1257-#1299 and #1336; yes/no on deleting the 19 local attack-reproduction branches
+              (deny-listed for the lane); the standing question whether the brain may merge product PRs after a clean review.
+              Next (at 06:40Z): wave 13 on the next fix pushes; land SHIPs one at a time; re-review #1353/#1354 on the Mac's
+              pushes; re-dispatch brace-less wave 4 when an Opus slot frees; readiness and launch-evidence as loop:state reads
+              them at the tip. Window detail: docs/agent/EVIDENCE.md, section "## 2026-10-01 - 31 PR MERGES ..." (its only
+              2026-10-01 entry).
+TIERS THIS SESSION: coordinator on claude-fable-5-1 (user switch); planner Sonnet; reviewers Sonnet, refuters Opus; workers
+              B38-B40 Opus, B41 Haiku, B41b/B42/B43 Sonnet; an Opus record-writer subagent wrote this record. The verdict comments
+              before 05:19Z name no model; from 05:19Z some (#1265 rounds 10-11, #1353, #1354) name the DR-047 tiers.
+PREVIOUSLY:   2026-09-30 (cloud lane; window 12:30Z-~16:05Z, closing at #1310's merge 96338294, 16:06:25Z) - FIVE CODE
+              LANDINGS UNDER DR-037 + ONE TICK LANDING + FOUR MAIL PRs; THE MAC ASKED THE CLOUD TO LAND FIVE - #1218 AND #1252
+              LANDED AT 16:22Z (just after the close, recorded here on the coordinator's instruction), #1216/#1225 FIX-NEEDED.
+              OWNER DIRECTIVE 2026-09-30 (verbatim): "Keep going and building everything you need and becoming the mega brain that
+              runs SignalGrid the worlds first smart automated orchestrator for all that want to bring modern era to legacy self
+              indepent systems across the entrire company this company provides to solution to self run and automate all signals
+              from any source and turn it into an actionable function on whatever platform the user is using the puck and it will
+              do things automated or self driven all depending on the user and how smart the workflows and varables on the company
+              itself using my product/solution." Consistent with docs/PURPOSE.md; any new platform/hardware scope still needs a
+              DR first (DR-020 rule). Building and claiming stay two acts: the quote is a directive, not a launch claim.
+              LANDED (cloud, DR-037; merge sha / gating check run): #1295 dde8c276 / 109882916391 (objective loop queues the next
+              free same-day request id, nextFreeRequestId - the Mac tick stopped cutting a branch every 5 min: no mac/tick-* PR
+              after #1300 at 12:42Z); #1237 3de208fe / 109910058858 (plan rows 146/147/148: SBOM maven half, e2e egress guard, e2e
+              README count) - FIVE gating attempts, two stale Actions listings ("last success was 644.4h ago") and two 502s read
+              as a ~1h rate limit; #1305 4a6a863c / 109927316942 (ci-liveness retries a 5xx carrying x-ratelimit-reset); #1277
+              3dee6a25 / 109935679941 (corepack pnpm fetch retry, grype fails on a crash - plan row 59); #1312 f1786167 /
+              109969353542 (ci-liveness confirms a red verdict against a second, differently-keyed runs listing). Tick landing
+              #1313 1dc2f7d9 / 109969646817 (Mac tick 20260930T124226Z, evidence re-mint request -2, coverage regenerated on
+              current mainline); #1300 reads merged through it. Mail/heartbeats: #1296 35ac13c9, #1304 3f91a9dd, #1306 2fa150a3
+              (forward-build cycle), #1310 96338294 (ack of the Mac land-5 ask + steward keepalive).
+              MAC ASK (mail mac-mac-5-safety-machinery-prs-are-green-clean-p, 14:52Z): land #1216 #1218 #1225 #1252 #1256 under
+              DR-037. Acked in #1310; each lands only after an independent Sonnet review + an Opus refutation, one at a time.
+              After the close: #1218 (owner escalations + a red weekly Mac-lane run become auto hands) merged 29b97fef /
+              109672057568 at 16:22:40Z and #1252 (four gates: an unreadable scanned file fails, only ENOENT skipped) merged
+              859b0d94 / 109767342465 at 16:22:58Z - both ship, upheld; #1216 and #1225 fix-needed, upheld, verdicts on the PRs;
+              #1256 had no verdict posted at the read. #1248 (build tick) lands after the Mac's conflict push; the DECISION_PATH
+              five (#1219 #1220 #1224 #1251 #1255) wait on the owner's #1246 (DR-061).
+              REVIEWS (brain): #1277 ship (landed); #1280 fix-needed: row 91 not built, the per-version test-binding call is the
+              owner's (hand raised on the branch), DECISION_PATH so the OWNER merges; #1272 and #1274 round-2 fix-needed (15:43Z) -
+              the original workers B16/B17 woke on the comments and are fixing; #1265 fix-needed (delta review 10:38Z), fix
+              worker F1 dispatched 14:14Z; #1309 owner-decision (16:23Z) - deleting lib/api-spec/product-openapi.json is
+              DECISION_PATH under --no-renames, so the owner merges.
+              WAVE 2026-09-30: B1-B22 dispatched earlier; this window F1 (#1265 fix), B23 brace-less sweep (#1311), B24 fonts +
+              OIDC pin (#1307), B25 fossil/census/orphan spec (#1309), B26 screen inventory (#1308), B27 signalgrid CLI (DR-040;
+              no PR at the close). HELD for file contention: DMH domains (#1247), session-store (#1219), audit-chain whole verify
+              (v1.ts), web-a11y floor (after #1265).
+              LESSON CANDIDATES (HELD - not numbered; #1133 claims L23): (a) create_session inherits the coordinator's model: two
+              fix workers (F2 #1272, F3 #1274) were created on Fable after a model switch and archived within 30 ms - every spawn
+              names its tier (DR-047); (b) a review comment on a worker's PR wakes the ORIGINAL worker, so a fix worker on the
+              same branch is a second writer - get_session the original first; (c) gated landing chains under load outrun the 1h
+              background timeout - use the 2h maximum.
+              OWNER QUEUE: merge #1239 #1240 #1242 #1244 #1215 #1222 #1230 #1190 #1146 #1153 #1050 #1280 (and #1309); close the
+              junk tick PRs #1257 #1262 and the mac/tick-* PRs in #1269-#1299; yes/no on deleting the 19 local
+              attack-reproduction branches (hand 2026-09-27-19-local-only-branches-in-the-cloud-container-at; branch deletion is
+              on the lane's deny list in .claude/settings.json).
+              Next (at 16:05Z): land the rest of the Mac's five as each review survives its refutation; #1248 after the Mac's
+              push; re-review #1272/#1274 on B16/B17's pushes; loop:state read readiness 0% (launch-evidence 0%) at 96338294 until
+              the Mac runs #1313's -2 re-mint request. Window detail: docs/agent/EVIDENCE.md, section "## 2026-09-30 -
+              FIVE CODE LANDINGS UNDER DR-037 ..." (its only cloud-lane 2026-09-30 entry).
+TIERS THIS SESSION: the coordinating session read model claude-fable-5-1 at 16:38Z (user_switched_model; configured
+              claude-opus-4-8) - the switch lesson candidate (a) names; every wave worker (B1-B27, F1) and the F2/F3 re-spawns ran
+              on Opus (configured_model claude-opus-5-5); the two Fable F2/F3 spawns were archived ~30 ms after creation; Sonnet
+              review + Opus refutation on the Mac's five per the coordinator (the PR comments name no model); an Opus
+              record-writer subagent wrote this record.
+AFTER THE WINDOW (to 17:35Z; the next record owns the detail): #1302 merged 9f771e34 (DR-037, check run 109895364861);
+              Mac #1256 merged ed62554f (DR-037, 109773993346) after the cloud lane reshaped its body to the seven headings -
+              SignalGrid_Alpha's phase-pr-evidence enforces them since #1233 and does not re-run on an edit, so the reshape was
+              proved with `pnpm run phase:summary-check` (summary=pass) before the merge; mail #1316 merged 60cc677c (110000705328).
+              #1301 fix-needed (untested enumerateCiJobs throw); #1307 and #1309 owner-decision; workers B28-B31 dispatched on Opus;
+              #1236 and #1303 landing chains running.
+PREVIOUSLY:   2026-09-30 (Mac lane) - OWNER: "BUILD THE WHOLE SYSTEM USING THE BRAIN". 16 NEW PRs + #1118 FINISHED + 3 MERGE STEPS; DR-061 (#1246) IS HIS ONE MERGE.
+              WHY IT STALLED: objective-loop tasks[0..2] were plan rows 17/18/24, all owner- or lab-blocked; the lane
+              tick only ran sim requests + heartbeats (159 heartbeat commits since 09-27); ~10 PRs waited on owner merges.
+              OWNER DECIDED 2026-09-29 (AskUserQuestion, in a Mac session): golden-rule-1 exception for #1118/#1121
+              (comment on both PRs); lanes may merge DECISION_PATH PRs under conditions; an unattended Mac build session.
+              Recorded as DR-061 = #1246 (OWNER_RESERVED - HIS MERGE; after it the lanes merge the DECISION_PATH queue).
+              BUILT (each: test-first, Opus adversarial review applied, local preflight + breadth 0/0 at the pushed head):
+              wave 1 #1216 (loop parks owner/lab-blocked rows as awaiting) #1218 #1219 #1220 #1224 #1225 #1226 #1227 #1228
+              #1247 #1248 (build tick) + #1118 finished (review items 1-5) + Mac merge steps #1083 #1117 #1050; wave 2 #1251
+              #1252 #1255 #1256. Cloud landed #1226 #1227 so far. Live evidence re-minted 7486855d (readiness 100%).
+              LESSONS: (1) mint in a dedicated worktree - the lane tick ff-pulls the main checkout every ~25 min and moved
+              HEAD mid-mint (attestation bound nothing, discarded); (2) the auto-mode classifier judges workflow subagents
+              on their own context - owner approvals relayed in a prompt do not count; DRs, .claude edits and
+              unattended-agent machinery are done in the main session after asking the owner; (3) #1248 got no
+              pull_request CI run (dropped event) - dispatched SignalGrid CI on its head by hand.
+              BUILD TICK INSTALLED 2026-09-30 (launchd com.signalgrid.build-tick, every 3 h): it extracts mainline's
+              build-tick.sh each run, so it no-ops until #1248 lands and builds unattended from then on. Its brief makes
+              every outcome retire its plan row (DONE / AWAITING OWNER / BLOCKED ON LAB), else tasks[] (TOP_N 3) stalls.
+TIERS THIS SESSION: Opus triaged, reviewed (every unit) and built DECISION_PATH units; Sonnet built SAFETY_MACHINERY
+              units and ran landing chains; the coordinator wrote DR-061 and the build tick itself (classifier-blocked
+              in subagents - lesson 2).
+PREVIOUSLY:   2026-09-28 (Mac lane) - CONFLICTS CLEARED + A MISTAKE OWNED. #1136/#1143/#1150 MERGED
               (Tier-1 review coverage 19->22/25, iOS Assist-wire client, tenant-isolation finding traced+
               downgraded). #1118 (iOS parity) and #1037 (intake) had gone CONFLICTING over 2 days; ran the
               Mac merge step on both (cloud sandbox cannot git merge): #1118 d4297467 (rebuilt COMPANY_BUILD_PLAN
@@ -75,7 +463,7 @@ LAST TOUCHED: 2026-09-28 (Mac lane) - CONFLICTS CLEARED + A MISTAKE OWNED. #1136
               #1146 (core-digest, DECISION_PATH) - its backlog check's part two (fixed regression corpus) is still TO ADD; merge once it is on the PR: https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1146
               #1133 (land-branch klass, OWNER_RESERVED; owed at the close as head 765faf7a, PR moved since) - merge only a body-validated head: https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1133
               #1117 (ephemeral test ports, DECISION_PATH) - merge: https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1117
-              #1118/#1121 (golden-rule-1 ruling, asked 08:20Z) - reply 'exception granted' or 'revert': https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1118 and https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1121; exception or not, still owed before either merges: #1121 Apple CI on its head plus three fail-closed mutants, #1118 a TRIGGERS-completeness check and a Linux Swift<->vector binding check (next actor: the Mac lane, which opened both)
+              #1118/#1121 (golden-rule-1 ruling, asked 08:20Z; corrected 2026-09-30 to the #1195 owner hand, 2026-09-28-1118-changes-decisionengine-swift-behaviour-clau, which superseded the 'exception granted or revert' ask): the owner owed (a) a decision record authorising or refusing the #1118 re-port - a bare 'exception granted' reply does not authorise it, (b) the unsafe-allow repair shape, (c) whether #1121 needs his decision; he RULED 2026-09-29 (relayed by the Mac on both PRs): "Grant exception (Recommended) — Swift port catches up to the TS engine. Unblocks #1118 and #1121.", written up as DR-061 in #1246 (open - his merge), which names #1121 too; neither the ruling nor #1246's body names the repair shape (b): https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1118 and https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1121; exception or not, still owed before either merges: #1121 Apple CI on its head plus three fail-closed mutants, #1118 a TRIGGERS-completeness check and a Linux Swift<->vector binding check (next actor: the Mac lane, which opened both)
               #1050 (DR-058) - merge: https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1050. #1083 (DR-059) - merge: https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1083
               Doctrine hand (plan row 8) - reply in chat or on https://github.com/DanFashauer/SignalGrid-Review-Hub/issues/1068. #1037 CodeQL alert - dismiss on https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1037 or reply 'Mac paths-ignore'
               Copilot code-review scanner - CAPIError 400 unsupported model; owner picks a supported model in Copilot settings (not in the 09:30Z heartbeat; confirmed unchanged across the close by #1133's scan runs at 09:49:34Z and 10:41:55Z, both CAPIError 400)
@@ -729,7 +1117,7 @@ PREVIOUS:     2026-09-24 (Mac lane, evening) - TWO OWNER RESOURCES ABSORBED: PR 
               (82/84). Clean run 82/82, up from 73/73. typecheck, review:invariants and
               check-decision-port-parity all green. BLOCKED on one line: preflight fails at the doc
               line-count gate because the branch itself invalidates a figure -
-              docs/COMPANY_BUILD_PLAN.md:4871 says decisionEngine.ts (336) and the branch makes the
+              docs/COMPANY_BUILD_PLAN.md:4784 says decisionEngine.ts (336) and the branch makes the
               file 361 (mainline measured 336). Two ungated figures also go stale:
               VALIDATION_EVIDENCE.md:33 says '11 scenarios / 51 assertions ... the scenario count
               still holds' (now 13 / 82) and PROOF_COVERAGE_AUDIT.md:25,:68 say '11 scenarios x 22
@@ -1743,7 +2131,40 @@ PREVIOUS:     2026-09-24 (Mac lane, evening) - TWO OWNER RESOURCES ABSORBED: PR 
               deterministic, removes 3 old colour bugs) and landed; the iOS SwiftUI
               view-layer rebuild is now COMPLETE, and native/ios/README's file-tree
               was corrected to match.
-BLOCKED ON: the FOUNDER's queue, now on one page (docs/agent/ORG_SELF_EVALUATION_2026-09-12.md,
+BLOCKED ON:   16 open hands (`pnpm run hands`, read 2026-10-16 06:19Z in the docs worktree: "Raised hands — 16 open", "Needs you (Dan) — 14",
+              "Needs the Mac lane — 2", measured at origin/SignalGrid_Alpha 759a39a6; the id list below is the 2026-10-15 22:09Z copy and was not re-diffed against this read).
+              Earlier count, 15:02Z: 16 open hands at origin/SignalGrid_Alpha 38003303 (counted by status over the 31 files in artifacts/raised-hands/,
+              and `pnpm run hands` prints the live list and is the authority, this block being a copy). The tree this record was written
+              on (e6acacc7) holds 17: #1515 (merged 355ff646 at 12:39:09Z) resolved the 17th, the mac-lane-tick cover, after that base.
+              OWNER clears 14 (ids are file stems):
+                2026-10-15-the-account-s-weekly-claude-usage-limit-seven-da - the budget decision, and an explicit go or decline for a NEW
+                  Dependabot queue-review row
+                2026-10-08-the-row-waits-on-the-owner-s-read-of-draft-4-and - read PR #1190 draft 4: publish, revise or drop (plan row 24)
+                2026-10-08-row-38-is-parked-awaiting-owner-since-2026-10-08 - name a pilot stack for the free-tier targets, or keep it parked
+                2026-10-08-row-22-is-parked-awaiting-owner-since-2026-10-08 - the deployment decision (VM and backup host) and whether a
+                  customer requires Fleet Premium
+                2026-10-08-row-17-has-been-parked-since-2026-09-29-because- - a non-production ITSM sandbox and shift-context source, or a
+                  ruling on the decision-path gap
+                2026-10-08-both-prs-re-port-native-ios-enterpriseshell-serv - merge #1246 (DR-061) and pick the #1118 unsafe-allow repair
+                2026-10-02-two-readings-of-the-note-conflict-with-canonical - the puck: one offered factor or the required one, and who
+                  re-binds or revokes
+                2026-10-02-the-repository-secret-claude-code-oauth-token-do - `claude setup-token` and `gh secret set
+                  CLAUDE_CODE_OAUTH_TOKEN` in both repositories, then merge the two workflow PRs
+                2026-09-29-objective-loop-owner-real-in-hand - whether something real is in hand for partners (DR-033): a decision record or no
+                2026-09-28-1118-changes-decisionengine-swift-behaviour-clau - a decision record on the #1118 re-port, the repair shape,
+                  #1121, and #1037's CodeQL alert
+                2026-09-25-policy-ts-v1-stays-silent-on-an-emitted-present- - the doctrine call on an emitted out-of-domain reading
+                2026-09-23-signalgrid-mcp-14-15-merge - merge signalgrid-mcp #14 and #15
+                2026-09-23-pr1005-secret-scan-false-positive - allowlist legacy_125khz in .gitleaks.toml, then merge #1005
+                2026-09-23-build-mac-hygiene - the build Mac's posture: firewall, Time Machine, display sleep, Fleet enrolment
+              MAC LANE clears 2 (a Mac session, which the cloud cannot start):
+                2026-10-15-five-cloud-to-mac-mails-are-unread-6-2-7-0-days- - ack the five mails (pnpm run lane:inbox), then re-mint live
+                  evidence (minted 2026-10-02T16:07Z, e78a7ae1) [superseded: re-minted 2026-10-15T16:33:53Z via #1522, mintedAt]
+                2026-09-28-the-review-acks-on-both-prs-list-work-the-prs-do - deliver every ack item on the #1118 and #1121 heads
+              A CHANGE TO LAND clears 0 at the tip (the 17th hand's change, #1515, landed).
+              Also the owner's, and not hands: the 14 owner-queue PRs #1463 #1459 #1440 #1443 #1442 #1445 #1441 #1439 #1438 #1338 #1337
+              #1330 #1321 #1265; signalgrid-mcp #15 #16 #17 (clean).
+PREVIOUSLY:   the FOUNDER's queue, now on one page (docs/agent/ORG_SELF_EVALUATION_2026-09-12.md,
               'The founder's queue'): Screen Recording for Terminal; 'yes' to the
               branch cleanup; pick the FIRST of
               the seven DR-033 product gaps (docs/BUILD_BACKLOG.md, the full-evaluation section);
@@ -1758,7 +2179,33 @@ BLOCKED ON: the FOUNDER's queue, now on one page (docs/agent/ORG_SELF_EVALUATION
               owner-gated and cannot be landed by either lane however green. #730 closes the last
               readiness gap and has been green since 06:30. This is now the binding constraint on
               the whole build; nothing else in the queue moves until those merge.
-NEXT ACTION: cloud: (000000) 2026-09-25 21:05Z: readiness is at goal; the binding constraint moves to the OWNER's two
+NEXT ACTION: cloud lane (2026-10-16, as of 09:01Z, every PR re-read from the API at that instant). Every item is named by its PR and branch; nothing here depends on a sha that only
+              the cloud container holds. In this order:
+              1. #1370 (claude/build-console-unknown-render-props-maps, open and not a draft, head 68827403 — round 24 pushed 07:07Z): round 25, owed by its worker since the 08:28Z note. The round-24 landing refute held M1–M4, the helper-parameter class and the status-flag keys (the ten named plants and the refute's extra twins flag on the real gate; 64 of 64 mutants red; 0 regressions over 151 earlier shapes),
+              and all five DR-037 conditions except condition 3: the five sixth-pass Codex threads (33–37) are declared in the body only — declare them in the header, the Remaining-risks bullet and row 2379, or fix 35. Live count (`gh api repos/DanFashauer/SignalGrid-Review-Hub/pulls/1370/ccr/review_threads`, 09:01Z): 37 threads, 32 resolved, 5 open. On the push: the delta refute, the five threads resolved, the landing under DR-037.
+              2. #1349 (claude/build-controls-matrix-status-gate, draft, head 07d44dff at 08:46Z): round 27 pushed — the two self-test pins the round-26 refute asked for (H12/H13 pass the phantom through `indexed`; the in-process pass control requires the fixture path in `ctx.indexed`) and the body refresh; no behaviour change. The delta refute of this head is running; land under DR-037 if it ships (mark ready first; Codex runs then).
+              3. #1378 (claude/build-row-status-drift-detector, draft, head c96e7b6b, conflicted with mainline): round 16. The coverage-page merge, the four unpinned guards, and the sha regex. The worker did not wake on the round-15 note; a direct one-shot wake is queued behind the pool cap.
+              4. #1333 (claude/build-mcp-roster-context7-pin-parity, draft, head 32024b21 at 08:02Z): round 31, owed by its worker since the 08:58Z wake. The round-30 review closed round 29's two classes (F1 0 of 8,537 in all 30 shapes; F3 0 misses in 106,000 fuzz lines) but found one MEDIUM — the new range reader requires a space or tab and one of four continuations, so a glued `||`, a trailing `||`, `- *` and Unicode whitespace still pass in every non-quote container — plus two self-test survivors and two dead lines.
+              5. Waiting on the owner. Counts are by classifyDiff (scripts/check-owner-gated-surfaces.mjs) over the changed files of each open PR, measured at 23:00:53Z:
+              (a) every open PR with a claude/ head, 44 PRs: 26 match DECISION_PATH (23 non-draft) and 3 match OWNER_RESERVED (2 non-draft, #1321 #1265; 1 draft, #1307);
+              (b) every open non-Dependabot PR, 104 PRs (9 Dependabot excluded): 36 match DECISION_PATH (33 non-draft) and 4 match OWNER_RESERVED (3 non-draft,
+              #1322 #1321 #1265; 1 draft, #1307). Also waiting on the owner: #1337 (the launch-claims gate); the Mac decision-record PRs #1357 #1322 #1246; 9 Dependabot PRs;
+              signalgrid-mcp #15 #16 #17.
+              The one unmet objective-loop criterion is owner-real-in-hand (attestedIn null, from `node scripts/objective-loop.mjs --json`). Row 17 of
+              docs/COMPANY_BUILD_PLAN.md is a separate parked item: the objective loop lists it as awaiting an ITSM lab (owner hand raised 2026-10-08).
+              THROTTLE: at most three concurrent workers until the owner decides the budget (the owner hand, open at 23:03Z by `pnpm run hands`).
+PREVIOUSLY:   owner: merge #1246 #1322 #1357, #1416 #1417 #1422 #1424, signalgrid-mcp #15 #16 #17; mint the GitHub-App
+              secret once (claude setup-token + gh secret set in both repos). cloud: land the SAFETY set under DR-037; the
+              DECISION_PATH set once #1246 lands. mac: re-mint on the next manifest move; build the loop's next tasks[] row
+              as 27 and 17b close; flip mac-build-tick active once #1248 lands.
+              owner: merge #1246 #1322 #1357 + signalgrid-mcp #15 #16; run /install-github-app per repo; protect
+              signalgrid-mcp main. cloud: land #1353 #1248 #1323 #1216 #1225 under DR-037, then the DECISION_PATH set under
+              DR-061. mac: after #1248 lands, flip mac-build-tick to active and read the first real run; after #1247 lands,
+              re-mint live evidence in the .mint worktree; union-merge #1322/#1357 after #1246 lands.
+              mac: (2026-09-30) the build tick is INSTALLED; once #1248 is on mainline, flip the mac-build-tick row
+              to active and read the first real run's log (~/Library/Logs/signalgrid/build-tick-*.log); after #1247 lands (manifest
+              moved), re-mint live evidence in the .mint worktree. owner: merge #1246 (DR-061).
+              cloud: (000000) 2026-09-25 21:05Z: readiness is at goal; the binding constraint moves to the OWNER's two
               calls - merge #1050 (DR-058 proposal) or leave it, and the #1037 CodeQL call. The cloud keeps both green
               and conflict-free and does not press merge. Next bounded build from objective-state tasks[0..2] under the
               heartbeat-witness rule (row 5 EnterpriseShell badge/session lane -> real backend is #1, skill:signalgrid-native)

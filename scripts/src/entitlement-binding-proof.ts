@@ -11,9 +11,9 @@
 //      own ceiling.
 //   4. NO NETWORK I/O in the family.
 
-import { readFileSync, readdirSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { scanForVendorCalls, vendorCallScanSelfTest } from "./lib/no-vendor-call.js";
 import {
   evaluateEntitlementBinding,
   evaluateEntitlementBindingFixture,
@@ -364,6 +364,13 @@ check(`every fixture grades as its name claims (${Object.keys(expectations).leng
     ([name, action]) => evaluateEntitlementBindingFixture(name)?.recommendedAction === action));
 check("an unknown fixture name is null, never invented",
   evaluateEntitlementBindingFixture("no-such-fixture") === null);
+// Pinned by the brace-less sweep (2026-10-01): the `Object.hasOwn` guard had no
+// check that reached it — "no-such-fixture" is not a prototype key, so it is null
+// with or without the guard. A HOSTILE unknown is: without the guard "constructor"
+// resolves to the Object function and is graded as a fixture.
+check("a fixture name that is an inherited Object.prototype member is null — the hostile unknown, not a friendly one",
+  ["constructor", "toString", "hasOwnProperty", "__proto__", "valueOf"].every(
+    (n) => evaluateEntitlementBindingFixture(n) === null));
 check("the fixture corpus covers every posture this dimension can report",
   new Set(Object.keys(ENTITLEMENT_BINDING_FIXTURES).map(
     (n) => evaluateEntitlementBindingFixture(n)!.posture)).size === 5);
@@ -375,63 +382,21 @@ check("no fixture carries a wall-clock timestamp — depths are counts, not time
 {
   const here = dirname(fileURLToPath(import.meta.url));
   const dir = resolve(here, "../../lib/integrations/src/integrations/entitlement-binding");
-  // RECURSIVE. The previous scan used a flat readdirSync, so a subdirectory could
-  // hold anything at all and the guarantee would still print green.
-  const walk = (d: string): string[] =>
-    readdirSync(d, { withFileTypes: true }).flatMap((e) =>
-      e.isDirectory() ? walk(join(d, e.name)) : e.name.endsWith(".ts") ? [join(d, e.name)] : []);
-  const files = walk(dir);
-  const offenders: string[] = [];
-
-  // WHAT THIS BANS, and the claim is now narrowed to what it actually checks.
-  //
-  // THE OLD VERSION PRINTED A FALSE GUARANTEE. It said "no network I/O in any
-  // source" while matching only fetch/axios/got/undici/https.request and a mutating
-  // `method:` literal. Adversarial review found `nac/store.ts` doing
-  // `await import("ioredis")` and opening a TCP connection to Redis — real network
-  // I/O, invisible to every pattern in the list. The scan was reporting success over
-  // something it had stopped looking at, which this repo's own guard-registry header
-  // calls WORSE than no guard.
-  //
-  // Two changes. (1) The claim is now "no VENDOR-API call", which is the property
-  // that actually matters here — Redis is configuration storage, not a device
-  // actuator, and banning it outright would be theatre. (2) The pattern list gained
-  // dynamic import of network clients, node:net/http/https/tls, XHR, WebSocket and
-  // aliased fetch, so the next thing that sneaks in has fewer doors.
-  const banned = [
-    /\b(?:fetch|XMLHttpRequest|WebSocket|EventSource)\s*\(/i,
-    /\b(?:const|let|var)\s+\w+\s*=\s*fetch\b/i,            // aliased fetch
-    /\brequire\s*\(\s*['"](?:axios|got|undici|node-fetch|superagent|request|ioredis|redis|pg|mysql2|mongodb)['"]/i,
-    /\bimport\s*\(\s*['"](?:axios|got|undici|node-fetch|superagent|request|ioredis|redis|pg|mysql2|mongodb)['"]/i,
-    /\bfrom\s+['"](?:axios|got|undici|node-fetch|superagent|request)['"]/i,
-    /\bfrom\s+['"]node:(?:net|http|https|tls|dgram)['"]/i,
-    /\bhttps?\.(?:request|get)\s*\(/i,
-    /\bnet\.(?:connect|createConnection)\s*\(/i,
-    /method:\s*['"](?:POST|PUT|PATCH|DELETE)['"]/i,
-  ];
-  // NO FILE IS EXEMPT HERE, and there is no exemption predicate to copy. This carried
-  // `const allowed = (_rel: string) => false;` and a matching `if (allowed(rel)) return;`
-  // — dead code cloned from nac-proof's §4, where the same shape (evaluated on the
-  // FILENAME, before the pattern test) switched all nine patterns off for an entire file
-  // and hid a planted ISE quarantine call. An exemption that exempts nothing is a
-  // template waiting to be filled in; if this family ever needs one it must be scoped to
-  // the REASON — take the line, test the pattern subset — the way nac-proof's is now.
-  for (const f of files) {
-    const rel = f.slice(dir.length + 1);
-    readFileSync(f, "utf8").split("\n").forEach((line, i) => {
-      const t = line.trim();
-      if (t.startsWith("//") || t.startsWith("*") || t.startsWith("/*")) return;
-      if (banned.some((re) => re.test(line))) offenders.push(`${rel}:${i + 1}`);
-    });
-  }
+  // NO FILE IS EXEMPT HERE: no config-storage set is passed. If this family ever needs
+  // one it is scoped to the REASON by the shared classifier, never to the filename.
+  // The scan is the SHARED one (scripts/src/lib/no-vendor-call.ts, row 119): five
+  // proofs carried five copies of this pattern list and one drifted permissive.
+  // RECURSIVE over every file, with a non-empty floor — a scan of nothing is green.
+  const { files, offenders } = scanForVendorCalls(dir);
   if (offenders.length) console.log(`      offenders: ${offenders.join(", ")}`);
   check(`no VENDOR-API call in any entitlement-binding/ source — an actuator cannot return (${files.length} files scanned recursively)`,
-    offenders.length === 0);
-  // NON-VACUITY: the scan must be able to FAIL. Without this, deleting the pattern
-  // list would leave the assertion green and nobody would notice.
-  check("...and the scan actually detects a planted vendor call",
-    banned.some((re) => re.test(`await fetch("https://vendor/api", { method: "POST" })`)) &&
-    banned.some((re) => re.test(`const { Redis } = await import("ioredis");`)));
+    files.length > 0 && offenders.length === 0);
+  // NON-VACUITY: the scan must be able to FAIL — against one planted control PER
+  // PATTERN CLASS, not a single `fetch(`. The shared self-test also requires the drifted
+  // six-pattern list to fail those controls (scripts/src/lib/no-vendor-call.ts, row 119).
+  const selfTest = vendorCallScanSelfTest();
+  check(`...and the scan actually detects a planted vendor call of every pattern class${selfTest.length ? `: ${selfTest.join("; ")}` : ""}`,
+    selfTest.length === 0);
 }
 
 

@@ -1,6 +1,7 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "messageId": "cloud-lab-001-step-1-formally-queued-as-a-sim-re",
   "ackedBy": "mac",
-  "note": null
+  "note": "Read 2026-10-31, two months late. The evidence op ran 2026-10-21 (LOOP STATE: mac-run.json on a70c36b3). The other items in that queue are not actioned by this session; pending sim requests are listed by scripts/check-sim-requests.mjs.",
+  "ackedAt": "2026-10-31T18:50:03.813Z"
 }

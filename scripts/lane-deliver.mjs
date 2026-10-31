@@ -231,6 +231,8 @@ let pushedSha = null;
   const gates = [["scripts/check-lane-messages.mjs", "lane messages"]];
   if (touchesHeartbeat) gates.push(["scripts/check-scheduled-routines.mjs", "scheduled routines"]);
   if (touchesHands) gates.push(["scripts/raised-hands.mjs", "raised hands", ["--coherence"]]);
+  // The schema gate preflight and CI run: a hand it would reject must not reach mainline from here.
+  if (touchesHands) gates.push(["scripts/check-raised-hands.mjs", "raised-hands schema"]);
   for (const [script, label, extra = []] of gates) {
     if (!existsSync(join(wt, script))) {
       // A check that did not run is not a check that passed. This used to

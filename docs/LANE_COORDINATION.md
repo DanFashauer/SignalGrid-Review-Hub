@@ -521,5 +521,10 @@ all owned attempts are terminal or separately held, initialize ONCE with
 `node scripts/lib/lane-attempt-store.mjs init <checkout>`. Normal ticks only read
 the marker; missing or replaced state refuses delivery. Never initialize to
 repair lost evidence, delete old receipts, or treat Generated content as authority.
-Per-cause build-hand fencing still requires a separately qualified repair for a
-known resolved blocker's recurrence; it is not an automatic reopen mechanism.
+A fresh build-hand notification episode requires a regular independent parent
+exit0, original canonical merge proof and the exact hand now resolved in canonical
+with its resolution evidence. `readback <receipt> --resolved-hand <exact-id>` is
+GET/fetch-only and returns the cleared Git blob identity. That identity fences one
+new hand; old records remain immutable. Unknown, missing or unconfirmed attempts
+stay held across dates. Notification clearance never retries a coding task or
+renews its source, ownership, grant or model budget.

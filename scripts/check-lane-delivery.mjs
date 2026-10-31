@@ -15,11 +15,11 @@ let passed = 0;
 let failed = 0;
 
 function fixture({ lane = "mac", reject = false, loseResponse = false, failBeforePush = false, gateFails = false,
-  readbackCanonicalRace = false, fixedClock = false, readbackState = "MERGED", denyCleanup = false, ghAuthFails = false, ghCreateFails = false, ghAutoFails = false, wakeMailbox = false, tick = false, ...tickOptions } = {}) {
+  readbackCanonicalRace = false, fixedClock = false, readbackState = "MERGED", denyCleanup = false, ghAuthFails = false, ghCreateFails = false, ghAutoFails = false, wakeMailbox = false, hand = false, tick = false, ...tickOptions } = {}) {
   if (tick) return heartbeatFixture(tickOptions);
   const root = mkdtempSync(join(tmpdir(), "sg-delivery-test-"));
   const repo = join(root, "repo"), remote = join(root, "remote.git"), bin = join(root, "bin");
-  const ghLog = join(root, "gh.jsonl"), pushLog = join(root, "push.jsonl");
+  const ghLog = join(root, "gh.jsonl"), pushLog = join(root, "push.jsonl"), mergeOID = join(root,"merge.oid"), handOps = join(root,"hand-ops.json");
   mkdirSync(repo); mkdirSync(bin);
   const env = { PATH: `${bin}:${dirname(process.execPath)}:${dirname(GIT)}:/usr/bin:/bin`, HOME: root,
     TMPDIR: root, LANG: "C", GIT_CONFIG_NOSYSTEM: "1", GIT_CONFIG_GLOBAL: "/dev/null",
@@ -47,6 +47,11 @@ function fixture({ lane = "mac", reject = false, loseResponse = false, failBefor
   file(join(repo, "artifacts/agent-heartbeats/mac-lane-tick.json"), JSON.stringify({ firedAt: "2026-10-24T07:30:38Z", result: "old fixture" }));
   if(wakeMailbox==="malformed")file(join(repo,"docs/agent/lane-mailbox.json"),"{");
   if(wakeMailbox==="directory")file(join(repo,"docs/agent/lane-mailbox.json/.keep"),"fixture\n");
+  if (hand) {
+    file(handOps, JSON.stringify([{op:"raise",id:"fixture-build-hand",doing:"fixture build",blocked:"fixture cause",need:"fixture repair",who:"mac lane"}]));
+    file(join(repo,"scripts/raise-hand.mjs"), `import {mkdirSync,writeFileSync} from 'node:fs';const a=process.argv.slice(2),id=a[a.indexOf('--id')+1];mkdirSync('artifacts/raised-hands',{recursive:true});writeFileSync('artifacts/raised-hands/'+id+'.json',JSON.stringify({id,status:'open',raisedAt:'2026-10-31T00:00:00Z'}));console.log('raised hand recorded: artifacts/raised-hands/'+id+'.json');`);
+    for(const name of ['raised-hands.mjs','check-raised-hands.mjs'])file(join(repo,'scripts',name),'process.exit(0);\n');
+  }
   git(["add", "."]); git(["commit", "-qm", "fixture baseline"]);
   const base = git(["rev-parse", "HEAD"]);
   git(["init", "-q", "--bare", remote]);
@@ -60,17 +65,17 @@ function fixture({ lane = "mac", reject = false, loseResponse = false, failBefor
   file(wrapper, `#!${process.execPath}\nimport {spawnSync} from 'node:child_process';\nimport {appendFileSync,readFileSync,writeFileSync} from 'node:fs';\nconst args=process.argv.slice(2);\nif(args[0]==='remote'&&args[1]==='get-url'&&args[2]==='origin'){console.log(${JSON.stringify(url)});process.exit(0)}\nif(args[0]==='push')appendFileSync(${JSON.stringify(pushLog)},JSON.stringify(args)+'\\n');\n${failBeforePush ? "if(args[0]==='push'){console.error('fixture transport stopped before transmission');process.exit(1)}" : ""}\nconst r=spawnSync(${JSON.stringify(GIT)},args,{stdio:'inherit'});\n${readbackCanonicalRace ? `if(args[0]==='fetch'&&r.status===0){try{const rows=readFileSync(${JSON.stringify(pushLog)},'utf8').trim().split(String.fromCharCode(10)).filter(Boolean).map(JSON.parse);const ref=rows.at(-1).at(-1).slice('HEAD:'.length);const oid=spawnSync(${JSON.stringify(GIT)},['--git-dir',${JSON.stringify(remote)},'rev-parse',ref],{encoding:'utf8'}).stdout.trim();if(/^[a-f0-9]{40}$/.test(oid))writeFileSync(${JSON.stringify(join(repo,'.git/FETCH_HEAD'))},oid+String.fromCharCode(9,9)+'concurrent fixture fetch'+String.fromCharCode(10));}catch{}}` : ""}\n${loseResponse ? "if(args[0]==='push' && r.status===0){console.error('fixture transport response lost');process.exit(1)}" : ""}\nprocess.exit(r.status??1);\n`);
   chmodSync(wrapper, 0o755);
   const gh = join(bin, "gh");
-  file(gh, `#!${process.execPath}\nimport {appendFileSync,chmodSync} from 'node:fs';\nimport {spawnSync} from 'node:child_process';\nconst a=process.argv.slice(2);appendFileSync(${JSON.stringify(ghLog)},JSON.stringify(a)+'\\n');\nif(a[0]==='pr'&&a[1]==='view'){
- const m=spawnSync(${JSON.stringify(GIT)},['--git-dir',${JSON.stringify(remote)},'rev-parse',${readbackCanonicalRace ? "'refs/heads/'+a[2]" : JSON.stringify('refs/heads/'+BASE)}],{encoding:'utf8'}).stdout.trim();
- console.log(JSON.stringify({number:7,state:${JSON.stringify(readbackState)},baseRefName:${JSON.stringify(BASE)},mergeCommit:{oid:m},autoMergeRequest:${readbackState === "OPEN" ? "{}" : "null"}}));
+  file(gh, `#!${process.execPath}\nimport {appendFileSync,chmodSync,existsSync,readFileSync} from 'node:fs';\nimport {spawnSync} from 'node:child_process';\nconst a=process.argv.slice(2);appendFileSync(${JSON.stringify(ghLog)},JSON.stringify(a)+'\\n');\nif(a[0]==='pr'&&a[1]==='view'){
+ const m=${readbackState === "MERGED"} && spawnSync(${JSON.stringify(GIT)},['--git-dir',${JSON.stringify(remote)},'rev-parse',existsSync(${JSON.stringify(mergeOID)}) ? readFileSync(${JSON.stringify(mergeOID)},'utf8').trim() : ${readbackCanonicalRace ? "'refs/heads/'+a[2]" : JSON.stringify('refs/heads/'+BASE)}],{encoding:'utf8'}).stdout.trim();
+ console.log(JSON.stringify({number:7,state:${JSON.stringify(readbackState)},baseRefName:${JSON.stringify(BASE)},mergeCommit:m?{oid:m}:null,autoMergeRequest:${readbackState === "OPEN" ? "{}" : "null"}}));
 }
 else if(a[0]==='auth'&&a[1]==='status'){${ghAuthFails ? "process.exit(1)" : "process.exit(0)"}}\nelse if(a[0]==='pr'&&a[1]==='create'){${ghCreateFails ? "console.error('fixture creation response lost or unauthenticated');process.exit(1)" : "console.log('https://github.com/fixture/route/pull/7')"}}\nelse if(a[0]==='pr'&&a[1]==='merge'&&a.includes('--auto')){${ghAutoFails ? "console.error('fixture auto-merge response lost');process.exit(1)" : `${denyCleanup ? `chmodSync(${JSON.stringify(root)},0o500);` : ""}console.log('fixture auto-merge request')`}}\nelse process.exit(2);\n`);
   chmodSync(gh, 0o755);
   const records = (p) => existsSync(p) ? readFileSync(p, "utf8").trim().split("\n").filter(Boolean).map(JSON.parse) : [];
   return { root, repo, base, git, run(extra = []) {
-    return spawnSync(process.execPath, [join(repo, "scripts/lane-deliver.mjs"), "heartbeat", "mac-lane-tick", "acted: fixture", ...(wakeMailbox ? [] : ["--no-wake"]), ...extra], { cwd: repo, env, encoding: "utf8", timeout: 90000 });
-  }, readback(path) {
-    return spawnSync(process.execPath,[join(repo,"scripts/lane-deliver.mjs"),"readback",path],{cwd:repo,env,encoding:"utf8",timeout:90000});
+    return spawnSync(process.execPath, [join(repo, "scripts/lane-deliver.mjs"), ...(hand ? ["batch",handOps] : ["heartbeat", "mac-lane-tick", "acted: fixture"]), ...(wakeMailbox ? [] : ["--no-wake"]), ...extra], { cwd: repo, env, encoding: "utf8", timeout: 90000 });
+  }, readback(path, extra = []) {
+    return spawnSync(process.execPath,[join(repo,"scripts/lane-deliver.mjs"),"readback",path,...extra],{cwd:repo,env,encoding:"utf8",timeout:90000});
   }, refresh({tamper=false}={}) {
     const target=records(pushLog).at(-1).at(-1).slice("HEAD:".length);
     const original=git(["rev-parse",target],remote);
@@ -84,7 +89,15 @@ else if(a[0]==='auth'&&a[1]==='status'){${ghAuthFails ? "process.exit(1)" : "pro
   }, land() {
     const target=records(pushLog).at(-1).at(-1).slice("HEAD:".length);
     git(["fetch","origin",target]);git(["merge","--no-ff","--no-edit","FETCH_HEAD"]);
+    writeFileSync(mergeOID,git(["rev-parse","HEAD"])); // real PR merge identity stays fixed after later canonical commits
     git(["fetch",repo,`HEAD:refs/heads/${BASE}`],remote); // disposable fixture's simulated protected merge
+  }, clearHand(resolution = "fixture repair verified") {
+    const path=join(repo,"artifacts/raised-hands/fixture-build-hand.json");
+    const value=JSON.parse(readFileSync(path,"utf8"));
+    file(path,JSON.stringify({...value,status:"resolved",resolution,resolvedAt:"2026-10-31T01:00:00Z",resolvedBy:"mac"}));
+    git(["add","artifacts/raised-hands/fixture-build-hand.json"]);git(["commit","-qm","disposable canonical hand resolution"]);
+    git(["fetch",repo,`HEAD:refs/heads/${BASE}`],remote);
+    return git(["rev-parse","HEAD:artifacts/raised-hands/fixture-build-hand.json"]);
   }, pushes: () => records(pushLog), ghCalls: () => records(ghLog), refs: () => git(["for-each-ref", "--format=%(refname)", "refs/heads"], remote).split("\n") };
 }
 
@@ -486,6 +499,53 @@ for(const kind of ['missing-marker','corrupt-marker','missing-directory','replac
 }
 
 }
+
+{
+
+function handEpisodes(steps){
+ const root=mkdtempSync(join(tmpdir(),'sg-hand-episode-'));const records=join(root,'records'),cache=join(root,'cache'),calls=join(root,'calls');
+ mkdirSync(records);mkdirSync(cache);mkdirSync(join(root,'scripts'));
+ const source=readFileSync(join(ROOT,'scripts/mac/build-tick.sh'),'utf8'),start=source.indexOf('raise_hand() {'),end=source.indexOf('\nfail() {',start);assert.ok(start>=0&&end>start);
+ writeFileSync(join(root,'scripts/lane-deliver.mjs'),`import fs from 'node:fs';\nconst a=process.argv.slice(2),calls=${JSON.stringify(calls)};\nif(a[0]==='batch'){const ops=JSON.parse(fs.readFileSync(a[1],'utf8'));let before=[];try{before=fs.readFileSync(calls,'utf8').trim().split('\\n').filter(Boolean).map(JSON.parse)}catch{};fs.appendFileSync(calls,JSON.stringify(ops[0])+'\\n');const receipt=a[a.indexOf('--receipt')+1];fs.writeFileSync(receipt,JSON.stringify({episode:before.length,id:ops[0].id}));console.log('fixture batch accepted; pending');process.exit(Number(process.env.DELIVERY_RC));}\nif(a[0]==='readback'){const r=JSON.parse(fs.readFileSync(a[1],'utf8'));if(a[a.indexOf('--resolved-hand')+1]!==r.id)process.exit(2);const p=process.env.PHASE;if(p==='bad'){console.log('unbound marker');process.exit(0)}if(p==='open')process.exit(3);if(p==='collide'||p==='clear0'&&r.episode===0||p==='clear1'&&r.episode<2){console.log('resolved hand '+(p==='collide'||r.episode===0?'a':'b').repeat(40));process.exit(0)}process.exit(4)}process.exit(2);`);
+ const q=s=>"'"+s.replaceAll("'","'\\''")+"'";
+ const actions=steps.map((step,i)=>`export DELIVERY_RC=${step.code??0} PHASE=${q(step.phase)}\nSTAMP=202610${i<1?'30':'31'}T010000Z\n${step.missing?'rm -f "$RECORDS"/*.exit\n':''}raise_hand 'same source-backed fixture blocker'`).join('\n');
+ const script=`set -u\nDRY=0\nCACHE="$CACHE_PATH"\nREPO_ROOT="$FIXTURE_ROOT"\nRUN_LOG="$FIXTURE_ROOT/run.log"\nsay(){ printf '%s\\n' "$1"; }\nnode(){ if [ "$1" = "$REPO_ROOT/scripts/lib/lane-attempt-store.mjs" ]; then printf '%s\\n' "$RECORDS"; else "$FIXTURE_NODE" "$@"; fi; }\n${source.slice(start,end)}\n${actions}\ntrue\n`;
+ try {const r=spawnSync('/bin/bash',['-c',script],{cwd:root,env:{PATH:'/usr/bin:/bin',HOME:root,FIXTURE_ROOT:root,FIXTURE_NODE:process.execPath,CACHE_PATH:cache,RECORDS:records},encoding:'utf8',timeout:10000});assert.equal(r.status,0,r.stderr);const sent=readFileSync(calls,'utf8').trim().split('\n').map(JSON.parse);return {sent,stdout:r.stdout};}
+ finally{rmSync(root,{recursive:true,force:true});}
+}
+const cases=[
+ ['unknown terminal remains held across day and apparent clear',[{phase:'pending',code:3},{phase:'clear1',code:0}],1],
+ ['missing independent terminal stays held despite a child receipt',[{phase:'pending'},{phase:'clear1',missing:true}],1],
+ ['known pending hand never duplicates',[{phase:'pending'},{phase:'pending'},{phase:'pending'}],1],
+ ['landed open hand does not create another episode',[{phase:'pending'},{phase:'open'}],1],
+ ['one exact cleared episode permits one different hand',[{phase:'pending'},{phase:'clear0'},{phase:'pending'}],2],
+ ['two different clear blobs permit exactly two successor hands',[{phase:'pending'},{phase:'clear0'},{phase:'clear1'},{phase:'clear1'}],3],
+ ['a successful readback without a bound clear token stays held',[{phase:'pending'},{phase:'bad'}],1],
+ ['repeating a clear token cannot loop or create a third hand',[{phase:'pending'},{phase:'collide'},{phase:'collide'}],2],
+];
+for(const [label,steps,count]of cases){try{const r=handEpisodes(steps);assert.equal(r.sent.length,count);if(count>1){assert.equal(new Set(r.sent.map(x=>x.id)).size,count);assert.ok(r.sent.every(x=>/^build-[a-f0-9]{64}$/.test(x.id)));}assert.doesNotMatch(r.stdout,/hand delivered/);passed++;console.log('PASS '+label)}catch(e){failed++;console.error('FAIL '+label+': '+e.message)}}
+}
+
+control("exact landed hand must be canonically resolved before a new notification episode",{hand:true},f=>{
+ const receipt=join(f.root,"hand.submission.json");assert.equal(f.run(["--receipt",receipt]).status,0);f.land();
+ const before=f.pushes().length,mutations=()=>f.ghCalls().filter(a=>a[0]==="pr"&&["create","merge","comment"].includes(a[1])).length,prior=mutations();
+ const open=f.readback(receipt,["--resolved-hand","fixture-build-hand"]);assert.equal(open.status,3);assert.doesNotMatch(open.stdout,/resolved hand/);
+ const oid=f.clearHand(),resolved=f.readback(receipt,["--resolved-hand","fixture-build-hand"]);
+ assert.equal(resolved.status,0,resolved.stderr);assert.match(resolved.stdout,new RegExp('^resolved hand '+oid+'$','m'));
+ assert.equal(f.pushes().length,before);assert.equal(mutations(),prior,'clearance readback is never a publication or auto-merge retry');
+});
+control("resolved status without resolution evidence never clears a hand",{hand:true},f=>{
+ const receipt=join(f.root,"hand.submission.json");assert.equal(f.run(["--receipt",receipt]).status,0);f.land();f.clearHand("");
+ const before=f.pushes().length,r=f.readback(receipt,["--resolved-hand","fixture-build-hand"]);assert.equal(r.status,3);assert.doesNotMatch(r.stdout,/resolved hand/);assert.equal(f.pushes().length,before);
+});
+control("a different exact hand id cannot borrow another hand's clearance",{hand:true},f=>{
+ const receipt=join(f.root,"hand.submission.json");assert.equal(f.run(["--receipt",receipt]).status,0);f.land();f.clearHand();
+ const r=f.readback(receipt,["--resolved-hand","different-hand"]);assert.equal(r.status,3);assert.doesNotMatch(r.stdout,/resolved hand/);
+});
+control("a heartbeat receipt never authorizes a hand notification episode",{},f=>{
+ const receipt=join(f.root,"heartbeat.submission.json");assert.equal(f.run(["--receipt",receipt]).status,0);f.land();
+ const r=f.readback(receipt,["--resolved-hand","fixture-build-hand"]);assert.equal(r.status,3);assert.doesNotMatch(r.stdout,/resolved hand/);
+});
 
 console.log(`lane-delivery regression: ${passed} passed, ${failed} failed, 0 skipped`);
 process.exitCode = failed ? 1 : 0;

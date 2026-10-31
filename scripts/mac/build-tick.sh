@@ -164,12 +164,13 @@ say() {
 
 # A hand through lane-deliver's protected mail PR, never only a file in the
 # build clone — that clone is reset next run. The parent keeps one immutable
-# attempt for each redacted cause, even across a UTC day change.
+# attempt for each redacted cause, even across a UTC day change. A new notification
+# episode requires the original known parent completion and exact canonical hand clearance.
 raise_hand() {
   if [ "$DRY" = "1" ]; then say "dry-run: would raise a hand: $1"; return 0; fi
   _hand_records="$(node "$REPO_ROOT/scripts/lib/lane-attempt-store.mjs" path "$REPO_ROOT")" || { say "RAISED HAND: shared delivery records unavailable; READBACK ONLY"; return 0; }
   _ops="$(mktemp "$CACHE/hand.XXXXXX")" || { say "WARN could not raise a hand (mktemp)"; return 0; }
-  if _hand_attempt="$(node -e 'const [f, blocked, where, cache, stamp] = process.argv.slice(1);
+  if _hand_attempt="$(node -e 'const [f, blocked, where, cache, stamp, repo] = process.argv.slice(1);
       // Same public-diagnostic policy as run-requests.mjs; private shell logs stay verbatim.
       const home = (process.env.HOME ?? "").replace(/\/+$/, "");
       const redact = (value) => (home ? value.split(home).join("<HOME>") : value)
@@ -184,12 +185,33 @@ raise_hand() {
         need: "a person on the Mac to read the log named in where, fix the cause or re-rank the row, and delete the claim branch it names when the row should be retried" };
       for (const key of ["doing", "blocked", "need", "where"]) hand[key] = redact(hand[key]);
       const fs = require("fs"), path = require("path");
-      const key = require("crypto").createHash("sha256").update(hand.blocked).digest("hex");
-      const attempt = path.join(cache, "hand-" + key);
+      const digest = value => require("crypto").createHash("sha256").update(value).digest("hex");
+      const cause = digest(hand.blocked), visited = new Set();
+      const read = file => {
+        const fd = fs.openSync(file, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW);
+        try {
+          const st = fs.fstatSync(fd);
+          if (!st.isFile() || st.nlink !== 1) throw Error("owned regular attempt record required");
+          return fs.readFileSync(fd, "utf8");
+        } finally { fs.closeSync(fd); }
+      };
+      let episode = cause, attempt = path.join(cache, "hand-" + episode);
+      while (fs.existsSync(attempt + ".attempt.json")) {
+        if (visited.has(attempt)) throw Error("repeated clearance binding");
+        visited.add(attempt);
+        if (JSON.parse(read(attempt + ".attempt.json")).receipt !== attempt + ".submission.json" || read(attempt + ".exit").trim() !== "0") throw Error("original parent is not known complete");
+        read(attempt + ".output"); // missing original evidence never renews an attempt
+        const result = require("child_process").spawnSync(process.execPath, [path.join(repo, "scripts/lane-deliver.mjs"), "readback", attempt + ".submission.json", "--resolved-hand", "build-" + episode], { cwd: repo, encoding: "utf8" });
+        const cleared = /^resolved hand ([a-f0-9]{40})$/m.exec(result.stdout ?? "");
+        if (result.status !== 0 || !cleared) throw Error("original hand not canonically resolved");
+        episode = digest(cause + ":" + cleared[1]);
+        attempt = path.join(cache, "hand-" + episode);
+      }
+      hand.id = "build-" + episode;
       fs.writeFileSync(attempt + ".attempt.json", JSON.stringify({ at: stamp, state: "attempted; pending exact readback", receipt: attempt + ".submission.json" }), { flag: "wx", mode: 0o600, flush: true });
       fs.writeFileSync(f, JSON.stringify([hand]));
       process.stdout.write(attempt);' \
-      "$_ops" "$1" "${RUN_LOG:-launchd log ~/Library/Logs/signalgrid-build-tick.log}" "$_hand_records" "$STAMP" 2>/dev/null)"; then
+      "$_ops" "$1" "${RUN_LOG:-launchd log ~/Library/Logs/signalgrid-build-tick.log}" "$_hand_records" "$STAMP" "$REPO_ROOT" 2>/dev/null)"; then
     if (umask 077; set -C; node "$REPO_ROOT/scripts/lane-deliver.mjs" batch "$_ops" --receipt "${_hand_attempt}.submission.json" >"${_hand_attempt}.output" 2>&1); then _hand_exit=0; else _hand_exit=$?; fi
     if [ -n "$RUN_LOG" ]; then cat "${_hand_attempt}.output" >> "$RUN_LOG"; fi
     node -e 'require("fs").writeFileSync(process.argv[1], process.argv[2]+"\n", {flag:"wx",mode:0o600,flush:true})' "${_hand_attempt}.exit" "$_hand_exit" || say "RAISED HAND: terminal receipt unavailable; READBACK ONLY"

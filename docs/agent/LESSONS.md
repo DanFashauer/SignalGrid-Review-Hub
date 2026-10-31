@@ -406,3 +406,12 @@ block; a stage run on the wrong tier is a lesson here.
 - **evidence:** Actual full failure and import RED retained; corrected current62 delivery controls pass under network denial, all265 staged checks pass in the supported process-inspection environment, with unchanged assertions. Unsupported sandbox CI-cleanup failures and exact own kernel-exit cleanup remain separate evidence.
 - **landing:** pending — copy the complete dependency closure from the same pinned Git tree and keep import free of CLI state initialization; PR #1698 still needs all current-head gates and natural canonical delivery proof.
 - **status:** pending
+
+
+### L45 — Notification clearance is a new episode, never a task retry
+- **date:** 2026-10-31
+- **lane:** mac
+- **incident:** A permanent per-cause fence correctly held unknown notifications but also suppressed a recurrence after the original hand was landed and resolved.
+- **evidence:** Frozen5/3 RED became8/0; current74/0 under actual network denial includes real Git original-merge/current-clearance binding, distinct successor IDs, wrong-ID refusal and no publication during readback. Existing staged265/265 assertions remain unchanged.
+- **landing:** pending — only an independent complete parent and exact canonical cleared-hand blob permit one different notification; no coding-task, grant or budget is renewed. PR #1698 still requires full current-head gates and natural canonical delivery proof.
+- **status:** pending

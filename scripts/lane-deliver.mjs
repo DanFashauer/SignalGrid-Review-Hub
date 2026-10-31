@@ -18,6 +18,7 @@
 //          --no-wake        skip the mailbox-PR comment
 //          --receipt <file> persist exact submission binding before the push
 //   lane:deliver readback <receipt> verifies canonical landing without mutations
+//   add --resolved-hand <id> to require that exact hand is now resolved in canonical
 //
 // WHY THIS EXISTS (2026-09-05, owner: "this is not working and causing delay").
 // The channel's law was "the push is the delivery", and three things made the
@@ -98,6 +99,11 @@ for (let i = 0; i < argv.length; i += 1) {
   else if (a === "--via-pr") continue;
   else if (a === "--no-wake") flags.noWake = true;
   else if (a === "--allow-ungated") flags.allowUngated = true;
+  else if (a === "--resolved-hand") {
+    const id = argv[++i];
+    if (!/^[a-z0-9][a-z0-9-]{0,127}$/.test(id ?? "")) die("--resolved-hand requires an exact safe hand id");
+    flags.resolvedHand = id;
+  }
   else if (a === "--receipt") {
     const v = argv[++i];
     if (!v || v.startsWith("--")) die("--receipt needs an unused local file");
@@ -110,6 +116,7 @@ for (let i = 0; i < argv.length; i += 1) {
   } else positional.push(a);
 }
 const [cmd, ...rest] = positional;
+if (flags.resolvedHand && cmd !== "readback") die("--resolved-hand is readback-only");
 const ALLOW_UNGATED = flags.allowUngated;
 
 /** @returns {Array<{op:string,[k:string]:string}>} */
@@ -202,6 +209,21 @@ function readback(path) {
     for (const b of r.blobs) {
       const actual = truthGit(["rev-parse", `${pr.mergeCommit.oid}:${b.path}`]);
       if (actual.code || actual.out.trim() !== b.oid) throw Error(`canonical blob differs: ${b.path}`);
+    }
+    if (flags.resolvedHand) {
+      const path = `artifacts/raised-hands/${flags.resolvedHand}.json`;
+      const hands = r.blobs.filter(b => b.path.startsWith("artifacts/raised-hands/"));
+      if (hands.length !== 1 || hands[0].path !== path) throw Error("original hand identity differs");
+      const object = truthGit(["rev-parse", `${canonical}:${path}`]);
+      receiptWrite(`${observation}.resolved-oid.json`, { canonical, path, exit: object.code, stdout: object.out, stderr: object.err });
+      const oid = object.out.trim();
+      if (object.code || !/^[a-f0-9]{40}$/.test(oid)) throw Error("current hand object unavailable");
+      const body = truthGit(["cat-file", "blob", oid]);
+      receiptWrite(`${observation}.resolved-hand.json`, { canonical, path, oid, exit: body.code, stdout: body.out, stderr: body.err });
+      if (body.code) throw Error("current hand body unavailable");
+      const hand = JSON.parse(body.out);
+      if (hand.id !== flags.resolvedHand || hand.status !== "resolved" || typeof hand.resolution !== "string" || !hand.resolution.trim() || typeof hand.resolvedAt !== "string" || !Number.isFinite(Date.parse(hand.resolvedAt))) throw Error("current canonical hand is not resolved with evidence");
+      console.log(`resolved hand ${oid}`);
     }
     console.log(`canonical merge verified: PR ${pr.number} @ ${pr.mergeCommit.oid}; original topic ${r.target} @ ${r.head}`);
     return 0;

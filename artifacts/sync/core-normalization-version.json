@@ -1,7 +1,7 @@
 {
   "schema": "signalgrid.core-normalization-version/1",
-  "version": 25,
-  "sourcesDigest": "784dc3c441b09837682fab955e79d22eefdbe0f06841daf1052032e1fcfc1d71",
+  "version": 27,
+  "sourcesDigest": "c860b34d4978f2917bde9e8347400a58ad0835e333cc5c44a1d52b4d1213e95f",
   "sources": [
     {
       "path": "lib/signalgrid-core/src/attach.ts",
@@ -25,7 +25,7 @@
     },
     {
       "path": "lib/signalgrid-core/src/evidence.ts",
-      "sha256": "f406bf23659b7123747d63f2679046096d335cc6310906e16a73b2ac736cb917"
+      "sha256": "f5c3204649d260c97b9daeeec9a9b452abb0998774942814a6d6eb202971725e"
     },
     {
       "path": "lib/signalgrid-core/src/policy.ts",
@@ -45,11 +45,11 @@
     },
     {
       "path": "lib/signalgrid-core/src/types.ts",
-      "sha256": "3645155ae2cc6503b571a34b62ca5c9d4eeb065e6159f0dc8ce3bfcb711f31d8"
+      "sha256": "5fb074161bb4ffe36f3af1786bc87e71292939401601b8afcc843be0d22e0627"
     },
     {
       "path": "lib/signalgrid-core/src/util.ts",
-      "sha256": "98d4a1c5940538144518f31a6c0d0df41fe10bc0a68c6e92a92a000a3d94e89f"
+      "sha256": "fbd5eceb176eb6d4ed2d75051bee0e14ae34cb8342ff54a136b5261c28ddc318"
     },
     {
       "path": "lib/signalgrid-core/src/webhooks.ts",

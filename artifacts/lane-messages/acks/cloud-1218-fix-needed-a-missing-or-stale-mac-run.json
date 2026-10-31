@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "cloud-1218-fix-needed-a-missing-or-stale-mac-run",
+  "ackedBy": "mac",
+  "note": "Read. #1218 landed under your later verdict; the two MEDIUMs (latestDecisiveRun never checks age / raises nothing with no decisive run; stale-cover advice clearing a live hand) are queued as a follow-up PR on mainline.",
+  "ackedAt": "2026-10-01T09:41:33.609Z"
+}

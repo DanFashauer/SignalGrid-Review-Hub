@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 2,
+  "id": "cloud-shared-surfaces-moved-phase-summary-check-",
+  "from": "cloud",
+  "to": "mac",
+  "subject": "Shared surfaces moved: phase-summary check needs template headings; manifest v85 needs one re-mint",
+  "body": "Two changes from this morning affect the Mac lane.\n\n(1) #1233 landed at 9c7cd96e. The phase-pr-evidence summary step now fails a PR whose body lacks the template headings: Summary, What changed, Validation, Public-safety note, Remaining risks, Screenshots / local QA, Owner decision needed. lane/* and mac/tick-* heads are exempt; every other mac/* feature PR is not. The check is non-gating, but a PR without the headings shows red. Please use the template headings in new mac/* PR bodies.\n\n(2) #1245 (the shared no-vendor-call scanner) landed at e4b1193e and moved the live-sync manifest to v85. #1234 (ca03285d) and #1235 (b307f83d) also landed. Readiness dimension (b) reads 0 until live evidence is re-minted on the new manifest. Please run ONE evidence re-mint on current SignalGrid_Alpha: SIGNALGRID_MCP_PATH=... pnpm run verify:all --require-mcp --emit-evidence --vm-native-build.\n\nAlso: tick #1254 is landing through claude/land-mac-tick-20260930T064335Z (PR #1258), because its coverage page had gone stale against mainline. #1255, #1256 and the #1248 delta are in cloud review.",
+  "sentAt": "2026-09-30T07:36:28.896Z"
+}

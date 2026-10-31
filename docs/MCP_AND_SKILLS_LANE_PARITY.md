@@ -51,7 +51,7 @@ cloud and Mac, writing no secret to any tracked file:
 The setup script prints this same per-lane env map on every run, so a lane always
 knows what it must supply. A missing CLI (`claude`, `uv`) or a missing key is a
 clean **skip with a warning, never a failure** — the same behaviour `mac-kickoff.sh`
-step 4 uses for the `signalgrid-mcp` registration. An installer whose preconditions
+step 4 uses for the `signalgrid-macos` registration. An installer whose preconditions
 were met but which then errors *does* fail the run: not-installed is never reported
 as success.
 
@@ -92,8 +92,14 @@ and `postgres-hardened` may never be granted.
 `scripts/check-mcp-roster.mjs` (in `scripts/preflight.mjs` and CI) checks the
 DOCUMENT, not a call: every granted server id must exist, every `grants.skills`
 key must be a real first-party skill, and a first-party skill doc that names an
-`mcp__<server>__` tool must hold a matching grant. It cannot see, and does not
-intercept, what a session actually calls.
+`mcp__<server>__` tool must hold a matching grant, and every `servers[]` entry
+must carry a non-empty `upstream`, `reads`, `writes` and `network` (its source
+and security label). It cannot see, and does not intercept, what a session
+actually calls.
+
+The Mac lane also holds `signalgrid-macos`, the sibling repository's read-only
+macOS trust-signal server: `mac-kickoff.sh` (step 4) registers it, not the tracked
+`.mcp.json`, and the roster grants it to that lane by name.
 
 ## The one command per lane
 

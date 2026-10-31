@@ -8,6 +8,10 @@ open-source Fleet server stood up locally for the exercise); nothing here is, or
 substitutes for, the repo's evidence, and no live system, credential, or
 reproduction artifact is part of this repository.
 
+Why Fleet and not Jamf or Intune — openness and infrastructure-as-code against
+managed depth, and when either is the conservative choice — is written down in
+[`native/ios/FLEET_MDM.md`](../native/ios/FLEET_MDM.md#the-tradeoff-fleet-against-jamf-or-intune).
+
 ## What the private exercise covered
 
 - **Fleet v4.89.2**, open-source (MIT), built from source for **arm64**

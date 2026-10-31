@@ -604,6 +604,10 @@ export interface EvidenceSnapshot {
    * a different value means something in the core decision path changed.
    */
   coreNormalizationVersion?: number;
+  /** Which digest function minted `digest`. ABSENT = a row minted before the WTF-8 fix
+   *  (legacy low-byte FNV); verified with that function, never re-stamped. Any other
+   *  value verifies false. Inside the digest body, so stripping it is itself tampering. */
+  digestAlg?: "fnv1a64-wtf8";
   /** Deterministic content digest making the snapshot tamper-evident. */
   digest: string;
 }

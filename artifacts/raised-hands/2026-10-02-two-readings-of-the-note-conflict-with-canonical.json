@@ -1,0 +1,12 @@
+{
+  "id": "2026-10-02-two-readings-of-the-note-conflict-with-canonical",
+  "raisedAt": "2026-10-02T21:52:46.922Z",
+  "origin": "mac",
+  "doing": "Absorbing the 2026-10-02 puck-as-token note (the puck replaces badge/keycard/2FA/MFA; non-duplicable; hard-locked after enrollment; cleared only by a super-admin factory wipe) into docs/SESSION_PUCK_HARDWARE_HYPOTHESIS.md as requirements, with the ARC kiosk photo as a custody-source cross-reference",
+  "blockedBy": "Two readings of the note conflict with canonical text and only the owner can settle them: (1) docs/PURPOSE.md:38 says the authentication factor is the customer's choice and the grid is agnostic to it — is the puck ONE offered factor, or THE required one (a PURPOSE change)? (2) DR-043 item 2 keeps credentials in the organization's identity plane, never a SignalGrid key database — does 'super admin … factory wipe' mean the customer's IdP/PACS admin under dual control (lib/dual-control), or a SignalGrid-held enrolment role? The landed section carries both readings as open questions.",
+  "need": "Owner: two yes/no answers — (1) puck = one offered factor (keeps PURPOSE.md:38) or the required factor; (2) re-bind/revoke = customer IdP/PACS admin under dual control, or a SignalGrid-held super-admin role. Answer here or in the PR; the section is rewritten to the answers.",
+  "whoCanUnblock": "owner",
+  "domain": "product",
+  "status": "open",
+  "routedTo": null
+}

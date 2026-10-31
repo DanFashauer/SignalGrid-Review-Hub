@@ -11,11 +11,16 @@
 // Tenant isolation is preserved structurally: every row carries `tenant_id`, and
 // every single-object read is keyed on `(id, tenant_id)` — a decision is never
 // looked up by id alone, mirroring the in-memory store's invariant.
+//
+// Records are IMMUTABLE: a save inserts ON CONFLICT DO NOTHING, and a different
+// record under an existing id is refused, never written over. The runtime role
+// holds no UPDATE on either table, and readiness refuses if it ever does.
 
 import type { Decision, EvidenceSnapshot } from "@workspace/signalgrid-core";
 
 export interface DecisionStore {
-  /** Persist a decision and its evidence snapshot (idempotent upsert). */
+  /** Persist a decision and its evidence snapshot. Idempotent for an identical
+   *  record; REJECTS a different record under an existing id (immutable). */
   saveDecision(decision: Decision, snapshot: EvidenceSnapshot): Promise<void>;
   /** A decision by id, ONLY if it belongs to the tenant (else null). */
   getDecision(tenantId: string, id: string): Promise<Decision | null>;
@@ -141,25 +146,43 @@ export class PostgresDecisionStore implements DecisionStore {
   }
 
   /**
-   * The exact per-table privileges the store's statements need (the upsert is
-   * INSERT … ON CONFLICT DO UPDATE, hence UPDATE). Cheap catalog reads — also
-   * run on every ping() so /readyz flips if the posture regresses underneath a
-   * running process instead of reporting a health it no longer has.
+   * The exact per-table privileges the store's statements need (SELECT and
+   * INSERT — saves are ON CONFLICT DO NOTHING), AND the forbidden direction:
+   * immutability is a negative claim, so UPDATE (table- or column-level),
+   * DELETE, TRUNCATE, REFERENCES or TRIGGER on either table is not a ready
+   * state. Cheap catalog reads — also run on every ping() so /readyz flips if
+   * the posture regresses underneath a running process.
    */
   private async assertPrivileges(): Promise<void> {
     const priv = await this.pool.query(`
       SELECT has_table_privilege('public.decisions', 'SELECT')
          AND has_table_privilege('public.decisions', 'INSERT')
-         AND has_table_privilege('public.decisions', 'UPDATE')
          AND has_table_privilege('public.evidence_snapshots', 'SELECT')
-         AND has_table_privilege('public.evidence_snapshots', 'INSERT')
-         AND has_table_privilege('public.evidence_snapshots', 'UPDATE') AS ok
+         AND has_table_privilege('public.evidence_snapshots', 'INSERT') AS ok,
+             has_any_column_privilege('public.decisions', 'UPDATE')
+          OR has_table_privilege('public.decisions', 'DELETE')
+          OR has_table_privilege('public.decisions', 'TRUNCATE')
+          OR has_any_column_privilege('public.decisions', 'REFERENCES')
+          OR has_table_privilege('public.decisions', 'TRIGGER')
+          OR has_any_column_privilege('public.evidence_snapshots', 'UPDATE')
+          OR has_table_privilege('public.evidence_snapshots', 'DELETE')
+          OR has_table_privilege('public.evidence_snapshots', 'TRUNCATE')
+          OR has_any_column_privilege('public.evidence_snapshots', 'REFERENCES')
+          OR has_table_privilege('public.evidence_snapshots', 'TRIGGER') AS forbidden
     `);
     if (!priv.rows[0]?.ok) {
       throw new Error(
         "this credential is missing table privileges on decisions/evidence_snapshots — " +
           "re-apply the role split with the admin credential (`pnpm run db:migrate`); " +
           "refusing to report ready for work that would fail.",
+      );
+    }
+    if (priv.rows[0]?.forbidden) {
+      throw new Error(
+        "this credential holds FORBIDDEN privileges on decisions/evidence_snapshots (UPDATE, DELETE, " +
+          "TRUNCATE, REFERENCES, or TRIGGER — directly, via PUBLIC, or column-level): decisions would " +
+          "not be immutable. Re-apply the role split with the admin credential (`pnpm run db:migrate`); " +
+          "refusing to report ready.",
       );
     }
   }
@@ -169,18 +192,46 @@ export class PostgresDecisionStore implements DecisionStore {
     const client = await this.pool.connect();
     try {
       await client.query("BEGIN");
-      await client.query(
+      const decisionData = JSON.stringify(decision);
+      const dec = await client.query(
         `INSERT INTO public.decisions (id, tenant_id, created_at, outcome, data)
          VALUES ($1,$2,$3,$4,$5)
-         ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data, outcome = EXCLUDED.outcome`,
-        [decision.id, decision.tenantId, decision.createdAt, decision.outcome, JSON.stringify(decision)],
+         ON CONFLICT (id) DO NOTHING`,
+        [decision.id, decision.tenantId, decision.createdAt, decision.outcome, decisionData],
       );
-      await client.query(
+      // A conflict is fine ONLY for the identical record (a retried save).
+      // Compared as JSONB in SQL — key order in JSON text is not identity.
+      if (dec.rowCount !== 1) {
+        const same = await client.query(
+          "SELECT (tenant_id = $2 AND outcome = $3 AND data = $4::jsonb) AS same FROM public.decisions WHERE id = $1",
+          [decision.id, decision.tenantId, decision.outcome, decisionData],
+        );
+        if (same.rows[0]?.same !== true) {
+          throw new Error(
+            `decision id collision on "${decision.id}" — a different record already holds this id; ` +
+              "refusing to overwrite an immutable record.",
+          );
+        }
+      }
+      const snapshotData = JSON.stringify(snapshot);
+      const snap = await client.query(
         `INSERT INTO public.evidence_snapshots (id, tenant_id, decision_id, data)
          VALUES ($1,$2,$3,$4)
-         ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data`,
-        [snapshot.id, snapshot.tenantId, snapshot.decisionId, JSON.stringify(snapshot)],
+         ON CONFLICT (id) DO NOTHING`,
+        [snapshot.id, snapshot.tenantId, snapshot.decisionId, snapshotData],
       );
+      if (snap.rowCount !== 1) {
+        const same = await client.query(
+          "SELECT (tenant_id = $2 AND decision_id = $3 AND data = $4::jsonb) AS same FROM public.evidence_snapshots WHERE id = $1",
+          [snapshot.id, snapshot.tenantId, snapshot.decisionId, snapshotData],
+        );
+        if (same.rows[0]?.same !== true) {
+          throw new Error(
+            `evidence snapshot id collision on "${snapshot.id}" — a different record already holds this id; ` +
+              "refusing to overwrite an immutable record.",
+          );
+        }
+      }
       await client.query("COMMIT");
     } catch (err) {
       await client.query("ROLLBACK");

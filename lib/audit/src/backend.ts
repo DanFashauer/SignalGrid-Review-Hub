@@ -203,6 +203,9 @@ export class PostgresAuditBackend implements AuditBackend {
              has_any_column_privilege('public.audit_ledger', 'UPDATE')
           OR has_table_privilege('public.audit_ledger', 'DELETE')
           OR has_table_privilege('public.audit_ledger', 'TRUNCATE')
+          OR has_any_column_privilege('public.audit_ledger', 'REFERENCES')
+          -- TRIGGER lets the runtime attach a trigger that suppresses or edits appends
+          OR has_table_privilege('public.audit_ledger', 'TRIGGER')
           -- sequence UPDATE means setval(): the append counter could be wedged
           OR has_sequence_privilege(pg_get_serial_sequence('public.audit_ledger', 'seq'), 'UPDATE') AS forbidden
     `);
@@ -215,12 +218,13 @@ export class PostgresAuditBackend implements AuditBackend {
     }
     // The append-only boundary is a NEGATIVE claim, so readiness must also
     // check the forbidden direction: a grant of UPDATE (table- or
-    // column-level), DELETE, or TRUNCATE that appears under a running process
-    // means the ledger is rewritable — that is not a ready state for a
+    // column-level), DELETE, TRUNCATE, REFERENCES or TRIGGER that appears
+    // under a running process means the ledger is rewritable (or its appends
+    // suppressible) — that is not a ready state for a
     // tamper-evidence component, whatever the required privileges say.
     if (priv.rows[0]?.forbidden) {
       throw new Error(
-        "this credential holds FORBIDDEN privileges on audit_ledger (UPDATE, DELETE, or TRUNCATE — " +
+        "this credential holds FORBIDDEN privileges on audit_ledger (UPDATE, DELETE, TRUNCATE, REFERENCES or TRIGGER — " +
           "directly, via PUBLIC, or column-level): the ledger would not be append-only. Re-apply the " +
           "role split with the admin credential (`pnpm run db:migrate`); refusing to report ready.",
       );
@@ -246,7 +250,7 @@ export class PostgresAuditBackend implements AuditBackend {
       );
       const prevHash: string = head.rows[0]?.hash ?? "";
       const record = build(prevHash);
-      await client.query(
+      const ins = await client.query(
         `INSERT INTO public.audit_ledger
            (id, ts, request_id, actor, event_type, target, meta, tenant_id, prev_hash, hash)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
@@ -263,6 +267,12 @@ export class PostgresAuditBackend implements AuditBackend {
           record.hash,
         ],
       );
+      // An INSERT can succeed and write nothing (a BEFORE trigger returning
+      // NULL). Returning the record then would report an append that never
+      // reached the ledger.
+      if (ins.rowCount !== 1) {
+        throw new Error("audit append wrote " + ins.rowCount + " rows — refusing to report an unwritten record as appended");
+      }
       await client.query("COMMIT");
       return record;
     } catch (err) {

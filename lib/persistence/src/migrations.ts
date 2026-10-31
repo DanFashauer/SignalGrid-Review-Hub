@@ -119,6 +119,11 @@ export async function runMigrations(connectionString: string): Promise<Migration
     const client = await pool.connect();
     try {
       await client.query("BEGIN");
+      // The baseline DDL is unqualified: without this, a caller whose
+      // search_path puts another schema ahead of public builds every table
+      // THERE, and the role split (which manages public.* only) guards nothing
+      // the stores read. Transaction-scoped, so it never leaks past COMMIT.
+      await client.query("SET LOCAL search_path = public, pg_temp");
       await client.query("SELECT pg_advisory_xact_lock($1)", [MIGRATION_LOCK_KEY]);
       await client.query(`
         CREATE TABLE IF NOT EXISTS schema_version (

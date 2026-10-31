@@ -2330,3 +2330,8 @@ The shared record store also contains a persistent identity-pinned tick guard. O
 An existing legacy tick.lock, missing/corrupt ownership, or an unfinished OPEN slot refuses work even if the kernel guard is available. OPEN is committed and read back before work. Exact original ownership and immutable finalization records precede CLOSED. Signals observed before normal finalization retain OPEN. CLOSED is lease finalization, not an independently observed parent terminal, task acceptance, provider quiet, canonical delivery or authority to retry an old attempt; those remain separately evidenced.
 
 L46 has actual84 portable delivery controls and12 independent Mac subprocess controls, all zero-fail/skip. These are source checks, not native coding or installed operation. Full current-head validation, fresh source reviews, protected landing, preservation audit and separate activation remain required; restoration needs a fresh natural canonical heartbeat.
+
+
+## Mac transport test contract — L47
+
+Linked-checkout heartbeat tests now execute the production RECORD_DIR startup assignment; a planted node_modules regression fails both related controls. The staged checker executes the actual descriptor-finalization Bash function, including host-release order, exact token/root/entry-status arguments, nonzero work status and interrupted OPEN retention. Delivery84/84 and staged267/267 pass. The earlier full264/265 result remains FAILED, not replaced by isolated checks. Runtime guard bytes are unchanged. New exact-head full/breadth, complete source reviews, protected landing, preservation audit and separate activation remain owed; no fresh canonical Mac heartbeat is claimed.

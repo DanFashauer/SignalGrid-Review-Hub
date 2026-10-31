@@ -424,3 +424,12 @@ block; a stage run on the wrong tier is a lesson here.
 - **evidence:** Independent disposable source acceptance first failed11 of12 cases, then passed12/12 with actual Mac network denial and positively awaited original children. The portable delivery checker passed84/84, zero skips, preserving all original assertion expressions. Its first77/7 result remains failed: command-string Bash fixture launches were corrected to actual script files matching production; the runtime parent-identity check was retained.
 - **landing:** pending — a separately initialized persistent FD8 guard and immutable ownership records fence the tick. Legacy locks and OPEN/corrupt slots stay held. CLOSED records authorized lease finalization, not an independent parent exit, accepted task, provider cleanup or retry grant. Full current-head qualification and protected landing precede separate activation and natural heartbeat proof.
 - **status:** pending
+
+
+### L47 — A fixture must execute the startup contract it claims to protect
+- **date:** 2026-10-31
+- **lane:** mac
+- **incident:** The linked-checkout heartbeat fixture recomputed RECORD_DIR, so a production regression back to dependency-cache state escaped. A separate staged check still demanded the removed PID-deleting trap and failed the new descriptor-guard source.
+- **evidence:** Actual startup mutation controls: the old fixture passed2/2 on the bad assignment; the corrected fixture failed2/2 on that same mutant and passed2/2 on actual source. Current network-denied delivery84/84 and supported staged267/267 pass. The original full264/265 failure and separate reproducing diagnostic remain failed; runtime guard and independent12 source acceptance bytes are unchanged.
+- **landing:** pending — execute the exact startup assignment and actual Bash finalization/status contract; keep the previous host-path/order checks and add interrupted/nonzero status controls. New exact-head full qualification, protected landing and audited separate activation still precede natural heartbeat proof.
+- **status:** pending

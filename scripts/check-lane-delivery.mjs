@@ -266,21 +266,25 @@ for(const rc of [0,3]) {
   } catch(e){failed++;console.error(`FAIL objective exit ${rc}: ${e.message}`);}
 }
 
-try {
-  const root=mkdtempSync(join(tmpdir(),"sg-build-hand-delivery-test-"));
+for (const suffix of ["plain", "space 'single' \"double\" $(touch shell-path-marker) `touch backtick-marker`"]) {
+  const parent=mkdtempSync(join(tmpdir(),"sg-build-hand-delivery-test-"));
+  const root=join(parent,suffix);mkdirSync(root);
   try {
     const source=readFileSync(join(ROOT,"scripts/mac/build-tick.sh"),"utf8");
     const start=source.indexOf('raise_hand() {'),end=source.indexOf('\nfail() {',start);
     assert.ok(start>=0&&end>start);
     const calls=join(root,'calls');
-    const script=`set -u\nDRY=0\nCACHE=${JSON.stringify(root)}\nREPO_ROOT=${JSON.stringify(root)}\nSTAMP=20261031T000000Z\nRUN_LOG=${JSON.stringify(join(root,'run.log'))}\nsay(){ printf '%s\\n' "$1"; }\nnode(){ if [ "$1" = "$REPO_ROOT/scripts/lane-deliver.mjs" ]; then printf 'call\\n' >> ${JSON.stringify(calls)}; return 3; else ${JSON.stringify(process.execPath)} "$@"; fi; }\n${source.slice(start,end)}\nraise_hand 'fixture failure'\nraise_hand 'fixture failure'\nraise_hand 'fixture failure'\ntrue\n`;
-    const r=spawnSync('/bin/bash',['-c',script],{cwd:root,env:{PATH:'/usr/bin:/bin',HOME:root},encoding:'utf8'});
+    const script=`set -u\nDRY=0\nCACHE="$FIXTURE_ROOT"\nREPO_ROOT="$FIXTURE_ROOT"\nSTAMP=20261031T000000Z\nRUN_LOG="$FIXTURE_RUN_LOG"\nsay(){ printf '%s\\n' "$1"; }\nnode(){ if [ "$1" = "$REPO_ROOT/scripts/lane-deliver.mjs" ]; then printf 'call\\n' >> "$FIXTURE_CALLS"; return 3; else "$FIXTURE_NODE" "$@"; fi; }\n${source.slice(start,end)}\nraise_hand 'fixture failure'\nraise_hand 'fixture failure'\nraise_hand 'fixture failure'\ntrue\n`;
+    const r=spawnSync('/bin/bash',['-c',script],{cwd:root,env:{PATH:'/usr/bin:/bin',HOME:root,FIXTURE_ROOT:root,FIXTURE_RUN_LOG:join(root,'run.log'),FIXTURE_CALLS:calls,FIXTURE_NODE:process.execPath},encoding:'utf8'});
+    assert.equal(existsSync(join(root,'shell-path-marker')),false,'path command substitution must never execute');
+    assert.equal(existsSync(join(root,'backtick-marker')),false,'path backticks must never execute');
     assert.equal(r.status,0,r.stderr);
     assert.equal(readFileSync(calls,'utf8').trim().split('\n').length,1,'unknown hand delivery is never re-submitted');
     assert.match(r.stdout,/READBACK ONLY|unconfirmed/);assert.doesNotMatch(r.stdout,/hand submitted/);
-    passed++;console.log('PASS build hand unknown attempt is durable across repeated calls');
-  } finally {rmSync(root,{recursive:true,force:true});}
-}catch(e){failed++;console.error(`FAIL build hand one-attempt fence: ${e.message}`);}
+    passed++;console.log(`PASS build hand ${suffix==="plain"?"plain":"special-character path"} unknown attempt is durable across repeated calls`);
+  } catch(e){failed++;console.error(`FAIL build hand one-attempt fence: ${e.message}`);}
+  finally {rmSync(parent,{recursive:true,force:true});}
+}
 
 
 for(const kind of ["exact","pending","wrong-head","not-canonical"])control(`original submission ${kind} readback never republishes`,{readbackState:kind==="pending"?"OPEN":"MERGED",readbackMismatch:kind==="wrong-head"},f=>{

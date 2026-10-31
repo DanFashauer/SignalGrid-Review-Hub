@@ -361,3 +361,12 @@ block; a stage run on the wrong tier is a lesson here.
 - **evidence:** New controls were 0/2 before correction and 1/1 after only pinning canonical; complete correction passes 39 caller controls with zero failures/skips.
 - **landing:** pending — exact remote canonical SHA plus real-object ancestry/blob reads, leaving local metadata untouched; new-head qualification and actual heartbeat proof remain in PR #1698.
 - **status:** pending
+
+
+### L40 — JSON quoting is not shell escaping in a test harness
+- **date:** 2026-10-31
+- **lane:** mac
+- **incident:** CodeQL found an environment-derived executable/path embedded in a Bash fixture with JSON.stringify; the original fixture failed under a special-character path.
+- **evidence:** Actual original block0/1; corrected integrated suite40/40, with real plain/special-path one-attempt assertions and no command-substitution markers.
+- **landing:** pending — pass dynamic paths as environment values and reference quoted variables; current-head qualification and actual heartbeat proof remain in PR #1698.
+- **status:** pending

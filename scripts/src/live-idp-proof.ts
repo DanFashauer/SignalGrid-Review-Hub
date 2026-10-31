@@ -86,11 +86,13 @@ function ecThumbprint(jwk: { crv: string; kty: string; x: string; y: string }): 
 // ── reserve an ephemeral port, then boot the provider bound to it ────────────────
 // The issuer is baked into the provider at construction, so we must know the port
 // first. Reserve one with a throwaway listener, release it, then hand it to the
-// provider — a standard local-port-acquisition pattern.
+// provider — a standard local-port-acquisition pattern. The probe binds the WILDCARD,
+// as the provider does: a port free on 127.0.0.1 can be held on <eth0> by an outbound
+// connection, and then the provider's bind reads EADDRINUSE (2026-10-02, cloud box).
 const port = await new Promise<number>((resolve, reject) => {
   const probe = createServer();
   probe.once("error", reject);
-  probe.listen(0, "127.0.0.1", () => {
+  probe.listen(0, () => {
     const p = (probe.address() as AddressInfo).port;
     probe.close(() => resolve(p));
   });

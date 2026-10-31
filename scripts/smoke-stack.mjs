@@ -59,6 +59,20 @@ async function main() {
     // a smoke that passes anyway certifies a stack that refuses work.
     const ready = await fetch(`${API}/readyz`);
     check("readyz reports READY (200) — the gateway can reach its durable store", ready.status === 200);
+    // THE POSITIVE PATH, on the packaged image. When the phase boots with the
+    // CI fixture IdP (scripts/fixture-idp.compose.yml) SMOKE_IDP_URL points at its
+    // /mint endpoint's host. A token signed by the fixture's runtime key, with
+    // claims the OIDC_*_MAP variables map, must complete an allowed /v1
+    // request as the MAPPED tenant — and the same key must still be refused
+    // when the audience is wrong, the token is expired, or the role is not in
+    // the map (otherwise the 200 above could be vacuous: an api that accepted
+    // anything would pass it).
+    const idpUrl = (process.env.SMOKE_IDP_URL ?? "").trim().replace(/\/$/, "");
+    if (idpUrl) {
+      await oidcPositivePath(idpUrl);
+    } else {
+      console.log("  NOTE: SMOKE_IDP_URL unset — the signed-token positive path was NOT exercised in this run.");
+    }
     console.log("  NOTE: gateway profile detected — demo-credential flow NOT RUN (no credential can exist here); the review-demo pass covers it.");
     return finishSmoke();
   }
@@ -108,6 +122,48 @@ async function main() {
   check("metrics: request counter present", metrics.includes("signalgrid_http_requests_total"));
 
   finishSmoke();
+}
+
+async function mintToken(idpUrl, kind) {
+  const res = await fetch(`${idpUrl}/mint?kind=${kind}`);
+  if (!res.ok) throw new Error(`fixture IdP /mint?kind=${kind} answered ${res.status}`);
+  return (await res.json()).token;
+}
+
+async function evaluateWith(token) {
+  return fetch(`${API}/v1/decisions/evaluate`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+    body: JSON.stringify({ identityRef: "nurse.compliant", deviceRef: "ipad-ward-01", workflowKey: "clinical-session" }),
+  });
+}
+
+async function oidcPositivePath(idpUrl) {
+  const expectedTenant = (process.env.SMOKE_EXPECT_TENANT ?? "tenant_northwind").trim();
+  const ok = await evaluateWith(await mintToken(idpUrl, "valid"));
+  check("oidc positive: a fixture-signed, mapped token completes /v1/decisions/evaluate (200)", ok.status === 200);
+  if (ok.status === 200) {
+    const decisionId = (await ok.json()).decision?.decisionId;
+    check("oidc positive: the evaluation returned a decision id", typeof decisionId === "string" && decisionId.length > 0);
+    // The mapped (INTERNAL) tenant, not the IdP's: /v1/context echoes the
+    // tenant the principal resolved to.
+    const ctx = await fetch(`${API}/v1/context`, { headers: { authorization: `Bearer ${await mintToken(idpUrl, "valid")}` } });
+    const body = ctx.status === 200 ? await ctx.json() : null;
+    check(`oidc positive: the token resolves to the mapped tenant ${expectedTenant}`, body?.tenant?.id === expectedTenant);
+  }
+  // Each control must be refused FOR ITS OWN REASON. A bare 401 is satisfied by
+  // any broken token (a fixture that mints a malformed or wrongly signed
+  // "expired" token would pass), so the gateway's message is pinned per kind.
+  const refusals = {
+    "wrong-audience": /audience mismatch/,
+    "expired": /token has expired/,
+    "unmapped-role": /no role claim value in \[ci-role-intruder\] maps to a known role/,
+  };
+  for (const [kind, reason] of Object.entries(refusals)) {
+    const res = await evaluateWith(await mintToken(idpUrl, kind));
+    const message = res.status === 401 ? String((await res.json().catch(() => ({}))).message ?? "") : "";
+    check(`oidc negative control: a ${kind} token signed by the same key is REFUSED (401) for its own reason`, res.status === 401 && reason.test(message));
+  }
 }
 
 function finishSmoke() {

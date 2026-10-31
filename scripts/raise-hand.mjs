@@ -25,7 +25,7 @@
 
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 // SIGNALGRID_LANE_REPO lets lane-deliver write the record into its throwaway worktree.
 const repo = process.env.SIGNALGRID_LANE_REPO ? resolve(process.env.SIGNALGRID_LANE_REPO) : resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -80,11 +80,26 @@ function resolveHand() {
   console.log(`resolved ${h.id}${note ? ` — ${note}` : ""}`);
 }
 
-function raise() {
+async function raise() {
   const doing = val("--doing"), blocked = val("--blocked"), need = val("--need");
   if (!doing || !blocked || !need) {
     console.error('raise-hand: --doing, --blocked and --need are all required (DR-054: what you were doing, what blocked you, what you need). An empty blocker looks answered.');
     process.exit(2);
+  }
+  // DR-054's fourth field: who can unblock it. check-raised-hands.mjs (preflight + CI) rejects a hand
+  // whose whoCanUnblock is empty or not a role / owner / lane, so a writer that let one through would
+  // turn mainline red on the merge. Refuse here, with the same predicate.
+  const { whoIsValid, rosterRoleIds, coverProblem } = await import(pathToFileURL(join(dirname(fileURLToPath(import.meta.url)), "check-raised-hands.mjs")).href);
+  if (!whoIsValid(val("--who"), rosterRoleIds())) {
+    console.error(`raise-hand: --who "${val("--who") ?? ""}" must be owner, "mac lane", "cloud lane", "the other lane", tool:<name> or an org-roster role id (docs/agent/org-roster.json) — DR-054 needs WHO can unblock it.`);
+    process.exit(2);
+  }
+  // Same predicate as the schema: a cover the stale-hand rule can never match (a typo'd kind, a trailing
+  // space, `--covers` as the last argument) is refused here instead of turning CI red after the merge.
+  for (const [i, a] of argv.entries()) {
+    if (a !== "--covers") continue;
+    const why = coverProblem(argv[i + 1]);
+    if (why) { console.error(`raise-hand: --covers ${why}`); process.exit(2); }
   }
   ensureLedger();
   const raisedAt = new Date().toISOString();
@@ -114,4 +129,4 @@ function raise() {
 if (argv.includes("--list")) list();
 else if (argv.includes("--take")) take();
 else if (argv.includes("--resolve")) resolveHand();
-else raise();
+else await raise();

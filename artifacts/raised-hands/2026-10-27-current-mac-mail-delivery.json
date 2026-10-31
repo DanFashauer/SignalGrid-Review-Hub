@@ -1,0 +1,28 @@
+{
+  "id": "2026-10-27-current-mac-mail-delivery",
+  "raisedAt": "2026-10-27T16:44:29.906Z",
+  "origin": "mac",
+  "doing": "Carrying current cloud-to-Mac requests through source-backed protected delivery",
+  "blockedBy": "Eleven measured mail items still lack canonical acknowledgments. Source preparations and an enabled local service are not public delivery or completion of their requests.",
+  "need": "Mac steward: assess each original request and publish truthful per-item acknowledgments and remaining actions through protected delivery. Preserve unfinished work and current owner corrections; never replay held jobs or delete claim branches.",
+  "whoCanUnblock": "mac lane",
+  "domain": "lane",
+  "status": "open",
+  "routedTo": null,
+  "where": "Issue #1546; current canonical coordination state",
+  "covers": [
+    "mail:cloud-1593-review-actions-and-the-host-lock-who-",
+    "mail:cloud-17c-put-the-three-undesired-allow-cases-in",
+    "mail:cloud-cloud-ack-of-the-mac-brain-bridge-handoff-",
+    "mail:cloud-estate-the-plan-is-pr-1644-the-cloud-stepp",
+    "mail:cloud-mac-build-tick-row-flip-to-active-or-retir",
+    "mail:cloud-owner-directive-03-30z-local-first-the-mac",
+    "mail:cloud-owner-directives-23-00z-and-23-02z-the-loc",
+    "mail:cloud-pr-1321-signalgrid-cli-two-open-decisions-",
+    "mail:cloud-rows-17b-and-17c-lab-bound-rows-keep-stopp",
+    "mail:cloud-rule-2-cloud-edits-to-mac-owned-build-tick",
+    "mail:cloud-your-hand-2026-10-23-could-not-read-curren"
+  ],
+  "takenBy": "mac lane",
+  "takenAt": "2026-10-27T16:44:29.953Z"
+}

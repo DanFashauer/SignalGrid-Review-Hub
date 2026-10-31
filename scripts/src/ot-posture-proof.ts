@@ -94,6 +94,14 @@ check("unknown firmware/segmentation/protocol/gateway are all counted unknown", 
 // Unknown ≠ secure: an unrecognized enum value must normalize to the safe unknown.
 const norm = normalizeReport("n", { firmware: { status: "brand-new-state" }, network: { segmentation: "sideways" } } as OtDeviceReportRaw);
 check("an unrecognized enum normalizes to 'unknown' (not a fabricated value)", norm.firmware === "unknown" && norm.segmentation === "unknown");
+// A blank or error-shaped deviceType is "no value", not an empty-string value (the
+// brace-less `s === ""` guard in readableString; wave 5 oneLine sweep, 2026-10-01).
+check(
+  "a blank or error-shaped deviceType normalizes to null, a real one is kept",
+  normalizeReport("t", { deviceType: "   " } as OtDeviceReportRaw).deviceType === null &&
+    normalizeReport("t", { deviceType: "Error: gateway timeout" } as OtDeviceReportRaw).deviceType === null &&
+    normalizeReport("t", { deviceType: " PLC " } as OtDeviceReportRaw).deviceType === "PLC",
+);
 
 // Worst-concern-wins: flat + eol + stale → restrict (not diluted by the step_up).
 const worst = evaluateOtPosture(await connector.fetchPosture(fixture.devices["worst-of-several"].deviceId));

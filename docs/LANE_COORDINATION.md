@@ -68,6 +68,69 @@ cloud's, the third is a sim request the tick runs.
 **What the owner does, once:** on the Mac, `bash scripts/mac/install-launchd.sh`.
 Then nothing — `bash scripts/mac/install-launchd.sh --status` shows it running.
 
+**The build tick (DR-050 placement, DR-060 delegation; owner reaffirmed 2026-10-21).**
+The owner asked on October 21, 2026 to adapt and run the workers with available local,
+Codex and Claude resources. This worker authorization does not adopt the pending
+DR-061 proposal or widen decision-path merge authority.
+
+`SG_STAGE_RUNNER` optionally names one absolute executable on the host, outside the
+build clone and writable run directory. The helper pins its file identity and SHA256
+and checks both before each stage. It sends protocol-version-1 JSON on stdin, with
+stage, kind, requested tier, time/turn/budget limits, read-only flag, brief, paths,
+pinned base and verdict schema; no shell command or host path is stored in this tree.
+The host runner must enforce those restrictions, keep reviews in fresh sessions,
+retain the timeout process group, and return the existing result envelope with actual
+provider/model telemetry. Unsupported budgets or unavailable providers must refuse;
+unknown cost remains unknown. Native Claude arguments remain the default when the
+variable is unset. The path check and hash are drift checks, not an OS sandbox or
+atomic executable-file pin; the host must protect the runner and its dependencies.
+
+The lane tick
+never builds. A second launchd job, `scripts/mac/build-tick.sh`
+(`bash scripts/mac/install-build-tick.sh`, retrying every 5 minutes), does nothing at all
+while it is paused. Each run first pins mainline ONCE: it asks the real remote
+for SignalGrid_Alpha's sha (`git ls-remote`), and every later step (the re-exec of
+its own script, the build clone, the diff the reviewer reads, the changed-path and
+forbidden-path checks, the landing classifier, the is-ancestor check before the
+push) uses that sha, never a ref a session could repoint; a run that cannot ask
+the remote does nothing. Otherwise it first refreshes ONE dirty `mac/*` PR with
+mainline's PR-refresh script, once it lands (PR #1353, not on mainline yet; no
+model; under a wall-clock cap that kills the refresh's whole process group; a
+failure never stops the build;
+the owner's 2026-10-01 instruction covers re-merging mainline into his own open
+`mac/*` PR branches, never merging a PR). It then takes the objective loop's top
+`tasks[]` row that no remote branch or open PR names and runs it as staged tiers
+(`scripts/mac/build-tick-stages.mjs`; DR-047, DR-060): triage on Sonnet,
+read-only, decides done, blocked or build BEFORE the claim. A broken triage
+session (a logged-out CLI, a usage limit, no Keychain: its envelope names an API
+error, or there is no envelope and the exit is not 0 or the time cap) pauses the
+tick before any claim is pushed, so that row stays unclaimed; a triage that only
+hit its turn or time cap raises a hand. The branch and PR lists are re-read right
+before the claim, so a row taken while triage ran is skipped. Then the claim, an
+empty `mac/build-row-<id>-<stamp>`; then build on Haiku, Sonnet or Opus by the
+kind triage names (Haiku, the `mechanical` kind, is writer reruns and doc-only
+edits: the helper writes its commit message, and its PR title and body after the
+last session from the final diff, and a diff outside `docs/**` and the sync
+manifest is a hand), an Opus read-only review, at most one fix on the build's
+tier, and a second review. The build area is its own clone (`<repo>.build`, made
+with `git clone --reference`, its config rewritten and its tree reset to the
+pinned sha every run), so a session shares no refs, config or hooks with the
+person's checkout. A session that breaks after the claim pauses the tick too (so
+does a helper that fails or writes no verdict), and that row's claim branch stays
+for a person; a build or fix session that edited and then capped or broke is
+never committed (broken pauses, capped hands). A row
+triage finds already done is a one-line plan marker with no build session. No
+session has git or GitHub credentials; the script commits, runs preflight and
+breadth, and only on 0/0, each gate's exact verdict line present and a sentinel
+naming the commit, pushes that sha (from a clean tree, with git hooks off; CI's
+frozen-lockfile install is the lockfile guard) and opens the PR. Every PR body
+carries the reviews and a tiers-and-cost table (stage, tier asked, model that
+ran, turns, seconds, USD at list price; a figure the CLI did not print is
+`unknown` on its row and counts as 0 in the total), and each stage appends a line
+to ~/Library/Caches/signalgrid/build-tick/ledger.jsonl. Nothing in it merges; a
+stuck or red run raises a hand and keeps the claim for a person. Registry row:
+`mac-build-tick`.
+
 ## The loop as of 2026-09-05, first revision (superseded above; kept for history)
 
 The owner's verdict on the loop below was "not working and causing delay". The
@@ -246,20 +309,81 @@ target — the same reasoning behind that bench's own 6,000x floor headroom.
    and never deletes a branch. The Mac lane's landing PRs are merged by the cloud
    only when the Mac asked for it in mail (as #653 did). The first landings under
    this rule: #656, #657, #653, #649, #654 on 2026-09-12.
+8. **Evidence age is read from `mintedAt` inside the artifact, never from the file's git date (2026-10-15).** The re-mint of
+   `artifacts/live-evidence/mac-run.json` landed via tick PR #1522 with `mintedAt` 2026-10-15T16:33:53.511Z, read with
+   `node -e 'console.log(JSON.parse(require("fs").readFileSync("artifacts/live-evidence/mac-run.json","utf8")).mintedAt)'`.
+   Before that re-mint the blob read 2026-10-02T16:07:18.870Z, while the commit that carried it then (047dcfd93) is dated
+   2026-10-04 17:14:10 -04:00: a git date two days younger than the file's real age. Read the field, not the commit.
+9. **Regenerate `docs/agent/SURFACE_REVIEW_COVERAGE.md` only on a fully staged index (2026-10-15).** After a merge of mainline
+   into a branch, the index holds duplicate stages until the merge is resolved and staged, and the coverage gate then
+   reports a false STALE (seen on #1524's round 7, 2026-10-15). Resolve, `git add -A`, run
+   `node scripts/check-surface-review-coverage.mjs --write`, `git add -A`, then run the gate without `--write`.
+10. **A heartbeat's "since the last cycle" is what the first-parent log prints, measured (2026-10-15).** Measure the window with
+   `git log origin/SignalGrid_Alpha --first-parent --since=<prior heartbeat firedAt> --until=<this delivery>`, and the age at
+   delivery from the prior `firedAt` to this delivery's instant, never from what the session remembers. The 21:24Z steward record (#1528) named two cloud
+   landings; the window from the prior `firedAt` 2026-10-15T19:25:57.719Z to its delivery commit 5703c7585 (21:26:43Z)
+   holds nine first-parent commits: four PR merges (#1524 df4ea3b8, #1526 67ff76eb, #1527 9e7fc18b, #1468 760d5032) and five
+   Mac heartbeat commits. Its age at delivery was 2h00m45s. The 17:24Z record (#1523) claimed a keepalive "also due" at
+   1h57m; the age from the prior `firedAt` 2026-10-15T15:28:02.975Z to its delivery commit e7f03d2db (17:25:56Z) is
+   1h57m53s, under the 2-hour threshold, so the keepalive was not due (corrected in 4808841e).
 
 ### How the cloud lane runs build work (2026-09-12)
 
 Orchestrator over workers, not one long session: the session model writes the spec
 (what changes, which check must fail without it, which gates must stay green),
-fans execution out to Opus sub-agents each in its own worktree with its own
-`pnpm install`, reviews what comes back against the spec, sends it back with the
+fans execution out to explicitly selected workers under DR-047/DR-060's stage
+table, each in its own worktree with its own `pnpm install`, reviews what comes
+back against the spec, sends it back with the
 exact defects until it is good, and only then runs the full gates and opens the PR.
 The loop closes on a check that fails without the fix, never on a description of
 one. First application: the mutation guard's pending brace-less families
 (BUILD_BACKLOG campaign row) — one worker per family, the orchestrator holds the
 census. Absorbed from an owner-shared practitioner clip (RESOURCE_INTAKE 2026-09-12);
 the vendored `subagent-driven-development` and `dispatching-parallel-agents` skills
-already describe the mechanics.
+already describe the mechanics. `docs/agent/WORKER_BRIEF.md` carries the shared
+worker contract for local-model, Codex and Claude Code sessions. Provider
+availability changes dispatch; it grants no additional merge authority.
+
+### The lane session's status line (2026-10-08)
+
+Claude Code shows one line at the foot of the lane session, from
+`scripts/mac/statusline.sh` (the `statusLine` key in `.claude/settings.json`):
+`<branch> | <N> open hands | <M> unread for <lane> | <model>`. Claude Code re-runs
+it every 30 seconds (`refreshInterval` on that entry) as well as on its own events,
+because hands and mail change while the session is idle, and the entry starts it
+from the repository root of the directory Claude Code was launched in
+(`workspace.project_dir`, never the working directory, which moves), so a session in
+a subdirectory still gets the line and one that wanders into another repository
+never runs that repository's script. It reads only files in the checkout of the
+session's directory: the branch from `git symbolic-ref`, open hands from
+`artifacts/raised-hands/` (every hand not yet resolved), and unread mail from
+`artifacts/lane-messages/` (addressed to this lane, with no ack written by this
+lane). No fetch, no `gh`, no network, so the numbers are as fresh as the last pull
+and are a prompt to run `pnpm run hands` or `pnpm run lane:inbox`, not a replacement
+for either. A part it cannot read (not a git checkout, a file that does not parse, a lane
+message of a shape `pnpm run lane:inbox` would refuse, such as a misspelled `to`) is left
+out of the line instead of shown as a number. To turn it off, delete the
+`statusLine` key from `.claude/settings.json`, or override it in your own local
+settings file. `bash scripts/mac/statusline.sh --self-test` proves the counts on a
+fixture tree; preflight and CI run it.
+
+### Operating notes, 2026-10-16 (cloud lane)
+
+- The lane takes an artifact's own freshness — the live evidence's `mintedAt`, a tick's or a routine's last `firedAt` — from the artifact's field, never from the commit that carried it, while the keepalive's "age at delivery" runs from the prior heartbeat's `firedAt` to the instant the new heartbeat is delivered (the #1523 correction above), so a heartbeat committed after its own `firedAt` is classified by when it was delivered.
+- A new ask names and retires the earlier asks it supersedes in part, and leaves their other items standing.
+- The lane compares commit times in epoch seconds (`git log -1 --format=%ct`), never as ISO strings, because the Mac commits at -04:00 and a later instant reads as earlier.
+- The lane reads a heartbeat delivered under two hours after the prior one as a non-quiet delivery only, never as "also the keepalive".
+- The lane marks a draft PR ready only when it is prepared for another round, because marking it ready triggers a Codex review whose comments wake the branch worker.
+- Every landing refute re-runs the earlier heads' flagged plants on the new head before a ship, because a fix that widens a gate's recognition can silently re-open a fail-open case.
+
+### Operating notes, 2026-10-23 (owner directive: the local second brain runs everything; the cloud and Codex inspect and approve)
+
+Owner, 2026-10-23 about 23:00Z, verbatim: *"Need to offload and let the local agent run everything and escalate to you or codex when it's needed for final inspection and approval for repo everything else is offloaded locally using second brain period …"* — the full text is in the `docs/agent/LOOP.md` STATE block of that day. It widens the 03:30Z local-first directive recorded there.
+
+- **The Mac's local second brain is the primary executor.** It runs every build round, review round, test, app build and company-site task itself, with whatever local tooling it needs, and decides what to work on from the objective state and the owner's inputs. Its runtime lives outside this tree (the 2026-10-22 intake row); it writes to this tree only through the Mac lane's registered channels — lane mail, hands, heartbeats, `mac/*` branches and PRs.
+- **The cloud lane and Codex are final inspection and approval for the repository.** The cloud builds nothing and dispatches nothing of its own. It acts on an escalation from the brain through one of three channels: (1) a lane message addressed to cloud — a comment on the mailbox PR (`docs/agent/lane-mailbox.json`) wakes it at once; (2) a raised hand with `whoCanUnblock: "cloud lane"`; (3) a sentence in a PR body asking the cloud to land it. On an escalation it reviews the exact head and lands under DR-037's five conditions, or returns its findings on the PR. `@codex review` on a PR requests Codex.
+- **What the cloud keeps running**, because the registry and the raised-hands gate expect them: the hourly steward cycle (reads Mac mail and branches, lands lane-mail and tick PRs, escalates a silent Mac to the owner), the 2-hourly forward-build heartbeat as a report of the pool with no refill, and the daily hygiene sweep.
+- **What does not change:** DR-037's five landing conditions and its owner-only surfaces (launch profile, launch-claims gate, publication boundary, decision records, `OWNER_RESERVED`); DR-054, a stuck unit raises a hand on either machine; claim discipline; the second-revision loop above for mail, acks and heartbeats. Authority for the brain's own writes is a registry row in `docs/agent/scheduled-routines.json` citing the owner's words, which the brain proposes and the cloud inspects; until it lands, the brain's deliveries ride the registered Mac lane identity, as they do today.
 
 ## Collision log
 

@@ -17,6 +17,7 @@
       "Read(**/.env)", "Read(**/.env.*)", "Read(~/.ssh/**)"
     ]
   },
+  "statusLine": { "type": "command", "command": "bash -c 'in=$(cat); d=$(printf %s \"$in\" | python3 -I -c \"import json,sys; print(json.load(sys.stdin)[sys.argv[1]][sys.argv[2]])\" workspace project_dir 2>/dev/null); case \"$d\" in /*) ;; *) exit 0 ;; esac; r=$(git -C \"$d\" rev-parse --show-toplevel 2>/dev/null) || exit 0; [ -f \"$r/scripts/mac/statusline.sh\" ] || exit 0; printf %s \"$in\" | bash \"$r/scripts/mac/statusline.sh\"'", "refreshInterval": 30 },
   "hooks": {
     "SessionStart": [
       { "hooks": [ { "type": "command", "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/session-start.sh" } ] }

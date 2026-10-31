@@ -620,7 +620,7 @@ function emit(state, { write, deliver }) {
         lines.push(`RAISED HAND: escalation ${e.id} already attempted or its intent cannot be preserved; READBACK ONLY (${attempt}.submission.json)`);
         continue;
       }
-      const r = spawnSync(process.execPath, [join(ROOT, "scripts/lane-deliver.mjs"), "--receipt", attempt + ".submission.json", "send", `objective-loop: ${e.id} — needs ${e.clears}`, `${e.asks}\n\n(Raised by scripts/objective-loop.mjs on the Mac tick, DR-056. Verdict ${state.verdict}; state ${STATE_REL} @ ${state.derivedAtCommit ?? "?"}. Sent once, on the first tick this escalation appeared; it stays in the state file until cleared.)`], { cwd: ROOT, encoding: "utf8" });
+      const r = spawnSync(process.execPath, [join(ROOT, "scripts/lane-deliver.mjs"), "send", `objective-loop: ${e.id} — needs ${e.clears}`, `${e.asks}\n\n(Raised by scripts/objective-loop.mjs on the Mac tick, DR-056. Verdict ${state.verdict}; state ${STATE_REL} @ ${state.derivedAtCommit ?? "?"}. Sent once, on the first tick this escalation appeared; it stays in the state file until cleared.)`, "--receipt", attempt + ".submission.json"], { cwd: ROOT, encoding: "utf8" });
       // The separate parent intent survives a killed child and a reset tick tree.
       try {
         writeFileSync(attempt + ".output", `${r.stdout ?? ""}${r.stderr ?? ""}`, { flag: "wx", mode: 0o600, flush: true });

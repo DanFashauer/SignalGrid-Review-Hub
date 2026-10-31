@@ -190,7 +190,8 @@ raise_hand() {
       fs.writeFileSync(f, JSON.stringify([hand]));
       process.stdout.write(attempt);' \
       "$_ops" "$1" "${RUN_LOG:-launchd log ~/Library/Logs/signalgrid-build-tick.log}" "$CACHE" "$STAMP" 2>/dev/null)"; then
-    if (umask 077; set -C; node "$REPO_ROOT/scripts/lane-deliver.mjs" --receipt "${_hand_attempt}.submission.json" batch "$_ops" >"${_hand_attempt}.output" 2>&1); then _hand_exit=0; else _hand_exit=$?; fi
+    if (umask 077; set -C; node "$REPO_ROOT/scripts/lane-deliver.mjs" batch "$_ops" --receipt "${_hand_attempt}.submission.json" >"${_hand_attempt}.output" 2>&1); then _hand_exit=0; else _hand_exit=$?; fi
+    if [ -n "$RUN_LOG" ]; then cat "${_hand_attempt}.output" >> "$RUN_LOG"; fi
     node -e 'require("fs").writeFileSync(process.argv[1], process.argv[2]+"\n", {flag:"wx",mode:0o600,flush:true})' "${_hand_attempt}.exit" "$_hand_exit" || say "RAISED HAND: terminal receipt unavailable; READBACK ONLY"
     if [ "$_hand_exit" = "0" ]; then
       say "hand submitted for protected PR merge, canonical landing pending: $1"

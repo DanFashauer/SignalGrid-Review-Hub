@@ -5031,3 +5031,16 @@ Output: Frozen new caller controls against published be1ef32a0da11ea2a8f3611da82
 Verdict: Unknown attempts are not retried. Immutable parent intents exist before objective/build children; they survive discarded decision stamps and identify their original receipt. Mac authentication precedes its sole topic push; a nonce avoids same-second topic collisions. GET/fetch readback verifies exact PR head/base, canonical and topic ancestry and each changed blob. Pending auto-merge is distinct from delivery; unresolved evidence records a local hand and names readback. The real CLI tests use disposable bare Git and gh/schema I/O fixtures; Bash controls run actual caller code with fixture external commands. They do not establish a live launchd heartbeat, remote model qualification or GitHub landing. The native Claude review on be1 automatically continued after an output-token limit; its two-turn result was rejected, and the remaining source lenses were not submitted. No complete source review is inferred.
 
 Earlier exact-head qualification is recorded separately: be1ef32a0da11ea2a8f3611da827bae18109db24 full preflight passed in 1057.67036545882 seconds, and breadth passed 58 proofs in 36.711130291223526 seconds using the existing cached pnpm 10.28.1. Two Mac web steps were unavailable and three checks self-skipped explicitly; that was not a zero-skip full-suite claim. These measurements preceded this caller correction. The final qualification after this journal entry is committed must name the resulting full source SHA in PR #1698, followed by genuine own-system reviews, applicable current CI/findings/DR-037 and expected-head protected landing. A fresh canonical heartbeat remains the restoration proof.
+
+
+## 2026-10-31 — Full preflight caught the delivery caller prefix and private-log regressions
+Command:
+```
+node scripts/preflight.mjs
+node scripts/mac/build-tick-stages.mjs --self-test
+node scripts/check-lane-delivery.mjs
+node scripts/objective-loop.mjs --self-test
+```
+Output: Exact local 3c015fc474f2c74518f3571c6532386cd8a8cd96 full preflight failed after 42.329266583081335 seconds at the staged Mac worker self-test (246/248 before its error aborted the remaining cases). New caller arguments had moved `--receipt` ahead of the existing `batch <file>` prefix, and the delivery output no longer appeared in the existing private run log. The correction preserves `batch <file>` / `send <subject> <body>` as the leading arguments, appends the new receipt option, and copies the independently captured output back to that log. Existing staged-worker test source and assertions are unchanged. Actual corrected staged-worker self-test: `265/265`; lane-delivery: `37 passed, 0 failed, 0 skipped`; objective-loop: `136/136`.
+
+Verdict: The full gate held before any source push. No fixture assertion, gate or debt list was relaxed. The failed full run is retained; its two unexecuted native web steps were explicitly unavailable on the Mac. The correction and this journal entry require their resulting exact head's full preflight/breadth and normal source reviews/current CI before landing. No live heartbeat restoration is inferred from local checks.

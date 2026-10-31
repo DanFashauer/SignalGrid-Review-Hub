@@ -343,3 +343,12 @@ block; a stage run on the wrong tier is a lesson here.
 - **evidence:** New frozen controls reproduced 12 failures on be1. Corrected source passes 37 controls with zero failures/skips; a separate actual Bash control reproduces old refusal pacing. Receipt-aware I/O fixed one fixture failure without weakening the estate-clearance assertion. Four deliberate false-success/ID mutants are rejected.
 - **landing:** pending — exact immutable submission readback, authentication before Mac push, unique topics and independent parent attempts; source-head qualification and canonical heartbeat proof belong to PR #1698.
 - **status:** pending
+
+
+### L38 — Preserve the caller prefix and existing private delivery log
+- **date:** 2026-10-31
+- **lane:** mac
+- **incident:** The new receipt option was placed before `batch`, breaking existing protocol consumers, while captured delivery output stopped being appended to the established private run log. Full preflight held at the staged worker (246/248 before the aborted tail).
+- **evidence:** The unchanged staged-worker assertions now pass 265/265; caller controls pass 37 with zero failures/skips, and objective-loop passes 136/136. The full 3c015fc failure remains a separate measurement.
+- **landing:** pending — preserve the original leading command arguments, append the receipt option and keep both private output records; final source-head qualification and canonical heartbeat proof remain in PR #1698.
+- **status:** pending

@@ -397,3 +397,12 @@ block; a stage run on the wrong tier is a lesson here.
 - **evidence:** Frozen cross-checkout baseline0/4 became4/0. Current61/0 under actual Mac network denial covers shared paths, real distinct-TMPDIR locking, parent-terminal completeness, damaged-store refusal and inherited Git environment binding.
 - **landing:** pending — preserve all old receipts, separately initialize the shared store only after exact legacy-attempt inventory and qualified release gates; PR #1698 still requires all current-head reviews/CI and natural canonical heartbeat proof.
 - **status:** pending
+
+
+### L44 — A pinned reader includes its imports and remains a library
+- **date:** 2026-10-31
+- **lane:** mac
+- **incident:** Adding a store import to the objective module broke the build tick's standalone pinned reader, first through an incomplete file list and then a CLI guard that treated a node-e label as a filename.
+- **evidence:** Actual full failure and import RED retained; corrected current62 delivery controls pass under network denial, all265 staged checks pass in the supported process-inspection environment, with unchanged assertions. Unsupported sandbox CI-cleanup failures and exact own kernel-exit cleanup remain separate evidence.
+- **landing:** pending — copy the complete dependency closure from the same pinned Git tree and keep import free of CLI state initialization; PR #1698 still needs all current-head gates and natural canonical delivery proof.
+- **status:** pending

@@ -32,7 +32,10 @@ export function deliveryRecordDirectory(root, initialize = false) {
   return directory;
 }
 
-if (process.argv[1] && realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)) {
+let entrypoint;
+// node -e consumers can use a label instead of a filename in argv[1].
+try { if (process.argv[1]) entrypoint = realpathSync(process.argv[1]); } catch { /* imported library */ }
+if (entrypoint === fileURLToPath(import.meta.url)) {
   try {
     const [mode, root] = process.argv.slice(2);
     if (!["path", "init"].includes(mode) || !root) throw Error("usage: lane-attempt-store.mjs path|init <checkout>");

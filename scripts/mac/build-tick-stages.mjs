@@ -1558,7 +1558,7 @@ function shellTests(root, ok) {
   const bash = (script, extra = {}) => spawnSync("/bin/bash", ["-c", `set -u\n${script}`], { env: { ...gitEnv, ...extra }, encoding: "utf8", timeout: 120000 });
   const q = (v) => `'${String(v).replace(/'/g, "'\\''")}'`;
   const copyObjectiveContract = (repo) => {
-    for (const file of ["objective-loop.mjs", "check-backlog-ownership.mjs", "lib/sim-operations.mjs", "lib/raised-hand-kinds.mjs", "lib/scratch-git.mjs"]) {
+    for (const file of ["objective-loop.mjs", "check-backlog-ownership.mjs", "lib/lane-attempt-store.mjs", "lib/sim-operations.mjs", "lib/raised-hand-kinds.mjs", "lib/scratch-git.mjs"]) {
       mkdirSync(dirname(join(repo, "scripts", file)), { recursive: true });
       copyFileSync(join(HERE, "..", file), join(repo, "scripts", file));
     }
@@ -1570,6 +1570,12 @@ function shellTests(root, ok) {
     const dir = join(root, "sh-public-hand"), repo = join(dir, "repo"), cache = join(dir, "cache");
     const home = join(dir, "custom-home"), log = join(home, "Library", "Logs", "build-tick.log"), capture = join(dir, "public.json");
     mkdirSync(join(repo, "scripts"), { recursive: true }); mkdirSync(cache); mkdirSync(dirname(log), { recursive: true });
+    // Initialize only this disposable record store; production activation is separate.
+    G(repo, "init", "-q");
+    mkdirSync(join(repo, "scripts/lib"), { recursive: true });
+    copyFileSync(join(HERE, "../lib/lane-attempt-store.mjs"), join(repo, "scripts/lib/lane-attempt-store.mjs"));
+    const prepared = spawnSync(process.execPath, [join(repo, "scripts/lib/lane-attempt-store.mjs"), "init", repo], { env: gitEnv, encoding: "utf8" });
+    if (prepared.status !== 0) throw new Error(prepared.stderr);
     // Capture the actual exported batch locally; never invoke lane-deliver or a remote.
     writeFileSync(join(repo, "scripts", "lane-deliver.mjs"), `import { readFileSync, writeFileSync } from "node:fs";
 if (process.argv[2] !== "batch") throw new Error("expected a batch");
@@ -2164,6 +2170,8 @@ defer_host_verification`);
     G(seed, "remote", "add", "origin", origin); G(seed, "push", "-q", "origin", "SignalGrid_Alpha");
     const mainline = G(seed, "rev-parse", "HEAD");
     G(dir, "clone", "-q", origin, main); // the person's checkout; REPO_ROOT
+    const preparedRecords = spawnSync(process.execPath, [join(main, "scripts/lib/lane-attempt-store.mjs"), "init", main], { env: gitEnv, encoding: "utf8" });
+    if (preparedRecords.status !== 0) throw new Error(preparedRecords.stderr);
     const bw = join(dir, "Repo.build");
     // A tick's branch and run directory are named by its STAMP (to the second); real ticks are hours apart, these are not, so wait for a new second.
     const runTick = (extra = {}) => {

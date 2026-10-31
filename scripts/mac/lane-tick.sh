@@ -101,7 +101,7 @@ trap 'if declare -F sg_host_verify_release >/dev/null; then sg_host_verify_relea
 
 # An UNCHANGED tick heartbeats at most once per this many minutes, so a short launchd
 # interval does not create a protected PR every run. The default leaves an hour
-# for CI within the steward's three-hour tolerance. The local stamp and result
+# for CI within the steward's three-hour tolerance. The attempt pointer and result
 # record the last attempted submission, not a claim that canonical delivery happened.
 #
 # "Unchanged", not "quiet" (2026-09-12): the throttle used to exempt every skipped
@@ -583,7 +583,6 @@ if [ -f scripts/mac/estate-queue.mjs ] && command -v gh >/dev/null 2>&1; then
       _est="$(node scripts/mac/estate-queue.mjs plan 2>&1 | tail -1)"
       say "dry-run: would execute the estate queue (max $ESTATE_MAX); plan: $_est"
     else
-      mkdir -p node_modules 2>/dev/null || true
       _est="$(node scripts/mac/estate-queue.mjs execute --max "$ESTATE_MAX" --cursor-file "$RECORD_DIR/.sg-estate-cursor" 2>&1)"
       _est_rc=$?
       printf '%s\n' "$_est" | while IFS= read -r _l; do say "  $_l"; done

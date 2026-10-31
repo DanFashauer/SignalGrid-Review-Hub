@@ -56,7 +56,12 @@ export interface DeviceIdentity {
  * 1. Local device registry
  * 2. UEM/MDM (Intune, Workspace ONE, Jamf)
  * 3. NAC (Cisco ISE, Aruba ClearPass)
- * 4. FleetDM (posture/telemetry)
+ *
+ * Those three are the whole list: `resolve()` and `aggregate()` try nothing else,
+ * and `DeviceIdentity.source` can represent nothing else. This docstring used to
+ * name a fourth, "FleetDM (posture/telemetry)", that had no code path — the
+ * FleetDM adapter in `telemetry/fleetdm.ts` is never imported here. A reader
+ * counting identity sources from this comment counted one that did not exist.
  */
 export class DeviceIdentityResolver {
   private uemAdapter: UEMAdapter | null = null;

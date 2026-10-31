@@ -1,5 +1,5 @@
 import type { ITSMAdapter, ITSMTicketRequest, ITSMTicketResponse } from '../adapters/types';
-import { resolveEmission, type EmissionCredential } from '../adapters/emit-gate';
+import { resolveEmission, type EmissionCredential, suppressedHealth } from '../adapters/emit-gate';
 import { isRedirectStatus, redirectRefusal } from '../adapters/redirect';
 import { asVendorInstant } from '../adapters/vendor-values';
 
@@ -120,14 +120,16 @@ export class ManageEngineAdapter implements ITSMAdapter {
   /**
    * Health check - verify ServiceDesk Plus connectivity
    */
-  async healthCheck(): Promise<boolean> {
+  async healthCheck(): Promise<boolean | 'unchecked'> {
     // GATED, like every other outbound path. A health check is still a LIVE CALL:
     // it resolves a configured hostname and opens a connection from wherever the
     // process runs. Ungated, it reached the network in dev/alpha with no credential
     // — outside the three-condition boundary the security-review package tells an
     // assessor to verify FIRST. Found by review taking that document at its word.
     const emission = resolveEmission(process.env, this.emissionCredential());
-    if (emission.mode !== "live") return false;
+    // Tier/flag suppression is NOT ASKED ('unchecked'); a missing credential with live
+    // emission on is a misconfiguration (false). See suppressedHealth in the gate.
+    if (emission.mode !== "live") return suppressedHealth(emission);
 
     try {
       const url = `${this.config.instanceUrl}/api/v3/requests?page=1&page_size=1`;

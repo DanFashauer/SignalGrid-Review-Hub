@@ -2778,9 +2778,11 @@ function selfTest() {
     pk.f("checkout", "-q", "main"); pk.c("h.txt", "h\n"); pk.f("push", "-q", "origin", "main");
     check("a branch that deletes a file mainline still has is a difference, not cleared (R6-del-kept)",
       pk.f("ls-tree", "--name-only", R6M, "g.txt") === "g.txt" && hasLandedByContent("rmkeep", R6M, pk.w) === false);
-    // (A) ancestry against the Hub's own listing. p1d: the tip IS the sha the Hub lists for another name, pushed by URL (no tracking ref written)
+    // (A) ancestry against the Hub's own listing. p1d: the tip IS the sha the Hub lists for another name, with no local tracking ref.
     const pd = mkFx("r6d");
     pd.f("checkout", "-q", "-b", "mine"); const pdT = pd.c("m.txt", "work\n"); pd.f("push", "-q", pd.h, "mine:refs/heads/other");
+    // Git 2.56 may update tracking refs for a URL matching origin. Construct the missing-ref scenario explicitly in this temporary fixture.
+    pd.f("update-ref", "-d", "refs/remotes/origin/other");
     const pdMap = hubMapOf(pd.h), pdRows = pd.rows(), pdC = rowOf(pdRows, T_CLEAN);
     check("a tip equal to a sha the Hub lists for another name is on the Hub even with no tracking ref for it: cleared and named (R6-p1d)",
       pd.f("for-each-ref", "refs/remotes/origin/other") === "" && pdMap.get("other") === pdT && hubNamesHoldingTip("mine", pdMap, pd.w).join() === "other" &&

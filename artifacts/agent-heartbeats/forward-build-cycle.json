@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-10-29T10:16:06.555Z",
-  "result": "acted (collapsed catch-up fire 2026-10-29 10:12Z): no workers dispatched. Under the owner's 2026-10-23 directive the local Mac brain (Ollama/OpenCode) is the primary builder and the cloud does final inspection; the Mac's #1675 and #1677 landed through the owner. Cloud harvest: #1585 and #1586 still at FIX-NEEDED refutes; #1655 (plan re-measure) to be refreshed onto mainline and landed under DR-037. Sub-brains: not read this fire."
+  "firedAt": "2026-10-31T10:45:49.499Z",
+  "result": "keepalive (held under the third #1698 stable-canonical window; delivered after the Mac's early close, comment 6542387681). The 06:10Z/08:10Z/10:10Z fires dispatched no cloud wave: builds route through the local brain queue (DR-064 direction); #439 re-subscribed. Previous heartbeat 04:10:55Z passed its 6h soft bound at 10:10:55Z and read stale until this lands. Owner queue: #1641 (DR-064, owner-directed merge after this keepalive); #1698 Mac-owned, in its own panel."
 }

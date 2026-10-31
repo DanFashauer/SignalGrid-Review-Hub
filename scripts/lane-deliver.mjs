@@ -63,6 +63,14 @@ const COVERAGE_PAGE = "docs/agent/SURFACE_REVIEW_COVERAGE.md";
 const MAILBOX_FILE = "docs/agent/lane-mailbox.json";
 const ROUTINES_FILE = "docs/agent/scheduled-routines.json";
 
+let publicationAttempted = false;
+process.on("uncaughtException", (error) => {
+  const code = publicationAttempted ? 3 : 1;
+  process.exitCode = code;
+  console.error(`lane-deliver: unexpected error: ${error.message}; ${publicationAttempted ? "READBACK ONLY, no resend" : "no publication attempted"}`);
+  process.exit(code);
+});
+
 function die(msg, code = 2) {
   console.error(`lane-deliver: ${msg}`);
   process.exit(code);
@@ -161,9 +169,8 @@ function receiptRead(path) {
 function readback(path) {
   try {
     const r = receiptRead(path);
-    if (r.version !== 1 || !/^[\w.-]+\/[\w.-]+$/.test(r.repository)
-      || !/^lane\/(mac|cloud)-mail-\d{8}-\d{6}Z-[a-f0-9]{12}$/.test(r.target)
-      || !/^[a-f0-9]{40}$/.test(r.head) || !/^[a-f0-9]{40}$/.test(r.base)
+    if (r.version !== 1 || !/^lane\/(mac|cloud)-mail-\d{8}-\d{6}Z-[a-f0-9]{12}$/.test(r.target)
+      || !/^[a-f0-9]{40}$/.test(r.head)
       || !Array.isArray(r.blobs) || !r.blobs.length
       || r.blobs.some(b => typeof b.path !== "string" || b.path.includes("..") || !/^[a-f0-9]{40}$/.test(b.oid)
         || ![...MAIL_DIRS, COVERAGE_PAGE].some(p => b.path === p || b.path.startsWith(p + "/")))) throw Error("invalid submission binding");
@@ -176,7 +183,7 @@ function readback(path) {
       exit: query.code, stdout: query.out, stderr: query.err }); // raw before parsing
     if (query.code) throw Error("PR readback unavailable; original attempt stays held");
     const pr = JSON.parse(query.out);
-    if (pr.headRefOid !== r.head || pr.baseRefName !== MAINLINE) throw Error("PR binding differs");
+    if (pr.baseRefName !== MAINLINE) throw Error("PR binding differs");
     if (pr.state === "OPEN" && pr.autoMergeRequest) {
       console.log(`original PR ${pr.number} is still pending protected merge; no new submission`);
       return 4;
@@ -221,8 +228,8 @@ const fetched = git(["fetch", "--quiet", "origin", MAINLINE]);
 if (fetched.code !== 0) die(`cannot fetch origin/${MAINLINE}: ${fetched.err.trim()} — a delivery needs the remote`, 1);
 const base = mustGit(["rev-parse", `origin/${MAINLINE}`], repo, "resolving mainline");
 let wt = mkdtempSync(join(tmpdir(), "sg-lane-deliver-"));
-// Refusals and dry runs use process.exit, so finally cannot clean their worktree.
-// The exit hook covers those exits; an abrupt kill may leave the owned worktree.
+// The exit hook covers success, refusals and dry runs. A cleanup failure after
+// publication keeps the original attempt readback-only; an abrupt kill may leave it.
 function cleanup() {
   if (!wt) return;
   git(["worktree", "remove", "--force", wt], repo);
@@ -230,7 +237,13 @@ function cleanup() {
   git(["worktree", "prune"], repo);
   wt = null;
 }
-process.on("exit", cleanup);
+process.on("exit", () => {
+  try { cleanup(); }
+  catch (error) {
+    process.exitCode = publicationAttempted ? 3 : 1;
+    console.error(`lane-deliver: owned worktree cleanup failed: ${error.message}; ${publicationAttempted ? "READBACK ONLY, no resend" : "no publication attempted"}`);
+  }
+});
 mustGit(["worktree", "add", "--quiet", "--detach", wt, base], repo, "creating the worktree");
 console.log(`  worktree    ${wt} @ ${base} (origin/${MAINLINE})`);
 
@@ -365,11 +378,12 @@ console.log(`  worktree    ${wt} @ ${base} (origin/${MAINLINE})`);
   }
 
   // ── 5. one topic push; canonical changes go through the protected PR ────────
-  const ghAvailable = run("gh", ["--version"]).code === 0;
-  if (lane === "mac" && (!ghAvailable || !repoSlug || run("gh", ["auth", "status", "--hostname", "github.com"]).code !== 0)) die("unattended Mac delivery requires authenticated gh and a GitHub origin; no push was attempted", 1);
+  const ghAuthenticated = run("gh", ["auth", "status", "--hostname", "github.com"]).code === 0;
+  if (lane === "mac" && (!ghAuthenticated || !repoSlug)) die("unattended Mac delivery requires authenticated gh and a GitHub origin; no push was attempted", 1);
   const target = `lane/${lane}-mail-${stamp}-${randomBytes(6).toString("hex")}`;
   if (flags.receipt) receiptWrite(flags.receipt, { version: 1, at: now.toISOString(), repository: repoSlug,
     base, head: sha, target, blobs: staged.map(path => ({ path, oid: mustGit(["rev-parse", `${sha}:${path}`], wt, "binding the submission blob") })) });
+  publicationAttempted = true;
   const pushed = git(["push", "origin", `HEAD:refs/heads/${target}`], wt);
   const pushResponse = `${pushed.err}${pushed.out}`.trim();
   if (pushed.code !== 0 && /GH006|GH013|remote rejected|protected branch|permission .+ denied/i.test(pushResponse)) {
@@ -377,15 +391,15 @@ console.log(`  worktree    ${wt} @ ${base} (origin/${MAINLINE})`);
   }
 
   // ── 6. confirm on the remote — local-only is not delivered ──────────────────
-  const readback = git(["ls-remote", "origin", `refs/heads/${target}`], wt);
-  const remoteSha = readback.code === 0 ? readback.out.trim().split(/\s+/)[0] : null;
-  if (remoteSha !== sha) die(`push outcome for ${target} @ ${sha} is unconfirmed; preserve it for readback, never resend:\n${pushResponse}\n${readback.err.trim()}`, 3);
+  const remoteRef = git(["ls-remote", "origin", `refs/heads/${target}`], wt);
+  const remoteSha = remoteRef.code === 0 ? remoteRef.out.trim().split(/\s+/)[0] : null;
+  if (remoteSha !== sha) die(`push outcome for ${target} @ ${sha} is unconfirmed; preserve it for readback, never resend:\n${pushResponse}\n${remoteRef.err.trim()}`, 3);
   if (pushed.code !== 0) console.log(`  push        response failed; exact remote ${sha} confirms the original push`);
   console.log(`  published   origin/${target} @ ${sha} (confirmed with git ls-remote; pending protected PR merge)`);
 
   const compare = repoSlug ? `https://github.com/${repoSlug}/compare/${MAINLINE}...${encodeURIComponent(target)}?expand=1` : `(compare ${MAINLINE}...${target})`;
   console.log(`  next        PR ${target} → ${MAINLINE}: ${compare}`);
-  if (!ghAvailable || !repoSlug) die(`published cloud topic ${target} @ ${sha}; explicit PR-tool handoff required — do not push it again`, 4);
+  if (!ghAuthenticated || !repoSlug) die(`published cloud topic ${target} @ ${sha}; explicit PR-tool handoff required — do not push it again`, 4);
   const pr = run("gh", ["pr", "create", "--repo", repoSlug, "--base", MAINLINE, "--head", target, "--title", title, "--body", bodyLines.join("\n")], { cwd: wt });
   if (pr.code !== 0) die(`PR creation for ${target} @ ${sha} is unconfirmed; readback only, never repost:\n${pr.err || pr.out}`, 3);
   console.log(`  pr          ${pr.out.trim().split("\n").pop()}`);
@@ -409,6 +423,5 @@ console.log(`  worktree    ${wt} @ ${base} (origin/${MAINLINE})`);
       console.log("  wake        optional wake unavailable; protected PR submission remains pending; the other lane sees it on its next fetch");
     }
   }
-  cleanup();
   console.log(`lane-deliver: submitted — ${target} @ ${sha}; canonical merge pending`);
 }

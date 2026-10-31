@@ -501,11 +501,25 @@ It never pushes, creates another PR, repeats auto-merge or deletes a branch.
 The heartbeat uses this command on later ticks, including after an interrupted
 parent. A verified canonical merge permits a new heartbeat observation. A
 pending PR waits. Missing, malformed or incompatible evidence stays readback
-only, with an immutable `.sg-heartbeat-*.hand.json` in the producing checkout's
-`node_modules` and a `RAISED HAND` line in its log. Objective/build attempts name
+only, preserving the original immutable intent/child log/terminal in the producing
+checkout's `node_modules` and a `RAISED HAND` line in its private tick log. Objective/build attempts name
 their original submission receipt in their local warnings. If no receipt exists,
 inspect the preserved parent intent and raw child log before choosing a separate
 scoped repair; do not erase the pointer or rerun the old mutation. A local hand
 does not certify that the blocked outbound channel notified GitHub. Keep private
-logs and receipt files local. This publication readback establishes no generic
-provider or host quiescence, product qualification or native coding success.
+logs and receipt files local.
+
+A behind mail PR may be updated through the existing qualified estate/steward
+route. Readback then proves the ORIGINAL commit is an ancestor of the real
+canonical merge and every recorded payload blob is unchanged; the refreshed PR
+head need not equal the original commit. A pending PR is checked only when a
+new heartbeat observation is due, rather than on every five-minute work poll.
+A CLOSED/unmerged PR, disabled auto-merge, or unavailable original receipt stays
+held. From the producing checkout, run `node scripts/lane-deliver.mjs readback
+<receipt>` and preserve its exact observations with the parent intent/log. Hand
+the cause to a separately source/ownership/grant-qualified repair; no automatic
+pointer deletion, resend, approving vote or bypass is a recovery step. A UTC day
+change alone never authorizes repeating an unknown objective/build hand. Only
+actual canonical proof closes the original delivery. Estate failures persist in
+the heartbeat as a coarse exit status; full diagnostics stay in the private log,
+and a later actual successful estate run clears that failure.

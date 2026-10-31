@@ -379,3 +379,12 @@ block; a stage run on the wrong tier is a lesson here.
 - **evidence:** Actual frozen CLI baseline 40/2; final 42/0 under network denial, asserting successful push/create/merge before the outcome boundary. No source assertion relaxed.
 - **landing:** pending — optional wake errors warn, retain pending submission semantics and never cause a resend; PR #1698 still requires current-head gates and natural heartbeat readback.
 - **status:** pending
+
+
+### L42 — A maintained PR head is not the original payload identity
+- **date:** 2026-10-31
+- **lane:** mac
+- **incident:** Exact PR-head equality permanently held a mail attempt after a lawful behind-branch refresh, even when the original commit and payload reached canonical.
+- **evidence:** Real Git refresh/merge and cleanup-permission counterexamples drove frozen48 from40/8 to48/0 under network denial; original-payload changes still refuse, unknown mutations never resend.
+- **landing:** pending — prove original ancestry and blobs, pace readbacks, and preserve independent fsynced records; PR #1698 still needs a canonical refresh, full current-head gates and natural heartbeat proof.
+- **status:** pending

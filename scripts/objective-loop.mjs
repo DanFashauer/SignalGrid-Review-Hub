@@ -623,8 +623,7 @@ function emit(state, { write, deliver }) {
       const r = spawnSync(process.execPath, [join(ROOT, "scripts/lane-deliver.mjs"), "send", `objective-loop: ${e.id} — needs ${e.clears}`, `${e.asks}\n\n(Raised by scripts/objective-loop.mjs on the Mac tick, DR-056. Verdict ${state.verdict}; state ${STATE_REL} @ ${state.derivedAtCommit ?? "?"}. Sent once, on the first tick this escalation appeared; it stays in the state file until cleared.)`, "--receipt", attempt + ".submission.json"], { cwd: ROOT, encoding: "utf8" });
       // The separate parent intent survives a killed child and a reset tick tree.
       try {
-        writeFileSync(attempt + ".output", `${r.stdout ?? ""}${r.stderr ?? ""}`, { flag: "wx", mode: 0o600, flush: true });
-        writeFileSync(attempt + ".terminal.json", JSON.stringify({ status: r.status, error: r.error?.message ?? null }) + "\n", { flag: "wx", mode: 0o600, flush: true });
+        writeFileSync(attempt + ".terminal.json", JSON.stringify({ status: r.status, error: r.error?.message ?? null, stdout: r.stdout ?? "", stderr: r.stderr ?? "" }) + "\n", { flag: "wx", mode: 0o600, flush: true });
       } catch { lines.push(`RAISED HAND: escalation ${e.id} terminal recording failed; READBACK ONLY`); }
       lines.push(r.status === 0 ? `escalation ${e.id} submitted for protected PR merge` : `WARN escalation ${e.id} submission unconfirmed (lane-deliver exit ${r.status}); read back its original attempt`);
       if (r.status === 0) submitted.add(e.id);

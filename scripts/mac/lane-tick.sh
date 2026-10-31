@@ -114,6 +114,47 @@ HB_LAST_RESULT="node_modules/.sg-last-heartbeat-result"
 HB_LAST_ATTEMPT="node_modules/.sg-last-heartbeat-attempt"
 ESTATE_RESULT="node_modules/.sg-estate-result"
 
+# Node is already required by the tick. Keep private cache writes and immutable
+# attempt records on the same regular-file, no-follow, fsynced primitive.
+tick_record() {
+  node - "$@" <<'JS'
+const fs = require("node:fs");
+const [mode, a, b, c, d, e] = process.argv.slice(2);
+function check(fd) {
+  const info = fs.fstatSync(fd);
+  if (!info.isFile() || info.nlink !== 1) throw Error("owned regular record required");
+}
+function write(path, data, exclusive = false) {
+  const fd = fs.openSync(path, fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_NOFOLLOW | (exclusive ? fs.constants.O_EXCL : 0), 0o600);
+  try {
+    check(fd);
+    if (data === null) { const now = new Date(); fs.futimesSync(fd, now, now); }
+    else { fs.ftruncateSync(fd, 0); fs.writeFileSync(fd, data); }
+    fs.fsyncSync(fd);
+  } finally { fs.closeSync(fd); }
+}
+if (mode === "prepare") {
+  write("node_modules/.sg-heartbeat-" + a + ".log", JSON.stringify({attempt:a,result:b}) + "\n", true);
+  write(c, a); write(d, b); write(e, null);
+} else if (mode === "terminal") {
+  const code = Number(b);
+  if (!Number.isInteger(code) || code < 0 || code > 255) throw Error("invalid actual child exit");
+  write("node_modules/.sg-heartbeat-" + a + ".exit", code + "\n", true);
+} else if (mode === "estate") {
+  const code = Number(b);
+  if (!Number.isInteger(code) || code < 0 || code > 255) throw Error("invalid estate exit");
+  if (code) write(a, `estate queue FAILED (exit ${code}); see private tick log\n`);
+  else {
+    try {
+      const fd = fs.openSync(a, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW);
+      try { check(fd); } finally { fs.closeSync(fd); }
+      fs.unlinkSync(a);
+    } catch (error) { if (error.code !== "ENOENT") throw error; }
+  }
+} else throw Error("invalid private record mode");
+JS
+}
+
 # The heartbeat is the tick's ONLY obligation on every path, including failure
 # paths: a tick that died silently is exactly what this script exists to prevent.
 RESULT="quiet"
@@ -166,8 +207,8 @@ append_raised_hands_state() {
 heartbeat() {
   append_unread_state
   append_raised_hands_state
-  # Keep the last actual estate outcome present between hourly runs. This avoids
-  # a success-summary flip and retains a failure until another outcome is recorded.
+  # Retain an estate failure until a later actual success. Successful PR counts
+  # stay in the private log; their hourly churn is not a changed heartbeat outcome.
   if [ -e "$ESTATE_RESULT" ] || [ -L "$ESTATE_RESULT" ]; then
     if [ ! -L "$ESTATE_RESULT" ] && _estate_result="$(cat "$ESTATE_RESULT" 2>/dev/null)" && [ -n "$_estate_result" ]; then
       RESULT="$RESULT; last estate: $_estate_result"
@@ -179,21 +220,11 @@ heartbeat() {
 
   _hb_hold() {
     say "RAISED HAND: $1; READBACK ONLY, no submission (see docs/LANE_COORDINATION.md, held deliveries)"
-    python3 - "${_hb_previous:-missing}" "$1" <<'PY'
-import hashlib,json,os,sys
-key,reason=sys.argv[1:3]
-path='node_modules/.sg-heartbeat-'+hashlib.sha256(key.encode()).hexdigest()+'.hand.json'
-try:fd=os.open(path,os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,0o600)
-except FileExistsError:pass
-else:
-    with os.fdopen(fd,'w')as f:
-        json.dump({'kind':'held-delivery','attempt':key,'reason':reason,'need':'Exact GET-only original submission readback; never delete receipts or resend the old attempt','remote_notification_verified':False},f)
-        f.flush();os.fsync(f.fileno())
-PY
-    return 1
+
   }
 
   _hb_window="$QUIET_HEARTBEAT_MIN"
+  _hb_submission=""
   # An independent parent-written terminal, not child output or a PID check,
   # closes an attempt. Unknown/interrupted mutations remain readback-only.
   if [ -e "$HB_LAST_ATTEMPT" ] || [ -L "$HB_LAST_ATTEMPT" ]; then
@@ -213,15 +244,6 @@ PY
         if [ ! -f "$_hb_submission" ] || [ -L "$_hb_submission" ]; then
           _hb_hold "unconfirmed/unfinished heartbeat lacks its exact submission binding"; return 1
         fi
-        if _hb_readback="$(node scripts/lane-deliver.mjs readback "$_hb_submission" 2>&1)"; then
-          say "$_hb_readback"
-        else
-          _hb_readback_exit=$?
-          if [ "$_hb_readback_exit" = "4" ]; then
-            say "$_hb_readback"; return 0
-          fi
-          _hb_hold "original heartbeat canonical readback is unavailable"; return 1
-        fi
         ;;
     esac
   fi
@@ -233,8 +255,21 @@ PY
   LAST_RESULT=""
   [ -f "$HB_LAST_RESULT" ] && LAST_RESULT="$(cat "$HB_LAST_RESULT" 2>/dev/null)"
   if [ "$RESULT" = "$LAST_RESULT" ] && [ -f "$HB_STAMP" ] && [ -n "$(find "$HB_STAMP" -mmin -"$_hb_window" 2>/dev/null)" ]; then
-    say "unchanged ($RESULT), last submission attempt <${_hb_window}m ago — tick ran, no new mail PR"
+    say "unchanged ($RESULT), last submission attempt <${_hb_window}m ago — no new mail PR; original submission not rechecked"
     return 0
+  fi
+  # A due/changed observation checks the original submission before any new one.
+  # Unchanged ticks do not fetch and write duplicate observations every five minutes.
+  if [ -n "$_hb_submission" ]; then
+    if _hb_readback="$(node scripts/lane-deliver.mjs readback "$_hb_submission" 2>&1)"; then
+      say "$_hb_readback"
+    else
+      _hb_readback_exit=$?
+      if [ "$_hb_readback_exit" = "4" ]; then
+        say "$_hb_readback"; return 0
+      fi
+      _hb_hold "original heartbeat canonical readback is unavailable"; return 1
+    fi
   fi
   # --no-wake: the tick heartbeat is a STALENESS record, read from the heartbeat
   # FILE by the cloud steward's hourly cycle — it never carries cloud-addressed
@@ -245,36 +280,10 @@ PY
   # every-tick quiet wake that flooded the cloud session (owner decision 2026-09-23).
   # Sync the intent before calling a mutating child, and its independent terminal
   # afterwards. Existing receipts remain immutable; no automatic unknown override.
-  _hb_record() {
-    python3 - "$@" <<'PY'
-import json, os, stat, sys
-def write(path, data, exclusive=False):
-    flags = os.O_WRONLY | os.O_CREAT | os.O_NOFOLLOW
-    if exclusive: flags |= os.O_EXCL
-    fd = os.open(path, flags, 0o600)
-    try:
-        info = os.fstat(fd)
-        if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
-            raise PermissionError("owned regular receipt required")
-        os.ftruncate(fd, 0)
-        with os.fdopen(fd, "wb", closefd=False) as stream:
-            stream.write(data); stream.flush(); os.fsync(fd)
-    finally: os.close(fd)
-mode, attempt, value = sys.argv[1:4]
-prefix = "node_modules/.sg-heartbeat-" + attempt
-if mode == "prepare":
-    pointer, key, stamp = sys.argv[4:7]
-    write(prefix + ".log", (json.dumps({"attempt": attempt, "result": value}) + "\n").encode(), True)
-    write(pointer, attempt.encode()); write(key, value.encode()); write(stamp, b"")
-else:
-    code = int(value)
-    if not 0 <= code <= 255: raise ValueError("invalid actual child exit")
-    write(prefix + ".exit", (str(code) + "\n").encode(), True)
-PY
-  }
+
   _hb_attempt="${STAMP}-$$"
   _hb_log="node_modules/.sg-heartbeat-${_hb_attempt}.log"
-  if ! mkdir -p node_modules || ! _hb_record prepare "$_hb_attempt" "$RESULT" "$HB_LAST_ATTEMPT" "$HB_LAST_RESULT" "$HB_STAMP"; then
+  if ! mkdir -p node_modules || ! tick_record prepare "$_hb_attempt" "$RESULT" "$HB_LAST_ATTEMPT" "$HB_LAST_RESULT" "$HB_STAMP"; then
     say "WARN could not preserve heartbeat intent; no submission"; return 1
   fi
   if node scripts/lane-deliver.mjs heartbeat mac-lane-tick "$RESULT" --no-wake --receipt "node_modules/.sg-heartbeat-${_hb_attempt}.submission.json" >>"$_hb_log" 2>&1; then
@@ -282,7 +291,7 @@ PY
   else
     _hb_exit=$?
   fi
-  if ! _hb_record terminal "$_hb_attempt" "$_hb_exit"; then
+  if ! tick_record terminal "$_hb_attempt" "$_hb_exit"; then
     say "WARN heartbeat terminal not recorded; READBACK ONLY: $_hb_log"; return 1
   fi
   if [ "$_hb_exit" = "0" ]; then
@@ -472,6 +481,9 @@ else
   # otherwise become the verdict in the commit message and the heartbeat.
   LOOP_LINE="$(printf '%s\n' "$LOOP_OUT" | grep -m1 '^objective-loop: ' || true)"
   say "${LOOP_LINE:-objective-loop printed no summary line}"
+  if [ "$LOOP_STATUS" = "0" ]; then
+    printf '%s\n' "$LOOP_OUT" | grep -E '^(RAISED HAND:|WARN )' | while IFS= read -r _l; do say "  $_l"; done
+  fi
   if [ "$LOOP_STATUS" = "0" ] && [ -n "$LOOP_LINE" ]; then
     LOOP_VERDICT="${LOOP_LINE#objective-loop: }"
     LOOP_VERDICT="${LOOP_VERDICT%% —*}"
@@ -573,9 +585,7 @@ if [ -f scripts/mac/estate-queue.mjs ] && command -v gh >/dev/null 2>&1; then
       printf '%s\n' "$_est" | while IFS= read -r _l; do say "  $_l"; done
       # Without the stamp the hourly throttle is gone and the queue runs every tick.
       touch "$ESTATE_STAMP" 2>/dev/null || say "WARN could not write $ESTATE_STAMP; the estate queue will re-run next tick"
-      _estate_result="$(printf '%s\n' "$_est" | tail -1)"
-      if [ "$_est_rc" != "0" ]; then _estate_result="estate queue FAILED (exit $_est_rc): $_estate_result"; fi
-      if ! printf '%s\n' "$_estate_result" > "$ESTATE_RESULT"; then RESULT="$RESULT; estate outcome could not be retained"; fi
+      if ! tick_record estate "$ESTATE_RESULT" "$_est_rc"; then RESULT="$RESULT; estate outcome could not be retained"; fi
     fi
   fi
 else

@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "cloud-od01-approved-run-the-zero-loss-deletes-fr",
+  "ackedBy": "mac",
+  "note": "Done from the Mac 2026-11-01: delete-zero-loss-verified.sh --apply deleted claude/build-gate-survivors-liveness-scratch-git and mac/pr-1216-fix-backup with archive tags pushed; DONE lines and remote-heads count (282) in PR #1725 (merged 06:14Z) and message mac-od01-done-from-the-mac-the-two-remaining-zer. #1698: Codex owns the branch; the Mac's fixes ride #1739 into it (seventh pass in flight). Item 6 list is in the brain intake for the queue.",
+  "ackedAt": "2026-11-01T20:39:49.366Z"
+}

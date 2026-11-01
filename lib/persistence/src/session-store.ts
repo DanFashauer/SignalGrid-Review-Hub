@@ -67,8 +67,14 @@ function withExpiry(s: Session, nowMs: number): Session {
   if (s.status === "active" && (!Number.isFinite(expiresAtMs) || expiresAtMs < nowMs)) {
     return { ...s, status: "expired" };
   }
+  // `status` is TEXT NOT NULL with no CHECK, so a durable row can hold any string
+  // and `rowToSession` only casts it. An unrecognised status is unknown state and
+  // reads EXPIRED, never verbatim (fail closed: unknown tightens, never loosens).
+  if (!KNOWN_STATUSES.has(s.status)) return { ...s, status: "expired" };
   return s;
 }
+
+const KNOWN_STATUSES: ReadonlySet<string> = new Set<SessionStatus>(["active", "expired", "ended"]);
 
 // ── in-memory (default, fixture-safe) ───────────────────────────────────────
 export class InMemorySessionStore implements SessionStore {
@@ -94,6 +100,10 @@ export class InMemorySessionStore implements SessionStore {
       lastSeenAt: new Date(nowMs).toISOString(),
       expiresAt: new Date(nowMs + ttlSeconds * 1000).toISOString(),
     };
+    // Parity with the Postgres `UPDATE … WHERE status = 'active'`: the read above
+    // awaited, so an end() that landed in that window must win. Re-check the live
+    // row immediately before the write; a non-active row is never revived.
+    if (this.byId.get(id)?.status !== "active") return null;
     this.byId.set(id, next);
     return next;
   }

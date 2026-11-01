@@ -7,9 +7,12 @@
   "need": "Owner: read PR #1190 draft 4 and say publish, revise (with what), or drop.",
   "whoCanUnblock": "owner",
   "domain": "",
-  "status": "open",
+  "status": "resolved",
   "routedTo": null,
   "covers": [
     "objective-owner:awaiting-owner-row-24"
-  ]
+  ],
+  "resolvedAt": "2026-10-22T10:54:49.166Z",
+  "resolvedBy": "cloud",
+  "resolution": "Stale cover, cleared so the stale-hand rule stops failing --check: the objective state derived 2026-10-22T00:49:06.737Z (docs/agent/objective-state.json, Mac tick bb6cf4ee6) no longer raises awaiting-owner-row-24, because the row's AWAITING OWNER marker dated 2026-10-08 passed the 14-day MEASURE_WINDOW_DAYS (scripts/objective-loop.mjs) and the row now sits in plan-rows-unmeasured, which the cloud lane clears. Nothing was decided: the owner's read of #1190 draft 4 (publish, revise or drop) is still owed. The ask stays in the row's marker in docs/COMPANY_BUILD_PLAN.md; the cloud lane re-checks the blocker and re-dates the marker, the loop then re-escalates the row, and a hand is raised again if it stands past its limit."
 }

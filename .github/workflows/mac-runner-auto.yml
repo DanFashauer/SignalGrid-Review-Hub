@@ -48,7 +48,9 @@ jobs:
     if: github.event_name == 'pull_request'
     name: PR — Mac-only checks (full-clone provenance, preflight on macOS)
     runs-on: [self-hosted, macOS, ARM64, signalgrid-mac]
-    timeout-minutes: 30
+    # 660m admission (local chain ceiling 645m + 15m), 40m work, 20m setup/upload margin.
+    # Self-hosted job limit is 5 days; the owning step uses internal caps, no step timeout.
+    timeout-minutes: 720
     concurrency:
       group: mac-pr-${{ github.event.pull_request.number }}
       cancel-in-progress: true
@@ -76,30 +78,27 @@ jobs:
         with:
           node-version: 22
 
-      - name: Install (frozen lockfile)
-        id: install
-        run: pnpm install --frozen-lockfile
-
-      - name: Provenance on a FULL clone (a result must name a commit that resolves)
-        run: pnpm run proof:sim-requests
-
-      - name: Free the api-server test ports (runner-owned orphans from a prior killed job)
-        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
-        run: bash scripts/mac/free-test-port.sh
-
-      - name: Preflight on macOS
-        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
-        # preflight runs check-ci-liveness.mjs, which is FATAL in CI without a token (2026-09-26):
-        # Actions does not export GITHUB_TOKEN by itself, so the step hands it over.
+      - name: Install and verify under the shared host reservation
+        # One shell retains FD9 through install, checks and teardown; steps cannot share FDs.
+        # Pin the published helper, not the PR worktree. Normal local ticks stay nonblocking.
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
-          code=0; node scripts/preflight.mjs > preflight.log 2>&1 || code=$?
-          grep -E "Preflight (PASSED|FAILED)|FAILED at" preflight.log || true; exit "$code"
-
-      - name: Free the api-server test ports (teardown — do not orphan one for the next job)
-        if: always()
-        run: bash scripts/mac/free-test-port.sh
+          bash scripts/mac/ci-host-verification.sh 24eff86a940099e0725d474d1d5520bfbc71d368 39600 2400 <<'CI_CHAIN'
+          set -u
+          code=0
+          install_code=0
+          pnpm install --frozen-lockfile || install_code=$?
+          [ "$install_code" = 0 ] || exit "$install_code"
+          bash scripts/mac/free-test-port.sh || exit $?
+          pnpm run proof:sim-requests || code=$?
+          # A provenance failure must not hide the independent preflight verdict.
+          preflight_code=0
+          node scripts/preflight.mjs > preflight.log 2>&1 || preflight_code=$?
+          grep -E "Preflight (PASSED|FAILED)|FAILED at" preflight.log || true
+          [ "$preflight_code" = 0 ] || code="$preflight_code"
+          exit "$code"
+          CI_CHAIN
 
       - name: Upload logs
         if: always()

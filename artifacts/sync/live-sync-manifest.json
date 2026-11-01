@@ -1,6 +1,6 @@
 {
-  "manifestVersion": 100,
-  "fingerprint": "3cef2da09cd6871eff627729eb30e4424aa09858becb5a784b5e4755d1ec0e71",
+  "manifestVersion": 101,
+  "fingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
   "body": {
     "schema": "signalgrid-live-sync-manifest/v1",
     "contract": {
@@ -123,7 +123,7 @@
       "decision-continuity": 76,
       "device-attestation": 157,
       "device-management-health": 209,
-      "device-resolver": 14,
+      "device-resolver": 17,
       "dual-control": 78,
       "emitter-discipline": 165,
       "entitlement-binding": 63,
@@ -166,7 +166,7 @@
       "uem": 80,
       "unsafe-claim": 58,
       "verdict-attestation": 98,
-      "webhooks": 243,
+      "webhooks": 246,
       "work-context": 58
     },
     "mcpTools": [

@@ -1558,7 +1558,7 @@ function shellTests(root, ok) {
   const bash = (script, extra = {}) => spawnSync("/bin/bash", ["-c", `set -u\n${script}`], { env: { ...gitEnv, ...extra }, encoding: "utf8", timeout: 120000 });
   const q = (v) => `'${String(v).replace(/'/g, "'\\''")}'`;
   const copyObjectiveContract = (repo) => {
-    for (const file of ["objective-loop.mjs", "check-backlog-ownership.mjs", "lib/sim-operations.mjs", "lib/raised-hand-kinds.mjs", "lib/scratch-git.mjs"]) {
+    for (const file of ["objective-loop.mjs", "check-backlog-ownership.mjs", "lib/lane-attempt-store.mjs", "lib/sim-operations.mjs", "lib/raised-hand-kinds.mjs", "lib/scratch-git.mjs"]) {
       mkdirSync(dirname(join(repo, "scripts", file)), { recursive: true });
       copyFileSync(join(HERE, "..", file), join(repo, "scripts", file));
     }
@@ -1570,6 +1570,12 @@ function shellTests(root, ok) {
     const dir = join(root, "sh-public-hand"), repo = join(dir, "repo"), cache = join(dir, "cache");
     const home = join(dir, "custom-home"), log = join(home, "Library", "Logs", "build-tick.log"), capture = join(dir, "public.json");
     mkdirSync(join(repo, "scripts"), { recursive: true }); mkdirSync(cache); mkdirSync(dirname(log), { recursive: true });
+    // Initialize only this disposable record store; production activation is separate.
+    G(repo, "init", "-q");
+    mkdirSync(join(repo, "scripts/lib"), { recursive: true });
+    copyFileSync(join(HERE, "../lib/lane-attempt-store.mjs"), join(repo, "scripts/lib/lane-attempt-store.mjs"));
+    const prepared = spawnSync(process.execPath, [join(repo, "scripts/lib/lane-attempt-store.mjs"), "init", repo], { env: gitEnv, encoding: "utf8" });
+    if (prepared.status !== 0) throw new Error(prepared.stderr);
     // Capture the actual exported batch locally; never invoke lane-deliver or a remote.
     writeFileSync(join(repo, "scripts", "lane-deliver.mjs"), `import { readFileSync, writeFileSync } from "node:fs";
 if (process.argv[2] !== "batch") throw new Error("expected a batch");
@@ -1760,10 +1766,36 @@ ${defer ?? ""}
 defer_host_verification`);
     ok("host verification: a deferred lane tick still heartbeats that requests and objective evaluation did not run", !!defer && hb.status === 0
       && /heartbeat:deferred: .*sim requests and objective evaluation not run/.test(hb.stdout), `${hb.status} ${hb.stdout}`);
+    const cleanup = shFn(lane, "sg_tick_guard_cleanup");
+    const cleanupProbe = (status, interrupted = 0) => bash(`
+TICK_LOCK_ROOT=fixture-root
+TICK_LOCK_HELPER=fixture-helper
+TICK_OWNER_TOKEN=fixture-owner
+TICK_INTERRUPTED=${interrupted}
+say() { printf 'said:%s\\n' "$1"; }
+sg_host_verify_release() { printf 'host-release\\n'; }
+node() { printf 'tick-finalize:%s|%s|%s|%s|%s|%s\\n' "$1" "$2" "$3" "$4" "$5" "$6"; }
+${cleanup ?? ""}
+exec 8</dev/null
+(exit ${status})
+sg_tick_guard_cleanup`);
+    const finalized = cleanupProbe(0);
     ok("host verification: both ticks use the same host path before heavy work and preserve their own lock cleanup",
       sh.includes('$HOME/Library/Caches/signalgrid/host-verification.lock') && lane.includes('$HOME/Library/Caches/signalgrid/host-verification.lock')
       && sh.indexOf('if ! sg_host_verify_acquire') < sh.indexOf('# ── 1b. refresh') && lane.indexOf('if ! sg_host_verify_acquire') < lane.indexOf('LOCK_SHA=')
-      && /trap '[^\n]*sg_host_verify_release[^\n]*\$LOCK\/pid/.test(sh) && /trap '[^\n]*sg_host_verify_release[^\n]*\$TICK_LOCK\/pid/.test(lane));
+      && /trap '[^\n]*sg_host_verify_release[^\n]*\$LOCK\/pid/.test(sh)
+      && !!cleanup && /trap sg_tick_guard_cleanup EXIT/.test(lane)
+      && finalized.status === 0 && /^host-release\ntick-finalize:fixture-helper\|tick-release\|fixture-root\|fixture-owner\|[1-9][0-9]*\|0\n$/.test(finalized.stdout),
+      `${finalized.status} ${finalized.stdout} ${finalized.stderr}`);
+    const failedWork = cleanupProbe(1);
+    ok("host verification: exact tick finalization retains a known nonzero work status",
+      failedWork.status === 1 && /^host-release\ntick-finalize:fixture-helper\|tick-release\|fixture-root\|fixture-owner\|[1-9][0-9]*\|1\n$/.test(failedWork.stdout),
+      `${failedWork.status} ${failedWork.stdout} ${failedWork.stderr}`);
+    const interrupted = cleanupProbe(143, 1);
+    ok("host verification: an interrupted tick releases its host descriptor without finalizing the OPEN tick lease",
+      interrupted.status === 143 && interrupted.stdout.startsWith("host-release\n")
+      && /original OPEN ownership remains held/.test(interrupted.stdout) && !/tick-finalize:/.test(interrupted.stdout),
+      `${interrupted.status} ${interrupted.stdout} ${interrupted.stderr}`);
   });
 
   // ── B-1(a): no git command in the script names the shared remote-tracking ref ──
@@ -2164,6 +2196,8 @@ defer_host_verification`);
     G(seed, "remote", "add", "origin", origin); G(seed, "push", "-q", "origin", "SignalGrid_Alpha");
     const mainline = G(seed, "rev-parse", "HEAD");
     G(dir, "clone", "-q", origin, main); // the person's checkout; REPO_ROOT
+    const preparedRecords = spawnSync(process.execPath, [join(main, "scripts/lib/lane-attempt-store.mjs"), "init", main], { env: gitEnv, encoding: "utf8" });
+    if (preparedRecords.status !== 0) throw new Error(preparedRecords.stderr);
     const bw = join(dir, "Repo.build");
     // A tick's branch and run directory are named by its STAMP (to the second); real ticks are hours apart, these are not, so wait for a new second.
     const runTick = (extra = {}) => {

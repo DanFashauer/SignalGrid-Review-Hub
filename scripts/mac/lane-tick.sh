@@ -3,9 +3,9 @@
 # SignalGrid — the Mac lane's automatic tick. Runs WITHOUT a person and WITHOUT a
 # Claude session, from launchd (scripts/mac/install-launchd.sh); the interval is the
 # installer's (default 5 min). A short interval picks up queued sim requests fast; to
-# keep that from flooding SignalGrid_Alpha with heartbeat commits, a QUIET tick
-# heartbeats at most once per QUIET_HEARTBEAT_MIN minutes (a tick that ACTED, SKIPPED
-# or FAILED always heartbeats). The steward's 3-hour staleness window stays satisfied.
+# keep protected mail PRs paced, an unchanged outcome gets a two-hour keepalive.
+# A changed outcome is submitted immediately. The work poll remains five minutes;
+# canonical delivery is pending until the PR passes its checks and merges.
 #
 #   bash scripts/mac/lane-tick.sh            # one tick, prints what it did
 #   bash scripts/mac/lane-tick.sh --dry-run  # say what would run, run nothing
@@ -37,7 +37,7 @@
 #   d. commit + push any new results on a `mac/tick-<stamp>` branch (the cloud
 #      steward opens the PR within the hour; if `gh` is on PATH the PR is opened
 #      here) and return the checkout to SignalGrid_Alpha;
-#   e. HEARTBEAT every tick, quiet or not, through `lane:deliver` — so "the Mac
+#   e. HEARTBEAT on a changed outcome or the keepalive through `lane:deliver` — so "the Mac
 #      ran and had nothing to do" is distinguishable from "the Mac never ran",
 #      and the cloud steward escalates to the owner when this stops arriving.
 #
@@ -77,30 +77,59 @@ STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 LOG_PREFIX="lane-tick $STAMP"
 say() { printf '%s  %s\n' "$LOG_PREFIX" "$1"; }
 
+# Resolve once before use_tick_worktree can change cwd. Missing state never means first run.
+RECORD_DIR="$(node "$REPO_ROOT/scripts/lib/lane-attempt-store.mjs" path "$REPO_ROOT")" || exit 1
+
 # ── one tick at a time ───────────────────────────────────────────────────────
-# launchd never overlaps its own label, but a PERSON running this script by hand while
-# the launchd tick is mid-run would race it on one whole-file JSON state (DR-056). mkdir
-# is atomic and needs no flock (bash 3.2). A lock whose holder is DEAD is stale and is
-# cleared here — a crashed tick must never latch every later tick into silence.
-TICK_LOCK="${TMPDIR:-/tmp}/signalgrid-lane-tick.lock"
-if ! mkdir "$TICK_LOCK" 2>/dev/null; then
-  _holder="$(cat "$TICK_LOCK/pid" 2>/dev/null || true)"
-  if [ -n "$_holder" ] && kill -0 "$_holder" 2>/dev/null; then
-    say "another tick (pid $_holder) holds $TICK_LOCK — exiting; the running tick delivers the heartbeat"
+# BEGIN OWNED TICK GUARD
+# Linked checkouts share a persistent, identity-pinned descriptor lock. Only
+# explicit store initialization creates it; opening read-only cannot recreate it.
+# An unfinished ownership record or an old tick.lock stays held for exact readback.
+# A PID, process absence or an available kernel lock never clears that evidence.
+# CLOSED records authorized lease finalization, not an independent parent exit,
+# accepted task, canonical delivery or provider-cleanup witness.
+TICK_LOCK_ROOT="$REPO_ROOT"
+TICK_LOCK_HELPER="$REPO_ROOT/scripts/lib/lane-attempt-store.mjs"
+TICK_GUARD_PATH="$(node "$TICK_LOCK_HELPER" tick-guard "$TICK_LOCK_ROOT")" || exit 1
+exec 8<"$TICK_GUARD_PATH" || { say "tick guard cannot be opened; READBACK ONLY"; exit 1; }
+TICK_OWNER_TOKEN="$(node "$TICK_LOCK_HELPER" tick-acquire "$TICK_LOCK_ROOT" "$$")"
+_tick_acquire_status=$?
+if [ "$_tick_acquire_status" != "0" ]; then
+  exec 8<&-
+  if [ "$_tick_acquire_status" = "75" ]; then
+    say "another tick owns the shared guard; no work started"
     exit 0
   fi
-  say "stale tick lock (holder ${_holder:-unknown} is gone) — clearing it"
-  rm -f "$TICK_LOCK/pid"; rmdir "$TICK_LOCK" 2>/dev/null || true
-  mkdir "$TICK_LOCK" 2>/dev/null || { say "could not take $TICK_LOCK — exiting"; exit 0; }
+  say "tick ownership is held or incomplete; no work started; READBACK ONLY"
+  exit 1
 fi
-printf '%s' "$$" > "$TICK_LOCK/pid"
-trap 'if declare -F sg_host_verify_release >/dev/null; then sg_host_verify_release; fi; rm -f "$TICK_LOCK/pid"; rmdir "$TICK_LOCK" 2>/dev/null' EXIT
+TICK_INTERRUPTED=0
+sg_tick_guard_cleanup() {
+  local _tick_exit=$?
+  trap - EXIT
+  if declare -F sg_host_verify_release >/dev/null; then sg_host_verify_release; fi
+  if [ "$TICK_INTERRUPTED" = "0" ] && [ "$_tick_exit" -lt 128 ]; then
+    if ! node "$TICK_LOCK_HELPER" tick-release "$TICK_LOCK_ROOT" "$TICK_OWNER_TOKEN" "$$" "$_tick_exit"; then
+      say "tick terminal ownership could not be committed; READBACK ONLY"
+      [ "$_tick_exit" != "0" ] || _tick_exit=1
+    fi
+  else
+    say "tick interrupted; original OPEN ownership remains held for readback"
+  fi
+  # Never unlink a shared guard or another owner's pathname.
+  exec 8<&-
+  exit "$_tick_exit"
+}
+trap 'TICK_INTERRUPTED=1; exit 129' HUP
+trap 'TICK_INTERRUPTED=1; exit 130' INT
+trap 'TICK_INTERRUPTED=1; exit 143' TERM
+trap sg_tick_guard_cleanup EXIT
+# END OWNED TICK GUARD
 
 # An UNCHANGED tick heartbeats at most once per this many minutes, so a short launchd
-# interval does not push a heartbeat commit to Alpha every run. Override with
-# SIGNALGRID_QUIET_HEARTBEAT_MIN. The local stamp sits beside the install stamp in
-# node_modules (gitignored, never pushed); its mtime is the last delivered heartbeat
-# and the sibling file holds the RESULT that heartbeat carried.
+# interval does not create a protected PR every run. The default leaves an hour
+# for CI within the steward's three-hour tolerance. The attempt pointer and result
+# record the last attempted submission, not a claim that canonical delivery happened.
 #
 # "Unchanged", not "quiet" (2026-09-12): the throttle used to exempt every skipped
 # and failed result, so a checkout parked on a landing branch for an hour pushed
@@ -109,9 +138,49 @@ trap 'if declare -F sg_host_verify_release >/dev/null; then sg_host_verify_relea
 # between them exhausting the repository's GITHUB_TOKEN budget until the CI liveness
 # gate failed a product PR on a 403. A repeated result is not news; a CHANGED result
 # is, and still delivers at once — including the first skip and the first failure.
-QUIET_HEARTBEAT_MIN="${SIGNALGRID_QUIET_HEARTBEAT_MIN:-25}"
-HB_STAMP="node_modules/.sg-last-heartbeat"
-HB_LAST_RESULT="node_modules/.sg-last-heartbeat-result"
+QUIET_HEARTBEAT_MIN="${SIGNALGRID_QUIET_HEARTBEAT_MIN:-120}"
+HB_LAST_RESULT="$RECORD_DIR/.sg-last-heartbeat-result"
+HB_LAST_ATTEMPT="$RECORD_DIR/.sg-last-heartbeat-attempt"
+ESTATE_RESULT="$RECORD_DIR/.sg-estate-result"
+
+# Node is already required by the tick. Keep private cache writes and immutable
+# attempt records on the same regular-file, no-follow, fsynced primitive.
+tick_record() {
+  node - "$@" <<'JS'
+const fs = require("node:fs");
+const [mode, a, b, c, d, e] = process.argv.slice(2);
+function check(fd) {
+  const info = fs.fstatSync(fd);
+  if (!info.isFile() || info.nlink !== 1) throw Error("owned regular record required");
+}
+function write(path, data, exclusive = false) {
+  const fd = fs.openSync(path, fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_NOFOLLOW | (exclusive ? fs.constants.O_EXCL : 0), 0o600);
+  try {
+    check(fd);
+    fs.ftruncateSync(fd, 0); fs.writeFileSync(fd, data);
+    fs.fsyncSync(fd);
+  } finally { fs.closeSync(fd); }
+}
+if (mode === "prepare") {
+  write(a, JSON.stringify({attempt:b,result:c}) + "\n", true);
+  write(d, b); write(e, c);
+} else {
+  const code = Number(b);
+  if (!Number.isInteger(code) || code < 0 || code > 255) throw Error("invalid actual child exit");
+  if (mode === "terminal") write(a, code + "\n", true);
+  else if (mode === "estate") {
+    if (code) write(a, `estate queue FAILED (exit ${code}); see private tick log\n`);
+    else {
+      try {
+        const fd = fs.openSync(a, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW);
+        try { check(fd); } finally { fs.closeSync(fd); }
+        fs.unlinkSync(a);
+      } catch (error) { if (error.code !== "ENOENT") throw error; }
+    }
+  } else throw Error("invalid private record mode");
+}
+JS
+}
 
 # The heartbeat is the tick's ONLY obligation on every path, including failure
 # paths: a tick that died silently is exactly what this script exists to prevent.
@@ -165,31 +234,220 @@ append_raised_hands_state() {
 heartbeat() {
   append_unread_state
   append_raised_hands_state
+  # Retain an estate failure until a later actual success. Successful PR counts
+  # stay in the private log; their hourly churn is not a changed heartbeat outcome.
+  if [ -e "$ESTATE_RESULT" ] || [ -L "$ESTATE_RESULT" ]; then
+    if [ ! -L "$ESTATE_RESULT" ] && _estate_result="$(cat "$ESTATE_RESULT" 2>/dev/null)" && [ -n "$_estate_result" ]; then
+      RESULT="$RESULT; last estate: $_estate_result"
+    else
+      RESULT="$RESULT; last estate: UNKNOWN (record unreadable)"
+    fi
+  fi
   if [ "$DRY" = "1" ]; then say "dry-run: would heartbeat: $RESULT"; return 0; fi
-  # Throttle a result IDENTICAL to the last delivered one ("quiet" again, the same
+
+  _hb_hold() {
+    say "RAISED HAND: $1; READBACK ONLY, no submission (see docs/LANE_COORDINATION.md, held deliveries)"
+  }
+
+  # A stuck pending PR may need Cloud inspection. This is one DIFFERENT hand,
+  # never a resend/requeue/close/auto-merge request for the original heartbeat.
+  _hb_pending_hand() {
+    node - "$_hb_submission" "$1" "$RECORD_DIR" "$_hb_previous" "${TICK_LOCK_ROOT:-}" "${TICK_OWNER_TOKEN:-}" "$$" <<'JS'
+  const fs = require("node:fs"), path = require("node:path"), crypto = require("node:crypto");
+  const { spawnSync } = require("node:child_process");
+  const [originalPath, output, records, attempt, guardRoot, guardToken, shellPid] = process.argv.slice(2);
+  const repo = process.cwd(); // same producing checkout as the original readback
+  const sha = raw => crypto.createHash("sha256").update(raw).digest("hex");
+  const own = st => st.isFile() && st.nlink === 1 && (typeof process.getuid !== "function" || st.uid === process.getuid());
+  function read(file) {
+    const fd = fs.openSync(file, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW | fs.constants.O_NONBLOCK);
+    try {
+      const before = fs.fstatSync(fd);
+      if (!own(before) || before.size > 1024 * 1024) throw Error("owned bounded record required");
+      const raw = fs.readFileSync(fd), after = fs.fstatSync(fd);
+      if (raw.length !== before.size || ["dev", "ino", "size", "mtimeMs", "ctimeMs"].some(key => before[key] !== after[key])) throw Error("record changed");
+      return raw;
+    } finally { fs.closeSync(fd); }
+  }
+  function write(file, value) {
+    fs.writeFileSync(file, JSON.stringify(value) + "\n", { flag: "wx", mode: 0o600, flush: true });
+  }
+  function exists(file) { try { fs.lstatSync(file); return true; } catch (error) { if (error.code === "ENOENT") return false; throw error; } }
+  (async () => {
+    if (!/^[0-9]{8}T[0-9]{6}Z-[0-9]+$/.test(attempt) || Buffer.byteLength(output) > 32768) throw Error("pending input differs");
+    const raw = read(originalPath), original = JSON.parse(raw.toString("utf8"));
+    if (original.version !== 1 || !/^[a-f0-9]{40}$/.test(original.head ?? "") ||
+        !/^lane\/mac-mail-\d{8}-\d{6}Z-[a-f0-9]{12}$/.test(original.target ?? "") ||
+        !/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(original.repository ?? "")) throw Error("original binding differs");
+    const prefix = "pending delivery observation ";
+    const lines = output.split("\n").filter(line => line.startsWith(prefix));
+    if (lines.length !== 1) throw Error("one original pending observation required");
+    const text = lines[0].slice(prefix.length), observed = JSON.parse(text);
+    const keys = ["version", "repository", "target", "original_head", "receipt_sha256", "pr_number", "base", "pr_head", "created_at", "observed_at", "age_seconds", "merge_state", "check_state", "auto_merge_requested"];
+    const literalKeys = [...text.matchAll(/(?:^|[,{])\s*"([A-Za-z_][A-Za-z_0-9]*)"\s*:/g)].map(match => match[1]);
+    if (!observed || typeof observed !== "object" || Array.isArray(observed) ||
+        Object.keys(observed).sort().join("\n") !== [...keys].sort().join("\n") ||
+        literalKeys.length !== keys.length || new Set(literalKeys).size !== keys.length ||
+        literalKeys.some(key => !keys.includes(key))) throw Error("pending scalar schema differs");
+    const created = typeof observed.created_at === "string" ? Date.parse(observed.created_at) : NaN;
+    const at = typeof observed.observed_at === "string" ? Date.parse(observed.observed_at) : NaN;
+    if (observed.version !== 1 || observed.repository !== original.repository || observed.target !== original.target ||
+        observed.original_head !== original.head || observed.receipt_sha256 !== sha(raw) || observed.base !== "SignalGrid_Alpha" ||
+        typeof observed.pr_head !== "string" || !/^[a-f0-9]{40}$/.test(observed.pr_head) || !Number.isInteger(observed.pr_number) || observed.pr_number <= 0 ||
+        !Number.isFinite(created) || !Number.isFinite(at) || created > at || at > Date.now() || Date.now() - at > 300000 ||
+        !Number.isInteger(observed.age_seconds) || observed.age_seconds < 0 || observed.age_seconds !== Math.floor((at - created) / 1000) ||
+        !["BEHIND", "BLOCKED", "CLEAN", "DIRTY", "DRAFT", "HAS_HOOKS", "UNSTABLE"].includes(observed.merge_state) ||
+        !["failed", "pending", "success"].includes(observed.check_state) || observed.auto_merge_requested !== true) throw Error("pending metadata missing, stale or foreign");
+    const reason = observed.check_state === "failed" ? "terminal failed check" : observed.merge_state === "BEHIND" ? "behind canonical" : observed.age_seconds >= 3600 ? "pending at least one hour" : null;
+    if (!reason) { console.log("pending heartbeat metadata is current; no new notification needed"); process.exit(0); }
+    const { checkTickOwner } = await import(require("node:url").pathToFileURL(path.join(repo, "scripts/lib/lane-attempt-store.mjs")).href);
+    if (typeof checkTickOwner !== "function") throw Error("qualified read-only owner check unavailable");
+    function activeOwner() {
+      const owner = checkTickOwner(guardRoot, guardToken, shellPid), named = fs.lstatSync(records);
+      if (owner.directory !== records || owner.token !== guardToken || owner.shellPid !== Number(shellPid) ||
+          !named.isDirectory() || named.dev !== owner.store.dev || named.ino !== owner.store.ino ||
+          (typeof process.getuid === "function" && named.uid !== process.getuid()) || (named.mode & 0o022)) throw Error("original notification store or owner changed");
+      return owner;
+    }
+    const active = activeOwner(), store = active.store;
+    function stillActive() {
+      const current = activeOwner();
+      if (current.openedSha256 !== active.openedSha256 || current.guard.dev !== active.guard.dev || current.guard.ino !== active.guard.ino ||
+          current.store.dev !== active.store.dev || current.store.ino !== active.store.ino) throw Error("original active lease changed");
+    }
+    const id = "pending-heartbeat-" + sha(attempt), root = path.join(records, id);
+    const files = { intent: root + ".attempt.json", ops: root + ".ops.json", output: root + ".output", terminal: root + ".terminal.json", receipt: root + ".submission.json" };
+    const binding = { version: 1, kind: "pending-heartbeat-notification", attempt, receipt_sha256: sha(raw), repository: original.repository,
+      target: original.target, original_head: original.head, pr_number: observed.pr_number, store: { dev: store.dev, ino: store.ino } };
+    if (Object.values(files).some(exists)) {
+      const prior = JSON.parse(read(files.intent).toString("utf8"));
+      if (JSON.stringify(prior.binding) !== JSON.stringify(binding)) throw Error("notification intent binding differs");
+      read(files.ops); read(files.output);
+      const terminal = JSON.parse(read(files.terminal).toString("utf8"));
+      if (!Number.isInteger(terminal.status) || terminal.status < 0 || terminal.status > 255 || terminal.signal !== null || terminal.error !== null) throw Error("notification parent terminal unknown");
+      read(files.receipt);
+      console.log("pending heartbeat notification was already attempted; READBACK ONLY, no new hand");
+      process.exit(0);
+    }
+    const url = `https://github.com/${original.repository}/pull/${observed.pr_number}`;
+    const op = { op: "raise", id, who: "cloud lane", domain: "lane", where: url,
+      doing: "canonical delivery of a Mac heartbeat",
+      blocked: `Protected heartbeat PR #${observed.pr_number} is ${reason}; original topic ${original.target} @ ${original.head}.`,
+      need: "Cloud lane: inspect the current PR checks and source, then repair or land only through the existing protected review/CI route. This hand does not authorize resending, reposting or closing the original attempt." };
+    stillActive();
+    write(files.intent, { at: new Date().toISOString(), binding, state: "one distinct notification attempted; original heartbeat unchanged", receipt: files.receipt });
+    write(files.ops, [op]);
+    const fd = fs.openSync(files.output, fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL | fs.constants.O_NOFOLLOW, 0o600);
+    let result;
+    try {
+      if (!own(fs.fstatSync(fd))) throw Error("owned notification output required");
+      stillActive();
+      result = spawnSync(process.execPath, [path.join(repo, "scripts/lane-deliver.mjs"), "batch", files.ops, "--receipt", files.receipt],
+        { cwd: repo, stdio: ["ignore", fd, fd] });
+      fs.fsyncSync(fd);
+    } finally { fs.closeSync(fd); }
+    write(files.terminal, { at: new Date().toISOString(), status: result.status, signal: result.signal ?? null,
+      error: result.error?.code ?? null, pid: result.pid ?? null, readback_only: true });
+    if (result.status !== 0 || result.signal || result.error) throw Error("new notification remains unconfirmed");
+    read(files.receipt);
+    console.log(`pending heartbeat PR #${observed.pr_number}: one distinct Cloud hand submitted; canonical merge unverified`);
+  })().catch(() => {
+    console.log("RAISED HAND: pending heartbeat diagnostic or notification remains held; READBACK ONLY, no retry");
+    process.exitCode = 1;
+  });
+JS
+  }
+
+  _hb_window="$QUIET_HEARTBEAT_MIN"
+  _hb_submission=""
+  # An independent parent-written terminal, not child output or a PID check,
+  # closes an attempt. Unknown/interrupted mutations remain readback-only.
+  if [ -e "$HB_LAST_ATTEMPT" ] || [ -L "$HB_LAST_ATTEMPT" ]; then
+    _hb_previous="$(cat "$HB_LAST_ATTEMPT" 2>/dev/null)"
+    if [ -L "$HB_LAST_ATTEMPT" ] || ! [[ "$_hb_previous" =~ ^[0-9]{8}T[0-9]{6}Z-[0-9]+$ ]]; then
+      _hb_hold "unknown heartbeat receipt"; return 1
+    fi
+    _hb_previous_log="$RECORD_DIR/.sg-heartbeat-${_hb_previous}.log"
+    _hb_previous_exit="$RECORD_DIR/.sg-heartbeat-${_hb_previous}.exit"
+    if [ ! -f "$_hb_previous_log" ] || [ -L "$_hb_previous_log" ] || [ ! -f "$_hb_previous_exit" ] || [ -L "$_hb_previous_exit" ]; then
+      _hb_hold "unfinished heartbeat receipt"; return 1
+    fi
+    _hb_previous_status="$(cat "$_hb_previous_exit" 2>/dev/null)"
+    case "$_hb_previous_status" in
+      0|1|2|3|4) ;;
+      *) _hb_hold "invalid independent heartbeat terminal"; return 1 ;;
+    esac
+    # The immutable receipt is written BEFORE push. A refused push or later
+    # cleanup can still exit 1/2; that receipt always binds the ORIGINAL attempt.
+    _hb_submission="$RECORD_DIR/.sg-heartbeat-${_hb_previous}.submission.json"
+    if [ -e "$_hb_submission" ] || [ -L "$_hb_submission" ]; then
+      if [ ! -f "$_hb_submission" ] || [ -L "$_hb_submission" ]; then
+        _hb_hold "original heartbeat submission binding is not a regular owned receipt"; return 1
+      fi
+    elif [ "$_hb_previous_status" = "1" ] || [ "$_hb_previous_status" = "2" ]; then
+      _hb_submission=""
+      _hb_window=10 # no publication binding: a DIFFERENT eligible observation
+    else
+      _hb_hold "unconfirmed/unfinished heartbeat lacks its exact submission binding"; return 1
+    fi
+  fi
+  # A lost pointer alongside existing attempt evidence is damage, never a first run.
+  if [ ! -e "$HB_LAST_ATTEMPT" ] && [ -n "$(find "$RECORD_DIR" -maxdepth 1 -name '.sg-heartbeat-*' -print -quit)" ]; then
+    _hb_hold "heartbeat pointer missing beside original attempt evidence"; return 1
+  fi
+  # Throttle a result IDENTICAL to the last attempted one ("quiet" again, the same
   # "skipped: …" again, the same failure again) inside the window; anything that
-  # differs from what Alpha already carries delivers now. A tick that ACTED names
-  # what it did, so its result differs and always delivers. `find -mmin -N` and the
+  # differs from the previous attempt submits now. A tick that ACTED names
+  # what it did, so its result differs and submits immediately. `find -mmin -N` and the
   # `cat` comparison are BSD/bash-3.2 safe; a missing result file compares unequal.
   LAST_RESULT=""
   [ -f "$HB_LAST_RESULT" ] && LAST_RESULT="$(cat "$HB_LAST_RESULT" 2>/dev/null)"
-  if [ "$RESULT" = "$LAST_RESULT" ] && [ -f "$HB_STAMP" ] && [ -n "$(find "$HB_STAMP" -mmin -"$QUIET_HEARTBEAT_MIN" 2>/dev/null)" ]; then
-    say "unchanged ($RESULT), last heartbeat <${QUIET_HEARTBEAT_MIN}m ago — tick ran, not re-pushing (avoids flooding Alpha)"
+  if [ "$RESULT" = "$LAST_RESULT" ] && [ -f "$HB_LAST_ATTEMPT" ] && [ -n "$(find "$HB_LAST_ATTEMPT" -mmin -"$_hb_window" 2>/dev/null)" ]; then
+    say "unchanged ($RESULT), last submission attempt <${_hb_window}m ago — no new mail PR; original submission not rechecked"
     return 0
+  fi
+  # A due/changed observation checks the original submission before any new one.
+  # Unchanged ticks do not fetch and write duplicate observations every five minutes.
+  if [ -n "$_hb_submission" ]; then
+    if _hb_readback="$(node scripts/lane-deliver.mjs readback "$_hb_submission" 2>&1)"; then
+      say "$_hb_readback"
+    else
+      _hb_readback_exit=$?
+      if [ "$_hb_readback_exit" = "4" ]; then
+        say "$_hb_readback"
+        _hb_pending_hand "$_hb_readback" || _hb_hold "pending heartbeat has no new qualified notification"
+        return 0
+      fi
+      _hb_hold "original heartbeat canonical readback is unavailable"; return 1
+    fi
   fi
   # --no-wake: the tick heartbeat is a STALENESS record, read from the heartbeat
   # FILE by the cloud steward's hourly cycle — it never carries cloud-addressed
   # mail (append_unread_state reports THIS lane's inbox, mac's), so it must not
   # post the mailbox-PR comment that wakes the cloud lane. Real cloud mail travels
   # on a separate `lane-deliver send` (no --no-wake), which still wakes at once;
-  # new mac/* branches are reviewed by the steward within the hour. This ends the
+  # mail topics pass their required checks before merging. This ends the
   # every-tick quiet wake that flooded the cloud session (owner decision 2026-09-23).
-  if node scripts/lane-deliver.mjs heartbeat mac-lane-tick "$RESULT" --no-wake >/dev/null 2>&1; then
-    touch "$HB_STAMP" 2>/dev/null || true
-    printf '%s' "$RESULT" > "$HB_LAST_RESULT" 2>/dev/null || true
-    say "heartbeat delivered: $RESULT"
+  # Sync the intent before calling a mutating child, and its independent terminal
+  # afterwards. Existing receipts remain immutable; no automatic unknown override.
+
+  _hb_attempt="${STAMP}-$$"
+  _hb_log="$RECORD_DIR/.sg-heartbeat-${_hb_attempt}.log"
+  if ! tick_record prepare "$_hb_log" "$_hb_attempt" "$RESULT" "$HB_LAST_ATTEMPT" "$HB_LAST_RESULT"; then
+    say "WARN could not preserve heartbeat intent; no submission"; return 1
+  fi
+  if node scripts/lane-deliver.mjs heartbeat mac-lane-tick "$RESULT" --no-wake --receipt "$RECORD_DIR/.sg-heartbeat-${_hb_attempt}.submission.json" >>"$_hb_log" 2>&1; then
+    _hb_exit=0
   else
-    say "WARN heartbeat delivery FAILED (push refused or offline): $RESULT"
+    _hb_exit=$?
+  fi
+  if ! tick_record terminal "$RECORD_DIR/.sg-heartbeat-${_hb_attempt}.exit" "$_hb_exit"; then
+    say "WARN heartbeat terminal not recorded; READBACK ONLY: $_hb_log"; return 1
+  fi
+  if [ "$_hb_exit" = "0" ]; then
+    say "heartbeat submitted for protected PR merge: $RESULT"
+  else
+    say "WARN heartbeat submission not confirmed (exit $_hb_exit); receipt $_hb_log: $RESULT"
   fi
 }
 
@@ -373,6 +631,9 @@ else
   # otherwise become the verdict in the commit message and the heartbeat.
   LOOP_LINE="$(printf '%s\n' "$LOOP_OUT" | grep -m1 '^objective-loop: ' || true)"
   say "${LOOP_LINE:-objective-loop printed no summary line}"
+  if [ "$LOOP_STATUS" = "0" ]; then
+    printf '%s\n' "$LOOP_OUT" | grep -E '^(RAISED HAND:|WARN )' | while IFS= read -r _l; do say "  $_l"; done
+  fi
   if [ "$LOOP_STATUS" = "0" ] && [ -n "$LOOP_LINE" ]; then
     LOOP_VERDICT="${LOOP_LINE#objective-loop: }"
     LOOP_VERDICT="${LOOP_VERDICT%% —*}"
@@ -432,7 +693,8 @@ if [ -n "$(git status --porcelain -- artifacts/sim-results artifacts/live-eviden
         rm -f docs/agent/objective-state.json
       fi
       git clean -fq -- "artifacts/sim-requests/objective-loop-*.json" >/dev/null 2>&1 || true
-      # ...and forget the delivery stamp, so the next tick re-derives AND re-delivers.
+      # ...and re-derive the decision next tick. Independent per-escalation attempt
+      # records remain intact: forgetting this stamp never permits re-submission.
       rm -f node_modules/.sg-objective-loop-last.json
     fi
     if [ "$IN_TICK_WT" = "1" ]; then
@@ -458,8 +720,8 @@ RESULT="$RESULT; objective: $LOOP_VERDICT"
 # and merges mainline into a PR that is behind without conflict, at most ESTATE_MAX
 # per run, and only reports everything else (it never merges a PR). Hourly, so a
 # 5-minute tick does not re-run CI on the same PRs every few minutes; the stamp lives
-# in node_modules (gitignored) like the heartbeat's.
-ESTATE_STAMP="node_modules/.sg-estate-last"
+# in the shared private store, like the heartbeat's.
+ESTATE_STAMP="$RECORD_DIR/.sg-estate-last"
 ESTATE_MAX="${SIGNALGRID_ESTATE_MAX:-3}"
 if [ -f scripts/mac/estate-queue.mjs ] && command -v gh >/dev/null 2>&1; then
   if [ -z "$(find "$ESTATE_STAMP" -mmin -60 2>/dev/null)" ]; then
@@ -467,17 +729,12 @@ if [ -f scripts/mac/estate-queue.mjs ] && command -v gh >/dev/null 2>&1; then
       _est="$(node scripts/mac/estate-queue.mjs plan 2>&1 | tail -1)"
       say "dry-run: would execute the estate queue (max $ESTATE_MAX); plan: $_est"
     else
-      mkdir -p node_modules 2>/dev/null || true
-      _est="$(node scripts/mac/estate-queue.mjs execute --max "$ESTATE_MAX" --cursor-file node_modules/.sg-estate-cursor 2>&1)"
+      _est="$(node scripts/mac/estate-queue.mjs execute --max "$ESTATE_MAX" --cursor-file "$RECORD_DIR/.sg-estate-cursor" 2>&1)"
       _est_rc=$?
       printf '%s\n' "$_est" | while IFS= read -r _l; do say "  $_l"; done
       # Without the stamp the hourly throttle is gone and the queue runs every tick.
       touch "$ESTATE_STAMP" 2>/dev/null || say "WARN could not write $ESTATE_STAMP; the estate queue will re-run next tick"
-      if [ "$_est_rc" = "0" ]; then
-        RESULT="$RESULT; $(printf '%s\n' "$_est" | tail -1)"
-      else
-        RESULT="$RESULT; estate queue FAILED (exit $_est_rc): $(printf '%s\n' "$_est" | tail -1)"
-      fi
+      if ! tick_record estate "$ESTATE_RESULT" "$_est_rc"; then RESULT="$RESULT; estate outcome could not be retained"; fi
     fi
   fi
 else

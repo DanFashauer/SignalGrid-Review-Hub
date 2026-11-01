@@ -61,6 +61,7 @@ CURRENT EVIDENCE: 2026-10-21 — immutable artifact f3b55f7173ed5d5365a102ebadad
 EVIDENCE PUBLICATION: #1577 carried artifact f3b55f7173ed5d5365a102ebadadef2e0e1dfcea onto canonical mainline at 24eff86a940099e0725d474d1d5520bfbc71d368; the mint and its Linux attestation remain measurements of clean a70c36b3e0e897d8a80a863e7228417f729e487f, not new measurements of the later redaction head or merge.
 PENDING SOURCE PREPARATION: 2026-10-28 — see the 2026-10-27/28 EVIDENCE source-preparation entries for delegated policy, the C0 proof and open coordination covers; no new mint, completed witness or public qualification is claimed.
 PENDING CI FIX: 2026-10-28 — R6p1d explicitly constructs its missing tracking ref; EVIDENCE records applicable local checks, targeted Git2.56 evidence and limited-resource failures. Full current-head source/CI/preflight qualification remains pending.
+MAC DELIVERY SOURCE SNAPSHOT (2026-10-31, local operator candidate before publication): PR #1698 is still draft/unmerged at19a. Its actual Codex Ponytail SHIP and Claude Ponytail FIX are recorded as COMMENTs5721143494/5721143602; the other six source methods and audit never started. Independently frozen48 reproduced40/8 on that source and now passes48/0: lawful refreshed heads retain original commit/blob proof, late unexpected post-push failures are readback-only, unchanged ticks defer repeat readback, Node records preserve no-follow/fsync/explicitmtime, estate success churn stays private, and successful objective runs retain warnings. Fetch diagnostics, durable build terminals and unknown-cause fences remain intentional. EVIDENCE retains prior history and exact dispositions. This candidate still needs the actual keeper/current-canonical refresh, full/breadth, all eight fresh own-system source methods, current findings/CI/DR-037 and full expected-head protected landing, then a natural canonical heartbeat. No restoration, native coding or whole-program success is claimed.
 LATEST LANDING UPDATE: 2026-10-22 — #1593 69258e30433f1a20c31975d50d746065032097c4 (GitHub merged_at 2026-10-22T19:52:31Z; Git committedDate 19:52:30Z), from exact tested head 79c403004707627f7b0431725c48dd713775af18; five-minute build retry, 144-failure scheduled outage threshold, active registry/coordination record, and configured/installed/loaded cadence reporting.
               Required check 120039369859 completed success at 19:50:15Z; all six main SignalGrid CI jobs succeeded. The 18-context final rollup had 14 success, 3 skipped and optional Mac check 120039362022 queued, not passed. Exact clean-head local preflight passed in 957.95s with two web build/browser steps unavailable and three checks self-skipped; breadth passed 58 proofs in 36.34s. All three recorded review threads resolved; the formal Codex review was on earlier 100682a4, not a new 79c review. The final canonical delta was one uncounted heartbeat file.
               See the separate #1593 EVIDENCE record; the later record-publishing head requires its own ordinary checks and landing, neither claimed here. CURRENT EVIDENCE/EVIDENCE PUBLICATION above remain historical f3/a70 measurements. No new mint, readiness, owner attestation, other landing or private-runtime claim is asserted.
@@ -2320,3 +2321,29 @@ something alongside a life.
 Everything else in this repository is finished enough. If a month passes and
 both are still zero, the problem is not the product, the doctrine, the gates or
 the plan - and no amount of work in any tool will fix it.
+
+
+## Mac transport guard — source correction L46
+
+The shared record store also contains a persistent identity-pinned tick guard. Only the separate explicit store initializer creates it. Normal ticks open that file read-only and retain FD8 while the existing Perl/Fcntl primitive serializes linked checkouts; they never unlink the shared guard or reap a PID file.
+
+An existing legacy tick.lock, missing/corrupt ownership, or an unfinished OPEN slot refuses work even if the kernel guard is available. OPEN is committed and read back before work. Exact original ownership and immutable finalization records precede CLOSED. Signals observed before normal finalization retain OPEN. CLOSED is lease finalization, not an independently observed parent terminal, task acceptance, provider quiet, canonical delivery or authority to retry an old attempt; those remain separately evidenced.
+
+L46 has actual84 portable delivery controls and12 independent Mac subprocess controls, all zero-fail/skip. These are source checks, not native coding or installed operation. Full current-head validation, fresh source reviews, protected landing, preservation audit and separate activation remain required; restoration needs a fresh natural canonical heartbeat.
+
+
+## Mac transport test contract — L47
+
+Linked-checkout heartbeat tests now execute the production RECORD_DIR startup assignment; a planted node_modules regression fails both related controls. The staged checker executes the actual descriptor-finalization Bash function, including host-release order, exact token/root/entry-status arguments, nonzero work status and interrupted OPEN retention. Delivery84/84 and staged267/267 pass. The earlier full264/265 result remains FAILED, not replaced by isolated checks. Runtime guard bytes are unchanged. New exact-head full/breadth, complete source reviews, protected landing, preservation audit and separate activation remain owed; no fresh canonical Mac heartbeat is claimed.
+
+
+## Mac transport producer and receipt boundary — L48
+
+The new transport refuses receipt-less Mac mutations before Git, including old Bash loaded before canonical JS advances. Existing submission evidence always selects original readback, even when its parent status is1/2; no rejected push is retried through another topic. A true prepublication refusal without a receipt remains a different observation, while unknown or damaged evidence holds.
+
+Pending readback binds the original receipt/head, PR age and checks. Behind, failed or one-hour-pending PRs may raise one distinct Cloud hand through the actual producing checkout after rechecking the original FD8/token/store. Unknown or partial notification evidence remains readback-only. Source45/45, independent guard12/12 and delivery96/96 pass, zero failures/errors/skips. These checks do not activate source or prove the complete local coding/delivery loop; new-head full/breadth, protected source reviews/CI/landing and a separate preservation audit/activation remain owed.
+
+
+## Original-evidence non-vacuity — L49
+
+The preservation fixture requires its five original records before snapshotting. Actual2-record and4-record negative cases refuse; complete5 succeeds. Current3 filesystem controls,96 delivery checks and16 unchanged walker self-tests pass. Runtime and previous assertions are unchanged. The01fc full failure remains FAILED and its breadth unstarted; a new exact-head full/breadth must precede protected publication and separate activation.

@@ -49,7 +49,7 @@ edit in the commit and the lane message, per protocol rule 2.
 (`bash scripts/mac/install-launchd.sh`, once, on the Mac): fetch, refuse a dirty
 or non-Alpha checkout, run every pending sim request, push results on a
 `mac/tick-<stamp>` branch, and HEARTBEAT (the mac-lane-tick file under artifacts/agent-heartbeats,
-written by the first tick) on every path — quiet, acted, skipped and why. The cloud steward opens the PR for
+written through a protected lane/mac-mail-* PR) on every path — quiet, acted, skipped and why. See [Held deliveries](#held-deliveries-original-receipt-readback) for cadence, durable records and canonical readback. The cloud steward opens the PR for
 each `mac/tick-*` branch within the hour and, when that heartbeat is older than
 three hours, escalates to the owner once with the one install command: a Mac
 that has gone silent is a signal, not a mystery. Before merging a tick PR that
@@ -150,7 +150,7 @@ What changed, and what each lane does now:
 
 | | Mac lane | Cloud lane |
 | --- | --- | --- |
-| Write + deliver mail, an ack, a heartbeat | `pnpm run lane:deliver send\|ack\|heartbeat …` — pushed **straight to `SignalGrid_Alpha`** from a throwaway worktree; your checkout is untouched (`git pull --ff-only` when convenient) | same command — pushed to **`lane/cloud-mail-<stamp>`**, then the session opens the PR and enables auto-merge. Never the code branch. |
+| Write + deliver mail, an ack, a heartbeat | `pnpm run lane:deliver send\|ack\|heartbeat …` — published to **`lane/mac-mail-<stamp>-<nonce>`** from a throwaway worktree, then PR + auto-merge request using authenticated `gh`; your checkout is untouched. Required checks and landing conditions remain. Publication is pending until the PR merges; never direct-push canonical or resend a refused/uncertain push. | same protected PR route using **`lane/cloud-mail-<stamp>-<nonce>`**. Never the code branch. |
 | Wake the other lane now | after a delivery, `lane:deliver` comments on the **mailbox PR** (`docs/agent/lane-mailbox.json`, PR #439) if `gh` is on PATH, else prints its URL — one comment there, from any device, wakes the cloud session | subscribed to the mailbox PR every session start and every cycle |
 | A topic branch pushed for review | push `mac/<name>`; `lane:inbox` lists your branches mainline does not carry yet | **hourly** cycle opens a DRAFT PR for every unmerged `mac/*` branch at once (CI starts before the review), subscribes to it, reviews, lands or comments the blocker |
 | How long has this waited | `lane:inbox` shows it per message; `check-lane-messages` names it on every run; unread beyond 24h is STALE (reported, never fatal) — for EVERY message: a message with no `sentAt` ages by the commit that delivered it (since 2026-09-06; before that it could never be stale) | same |
@@ -476,3 +476,85 @@ needed. Both entries are real, both cost real time.
    If a future pair of lanes measures the same thing twice, rule 4 applies and
    one of them is redundant; if they measure different things, both stay AND
    each must name what it is not.
+
+
+## Held deliveries: original receipt readback
+
+Each unattended heartbeat, objective escalation and build hand records its parent
+intent before invoking the delivery child. The delivery writes an exclusive
+submission receipt before its sole topic push, containing the repository, base,
+unique topic, full head and exact changed Git blobs. Authentication is checked
+before a Mac push. A reset of tracked objective state or its old decision stamp
+does not remove the independent escalation attempts. The build-hand cause also
+has one attempt record; repeating the tick never resends an uncertain hand.
+
+Run this from any linked checkout sharing the original Git object store, using
+the absolute receipt path recorded in its local log:
+
+```sh
+node scripts/lane-deliver.mjs readback <original-submission-receipt>
+```
+
+This is GET/fetch only. It saves the raw response before parsing, verifies the
+PR repository/base and MERGED state, pins the exact current canonical SHA, and
+uses real Git objects to prove the merge and ORIGINAL topic commit are in
+canonical ancestry with every recorded payload blob unchanged. An estate/steward
+refresh may advance the PR head without changing that original commit or payload.
+Concurrent FETCH_HEAD changes, replacement refs and grafts are not proof.
+
+Exit 0 verifies that delivery; exit 4 means its open PR still has auto-merge
+pending; exit 3 means held. A due or changed heartbeat observation checks its
+original submission first; identical observations inside the keepalive window
+remain quiet. A verified canonical merge permits a new observation. Objective
+and build warnings identify their original consumed attempt; they are local
+warnings and do not certify that GitHub received new mail.
+
+Missing, malformed, edited or incompatible intent/log/terminal/submission
+evidence, a CLOSED/unmerged PR, disabled auto-merge or unavailable canonical
+proof stays readback-only. Preserve the original immutable evidence in the
+shared Git common-directory store; use the command above and hand the
+cause to a separate source/ownership/grant-qualified repair. Never erase its
+pointer, resend, infer cleanup from process-group defaults. A UTC day change does not renew an unknown
+attempt. Keep private logs and receipts local. Only actual canonical proof closes
+the original delivery.
+
+The shared store is `<git-common-dir>/signalgrid-lane-records`, pinned by a sibling
+identity marker. Before activating this source, preserve and inspect legacy
+heartbeat/objective records in every linked checkout and build-hand cache. After
+all owned attempts are terminal or separately held, initialize ONCE with
+`node scripts/lib/lane-attempt-store.mjs init <checkout>`. Normal ticks only read
+the marker; missing or replaced state refuses delivery. Never initialize to
+repair lost evidence, delete old receipts, or treat Generated content as authority.
+A fresh build-hand notification episode requires a regular independent parent
+exit0, original canonical merge proof and the exact hand now resolved in canonical
+with its resolution evidence. `readback <receipt> --resolved-hand <exact-id>` is
+GET/fetch-only and returns the cleared Git blob identity. That identity fences one
+new hand; old records remain immutable. Unknown, missing or unconfirmed attempts
+stay held across dates. Notification clearance never retries a coding task or
+renews its source, ownership, grant or model budget.
+
+
+### Shared tick serialization (L46)
+
+The one-time record-store initializer additionally creates tick.guard, its immutable identity marker and the initial ownership slot. A normal tick opens the guard read-only and retains its locked FD8; a missing or replaced guard is never recreated. Legacy tick.lock evidence is held without a PID liveness probe or automatic reaping.
+
+OPEN ownership is durably committed before work. Its exact token, caller, store and guard bind immutable opened/finalization records; only the original normal finalization can close that lease. Unknown or interrupted-before-finalization ownership remains held despite later kernel capacity. No shared guard pathname is deleted. The recorded exitTrapStatus is the status entering finalization, not an independent eventual-parent terminal or provider/delivery witness. Per-attempt no-replay fences remain unchanged.
+
+The operator correction has84 passing portable delivery controls and12 independent passing Mac subprocess cases with zero failures/skips. It does not initialize production state, activate the source, prove native coding or restore a heartbeat. Preserve legacy evidence, complete all current-head source/CI/protection requirements, then separately audit and activate before observing a natural canonical Mac heartbeat.
+
+
+### Startup and cleanup regression coverage (L47)
+
+The linked-checkout heartbeat tests execute the tick's actual startup RECORD_DIR assignment. A planted regression back to node_modules escaped the earlier fixture but now fails both linked-checkout and dependency-purge cases. The staged worker checks execute the actual Bash finalization function: release the host descriptor first, pass the exact owned token/root/status to tick-release, preserve known nonzero work status, and leave an interrupted OPEN lease unfinished. These tests do not certify an eventual parent exit or provider cleanup. The current delivery84 and staged267 checks pass; the earlier current-head full264/265 failure remains recorded. A new exact-head full/breadth and all protected publication/activation requirements still apply.
+
+
+### Mixed-producer publication and pending handoff (L48)
+
+Mac mutation entry now requires a fresh private receipt path before any Git access. An already-loaded receipt-less Bash producer is refused if its checkout later acquires the new transport. The receipt pathname is a caller contract, not an execution grant. Any existing exact submission receipt takes precedence over exit1/2: publication may already have been attempted, so the original remains readback-only. Malformed evidence and unknown parent terminals hold. Only a genuine prepublication1/2 with no receipt can permit a different observation.
+
+A pending original PR gets GET-only age/head/check diagnostics. A behind PR, terminal failed check or one-hour delay may produce one distinct durable Cloud hand, bound to the original attempt. The actual producing checkout and original FD8/token/store are rechecked before its intent and publication. Partial or unknown notifications never repeat. This does not resend or close the original PR. Current source qualification:45 private cases,12 independent guard cases and96 portable delivery controls pass with zero failures/errors/skips. Protected landing and audited separate activation still precede natural heartbeat proof.
+
+
+### Original-evidence snapshot floor (L49)
+
+The test snapshot now refuses fewer than its five required original records before comparing preserved bytes. Real filesystem controls refuse two pointers alone and four records without the submission receipt, while accepting all five;3/3 pass. Delivery96 and the unchanged walker gate/self-test16 also pass. Runtime source and previous assertions are unchanged. The earlier01fc full failed at this missing non-vacuity check and remains failed; new-head full qualification is required.

@@ -567,6 +567,7 @@ const STEPS = [
   { name: "Action pinning self-test (the gate can actually fail)", cmd: ["node", "scripts/check-action-pinning.mjs", "--self-test"] },
   { name: "Scheduled routines self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-scheduled-routines.mjs", "--self-test"] },
   { name: "Scheduled routines (every always-on lane declared, authorized, scoped, evidenced)", cmd: ["node", "scripts/check-scheduled-routines.mjs"] },
+  { name: "Lane delivery (protected PR topics and one-attempt readback)", cmd: ["node", "scripts/check-lane-delivery.mjs"] },
   { name: "Lab registry self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-lab-registry.mjs", "--self-test"] },
   { name: "Lab source collections are declared, openable, read-only and parseable", cmd: ["node", "scripts/check-lab-collections.mjs"] },
   { name: "Lab registry (both halves agree; every deployment claim cites evidence on disk)", cmd: ["node", "scripts/check-lab-registry.mjs"] },

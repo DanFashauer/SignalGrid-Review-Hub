@@ -46,7 +46,15 @@
 
 export type EmitResolution =
   | { mode: "live" }
-  | { mode: "suppressed"; reason: string };
+  | { mode: "suppressed"; reason: string; cause: SuppressionCause };
+
+/**
+ * WHY the gate withheld a send, as data rather than prose to be parsed.
+ * `tier` and `flag` are the deployment choosing not to emit. `credential` is
+ * different in kind: the deployment DID choose to emit (beta/prod, flag on) and the
+ * credential it needs is missing — a misconfiguration, not a policy.
+ */
+export type SuppressionCause = "tier" | "flag" | "credential";
 
 /**
  * The credential a caller holds for the system it is about to reach.
@@ -119,15 +127,28 @@ export function resolveEmission(
 ): EmitResolution {
   const tier = (env.SIGNALGRID_TIER ?? "dev").toLowerCase();
   if (tier !== "beta" && tier !== "prod") {
-    return { mode: "suppressed", reason: `tier "${tier}" never emits to live systems` };
+    return { mode: "suppressed", reason: `tier "${tier}" never emits to live systems`, cause: "tier" };
   }
   if (env.SIGNALGRID_LIVE_INTEGRATIONS !== "true") {
-    return { mode: "suppressed", reason: "SIGNALGRID_LIVE_INTEGRATIONS is not 'true'" };
+    return { mode: "suppressed", reason: "SIGNALGRID_LIVE_INTEGRATIONS is not 'true'", cause: "flag" };
   }
   if (credential !== NO_CREDENTIAL && !credential.value?.trim()) {
-    return { mode: "suppressed", reason: credentialAbsentReason(credential.name) };
+    return { mode: "suppressed", reason: credentialAbsentReason(credential.name), cause: "credential" };
   }
   return { mode: "live" };
+}
+
+/**
+ * What a health check reports when the gate withheld its call (plan row 128).
+ *
+ * Tier or flag suppression: `'unchecked'` — nothing was asked, so nothing was found
+ * unhealthy, and dev must not light up as eight vendor outages. A MISSING CREDENTIAL
+ * while live emission is switched on: `false` (unhealthy) — the same state suppresses
+ * every createTicket too, so reporting it as merely unasked would make a broken prod
+ * integration look exactly like a quiet dev box.
+ */
+export function suppressedHealth(resolution: { mode: "suppressed"; cause: SuppressionCause }): false | "unchecked" {
+  return resolution.cause === "credential" ? false : "unchecked";
 }
 
 /**

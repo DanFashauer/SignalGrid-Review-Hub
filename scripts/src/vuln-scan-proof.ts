@@ -57,6 +57,19 @@ check("every normalized finding carries sourceSystem", normalized.every((f) => f
 // CVSS-band fallback: dev-medium has no severity label, only cvss 5.0 → medium.
 check("severity falls back to the CVSS band when the label is missing", normalizeFinding({ deviceId: "x", cvssScore: 5.0 }).severity === "medium");
 check("a 9.8 CVSS with no label normalizes to critical", normalizeFinding({ deviceId: "x", cvssScore: 9.8 }).severity === "critical");
+// Plan row 140: a non-finite CVSS is not a reading. It must reach the evidence field as
+// null (unknown), and the severity it implies must never loosen: NaN -> unknown (raised),
+// Infinity -> critical (tightened).
+{
+  const nan = normalizeFinding({ deviceId: "x", cvssScore: NaN });
+  const inf = normalizeFinding({ deviceId: "x", cvssScore: Infinity });
+  const ninf = normalizeFinding({ deviceId: "x", cvssScore: -Infinity });
+  check("a NaN / +Infinity / -Infinity CVSS never reaches the evidence field — it is null (unknown)",
+    nan.cvssScore === null && inf.cvssScore === null && ninf.cvssScore === null);
+  check("...and the severity a non-finite CVSS implies is unknown or critical, never a lower band",
+    nan.severity === "unknown" && inf.severity === "critical" && ninf.severity === "unknown");
+  check("...while a finite CVSS still passes through unchanged", normalizeFinding({ deviceId: "x", cvssScore: 9.8 }).cvssScore === 9.8);
+}
 // Every CVSS band pinned, not only medium and critical (brace-less sweep, 2026-10-01):
 // with the `>= 7.0` band gone a 7.5 fell through to MEDIUM — a high CVE read one band
 // soft — and with the `> 0` band gone a 2.0 read as unknown instead of low.

@@ -33,12 +33,14 @@ import { dirname, resolve } from "node:path";
 // secondary server in this file lost its port in four runs out of four; probing the
 // wildcard made the same file pass 486/486.
 const handedOut = [];
-const freePort = () => new Promise((resolvePort) => {
+// freePort(host) probes on the host its consumer binds: no host (wildcard) for ports handed
+// to the api-server, "127.0.0.1" for the loopback Graph stubs. On a bindv6only host the two differ.
+const freePort = (host) => new Promise((resolvePort) => {
   const probe = netCreateServer();
-  probe.listen(0, () => {
+  probe.listen(...(host ? [0, host] : [0]), () => {
     const p = probe.address().port;
     probe.close(() => {
-      if (handedOut.includes(p)) return resolvePort(freePort());
+      if (handedOut.includes(p)) return resolvePort(freePort(host));
       handedOut.push(p);
       resolvePort(p);
     });
@@ -2605,9 +2607,9 @@ async function run() {
   {
     const PORT12 = await freePort();
     const PORT13 = await freePort();
-    const STUB_PORT = await freePort();
+    const STUB_PORT = await freePort("127.0.0.1");
     const PORT14 = await freePort();
-    const GATED_STUB_PORT = await freePort();
+    const GATED_STUB_PORT = await freePort("127.0.0.1");
     const BASE12 = `http://localhost:${PORT12}/api`;
     // What the live transport actually put on the wire, recorded by the stub below.
     const graphStubSaw = [];

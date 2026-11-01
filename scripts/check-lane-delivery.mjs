@@ -271,6 +271,13 @@ control("a heartbeat killed before lane-deliver pushed (no .exit, no receipt) is
   const cache = join(f.root, "node_modules"), marker = JSON.parse(readFileSync(join(cache, "refused/.sg-heartbeat-20261030T000000Z-999999.retried"), "utf8"));
   assert.equal(marker.exit, null); assert.ok(existsSync(join(cache, ".sg-heartbeat-20261030T000000Z-999999.log")), "the killed original stays in place");
 });
+control("a tick killed after preparing a resend (pointer still on the predecessor) delivers exactly once next tick", { tick: true, age: 130, priorAttempt: "interrupted", result: "changed: fixture" }, (f) => {
+  const cache = join(f.root, "node_modules"), prior = ".sg-heartbeat-20261030T000000Z-999999", next = ".sg-heartbeat-20261030T005500Z-12345";
+  mkdirSync(join(cache, "refused")); writeFileSync(join(cache, "refused", prior + ".retried"), JSON.stringify({ root: prior, n: 1, successor: next, exit: null }) + "\n");
+  writeFileSync(join(cache, next + ".log"), JSON.stringify({ attempt: "20261030T005500Z-12345", result: "changed: fixture" }) + "\n"); // prepare wrote it; the pointer was never moved
+  const r = f.runTick(); assert.equal(r.status, 0, r.stderr); assert.equal(f.deliveries().length, 1, "exactly one delivery"); assert.match(r.stdout, /20261030T005500Z-12345 published nothing/);
+  assert.equal(JSON.parse(readFileSync(join(cache, "refused", next + ".retried"), "utf8")).n, 2, "the chain continues from the successor");
+});
 control("a cause capped after its retries is named in the heartbeat RESULT", { tick: true, age: 30 }, (f) => {
   mkdirSync(join(f.root, "node_modules/refused")); writeFileSync(join(f.root, "node_modules/refused/hand-fixture.capped"), "4\n");
   const r = f.runTick(); assert.equal(r.status, 0, r.stderr); assert.match(f.deliveries()[0] ?? "", /refused:hand-fixture x4/);
@@ -580,6 +587,39 @@ for(const [ledger,want] of [['open',1],['resolved',2]])check('a delivered hold h
  const second=run(process.execPath,[module,'raise-hold',f.root,message],f.root);assert.equal(second.status,0,second.stderr);
  const sent=readFileSync(calls,'utf8').trim().split('\n');assert.equal(sent.length,want);
  if(want===2){assert.equal(sent[1],id+'-again-1');assert.match(second.stdout,new RegExp('hand '+id+'-again-1 written'));}else assert.match(second.stdout,/already raised/);
+});
+check('two concurrent raise-holds publish exactly one hold hand',f=>{
+ const calls=join(f.parent,'race-calls'),bin=join(f.parent,'race-bin'),message='original tick shell 1 is still alive; holding';mkdirSync(bin);
+ // A's delivery writes its receipt, then is mid-push for 4 s; origin shows no ref yet.
+ writeFileSync(join(f.root,'scripts/lane-deliver.mjs'),`import fs from 'node:fs';const a=process.argv.slice(2);fs.writeFileSync(a[a.indexOf('--receipt')+1],JSON.stringify({version:1,target:'lane/mac-mail-20261101-010000Z-0123456789ab'})+'\\n',{flag:'wx'});Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0,4000);fs.appendFileSync(${JSON.stringify(calls)},'push\\n');`);
+ writeFileSync(join(bin,'git'),'#!/bin/sh\nif [ "$1" = ls-remote ]; then exit 0; fi\nexec '+GIT+' "$@"\n',{mode:0o755});
+ const module=join(f.root,'scripts/lib/lane-attempt-store.mjs'),env={PATH:bin+':'+dirname(process.execPath)+':/usr/bin:/bin',NODE:process.execPath,M:module,R:f.root,MSG:message,OUT:join(f.parent,'a.out')};
+ const both=spawnSync('/bin/sh',['-c','"$NODE" "$M" raise-hold "$R" "$MSG" > "$OUT" 2>&1 & a=$!; sleep 1.5; "$NODE" "$M" raise-hold "$R" "$MSG"; wait $a'],{cwd:f.root,encoding:'utf8',env,timeout:30000});
+ assert.equal(both.status,0,both.stderr);assert.match(both.stdout,/already raised \(its delivery may still be running\)/);
+ assert.equal(readFileSync(calls,'utf8').trim().split('\n').length,1,'exactly one publication');assert.match(readFileSync(join(f.parent,'a.out'),'utf8'),/written \(lane-deliver exit 0\)/);
+});
+check('a hold delivery killed before its exit (writer dead, no receipt) is raised again',f=>{
+ const calls=join(f.parent,'killed-calls'),message='original tick shell 2 is still alive; holding',id='tick-hold-'+createHash('sha256').update(message).digest('hex');
+ writeFileSync(join(f.root,'scripts/lane-deliver.mjs'),`import fs from 'node:fs';fs.appendFileSync(${JSON.stringify(calls)},'push\\n');`);
+ const module=join(f.root,'scripts/lib/lane-attempt-store.mjs'),records=run(process.execPath,[module,'path',f.root],f.root).stdout.trim(),dead=run('/usr/bin/true',[],f.root);
+ writeFileSync(join(records,id+'.attempt.json'),JSON.stringify({state:'attempted; pending exact readback',receipt:join(records,id+'.submission.json'),cause:message,handId:id,writer:{pid:dead.pid,startMs:0}})+'\n');
+ const r=run(process.execPath,[module,'raise-hold',f.root,message],f.root);assert.equal(r.status,0,r.stderr);assert.match(r.stdout,/written/);
+ assert.equal(readFileSync(calls,'utf8').trim().split('\n').length,1);assert.ok(existsSync(join(records,'refused',id+'.refused-1.attempt.json')),'the killed attempt is kept aside');
+});
+for(const [label,marker,target] of [['a resumed archival whose target already holds other content holds and deletes nothing',null,'other bytes\n'],['an unreadable archival marker is a named hold','{',null]])check(label,f=>{
+ const module=join(f.root,'scripts/lib/lane-attempt-store.mjs'),records=run(process.execPath,[module,'path',f.root],f.root).stdout.trim(),id='repair-build-'+'c'.repeat(64);
+ mkdirSync(join(records,'refused'),{recursive:true});writeFileSync(join(records,id+'.attempt.json'),'source bytes\n');
+ if(target)writeFileSync(join(records,'refused',id+'.refused-1.attempt.json'),target);
+ writeFileSync(join(records,'refused',id+'.archiving'),marker??JSON.stringify({name:id,n:1,files:[id+'.attempt.json']})+'\n');
+ const r=run(process.execPath,[module,'retry-refused',f.root,records,'repair-build-'+'d'.repeat(64),'1','move'],f.root);
+ assert.equal(r.status,1);assert.match(r.stderr,target?/conflicts: refused target exists with other content/:/archival marker refused\/.+\.archiving is unreadable/);
+ assert.equal(readFileSync(join(records,id+'.attempt.json'),'utf8'),'source bytes\n','nothing deleted');assert.ok(existsSync(join(records,'refused',id+'.archiving')),'the marker stays');
+});
+for(const [exit,want] of [['0',''],['1','refused:repair-build-'+'e'.repeat(64)+' x4']])check('a capped cause whose attempt exit is '+exit+(exit==='0'?' is cleared from RESULT':' is still reported'),f=>{
+ const module=join(f.root,'scripts/lib/lane-attempt-store.mjs'),records=run(process.execPath,[module,'path',f.root],f.root).stdout.trim(),id='repair-build-'+'e'.repeat(64);
+ mkdirSync(join(records,'refused'),{recursive:true});writeFileSync(join(records,'refused',id+'.capped'),'4\n');writeFileSync(join(records,id+'.exit'),exit+'\n');
+ const r=run(process.execPath,[module,'capped',f.root,records],f.root);assert.equal(r.status,0,r.stderr);assert.equal(r.stdout.trim(),want);
+ assert.equal(existsSync(join(records,'refused',id+'.capped-cleared-1')),exit==='0');
 });
 check('a store directory left without its marker is held, never reset',f=>{
  const module=join(f.root,'scripts/lib/lane-attempt-store.mjs');

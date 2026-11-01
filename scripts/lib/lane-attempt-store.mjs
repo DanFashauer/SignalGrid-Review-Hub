@@ -613,17 +613,53 @@ export function resumeArchivals(directory) {
   let names = [];
   try { names = readdirSync(refused); } catch (error) { if (error.code === "ENOENT") return; throw error; }
   for (const marker of names.filter((file) => file.endsWith(".archiving"))) {
-    const { name, n, files } = JSON.parse(readFileSync(join(refused, marker), "utf8"));
+    let name, n, files;
+    try {
+      ({ name, n, files } = JSON.parse(readFileSync(join(refused, marker), "utf8")));
+      if (typeof name !== "string" || !Number.isSafeInteger(n) || !Array.isArray(files) || files.some((file) => typeof file !== "string" || !file.startsWith(name + ".") || file.includes("/"))) throw Error("schema");
+    } catch { throw Error(`archival marker refused/${marker} is unreadable; archival held, nothing moved`); }
     for (const file of files) {
       const source = join(directory, file), target = join(refused, `${name}.refused-${n}${file.slice(name.length)}`);
-      let haveSource = true, haveTarget = true;
-      try { lstatSync(source); } catch (error) { if (error.code !== "ENOENT") throw error; haveSource = false; }
-      try { lstatSync(target); } catch (error) { if (error.code !== "ENOENT") throw error; haveTarget = false; }
-      if (haveSource && !haveTarget) linkSync(source, target);
-      if (haveSource) unlinkSync(source);
+      let src = null, dst = null;
+      try { src = lstatSync(source); } catch (error) { if (error.code !== "ENOENT") throw error; }
+      try { dst = lstatSync(target); } catch (error) { if (error.code !== "ENOENT") throw error; }
+      if (src && !dst) { linkSync(source, target); dst = lstatSync(target); }
+      // The source goes only once the target is the very same file (link done).
+      if (src && (dst.dev !== src.dev || dst.ino !== src.ino)) throw Error(`archival of ${file} conflicts: refused target exists with other content; archival held, nothing deleted`);
+      if (src) unlinkSync(source);
     }
     unlinkSync(join(refused, marker));
   }
+}
+
+// The capped causes still held, as `refused:<root> x<n>`. A cap whose chain head has
+// since succeeded (exit 0) is cleared: renamed to .capped-cleared-<k>, never deleted.
+export function activeCaps(directory) {
+  const refused = join(directory, "refused");
+  let names = [];
+  try { names = readdirSync(refused); } catch (error) { if (error.code === "ENOENT") return []; throw error; }
+  const out = [];
+  for (const file of names.filter((name) => name.endsWith(".capped"))) {
+    const root = file.slice(0, -".capped".length), head = retryHead(directory, root);
+    let succeeded = false;
+    try { succeeded = readFileSync(join(directory, head + ".exit"), "utf8").trim() === "0"; } catch { /* no exit */ }
+    if (!succeeded) try { succeeded = JSON.parse(readFileSync(join(directory, head + ".terminal.json"), "utf8")).status === 0; } catch { /* no terminal */ }
+    if (succeeded) {
+      let k = 1;
+      while (names.includes(`${root}.capped-cleared-${k}`)) k++;
+      linkSync(join(refused, file), join(refused, `${root}.capped-cleared-${k}`)); unlinkSync(join(refused, file));
+      continue;
+    }
+    out.push(`refused:${root} x${readFileSync(join(refused, file), "utf8").replace(/[^0-9]/g, "")}`);
+  }
+  return out;
+}
+
+function writerGone(writer) {
+  if (!writer || !Number.isSafeInteger(writer.pid) || writer.pid <= 0) return false;
+  try { process.kill(writer.pid, 0); } catch (error) { if (error.code === "ESRCH") return true; if (error.code !== "EPERM") return false; }
+  const now = startEpochOf(writer.pid);
+  return Number.isFinite(writer.startMs) && now !== null && now > writer.startMs;
 }
 
 // A liveness hold must not be silent (DR-054): write one hand per held cause through
@@ -632,8 +668,10 @@ export function resumeArchivals(directory) {
 export function raiseTickHold(root, message) {
   const directory = deliveryRecordDirectory(root), id = "tick-hold-" + digest(Buffer.from(message));
   const prefix = join(directory, id);
+  resumeArchivals(directory);
   let retryOf = null, handId = id;
-  const write = () => writeFileSync(prefix + ".attempt.json", JSON.stringify({ state: "attempted; pending exact readback", receipt: prefix + ".submission.json", cause: message, handId, ...(retryOf ? { retryOf } : {}) }) + "\n", { flag: "wx", mode: 0o600, flush: true });
+  const writer = { pid: process.pid, startMs: startEpochOf(process.pid) };
+  const write = () => writeFileSync(prefix + ".attempt.json", JSON.stringify({ state: "attempted; pending exact readback", receipt: prefix + ".submission.json", cause: message, handId, writer, ...(retryOf ? { retryOf } : {}) }) + "\n", { flag: "wx", mode: 0o600, flush: true });
   try { write(); }
   catch (error) {
     if (error.code !== "EEXIST") throw error;
@@ -644,6 +682,8 @@ export function raiseTickHold(root, message) {
     let exit = "none", prior = {};
     try { exit = readFileSync(prefix + ".exit", "utf8").trim(); } catch (missing) { if (missing.code !== "ENOENT") throw missing; }
     try { prior = JSON.parse(readFileSync(prefix + ".attempt.json", "utf8")); } catch { /* legacy intent: default id */ }
+    // No exit yet: retried only when its writer is provably gone (same rule as a tick).
+    if (exit === "none" && !writerGone(prior.writer)) return `hand ${prior.handId ?? id} already raised (its delivery may still be running)`;
     if (["none", "1", "2"].includes(exit)) {
       retryOf = setAsideRefusedAttempt(root, directory, id, exit, "move");
       if (!retryOf?.setAsideAs) return `hand ${prior.handId ?? id} already raised`;
@@ -683,6 +723,7 @@ if (entrypoint === fileURLToPath(import.meta.url)) {
     else if (mode === "retry-refused" && (args.length === 3 || args.length === 4)) console.log(JSON.stringify(setAsideRefusedAttempt(root, ...args)));
     else if (mode === "retry-head" && args.length === 2) console.log(retryHead(...args));
     else if (mode === "raise-hold" && args.length === 1) console.log(raiseTickHold(root, args[0]));
+    else if (mode === "capped" && args.length === 1) { const caps = activeCaps(args[0]); if (caps.length) console.log(caps.join("; ")); }
     else if (mode === "tick-release" && args.length === 3) releaseTick(root, ...args);
     else throw Error("usage: lane-attempt-store.mjs path|init|ensure|tick-guard <checkout> | tick-acquire <checkout> <shell-pid> [<pgid> [<lstart>]] | raise-hold <checkout> <message> | refused-disposition <checkout> <receipt> | retry-refused <checkout> <records> <attempt-name> <exit> [<successor>|derive|move] | retry-head <checkout> <records> <attempt-name> | tick-release <checkout> <token> <shell-pid> <exit-trap-status>");
   } catch (error) {

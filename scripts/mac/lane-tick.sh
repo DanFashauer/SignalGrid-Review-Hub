@@ -101,7 +101,9 @@ exec 8<"$TICK_GUARD_PATH" || { say "tick guard cannot be opened; READBACK ONLY";
 _tick_pgid="$(ps -o pgid= -p $$ | tr -d ' ')"
 # Read in the C locale and UTC: the store compares start times as epochs.
 _tick_start="$(LC_ALL=C TZ=UTC0 ps -o lstart= -p $$ | sed 's/^ *//; s/ *$//')"
-_tick_err="$(mktemp "${TMPDIR:-/tmp}/sg-tick-acquire.XXXXXX" 2>/dev/null)" || _tick_err=""
+_tick_err="$(mktemp "${TMPDIR:-/tmp}/sg-tick-acquire.XXXXXX" 2>/dev/null)" || {
+  say "RAISED HAND: cannot create a temp file under ${TMPDIR:-/tmp}; the tick cannot record why ownership would hold; no work started"
+  exec 8<&-; exit 1; }
 # Redirect the shell's own stderr around the call: a redirection inside $(...) would
 # cost bash its exec shortcut, and the helper must stay a direct child of this shell.
 if [ -n "$_tick_err" ]; then exec 9>&2 2>"$_tick_err"; fi
@@ -115,19 +117,22 @@ TICK_OWNER_TOKEN="$(printf '%s\n' "$_tick_acquired" | sed -n 1p)"
 TICK_RECOVERED="$(printf '%s\n' "$_tick_acquired" | sed -n '2,$p' | sed 's/^recovered: //' | paste -sd ';' -)"
 if [ -n "$TICK_RECOVERED" ]; then say "recovered: $TICK_RECOVERED"; fi
 if [ "$_tick_acquire_status" != "0" ]; then
-  exec 8<&-
   if [ "$_tick_acquire_status" = "75" ]; then
+    exec 8<&-
     say "another tick owns the shared guard; no work started"
     exit 0
   fi
   say "tick ownership is held or incomplete; no work started; READBACK ONLY"
   # A liveness hold (original shell alive, its group busy, or EPERM) is made visible
   # on the Hub: one hand per held cause, through the ordinary hand path (DR-054).
+  # Raised BEFORE FD8 is closed: this tick still holds the kernel guard, so two
+  # ticks can never raise (or retry) the same hold hand at once.
   case "$_tick_acquire_msg" in
     *holding*)
       if [ "${DRY:-0}" = "1" ]; then say "dry-run: would raise a hand: tick recovery holding; $_tick_acquire_msg"
       else say "RAISED HAND: tick recovery holding; $(node "$TICK_LOCK_HELPER" raise-hold "$TICK_LOCK_ROOT" "$_tick_acquire_msg" 2>&1)"; fi ;;
   esac
+  exec 8<&-
   exit 1
 fi
 TICK_INTERRUPTED=0
@@ -268,10 +273,12 @@ append_raised_hands_state() {
 heartbeat() {
   if [ -n "${TICK_RECOVERED:-}" ]; then RESULT="$RESULT; recovered: $TICK_RECOVERED"; fi
   # A cause refused past its retry cap is held; say so on every heartbeat (DR-054).
-  for _hb_cap in "$RECORD_DIR"/refused/*.capped; do
-    [ -f "$_hb_cap" ] || continue
-    RESULT="$RESULT; refused:$(basename "$_hb_cap" .capped) x$(tr -cd '0-9' < "$_hb_cap")"
-  done
+  # A cap whose cause later succeeded is cleared (kept as .capped-cleared-<k>).
+  if _hb_caps="$(node scripts/lib/lane-attempt-store.mjs capped "$(pwd -P)" "$RECORD_DIR" 2>/dev/null)"; then
+    [ -z "$_hb_caps" ] || RESULT="$RESULT; $_hb_caps"
+  else
+    RESULT="$RESULT; refused causes UNREADABLE"
+  fi
   append_unread_state
   append_raised_hands_state
   # Retain an estate failure until a later actual success. Successful PR counts
@@ -481,6 +488,14 @@ JS
     if [ -L "$HB_LAST_ATTEMPT" ] || ! [[ "$_hb_previous" =~ ^[0-9]{8}T[0-9]{6}Z-[0-9]+$ ]]; then
       _hb_hold "unknown heartbeat receipt"; return 1
     fi
+    # Follow refused/<name>.retried to the newest successor first: a tick that died
+    # after preparing a resend (its .log written) but before moving the pointer left
+    # the pointer on the predecessor; the readback rule applies to that successor.
+    _hb_head="$(node scripts/lib/lane-attempt-store.mjs retry-head "$(pwd -P)" "$RECORD_DIR" ".sg-heartbeat-${_hb_previous}" 2>/dev/null)" || _hb_head=""
+    case "${_hb_head#.sg-heartbeat-}" in
+      "$_hb_previous"|"") ;;
+      *) if [[ "${_hb_head#.sg-heartbeat-}" =~ ^[0-9]{8}T[0-9]{6}Z-[0-9]+$ ]]; then _hb_previous="${_hb_head#.sg-heartbeat-}"; else _hb_hold "heartbeat retry chain names an unknown attempt"; return 1; fi ;;
+    esac
     _hb_previous_log="$RECORD_DIR/.sg-heartbeat-${_hb_previous}.log"
     _hb_previous_exit="$RECORD_DIR/.sg-heartbeat-${_hb_previous}.exit"
     _hb_previous_receipt="$RECORD_DIR/.sg-heartbeat-${_hb_previous}.submission.json"

@@ -716,6 +716,12 @@ export const SHARED_DEVICE_RULES_V1: PolicyRuleSpec[] = [
     reasonCode: "CREDENTIAL_DOWNGRADE",
     severity: "critical",
   },
+  // Resolution note (Puck 6): this live row has NO resolution descriptor, so every
+  // `removed` it matches escalates — including a planned end-of-shift return, which the
+  // live evidence cannot yet tell from a walk-away. `puckVerdict` (attach.ts) already
+  // grades a holder-bound return as CUSTODY_RETURNED (closed, nothing to escalate); the
+  // live gate gains the same distinction only when a release/return evidence field
+  // exists for it to match on. Until then this row is deliberately the stricter reading.
   {
     id: "attach-removed",
     description:

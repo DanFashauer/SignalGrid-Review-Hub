@@ -50,7 +50,11 @@ router.use(radarRouter);
 //                      metrics increment). An anonymous caller can move another
 //                      tenant's ledger.
 //   controlPlaneRouter — /cp/v1 carries no principal at all, so its client-supplied
-//                      `?tenant=` query parameter is the only scoping present.
+//                      `?tenant=` query parameter is the only scoping present. It
+//                      also holds one WRITE: POST /cp/v1/telemetry overwrites a
+//                      seeded edge node's counts, so an anonymous caller can move
+//                      any tenant's health / ops-intelligence rollup (ids outside
+//                      the fixture's edge nodes are refused 404).
 //
 // Not mounted rather than 403'd on purpose: a route that exists and refuses still
 // answers "does this deployment have a control plane?", and there is no reason for a
@@ -67,8 +71,8 @@ router.use(v1Router);
 // Without it an unknown /api path fell through to Express's HTML error page:
 // the one place an integrator is most lost (a typo'd path) answered in a
 // different content type and a shape no client parses. Same flat envelope as
-// every other error. Scoped to this router (mounted at /api) on purpose — the
-// root serves human surfaces (demo console, /metrics) whose defaults stand.
+// every other error. Unknown ROOT paths get the same envelope from the catch-all
+// in app.ts, registered after the human surfaces (demo console, /metrics).
 router.use((req, res) => {
   res.status(404).json({
     requestId: req.requestId ?? null,

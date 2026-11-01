@@ -215,6 +215,137 @@ check("warehouse: the role/workflow context was PRESERVED end to end — workflo
   JSON.stringify(w[0].work?.appCatalogKeys) === JSON.stringify(w[12].work?.appCatalogKeys) &&
   JSON.stringify(w[0].custodyRefs) === JSON.stringify(w[12].custodyRefs));
 
+// ── SAME-TASK TWIN: two holds on ONE task, only the second resolved ───────────
+// The row-48 second-pass audit found `holds` keyed one exception per task: a second
+// hold-grade exception on the same task OVERWROTE the first, and releasing the
+// survivor moved the task held→active while the first was still unresolved. The
+// cross-task version of this hole was closed earlier; this is its same-task twin.
+
+const TWIN_A = "INVENTORY_EXCEPTION_ACTIVE:exc-0107-first";
+const CTRL_ENTRY_TWIN = "INVENTORY_EXCEPTION_ACTIVE:exc-twin-4410";
+const TWIN_B = "INVENTORY_EXCEPTION_ACTIVE:exc-0107-second";
+const twin = runHandoffScript({
+  scriptRef: "script-warehouse-twin-0001",
+  steps: [
+    { kind: "assemble", inputs: pickerInputs() },                                                  // 0
+    { kind: "handoff", deviceRef: "handheld-A", deviceSignals: healthyHandheld },                  // 1
+    { kind: "exception", taskRef: "task-0107", exceptionRef: "exc-0107-first", raw: wrongAisleRaw }, // 2
+    { kind: "exception", taskRef: "task-0107", exceptionRef: "exc-0107-second", raw: wrongAisleRaw },// 3
+    { kind: "resolve", exceptionRef: TWIN_B, resolutionRef: "wms-adj-twin-b" },                    // 4
+    { kind: "verify", exceptionRef: TWIN_B, verificationEvidenceRef: "cyclecount-twin-b" },        // 5
+    { kind: "release", taskRef: "task-0107", exceptionRef: TWIN_B },                               // 6: A still open
+    { kind: "resolve", exceptionRef: TWIN_A, resolutionRef: "wms-adj-twin-a" },                    // 7
+    { kind: "verify", exceptionRef: TWIN_A, verificationEvidenceRef: "cyclecount-twin-a" },        // 8
+    { kind: "release", taskRef: "task-0107", exceptionRef: TWIN_A },                               // 9: last hold
+  ],
+}).trace.entries;
+check("twin[3] two hold-grade exceptions on ONE task: both entries carried, the task held once",
+  twin[3].status === "applied" && twin[3].work?.unresolvedExceptionRefs.includes(TWIN_A) === true &&
+  twin[3].work?.unresolvedExceptionRefs.includes(TWIN_B) === true &&
+  twin[3].work?.heldTaskRefs.filter((r) => r === "task-0107").length === 1);
+check("twin[6] releasing the SECOND hold (resolved + verified) while the FIRST is still unresolved does NOT free the task — task-0107 stays held and the first entry stays carried",
+  twin[6].work?.heldTaskRefs.includes("task-0107") === true && twin[6].work?.activeTaskRefs.includes("task-0107") === false &&
+  twin[6].work?.unresolvedExceptionRefs.includes(TWIN_A) === true);
+check("twin[9] only when the LAST hold is resolved, verified and released does task-0107 go active, with no entry left",
+  twin[9].status === "applied" && twin[9].work?.activeTaskRefs.includes("task-0107") === true &&
+  twin[9].work?.heldTaskRefs.length === 0 && twin[9].work?.unresolvedExceptionRefs.length === 0);
+
+// Refs that name an Object.prototype member are still just refs. With holds as lists,
+// a plain `{}` holds map answered "constructor" with an inherited function and the
+// run threw an untyped TypeError with no trace at all (review round 1 on this fix).
+const protoNamed = ["constructor", "__proto__", "toString", "hasOwnProperty"].map((name) => {
+  try {
+    const t = runHandoffScript({
+      scriptRef: `script-proto-${name.replace(/_/g, "")}`,
+      steps: [
+        { kind: "assemble", inputs: pickerInputs() },
+        { kind: "handoff", deviceRef: "handheld-A", deviceSignals: healthyHandheld },
+        { kind: "exception", taskRef: name, exceptionRef: `exc-proto-${name}`, raw: wrongAisleRaw },
+        { kind: "resolve", exceptionRef: `INVENTORY_EXCEPTION_ACTIVE:exc-proto-${name}`, resolutionRef: `wms-adj-proto-${name}` },
+        { kind: "verify", exceptionRef: `INVENTORY_EXCEPTION_ACTIVE:exc-proto-${name}`, verificationEvidenceRef: `cyclecount-proto-${name}` },
+        { kind: "release", taskRef: name, exceptionRef: `INVENTORY_EXCEPTION_ACTIVE:exc-proto-${name}` },
+      ],
+    }).trace.entries;
+    return t[2].status === "applied" && t[2].work?.heldTaskRefs.includes(name) === true &&
+      t[5].status === "applied" && t[5].work?.activeTaskRefs.includes(name) === true && t[5].work?.heldTaskRefs.length === 0;
+  } catch { return false; }
+});
+check("a taskRef named after an Object.prototype member (constructor, __proto__, toString, hasOwnProperty) is held and released like any other — never an untyped throw",
+  protoNamed.every(Boolean));
+
+// A sibling hold that is resolved AND verified but not yet RELEASED still holds the
+// task: only a release removes an entry from the context, so the ledger's say-so
+// about the sibling is not enough to free the task.
+const SIBLING = "INVENTORY_EXCEPTION_ACTIVE:exc-sibling-3300";
+const twoHeld = assembleWorkContext({
+  ...pickerInputs(),
+  work: { ...pickerInputs().work, activeTaskRefs: ["task-0300"], heldTaskRefs: ["task-0200"], unresolvedExceptionRefs: [CTRL_ENTRY_TWIN, SIBLING] },
+});
+const bothVerified = releaseHeldTask(twoHeld, "task-0200", CTRL_ENTRY_TWIN, {
+  holds: { "task-0200": [CTRL_ENTRY_TWIN, SIBLING] },
+  resolutions: { [CTRL_ENTRY_TWIN]: "wms-adj-sib-1", [SIBLING]: "wms-adj-sib-2" },
+  verifications: { [CTRL_ENTRY_TWIN]: "cyclecount-sib-1", [SIBLING]: "cyclecount-sib-2" },
+  currentDeviceDecision: reevaluateForDevice(twoHeld, healthyHandheld).decision,
+});
+check("releasing one hold while a sibling is resolved + verified but NOT released keeps the task held — the sibling entry is still carried",
+  bothVerified.work.heldTaskRefs.includes("task-0200") && !bothVerified.work.activeTaskRefs.includes("task-0200") &&
+  bothVerified.work.unresolvedExceptionRefs.includes(SIBLING) && !bothVerified.work.unresolvedExceptionRefs.includes(CTRL_ENTRY_TWIN));
+
+// An exception naming no task (past the type system: a JSON script) still COUNTS:
+// its signal is composed and its entry carried, so assurance rises; only the hold is
+// skipped. Review round 3 showed the refusal this replaced dropped a restrict-grade
+// bypass report and let a resolved+verified release go through on that device.
+const bypassRaw: TaskExceptionReportRaw = {
+  exceptionKind: "procedure_bypassed",
+  exceptionState: "active",
+  taskState: "in_process",
+  taskSystemReachable: true,
+  sourceExceptionCode: "BYPASS",
+};
+const NT_ENTRY = "INVENTORY_EXCEPTION_ACTIVE:exc-nt-1";
+const noTask = [undefined, "", "   ", null, 107].map((ref) => runHandoffScript({
+  scriptRef: "script-no-task",
+  steps: [
+    { kind: "assemble", inputs: pickerInputs() },                                                  // 0
+    { kind: "handoff", deviceRef: "handheld-A", deviceSignals: healthyHandheld },                  // 1
+    { kind: "exception", taskRef: "task-0107", exceptionRef: "exc-nt-1", raw: wrongAisleRaw },     // 2
+    { kind: "resolve", exceptionRef: NT_ENTRY, resolutionRef: "wms-adj-nt-1" },                    // 3
+    { kind: "verify", exceptionRef: NT_ENTRY, verificationEvidenceRef: "cyclecount-nt-1" },        // 4
+    { kind: "exception", taskRef: ref as never, exceptionRef: "exc-nt-byp", raw: bypassRaw },      // 5: names no task
+    { kind: "release", taskRef: "task-0107", exceptionRef: NT_ENTRY },                             // 6
+  ],
+}).trace.entries);
+check("an exception naming no task (missing, empty, blank, null, numeric) is still composed and carried — the device goes restrict-grade, nothing new is held, and the next release on that device is refused `device_not_trusted_for_release`",
+  noTask.every((t) =>
+    t[5].status === "applied" && t[5].decision?.deviceAction === "restrict" &&
+    t[5].exception?.taskHeld === false &&
+    t[5].work?.unresolvedExceptionRefs.some((e) => e.endsWith(":exc-nt-byp")) === true &&
+    JSON.stringify(t[5].work?.heldTaskRefs) === JSON.stringify(["task-0107"]) &&
+    t[6].status === "refused" && t[6].refusalCode === "device_not_trusted_for_release" &&
+    t[6].work?.heldTaskRefs.includes("task-0107") === true));
+
+// A released hold leaves the simulator's holds list. Review round 3: a stale entry
+// let a release aimed at task-0107 clear exc-b after exc-b was re-raised on task-0108,
+// orphaning task-0108's hold.
+const EB = "INVENTORY_EXCEPTION_ACTIVE:exc-stale-b";
+const stale = runHandoffScript({
+  scriptRef: "script-stale-hold",
+  steps: [
+    { kind: "assemble", inputs: pickerInputs() },                                                  // 0
+    { kind: "handoff", deviceRef: "handheld-A", deviceSignals: healthyHandheld },                  // 1
+    { kind: "exception", taskRef: "task-0107", exceptionRef: "exc-stale-b", raw: wrongAisleRaw },  // 2
+    { kind: "resolve", exceptionRef: EB, resolutionRef: "wms-adj-stale-b" },                       // 3
+    { kind: "verify", exceptionRef: EB, verificationEvidenceRef: "cyclecount-stale-b" },           // 4
+    { kind: "release", taskRef: "task-0107", exceptionRef: EB },                                   // 5: applied
+    { kind: "exception", taskRef: "task-0108", exceptionRef: "exc-stale-b", raw: wrongAisleRaw },  // 6: b again, on 0108
+    { kind: "exception", taskRef: "task-0107", exceptionRef: "exc-stale-x", raw: wrongAisleRaw },  // 7
+    { kind: "release", taskRef: "task-0107", exceptionRef: EB },                                   // 8: names 0107's OLD hold
+  ],
+}).trace.entries;
+check("a released hold is pruned: naming it again on its old task (after it is re-raised on ANOTHER task) → refused `exception_does_not_hold_task`, and the other task's hold still carries it",
+  stale[5].status === "applied" && stale[8].status === "refused" && stale[8].refusalCode === "exception_does_not_hold_task" &&
+  stale[8].work?.unresolvedExceptionRefs.includes(EB) === true && stale[8].work?.heldTaskRefs.includes("task-0108") === true);
+
 // ── HEALTHCARE SCENARIO: three shared iPads, work identical, trust re-earned ──
 
 const healthcareScript: HandoffScript = {
@@ -345,7 +476,7 @@ check("control fixture: the trusted device composes none, the degraded one compo
   trustedDecision.deviceAction === "none" && restrictedDecision.deviceAction === "restrict");
 
 const fullLedger = (decision: ReleaseLedger["currentDeviceDecision"]): ReleaseLedger => ({
-  holds: { "task-0200": CTRL_ENTRY },
+  holds: { "task-0200": [CTRL_ENTRY] },
   resolutions: { [CTRL_ENTRY]: CTRL_RESOLUTION },
   verifications: { [CTRL_ENTRY]: CTRL_EVIDENCE },
   currentDeviceDecision: decision,
@@ -370,17 +501,17 @@ const notHeld = refusalOf(() => releaseHeldTask(heldCtx, "task-zz-9876", CTRL_EN
 check("releasing a task this context does not hold → typed refusal `task_not_held`",
   notHeld?.code === "task_not_held");
 
-const unresolved = refusalOf(() => releaseHeldTask(heldCtx, "task-0200", CTRL_ENTRY, { holds: { "task-0200": CTRL_ENTRY }, resolutions: {}, verifications: {}, currentDeviceDecision: trustedDecision }));
+const unresolved = refusalOf(() => releaseHeldTask(heldCtx, "task-0200", CTRL_ENTRY, { holds: { "task-0200": [CTRL_ENTRY] }, resolutions: {}, verifications: {}, currentDeviceDecision: trustedDecision }));
 check("release with no resolution recorded → typed refusal `exception_unresolved`",
   unresolved?.code === "exception_unresolved");
 check("...and a whitespace-only resolution ref is no resolution at all",
-  refusalOf(() => releaseHeldTask(heldCtx, "task-0200", CTRL_ENTRY, { holds: { "task-0200": CTRL_ENTRY }, resolutions: { [CTRL_ENTRY]: "   " }, verifications: {}, currentDeviceDecision: trustedDecision }))?.code === "exception_unresolved");
+  refusalOf(() => releaseHeldTask(heldCtx, "task-0200", CTRL_ENTRY, { holds: { "task-0200": [CTRL_ENTRY] }, resolutions: { [CTRL_ENTRY]: "   " }, verifications: {}, currentDeviceDecision: trustedDecision }))?.code === "exception_unresolved");
 
-const noEvidence = refusalOf(() => releaseHeldTask(heldCtx, "task-0200", CTRL_ENTRY, { holds: { "task-0200": CTRL_ENTRY }, resolutions: { [CTRL_ENTRY]: CTRL_RESOLUTION }, verifications: {}, currentDeviceDecision: trustedDecision }));
+const noEvidence = refusalOf(() => releaseHeldTask(heldCtx, "task-0200", CTRL_ENTRY, { holds: { "task-0200": [CTRL_ENTRY] }, resolutions: { [CTRL_ENTRY]: CTRL_RESOLUTION }, verifications: {}, currentDeviceDecision: trustedDecision }));
 check("release with a resolution but no verification evidence → typed refusal `verification_missing`",
   noEvidence?.code === "verification_missing");
 
-const selfCited = refusalOf(() => releaseHeldTask(heldCtx, "task-0200", CTRL_ENTRY, { holds: { "task-0200": CTRL_ENTRY }, resolutions: { [CTRL_ENTRY]: CTRL_RESOLUTION }, verifications: { [CTRL_ENTRY]: CTRL_RESOLUTION }, currentDeviceDecision: trustedDecision }));
+const selfCited = refusalOf(() => releaseHeldTask(heldCtx, "task-0200", CTRL_ENTRY, { holds: { "task-0200": [CTRL_ENTRY] }, resolutions: { [CTRL_ENTRY]: CTRL_RESOLUTION }, verifications: { [CTRL_ENTRY]: CTRL_RESOLUTION }, currentDeviceDecision: trustedDecision }));
 check("release where the evidence IS the resolution → typed refusal `verification_not_independent` — the fix cannot cite itself as its own proof",
   selfCited?.code === "verification_not_independent");
 
@@ -391,7 +522,7 @@ check("...and with NO device decision at all — an unevaluated device is never 
 
 const GHOST_ENTRY = "INVENTORY_EXCEPTION_ACTIVE:exc-ghost-0404";
 const ghost = refusalOf(() => releaseHeldTask(heldCtx, "task-0200", GHOST_ENTRY, {
-  holds: { "task-0200": GHOST_ENTRY },
+  holds: { "task-0200": [GHOST_ENTRY] },
   resolutions: { [GHOST_ENTRY]: CTRL_RESOLUTION },
   verifications: { [GHOST_ENTRY]: CTRL_EVIDENCE },
   currentDeviceDecision: trustedDecision,
@@ -399,13 +530,28 @@ const ghost = refusalOf(() => releaseHeldTask(heldCtx, "task-0200", GHOST_ENTRY,
 check("release naming an entry this context never carried goes through the REAL resolveException door and refuses `unknown_exception_ref`",
   ghost?.code === "unknown_exception_ref");
 
+// `holds` is a LIST per task. An untyped caller passing the old single-string shape
+// must refuse, never have `"...".includes(ref)` substring-match its way to a release.
+check("release against a ledger whose hold for the task is a bare string (the pre-fix shape) → typed refusal `exception_does_not_hold_task`",
+  refusalOf(() => releaseHeldTask(heldCtx, "task-0200", CTRL_ENTRY, {
+    ...fullLedger(trustedDecision),
+    holds: { "task-0200": CTRL_ENTRY } as never,
+  }))?.code === "exception_does_not_hold_task");
+// Own properties only: a hold reached through the ledger's PROTOTYPE is not a hold.
+// Without the own-property read, an inherited array naming the entry released.
+check("release against a ledger whose hold for the task is only INHERITED (on the holds object's prototype) → typed refusal `exception_does_not_hold_task`",
+  refusalOf(() => releaseHeldTask(heldCtx, "task-0200", CTRL_ENTRY, {
+    ...fullLedger(trustedDecision),
+    holds: Object.create({ "task-0200": [CTRL_ENTRY] }),
+  }))?.code === "exception_does_not_hold_task");
+
 // ── the seventh review's findings, each now a refusal with a fixture ─────────
 // 3a CROSS-EXCEPTION RELEASE: the named exception must be the one holding the
 // named task. Before the linkage existed, this exact ledger released task-0200
 // against an exception that held a DIFFERENT task.
 check("release naming an exception that does not hold the named task → typed refusal `exception_does_not_hold_task`",
   refusalOf(() => releaseHeldTask(heldCtx, "task-0200", CTRL_ENTRY, {
-    holds: { "task-0200": "INVENTORY_EXCEPTION_ACTIVE:exc-other-1111" },
+    holds: { "task-0200": ["INVENTORY_EXCEPTION_ACTIVE:exc-other-1111"] },
     resolutions: { [CTRL_ENTRY]: CTRL_RESOLUTION },
     verifications: { [CTRL_ENTRY]: CTRL_EVIDENCE },
     currentDeviceDecision: trustedDecision,
@@ -414,7 +560,7 @@ check("release naming an exception that does not hold the named task → typed r
 // as ANOTHER exception's verification refuses this release.
 check("release whose evidence ref is already another exception's verification → typed refusal `verification_evidence_reused`",
   refusalOf(() => releaseHeldTask(heldCtx, "task-0200", CTRL_ENTRY, {
-    holds: { "task-0200": CTRL_ENTRY },
+    holds: { "task-0200": [CTRL_ENTRY] },
     resolutions: { [CTRL_ENTRY]: CTRL_RESOLUTION },
     verifications: { [CTRL_ENTRY]: CTRL_EVIDENCE, "INVENTORY_EXCEPTION_ACTIVE:exc-neighbor-2222": CTRL_EVIDENCE },
     currentDeviceDecision: trustedDecision,
@@ -423,7 +569,7 @@ check("release whose evidence ref is already another exception's verification �
 // citing itself as its own proof modulo whitespace. Trimmed equality refuses it.
 check("release whose evidence is the resolution plus trailing whitespace → typed refusal `verification_not_independent`",
   refusalOf(() => releaseHeldTask(heldCtx, "task-0200", CTRL_ENTRY, {
-    holds: { "task-0200": CTRL_ENTRY },
+    holds: { "task-0200": [CTRL_ENTRY] },
     resolutions: { [CTRL_ENTRY]: CTRL_RESOLUTION },
     verifications: { [CTRL_ENTRY]: CTRL_RESOLUTION + " " },
     currentDeviceDecision: trustedDecision,

@@ -1,6 +1,6 @@
 {
   "manifestVersion": 99,
-  "fingerprint": "82e0cef01c64b37ae18931217a818cbd617c5b545ad9b491205ce643bdb22a30",
+  "fingerprint": "0114acb54771e7306b68b9996d03211305c8c170b0dde2c8c1fe44ff7f9aa876",
   "body": {
     "schema": "signalgrid-live-sync-manifest/v1",
     "contract": {
@@ -125,12 +125,12 @@
       "device-management-health": 209,
       "device-resolver": 14,
       "dual-control": 78,
-      "emitter-discipline": 165,
+      "emitter-discipline": 164,
       "entitlement-binding": 63,
       "estate-core": 13,
       "evidence-coverage": 30,
       "factory-flows": 16,
-      "handoff-sim": 59,
+      "handoff-sim": 68,
       "iac": 72,
       "link-usability": 167,
       "live-idp": 31,

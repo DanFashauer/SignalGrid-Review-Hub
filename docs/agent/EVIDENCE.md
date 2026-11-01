@@ -5067,3 +5067,54 @@ bb6d80727 Merge pull request #1441 from DanFashauer/claude/build-estate-refresh-
 **Lesson (lane mail).** The first copy of the re-mint request (PR #1733) was produced with flag syntax on `lane-deliver.mjs send`, whose arguments are positional (`send "subject" "body"`): the subject became `--to`, the id slugged to `cloud-to`, and the write overwrote a September message that already carries a Mac ack, so `auditLaneMessages()` (ids only) would never have shown it unread. Codex caught it (thread 4435371880); #1733 was closed unmerged and the request re-sent as a `batch` send op (PR #1734 → d32b32e6, id `cloud-one-live-evidence-re-mint-after-the-brain-`). The September `cloud-to` file is the same mistake made once before. The skill text that showed the flag form is corrected in this PR.
 
 Verdict: nine of the ten owner-accepted PRs are on `SignalGrid_Alpha`, each on a head whose gating check was green and whose local half is quoted; #1337 remains for the stated reason.
+
+## 2026-11-01 — Standing-order item 6: twelve claude/* PRs landed under DR-037/DR-061, one at a time
+
+**Order.** The owner's 2026-11-01 ~03:50Z standing order, item 6: run the remaining still-needed `claude/*` PRs through the review-and-land loop, small first; merges happen under DR-037 by the lane, never parked on the owner; every claim of done quotes the command output and the mainline sha. Each PR below had, on the exact 40-character head merged: the gating check "Typecheck, build, and proof scaffold" green; `node scripts/preflight.mjs` and `pnpm run verify:breadth` run locally on that tree before the push that produced it (quoted in the PR body); 0 unresolved review threads; a clean merge-tree; and, for every DECISION_PATH / `lib/*` / api-server change, an Opus landing refute recorded SHIP in the body (DR-061). A measured mutant (source changed, proof re-run, source restored byte-for-byte) is quoted where the PR adds a falsifiable check.
+
+| PR | Change | Merged sha | Exact head | Gating check run | Local half (quoted in the body) |
+| --- | --- | --- | --- | --- | --- |
+| #1240 | webauthn race proof | 2d391859 | c084f885 | 124862423564
+| #1222 | root JSON 404 catch-all (plan row 98) | 42b1e545 | 27366cf3 | 124868289779
+| #1215 | telemetry known-node guard (row 97) | 069f8386 | d6f4ce4a | 124874329044
+| #1320 | simulator constant conjuncts (rows 84/85) | 9d6a8ee7 | b8144a7b | 124879091265
+| #1230 | console unknown-verdict tone (row 109) | a9789f25 | e1cf0f3a | 124889973179
+| #1280 | core: registerVerifiedPrincipal refuses unknown roles (row 86) | dd1459b6 | 5a49ba51 | 124896225307
+| #1309 | docs fossils + status-figures and ungoverned-spec gates | 496dae73 | 66d38e06 | 124907814764
+| #1330 | handoff-sim per-task holds | 6b4ae813 | 7fe9a439 | 124912188279 | proof:handoff-sim 68/68; mutant 66/68 |
+| #1443 | store: stepUpAnswers evicted with their decision | eafc8fbc | b548fcb7 | 124919624327 | proof:signalgrid-core 668/668; mutant 662/668; test:api 516/516; stamp v29 |
+| #1459 | /v1/audit whole-chain verify | a872899c | a17a6f11 | 124925323276 | test:api 531/531; mutant 521/531 (ten whole-chain checks red) |
+| #1244 | ladderRungs derived from the ladder + literal figure gate | 9df420dd | 688991eb | 124940298754 | proof:emitter-discipline 165/165; proof-count 63/63; figure-guard self-test 22/22 |
+| #1242 | integrations honesty (ITSM unchecked, DLQ observed attempts, CVSS finiteness) | a1f0c05a | 2c4e96f4 | 124953758924 | proof:webhooks 246/246 (mutant 244/246), emit-gate 314/314, vuln-scan 41/41, device-resolver 17/17 |
+
+**Mutants measured by the cloud on the merged trees (source changed, proof re-run, source restored byte-for-byte):** #1280 unknown-role guard removed → 610/658; #1330 per-task hold list overwritten per hold → 66/68; #1443 evict callback's step-up-answer delete removed → 662/668; #1459 whole-chain walk replaced by the windowed `verifyLedger()` → 521/531 with all ten whole-chain checks red; #1242 DLQ attempts hard-coded to 6 → 244/246.
+
+**Order and regeneration.** The three manifest-moving PRs (#1330 v98→v99, #1244 v99→v100, #1242 v100→v101) landed one at a time; each later one was re-merged onto the previous landing with `node scripts/generate-sync-manifest.mjs` and `node scripts/check-surface-review-coverage.mjs --write` run on a clean index, and its gates re-run on the re-merged tree before the push. #1443 was redone once after #1280 moved the core proof figure (620 → 658 → 668) and the normalization stamp (v28 → v29); #1244's plan-row sentence was reworded so the figure guard does not read its own comma-formatted threshold as a measurement; #1443's gating was re-run once for an unrelated loop-state R12-hostile-global case that mainline's own run passed. Tip gates (`node scripts/preflight.mjs` and `pnpm run verify:breadth`) passed on 6b4ae813, eafc8fbc, a872899c and 9df420dd; the run on a1f0c05a is recorded in the lane's task log.
+
+**Owed after the batch.** ONE live-evidence re-mint from the Mac against manifest v101 (fingerprint `e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4`), requested in lane mail `cloud-one-live-evidence-re-mint-after-the-item-6-` (PR #1742); readiness dimension (b) reads 0 until it lands, by design. Still open from item 6 and not landed by the cloud: #1463 (`/metrics` series; FIX-NEEDED on the DR-059 freshness gap, the brain builds), #1586/#1611/#1585 (brain rounds; land only on a SHIP refute of the next head), #1265 (a11y), #1442 and #1398 (redo on fresh branches, Mac builds).
+
+**Hold list for the owner (one list, nothing else decides them):** #1337 (launch-claims gate), #1338 (Assist-wire figure gate), #1307 (`artifacts/signalgrid-review`, OWNER_RESERVED; Opus SHIP on content; question: should a blank `OIDC_ISSUER` refuse at boot?), #1314, #1321, #1190, #1133, plus the row-91 hand (PolicyTest per policy version? rollback allowed?). #1641 is closed; #1050 and #1083 landed on 2026-11-01.
+
+**Estate.** At the standing order: 68 open PRs (35 claude, 21 mac, 9 dependabot, 3 lane), 283 remote heads, 7 open issues. At 19:55Z on 2026-11-01: 47 open PRs (14 claude, 23 mac, 9 dependabot, 1 lane), 300 remote heads, 7 open issues. The mac/* count rose because the Mac lane opened new work (#1739, #1741) and the OD01 deletes are the Mac's; the remote-head count is reported, not claimed as progress.
+
+Command, in a checkout with `origin/SignalGrid_Alpha` fetched at a1f0c05a:
+```sh
+git log --first-parent --format='%h %s' origin/SignalGrid_Alpha | grep -E 'Merge pull request #(1240|1222|1215|1320|1230|1280|1309|1330|1443|1459|1244|1242)\b' | cut -c1-100
+```
+Output, verbatim:
+```
+a1f0c05a8 Merge pull request #1242 from DanFashauer/claude/build-integrations-honesty
+9df420ddd Merge pull request #1244 from DanFashauer/claude/build-ladder-rungs-derived
+a872899cc Merge pull request #1459 from DanFashauer/claude/build-audit-route-verify-ledger-full
+eafc8fbc8 Merge pull request #1443 from DanFashauer/claude/build-store-stepup-answers-evict
+6b4ae813e Merge pull request #1330 from DanFashauer/claude/build-handoff-sim-same-task-holds
+496dae738 Merge pull request #1309 from DanFashauer/claude/build-fossil-figures-orphan-spec
+dd1459b6f Merge pull request #1280 from DanFashauer/claude/build-core-principal-policy-guards
+a9789f25e Merge pull request #1230 from DanFashauer/claude/build-live-panel-unknown-tone
+9d6a8ee71 Merge pull request #1320 from DanFashauer/claude/build-sim-status-constants-key-pins
+069f8386b Merge pull request #1215 from DanFashauer/claude/build-telemetry-known-node
+42b1e545c Merge pull request #1222 from DanFashauer/claude/build-gateway-root-json-404
+2d3918592 Merge pull request #1240 from DanFashauer/claude/build-webauthn-revocation-race
+```
+
+Verdict: twelve of the standing order's item-6 `claude/*` PRs are on `SignalGrid_Alpha`, each on a head whose gating check was green and whose local half is quoted; the rest of item 6 is the brain's to build (FIX-NEEDED verdicts posted on each) or the owner's to decide (the hold list above).

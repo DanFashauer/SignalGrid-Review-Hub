@@ -210,10 +210,10 @@ lone repairs into unreachable code).
       above rested on the credited-by-prose reading. The code is where it is; the
       claim that both "ship" did not hold when it was written.)
 - [ ] **`ReleaseLedger.holds` loses the second hold on the same task (found by the row-48
-      second-pass audit; LATENT, not live — record the distinction).** `holds` is
+      second-pass audit; LATENT, not live — record the distinction).** FIX PROPOSED 2026-09-30 (branch claude/build-handoff-sim-same-task-holds, owner merges): `holds` is now `Readonly<Record<string, readonly string[]>>` in `lib/handoff-sim/src/types.ts`; `lib/handoff-sim/src/simulate.ts` appends each hold instead of assigning; `lib/handoff-sim/src/release.ts` refuses unless the named exception is in the task's list (a non-array refuses) and moves the task held→active only when no other carried entry still holds it; `scripts/src/handoff-sim-proof.ts` adds the same-task twin scenario (fails on the prior tree, 60/62) and a bare-string-ledger refusal. Review round 1 added: null-prototype ledger maps in `lib/handoff-sim/src/simulate.ts` and an own-property read in `lib/handoff-sim/src/release.ts` (a taskRef `constructor` crashed the run); an exception naming no task is still composed and carried by `lib/handoff-sim/src/simulate.ts` (it holds nothing; review round 3 showed refusing it dropped a restrict-grade report), and a released hold is pruned from the simulator's list; and a proof check that a resolved+verified but unreleased sibling hold keeps the task held. Still open, fail-closed, unchanged from base: one exceptionRef holding two tasks leaves the second task unreleasable (`unknown_exception_ref`). **Diagnosis as found on 2026-09-30, before the fix above — historical, kept for the audit trail; do not repeat the repair:** `holds` was
       `Readonly<Record<string, string>>` (`lib/handoff-sim/src/types.ts:137`) — one
       exception per task — and `lib/handoff-sim/src/simulate.ts:134` assigns
-      `holdsMap[step.taskRef] = carriedEntry`, which OVERWRITES the entry when a second
+      `holdsMap[step.taskRef] = carriedEntry`, which OVERWROTE the entry when a second
       hold-grade exception fires on the same task. A release naming the surviving
       exception then succeeds while the overwritten one is still in
       `unresolvedExceptionRefs`, moving the task held → active with an unresolved hold
@@ -228,7 +228,7 @@ lone repairs into unreachable code).
       reports it imported only by the proof harness. The shipped decision plane does not
       consult this ledger; it ANDs over its whole condition set structurally every call.
       And the trace still carries the overwritten entry, so the evidence is not lost even
-      in the simulation. Fix shape: `holds` becomes `Record<string, string[]>` (or the
+      in the simulation. Fix shape as proposed then: `holds` becomes `Record<string, string[]>` (or the
       release check asserts every unresolved entry naming the task, not just the recorded
       one), plus the proof case that reproduces the overwrite. Bundle it with any future
       work that makes handoff-sim reachable rather than shipping a lone repair into a
@@ -2297,13 +2297,17 @@ New ideas land here first (CLAUDE.md scope rule), then get ranked.
       extend the contract proof to hold `openapi.yaml` against the monitoring/
       integrations/health routers. `docs/REPO_LAYOUT.md` should stop calling this
       client "bindings for the /v1 API" — it binds the fixture monitoring surface.
-- [ ] **Orphan third spec `lib/api-spec/product-openapi.json` describes an API that
+- [ ] **Orphan third spec `product-openapi.json` (in `lib/api-spec/` until 2026-09-30) describes an API that
       does not exist. 2026-09-01 (contract-drift sweep, MEDIUM).** Ten paths
       (`/api/v1/session/start`, `/api/v1/location/report`, `/api/v1/devices` …),
       eight unserved, servers `api.signalgrid.local`, committed 2026-08-03, referenced
       by nothing, validated by no gate, sitting in the directory `REPO_LAYOUT.md`
       calls "The OpenAPI contract". Anyone importing it builds against phantom
       routes. Fix: delete it, or move under `docs/archive/` with a header. Lane: api-contract-architect.
+      FIX PROPOSED 2026-09-30 (branch claude/build-fossil-figures-orphan-spec, owner merges):
+      `git mv` to `docs/archive/product-openapi.json` with an `x-archived` header key
+      saying it is not a contract and naming the two served specs; `scripts/src/api-contract-proof.ts`
+      now fails on any OpenAPI-shaped file in `lib/api-spec/` that no DOCUMENTS entry governs.
 - [x] **SDK docs say "append `/v1/authorize` to the base URL"; the server serves it
       at `/api/v1/authorize`. 2026-09-01 (contract-drift sweep, MEDIUM, latent).**
       `GateEndpoint.kt` and `endpoint.rs` trim a trailing slash "so callers can
@@ -2374,6 +2378,12 @@ New ideas land here first (CLAUDE.md scope rule), then get ranked.
       but a fossil risk on a hand-maintained census. Either derive the numbers
       or mark the doc as a fixed dated snapshot so a reader stops treating them
       as current measurements. Lane: docs-writer.
+      FIX PROPOSED 2026-09-30 (branch claude/build-fossil-figures-orphan-spec, owner merges):
+      marked as a snapshot rather than derived — `docs/PRODUCT_COMPLETION_PLAN.md` carries a
+      dated point-in-time banner above §1 (census taken 2026-08-10) naming
+      `node scripts/check-preflight-ci-parity.mjs`, `pnpm run proof:launch-profile` and
+      `node scripts/check-status-figures.mjs` for the live figures; `scripts/check-status-figures.mjs`
+      fails if the banner, its date or the command goes missing.
 - [ ] Default `review-demo` profile mounts sim + control-plane routes
       unauthenticated. 2026-09-01 (security/adversarial scan, attack-surface
       review): informational, not a code defect — `POST /api/sim/room-entry`

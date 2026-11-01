@@ -1026,6 +1026,7 @@ paths:
       tags: [control-plane]
       security: []
       summary: Ingest a telemetry batch reported UP by an edge node
+      description: The nodeId must be one of the seeded edge nodes (GET /cp/v1/edge-nodes); any other id is refused 404 and not stored.
       requestBody:
         required: true
         content:
@@ -1044,6 +1045,7 @@ paths:
       responses:
         "200": { description: Ingested }
         "400": { $ref: "#/components/responses/ValidationError" }
+        "404": { $ref: "#/components/responses/NotFound" }
 
   /cp/v1/health:
     get:

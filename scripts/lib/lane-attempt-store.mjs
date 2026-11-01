@@ -215,7 +215,7 @@ const startEpochOf = (pid) => {
   return Number.isFinite(ms) ? ms : null;
 };
 const recordedEpoch = (iso) => (typeof iso === "string" && /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/.test(iso) ? Date.parse(iso) : NaN);
-function assertOriginalGone(shellPid, { pgid = null, token = null, shellStart = null } = {}) {
+function assertOriginalGone(shellPid, { pgid = null, token = null, shellStart = null, openedMs = null } = {}) {
   // An unparseable recorded start degrades to PID-only liveness (never a silent exit).
   const recorded = Number.isFinite(recordedEpoch(shellStart)) ? recordedEpoch(shellStart) : null;
   let alive = true, code = null;
@@ -226,22 +226,40 @@ function assertOriginalGone(shellPid, { pgid = null, token = null, shellStart = 
       `original tick shell ${shellPid} liveness is unknown (${code}); holding`);
   } else if (code !== "ESRCH") throw Error(`original tick shell ${shellPid} liveness is unknown (${code}); holding`);
   if (pgid === null && token === null) return;
-  const own = processGroupOf(process.pid), since = recorded ?? -Infinity;
-  const ps = spawnSync("ps", ["-eo", "pid=,pgid=,lstart=,command="], { encoding: "utf8", env: PS_ENV, maxBuffer: 64 * 1024 * 1024 });
+  // Without a recorded start, the OPEN slot's write time (less 1 s for lstart's
+  // resolution) bounds when the original tick's descendants can have started.
+  const own = processGroupOf(process.pid), since = recorded ?? (Number.isFinite(openedMs) ? Math.floor(openedMs / 1000) * 1000 - 1000 : -Infinity);
+  const ps = spawnSync("ps", ["-eo", "pid=,ppid=,pgid=,lstart=,command="], { encoding: "utf8", env: PS_ENV, maxBuffer: 64 * 1024 * 1024 });
   if (ps.error || ps.signal || ps.status !== 0 || own === null) throw Error("process table is unreadable; holding");
+  const table = new Map();
   for (const line of ps.stdout.split("\n")) {
     if (!line.trim()) continue;
-    const m = /^\s*(\d+)\s+(\d+)\s+(\w{3} \w{3}\s+\d+ \d\d:\d\d:\d\d \d{4})\s(.*)$/.exec(line), started = m ? lstartEpoch(m[3]) : NaN;
+    const m = /^\s*(\d+)\s+(\d+)\s+(\d+)\s+(\w{3} \w{3}\s+\d+ \d\d:\d\d:\d\d \d{4})\s(.*)$/.exec(line), started = m ? lstartEpoch(m[4]) : NaN;
     // Never echo a process line: argv can carry credentials, and this text is published.
     if (!m || !Number.isFinite(started)) throw Error("a process table line is unparseable; holding");
-    if (Number(m[1]) === process.pid) continue;
-    const group = Number(m[2]), command = m[4];
+    table.set(Number(m[1]), { ppid: Number(m[2]), group: Number(m[3]), started, command: m[5] });
+  }
+  // A lane-deliver worktree process counts only when its whole ancestry started at or
+  // after the original tick until it reaches pid 1 (orphaned with that tick): a live
+  // delivery of another session or lane has an older living ancestor.
+  const orphanedSince = (pid) => {
+    for (let hops = 0; pid > 1 && hops < 64; hops++) {
+      const row = table.get(pid);
+      if (!row) return true; // unknown ancestry: fail closed
+      if (!(row.started >= since)) return false;
+      pid = row.ppid;
+    }
+    return true;
+  };
+  for (const [pid, { group, started, command }] of table) {
+    if (pid === process.pid) continue;
     if (!(started >= since)) continue; // started before the original tick: not its descendant
-    if ((pgid !== null && group === pgid && pgid !== own) || (token && command.includes(token)) || command.includes("sg-lane-deliver-")) {
+    const worktree = command.includes("sg-lane-deliver-") && orphanedSince(pid);
+    if ((pgid !== null && group === pgid && pgid !== own) || (token && command.includes(token)) || worktree) {
       // Publishable fields only: pid, group, start and the program's basename; never its
       // arguments (live-lane scripts pass Authorization headers to curl in argv).
       const program = (command.trim().split(/\s+/)[0] ?? "").split("/").pop().replace(/[^A-Za-z0-9._+-]/g, "?").slice(0, 40);
-      throw Error(`process ${m[1]} (program ${program || "unknown"}, group ${group}, started ${new Date(started).toISOString()}${command.includes("sg-lane-deliver-") ? ", in a lane-deliver worktree" : ""}) of the original tick (group ${pgid ?? "unrecorded"}, started ${recorded === null ? "unrecorded" : new Date(recorded).toISOString()}) may survive; holding`);
+      throw Error(`process ${pid} (program ${program || "unknown"}, group ${group}, started ${new Date(started).toISOString()}${worktree ? ", in a lane-deliver worktree" : ""}) of the original tick (group ${pgid ?? "unrecorded"}, started ${recorded === null ? "unrecorded" : new Date(recorded).toISOString()}) may survive; holding`);
     }
   }
 }
@@ -364,7 +382,7 @@ function recoverOpenSlot(binding, slot, stamp) {
     assertOwner(owner, binding, token, shellPid);
     if (digest(owner.raw) !== openedSha256) throw Error("abandoned tick owner bytes differ");
   }
-  assertOriginalGone(shellPid, { pgid: owner?.value.pgid ?? null, token, shellStart: owner?.value.shellStart ?? null });
+  assertOriginalGone(shellPid, { pgid: owner?.value.pgid ?? null, token, shellStart: owner?.value.shellStart ?? null, openedMs: slot.info?.mtimeMs ?? null });
   const terminalPath = join(binding.directory, `tick-${token}.terminal.json`);
   let actual;
   try { actual = readTickJson(terminalPath); } catch (error) { if (error.code !== "ENOENT") throw error; }
@@ -460,6 +478,10 @@ export function releaseTick(root, token, shellPid, exitTrapStatus) {
 // push. With a receipt, the target ref is read on origin: present -> "published"
 // (readback-only, never resent); absent -> "unpublished" (retry); unreadable or
 // unnamed -> "unknown" (hold). A failed read is never taken as absence.
+// Network and ledger reads never inherit the tick guard (FD8): fds 3-8 are closed in
+// the child. Only the hold's lane-deliver child keeps FD8 (raiseTickHold).
+const NO_GUARD_PIPED = ["ignore", "pipe", "pipe", "ignore", "ignore", "ignore", "ignore", "ignore", "ignore"];
+const NO_GUARD_SILENT = ["ignore", "ignore", "ignore", "ignore", "ignore", "ignore", "ignore", "ignore", "ignore"];
 // Same shape as lane-tick.sh's sg_run_bounded: the command runs in its own session,
 // and at the limit its WHOLE group (ssh, credential helpers) gets TERM, then KILL.
 const GROUP_BOUNDED = `my $limit = shift; my $pid = fork; exit 125 unless defined $pid;
@@ -477,7 +499,7 @@ export function refusedDisposition(root, receiptPath) {
   for (const key of ["GIT_DIR", "GIT_WORK_TREE", "GIT_COMMON_DIR"]) delete env[key];
   const limit = /^[1-9][0-9]*$/.test(process.env.SIGNALGRID_LS_REMOTE_TIMEOUT_SEC ?? "") ? Number(process.env.SIGNALGRID_LS_REMOTE_TIMEOUT_SEC) : 60;
   const r = spawnSync("perl", ["-MPOSIX", "-e", GROUP_BOUNDED, String(limit), "git", "ls-remote", "origin", "refs/heads/" + target],
-    { cwd: root, env, encoding: "utf8", timeout: (limit + 10) * 1000 });
+    { cwd: root, env, encoding: "utf8", timeout: (limit + 10) * 1000, stdio: NO_GUARD_PIPED });
   if (r.error || r.signal || r.status !== 0) return "unknown";
   return r.stdout.trim() ? "published" : "unpublished";
 }
@@ -541,7 +563,7 @@ export function handLedgerStatus(root, id) {
   if (!/^[a-z0-9][a-z0-9-]{0,127}$/.test(id)) return "unknown";
   const env = { ...process.env };
   for (const key of ["GIT_DIR", "GIT_WORK_TREE", "GIT_COMMON_DIR"]) delete env[key];
-  const r = spawnSync("git", ["show", `origin/SignalGrid_Alpha:artifacts/raised-hands/${id}.json`], { cwd: root, env, encoding: "utf8", timeout: 60000 });
+  const r = spawnSync("git", ["show", `origin/SignalGrid_Alpha:artifacts/raised-hands/${id}.json`], { cwd: root, env, encoding: "utf8", timeout: 60000, stdio: NO_GUARD_PIPED });
   if (r.status !== 0) return /does not exist|exists on disk, but not in/.test(r.stderr ?? "") ? "absent" : "unknown";
   try { return JSON.parse(r.stdout).status === "resolved" ? "resolved" : "open"; } catch { return "unknown"; }
 }
@@ -703,7 +725,7 @@ export function raiseTickHold(root, shellPid, message) {
       // Read the Hub ledger fresh (best effort, bounded; a stale local ref is still read).
       const env = { ...process.env, GIT_TERMINAL_PROMPT: "0" };
       for (const key of ["GIT_DIR", "GIT_WORK_TREE", "GIT_COMMON_DIR"]) delete env[key];
-      spawnSync("perl", ["-MPOSIX", "-e", GROUP_BOUNDED, "60", "git", "fetch", "--quiet", "origin", "SignalGrid_Alpha"], { cwd: root, env, stdio: "ignore", timeout: 70000 });
+      spawnSync("perl", ["-MPOSIX", "-e", GROUP_BOUNDED, "60", "git", "fetch", "--quiet", "origin", "SignalGrid_Alpha"], { cwd: root, env, stdio: NO_GUARD_SILENT, timeout: 70000 });
       const status = handLedgerStatus(root, prior.handId ?? id);
       if (status === "unknown") return `hand ${prior.handId ?? id} ledger unreadable; holding`;
       if (status !== "resolved") return `hand ${prior.handId ?? id} already raised`;

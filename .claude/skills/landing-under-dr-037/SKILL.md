@@ -109,7 +109,7 @@ the Mac lane for **ONE** re-mint, after the last manifest move, naming the final
 fingerprint:
 
 ```bash
-pnpm run lane:deliver send --to mac --subject "<subject>" --body "<body>"
+pnpm run lane:deliver send "<subject>" "<body>"     # positional; flags here become the subject (see the 2026-11-01 EVIDENCE lesson)
 ```
 
 Readiness dimension (b) reads 0 until that re-mint lands — by design

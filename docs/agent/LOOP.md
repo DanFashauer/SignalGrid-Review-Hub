@@ -28,23 +28,23 @@ individually reported success.
 
 ---
 
-## Which tool for what
+## Which role and harness for what
 
-| Tool | Use it for | Do not use it for |
-| --- | --- | --- |
-| **Chat** | Thinking, strategy, research, reviewing evidence, arguing back | Editing the repo |
-| **Claude Code** | Patches, gates, tests, anything touching files | Deciding what to build |
-| **Cowork** | Documents, discovery notes, spreadsheets, non-repo work | Code |
+Routine bounded selection and execution are delegated to the local second brain
+and its repository steward. A supervised local coding harness may inspect source,
+select eligible work, and make and test isolated edits within actual grants and
+exclusive ownership. Local Ollama is primary; Claude/Codex supply necessary
+escalation and genuine source review within saved limits.
 
-**The rule that matters:** the tool that *decides* is never the tool that
-*builds*. Decisions come from the owner or from a chat session; Claude Code
-executes them. That separation is what stopped the freeze dying quietly when a
-well-argued networking proposal arrived.
+Tool brands do not create permissions or require the owner to route every task.
+Current owner directions, source scope, independent source review, full applicable
+local checks, current-head CI, findings disposition and DR-037 control delivery.
+Owner-reserved decisions and the publication boundary remain in force. Source
+review is evidence, never an invented approving vote.
 
-**A plain chat window has no repo checkout.** If a session cannot find this
-file, it is not lost - clone the repo, or attach it.
-Plain chat sessions have no repo checkout — attach LOOP.md to the chat or
-clone `SignalGrid_Alpha`; `git pull` is not available there.
+Verify the actual checkout path, origin, canonical branch and full head before
+acting. A session without repository access needs an attached source or checkout;
+conversation context alone is not a repository or execution proof.
 
 ---
 
@@ -59,6 +59,16 @@ PHASE:        Build / execution (past Customer Discovery, DR-033 2026-09-10).
 CURRENT EVIDENCE: 2026-10-21 — immutable artifact f3b55f7173ed5d5365a102ebadadef2e0e1dfcea records mint 22:14:07.453Z and request completion 22:14:10.153Z, passed/exit 0 in 1196548 ms, on clean source a70c36b3e0e897d8a80a863e7228417f729e487f.
               reviewHubPass=true; mcpPass=true; MCP commit 343339c436dea47818fa17cf3be486782e62d912 is clean; manifest v97 aa9ce381438ecb26874cdbe60b82a9339821d6b540f176e122291202a6b3885b; 141 passed proof records. The two native web steps are Linux-VM attested on that exact source, so stepsNotRun=[]; two proof names remain notRecorded and three steps remain stepsExcluded. The separate fresh-evidence EVIDENCE entry names those ceilings and the contract hash. No new readiness figure or owner-real-in-hand attestation is asserted.
 EVIDENCE PUBLICATION: #1577 carried artifact f3b55f7173ed5d5365a102ebadadef2e0e1dfcea onto canonical mainline at 24eff86a940099e0725d474d1d5520bfbc71d368; the mint and its Linux attestation remain measurements of clean a70c36b3e0e897d8a80a863e7228417f729e487f, not new measurements of the later redaction head or merge.
+PENDING SOURCE PREPARATION: 2026-10-28 — see the 2026-10-27/28 EVIDENCE source-preparation entries for delegated policy, the C0 proof and open coordination covers; no new mint, completed witness or public qualification is claimed.
+PENDING CI FIX: 2026-10-28 — R6p1d explicitly constructs its missing tracking ref; EVIDENCE records applicable local checks, targeted Git2.56 evidence and limited-resource failures. Full current-head source/CI/preflight qualification remains pending.
+LATEST LANDING UPDATE: 2026-11-01 (12:00Z) — nine of the ten owner-accepted brain:ready PRs landed under DR-037/DR-061, one at a time under the strict required-check rule: #1438 09d4e16e, #1439 1928b654, #1441 bb6d8072, #1239 0b9d68eb, #1445 16917512, #1440 3d282977, #1556 5886f1e6, #1117 7cf2dadc, #1431 be38c923d8cfc33a5d94894a9964265c16acb112 (last head 98371bf5, gating 124836408448). Each head had the gating check green and local preflight+breadth quoted; api-server PRs had an Opus refute. #1337 (launch-claims gate) stays the owner's click. OD01 closed (two zero-loss branches deleted by the Mac, archive-tagged). ONE re-mint request mailed (#1734 → d32b32e6); readiness (b) reads 0% until it lands, by design. Record: the two 2026-11-01 EVIDENCE entries below the six-DR entry.
+              Superseded for "latest landing": the 02:00Z six-DR update is retained verbatim as history:
+PREVIOUS LANDING UPDATE: 2026-11-01 — six owner-accepted decision-record PRs landed one at a time under the owner's 2026-10-31 acceptance: #1357 69501b56, #1246 c508cdb3, #1083 cfafb095, #1050 972751c4, #1322 702d6ca3, #1433 df1ff2df7c4a23226832d9f36feeaec6cce63aac (last head 3af79ce1, gating 124717727995). Each head had the gating check green and local preflight+breadth green; two decision-core PRs (#1083, #1050) had an Opus merge-refute SHIP. Record: the 2026-11-01 EVIDENCE entry. Readiness dimension (b) waits on the Mac's live-evidence re-mint (request queued by the Mac's tick in #1716); no new readiness figure is asserted.
+              Superseded for "latest landing": the 2026-10-22 #1593 update below is retained verbatim as history.
+PREVIOUS LANDING UPDATE: 2026-10-22 — #1593 69258e30433f1a20c31975d50d746065032097c4 (GitHub merged_at 2026-10-22T19:52:31Z; Git committedDate 19:52:30Z), from exact tested head 79c403004707627f7b0431725c48dd713775af18; five-minute build retry, 144-failure scheduled outage threshold, active registry/coordination record, and configured/installed/loaded cadence reporting.
+              Required check 120039369859 completed success at 19:50:15Z; all six main SignalGrid CI jobs succeeded. The 18-context final rollup had 14 success, 3 skipped and optional Mac check 120039362022 queued, not passed. Exact clean-head local preflight passed in 957.95s with two web build/browser steps unavailable and three checks self-skipped; breadth passed 58 proofs in 36.34s. All three recorded review threads resolved; the formal Codex review was on earlier 100682a4, not a new 79c review. The final canonical delta was one uncounted heartbeat file.
+              See the separate #1593 EVIDENCE record; the later record-publishing head requires its own ordinary checks and landing, neither claimed here. CURRENT EVIDENCE/EVIDENCE PUBLICATION above remain historical f3/a70 measurements. No new mint, readiness, owner attestation, other landing or private-runtime claim is asserted.
+HISTORICAL LANDING STATE: the following #1578/#1577/#1576 labels and receipts are retained verbatim as the earlier recorded landing state; the #1593 update above supersedes only which recorded landing is latest.
 LATEST LANDING: 2026-10-22 — #1578 3c892ad96dded5d8e4630d4dc63c12e3fcf02bb0 (2026-10-22T00:05:39Z), from exact head 2493b26d100d398bd178ddc5a0052d8b5787e481; self-hosted Mac CI now uses the same persistent host reservation as local workers through install, checks and teardown.
               Required check 119552326565: completed / success at 2026-10-22T00:03:04Z; Mac check 119552323893: completed / success at 2026-10-22T00:05:12Z. Exact clean-head local preflight passed in 941.32s with two native web steps unavailable and three checks self-skipped, not passed; breadth passed 58 proofs in 36.78s. Independent primary review was clear; the completed exact-head Codex review had no findings; the final pre-merge read found zero review threads, and all five triggered workflows completed success before merge, per the coordinator's receipts.
               Separate live observations at 2026-10-21T23:48:06.801950Z and 23:49:29.148312Z recorded local-worker ownership followed by Actions Bash/Perl ownership of the same persistent inode; a nonblocking Python lock probe observed contention at both instants and the manual guard was already released. These observations do not claim a shell-helper exit code, a new model-quality result or replace final CI verdicts. The f3/a70 mint and its native attestation remain historical measurements of that source; no new mint, readiness value, owner attestation or later journal landing is asserted. See the separate #1578 EVIDENCE receipt.
@@ -67,7 +77,68 @@ PREVIOUS LANDING: 2026-10-21 — #1577 24eff86a940099e0725d474d1d5520bfbc71d368 
 EARLIER LANDING: 2026-10-21 — #1576 b0a4568855ca2d2378698ba23e5ff867a7c6650b (2026-10-21T21:33:03Z), from exact head 418221363eea5dc66ff3eda7c21484247d03cfb9; required check 119486613085 completed success at 21:30:31Z; Mac check 119486610742 completed success at 21:25:12Z.
               Local preflight passed with two native web steps explicitly unavailable on the Mac; a separate clean-head Linux build and browser E2E passed 53/53; breadth 58/58; staged helper 243/243; local-brain primitives 41/41. Primary independent source reviews completed per the PR body; optional GitHub Codex review was still running at landing and at the 21:47Z read, with no completed verdict claimed. See the 2026-10-21 EVIDENCE entry. This records the worker integration, not a new readiness figure or owner attestation.
 HISTORICAL SNAPSHOT: the following October 16 LAST TOUCHED block, including its readiness and pending-re-mint statements, records that earlier window. The fresh October 21 receipt is CURRENT EVIDENCE above; no current readiness value is inferred from either entry.
-LAST TOUCHED: 2026-10-16 (cloud lane; window 2026-10-15 22:07:46Z-2026-10-16 04:29:46Z) - THIRTEEN LANDINGS; READINESS 0% ON THE TIP, DIMENSION (b) 0% BY DESIGN
+LAST TOUCHED: 2026-11-01 (cloud lane, 12:00Z) - NINE OF TEN BRAIN:READY PRs LANDED (#1438 #1439 #1441 #1239 #1445 #1440 #1556 #1117 #1431; last
+              merge be38c923d8cfc33a5d94894a9964265c16acb112) under the owner's 2026-10-30 acceptance and the 2026-11-01 standing order; #1337 is
+              the owner's click (launch-claims gate). OD01 done; re-mint requested (#1734). Queue-claim gap recorded (estate-queue classifies
+              DECISION_PATH/green PRs as owner/wait, so pr:<n> is not claimable). Hold list for the owner: #1337, #1641, #1314, #1321, #1190, #1133.
+              Still owed by the Mac: a new head on #1698 (tick heartbeat on mainline still 2026-10-24), the OD01 ack, the evidence re-mint.
+PREVIOUSLY:   2026-11-01 (cloud lane, 02:00Z) - SIX OWNER-ACCEPTED DECISION-RECORD PRs LANDED (#1357 #1246 #1083 #1050 #1322 #1433; last
+              merge df1ff2df7c4a23226832d9f36feeaec6cce63aac). Landed one at a time under the owner's 2026-10-31 acceptance, each on a head with the
+              gating check and local preflight+breadth green; two decision-core PRs had an Opus merge-refute SHIP. Five owner questions carried
+              out (puck factor, super admin, lost-puck revocation, CTAP reset ceremony, DR-062 ask-first default) — see the 2026-11-01 EVIDENCE entry.
+              The 2026-10-23 directive block below stands unchanged as the governing order.
+PREVIOUSLY:   2026-10-23 (cloud lane, 23:00Z) - OWNER: THE LOCAL SECOND BRAIN RUNS EVERYTHING; THE CLOUD AND CODEX ARE FINAL INSPECTION AND
+              APPROVAL FOR THE REPOSITORY. Owner (verbatim, about 23:00Z): 'Need to offload and let the local agent run everything and
+              escalate to you or codex when it's needed for final inspection and approval for repo everything else is offloaded locally
+              using second brain period which it can run anything it needs to complete the tasks it need for second brain plus I'm going
+              to give it more knowledge to build more skills and workers for us plus it can actually build the apps and test them plus
+              build company website and all other items needed to create my company SignalGrid'. It widens the 03:30Z local-first
+              directive below. The second brain is the Mac's private local runtime at <HOME>/SignalGrid-Local-AI (named by the owner in
+              chat at 22:47Z; its design and state stay outside this tree, per the 2026-10-22 intake row; the one in-tree trace is the
+              2026-10-21 evidence re-mint, run from its worker-runtime-evidence copy). Done on that word, same hour: this record; an
+              operating note in docs/LANE_COORDINATION.md naming the roles and the brain's three escalation channels; lane mail to the
+              Mac carrying the directive verbatim with the brain's first asks (the 23:24Z steward batch); a decision-record proposal,
+              DR-064 (proposed), opened for the owner's merge and never the lane's. What the cloud does from here: it builds nothing and
+              dispatches nothing of its own; it inspects and approves repository changes the brain escalates - a lane message addressed
+              to cloud, a hand with whoCanUnblock 'cloud lane', or a PR-body sentence asking the cloud to land - reviewing the exact
+              head and landing under DR-037's five conditions as before, or returning findings; it keeps the hourly steward, the
+              2-hourly forward-build heartbeat (report only, no refill) and the daily hygiene sweep because the registry and the
+              raised-hands gate expect them; it escalates to the owner only what only the owner can clear; Codex reviews on the brain's
+              '@codex review'. What the brain had shown by 22:41Z, measured on mainline dd1380b7: alive - 114 tick heartbeats since
+              00:00Z (50 quiet, 1 acted, 63 deferred on the host lock), five status mails, its private runtime reinstalled at 05:04Z,
+              07:57Z and again before 20:03Z; nothing produced - no Mac PR opened or updated today, its one model attempt (Ollama on the
+              single intake row of #1354) stopped at 20:03:08Z after two partial edits; its build tick starved by its own three claimed
+              rows (17b in #1424 and 26 in #1219, both unmoved since early October; 17c behind the 2026-10-21 claim branch and an open
+              hand); 11 cloud-to-mac messages unacknowledged, the oldest 15 days. The mail's first asks of the brain: register itself (a
+              mac-local-brain row in docs/agent/scheduled-routines.json citing this directive, which the cloud inspects), acknowledge
+              its inbox, clear or retry 17c, move or close #1424 and #1219, and finish or close the handed-over cloud branches and PRs
+              #1585, #1586, #1611. Owner queue: #1556 (lib/), signalgrid-mcp #15-#17, the eight OWNER DECISION rows from #1600, row 50
+              vs 53, the Dependabot queue decision, DR-061/062/063 and now DR-064 (all proposed, owner-merge).
+TIERS THIS SESSION: the coordinating session wrote this record, the note, the mail and the proposal itself (docs and lane mail, no
+              engineering stage); no worker, review or refute was run.
+PREVIOUSLY:   2026-10-23 (cloud lane, 03:30Z) - OWNER: LOCAL-FIRST. THE MAC BRAIN TAKES EVERY OPEN BUILD ROUND; THE CLOUD LANDS GREEN PRs AND ANSWERS ASKS.
+              Owner (verbatim, 03:30Z): 'Hey please make sure all of these get offloaded to the new local side first then going
+              forward it will ask for you if needed but that for much higher or even extreme use cases.' Done on that word at
+              03:32-03:39Z: the cloud stopped its two just-started rounds (plan re-measure r2, backlog-landing r5), interrupted
+              its idle worker, refilled nothing, pushed every stopped branch (claude/plan-remeasure-20261023 @ ef7292fab,
+              claude/build-backlog-landing-skill @ 213c8618c, claude/build-tick-followup-1593 @ 3f96ff27) and mailed the Mac
+              the handoff (PR #1614, send cloud-owner-directive-03-30z-local-first-the-mac): eight items, each with branch, tip,
+              latest verdict comment and what remains - #1585 (round 7 finishing in the cloud, then the Mac's), #1586 (CI green,
+              the cloud's landing refute r8 finishing), draft #1611 (round 2 the Mac's), the three pushed branches above, the
+              local-brain capabilities contract (cloud r3 finishing, then the Mac's; OWNER_DECISION stays a draft) and the
+              worker slot B87 freed (not refilled). What the cloud keeps: DR-037 landings of green PRs, the hourly steward and
+              2-hourly forward-build heartbeats, the honest report; it builds or reviews only on the Mac's ask (lane mail or a
+              hand with whoCanUnblock 'cloud lane'), for the higher or extreme cases. Landed this window under DR-037: #1559 at
+              808ee24c (counted; the determinism gate's clock-spelling catalogue, 14 rounds) plus lane-mail #1607 #1608 #1609
+              #1610 #1612. Codex at its review usage limit since 2026-10-22 23:41Z; the judgment-tier refutes were the only
+              independent review. Owner queue: #1556 (lib/), signalgrid-mcp #15-#17, the eight OWNER DECISION rows from #1600,
+              row 50 vs 53 (the committed-heartbeat design), the backlog-landing PR (owner-merge) when it opens.
+              LESSONS (memory): compare branch times as epochs, never ISO strings with offsets (the moved-branch loop missed the
+              Mac's tick branch); never chain && on grep -c (exit 1 on zero matches aborted a merge script); stamp in-flight
+              text only from reads taken in the same minute.
+TIERS THIS SESSION: the coordinating session delivered the mail and landed the PRs itself; the three finishing reviews run on the
+              judgment tier, the two finishing builds (B92's round 7, the local-brain round 3) on the build tier, per DR-047.
+PREVIOUSLY:   2026-10-16 (cloud lane; window 2026-10-15 22:07:46Z-2026-10-16 04:29:46Z) - THIRTEEN LANDINGS; READINESS 0% ON THE TIP, DIMENSION (b) 0% BY DESIGN
               UNTIL THE MAC'S ONE RE-MINT (ASKED IN #1536).
               LANDINGS: every first-parent merge in the window, in merged_at order. Window query: `git log origin/SignalGrid_Alpha --first-parent --merges --since=2026-10-15T22:07:46Z --until=2026-10-16T04:29:46Z` prints 13 lines. Merged sha, UTC merged_at and gating id from `gh api .../pulls/N` and `.../check-runs/<id>`. The same window holds 17 direct, non-merge commits, all Mac heartbeats ("Lane mail (mac): heartbeat mac-lane-tick"), which are not PR landings.
               #1529 f304ca4d (22:42:56Z, the 22:11Z forward-build heartbeat; gating 116703665804); #1530 f8625295 (23:49:32Z, the 23:24Z steward keepalive, quiet; gating 116726065910); #1460 cc910439 (00:28:14Z, a check-gate's --self-test that no step runs is run by a gate; gating 116735582504, Mac-only 116735581757); #1531 6b97d0ac (00:33:15Z, the 00:11Z forward-build heartbeat; gating 116741518825); #1532 468fd3e0 (00:43:57Z, the 2026-10-15 docs batch; gating 116741851860, Mac-only 116741851749); #1533 e6795df0 (01:48:58Z, the 01:28Z steward keepalive; gating 116764648248); #1535 1ed88f9f (02:30:36Z, the 02:11Z forward-build heartbeat; gating 116775327913); #1504 2b7f81f3 (02:51:27Z, url-guard and redirect hand mutants pinned in proof:emitter-discipline, proof 139 to 150, five landing-refute rounds, merged head ca89f108 tree-identical to the verified head 9613ac61; the sync manifest moved v96 3c69fedd to v97 aa9ce381438ecb26; gating 116776717682, Mac-only 116776521794); #1534 dd3ba58f (03:06:14Z, the mutation sweep's shard-3 root cause, cost-balanced partition; gating 116782022894, Mac-only 116782022240); #1536 06e494a1 (03:13:57Z, the ONE live-evidence re-mint ask to the Mac lane after the manifest move, retiring the refresh portions of the 2026-10-08 and 2026-10-09 messages; gating 116787586536); #1537 7fd78b48 (03:29:32Z, Mac tick mac/tick-20261016T025332Z, "objective loop: escalate", merged by the steward; gating 116786409708); #1538 1efb3fdd (03:55:57Z, the steward's 03:25Z non-quiet heartbeat; gating 116796976650); #1539 511c0153 (04:29:46Z, the 04:11Z forward-build heartbeat; gating 116807305698).

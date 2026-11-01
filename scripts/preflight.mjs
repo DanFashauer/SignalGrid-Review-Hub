@@ -87,6 +87,7 @@ const STEPS = [
   { name: "Docker carries every install-hook entrypoint", cmd: ["node", "scripts/check-docker-lifecycle-copy.mjs"] },
   { name: "Invariant review self-test (a default-less switch / stray clock read must fail)", cmd: ["node", "scripts/review-invariants.mjs", "--self-test"] },
   { name: "Invariant review (fail-closed / determinism / Assist / truth)", cmd: ["node", "scripts/review-invariants.mjs"] },
+  { name: "Clock-spelling matcher mutation guard (every listed mutant of the shared matcher must fail its self-test)", cmd: ["node", "scripts/clock-spellings-mutants.mjs"] },
   // Shell was the only language here with no static analysis: CodeQL takes JS/TS,
   // tsc takes types, gitleaks takes secrets, the proofs take behaviour. See
   // scripts/check-shell.mjs for why the floor is `warning` and why the Mac lane's
@@ -109,6 +110,8 @@ const STEPS = [
   { name: "Staged Mac worker self-test (triage, review, limits and transport)", cmd: ["node", "scripts/mac/build-tick-stages.mjs", "--self-test"] },
   { name: "Local worker job-state proofs", cmd: ["node", "scripts/mac/local-brain/test/job-state.test.mjs"] },
   { name: "Local worker task-selector proofs", cmd: ["node", "scripts/mac/local-brain/test/task-selector.test.mjs"] },
+  { name: "Local worker task-selector C0 regressions", cmd: ["node", "scripts/mac/local-brain/test/task-selector-control-scope.test.mjs"] },
+  { name: "Local worker task-selector C0 proof envelope", cmd: ["node", "scripts/check-local-worker-task-selector-proof.mjs"] },
   { name: "Local worker proof-policy proofs", cmd: ["node", "scripts/mac/local-brain/test/proof-policy.test.mjs"] },
   // DR-060 rule 3, first slice: docs/agent/mcp-roster.json names which lane or
   // first-party skill may call which MCP server, with signalgrid-mcp's tool count
@@ -641,7 +644,7 @@ const STEPS = [
   { name: "API integration test (boots the server)", cmd: ["pnpm", "run", "test:api"] },
   // The review console's own node:test suite (policy-test-set status, facility-graph layout);
   // the test-execution gate refused these files while nothing reached them.
-  { name: "Console + PWA unit tests (policyTests, facilityGraphLayout, signal-tone)", cmd: ["pnpm", "run", "test:console"] },
+  { name: "Console + PWA unit tests (policyTests, facilityGraphLayout, outcomeTone, signal-tone)", cmd: ["pnpm", "run", "test:console"] },
   // The MCP server's own node:test suite (wire-visible tool/resource contract +
   // read-only annotations, incl. the not-read-only bruno_collection_run). It sat
   // executed by no lane until 2026-09-02; wired here and in CI beside the

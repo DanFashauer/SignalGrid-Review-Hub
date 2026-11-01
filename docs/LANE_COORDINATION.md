@@ -87,7 +87,7 @@ atomic executable-file pin; the host must protect the runner and its dependencie
 
 The lane tick
 never builds. A second launchd job, `scripts/mac/build-tick.sh`
-(`bash scripts/mac/install-build-tick.sh`, every 3 hours), does nothing at all
+(`bash scripts/mac/install-build-tick.sh`, retrying every 5 minutes), does nothing at all
 while it is paused. Each run first pins mainline ONCE: it asks the real remote
 for SignalGrid_Alpha's sha (`git ls-remote`), and every later step (the re-exec of
 its own script, the build clone, the diff the reviewer reads, the changed-path and
@@ -308,7 +308,11 @@ target — the same reasoning behind that bench's own 6,000x floor headroom.
    merges a change to the launch profile / launch-claims gate / publication boundary,
    and never deletes a branch. The Mac lane's landing PRs are merged by the cloud
    only when the Mac asked for it in mail (as #653 did). The first landings under
-   this rule: #656, #657, #653, #649, #654 on 2026-09-12.
+   this rule: #656, #657, #653, #649, #654 on 2026-09-12. DR-061 (owner-directed
+   2026-09-29) extends lane merges to DECISION_PATH PRs under two added conditions —
+   an adversarial Opus review by an agent that did not author the change, and an
+   executed counterexample quoted in the body; its rule 2 paths stay the owner's
+   merge. The landing skill carries the full text.
 8. **Evidence age is read from `mintedAt` inside the artifact, never from the file's git date (2026-10-15).** The re-mint of
    `artifacts/live-evidence/mac-run.json` landed via tick PR #1522 with `mintedAt` 2026-10-15T16:33:53.511Z, read with
    `node -e 'console.log(JSON.parse(require("fs").readFileSync("artifacts/live-evidence/mac-run.json","utf8")).mintedAt)'`.
@@ -375,6 +379,15 @@ fixture tree; preflight and CI run it.
 - The lane reads a heartbeat delivered under two hours after the prior one as a non-quiet delivery only, never as "also the keepalive".
 - The lane marks a draft PR ready only when it is prepared for another round, because marking it ready triggers a Codex review whose comments wake the branch worker.
 - Every landing refute re-runs the earlier heads' flagged plants on the new head before a ship, because a fix that widens a gate's recognition can silently re-open a fail-open case.
+
+### Operating notes, 2026-10-23 (owner directive: the local second brain runs everything; the cloud and Codex inspect and approve)
+
+Owner, 2026-10-23 about 23:00Z, verbatim: *"Need to offload and let the local agent run everything and escalate to you or codex when it's needed for final inspection and approval for repo everything else is offloaded locally using second brain period …"* — the full text is in the `docs/agent/LOOP.md` STATE block of that day. It widens the 03:30Z local-first directive recorded there.
+
+- **The Mac's local second brain is the primary executor.** It runs every build round, review round, test, app build and company-site task itself, with whatever local tooling it needs, and decides what to work on from the objective state and the owner's inputs. Its runtime lives outside this tree (the 2026-10-22 intake row); it writes to this tree only through the Mac lane's registered channels — lane mail, hands, heartbeats, `mac/*` branches and PRs.
+- **The cloud lane and Codex are final inspection and approval for the repository.** The cloud builds nothing and dispatches nothing of its own. It acts on an escalation from the brain through one of three channels: (1) a lane message addressed to cloud — a comment on the mailbox PR (`docs/agent/lane-mailbox.json`) wakes it at once; (2) a raised hand with `whoCanUnblock: "cloud lane"`; (3) a sentence in a PR body asking the cloud to land it. On an escalation it reviews the exact head and lands under DR-037's five conditions, or returns its findings on the PR. `@codex review` on a PR requests Codex.
+- **What the cloud keeps running**, because the registry and the raised-hands gate expect them: the hourly steward cycle (reads Mac mail and branches, lands lane-mail and tick PRs, escalates a silent Mac to the owner), the 2-hourly forward-build heartbeat as a report of the pool with no refill, and the daily hygiene sweep.
+- **What does not change:** DR-037's five landing conditions and its owner-only surfaces (launch profile, launch-claims gate, publication boundary, decision records, `OWNER_RESERVED`); DR-054, a stuck unit raises a hand on either machine; claim discipline; the second-revision loop above for mail, acks and heartbeats. Authority for the brain's own writes is a registry row in `docs/agent/scheduled-routines.json` citing the owner's words, which the brain proposes and the cloud inspects; until it lands, the brain's deliveries ride the registered Mac lane identity, as they do today.
 
 ## Collision log
 

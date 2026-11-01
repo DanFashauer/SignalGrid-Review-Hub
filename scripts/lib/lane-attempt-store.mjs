@@ -550,16 +550,38 @@ export function setAsideRefusedAttempt(root, directory, name, exit, successor = 
     else writeFileSync(markerPath, marker, { flag: "wx", mode: 0o600 });
     return { attempt: name, exit: code, n, successor, retryRoot: chainRoot };
   }
+  resumeArchivals(directory);
   const taken = new Set(readdirSync(refused));
   let n = 1;
   while ([...taken].some((file) => file.startsWith(`${name}.refused-${n}.`))) n++;
   if (n > MAX_REFUSED_RETRIES) return cap(refused, name, n);
-  for (const file of readdirSync(directory)) {
-    if (!file.startsWith(name + ".") || file.endsWith(".repair-request.json")) continue;
-    linkSync(join(directory, file), join(refused, `${name}.refused-${n}${file.slice(name.length)}`));
-    unlinkSync(join(directory, file));
-  }
+  // Resumable: the operation is recorded first and its marker removed last, so an
+  // interrupted move is completed by the next tick before anything reads the id.
+  const files = readdirSync(directory).filter((file) => file.startsWith(name + ".") && !file.endsWith(".repair-request.json"));
+  writeFileSync(join(refused, name + ".archiving"), JSON.stringify({ name, n, files }) + "\n", { flag: "wx", mode: 0o600, flush: true });
+  resumeArchivals(directory);
   return { attempt: name, exit: code, n, setAsideAs: `refused/${name}.refused-${n}` };
+}
+
+// Complete every recorded notice archival (refused/<name>.archiving). Each step is
+// idempotent: a file already linked is only unlinked from its source, a file already
+// moved is skipped. Callers run this before any consumed-by-id check.
+export function resumeArchivals(directory) {
+  const refused = join(directory, "refused");
+  let names = [];
+  try { names = readdirSync(refused); } catch (error) { if (error.code === "ENOENT") return; throw error; }
+  for (const marker of names.filter((file) => file.endsWith(".archiving"))) {
+    const { name, n, files } = JSON.parse(readFileSync(join(refused, marker), "utf8"));
+    for (const file of files) {
+      const source = join(directory, file), target = join(refused, `${name}.refused-${n}${file.slice(name.length)}`);
+      let haveSource = true, haveTarget = true;
+      try { lstatSync(source); } catch (error) { if (error.code !== "ENOENT") throw error; haveSource = false; }
+      try { lstatSync(target); } catch (error) { if (error.code !== "ENOENT") throw error; haveTarget = false; }
+      if (haveSource && !haveTarget) linkSync(source, target);
+      if (haveSource) unlinkSync(source);
+    }
+    unlinkSync(join(refused, marker));
+  }
 }
 
 // A liveness hold must not be silent (DR-054): write one hand per held cause through
@@ -568,8 +590,21 @@ export function setAsideRefusedAttempt(root, directory, name, exit, successor = 
 export function raiseTickHold(root, message) {
   const directory = deliveryRecordDirectory(root), id = "tick-hold-" + digest(Buffer.from(message));
   const prefix = join(directory, id);
-  try { writeFileSync(prefix + ".attempt.json", JSON.stringify({ state: "attempted; pending exact readback", receipt: prefix + ".submission.json", cause: message }) + "\n", { flag: "wx", mode: 0o600, flush: true }); }
-  catch (error) { if (error.code === "EEXIST") return `hand ${id} already raised`; throw error; }
+  let retryOf = null;
+  const write = () => writeFileSync(prefix + ".attempt.json", JSON.stringify({ state: "attempted; pending exact readback", receipt: prefix + ".submission.json", cause: message, ...(retryOf ? { retryOf } : {}) }) + "\n", { flag: "wx", mode: 0o600, flush: true });
+  try { write(); }
+  catch (error) {
+    if (error.code !== "EEXIST") throw error;
+    // An earlier hold notification that published nothing (exit 1/2, or killed before
+    // its exit) is retried under the shared readback-bound rule; anything else stays
+    // readback-only.
+    let exit = "none";
+    try { exit = readFileSync(prefix + ".exit", "utf8").trim(); } catch (missing) { if (missing.code !== "ENOENT") throw missing; }
+    if (!["none", "1", "2"].includes(exit)) return `hand ${id} already raised`;
+    retryOf = setAsideRefusedAttempt(root, directory, id, exit, "move");
+    if (!retryOf?.setAsideAs) return `hand ${id} already raised`;
+    write();
+  }
   const op = { op: "raise", id, who: "mac lane", domain: "lane", where: "scripts/mac/lane-tick.sh",
     doing: "the unattended Mac lane tick (scripts/mac/lane-tick.sh)",
     blocked: "Tick recovery is holding: " + message.replace(/\/(?:Users|home)\/[^/\s:]+/g, "<HOME>"),

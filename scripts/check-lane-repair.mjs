@@ -199,6 +199,18 @@ for(const [id,mode] of [['R19','present'],['R20','fail']])frozen(id,'a refused r
  acceptOwned(owned(f,notifyCommand(f,r)+'; :',{extra:{FIXTURE_LS_REMOTE:mode}}));oneRepair(f);preserved(o.prefix,o.initial);
  assert.equal(existsSync(join(f.store,'refused')),false,'nothing is set aside without proof of non-publication');
 });
+frozen('R21','an archival interrupted after its first move is completed by the next tick, and the retry proceeds',f=>{
+ const o=original(f,'heartbeat'),r=request(f,o);acceptOwned(owned(f,notifyCommand(f,r)+'; :',{extra:{FIXTURE_TRANSPORT_MODE:'exit1',FIXTURE_LS_REMOTE:'absent'}}));oneRepair(f);
+ const id=r.data.id,refused=join(f.store,'refused'),moved=readdirSync(refused).filter(n=>n.startsWith(id+'.refused-1.'));assert.ok(moved.length>=3,'the refused notice was archived');
+ // Rebuild the state of a tick killed right after moving .attempt.json: the rest are back in place, the operation marker remains.
+ const files=moved.map(n=>id+n.slice((id+'.refused-1').length));
+ for(const n of moved)if(!n.endsWith('.attempt.json'))renameSync(join(refused,n),join(f.store,id+n.slice((id+'.refused-1').length)));
+ writeFileSync(join(refused,id+'.archiving'),JSON.stringify({name:id,n:1,files})+'\n',{mode:0o600});
+ acceptOwned(owned(f,notifyCommand(f,r)+'; :',{extra:{FIXTURE_LS_REMOTE:'absent'}}));oneRepair(f,2);
+ assert.equal(existsSync(join(refused,id+'.archiving')),false,'the operation marker is removed last');
+ for(const n of files)assert.ok(existsSync(join(refused,id+'.refused-1'+n.slice(id.length))),'archived: '+n);
+ preserved(o.prefix,o.initial);
+});
 frozen('R09','a signaled local repair child never creates a replacement notification identity',f=>{
  const o=original(f,'heartbeat'),r=request(f,o);acceptOwned(owned(f,notifyCommand(f,r)+'; :',{extra:{FIXTURE_TRANSPORT_MODE:'signal'}}));oneRepair(f);
  const again=request(f,o);assert.equal(again.path,r.path);acceptOwned(owned(f,notifyCommand(f,again)+'; :'));oneRepair(f);preserved(o.prefix,o.initial);

@@ -554,6 +554,18 @@ check('a paused initializer resuming never removes a replacement owner\'s lock',
  const status=spawnSync('/bin/sh',['-c','while kill -0 '+child.pid+' 2>/dev/null; do sleep 0.1; done']);assert.equal(status.status,0);
  assert.equal(readFileSync(lock,'utf8'),replacement,'the resumed initializer leaves the replacement lock alone');
 });
+for(const [label,receipt,want] of [['without a receipt is raised again',false,2],['with a receipt whose ref is on origin stays already raised',true,1]])check('a hold notification refused (exit 1) '+label,f=>{
+ const calls=join(f.parent,'hold-calls'),bin=join(f.parent,'hold-bin');mkdirSync(bin);
+ writeFileSync(join(f.root,'scripts/lane-deliver.mjs'),`import fs from 'node:fs';const a=process.argv.slice(2);fs.appendFileSync(${JSON.stringify(calls)},'call\\n');if(process.env.HOLD_RECEIPT)fs.writeFileSync(a[a.indexOf('--receipt')+1],JSON.stringify({version:1,target:'lane/mac-mail-20261101-010000Z-0123456789ab'})+'\\n');process.exit(Number(process.env.HOLD_RC||0));`);
+ writeFileSync(join(bin,'git'),'#!/bin/sh\nif [ "$1" = ls-remote ]; then printf \'%s\\t%s\\n\' 0123456789012345678901234567890123456789 "$4"; exit 0; fi\nexec '+GIT+' "$@"\n',{mode:0o755});
+ const module=join(f.root,'scripts/lib/lane-attempt-store.mjs'),env={PATH:bin+':'+dirname(process.execPath)+':/usr/bin:/bin'};
+ const first=run(process.execPath,[module,'raise-hold',f.root,'original tick shell 1 is still alive; holding'],f.root,{...env,HOLD_RC:'1',...(receipt?{HOLD_RECEIPT:'1'}:{})});
+ assert.equal(first.status,0,first.stderr);assert.match(first.stdout,/written \(lane-deliver exit 1\)/);
+ const second=run(process.execPath,[module,'raise-hold',f.root,'original tick shell 1 is still alive; holding'],f.root,{...env,HOLD_RC:'0'});
+ assert.equal(second.status,0,second.stderr);assert.equal(readFileSync(calls,'utf8').trim().split('\n').length,want);
+ assert.match(second.stdout,want===2?/written \(lane-deliver exit 0\)/:/already raised/);
+ if(want===2){const third=run(process.execPath,[module,'raise-hold',f.root,'original tick shell 1 is still alive; holding'],f.root,{...env,HOLD_RC:'0'});assert.match(third.stdout,/already raised/);assert.equal(readFileSync(calls,'utf8').trim().split('\n').length,2);}
+});
 check('a store directory left without its marker is held, never reset',f=>{
  const module=join(f.root,'scripts/lib/lane-attempt-store.mjs');
  const directory=run(process.execPath,[module,'path',f.root],f.root).stdout.trim();assert.ok(directory);
@@ -650,9 +662,9 @@ function leaseContext(f){
  fs.writeFileSync=function(...v){gate(v[0]);return Reflect.apply(write,this,v)};
  require('node:module').syncBuiltinESMExports();\n`);
  const children=[];
- function start(label,{checkout=f.root,gate='',pre='',detached=false}={}){
+ function start(label,{checkout=f.root,gate='',pre='',detached=false,dry=1}={}){
   const temp=join(f.parent,label+'-tmp');mkdirSync(temp);
-  const script=`set -u\nDRY=1\nREPO_ROOT="$FIXTURE_CHECKOUT"\nRECORD_DIR="$TICK_TEST_STORE"\nsay(){ printf '%s\\n' "$1"; }\n${source.slice(a,b)}\n${pre}\nprintf '{"event":"ENTER"}\\n' >&4\nread -r release\nexit 0\n`;
+  const script=`set -u\nDRY=${dry}\nREPO_ROOT="$FIXTURE_CHECKOUT"\nRECORD_DIR="$TICK_TEST_STORE"\nsay(){ printf '%s\\n' "$1"; }\n${source.slice(a,b)}\n${pre}\nprintf '{"event":"ENTER"}\\n' >&4\nread -r release\nexit 0\n`;
   const env={PATH:dirname(process.execPath)+':/usr/bin:/bin',HOME:f.parent,TMPDIR:temp,
    GIT_CONFIG_NOSYSTEM:'1',GIT_CONFIG_GLOBAL:'/dev/null',FIXTURE_CHECKOUT:checkout,
    TICK_TEST_STORE:store,TICK_TEST_GATE_MODE:gate,TICK_TEST_GATE_USED:join(f.parent,label+'-gate-used'),
@@ -723,6 +735,12 @@ await leaseControl('preexisting legacy tick lock with a dead PID is renamed asid
  assert.equal(existsSync(old),false);const aside=readdirSync(c.store).filter(n=>n.startsWith('tick.lock.abandoned-'));assert.equal(aside.length,1,'kept aside, never deleted');
  assert.deepEqual(readFileSync(join(c.store,aside[0],'pid')),before);
 });
+await leaseControl('a dry-run hold says what it would raise and starts no delivery',async(f,c)=>{
+ const old=join(c.store,'tick.lock');mkdirSync(old);writeFileSync(join(old,'pid'),String(process.pid)+'\n');
+ const b=c.start('dry-hold');assert.equal((await b.next()).event,'CLOSED');await b.closed;
+ assert.match(b.stdout,/dry-run: would raise a hand: tick recovery holding/);assert.doesNotMatch(b.stdout,/hand tick-hold-/);
+ assert.equal(readdirSync(c.store).some(n=>n.startsWith('tick-hold-')),false,'no hand record, no delivery child, under --dry-run');
+});
 // No positive evidence the holder is gone (live, missing or corrupt PID): held untouched.
 for(const kind of ['live','missing','corrupt'])await leaseControl('preexisting legacy tick lock with a '+kind+' PID stays held',async(f,c)=>{
  const old=join(c.store,'tick.lock');mkdirSync(old);
@@ -743,12 +761,16 @@ await leaseControl('a live PID with the recorded start time holds and raises a h
  assert.equal(a.child.kill('SIGKILL'),true);await a.closed;
  const start=run('/bin/ps',['-o','lstart=','-p',String(process.pid)],f.root).stdout.trim().replace(/\s+/g,' ');assert.ok(start);
  rewriteOwner(c,open,{shellPid:process.pid,shellStart:start,pgid:undefined});
- c.kernelAvailable();const original=leaseTree(c.store),b=c.start('same-B');assert.equal((await b.next()).event,'CLOSED');await b.closed;
+ c.kernelAvailable();const original=leaseTree(c.store),b=c.start('same-B',{dry:0});assert.equal((await b.next()).event,'CLOSED');await b.closed;
  assert.match(b.stdout+b.stderr,/still alive; holding/);assert.match(b.stdout,/RAISED HAND: tick recovery holding; hand tick-hold-[a-f0-9]{64} written/);
  assert.deepEqual(held(leaseTree(c.store)),held(original),'the live original is never finalized');assert.equal(c.state(),'OPEN');
  const ops=readdirSync(c.store).filter(n=>/^tick-hold-[a-f0-9]{64}\.ops\.json$/.test(n));assert.equal(ops.length,1,'exactly one hand record for the held cause');
  const op=JSON.parse(readFileSync(join(c.store,ops[0]),'utf8'))[0];assert.equal(op.op,'raise');assert.ok(op.blocked.includes(String(process.pid))&&op.blocked.includes(start),'the hand names the PID and its start time');
- const again=c.start('same-C');assert.equal((await again.next()).event,'CLOSED');await again.closed;assert.match(again.stdout,/already raised/);
+ // This fixture has no lane-deliver, so the hand's delivery exits 1 before any receipt: published
+ // nothing, so the next hold raises it again (shared retry rule), keeping the first aside.
+ const again=c.start('same-C',{dry:0});assert.equal((await again.next()).event,'CLOSED');await again.closed;
+ assert.match(again.stdout,/hand tick-hold-[a-f0-9]{64} written \(lane-deliver exit 1\)/);
+ assert.ok(existsSync(join(c.store,'refused',ops[0].replace('.ops.json','.refused-1.attempt.json'))),'the refused first hand is kept aside');
 });
 await leaseControl('an OPEN slot whose original shell is still alive stays held',async(f,c)=>{
  const a=c.start('live-A');assert.equal((await a.next()).event,'ENTER');const open=JSON.parse(readFileSync(c.slot,'utf8'));

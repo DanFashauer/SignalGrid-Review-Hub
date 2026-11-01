@@ -248,9 +248,10 @@ class RefusalRepairHandControls(unittest.TestCase):
         owner = lock / 'owner'; owner.write_bytes(b'held original legacy evidence\n')
         before = owner.read_bytes(); result = f.heartbeat()
         self.assertNotEqual(result.returncode, 0)
-        # The hold is visible (DR-054): exactly one tick-hold hand, nothing else.
-        ops = f.hand_ops(); self.assertEqual(len(ops), 1, ops)
-        self.assertRegex(ops[0]['id'], r'^tick-hold-[a-f0-9]{64}$'); self.assertIn('holding', ops[0]['blocked'])
+        # This fixture runs the guard block with DRY=1, so the hold names the hand it
+        # would raise and starts no delivery (the hand itself: check-lane-delivery.mjs).
+        self.assertIn('dry-run: would raise a hand: tick recovery holding', result.stdout)
+        self.assertEqual(f.hand_ops(), [])
         self.assertTrue(lock.is_dir()); self.assertEqual(owner.read_bytes(), before)
         f.assert_original_preserved()
 

@@ -123,7 +123,9 @@ if [ "$_tick_acquire_status" != "0" ]; then
   # A liveness hold (original shell alive, its group busy, or EPERM) is made visible
   # on the Hub: one hand per held cause, through the ordinary hand path (DR-054).
   case "$_tick_acquire_msg" in
-    *holding*) say "RAISED HAND: tick recovery holding; $(node "$TICK_LOCK_HELPER" raise-hold "$TICK_LOCK_ROOT" "$_tick_acquire_msg" 2>&1)" ;;
+    *holding*)
+      if [ "${DRY:-0}" = "1" ]; then say "dry-run: would raise a hand: tick recovery holding; $_tick_acquire_msg"
+      else say "RAISED HAND: tick recovery holding; $(node "$TICK_LOCK_HELPER" raise-hold "$TICK_LOCK_ROOT" "$_tick_acquire_msg" 2>&1)"; fi ;;
   esac
   exit 1
 fi
@@ -389,7 +391,7 @@ heartbeat() {
     reason = observed.check_state === "failed" ? "terminal failed check" : observed.merge_state === "BEHIND" ? "behind canonical" : observed.age_seconds >= 3600 ? "pending at least one hour" : null;
     }
     if (!reason) { console.log("pending heartbeat metadata is current; no new notification needed"); process.exit(0); }
-    const { checkTickOwner, setAsideRefusedAttempt } = await import(require("node:url").pathToFileURL(path.join(repo, "scripts/lib/lane-attempt-store.mjs")).href);
+    const { checkTickOwner, resumeArchivals, setAsideRefusedAttempt } = await import(require("node:url").pathToFileURL(path.join(repo, "scripts/lib/lane-attempt-store.mjs")).href);
     if (typeof checkTickOwner !== "function") throw Error("qualified read-only owner check unavailable");
     function activeOwner() {
       const owner = checkTickOwner(guardRoot, guardToken, shellPid), named = fs.lstatSync(records);
@@ -415,6 +417,7 @@ heartbeat() {
       { version: 1, kind: "pending-heartbeat-notification", attempt, receipt_sha256: sha(raw), repository: original.repository,
       target: original.target, original_head: original.head, pr_number: observed.pr_number, store: { dev: store.dev, ino: store.ino } };
     let retryOf = null;
+    if (typeof resumeArchivals === "function") resumeArchivals(records); // finish an interrupted notice archival first
     if (Object.values(files).some(exists)) {
       const prior = JSON.parse(read(files.intent).toString("utf8"));
       if (JSON.stringify(prior.binding) !== JSON.stringify(binding)) throw Error("notification intent binding differs");

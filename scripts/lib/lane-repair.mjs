@@ -8,7 +8,7 @@ import { closeSync, constants, fstatSync, fsyncSync, lstatSync, openSync,
   opendirSync, readdirSync, readFileSync, readSync, realpathSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { checkTickOwner, deliveryRecordDirectory, setAsideRefusedAttempt } from './lane-attempt-store.mjs';
+import { checkTickOwner, deliveryRecordDirectory, resumeArchivals, setAsideRefusedAttempt } from './lane-attempt-store.mjs';
 
 const MAX_RECORD = 1024 * 1024;
 const MAX_TOTAL = 16 * MAX_RECORD;
@@ -262,6 +262,7 @@ function refusedNotices(store, id) {
   catch (error) { if (error.code === 'ENOENT') return []; throw error; }
 }
 function inventory(store) {
+  resumeArchivals(store.directory); // an interrupted notice archival must not read as consumed
   const requests = [], consumed = new Set(), directory = opendirSync(store.directory);
   let count = 0;
   try {

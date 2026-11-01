@@ -44,6 +44,8 @@
 // against its dynamic-group rules), reported to the fabric — this dimension never
 // re-implements a vendor's grouping engine, it grades the reported outcome.
 
+import type { FamilyAction } from "../action-ladder";
+
 /** Is the device assigned to any policy-bearing group/team at all? */
 export type BindingState = "bound" | "unbound" | "unknown";
 
@@ -130,7 +132,7 @@ export type PolicyBindingPosture =
   | "binding_disabled" // bound to a policy that neither acts nor observes
   | "binding_unverified"; // any axis unknown / malformed
 
-export type PolicyBindingAction = "none" | "monitor" | "step_up" | "alert" | "restrict" | "escalate";
+export type PolicyBindingAction = FamilyAction;
 
 export type PolicyBindingReasonCode =
   | "BOUND_CORRECTLY"

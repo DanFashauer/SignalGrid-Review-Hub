@@ -30,6 +30,7 @@ import {
 } from "@workspace/integrations/passkey-assurance";
 import { enumerateGrantSafety, productOf } from "./lib/grant-safety.js";
 import { checkDefaultTransport, checkLiveGateIsolated, withRecordedFetch } from "./lib/live-gate.js";
+import { FAMILY_ACTIONS } from "@workspace/integrations/action-ladder";
 
 let passed = 0;
 const failures: string[] = [];
@@ -739,6 +740,6 @@ check("transport — the response-shape probes above were OBSERVABLE: every stub
   observedProbeRequests.every((r) => r.url === `${TRANSPORT_ROOT}/identityRef-1` && bearerOf(r.init) === "Bearer t"));
 
 const total = passed + failures.length;
-console.log(`figures=normalizedCombos=${normRes.combos},rawCombos=${rawRes.combos},grantingCombos=${normRes.noneCount},syncedGrantingCombos=${syncedGrants},ladderRungs=6`);
+console.log(`figures=normalizedCombos=${normRes.combos},rawCombos=${rawRes.combos},grantingCombos=${normRes.noneCount},syncedGrantingCombos=${syncedGrants},ladderRungs=${FAMILY_ACTIONS.length}`);
 console.log(`summary=${failures.length === 0 ? "pass" : "fail"} (${passed}/${total})`);
 if (failures.length > 0) { console.error("Failed checks:"); for (const f of failures) console.error(`  - ${f}`); process.exitCode = 1; }

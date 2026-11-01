@@ -2088,7 +2088,7 @@ authoritative decision; this record cites that rule rather than restating it.
 
 **The call.**
 
-1. **Scope.** The building is the first scope, not the boundary. The same grid spans every
+1. **Scope.** The building is the first scope, not the boundary. **[Amended 2026-09-30 by DR-062: the company is the scope, legacy systems included.]** The same grid spans every
    system the company runs that exposes an API or SDK — for the devices staff use, the
    admins who run those systems, and the workflows between them. **[Amended 2026-09-10 by DR-036:
    a company is many sites and buildings; the grid spans all of them, and a site is
@@ -3492,7 +3492,7 @@ Proven by ADDING assertions to the existing, already-registered `scripts/src/eve
 
 **Reversal / amendment.** The owner reverses by saying so; the rule is then struck here with the date and the rows already produced under it stand as records.
 
-## DR-055 — The owner's 2026-09-23 puck flow is recorded as a REFINEMENT of the DR-043 hypothesis, not a product: keys only on the puck, attach is custody evidence that may start a sign-in, sessions stay with the OS/IdP/VDI broker, return is docking and clearing belongs to the MDM, clinical continuity escalates, and no hardware moves; the owner's 2026-09-24 note adds a one-to-one ASSIGNED-device mode, recorded as a declared input and an assignment check that only tightens (owner-directed 2026-09-23, amended 2026-09-24)
+## DR-055 — The owner's 2026-09-23 puck flow is recorded as a REFINEMENT of the DR-043 hypothesis, not a product: keys only on the puck, attach is custody evidence that may start a sign-in, sessions stay with the OS/IdP/VDI broker, return is docking and clearing belongs to the MDM, clinical continuity escalates, and no hardware moves; the owner's 2026-09-24 note adds a one-to-one ASSIGNED-device mode, recorded as a declared input and an assignment check that only tightens; the owner's 2026-10-02 ARC-kiosk note adds hard-bound-token requirements R1–R6 as design targets, with two questions left open to him (owner-directed 2026-09-23, amended 2026-09-24 and 2026-10-02)
 **Status: an owner-directed record of a hardware HYPOTHESIS refinement.** Every puck, dock, locker, custody and tap-point surface it names is a deferred design target; nothing here is shipped or claimed.
 
 **Question.** On 2026-09-23 the owner described *"the hardware flow I'm thinking for this
@@ -3505,7 +3505,9 @@ open PR #905 (`docs/agent/LOOP.md:1390`–`1392`) and DR-054 by open PR #1019, s
 takes DR-055. It amends nothing in DR-043's text; it adds to it. On 2026-09-24, while this
 record was still unmerged, the owner added a second input (below): the shared-device flow is one
 example use case, and a one-to-one assigned mode sits beside it. The record is amended in place
-to take it; item 6 is the call on it.
+to take it; item 6 is the call on it. On 2026-10-02 the owner added a third (below): an ARC-kiosk
+photo and a note on the puck as a hard-bound token, recorded as direction and design targets, with
+two questions left open to him.
 
 **The input, in one paragraph.** The flow, in the owner's words as the review quotes them.
 **C1** a *"MagSafe-style"* magnetic puck that locks onto the back of the device, shaped like his
@@ -3546,6 +3548,40 @@ critic that re-read the load-bearing facts at their primary sources on 2026-09-2
 material and is not committed; the platform facts in item 6 that it did not re-read were re-read
 for this amendment on 2026-09-24, and the ones nobody re-read are marked unverified where they
 appear.
+
+**The third input (owner, 2026-10-02), recorded as direction — amended in place.** The owner
+pasted a photo of an ARC dispensing kiosk and a sentence about the puck as the single token that
+replaces a badge, key card, 2FA and MFA, is *"hard locked"* to the person it is enrolled to, and
+is cleared only by a factory wipe that only a *"super admin of the system"* can do (quoted whole
+in the hypothesis page's *Credential binding and reset (owner note 2026-10-02; DR-055 amendment)*
+section, which carries requirements R1–R6, the architecture sentence and the never-claim words).
+It changes none of the Call below. It adds requirements, all design targets: a non-exportable key
+accepted only with IdP attestation; the binding is the IdP registration, revoked through the IdP
+and the PACS; replacement is a new keypair; a CTAP 2.1 authenticatorReset is open to whoever
+holds the key and leaves the puck inert, so RE-BINDING is the guarded step; re-bind and revoke
+are **proposed** under two-person authorization, although `lib/dual-control` has no such action
+class today (`lib/dual-control/src/types.ts:33`); and an absent, unknown, wiped or unreadable IdP
+binding reads UNBOUND and never loosens a decision. Two questions are **open and the owner's**,
+raised as a hand on 2026-10-02 (`artifacts/raised-hands/2026-10-02-two-readings-of-the-note-conflict-with-canonical.json`):
+(1) whether the puck is one factor a customer may choose to offer or the required factor, which
+`docs/PURPOSE.md:38` ("the factor is the customer's choice") would have to change to allow; and
+(2) whether "super admin" means the customer's IdP and PACS administrator under dual control or a
+role SignalGrid holds over enrolment and keys, which DR-043 item 2 forbids. The ARC kiosk is a
+candidate read-only custody source (`docs/HARDWARE_PARTNER_MATRIX.md:17`); no connector or
+emulator is recorded. This amendment reaches past the docs-only footprint of the 2026-09-24
+Boundary, and the Boundary below is read with that exception: it also changes the security-absolute
+markers and self-tests in `scripts/check-launch-claims.mjs` (the absolute wording it quotes had no
+guard at all) and the five "not claimable" rows it adds to the claim inventory
+(`docs/agent/CLAIM_INVENTORY.json`, with the derived `docs/CLAIM_INVENTORY.md`); a catalog clause in
+`docs/SIGNAL_SOURCE_CATALOG.md`; the *Kiosk interaction contract* section of
+`docs/PHYSICAL_CUSTODY_SIGNAL_MODEL.md` and a pointer to it in `docs/HARDWARE_PARTNER_MATRIX.md`
+(a partner-facing page, so under the buyer-scope claim gate); backlog row Puck 16; the scan file
+`docs/agent/resource-scans/2026-10-02-arc-kiosk-puck-token.json` with its intake row; one attribution
+in `docs/research/COMPETITIVE_TELEPORT.md` (its "tamper-proof" audit-log phrase is now quoted as
+Teleport's own wording, not verified here); and the regenerated
+`docs/agent/SURFACE_REVIEW_COVERAGE.md`. Nothing under `lib/*`, `/v1`, a connector, a proof, the
+launch profile or any Swift source changes. DR text is owner-reserved: the owner adopts this
+paragraph by merging the pull request that carries it.
 
 **Call.**
 
@@ -3910,7 +3946,8 @@ item 5:
 `native/ios/FLEET_MDM.md` (markdown), `docs/BUILD_BACKLOG.md`,
 `docs/agent/RESOURCE_INTAKE.md` and `docs/agent/DISCOVERY_LOG.md` (prompts only, no count).
 Nothing touches `lib/*`, `/v1`, a connector, a proof, the launch profile, the publication
-boundary, the claim inventory, the docs-sanity denylist or any Swift source. The review's
+boundary, the claim inventory, the docs-sanity denylist or any Swift source (the claim inventory
+and the launch-claims gate are touched by the 2026-10-02 amendment above, and only by it). The review's
 proposed claim guards — denylist entries, claim-inventory pre-registration, and a *"not a session
 broker"* clause beside `docs/POSITIONING.md:73` — belong to a change that owns those surfaces
 and goes through the launch-claims gate; they are not made here. The 2026-09-24 amendment
@@ -3934,6 +3971,10 @@ security-key, `UserRights` CSP, Platform SSO deployment and Apple Wallet badge p
 this amendment on 2026-09-24, and the Conditional Access device-filter page as saved that day — the `check:absence` runs quoted in item 6, and
 PR #1005's branch (`claude/build-dr043-live-attach-rules`) read on 2026-09-24 for its
 `not_applicable` reading.
+For the 2026-10-02 amendment: the photo (session material, not committed; its serial number, support
+phone and support email are in no file), the owner's note quoted whole in the hypothesis page, CTAP
+2.1 §6.6 *authenticatorReset* as fetched 2026-10-02, the scan file with its four confirms, and the
+launch-claims gate run with its self-tests (planted first, then the markers).
 
 **Reversal.** The owner reverses any line of this by saying so. Mechanically: delete this record,
 the *Owner refinement (2026-09-23, DR-055)* section of the hypothesis page, backlog rows Puck 6–9
@@ -3945,7 +3986,15 @@ and item 5's question closes only by the owner's own decision record. Item 6 (th
 amendment) reverses the same way: delete it and its do-not-claim lines, the *Assigned-device mode*
 section of the hypothesis page, rows Puck 10–15, the 2026-09-24 intake row and the assigned-device
 discovery prompts; the platform facts it cites stay true whatever the owner decides, and item
-6(v)'s question closes only by the owner's answer.
+6(v)'s question closes only by the owner's answer. The 2026-10-02 amendment reverses the same way:
+delete its paragraph, the *Credential binding and reset (owner note 2026-10-02; DR-055 amendment)*
+section of the hypothesis page, backlog row Puck 16, the 2026-10-02 ARC intake row and the scan file
+with its regenerated coverage line, the five *docs/SESSION_PUCK_HARDWARE_HYPOTHESIS.md* rows in the
+claim inventory (then regenerate `docs/CLAIM_INVENTORY.md`), the security-absolute alternatives and
+self-tests in `scripts/check-launch-claims.mjs` (the absolute words are then unguarded again, which
+is a loss, not a neutral state), the ARC-class clause in `docs/SIGNAL_SOURCE_CATALOG.md`, the *Kiosk
+interaction contract* section and its pointer in `docs/HARDWARE_PARTNER_MATRIX.md`. The two open
+questions close only by the owner's own answer, on the raised hand.
 
 ## DR-056 — The company brain runs the owner's agentic loop: one declared objective, a deterministic evaluator and ranker, and the Mac tick that already exists (owner-directed 2026-09-24)
 
@@ -4104,6 +4153,71 @@ from the review-hub-ci.yml step and its `CI_WARN_ONLY` entry.
 
 **Reversal.** Delete this record, `scripts/lib/native-build-attestation.mjs` and its preflight/CI rows, the `--e2e`/`--attest` arms of `scripts/mac/linux-web-build.sh`, the `--vm-native-build` arm of `scripts/verify-all.mjs` and the flag in `scripts/lib/sim-operations.mjs`; re-mint the evidence on the Mac and the figure returns to its 19/20 ceiling here, which is the honest number without a Linux run. A weaker binding (skipping the sha, the clean check or the recomputed digest) is not a reversal but a fail-open, and needs its own record.
 
+## DR-058 — Puck 6: a `device_returned` bound to the holder's own credential closes custody without `CUSTODY_REMOVED`; an unauthorized seat release is a torn removal; every unbound return keeps custody open — a deferred design target (cloud lane — proposal, 2026-09-25)
+
+**Status: PROPOSAL — decision-core behaviour, not claimed as current and not Limited GA until merged.** This record changes what `puckVerdict` (`lib/signalgrid-core/src/attach.ts`) returns for a removed credential once the release reading and the return binding are known, and it adds one lifecycle event type to the audit vocabulary. The custody family stays `deferred` in `scripts/launch-profile.mjs`; nothing here claims it ships. The owner approves by merging the one PR that carries this record, or vetoes by not merging (the DR-051 pattern that DR-055 item 4 names for rows Puck 6, 8 and 9).
+
+**Context.** DR-055 records the owner's 2026-09-23 flow: *return is docking*. `docs/SESSION_PUCK_HARDWARE_HYPOTHESIS.md` (the *Candidate fixture rows* table) and BUILD_BACKLOG row *Puck 6* name the gap (all of it a deferred design target): under PR #1005's live attach rules a planned end-of-shift return reads as `removed`, restricts with `CUSTODY_REMOVED`, and — because that live row has no resolution descriptor — escalates, so every shift change would read as an incident. The event contract already names `device_returned` (`lib/event-contract/src/types.ts`) and the timeline detector already reads its absence as "still out"; nothing bound the event to the credential that checked the device out, and `puckVerdict` knew only attached, removed and unknown.
+
+**The question this settles.** What a removal grades to once the receiver says HOW the seat released and the ledger says WHAT the return binds to — and which of those readings may close custody (a deferred design target until merged, and deferred in the launch profile after).
+
+### 1. The rows (deferred until merged)
+
+Deferred until merged. `PuckSituation` gains two inputs, both with a quiet `not_applicable` so every existing row grades exactly as before:
+
+- `release: authorized | unauthorized | unknown | not_applicable` — how the seat released, as the receiver reported it. A tamper or seat-break reading is `unauthorized`.
+- `returned: holder | other_credential | device_absent | unknown | not_applicable` — what a `device_returned` binds to, produced by the new pure `bindReturn(reading, holderCredentialRef)`: the holder's own credential **with a device sensed in the bay** is the only `holder`; no device in the bay is `device_absent` whatever credential carried it; an unreadable credential, unreadable bay sensing, or a holder the ledger cannot name is `unknown`; no return is `not_applicable`.
+
+Graded most-restrictive-first, below the torn-removal row and above the walk-away row (deferred design target — the custody family is not shipping):
+
+| Situation (credential `removed`; deferred design target) | Verdict | Reason code |
+| --- | --- | --- |
+| forced/torn removal (unchanged) | `deny` | `CUSTODY_TORN` |
+| seat released with no authorized release | `deny` | `CUSTODY_TORN` |
+| release reading present but unreadable | `deny` | `CUSTODY_RELEASE_UNKNOWN` |
+| return carried by another credential | `deny` | `CUSTODY_RETURN_UNBOUND` |
+| return claimed, no device sensed in the bay | `restrict` | `CUSTODY_EXCEPTION` |
+| return the ledger cannot read | `restrict` | `CUSTODY_RETURN_UNKNOWN` |
+| return bound to the holder's own credential | `restrict` | `CUSTODY_RETURNED` — custody closed, session ended, nothing to escalate |
+| authorized release, no return (an ordinary walk-away; also the default) | `restrict` | `CUSTODY_REMOVED` (unchanged) |
+
+And one row while the credential is still **seated** (deferred, like the rest): any return reported at all is two planes disagreeing and grades `step_up` / `CUSTODY_STATE_CONFLICT` — it never closes custody and never grants.
+
+### 2. Why it satisfies golden rule 2 (fail-closed, deterministic)
+
+- **Deterministic.** Pure functions of the situation; the instants are the caller's, as before.
+- **Fail-closed, both ways (deferred design target).** No return can soften a torn or unauthorized release (those rows sit above every return row). No release reading can turn a holder's return into a walk-away (the holder row sits above the walk-away row). Every *unreadable* input lands on a value that keeps custody open — an unreadable release raises to the torn rung ("nothing rules out a torn removal"), an unreadable return stays a removal ("read as still out"). The default `not_applicable` on both inputs reproduces today's matrix row for row, so a receiver or ledger with no such channel is neither loosened nor stepped up on day one — the DR-043 `not_applicable` convention.
+- **Truthful (and deferred).** `CUSTODY_RETURNED` is still `restrict`: the session it authorized is over. It is the *resolution* that differs — a planned return is not an incident — and the reason code says so, which is what the live row cannot yet say.
+
+### 3. The audit vocabulary and the live gate
+
+Deferred until merged: `AUDIT_EVENT_TYPES` gains `dock.returned` beside `dock.removed` (15 → 16; the puck-lifecycle subset 8 → 9), because recording a return as `dock.removed` is the conflation this row removes; the core proof's census moves in the same change, never loosened. The live `/v1` rule `attach-removed` (`lib/signalgrid-core/src/policy.ts`) is **unchanged** and carries a resolution note: it has no release/return evidence field to match on yet, so it stays the stricter reading and escalates every `removed` until such a field exists — a separate row, because it moves the evidence schema.
+
+### 4. Proof and scope
+
+Deferred design target, proven offline: `proof:decision-cascade` (already registered) gains ten matrix rows (18 → 28), eight `bindReturn` assertions — including that every non-holder binding keeps custody open and that a bound holder return grades `CUSTODY_RETURNED` end to end — and the `dock.returned` census check; `proof:signalgrid-core` pins the census at 16 / 9. `CORE_NORMALIZATION_VERSION` moves 24 → 25 by its generator. Nothing in `native/ios` moves (`puckVerdict` has no Swift twin; DR-043).
+
+**Reversal / amendment.** The owner vetoes by not merging, or reverses a merged form by reverting the one PR with the reversal date added here; rows Puck 7–9 (deferred) build on these inputs and would revert with it.
+
+## DR-059 — Estate posture ages at decision time, and a refresh retracts what the source stopped reporting (cloud lane — proposal, 2026-09-26)
+
+**Status: PROPOSED — decision-core behaviour, so the owner decides by merging the PR that carries this record or vetoes by not merging it (the DR-051 pattern DR-055 item 4 names). Nothing here changes what may be claimed to ship; the custody, location and shift families stay deferred.**
+
+**Question.** The 2026-09-25 verdict-core audit read (plan row 8, PR #1077) reproduced two fail-closed inversions on the estate path — the path `SignalGridCore.fromEstate` and `refreshEstatePosture` serve on `/v1` in estate mode. (1) Posture freshness was stamped ONCE, at sync, against the sync clock, and `buildEvidence` was handed no clock, so a device read fresh and never refreshed decided as fresh forever: under policy v2 a Graph-shaped record already `40` days old at read restricted with `POSTURE_STALE_STRICT`, while the same device read fresh and then aged `40` days with no refresh stepped up with no stale code, and with `encrypted`/`osSupported` in the spec it allowed both times. The refresh loop is off unless `SIGNALGRID_ESTATE_REFRESH_SECONDS` is set, and a failing loop keeps the last good posture, so this is the default deployment. (2) `runPostureSync` upserted and never retracted: a refresh that omitted `encrypted` kept the old allow with a `success` run; a device dropped from the feed kept its verdict on a `healthy` connector; a refresh carrying `[]` was a healthy success that re-affirmed every prior answer. The connector's own comment and the `FixturePostureRecord` doc said "absent evaluates as unknown" — true only on the first sync. Golden rule 2 says an unknown, stale or missing input raises assurance, never lowers it; both paths lowered it by keeping an affirmative the source no longer stood behind.
+
+**Grounding.** Every reproduction above was run by the lane on `8fdc143c` before recording (`docs/agent/EVIDENCE.md`, 2026-09-26 entry: `R1 +40 days, no refresh, a: allow TRUST_ESTABLISHED`; `R2 refresh w/o encrypted -> run success a: allow TRUST_ESTABLISHED` against the control `R2 control boot w/o encrypted: step_up`; `R3 empty refresh +40d: success healthy`; `R4 b omitted from refresh: success healthy b: allow TRUST_ESTABLISHED`). The estate-refresh proof's own claim 3b ("a refresh with no records processes nothing and normalizes nothing") could not fail for `[]` by construction — the counters are zero whatever the run reports.
+
+**The call.**
+
+1. **Posture ages.** `buildEvidence` takes the decision instant (`decision.ts` passes `createdAt`, the injected clock). `readFreshness` folds each `posture_freshness` reading's own age — `classifyFreshness(signal.observedAt, nowIso)` with the same `FRESH_WINDOW_HOURS`/`STALE_WINDOW_HOURS` the sync uses, now exported from `util.ts` so the two sites cannot drift — worst-wins with the value the sync stamped. A stamp the clock cannot place classifies `unknown`, which only tightens. Callers that pass no instant (older call sites, proofs of the stamped path) keep the stamped value: the status quo, never a loosening.
+2. **A refresh retracts.** A sync after the connector's first is a refresh. On a refresh, every category this connector previously reported for a device and did not report this run — a fact omitted, or a device dropped from the feed — is re-put with value `null` at the run instant; every evidence reader folds `null` to `unknown`. Boot has no prior run and retracts nothing, so the first-sync snapshots the migration proof pins are untouched. The signal id is unchanged (connector, subject, category), so the retraction overwrites in place.
+3. **An empty refresh confirms nothing.** A refresh carrying no records is `partial` on a `degraded` connector, never a healthy `success`; its note says nothing was confirmed and how many facts were retracted.
+4. The simulator (`lib/signalgrid-simulator`) and its byte-faithful iOS port do not run the estate sync and are untouched. `CORE_NORMALIZATION_VERSION` moves by its generator (24 → 25 on this branch; the generator's hold/bump rule reconciles with any other bump that lands first) and the committed Room Entry console bundle is rebuilt by `pnpm run build:room-console`.
+
+**Evidence.** `pnpm run proof:estate-refresh` → `summary=pass (24/24)` with the new claims: `…and it is PARTIAL on a DEGRADED connector, never a healthy success`; `…and it retracts: the verdict after an empty refresh is not the allow the last real read earned`; `a refresh that omits encryption retracts it — the verdict leaves allow` with its control `reporting encryption again restores allow`; `forty days with no refresh: the posture read fresh at sync no longer allows` with its control `a fresh refresh after the gap restores allow`. `pnpm run proof:signalgrid-core` → `Assertions: 597/597 passed`; `pnpm run proof:decision-cascade` → `summary=pass (100/100)`; `pnpm run proof:signalgrid-simulator` → `102/102`. The two BUILD_BACKLOG rows of 2026-09-25 that carried the findings read PROPOSED and close on the owner's merge.
+
+**Reversal.** Revert the PR that carries this record and add the reversal date here. A partial reversal — keeping the stamped-at-sync freshness but not the retraction, or the reverse — reopens the corresponding inversion and needs its own record naming which affirmative the product will keep standing without the source behind it.
+
 ## DR-060 — The brain delegates; the cycle learns: the coordinating session dispatches every stage it can to a cheaper tier, every incident a cycle hits becomes a recorded lesson with a landing place, and capability grows by adding MCP servers and APIs through intake (owner-directed 2026-09-26)
 
 **Status: ADOPTED — owner-directed doctrine, landed by the cloud lane under DR-037.** The pull request touches `scripts/**`, `.github/workflows/**` and this file, which `scripts/check-owner-gated-surfaces.mjs` classifies as safety machinery; the lane merges it under DR-037's five conditions, naming the gating check-run id in the PR body, and the owner reverses it by this record's own Reversal clause below.
@@ -4134,3 +4248,200 @@ from the review-hub-ci.yml step and its `CI_WARN_ONLY` entry.
 **What does not change.** DR-047's tiers and fallback rules (rule 1 assigns two stages DR-047 did not name and re-maps none), DR-054's raise-your-hand law, DR-056's objective loop, the verdict enum, the determinism invariant and the Decision Envelope.
 
 **Reversal / amendment.** The owner reverses this by reverting the pull request that carries it, with the reversal date added here. Amend rule 1 and the SKILL table together, as DR-047's own reversal clause requires of its rules and SKILL section. Making the 14-day report fatal is an amendment and needs a line here saying so.
+
+## DR-061 — Lanes may merge decision-path PRs under stated conditions; the Mac runs an unattended build session that opens PRs and never merges; the Swift ports may take a literal parity re-port the owner has ruled on, #1118/#1121 first (owner-directed 2026-09-29)
+
+**Status: PROPOSED — takes effect when the owner merges the pull request that carries it.** This record touches `docs/DECISION_RECORDS.md`, which rule 2 below keeps with the owner, so no lane merges it.
+
+**Context.** On 2026-09-29 the owner opened a Claude Code session with: *"Please build the whole system using the brain why isn't this happening as I expected like I'm trying to get this done."* Three things held the build: every PR that touches the decision path waited for his merge; nothing was built unless a person opened a session; and PR #1118, which ports one TS engine rule into the iOS engine, was blocked by golden rule 1. The session put three questions to him and he chose one option on each. His answers are below, verbatim (the option label, then the option text he selected).
+
+**The owner's answers (2026-09-29, verbatim).**
+- (a) Q: *"About 10 decision-path PRs wait for your merge (#1153, #1146, #1083, #1050, #1118…). You're the bottleneck. What do you want?"* A: *"Delegate to the lanes (Recommended) — Lanes may merge decision-path PRs when CI, preflight and an Opus review are green. Needs a new decision record."*
+- (b) Q: *"Nothing builds unless a person opens a Claude session. Should the Mac start a build session by itself every few hours when the brain has a buildable task? This uses your Claude usage."* A: *"Yes, build it (Recommended) — The brain builds its top task unattended and opens PRs."*
+- (c) Q: *"PR #1118 edits the iOS DecisionEngine.swift to add one rule the TS engine already has, copied literally. Golden rule 1 bans behavior edits there. Allow it?"* A: *"Grant exception (Recommended) — Swift port catches up to the TS engine. Unblocks #1118 and #1121."*
+
+**The question this settles.** Who may merge a PR that `scripts/check-owner-gated-surfaces.mjs` classifies as DECISION_PATH, and on what evidence; what still needs the owner's merge; what the Mac may build with no session open; and whether the byte-faithful Swift ports may take a behavior change.
+
+**Decision.**
+1. **A lane may merge a DECISION_PATH PR only when ALL of the following hold on the current head.** Otherwise it waits for the owner.
+   - All five DR-037 conditions hold (`.claude/skills/landing-under-dr-037/SKILL.md`). This includes condition 5, which already decides which lane may merge which PR. This record widens what a lane may merge, not who merges.
+   - An adversarial review of that head, by an Opus-tier agent that did not author the change, found no unresolved blocking finding. The PR body quotes the review's verdict and names the reviewer's model.
+   - The PR body quotes an executed counterexample: a command, the line it printed on the base (failing) and on the head (passing).
+
+   A condition nobody can show is not met. A review or a counterexample on an earlier head is not one on this head. The PR body says, under "Owner decision needed": *"DECISION_PATH: merged under DR-061 with check run <id>"*.
+2. **These stay the owner's to merge. DR-061 delegates nothing on them:**
+   - `docs/DECISION_RECORDS.md`
+   - `docs/agent/objective.json`
+   - the launch profile, including `docs/LAUNCH_PROFILE.md`, `scripts/launch-profile.mjs`, `scripts/launch-profile.d.mts`, `scripts/check-launch-profile.mjs` and `scripts/src/launch-profile-proof.ts`
+   - the launch-claims gate, including `scripts/check-launch-claims.mjs` and its two ratchets, `docs/agent/launch-claims-docs-ceiling.json` and `docs/agent/launch-claims-retired-labels-ceiling.json`
+   - the publication boundary, including `docs/PUBLICATION_BOUNDARY.md`, `scripts/publication-boundary.mjs` and `scripts/check-publication-boundary.mjs`
+   - every path `scripts/check-owner-gated-surfaces.mjs` classifies OWNER_RESERVED — among them pricing and positioning, the buyer-facing site and outreach, `README.md`, LICENSE/NOTICE, the compliance and threat-model documents and `docs/COST_MODEL.md`. The owner delegated decision-path code, not buyer copy or price.
+   - the golden rules in `CLAUDE.md`
+   - any change to `native/ios/EnterpriseShell/Services/DecisionEngine.swift` or `AppWorkflows.swift`, except a literal parity re-port the owner has ruled on in a decision record
+
+   The list is by path, not only by classifier category. The classifier puts the records file and the objective under SAFETY_MACHINERY, puts the gates under `scripts/**`, and does not classify `CLAUDE.md` at all (until #1133), so a lane must not infer "mergeable" from a category. A PR that touches one of these paths is the owner's to merge in whole — a DECISION_PATH change riding with a price edit is the owner's. This narrows a practice: DR-060's own PR, which added a record, was merged by a lane under DR-037. From this record on, a PR that adds or edits a record waits for the owner, as DR-037's "It still does not: edit `AGENTS.md` or a decision record on its own authority" already implied. Rule 2 amends DR-037's "What stays owner-gated" list by reference, not in place.
+3. **Golden rule 1: the first owner ruling (answer c).** The rule's text is unchanged. The exception covers only these literal re-ports of TS rules already on mainline:
+   - PR #1118 (also carried by #1121): `DecisionEngine.swift` gains `hasUnauthorizedRemoval` from `lib/signalgrid-simulator/src/decisionEngine.ts`: an undock while no signal asserts an active session raises `CUSTODY_EXCEPTION`, as the TS engine already does.
+   - PR #1121: `AppWorkflows.swift` gains two things from `lib/app-workflows/src/index.ts`. The first is the scoped step-up release (`stepUpSatisfiedActionKeys`). The second is the unknown-vertical confirmer fallback, `"an authorized confirmer"`. The owner's question named only the engine rule; his answer named #1121 as well, so its planner hunk is covered as a literal re-port and nothing more.
+
+   The ruling covers those hunks as reviewed at #1118 head `8f97bb73` and #1121 head `2848a9a1`; any later change to them needs a fresh Opus review under rule 1. Both PRs still need every rule 1 condition. Both also need the native client suites that the landing skill names, and the shared vectors must replay green on the head. Any other hunk in those two files, and any later behavior edit, needs its own owner ruling, recorded as its own decision record.
+4. **The Mac runs an unattended build session (answer b).** The session is scripts/mac/build-tick.sh, built on branch mac/auto-build-tick. It lands in its own PR, with its own row in `docs/agent/scheduled-routines.json` that this record authorizes. Once landed, it works like this:
+   - It takes the top unclaimed task from the objective loop (`docs/agent/objective-state.json`, DR-056) and claims it by pushing an empty branch first.
+   - The headless session only edits its own worktree and runs local checks, started with no git or GitHub credentials in its environment and with push, merge and `gh` commands deny-listed. The script, not the session, commits, runs `node scripts/preflight.mjs` and `pnpm run verify:breadth`, and pushes that one branch and opens its PR only when both are green.
+   - Nothing in it merges, force-pushes or bypasses a hook. This is enforced by the environment and the deny list, not by an OS boundary: a session that deliberately wrote its own push script could still escape, so the claim rests on those layers plus the brief.
+   - When it is stuck, it raises a hand (DR-054).
+
+   Its runs use the owner's Claude usage, which his answer accepts. A PR it opens is merged, if at all, by a lane under rule 1. The tick authored the change, so the review must come from a separate agent.
+
+   Rule 4 amends DR-056 §4 ("Mac derives and opens; cloud reviews, merges and consumes"): the Mac now also consumes `tasks[]`. A row with an open PR naming it, or a pushed `mac/build-row-<id>-*` branch, is claimed, and the build tick skips it; the cloud's forward-build cycle skips the same. Two lanes can still start the same row inside one cycle; the later PR is closed as superseded.
+
+**What does not change, deliberately.** No deterministic auto-merge authorizer, and no routine whose own row does not say so, gains merge authority over the decision path. The rule 1 conditions rest on a model's review, so merging under them is the cloud lane's act (DR-037 condition 5).
+- `scripts/brain-cycle-merge-decide.mjs` and `docs/agent/brain-cycle-config.json` still refuse DECISION_PATH outright, because no model output authorizes an unattended merge.
+- `scripts/check-owner-gated-surfaces.mjs` still classifies the decision path as owner-gated for the autonomous loop.
+- Every routine row in `docs/agent/scheduled-routines.json` keeps its own scope. That includes forward-build-cycle's "NEVER self-merges a product / launch-profile / launch-claims-gate / publication-boundary change". A routine's scope widens only when its own row is amended.
+
+DR-037's conditions, DR-054 and the determinism invariant are unchanged, and DR-056's loop is unchanged except as rule 4 amends its §4. Nothing here changes what may be claimed to ship.
+
+**Follow-up.** `.claude/workflows/land-branch.js` still writes "the cloud lane will not self-merge it" into a DECISION_PATH PR body, and its `klass` row in `.claude/workflows/README.md` still feeds that text; open PR #1133 moves that text into `scripts/lib/land-branch-gate.mjs` (its owner-decision text, as the file stands on #1133). All three belong to #1133 and are not touched here.
+
+**Evidence.** No gate refuses a lane's merge of a DECISION_PATH PR. The rule lived in prose: the landing skill, `docs/LANE_COORDINATION.md` protocol item 7, `.claude/agents/blocker-dispatcher.md`, `.claude/skills/signalgrid/SKILL.md` (two places) and the project-manager charter in `docs/agent/agent-tiers.json`. The only code that refuses a decision-path merge is the unattended brain-cycle authorizer, and the landing workflow's PR-body text, which is left to #1133. Both code sites stay as they are. The PR that carries this record also points the five prose sites at DR-061 (each keeps rule 2's paths with the owner), so they and this record take effect together, when the owner merges it. The PR quotes the searches it ran and the self-test lines showing both refusals still hold.
+
+**What no gate can observe.** No gate checks the rule 1 conditions. Whether the reviewer ran on Opus, whether it authored the change, and whether the counterexample really failed on the base all rest on the PR body quoting them. This is the same footing as DR-037's condition 2.
+
+**Reversal / amendment.** The owner revokes any part of this with one line in chat. That part stops at the lane's next decision: decision-path PRs return to owner-merge, or the Mac lane stops the build session the same day. The next PR adds the revocation date here. Revoking one part leaves the others standing. A new golden-rule-1 exception is not an amendment. It is a separate owner ruling with its own record.
+
+**Reconciliation note (2026-10-31, on owner acceptance).** DR-064 (rules 1, 2, 4, 9 and 10) makes the local second brain the primary executor and the cloud lane and Codex final inspection and landing on escalation. Rule 4 above (the Mac unattended build session, `scripts/mac/build-tick.sh`) therefore now reads subject to DR-064 rules 1, 4, 9 and 10: the brain places work, grants the host lock and hands work off, and the build tick is one registered channel, not the executor. In rule 1, who lands now reads subject to DR-064 rule 2 (cloud lands on escalation under DR-037's five conditions); its added review and counterexample conditions and rule 2's owner-only paths are unchanged.
+
+## DR-062 — The product's scope is the whole company, legacy systems included; a declared workflow is standing approval, so the cascade acts automatically by default — changes to source systems included (owner-directed 2026-09-30)
+
+**Status: PROPOSED — takes effect when the owner merges the pull request that carries it.** It edits `docs/PURPOSE.md` (canonical under DR-020), its live mirrors and `CLAUDE.md`, which only the owner merges.
+
+**Context.** On 2026-09-30 the owner, in a Mac Claude Code session, described the product as *"SignalGrid the worlds first smart automated orchestrator for all that want to bring modern era to legacy self indepent systems across the entrire company this company provides to solution to self run and automate all signals from any source and turn it into an actionable function on whatever platform the user is using the puck and it will do things automated or self driven all depending on the user and how smart the workflows and varables on the company itself using my product/solution."* The session then put questions to him. His answers, verbatim (the option he chose, then its text):
+
+- Q (the session's question, paraphrased with the owner's go-ahead because its wording tripped the docs-sanity claim scan; his answer is verbatim): each company sets how far SignalGrid goes by itself — what should the default be when a company has not chosen? A: *"Fully automatic — SignalGrid acts on every decision unless a workflow says ask first."* (The session had recommended "Recommend, human approves".)
+- Q: *"The product definition (PURPOSE.md) still says SignalGrid runs 'a building'. Your words say 'the entire company' and legacy systems. Widen it?"* A: *"Widen to the company (Recommended) — Update PURPOSE.md and its copies to 'the whole company, including legacy systems'. You merge that PR."*
+- An Opus review then found that "fully automatic" contradicted `docs/PURPOSE.md`'s rule *"Nothing in the cascade may **execute** a change on a source system without a recorded human approval"*, which the first question had not shown him. He was asked: *"Your rules (PURPOSE.md) say: 'Nothing in the cascade may change a source system without a recorded human approval.' Your 'fully automatic' default conflicts with that. Which do you want?"* A: *"Fully automatic, everything — An admin's declared workflow counts as the approval, so SignalGrid also changes systems (revoke, lock, erase) on its own. The PURPOSE rule is rewritten."* (The session had recommended "Auto, but changes need approval".)
+- Q: *"CLAUDE.md (the rules every AI agent here reads) also describes the product as 'the systems a building runs'. Update it to 'a company runs, legacy systems included' in the same PR?"* A: *"Yes, update it (Recommended) — One line changes, so every agent sees the same product definition."*
+
+(His other answer that day, "One-command live demo", is a build priority, not a product rule; it is being built.)
+
+**Decision.**
+1. **Scope.** `docs/PURPOSE.md` §2's product sentence reads "the systems a company already runs … the legacy ones never built to talk to each other included" — "never built to talk to each other" is from his vision's "legacy self indepent systems". §2's second paragraph and the "Source-agnostic" paragraph say the company is the scope; DR-035 item 1 carries an amendment marker. The copies change with it: `docs/POSITIONING.md`, `artifacts/signalgrid-web/index.html` (meta description), `docs/SIGNAL_SOURCE_CATALOG.md`, `docs/OPERATIONAL_HEALTH_DEX_LAYER_STRATEGY.md`, `CLAUDE.md`, the seven live research documents that quote or cite §2, and `scripts/check-product-framing.mjs`'s self-test probe. Kept on purpose: the bannered `docs/research/STRATEGIC_BUYER_PARTNER_PITCH_PACK.md` (SUPERSEDED), the dated `docs/agent/ORG_SELF_EVALUATION_2026-09-12.md`, and `artifacts/signalgrid-web/src/pages/About.tsx`, whose "shared and mobile work environment" wording is the Limited-GA launch scope, not the product scope. No gate checks a "§2, verbatim" claim; the drift report reads only "SignalGrid is …" sentences. "World's first" is the owner's ambition and is never a product claim: `docs/PURPOSE.md` forbids claiming a moat and asserting the competitive seam is unowned as settled fact.
+2. **Autonomy — a declared workflow is standing approval.** An administrator who declares a workflow records, by declaring it, the approval for every action that workflow names. When a company has not chosen otherwise, its declared workflows act automatically: tickets, notifications, verification AND changes to source systems (revoke, lock, suspend, erase requests) run without a person approving each one, unless the workflow declares *ask first*. `docs/PURPOSE.md`'s two-rules paragraph is rewritten to say so. This answers the question DR-055 item 5 left to the owner: an erase, revoke or suspend request named in a declared workflow runs under that workflow's standing approval; one no workflow names stays one-at-a-time and approval-gated. DR-055 3(iv) stands — the MDM erases; SignalGrid requests, and never writes lists, records or credentials.
+3. **A deliberate owner exception, acting only.** Defaulting to automatic when a company has declared nothing gives the answer with less human oversight from missing configuration — the shape DR-045 item 1 and DR-055 6(i) refuse for VERDICTS. That refusal is unchanged: this exception covers only what the cascade does after a decision, never the decision. A later fail-closed audit must not "fix" it; the owner chose it knowing the rule it replaces.
+4. **Building it.** The per-company, per-workflow autonomy setting (`automatic | ask first`, default `automatic`) is a new tenant input, built as its own change after this record lands; until then every existing approval step (for example `approveRemediation` in `lib/signalgrid-core/src/engine.ts`) is unchanged.
+
+**What does not change.** The decision itself: deterministic, fail-closed, policy-versioned (golden rule 2) — an unknown, stale or missing signal still tightens the verdict, and an unreachable or unknown downstream system still refuses. An action whose own preconditions cannot be verified is refused, never run on a guess. Read before write: the first deployment of any source is read-only (`docs/PURPOSE.md` "Architectural prerequisite" and its forbids line "Write access to a source system on first deployment"); the owner's answer did not address it, so it stands until he says otherwise. Learning only proposes (DR-035). DR-019 (no category label), DR-020 (PURPOSE.md is canonical), and what may be CLAIMED: the launch-claims gate, the launch profile and the publication boundary — `docs/PURPOSE.md` still forbids claiming autonomous remediation until those say it ships.
+
+**Reversal / amendment.** The owner reverses any part with one line in chat or by reverting the pull request that carries this record, with the date added here. Changing the autonomy default, or making first deployments writable, is an amendment and needs a line here saying so.
+
+## DR-063 — The brain ecosystem: per-repo instructions, labeled ingestion, one MCP plane, per-repo triggers (owner-directed 2026-10-01)
+
+**Status: PROPOSED — takes effect when the owner merges the pull request that carries it.** Rules 2, 5 and 6 name steps only the owner can take. The three slices in rule 1 stand on their own: each strengthens a gate this repository already runs and none reaches another repository. Slice (a) is open PR #1356 (a fix for a relative-path origin reading as clean is in flight) and slice (c) is open PR #1354; each lands under DR-037 on its own, and this record is merged after them. Slice (b) rides in this pull request because its gate names this record. The owner answered the per-repository question for signalgrid-mcp on 2026-10-01 (rule 2) and approved this record and the `CLAUDE.md` line in his own words.
+
+**Context.** On 2026-10-01 the session asked the owner whether the other repositories should get "sub-brains". He answered by pasting a four-point summary of Cole Medin's video "You Built Your AI Second Brain. Now What? (Here's How to Evolve It)" (YouTube, 16:06, uploaded 2026-09-16, https://www.youtube.com/watch?v=mjQlZrteMIY). His pasted summary, verbatim:
+
+- *"Local Instructions (claude.md): Define the specific role, goals, and technical boundaries for the AI agent inside each repository folder."*
+- *"Ingestion Labeling: Tag data from each repository with clear source and security labels so your central brain can query it accurately without leaking context."*
+- *"MCP Integration: Connect each repo's local context to a unified Model Context Protocol server so your primary strategist agent can execute tasks across multiple codebases concurrently."*
+- *"Workflow Triggers: Set up automated background tasks (like issue fixing or pull request reviews) tied specifically to that repository's state."*
+
+The session recorded what he wants underneath it (a paraphrase, not his words): the company operated by scales of brains (Opus for judgment, cheaper tiers for building, bots for chores), fewer concurrent sessions, and model choice the system manages per stage.
+
+The source covers less than the summary does. It was read on 2026-10-01 from the video's description, chapter markers and the platform's own captions. Nobody watched it, took frames or transcribed it locally. The video describes one central team brain: a single table fed from chat, repositories and docs, a label on every row at ingestion, the database enforcing those labels on every read, and one remote MCP server with read tools and a per-person token. Against the summary:
+
+- **Labeling:** supported.
+- **MCP:** partly supported, as one central read-only server only.
+- **Per-repository instruction files:** not shown.
+- **Repository-tied triggers:** not shown.
+
+The last two are the owner's own additions, and this record decides them as his.
+
+**What the tree had on 2026-10-01 (`bd827bb0`).**
+
+- **Instructions.** This repository has `CLAUDE.md` and `AGENTS.md`. The signalgrid-mcp repository has neither. DEV (archived on GitHub) has a one-line placeholder `AGENTS.md`.
+- **Labels.** No source or security label existed on cross-repository data. `scripts/scan-estate-citations.mjs` hardcoded `/workspace/*` and reached 1 of 7 repositories on the Mac.
+- **MCP.** Two first-party MCP servers ran in Mac sessions:
+  - this repository's 16-tool server (`artifacts/mcp-server`), which is rostered;
+  - the sibling's 22-tool macOS posture server (registered as `signalgrid-macos` by `mac-kickoff.sh`), which had no entry in `docs/agent/mcp-roster.json`. Two skill grants credited its purpose to the 16-tool server instead.
+- **Triggers.** No workflow in this repository ran a model on an issue or pull-request event.
+
+**The question this settles.** Which of the four points SignalGrid adopts across its seven repositories, what lands now in this repository, what waits and for what, and which steps only the owner can take.
+
+**Decision.**
+
+1. **Adopted in this repository only — as the three pull requests above, not as landed fact until each merges.**
+   - (a) `scripts/scan-estate-citations.mjs` also looks for a repository beside this checkout when its `/workspace` path is absent.
+     - It scans a sibling only when that sibling's `origin` names the expected repository.
+     - It keeps every unreachable or unconfirmed repository NOT SCANNED, never counted clean.
+     - It reports an archived repository's broken citations without gating on them, the same way it already treats an upstream fork.
+     - Its `--self-test` runs in preflight and CI.
+   - (b) `docs/agent/mcp-roster.json` gains a `signalgrid-macos` entry, with a Mac lane grant, and the two skill grants move to the server they describe. `scripts/check-mcp-roster.mjs` fails any `servers[]` entry that lacks `upstream`, `reads`, `writes` or `network`. Those four fields are the source and security label for an MCP server, so no separate field is added.
+   - (c) The intake row in `docs/agent/RESOURCE_INTAKE.md`.
+2. **Per-repository instructions.** This repository's `CLAUDE.md` and `AGENTS.md` stand. A sibling gets its own `CLAUDE.md` only on the owner's go-ahead for that repository; no lane creates, edits or opens anything in another repository without it. DEV gets none while it is archived. *Given for signalgrid-mcp on 2026-10-01:* asked "What do you want?" for that repository, the owner chose *"Yes: instructions file + Mac-run reviews — I open a PR there adding CLAUDE.md (read-only tools, never writes to the OS). Reviews run on your Mac, no API key in GitHub. You still need to protect its main branch in GitHub settings."* So signalgrid-mcp gets a `CLAUDE.md` by pull request (its PR #16), and its reviews run on the Mac and, by his later answer the same day, through the Claude GitHub App as well (rule 5). *Still owner-only:* branch protection on its `main` with the Mac check required.
+3. **Labels.** An MCP server's label is its roster entry. A repository's label is its `ESTATE` entry in `scripts/scan-estate-citations.mjs`: name, note, `upstreamFork`, `archived`. *Deferred:* a source tag on Neural Memory writes. *Trigger:* the first memory that one repository's session writes and another repository's session reads.
+4. **One MCP plane, not a new hub.** The plane is the roster: every server a lane can reach is an entry with its labels and its grants. Each repository's server stays in its own repository. *Deferred:* a cross-repository tool that lists tasks, opens a pull request or runs a gate. *Trigger:* a second repository has a machine-readable task source, meaning issues in use or a backlog file. Today only this repository has one (`docs/agent/objective-state.json`). A tool that opens a pull request or runs a gate writes, and no rostered first-party tool does either today, so that tool needs its own record before it is built.
+5. **Triggers — chosen 2026-10-01: both.** The owner installed the Claude GitHub App on all his repositories (read access to administration, commit statuses, merge queues and metadata; read and write to actions, checks, code, discussions, issues, pull requests, repository hooks and workflows — his settings page, 2026-10-01) and, asked whether to keep Mac-only reviews, chose *"Both: GitHub app + Mac — Claude reviews PRs and answers @claude in GitHub on both repos; the Mac still runs the hardware checks. You type /install-github-app once per repo to add the workflow and token."* So:
+   - A review workflow using the Claude GitHub App runs in this repository and in signalgrid-mcp. The token it needs is created by the owner through `/install-github-app`, once per repository; no lane ever creates, reads or moves that secret.
+   - The workflow runs only on `pull_request` and `@claude` mentions from the repository owner or members, never on `pull_request_target` with fork code checked out — both repositories are public, and that shape is how a secret reaches a stranger's pull request.
+   - The Mac keeps every check that needs real hardware: the macOS job, `verify.sh`, the live evidence mint.
+   - The App's access does not change who merges. DR-037 stands as written: the cloud lane merges the green product PRs it opened, under its five conditions. DR-061 (#1246, pending the owner's merge) governs DECISION_PATH merges once in force. The Mac lane does not merge its own work. This record amends neither.
+
+   *Still owner-only, by name:* the token per repository (above); branch protection on signalgrid-mcp's `main` with its Mac check required; whether DEV stays archived (recommended: yes).
+6. **Model scale.** DR-047's tiers govern every entry point that runs a model, triggered or not. Two such entry points do not follow them today. This record names them for the coordinator and changes neither:
+   - The on-demand review pass that lives outside this tree calls the model with no tier pinned.
+   - The build tick on the unmerged #1248 branch pinned Opus for implementation at `70459c1a`, which DR-047 rule 2 routes to Sonnet; the staged-tiers change pushed to that branch at `694d255a` on 2026-10-01 (triage on Sonnet, build on the tier the task implies, review on Opus, a cost line per stage) moves it to the tiers.
+
+   Choosing the primary model stays the owner's (DR-047 rule 6).
+
+**What no gate can observe.** Gates in this tree cannot see GitHub settings: archive state, branch protection and secrets. The record of those settings is a dated read of the public API, quoted in the intake row. No gate here can see whether a lane wrote in another repository either; rule 2 rests on the lanes and on the owner's review.
+
+**What does not change.**
+
+- DR-020: a new platform, vertical or hardware still needs its own record, and `docs/PURPOSE.md` stays canonical.
+- DR-029 and DR-047 rule 7: no model and no added server enter the decision path.
+- DR-053: scan, then confirm, then choose.
+- DR-060 rule 3: a server arrives through intake, and the tracked `.mcp.json` names only `signalgrid-mcp`.
+- Claim discipline: the launch-claims gate, the launch profile and the publication boundary.
+
+**Reversal / amendment.** The owner reverses any part with one line in chat, or by reverting the pull request that carries this record, and the date is added here. When a deferred item's trigger fires, building it is an amendment and needs a line here saying so. A lane writing in another repository also needs such a line.
+
+## DR-064 — The local second brain is the primary executor; the cloud lane and Codex are final inspection and approval for the repository (owner-directed 2026-10-23; PROPOSED)
+
+**Status: PROPOSED — owner-directed; awaits the owner's merge.** This file is SAFETY_MACHINERY under `scripts/check-owner-gated-surfaces.mjs` ("the decision records"), so the cloud lane opened the pull request and does not merge it. The operating record of the same directive travels separately as docs under DR-037: the `docs/agent/LOOP.md` STATE block of 2026-10-23 (23:00Z) and the operating note of the same date in `docs/LANE_COORDINATION.md`. This record is the doctrine; those are the log.
+
+**Context.** DR-056 (2026-09-24) put the owner's agentic loop on the Mac tick: one declared objective, a deterministic evaluator and ranker, the tick that already existed. DR-060 (2026-09-26) made the coordinating cloud session a delegator that dispatches every stage it can to a cheaper tier. On 2026-10-22 the owner shared a private handoff note for a local operating brain on the Mac (recorded in `docs/agent/RESOURCE_INTAKE.md`, 2026-10-22; the brain and its state stay outside this tree). At 03:30Z on 2026-10-23 the owner made that brain first executor of every open build round ("make sure all of these get offloaded to the new local side first then going forward it will ask for you if needed but that for much higher or even extreme use cases"); the cloud stopped its rounds, handed over its branches and mailed the Mac the same hour. At about 23:00Z the owner widened it to everything.
+
+**The question this settles.** Who runs the company's work, who approves it into the repository, and how the two talk.
+
+**The directive (owner, in his own words, 2026-10-23 about 23:00Z).** "Need to offload and let the local agent run everything and escalate to you or codex when it's needed for final inspection and approval for repo everything else is offloaded locally using second brain period which it can run anything it needs to complete the tasks it need for second brain plus I'm going to give it more knowledge to build more skills and workers for us plus it can actually build the apps and test them plus build company website and all other items needed to create my company SignalGrid". Asked where the brain lives, the owner named its folder in his home directory; this record carries it as `<HOME>/SignalGrid-Local-AI`, the redaction the Mac's own artifacts use. Two minutes later, about 23:02Z, the owner added: "Clean up all branches and make sure only the main branch stays the only branch unless it's 100% to have this secondary branches. Plus all issues and pulls need to be resolved now. Let local see what it can handle first then see if you need to step in and resolve or provide the fixes for local to run these properly and everything to be automated I'm going to be setting up obsidian for a better second brain approach with this company too it all needs to be automated I'm a one man team and cannot do it all myself."
+
+**What the agents control, and what they do not.**
+- The BRAIN controls: what it works on, in which order, with which local tools and models; when it tests, when it escalates, and what it asks for; the rounds it runs on its own branches and PRs; the skills and workers it builds for itself under the owner's instruction.
+- The CLOUD LANE controls: the inspection it performs on an escalated head and the landing decision under DR-037's five conditions; its own standing routines; what it escalates to the owner.
+- Neither controls: merging a launch-profile, launch-claims, publication-boundary, decision-record or `OWNER_RESERVED` change (DR-037 condition 5 — the owner's); what may be said to ship (the launch-claims gate, the launch profile and the publication boundary); the decision path (DR-029's gateway boundary and DR-047 rule 7: no model, local or hosted, writes into the deterministic core's verdict, and a local model's advice grants no writer authority, as `docs/agent/scheduled-routines.json` already states); the gates themselves, which stay the measure on both machines.
+
+**Decision.**
+1. **The local second brain is the primary executor.** Every build round, review round, test, native and web app build, company-site task, skill and worker belongs to it first. It uses whatever local tooling it needs and is not limited to the tiers of DR-047, which govern hosted Claude sessions; DR-047 rule 7 still binds every model it runs.
+2. **The cloud lane and Codex are final inspection and approval for the repository.** The cloud builds nothing and dispatches nothing of its own while this record stands. It acts on an escalation from the brain through one of three channels: a lane message addressed to cloud (the mailbox PR comment wakes it at once); a raised hand with `whoCanUnblock: "cloud lane"`; a sentence in a PR body asking the cloud to land it. On an escalation it reviews the exact head and lands under DR-037's five conditions, or returns its findings on the PR. `@codex review` on a PR requests Codex. The forward-build routine's dispatch mandate (the worker wave of 2026-10-01) is suspended, not retired: its fire continues as a heartbeat and a report of the pool, so the registry and the raised-hands gate keep their witness.
+3. **The cloud keeps the duties that only it holds.** The hourly steward cycle (reading Mac mail and branches, landing lane-mail and tick PRs, escalating a silent Mac to the owner), the forward-build heartbeat, the daily hygiene sweep, and DR-037 landings of green PRs.
+4. **Authority for the brain's own writes is declared, not assumed.** The brain writes to this tree through the Mac lane's registered channels — lane mail, hands, heartbeats, `mac/*` branches and PRs — and proposes a `mac-local-brain` row in `docs/agent/scheduled-routines.json` in the `mac-build-tick` shape, with the owner's words above as its authorization evidence, a write scope and an escalation boundary; the cloud inspects that row on its PR. Until it lands, the brain's deliveries ride the registered Mac lane identity, as they do today.
+5. **Raise your hand on either machine.** DR-054 binds the brain as it binds every lane: a stuck unit surfaces what it was doing, what blocked it, what it needs and who can clear it, through a hand or a lane message; a silent stall is the one failure this system does not tolerate.
+6. **Claim discipline and the decision-path boundary are unchanged.** Nothing here is a buyer-facing claim, and nothing here moves a model into the verdict path.
+7. **The estate is resolved, local first.** Every open issue and pull request is resolved — landed, closed as superseded, or placed before the owner with its one-line decision — and every branch other than `SignalGrid_Alpha` is deleted once its commits are on mainline or its work is recorded as abandoned, unless it is needed: an open PR's head, the mailbox branch, a live Mac claim. The brain does this first, from a measured inventory the cloud commits beside this record's log in the agent docs (the estate plan of 2026-10-23 and its JSON, landed as docs under DR-037); whatever the brain has not started by the window named in the mail that carried the directive, the cloud steps in on — zero-loss deletions and DR-037 landings first — and provides the fixes the brain needs to run the rest unattended. Branch deletion, which DR-037 condition 5 withheld from the lanes to protect the other lane's work, is granted here by the owner for branches whose commits are on mainline or whose work is recorded as abandoned, and for no other.
+8. **Everything is automated; the owner's second brain is his.** The owner is one person. Any step that needs a person on the Mac is a gap the brain names by hand or mail and the cloud removes. The owner's Obsidian second brain is his own knowledge layer, outside this tree, like the handoff note of 2026-10-22; nothing from it is committed unless he puts it in.
+
+**The second directive (owner, in his own words, 2026-10-30, Mac session).** "This one lock should prevent the rest of the second 🧠 to stop working on other tasks unless it it affects the whole entire repo otherwise the system should be able to handle it that's the whole point for second 🧠 it can multitask and stay on top of each other making the pass off to other teams and workers so everything continuously working and learning on its own." And: "this lock shouldn't from codex it should be from local second brain not codex itself that is the other issue plus again the 🧠 should dictate its position within the 🧠 and keeps going through the flow and departments and teams then workers who pass it off to next group so on until it get to GitHub with a PR then that gets same treatment as local but with with both Claude and Codex."
+
+9. **The brain owns the host lock, and the lock is narrow.** The host verification lock (`scripts/mac/host-verification-lock.sh`) is granted by the local second brain, never taken by a worker for itself: Codex, a Claude session, or any other worker asks the brain and runs under the brain's grant. The lock serializes only work that touches the whole repository: the shared checkout, mainline, the lockfile, a full preflight or verify run, the live evidence. Every other unit keeps running while it is held. The tick's heartbeat, mail, hands and reads never wait on it. A worker holding it longer than the brain granted is a stall the brain reclaims and reports, not a reason for the rest of the brain to stop. Measured 2026-10-30: a Codex-run `host_chain.py` held the lock for over two hours, and the tick had logged 3,268 deferrals behind the lock since 2026-10-21.
+10. **Work moves by hand-off, and the brain places it.** The brain decides where each unit of work sits: department, then team, then worker. Each one passes its finished piece to the next group, and each step is recorded so the brain keeps learning from it, until the work reaches GitHub as a pull request. On GitHub the PR gets the same treatment it got locally (the same staged review, test and hand-off), with both Claude and Codex as its reviewers, before landing under DR-037. No worker sets its own place in the flow.
+
+**What no gate can observe.** The brain's runs inside its private runtime; only its deliveries are measurable. The tick heartbeat gate reads a heartbeat's `firedAt` and never its result, so a tick that always defers on the host lock counts as alive (the deferral-blind read is a backlog row, filed in the business-review absorption of 2026-10-22). The steward reads a run of deferrals as host contention and reports it each hour; the owner is escalated only when no tick heartbeat lands inside the 3 h bound.
+
+**Evidence.** Measured on mainline `dd1380b7` at 22:41Z on 2026-10-23, before this record was written: 114 `mac-lane-tick` heartbeats since 00:00Z (50 quiet, 1 acted, 63 deferred on the host lock); five Mac status mails that day; no Mac PR opened or updated that day; PR #1354's head unchanged since 2026-10-22; the brain's one model attempt (the single intake row of #1354) stopped at 20:03:08Z after two partial edits, by the Mac's own correction mail; the build tick's three ranked rows all held by the Mac (17b in #1424, 26 in #1219, 17c behind the claim branch `mac/build-row-17c-20261021T214648Z` and the open hand of 2026-10-21); 11 cloud-to-mac messages unacknowledged, the oldest 15 days (`node scripts/check-lane-messages.mjs`). The one in-tree trace of the brain's folder is `artifacts/sim-results/objective-loop-evidence-fresh-2026-10-17-2.json`, the 2026-10-21 evidence re-mint run from its `worker-runtime-evidence` copy.
+
+**Consequences.** The cloud's spend falls to inspection, landing and heartbeats. The brain's throughput becomes the company's throughput, and its first measurable duties are the four it has not yet shown: a registry row for itself, an acknowledged inbox, a cleared or retried 17c, and movement on #1424 and #1219. A brain that escalates nothing lands nothing; the steward's hourly report is where that shows.
+
+**What does not change.** DR-037's five conditions and owner-only surfaces; DR-047's tiers for hosted sessions and its rule 7; DR-054; DR-056's objective loop and the tick; DR-060's lessons duty; the launch-claims gate, the launch profile and the publication boundary; the second-revision lane loop in `docs/LANE_COORDINATION.md`.
+
+**Reversal / amendment.** The owner reverses this by reverting the pull request that carries it, with the reversal date added here, or by a later record that returns dispatch to the cloud lane; the forward-build routine's dispatch mandate then resumes as DR-060 and its prompt describe. Amending the three escalation channels or the brain's write scope amends rule 2 and rule 4 together with the `docs/LANE_COORDINATION.md` operating note of 2026-10-23 and the `mac-local-brain` registry row, in one pull request.

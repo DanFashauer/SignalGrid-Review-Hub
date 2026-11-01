@@ -1,6 +1,6 @@
 # PURPOSE
 
-**Status: canonical, v2. Corrected 2026-08-27 (DR-020).**
+**Status: canonical, v2. Corrected 2026-08-27 (DR-020). Widened 2026-09-30 (DR-062): the company is the scope, and a declared workflow is standing approval.**
 
 Material changes require new evidence from customer discovery, design-partner
 deployment, observed production-adjacent use, **or a correction of owner intent**.
@@ -17,12 +17,14 @@ operational context.**
 
 ## 2. Product
 
-**SignalGrid connects the systems a building already runs - access control,
-identity, device management, location, applications, ticketing - into one grid
-that decides and acts on the person's behalf.**
+**SignalGrid connects the systems a company already runs - access control,
+identity, device management, location, applications, ticketing, the legacy ones
+never built to talk to each other included - into one grid that decides and acts
+on the person's behalf.**
 
 One credential the person already carries - badge, phone, token, biometric -
-carries them through the building. Tap in at the door. Pick up a device. Enter
+carries them through every building and system the company runs. Tap in at the
+door. Pick up a device. Enter
 the room. Open the app. **The identity is continuous; the systems are what is
 fragmented.** SignalGrid makes them behave as one, so the person never
 negotiates with technology.
@@ -70,16 +72,19 @@ publication boundary govern what may be said, and each unbuilt stage points at i
 | **Watch the fix, and step in** | the restriction lifts when the condition is observed to clear, not on a timer; if it does not clear, it escalates | **partial** — exception release and decision continuity exist; a general post-execution verifier does not (`docs/SIGNALGRID_CLOUD_PLATFORM_AND_CYBER_RESILIENCE_ARCHITECTURE.md` §9) |
 
 Two rules bind every stage and are not negotiable by any of them. Nothing in the
-cascade may **execute** a change on a source system without a recorded human
-approval — the read-before-write prerequisite below is the whole posture. And an
+cascade may **execute** a change on a source system without a recorded approval —
+a person's, or the standing approval a company administrator records by declaring
+the workflow that names that action; when a company has not chosen otherwise, its
+declared workflows act automatically (DR-062). The read-before-write prerequisite
+below still holds: the first deployment of any source is read-only. And an
 unreachable or unknown downstream system **refuses**: a ticketing backend that
 cannot be reached leaves the failure open and says so, and never reports a ticket
 it did not open.
 
 ### The system underneath is replaceable
 
-**Source-agnostic is the point, not a feature.** The building is the first scope; the
-same grid spans every system the company runs — across all of its sites and buildings —
+**Source-agnostic is the point, not a feature.** The company is the scope: the grid
+spans every system it runs, legacy or new — across all of its sites and buildings —
 that exposes an API or SDK — the devices
 staff use, the admins who run those systems, and the workflows between them. Any such
 system is a candidate signal source. None is a dependency. **Vendor lock, in either
@@ -294,4 +299,5 @@ Nothing in this repository compounds. One real room does.
 | May 2026 | `Enterprise Architecture for Badge Locked Shared Devices and Incident Alerting.pdf` | Two control planes. The deterministic state machine. The network-dependency constraint. |
 | Jul 2026 | `SignalGrid_Technology_Ecosystem_Master_Catalog_2026-07-31.xlsx` | Freeze breadth. P0 Microsoft wedge. System-of-record and AI boundaries. |
 | Aug 2026 | PURPOSE v1 | Decision Envelope, determinism invariant, moat disclaimed. **Described a gate, not the grid.** |
+| Sep 2026 | **PURPOSE v2, widened (DR-062)** | The company is the scope, legacy systems included. A declared workflow is standing approval, so the cascade acts automatically by default; deciding stays deterministic and fail-closed. |
 | Aug 2026 | **PURPOSE v2 (DR-020)** | Orchestration thesis. Credential as spine. Embedded UX law promoted to thesis. Verticals as configuration. Mac and API lanes reopened. |

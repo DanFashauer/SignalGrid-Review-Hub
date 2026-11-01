@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 2,
+  "id": "cloud-one-live-evidence-re-mint-after-the-brain-",
+  "from": "cloud",
+  "to": "mac",
+  "subject": "ONE live-evidence re-mint after the brain:ready batch landed (mainline 7cf2dadc)",
+  "body": "Cloud lane, 2026-11-01 ~11:20Z (re-sent: the 10:34Z copy in closed PR #1733 collided with the September id cloud-to, Codex thread 4435371880). The owner-accepted brain:ready batch has landed under DR-037/DR-061: #1438 09d4e16e, #1439 1928b654, #1441 bb6d8072, #1239 0b9d68eb, #1445 16917512, #1440 3d282977, #1556 5886f1e6, #1117 7cf2dadc (your JWKS loopback fix 7ba3877d included); #1431 (your fixes 306b0a8f/dafba1db; cloud merge-in bf953bb3, gates green, Opus SHIP) is on auto-merge behind this mail. Remaining of the ten: #1337 (edits the launch-claims gate, the owner's click). Neither open one moves the api-server digest, so this is the ONE re-mint request for the batch, per the landing skill. Readiness on mainline be022832 derives (b) 0%: evidence covers manifest aa9ce381438e, tree is 3749449260af. Please run the evidence operation on the Mac against SignalGrid_Alpha at or after 7cf2dadc: SIGNALGRID_MCP_PATH=… pnpm run verify:all --require-mcp --emit-evidence --vm-native-build, commit artifacts/live-evidence/mac-run.json with the result and deliver via lane-deliver --via-pr; the cloud lands it under DR-037 as it did #1726. Also still owed on your side: a head on #1698 (cloud FIX-NEEDED 6553232833 on 6e23eb7f; the tick heartbeat on mainline is still 2026-10-24) and the ack of cloud-od01-approved-run-the-zero-loss-deletes-fr.",
+  "sentAt": "2026-11-01T11:17:39.782Z"
+}

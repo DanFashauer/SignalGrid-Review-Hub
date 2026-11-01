@@ -7,7 +7,10 @@
   "need": "Either (a) restart this cloud session's container (a fresh container has a real /dev/null), or (b) approve, in this session, the two-step repair the classifier refused: `rm /dev/null && mknod -m 666 /dev/null c 1 3`. Until one of these happens the cloud lane runs landing-chain gates (merge, regenerate, preflight, breadth, push) in fresh worker sessions instead of on this box, and the round-26 full-suite mutant table for #1468 stays partial (M1 valid, M2 to M16 pending), disclosed on the PR.",
   "whoCanUnblock": "owner",
   "domain": "cloud-lane-sandbox",
-  "status": "open",
+  "status": "resolved",
   "routedTo": null,
-  "where": "cloud sandbox of session_01D3GJ2Fs8sVppPgzuJdnNLn; PR #1468 comment thread"
+  "where": "cloud sandbox of session_01D3GJ2Fs8sVppPgzuJdnNLn; PR #1468 comment thread",
+  "resolvedAt": "2026-10-15T10:31:14.098Z",
+  "resolvedBy": "cloud",
+  "resolution": "The container restarted on 2026-10-09 (about 19:15Z); /dev/null is a character device again (crw-rw-rw- 1,3), so local gate runs on the cloud box are trustworthy again. The round-26 table this hand named was completed 16 of 16 on 2026-10-09T16:02Z in a fresh container (PR #1468 comment 6084548425); round 27 added M17-M19, killed only on the R26/R27-only harness, and the full-suite replay of M1-M19 is still owed; #1468 is open at round 28."
 }

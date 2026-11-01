@@ -73,6 +73,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { auditBacklogOwnership, parseRows, rosterIds, statusText } from "./check-backlog-ownership.mjs";
 import { SIM_OPERATIONS } from "./lib/sim-operations.mjs";
+import { SOFT_LIMIT_H } from "./lib/raised-hand-kinds.mjs";
 
 const HERE = fileURLToPath(import.meta.url);
 const ROOT = resolve(dirname(HERE), "..");
@@ -493,26 +494,73 @@ export function derive(c) {
 }
 
 // ── Emit: content-addressed write, one request, one mail per NEW escalation ───────────────
-function requestAlreadyQueued(criterionId) {
-  // Dedup against work that is OUTSTANDING, never against history: a request that already has a
-  // result is done, and the criterion may decay again next week. The mark must survive the tick
-  // worktree returning to origin/SignalGrid_Alpha, so look in the working tree, on mainline, and
-  // on every unmerged mac/tick-* head. Any outstanding request for this criterion = already queued.
-  const prefix = `${REQUEST_PREFIX}${criterionId}-`;
-  const localResults = new Set(loadDir(RES_DIR_REL).map((r) => r.requestId).filter(Boolean));
-  for (const f of existsSync(join(ROOT, REQ_DIR_REL)) ? readdirSync(join(ROOT, REQ_DIR_REL)) : []) {
+/** Does a request sitting on an unmerged mac/tick-* ref still count as outstanding? PURE: no clock
+ *  (`nowIso` is an argument), no I/O, no PR API. A request on a tick ref cannot run until the cloud
+ *  lane LANDS that tick PR, so its age measures landing latency, not the Mac heartbeat; the bound is
+ *  therefore the system's own definition of a stalled sim request (SOFT_LIMIT_H.sim), NOT
+ *  staleAfterHours (the heartbeat tolerance, which serves readVerdict alone). A tick ref whose tip is
+ *  older than `maxAgeHours` stops suppressing a new request, as does one whose PR is closed, merged or
+ *  conflicted. `prState` is an INJECTED input (the script is offline): absent → the age leg alone
+ *  decides. Fail-closed: an unparseable tip or instant, an unusable bound, or an unrecognised prState
+ *  keeps the ref outstanding (the pre-change answer) — unknown never loosens the dedup. */
+export function tickRefOutstanding({ tipIso, nowIso, maxAgeHours, prState } = {}) {
+  if (prState === "closed" || prState === "merged" || prState === "conflicted") return false;
+  if (prState !== undefined && prState !== null && prState !== "open") return true;
+  const tip = Date.parse(tipIso), now = Date.parse(nowIso);
+  if (!Number.isFinite(tip) || !Number.isFinite(now) || !Number.isFinite(maxAgeHours) || maxAgeHours <= 0) return true;
+  return (now - tip) / 3.6e6 <= maxAgeHours;
+}
+
+/** The first outstanding request for `prefix`, or null. PURE over `refs`: [{ ref, tipIso?, prState?,
+ *  requests: [filename], resultIds: Set<id> }]. A ref with a `tipIso` is a tick ref and is judged by
+ *  tickRefOutstanding; mainline is passed without one and always counts. */
+export function findOutstandingRequest({ prefix, localRequests = [], localResults = new Set(), refs = [], nowIso, maxAgeHours }) {
+  for (const f of localRequests) {
     if (f.startsWith(prefix) && f.endsWith(".json") && !localResults.has(f.slice(0, -5))) return `working tree (${f})`;
   }
-  const refs = ["origin/SignalGrid_Alpha", ...git(["for-each-ref", "--format=%(refname:short)", "refs/remotes/origin/mac/tick-*"]).out.split("\n").filter(Boolean)];
-  for (const ref of refs) {
-    const listed = git(["ls-tree", "--name-only", ref, `${REQ_DIR_REL}/`]).out.split("\n").map((l) => l.split("/").pop()).filter((f) => f && f.startsWith(prefix) && f.endsWith(".json"));
-    for (const f of listed) {
+  for (const r of refs) {
+    if (r.tipIso !== undefined && !tickRefOutstanding({ tipIso: r.tipIso, nowIso, maxAgeHours, prState: r.prState })) continue;
+    for (const f of r.requests) {
+      if (!f.startsWith(prefix) || !f.endsWith(".json")) continue;
       const id = f.slice(0, -5);
-      const done = localResults.has(id) || git(["cat-file", "-e", `${ref}:${RES_DIR_REL}/${id}.json`]).status === 0;
-      if (!done) return `${ref} (${f})`;
+      if (!(localResults.has(id) || r.resultIds.has(id))) return `${r.ref} (${f})`;
     }
   }
   return null;
+}
+
+/** The real git reader behind requestAlreadyQueued; the self-test injects a stub in its place. */
+const gitReader = {
+  localRequests: () => (existsSync(join(ROOT, REQ_DIR_REL)) ? readdirSync(join(ROOT, REQ_DIR_REL)) : []),
+  localResults: () => new Set(loadDir(RES_DIR_REL).map((r) => r.requestId).filter(Boolean)),
+  tickRefs: () => git(["for-each-ref", "--format=%(refname:short)", "refs/remotes/origin/mac/tick-*"]).out.split("\n").filter(Boolean),
+  requestFiles: (ref) => git(["ls-tree", "--name-only", ref, `${REQ_DIR_REL}/`]).out.split("\n").map((l) => l.split("/").pop()).filter(Boolean),
+  hasResult: (ref, id) => git(["cat-file", "-e", `${ref}:${RES_DIR_REL}/${id}.json`]).status === 0,
+  // A tip time that cannot be read is "" → unparseable → the ref stays outstanding.
+  tipIso: (ref) => git(["log", "-1", "--format=%cI", ref]).out.trim(),
+};
+
+function requestAlreadyQueued(criterionId, { nowIso, maxAgeHours }, reader = gitReader) {
+  // Dedup against work that is OUTSTANDING, never against history: a request that already has a
+  // result is done, and the criterion may decay again next week. The mark must survive the tick
+  // worktree returning to origin/SignalGrid_Alpha, so look in the working tree, on mainline, and
+  // on every unmerged mac/tick-* head — except a tick head older than maxAgeHours (see
+  // tickRefOutstanding). Any outstanding request for this criterion = already queued.
+  const prefix = `${REQUEST_PREFIX}${criterionId}-`;
+  const localResults = reader.localResults();
+  const refs = ["origin/SignalGrid_Alpha", ...reader.tickRefs()].map((ref) => {
+    // Filter by prefix BEFORE touching results: one cat-file per matching request, not per file.
+    const requests = reader.requestFiles(ref);
+    const resultIds = new Set(requests.filter((f) => f.startsWith(prefix) && f.endsWith(".json")).map((f) => f.slice(0, -5)).filter((id) => reader.hasResult(ref, id)));
+    return { ref, tipIso: ref === "origin/SignalGrid_Alpha" ? undefined : reader.tipIso(ref), requests, resultIds };
+  });
+  return findOutstandingRequest({ prefix, localRequests: reader.localRequests(), localResults, refs, nowIso, maxAgeHours });
+}
+
+/** The ONE call site emit() uses: derives the tick-ref age bound from SOFT_LIMIT_H.sim (never a typed
+ *  number, never staleAfterHours). An unusable value is passed through and fails closed (never stale). */
+export function queuedWhere(criterionId, state, reader = gitReader) {
+  return requestAlreadyQueued(criterionId, { nowIso: state.derivedAt, maxAgeHours: SOFT_LIMIT_H.sim }, reader);
 }
 
 /** An id is taken when a request or a result for it exists locally, on mainline, or on any
@@ -540,7 +588,7 @@ function emit(state, { write, deliver }) {
   }
   if (write) {
     for (const q of state.queue) {
-      const where = requestAlreadyQueued(q.criterionId);
+      const where = queuedWhere(q.criterionId, state);
       if (where) { q.queuedAs = where; lines.push(`request ${q.id} already queued (${where}) — not re-queued`); continue; }
       q.id = nextFreeRequestId(q.id, requestIdTaken);
       const rel = `${REQ_DIR_REL}/${q.id}.json`;
@@ -879,6 +927,39 @@ function selfTest() {
   t("check: a future date fails", chk({ ...good, derivedAt: "2099-01-01T00:00:00.000Z" }).fatal.some((f) => /future/.test(f)));
   t("check: an escalate that names nothing fails", chk({ ...good, escalations: [], probeErrors: [], decisionAddress: decisionAddress({ ...good, escalations: [] }) }).fatal.some((f) => /DR-054/.test(f)));
   t("check: an unparseable date is fatal, and an unparseable gate instant is fatal too", chk({ ...good, derivedAt: "nope" }).fatal.some((f) => /not parseable/.test(f)) && chk(good, { nowIso: "nope" }).fatal.some((f) => /own instant/.test(f)));
+  // stale tick ref (backlog row 2638): a tick head past the sim-request stall bound no longer suppresses a new request
+  const LIVE_REQ = "objective-loop-evidence-fresh-2026-09-30-4.json", PFX = "objective-loop-evidence-fresh-";
+  const NOW = "2026-10-17T12:00:00.000Z", TICK = "origin/mac/tick-20260930T204503Z", BOUND = SOFT_LIMIT_H.sim;
+  const ago = (h) => new Date(Date.parse(NOW) - h * 3.6e6).toISOString();
+  const find = (over, extra = {}) => findOutstandingRequest({ prefix: PFX, refs: [{ ref: TICK, tipIso: "2026-09-30T16:45:09-04:00", requests: [LIVE_REQ], resultIds: new Set(), ...over }], nowIso: NOW, maxAgeHours: BOUND, ...extra });
+  t("tick ref: the bound is SOFT_LIMIT_H.sim, a finite positive number, and is not the 3h heartbeat tolerance", Number.isFinite(BOUND) && BOUND > 0 && BOUND > 3);
+  t("tick ref: the live inputs (tip 2026-09-30, no result) are NOT outstanding", find({}) === null);
+  t("tick ref: with no age bound applied (Infinity) the same inputs ARE outstanding — the pre-change answer", find({}, { maxAgeHours: Infinity }) === `${TICK} (${LIVE_REQ})`);
+  t("tick ref: a ref past the 3h heartbeat tolerance but inside the stall bound still counts (landing latency, not the Mac tick)", find({ tipIso: ago(10) }) === `${TICK} (${LIVE_REQ})`);
+  t("tick ref: BOUNDARY — a tip exactly at the bound counts, one millisecond past it does not", find({ tipIso: ago(BOUND) }) !== null && find({ tipIso: new Date(Date.parse(ago(BOUND)) - 1).toISOString() }) === null);
+  t("tick ref: a young ref with an injected closed / merged / conflicted PR does not count", ["closed", "merged", "conflicted"].every((prState) => find({ tipIso: ago(1), prState }) === null));
+  t("tick ref: a young ref with no PR state, or an open one, still counts", find({ tipIso: ago(1), prState: undefined }) !== null && find({ tipIso: ago(1), prState: "open" }) !== null);
+  t("tick ref: a stale ref with an open PR is judged by age alone → not outstanding", find({ prState: "open" }) === null);
+  t("tick ref: unparseable tip, unparseable now, or an unusable bound keeps it outstanding (fail-closed)", find({ tipIso: "" }) !== null && find({ tipIso: "x" }) !== null && find({}, { nowIso: "nope" }) !== null && [0, -1, NaN, undefined, null].every((b) => find({}, { maxAgeHours: b }) !== null));
+  t("tick ref: an unrecognised PR state keeps it outstanding (declared ceiling: the live script never feeds prState)", find({ prState: "weird" }) !== null);
+  t("tick ref: a result on the ref closes it regardless of age", find({ tipIso: ago(1), resultIds: new Set([LIVE_REQ.slice(0, -5)]) }) === null);
+  t("mainline (no tipIso) always counts, however old; the working tree counts too", findOutstandingRequest({ prefix: PFX, refs: [{ ref: "origin/SignalGrid_Alpha", requests: [LIVE_REQ], resultIds: new Set() }], nowIso: NOW, maxAgeHours: BOUND }) !== null && findOutstandingRequest({ prefix: PFX, localRequests: [LIVE_REQ], nowIso: NOW, maxAgeHours: BOUND }) === `working tree (${LIVE_REQ})`);
+  // WIRING: the same decision driven through queuedWhere() (the one call site emit() uses) over a stub git reader.
+  const stubReader = (tips, extra = {}) => {
+    const calls = { hasResult: 0 };
+    const rd = {
+      localRequests: () => [], localResults: () => new Set(), tickRefs: () => Object.keys(tips),
+      requestFiles: (ref) => (ref === "origin/SignalGrid_Alpha" ? [] : [LIVE_REQ, "unrelated-request-a.json", "unrelated-request-b.json"]),
+      hasResult: () => { calls.hasResult++; return false; }, tipIso: (ref) => tips[ref], ...extra,
+    };
+    return { rd, calls };
+  };
+  const wst = { derivedAt: NOW, staleAfterHours: 3 };
+  t("wiring: a tick ref 17 days old does not suppress (queuedWhere → null)", queuedWhere("evidence-fresh", wst, stubReader({ [TICK]: "2026-09-30T16:45:09-04:00" }).rd) === null);
+  t("wiring: a tick ref 10h old (past staleAfterHours 3, inside the 48h stall bound) STILL suppresses — the bound is not staleAfterHours", queuedWhere("evidence-fresh", wst, stubReader({ [TICK]: ago(10) }).rd) === `${TICK} (${LIVE_REQ})`);
+  t("wiring: a tick ref younger than the bound suppresses, and an unreadable tip suppresses (fail-closed)", queuedWhere("evidence-fresh", wst, stubReader({ [TICK]: ago(1) }).rd) !== null && queuedWhere("evidence-fresh", wst, stubReader({ [TICK]: "" }).rd) !== null);
+  t("wiring: the bound follows state.derivedAt (the one sampled instant), not a fresh clock read", queuedWhere("evidence-fresh", { ...wst, derivedAt: "2026-09-30T20:00:00.000Z" }, stubReader({ [TICK]: "2026-09-30T16:45:09-04:00" }).rd) !== null);
+  t("perf: result lookups are made only for requests matching the criterion prefix — 1 cat-file for 3 request files on the tick ref, none on mainline", (() => { const { rd, calls } = stubReader({ [TICK]: ago(1) }); queuedWhere("evidence-fresh", wst, rd); return calls.hasResult === 1; })());
   // floor
   t("self-test floor: at least 40 assertions ran", checks.length >= 40);
 

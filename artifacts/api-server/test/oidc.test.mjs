@@ -22,12 +22,32 @@
 //      expired, unmapped tenant, unmapped role, unsigned/`alg:none`.
 import { spawn } from "node:child_process";
 import { createServer } from "node:http";
+import { createServer as netCreateServer } from "node:net";
 import { generateKeyPairSync, createSign, randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const serverEntry = resolve(here, "..", "dist", "index.mjs");
+
+// Every port this test hands out is OS-assigned, as `api.test.mjs` (#1106) does —
+// a fixed port here collides with the SAME fixed port bound by another tree or
+// tick on the same host. `handedOut` stops one run from reusing a number it just
+// released to itself (the OS may re-offer a just-closed probe port).
+const handedOut = [];
+// Probe on the same host the consumer binds: no host (wildcard) for ports handed to the
+// api-server, "127.0.0.1" for the loopback JWKS stub. On a bindv6only host the two differ.
+const freePort = (host) => new Promise((resolvePort) => {
+  const probe = netCreateServer();
+  probe.listen(...(host ? [0, host] : [0]), () => {
+    const p = probe.address().port;
+    probe.close(() => {
+      if (handedOut.includes(p)) return resolvePort(freePort(host));
+      handedOut.push(p);
+      resolvePort(p);
+    });
+  });
+});
 
 let passed = 0;
 let failed = 0;
@@ -51,7 +71,7 @@ function sign(claims, { alg = "RS256", kid = KID } = {}) {
   return `${header}.${payload}.${signer.sign(privateKey).toString("base64url")}`;
 }
 
-const JWKS_PORT = 5399;
+const JWKS_PORT = await freePort("127.0.0.1");
 const ISSUER = `http://127.0.0.1:${JWKS_PORT}`;
 const AUDIENCE = "signalgrid-api-test";
 const IDP_TENANT = "idp-tenant-abc";
@@ -63,7 +83,7 @@ const jwksServer = createServer((req, res) => {
 });
 await new Promise((r) => jwksServer.listen(JWKS_PORT, "127.0.0.1", r));
 
-const PORT = 5398;
+const PORT = await freePort();
 const BASE = `http://localhost:${PORT}/api`;
 const now = () => Math.floor(Date.now() / 1000);
 const baseClaims = (over = {}) => ({
@@ -145,7 +165,7 @@ try {
   // names an internal tenant the seed does not create, so one is spawned here, and
   // the only accepted answer is 401.
   {
-    const ABSENT_PORT = 5397;
+    const ABSENT_PORT = await freePort();
     const ABSENT_BASE = `http://localhost:${ABSENT_PORT}/api`;
     const ABSENT_TENANT = "tenant_that_the_seed_never_creates";
     const absentServer = spawn("node", [serverEntry], {
@@ -254,7 +274,9 @@ for (const [label, extraEnv] of [
     },
   ],
 ]) {
-  const brokenPort = PORT + 40 + (extraEnv.OIDC_TENANT_MAP ? 1 : 0);
+  // A fixed offset from PORT is no guarantee of freeness once PORT itself is
+  // OS-assigned — each broken-config case gets its own freePort() call.
+  const brokenPort = await freePort();
   const env = { ...process.env, PORT: String(brokenPort), LOG_LEVEL: "silent" };
   // Start from a clean slate so a variable set in the ambient environment cannot
   // accidentally COMPLETE the config this case needs to be broken.

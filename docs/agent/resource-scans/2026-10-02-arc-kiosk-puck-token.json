@@ -1,0 +1,226 @@
+{
+  "$comment": "Stage outputs of tool-evaluation-by-use §5b for the 2026-10-02 ARC kiosk photo and puck-as-token note: A one self-scan proposal (Opus tier), B four confirms from roster perspectives (Sonnet tier; each named one missing task, recorded here as M-1..M-4), C the coordinator's decision (Fable), then build (Sonnet) and review (Opus). The vendor facts in the proposal are the vendor's own marketing as read from public pages on 2026-10-02; none was tested. The photo is not committed and the kiosk label's serial number, support phone and support email are recorded nowhere in the tree. One domain the stage A text read off the kiosk label was redacted by the build stage for the same reason.",
+  "date": "2026-10-02",
+  "resources": [
+    {
+      "name": "ARC kiosk photo (ChargeItSpot 'Asset ReCharge') and the owner's puck-as-token note",
+      "upstream": "https://experiencearc.com/about/",
+      "form": "owner-pasted photo (not committed) plus the owner's words, quoted whole in docs/SESSION_PUCK_HARDWARE_HYPOTHESIS.md and docs/agent/RESOURCE_INTAKE.md",
+      "licence": "not applicable; nothing of the vendor's is vendored",
+      "pin": "none (no code or package taken; public pages read as search excerpts and one fetch of the FIDO CTAP 2.1 spec)",
+      "fidoSpec": "https://fidoalliance.org/specs/fido-v2.1-ps-20210615/fido-client-to-authenticator-protocol-v2.1-ps-errata-20220621.html (section 6.6 authenticatorReset re-read by the build stage on 2026-10-02: invalidates all generated credentials; evidence of user interaction; no-display authenticators within 10 seconds of power-up; per-transport support allowed but required on at least one)"
+    }
+  ],
+  "proposals": [
+    {
+      "whatItIs": "ARC is a ChargeItSpot product. The MHI member listing calls it \"Asset Recharge Center\" (https://www.mhi.org/members/115328, read as a search excerpt only, not fetched). The kiosk label in the owner's photo prints a web domain, which is not reproduced here because the label also carries contact details (publication boundary); the vendor's public site is cited below. It is a self-service device-custody locker for shared work devices: a touchscreen kiosk with \"expandable modular locker banks and a cloud-based management platform\", programmed \"to release the mobile device with the most charge, alert managers when a device has not been returned, and allow employees to flag damaged devices\" (https://experiencearc.com/introducing-arc-chargeitspots-new-mobile-device-management-locker-3/). That page also says ARC \"contains an audit trail for device check-ins, effectively preventing employees from checking out a second device before having returned the first one\", and that broken devices are kept out of circulation \"unless it's been cleared by a supervising manager\". The About page (https://experiencearc.com/about/) says it \"Works with all major brands like Zebra, Honeywell, Apple, and Verifone\", \"allows for over-the-air software updates to devices\", \"Integrates with company logins, employee badges, and mobile device management tools\" and \"Connects to business systems like payroll, ticketing, and task tracking\". It is sold into retail, grocery, warehouse, parcel, airline, manufacturing and healthcare.\n\nIntegration surface: the vendor says it integrates, but I found nothing public. Two web searches turned up no API, webhook, SDK or developer documentation for ChargeItSpot ARC. The hits named \"Arc\" (arc.gbci.org, CData Arc, Arc XP) are unrelated products. Every integration fact here is a vendor marketing claim, and none of it has been tested. The site's shrink, time and overstock percentages are vendor-stated without a method and are not reproduced in this proposal.\n\nWhat the photo shows: one ARC kiosk with \"Pick Up Device\" and \"Return Device\" buttons. The serial number, support phone and support email on its label stay out of the tree (publication boundary).",
+      "alreadyHere": [
+        "docs/HARDWARE_PARTNER_MATRIX.md:17 already has the row 'Device-dispensing kiosks and checkout stations | ARC, and other multi-bay dispensing-kiosk vendors | Kiosk ID, bay ID, dispense/return event, per-bay occupancy and charge state, bay-fault indication, unreturned-device signal | Treat the kiosk as the custody system of record and consume it as a read-only signal source'. ARC is already in the tree by name, so the matrix is not the gap.",
+        "docs/HARDWARE_PARTNER_MATRIX.md:40-95 ('Where dispensing-kiosk claims land') maps ARC-class vendor claims to the custody model. Returned-and-charging is checked_in + charging. Not returned is overdue (CUSTODY_OVERDUE restrict). Broken bay is dockState=faulted (DOCK_FAULTED). Failing battery is batteryHealth=failing (BATTERY_FAILING). Releasing the most-charged device is 'Not performed here'. Analytics are out of scope. Shrink is 'Not a signal'. OTA updates from a kiosk are flagged as 'a management-plane claim, and it is currently unmodelled' (cross-referenced to the PRODUCT_CORE_THREAT_MODEL custody-device-as-update-channel section). ARC's About page claims these exact capabilities.",
+        "docs/ZERO_COST_LIVE_TEST_MATRIX.md:222 says 'The dock/kiosk/locker aisle (Beam Mobile, LocknCharge, ARC kiosks, Traka/Vecos) has no public sandboxes of any kind'. This is the only match for `pnpm run check:absence \"ARC kiosk\"`, which exited 2 (INCONCLUSIVE, a catalogue line). The bare word 'ARC' at matrix :17 was not probed by check:absence.",
+        "lib/event-contract/src/types.ts:11-25: the canonical event contract already defines the kiosk's two buttons as events: checkout_requested, checkout_granted, checkout_denied, device_removed, device_returned, dock_unlocked, dock_relocked, dock_timeout, non_return, custody_expired.",
+        "lib/integrations/src/integrations/rtls-custody/custody-ledger.ts:1-2 ('does the checkout ledger agree with the dock bay about this device, and may THIS requester take it?') is already the pickup-authorization decision. It is fail-closed: the only grant needs ledger clear + seated + paired + under cap. ARC's two extra vendor claims map onto it. 'Can't take a second device before returning the first' is CapState (custody-ledger.ts:53). 'Broken device held until a manager clears it' is the hold (step_up) rung. The proof is in scripts/src/rtls-custody-proof.ts:31-32.",
+        "scripts/src/event-contract-proof.ts:466-472 pins the one open wiring gap: 'What does not exist is any path from a SignalGridEvent[] to that judgement: evaluateCustodyLedger grades a supplied snapshot, nothing derives such a snapshot from a timeline'. Lines :518-528 record it as PARTLY CLOSED by #720 (CUSTODY_STALE_OR_CONTESTED). The gap is vendor-neutral, not specific to ARC.",
+        "lib/integrations/src/integrations/: there is no kiosk, locker or dispense connector directory. The custody-adjacent connectors are custody-beacon/ and rtls-custody/, each with a mock-transport.ts. That is the emulator pattern a vendor adapter would copy.",
+        "docs/SMART_LOCKER_IDENTITY_CUSTODY_MODEL.md:5-11 has the fixture-only locker/kiosk/custody pattern, with lockers as systems of record. docs/CREDENTIAL_READER_SIGNAL_MODEL.md:88-90 says a valid badge + compliant device + expected bay gives allowCandidate, and a wrong bay gives restrict. docs/SIGNAL_SOURCE_CATALOG.md:29-30 has Physical Custody and Credential Reader / Smart Locker rows naming Beam, LocknCharge, Traka, Vecos and LocknCharge/FUYL, but not ARC or dispensing kiosks.",
+        "check:absence results: 'ChargeItSpot' was CORROBORATED (exit 0) across 4 probes, so the vendor name is absent. 'device locker' was CORROBORATED for that exact phrase only. The concept is present as 'smart locker' in many files (for example docs/HARDWARE_PARTNER_MATRIX.md:16, docs/SMART_LOCKER_IDENTITY_CUSTODY_MODEL.md:1).",
+        "docs/DECISION_RECORDS.md:2745 (DR-043). The puck is a customer-testable hardware hypothesis. It has three separate functions (identity, custody binding, ongoing presence). It is 'a SOURCE OF EVIDENCE — never the policy engine' and 'registers through the organization's existing identity plane, never a SignalGrid key database' (item 2). No hardware work starts before the discovery gates (item 4; tally 0 of 15 at DISCOVERY_LOG.md:159 as cited in DR-043). Item 5 forbids claiming 'relay-proof', 'clone-proof', or that any mitigation prevents an attack.",
+        "docs/DECISION_RECORDS.md:3495-3512 (DR-055) records the owner's 2026-09-23 C1-C7 flow as a refinement that 'amends nothing in DR-043's text; it adds to it'. It was amended in place on 2026-09-24 for the assigned-device note. This is the precedent for absorbing a new owner puck note.",
+        "docs/SESSION_PUCK_HARDWARE_HYPOTHESIS.md:162 assigns 'FIDO credential registration and authentication; attestation and authenticator-model policy' to the IdP. :205-212 is the threat table: stolen puck leads to step_up, and a lost credential leads to 'reissue with a new keypair, never a cloned private key'. :216-224 is the lifecycle: assign to an employee, register with the IdP, active, then revoke (IdP + PACS + SignalGrid mapping) and reissue. :353 says 'no parallel identity administration'. :395-403 is the never-claim list, including 'clone-proof'. :429 is C4 ('The locker vendor releases the bay; SignalGrid returns a per-device ready or hold'). :586-590 is assigned-mode loss/wipe handling.",
+        "docs/BUILD_BACKLOG.md:814-1195: Puck 1-5 are done (attach domain lib/signalgrid-core/src/attach.ts, removal-to-suspend, audit events, simulator scenario, hardware tally). Puck 6-15 are open. Puck 9 (:1044) is puck-to-checkout binding: 'checking out a device that still carries another worker's puck is deny'.",
+        "lib/dual-control (actionClass break_glass | privileged_config | bulk_data | unknown at types.ts:88) and docs/DUAL_CONTROL.md:15 provide an existing two-person authorization pattern 'where a single compromised or coerced credential should not be enough'. docs/HARDWARE_ELEVATED_ACCESS_TOKEN.md:13 already has a case-mounted FIDO2 token concept.",
+        "docs/agent/RESOURCE_INTAKE.md has the earlier puck rows at :111 (2026-09-12 research doc), :125 (2026-09-23 C1-C7) and :126 (2026-09-24 assigned-device). There is no row for ARC/ChargeItSpot or for the 2026-10-02 note."
+      ],
+      "ownerRequirementRead": "The owner's words, recorded verbatim as his direction: \"...using the puck which is replacing of your ID badge/key card/2fa/MFA all of the above this device is the token for that user and cannot be duplicated and or replicated its hard locked once it's enrolled and registered to that person only way it's cleared is by factory wipe only super admin of the system can do without additional verification and validation making it impossible to break and or hack.\"\n\nTranslated into requirements the repo can hold truthfully:\n\n(R1) One token that replaces badge, keycard, 2FA and MFA becomes: the puck MAY serve as the single carried credential. It may cover the door applet, the IdP passkey and the session attach, and already does in C2 and A4 (SESSION_PUCK :429ff, :554). CONFLICT for the owner: docs/PURPOSE.md:38 (canonical, DR-020) says 'The factor is the customer's choice, and the grid is agnostic to it.' The requirements text can make the puck one offered factor, not the required one. Making it mandatory is a PURPOSE change only the owner can make.\n\n(R2) 'Cannot be duplicated or replicated' becomes: a non-exportable private key generated inside a secure element. Registration is accepted only with attestation and an authenticator-model allowlist enforced by the IdP (SESSION_PUCK :162, :257). Replacement always uses a NEW keypair, never a copy (:212). This is a proven, testable property, not 'clone-proof'.\n\n(R3) 'Hard locked once enrolled to that person' becomes: the binding is the IdP registration mapping employee to credential ID to authenticator model/serial to issuance and revocation state (:216-224). Puck 9 (BUILD_BACKLOG.md:1044) and assigned mode (:551ff) add a tighten-only check that the puck presented matches the subject and device. Per DR-043 item 2 the lock lives in the IdP, not in a SignalGrid key database.\n\n(R4) 'Cleared only by factory wipe' becomes a hardware fact the owner needs to know. FIDO CTAP 2.1 §6.6 authenticatorReset (https://fidoalliance.org/specs/fido-v2.1-ps-20210615/fido-client-to-authenticator-protocol-v2.1-ps-errata-20220621.html) needs only 'evidence of user interaction' and, on a key with no display, a request 'within 10 seconds of powering up'. It 'Invalidates all generated credentials' and disables enterprise attestation. So anyone holding an off-the-shelf key can wipe it, and 'only the super admin can clear it' cannot be a hardware property. The wipe does make the puck inert, which is the fail-closed outcome. The protected step is RE-BINDING: a new IdP registration for a person. That is where the super-admin control belongs.\n\n(R5) 'Only super admin, with or without additional verification'. The sentence parses two ways: (a) only a super admin can wipe or re-bind, and only after additional verification; (b) a super admin can do it without additional verification and everyone else needs it. Both readings are recorded next to the quote. The proposal, not a decision: re-binding and revocation run through the IdP/PACS admin under the existing two-person pattern (lib/dual-control types.ts:88; DUAL_CONTROL.md:15, 'a single compromised or coerced credential should not be enough'). That suits either reading and removes a single-admin point of compromise. CONFLICT for the owner: if 'super admin of the system' means a SignalGrid super-admin who holds keys or enrolment, that contradicts DR-043 item 2 (no SignalGrid key database) and SESSION_PUCK :353 (no parallel identity administration). That would be a doctrine change, not a requirement.\n\n(R6) 'Impossible to break or hack' becomes: the repo states proven properties (non-exportable key, attestation enforced, reissue with a new keypair, revocation sequence), points to the threat table (:205-212), and keeps the fail-closed rule. A puck that is absent, unknown or reported only by a mechanical sensor never loosens the answer: unknown attach is at least step_up (attach.ts header, DR-043 item 3a), and a mechanical-only attach counts as unknown (SESSION_PUCK new-rows table). 'Impossible' stays the owner's word, never the repo's (DR-043 item 5; SESSION_PUCK :400).",
+      "landingPlace": "The landing place is a dated section in docs/SESSION_PUCK_HARDWARE_HYPOTHESIS.md, 'Credential binding and reset (owner note 2026-10-02, DR-055 amendment)', plus an in-place amendment to DR-055 in docs/DECISION_RECORDS.md (owner-reserved to merge, writable on a PR). The ARC kiosk lands as a single cross-reference line in that section plus a RESOURCE_INTAKE row. It does not get a new matrix row.\n\nWhy this place: DR-055 is the existing refinement record. It 'amends nothing in DR-043's text; it adds to it' (DECISION_RECORDS.md:3505), and it was already amended in place for the 2026-09-24 owner note, so the 2026-10-02 note follows the same precedent. The hypothesis page already holds the C1-C7 and assigned-mode sections in the same shape.\n\nWhy not the alternatives:\n- Amending DR-043 directly would break the pattern of leaving DR-043's text untouched and stacking refinements in DR-055.\n- A new HARDWARE_PARTNER_MATRIX or SIGNAL_SOURCE_CATALOG row for ARC is wrong because matrix :17 already names ARC and :40-95 already maps its claims. A second row would duplicate it.\n- A kiosk connector directory is wrong because the event contract and custody-ledger already model pickup and return vendor-neutrally, and no public ARC API exists to adapt to.",
+      "gapClosed": "The puck page has a lifecycle (SESSION_PUCK :216-224) and a lost-credential sequence (:212), but nothing on who may reset or re-bind a puck. It also lacks the hardware fact that a CTAP reset is available to whoever holds the key, and it has no answer to the owner's 'hard locked / super-admin factory wipe' requirement. A grep of the puck page and docs/ for 'super admin', 'factory wipe/reset' and 'authenticatorReset' found nothing about the puck. The only hits were unrelated Knox, DDM-re-enroll and resolution text.\n\nA second gap sits next to it: no gate catches absolute-security wording. scripts/check-launch-claims.mjs OVERCLAIM_MARKERS (:426-430) contains only the three 'evaluated today' regexes. No script under scripts/ matches 'unhackable', 'clone-proof', 'hack-proof' or 'tamper-proof'. 'puck' is not in DEFERRED_NOUNS (:471-472). So buyer copy saying 'the unhackable puck replaces your badge' would pass every gate today. The ban exists only as prose, in DR-043 item 5 and SESSION_PUCK :400.",
+      "claimDiscipline": "Owner's words (recorded verbatim as direction, never as a repo claim): 'cannot be duplicated and or replicated', 'hard locked', 'only way it's cleared is by factory wipe only super admin', 'impossible to break and or hack', 'replacing your ID badge/key card/2fa/MFA all of the above'.\n\nSentences the docs MAY carry (all marked design target, deferred, not shipped):\n- 'The puck is designed around a non-exportable key generated in a secure element; the IdP accepts its registration only with attestation from an allowlisted authenticator model.'\n- 'Replacement always issues a new keypair; no key is copied.'\n- 'The binding to one person is the IdP registration, revoked through the IdP and the PACS.'\n- 'A factory reset (CTAP authenticatorReset) erases the puck's credentials and leaves it unusable; binding it to anyone again requires a new IdP registration, proposed to require two authorized administrators.'\n- 'An absent, unknown or mechanically-reported puck never loosens a decision.'\n- 'ARC-class dispensing kiosks are a candidate read-only custody signal source; the kiosk stays the system of record.'\n\nSentences the docs may NOT carry, in any tense:\n- unhackable, impossible to hack or break, clone-proof, cannot be duplicated, tamper-proof\n- only the super admin can wipe it (false for the hardware, per CTAP §6.6)\n- the puck replaces the customer's badge or MFA (conflicts with PURPOSE.md:38)\n- any ARC integration, partnership or certification\n- ARC's 93%/84%/75% or shrink figures as fact\n\nWhich gate catches an over-claim: today, none mechanically. The computed task says scripts/check-launch-claims.mjs denies 'impossible to hack', 'cannot be duplicated' and 'unhackable'. That is false: its OVERCLAIM_MARKERS (:426-430) hold only three 'evaluated today' regexes, no script under scripts/ matches those words, and 'puck' is not in DEFERRED_NOUNS (:471-472). The ban exists only as prose in DR-043 item 5 and SESSION_PUCK :400. Task ARC-2 is the fix.\n\nGates that do apply today:\n- check-launch-claims rule 3 catches unhedged 'custody' or 'badge binding' in buyer copy.\n- check-known-false-claims catches only claims already registered in docs/agent/FALSE_CLAIMS.json.\n- check-cited-paths catches bad path:line citations.",
+      "tasks": [
+        {
+          "id": "ARC-1",
+          "title": "Record the 2026-10-02 puck credential-binding and reset requirements (R1-R6) as a DR-055 amendment plus a dated section on the hypothesis page",
+          "evidence": "docs/DECISION_RECORDS.md:3505 (DR-055 adds to DR-043, amended in place 2026-09-24); docs/SESSION_PUCK_HARDWARE_HYPOTHESIS.md:162, :212, :216-224, :353, :400; docs/PURPOSE.md:38; lib/dual-control/src/types.ts:88; CTAP 2.1 §6.6 at the fidoalliance.org URL quoted above",
+          "change": "One new section in SESSION_PUCK_HARDWARE_HYPOTHESIS.md with: the owner's sentence verbatim; both parses of the super-admin clause; R1-R6 as requirements (non-exportable key + IdP attestation allowlist; binding = IdP registration mapping; a CTAP reset is open to the holder and leaves the puck inert, so re-binding is the guarded step; re-bind and revoke via IdP/PACS admin under dual control as a proposal); the two owner conflicts (PURPOSE:38 factor-agnostic; DR-043 item 2 / :353 no SignalGrid key DB) stated as open questions; and a one-line ARC cross-reference to HARDWARE_PARTNER_MATRIX.md:17. Also a short in-place amendment paragraph in DR-055 and a RESOURCE_INTAKE.md row for ARC + the note. Prose only; no lib/ change.",
+          "owner": "doc-updater (drafts); owner merges, because DR text is owner-reserved",
+          "risk": "The DR edit and settling either conflict are the owner's calls; the PR must leave both as questions. Docs figures and cited paths must pass check-cited-paths and preflight. The fetched vendor facts are marketing; the serial number, phone, email and percentages must not enter the tree."
+        },
+        {
+          "id": "ARC-2",
+          "title": "Gate absolute-security wording and make 'puck' a hedged deferred noun in the launch-claims gate",
+          "evidence": "scripts/check-launch-claims.mjs:426-430 (OVERCLAIM_MARKERS = three 'evaluated today' regexes only), :471-472 (DEFERRED_NOUNS has no 'puck'), :35 (SELF-TEST FIRST rule); a grep of scripts/ found no 'unhackable|clone-proof|hack-proof|tamper-proof|impossible to hack' marker; DR-043 item 5 and SESSION_PUCK :400 ban them in prose only",
+          "change": "Add security-absolute markers (unhackable, hack-proof, clone-proof, tamper-proof, impossible to (hack|break|clone|duplicate), cannot be (duplicated|cloned|hacked)) to OVERCLAIM_MARKERS. Add \\bpucks?\\b to DEFERRED_NOUNS. Add one synthetic self-test violation for each. stripNegated (:568) already exempts 'never claim X' lines. Then run node scripts/preflight.mjs to the verdict line.",
+          "owner": "gate-and-proof-engineer",
+          "risk": "Existing buyer-facing copy that mentions 'puck' without a hedge, or uses an absolute word inside a non-negated quote, would turn the gate red on landing. Run the gate first and fix any hits with true hedged wording, never by deleting the marker. Only the declared buyer-facing scope is scanned, so docs/ prose is unaffected."
+        },
+        {
+          "id": "ARC-3",
+          "title": "Tested and NOT proposed as a build: an ARC custody-kiosk connector emulator. Smallest residual: name dispensing kiosks in the signal catalog",
+          "evidence": "lib/event-contract/src/types.ts:11-25 (checkout_requested/granted/denied, device_removed/returned already cover Pick Up and Return); custody-ledger.ts:1-2 (pickup authorization already decided, fail-closed); scripts/src/event-contract-proof.ts:466-472 and :518-528 (the only open gap is vendor-neutral timeline-to-ledger wiring, partly closed by #720); two web searches found no public ARC API/webhook/SDK; docs/SIGNAL_SOURCE_CATALOG.md:29-30 lists Beam, LocknCharge, Traka, Vecos but no dispensing kiosk",
+          "change": "No connector directory and no emulator: there is no vendor surface to emulate, and the generic one already exists (the custody-beacon and rtls-custody mock-transport.ts pattern is what to copy once an ARC event shape is obtained under an approved discovery path). The only edit is appending 'device-dispensing kiosks (ARC-class)' to the Physical Custody candidate-systems cell at SIGNAL_SOURCE_CATALOG.md:29, linked to HARDWARE_PARTNER_MATRIX.md:17. The timeline-to-ledger wiring stays its own vendor-neutral backlog item rather than an ARC task.",
+          "owner": "doc-updater",
+          "risk": "Low. The catalog row is a design-target listing inside a deferred family, so it must keep the deferred hedge in the same block or check-launch-claims rule 3 applies if the file is ever in buyer scope. The opposite risk is building an 'ARC adapter' from marketing copy, which would be a fabricated integration; that is why it is not proposed."
+        },
+        {
+          "id": "M-1",
+          "title": "Proof vectors: a reset, unbound or unreadable puck never yields allow, and re-bind needs two authorizers",
+          "evidence": "lib/dual-control/src/types.ts:33 and :88 have no credential re-bind class, so the re-bind step ARC-1 proposes has no gate today. The proposal itself cites a CTAP reset as open to whoever holds the key (CTAP 2.1 §6.6), so a wiped puck can be re-registered by one admin. docs/SESSION_PUCK_HARDWARE_HYPOTHESIS.md:212 and :216-224 describe reissue and lifecycle in prose only. I read the dual-control types file, not attach.ts, so check the attach.ts header before wiring the vectors.",
+          "change": "Add a fixture-backed proof with three vectors on the attach/dual-control path. First, a puck with absent, wiped or unreadable IdP binding yields unknown, so step_up or worse and never allow. Second, a puck registered within a freshly re-bound window never loosens the answer. Third, a re-bind or revoke request carrying one authorizer, or a single super-admin credential, is refused because the second authorizer is missing or unknown. This needs a new elevated-action class beside the existing four, and unknown stays the fail-safe. Add it to the proof registry so validate-sim-macos.sh and preflight pick it up.",
+          "owner": "gate-and-proof-engineer (adds the proof); owner approves the new action class, because it touches the dual-control contract",
+          "origin": "missing task named by the fail-closed-auditor confirm (stage B)"
+        },
+        {
+          "id": "M-2",
+          "title": "Register the vendor-claim and absolute-security phrases in the false/overclaim registries before any ARC or puck copy lands",
+          "evidence": "scripts/check-launch-claims.mjs:426-430 has no security-absolute markers; grep of scripts/*.mjs and docs/CLAIM_INVENTORY.md finds no entry for 'unhackable', 'clone-proof', 'cannot be duplicated' or ChargeItSpot/ARC vendor claims; the only guard is prose (docs/SESSION_PUCK_HARDWARE_HYPOTHESIS.md:~400, DR-043 item 5)",
+          "change": "Add a CLAIM_INVENTORY.md entry classifying 'puck replaces badge/MFA', 'cannot be duplicated', 'only super admin can clear', and 'integrates with ARC/ChargeItSpot' as not-claimable (design target or owner-direction only), then have the ARC-2 gate cite it so prose and gate share one source.",
+          "owner": "gate-and-proof-engineer (CLAIM_INVENTORY wording reviewed by owner)",
+          "origin": "missing task named by the launch-claims confirm (stage B)"
+        },
+        {
+          "id": "M-3",
+          "title": "Name the kiosk's two calls (ask and tell) and the unknown-mapping rule in the custody model",
+          "evidence": "docs/PHYSICAL_CUSTODY_SIGNAL_MODEL.md:7-26 defines a vendor-neutral event schema with custodyState (unknown, checked_in, checked_out, overdue, exception, maintenance) but never says which direction a kiosk talks. rtls-custody/custody-ledger.ts:1-12 is the decision path (kiosk ASKS: Pick Up pressed, may this requester take it). lib/event-contract/src/types.ts:11-25 is the event path (kiosk TELLS: device_removed, device_returned, non_return). event-contract-proof.ts:466-472 (as cited in the proposal) records that nothing derives a ledger snapshot from a timeline.",
+          "change": "Add a short 'Kiosk interaction contract' paragraph to PHYSICAL_CUSTODY_SIGNAL_MODEL.md and HARDWARE_PARTNER_MATRIX.md near row :17. Call 1 is a decision request on Pick Up (kiosk asks, SignalGrid returns allow/step_up/hold/deny, the kiosk keeps the bay lock, SignalGrid never actuates it). Call 2 is an event push on dispense, return, fault and unreturned (kiosk tells, SignalGrid never writes back to the ledger). Any kiosk field that is missing, stale or unmapped maps to the unknown value of the matching axis, which holds the decision (custody-ledger.ts:31). The puck stays evidence in the request, never the engine. Doc-only, vendor-neutral, no ARC API claimed.",
+          "owner": "doc-updater",
+          "origin": "missing task named by the architect confirm (stage B)"
+        },
+        {
+          "id": "M-4",
+          "title": "Ask the owner the two blocking questions via a raised hand, then stop",
+          "evidence": "docs/PURPOSE.md:38 (factor is the customer's choice, grid is agnostic) versus the owner's 'replacing ID badge/key card/2FA/MFA all of the above'; docs/DECISION_RECORDS.md DR-043 item 2 (no SignalGrid key database) versus 'only super admin of the system' can clear it; docs/agent/objective-state.json tasks[] has no puck task",
+          "change": "File one hand with pnpm run hand:raise listing two yes/no owner questions. (1) Is the puck one offered factor or the required one? (2) Does 'super admin' mean the customer's IdP/PACS admin under dual control (lib/dual-control/src/types.ts:88), or a SignalGrid-held key or enrolment role? Land ARC-1 and ARC-2 as drafts that carry both readings, and write nothing further on either until he answers.",
+          "owner": "owner (decision); docs lane files the hand",
+          "origin": "missing task named by the project-manager confirm (stage B)"
+        }
+      ],
+      "model": "opus (claude-opus-5-5). Judgment stage per DR-047."
+    }
+  ],
+  "confirms": [
+    {
+      "perspective": "fail-closed-auditor",
+      "model": "sonnet",
+      "votes": [
+        {
+          "id": "ARC-1",
+          "verdict": "amend",
+          "reason": "Direction is right: it makes a CTAP reset leave the puck inert, which fails closed. But R5 says re-bind and revoke run 'under the existing two-person pattern', and that pattern has no such class. lib/dual-control/src/types.ts:33 and :88 list only break_glass, privileged_config, bulk_data and unknown. The section must also say an absent or unreadable IdP binding means unbound, never already enrolled. This is the iOS managedBool lesson (CLAUDE.md, no policy default from the absence of managed configuration). Amended change: add to the ARC-1 section a fail-closed clause that a puck with no IdP binding, a wiped puck, or an unreadable binding state is unknown, so step_up at minimum and never allow, and state that re-bind needs a new elevated-action class (currently unmodelled) plus two authorizers, naming a single super-admin credential as the failure to avoid."
+        },
+        {
+          "id": "ARC-2",
+          "verdict": "confirm",
+          "reason": "Checked in the tree. scripts/check-launch-claims.mjs:426-430 holds only the three evaluated-today regexes. DEFERRED_NOUNS at :471-472 has no puck. A grep of scripts/*.mjs and scripts/src for unhackable, clone-proof, impossible to hack and cannot be duplicated returned no hits. The ban exists as prose only, so the gate is a real gap. Keep the instruction to add the self-tests first, run the gate before landing, and never delete a marker to make it green."
+        },
+        {
+          "id": "ARC-3",
+          "verdict": "confirm",
+          "reason": "Not building a kiosk adapter is the fail-closed choice, since there is no real ARC surface to emulate and a connector written from marketing copy would be invented. The existing path already holds on missing data. lib/integrations/src/integrations/rtls-custody/custody-ledger.ts:40-46 has LedgerState, SlotState and PairingState each with an unknown value, and a device the ledger does not track leaves ledger_state absent, read as unknown and a hold, never none. So an absent or unknown kiosk signal cannot loosen a pickup. The catalog line stays hedged as a deferred design target."
+        }
+      ],
+      "missing": "M-1: Proof vectors: a reset, unbound or unreadable puck never yields allow, and re-bind needs two authorizers"
+    },
+    {
+      "perspective": "launch-claims / publication-boundary lens (Stage B)",
+      "model": "sonnet",
+      "votes": [
+        {
+          "id": "ARC-1",
+          "verdict": "amend",
+          "reason": "Substance holds: DR text is owner-gated (scripts/check-owner-gated-surfaces.mjs:48,126), and DR-043 item 5 plus docs/SESSION_PUCK_HARDWARE_HYPOTHESIS.md:~395-403 already carry the never-claim list. Amended change: land only the SESSION_PUCK section plus the RESOURCE_INTAKE row on a PR; draft the DR-055 amendment as proposed text in the PR body for the owner to apply, and keep the owner's quoted words inside a clearly labelled owner-direction block so they are not read as repo claims. Never write the 'cannot be duplicated' sentence or 'only the super admin' as present-tense fact outside that block; keep 'impossible' only as a quote. Keep the serial number, phone, email and vendor percentages out."
+        },
+        {
+          "id": "ARC-2",
+          "verdict": "amend",
+          "reason": "Gap confirmed by reading: scripts/check-launch-claims.mjs:426-430 OVERCLAIM_MARKERS holds only three evaluated-today regexes, line 471-472 DEFERRED_NOUNS has no 'puck', and grep of scripts/*.mjs and docs/CLAIM_INVENTORY.md for unhackable|clone-proof|impossible to hack returns zero. But the gate scans only derived buyer-facing scope, and the checked-in prose in docs/SESSION_PUCK (:395-403 list) and DR-043 item 5 names these words. Amended change: add the absolute-security markers to OVERCLAIM_MARKERS and a self-test violation, but only as a separate small PR after running the gate on current buyer scope; DEFER adding 'puck' to DEFERRED_NOUNS until the current hits are counted, since it changes rule 3 for every buyer block and may turn buyer copy red (the file's own history notes such additions moved the buyer gate). The negation exemption must be verified by the self-test so the never-claim lines do not trip it."
+        },
+        {
+          "id": "ARC-3",
+          "verdict": "confirm",
+          "reason": "Matches the tree: HARDWARE_PARTNER_MATRIX.md:17 already names ARC and its claims map at :40-95, so a new matrix row or connector would duplicate it or fabricate an integration from marketing copy. The one-cell catalog addition (docs/SIGNAL_SOURCE_CATALOG.md:29, Physical Custody row, which lists Beam, LocknCharge, Traka, Vecos but no dispensing kiosk) is safe wording-wise if it says 'candidate', 'design target', not 'integrates with ARC'. No partner or certification wording; vendor name ChargeItSpot stays out of buyer scope."
+        }
+      ],
+      "missing": "M-2: Register the vendor-claim and absolute-security phrases in the false/overclaim registries before any ARC or puck copy lands"
+    },
+    {
+      "perspective": "architect / signal-domain lens (custody signal model, lib/integrations connector shapes, integration map)",
+      "model": "sonnet",
+      "votes": [
+        {
+          "id": "ARC-1",
+          "verdict": "confirm",
+          "reason": "Doc-only landing is right for the owner note. The puck page and DR-055 are the precedent (proposal cites DECISION_RECORDS.md:3505). docs/PURPOSE.md:38 does say 'The factor is the customer's choice, and the grid is agnostic to it', so the badge/MFA-replacement conflict is real and must stay an owner question. Architecture point to add in the section: the puck is evidence, the kiosk is a custody source, and neither is the policy engine (DR-043)."
+        },
+        {
+          "id": "ARC-2",
+          "verdict": "amend",
+          "reason": "I confirmed the gap: scripts/check-launch-claims.mjs:426-430 OVERCLAIM_MARKERS holds only the three 'evaluated today' regexes, DEFERRED_NOUNS at :471-472 has no 'puck', and grep of scripts/*.mjs for unhackable|clone-proof|hack-proof|tamper-proof|impossible to hack returned nothing. Amended change: add only the security-absolute markers to OVERCLAIM_MARKERS, each with a self-test, and drop the 'puck' DEFERRED_NOUN until a dry run shows how many buyer-scope hits it causes, because 'puck' is a hardware-hypothesis noun and not a signal dimension. Also note DEFERRED_NOUNS already lists 'tamper (sensor|witness|detection)', so the new tamper-proof marker must not collide with it. Owner reserved to the gate engineer, not this lens."
+        },
+        {
+          "id": "ARC-3",
+          "verdict": "confirm",
+          "reason": "No kiosk connector is correct. lib/integrations/src/integrations/ has only custody-beacon/ and rtls-custody/, both with mock-transport.ts, evaluate.ts and types.ts. rtls-custody/custody-ledger.ts:1-12 already grades 'may THIS requester take it' fail-closed, with unknown on every axis (LedgerState/SlotState/PairingState/CapState, :44-53, domains :90-94). lib/event-contract/src/types.ts:11-25 already carries checkout_requested/granted/denied, device_removed/returned, non_return. HARDWARE_PARTNER_MATRIX.md:17 already names ARC and says read-only signal source, so ARC today is a signal source row, not a connector family. Confirm the single catalog edit: SIGNAL_SOURCE_CATALOG.md:29 (Physical Custody) and :30 (Credential Reader / Smart Locker) list Beam/LocknCharge/Traka/Vecos/FUYL but no dispensing kiosk. Add 'device-dispensing kiosks' there with the deferred hedge."
+        }
+      ],
+      "missing": "M-3: Name the kiosk's two calls (ask and tell) and the unknown-mapping rule in the custody model"
+    },
+    {
+      "perspective": "project-manager",
+      "model": "sonnet",
+      "votes": [
+        {
+          "id": "ARC-1",
+          "verdict": "amend",
+          "reason": "Land now, but as one dated section in docs/SESSION_PUCK_HARDWARE_HYPOTHESIS.md plus RESOURCE_INTAKE row. DR-055 (DECISION_RECORDS.md:3503-3508) was already amended in place once and the DR edit is owner-reserved, so draft the DR-055 paragraph on the PR as a proposal. Leave the two conflicts (PURPOSE.md:38 'The factor is the customer's choice', DR-043 item 2) as owner questions. Per DR-020/DR-043 item 4 this is requirements text only and no hardware moves. The objective-state.json tasks[] (Keycloak lab, role-split, WebAuthn step-up) do not name the puck. This is a doc-lane add that does not displace them, and the Keycloak/WebAuthn tasks are the nearest real engineering for R2/R3."
+        },
+        {
+          "id": "ARC-2",
+          "verdict": "confirm",
+          "reason": "Verified. scripts/check-launch-claims.mjs:425-429 holds only three 'evaluated today' regexes, DEFERRED_NOUNS (:471-472) has no puck, and grep of scripts/*.mjs for unhackable|clone-proof|hack-proof|tamper-proof returns nothing. So the 'denylist' the task text cites does not exist mechanically. It is the highest-value task: small, and it turns a prose ban into a gate. Amend: add the self-test cases first (file rule :35) and land it before ARC-1's section so the new prose, which quotes the banned words, is negated or out of buyer scope. No buyer-scope file in artifacts/signalgrid-*/src mentions 'puck', so go-red risk is low, but run it and read the hits."
+        },
+        {
+          "id": "ARC-3",
+          "verdict": "amend",
+          "reason": "Confirm the no-emulator call: there is no public ARC API, and event-contract plus custody-ledger already cover pickup and return, so a connector would be fabricated. Amend the residual to a one-clause append to the Physical Custody row of SIGNAL_SOURCE_CATALOG.md:29 (its cell lists Beam, LocknCharge, Traka, Vecos and no dispensing kiosk) or drop it. Low priority and it can ride in the ARC-1 PR. Do not file an emulator task. Revisit only when a vendor event shape arrives through discovery."
+        }
+      ],
+      "missing": "M-4: Ask the owner the two blocking questions via a raised hand, then stop"
+    }
+  ],
+  "decision": {
+    "ARC-1": {
+      "outcome": "landed",
+      "where": "docs/SESSION_PUCK_HARDWARE_HYPOTHESIS.md (section 'Credential binding and reset (owner note 2026-10-02; DR-055 amendment)': owner words in a labelled quote block, R1-R6, UNBOUND reading, two open owner questions tied to artifacts/raised-hands/2026-10-02-two-readings-of-the-note-conflict-with-canonical.json, architecture sentence, ARC cross-reference) and docs/DECISION_RECORDS.md (DR-055 in-place amendment paragraph; owner-reserved, adopted by merging). Amends applied: fail-closed-auditor (no dual-control action class exists, so re-bind is a proposal; absent or unreadable binding reads unbound), claims lens (owner words only inside the labelled block), architect (puck is evidence, kiosk is a custody source, neither is the policy engine)."
+    },
+    "ARC-2": {
+      "outcome": "landed",
+      "where": "scripts/check-launch-claims.mjs (security-absolute markers in OVERCLAIM_MARKERS, self-tests planted first and shown failing, negation and quoted-span exemptions proven for docs-path markdown only; buyer-scope and non-markdown sources take neither, 'puck' deliberately NOT added to DEFERRED_NOUNS per the architect and claims-lens amends) and docs/research/COMPETITIVE_TELEPORT.md (the one pre-existing hit, attributed and quoted; docs ceiling unchanged at 407)."
+    },
+    "ARC-3": {
+      "outcome": "landed",
+      "where": "docs/SIGNAL_SOURCE_CATALOG.md (Physical Custody cell: ARC-class kiosks, candidate, design target), docs/PHYSICAL_CUSTODY_SIGNAL_MODEL.md (Kiosk interaction contract) and docs/HARDWARE_PARTNER_MATRIX.md (one pointer). The residual only: no connector, no emulator, because there is no public ARC surface and lib/event-contract plus the custody ledger already hold pickup, return and the fail-closed pickup decision."
+    },
+    "M-1": {
+      "outcome": "filed",
+      "where": "docs/BUILD_BACKLOG.md (row Puck 16, lane iam-domain): proof vectors for the attach and re-bind path; not built here."
+    },
+    "M-2": {
+      "outcome": "landed",
+      "where": "docs/agent/CLAIM_INVENTORY.json and docs/CLAIM_INVENTORY.md (rows classifying the puck-replaces-badge, non-duplication, super-admin-clear and ARC-integration sentences as not claimable); the marker comment in scripts/check-launch-claims.mjs cites them."
+    },
+    "M-3": {
+      "outcome": "landed",
+      "where": "docs/PHYSICAL_CUSTODY_SIGNAL_MODEL.md (Kiosk interaction contract: ask, tell, unknown rule) with a one-line pointer in docs/HARDWARE_PARTNER_MATRIX.md."
+    },
+    "M-4": {
+      "outcome": "landed",
+      "where": "artifacts/raised-hands/2026-10-02-two-readings-of-the-note-conflict-with-canonical.json (the two owner questions, raised on mainline 2026-10-02 before this branch)."
+    }
+  },
+  "models": {
+    "A_self_scan": "opus (claude-opus-5-5)",
+    "B_confirms": "sonnet (claude-sonnet-5-5), four perspectives",
+    "C_decision": "coordinator (Fable); judgment only, no engineering stage",
+    "build": "sonnet (claude-sonnet-5-5)",
+    "review": "opus (claude-opus-5-5)"
+  }
+}

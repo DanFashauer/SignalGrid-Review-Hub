@@ -1,0 +1,1464 @@
+{
+ "measuredAt": "2026-10-23T23:05:00Z",
+ "total": 79,
+ "prs": [
+  {
+   "number": 439,
+   "title": "Lane mailbox \u2014 comment here to wake the cloud lane (standing, never merge)",
+   "user": "DanFashauer",
+   "draft": true,
+   "headRef": "lane/mailbox",
+   "headSha": "f00a6e1bbbc8aeefbe6cb9dbc99af2d5bc44b8bd",
+   "headRepo": "DanFashauer/SignalGrid-Review-Hub",
+   "baseRef": "SignalGrid_Alpha",
+   "createdAt": "2026-09-05T17:06:09Z",
+   "updatedAt": "2026-10-23T22:59:11Z",
+   "labels": [
+    "size:XS"
+   ],
+   "bodyLength": 1214
+  },
+  {
+   "number": 1037,
+   "title": "intake: unlazy linter + templates under third_party/, vercel-labs/skills evaluated-not-adopted, two hook denials",
+   "user": "DanFashauer",
+   "draft": false,
+   "headRef": "mac/intake-unlazy-skills",
+   "headSha": "b1d6ea8df51eb6d546c933d41729f1498dfb2ad1",
+   "headRepo": "DanFashauer/SignalGrid-Review-Hub",
+   "baseRef": "SignalGrid_Alpha",
+   "createdAt": "2026-09-25T00:44:49Z",
+   "updatedAt": "2026-09-28T16:11:24Z",
+   "labels": [
+    "area:tooling",
+    "size:XL",
+    "area:docs"
+   ],
+   "bodyLength": 6581
+  },
+  {
+   "number": 1050,
+   "title": "Puck 6 (DR-058 proposal): a holder-bound device_returned closes custody without CUSTODY_REMOVED; unbound returns keep custody open",
+   "user": "DanFashauer",
+   "draft": false,
+   "headRef": "claude/build-puck6-return-binding",
+   "headSha": "fc2ba6482d7269e63bf6827d6c5ad49de0011d2d",
+   "headRepo": "DanFashauer/SignalGrid-Review-Hub",
+   "baseRef": "SignalGrid_Alpha",
+   "createdAt": "2026-09-25T15:41:12Z",
+   "updatedAt": "2026-09-30T04:21:20Z",
+   "labels": [
+    "size:M",
+    "area:tooling",
+    "area:docs",
+    "area:core"
+   ],
+   "bodyLength": 5916
+  },
+  {
+   "number": 1083,
+   "title": "DR-059 (proposal): estate posture ages at decision time; a refresh retracts what the source stopped reporting; an empty refresh confirms nothing",
+   "user": "DanFashauer",
+   "draft": false,
+   "headRef": "claude/proposal-dr059-posture-ages-refresh-retracts",
+   "headSha": "d0c6264770a09e35a90492fb3a8333d636f22c46",
+   "headRepo": "DanFashauer/SignalGrid-Review-Hub",
+   "baseRef": "SignalGrid_Alpha",
+   "createdAt": "2026-09-26T01:16:15Z",
+   "updatedAt": "2026-09-29T23:45:48Z",
+   "labels": [
+    "size:M",
+    "area:tooling",
+    "area:docs",
+    "area:core"
+   ],
+   "bodyLength": 6294
+  },
+  {
+   "number": 1117,
+   "title": "L1 root cause: the OIDC and load tests and the observability proof bind OS-assigned ports; run-live-lanes' 5330/5390 named as still fixed (DR-060)",
+   "user": "DanFashauer",
+   "draft": false,
+   "headRef": "claude/tests-ephemeral-ports-oidc-load-observability",
+   "headSha": "261eefbadc19834be76f8ae958cc4657a6163802",
+   "headRepo": "DanFashauer/SignalGrid-Review-Hub",
+   "baseRef": "SignalGrid_Alpha",
+   "createdAt": "2026-09-26T07:50:13Z",
+   "updatedAt": "2026-09-29T23:15:06Z",
+   "labels": [
+    "size:S",
+    "area:api",
+    "area:tooling",
+    "area:docs"
+   ],
+   "bodyLength": 5882
+  },
+  {
+   "number": 1118,
+   "title": "iOS port parity is behavioural: the TS engine's decisions replayed through the Swift port \u2014 first replay caught a real drift (plan row 18)",
+   "user": "DanFashauer",
+   "draft": false,
+   "headRef": "mac/ios-parity-behavioral",
+   "headSha": "8f97bb73aedbeac03828c2a94f726b84d7eab5c7",
+   "headRepo": "DanFashauer/SignalGrid-Review-Hub",
+   "baseRef": "SignalGrid_Alpha",
+   "createdAt": "2026-09-26T07:50:35Z",
+   "updatedAt": "2026-09-30T00:12:52Z",
+   "labels": [
+    "area:ci",
+    "area:tooling",
+    "size:XL",
+    "area:docs",
+    "area:ios"
+   ],
+   "bodyLength": 4884
+  },
+  {
+   "number": 1121,
+   "title": "AppWorkflows port parity is behavioural too: TS plans replayed through the Swift planner, scoped step-up release ported (row 101; stacked on #1118)",
+   "user": "DanFashauer",
+   "draft": false,
+   "headRef": "mac/app-workflows-parity",
+   "headSha": "2848a9a1fe039d6fb94ae7211f4d5a06b7f6ca4b",
+   "headRepo": "DanFashauer/SignalGrid-Review-Hub",
+   "baseRef": "mac/ios-parity-behavioral",
+   "createdAt": "2026-09-26T08:26:17Z",
+   "updatedAt": "2026-09-29T21:34:44Z",
+   "labels": [
+    "area:ci",
+    "area:tooling",
+    "size:XL",
+    "area:docs",
+    "area:ios"
+   ],
+   "bodyLength": 4625
+  },
+  {
+   "number": 1133,
+   "title": "land-branch derives the owner-decision class from the diff (--classify-branch, --verify --klass; OWNER_RESERVED never lane-merged); the grader, launch-claims/publication-boundary/launch-profile machinery and every hand-found gate-input family are gated; L17",
+   "user": "DanFashauer",
+   "draft": false,
+   "headRef": "claude/land-branch-derive-klass",
+   "headSha": "992cb2a73086bd5939e65059805c046d11dc3f9e",
+   "headRepo": "DanFashauer/SignalGrid-Review-Hub",
+   "baseRef": "SignalGrid_Alpha",
+   "createdAt": "2026-09-26T16:30:29Z",
+   "updatedAt": "2026-09-27T10:42:32Z",
+   "labels": [
+    "area:tooling",
+    "size:XL",
+    "area:docs"
+   ],
+   "bodyLength": 15843
+  },
+  {
+   "number": 1146,
+   "title": "Core digest: hash UTF-8 bytes, escape deterministicId parts, gate legacy snapshot verification on digestAlg (owner merge)",
+   "user": "DanFashauer",
+   "draft": false,
+   "headRef": "claude/core-digest-utf8",
+   "headSha": "642e4751b78220f457fe622259a7d98f856f2f10",
+   "headRepo": "DanFashauer/SignalGrid-Review-Hub",
+   "baseRef": "SignalGrid_Alpha",
+   "createdAt": "2026-09-27T00:05:04Z",
+   "updatedAt": "2026-09-27T15:55:46Z",
+   "labels": [
+    "size:M",
+    "area:tooling",
+    "area:docs",
+    "area:core"
+   ],
+   "bodyLength": 9838
+  },
+  {
+   "number": 1153,
+   "title": "Assist wire, server side: /v1/authorize returns a non-blank string decisionId and string-only reasons on all four outcomes; the spec says the same (owner merge)",
+   "user": "DanFashauer",
+   "draft": false,
+   "headRef": "claude/assist-wire-server-four-outcomes",
+   "headSha": "26a39479b314e62caf65b4c229c4e10a5802e9e9",
+   "headRepo": "DanFashauer/SignalGrid-Review-Hub",
+   "baseRef": "SignalGrid_Alpha",
+   "createdAt": "2026-09-27T02:18:27Z",
+   "updatedAt": "2026-09-27T03:07:55Z",
+   "labels": [
+    "size:S",
+    "area:api",
+    "area:tooling"
+   ],
+   "bodyLength": 5627
+  },
+  {
+   "number": 1190,
+   "title": "Stage article draft 4: what one real IdP puts on the wire about a session (plan row 24)",
+   "user": "DanFashauer",
+   "draft": false,
+   "headRef": "claude/build-identity-wire-truth-article",
+   "headSha": "e3ea3bf0ef949be98eb8fd64fd5490f61117ea6b",
+   "headRepo": "DanFashauer/SignalGrid-Review-Hub",
+   "baseRef": "SignalGrid_Alpha",
+   "createdAt": "2026-09-28T15:38:09Z",
+   "updatedAt": "2026-10-02T20:15:29Z",
+   "labels": [
+    "size:M",
+    "area:docs"
+   ],
+   "bodyLength": 4481
+  },
+  {
+   "number": 1215,
+   "title": "Refuse telemetry from nodeIds outside the seeded edge nodes (plan row 97)",
+   "user": "DanFashauer",
+   "draft": false,
+   "headRef": "claude/build-telemetry-known-node",
+   "headSha": "4cb606054ab04dd01dfa81343eb1bc7d23bc176b",
+   "headRepo": "DanFashauer/SignalGrid-Review-Hub",
+   "baseRef": "SignalGrid_Alpha",
+   "createdAt": "2026-09-29T22:53:13Z",
+   "updatedAt": "2026-09-29T22:58:17Z",
+   "labels": [
+    "size:S",
+    "area:api",
+    "area:docs"
+   ],
+   "bodyLength": 2306
+  },
+  {
+   "number": 1219,
+   "title": "Postgres role split and stores: refuse triggers, PUBLIC grants, TEMP; immutable decisions",
+   "user": "DanFashauer",
+   "draft": false,
+   "headRef": "mac/pg-role-split-stores",
+   "headSha": "feca7ca9b6841d795b3c5aaafb4c1f08b07741f2",
+   "headRepo": "DanFashauer/SignalGrid-Review-Hub",
+   "baseRef": "SignalGrid_Alpha",
+   "createdAt": "2026-09-29T23:53:57Z",
+   "updatedAt": "2026-10-01T19:38:58Z",
+   "labels": [
+    "area:tooling",
+    "area:docs",
+    "size:L"
+   ],
+   "bodyLength": 14818
+  },
+  {
+   "number": 1220,
+   "title": "Enterprise auth: JSON-null JOSE parts fail closed, malformed nbf/iat/exp refused, JWKS single-flight",
+   "user": "DanFashauer",
+   "draft": false,
+   "headRef": "mac/enterprise-auth-hardening",
+   "headSha": "c17824721fed9f61c2b156d5e13930a33ef772d3",
+   "headRepo": "DanFashauer/SignalGrid-Review-Hub",
+   "baseRef": "SignalGrid_Alpha",
+   "createdAt": "2026-09-30T00:14:11Z",
+   "updatedAt": "2026-10-01T15:16:26Z",
+   "labels": [
+    "size:M",
+    "area:tooling",
+    "area:docs"
+   ],
+   "bodyLength": 9684
+  },
+  {
+   "number": 1222,
+   "title": "Answer unknown root paths with the JSON not_found envelope (plan row 98)",
+   "user": "DanFashauer",
+   "draft": false,
+   "headRef": "claude/build-gateway-root-json-404",
+   "headSha": "bd964d532cdecb59ee92d817b6ef363875993225",
+   "headRepo": "DanFashauer/SignalGrid-Review-Hub",
+   "baseRef": "SignalGrid_Alpha",
+   "createdAt": "2026-09-30T00:36:14Z",
+   "updatedAt": "2026-09-30T00:39:52Z",
+   "labels": [
+    "size:XS",
+    "area:api",
+    "area:docs"
+   ],
+   "bodyLength": 2219
+  },
+  {
+   "number": 1224,
+   "title": "Core evidence: a not-fresh reading cannot erase a fresh accusation; store eviction and key escaping",
+   "user": "DanFashauer",
+   "draft": false,
+   "headRef": "mac/core-evidence-freshness",
+   "headSha": "92cb816bc16d2992b07da66722a1d6dd771510c7",
+   "headRepo": "DanFashauer/SignalGrid-Review-Hub",
+   "baseRef": "SignalGrid_Alpha",
+   "createdAt": "2026-09-30T00:37:05Z",
+   "updatedAt": "2026-10-01T16:57:46Z",
+   "labels": [
+    "area:tooling",
+    "area:docs",
+    "size:L",
+    "area:core"
+   ],
+   "bodyLength": 9584
+  },
+  {
+   "number": 1225,
+   "title": "Mac shell scripts: bash-3.2 rule and Darwin-guard rule in the sim-script self-check, plus guards",
+   "user": "DanFashauer",
+   "draft": false,
+   "headRef": "mac/sim-scripts-bash32-darwin",
+   "headSha": "216d0dc4d9feb8ff5964412169adf89385ced936",
+   "headRepo": "DanFashauer/SignalGrid-Review-Hub",
+   "baseRef": "SignalGrid_Alpha",
+   "createdAt": "2026-09-30T00:41:08Z",
+   "updatedAt": "2026-10-01T14:27:50Z",
+   "labels": [
+    "size:M",
+    "area:tooling",
+    "area:docs"
+   ],
+   "bodyLength": 9921
+  },
+  {
+   "number": 1228,
+   "title": "api-server fail-closed batch: profile, step-up authz order, revoke audit, estate refresh",
+   "user": "DanFashauer",
+   "draft": false,
+   "headRef": "mac/api-profile-stepup-estate",
+   "headSha": "40f194fe9c7125bb2f2c642f1366f56c4c993f38",
+   "headRepo": "DanFashauer/SignalGrid-Review-Hub",
+   "baseRef": "SignalGrid_Alpha",
+   "createdAt": "2026-09-30T01:08:48Z",
+   "updatedAt": "2026-10-01T16:22:12Z",
+   "labels": [
+    "size:M",
+    "area:api",
+    "area:tooling",
+    "area:docs",
+    "area:core"
+   ],
+   "bodyLength": 7133
+  },
+  {
+   "number": 1230,
+   "title": "Console: an unrecognised verdict renders restrictive, never a blank card (plan row 109)",
+   "user": "DanFashauer",
+   "draft": false,
+   "headRef": "claude/build-live-panel-unknown-tone",
+   "headSha": "a77859ae05636115f1e0eac38c76f2ff2a6426d0",
+   "headRepo": "DanFashauer/SignalGrid-Review-Hub",
+   "baseRef": "SignalGrid_Alpha",
+   "createdAt": "2026-09-30T02:54:09Z",
+   "updatedAt": "2026-10-02T21:08:44Z",
+   "labels": [
+    "size:S",
+    "area:apps",
+    "area:tooling",
+    "area:docs"
+   ],
+   "bodyLength": 3062
+  },
+  {
+   "number": 1239,
+   "title": "api-server: HEAD served where GET is under the gateway; demo routers reuse req.requestId (plan rows 95, 99)",
+   "user": "DanFashauer",
+   "draft": false,
+   "headRef": "claude/build-api-head-and-demo-envelope",
+   "headSha": "42b0841f82e25ef5e1473e1653fa0d96d7e673ba",
+   "headRepo": "DanFashauer/SignalGrid-Review-Hub",
+   "baseRef": "SignalGrid_Alpha",
+   "createdAt": "2026-09-30T04:28:18Z",
+   "updatedAt": "2026-10-22T15:30:39Z",
+   "labels": [
+    "size:M",
+    "area:api",
+    "area:docs"
+   ],
+   "bodyLength": 4129
+  },
+  {
+   "number": 1240,
+   "title": "webauthn: force the revocation/enrolment race orderings in proof:enrollment-race (plan row 82)",
+   "user": "DanFashauer",
+   "draft": false,
+   "headRef": "claude/build-webauthn-revocation-race",
+   "headSha": "e93599557ce9c7f3f44082a3e20c91135b630ae9",
+   "headRepo": "DanFashauer/SignalGrid-Review-Hub",
+   "baseRef": "SignalGrid_Alpha",
+   "createdAt": "2026-09-30T04:28:58Z",
+   "updatedAt": "2026-10-09T16:23:49Z",
+   "labels": [
+    "size:M",
+    "area:tooling",
+    "area:docs"
+   ],
+   "bodyLength": 4593
+  },
+  {
+   "number": 1242,
+   "title": "integrations: honest ITSM health, DLQ attempts, resolver docstring, finite CVSS (plan rows 128, 130, 138, 140)",
+   "user": "DanFashauer",
+   "draft": false,
+   "headRef": "claude/build-integrations-honesty",
+   "headSha": "2d5a158a3a15d98d4837d8fbc9c13be539e28390",
+   "headRepo": "DanFashauer/SignalGrid-Review-Hub",
+   "baseRef": "SignalGrid_Alpha",
+   "createdAt": "2026-09-30T04:45:28Z",
+   "updatedAt": "2026-10-22T18:47:33Z",
+   "labels": [
+    "size:M",
+    "area:tooling",
+    "area:docs",
+    "area:integrations"
+   ],
+   "bodyLength": 8129
+  },
+  {
+   "number": 1244,
+   "title": "proofs: derive ladderRungs from the ladder, gate typed literals (plan rows 124, 150)",
+   "user": "DanFashauer",
+   "draft": false,
+   "headRef": "claude/build-ladder-rungs-derived",
+   "headSha": "e77470cf61576291de4d056c0303650aa6275da4",
+   "headRepo": "DanFashauer/SignalGrid-Review-Hub",
+   "baseRef": "SignalGrid_Alpha",
+   "createdAt": "2026-09-30T04:51:47Z",
+   "updatedAt": "2026-10-23T04:35:27Z",
+   "labels": [
+    "size:M",
+    "area:tooling",
+    "area:docs",
+    "area:integrations"
+   ],
+   "bodyLength": 7562
+  },
+  {
+   "number": 1246,
+   "title": "DR-061 (owner decision): lanes merge decision-path PRs under conditions; Mac auto-build; #1118/#1121 rule-1 ruling",
+   "user": "DanFashauer",
+   "draft": false,
+   "headRef": "mac/dr-061-delegation",
+   "headSha": "756064fa8c596b3e093af84d521200df8bc4c8dc",
+   "headRepo": "DanFashauer/SignalGrid-Review-Hub",
+   "baseRef": "SignalGrid_Alpha",
+   "createdAt": "2026-09-30T04:56:31Z",
+   "updatedAt": "2026-09-30T04:56:43Z",
+   "labels": [
+    "size:S",
+    "area:docs"
+   ],
+   "bodyLength": 2384
+  },
+  {
+   "number": 1247,
+   "title": "Device-management-health: an out-of-union or absent judged field reads unverified, never grants (BUILD_BACKLOG: DMH named-bad-only)",
+   "user": "DanFashauer",
+   "draft": false,
+   "headRef": "mac/dmh-evaluate-unknowns",
+   "headSha": "36ef2251c499d5fd66fc7fa6eabffd61060ee3bb",
+   "headRepo": "DanFashauer/SignalGrid-Review-Hub",
+   "baseRef": "SignalGrid_Alpha",
+   "createdAt": "2026-09-30T05:28:30Z",
+   "updatedAt": "2026-09-30T16:54:12Z",
+   "labels": [
+    "size:S",
+    "area:tooling",
+    "area:docs",
+    "area:integrations"
+   ],
+   "bodyLength": 2499
+  },
+  {
+   "number": 1251,
+   "title": "posture-composition: fromDevicePosture fails closed on out-of-domain input (BUILD_BACKLOG: fromDevicePosture fail-closed)",
+   "user": "DanFashauer",
+   "draft": false,
+   "headRef": "mac/posture-composition-device-posture-fail-closed",
+   "headSha": "d4faea6bf5bbc3fbb791184a2eef9ab5c339e137",
+   "headRepo": "DanFashauer/SignalGrid-Review-Hub",
+   "baseRef": "SignalGrid_Alpha",
+   "createdAt": "2026-09-30T06:22:32Z",
+   "updatedAt": "2026-09-30T06:43:13Z",
+   "labels": [
+    "size:S",
+    "area:tooling",
+    "area:docs"
+   ],
+   "bodyLength": 5325
+  },
+  {
+   "number": 1255,
+   "title": "control-plane: one canonical bundle encoding for checksum + signature (BUILD_BACKLOG: canonicalBundle ',' join)",
+   "user": "DanFashauer",
+   "draft": false,
+   "headRef": "mac/control-plane-unambiguous-canonical-bundle",
+   "headSha": "566806c73d11820412f96338072758430ab5f3c8",
+   "headRepo": "DanFashauer/SignalGrid-Review-Hub",
+   "baseRef": "SignalGrid_Alpha",
+   "createdAt": "2026-09-30T06:48:19Z",
+   "updatedAt": "2026-09-30T08:02:36Z",
+   "labels": [
+    "size:S",
+    "area:tooling"
+   ],
+   "bodyLength": 6981
+  },
+  {
+   "number": 1265,
+   "title": "web: live regions on polling views, labelled icon delete, reduced motion (plan row 76)",
+   "user": "DanFashauer",
+   "draft": false,
+   "headRef": "claude/build-web-a11y-live-regions",
+   "headSha": "3c7a43984753cb2bd45183f2b84332f0d22a1c87",
+   "headRepo": "DanFashauer/SignalGrid-Review-Hub",
+   "baseRef": "SignalGrid_Alpha",
+   "createdAt": "2026-09-30T09:05:15Z",
+   "updatedAt": "2026-10-23T04:25:41Z",
+   "labels": [
+    "area:ci",
+    "area:apps",
+    "area:tooling",
+    "size:XL",
+    "area:docs"
+   ],
+   "bodyLength": 27539
+  },
+  {
+   "number": 1280,
+   "title": "core: registerVerifiedPrincipal refuses unknown roles (plan row 86; row 91 deferred)",
+   "user": "DanFashauer",
+   "draft": true,
+   "headRef": "claude/build-core-principal-policy-guards",
+   "headSha": "4c9cd27efad5aa9cca30c4740ea87aa257c8e9c3",
+   "headRepo": "DanFashauer/SignalGrid-Review-Hub",
+   "baseRef": "SignalGrid_Alpha",
+   "createdAt": "2026-09-30T11:12:43Z",
+   "updatedAt": "2026-10-09T04:26:03Z",
+   "labels": [
+    "size:S",
+    "area:tooling",
+    "area:docs",
+    "area:core"
+   ],
+   "bodyLength": 4715
+  },
+  {
+   "number": 1307,
+   "title": "web+auth: self-host fonts in review/desktop, pin blank OIDC_ISSUER (plan row 70 residual + backlog OIDC pin)",
+   "user": "DanFashauer",
+   "draft": true,
+   "headRef": "claude/build-self-host-fonts-review-desktop",
+   "headSha": "d46fd15600d5b2478f4efcc8ef83a88a41b8ebfd",
+   "headRepo": "DanFashauer/SignalGrid-Review-Hub",
+   "baseRef": "SignalGrid_Alpha",
+   "createdAt": "2026-09-30T14:51:34Z",
+   "updatedAt": "2026-10-09T16:25:06Z",
+   "labels": [
+    "size:S",
+    "area:apps",
+    "area:tooling",
+    "area:docs"
+   ],
+   "bodyLength": 7289
+  },
+  {
+   "number": 1309,
+   "title": "docs: retire the file-count fossil, date the completion-plan census, archive the orphan spec (plan row 73 residual, backlog rows census-figures + orphan-third-spec)",
+   "user": "DanFashauer",
+   "draft": true,
+   "headRef": "claude/build-fossil-figures-orphan-spec",
+   "headSha": "1f882fcc33fe4ac8bb6244f57aa443ffbf5bbd75",
+   "headRepo": "DanFashauer/SignalGrid-Review-Hub",
+   "baseRef": "SignalGrid_Alpha",
+   "createdAt": "2026-09-30T15:01:07Z",
+   "updatedAt": "2026-10-08T22:19:48Z",
+   "labels": [
+    "size:M",
+    "area:tooling",
+    "area:docs"
+   ],
+   "bodyLength": 7438
+  },
+  {
+   "number": 1314,
+   "title": "webauthn: a revoked step-up credential stays revoked (PR #1240 review gaps 1+2) \u2014 owner picks the gap-1 option",
+   "user": "DanFashauer",
+   "draft": true,
+   "headRef": "claude/cool-curie-mgkzox",
+   "headSha": "c16adf05ddeeffc4162621e1ea96580be4d52e35",
+   "headRepo": "DanFashauer/SignalGrid-Review-Hub",
+   "baseRef": "SignalGrid_Alpha",
+   "createdAt": "2026-09-30T16:36:14Z",
+   "updatedAt": "2026-10-08T17:28:15Z",
+   "labels": [
+    "area:ci",
+    "area:api",
+    "area:tooling",
+    "size:XL",
+    "area:docs"
+   ],
+   "bodyLength": 13692
+  },
+  {
+   "number": 1320,
+   "title": "simulator: drop constant status conjuncts, pin three unset attribute keys (plan rows 84, 85)",
+   "user": "DanFashauer",
+   "draft": true,
+   "headRef": "claude/build-sim-status-constants-key-pins",
+   "headSha": "2fc1035fe5b8f6ad4f57e9bcd2b8367993cbc8e8",
+   "headRepo": "DanFashauer/SignalGrid-Review-Hub",
+   "baseRef": "SignalGrid_Alpha",
+   "createdAt": "2026-09-30T17:13:21Z",
+   "updatedAt": "2026-09-30T18:55:04Z",
+   "labels": [
+    "size:S",
+    "area:tooling",
+    "area:docs"
+   ],
+   "bodyLength": 4256
+  },
+  {
+   "number": 1321,
+   "title": "cli: signalgrid CLI harness, read-only by default (backlog row, DR-040)",
+   "user": "DanFashauer",
+   "draft": false,
+   "headRef": "claude/build-signalgrid-cli-harness",
+   "headSha": "d319889624c21bc33bc1f0152bd2bb9b6cffa328",
+   "headRepo": "DanFashauer/SignalGrid-Review-Hub",
+   "baseRef": "SignalGrid_Alpha",
+   "createdAt": "2026-09-30T17:33:27Z",
+   "updatedAt": "2026-10-23T04:25:27Z",
+   "labels": [
+    "area:ci",
+    "area:tooling",
+    "size:XL",
+    "area:docs"
+   ],
+   "bodyLength": 12884
+  },
+  {
+   "number": 1322,
+   "title": "DR-062 (owner decision): SignalGrid's scope is the whole company incl. legacy systems; fully automatic by default",
+   "user": "DanFashauer",
+   "draft": false,
+   "headRef": "mac/dr-062-company-scope",
+   "headSha": "a6ce6572d133362fc83e0a8de0f7146ebd2e2300",
+   "headRepo": "DanFashauer/SignalGrid-Review-Hub",
+   "baseRef": "SignalGrid_Alpha",
+   "createdAt": "2026-09-30T17:35:33Z",
+   "updatedAt": "2026-09-30T17:35:46Z",
+   "labels": [
+    "size:S",
+    "area:apps",
+    "area:tooling",
+    "area:docs"
+   ],
+   "bodyLength": 2414
+  },
+  {
+   "number": 1323,
+   "title": "Live demo: pnpm run demo:live plays signal \u2192 decision \u2192 ticket \u2192 notice \u2192 verified restore on your phone (BUILD_BACKLOG: one-command live demo)",
+   "user": "DanFashauer",
+   "draft": false,
+   "headRef": "mac/demo-live",
+   "headSha": "7994535480bd8d3478d7ffbc53146bf970cbe5e2",
+   "headRepo": "DanFashauer/SignalGrid-Review-Hub",
+   "baseRef": "SignalGrid_Alpha",
+   "createdAt": "2026-09-30T18:08:46Z",
+   "updatedAt": "2026-10-01T05:33:21Z",
+   "labels": [
+    "area:ci",
+    "area:tooling",
+    "size:XL",
+    "area:docs"
+   ],
+   "bodyLength": 3264
+  },
+  {
+   "number": 1330,
+   "title": "handoff-sim: keep every hold on a task, not just the last (backlog row ReleaseLedger.holds)",
+   "user": "DanFashauer",
+   "draft": false,
+   "headRef": "claude/build-handoff-sim-same-task-holds",
+   "headSha": "151299936353e11c5c1aaca68156fbff2bbfd0f7",
+   "headRepo": "DanFashauer/SignalGrid-Review-Hub",
+   "baseRef": "SignalGrid_Alpha",
+   "createdAt": "2026-09-30T19:30:13Z",
+   "updatedAt": "2026-10-09T08:51:18Z",
+   "labels": [
+    "size:M",
+    "area:tooling",
+    "area:docs"
+   ],
+   "bodyLength": 6390
+  },
+  {
+   "number": 1336,
+   "title": "Mac tick 20260930T204503Z: sim results (0 request(s)); objective loop: escalate",
+   "user": "DanFashauer",
+   "draft": false,
+   "headRef": "mac/tick-20260930T204503Z",
+   "headSha": "8388d0ba4bafa2f4a832bcb29949238017e77366",
+   "headRepo": "DanFashauer/SignalGrid-Review-Hub",
+   "baseRef": "SignalGrid_Alpha",
+   "createdAt": "2026-09-30T20:45:13Z",
+   "updatedAt": "2026-09-30T21:25:27Z",
+   "labels": [
+    "size:S",
+    "area:docs",
+    "area:lanes"
+   ],
+   "bodyLength": 0
+  },
+  {
+   "number": 1337,
+   "title": "gates: an unreadable scanned file fails launch-claims + proof-bindings, only ENOENT skips (backlog DR-054 sweep #7, fifth site)",
+   "user": "DanFashauer",
+   "draft": false,
+   "headRef": "claude/build-gate-unreadable-scan-siblings",
+   "headSha": "64e0ddcf5371e3773157f6a4d1c6e9fe44016c7d",
+   "headRepo": "DanFashauer/SignalGrid-Review-Hub",
+   "baseRef": "SignalGrid_Alpha",
+   "createdAt": "2026-09-30T20:47:02Z",
+   "updatedAt": "2026-10-08T14:51:02Z",
+   "labels": [
+    "size:M",
+    "area:tooling",
+    "area:docs"
+   ],
+   "bodyLength": 6734
+  },
+  {
+   "number": 1338,
+   "title": "gates: derive the Assist-wire vector figure and self-test the dir closedWhen branch (plan row 29 residuals a, b)",
+   "user": "DanFashauer",
+   "draft": false,
+   "headRef": "claude/build-launch-profile-dir-closedwhen-vector-figure",
+   "headSha": "a26aab070bae5a87ff4c9d39d6f8d42e1a9c8586",
+   "headRepo": "DanFashauer/SignalGrid-Review-Hub",
+   "baseRef": "SignalGrid_Alpha",
+   "createdAt": "2026-09-30T20:48:56Z",
+   "updatedAt": "2026-10-08T14:45:07Z",
+   "labels": [
+    "size:S",
+    "area:api",
+    "area:tooling",
+    "area:docs"
+   ],
+   "bodyLength": 6359
+  },
+  {
+   "number": 1353,
+   "title": "pr-refresh: a no-model bot that re-merges mainline into dirty Mac PRs and regenerates derived files",
+   "user": "DanFashauer",
+   "draft": false,
+   "headRef": "mac/pr-refresh",
+   "headSha": "cb62b1bde15feeb70203ea44d77d09bccf6e09c0",
+   "headRepo": "DanFashauer/SignalGrid-Review-Hub",
+   "baseRef": "SignalGrid_Alpha",
+   "createdAt": "2026-10-01T05:54:37Z",
+   "updatedAt": "2026-10-01T06:24:38Z",
+   "labels": [
+    "area:tooling",
+    "size:XL",
+    "area:docs"
+   ],
+   "bodyLength": 4523
+  },
+  {
+   "number": 1354,
+   "title": "docs: RESOURCE_INTAKE row for the Cole Medin team-brain video (proposed, not adopted)",
+   "user": "DanFashauer",
+   "draft": false,
+   "headRef": "mac/intake-row-cole-medin-team-brain",
+   "headSha": "1c857ef174b9c7ea4b2ab09680edb4988c1ec67b",
+   "headRepo": "DanFashauer/SignalGrid-Review-Hub",
+   "baseRef": "SignalGrid_Alpha",
+   "createdAt": "2026-10-01T06:07:26Z",
+   "updatedAt": "2026-10-22T18:54:28Z",
+   "labels": [
+    "size:XS",
+    "area:docs"
+   ],
+   "bodyLength": 2443
+  },
+  {
+   "number": 1356,
+   "title": "scan:estate finds sibling checkouts and scans one only when origin proves owner and name",
+   "user": "DanFashauer",
+   "draft": false,
+   "headRef": "mac/scan-estate-sibling-locator",
+   "headSha": "03462b7e4e4d60d349322f74f92fb7e8a6403cee",
+   "headRepo": "DanFashauer/SignalGrid-Review-Hub",
+   "baseRef": "SignalGrid_Alpha",
+   "createdAt": "2026-10-01T06:23:45Z",
+   "updatedAt": "2026-10-01T15:47:06Z",
+   "labels": [
+    "area:ci",
+    "area:tooling",
+    "area:docs",
+    "size:L"
+   ],
+   "bodyLength": 7198
+  },
+  {
+   "number": 1357,
+   "title": "DR-063 (owner decision): the brain ecosystem \u2014 per-repo instructions, labeled ingestion, one MCP plane, repo triggers",
+   "user": "DanFashauer",
+   "draft": false,
+   "headRef": "mac/dr-063-brain-ecosystem",
+   "headSha": "f9260f1de8f2736bdef9f09bce32f1ea4672af7a",
+   "headRepo": "DanFashauer/SignalGrid-Review-Hub",
+   "baseRef": "SignalGrid_Alpha",
+   "createdAt": "2026-10-01T07:11:43Z",
+   "updatedAt": "2026-10-01T14:59:27Z",
+   "labels": [
+    "size:M",
+    "area:tooling",
+    "area:docs"
+   ],
+   "bodyLength": 2100
+  },
+  {
+   "number": 1379,
+   "title": "ci: bump the github-actions-minor-and-patch group with 2 updates",
+   "user": "dependabot[bot]",
+   "draft": false,
+   "headRef": "dependabot/github_actions/github-actions-minor-and-patch-d30a372842",
+   "headSha": "524ce94d919334b1c81e716149a1b40de07fb33a",
+   "headRepo": "DanFashauer/SignalGrid-Review-Hub",
+   "baseRef": "SignalGrid_Alpha",
+   "createdAt": "2026-10-01T15:21:30Z",
+   "updatedAt": "2026-10-01T15:21:44Z",
+   "labels": [
+    "area:ci",
+    "size:XS",
+    "dependencies",
+    "github_actions"
+   ],
+   "bodyLength": 9352
+  },
+  {
+   "number": 1381,
+   "title": "deps: bump thread-stream from 3.1.0 to 4.2.0",
+   "user": "dependabot[bot]",
+   "draft": false,
+   "headRef": "dependabot/npm_and_yarn/thread-stream-4.2.0",
+   "headSha": "3d05112e173ba84284cdf797e9497dd8279a27eb",
+   "headRepo": "DanFashauer/SignalGrid-Review-Hub",
+   "baseRef": "SignalGrid_Alpha",
+   "createdAt": "2026-10-01T15:27:16Z",
+   "updatedAt": "2026-10-01T15:31:23Z",
+   "labels": [
+    "size:XS",
+    "area:api",
+    "dependencies",
+    "javascript"
+   ],
+   "bodyLength": 11103
+  },
+  {
+   "number": 1382,
+   "title": "deps: bump @types/node from 25.6.2 to 26.6.3",
+   "user": "dependabot[bot]",
+   "draft": false,
+   "headRef": "dependabot/npm_and_yarn/types/node-26.6.3",
+   "headSha": "3616e506121910a5c7b35c7a68836a842fd5b89b",
+   "headRepo": "DanFashauer/SignalGrid-Review-Hub",
+   "baseRef": "SignalGrid_Alpha",
+   "createdAt": "2026-10-01T15:27:31Z",
+   "updatedAt": "2026-10-01T15:30:24Z",
+   "labels": [
+    "size:M",
+    "dependencies",
+    "javascript"
+   ],
+   "bodyLength": 1816
+  },
+  {
+   "number": 1383,
+   "title": "deps: bump ioredis from 5.11.1 to 6.0.0",
+   "user": "dependabot[bot]",
+   "draft": false,
+   "headRef": "dependabot/npm_and_yarn/ioredis-6.0.0",
+   "headSha": "c4529c3d130a085d33d6ca02a87230e6fb5dc101",
+   "headRepo": "DanFashauer/SignalGrid-Review-Hub",
+   "baseRef": "SignalGrid_Alpha",
+   "createdAt": "2026-10-01T15:28:01Z",
+   "updatedAt": "2026-10-01T15:32:11Z",
+   "labels": [
+    "size:S",
+    "area:tooling",
+    "area:integrations",
+    "dependencies",
+    "javascript"
+   ],
+   "bodyLength": 14786
+  },
+  {
+   "number": 1384,
+   "title": "deps: bump lucide-react from 0.545.0 to 1.48.0",
+   "user": "dependabot[bot]",
+   "draft": false,
+   "headRef": "dependabot/npm_and_yarn/lucide-react-1.48.0",
+   "headSha": "2755e2ba671a921f0f3f0b031ad9608aac5dfba5",
+   "headRepo": "DanFashauer/SignalGrid-Review-Hub",
+   "baseRef": "SignalGrid_Alpha",
+   "createdAt": "2026-10-01T15:28:38Z",
+   "updatedAt": "2026-10-01T15:33:19Z",
+   "labels": [
+    "size:XS",
+    "dependencies",
+    "javascript"
+   ],
+   "bodyLength": 14508
+  },
+  {
+   "number": 1385,
+   "title": "deps: bump zod from 3.25.76 to 4.6.5",
+   "user": "dependabot[bot]",
+   "draft": false,
+   "headRef": "dependabot/npm_and_yarn/zod-4.6.5",
+   "headSha": "69596f570e62e414faaa64d4e36d453584c3a5a3",
+   "headRepo": "DanFashauer/SignalGrid-Review-Hub",
+   "baseRef": "SignalGrid_Alpha",
+   "createdAt": "2026-10-01T15:28:56Z",
+   "updatedAt": "2026-10-01T15:35:16Z",
+   "labels": [
+    "size:S",
+    "dependencies",
+    "javascript"
+   ],
+   "bodyLength": 9680
+  },
+  {
+   "number": 1386,
+   "title": "deps: bump @hookform/resolvers from 3.10.0 to 5.9.1",
+   "user": "dependabot[bot]",
+   "draft": false,
+   "headRef": "dependabot/npm_and_yarn/hookform/resolvers-5.9.1",
+   "headSha": "d75569f042062cca62ef5cb4981586d2445c3dce",
+   "headRepo": "DanFashauer/SignalGrid-Review-Hub",
+   "baseRef": "SignalGrid_Alpha",
+   "createdAt": "2026-10-01T15:29:17Z",
+   "updatedAt": "2026-10-01T15:33:39Z",
+   "labels": [
+    "size:S",
+    "area:apps",
+    "dependencies",
+    "javascript"
+   ],
+   "bodyLength": 6796
+  },
+  {
+   "number": 1387,
+   "title": "deps: bump framer-motion from 12.38.0 to 13.4.4",
+   "user": "dependabot[bot]",
+   "draft": false,
+   "headRef": "dependabot/npm_and_yarn/framer-motion-13.4.4",
+   "headSha": "f12459b919829ccb9860dd0ae254148250752ac7",
+   "headRepo": "DanFashauer/SignalGrid-Review-Hub",
+   "baseRef": "SignalGrid_Alpha",
+   "createdAt": "2026-10-01T15:29:37Z",
+   "updatedAt": "2026-10-01T15:35:00Z",
+   "labels": [
+    "size:S",
+    "dependencies",
+    "javascript"
+   ],
+   "bodyLength": 5870
+  },
+  {
+   "number": 1390,
+   "title": "ci: shell lint uses the runner's shellcheck and waits for the apt lock (backlog row: gating CI apt-lock race)",
+   "user": "DanFashauer",
+   "draft": false,
+   "headRef": "claude/build-ci-shellcheck-no-apt-lock",
+   "headSha": "c88ea58c412da93fef25ee2226daf57501ea1665",
+   "headRepo": "DanFashauer/SignalGrid-Review-Hub",
+   "baseRef": "SignalGrid_Alpha",
+   "createdAt": "2026-10-01T16:55:00Z",
+   "updatedAt": "2026-10-08T11:46:14Z",
+   "labels": [
+    "area:ci",
+    "area:tooling",
+    "area:docs",
+    "size:L"
+   ],
+   "bodyLength": 7951
+  },
+  {
+   "number": 1398,
+   "title": "mutation-guard: journal-based restore on signal + carrier evaluate registered (backlog row Brace-less guards)",
+   "user": "DanFashauer",
+   "draft": true,
+   "headRef": "claude/build-mutation-guard-restore-and-carrier-evaluate",
+   "headSha": "b8b37678df5c1b6151055ff58e099a2ecf2df9ab",
+   "headRepo": "DanFashauer/SignalGrid-Review-Hub",
+   "baseRef": "SignalGrid_Alpha",
+   "createdAt": "2026-10-01T22:57:54Z",
+   "updatedAt": "2026-10-08T12:55:58Z",
+   "labels": [
+    "area:tooling",
+    "area:docs",
+    "size:L"
+   ],
+   "bodyLength": 11468
+  },
+  {
+   "number": 1416,
+   "title": "Add the @claude GitHub workflow (DR-063 GitHub-App trigger, owner-chosen shape, Opus-reviewed)",
+   "user": "DanFashauer",
+   "draft": false,
+   "headRef": "mac/claude-github-action",
+   "headSha": "b02d067e49203ff12bf3d9657b65aca0d0897729",
+   "headRepo": "DanFashauer/SignalGrid-Review-Hub",
+   "baseRef": "SignalGrid_Alpha",
+   "createdAt": "2026-10-02T15:08:26Z",
+   "updatedAt": "2026-10-02T19:22:34Z",
+   "labels": [
+    "area:ci",
+    "size:M",
+    "area:tooling",
+    "area:docs"
+   ],
+   "bodyLength": 4666
+  },
+  {
+   "number": 1417,
+   "title": "Adopt icm-architect (DR-053 re-run): vendor byte-identical, nested-instruction-file gate, lookup-before-append, STATE-block ritual",
+   "user": "DanFashauer",
+   "draft": false,
+   "headRef": "mac/icm-architect-adopt",
+   "headSha": "572b7a4b1c79ddbcc842aff987f62605fb08c89d",
+   "headRepo": "DanFashauer/SignalGrid-Review-Hub",
+   "baseRef": "SignalGrid_Alpha",
+   "createdAt": "2026-10-02T15:09:14Z",
+   "updatedAt": "2026-10-02T19:22:36Z",
+   "labels": [
+    "area:tooling",
+    "size:XL",
+    "area:docs"
+   ],
+   "bodyLength": 5649
+  },
+  {
+   "number": 1422,
+   "title": "Retire dead WEBAUTHN admin step-up knob (plan row 27)",
+   "user": "DanFashauer",
+   "draft": false,
+   "headRef": "mac/webauthn-admin-step-up",
+   "headSha": "fead8e868789e55ccea6fc14b3667984c4762217",
+   "headRepo": "DanFashauer/SignalGrid-Review-Hub",
+   "baseRef": "SignalGrid_Alpha",
+   "createdAt": "2026-10-02T17:10:36Z",
+   "updatedAt": "2026-10-02T19:32:23Z",
+   "labels": [
+    "size:XS",
+    "area:api",
+    "area:docs",
+    "area:container"
+   ],
+   "bodyLength": 3063
+  },
+  {
+   "number": 1424,
+   "title": "proof: Keycloak access-governance bridge and live proof, never grades in_scope (row 17b)",
+   "user": "DanFashauer",
+   "draft": false,
+   "headRef": "mac/keycloak-access-governance",
+   "headSha": "f780c70180fdc11120f989b8e1f319d21023bc94",
+   "headRepo": "DanFashauer/SignalGrid-Review-Hub",
+   "baseRef": "SignalGrid_Alpha",
+   "createdAt": "2026-10-02T18:06:33Z",
+   "updatedAt": "2026-10-02T19:33:18Z",
+   "labels": [
+    "area:tooling",
+    "size:XL",
+    "area:docs"
+   ],
+   "bodyLength": 9079
+  },
+  {
+   "number": 1431,
+   "title": "test: ephemeral-port probes bind the wildcard the server binds, not 127.0.0.1",
+   "user": "DanFashauer",
+   "draft": false,
+   "headRef": "claude/fix-port-probe-wildcard-bind",
+   "headSha": "e570af93cbcbcf765ed67db9b29931e072f4f83f",
+   "headRepo": "DanFashauer/SignalGrid-Review-Hub",
+   "baseRef": "SignalGrid_Alpha",
+   "createdAt": "2026-10-02T23:19:20Z",
+   "updatedAt": "2026-10-03T00:40:00Z",
+   "labels": [
+    "size:XS",
+    "area:api",
+    "area:tooling"
+   ],
+   "bodyLength": 3196
+  },
+  {
+   "number": 1433,
+   "title": "Absorb the ARC kiosk + puck-as-token owner note: puck requirements, DR-055 amendment, security-absolute overclaims gated",
+   "user": "DanFashauer",
+   "draft": false,
+   "headRef": "mac/arc-puck-intake-v2",
+   "headSha": "af395c3f3e81d2ef66760ec0ec036125a43d0a6e",
+   "headRepo": "DanFashauer/SignalGrid-Review-Hub",
+   "baseRef": "SignalGrid_Alpha",
+   "createdAt": "2026-10-02T23:47:10Z",
+   "updatedAt": "2026-10-03T01:07:09Z",
+   "labels": [
+    "area:tooling",
+    "area:docs",
+    "size:L"
+   ],
+   "bodyLength": 4240
+  },
+  {
+   "number": 1438,
+   "title": "persistence: unknown durable session status reads as expired (backlog row: blind-cast status)",
+   "user": "DanFashauer",
+   "draft": false,
+   "headRef": "claude/build-session-store-status-normalize",
+   "headSha": "b9a0204c6c3c62b3a526e7b7f680e35d66f3850f",
+   "headRepo": "DanFashauer/SignalGrid-Review-Hub",
+   "baseRef": "SignalGrid_Alpha",
+   "createdAt": "2026-10-08T11:07:57Z",
+   "updatedAt": "2026-10-08T14:02:14Z",
+   "labels": [
+    "size:S",
+    "area:tooling",
+    "area:docs"
+   ],
+   "bodyLength": 3553
+  },
+  {
+   "number": 1439,
+   "title": "persistence: refresh guards on status=active and the losing refresh writes no audit row (backlog row)",
+   "user": "DanFashauer",
+   "draft": false,
+   "headRef": "claude/build-session-refresh-active-guard",
+   "headSha": "528b2641532630bf20c3221bd433436c3e369f69",
+   "headRepo": "DanFashauer/SignalGrid-Review-Hub",
+   "baseRef": "SignalGrid_Alpha",
+   "createdAt": "2026-10-08T11:08:29Z",
+   "updatedAt": "2026-10-08T14:04:13Z",
+   "labels": [
+    "size:S",
+    "area:api",
+    "area:tooling",
+    "area:docs"
+   ],
+   "bodyLength": 2891
+  },
+  {
+   "number": 1440,
+   "title": "auth: a null JOSE header, JWKS element or payload refuses instead of throwing 500 (backlog row)",
+   "user": "DanFashauer",
+   "draft": false,
+   "headRef": "claude/build-jwt-null-segments-refuse",
+   "headSha": "c9ba4e5475311c503f144384648c3580dba873f2",
+   "headRepo": "DanFashauer/SignalGrid-Review-Hub",
+   "baseRef": "SignalGrid_Alpha",
+   "createdAt": "2026-10-08T11:08:51Z",
+   "updatedAt": "2026-10-08T17:06:24Z",
+   "labels": [
+    "size:S",
+    "area:tooling",
+    "area:docs"
+   ],
+   "bodyLength": 4716
+  },
+  {
+   "number": 1441,
+   "title": "core: SIGNALGRID_ESTATE_REFRESH_SECONDS rejects values past Node's timer ceiling (backlog row)",
+   "user": "DanFashauer",
+   "draft": false,
+   "headRef": "claude/build-estate-refresh-upper-bound",
+   "headSha": "67e4f28a01136855a6dd17df5a5b4acc0ba40326",
+   "headRepo": "DanFashauer/SignalGrid-Review-Hub",
+   "baseRef": "SignalGrid_Alpha",
+   "createdAt": "2026-10-08T11:09:34Z",
+   "updatedAt": "2026-10-08T14:02:28Z",
+   "labels": [
+    "size:S",
+    "area:api",
+    "area:docs"
+   ],
+   "bodyLength": 2796
+  },
+  {
+   "number": 1442,
+   "title": "core: groupLatest orders observedAt in UTC regardless of host timezone (backlog row)",
+   "user": "DanFashauer",
+   "draft": false,
+   "headRef": "claude/build-evidence-observedat-utc-order",
+   "headSha": "f4a995db34fe7be401320f89010c5ca114deaa1e",
+   "headRepo": "DanFashauer/SignalGrid-Review-Hub",
+   "baseRef": "SignalGrid_Alpha",
+   "createdAt": "2026-10-08T11:10:39Z",
+   "updatedAt": "2026-10-09T08:31:27Z",
+   "labels": [
+    "area:ci",
+    "area:tooling",
+    "area:docs",
+    "size:L",
+    "area:core"
+   ],
+   "bodyLength": 9986
+  },
+  {
+   "number": 1443,
+   "title": "core: stepUpAnswers evicted with their decision (backlog row)",
+   "user": "DanFashauer",
+   "draft": false,
+   "headRef": "claude/build-store-stepup-answers-evict",
+   "headSha": "bbf2aee512229548ec47d6500778091e94f7f207",
+   "headRepo": "DanFashauer/SignalGrid-Review-Hub",
+   "baseRef": "SignalGrid_Alpha",
+   "createdAt": "2026-10-08T11:10:52Z",
+   "updatedAt": "2026-10-08T17:12:22Z",
+   "labels": [
+    "size:S",
+    "area:tooling",
+    "area:docs",
+    "area:core"
+   ],
+   "bodyLength": 3747
+  },
+  {
+   "number": 1445,
+   "title": "api-server: decision:evaluate is authorized before WebAuthn consumes the step-up challenge (backlog row)",
+   "user": "DanFashauer",
+   "draft": false,
+   "headRef": "claude/build-step-up-authorize-before-webauthn",
+   "headSha": "468a38c9f6bc9ee7bb7b385698e4734449734f99",
+   "headRepo": "DanFashauer/SignalGrid-Review-Hub",
+   "baseRef": "SignalGrid_Alpha",
+   "createdAt": "2026-10-08T11:12:25Z",
+   "updatedAt": "2026-10-08T14:16:18Z",
+   "labels": [
+    "size:S",
+    "area:api",
+    "area:docs"
+   ],
+   "bodyLength": 6144
+  },
+  {
+   "number": 1459,
+   "title": "api-server: GET /v1/audit verifies the whole durable chain (verifyLedgerFull) and names the durable meaning of chain.truncated (backlog: capped 10,000-row verdict)",
+   "user": "DanFashauer",
+   "draft": false,
+   "headRef": "claude/build-audit-route-verify-ledger-full",
+   "headSha": "e2a4ac054c7843719e15699f7b447a9c4871a6d3",
+   "headRepo": "DanFashauer/SignalGrid-Review-Hub",
+   "baseRef": "SignalGrid_Alpha",
+   "createdAt": "2026-10-08T16:19:04Z",
+   "updatedAt": "2026-10-09T08:25:22Z",
+   "labels": [
+    "area:api",
+    "area:docs",
+    "size:L"
+   ],
+   "bodyLength": 8695
+  },
+  {
+   "number": 1463,
+   "title": "api-server: /metrics exports connector-health and stale-evidence series, derived from held state and fail-closed (plan row 33)",
+   "user": "DanFashauer",
+   "draft": false,
+   "headRef": "claude/build-connector-health-and-stale-evidence-metrics",
+   "headSha": "d160264f9f08ddfbc10833872e5f0cf19b617a8f",
+   "headRepo": "DanFashauer/SignalGrid-Review-Hub",
+   "baseRef": "SignalGrid_Alpha",
+   "createdAt": "2026-10-08T17:56:54Z",
+   "updatedAt": "2026-10-09T03:59:56Z",
+   "labels": [
+    "area:api",
+    "area:tooling",
+    "area:docs",
+    "size:L",
+    "area:core"
+   ],
+   "bodyLength": 8831
+  },
+  {
+   "number": 1509,
+   "title": "Mac tick 20261012T000306Z: sim results (0 request(s)); objective loop: escalate",
+   "user": "DanFashauer",
+   "draft": false,
+   "headRef": "mac/tick-20261012T000306Z",
+   "headSha": "b743ae7c38b8cfe091079721fd7c65539248d50d",
+   "headRepo": "DanFashauer/SignalGrid-Review-Hub",
+   "baseRef": "SignalGrid_Alpha",
+   "createdAt": "2026-10-12T00:03:13Z",
+   "updatedAt": "2026-10-12T00:07:44Z",
+   "labels": [
+    "size:S",
+    "area:docs"
+   ],
+   "bodyLength": 0
+  },
+  {
+   "number": 1510,
+   "title": "Mac tick 20261013T000348Z: sim results (0 request(s)); objective loop: escalate",
+   "user": "DanFashauer",
+   "draft": false,
+   "headRef": "mac/tick-20261013T000348Z",
+   "headSha": "3deddcf5835230d27be94217a05f10ca3e51aca4",
+   "headRepo": "DanFashauer/SignalGrid-Review-Hub",
+   "baseRef": "SignalGrid_Alpha",
+   "createdAt": "2026-10-13T00:03:55Z",
+   "updatedAt": "2026-10-13T00:07:06Z",
+   "labels": [
+    "size:S",
+    "area:docs"
+   ],
+   "bodyLength": 0
+  },
+  {
+   "number": 1511,
+   "title": "Mac tick 20261014T000011Z: sim results (0 request(s)); objective loop: escalate",
+   "user": "DanFashauer",
+   "draft": false,
+   "headRef": "mac/tick-20261014T000011Z",
+   "headSha": "21bc1f85b8997bbc876d34ccf8ffe663dff9750e",
+   "headRepo": "DanFashauer/SignalGrid-Review-Hub",
+   "baseRef": "SignalGrid_Alpha",
+   "createdAt": "2026-10-14T00:00:18Z",
+   "updatedAt": "2026-10-14T00:04:55Z",
+   "labels": [
+    "size:S",
+    "area:docs"
+   ],
+   "bodyLength": 0
+  },
+  {
+   "number": 1556,
+   "title": "integrations: the webhook URL guard refuses the ::ffff:0: translated IPv6 form and trailing-dot localhost; pins for the #1504 residue (backlog rows)",
+   "user": "DanFashauer",
+   "draft": false,
+   "headRef": "claude/build-url-guard-translated-form-trailing-dot",
+   "headSha": "d607c5c901d8ef7e7d9c328fd7ae7c11a1d9f58b",
+   "headRepo": "DanFashauer/SignalGrid-Review-Hub",
+   "baseRef": "SignalGrid_Alpha",
+   "createdAt": "2026-10-17T12:08:32Z",
+   "updatedAt": "2026-10-17T14:21:54Z",
+   "labels": [
+    "size:M",
+    "area:tooling",
+    "area:docs",
+    "area:integrations"
+   ],
+   "bodyLength": 11629
+  },
+  {
+   "number": 1562,
+   "title": "deps: bump the npm-minor-and-patch group across 1 directory with 35 updates",
+   "user": "dependabot[bot]",
+   "draft": false,
+   "headRef": "dependabot/npm_and_yarn/npm-minor-and-patch-bca47db88a",
+   "headSha": "dbdaeb2e9d2ab9eba7e8f4fa1f8c41985745f589",
+   "headRepo": "DanFashauer/SignalGrid-Review-Hub",
+   "baseRef": "SignalGrid_Alpha",
+   "createdAt": "2026-10-17T15:29:54Z",
+   "updatedAt": "2026-10-17T15:34:11Z",
+   "labels": [
+    "area:api",
+    "area:mcp",
+    "area:apps",
+    "area:tooling",
+    "size:XL",
+    "dependencies",
+    "javascript"
+   ],
+   "bodyLength": 65535
+  },
+  {
+   "number": 1569,
+   "title": "Mac tick 20261017T182020Z: sim results (1 request(s)); objective loop: escalate",
+   "user": "DanFashauer",
+   "draft": false,
+   "headRef": "mac/tick-20261017T182020Z",
+   "headSha": "4d0599ccdedeb2b87dc88c2af03cb28d40d738c0",
+   "headRepo": "DanFashauer/SignalGrid-Review-Hub",
+   "baseRef": "SignalGrid_Alpha",
+   "createdAt": "2026-10-17T19:00:21Z",
+   "updatedAt": "2026-10-17T19:00:32Z",
+   "labels": [
+    "size:XL",
+    "area:docs",
+    "area:lanes"
+   ],
+   "bodyLength": 0
+  },
+  {
+   "number": 1585,
+   "title": "gates: pair each verdict with its own token; report an unreadable resolve.ts",
+   "user": "DanFashauer",
+   "draft": false,
+   "headRef": "claude/build-tone-pairing-and-fetch-unreadable",
+   "headSha": "93288d4cb3becf95cb9c459f214a8df87bfbef0b",
+   "headRepo": "DanFashauer/SignalGrid-Review-Hub",
+   "baseRef": "SignalGrid_Alpha",
+   "createdAt": "2026-10-22T13:15:50Z",
+   "updatedAt": "2026-10-23T03:50:05Z",
+   "labels": [
+    "area:tooling",
+    "size:XL",
+    "area:docs"
+   ],
+   "bodyLength": 11026
+  },
+  {
+   "number": 1586,
+   "title": "Gates: realpath entry guard so a symlinked start cannot skip a gate body",
+   "user": "DanFashauer",
+   "draft": false,
+   "headRef": "claude/build-gate-symlink-entry-guard",
+   "headSha": "6d11676083b057c66b6d923977b527a81ba0a61d",
+   "headRepo": "DanFashauer/SignalGrid-Review-Hub",
+   "baseRef": "SignalGrid_Alpha",
+   "createdAt": "2026-10-22T13:48:15Z",
+   "updatedAt": "2026-10-23T02:50:07Z",
+   "labels": [
+    "area:tooling",
+    "size:XL",
+    "area:docs"
+   ],
+   "bodyLength": 6363
+  },
+  {
+   "number": 1611,
+   "title": "Container shipped-import model: a script shipped alone must have its relative imports shipped beside it",
+   "user": "DanFashauer",
+   "draft": true,
+   "headRef": "claude/build-shipped-import-model",
+   "headSha": "c8451bfba538ed2f97811d06c50bb262d922e016",
+   "headRepo": "DanFashauer/SignalGrid-Review-Hub",
+   "baseRef": "SignalGrid_Alpha",
+   "createdAt": "2026-10-23T02:06:30Z",
+   "updatedAt": "2026-10-23T03:42:21Z",
+   "labels": [
+    "area:ci",
+    "area:tooling",
+    "size:XL",
+    "area:docs"
+   ],
+   "bodyLength": 5835
+  },
+  {
+   "number": 1638,
+   "title": "Lane mail (cloud): PR #1321 open decisions handed to the Mac lane",
+   "user": "DanFashauer",
+   "draft": false,
+   "headRef": "lane/cloud-mail-20261023-225852Z",
+   "headSha": "c2b74fee5823d9d81647eb1f20b7a25eb8eb95ca",
+   "headRepo": "DanFashauer/SignalGrid-Review-Hub",
+   "baseRef": "SignalGrid_Alpha",
+   "createdAt": "2026-10-23T22:59:06Z",
+   "updatedAt": "2026-10-23T22:59:48Z",
+   "labels": [
+    "size:XS",
+    "area:lanes"
+   ],
+   "bodyLength": 432
+  }
+ ]
+}

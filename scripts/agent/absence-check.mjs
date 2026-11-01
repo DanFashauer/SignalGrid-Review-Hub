@@ -35,6 +35,7 @@
 //
 // EXIT CODES:  0 = absence corroborated   1 = refuted (a file exists)   2 = inconclusive
 import { execFileSync, spawnSync } from "node:child_process";
+import { scratchGitOk, scrubProcessGitEnv } from "../lib/scratch-git.mjs";
 import { readFileSync, readdirSync, existsSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -350,6 +351,7 @@ export function classify(results) {
 }
 
 function selfTest() {
+  scrubProcessGitEnv(); // inherited GIT_DIR/GIT_WORK_TREE/GIT_INDEX_FILE would aim the gate's own plain-git calls at the real repo
   const checks = [];
   // Assembled so the token is never a contiguous literal in this tracked file: the words
   // probe (all words in one file) would otherwise find this file and the absent-topic
@@ -529,7 +531,7 @@ function selfTest() {
     const tmp = mkdtempSync(join(tmpdir(), "absence-words-"));
     try {
       writeFileSync(join(tmp, "doc.md"), "Agent MODEL Tier\n");
-      const git = (...a) => execFileSync("git", ["-C", tmp, ...a], { encoding: "utf8" });
+      const git = (...a) => scratchGitOk(tmp, a);
       git("init", "-q");
       git("add", "-A");
       const hits = git(...wordsProbeArgv(w3)).split("\n").filter(Boolean);
@@ -625,7 +627,7 @@ function selfTest() {
         "a.js.map",
       ];
       for (const f of [...firstParty, ...excluded]) put(f);
-      const git = (...a) => execFileSync("git", ["-C", tmp, ...a], { encoding: "utf8" });
+      const git = (...a) => scratchGitOk(tmp, a);
       git("init", "-q");
       git("add", "-A");
       const hits = git("grep", "-lIi", "-e", canary, "--", ...CONTENT_EXCLUSIONS).split("\n").filter(Boolean).sort();

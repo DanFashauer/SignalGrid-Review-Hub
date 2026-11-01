@@ -130,7 +130,9 @@ if [ "$_tick_acquire_status" != "0" ]; then
   case "$_tick_acquire_msg" in
     *holding*)
       if [ "${DRY:-0}" = "1" ]; then say "dry-run: would raise a hand: tick recovery holding; $_tick_acquire_msg"
-      else say "RAISED HAND: tick recovery holding; $(node "$TICK_LOCK_HELPER" raise-hold "$TICK_LOCK_ROOT" "$_tick_acquire_msg" 2>&1)"; fi ;;
+      # No redirection inside $(...): the helper must stay a direct child of this shell.
+      else _tick_hold_out="$(node "$TICK_LOCK_HELPER" raise-hold "$TICK_LOCK_ROOT" "$$" "$_tick_acquire_msg")"
+        say "RAISED HAND: tick recovery holding; $_tick_hold_out"; fi ;;
   esac
   exec 8<&-
   exit 1
@@ -494,7 +496,12 @@ JS
     _hb_head="$(node scripts/lib/lane-attempt-store.mjs retry-head "$(pwd -P)" "$RECORD_DIR" ".sg-heartbeat-${_hb_previous}" 2>/dev/null)" || _hb_head=""
     case "${_hb_head#.sg-heartbeat-}" in
       "$_hb_previous"|"") ;;
-      *) if [[ "${_hb_head#.sg-heartbeat-}" =~ ^[0-9]{8}T[0-9]{6}Z-[0-9]+$ ]]; then _hb_previous="${_hb_head#.sg-heartbeat-}"; else _hb_hold "heartbeat retry chain names an unknown attempt"; return 1; fi ;;
+      *) if [[ "${_hb_head#.sg-heartbeat-}" =~ ^[0-9]{8}T[0-9]{6}Z-[0-9]+$ ]]; then _hb_previous="${_hb_head#.sg-heartbeat-}"; else _hb_hold "heartbeat retry chain names an unknown attempt"; return 1; fi
+         # A marked successor with no files is a retry that never started (killed after
+         # the marker, before prepare): start it now, under the id the marker names.
+         if ! compgen -G "$RECORD_DIR/.sg-heartbeat-${_hb_previous}.*" >/dev/null; then
+           _hb_attempt="$_hb_previous"; _hb_retry="{\"resumed\":true,\"successor\":\"$_hb_head\"}"
+         fi ;;
     esac
     _hb_previous_log="$RECORD_DIR/.sg-heartbeat-${_hb_previous}.log"
     _hb_previous_exit="$RECORD_DIR/.sg-heartbeat-${_hb_previous}.exit"

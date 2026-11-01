@@ -278,6 +278,14 @@ control("a tick killed after preparing a resend (pointer still on the predecesso
   const r = f.runTick(); assert.equal(r.status, 0, r.stderr); assert.equal(f.deliveries().length, 1, "exactly one delivery"); assert.match(r.stdout, /20261030T005500Z-12345 published nothing/);
   assert.equal(JSON.parse(readFileSync(join(cache, "refused", next + ".retried"), "utf8")).n, 2, "the chain continues from the successor");
 });
+control("a retry marked but never started (no successor files) delivers exactly once next tick", { tick: true, age: 130, priorAttempt: "interrupted", result: "changed: fixture" }, (f) => {
+  const cache = join(f.root, "node_modules"), prior = ".sg-heartbeat-20261030T000000Z-999999", next = ".sg-heartbeat-20261030T005500Z-12345";
+  mkdirSync(join(cache, "refused")); writeFileSync(join(cache, "refused", prior + ".retried"), JSON.stringify({ root: prior, n: 1, successor: next, exit: null }) + "\n");
+  const r = f.runTick(); assert.equal(r.status, 0, r.stderr); assert.equal(f.deliveries().length, 1, "exactly one delivery");
+  assert.ok(existsSync(join(cache, next + ".log")), "the unstarted retry runs under the id its marker names");
+  assert.equal(readFileSync(join(cache, ".sg-last-heartbeat-attempt"), "utf8").trim(), "20261030T005500Z-12345");
+  assert.equal(JSON.parse(readFileSync(join(cache, next + ".log"), "utf8").split("\n")[0]).retryOf.resumed, true);
+});
 control("a cause capped after its retries is named in the heartbeat RESULT", { tick: true, age: 30 }, (f) => {
   mkdirSync(join(f.root, "node_modules/refused")); writeFileSync(join(f.root, "node_modules/refused/hand-fixture.capped"), "4\n");
   const r = f.runTick(); assert.equal(r.status, 0, r.stderr); assert.match(f.deliveries()[0] ?? "", /refused:hand-fixture x4/);
@@ -563,28 +571,39 @@ check('a paused initializer resuming never removes a replacement owner\'s lock',
  const status=spawnSync('/bin/sh',['-c','while kill -0 '+child.pid+' 2>/dev/null; do sleep 0.1; done']);assert.equal(status.status,0);
  assert.equal(readFileSync(lock,'utf8'),replacement,'the resumed initializer leaves the replacement lock alone');
 });
+// raise-hold runs only from a shell that holds the tick guard (FD8, kernel-locked), as the real tick does.
+function holdRun(f,module,message,extra={}){
+ return run('/bin/bash',['-c','set -u\nG="$("$NODE" "$M" tick-guard "$R")" || exit 3\nexec 8<"$G"\n"$NODE" "$M" raise-hold "$R" "$$" "$MSG"\nexit $?\n'],f.root,{NODE:process.execPath,M:module,R:f.root,MSG:message,...extra});
+}
+check('raise-hold from a caller that does not hold the tick guard publishes nothing',f=>{
+ const calls=join(f.parent,'custody-calls'),module=join(f.root,'scripts/lib/lane-attempt-store.mjs');
+ writeFileSync(join(f.root,'scripts/lane-deliver.mjs'),`import fs from 'node:fs';fs.appendFileSync(${JSON.stringify(calls)},'push\\n');`);
+ const r=run(process.execPath,[module,'raise-hold',f.root,String(process.pid),'original tick shell 4 is still alive; holding'],f.root);
+ assert.equal(r.status,0,r.stderr);assert.match(r.stdout,/raise-hold refused: this caller does not hold the tick guard/);
+ assert.equal(existsSync(calls),false,'nothing published');assert.equal(readdirSync(run(process.execPath,[module,'path',f.root],f.root).stdout.trim()).some(n=>n.startsWith('tick-hold-')),false,'no intent written');
+});
 for(const [label,receipt,want] of [['without a receipt is raised again',false,2],['with a receipt whose ref is on origin stays already raised',true,1]])check('a hold notification refused (exit 1) '+label,f=>{
  const calls=join(f.parent,'hold-calls'),bin=join(f.parent,'hold-bin');mkdirSync(bin);
  writeFileSync(join(f.root,'scripts/lane-deliver.mjs'),`import fs from 'node:fs';const a=process.argv.slice(2);fs.appendFileSync(${JSON.stringify(calls)},'call\\n');if(process.env.HOLD_RECEIPT)fs.writeFileSync(a[a.indexOf('--receipt')+1],JSON.stringify({version:1,target:'lane/mac-mail-20261101-010000Z-0123456789ab'})+'\\n');process.exit(Number(process.env.HOLD_RC||0));`);
  writeFileSync(join(bin,'git'),'#!/bin/sh\nif [ "$1" = ls-remote ]; then printf \'%s\\t%s\\n\' 0123456789012345678901234567890123456789 "$4"; exit 0; fi\nexec '+GIT+' "$@"\n',{mode:0o755});
  const module=join(f.root,'scripts/lib/lane-attempt-store.mjs'),env={PATH:bin+':'+dirname(process.execPath)+':/usr/bin:/bin'};
- const first=run(process.execPath,[module,'raise-hold',f.root,'original tick shell 1 is still alive; holding'],f.root,{...env,HOLD_RC:'1',...(receipt?{HOLD_RECEIPT:'1'}:{})});
+ const first=holdRun(f,module,'original tick shell 1 is still alive; holding',{...env,HOLD_RC:'1',...(receipt?{HOLD_RECEIPT:'1'}:{})});
  assert.equal(first.status,0,first.stderr);assert.match(first.stdout,/written \(lane-deliver exit 1\)/);
- const second=run(process.execPath,[module,'raise-hold',f.root,'original tick shell 1 is still alive; holding'],f.root,{...env,HOLD_RC:'0'});
+ const second=holdRun(f,module,'original tick shell 1 is still alive; holding',{...env,HOLD_RC:'0'});
  assert.equal(second.status,0,second.stderr);assert.equal(readFileSync(calls,'utf8').trim().split('\n').length,want);
  assert.match(second.stdout,want===2?/written \(lane-deliver exit 0\)/:/already raised/);
- if(want===2){const third=run(process.execPath,[module,'raise-hold',f.root,'original tick shell 1 is still alive; holding'],f.root,{...env,HOLD_RC:'0'});assert.match(third.stdout,/ledger unreadable; holding/,'delivered, and no ledger to dedupe on here: held, not resent');assert.equal(readFileSync(calls,'utf8').trim().split('\n').length,2);}
+ if(want===2){const third=holdRun(f,module,'original tick shell 1 is still alive; holding',{...env,HOLD_RC:'0'});assert.match(third.stdout,/ledger unreadable; holding/,'delivered, and no ledger to dedupe on here: held, not resent');assert.equal(readFileSync(calls,'utf8').trim().split('\n').length,2);}
 });
 for(const [ledger,want] of [['open',1],['resolved',2]])check('a delivered hold hand whose Hub hand is '+ledger+(want===2?' is raised again under a new id':' stays already raised'),f=>{
  const calls=join(f.parent,'hold-calls'),message='original tick shell 1 is still alive; holding',id='tick-hold-'+createHash('sha256').update(message).digest('hex');
  writeFileSync(join(f.root,'scripts/lane-deliver.mjs'),`import fs from 'node:fs';const a=process.argv.slice(2);fs.appendFileSync(${JSON.stringify(calls)},JSON.parse(fs.readFileSync(a[1],'utf8'))[0].id+'\\n');process.exit(0);`);
  const module=join(f.root,'scripts/lib/lane-attempt-store.mjs');
- const first=run(process.execPath,[module,'raise-hold',f.root,message],f.root);assert.equal(first.status,0,first.stderr);assert.match(first.stdout,/written \(lane-deliver exit 0\)/);
+ const first=holdRun(f,module,message);assert.equal(first.status,0,first.stderr);assert.match(first.stdout,/written \(lane-deliver exit 0\)/);
  // The Hub ledger as lane-deliver's fetch leaves it on origin/SignalGrid_Alpha.
  const g=a=>{const r=scratchGit(f.root,a,{env:{GIT_CONFIG_NOSYSTEM:'1',GIT_CONFIG_GLOBAL:'/dev/null'}});assert.equal(r.status,0,r.stderr)};
  mkdirSync(join(f.root,'artifacts/raised-hands'),{recursive:true});writeFileSync(join(f.root,'artifacts/raised-hands',id+'.json'),JSON.stringify({id,status:ledger})+'\n');
  g(['add','artifacts']);g(['commit','-qm','ledger']);g(['update-ref','refs/remotes/origin/SignalGrid_Alpha','HEAD']);
- const second=run(process.execPath,[module,'raise-hold',f.root,message],f.root);assert.equal(second.status,0,second.stderr);
+ const second=holdRun(f,module,message);assert.equal(second.status,0,second.stderr);
  const sent=readFileSync(calls,'utf8').trim().split('\n');assert.equal(sent.length,want);
  if(want===2){assert.equal(sent[1],id+'-again-1');assert.match(second.stdout,new RegExp('hand '+id+'-again-1 written'));}else assert.match(second.stdout,/already raised/);
 });
@@ -592,18 +611,19 @@ check('a delivered hold hand with an unreadable Hub ledger says so and holds',f=
  const calls=join(f.parent,'unknown-calls'),message='original tick shell 3 is still alive; holding';
  writeFileSync(join(f.root,'scripts/lane-deliver.mjs'),`import fs from 'node:fs';fs.appendFileSync(${JSON.stringify(calls)},'push\\n');`);
  const module=join(f.root,'scripts/lib/lane-attempt-store.mjs');
- assert.match(run(process.execPath,[module,'raise-hold',f.root,message],f.root).stdout,/written \(lane-deliver exit 0\)/);
- const second=run(process.execPath,[module,'raise-hold',f.root,message],f.root); // no origin/SignalGrid_Alpha: the ledger cannot be read
+ assert.match(holdRun(f,module,message).stdout,/written \(lane-deliver exit 0\)/);
+ const second=holdRun(f,module,message); // no origin/SignalGrid_Alpha: the ledger cannot be read
  assert.equal(second.status,0,second.stderr);assert.match(second.stdout,/ledger unreadable; holding/);assert.equal(readFileSync(calls,'utf8').trim().split('\n').length,1);
 });
-check('two concurrent raise-holds publish exactly one hold hand',f=>{
+check('two concurrent raise-holds publish exactly one hold hand (the second cannot take the guard)',f=>{
  const calls=join(f.parent,'race-calls'),bin=join(f.parent,'race-bin'),message='original tick shell 1 is still alive; holding';mkdirSync(bin);
  // A's delivery writes its receipt, then is mid-push for 4 s; origin shows no ref yet.
  writeFileSync(join(f.root,'scripts/lane-deliver.mjs'),`import fs from 'node:fs';const a=process.argv.slice(2);fs.writeFileSync(a[a.indexOf('--receipt')+1],JSON.stringify({version:1,target:'lane/mac-mail-20261101-010000Z-0123456789ab'})+'\\n',{flag:'wx'});Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0,4000);fs.appendFileSync(${JSON.stringify(calls)},'push\\n');`);
  writeFileSync(join(bin,'git'),'#!/bin/sh\nif [ "$1" = ls-remote ]; then exit 0; fi\nexec '+GIT+' "$@"\n',{mode:0o755});
  const module=join(f.root,'scripts/lib/lane-attempt-store.mjs'),env={PATH:bin+':'+dirname(process.execPath)+':/usr/bin:/bin',NODE:process.execPath,M:module,R:f.root,MSG:message,OUT:join(f.parent,'a.out')};
- const both=spawnSync('/bin/sh',['-c','"$NODE" "$M" raise-hold "$R" "$MSG" > "$OUT" 2>&1 & a=$!; sleep 1.5; "$NODE" "$M" raise-hold "$R" "$MSG"; wait $a'],{cwd:f.root,encoding:'utf8',env,timeout:30000});
- assert.equal(both.status,0,both.stderr);assert.match(both.stdout,/already raised \(its delivery may still be running\)/);
+ const one='G="$("$NODE" "$M" tick-guard "$R")" || exit 3; exec 8<"$G"; "$NODE" "$M" raise-hold "$R" "$$" "$MSG"; exit $?';
+ const both=spawnSync('/bin/bash',['-c','bash -c \''+one+'\' > "$OUT" 2>&1 & a=$!; sleep 1.5; bash -c \''+one+'\'; wait $a'],{cwd:f.root,encoding:'utf8',env,timeout:30000});
+ assert.equal(both.status,0,both.stderr);assert.match(both.stdout,/raise-hold refused: this caller does not hold the tick guard/);
  assert.equal(readFileSync(calls,'utf8').trim().split('\n').length,1,'exactly one publication');assert.match(readFileSync(join(f.parent,'a.out'),'utf8'),/written \(lane-deliver exit 0\)/);
 });
 check('a hold delivery killed before its exit (writer dead, no receipt) is raised again',f=>{
@@ -611,7 +631,7 @@ check('a hold delivery killed before its exit (writer dead, no receipt) is raise
  writeFileSync(join(f.root,'scripts/lane-deliver.mjs'),`import fs from 'node:fs';fs.appendFileSync(${JSON.stringify(calls)},'push\\n');`);
  const module=join(f.root,'scripts/lib/lane-attempt-store.mjs'),records=run(process.execPath,[module,'path',f.root],f.root).stdout.trim(),dead=run('/usr/bin/true',[],f.root);
  writeFileSync(join(records,id+'.attempt.json'),JSON.stringify({state:'attempted; pending exact readback',receipt:join(records,id+'.submission.json'),cause:message,handId:id,writer:{pid:dead.pid,startMs:0}})+'\n');
- const r=run(process.execPath,[module,'raise-hold',f.root,message],f.root);assert.equal(r.status,0,r.stderr);assert.match(r.stdout,/written/);
+ const r=holdRun(f,module,message);assert.equal(r.status,0,r.stderr);assert.match(r.stdout,/written/);
  assert.equal(readFileSync(calls,'utf8').trim().split('\n').length,1);assert.ok(existsSync(join(records,'refused',id+'.refused-1.attempt.json')),'the killed attempt is kept aside');
 });
 for(const [label,marker,target] of [['a resumed archival whose target already holds other content holds and deletes nothing',null,'other bytes\n'],['an unreadable archival marker is a named hold','{',null]])check(label,f=>{
@@ -878,6 +898,19 @@ await leaseControl('failed immutable owner publication is recovered as ABANDONED
  chmodSync(c.store,0o500);a.resume();assert.equal((await a.next()).event,'CLOSED');await a.closed;chmodSync(c.store,0o700);
  assert.equal(c.state(),'OPEN');const token=JSON.parse(readFileSync(c.slot,'utf8')).token;c.kernelAvailable();
  await recovers(c,c.start('owner-failure-B'),token);
+});
+await leaseControl('a surviving process carrying a credential in argv holds without publishing any argument',async(f,c)=>{
+ const child=join(f.parent,'secret.pid');
+ const a=c.start('secret-A',{detached:true,pre:`perl -e 'sleep 300' 'Authorization: Bearer SECRET-xyz' </dev/null >/dev/null 2>&1 4>&- 8<&- &\necho $! > ${q(child)}`});assert.equal((await a.next()).event,'ENTER');
+ const survivor=Number(readFileSync(child,'utf8'));
+ try {
+  assert.equal(a.child.kill('SIGKILL'),true);await a.closed;
+  c.kernelAvailable();const b=c.start('secret-B',{dry:0});assert.equal((await b.next()).event,'CLOSED');await b.closed;
+  const out=b.stdout+b.stderr;assert.match(out,/program perl,.*may survive; holding/);
+  const ops=readdirSync(c.store).filter(n=>/^tick-hold-[a-f0-9]{64}\.(ops|attempt)\.json$/.test(n));assert.equal(ops.length,2,'the hold hand was written');
+  for(const text of [out,...ops.map(n=>readFileSync(join(c.store,n),'utf8'))]){assert.doesNotMatch(text,/SECRET-xyz/);assert.doesNotMatch(text,/Bearer/);}
+ } finally { try{process.kill(survivor,'SIGKILL')}catch{} }
+ for(let i=0;i<50;i++){try{process.kill(survivor,0);spawnSync('/bin/sleep',['0.1'])}catch{break}}
 });
 await leaseControl('a surviving child in the original tick process group holds recovery until it is gone',async(f,c)=>{
  const child=join(f.parent,'survivor.pid');

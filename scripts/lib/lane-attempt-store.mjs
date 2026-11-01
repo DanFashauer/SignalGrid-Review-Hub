@@ -232,12 +232,16 @@ function assertOriginalGone(shellPid, { pgid = null, token = null, shellStart = 
   for (const line of ps.stdout.split("\n")) {
     if (!line.trim()) continue;
     const m = /^\s*(\d+)\s+(\d+)\s+(\w{3} \w{3}\s+\d+ \d\d:\d\d:\d\d \d{4})\s(.*)$/.exec(line), started = m ? lstartEpoch(m[3]) : NaN;
-    if (!m || !Number.isFinite(started)) throw Error(`process table line is unparseable (${line.slice(0, 80)}); holding`);
+    // Never echo a process line: argv can carry credentials, and this text is published.
+    if (!m || !Number.isFinite(started)) throw Error("a process table line is unparseable; holding");
     if (Number(m[1]) === process.pid) continue;
     const group = Number(m[2]), command = m[4];
     if (!(started >= since)) continue; // started before the original tick: not its descendant
     if ((pgid !== null && group === pgid && pgid !== own) || (token && command.includes(token)) || command.includes("sg-lane-deliver-")) {
-      throw Error(`process ${m[1]} of the original tick (group ${pgid ?? "unrecorded"}, started ${recorded === null ? "unrecorded" : new Date(recorded).toISOString()}) may survive (${command.slice(0, 120)}); holding`);
+      // Publishable fields only: pid, group, start and the program's basename; never its
+      // arguments (live-lane scripts pass Authorization headers to curl in argv).
+      const program = (command.trim().split(/\s+/)[0] ?? "").split("/").pop().replace(/[^A-Za-z0-9._+-]/g, "?").slice(0, 40);
+      throw Error(`process ${m[1]} (program ${program || "unknown"}, group ${group}, started ${new Date(started).toISOString()}${command.includes("sg-lane-deliver-") ? ", in a lane-deliver worktree" : ""}) of the original tick (group ${pgid ?? "unrecorded"}, started ${recorded === null ? "unrecorded" : new Date(recorded).toISOString()}) may survive; holding`);
     }
   }
 }
@@ -665,7 +669,15 @@ function writerGone(writer) {
 // A liveness hold must not be silent (DR-054): write one hand per held cause through
 // the ordinary Mac hand path (attempt intent, ops, lane-deliver batch --receipt,
 // parent terminal). The cause text names the PID, group and recorded start time.
-export function raiseTickHold(root, message) {
+//
+// Custody: only a tick that holds the kernel guard may raise one. The caller passes
+// its own shell PID; ownedGuard verifies this process is that shell's child and that
+// the shell's inherited FD8 is the store's guard, locked by it. The hold never adopts
+// or finalizes the OPEN slot. The lane-deliver child inherits FD8, so the guard stays
+// held until the delivery itself has exited.
+export function raiseTickHold(root, shellPid, message) {
+  try { ownedGuard(root, shellPid); }
+  catch (error) { return `raise-hold refused: this caller does not hold the tick guard (${error.message}); nothing published`; }
   const directory = deliveryRecordDirectory(root), id = "tick-hold-" + digest(Buffer.from(message));
   const prefix = join(directory, id);
   resumeArchivals(directory);
@@ -708,7 +720,7 @@ export function raiseTickHold(root, message) {
     need: "Mac lane: check whether the named original tick process (PID, group, start time) still runs; once it is gone the next tick recovers on its own." };
   writeFileSync(prefix + ".ops.json", JSON.stringify([op]) + "\n", { flag: "wx", mode: 0o600 });
   const r = spawnSync(process.execPath, [join(root, "scripts/lane-deliver.mjs"), "batch", prefix + ".ops.json", "--receipt", prefix + ".submission.json"],
-    { cwd: root, encoding: "utf8", timeout: 300000, stdio: ["ignore", "pipe", "pipe", "ignore", "ignore", "ignore", "ignore", "ignore", "ignore"] });
+    { cwd: root, encoding: "utf8", timeout: 300000, stdio: ["ignore", "pipe", "pipe", "ignore", "ignore", "ignore", "ignore", "ignore", TICK_FD] });
   writeFileSync(prefix + ".output", (r.stdout ?? "") + (r.stderr ?? ""), { flag: "wx", mode: 0o600 });
   writeFileSync(prefix + ".exit", `${r.status ?? 255}\n`, { flag: "wx", mode: 0o600 });
   return `hand ${handId} written (lane-deliver exit ${r.status ?? "signal"})`;
@@ -729,10 +741,10 @@ if (entrypoint === fileURLToPath(import.meta.url)) {
     else if (mode === "refused-disposition" && args.length === 1) console.log(refusedDisposition(root, args[0]));
     else if (mode === "retry-refused" && (args.length === 3 || args.length === 4)) console.log(JSON.stringify(setAsideRefusedAttempt(root, ...args)));
     else if (mode === "retry-head" && args.length === 2) console.log(retryHead(...args));
-    else if (mode === "raise-hold" && args.length === 1) console.log(raiseTickHold(root, args[0]));
+    else if (mode === "raise-hold" && args.length === 2) console.log(raiseTickHold(root, args[0], args[1]));
     else if (mode === "capped" && args.length === 1) { const caps = activeCaps(args[0]); if (caps.length) console.log(caps.join("; ")); }
     else if (mode === "tick-release" && args.length === 3) releaseTick(root, ...args);
-    else throw Error("usage: lane-attempt-store.mjs path|init|ensure|tick-guard <checkout> | tick-acquire <checkout> <shell-pid> [<pgid> [<lstart>]] | raise-hold <checkout> <message> | refused-disposition <checkout> <receipt> | retry-refused <checkout> <records> <attempt-name> <exit> [<successor>|derive|move] | retry-head <checkout> <records> <attempt-name> | tick-release <checkout> <token> <shell-pid> <exit-trap-status>");
+    else throw Error("usage: lane-attempt-store.mjs path|init|ensure|tick-guard <checkout> | tick-acquire <checkout> <shell-pid> [<pgid> [<lstart>]] | raise-hold <checkout> <shell-pid> <message> | refused-disposition <checkout> <receipt> | retry-refused <checkout> <records> <attempt-name> <exit> [<successor>|derive|move] | retry-head <checkout> <records> <attempt-name> | tick-release <checkout> <token> <shell-pid> <exit-trap-status>");
   } catch (error) {
     console.error(`RAISED HAND: delivery record store unavailable: ${error.message}; READBACK ONLY`);
     process.exitCode = error instanceof TickBusy ? 75 : 1;

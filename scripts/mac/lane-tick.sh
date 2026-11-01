@@ -77,23 +77,27 @@ STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 LOG_PREFIX="lane-tick $STAMP"
 say() { printf '%s  %s\n' "$LOG_PREFIX" "$1"; }
 
-# Resolve once before use_tick_worktree can change cwd. Missing state never means first run.
-RECORD_DIR="$(node "$REPO_ROOT/scripts/lib/lane-attempt-store.mjs" path "$REPO_ROOT")" || exit 1
+# Resolve once before use_tick_worktree can change cwd. A missing store is initialized
+# and a damaged one is renamed aside and replaced (`ensure`): the tick never waits on a person.
+RECORD_DIR="$(node "$REPO_ROOT/scripts/lib/lane-attempt-store.mjs" ensure "$REPO_ROOT")" || exit 1
 
 # ── one tick at a time ───────────────────────────────────────────────────────
 # BEGIN OWNED TICK GUARD
 # Linked checkouts share a persistent, identity-pinned descriptor lock. Only
 # explicit store initialization creates it; opening read-only cannot recreate it.
-# An unfinished ownership record or an old tick.lock stays held for exact readback.
-# A PID, process absence or an available kernel lock never clears that evidence.
+# The next tick that holds the kernel guard recovers an interrupted tick's OPEN
+# slot (records it ABANDONED, CLOSES it) and renames an old tick.lock aside.
 # CLOSED records authorized lease finalization, not an independent parent exit,
 # accepted task, canonical delivery or provider-cleanup witness.
 TICK_LOCK_ROOT="$REPO_ROOT"
 TICK_LOCK_HELPER="$REPO_ROOT/scripts/lib/lane-attempt-store.mjs"
 TICK_GUARD_PATH="$(node "$TICK_LOCK_HELPER" tick-guard "$TICK_LOCK_ROOT")" || exit 1
 exec 8<"$TICK_GUARD_PATH" || { say "tick guard cannot be opened; READBACK ONLY"; exit 1; }
-TICK_OWNER_TOKEN="$(node "$TICK_LOCK_HELPER" tick-acquire "$TICK_LOCK_ROOT" "$$")"
+_tick_acquired="$(node "$TICK_LOCK_HELPER" tick-acquire "$TICK_LOCK_ROOT" "$$")"
 _tick_acquire_status=$?
+TICK_OWNER_TOKEN="$(printf '%s\n' "$_tick_acquired" | sed -n 1p)"
+TICK_RECOVERED="$(printf '%s\n' "$_tick_acquired" | sed -n '2,$p' | sed 's/^recovered: //' | paste -sd ';' -)"
+if [ -n "$TICK_RECOVERED" ]; then say "recovered: $TICK_RECOVERED"; fi
 if [ "$_tick_acquire_status" != "0" ]; then
   exec 8<&-
   if [ "$_tick_acquire_status" = "75" ]; then
@@ -114,7 +118,7 @@ sg_tick_guard_cleanup() {
       [ "$_tick_exit" != "0" ] || _tick_exit=1
     fi
   else
-    say "tick interrupted; original OPEN ownership remains held for readback"
+    say "tick interrupted; the next tick records it ABANDONED and recovers the slot"
   fi
   # Never unlink a shared guard or another owner's pathname.
   exec 8<&-
@@ -127,7 +131,7 @@ trap sg_tick_guard_cleanup EXIT
 # END OWNED TICK GUARD
 
 # Producers may retain repair DATA without owning this tick. Only this actual
-# FD8 owner consumes one distinct request; a failed notice stays consumed.
+# FD8 owner consumes one distinct request; a refused (exit 1/2) notice is retried.
 if [ "$DRY" != "1" ]; then
   node "$REPO_ROOT/scripts/lib/lane-repair.mjs" drain "$REPO_ROOT" "$TICK_OWNER_TOKEN" "$$" ||
     say "RAISED HAND: queued delivery repair remains held; original attempts unchanged"
@@ -239,6 +243,7 @@ append_raised_hands_state() {
 }
 
 heartbeat() {
+  if [ -n "${TICK_RECOVERED:-}" ]; then RESULT="$RESULT; recovered: $TICK_RECOVERED"; fi
   append_unread_state
   append_raised_hands_state
   # Retain an estate failure until a later actual success. Successful PR counts
@@ -390,9 +395,16 @@ heartbeat() {
       read(files.ops); read(files.output);
       const terminal = JSON.parse(read(files.terminal).toString("utf8"));
       if (!Number.isInteger(terminal.status) || terminal.status < 0 || terminal.status > 255 || terminal.signal !== null || terminal.error !== null) throw Error("notification parent terminal unknown");
-      read(files.receipt);
-      console.log("pending heartbeat notification was already attempted; READBACK ONLY, no new hand");
-      process.exit(0);
+      if (terminal.status === 1 || terminal.status === 2) {
+        // lane-deliver exit 1/2 published nothing: keep the evidence (renamed aside) and retry now.
+        const aside = path.join(records, "refused", new Date().toISOString().replace(/[:.]/g, "") + "-" + process.pid + "-" + crypto.randomBytes(4).toString("hex") + "-");
+        fs.mkdirSync(path.dirname(aside), { recursive: true, mode: 0o700 });
+        for (const file of Object.values(files)) if (exists(file)) fs.renameSync(file, aside + path.basename(file));
+      } else {
+        read(files.receipt);
+        console.log("pending heartbeat notification was already attempted; READBACK ONLY, no new hand");
+        process.exit(0);
+      }
     }
     const url = refused ? `https://github.com/${original.repository}/compare/SignalGrid_Alpha...${encodeURIComponent(original.target)}` : `https://github.com/${original.repository}/pull/${observed.pr_number}`;
     const op = { op: "raise", id, who: "cloud lane", domain: "lane", where: url,
@@ -418,7 +430,7 @@ heartbeat() {
     read(files.receipt);
     console.log(refused ? "refused original heartbeat: one distinct Cloud repair hand submitted; canonical merge unverified" : `pending heartbeat PR #${observed.pr_number}: one distinct Cloud hand submitted; canonical merge unverified`);
   })().catch(() => {
-    console.log("RAISED HAND: pending heartbeat diagnostic or notification remains held; READBACK ONLY, no retry");
+    console.log("RAISED HAND: pending heartbeat diagnostic or notification remains held; a refused send (exit 1/2) is retried next tick");
     process.exitCode = 1;
   });
 JS
@@ -553,7 +565,9 @@ use_tick_worktree() {
 }
 
 # ── a. sync, never over a person's work ──────────────────────────────────────
-if ! git fetch origin --prune >/dev/null 2>&1; then
+# Bounded: a hung network must not hold the tick (and its guard) forever. perl's
+# alarm survives exec, so git itself receives SIGALRM at the limit.
+if ! perl -e 'alarm shift; exec @ARGV or exit 127' "${SIGNALGRID_TICK_FETCH_TIMEOUT_SEC:-120}" git fetch origin --prune >/dev/null 2>&1; then
   RESULT="skipped: origin unreachable (offline?)"
   say "$RESULT"
   heartbeat

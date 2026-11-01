@@ -243,6 +243,10 @@ control("unchanged heartbeat stays quiet for almost two hours", { tick: true, ag
 control("unchanged heartbeat gets its keepalive before the three-hour tolerance", { tick: true, age: 130 }, (f) => {
   const r = f.runTick(); assert.equal(r.status, 0, r.stderr); assert.equal(f.deliveries().length, 1);
 });
+control("a recovered abandoned tick is named in the heartbeat RESULT", { tick: true, age: 30 }, (f) => {
+  const r = f.runTick("TICK_RECOVERED='abandoned tick fixture closed'\nheartbeat"); assert.equal(r.status, 0, r.stderr);
+  assert.equal(f.deliveries().length, 1); assert.match(f.deliveries()[0], /recovered: abandoned tick fixture closed/);
+});
 control("a changed failure is reported inside the keepalive window", { tick: true, result: "failed: fixture gate" }, (f) => {
   const r = f.runTick(); assert.equal(r.status, 0, r.stderr); assert.equal(f.deliveries().length, 1);
 });
@@ -469,7 +473,7 @@ check('pending heartbeat is one chain across primary and linked tick worktree',f
 check('removing both node_modules cannot erase a pending heartbeat fence',f=>{heartbeat(f,f.root);rmSync(join(f.root,'node_modules'),{recursive:true});heartbeat(f,f.root);assert.equal(calls(f),1)});
 for(const purge of [false,true])check('one escalation across '+(purge?'dependency purge':'linked checkouts'),f=>{
  const source=readFileSync(join(ROOT,'scripts/objective-loop.mjs'),'utf8');const a=source.indexOf('function emit(state,'),b=source.indexOf('// ── --check:',a);assert.ok(a>=0&&b>a);
- const harness=join(f.parent,'objective.mjs');writeFileSync(harness,`import {mkdirSync,readFileSync,readdirSync,rmSync,writeFileSync} from 'node:fs';import {dirname,join} from 'node:path';import {createHash} from 'node:crypto';import {deliveryRecordDirectory} from ${JSON.stringify('file://'+join(f.root,'scripts/lib/lane-attempt-store.mjs'))};\nlet ROOT=${JSON.stringify(f.root)};const STATE_REL='state.json',STAMP_REL='node_modules/stamp.json';let calls=0;function spawnSync(_cmd,args){if(args[0].endsWith('/scripts/lane-deliver.mjs')){calls++;return {status:3,stdout:'raw fixture',stderr:''}}if(args[0].endsWith('/scripts/lib/lane-repair.mjs')&&['repair-status','request'].includes(args[1]))return {status:0,stdout:'fixture DATA only',stderr:''};throw Error('unexpected fixture operation')}\n${source.slice(a,b)}\nconst state={decisionAddress:'d',derivedAt:'2026-10-31T01:00:00Z',queue:[],escalations:[{id:'same-source-escalation',clears:'cloud',asks:'repair'}],criteria:[],tasks:[],verdict:'building'};emit(state,{write:true,deliver:true});rmSync(join(ROOT,STATE_REL),{force:true});${purge?"rmSync(join(ROOT,'node_modules'),{recursive:true,force:true});":"ROOT="+JSON.stringify(f.linked)+";"}emit(state,{write:true,deliver:true});console.log(calls);`);
+ const harness=join(f.parent,'objective.mjs');writeFileSync(harness,`import {mkdirSync,readFileSync,readdirSync,renameSync,rmSync,writeFileSync} from 'node:fs';import {dirname,join} from 'node:path';import {createHash,randomBytes} from 'node:crypto';import {deliveryRecordDirectory} from ${JSON.stringify('file://'+join(f.root,'scripts/lib/lane-attempt-store.mjs'))};\nlet ROOT=${JSON.stringify(f.root)};const STATE_REL='state.json',STAMP_REL='node_modules/stamp.json';let calls=0;function spawnSync(_cmd,args){if(args[0].endsWith('/scripts/lane-deliver.mjs')){calls++;return {status:3,stdout:'raw fixture',stderr:''}}if(args[0].endsWith('/scripts/lib/lane-repair.mjs')&&['repair-status','request'].includes(args[1]))return {status:0,stdout:'fixture DATA only',stderr:''};throw Error('unexpected fixture operation')}\n${source.slice(a,b)}\nconst state={decisionAddress:'d',derivedAt:'2026-10-31T01:00:00Z',queue:[],escalations:[{id:'same-source-escalation',clears:'cloud',asks:'repair'}],criteria:[],tasks:[],verdict:'building'};emit(state,{write:true,deliver:true});rmSync(join(ROOT,STATE_REL),{force:true});${purge?"rmSync(join(ROOT,'node_modules'),{recursive:true,force:true});":"ROOT="+JSON.stringify(f.linked)+";"}emit(state,{write:true,deliver:true});console.log(calls);`);
  const r=run(process.execPath,[harness],f.root);assert.equal(r.status,0,r.stderr);assert.equal(Number(r.stdout.trim()),1);
 });
 
@@ -488,6 +492,16 @@ check('the read-only imported contract accepts a non-file argv label without ini
  const marker=observed.stdout.trim()+'.json';rmSync(marker);
  const r=run(process.execPath,['--input-type=module','-e','await import('+JSON.stringify('file://'+module)+'); console.log("IMPORTED_LIBRARY");','objective-intake'],f.root);
  assert.equal(r.status,0,r.stderr);assert.match(r.stdout,/IMPORTED_LIBRARY/);assert.equal(existsSync(marker),false,'a library import never initializes state');
+});
+for(const kind of ['never-initialized','orphan-directory'])check('the live tick initializes a '+kind+' record store instead of exiting',f=>{
+ const module=join(f.root,'scripts/lib/lane-attempt-store.mjs');
+ const directory=run(process.execPath,[module,'path',f.root],f.root).stdout.trim();assert.ok(directory);
+ rmSync(directory+'.json');if(kind==='never-initialized')rmSync(directory,{recursive:true});
+ const line=readFileSync(join(ROOT,'scripts/mac/lane-tick.sh'),'utf8').split('\n').find(l=>l.startsWith('RECORD_DIR='));
+ const r=run('/bin/bash',['-c',`set -u\nREPO_ROOT=${q(f.linked)}\n${line}\nprintf '%s' "$RECORD_DIR"\n`],f.linked);
+ assert.equal(r.status,0,r.stderr);assert.equal(r.stdout,directory);
+ assert.equal(run(process.execPath,[module,'tick-guard',f.root],f.root).status,0,'a usable tick guard exists after recovery');
+ if(kind==='orphan-directory')assert.ok(readdirSync(dirname(directory)).some(n=>n.startsWith('signalgrid-lane-records.orphan-')),'the orphan is renamed aside, never deleted');
 });
 for(const kind of ['missing-marker','corrupt-marker','missing-directory','replaced-directory','symlink-marker','hardlinked-marker','double-init'])check('shared record store refuses '+kind,f=>{
  const module=join(f.root,'scripts/lib/lane-attempt-store.mjs');
@@ -628,17 +642,35 @@ await leaseControl('actual FD8 excludes another checkout before the first owners
  const original=leaseTree(c.store),b=c.start('startup-B',{checkout:f.linked});assert.equal((await b.next()).event,'CLOSED');await b.closed;
  assert.deepEqual(leaseTree(c.store),original);a.resume();assert.equal((await a.next()).event,'ENTER');a.resume();assert.equal((await a.closed).code,0);assert.equal(c.state(),'CLOSED');
 });
-for(const kind of ['missing','corrupt','known-finished'])await leaseControl('preexisting legacy tick lock stays held with '+kind+' PID',async(f,c)=>{
+// Owner order 2026-11-01: the next tick holding the kernel guard recovers on its own.
+async function recovers(c,b,abandoned){
+ assert.equal((await b.next()).event,'ENTER','the next tick must start work');assert.match(b.stdout,/recovered:/);
+ if(abandoned){const t=JSON.parse(readFileSync(join(c.store,'tick-'+abandoned+'.terminal.json'),'utf8'));assert.equal(t.state,'ABANDONED');assert.equal(t.exitTrapStatus,null);}
+ b.resume();assert.equal((await b.closed).code,0);assert.equal(c.state(),'CLOSED');
+}
+for(const kind of ['missing','corrupt','known-finished'])await leaseControl('preexisting legacy tick lock with '+kind+' PID is renamed aside and the tick proceeds',async(f,c)=>{
  const old=join(c.store,'tick.lock');mkdirSync(old);
  if(kind==='corrupt')writeFileSync(join(old,'pid'),'not-a-pid\n');
  if(kind==='known-finished'){const r=run('/usr/bin/true',[],f.root);assert.equal(r.status,0,r.stderr);writeFileSync(join(old,'pid'),String(r.pid)+'\n')}
- const original=leaseTree(c.store),b=c.start('unknown-'+kind);assert.equal((await b.next()).event,'CLOSED');await b.closed;
- assert.deepEqual(leaseTree(c.store),original,'an existing unknown lock is never reaped from PID evidence');
+ const before=kind==='missing'?null:readFileSync(join(old,'pid'));
+ await recovers(c,c.start('unknown-'+kind),null);
+ assert.equal(existsSync(old),false);const aside=readdirSync(c.store).filter(n=>n.startsWith('tick.lock.abandoned-'));assert.equal(aside.length,1,'kept aside, never deleted');
+ if(before)assert.deepEqual(readFileSync(join(c.store,aside[0],'pid')),before);
 });
-await leaseControl('failed immutable owner publication leaves OPEN and denies later work',async(f,c)=>{
+await leaseControl('failed immutable owner publication is recovered as ABANDONED by the next tick',async(f,c)=>{
  const a=c.start('owner-failure-A',{gate:'owner'});assert.equal((await a.next()).event,'BEFORE_OWNER');assert.equal(c.state(),'OPEN');
  chmodSync(c.store,0o500);a.resume();assert.equal((await a.next()).event,'CLOSED');await a.closed;chmodSync(c.store,0o700);
- assert.equal(c.state(),'OPEN');c.kernelAvailable();const original=leaseTree(c.store),b=c.start('owner-failure-B');assert.equal((await b.next()).event,'CLOSED');await b.closed;assert.deepEqual(leaseTree(c.store),original);
+ assert.equal(c.state(),'OPEN');const token=JSON.parse(readFileSync(c.slot,'utf8')).token;c.kernelAvailable();
+ await recovers(c,c.start('owner-failure-B'),token);
+});
+await leaseControl('a tick killed between its CLOSED terminal and the slot write is closed onto that terminal',async(f,c)=>{
+ const a=c.start('terminal-A');assert.equal((await a.next()).event,'ENTER');const open=JSON.parse(readFileSync(c.slot,'utf8'));
+ assert.equal(a.child.kill('SIGKILL'),true);await a.closed;
+ const {version,directory,store,guard,token,shellPid,openedSha256}=open;
+ writeFileSync(join(c.store,'tick-'+token+'.terminal.json'),JSON.stringify({version,directory,store,guard,state:'CLOSED',token,shellPid,openedSha256,exitTrapStatus:0,closedAt:'2026-11-01T00:00:00.000Z'})+'\n',{flag:'wx',mode:0o600});
+ const b=c.start('terminal-B');assert.equal((await b.next()).event,'ENTER');assert.match(b.stdout,/recovered:/);
+ assert.equal(JSON.parse(readFileSync(join(c.store,'tick-'+token+'.terminal.json'),'utf8')).state,'CLOSED','the existing terminal is kept, not overwritten');
+ b.resume();assert.equal((await b.closed).code,0);assert.equal(c.state(),'CLOSED');
 });
 await leaseControl('normal exit cannot alter another owner after persistent-store replacement',async(f,c)=>{
  const a=c.start('replacement-A');assert.equal((await a.next()).event,'ENTER');
@@ -649,12 +681,13 @@ await leaseControl('normal exit cannot alter another owner after persistent-stor
  const d=c.start('replacement-C');assert.equal((await d.next()).event,'CLOSED');await d.closed;
  b.resume();assert.equal((await b.closed).code,0);assert.equal(c.state(),'CLOSED');assert.equal(JSON.parse(readFileSync(join(kept,'tick.slot.json'),'utf8')).state,'OPEN');
 });
-for(const [signal,number]of [['SIGKILL',9],['SIGTERM',15]])await leaseControl('actual '+signal+' before terminal never clears OPEN',async(f,c)=>{
+for(const [signal,number]of [['SIGKILL',9],['SIGTERM',15]])await leaseControl('actual '+signal+' before terminal is recovered as ABANDONED by the next tick',async(f,c)=>{
  const a=c.start('signal-A');assert.equal((await a.next()).event,'ENTER');assert.equal(c.state(),'OPEN');
  // ENTER is after all synchronous ownership helpers; only this exact owned
  // Bash is waiting in the fixture body. It has no task/provider/model child.
  assert.equal(a.child.kill(signal),true);const terminal=await a.closed;assert.ok(terminal.signal===signal||terminal.code===128+number);
- assert.equal(c.state(),'OPEN');c.kernelAvailable();const original=leaseTree(c.store),b=c.start('signal-B',{checkout:f.linked});assert.equal((await b.next()).event,'CLOSED');await b.closed;assert.deepEqual(leaseTree(c.store),original);
+ assert.equal(c.state(),'OPEN');const token=JSON.parse(readFileSync(c.slot,'utf8')).token;c.kernelAvailable();
+ await recovers(c,c.start('signal-B',{checkout:f.linked}),token);
 });
 await leaseControl('malformed durable ownership slot stays held with kernel capacity available',async(f,c)=>{
  writeFileSync(c.slot,'{"state":');const original=leaseTree(c.store);c.kernelAvailable();const b=c.start('malformed-slot');assert.equal((await b.next()).event,'CLOSED');await b.closed;assert.deepEqual(leaseTree(c.store),original);
@@ -691,6 +724,7 @@ const cases=[
  ['a successful readback without a bound clear token stays held',[{phase:'pending'},{phase:'bad'}],1],
  ['repeating a clear token cannot loop or create a third hand',[{phase:'pending'},{phase:'collide'},{phase:'collide'}],2],
 ];
+try{const r=handEpisodes([{phase:'pending',code:1},{phase:'pending'}]);assert.equal(r.sent.length,2,'a refused (exit 1) hand is retried, never consumed');assert.equal(r.sent[0].id,r.sent[1].id);passed++;console.log('PASS a refused hand (exit 1) is retried by the next raise')}catch(e){failed++;console.error('FAIL a refused hand (exit 1) is retried by the next raise: '+e.message)}
 for(const [label,steps,count]of cases){try{const r=handEpisodes(steps);assert.equal(r.sent.length,count);if(count>1){assert.equal(new Set(r.sent.map(x=>x.id)).size,count);assert.ok(r.sent.every(x=>/^build-[a-f0-9]{64}$/.test(x.id)));}assert.doesNotMatch(r.stdout,/hand delivered/);passed++;console.log('PASS '+label)}catch(e){failed++;console.error('FAIL '+label+': '+e.message)}}
 }
 
@@ -776,6 +810,21 @@ for(const item of [
  assert.equal(f.pushes().length,beforePushes);assert.equal(f.ghCalls().filter(a=>a[0]==="pr"&&["create","merge"].includes(a[1])).length,beforeMutations);assert.deepEqual(readFileSync(receipt),raw);
  const readbacks=readdirSync(f.root).filter(n=>n.startsWith("bound-pending.submission.json.readback-")&&n.endsWith(".json"));assert.ok(readbacks.length>=1,"raw GET response remains durable");
 });
+
+{
+ // A hung network must not hold the tick: the actual sync block, a git that never answers.
+ const root=mkdtempSync(join(tmpdir(),'sg-fetch-timeout-'));
+ try {
+  const tick=readFileSync(join(ROOT,'scripts/mac/lane-tick.sh'),'utf8'),a=tick.indexOf('# ── a. sync'),b=tick.indexOf('if [ -n "$(git status --porcelain)" ]',a);
+  assert.ok(a>=0&&b>a,'actual sync block must be present');
+  mkdirSync(join(root,'bin'));writeFileSync(join(root,'bin/git'),'#!/bin/sh\nexec sleep 60\n',{mode:0o755});
+  const script=`set -u\nsay(){ printf '%s\\n' "$1"; }\nheartbeat(){ printf 'HEARTBEAT %s\\n' "$RESULT"; }\n${tick.slice(a,b)}\necho NOT_REACHED\n`;
+  const began=Date.now(),r=spawnSync('/bin/bash',['-c',script],{cwd:root,encoding:'utf8',timeout:15000,env:{PATH:join(root,'bin')+':/usr/bin:/bin',SIGNALGRID_TICK_FETCH_TIMEOUT_SEC:'1'}});
+  assert.equal(r.status,0,'the tick must not hang on fetch: '+(r.error?.code??r.stderr));assert.match(r.stdout,/HEARTBEAT skipped: origin unreachable/);assert.ok(Date.now()-began<10000);
+  passed++;console.log('PASS a hung git fetch times out and the tick still heartbeats');
+ } catch(e){failed++;console.error('FAIL a hung git fetch times out and the tick still heartbeats: '+e.message);}
+ finally{rmSync(root,{recursive:true,force:true});}
+}
 
 console.log(`lane-delivery regression: ${passed} passed, ${failed} failed, 0 skipped`);
 process.exitCode = failed ? 1 : 0;

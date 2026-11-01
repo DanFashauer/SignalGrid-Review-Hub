@@ -207,6 +207,13 @@ raise_hand() {
         try {
           if (visited.has(attempt)) throw Error("repeated clearance binding");
           visited.add(attempt);
+          let exit = null; try { exit = read(attempt + ".exit").trim(); } catch { /* unknown stays held below */ }
+          if (exit === "1" || exit === "2") {
+            // lane-deliver exit 1/2 published nothing: keep the evidence (renamed aside) and retry.
+            fs.mkdirSync(path.join(cache, "refused"), { recursive: true, mode: 0o700 });
+            for (const name of fs.readdirSync(cache)) if (name.startsWith(path.basename(attempt) + ".")) fs.renameSync(path.join(cache, name), path.join(cache, "refused", stamp + "-" + process.pid + "-" + require("crypto").randomBytes(4).toString("hex") + "-" + name));
+            break;
+          }
           if (JSON.parse(read(attempt + ".attempt.json")).receipt !== attempt + ".submission.json" || read(attempt + ".exit").trim() !== "0") throw Error("original parent is not known complete");
           read(attempt + ".output"); // missing original evidence never renews an attempt
           const result = require("child_process").spawnSync(process.execPath, [path.join(repo, "scripts/lane-deliver.mjs"), "readback", attempt + ".submission.json", "--resolved-hand", "build-" + episode], { cwd: repo, encoding: "utf8" });
@@ -228,9 +235,10 @@ raise_hand() {
     if (umask 077; set -C; node "$REPO_ROOT/scripts/lane-deliver.mjs" batch "$_ops" --receipt "${_hand_attempt}.submission.json" >"${_hand_attempt}.output" 2>&1); then _hand_exit=0; else _hand_exit=$?; fi
     if [ -n "$RUN_LOG" ]; then cat "${_hand_attempt}.output" >> "$RUN_LOG"; fi
     if node -e 'require("fs").writeFileSync(process.argv[1], process.argv[2]+"\n", {flag:"wx",mode:0o600,flush:true})' "${_hand_attempt}.exit" "$_hand_exit"; then
-      if [ "$_hand_exit" != "0" ]; then
-        node "$REPO_ROOT/scripts/lib/lane-repair.mjs" request "$REPO_ROOT" build "$_hand_attempt" >/dev/null 2>&1 || say "RAISED HAND: repair DATA request unavailable; original hand remains READBACK ONLY"
-      fi
+      case "$_hand_exit" in
+        0|1|2) ;; # 1/2 published nothing; the next raise retries it
+        *) node "$REPO_ROOT/scripts/lib/lane-repair.mjs" request "$REPO_ROOT" build "$_hand_attempt" >/dev/null 2>&1 || say "RAISED HAND: repair DATA request unavailable; original hand remains READBACK ONLY" ;;
+      esac
     else
       say "RAISED HAND: terminal receipt unavailable; original hand remains READBACK ONLY"
     fi

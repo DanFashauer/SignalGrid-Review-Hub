@@ -190,9 +190,9 @@ frozen('R07','a replaced guard pathname cannot authorize notification or release
  assert.equal(run.signal,null);assert.equal(f.calls().length,0);assert.equal(JSON.parse(readFileSync(join(f.store,'tick.slot.json'),'utf8')).state,'OPEN');
  assert.equal(readFileSync(guard,'utf8'),'replacement guard\n');assert.ok(existsSync(guard+'.original-preserved'));
 });
-frozen('R08','a failed different repair hand remains consumed on a later valid tick',f=>{
+frozen('R08','a refused (exit1) different repair hand is retried on a later valid tick, then consumed',f=>{
  const o=original(f,'heartbeat'),r=request(f,o);acceptOwned(owned(f,notifyCommand(f,r)+'; :',{extra:{FIXTURE_TRANSPORT_MODE:'exit1'}}));oneRepair(f);
- acceptOwned(owned(f,notifyCommand(f,r)+'; :'));oneRepair(f);preserved(o.prefix,o.initial);
+ acceptOwned(owned(f,notifyCommand(f,r)+'; :'));oneRepair(f,2);acceptOwned(owned(f,notifyCommand(f,r)+'; :'));oneRepair(f,2);preserved(o.prefix,o.initial);
 });
 frozen('R09','a signaled local repair child never creates a replacement notification identity',f=>{
  const o=original(f,'heartbeat'),r=request(f,o);acceptOwned(owned(f,notifyCommand(f,r)+'; :',{extra:{FIXTURE_TRANSPORT_MODE:'signal'}}));oneRepair(f);

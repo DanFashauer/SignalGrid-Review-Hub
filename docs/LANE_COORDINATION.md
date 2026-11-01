@@ -522,8 +522,10 @@ The shared store is `<git-common-dir>/signalgrid-lane-records`, pinned by a sibl
 identity marker. Before activating this source, preserve and inspect legacy
 heartbeat/objective records in every linked checkout and build-hand cache. After
 all owned attempts are terminal or separately held, initialize ONCE with
-`node scripts/lib/lane-attempt-store.mjs init <checkout>`. Normal ticks only read
-the marker; missing or replaced state refuses delivery. Never initialize to
+`node scripts/lib/lane-attempt-store.mjs init <checkout>`. The live tick resolves
+the store with `ensure`: a missing marker is initialized by the tick itself (an
+orphan directory without a marker is renamed aside first, never deleted); a present
+but damaged marker still refuses delivery. Never initialize to
 repair lost evidence, delete old receipts, or treat Generated content as authority.
 A fresh build-hand notification episode requires a regular independent parent
 exit0, original canonical merge proof and the exact hand now resolved in canonical
@@ -536,9 +538,9 @@ renews its source, ownership, grant or model budget.
 
 ### Shared tick serialization (L46)
 
-The one-time record-store initializer additionally creates tick.guard, its immutable identity marker and the initial ownership slot. A normal tick opens the guard read-only and retains its locked FD8; a missing or replaced guard is never recreated. Legacy tick.lock evidence is held without a PID liveness probe or automatic reaping.
+The one-time record-store initializer additionally creates tick.guard, its immutable identity marker and the initial ownership slot. A normal tick opens the guard read-only and retains its locked FD8; a missing or replaced guard is never recreated. A legacy tick.lock is renamed aside (`tick.lock.abandoned-<stamp>-<rand>`, kept as evidence) by the next tick that holds the kernel guard.
 
-OPEN ownership is durably committed before work. Its exact token, caller, store and guard bind immutable opened/finalization records; only the original normal finalization can close that lease. Unknown or interrupted-before-finalization ownership remains held despite later kernel capacity. No shared guard pathname is deleted. The recorded exitTrapStatus is the status entering finalization, not an independent eventual-parent terminal or provider/delivery witness. Per-attempt no-replay fences remain unchanged.
+OPEN ownership is durably committed before work. Its exact token, caller, store and guard bind immutable opened/finalization records. The tick recovers on its own (owner order, 2026-11-01): holding the kernel guard proves no process still holds an earlier tick's FD8, so the next tick that acquires it records an interrupted OPEN lifetime as an `ABANDONED` terminal (or closes onto that tick's own CLOSED terminal if it died between the two writes), CLOSES the slot, proceeds, and its heartbeat RESULT says `recovered: …`. Nothing is deleted; the opened record, when it was published, must still match. No shared guard pathname is deleted. The recorded exitTrapStatus is the status entering finalization, not an independent eventual-parent terminal or provider/delivery witness. Per-attempt no-replay fences remain unchanged.
 
 The operator correction has84 passing portable delivery controls and12 independent passing Mac subprocess cases with zero failures/skips. It does not initialize production state, activate the source, prove native coding or restore a heartbeat. Preserve legacy evidence, complete all current-head source/CI/protection requirements, then separately audit and activate before observing a natural canonical Mac heartbeat.
 
@@ -552,7 +554,7 @@ The linked-checkout heartbeat tests execute the tick's actual startup RECORD_DIR
 
 Mac mutation entry now requires a fresh private receipt path before any Git access. An already-loaded receipt-less Bash producer is refused if its checkout later acquires the new transport. The receipt pathname is a caller contract, not an execution grant. Any existing exact submission receipt takes precedence over exit1/2: publication may already have been attempted, so the original remains readback-only. Malformed evidence and unknown parent terminals hold. Only a genuine prepublication1/2 with no receipt can permit a different observation.
 
-A pending original PR gets GET-only age/head/check diagnostics. A behind PR, terminal failed check or one-hour delay may produce one distinct durable Cloud hand, bound to the original attempt. The actual producing checkout and original FD8/token/store are rechecked before its intent and publication. Partial or unknown notifications never repeat. This does not resend or close the original PR. Current source qualification:45 private cases,12 independent guard cases and96 portable delivery controls pass with zero failures/errors/skips. Protected landing and audited separate activation still precede natural heartbeat proof.
+A pending original PR gets GET-only age/head/check diagnostics. A behind PR, terminal failed check or one-hour delay may produce one distinct durable Cloud hand, bound to the original attempt. The actual producing checkout and original FD8/token/store are rechecked before its intent and publication. Partial or unknown notifications never repeat; a notification whose lane-deliver exited 1 or 2 (nothing published) is moved under `refused/` and retried on the next tick. This does not resend or close the original PR. Current source qualification:45 private cases,12 independent guard cases and96 portable delivery controls pass with zero failures/errors/skips. Protected landing and audited separate activation still precede natural heartbeat proof.
 
 
 ### Original-evidence snapshot floor (L49)
@@ -569,4 +571,4 @@ The regression helper reads each regular fixture file through one no-follow, non
 
 The producer writes exact original Git stdout/stderr bytes and its terminal result before decoding output. The result binds the submission receipt, committed producer source, original head and target. GET-only readback can classify a remote refusal only after a normal failed push and one exact successful observation that its original topic is absent. Partial, foreign, signaled or ambiguous evidence remains held. A failed GET remains consumed and unknown; no rejected push is retried.
 
-A qualified current tick owner may send one distinct Cloud repair hand bound to that original attempt. The same stable notification identity covers pending and refused observations; a failed or unknown hand remains readback-only. Legacy locks are not reaped from process absence or elapsed time. Frozen31 and unchanged delivery96 pass, zero failures/errors/skips, under real network denial. Full changed-head qualification, protected review/CI/landing and a separate preservation audit/activation remain required.
+A qualified current tick owner may send one distinct Cloud repair hand bound to that original attempt. The same stable notification identity covers pending and refused observations; an unknown or unconfirmed (exit 3+, signal) hand remains readback-only. A hand whose own lane-deliver exited 1 or 2 published nothing: its evidence is moved under the store's `refused/` directory and the hand is retried on the next tick (build-tick, objective-loop, lane-repair and the pending-heartbeat notice alike) — never consumed as already attempted. Legacy locks are renamed aside by the next guard holder, never deleted. Frozen31 and unchanged delivery96 pass, zero failures/errors/skips, under real network denial. Full changed-head qualification, protected review/CI/landing and a separate preservation audit/activation remain required.

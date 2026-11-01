@@ -1,10 +1,11 @@
 // One bounded DATA-to-notice bridge. A request never grants execution or retries
 // an original delivery. Only the actual current Bash/FD8 owner may issue the one
-// DIFFERENT Cloud uncertainty notice; its own intent consumes even a failed send.
+// DIFFERENT Cloud uncertainty notice; its own intent consumes an unconfirmed send.
+// A refused send (lane-deliver exit 1/2: nothing published) is moved aside and retried.
 import { spawnSync } from 'node:child_process';
-import { createHash } from 'node:crypto';
-import { closeSync, constants, fstatSync, fsyncSync, lstatSync, openSync,
-  opendirSync, readFileSync, readSync, realpathSync, writeFileSync } from 'node:fs';
+import { createHash, randomBytes } from 'node:crypto';
+import { closeSync, constants, fstatSync, fsyncSync, lstatSync, mkdirSync, openSync,
+  opendirSync, readFileSync, readSync, realpathSync, renameSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { checkTickOwner, deliveryRecordDirectory } from './lane-attempt-store.mjs';
@@ -299,7 +300,7 @@ function publishPrepared(root, prepared, token, shellPid, store) {
     need: 'Cloud lane: inspect the current source, protected PR checks and findings. Preserve the original attempt as readback-only; this separate uncertainty notice grants no execution, landing or retry authority.',
   };
   activeOwner(root, token, shellPid, store, owner);
-  // The intent is the fence. Any subsequent failure stays consumed forever.
+  // The intent is the fence. An unconfirmed (not refused) failure stays consumed.
   try {
     writeNew(files.intent, encoded({ version: 1, kind: 'lane-delivery-repair-notification',
       at: new Date().toISOString(), request_sha256: sha(record.raw), request_id: request.id,
@@ -325,6 +326,13 @@ function publishPrepared(root, prepared, token, shellPid, store) {
     at: new Date().toISOString(), request_id: request.id, status: result.status,
     signal: result.signal ?? null, error: result.error?.code ?? null, pid: result.pid ?? null,
     readback_only: true, canonical_merge_verified: false }));
+  if (!result.signal && !result.error && (result.status === 1 || result.status === 2)) {
+    // lane-deliver exit 1/2 published nothing: move this notice aside so the next drain retries it.
+    const aside = join(store.directory, 'refused', new Date().toISOString().replace(/[:.]/g, '') + '-' + process.pid + '-' + randomBytes(4).toString('hex') + '-');
+    mkdirSync(dirname(aside), { recursive: true, mode: 0o700 });
+    for (const file of Object.values(files)) if (present(file)) renameSync(file, aside + basename(file));
+    throw Error('different repair notice was refused (exit ' + result.status + '); nothing published, retried next drain');
+  }
   if (result.status !== 0 || result.signal || result.error) throw Error('different repair notice is unconfirmed and consumed');
   readOwned(files.receipt); // A missing/unsafe receipt never permits a second send.
   return { consumed: true, attempted: true };

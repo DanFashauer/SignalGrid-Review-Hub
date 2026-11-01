@@ -66,10 +66,10 @@
 // not a model (no LLM is called; a model may propose by editing the prose the ranker reads), not
 // a second Mac routine (it is a step inside the pulse that already fires), not a merger (its output
 // rides the tick PR; DR-037 decides), and not the decision core (lib/*, /v1, native ports untouched).
-import { createHash } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { execFileSync, spawnSync } from "node:child_process";
 import { deliveryRecordDirectory } from "./lib/lane-attempt-store.mjs";
-import { existsSync, readFileSync, readdirSync, writeFileSync, mkdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, renameSync, writeFileSync, mkdirSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { auditBacklogOwnership, parseRows, rosterIds, statusText } from "./check-backlog-ownership.mjs";
@@ -634,7 +634,16 @@ function emit(state, { write, deliver }) {
         attempt = join(records, name);
         // A tracked/stamp id is not proof of a known child terminal or landing.
         // Inspect the preserved attempt even when older state calls it submitted.
-        const hasEvidence = readdirSync(records).some(file => file.startsWith(name + "."));
+        let hasEvidence = readdirSync(records).some(file => file.startsWith(name + "."));
+        let prior = null;
+        try { prior = JSON.parse(readFileSync(attempt + ".terminal.json", "utf8")); } catch { /* unknown stays held below */ }
+        if (hasEvidence && prior && !prior.signal && !prior.error && (prior.status === 1 || prior.status === 2)) {
+          // lane-deliver exit 1/2 published nothing: keep the evidence (renamed aside) and retry now.
+          const aside = join(records, "refused", new Date().toISOString().replace(/[:.]/g, "") + "-" + process.pid + "-" + randomBytes(4).toString("hex") + "-");
+          mkdirSync(dirname(aside), { recursive: true, mode: 0o700 });
+          for (const file of readdirSync(records)) if (file.startsWith(name + ".")) renameSync(join(records, file), aside + file);
+          hasEvidence = false; submitted.delete(e.id);
+        }
         if (submitted.has(e.id) || hasEvidence) {
           if (queueRepair(attempt)) lines.push(`RAISED HAND: escalation ${e.id} original attempt retained; READBACK ONLY`);
           continue;
@@ -655,7 +664,8 @@ function emit(state, { write, deliver }) {
         terminalRecorded = true;
       } catch { lines.push(`RAISED HAND: escalation ${e.id} terminal recording failed; READBACK ONLY`); }
       const accepted = terminalRecorded && !r.error && !r.signal && r.status === 0;
-      if (terminalRecorded && !accepted) queueRepair(attempt);
+      const refused = !r.error && !r.signal && (r.status === 1 || r.status === 2); // nothing published; retried next tick
+      if (terminalRecorded && !accepted && !refused) queueRepair(attempt);
       lines.push(accepted ? `escalation ${e.id} submitted for protected PR merge` : `WARN escalation ${e.id} submission unconfirmed (lane-deliver exit ${r.status}); read back its original attempt`);
       if (accepted) submitted.add(e.id);
     }

@@ -208,7 +208,7 @@ class RefusalRepairHandControls(unittest.TestCase):
     def test_qualified_current_owner_can_send_one_distinct_repair_hand(self):
         self.one_hand(self.fixture())
 
-    def test_known_refused_repair_hand_is_consumed_and_never_renamed_or_retried(self):
+    def test_known_refused_repair_hand_is_not_resent_inside_its_keepalive_window(self):
         self.one_hand(self.fixture(reject='always'))
 
     def test_UNKNOWN_repair_hand_is_consumed_and_readback_only(self):
@@ -239,13 +239,16 @@ class RefusalRepairHandControls(unittest.TestCase):
         f = self.fixture(diagnostic_changes={'producer_head': 'f' * 40})
         f.heartbeat(); self.assertEqual(f.hand_ops(), []); f.assert_original_preserved()
 
-    def test_unqualified_legacy_guard_stays_held_without_hand_or_reaping(self):
+    def test_legacy_tick_lock_no_longer_holds_the_repair_hand(self):
+        # Owner order 2026-11-01: tick-acquire renames a legacy tick.lock aside (bytes kept);
+        # it never blocks a qualified current owner.
         f = self.fixture(); lock = f.records / 'tick.lock'; lock.mkdir()
         owner = lock / 'owner'; owner.write_bytes(b'held original legacy evidence\n')
         before = owner.read_bytes(); result = f.heartbeat()
-        self.assertNotEqual(result.returncode, 0)
-        self.assertEqual(f.hand_ops(), []); self.assertEqual(len(f.rows(f.push_observed)), 1)
-        self.assertTrue(lock.is_dir()); self.assertEqual(owner.read_bytes(), before)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(len(f.hand_ops()), 1); self.assertEqual(len(f.rows(f.push_observed)), 2)
+        self.assertFalse(lock.exists()); aside = list(f.records.glob('tick.lock.abandoned-*'))
+        self.assertEqual(len(aside), 1); self.assertEqual((aside[0] / 'owner').read_bytes(), before)
         f.assert_original_preserved()
 
 

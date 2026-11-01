@@ -2,7 +2,7 @@
 // Initialize separately after preserving old receipts and verifying no old attempt is in flight.
 import { spawnSync } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
-import { closeSync, constants, fstatSync, fsyncSync, ftruncateSync, lstatSync, mkdirSync, openSync, readFileSync, readdirSync, realpathSync, writeFileSync } from "node:fs";
+import { closeSync, constants, fstatSync, fsyncSync, ftruncateSync, lstatSync, mkdirSync, openSync, readFileSync, readdirSync, realpathSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -32,6 +32,29 @@ export function deliveryRecordDirectory(root, initialize = false) {
   const st = lstatSync(directory);
   if (record.version !== 1 || record.directory !== directory || !st.isDirectory() || record.dev !== st.dev || record.ino !== st.ino) throw Error("delivery store missing, replaced or incompatible; preserve evidence, readback only");
   return directory;
+}
+
+// The tick must recover on its own (owner, 2026-11-01). A missing marker means the
+// store was never (fully) initialized: initialize it, renaming any orphan directory
+// aside (never deleted). A present but damaged marker stays held.
+export function ensureDeliveryRecordDirectory(root) {
+  try { return deliveryRecordDirectory(root); } catch (first) {
+    const env = { ...process.env };
+    for (const key of ["GIT_DIR", "GIT_WORK_TREE", "GIT_COMMON_DIR"]) delete env[key];
+    const common = spawnSync("git", ["rev-parse", "--path-format=absolute", "--git-common-dir"], { cwd: root, env, encoding: "utf8" });
+    if (common.status !== 0) throw first;
+    const directory = join(realpathSync(common.stdout.trim()), "signalgrid-lane-records");
+    let markerPresent = true;
+    try { lstatSync(directory + ".json"); } catch (error) { if (error.code !== "ENOENT") throw error; markerPresent = false; }
+    if (markerPresent) throw first; // a damaged marker stays held
+    try {
+      lstatSync(directory);
+      const aside = `${directory}.orphan-${process.pid}-${randomBytes(4).toString("hex")}`;
+      renameSync(directory, aside);
+      console.error(`delivery record store recovered: orphan ${directory} moved aside to ${aside}`);
+    } catch (error) { if (error.code !== "ENOENT") throw error; }
+    try { return deliveryRecordDirectory(root, true); } catch { return deliveryRecordDirectory(root); } // a concurrent init won
+  }
 }
 
 // This guard is persistent. Closing the owned FD releases the kernel lock;
@@ -122,15 +145,18 @@ function initializeTickGuard(directory, store) {
   writeTickJson(join(directory, "tick.slot.json"), { ...binding, state: "READY" });
 }
 
-function noLegacyTickLock(directory) {
-  try { lstatSync(join(directory, "tick.lock")); }
-  catch (error) { if (error.code === "ENOENT") return; throw error; }
-  throw Error("legacy tick.lock is held evidence; no PID probe or automatic reaping");
+// Called only while this tick holds the kernel guard: an old tick.lock is
+// renamed aside (kept as evidence), never deleted and never waited on.
+function setAsideLegacyTickLock(directory, stamp) {
+  const legacy = join(directory, "tick.lock");
+  try { lstatSync(legacy); } catch (error) { if (error.code === "ENOENT") return null; throw error; }
+  const aside = `tick.lock.abandoned-${stamp}-${randomBytes(4).toString("hex")}`;
+  renameSync(legacy, join(directory, aside));
+  return `legacy tick.lock moved aside to ${aside}`;
 }
 
 function tickBinding(root) {
   const directory = deliveryRecordDirectory(root);
-  noLegacyTickLock(directory);
   const marker = readTickJson(join(directory, "tick.guard.json")).value;
   keysExactly(marker, ["version", "directory", "store", "guard"]);
   validIdentity(marker.store);
@@ -178,6 +204,12 @@ const OPEN_KEYS = [...BASE_KEYS, "token", "shellPid", "openedSha256"];
 const OWNER_KEYS = [...BASE_KEYS, "token", "shellPid", "openedAt"];
 const TERMINAL_KEYS = [...BASE_KEYS, "token", "shellPid", "openedSha256", "exitTrapStatus", "closedAt"];
 
+// An ABANDONED tick may have died before publishing its owner record.
+function readOwnerRecord(binding, token, abandoned) {
+  try { return readTickJson(join(binding.directory, `tick-${token}.opened.json`)); }
+  catch (error) { if (abandoned && error.code === "ENOENT") return null; throw error; }
+}
+
 function assertOwner(record, binding, token, shellPid) {
   keysExactly(record.value, OWNER_KEYS);
   assertBinding(record.value, binding);
@@ -193,21 +225,53 @@ function readSlot(binding) {
     if (readdirSync(binding.directory).some((name) => /^tick-/.test(name))) throw Error("READY tick slot has earlier owner evidence");
     return slot;
   }
-  if (slot.value.state === "OPEN") throw Error("original tick lifetime remains OPEN; readback only");
+  if (slot.value.state === "OPEN") return slot; // acquireTick recovers it under the kernel guard
   if (slot.value.state !== "CLOSED") throw Error("unknown tick slot state");
   keysExactly(slot.value, [...OPEN_KEYS, "terminalSha256"]);
   const { token, shellPid, openedSha256, terminalSha256 } = slot.value;
   if (!TOKEN.test(token) || !Number.isSafeInteger(shellPid) || shellPid <= 0 || !HASH.test(openedSha256) || !HASH.test(terminalSha256)) throw Error("closed tick slot identity is invalid");
-  const owner = readTickJson(join(binding.directory, `tick-${token}.opened.json`));
-  assertOwner(owner, binding, token, shellPid);
   const terminal = readTickJson(join(binding.directory, `tick-${token}.terminal.json`));
   keysExactly(terminal.value, TERMINAL_KEYS);
   assertBinding(terminal.value, binding);
-  if (digest(owner.raw) !== openedSha256 || digest(terminal.raw) !== terminalSha256 || terminal.value.state !== "CLOSED" ||
+  // ABANDONED: an interrupted tick recovered by a later guard holder. Its owner
+  // record may never have been published; when present it must still match.
+  const abandoned = terminal.value.state === "ABANDONED";
+  const owner = readOwnerRecord(binding, token, abandoned);
+  if (owner) assertOwner(owner, binding, token, shellPid);
+  if ((owner && digest(owner.raw) !== openedSha256) || digest(terminal.raw) !== terminalSha256 || !(abandoned || terminal.value.state === "CLOSED") ||
       terminal.value.token !== token || terminal.value.shellPid !== shellPid || terminal.value.openedSha256 !== openedSha256 ||
-      !Number.isInteger(terminal.value.exitTrapStatus) || terminal.value.exitTrapStatus < 0 || terminal.value.exitTrapStatus >= 128 ||
+      (abandoned ? terminal.value.exitTrapStatus !== null :
+        !Number.isInteger(terminal.value.exitTrapStatus) || terminal.value.exitTrapStatus < 0 || terminal.value.exitTrapStatus >= 128) ||
       typeof terminal.value.closedAt !== "string" || !Number.isFinite(Date.parse(terminal.value.closedAt))) throw Error("closed tick terminal is not its exact owner result");
   return slot;
+}
+
+// Holding the kernel guard proves no process still holds the interrupted tick's
+// FD8, so its OPEN lifetime is over. Record exactly that, then CLOSE the slot.
+function recoverOpenSlot(binding, slot, stamp) {
+  keysExactly(slot.value, OPEN_KEYS);
+  const { token, shellPid, openedSha256 } = slot.value;
+  if (!TOKEN.test(token) || !Number.isSafeInteger(shellPid) || shellPid <= 0 || !HASH.test(openedSha256)) throw Error("open tick slot identity is invalid");
+  const owner = readOwnerRecord(binding, token, true); // null: interrupted before its owner record
+  if (owner) {
+    assertOwner(owner, binding, token, shellPid);
+    if (digest(owner.raw) !== openedSha256) throw Error("abandoned tick owner bytes differ");
+  }
+  const terminalPath = join(binding.directory, `tick-${token}.terminal.json`);
+  let actual;
+  try { actual = readTickJson(terminalPath); } catch (error) { if (error.code !== "ENOENT") throw error; }
+  if (actual) {
+    // Interrupted between its own CLOSED terminal and the slot write: close onto that terminal.
+    keysExactly(actual.value, TERMINAL_KEYS);
+    assertBinding(actual.value, binding);
+    if (actual.value.state !== "CLOSED" || actual.value.token !== token || actual.value.shellPid !== shellPid ||
+        actual.value.openedSha256 !== openedSha256) throw Error("open tick has a foreign terminal");
+  } else {
+    actual = writeTickJson(terminalPath, { version: 1, directory: binding.directory, store: binding.store, guard: binding.guard,
+      state: "ABANDONED", token, shellPid, openedSha256, exitTrapStatus: null, closedAt: new Date().toISOString() });
+  }
+  writeTickJson(join(binding.directory, "tick.slot.json"), { ...slot.value, state: "CLOSED", terminalSha256: digest(actual.raw) }, slot);
+  return { slot: readSlot(binding), note: `abandoned tick ${token} (shell ${shellPid}) recorded ABANDONED and closed at ${stamp}` };
 }
 
 export function tickGuardPath(root) { return tickBinding(root).guardPath; }
@@ -235,7 +299,11 @@ export function checkTickOwner(root, token, shellPid) {
 export function acquireTick(root, shellPid) {
   const owned = ownedGuard(root, shellPid);
   const { binding } = owned;
-  const slot = readSlot(binding);
+  const stamp = new Date().toISOString().replace(/[:.]/g, "");
+  const recovered = [setAsideLegacyTickLock(binding.directory, stamp)];
+  let slot = readSlot(binding);
+  if (slot.value.state === "OPEN") { const r = recoverOpenSlot(binding, slot, stamp); slot = r.slot; recovered.push(r.note); }
+  acquireTick.recovered = recovered.filter(Boolean);
   const token = randomBytes(16).toString("hex");
   const base = { version: 1, directory: binding.directory, store: binding.store, guard: binding.guard };
   const owner = { ...base, state: "OPEN", token, shellPid: owned.shellPid, openedAt: new Date().toISOString() };
@@ -280,10 +348,12 @@ if (entrypoint === fileURLToPath(import.meta.url)) {
     const [mode, root, ...args] = process.argv.slice(2);
     if (!root) throw Error("checkout required");
     if (mode === "path" || mode === "init") console.log(deliveryRecordDirectory(root, mode === "init"));
+    else if (mode === "ensure" && args.length === 0) console.log(ensureDeliveryRecordDirectory(root));
     else if (mode === "tick-guard" && args.length === 0) console.log(tickGuardPath(root));
-    else if (mode === "tick-acquire" && args.length === 1) console.log(acquireTick(root, args[0]));
+    // Line 1 is the token; any further lines say what was recovered.
+    else if (mode === "tick-acquire" && args.length === 1) console.log([acquireTick(root, args[0]), ...acquireTick.recovered.map((n) => "recovered: " + n)].join("\n"));
     else if (mode === "tick-release" && args.length === 3) releaseTick(root, ...args);
-    else throw Error("usage: lane-attempt-store.mjs path|init|tick-guard <checkout> | tick-acquire <checkout> <shell-pid> | tick-release <checkout> <token> <shell-pid> <exit-trap-status>");
+    else throw Error("usage: lane-attempt-store.mjs path|init|ensure|tick-guard <checkout> | tick-acquire <checkout> <shell-pid> | tick-release <checkout> <token> <shell-pid> <exit-trap-status>");
   } catch (error) {
     console.error(`RAISED HAND: delivery record store unavailable: ${error.message}; READBACK ONLY`);
     process.exitCode = error instanceof TickBusy ? 75 : 1;

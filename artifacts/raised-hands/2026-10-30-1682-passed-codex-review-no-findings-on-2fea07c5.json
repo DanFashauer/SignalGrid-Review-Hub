@@ -7,6 +7,11 @@
   "need": "Owner: resolve the 6 threads on #1682 (or permit the lane to resolve them); on the Mac run `bash scripts/mac/install-launchd.sh` then `node scripts/mac/estate-queue.mjs init`.",
   "whoCanUnblock": "owner",
   "domain": "",
-  "status": "open",
-  "routedTo": null
+  "status": "resolved",
+  "routedTo": null,
+  "takenBy": "mac",
+  "takenAt": "2026-11-01T03:24:29.575Z",
+  "resolvedAt": "2026-11-01T03:24:29.606Z",
+  "resolvedBy": "mac",
+  "resolution": "Cleared 2026-10-31 by the Mac lane (Claude session). #1682 is merged (eb24084a) and the hand-off mail landed (#1683); the estate-queue ledger was initialised on the Mac by Codex (owner report 2026-10-30). The remaining item, the stale mac-lane-tick witness, is tracked by hand 2026-10-27-current-mac-witness-delivery and Codex's draft #1698 (ruleset 25774497 rejects the tick's direct pushes; the Mac delivers --via-pr meanwhile, e.g. #1709)."
 }

@@ -5174,3 +5174,37 @@ Command: Network-denied current public delivery, repair, caller, bounded-drain, 
 Output: The six unchanged-runtime cohorts produced160 passes (96+18+12+9+20+5), zero failures/skips. A separate corrected strict-refusal unit31 and whole-heartbeat wrong-witness4 produced35 passes, zero failures/errors/skips on identical production bytes. The prior combined191 run remains FAILED: its refusal cohort had27 passes and4 failures because a generic uncertainty notice was mistaken for strict refusal acceptance. The explicit unit seam now records only that separate dependency; all31 original test methods/assertions remain byte-exact, while four full heartbeat cases count every operation through the real generic HOLD. This is195 explicit focused checks across separate source-bound cohorts, not one full-head preflight result. Earlier RED/helper/fixture failures remain retained.
 Verdict: Independent operator repair. Producers retain bounded immutable repair DATA; only the actual current descriptor/token owner can submit one distinct, sanitized uncertainty notice. Consumed notification failures never replay. Drain pages are bounded and round-robin; damaged cursors hold. Exact-source normal success suppresses redundant repair DATA. Pending receipt GETs have a120-minute cadence only under the actual tick owner; default and resolved-hand reads stay fresh. Append-only raw frames precede interpretation. The root filesystem snapshot no longer uses a separate exists/read race; current CodeQL clearance is still owed.
 Limits: Startup OPEN/legacy-lock recovery and the generic shell/Git descendant boundary remain unresolved. No interrupted history is abandoned, reaped or adopted; no ordinary startup initialization or transport-timeout cleanup inference was added. No native coding, full preflight/breadth, current CI, complete own-system source panel, protected landing, installation, activation or fresh natural canonical Mac heartbeat is claimed.
+## 2026-11-01 — Six owner-accepted decision-record PRs landed one at a time
+
+The owner accepted six decision-record PRs in chat on 2026-10-31 (two groups of three). The cloud lane landed each under that acceptance, not as a DR-037 self-merge, one at a time, re-merging `SignalGrid_Alpha` before every push and letting GitHub's strict required-check policy force a branch refresh after every landing. No record's wording was changed by the lane except the owner-sanctioned DR-061 reconciliation note against DR-064.
+
+| PR | Record | Merged sha | Exact head | Gating check run | Local gates |
+| --- | --- | --- | --- | --- | --- |
+| #1357 | DR-063 brain ecosystem | 69501b56 | 7b5fbfcc | 124655707168 | preflight PASSED, breadth PASSED 58 |
+| #1246 | DR-061 lane merges (+ reconciliation note) | c508cdb3 | 76a132bf | 124667843871 | preflight PASSED, breadth PASSED 58 |
+| #1083 | DR-059 posture ages (decision core) | cfafb095 | 59f03938 | 124685646228 | preflight PASSED, breadth PASSED 58; Opus merge-refute SHIP; CORE_NORMALIZATION_VERSION 26→27; proof:estate-refresh 24/24; test:api 490/490 |
+| #1050 | DR-058 puck return binding (decision core) | 972751c4 | ab2ae448 | 124702966504 | preflight PASSED, breadth PASSED 58 on c49d3d60; Opus merge-refute SHIP (exhaustive loosenings: 0; 119/119; 610/610; 490/490); CORE_NORMALIZATION_VERSION 27→28 |
+| #1322 | DR-062 company scope, automatic by default | 702d6ca3 | 8652e9b3 | 124711433535 | preflight PASSED, breadth PASSED 58 on 7f18013c |
+| #1433 | DR-055 amendment, ARC puck note, launch-claims gate fixes | df1ff2df | 3af79ce1 | 124717727995 | preflight PASSED (PREFLIGHT_EXIT=0), breadth PASSED 58 on ee792b45; check-launch-claims self-test 87 vectors, docs ceiling 407/407 |
+
+Also landed in the same window, under DR-037: #1711 (two stale raised hands cleared; mainline preflight had failed "Raised hands check FAILED: 16 problem(s)"), #1714 (scratch-git hygiene detector: a quoted token must be the whole word — the false positive that blocked #1433), Mac tick PR #1716 (b1df078f; sim request `objective-loop-evidence-fresh-2026-10-31` queued), and the lane-mail heartbeats #1710, #1712, #1713, #1715, #1718, #1719.
+
+Observed, not dismissed: on #1433's head 7b3afc6c the gating check failed once at `node scripts/loop-state.mjs --self-test`, cases R18-display-rows and R19-display-bare (314/316), a script the PR does not touch; the same version passes locally (316/316) and passed on #1716's head in the same minute; one re-run (job 124711304420) was green. A second occurrence anywhere is real and gets investigated, not re-run.
+
+Open owner questions carried out of this batch (nothing in the tree decides them): (1) puck required vs optional factor; (2) who the "super admin" is; (3) on a lost or stolen puck, does immediate single-admin revocation govern, with dual control reserved for re-binding; (4) verify the target authenticator's CTAP 2.1 reset ceremony before moving all protection to re-binding; (5) DR-062: should the per-company switch default to "ask first" for revoke/lock/suspend/erase until an admin enables autonomy (the GHAS thread on #1322, answered as the owner's recorded decision). DR-055 still says "two questions"; the record is the owner's to amend.
+
+Command, in a checkout with `origin/SignalGrid_Alpha` fetched at df1ff2df:
+```sh
+git log --first-parent --format='%h %s' origin/SignalGrid_Alpha | grep -E 'Merge pull request #(1357|1246|1083|1050|1322|1433)'
+```
+Output, verbatim (first-parent order, newest first; titles cut at 100 columns):
+```text
+df1ff2df7 Merge pull request #1433: ARC kiosk photo + puck-as-token note absorbed as direction; DR-0
+702d6ca33 Merge pull request #1322: DR-062 — SignalGrid's scope is the whole company incl. legacy
+972751c4e Merge pull request #1050: DR-058 — a holder-bound device_returned closes custody without
+cfafb095d Merge pull request #1083: DR-059 — estate posture ages at decision time; a refresh retra
+c508cdb39 Merge pull request #1246: DR-061 (owner decision): lanes merge decision-path PRs under con
+69501b56d Merge pull request #1357: DR-063 (owner decision): the brain ecosystem
+```
+
+Verdict: six owner-accepted records are on `SignalGrid_Alpha`, each on a head whose gating check and local preflight+breadth were green. Readiness dimension (b) reads low until the Mac re-mints live evidence on the final manifest; that request is already queued by the Mac's own tick (#1716). No new readiness figure is asserted.

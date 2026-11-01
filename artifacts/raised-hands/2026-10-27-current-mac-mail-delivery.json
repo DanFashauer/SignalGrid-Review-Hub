@@ -7,7 +7,7 @@
   "need": "Mac steward: assess each original request and publish truthful per-item acknowledgments and remaining actions through protected delivery. Preserve unfinished work and current owner corrections; never replay held jobs or delete claim branches.",
   "whoCanUnblock": "mac lane",
   "domain": "lane",
-  "status": "open",
+  "status": "resolved",
   "routedTo": null,
   "where": "Issue #1546; current canonical coordination state",
   "covers": [
@@ -24,5 +24,8 @@
     "mail:cloud-your-hand-2026-10-23-could-not-read-curren"
   ],
   "takenBy": "mac lane",
-  "takenAt": "2026-10-27T16:44:29.953Z"
+  "takenAt": "2026-10-27T16:44:29.953Z",
+  "resolvedAt": "2026-10-31T20:06:01.048Z",
+  "resolvedBy": "cloud",
+  "resolution": "The Mac lane read and acknowledged all 19 outstanding cloud-to-mac messages in one batch (#1709, mainline 5295c762, 2026-10-31 19:07Z); the unread-mail stalls this hand covered are no longer measured."
 }

@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "cloud-mac-build-tick-row-flip-to-active-or-retir",
+  "ackedBy": "mac",
+  "note": "Read 2026-10-31. Mainline now reads mac-build-tick status active in docs/agent/scheduled-routines.json, so the 2026-10-29 FATAL did not trip; no action from this session.",
+  "ackedAt": "2026-10-31T18:50:02.903Z"
+}

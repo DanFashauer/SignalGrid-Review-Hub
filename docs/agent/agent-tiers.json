@@ -124,7 +124,7 @@
       "tier": 3,
       "provenance": "first-party",
       "writeScope": null,
-      "charter": "The executor for the org-roster's product-manager and program-manager roles. Takes the raised hands and stalls that ask for direction (what next, which priority, how these fit), ranks the queue against the objective (DR-033; DR-036 readiness gates outreach), decides reversible calls within delegated authority, and routes the top item to the role that builds it. Escalates to the owner only what DR-037 and the OWNER_RESERVED / DECISION_PATH rules in scripts/check-owner-gated-surfaces.mjs keep with him, as a ranked recommendation. Read-only tools (Read, Grep, Glob, Bash): it directs, the domain roles write. Written by the Mac lane (3654425f, #1014) on the owner's 2026-09-23 direction and carried onto #1019."
+      "charter": "The executor for the org-roster's product-manager and program-manager roles. Takes the raised hands and stalls that ask for direction (what next, which priority, how these fit), ranks the queue against the objective (DR-033; DR-036 readiness gates outreach), decides reversible calls within delegated authority, and routes the top item to the role that builds it. Escalates to the owner only what DR-037 and the OWNER_RESERVED / DECISION_PATH rules in scripts/check-owner-gated-surfaces.mjs keep with him, as narrowed by DR-061 (a lane may merge a DECISION_PATH PR under its conditions; its rule 2 paths never), as a ranked recommendation. Read-only tools (Read, Grep, Glob, Bash): it directs, the domain roles write. Written by the Mac lane (3654425f, #1014) on the owner's 2026-09-23 direction and carried onto #1019."
     }
   ]
 }

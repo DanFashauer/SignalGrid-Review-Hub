@@ -534,6 +534,40 @@ async function run() {
   const simReset = await req("POST", "/simulator/reset", { body: {} });
   check("simulator reset → 200", simReset.status === 200 && Array.isArray(simReset.json?.auditEvidence));
 
+  // ── Row 99: both demo routers speak the envelope's requestId — the SAME one ──
+  // the header carries. /api/simulator/* minted a fresh uuid per body (a caller's
+  // x-request-id echoed in the header, contradicted in the body) and /api/sim/*
+  // carried none at all while forwarding the room-sim library's raw error text.
+  {
+    const demoCall = async (method, path, body) => {
+      const r = await fetch(`${BASE}${path}`, {
+        method,
+        headers: { "x-request-id": "row99-caller-id", ...(body ? { "content-type": "application/json" } : {}) },
+        body: body ? JSON.stringify(body) : undefined,
+      });
+      return { status: r.status, header: r.headers.get("x-request-id"), json: await r.json().catch(() => null) };
+    };
+    const firstSim = (scenarios.json?.scenarios ?? [])[0]?.id;
+    const cases = [
+      ["GET", "/simulator/scenarios", undefined],
+      ["POST", "/simulator/run", { scenarioId: firstSim }],
+      ["POST", "/simulator/run", { scenarioId: "no-such-scenario" }],
+      ["GET", "/sim/room-entry/scenarios", undefined],
+      ["POST", "/sim/room-entry", { scenarioId: "compliant-bedside" }],
+      ["POST", "/sim/room-entry", { scenarioId: "does-not-exist" }],
+    ];
+    for (const [method, path, body] of cases) {
+      const r = await demoCall(method, path, body);
+      check(`demo envelope: ${method} ${path} (${r.status}) body requestId is the header's x-request-id`,
+        r.header === "row99-caller-id" && r.json?.requestId === "row99-caller-id");
+    }
+    const unknownRoom = await demoCall("POST", "/sim/room-entry", { scenarioId: "does-not-exist" });
+    check("demo envelope: an unknown room-entry scenario is a fixed not_found message, not the library's error string",
+      unknownRoom.status === 404 && unknownRoom.json?.error === "not_found" &&
+      unknownRoom.json?.message === "Room-entry scenario not found." &&
+      !String(unknownRoom.json?.message).includes("does-not-exist"));
+  }
+
   // ── auth fails closed ───────────────────────────────────────────────────
   const noAuth = await req("GET", "/v1/decisions");
   check("unauthenticated request is 401", noAuth.status === 401);
@@ -1984,6 +2018,23 @@ async function run() {
       check(`metrics: process uptime measures the PROCESS, not the scraper (first scrape of a >0.9s-old server read ${uptime}s)`,
         uptime >= 0.7);
 
+      // ── Row 95: HEAD is served wherever GET is, and nowhere else ────────────
+      // Express answers HEAD from the GET handler, but the fence matched the verb
+      // literally and 404'd first — a healthy instance reporting 404 to a
+      // load-balancer probe that defaults to HEAD. Both halves, like the fence above.
+      const gwHeadHealth = await fetch(`${BASE4}/healthz`, { method: "HEAD" });
+      check(`gateway: HEAD /healthz is served as GET is (${gwHeadHealth.status}, was 404)`, gwHeadHealth.status === 200);
+      const gwHeadContext = await fetch(`${BASE4}/v1/context`, { method: "HEAD" });
+      check(`gateway: HEAD on the allowlisted GET /v1/context reaches the route and demands a credential (${gwHeadContext.status}, want 401)`,
+        gwHeadContext.status === 401);
+      const gwHeadKeys = await fetch(`${BASE4}/v1/keys`, { method: "HEAD" });
+      check("gateway: HEAD on an unlisted route is still fenced (404)", gwHeadKeys.status === 404);
+      // /v1/authorize is POST-only with no GET sibling pattern (unlike
+      // /v1/decisions/evaluate, which GET /v1/decisions/:id also matches).
+      const gwHeadAuthorize = await fetch(`${BASE4}/v1/authorize`, { method: "HEAD" });
+      check("gateway: HEAD on a POST-only launch route is still fenced (404) — only HEAD→GET is folded",
+        gwHeadAuthorize.status === 404);
+
       // NON-VACUITY. Every check above asserts an ABSENCE, and a server that failed to
       // boot, or a wrong base URL, would satisfy all of them. Something must still be
       // served, or these prove nothing.
@@ -2264,7 +2315,15 @@ async function run() {
   check("session end → 200 and the session is no longer active", ended.status === 200 && ended.json?.session?.status !== "active");
   // The one that would actually hurt: an ended session must not be revivable, or
   // "end" is advisory rather than an control.
+  const refreshAuditCount = async () => {
+    const t = await (await fetch(`${BASE.replace(/\/api$/, "")}/metrics`)).text();
+    const m = t.match(/signalgrid_audit_events_total\{event_type="session\.refresh"\} (\d+)/);
+    return m ? Number(m[1]) : 0;
+  };
+  const refreshAuditBefore = await refreshAuditCount();
   const refreshAfterEnd = await req("POST", `/v1/sessions/${sessionId}/refresh`, { token: KEYS.operator, body: { ttlSeconds: 900 } });
+  check("a refresh that did not happen appends no session.refresh audit row",
+    (await refreshAuditCount()) === refreshAuditBefore);
   // 404, specifically — not merely "not a 200 with active". The store used to hand
   // the ENDED session object back and the route answered 200 with status "ended"
   // plus a session.refresh audit row for a refresh that never happened; the old
@@ -2890,6 +2949,30 @@ async function run() {
     const tooFastExit = await exitOf(tooFast);
     check("estate refresh: an interval below the 30s floor refuses at boot",
       tooFastExit !== "still-running" && tooFastExit !== 0);
+
+    // Above Node's timer ceiling: setInterval clamps a delay past 2^31-1 ms to 1ms, so a
+    // "monthly" 2592000 would have fired the refresh ~1000x a second. Refuse, never clamp.
+    for (const tooSlow of ["2592000", "2147484"]) {
+      const tooSlowChild = spawn("node", [serverEntry], {
+        env: estateEnv({ SIGNALGRID_ESTATE_REFRESH_SECONDS: tooSlow }),
+        stdio: ["ignore", "ignore", "ignore"],
+      });
+      const tooSlowExit = await exitOf(tooSlowChild);
+      check(`estate refresh: ${tooSlow}s is past setInterval's 2^31-1 ms ceiling and refuses at boot`,
+        tooSlowExit !== "still-running" && tooSlowExit !== 0);
+    }
+    // The ceiling itself (2147483s = 2147483000ms <= 2^31-1) is honoured, not refused.
+    const atCeiling = spawn("node", [serverEntry], {
+      env: estateEnv({ SIGNALGRID_ESTATE_REFRESH_SECONDS: "2147483" }),
+      stdio: ["ignore", "ignore", "ignore"],
+    });
+    try {
+      check("estate refresh: the largest interval Node can honour (2147483s) still boots",
+        await waitReady(PORT12));
+    } finally {
+      atCeiling.kill("SIGTERM");
+      await exitOf(atCeiling);
+    }
 
     // Set on a DEMO core: there is no estate connector to refresh, so a server that
     // booted anyway would report a loop that could never run.

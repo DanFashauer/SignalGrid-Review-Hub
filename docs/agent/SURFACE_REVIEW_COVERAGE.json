@@ -136,7 +136,20 @@
         }
       ]
     },
-    ".claude/workflows": { "path": ".claude/workflows", "reads": [] },
+    ".claude/workflows": {
+      "path": ".claude/workflows",
+      "reads": [
+        {
+          "date": "2026-10-15",
+          "read": "README.md, review-wave.js, helpers/review-wave-verdict.py and helpers/land-first-half.sh read line by line across PR #1468's review rounds 28–34: Sonnet reviews at rounds 28–33 (comment 6200395927 on #1468), the Opus landing re-refute alone at round 34; Opus refutes at rounds 28, 29, 30 and 33 (fix-needed: an R16 port-file race in loop-state's self-test server; the verdict helper rendered a dead or blocked agent as ship) and the Opus landing re-refute at round 34 (ship, five LOWs filed as backlog rows). land-branch.js was not read by any of them. Basis for the counts: open 6 is the five LOW rows and the helper self-test row filed from this refute; closed 5 is the two round-33 MEDIUMs and the three round-33 LOWs closed in round 34 (comment 6200395927 on #1468, \"Round 34 (the Opus landing refute's two MEDIUMs and three LOWs)\").",
+          "reviewer": "cloud lane (Sonnet reviewers in detached worktrees + Opus landing refute, 2026-10-15)",
+          "record": "#1468",
+          "scope": "partial: four of the five files read; land-branch.js not read",
+          "open": 6,
+          "closed": 5
+        }
+      ]
+    },
     ".claude/skills": {
       "path": ".claude/skills",
       "reads": [

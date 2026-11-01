@@ -7,7 +7,12 @@
   "need": "a person on the Mac to read the log named in where, fix the cause or re-rank the row, and delete the claim branch it names when the row should be retried",
   "whoCanUnblock": "mac lane",
   "domain": "lane",
-  "status": "open",
+  "status": "resolved",
   "routedTo": null,
-  "where": "launchd log ~/Library/Logs/signalgrid-build-tick.log"
+  "where": "launchd log ~/Library/Logs/signalgrid-build-tick.log",
+  "takenBy": "mac",
+  "takenAt": "2026-11-01T03:24:29.468Z",
+  "resolvedAt": "2026-11-01T03:24:29.493Z",
+  "resolvedBy": "mac",
+  "resolution": "Cleared 2026-10-31 by the Mac lane (Claude session). The cloud reproduced the cause read-only (mail cloud-your-hand-2026-10-23-...): the tick heartbeat did not name the state's verdict, not the state itself. ~/Library/Logs/signalgrid-build-tick.log shows the last 'could not read current tasks[]' at 2026-10-24T07:30:34Z and, from 2026-10-24T09:37:35Z on, the tick reading tasks and claiming rows 17b/17c. docs/agent/objective-state.json on mainline ef8cbaf7d reads 3 tasks, verdict escalate. No claim branch for this row remains on origin."
 }

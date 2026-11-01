@@ -733,6 +733,119 @@ In addition to both lists above, and recorded in DR-055 item 6:
   credential-at-reader door", "works with any website", "device-bound sessions for every web
   app", "replaces Conditional Access or the PACS".
 
+## Credential binding and reset (owner note 2026-10-02; DR-055 amendment)
+
+On 2026-10-02 the owner pasted a photo of a device-dispensing kiosk from a vendor called ARC —
+a touchscreen with **Pick Up Device** and **Return Device** — and wrote that the company is
+*"a good choice to look at for part of integration and the whole puck system"*. The photo is
+not committed, and nothing printed on the kiosk's label (its serial number, support phone and
+support email) is recorded anywhere in this tree. This section holds the note against the
+pages above under the same limit: **it is requirements text and a design target. Nothing is
+built, no hardware gate moves, and nothing here is a claim of current capability.** DR-055 is
+amended in place to take it (the paragraph dated 2026-10-02).
+
+### The owner's words — his direction, quoted whole
+
+The sentence below is the owner's direction and is not a statement of this repository. Its
+absolutes appear in this repository only as quotations or as names (this block, the intake row
+that logs it in `docs/agent/RESOURCE_INTAKE.md`, the claim inventory's "not claimable" rows, the
+scan file and the never-claim list), never as a claim; the requirements that follow are what this page can hold
+truthfully, and the words it will not use are listed at the end of this section.
+
+> "This company is also a good choice to look at for part of integration and the whole puck system that I'm asking to create as part of the company and a solution I provide to offer easier accountability and accessibility. The smart system for all companies no matter the size SignalGrid automates the whole company technology and desired outcomes based on workflows and how automated vs self drive aka user based you allow based off using the puck which is replacing of your ID badge/key card/2fa/MFA all of the above this device is the token for that user and cannot be duplicated and or replicated its hard locked once it's enrolled and registered to that person only way it's cleared is by factory wipe only super admin of the system can do without additional verification and validation making it impossible to break and or hack."
+
+### Requirements R1–R6 (design targets)
+
+1. **R1 — a key that is not exportable, accepted only with attestation.** The puck is designed
+   around a private key generated inside a secure element that never leaves it, and the IdP
+   registers it only with attestation from an allowlisted authenticator model — attestation and
+   authenticator-model policy are the IdP's (`docs/SESSION_PUCK_HARDWARE_HYPOTHESIS.md:162`).
+   This is the testable property behind the owner's duplication clause. It is a property of the
+   authenticator and of the IdP's policy, not a promise SignalGrid makes.
+2. **R2 — the binding is the IdP registration.** The lock to one person is the mapping employee
+   ↔ credential ID ↔ authenticator model or serial ↔ issuance state ↔ revocation state
+   (lifecycle, `:216`–`:224`). It is revoked through the IdP and the PACS, and SignalGrid's
+   session mappings are invalidated. SignalGrid holds no key database and runs no parallel
+   identity administration (DR-043 item 2, `docs/DECISION_RECORDS.md:2791`; this page, `:353`).
+3. **R3 — replacement is a new keypair, never a copy** (`:212`). A lost, wiped or replaced puck is
+   re-issued, not restored.
+4. **R4 — a reset is open to whoever holds the key, so RE-BINDING is the guarded step.** FIDO
+   CTAP 2.1 §6.6, *authenticatorReset*
+   (<https://fidoalliance.org/specs/fido-v2.1-ps-20210615/fido-client-to-authenticator-protocol-v2.1-ps-errata-20220621.html>,
+   read 2026-10-02), invalidates all generated credentials and erases all discoverable ones. Its
+   only guard is *"evidence of user interaction"* and, on an authenticator with no display, a
+   request within 10 seconds of powering up. An authenticator may decline the command on a
+   transport (the spec's own example is NFC) but must support it on at least one. So, for a CTAP 2.1-conformant
+   authenticator (which R1 assumes), "only an administrator can wipe it" cannot be a property of the hardware. What a reset does do is
+   leave the puck inert — its credentials are gone and the IdP's registration names a key that
+   no longer exists — which is the fail-closed outcome. The step that needs a guard is the next
+   one: a new registration for a person.
+5. **R5 — re-bind and revoke under two-person authorization (a proposal).** The tree's pattern
+   for a case where *"a single compromised or coerced credential should not be enough"* is
+   `lib/dual-control` (`docs/DUAL_CONTROL.md:15`). Its elevated-action classes are
+   `break_glass | privileged_config | bulk_data | unknown` (`lib/dual-control/src/types.ts:33`;
+   the request's `actionClass` at `:88`), so **no credential re-bind or revoke class exists
+   today**: this needs a new class and two distinct authorizers, with `unknown` staying the
+   fail-safe. A single super-admin credential able to re-bind alone is the failure to avoid.
+   Proof vectors for it are filed as Puck 16 in `docs/BUILD_BACKLOG.md`, not built here.
+6. **R6 — an unreadable binding reads UNBOUND.** A puck with no IdP binding, a wiped puck, a
+   binding state that cannot be read, or an attach reported only by a mechanical sensor
+   (`:445`) is *unknown*: at least `step_up`, never `allow`, and never "already enrolled". This
+   is the rule `CLAUDE.md` states for the iOS policy defaults — the absence of a record never
+   loosens an answer — and the attach domain already stands there
+   (`lib/signalgrid-core/src/attach.ts:14`–`:18`: an unknown attach state is at least `step_up`
+   and never a grant).
+
+### Two open owner questions — recorded, not answered
+
+Raised as a hand on 2026-10-02:
+`artifacts/raised-hands/2026-10-02-two-readings-of-the-note-conflict-with-canonical.json`
+(open; whoCanUnblock: owner). This section is rewritten to the answers.
+
+1. **One offered factor, or the required factor?** The note says the puck is *"replacing of your
+   ID badge/key card/2fa/MFA all of the above"*. `docs/PURPOSE.md:38` says *"The factor is the
+   customer's choice, and the grid is agnostic to it."* Making the puck the required factor is a
+   PURPOSE change only the owner can make. Until he answers, this page treats the puck as one
+   factor a customer may choose to offer, and PURPOSE.md stands.
+2. **Who is the "super admin of the system"?** The customer's IdP and PACS administrator acting
+   under dual control (consistent with DR-043 item 2 and R5), or a role SignalGrid itself holds
+   over enrolment and keys (which would contradict DR-043 item 2 and `:353` — a doctrine change,
+   not a requirement)? The clause also parses two ways: only a super admin can clear a puck,
+   after additional verification; or a super admin can do it without additional verification and
+   no one else can. R5 fits either reading, because it removes a single point of compromise.
+
+### Where the kiosk fits
+
+The puck is evidence, the kiosk is a custody source, and neither is the policy engine
+(DR-043 item 2; *Division of authority* above). ARC-class dispensing kiosks are a candidate
+read-only signal source and a design target — one cross-reference, at
+`docs/HARDWARE_PARTNER_MATRIX.md:17`; the kiosk's two calls (ask, tell) and its unknown rule are
+in `docs/PHYSICAL_CUSTODY_SIGNAL_MODEL.md`. No connector or emulator is proposed: two web
+searches on 2026-10-02 found no public ARC API, webhook or SDK, every integration fact the
+vendor states is marketing and untested, and `lib/event-contract` plus the custody ledger
+already hold pickup, return and the fail-closed pickup decision.
+
+### Added to what this repository will not claim (2026-10-02)
+
+In addition to the lists above. Only the first bullet is gated: the security-absolute markers in
+`scripts/check-launch-claims.mjs` fail the build when buyer-facing copy asserts those words. The
+second and third bullets have no launch-claims marker. Their lead claims (replacing a badge, key
+card, 2FA or MFA; "only a super admin can clear it"; an ARC integration, partnership or
+certification) are recorded as "not claimable" rows in the claim inventory
+(`docs/agent/CLAIM_INVENTORY.json`), and the inventory gates
+(`scripts/check-claim-inventory-anchors.mjs` and `scripts/gen-claim-inventory-md.mjs --check`)
+keep those rows' quotations and citations true. The rest of those bullets ("hard locked", operating
+a kiosk, holding keys, administering enrolment, wiping a device) have neither a row nor a marker:
+
+- "Unhackable", "hack-proof", "clone-proof", "tamper-proof", "impossible to hack", "impossible
+  to break", "cannot be duplicated", "cannot be replicated" — about the puck, a receiver, a
+  kiosk or SignalGrid. Every mitigation here raises assurance or reduces risk; none is a
+  guarantee.
+- That the puck replaces a badge, key card, 2FA or MFA; that it is "hard locked" to a person by
+  SignalGrid; that only a super admin can clear it (R4: the holder of the key can reset it).
+- That SignalGrid integrates with, is partnered with, or is certified by ARC or its vendor, or
+  that it operates a kiosk. That SignalGrid holds keys, administers enrolment or wipes a device.
+
 ## A note on disclosure
 
 This tree is public. The concept above is now disclosed by being written here; the

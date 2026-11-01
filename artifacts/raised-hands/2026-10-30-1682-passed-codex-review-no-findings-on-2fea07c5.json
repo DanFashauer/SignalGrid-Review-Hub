@@ -1,0 +1,17 @@
+{
+  "id": "2026-10-30-1682-passed-codex-review-no-findings-on-2fea07c5",
+  "raisedAt": "2026-10-30T04:19:38.268Z",
+  "origin": "cloud",
+  "doing": "Landing the work queue (PR #1682) under DR-037 and handing the build loop to the local brain (hand-off mail landed in #1683).",
+  "blockedBy": "#1682 passed Codex review (no findings on 2fea07c5) and local preflight + breadth, but 6 addressed review threads stay open: the auto-mode permission check denied the lane's resolve calls twice. The Mac tick has not fired since 2026-10-24T07:30:38Z, so the local brain cannot pick up the hand-off, and the estate-queue ledger was never initialised.",
+  "need": "Owner: resolve the 6 threads on #1682 (or permit the lane to resolve them); on the Mac run `bash scripts/mac/install-launchd.sh` then `node scripts/mac/estate-queue.mjs init`.",
+  "whoCanUnblock": "owner",
+  "domain": "",
+  "status": "resolved",
+  "routedTo": null,
+  "takenBy": "mac",
+  "takenAt": "2026-11-01T03:24:29.575Z",
+  "resolvedAt": "2026-11-01T03:24:29.606Z",
+  "resolvedBy": "mac",
+  "resolution": "Cleared 2026-10-31 by the Mac lane (Claude session). #1682 is merged (eb24084a) and the hand-off mail landed (#1683); the estate-queue ledger was initialised on the Mac by Codex (owner report 2026-10-30). The remaining item, the stale mac-lane-tick witness, is tracked by hand 2026-10-27-current-mac-witness-delivery and Codex's draft #1698 (ruleset 25774497 rejects the tick's direct pushes; the Mac delivers --via-pr meanwhile, e.g. #1709)."
+}

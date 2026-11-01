@@ -104,8 +104,9 @@ router.post("/cp/v1/telemetry", (req, res) => {
     return;
   }
   // Only a seeded edge node may report. Any other string was stored under its own
-  // key, so an anonymous caller could grow the map without bound (60KB ids) and
-  // fleetHealth / ops-intelligence would read it as a site. A KNOWN node id can
+  // key, so an anonymous caller could grow the map without bound (60KB ids); the
+  // rollups never read those keys (fleetHealth and hotspots iterate the seeded
+  // nodes only), so the harm was memory, not phantom sites. A KNOWN node id can
   // still be overwritten — this router carries no principal and is demo-only
   // (the gateway profile does not mount it) — but only among the fixture's nodes.
   if (!cp.listEdgeNodes().some((n) => n.id === b.nodeId)) {

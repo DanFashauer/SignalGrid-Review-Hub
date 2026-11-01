@@ -68,7 +68,7 @@
 // rides the tick PR; DR-037 decides), and not the decision core (lib/*, /v1, native ports untouched).
 import { createHash } from "node:crypto";
 import { execFileSync, spawnSync } from "node:child_process";
-import { deliveryRecordDirectory, setAsideRefusedAttempt } from "./lib/lane-attempt-store.mjs";
+import { deliveryRecordDirectory, retryHead, setAsideRefusedAttempt } from "./lib/lane-attempt-store.mjs";
 import { existsSync, readFileSync, readdirSync, writeFileSync, mkdirSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -630,7 +630,8 @@ function emit(state, { write, deliver }) {
       let attempt;
       try {
         const records = deliveryRecordDirectory(ROOT);
-        const name = "objective-" + createHash("sha256").update(e.id).digest("hex");
+        // A refused original stays in place; follow its retry chain to the current attempt.
+        let name = retryHead(records, "objective-" + createHash("sha256").update(e.id).digest("hex"));
         attempt = join(records, name);
         // A tracked/stamp id is not proof of a known child terminal or landing.
         // Inspect the preserved attempt even when older state calls it submitted.
@@ -639,10 +640,12 @@ function emit(state, { write, deliver }) {
         try { prior = JSON.parse(readFileSync(attempt + ".terminal.json", "utf8")); } catch { /* unknown stays held below */ }
         let retryOf = null;
         // Exit 1/2 is retried only when a readback proves nothing was published
-        // (shared rule; deterministic aside name, no clock or randomness here).
-        if (hasEvidence && prior && !prior.signal && !prior.error && (prior.status === 1 || prior.status === 2) &&
-            (retryOf = setAsideRefusedAttempt(ROOT, records, name, prior.status))) {
-          retryOf.stamp = state.derivedAt; hasEvidence = false; submitted.delete(e.id);
+        // (shared rule; deterministic successor prefix, no clock or randomness here).
+        const retry = hasEvidence && prior && !prior.signal && !prior.error && (prior.status === 1 || prior.status === 2) ?
+          setAsideRefusedAttempt(ROOT, records, name, prior.status, "derive") : null;
+        if (retry?.successor) {
+          retryOf = { ...retry, stamp: state.derivedAt }; name = retry.successor; attempt = join(records, name);
+          hasEvidence = false; submitted.delete(e.id);
         }
         if (submitted.has(e.id) || hasEvidence) {
           if (queueRepair(attempt)) lines.push(`RAISED HAND: escalation ${e.id} original attempt retained; READBACK ONLY`);

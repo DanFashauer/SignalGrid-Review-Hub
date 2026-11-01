@@ -208,16 +208,10 @@ class RefusalRepairHandControls(unittest.TestCase):
     def test_qualified_current_owner_can_send_one_distinct_repair_hand(self):
         self.one_hand(self.fixture())
 
-    def test_known_refused_repair_hand_is_retried_only_after_readback_proves_its_ref_absent(self):
-        # The hand's own push is refused (exit 1); ls-remote of its target returns no ref,
-        # so the next tick moves it under refused/ and sends it once more (refused again).
-        f = self.fixture(reject='always'); first = f.heartbeat(); second = f.heartbeat()
-        self.assertEqual(first.returncode, 0, first.stdout + first.stderr)
-        self.assertEqual(second.returncode, 0, second.stdout + second.stderr)
-        ops = f.hand_ops(); self.assertEqual(len(ops), 1, 'the retried hand reuses its one identity')
-        self.assertEqual(len(f.rows(f.push_observed)), 3, 'original refusal, the hand, and its one readback-bound retry')
-        self.assertTrue(list((f.records / 'refused').glob('*.refused-1.terminal.json')), 'the refused hand is kept aside')
-        f.assert_original_preserved()
+    def test_known_refused_repair_hand_is_consumed_and_never_renamed_or_retried(self):
+        # A remote-rule refusal of the hand's own push (push terminal recorded) is not a
+        # retryable pre-push refusal: resending the same cannot pass.
+        self.one_hand(self.fixture(reject='always'))
 
     def test_UNKNOWN_repair_hand_is_consumed_and_readback_only(self):
         self.one_hand(self.fixture(hand_outcome='unknown'))

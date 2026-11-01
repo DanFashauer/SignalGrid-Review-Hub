@@ -335,7 +335,7 @@ function publishPrepared(root, prepared, token, shellPid, store) {
   // A readback proving nothing was published moves this notice aside (shared rule)
   // so the next drain retries it; the request itself stays.
   if (!result.signal && !result.error && (result.status === 1 || result.status === 2) &&
-      setAsideRefusedAttempt(root, store.directory, request.id, result.status)) {
+      setAsideRefusedAttempt(root, store.directory, request.id, result.status, 'move')?.setAsideAs) {
     throw Error('different repair notice was refused (exit ' + result.status + '); nothing published, retried next drain');
   }
   if (result.status !== 0 || result.signal || result.error) throw Error('different repair notice is unconfirmed and consumed');

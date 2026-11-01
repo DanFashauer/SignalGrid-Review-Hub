@@ -207,14 +207,18 @@ raise_hand() {
         try {
           if (visited.has(attempt)) throw Error("repeated clearance binding");
           visited.add(attempt);
+          // A refused original stays in place; its retry runs under the successor prefix it names.
+          const marker = path.join(cache, "refused", path.basename(attempt) + ".retried");
+          if (fs.existsSync(marker)) { attempt = path.join(cache, JSON.parse(read(marker)).successor); continue; }
           let exit = null; try { exit = read(attempt + ".exit").trim(); } catch { /* unknown stays held below */ }
           // Exit 1/2 is retried only when a readback proves nothing was published;
           // a published or unreadable target falls through to the held path below.
           if (exit === "1" || exit === "2") {
             const moved = require("child_process").spawnSync(process.execPath, [path.join(repo, "scripts/lib/lane-attempt-store.mjs"),
-              "retry-refused", repo, cache, path.basename(attempt), exit], { cwd: repo, encoding: "utf8" });
-            retryOf = moved.status === 0 ? JSON.parse(moved.stdout) : null;
-            if (retryOf) { retryOf.stamp = stamp; break; }
+              "retry-refused", repo, cache, path.basename(attempt), exit, "derive"], { cwd: repo, encoding: "utf8" });
+            const retry = moved.status === 0 ? JSON.parse(moved.stdout) : null;
+            if (retry && retry.done) process.exit(4); // the hand id already exists on the Hub: done, not refused
+            if (retry && retry.successor) { retryOf = { ...retry, stamp }; attempt = path.join(cache, retry.successor); continue; }
           }
           if (JSON.parse(read(attempt + ".attempt.json")).receipt !== attempt + ".submission.json" || read(attempt + ".exit").trim() !== "0") throw Error("original parent is not known complete");
           read(attempt + ".output"); // missing original evidence never renews an attempt
@@ -249,6 +253,8 @@ raise_hand() {
     else
       say "WARN hand submission unconfirmed (exit $_hand_exit); READBACK ONLY: ${_hand_attempt}.submission.json"
     fi
+  elif [ "$?" = "4" ]; then
+    say "hand already on the Hub (existing id); done, nothing to retry: $1"
   else
     say "RAISED HAND: original hand already attempted or its intent unavailable; READBACK ONLY: $1"
     printf '%s  %s\n' "$STAMP" "$1" >> "$CACHE/undelivered-hands.log"

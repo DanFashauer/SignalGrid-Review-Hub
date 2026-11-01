@@ -31,10 +31,14 @@ function rawFiles(prefix) {
  }
  return out;
 }
-// Owner order 2026-11-01: a refused original (exit 1/2) is moved under refused/, byte-identical, and retried.
-function setAside(f,before) {
- const moved=readdirSync(join(f.store,'refused'));
- for(const [name,state] of Object.entries(before)){const dot=name.indexOf('.',1),m=moved.filter(x=>x===name.slice(0,dot)+'.refused-1'+name.slice(dot));assert.equal(m.length,1,'refused evidence kept aside: '+name);assert.equal(readFileSync(join(f.store,'refused',m[0])).toString('hex'),state.raw);}
+// Owner order 2026-11-01: a refused original (exit 1/2) stays in place byte-identical,
+// is marked refused/<name>.retried, and its retry runs under its own successor prefix.
+const successorOf=name=>name.replace(/-[a-f0-9]{64}$/,'')+'-'+sha(name+':retry');
+function retried(f,o) {
+ const name=o.prefix.split('/').at(-1);preserved(o.prefix,o.initial);
+ const marker=JSON.parse(readFileSync(join(f.store,'refused',name+'.retried'),'utf8'));
+ assert.equal(marker.successor,successorOf(name));assert.equal(marker.n,1);assert.equal(marker.root,name);
+ return join(f.store,marker.successor);
 }
 function preserved(prefix,before) {
  const now=rawFiles(prefix);for(const [name,state] of Object.entries(before))assert.deepEqual(now[name],state,'original bytes/inode/mode preserved: '+name);
@@ -189,7 +193,8 @@ function sourceFunction(file,start,end) {
 }
 function heartbeatScript(f,body) {
  const text=readFileSync(join(SOURCE,'scripts/mac/lane-tick.sh'),'utf8'),a=text.indexOf('heartbeat() {'),b=text.indexOf('\n}\n',a)+3;
- assert.ok(a>=0&&b>a);return `DRY=0\nRESULT=quiet\nQUIET_HEARTBEAT_MIN=120\nSTAMP=20261101T010000Z\nHB_LAST_RESULT=${quote(join(f.store,'.sg-last-heartbeat-result'))}\nHB_LAST_ATTEMPT=${quote(join(f.store,'.sg-last-heartbeat-attempt'))}\nESTATE_RESULT=${quote(join(f.store,'.sg-estate-result'))}\nappend_unread_state(){ :; }\nappend_raised_hands_state(){ :; }\n${text.slice(a,b)}\n${body}`;
+ const w=text.indexOf('tick_record() {'),we=text.indexOf('\nJS\n}\n',w)+7;
+ assert.ok(a>=0&&b>a&&w>=0&&we>w);return `${text.slice(w,we)}\nDRY=0\nRESULT=quiet\nQUIET_HEARTBEAT_MIN=120\nSTAMP=20261101T010000Z\nHB_LAST_RESULT=${quote(join(f.store,'.sg-last-heartbeat-result'))}\nHB_LAST_ATTEMPT=${quote(join(f.store,'.sg-last-heartbeat-attempt'))}\nESTATE_RESULT=${quote(join(f.store,'.sg-estate-result'))}\nappend_unread_state(){ :; }\nappend_raised_hands_state(){ :; }\n${text.slice(a,b)}\n${body}`;
 }
 function runBuild(f,body,{extra={}}={}) {
  const source=sourceFunction('scripts/mac/build-tick.sh','raise_hand() {','\nfail() {');
@@ -204,7 +209,7 @@ function emitObjective(f,{existingState=false,rounds=1}={}) {
  const state={decisionAddress:'same frozen decision',derivedAt:'2026-11-01T01:00:00Z',derivedAtCommit:f.head,queue:[],escalations:[escalation],criteria:[],tasks:[],verdict:'building'};
  if(existingState)put(join(f.root,'frozen-state.json'),enc(state));
  const file=join(f.parent,'objective-caller-'+(++serial)+'.mjs');
- put(file,`import {createHash,randomBytes} from 'node:crypto';import {spawnSync} from 'node:child_process';import {mkdirSync,readFileSync,readdirSync,renameSync,existsSync,writeFileSync,rmSync} from 'node:fs';import {dirname,join} from 'node:path';import {fileURLToPath} from 'node:url';import {deliveryRecordDirectory,setAsideRefusedAttempt} from ${JSON.stringify('file://'+join(f.root,'scripts/lib/lane-attempt-store.mjs'))};\nconst ROOT=${JSON.stringify(f.root)},STATE_REL='frozen-state.json',STAMP_REL='node_modules/frozen-objective-stamp.json';\n${text.slice(a,b)}\nconst state=${JSON.stringify(state)};for(let n=0;n<${rounds};n++){const r=emit(state,{write:true,deliver:true});console.log(r.lines.join('\\n'));}\n`);
+ put(file,`import {createHash,randomBytes} from 'node:crypto';import {spawnSync} from 'node:child_process';import {mkdirSync,readFileSync,readdirSync,renameSync,existsSync,writeFileSync,rmSync} from 'node:fs';import {dirname,join} from 'node:path';import {fileURLToPath} from 'node:url';import {deliveryRecordDirectory,retryHead,setAsideRefusedAttempt} from ${JSON.stringify('file://'+join(f.root,'scripts/lib/lane-attempt-store.mjs'))};\nconst ROOT=${JSON.stringify(f.root)},STATE_REL='frozen-state.json',STAMP_REL='node_modules/frozen-objective-stamp.json';\n${text.slice(a,b)}\nconst state=${JSON.stringify(state)};for(let n=0;n<${rounds};n++){const r=emit(state,{write:true,deliver:true});console.log(r.lines.join('\\n'));}\n`);
  return spawnSync(process.execPath,[file],{cwd:f.root,env:f.env,encoding:'utf8'});
 }
 function exactRequest(f,o,{atLeast=1}={}) {
@@ -234,7 +239,7 @@ callerCase('CW02','repeated heartbeat HOLD does not repeat the original send or 
  acceptOwned(owned(f,heartbeatScript(f,'heartbeat || :\nRESULT="different observation wording"\nheartbeat || :\nRESULT=quiet\nheartbeat || :')));
  exactRequest(f,o);oneDifferentRepair(f,o);assert.ok(f.calls().some(c=>c.args[0]==='readback'),'old original uses readback only');
 });
-for(const [id,status] of [['CW03',1],['CW04',2]])callerCase(id,'prior build exit'+status+' published nothing: it is set aside and the hand is sent again once',f=>{
+for(const [id,status] of [['CW03',1],['CW04',2]])callerCase(id,'prior build exit'+status+' published nothing: kept in place, sent again once under its successor prefix',f=>{
  f.env.FIXTURE_LS_REMOTE='absent'; // readback: the original target ref is absent, so nothing was published
  const cause=sha(BLOCKER),o=original(f,'build',{exit:status,legacy:true});
  // Existing source derives this exact blocker identity before the failing branch.
@@ -242,24 +247,51 @@ for(const [id,status] of [['CW03',1],['CW04',2]])callerCase(id,'prior build exit
  const prior=JSON.parse(readFileSync(desired+'.attempt.json','utf8'));prior.receipt=desired+'.submission.json';writeFileSync(desired+'.attempt.json',enc(prior));
  o.prefix=desired;o.initial=rawFiles(desired);
  acceptOwned(runBuild(f,`raise_hand ${quote(BLOCKER)}\nraise_hand ${quote(BLOCKER)}\nraise_hand ${quote(BLOCKER)}`));
- assert.equal(f.calls().filter(c=>c.args[0]==='batch').length,1,'the refused hand is retried exactly once, then the new attempt is held');assert.equal(f.entries().filter(e=>['notify','drain'].includes(e.argv[0])).length,0,'build DATA producer cannot invent FD8 ownership');setAside(f,o.initial);
+ assert.equal(f.calls().filter(c=>c.args[0]==='batch').length,1,'the refused hand is retried exactly once, then the new attempt is held');assert.equal(f.entries().filter(e=>['notify','drain'].includes(e.argv[0])).length,0,'build DATA producer cannot invent FD8 ownership');
+ const next=retried(f,o);assert.equal(readFileSync(next+'.exit','utf8'),'0\n');assert.equal(JSON.parse(readFileSync(next+'.attempt.json','utf8')).retryOf.attempt,'hand-'+cause);
 });
-callerCase('CW05','prior refused objective (exit2) is set aside and sent again once despite appearing submitted',f=>{
+callerCase('CW05','prior refused objective (exit2) is kept in place and sent again once under its successor prefix despite appearing submitted',f=>{
  f.env.FIXTURE_LS_REMOTE='absent';
  const o=original(f,'objective',{exit:2,legacy:true}),desired=join(f.store,'objective-'+sha('same-source-escalation')),base=o.prefix.split('/').at(-1);
  for(const name of Object.keys(o.initial).filter(n=>n.startsWith(base+'.')))renameSync(o.prefix+name.slice(base.length),desired+name.slice(base.length));
  const intent=JSON.parse(readFileSync(desired+'.attempt.json','utf8'));intent.receipt=desired+'.submission.json';writeFileSync(desired+'.attempt.json',enc(intent));o.prefix=desired;o.initial=rawFiles(desired);
  acceptOwned(emitObjective(f,{existingState:true,rounds:3}));
- assert.equal(f.originalPublications().length,1,'a refused escalation is retried exactly once');assert.equal(f.entries().filter(e=>['notify','drain'].includes(e.argv[0])).length,0);setAside(f,o.initial);
- assert.equal(JSON.parse(readFileSync(o.prefix+'.attempt.json','utf8')).escalation,'same-source-escalation');
+ assert.equal(f.originalPublications().length,1,'a refused escalation is retried exactly once');assert.equal(f.entries().filter(e=>['notify','drain'].includes(e.argv[0])).length,0);
+ const next=retried(f,o),retryIntent=JSON.parse(readFileSync(next+'.attempt.json','utf8'));
+ assert.equal(retryIntent.escalation,'same-source-escalation');assert.equal(retryIntent.retryOf.exit,2);assert.equal(retryIntent.receipt,next+'.submission.json');
 });
 callerCase('CW06','a fresh build batch refused with exit1 records its terminal, queues no DATA, and is retried by the next raise',f=>{
  const prefix=join(f.store,'hand-'+sha(BLOCKER));
  acceptOwned(runBuild(f,`raise_hand ${quote(BLOCKER)}\nraise_hand ${quote(BLOCKER)}`,{extra:{FIXTURE_ORIGINAL_EXIT:'1',FIXTURE_LS_REMOTE:'absent'}}));
  assert.equal(f.originalPublications().length,2,'a refused hand is retried, never consumed');assert.equal(f.repairs().length,0);
  assert.equal(f.entries().filter(e=>e.argv[0]==='request').length,0,'a refused hand needs no repair DATA');
- assert.equal(readFileSync(prefix+'.exit','utf8'),'1\n');assert.ok(existsSync(join(f.store,'refused','hand-'+sha(BLOCKER)+'.refused-1.exit')),'the first attempt is kept aside');
- const retry=JSON.parse(readFileSync(prefix+'.attempt.json','utf8')).retryOf;assert.equal(retry.attempt,'hand-'+sha(BLOCKER));assert.equal(retry.exit,1);assert.equal(retry.setAsideAs,'refused/hand-'+sha(BLOCKER)+'.refused-1');assert.ok(retry.stamp,'the retry chain names its original attempt, exit and stamp');
+ assert.equal(readFileSync(prefix+'.exit','utf8'),'1\n','the original stays in place');const next=join(f.store,successorOf('hand-'+sha(BLOCKER)));
+ assert.equal(readFileSync(next+'.exit','utf8'),'1\n');
+ const retry=JSON.parse(readFileSync(next+'.attempt.json','utf8')).retryOf;assert.equal(retry.attempt,'hand-'+sha(BLOCKER));assert.equal(retry.exit,1);assert.equal(retry.n,1);assert.equal(retry.successor,successorOf('hand-'+sha(BLOCKER)));assert.ok(retry.stamp,'the retry chain names its original attempt, exit and stamp');
+});
+callerCase('CW13','after three retries the fourth refusal holds, queues repair DATA and is capped visibly',f=>{
+ const raise=`raise_hand ${quote(BLOCKER)}\n`;
+ acceptOwned(runBuild(f,raise.repeat(5),{extra:{FIXTURE_ORIGINAL_EXIT:'1',FIXTURE_LS_REMOTE:'absent'}}));
+ assert.equal(f.originalPublications().length,4,'the original plus exactly three retries');
+ const root='hand-'+sha(BLOCKER);assert.equal(readFileSync(join(f.store,'refused',root+'.capped'),'utf8'),'4\n');
+ const head=[root];for(let i=0;i<3;i++)head.push(successorOf(head.at(-1)));
+ assert.ok(f.entries().some(e=>e.argv[0]==='request'&&e.argv[2]==='build'&&e.argv[3]===join(f.store,head.at(-1))),'the capped head queues its repair DATA');
+});
+callerCase('CW14','a retried attempt that already had repair DATA keeps that request valid; the retry gets its own',f=>{
+ const cause=sha(BLOCKER),o=original(f,'build',{exit:1,legacy:true});
+ const desired=join(f.store,'hand-'+cause);for(const suffix of Object.keys(o.initial).filter(n=>n.startsWith(o.prefix.split('/').at(-1)+'.')).map(n=>n.slice(o.prefix.split('/').at(-1).length)))renameSync(o.prefix+suffix,desired+suffix);
+ const prior=JSON.parse(readFileSync(desired+'.attempt.json','utf8'));prior.receipt=desired+'.submission.json';writeFileSync(desired+'.attempt.json',enc(prior));
+ o.prefix=desired;o.initial=rawFiles(desired);const first=request(f,o); // the old policy queued DATA for every nonzero exit
+ acceptOwned(runBuild(f,`raise_hand ${quote(BLOCKER)}`,{extra:{FIXTURE_ORIGINAL_EXIT:'3',FIXTURE_LS_REMOTE:'absent'}}));
+ const next=retried(f,o);assert.equal(readFileSync(next+'.exit','utf8'),'3\n');
+ const again=f.cli(['request',f.root,'build',o.prefix]);assert.equal(again.status,0,'the original request binding is unchanged: '+again.stderr);assert.equal(again.stdout.trim(),first.path);
+ assert.ok(f.entries().some(e=>e.argv[0]==='request'&&e.argv[3]===next),'the exit-3 retry queues its own request');
+ const own=f.cli(['request',f.root,'build',next]);assert.equal(own.status,0,'and that request is valid: '+own.stderr);
+ const text=readFileSync(join(SOURCE,'scripts/mac/lane-tick.sh'),'utf8'),a=text.indexOf('# Resolve once before use_tick_worktree'),b=text.indexOf('# An UNCHANGED tick',a);
+ const script=join(f.parent,'drain-caller.sh');put(script,`set -u\nDRY=0\nREPO_ROOT=${quote(f.root)}\nsay(){ printf '%s\\n' "$1"; }\n${text.slice(a,b)}\nexit 0\n`);
+ for(let i=0;i<2;i++)acceptOwned(spawnSync('/bin/bash',[script],{cwd:f.root,env:f.env,encoding:'utf8'}));
+ const ids=new Set(f.repairs().map(c=>c.ops[0].id));
+ assert.ok(ids.has('repair-build-'+sha('hand-'+cause)),'draining the original request still sends its notice');assert.ok(ids.has('repair-build-'+sha(next.split('/').at(-1))),'the retry request drains too');
 });
 callerCase('CW07','a fresh objective send failure records its actual terminal before the same-ID repair request',f=>{
  const prefix=join(f.store,'objective-'+sha('same-source-escalation'));f.env.FIXTURE_ORIGINAL_EXIT='3';acceptOwned(emitObjective(f,{rounds:2}));
@@ -292,13 +324,14 @@ callerCase('CW10','generic successful readback without exact resolved blob never
 // New independently discovered gap: legacy exit1/2 alone is not a
 // producing-source-bound proof that publication did not occur. Ten minutes, a
 // changed result or a new tick owner cannot clear that original uncertainty.
-for(const [id,status] of [['CW11',1],['CW12',2]])callerCase(id,'legacy missing heartbeat receipt after exit'+status+' remains HELD with DATA instead of a new heartbeat',f=>{
+for(const [id,status] of [['CW11',1],['CW12',2]])callerCase(id,'heartbeat exit'+status+' with no receipt (refused before its push) is sent again once, the original kept in place',f=>{
  const o=original(f,'heartbeat',{exit:status,legacy:true,receipt:false});
  utimesSync(join(f.store,'.sg-last-heartbeat-attempt'),new Date(0),new Date(0));
- acceptOwned(owned(f,heartbeatScript(f,'heartbeat || :\nRESULT="different outcome does not clear missing provenance"\nheartbeat || :')));
- exactRequest(f,o);const records=f.dataRequests();assert.equal(records[0].value.provenance,'UNVERIFIED');
- assert.equal(f.originalPublications().length,0,'legacy exit1/2 and elapsed ten minutes never prove no original publication');
- oneDifferentRepair(f,o);assert.equal(existsSync(o.prefix+'.submission.json'),false,'missing old receipt is never synthesized or adopted');
- assert.equal(readFileSync(join(f.store,'.sg-last-heartbeat-attempt'),'utf8'),o.intent.attempt,'old unknown pointer remains unchanged');
- preserved(o.prefix,o.initial);
+ const r=owned(f,heartbeatScript(f,'heartbeat || :\nRESULT="different outcome"\nheartbeat || :'));acceptOwned(r);
+ assert.equal(f.originalPublications().length,1,'no receipt means no push: exactly one resend');
+ assert.equal(existsSync(o.prefix+'.submission.json'),false,'missing old receipt is never synthesized or adopted');
+ const marker=JSON.parse(readFileSync(join(f.store,'refused',o.prefix.split('/').at(-1)+'.retried'),'utf8'));
+ const now=readFileSync(join(f.store,'.sg-last-heartbeat-attempt'),'utf8');assert.equal('.sg-heartbeat-'+now,marker.successor,'the pointer moves to the resend');
+ const log=readFileSync(join(f.store,marker.successor+'.log'),'utf8');assert.equal(JSON.parse(log.split('\n')[0]).retryOf.attempt,o.prefix.split('/').at(-1));
+ const base=o.prefix.split('/').at(-1);preserved(o.prefix,Object.fromEntries(Object.entries(o.initial).filter(([n])=>n.startsWith(base+'.'))));
 });

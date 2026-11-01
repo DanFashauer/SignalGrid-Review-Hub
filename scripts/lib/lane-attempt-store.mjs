@@ -423,24 +423,98 @@ export function refusedDisposition(root, receiptPath) {
 }
 
 // The one rule for every refused-attempt retry branch (build-tick, objective-loop,
-// lane-repair, pending-heartbeat notice). Only when refusedDisposition proves nothing
-// was published are the attempt's files (all `<name>.*` except a repair request)
-// moved, byte-identical, to refused/<name>.refused-<n>.<suffix> with n the first
-// unused integer: deterministic, no clock or randomness, and link+unlink so an
-// existing name is never overwritten. Returns the retry identity, or null (held).
-export function setAsideRefusedAttempt(root, directory, name, exit) {
+// heartbeat, lane-repair notice, pending-heartbeat notice). A refusal (lane-deliver
+// exit 1/2, or a killed attempt with no exit) is retried only when refusedDisposition
+// proves nothing was published. Two shapes:
+//
+// - An ORIGINAL attempt (hand-*, objective-*, .sg-heartbeat-*) may already have
+//   repair DATA bound to its prefix, so it is never touched. It is marked with
+//   refused/<name>.retried ({ root, n, successor }) and the retry runs under its own
+//   prefix: `successor` names it ("derive" -> <kind>-sha256(<name>:retry), still a
+//   supported lane-repair identity). Callers follow the marker chain to its head.
+// - A NOTICE (a lane-repair or pending-heartbeat notification, `successor` "move")
+//   is consumed by any file under its id, and no repair DATA reads its files, so
+//   its files move byte-identical to refused/<name>.refused-<n>.* (link+unlink:
+//   never overwritten) and the same id is retried.
+//
+// raise-hand's "<id> already exists" (exit 2) means the hand is already on the
+// Hub: { done: true }, never retried. After MAX_REFUSED_RETRIES retries of one
+// cause the next refusal holds instead, visibly (DR-054): refused/<root>.capped
+// records the count, lane-tick's heartbeat RESULT carries `refused:<root> x<n>`,
+// and the caller's held path queues the repair. Deterministic: no clock or randomness.
+export const MAX_REFUSED_RETRIES = 3;
+function attemptText(directory, name) {
+  let text = "";
+  for (const suffix of [".output", ".terminal.json"]) {
+    try { text += readFileSync(join(directory, name + suffix), "utf8").slice(0, 1024 * 1024); } catch { /* absent */ }
+  }
+  return text;
+}
+function retriedMarkers(refused) {
+  const out = [];
+  let names = [];
+  try { names = readdirSync(refused); } catch (error) { if (error.code !== "ENOENT") throw error; }
+  for (const file of names) {
+    if (!file.endsWith(".retried")) continue;
+    out.push({ name: file.slice(0, -".retried".length), ...JSON.parse(readFileSync(join(refused, file), "utf8")) });
+  }
+  return out;
+}
+// The current head of an original attempt's retry chain (itself when never retried).
+export function retryHead(directory, name) {
+  const markers = new Map(retriedMarkers(join(directory, "refused")).map((m) => [m.name, m]));
+  for (let hops = 0; markers.has(name); hops++) {
+    if (hops > MAX_REFUSED_RETRIES + 1) throw Error("retry chain does not terminate");
+    name = markers.get(name).successor;
+  }
+  return name;
+}
+function cap(refused, root, count) {
+  try { writeFileSync(join(refused, root + ".capped"), `${count}\n`, { flag: "wx", mode: 0o600 }); }
+  catch (error) { if (error.code !== "EEXIST") throw error; }
+  return null;
+}
+export function setAsideRefusedAttempt(root, directory, name, exit, successor = "move") {
+  if (String(exit) === "2" && /raise-hand: \S+ already exists/.test(attemptText(directory, name))) return { done: true, attempt: name };
+  // A push terminal means lane-deliver reached its push and Git reported a remote
+  // refusal (a repository rule): resending the same cannot pass. That keeps the
+  // existing readback -> Cloud repair-hand path (LANE_COORDINATION.md L51).
+  try { lstatSync(join(directory, name + ".submission.json.push.json")); return null; }
+  catch (error) { if (error.code !== "ENOENT") throw error; }
   if (refusedDisposition(root, join(directory, name + ".submission.json")) !== "unpublished") return null;
   const refused = join(directory, "refused");
   mkdirSync(refused, { recursive: true, mode: 0o700 });
+  const code = /^[0-9]+$/.test(String(exit)) ? Number(exit) : null;
+  if (successor !== "move") {
+    const markerPath = join(refused, name + ".retried");
+    let existing = null;
+    try { existing = JSON.parse(readFileSync(markerPath, "utf8")); } catch (error) { if (error.code !== "ENOENT") throw error; }
+    // Already marked: if its retry started, the caller follows the chain; if it never
+    // started (killed before its intent), re-point the same retry (no extra count).
+    if (existing && readdirSync(directory).some((file) => file.startsWith(existing.successor + "."))) return null;
+    const prior = existing ?? retriedMarkers(refused).find((m) => m.successor === name);
+    const chainRoot = prior?.root ?? name, n = existing ? existing.n : (prior?.n ?? 0) + 1;
+    if (n > MAX_REFUSED_RETRIES) return cap(refused, chainRoot, n);
+    if (successor === "derive") {
+      const kind = /^(hand|objective)-[a-f0-9]{64}$/.exec(name);
+      if (!kind) throw Error("no derivable retry prefix for " + name);
+      successor = `${kind[1]}-${digest(Buffer.from(name + ":retry"))}`;
+    }
+    const marker = JSON.stringify({ root: chainRoot, n, successor, exit: code }) + "\n";
+    if (existing) { writeFileSync(markerPath + ".next", marker, { mode: 0o600 }); renameSync(markerPath + ".next", markerPath); }
+    else writeFileSync(markerPath, marker, { flag: "wx", mode: 0o600 });
+    return { attempt: name, exit: code, n, successor, retryRoot: chainRoot };
+  }
   const taken = new Set(readdirSync(refused));
   let n = 1;
   while ([...taken].some((file) => file.startsWith(`${name}.refused-${n}.`))) n++;
+  if (n > MAX_REFUSED_RETRIES) return cap(refused, name, n);
   for (const file of readdirSync(directory)) {
     if (!file.startsWith(name + ".") || file.endsWith(".repair-request.json")) continue;
     linkSync(join(directory, file), join(refused, `${name}.refused-${n}${file.slice(name.length)}`));
     unlinkSync(join(directory, file));
   }
-  return { attempt: name, exit: Number(exit), setAsideAs: `refused/${name}.refused-${n}` };
+  return { attempt: name, exit: code, n, setAsideAs: `refused/${name}.refused-${n}` };
 }
 
 let entrypoint;
@@ -456,9 +530,10 @@ if (entrypoint === fileURLToPath(import.meta.url)) {
     // Line 1 is the token; any further lines say what was recovered.
     else if (mode === "tick-acquire" && (args.length === 1 || args.length === 2)) console.log([acquireTick(root, args[0], args[1] ?? null), ...acquireTick.recovered.map((n) => "recovered: " + n)].join("\n"));
     else if (mode === "refused-disposition" && args.length === 1) console.log(refusedDisposition(root, args[0]));
-    else if (mode === "retry-refused" && args.length === 3) console.log(JSON.stringify(setAsideRefusedAttempt(root, ...args)));
+    else if (mode === "retry-refused" && (args.length === 3 || args.length === 4)) console.log(JSON.stringify(setAsideRefusedAttempt(root, ...args)));
+    else if (mode === "retry-head" && args.length === 2) console.log(retryHead(...args));
     else if (mode === "tick-release" && args.length === 3) releaseTick(root, ...args);
-    else throw Error("usage: lane-attempt-store.mjs path|init|ensure|tick-guard <checkout> | tick-acquire <checkout> <shell-pid> [<pgid>] | refused-disposition <checkout> <receipt> | retry-refused <checkout> <records> <attempt-name> <exit> | tick-release <checkout> <token> <shell-pid> <exit-trap-status>");
+    else throw Error("usage: lane-attempt-store.mjs path|init|ensure|tick-guard <checkout> | tick-acquire <checkout> <shell-pid> [<pgid>] | refused-disposition <checkout> <receipt> | retry-refused <checkout> <records> <attempt-name> <exit> [<successor>|derive|move] | retry-head <checkout> <records> <attempt-name> | tick-release <checkout> <token> <shell-pid> <exit-trap-status>");
   } catch (error) {
     console.error(`RAISED HAND: delivery record store unavailable: ${error.message}; READBACK ONLY`);
     process.exitCode = error instanceof TickBusy ? 75 : 1;

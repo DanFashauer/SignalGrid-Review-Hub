@@ -200,6 +200,9 @@ function heartbeatFixture({ age = 30, result = "quiet", dry = false,
   const cache = join(root, "node_modules"), deliveries = join(root, "deliveries"), readbacks = join(root,"readbacks");
   mkdirSync(cache); mkdirSync(join(root, "scripts/mac"), { recursive: true });
   writeFileSync(join(root, "scripts/mac/estate-queue.mjs"), "fixture\n");
+  mkdirSync(join(root, "scripts/lib")); writeFileSync(join(root, "scripts/lib/lane-attempt-store.mjs"), readFileSync(join(ROOT, "scripts/lib/lane-attempt-store.mjs")));
+  // ls-remote answers per FIXTURE_LS_REMOTE (present | absent | anything else: the read fails).
+  mkdirSync(join(root, "bin")); writeFileSync(join(root, "bin/git"), '#!/bin/sh\nif [ "$1" = ls-remote ]; then case "${FIXTURE_LS_REMOTE:-fail}" in present) printf \'0123456789012345678901234567890123456789\\t%s\\n\' "$4"; exit 0;; absent) exit 0;; *) exit 2;; esac; fi\nexec /usr/bin/git "$@"\n', { mode: 0o755 });
   writeFileSync(join(cache, ".sg-last-heartbeat-result"), "quiet");
   const stamp = join(cache, ".sg-last-heartbeat-attempt");
   const aged = new Date(Date.now() - age * 60000);
@@ -232,9 +235,9 @@ function heartbeatFixture({ age = 30, result = "quiet", dry = false,
   const declarations = tick.split("\n").filter((line) => /^(QUIET_HEARTBEAT_MIN|HB_[A-Z_]+|ESTATE_RESULT)=/.test(line)).join("\n");
   const quote = (s) => `'${String(s).replaceAll("'", "'\\''")}'`;
   return { root, runTick(body = "heartbeat") {
-    const script = `set -u\nREPO_ROOT=${quote(root)}\nRECORD_DIR=${quote(cache)}\n${declarations}\nSTAMP=20261030T010000Z\nDRY=${dry ? 1 : 0}\nRESULT=${quote(result)}\nDELIVERY_RC=${deliveryCode}\nESTATE_RC=0\nESTATE_OUTPUT='estate: 0 open ()'\nsay(){ printf '%s\\n' "$1"; }\nappend_unread_state(){ :; }\nappend_raised_hands_state(){ :; }\ngh(){ return 0; }\nnode(){ if [ "$1" = scripts/lane-deliver.mjs ]; then if [ "$2" = readback ]; then printf 'readback\\n' >> "$FIXTURE_READBACK_LOG"; if [ "\${READBACK_RC:-$DELIVERY_RC}" = 0 ]; then printf 'canonical fixture merge verified\\n'; else printf 'original fixture PR still pending or unavailable\\n'; fi; return "\${READBACK_RC:-$DELIVERY_RC}"; fi; printf '%s\\n' "$*" >> ${quote(deliveries)}; for _arg in "$@"; do if [ "\${_want_receipt:-0}" = 1 ]; then printf '{"fixtureSubmission":true}\\n' > "$_arg"; _want_receipt=0; fi; if [ "$_arg" = --receipt ]; then _want_receipt=1; fi; done; printf 'untrusted fixture output: exit_code=0\\n'; return "$DELIVERY_RC"; elif [ "$1" = scripts/mac/estate-queue.mjs ]; then printf '%s\\n' "$ESTATE_OUTPUT"; return "$ESTATE_RC"; else "$FIXTURE_NODE" "$@"; fi; }\n${recordHelper}\n${heartbeat}\nrun_estate(){\n${estate}\n}\n${body}\ntrue\n`;
+    const script = `set -u\nREPO_ROOT=${quote(root)}\nRECORD_DIR=${quote(cache)}\n${declarations}\nSTAMP=20261030T010000Z\nDRY=${dry ? 1 : 0}\nRESULT=${quote(result)}\nDELIVERY_RC=${deliveryCode}\nESTATE_RC=0\nESTATE_OUTPUT='estate: 0 open ()'\nsay(){ printf '%s\\n' "$1"; }\nappend_unread_state(){ :; }\nappend_raised_hands_state(){ :; }\ngh(){ return 0; }\nnode(){ if [ "$1" = scripts/lane-deliver.mjs ]; then if [ "$2" = readback ]; then printf 'readback\\n' >> "$FIXTURE_READBACK_LOG"; if [ "\${READBACK_RC:-$DELIVERY_RC}" = 0 ]; then printf 'canonical fixture merge verified\\n'; else printf 'original fixture PR still pending or unavailable\\n'; fi; return "\${READBACK_RC:-$DELIVERY_RC}"; fi; printf '%s\\n' "$*" >> ${quote(deliveries)}; for _arg in "$@"; do if [ "\${_want_receipt:-0}" = 1 ]; then printf '{"fixtureSubmission":true,"target":"lane/mac-mail-20261030-010000Z-0123456789ab"}\\n' > "$_arg"; _want_receipt=0; fi; if [ "$_arg" = --receipt ]; then _want_receipt=1; fi; done; printf 'untrusted fixture output: exit_code=0\\n'; return "$DELIVERY_RC"; elif [ "$1" = scripts/mac/estate-queue.mjs ]; then printf '%s\\n' "$ESTATE_OUTPUT"; return "$ESTATE_RC"; else "$FIXTURE_NODE" "$@"; fi; }\n${recordHelper}\n${heartbeat}\nrun_estate(){\n${estate}\n}\n${body}\ntrue\n`;
     return spawnSync("/bin/bash", ["-c", script], { cwd: root,
-      env: { PATH: "/usr/bin:/bin", HOME: process.env.HOME, LANG: "C", FIXTURE_NODE:process.execPath, FIXTURE_READBACK_LOG:readbacks }, encoding: "utf8", timeout: 10000 });
+      env: { PATH: join(root, "bin") + ":/usr/bin:/bin", HOME: process.env.HOME, LANG: "C", FIXTURE_NODE:process.execPath, FIXTURE_READBACK_LOG:readbacks }, encoding: "utf8", timeout: 10000 });
   }, deliveries: () => existsSync(deliveries) ? readFileSync(deliveries, "utf8").trim().split("\n") : [], readbacks:()=>existsSync(readbacks)?readFileSync(readbacks,"utf8").trim().split("\n"):[] };
 }
 control("unchanged heartbeat stays quiet for almost two hours", { tick: true, age: 115 }, (f) => {
@@ -262,7 +265,17 @@ control("known failed submission is paced and is not called delivered", { tick: 
   const r = f.runTick("heartbeat\nSTAMP=20261030T010500Z\nRESULT=quiet\nheartbeat");
   assert.equal(r.status, 0, r.stderr); assert.equal(f.deliveries().length, 1); assert.match(r.stdout, /WARN heartbeat submission not confirmed/); assert.doesNotMatch(r.stdout, /heartbeat (submitted|delivered)/);
 });
-for (const priorAttempt of ["unknown", "interrupted", "malformed"]) control(`${priorAttempt} receipt blocks a fresh submission without a quiet inference`, { tick: true, age: 130, priorAttempt, result: "changed: fixture" }, (f) => {
+control("a heartbeat killed before lane-deliver pushed (no .exit, no receipt) is sent again once", { tick: true, age: 130, priorAttempt: "interrupted", result: "changed: fixture" }, (f) => {
+  const r = f.runTick("heartbeat\nSTAMP=20261030T010500Z\nRESULT='changed again'\nheartbeat"); assert.equal(r.status, 0, r.stderr);
+  assert.equal(f.deliveries().length, 2, "one resend, then the next heartbeat follows its own record"); assert.match(r.stdout, /published nothing \(readback\); sending it again/);
+  const cache = join(f.root, "node_modules"), marker = JSON.parse(readFileSync(join(cache, "refused/.sg-heartbeat-20261030T000000Z-999999.retried"), "utf8"));
+  assert.equal(marker.exit, null); assert.ok(existsSync(join(cache, ".sg-heartbeat-20261030T000000Z-999999.log")), "the killed original stays in place");
+});
+control("a cause capped after its retries is named in the heartbeat RESULT", { tick: true, age: 30 }, (f) => {
+  mkdirSync(join(f.root, "node_modules/refused")); writeFileSync(join(f.root, "node_modules/refused/hand-fixture.capped"), "4\n");
+  const r = f.runTick(); assert.equal(r.status, 0, r.stderr); assert.match(f.deliveries()[0] ?? "", /refused:hand-fixture x4/);
+});
+for (const priorAttempt of ["unknown", "malformed"]) control(`${priorAttempt} receipt blocks a fresh submission without a quiet inference`, { tick: true, age: 130, priorAttempt, result: "changed: fixture" }, (f) => {
   const r = f.runTick(); assert.equal(r.status, 0, r.stderr); assert.equal(f.deliveries().length, 0); assert.match(r.stdout, /RAISED HAND/); assert.match(r.stdout, /READBACK ONLY/); assert.doesNotMatch(r.stdout, /heartbeat (submitted|delivered)/);
 });
 control("an unconfirmed submission cannot retry on the next changed tick", { tick: true, age: 130, deliveryCode: 3 }, (f) => {
@@ -298,7 +311,7 @@ function objectiveCaller(rc) {
 import {mkdirSync,readFileSync,readdirSync,rmSync,writeFileSync} from 'node:fs';
 import {dirname,join} from 'node:path';
 import {createHash} from 'node:crypto';
-const deliveryRecordDirectory=()=>${JSON.stringify(join(root,'node_modules'))};\nconst ROOT=${JSON.stringify(root)},STATE_REL='state.json',STAMP_REL='node_modules/.sg-objective-loop-last.json';
+const deliveryRecordDirectory=()=>${JSON.stringify(join(root,'node_modules'))};const retryHead=(_dir,name)=>name,setAsideRefusedAttempt=()=>null; // no refused (1/2) attempts in this fixture\nconst ROOT=${JSON.stringify(root)},STATE_REL='state.json',STAMP_REL='node_modules/.sg-objective-loop-last.json';
 const calls=[];
 function spawnSync(_cmd,args){if(args[0].endsWith('/scripts/lane-deliver.mjs')){calls.push(1);return {status:${rc},stdout:'fixture raw output',stderr:''};}if(args[0].endsWith('/scripts/lib/lane-repair.mjs')&&['repair-status','request'].includes(args[1]))return {status:0,stdout:'fixture DATA only',stderr:''};throw Error('unexpected fixture operation');}
 ${source.slice(start,end)}
@@ -473,7 +486,7 @@ check('pending heartbeat is one chain across primary and linked tick worktree',f
 check('removing both node_modules cannot erase a pending heartbeat fence',f=>{heartbeat(f,f.root);rmSync(join(f.root,'node_modules'),{recursive:true});heartbeat(f,f.root);assert.equal(calls(f),1)});
 for(const purge of [false,true])check('one escalation across '+(purge?'dependency purge':'linked checkouts'),f=>{
  const source=readFileSync(join(ROOT,'scripts/objective-loop.mjs'),'utf8');const a=source.indexOf('function emit(state,'),b=source.indexOf('// ── --check:',a);assert.ok(a>=0&&b>a);
- const harness=join(f.parent,'objective.mjs');writeFileSync(harness,`import {mkdirSync,readFileSync,readdirSync,renameSync,rmSync,writeFileSync} from 'node:fs';import {dirname,join} from 'node:path';import {createHash,randomBytes} from 'node:crypto';import {deliveryRecordDirectory,setAsideRefusedAttempt} from ${JSON.stringify('file://'+join(f.root,'scripts/lib/lane-attempt-store.mjs'))};\nlet ROOT=${JSON.stringify(f.root)};const STATE_REL='state.json',STAMP_REL='node_modules/stamp.json';let calls=0;function spawnSync(_cmd,args){if(args[0].endsWith('/scripts/lane-deliver.mjs')){calls++;return {status:3,stdout:'raw fixture',stderr:''}}if(args[0].endsWith('/scripts/lib/lane-repair.mjs')&&['repair-status','request'].includes(args[1]))return {status:0,stdout:'fixture DATA only',stderr:''};throw Error('unexpected fixture operation')}\n${source.slice(a,b)}\nconst state={decisionAddress:'d',derivedAt:'2026-10-31T01:00:00Z',queue:[],escalations:[{id:'same-source-escalation',clears:'cloud',asks:'repair'}],criteria:[],tasks:[],verdict:'building'};emit(state,{write:true,deliver:true});rmSync(join(ROOT,STATE_REL),{force:true});${purge?"rmSync(join(ROOT,'node_modules'),{recursive:true,force:true});":"ROOT="+JSON.stringify(f.linked)+";"}emit(state,{write:true,deliver:true});console.log(calls);`);
+ const harness=join(f.parent,'objective.mjs');writeFileSync(harness,`import {mkdirSync,readFileSync,readdirSync,renameSync,rmSync,writeFileSync} from 'node:fs';import {dirname,join} from 'node:path';import {createHash,randomBytes} from 'node:crypto';import {deliveryRecordDirectory,retryHead,setAsideRefusedAttempt} from ${JSON.stringify('file://'+join(f.root,'scripts/lib/lane-attempt-store.mjs'))};\nlet ROOT=${JSON.stringify(f.root)};const STATE_REL='state.json',STAMP_REL='node_modules/stamp.json';let calls=0;function spawnSync(_cmd,args){if(args[0].endsWith('/scripts/lane-deliver.mjs')){calls++;return {status:3,stdout:'raw fixture',stderr:''}}if(args[0].endsWith('/scripts/lib/lane-repair.mjs')&&['repair-status','request'].includes(args[1]))return {status:0,stdout:'fixture DATA only',stderr:''};throw Error('unexpected fixture operation')}\n${source.slice(a,b)}\nconst state={decisionAddress:'d',derivedAt:'2026-10-31T01:00:00Z',queue:[],escalations:[{id:'same-source-escalation',clears:'cloud',asks:'repair'}],criteria:[],tasks:[],verdict:'building'};emit(state,{write:true,deliver:true});rmSync(join(ROOT,STATE_REL),{force:true});${purge?"rmSync(join(ROOT,'node_modules'),{recursive:true,force:true});":"ROOT="+JSON.stringify(f.linked)+";"}emit(state,{write:true,deliver:true});console.log(calls);`);
  const r=run(process.execPath,[harness],f.root);assert.equal(r.status,0,r.stderr);assert.equal(Number(r.stdout.trim()),1);
 });
 
@@ -763,9 +776,9 @@ function handEpisodes(steps){
  mkdirSync(records);mkdirSync(cache);mkdirSync(join(root,'scripts/lib'),{recursive:true});
  writeFileSync(join(root,'scripts/lib/lane-attempt-store.mjs'),readFileSync(join(ROOT,'scripts/lib/lane-attempt-store.mjs'))); // shared refused-retry rule
  const source=readFileSync(join(ROOT,'scripts/mac/build-tick.sh'),'utf8'),start=source.indexOf('raise_hand() {'),end=source.indexOf('\nfail() {',start);assert.ok(start>=0&&end>start);
- writeFileSync(join(root,'scripts/lane-deliver.mjs'),`import fs from 'node:fs';\nconst a=process.argv.slice(2),calls=${JSON.stringify(calls)};\nif(a[0]==='batch'){const ops=JSON.parse(fs.readFileSync(a[1],'utf8'));let before=[];try{before=fs.readFileSync(calls,'utf8').trim().split('\\n').filter(Boolean).map(JSON.parse)}catch{};fs.appendFileSync(calls,JSON.stringify(ops[0])+'\\n');const receipt=a[a.indexOf('--receipt')+1];if(!['1','2'].includes(process.env.DELIVERY_RC))fs.writeFileSync(receipt,JSON.stringify({episode:before.length,id:ops[0].id}));console.log('fixture batch accepted; pending');process.exit(Number(process.env.DELIVERY_RC));}\nif(a[0]==='readback'){const r=JSON.parse(fs.readFileSync(a[1],'utf8'));if(a[a.indexOf('--resolved-hand')+1]!==r.id)process.exit(2);const p=process.env.PHASE;if(p==='bad'){console.log('unbound marker');process.exit(0)}if(p==='open')process.exit(3);if(p==='collide'||p==='clear0'&&r.episode===0||p==='clear1'&&r.episode<2){console.log('resolved hand '+(p==='collide'||r.episode===0?'a':'b').repeat(40));process.exit(0)}process.exit(4)}process.exit(2);`);
+ writeFileSync(join(root,'scripts/lane-deliver.mjs'),`import fs from 'node:fs';\nconst a=process.argv.slice(2),calls=${JSON.stringify(calls)};\nif(a[0]==='batch'){const ops=JSON.parse(fs.readFileSync(a[1],'utf8'));let before=[];try{before=fs.readFileSync(calls,'utf8').trim().split('\\n').filter(Boolean).map(JSON.parse)}catch{};fs.appendFileSync(calls,JSON.stringify(ops[0])+'\\n');if(process.env.DELIVERY_EXISTS)console.error('raise refused:\\nraise-hand: '+ops[0].id+' already exists — pass --id, or --take / --resolve the existing one');const receipt=a[a.indexOf('--receipt')+1];if(!['1','2'].includes(process.env.DELIVERY_RC))fs.writeFileSync(receipt,JSON.stringify({episode:before.length,id:ops[0].id}));console.log('fixture batch accepted; pending');process.exit(Number(process.env.DELIVERY_RC));}\nif(a[0]==='readback'){const r=JSON.parse(fs.readFileSync(a[1],'utf8'));if(a[a.indexOf('--resolved-hand')+1]!==r.id)process.exit(2);const p=process.env.PHASE;if(p==='bad'){console.log('unbound marker');process.exit(0)}if(p==='open')process.exit(3);if(p==='collide'||p==='clear0'&&r.episode===0||p==='clear1'&&r.episode<2){console.log('resolved hand '+(p==='collide'||r.episode===0?'a':'b').repeat(40));process.exit(0)}process.exit(4)}process.exit(2);`);
  const q=s=>"'"+s.replaceAll("'","'\\''")+"'";
- const actions=steps.map((step,i)=>`export DELIVERY_RC=${step.code??0} PHASE=${q(step.phase)}\nSTAMP=202610${i<1?'30':'31'}T010000Z\n${step.missing?'rm -f "$RECORDS"/*.exit\n':''}raise_hand 'same source-backed fixture blocker'`).join('\n');
+ const actions=steps.map((step,i)=>`export DELIVERY_RC=${step.code??0} PHASE=${q(step.phase)} DELIVERY_EXISTS=${step.exists?1:''}\nSTAMP=202610${i<1?'30':'31'}T010000Z\n${step.missing?'rm -f "$RECORDS"/*.exit\n':''}raise_hand 'same source-backed fixture blocker'`).join('\n');
  const script=`set -u\nDRY=0\nCACHE="$CACHE_PATH"\nREPO_ROOT="$FIXTURE_ROOT"\nRUN_LOG="$FIXTURE_ROOT/run.log"\nsay(){ printf '%s\\n' "$1"; }\nnode(){ if [ "$1" = "$REPO_ROOT/scripts/lib/lane-attempt-store.mjs" ]; then printf '%s\\n' "$RECORDS"; else "$FIXTURE_NODE" "$@"; fi; }\n${source.slice(start,end)}\n${actions}\ntrue\n`;
  try {const r=spawnSync('/bin/bash',['-c',script],{cwd:root,env:{PATH:'/usr/bin:/bin',HOME: process.env.HOME,FIXTURE_ROOT:root,FIXTURE_NODE:process.execPath,CACHE_PATH:cache,RECORDS:records},encoding:'utf8',timeout:10000});assert.equal(r.status,0,r.stderr);const sent=readFileSync(calls,'utf8').trim().split('\n').map(JSON.parse);return {sent,stdout:r.stdout};}
  finally{rmSync(root,{recursive:true,force:true});}
@@ -781,6 +794,7 @@ const cases=[
  ['repeating a clear token cannot loop or create a third hand',[{phase:'pending'},{phase:'collide'},{phase:'collide'}],2],
 ];
 try{const r=handEpisodes([{phase:'pending',code:1},{phase:'pending'}]);assert.equal(r.sent.length,2,'a refused (exit 1) hand is retried, never consumed');assert.equal(r.sent[0].id,r.sent[1].id);passed++;console.log('PASS a refused hand (exit 1) is retried by the next raise')}catch(e){failed++;console.error('FAIL a refused hand (exit 1) is retried by the next raise: '+e.message)}
+try{const r=handEpisodes([{phase:'pending',code:2,exists:true},{phase:'pending'},{phase:'pending'}]);assert.equal(r.sent.length,1,'an existing hand id is done, never retried');assert.match(r.stdout,/already on the Hub/);passed++;console.log('PASS raise-hand "already exists" (exit 2) is done, not retried')}catch(e){failed++;console.error('FAIL raise-hand "already exists" (exit 2) is done, not retried: '+e.message)}
 for(const [label,steps,count]of cases){try{const r=handEpisodes(steps);assert.equal(r.sent.length,count);if(count>1){assert.equal(new Set(r.sent.map(x=>x.id)).size,count);assert.ok(r.sent.every(x=>/^build-[a-f0-9]{64}$/.test(x.id)));}assert.doesNotMatch(r.stdout,/hand delivered/);passed++;console.log('PASS '+label)}catch(e){failed++;console.error('FAIL '+label+': '+e.message)}}
 }
 
@@ -821,17 +835,25 @@ control("already-loaded legacy Bash cannot publish after canonical JS advances",
 
 
 // Publication-boundary receipts survive refused push/cleanup exit statuses.
-for(const code of [1,2])control(`exit${code} with a durable submission receipt never starts another heartbeat`,{tick:true,age:130,deliveryCode:code},f=>{
+for(const code of [1,2])control(`exit${code} with a receipt whose ref is on origin is read back, never resent`,{tick:true,age:130,deliveryCode:code},f=>{
  const first=f.runTick();assert.equal(first.status,0,first.stderr);assert.equal(f.deliveries().length,1);
  const cache=join(f.root,"node_modules"),attempt=readFileSync(join(cache,".sg-last-heartbeat-attempt"),"utf8").trim();
  const names=[".sg-last-heartbeat-attempt",".sg-last-heartbeat-result",...readdirSync(cache).filter(n=>n.startsWith(`.sg-heartbeat-${attempt}.`))];
  if (names.length < 5) throw Error("snapshot omitted original heartbeat evidence");
  const before=names.map(n=>[n,readFileSync(join(cache,n))]);
- const second=f.runTick("RESULT='different current observation'\nREADBACK_RC=3\nheartbeat");
- assert.equal(second.status,0,second.stderr);assert.equal(f.deliveries().length,1,"the original publication boundary forbids a new topic");
+ const second=f.runTick("export FIXTURE_LS_REMOTE=present\nRESULT='different current observation'\nREADBACK_RC=3\nheartbeat");
+ assert.equal(second.status,0,second.stderr);assert.equal(f.deliveries().length,1,"a published original is never resent");
  assert.equal(f.readbacks().length,1,"only original GET-only readback is allowed");assert.match(second.stdout,/READBACK ONLY/);
  for(const[name,raw]of before)assert.deepEqual(readFileSync(join(cache,name)),raw,"original parent/receipt evidence changed");
- assert.equal(readdirSync(cache).filter(n=>n.startsWith(".sg-heartbeat-")).length,names.length-2);
+});
+for(const code of [1,2])control(`exit${code} with a receipt whose ref is absent on origin is resent once`,{tick:true,age:130,deliveryCode:code},f=>{
+ const first=f.runTick();assert.equal(first.status,0,first.stderr);assert.equal(f.deliveries().length,1);
+ const cache=join(f.root,"node_modules"),attempt=readFileSync(join(cache,".sg-last-heartbeat-attempt"),"utf8").trim();
+ const own=readdirSync(cache).filter(n=>n.startsWith(`.sg-heartbeat-${attempt}.`)),before=own.map(n=>[n,readFileSync(join(cache,n))]);
+ const second=f.runTick("export FIXTURE_LS_REMOTE=absent\nRESULT='different current observation'\nREADBACK_RC=3\nheartbeat");
+ assert.equal(second.status,0,second.stderr);assert.equal(f.deliveries().length,2,"nothing published: exactly one resend");assert.equal(f.readbacks().length,0);
+ for(const[name,raw]of before)assert.deepEqual(readFileSync(join(cache,name)),raw,"the original stays in place, byte-identical");
+ assert.equal(JSON.parse(readFileSync(join(cache,`refused/.sg-heartbeat-${attempt}.retried`),"utf8")).exit,code);
 });
 for(const damage of ["partial","symlink"])control(`${damage} receipt after exit1 stays held without a fresh observation`,{tick:true,age:130,priorAttempt:"unknown",result:"different observation"},f=>{
  const cache=join(f.root,"node_modules"),stem=join(cache,".sg-heartbeat-20261030T000000Z-999999"),receipt=stem+".submission.json";
@@ -874,13 +896,18 @@ for(const item of [
   const tick=readFileSync(join(ROOT,'scripts/mac/lane-tick.sh'),'utf8'),a=tick.indexOf('# ── a. sync'),b=tick.indexOf('if [ -n "$(git status --porcelain)" ]',a);
   assert.ok(a>=0&&b>a,'actual sync block must be present');
   const childPid=join(root,'child.pid');
-  mkdirSync(join(root,'bin'));writeFileSync(join(root,'bin/git'),'#!/bin/sh\nsleep 300 &\necho $! > "$FIXTURE_CHILD_PID"\nwait\n',{mode:0o755});
-  const script=`set -u\nsay(){ printf '%s\\n' "$1"; }\nheartbeat(){ printf 'HEARTBEAT %s\\n' "$RESULT"; }\n${tick.slice(a,b)}\necho NOT_REACHED\n`;
-  const began=Date.now(),r=spawnSync('/bin/bash',['-c',script],{cwd:root,encoding:'utf8',timeout:15000,env:{PATH:join(root,'bin')+':/usr/bin:/bin',SIGNALGRID_TICK_FETCH_TIMEOUT_SEC:'1',FIXTURE_CHILD_PID:childPid}});
+  const fd8=join(root,'fd8'),guard=join(root,'tick.guard');writeFileSync(guard,'guard\n');
+  mkdirSync(join(root,'bin'));writeFileSync(join(root,'bin/git'),'#!/bin/sh\nif { : >&8; } 2>/dev/null; then echo HELD > "$FIXTURE_FD8"; else echo CLOSED > "$FIXTURE_FD8"; fi\nsleep 300 &\necho $! > "$FIXTURE_CHILD_PID"\nwait\n',{mode:0o755});
+  // The script holds the guard's kernel lock on FD8, as the real tick does.
+  const script=`set -u\nexec 8<'${guard}'\nperl -MFcntl=:flock -e 'open(my $l,"<&=8") or exit 2; flock($l,LOCK_EX|LOCK_NB) or exit 3'\nsay(){ printf '%s\\n' "$1"; }\nheartbeat(){ printf 'HEARTBEAT %s\\n' "$RESULT"; }\n${tick.slice(a,b)}\necho NOT_REACHED\n`;
+  const began=Date.now(),r=spawnSync('/bin/bash',['-c',script],{cwd:root,encoding:'utf8',timeout:15000,env:{PATH:join(root,'bin')+':/usr/bin:/bin',SIGNALGRID_TICK_FETCH_TIMEOUT_SEC:'1',FIXTURE_CHILD_PID:childPid,FIXTURE_FD8:fd8}});
   assert.equal(r.status,0,'the tick must not hang on fetch: '+(r.error?.code??r.stderr));assert.match(r.stdout,/HEARTBEAT skipped: origin unreachable/);assert.ok(Date.now()-began<10000);
   const pid=Number(readFileSync(childPid,'utf8'));assert.ok(pid>0);let gone=false;
   for(let i=0;i<40&&!gone;i++){try{process.kill(pid,0);spawnSync('/bin/sleep',['0.1']);}catch(e){gone=e.code==='ESRCH';if(!gone)throw e;}}
   assert.ok(gone,'a child the timed-out fetch spawned must be killed with its process group');
+  assert.equal(readFileSync(fd8,'utf8').trim(),'CLOSED','the fetch and its helpers never inherit the tick guard FD8');
+  const next=spawnSync('/usr/bin/perl',['-MFcntl=:flock','-e','open(my $f,"<",$ARGV[0]) or exit 2; exit(flock($f,LOCK_EX|LOCK_NB)?0:75)',guard],{encoding:'utf8'});
+  assert.equal(next.status,0,'the next tick is not reported busy after the timeout');
   passed++;console.log('PASS a hung git fetch times out, its whole process group dies, and the tick still heartbeats');
  } catch(e){failed++;console.error('FAIL a hung git fetch times out and the tick still heartbeats: '+e.message);}
  finally{rmSync(root,{recursive:true,force:true});}

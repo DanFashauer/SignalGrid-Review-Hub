@@ -77,8 +77,9 @@ STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 LOG_PREFIX="lane-tick $STAMP"
 say() { printf '%s  %s\n' "$LOG_PREFIX" "$1"; }
 
-# Resolve once before use_tick_worktree can change cwd. A missing store is initialized
-# and a damaged one is renamed aside and replaced (`ensure`): the tick never waits on a person.
+# Resolve once before use_tick_worktree can change cwd. `ensure` initializes a store only
+# when both its directory and marker are absent; a damaged or marker-less store holds
+# and the error names its path. Nothing is renamed or reset automatically.
 RECORD_DIR="$(node "$REPO_ROOT/scripts/lib/lane-attempt-store.mjs" ensure "$REPO_ROOT")" || exit 1
 
 # ── one tick at a time ───────────────────────────────────────────────────────
@@ -122,7 +123,7 @@ sg_tick_guard_cleanup() {
       [ "$_tick_exit" != "0" ] || _tick_exit=1
     fi
   else
-    say "tick interrupted; the next tick records it ABANDONED and recovers the slot"
+    say "tick interrupted; original OPEN ownership remains held until the next tick records it ABANDONED and recovers the slot"
   fi
   # Never unlink a shared guard or another owner's pathname.
   exec 8<&-
@@ -163,7 +164,7 @@ ESTATE_RESULT="$RECORD_DIR/.sg-estate-result"
 tick_record() {
   node - "$@" <<'JS'
 const fs = require("node:fs");
-const [mode, a, b, c, d, e] = process.argv.slice(2);
+const [mode, a, b, c, d, e, f] = process.argv.slice(2);
 function check(fd) {
   const info = fs.fstatSync(fd);
   if (!info.isFile() || info.nlink !== 1) throw Error("owned regular record required");
@@ -177,7 +178,7 @@ function write(path, data, exclusive = false) {
   } finally { fs.closeSync(fd); }
 }
 if (mode === "prepare") {
-  write(a, JSON.stringify({attempt:b,result:c}) + "\n", true);
+  write(a, JSON.stringify({attempt:b,result:c,...(f ? {retryOf:JSON.parse(f)} : {})}) + "\n", true);
   write(d, b); write(e, c);
 } else {
   const code = Number(b);
@@ -248,6 +249,11 @@ append_raised_hands_state() {
 
 heartbeat() {
   if [ -n "${TICK_RECOVERED:-}" ]; then RESULT="$RESULT; recovered: $TICK_RECOVERED"; fi
+  # A cause refused past its retry cap is held; say so on every heartbeat (DR-054).
+  for _hb_cap in "$RECORD_DIR"/refused/*.capped; do
+    [ -f "$_hb_cap" ] || continue
+    RESULT="$RESULT; refused:$(basename "$_hb_cap" .capped) x$(tr -cd '0-9' < "$_hb_cap")"
+  done
   append_unread_state
   append_raised_hands_state
   # Retain an estate failure until a later actual success. Successful PR counts
@@ -401,9 +407,14 @@ heartbeat() {
       const terminal = JSON.parse(read(files.terminal).toString("utf8"));
       if (!Number.isInteger(terminal.status) || terminal.status < 0 || terminal.status > 255 || terminal.signal !== null || terminal.error !== null) throw Error("notification parent terminal unknown");
       // Exit 1/2 is retried only when a readback proves nothing was published.
-      if ((terminal.status === 1 || terminal.status === 2) && typeof setAsideRefusedAttempt === "function" &&
-          (retryOf = setAsideRefusedAttempt(repo, records, id, terminal.status))) {
-        retryOf.stamp = new Date().toISOString();
+      // A notice is retried under its same id (shared rule, "move" shape).
+      const retry = (terminal.status === 1 || terminal.status === 2) && typeof setAsideRefusedAttempt === "function" ?
+        setAsideRefusedAttempt(repo, records, id, terminal.status, "move") : null;
+      if (retry?.setAsideAs) {
+        retryOf = { ...retry, stamp: new Date().toISOString() };
+      } else if (retry?.done) {
+        console.log("pending heartbeat notification already on the Hub (existing id); nothing to retry");
+        process.exit(0);
       } else {
         read(files.receipt);
         console.log("pending heartbeat notification was already attempted; READBACK ONLY, no new hand");
@@ -442,6 +453,8 @@ JS
 
   _hb_window="$QUIET_HEARTBEAT_MIN"
   _hb_submission=""
+  _hb_attempt="${STAMP}-$$"
+  _hb_retry=""
   # An independent parent-written terminal, not child output or a PID check,
   # closes an attempt. Unknown/interrupted mutations remain readback-only.
   if [ -e "$HB_LAST_ATTEMPT" ] || [ -L "$HB_LAST_ATTEMPT" ]; then
@@ -451,10 +464,32 @@ JS
     fi
     _hb_previous_log="$RECORD_DIR/.sg-heartbeat-${_hb_previous}.log"
     _hb_previous_exit="$RECORD_DIR/.sg-heartbeat-${_hb_previous}.exit"
-    if [ ! -f "$_hb_previous_log" ] || [ -L "$_hb_previous_log" ] || [ ! -f "$_hb_previous_exit" ] || [ -L "$_hb_previous_exit" ]; then
+    _hb_previous_receipt="$RECORD_DIR/.sg-heartbeat-${_hb_previous}.submission.json"
+    # Heartbeats follow the hands' rule: killed (no .exit) or refused (exit 1/2) is
+    # sent again only when the shared readback proves nothing was published (no
+    # receipt: killed before its push; receipt: its target ref absent on origin).
+    # The original stays in place; the new attempt names it in retryOf.
+    _hb_previous_status=""
+    [ -f "$_hb_previous_exit" ] && [ ! -L "$_hb_previous_exit" ] && _hb_previous_status="$(cat "$_hb_previous_exit" 2>/dev/null)"
+    if [ -f "$_hb_previous_log" ] && [ ! -L "$_hb_previous_log" ] && [ ! -L "$_hb_previous_exit" ] && [ ! -L "$_hb_previous_receipt" ]; then
+      case "$_hb_previous_status" in
+        ""|1|2)
+          _hb_retry="$(node scripts/lib/lane-attempt-store.mjs retry-refused "$(pwd -P)" "$RECORD_DIR" ".sg-heartbeat-${_hb_previous}" "${_hb_previous_status:-none}" ".sg-heartbeat-${_hb_attempt}" 2>/dev/null)" || _hb_retry=""
+          case "$_hb_retry" in *'"successor"'*) ;; *) _hb_retry="" ;; esac ;;
+      esac
+    fi
+    # Killed after its push (receipt names a ref now on origin): read it back like exit 3.
+    if [ -z "$_hb_retry" ] && [ -z "$_hb_previous_status" ] && [ -f "$_hb_previous_receipt" ] &&
+       [ "$(node scripts/lib/lane-attempt-store.mjs refused-disposition "$(pwd -P)" "$_hb_previous_receipt" 2>/dev/null)" = published ]; then
+      _hb_previous_status=3
+    fi
+  fi
+  if [ -n "$_hb_retry" ]; then
+    say "heartbeat ${_hb_previous} published nothing (readback); sending it again"
+  elif [ -e "$HB_LAST_ATTEMPT" ] || [ -L "$HB_LAST_ATTEMPT" ]; then
+    if [ ! -f "$_hb_previous_log" ] || [ -L "$_hb_previous_log" ] || [ -z "$_hb_previous_status" ]; then
       _hb_hold "unfinished heartbeat receipt"; return 1
     fi
-    _hb_previous_status="$(cat "$_hb_previous_exit" 2>/dev/null)"
     case "$_hb_previous_status" in
       0|1|2|3|4) ;;
       *) _hb_hold "invalid independent heartbeat terminal"; return 1 ;;
@@ -481,7 +516,7 @@ JS
   # `cat` comparison are BSD/bash-3.2 safe; a missing result file compares unequal.
   LAST_RESULT=""
   [ -f "$HB_LAST_RESULT" ] && LAST_RESULT="$(cat "$HB_LAST_RESULT" 2>/dev/null)"
-  if [ "$RESULT" = "$LAST_RESULT" ] && [ -f "$HB_LAST_ATTEMPT" ] && [ -n "$(find "$HB_LAST_ATTEMPT" -mmin -"$_hb_window" 2>/dev/null)" ]; then
+  if [ -z "$_hb_retry" ] && [ "$RESULT" = "$LAST_RESULT" ] && [ -f "$HB_LAST_ATTEMPT" ] && [ -n "$(find "$HB_LAST_ATTEMPT" -mmin -"$_hb_window" 2>/dev/null)" ]; then
     say "unchanged ($RESULT), last submission attempt <${_hb_window}m ago — no new mail PR; original submission not rechecked"
     return 0
   fi
@@ -513,9 +548,8 @@ JS
   # Sync the intent before calling a mutating child, and its independent terminal
   # afterwards. Existing receipts remain immutable; no automatic unknown override.
 
-  _hb_attempt="${STAMP}-$$"
   _hb_log="$RECORD_DIR/.sg-heartbeat-${_hb_attempt}.log"
-  if ! tick_record prepare "$_hb_log" "$_hb_attempt" "$RESULT" "$HB_LAST_ATTEMPT" "$HB_LAST_RESULT"; then
+  if ! tick_record prepare "$_hb_log" "$_hb_attempt" "$RESULT" "$HB_LAST_ATTEMPT" "$HB_LAST_RESULT" ${_hb_retry:+"$_hb_retry"}; then
     say "WARN could not preserve heartbeat intent; no submission"; return 1
   fi
   if node scripts/lane-deliver.mjs heartbeat mac-lane-tick "$RESULT" --no-wake --receipt "$RECORD_DIR/.sg-heartbeat-${_hb_attempt}.submission.json" >>"$_hb_log" 2>&1; then
@@ -580,7 +614,8 @@ sg_run_bounded() {
     alarm $limit; waitpid($pid, 0); my $status = $?; alarm 0;
     exit(($status & 127) ? 128 + ($status & 127) : $status >> 8);' "$@"
 }
-if ! sg_run_bounded "${SIGNALGRID_TICK_FETCH_TIMEOUT_SEC:-120}" git fetch origin --prune >/dev/null 2>&1; then
+# 8<&-: the tick guard (FD8) never leaks into git, ssh or credential helpers.
+if ! sg_run_bounded "${SIGNALGRID_TICK_FETCH_TIMEOUT_SEC:-120}" git fetch origin --prune >/dev/null 2>&1 8<&-; then
   RESULT="skipped: origin unreachable (offline?)"
   say "$RESULT"
   heartbeat

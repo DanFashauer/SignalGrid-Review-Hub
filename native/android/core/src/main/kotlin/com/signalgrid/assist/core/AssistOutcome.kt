@@ -80,10 +80,18 @@ enum class Assist {
          * a challenge and therefore a route to proceeding, where DENY offers none.
          * Guessing a route forward from a misspelling is the exact thing the comment
          * above forbids. Found by the shared conformance vectors.
+         *
+         * ASCII WHITESPACE ONLY is trimmed (space, tab, LF, FF, CR — the set Rust's
+         * `is_ascii_whitespace` names). Kotlin's `trim()`/`isBlank()` use
+         * `Char.isWhitespace`, which strips NBSP, U+3000 and U+001C–U+001F, so an `allow`
+         * padded with U+001C proceeded here while Rust and Swift denied it. Anything
+         * that is not a known outcome after the ASCII trim is DENY in every client.
          */
         fun parse(raw: String?): Assist? {
-            if (raw == null || raw.isBlank()) return null
-            return when (raw.trim().lowercase()) {
+            if (raw == null) return null
+            val trimmed = raw.trim(::isAsciiWhitespace)
+            if (trimmed.isEmpty()) return null
+            return when (trimmed.lowercase()) {
                 "allow" -> ALLOW
                 "step_up" -> STEP_UP
                 "restrict" -> RESTRICT
@@ -91,6 +99,9 @@ enum class Assist {
                 else -> DENY
             }
         }
+
+        private fun isAsciiWhitespace(c: Char): Boolean =
+            c == ' ' || c == '\t' || c == '\n' || c == '\u000C' || c == '\r'
     }
 }
 

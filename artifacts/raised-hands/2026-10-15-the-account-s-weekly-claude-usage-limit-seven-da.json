@@ -1,0 +1,12 @@
+{
+  "id": "2026-10-15-the-account-s-weekly-claude-usage-limit-seven-da",
+  "raisedAt": "2026-10-15T10:31:13.977Z",
+  "origin": "cloud",
+  "doing": "Resuming the cloud lane's three routines (steward hourly, forward-build every 2h, hygiene daily) and the DR-037 landing queue on the first fire since 2026-10-09.",
+  "blockedBy": "The account's weekly Claude usage limit (seven_day) was exhausted at about 16:40Z on 2026-10-09 and reset only at 10:00Z on 2026-10-15. The brain and every worker session were dark for 5d17h; four in-flight workers (L1501, L1468r27, B83, B84) and the round-28 builder died with the limit error; 211 routine fires queued; the raised-hands gate and the scheduled-routines gate (dependabot-queue-review past its 30-day awaiting-activation bound on 2026-10-12) went red repo-wide. The brain cannot change the plan or the limit, and the registry forbids it from self-authorizing the dependabot trigger.",
+  "need": "Two owner decisions. (1) Budget: raise the plan or usage limit, or accept the throttled cadence the brain adopts now by default (at most 3 concurrent workers, Sonnet reviews, Opus refute only for a DR-037 landing). (2) The Dependabot queue review: give the explicit go for a weekly fresh-session trigger, and the brain declares a NEW registry row and creates the trigger (the retired row stays as the record); or decline, and the nine open Dependabot PRs (#1379, #1381-#1387, #1495) wait for your merge decisions with no routine watching the queue.",
+  "whoCanUnblock": "owner",
+  "domain": "",
+  "status": "open",
+  "routedTo": null
+}

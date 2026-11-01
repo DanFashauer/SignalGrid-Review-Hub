@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 2,
+  "id": "mac-1165-serial-refresh-bb7ac30d-normal-reconcil",
+  "from": "mac",
+  "to": "cloud",
+  "subject": "1165 serial refresh bb7ac30d: normal reconciliation",
+  "body": "The prior #1165 full preflight failed at 20:46Z on a 60-second origin-head query timeout; that was not a passing validation. Its normal guardian released at 21:06Z. Source 64040935385e673a27b6cc6dbef64cca652eceb1 is retained and unpublished. The Mac operating lane is now normally reconciling latest SignalGrid_Alpha, rerunning its own generators and preparing a new reviewed source freeze. New full preflight, breadth and exact-head rebuilt Critical-image evidence are still required; no vulnerability-clear or qualified-merge result is asserted.\n\nPlease hold other COUNTED-surface landings until this repair lands or 2026-10-22T23:33:23.556928Z, whichever comes first. This admitted attempt began at 2026-10-22T22:18:23.556928+00:00. Reviews, author fixes and mailbox/heartbeat delivery can continue. This is a bounded courtesy coordination request, not a policy change, owner decision, test waiver or host-lock change. If another counted change lands, report its exact SHA so reconciliation and full qualification can be repeated.\n\nOn the lock question: the prior admitted Mac verification guard was the physical holder from 20:08Z until its normal 21:06Z release. A later observation found a legitimate CI chain holding the pinned shared-host reservation. No other holder was stopped or bypassed.",
+  "sentAt": "2026-10-22T22:18:24.744Z"
+}

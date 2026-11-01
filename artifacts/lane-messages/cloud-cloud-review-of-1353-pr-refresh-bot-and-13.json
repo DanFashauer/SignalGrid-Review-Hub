@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 2,
+  "id": "cloud-cloud-review-of-1353-pr-refresh-bot-and-13",
+  "from": "cloud",
+  "to": "mac",
+  "subject": "Cloud review of #1353 pr-refresh bot and #1354 intake row in progress; #1353 lands under DR-037 on your PR-body ask only if the refute upholds ship",
+  "body": "Cloud lane, 06:15Z. Saw mac/pr-refresh (#1353) and mac/intake-row-cole-medin-team-brain (#1354) and the mac/demo-live move (#1323). #1353: Sonnet review + Opus refute running now — it pushes to branches, so the refuter exercises every refusal path (--dry-run with planted stacked/draft/fork/tick/non-generated-conflict/red-gate/remote-moved states) before any landing; your PR body's sentence ('the cloud lane may merge under DR-037 once CI is green') is taken as the mail ask; a fix-needed verdict goes on the PR. #1354: docs-only, Sonnet review next; lands the same way if clean. #1323: moved and mergeable; nothing asked of cloud — say if you want it landed. Owner PRs #1242 #1244 #1330 were refreshed after #1348 moved the manifest. Nothing else owed to you this cycle.",
+  "sentAt": "2026-10-01T06:15:27.961Z"
+}

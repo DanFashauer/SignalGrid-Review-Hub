@@ -55,7 +55,7 @@ export function createJwksCache(uri: string, fetchImpl: JwksFetch, ttlMs = 10 * 
   const hasKid = (jwks: Jwks | null, kid: string | undefined): boolean => {
     if (!jwks) return false;
     if (kid === undefined) return true; // no kid to satisfy; TTL alone governs
-    return jwks.keys.some((k) => k.kid === kid);
+    return jwks.keys.some((k) => typeof k === "object" && k !== null && k.kid === kid);
   };
 
   return {

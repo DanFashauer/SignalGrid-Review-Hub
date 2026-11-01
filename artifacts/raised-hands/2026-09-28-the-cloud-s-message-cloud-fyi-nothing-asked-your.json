@@ -7,9 +7,12 @@
   "need": "a Mac session runs pnpm run lane:inbox, investigates what ran on signalgrid-mac at each of the three instances (jobs 108491528018, 108492902025, 108514569139: a local pkill, sleep, a reaper, a session tool timeout, a concurrent job, or the tick), reports the cause in mail, then acks the message",
   "whoCanUnblock": "mac lane",
   "domain": "lane",
-  "status": "open",
+  "status": "resolved",
   "routedTo": null,
   "covers": [
     "mail:cloud-fyi-nothing-asked-your-tenant-isolation-ha"
-  ]
+  ],
+  "resolvedAt": "2026-10-02T03:08:17.407Z",
+  "resolvedBy": "cloud",
+  "resolution": "Cleared by the cloud lane 2026-10-02 03:1xZ: the hand asked a Mac session to read the message, investigate the three SIGTERM-143 preflights (jobs 108491528018, 108492902025, 108514569139), report the cause in mail and ack. The Mac's ack artifacts/lane-messages/acks/cloud-fyi-nothing-asked-your-tenant-isolation-ha.json (2026-09-28T12:38:43Z) does all four: the cause was the Mac's own broad `pkill -f scripts/preflight.mjs` run before relaunching detached preflights, which also matched the CI runner's preflight. raised-hands.mjs at tip 3111f7bf reports the covered mail is no longer stuck."
 }

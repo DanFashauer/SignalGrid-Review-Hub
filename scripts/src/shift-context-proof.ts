@@ -154,6 +154,23 @@ check("an ASSERTED instant we cannot read ('this morning') is malformed — an a
 check("a shift window that ENDS BEFORE IT STARTS is a wire contradiction → malformed",
   normalizeShiftReport("j3", clean({ shift_start: "2026-07-31T19:00:00Z", shift_end: "2026-07-31T07:00:00Z" }),
     { deviceSite: SITE, referenceTime: REF }).reportIntegrity === "malformed");
+// Each check below isolates ONE brace-less guard the mutation sweep reaches
+// (`oneLine: true`): it fails when that guard alone is replaced by `if (false)`.
+let nonStringPunchThrew = false;
+try {
+  const numericPunch = normalizeShiftReport("np", clean({ punch_status: 7 as unknown as string }), { deviceSite: SITE, referenceTime: REF });
+  check("a NON-STRING punch status (a number) is an assertion we cannot read → malformed, punch unknown",
+    numericPunch.reportIntegrity === "malformed" && numericPunch.punchStatus === "unknown");
+} catch { nonStringPunchThrew = true; }
+check("...and it is judged, not thrown out of the normalizer as a TypeError", nonStringPunchThrew === false);
+const localTimeStart = normalizeShiftReport("lt", clean({ shift_start: "2026-07-31T07:00:00" }), { deviceSite: SITE, referenceTime: REF });
+check("a shift start WITHOUT its Zulu marker is a parseable-but-ambiguous local time → malformed and not carried — only the strict UTC form is an instant",
+  localTimeStart.reportIntegrity === "malformed" && localTimeStart.shiftStart === null && localTimeStart.scheduleStanding === "unknown");
+const { punch_status: _punchHoisted, ...cleanSansPunch } = clean();
+const recognizedOnProto = normalizeShiftReport("rp",
+  Object.assign(Object.create({ punch_status: "clocked_in" }), cleanSansPunch) as ShiftContextReportRaw, { deviceSite: SITE, referenceTime: REF });
+check("a RECOGNIZED key inherited from the prototype is an unrecognized envelope → malformed (read by nobody, asserted by the report)",
+  recognizedOnProto.reportIntegrity === "malformed");
 const inherited = evaluateShiftContext(
   normalizeShiftReport("i", Object.create(clean()) as ShiftContextReportRaw, { deviceSite: SITE, referenceTime: REF }));
 check("a report with ZERO own keys asserts nothing and cannot grant", inherited.recommendedAction !== "none");

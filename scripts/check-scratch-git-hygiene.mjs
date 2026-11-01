@@ -109,7 +109,9 @@ export function stripComments(text) {
 
 const RE_MKDTEMP = /mkdtemp/;
 const RE_GIT = /["'`]git["'`]|\bgit\s/;
-const RE_INITCLONE = /["'`](?:git\s+(?:-[cC]\s+\S+\s+)*)?(?:init|clone)\b|\bgit\s+(?:-[cC]\s+\S+\s+)*(?:init|clone)\b/;
+// A quoted token must be the WHOLE word followed by a quote or whitespace: `"init"`, `"clone"`, `"git init -q"`.
+// `\b` alone matched `"clone-proof"` (a launch-claims marker string) and flagged a file that makes no repo.
+const RE_INITCLONE = /["'`](?:git\s+(?:-[cC]\s+\S+\s+)*)?(?:init|clone)(?=["'`\s])|\bgit\s+(?:-[cC]\s+\S+\s+)*(?:init|clone)\b/;
 const HELPER_CALLS = ["scratchGit", "scratchGitOk"];
 
 /** @param {{path:string,text:string}[]} files @returns {string[]} paths that create scratch repos */
@@ -374,6 +376,8 @@ async function selfTest({ inner = false } = {}) {
   check("a regex holding `//` earlier on the line does not hide it", seen("e7", 'const u = /^https?:\\/\\//; ' + BARE.replace(/\n/g, " ") + "\n"));
   check("a backtick inside a regex does not hide a later creator", seen("e10", 'const R = /(?:^|[\\s`(])x/g;\nconst s = "covers `lib/**`";\n' + BARE));
   check("a trailing `// ...` comment is NOT stripped (false creator, never a miss)", seen("e11", 'import { mkdtempSync } from "node:fs";\nconst d = mkdtempSync("x");\nspawnSync("git", ["status"]); // later: "init" it\n'));
+  check("a quoted compound such as `\"clone-proof\"` beside mkdtemp + git is NOT a creator (exit 0)", (() => { const d = T("e13"); put(d, "scripts/x.mjs", 'import { mkdtempSync } from "node:fs";\nconst d = mkdtempSync("x");\nconst MARKERS = ["clone-proof", "tamper-proof"];\nspawnSync("git", ["status"], { cwd: d });\n'); const r = cli(d, ["--floor", "0"]); return r.status === 0 && /creators=0/.test(r.out); })());
+  check("a quoted `git clone` argument list is still seen", seen("e14", 'const d = mkdtempSync("x");\nspawnSync("git", ["clone", "-q", "u", d]);\n'));
   check("a template-literal `git -C ${d} init` is seen", seen("e2", 'const d = mkdtempSync("x");\nexecSync(`git -C ${d} init -q`);\n'));
   check("an unused helper import does not count as migrated (exit 1)", (() => { const d = T("e1"); put(d, "scripts/x.mjs", 'import { SCRATCH_GIT_SCRUB } from "./lib/scratch-git.mjs";\n' + BARE); return cli(d, ["--floor", "1"]).status === 1; })());
   check("an import written inside a string does not count as migrated (exit 1)", (() => { const d = T("e3"); put(d, "scripts/x.mjs", "const s = 'import { scratchGit } from \"./lib/scratch-git.mjs\"'; scratchGit(1);\n" + BARE); return cli(d, ["--floor", "1"]).status === 1; })());

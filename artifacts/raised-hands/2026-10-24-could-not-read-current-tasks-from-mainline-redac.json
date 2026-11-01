@@ -7,7 +7,12 @@
   "need": "a person on the Mac to read the log named in where, fix the cause or re-rank the row, and delete the claim branch it names when the row should be retried",
   "whoCanUnblock": "mac lane",
   "domain": "lane",
-  "status": "open",
+  "status": "resolved",
   "routedTo": null,
-  "where": "launchd log ~/Library/Logs/signalgrid-build-tick.log"
+  "where": "launchd log ~/Library/Logs/signalgrid-build-tick.log",
+  "takenBy": "mac",
+  "takenAt": "2026-11-01T03:24:29.521Z",
+  "resolvedAt": "2026-11-01T03:24:29.546Z",
+  "resolvedBy": "mac",
+  "resolution": "Cleared 2026-10-31 by the Mac lane (Claude session); same cause and evidence as the 2026-10-23 hand: last occurrence 2026-10-24T07:30:34Z in ~/Library/Logs/signalgrid-build-tick.log, clean task reads from 09:37:35Z the same day, mainline objective-state.json readable (3 tasks). No mac/build-row-17* claim branch remains on origin."
 }

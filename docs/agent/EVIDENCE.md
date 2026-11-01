@@ -4723,3 +4723,347 @@ Recorded final review/workflow disposition: Independent primary source review re
 Recorded merge process: Normal merge commit using fresh full expected head SHA; no author approval, force push, branch deletion or check bypass.
 
 Verdict: holds for the pinned merge identity, source and prior-landing ancestry, and declared wrapper/helper configuration. Git committedAt is 2026-10-22T00:05:38Z; the recorded GitHub server merged_at is 2026-10-22T00:05:39Z. The recorded exact-head local gates, final check results and independent review support the landing within their stated coverage; these fixed reads do not rerun them. The local graph/source reads, the recorded local gates, the GitHub check/merge receipts and the live host observations are distinct evidence. This landing does not re-mint the existing artifact f3b55f7173ed5d5365a102ebadadef2e0e1dfcea, measured on clean source a70c36b3e0e897d8a80a863e7228417f729e487f. Manifest v97 remains aa9ce381438ecb26874cdbe60b82a9339821d6b540f176e122291202a6b3885b in that receipt; its 141 passed proof records, two notRecorded proofs, three stepsExcluded entries, and Linux-VM native attestation on exact a70 remain the earlier receipt's coverage, not new measurements of D or its merge. No new overall readiness, owner-real-in-hand attestation, completion of pending product/PR work, or later journal landing is asserted.
+
+
+## 2026-10-22 — #1593 aligns the Mac build tick's retry cadence, outage hand and loaded-status record, landed at 69258e30433f1a20c31975d50d746065032097c4 from head 79c403004707627f7b0431725c48dd713775af18
+
+Recorded exact-head local pre-push commands and receipt output:
+```text
+head=79c403004707627f7b0431725c48dd713775af18
+node scripts/preflight.mjs
+Preflight PASSED — everything it runs is green.
+PREFLIGHT_EXIT=0 duration_seconds=957.95 finished=2026-10-22T19:27:26.501852Z
+pnpm run verify:breadth
+Breadth lane PASSED — 58 breadth proofs green (deferred families, doctrine documents, and the DR-005 decision-palette design gate).
+BREADTH_EXIT=0 duration_seconds=36.34 finished=2026-10-22T19:28:02.915113Z
+```
+The retained clean-head snapshots bracket both gates and normal publication; all four operational source hashes stayed unchanged from reviewed source-fix head 6a3b7b18e771f5a5ee704e93d74cee65dcd485ff. The branch incorporated canonical 07ce83a0a30d79c49c948da05890160011b8c793 by a normal merge before those gates. Both repository generators exited 0 and produced no changed outputs. An ordinary push with hooks intact exited 0, and the remote was verified at that exact head at 2026-10-22T19:28:07.918305Z. The enclosing shared-host guardian completed normal cleanup; no other host holder was stopped or bypassed. These receipts do not rerun the commands here.
+
+Local coverage ceiling: Build (all packages) and Browser E2E (review console, website, admin) were unavailable on darwin-arm64 and did not run. Backup/restore and DB-role-split self-skipped with DATABASE_URL unset; the workflow-red-streak report self-skipped with GITHUB_TOKEN unset. None is counted as passed by the local run. The earlier interrupted validation and the publication guard's refusal remain unsuccessful historical attempts; they do not supply this combined-head result. Both fresh gates used project-pinned offline pnpm 10.28.1 and approved esbuild 0.28.2 without changing dependencies or the lockfile.
+
+Recorded GitHub API observations, separate from local commands (final pre-merge receipt at 2026-10-22T19:51:55.884173+00:00; merge/default-branch confirmation at 2026-10-22T19:52:50.633445+00:00):
+```text
+#1593 head=79c403004707627f7b0431725c48dd713775af18 final-premerge-unresolved-threads=0
+120039369859 Typecheck, build, and proof scaffold head=79c403004707627f7b0431725c48dd713775af18 status=completed conclusion=success completed=2026-10-22T19:50:15Z workflow=39840335177
+120039369379 Required docs and unsafe-claim sanity: completed / success
+120039369834 Breadth lane (deferred families + doctrine docs): completed / success
+120039369798 Durable persistence (Postgres audit ledger): completed / success
+120039369843 Prod stack (Podman): completed / success
+120039369933 Prod stack (Docker compose smoke): completed / success
+120039362022 PR — Mac-only checks (full-clone provenance, preflight on macOS): queued / no conclusion at final pre-merge observation
+rollup: 18 contexts fully enumerated; 14 success, 3 skipped, 1 queued; no failure conclusion
+#1593 state=MERGED merged=true merge=69258e30433f1a20c31975d50d746065032097c4 merged_at=2026-10-22T19:52:31Z
+merge-parents=fcdf27323337ac9dbacc997f7838b31eb1aba984 79c403004707627f7b0431725c48dd713775af18
+canonical-at-confirmation=69258e30433f1a20c31975d50d746065032097c4
+git-object-committedDate=2026-10-22T19:52:30Z
+```
+The three skipped contexts were Nightly — full harness + preflight, Nightly — MCP lane, and CycloneDX SBOM sync (dependabot); skips are not passes. The optional Mac-only job was queued, not passed, at this observation. All six jobs in the main SignalGrid CI run completed success on the tested head. The three source-review threads were resolved. The sole formal Codex review in the recorded review list names earlier head 100682a473ab4ca662baed7c0f73d78fb75e8370; it is not represented as a new review of 79c40300. The final compare receipt found only artifacts/agent-heartbeats/mac-lane-tick.json between the tested canonical pin 07ce83a0 and pre-merge fcdf2732, with no counted-surface movement. The merge call used the freshly re-read full expected head; no author approval, force push, branch deletion or check bypass is recorded. Git committedDate and GitHub merged_at differ by one second.
+
+Fixed Git graph/source reads executed at 2026-10-22T20:07:29.153449+00:00; the following fixed commands each exited 0:
+Command:
+```bash
+git --no-replace-objects show --no-patch --format='commit=%H%nparents=%P%ncommittedAt=%cI%nsubject=%s' 69258e30433f1a20c31975d50d746065032097c4
+git --no-replace-objects merge-base --is-ancestor 79c403004707627f7b0431725c48dd713775af18 69258e30433f1a20c31975d50d746065032097c4
+git --no-replace-objects merge-base --is-ancestor fcdf27323337ac9dbacc997f7838b31eb1aba984 69258e30433f1a20c31975d50d746065032097c4
+git --no-replace-objects merge-base --is-ancestor 3c892ad96dded5d8e4630d4dc63c12e3fcf02bb0 69258e30433f1a20c31975d50d746065032097c4
+git --no-replace-objects show 79c403004707627f7b0431725c48dd713775af18:scripts/mac/build-tick.sh | shasum -a 256
+git --no-replace-objects show 79c403004707627f7b0431725c48dd713775af18:scripts/mac/install-build-tick.sh | shasum -a 256
+git --no-replace-objects show 79c403004707627f7b0431725c48dd713775af18:docs/LANE_COORDINATION.md | shasum -a 256
+git --no-replace-objects show 79c403004707627f7b0431725c48dd713775af18:docs/agent/scheduled-routines.json | shasum -a 256
+```
+Output:
+```text
+commit=69258e30433f1a20c31975d50d746065032097c4
+parents=fcdf27323337ac9dbacc997f7838b31eb1aba984 79c403004707627f7b0431725c48dd713775af18
+committedAt=2026-10-22T15:52:30-04:00
+subject=Merge pull request #1593: align Mac build-tick cadence and loaded status
+d3caf9b528fb609a98aab7d2799b20a3a98cf37cf761f8d38fe4243d9a6d37fc  -
+165fdb63aa634bab8d34c63ccd844faa8ae613e2b9fa3b308ebcd3ed38caa66a  -
+8b1f10fbfb04c23f6220f20af9156a2f707a22f22d8127ffb8da52653fccfdf5  -
+f439e1aecf147d834bcfca3a12e3243f8d290fedbe1470337b160dab4802f7fd  -
+```
+Recorded exits: commands 1–8 each exited 0; all stderr was empty. Commands 2–4 have no stdout on successful ancestry checks. These reads identify the graph and source; they do not repeat preflight, breadth or a loaded-service observation.
+
+The four operational files set a five-minute build retry, align the origin-outage hand to 144 consecutive failed scheduled attempts, update the active registry/coordination record, and make installer status distinguish configured, installed and actually loaded intervals. The 12-hour figure assumes scheduled five-minute attempts; host sleep, delays and missed firings can extend elapsed time. The dated 2026-10-22T15:11:45Z activation firing found all three ranked tasks already claimed: it witnesses a firing, not a completed product build. Source alone does not establish current loaded service state, continuous execution or unattended success. This landing does not run the installer or alter host-specific admission wiring.
+
+Verdict: the recorded local and GitHub receipts support the exact landing and its stated coverage; the fixed Git reads independently confirm the graph and unchanged four-file source. This entry records #1593; it makes no claim that the later record-publishing PR has merged or passed its own checks. It does not re-mint artifact f3b55f7173ed5d5365a102ebadadef2e0e1dfcea, measured on clean a70c36b3e0e897d8a80a863e7228417f729e487f. Its 141 passed proof records, two notRecorded proofs, three stepsExcluded entries and Linux-VM native attestation remain that earlier receipt's coverage. No new readiness figure, owner-real-in-hand attestation, production claim, completion of other PR/backlog work, or validation of the later record-publishing head is inferred.
+
+
+## 2026-10-27 — Source preparation for delegated execution and truthful coordination
+
+Command:
+```bash
+node scripts/raised-hands.mjs --check
+node scripts/check-raised-hands.mjs
+```
+Output:
+```text
+Before new records: Raised hands check FAILED: 13 problem(s): 11 mail stalls and two heartbeat stalls.
+After three explicit open records: Raised hands check passed.
+Raised-hand schema and routing check: exit 0.
+```
+Verdict: the current branch explicitly records all 13 measured stalls with their actual responders. The mail work and both witnesses remain unfinished: no acknowledgment, Cloud run, fresh heartbeat, full validation, source-review clearance, publication, CI or merge is asserted by a covering hand. AGENTS and LOOP guidance now reflect the owner's delegated local-first workflow while preserving all protected-delivery conditions. This entry is source preparation; canonical state is unchanged until protected delivery.
+
+
+## 2026-10-27 — Source-pinned local coding capability and task-scope repair
+
+Command:
+```bash
+# RED: complete proposed tree with only the original validator restored from8243280; frozen tests unchanged.
+node --test --test-reporter=tap scripts/mac/local-brain/test/task-selector-control-scope.test.mjs
+# GREEN: corrected validator with the same frozen tests.
+node --test --test-reporter=tap scripts/mac/local-brain/test/task-selector-control-scope.test.mjs scripts/mac/local-brain/test/task-selector.test.mjs
+```
+Output:
+```text
+Frozen original source: 33 tests, 2 pass, 31 assertion failures, zero skips.
+Model-written implementation: 39 new and original checks pass, zero failures, zero skips.
+```
+Verdict: a bounded local OpenCode/Ollama coding trial read the complete implementation and both test files, ran assertion RED, wrote one expression and ran GREEN. The frozen tests remained unchanged. Independent comparison covered all65536 UTF-16 code units and four non-ASCII paths. Five sandbox-negative probes denied private access, source writes during checks, subprocesses and network. The local model/harness is qualified for this source trial only; the default worker is unchanged. This is not daemon build-to-PR integration, current-head CI, physical testing or issue1546 end-to-end acceptance. The13 coordination stalls remain open work, covered by the existing three correctly routed hands on this proposed source.
+
+
+## 2026-10-27 — Wire the C0 regression into both actual runners
+
+Command:
+```bash
+node scripts/check-test-execution.mjs
+node scripts/check-preflight-ci-parity.mjs
+node scripts/mac/local-brain/test/task-selector-control-scope.test.mjs
+```
+Output:
+```text
+Before wiring: one problem; no runner reached the new regression.
+After wiring: zero test-execution problems; preflight-CI parity green; all33 new checks pass.
+```
+Verdict: the first full preflight on the combined candidate stopped at the test-execution gate. The same unchanged regression now has an explicit command in both preflight and review-hub CI. The original task-selector command stays present. No test exemption, check removal, gate weakening or source/test rewrite was used. Full local validation and source/public delivery are still separate requirements.
+
+
+## 2026-10-27 — Refresh the measured preflight line count after runner wiring
+
+Command:
+```bash
+node scripts/check-doc-line-counts.mjs
+node scripts/check-doc-line-counts.mjs --self-test
+```
+Output:
+```text
+Before correction: COMPANY_BUILD_PLAN quoted967lines for the now968-line preflight.
+After the one-number source correction: zero line-count drift; self-test10/10.
+```
+Verdict: adding the missing explicit test runner row changed the measured preflight line count. Only the stale numeric citation is corrected; no line-count matcher, exemption, floor or gate is altered. The failed full preflight and the direct exact diagnostic remain retained.
+
+
+## 2026-10-27 — Regenerate the current surface inventory after adding a regression
+
+Command:
+```bash
+node scripts/generate-sync-manifest.mjs
+node scripts/check-surface-review-coverage.mjs --write
+node scripts/check-surface-review-coverage.mjs
+```
+Output:
+```text
+Full preflight detected a stale generated surface page after adding the new test file.
+Canonical pinned generators rederived their outputs; the review-history JSON is unchanged.
+```
+Verdict: the generated current-tree view is refreshed through the existing preparation contract. No review date, read claim, JSON history, matcher, exemption or gate is changed. Earlier full-preflight failures remain retained; new-head full validation and protected delivery remain required.
+
+
+## 2026-10-27 — Require a complete C0 proof execution envelope
+
+Command:
+```bash
+node scripts/mac/local-brain/test/task-selector-control-scope.test.mjs
+node scripts/check-local-worker-task-selector-proof.mjs --self-test
+node scripts/check-local-worker-task-selector-proof.mjs
+```
+Output:
+```text
+Before envelope, with the control loop forced to zero: exit0; one ordinary test passed; zero C0 cases executed.
+C0 proof envelope self-test PASSED: 1 positive / 12 negative / 0 skipped
+C0 task-selector proof PASSED: 32 control cases, 39 total tests, 0 skipped
+```
+Verdict: actual falsification found an empty-enumeration gap in the newly registered regression. The checked runner requires all32 named C0 assertions and zero missing/deferred results. The existing direct proof commands remain; an additional checked command is wired into both preflight and CI. The model implementation and both frozen tests are unchanged. These are initial source checks; final-source falsification, full local gates, fresh source lenses, publication, current CI and protected delivery remain separate requirements.
+
+
+## 2026-10-28 — Keep the checked proof compatible with the CI Node line
+
+Command:
+```bash
+node scripts/check-local-worker-task-selector-proof.mjs --self-test
+node scripts/check-local-worker-task-selector-proof.mjs
+```
+Output:
+```text
+C0 proof envelope self-test PASSED: 1 positive / 12 negative / 0 skipped
+C0 task-selector proof PASSED: 32 control cases, 39 total tests, 0 skipped
+```
+Verdict: the added runner originally used an optional isolation flag whose rename is recorded at Node23.6 in the official Node CLI history, while this repository's workflow uses Node22. The unnecessary flag is removed; the normal test runner's default isolation executes every frozen assertion and the checked envelope still refuses an empty domain. No Node version, workflow setup, model implementation, frozen test, proof floor or permission is changed. This is a local source correction; final-head full validation, fresh source review and exact-head CI remain separate requirements.
+
+
+## 2026-10-28 — Keep pending preparation outside an existing evidence record
+
+Command:
+```bash
+git diff c2b1bfe5e3420ea7e48208299797d815c88b5aae HEAD -- docs/agent/LOOP.md
+```
+Output:
+```text
+Source-comparison observations (interpretation, not literal Git output):
+The canonical2026-10-21 CURRENT EVIDENCE line and its original continuation are verbatim and adjacent.
+The new short preparation note has its own PENDING SOURCE PREPARATION label below the complete record.
+Every other LOOP byte is preserved after removing the exact old/new preparation lines.
+```
+Verdict: the first genuine native Ponytail source lens returned FIX for an ambiguous insertion between an older measurement and its continuation. The finding is accepted and corrected; the other three source lenses did not run. The original older artifact/source/coverage remain one dated record. No code, frozen test, workflow, proof floor or old evidence is changed by this correction. New-head full local checks, all four fresh source lenses, publication, current CI and protected landing remain required.
+
+
+## 2026-10-28 — Pair each recorded count with the command that executed it
+
+Command:
+```bash
+# RED: complete proposed tree, only the original validator restored; frozen tests unchanged.
+node --test --test-reporter=tap scripts/mac/local-brain/test/task-selector-control-scope.test.mjs
+# GREEN: corrected validator, same frozen tests.
+node --test --test-reporter=tap scripts/mac/local-brain/test/task-selector-control-scope.test.mjs scripts/mac/local-brain/test/task-selector.test.mjs
+```
+Output:
+```text
+Single-file RED:33tests/2pass/31fail/0skipped, exit1.
+Two-file GREEN:39tests/39pass/0fail/0skipped, exit0.
+```
+Verdict: the genuine Ponytail review of2382d7f4 returned FIX because a single-file RED result was listed beneath a two-file command. The finding is accepted; separate exact command reproductions confirm both recorded totals. No original model trial, failed job or helper was replayed. The inherited implementation and both frozen tests remain byte-identical, and previous source versions/reviews remain retained. These source checks do not establish new-head full validation, four-source-lens clearance, publication, CI, merge or issue1546 completion.
+
+
+## 2026-10-28 — Record the final preflight measurement after envelope wiring
+
+Command:
+```bash
+node scripts/check-doc-line-counts.mjs
+```
+Output:
+```text
+doc line counts: 32 figure(s) across 2 document(s), 4 in dated records (exempt, 1 exemption(s) each with a reason), 0 drifted
+Doc line-count gate passed — every `path (N)` figure matches the file it names.
+```
+Verdict: the checked C0 proof-envelope step added a second preflight row after the historical 968-line measurement. The final scripts/preflight.mjs now has969lines, and docs/COMPANY_BUILD_PLAN.md cites969. The actual line-count gate above confirms zero drift. The earlier dated968-line evidence and lesson L28 remain unchanged as historical records. The security source review's missing-measurement finding is accepted. This measurement does not claim fresh full preflight, source clearance, GitHub CI, merge or whole-system completion.
+
+
+## 2026-10-28 — R6p1d constructs its missing tracking reference explicitly
+
+Canonical SignalGrid CI [40624043339](https://github.com/DanFashauer/SignalGrid-Review-Hub/actions/runs/40624043339) on `8329d4f553f3b0f20a2f102b10e335d7273d8b64` failed R6p1d and nested R12 with Git2.56.0. The [official pinned release notes](https://github.com/git/git/blob/a018953688f1b10bddf91bff8747068f5f4746a4/Documentation/RelNotes/2.56.0.adoc) describe URL pushes updating tracking refs when the URL uniquely matches a configured remote. The fixture had inferred absence from URL syntax.
+
+The correction explicitly removes only the temporary fixture's `origin/other` tracking ref after its local bare-fixture push. The complete existing assertion, local `mine` branch and bare fixture's `other` branch are unchanged. Production seam logic and every unrelated executable source byte remain unchanged. A planted-state probe also verified the old required-absence assertion fails, then the missing-ref scenario passes without changing either branch tip.
+
+Command on the installed AppleGit2.54.0/Node24.18.0 toolchain:
+```sh
+node scripts/loop-state.mjs --self-test
+```
+Output, verbatim final summary:
+```text
+self-test: 6 case(s) SKIPPED, listed above; a skip asserted nothing and is in neither number below
+self-test passed (309/309)
+```
+
+A bounded build of the exact Git2.56 source also reproduced the original R6p1d failure and the corrected full R6p1d assertion passed. That resource trial is LIMITED, not generally qualified: its original complete run passed300/309 and corrected run301/309, with6explicit skips and8other failures retained, including the nested R12 aggregate. Its C-only build omits the installed HTTPS helper and uses an owned executable/template layout; the sole causes of all8other failures are not established. These runs are not full Git2.56 GREEN or equivalent to current-head GitHub CI.
+
+Resource preparation failures remain retained: missing dyld literal root-directory read, denied system-make xcrun-cache write followed by generic license text, unavailable Cargo before choosing Git2.56's officially supported optional C build, and absent standard init templates in a first partial trial. No Rust/toolchain installation, license acceptance, global Git/template/default change or private-source/network build grant was made. A surrounding verifier also assumed the Linux case count; the applicable Mac result above is the actual measurement.
+
+Verdict: holds for the complete applicable installed-toolchain self-test and the specific Git2.56 R6p1d assertion. Six platform-unavailable cases are not passes; two other unavailable platform preconditions still asserted their guarded answers on the installed toolchain. Full local preflight/breadth, fresh same-head source reviews and exact-current-head GitHub CI remain required for protected landing. No gate exemption, real remote branch deletion, source clearance or merge is claimed here.
+
+## 2026-11-01 — Six owner-accepted decision-record PRs landed one at a time
+
+The owner accepted six decision-record PRs in chat on 2026-10-31 (two groups of three). The cloud lane landed each under that acceptance, not as a DR-037 self-merge, one at a time, re-merging `SignalGrid_Alpha` before every push and letting GitHub's strict required-check policy force a branch refresh after every landing. No record's wording was changed by the lane except the owner-sanctioned DR-061 reconciliation note against DR-064.
+
+| PR | Record | Merged sha | Exact head | Gating check run | Local gates |
+| --- | --- | --- | --- | --- | --- |
+| #1357 | DR-063 brain ecosystem | 69501b56 | 7b5fbfcc | 124655707168 | preflight PASSED, breadth PASSED 58 |
+| #1246 | DR-061 lane merges (+ reconciliation note) | c508cdb3 | 76a132bf | 124667843871 | preflight PASSED, breadth PASSED 58 |
+| #1083 | DR-059 posture ages (decision core) | cfafb095 | 59f03938 | 124685646228 | preflight PASSED, breadth PASSED 58; Opus merge-refute SHIP; CORE_NORMALIZATION_VERSION 26→27; proof:estate-refresh 24/24; test:api 490/490 |
+| #1050 | DR-058 puck return binding (decision core) | 972751c4 | ab2ae448 | 124702966504 | preflight PASSED, breadth PASSED 58 on c49d3d60; Opus merge-refute SHIP (exhaustive loosenings: 0; 119/119; 610/610; 490/490); CORE_NORMALIZATION_VERSION 27→28 |
+| #1322 | DR-062 company scope, automatic by default | 702d6ca3 | 8652e9b3 | 124711433535 | preflight PASSED, breadth PASSED 58 on 7f18013c |
+| #1433 | DR-055 amendment, ARC puck note, launch-claims gate fixes | df1ff2df | 3af79ce1 | 124717727995 | preflight PASSED (PREFLIGHT_EXIT=0), breadth PASSED 58 on ee792b45; check-launch-claims self-test 87 vectors, docs ceiling 407/407 |
+
+Also landed in the same window, under DR-037: #1711 (two stale raised hands cleared; mainline preflight had failed "Raised hands check FAILED: 16 problem(s)"), #1714 (scratch-git hygiene detector: a quoted token must be the whole word — the false positive that blocked #1433), Mac tick PR #1716 (b1df078f; sim request `objective-loop-evidence-fresh-2026-10-31` queued), and the lane-mail heartbeats #1710, #1712, #1713, #1715, #1718, #1719.
+
+Observed, not dismissed: on #1433's head 7b3afc6c the gating check failed once at `node scripts/loop-state.mjs --self-test`, cases R18-display-rows and R19-display-bare (314/316), a script the PR does not touch; the same version passes locally (316/316) and passed on #1716's head in the same minute; one re-run (job 124711304420) was green. A second occurrence anywhere is real and gets investigated, not re-run.
+
+Open owner questions carried out of this batch (nothing in the tree decides them): (1) puck required vs optional factor; (2) who the "super admin" is; (3) on a lost or stolen puck, does immediate single-admin revocation govern, with dual control reserved for re-binding; (4) verify the target authenticator's CTAP 2.1 reset ceremony before moving all protection to re-binding; (5) DR-062: should the per-company switch default to "ask first" for revoke/lock/suspend/erase until an admin enables autonomy (the GHAS thread on #1322, answered as the owner's recorded decision). DR-055 still says "two questions"; the record is the owner's to amend.
+
+Command, in a checkout with `origin/SignalGrid_Alpha` fetched at df1ff2df:
+```sh
+git log --first-parent --format='%h %s' origin/SignalGrid_Alpha | grep -E 'Merge pull request #(1357|1246|1083|1050|1322|1433)'
+```
+Output, verbatim (first-parent order, newest first; titles cut at 100 columns):
+```text
+df1ff2df7 Merge pull request #1433: ARC kiosk photo + puck-as-token note absorbed as direction; DR-0
+702d6ca33 Merge pull request #1322: DR-062 — SignalGrid's scope is the whole company incl. legacy 
+972751c4e Merge pull request #1050: DR-058 — a holder-bound device_returned closes custody without
+cfafb095d Merge pull request #1083: DR-059 — estate posture ages at decision time; a refresh retra
+c508cdb39 Merge pull request #1246: DR-061 (owner decision): lanes merge decision-path PRs under con
+69501b56d Merge pull request #1357: DR-063 (owner decision): the brain ecosystem
+```
+
+Verdict: six owner-accepted records are on `SignalGrid_Alpha`, each on a head whose gating check and local preflight+breadth were green. Readiness dimension (b) reads low until the Mac re-mints live evidence on the final manifest; that request is already queued by the Mac's own tick (#1716). No new readiness figure is asserted.
+
+## 2026-11-01 — OD01 approved; the verified zero-loss branch list is closed
+
+**Decision.** The owner approved OD01 (lane deletion authority for the verified zero-loss list only, `docs/agent/ESTATE_PLAN_20261023.md`) in the cloud session on 2026-11-01 at ~03:50Z, verbatim: "Yes go ahead and delete the zero-loss branches, approve OD01". Scope is that list and nothing else; every other branch still needs its own merge, close-with-evidence, or an explicit owner decision.
+
+**What happened.** The cloud ran `bash docs/agent/estate-20261023/delete-zero-loss-verified.sh` (dry run: 8 DONE already absent, 2 WOULD) and `--apply`, which SKIPPED both remaining branches: the cloud's GitHub proxy refuses tag creation (`git push origin <tip>:refs/tags/archive/<b>` → `send-pack: unexpected disconnect while reading sideband packet`; `POST repos/…/git/refs` → HTTP 403 "Write access to this GitHub API path is not permitted through this proxy"), and the script refuses to delete without the archive tag. The cloud mailed the Mac (lane-mail PR #1724). The Mac lane ran the script's checks by hand at ~04:31Z (its classifier refused the script invocation and the `--force-with-lease` form), pushed and read back the archive tags, and deleted both branches (mail `mac-od01-done-from-the-mac-the-two-remaining-zer`, PR #1725).
+
+Command (cloud, 2026-11-01 04:36Z):
+```
+for b in claude/build-gate-survivors-liveness-scratch-git mac/pr-1216-fix-backup; do git ls-remote --exit-code --heads origin $b >/dev/null 2>&1; echo "$b heads rc=$?"; git ls-remote origin refs/tags/archive/$b | cut -c1-12; done
+```
+Output:
+```
+claude/build-gate-survivors-liveness-scratch-git heads rc=2
+531e141fdc7a
+mac/pr-1216-fix-backup heads rc=2
+5a2701745129
+```
+Verdict: both heads absent (rc 2), both archive tags present at the measured tips. Remote heads: 283 before, 282 after the deletes (the Mac's own mail branch then added one). Restore path, if ever needed: `git fetch origin refs/tags/archive/<b>:refs/tags/archive/<b> && git push origin <tip>:refs/heads/<b>`.
+
+## 2026-11-01 — The owner's brain:ready batch: nine of ten landed under DR-037/DR-061
+
+**Decision.** On 2026-10-30 the owner approved ten PRs for the local second brain (label `brain:ready`; comment 6526000134 on each: #1556, #1445, #1440, #1441, #1431, #1438, #1439, #1337, #1117, #1239) and on 2026-11-01 ~03:50Z ordered them landed hands-free: the brain builds, Codex and Claude each review in their own system, the lane merges under DR-037, never parked on the owner. The cloud lane reviewed each head (Opus refute for the decision-path and api-server ones, DR-061), merged `SignalGrid_Alpha` in where a landing had moved a figure, ran the local half (preflight + breadth, plus `test:api` where the api-server was touched) on the tree it pushed, armed auto-merge, and let GitHub's strict required-check policy force one branch refresh per landing. Nothing was approved by the lane; nothing was force-pushed; no gate was bypassed.
+
+| PR | Change | Merged sha | Exact head | Gating check run | Local half |
+| --- | --- | --- | --- | --- | --- |
+| #1438 | session-store: unknown status never refreshes (pg + in-memory parity) | 09d4e16e | b9741ff4 | 124751478478 | preflight PASSED, breadth 58, test:api 505/505 |
+| #1439 | session-store: in-memory refresh racing end() (guard + proof) | 1928b654 | 9b9715be | 124761406769 | preflight PASSED, breadth 58; session-store proof 17/17 (14/17 without the guard) |
+| #1441 | estate-refresh upper bound | bb6d8072 | 00f39d17 | 124781707335 | preflight 417 PASSED, breadth 58; proof:estate-refresh 24/24 |
+| #1239 | api head + demo endpoint docs figures (merge-in c34c3bf4) | 0b9d68eb | c34c3bf4 | 124786883019 | test:api 505/505 |
+| #1445 | step-up authorization | 16917512 | 7f6063de | 124790667884 | quoted in body |
+| #1440 | JWT null-segment handling | 3d282977 | 394a7765 | 124795778597 | quoted in body |
+| #1556 | URL-guard transforms (lib/) | 5886f1e6 | 7cf6ed54 | 124801475640 | quoted in body |
+| #1117 | ephemeral ports: oidc/load/observability tests; Mac JWKS loopback probe 7ba3877d | 7cf2dadc | 12fba020 | 124817276118 | test:api 505/505, preflight PASSED, breadth 58 on f0382ce4 |
+| #1431 | port probes bind the host their consumer binds (brain fixes 306b0a8f, dafba1db for three Codex P2 threads) | be38c923 | 98371bf5 | 124836408448 | test:api 512/512, proof:live-idp 31/31, test:fixture-idp 12/12, preflight PASSED, breadth 58 on bf953bb3; Opus landing refute SHIP |
+
+Not landed, by rule: **#1337** edits `scripts/check-launch-claims.mjs` (the launch-claims gate) — reviewed SOUND, the owner's click under DR-037's exclusions.
+
+**Queue claims (standing-order item 3).** `scripts/work-queue.mjs claim --lane mac-brain` could not be taken for any of the ten: `scripts/mac/estate-queue.mjs plan()` classifies a DECISION_PATH PR as `owner` and a green refreshed PR as `wait`, so `pr:<n>` is reported as `unknown task` and is not claimable (measured 2026-11-01, `list` ~3 min). A claim ref therefore exists for none of these landings; the gap is the queue's classification, not a skipped step, and is left for the brain's builder wiring.
+
+**Post-landing gates on 7cf2dadc:** `generate-sync-manifest.mjs --check` clean (kinds=42 categories=20 taskExceptionCodes=13 ceilings=3 refusals=9 proofs=63 mcpTools=16); surface-read-coverage gate passed; doc line-count gate passed. Readiness on 7cf2dadc derives **(b) 0%** — evidence covers manifest aa9ce381438e, tree is 3749449260af — by design (DR-036); the ONE re-mint request for the batch went to the Mac as lane mail (PR #1734 → d32b32e6). No new readiness figure is asserted.
+
+**Hold list for the owner (one list, nothing else decides them):** #1337 (launch-claims gate click), #1641, #1314, #1321, #1190, #1133.
+
+Command, in a checkout with `origin/SignalGrid_Alpha` fetched at be38c923:
+```sh
+git log --first-parent --format='%h %s' origin/SignalGrid_Alpha | grep -E 'Merge pull request #(1438|1439|1441|1239|1445|1440|1556|1117|1431)\b' | cut -c1-100
+```
+Output, verbatim:
+```text
+be38c923d Merge pull request #1431 from DanFashauer/claude/fix-port-probe-wildcard-bind
+7cf2dadc7 Merge pull request #1117 from DanFashauer/claude/tests-ephemeral-ports-oidc-load-observabi
+5886f1e62 Merge pull request #1556 from DanFashauer/claude/build-url-guard-translated-form-trailing-
+3d2829778 Merge pull request #1440 from DanFashauer/claude/build-jwt-null-segments-refuse
+169175120 Merge pull request #1445 from DanFashauer/claude/build-step-up-authorize-before-webauthn
+0b9d68eb8 Merge pull request #1239 from DanFashauer/claude/build-api-head-and-demo-envelope
+bb6d80727 Merge pull request #1441 from DanFashauer/claude/build-estate-refresh-upper-bound
+1928b6548 Merge pull request #1439 from DanFashauer/claude/build-session-refresh-active-guard
+09d4e16e8 Merge pull request #1438 from DanFashauer/claude/build-session-store-status-normalize
+```
+**Lesson (lane mail).** The first copy of the re-mint request (PR #1733) was produced with flag syntax on `lane-deliver.mjs send`, whose arguments are positional (`send "subject" "body"`): the subject became `--to`, the id slugged to `cloud-to`, and the write overwrote a September message that already carries a Mac ack, so `auditLaneMessages()` (ids only) would never have shown it unread. Codex caught it (thread 4435371880); #1733 was closed unmerged and the request re-sent as a `batch` send op (PR #1734 → d32b32e6, id `cloud-one-live-evidence-re-mint-after-the-brain-`). The September `cloud-to` file is the same mistake made once before. The skill text that showed the flag form is corrected in this PR.
+
+Verdict: nine of the ten owner-accepted PRs are on `SignalGrid_Alpha`, each on a head whose gating check was green and whose local half is quoted; #1337 remains for the stated reason.

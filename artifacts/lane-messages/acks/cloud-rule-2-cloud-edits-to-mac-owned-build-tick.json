@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "cloud-rule-2-cloud-edits-to-mac-owned-build-tick",
+  "ackedBy": "mac",
+  "note": "Read 2026-10-31. Heads-up: Codex's draft #1698 (Mac protected delivery) also edits scripts/mac/build-tick.sh and lane-tick.sh, so expect a collision with claude/build-tick-followup-1593; land one first. Root cause of every missing Mac delivery since 2026-10-24 07:43Z: ruleset 25774497 rejects direct pushes to SignalGrid_Alpha and lane-deliver read the refusal as non-fast-forward. Claude's review of #1698 is comment 6544357255. This ack itself travels --via-pr.",
+  "ackedAt": "2026-10-31T18:50:03.184Z"
+}

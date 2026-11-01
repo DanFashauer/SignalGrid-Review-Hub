@@ -131,8 +131,18 @@ if [ "$_tick_acquire_status" != "0" ]; then
     *holding*)
       if [ "${DRY:-0}" = "1" ]; then say "dry-run: would raise a hand: tick recovery holding; $_tick_acquire_msg"
       # No redirection inside $(...): the helper must stay a direct child of this shell.
-      else _tick_hold_out="$(node "$TICK_LOCK_HELPER" raise-hold "$TICK_LOCK_ROOT" "$$" "$_tick_acquire_msg")"
-        say "RAISED HAND: tick recovery holding; $_tick_hold_out"; fi ;;
+      else
+        # Its stderr (a thrown reason) is captured by redirecting the shell around the
+        # call, as for tick-acquire: a redirection inside $(...) would break custody.
+        _tick_hold_err="$(mktemp "${TMPDIR:-/tmp}/sg-tick-hold.XXXXXX" 2>/dev/null)" || _tick_hold_err=""
+        if [ -n "$_tick_hold_err" ]; then exec 9>&2 2>"$_tick_hold_err"; fi
+        _tick_hold_out="$(node "$TICK_LOCK_HELPER" raise-hold "$TICK_LOCK_ROOT" "$$" "$_tick_acquire_msg")"
+        if [ -n "$_tick_hold_err" ]; then
+          exec 2>&9 9>&-
+          _tick_hold_out="$_tick_hold_out$(cat "$_tick_hold_err" 2>/dev/null)"; rm -f "$_tick_hold_err"
+        fi
+        say "RAISED HAND: tick recovery holding; $_tick_hold_out"
+      fi ;;
   esac
   exec 8<&-
   exit 1

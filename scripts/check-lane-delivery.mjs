@@ -850,6 +850,12 @@ await leaseControl('a hold hand written against a READY slot does not block the 
  if(holder.exitCode===null&&holder.signalCode===null)await new Promise(r=>holder.on('exit',r));
  await recovers(c,c.start('ready-after'),null);
 });
+await leaseControl('a raise-hold that throws reports its reason on the hold line',async(f,c)=>{
+ const old=join(c.store,'tick.lock');mkdirSync(old);writeFileSync(join(old,'pid'),String(process.pid)+'\n');
+ mkdirSync(join(c.store,'refused'));writeFileSync(join(c.store,'refused','x.archiving'),'{'); // raise-hold's archival resume throws on this
+ const b=c.start('hold-throws',{dry:0});assert.equal((await b.next()).event,'CLOSED');await b.closed;
+ assert.match(b.stdout,/RAISED HAND: tick recovery holding; .*archival marker refused\/x\.archiving is unreadable/);
+});
 await leaseControl('a dry-run hold says what it would raise and starts no delivery',async(f,c)=>{
  const old=join(c.store,'tick.lock');mkdirSync(old);writeFileSync(join(old,'pid'),String(process.pid)+'\n');
  const b=c.start('dry-hold');assert.equal((await b.next()).event,'CLOSED');await b.closed;
@@ -905,9 +911,9 @@ await leaseControl('a live PID whose recorded start is later than its current on
 });
 await leaseControl('a process-table line that does not parse holds recovery',async(f,c)=>{
  const a=c.start('ps-A');assert.equal((await a.next()).event,'ENTER');assert.equal(a.child.kill('SIGKILL'),true);await a.closed;
- const bin=join(f.parent,'fake-ps');mkdirSync(bin);writeFileSync(join(bin,'ps'),'#!/bin/sh\nif [ "$1" = -eo ]; then echo "  1 1 garbage that is not a process line"; exit 0; fi\nexec /bin/ps "$@"\n',{mode:0o755});
+ const bin=join(f.parent,'fake-ps');mkdirSync(bin);writeFileSync(join(bin,'ps'),'#!/bin/sh\nif [ "$1" = -eo ]; then echo "  1 1 garbage Authorization: Bearer SECRET-ps-line"; exit 0; fi\nexec /bin/ps "$@"\n',{mode:0o755});
  c.kernelAvailable();const original=leaseTree(c.store),b=c.start('ps-B',{pathPrefix:bin+':'});assert.equal((await b.next()).event,'CLOSED');await b.closed;
- assert.match(b.stdout+b.stderr,/unparseable.*holding/);assert.deepEqual(held(leaseTree(c.store)),held(original));
+ assert.match(b.stdout+b.stderr,/unparseable.*holding/);assert.doesNotMatch(b.stdout+b.stderr,/SECRET-ps-line|Bearer/,'the unparseable line is never echoed');assert.deepEqual(held(leaseTree(c.store)),held(original));
 });
 await leaseControl('an invalid recorded start time degrades to PID-only liveness instead of stopping the tick',async(f,c)=>{
  const a=c.start('badstart-A');assert.equal((await a.next()).event,'ENTER');const open=JSON.parse(readFileSync(c.slot,'utf8'));

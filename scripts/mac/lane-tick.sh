@@ -126,6 +126,13 @@ trap 'TICK_INTERRUPTED=1; exit 143' TERM
 trap sg_tick_guard_cleanup EXIT
 # END OWNED TICK GUARD
 
+# Producers may retain repair DATA without owning this tick. Only this actual
+# FD8 owner consumes one distinct request; a failed notice stays consumed.
+if [ "$DRY" != "1" ]; then
+  node "$REPO_ROOT/scripts/lib/lane-repair.mjs" drain "$REPO_ROOT" "$TICK_OWNER_TOKEN" "$$" ||
+    say "RAISED HAND: queued delivery repair remains held; original attempts unchanged"
+fi
+
 # An UNCHANGED tick heartbeats at most once per this many minutes, so a short launchd
 # interval does not create a protected PR every run. The default leaves an hour
 # for CI within the steward's three-hour tolerance. The attempt pointer and result
@@ -247,6 +254,16 @@ heartbeat() {
 
   _hb_hold() {
     say "RAISED HAND: $1; READBACK ONLY, no submission (see docs/LANE_COORDINATION.md, held deliveries)"
+    local _hb_repair_attempt="${2:-${_hb_previous:-}}" _hb_repair_request _hb_repair_root
+    if [[ "$_hb_repair_attempt" =~ ^[0-9]{8}T[0-9]{6}Z-[0-9]+$ ]]; then
+      _hb_repair_root="$(pwd -P)" || return 1
+      if _hb_repair_request="$(node scripts/lib/lane-repair.mjs request "$_hb_repair_root" heartbeat "$RECORD_DIR/.sg-heartbeat-${_hb_repair_attempt}")"; then
+        node scripts/lib/lane-repair.mjs notify "$_hb_repair_root" "$_hb_repair_request" "${TICK_OWNER_TOKEN:-}" "$$" ||
+          say "RAISED HAND: distinct repair notice unconfirmed; its original intent remains consumed"
+      else
+        say "RAISED HAND: original repair DATA unavailable; evidence retained without a new delivery"
+      fi
+    fi
   }
 
   # A pending PR or a source-bound refused original push may need Cloud repair.
@@ -433,9 +450,6 @@ JS
       if [ ! -f "$_hb_submission" ] || [ -L "$_hb_submission" ]; then
         _hb_hold "original heartbeat submission binding is not a regular owned receipt"; return 1
       fi
-    elif [ "$_hb_previous_status" = "1" ] || [ "$_hb_previous_status" = "2" ]; then
-      _hb_submission=""
-      _hb_window=10 # no publication binding: a DIFFERENT eligible observation
     else
       _hb_hold "unconfirmed/unfinished heartbeat lacks its exact submission binding"; return 1
     fi
@@ -458,10 +472,13 @@ JS
   # A due/changed observation checks the original submission before any new one.
   # Unchanged ticks do not fetch and write duplicate observations every five minutes.
   if [ -n "$_hb_submission" ]; then
-    if _hb_readback="$(node scripts/lane-deliver.mjs readback "$_hb_submission" 2>&1)"; then
+    if _hb_readback="$(node scripts/lane-deliver.mjs readback "$_hb_submission" --pending-cadence "${TICK_OWNER_TOKEN:-}" "$$" 2>&1)"; then
       say "$_hb_readback"
     else
       _hb_readback_exit=$?
+      if [ "$_hb_readback_exit" = "6" ]; then
+        say "$_hb_readback"; return 0
+      fi
       if [ "$_hb_readback_exit" = "4" ] || [ "$_hb_readback_exit" = "5" ]; then
         say "$_hb_readback"
         _hb_pending_hand "$_hb_readback" || _hb_hold "pending heartbeat has no new qualified notification"
@@ -491,12 +508,13 @@ JS
     _hb_exit=$?
   fi
   if ! tick_record terminal "$RECORD_DIR/.sg-heartbeat-${_hb_attempt}.exit" "$_hb_exit"; then
-    say "WARN heartbeat terminal not recorded; READBACK ONLY: $_hb_log"; return 1
+    _hb_hold "heartbeat terminal not recorded" "$_hb_attempt"; return 1
   fi
   if [ "$_hb_exit" = "0" ]; then
     say "heartbeat submitted for protected PR merge: $RESULT"
   else
     say "WARN heartbeat submission not confirmed (exit $_hb_exit); receipt $_hb_log: $RESULT"
+    _hb_hold "heartbeat submission remains unconfirmed" "$_hb_attempt"
   fi
 }
 

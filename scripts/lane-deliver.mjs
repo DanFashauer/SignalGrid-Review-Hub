@@ -20,6 +20,8 @@
 //                           submission binding before the push
 //   lane:deliver readback <receipt> verifies canonical landing without mutations
 //   add --resolved-hand <id> to require that exact hand is now resolved in canonical
+//   --pending-cadence <tick-token> <Bash-PID> is only for the actual owned tick:
+//   fixed 120-minute read cadence, exit 6 means deferred and never canonical success.
 //
 // WHY THIS EXISTS (2026-09-05, owner: "this is not working and causing delay").
 // The channel's law was "the push is the delivery", and three things made the
@@ -56,6 +58,8 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { currentLane } from "./lib/lane-identity.mjs";
+import { checkTickOwner } from "./lib/lane-attempt-store.mjs";
+import { ReadbackEvidence } from "./lib/lane-readback.mjs";
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const MAINLINE = "SignalGrid_Alpha";
@@ -110,6 +114,9 @@ for (let i = 0; i < argv.length; i += 1) {
   if (a === "--dry-run") flags.dryRun = true;
   else if (a === "--via-pr") continue;
   else if (a === "--no-wake") flags.noWake = true;
+  else if (a === "--pending-cadence") {
+    flags.pendingCadence = { token: argv[++i], shellPid: argv[++i] };
+  }
   else if (a === "--allow-ungated") flags.allowUngated = true;
   else if (a === "--resolved-hand") {
     const id = argv[++i];
@@ -129,6 +136,7 @@ for (let i = 0; i < argv.length; i += 1) {
 }
 const [cmd, ...rest] = positional;
 if (flags.resolvedHand && cmd !== "readback") die("--resolved-hand is readback-only");
+if (flags.pendingCadence && cmd !== "readback") die("--pending-cadence is readback-only");
 const ALLOW_UNGATED = flags.allowUngated;
 
 /** @returns {Array<{op:string,[k:string]:string}>} */
@@ -298,18 +306,22 @@ function readback(path) {
       || r.blobs.some(b => typeof b.path !== "string" || b.path.includes("..") || !/^[a-f0-9]{40}$/.test(b.oid)
         || ![...MAIL_DIRS, COVERAGE_PAGE].some(p => b.path === p || b.path.startsWith(p + "/")))) throw Error("invalid submission binding");
     if (!repoSlug || repoSlug !== r.repository) throw Error("receipt repository differs");
+    const evidence = new ReadbackEvidence(path, receipt.sha256, {
+      pendingCadence: Boolean(flags.pendingCadence), resolvedHand: flags.resolvedHand ?? null,
+      checkOwner: flags.pendingCadence ? () => checkTickOwner(repo, flags.pendingCadence.token, flags.pendingCadence.shellPid) : null,
+    });
+    const deferred = evidence.deferred();
+    if (deferred) { console.log(deferred); return 6; }
     const refusal = originalPushRefusal(path, receipt);
     if (refusal) {
       console.log("original Git push was refused and its exact topic was observed absent; no resend or remote-quiet claim");
       console.log("refused delivery observation " + JSON.stringify(refusal));
       return 5;
     }
-    const query = run("gh", ["pr", "view", r.target, "--repo", r.repository, "--json", "number,state,baseRefName,headRefName,headRefOid,mergeCommit,autoMergeRequest,createdAt,mergeStateStatus,statusCheckRollup"]);
-    const observation = `${path}.readback-${Date.now()}-${randomBytes(6).toString("hex")}.json`;
-    receiptWrite(observation, { at: new Date().toISOString(), target: r.target, head: r.head,
-      exit: query.code, stdout: query.out, stderr: query.err }); // raw before parsing
-    if (query.code) throw Error("PR readback unavailable; original attempt stays held");
-    const pr = JSON.parse(query.out);
+    const query = evidence.capture(["gh", "pr", "view", r.target, "--repo", r.repository, "--json", "number,state,baseRefName,headRefName,headRefOid,mergeCommit,autoMergeRequest,createdAt,mergeStateStatus,statusCheckRollup"], repo);
+    const observation = query.prefix;
+    if (query.status !== 0 || query.signal !== null || query.error !== null) throw Error("PR readback unavailable; original attempt stays held");
+    const pr = JSON.parse(exactText(query.stdout)); // exact raw and actual terminal are durable before interpretation
     if (pr.baseRefName !== MAINLINE || !Number.isInteger(pr.number) || pr.number <= 0) throw Error("PR binding differs");
     if (pr.headRefName !== undefined && pr.headRefName !== null && pr.headRefName !== r.target) throw Error("PR topic binding differs");
     if (pr.state === "OPEN" && pr.autoMergeRequest) {

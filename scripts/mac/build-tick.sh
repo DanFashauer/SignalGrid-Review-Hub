@@ -180,9 +180,9 @@ raise_hand() {
         .replace(/\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]+/g, "<REDACTED-JWT>")
         .replace(/\b(?:[A-Za-z0-9+/]{40,}={0,2})\b/g, "<REDACTED-BLOB>")
         .replace(/\b(\w*(?:secret|password|token|api[_-]?key|credential)\w*)\s*[:=]\s*\S+/gi, "$1=<REDACTED>");
-      const hand = { op: "raise", who: "mac lane", domain: "lane", where,
+      const hand = { op: "raise", who: "cloud lane", domain: "lane", where: "scripts/mac/build-tick.sh",
         doing: "the unattended build tick (scripts/mac/build-tick.sh)", blocked,
-        need: "a person on the Mac to read the log named in where, fix the cause or re-rank the row, and delete the claim branch it names when the row should be retried" };
+        need: "Cloud lane: inspect the current source, protected PR checks and findings, then route a scoped repair or protected landing through the existing lane review process. Preserve original attempts and claims until their exact source-backed disposition is established." };
       for (const key of ["doing", "blocked", "need", "where"]) hand[key] = redact(hand[key]);
       const fs = require("fs"), path = require("path");
       const digest = value => require("crypto").createHash("sha256").update(value).digest("hex");
@@ -195,17 +195,30 @@ raise_hand() {
           return fs.readFileSync(fd, "utf8");
         } finally { fs.closeSync(fd); }
       };
+      const queueRepair = original => {
+        const repair = require("child_process").spawnSync(process.execPath,
+          [path.join(repo, "scripts/lib/lane-repair.mjs"), "request", repo, "build", original],
+          { cwd: repo, encoding: "utf8" });
+        if (repair.error || repair.signal || repair.status !== 0) throw Error("original held; repair DATA request is unconfirmed");
+      };
+      const hasEvidence = original => fs.readdirSync(cache).some(name => name.startsWith(path.basename(original) + "."));
       let episode = cause, attempt = path.join(cache, "hand-" + episode);
-      while (fs.existsSync(attempt + ".attempt.json")) {
-        if (visited.has(attempt)) throw Error("repeated clearance binding");
-        visited.add(attempt);
-        if (JSON.parse(read(attempt + ".attempt.json")).receipt !== attempt + ".submission.json" || read(attempt + ".exit").trim() !== "0") throw Error("original parent is not known complete");
-        read(attempt + ".output"); // missing original evidence never renews an attempt
-        const result = require("child_process").spawnSync(process.execPath, [path.join(repo, "scripts/lane-deliver.mjs"), "readback", attempt + ".submission.json", "--resolved-hand", "build-" + episode], { cwd: repo, encoding: "utf8" });
-        const cleared = /^resolved hand ([a-f0-9]{40})$/m.exec(result.stdout ?? "");
-        if (result.status !== 0 || !cleared) throw Error("original hand not canonically resolved");
-        episode = digest(cause + ":" + cleared[1]);
-        attempt = path.join(cache, "hand-" + episode);
+      while (hasEvidence(attempt)) {
+        try {
+          if (visited.has(attempt)) throw Error("repeated clearance binding");
+          visited.add(attempt);
+          if (JSON.parse(read(attempt + ".attempt.json")).receipt !== attempt + ".submission.json" || read(attempt + ".exit").trim() !== "0") throw Error("original parent is not known complete");
+          read(attempt + ".output"); // missing original evidence never renews an attempt
+          const result = require("child_process").spawnSync(process.execPath, [path.join(repo, "scripts/lane-deliver.mjs"), "readback", attempt + ".submission.json", "--resolved-hand", "build-" + episode], { cwd: repo, encoding: "utf8" });
+          const cleared = /^resolved hand ([a-f0-9]{40})$/m.exec(result.stdout ?? "");
+          if (result.error || result.signal || result.status !== 0 || !cleared) throw Error("original hand not canonically resolved");
+          episode = digest(cause + ":" + cleared[1]);
+          attempt = path.join(cache, "hand-" + episode);
+        } catch (error) {
+          // DATA only: this producer has no lane-tick FD8 publication authority.
+          queueRepair(attempt);
+          throw error;
+        }
       }
       hand.id = "build-" + episode;
       fs.writeFileSync(attempt + ".attempt.json", JSON.stringify({ at: stamp, state: "attempted; pending exact readback", receipt: attempt + ".submission.json" }), { flag: "wx", mode: 0o600, flush: true });
@@ -214,7 +227,13 @@ raise_hand() {
       "$_ops" "$1" "${RUN_LOG:-launchd log ~/Library/Logs/signalgrid-build-tick.log}" "$_hand_records" "$STAMP" "$REPO_ROOT" 2>/dev/null)"; then
     if (umask 077; set -C; node "$REPO_ROOT/scripts/lane-deliver.mjs" batch "$_ops" --receipt "${_hand_attempt}.submission.json" >"${_hand_attempt}.output" 2>&1); then _hand_exit=0; else _hand_exit=$?; fi
     if [ -n "$RUN_LOG" ]; then cat "${_hand_attempt}.output" >> "$RUN_LOG"; fi
-    node -e 'require("fs").writeFileSync(process.argv[1], process.argv[2]+"\n", {flag:"wx",mode:0o600,flush:true})' "${_hand_attempt}.exit" "$_hand_exit" || say "RAISED HAND: terminal receipt unavailable; READBACK ONLY"
+    if node -e 'require("fs").writeFileSync(process.argv[1], process.argv[2]+"\n", {flag:"wx",mode:0o600,flush:true})' "${_hand_attempt}.exit" "$_hand_exit"; then
+      if [ "$_hand_exit" != "0" ]; then
+        node "$REPO_ROOT/scripts/lib/lane-repair.mjs" request "$REPO_ROOT" build "$_hand_attempt" >/dev/null 2>&1 || say "RAISED HAND: repair DATA request unavailable; original hand remains READBACK ONLY"
+      fi
+    else
+      say "RAISED HAND: terminal receipt unavailable; original hand remains READBACK ONLY"
+    fi
     if [ "$_hand_exit" = "0" ]; then
       say "hand submitted for protected PR merge, canonical landing pending: $1"
     else

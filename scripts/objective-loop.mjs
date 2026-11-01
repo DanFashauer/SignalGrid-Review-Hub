@@ -610,24 +610,54 @@ function emit(state, { write, deliver }) {
     if (state.queue.some((q) => q.queuedAs) && changed) writeFileSync(join(ROOT, STATE_REL), JSON.stringify(state, null, 2) + "\n");
   }
   if (deliver) {
+    const queueRepair = attempt => {
+      // This producer records DATA only. The actual lane-tick FD8 consumer owns
+      // any different uncertainty notice; the original escalation stays consumed.
+      const status = spawnSync(process.execPath, [join(ROOT, "scripts/lib/lane-repair.mjs"),
+        "repair-status", ROOT, "objective", attempt], { cwd: ROOT, encoding: "utf8" });
+      if (!status.error && !status.signal && status.status === 2) {
+        lines.push("Original escalation parent and source-bound push completed normally; no uncertainty repair DATA needed. Canonical landing remains unverified");
+        return false;
+      }
+      const repair = spawnSync(process.execPath, [join(ROOT, "scripts/lib/lane-repair.mjs"),
+        "request", ROOT, "objective", attempt], { cwd: ROOT, encoding: "utf8" });
+      if (repair.error || repair.signal || repair.status !== 0) {
+        lines.push("RAISED HAND: escalation repair DATA request is unconfirmed; original remains READBACK ONLY");
+      } else lines.push("Escalation repair DATA recorded; original delivery remains unverified");
+      return true;
+    };
     for (const e of state.escalations) {
-      if (submitted.has(e.id)) continue;
       let attempt;
       try {
-        attempt = join(deliveryRecordDirectory(ROOT), "objective-" + createHash("sha256").update(e.id).digest("hex"));
+        const records = deliveryRecordDirectory(ROOT);
+        const name = "objective-" + createHash("sha256").update(e.id).digest("hex");
+        attempt = join(records, name);
+        // A tracked/stamp id is not proof of a known child terminal or landing.
+        // Inspect the preserved attempt even when older state calls it submitted.
+        const hasEvidence = readdirSync(records).some(file => file.startsWith(name + "."));
+        if (submitted.has(e.id) || hasEvidence) {
+          if (queueRepair(attempt)) lines.push(`RAISED HAND: escalation ${e.id} original attempt retained; READBACK ONLY`);
+          continue;
+        }
         writeFileSync(attempt + ".attempt.json", JSON.stringify({ at: state.derivedAt, escalation: e.id,
           state: "attempted; pending exact readback", receipt: attempt + ".submission.json" }) + "\n", { flag: "wx", mode: 0o600, flush: true });
       } catch {
+        if (attempt) queueRepair(attempt);
         lines.push(`RAISED HAND: escalation ${e.id} already attempted or its intent cannot be preserved; READBACK ONLY (${attempt ? attempt + ".submission.json" : "shared record store unavailable"})`);
         continue;
       }
       const r = spawnSync(process.execPath, [join(ROOT, "scripts/lane-deliver.mjs"), "send", `objective-loop: ${e.id} — needs ${e.clears}`, `${e.asks}\n\n(Raised by scripts/objective-loop.mjs on the Mac tick, DR-056. Verdict ${state.verdict}; state ${STATE_REL} @ ${state.derivedAtCommit ?? "?"}. Sent once, on the first tick this escalation appeared; it stays in the state file until cleared.)`, "--receipt", attempt + ".submission.json"], { cwd: ROOT, encoding: "utf8" });
-      // The separate parent intent survives a killed child and a reset tick tree.
+      // Sync the actual independent parent terminal before requesting repair DATA.
+      let terminalRecorded = false;
       try {
-        writeFileSync(attempt + ".terminal.json", JSON.stringify({ status: r.status, error: r.error?.message ?? null, stdout: r.stdout ?? "", stderr: r.stderr ?? "" }) + "\n", { flag: "wx", mode: 0o600, flush: true });
+        writeFileSync(attempt + ".terminal.json", JSON.stringify({ status: r.status, signal: r.signal ?? null,
+          error: r.error?.message ?? null, stdout: r.stdout ?? "", stderr: r.stderr ?? "" }) + "\n", { flag: "wx", mode: 0o600, flush: true });
+        terminalRecorded = true;
       } catch { lines.push(`RAISED HAND: escalation ${e.id} terminal recording failed; READBACK ONLY`); }
-      lines.push(r.status === 0 ? `escalation ${e.id} submitted for protected PR merge` : `WARN escalation ${e.id} submission unconfirmed (lane-deliver exit ${r.status}); read back its original attempt`);
-      if (r.status === 0) submitted.add(e.id);
+      const accepted = terminalRecorded && !r.error && !r.signal && r.status === 0;
+      if (terminalRecorded && !accepted) queueRepair(attempt);
+      lines.push(accepted ? `escalation ${e.id} submitted for protected PR merge` : `WARN escalation ${e.id} submission unconfirmed (lane-deliver exit ${r.status}); read back its original attempt`);
+      if (accepted) submitted.add(e.id);
     }
   }
   if (write) {

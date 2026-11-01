@@ -281,6 +281,20 @@ jobs:
         run: node scripts/check-scheduled-routines.mjs
       - name: Lane delivery (protected PR topics and one-attempt readback)
         run: node scripts/check-lane-delivery.mjs
+      - name: Lane original push (raw terminal and strict refusal unit)
+        run: node scripts/check-lane-push.mjs
+      - name: Lane heartbeat mismatch (real uncertainty route, no refusal authority)
+        run: node scripts/check-lane-mismatch.mjs
+      - name: Lane fixture snapshot (exact filesystem descriptor binding)
+        run: node scripts/check-lane-lease-tree.mjs
+      - name: Lane repair (original uncertainty DATA and owned notification)
+        run: node scripts/check-lane-repair.mjs
+      - name: Lane repair callers (durable handoff and current tick ownership)
+        run: node scripts/check-lane-repair-callers.mjs
+      - name: Lane repair bounds (fair cursor and healthy hand suppression)
+        run: node scripts/check-lane-repair-bounds.mjs
+      - name: Lane readback (bounded cadence and exact durable observations)
+        run: node scripts/check-lane-readback.mjs
       - name: iOS dynamic type self-test (the gate must be able to fail)
         run: node scripts/check-ios-dynamic-type.mjs --self-test
       - name: iOS dynamic type (no raw system font outside DesignSystem.swift)

@@ -505,3 +505,12 @@ block; a stage run on the wrong tier is a lesson here.
 - **evidence:** Vetted JWT/JWKS source 3d2829778952625cc79d13c369769c989f38cbc0 was integrated as d0427b5bea88cb31d4a33f87d63aeb6e23155770; later observed 5886f1e62441bbc272207dc541c9b89407d3e78a is still explicitly unreviewed. Preflight source SHA256 a41a3859eacdf884e5b9774ed001c5b889ab1464940cf0c7a62414500766ce87 and its977-line figure remain unchanged.
 - **landing:** pending — ordinary local source/journal/generated checkpoint only; actual generator outcomes are separately retained, and full/breadth/reviews/currentCI/protected landing/activation remain owed.
 - **status:** pending
+
+
+### L56 — Reanchor exact evidence after source wiring without weakening the inventory
+- **date:** 2026-11-01
+- **lane:** mac
+- **incident:** The retained D003 full stopped because the README evidence still cited preflight591 although its literal target moved; breadth never started.
+- **evidence:** The sole normal writer derives the unique current literal after source integration/owned generators. Every other parsed inventory field and row stays identical; the ratchet remains byte-exact, with no ceiling, floor or window waiver. Vetted source 5886f1e62441bbc272207dc541c9b89407d3e78a is an other-lane delivery.
+- **landing:** pending — one local source/citation/generated checkpoint only; a new exact-head full/breadth, current CI, formal reviews, protected landing and separate activation remain owed.
+- **status:** pending

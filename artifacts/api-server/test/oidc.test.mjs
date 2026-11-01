@@ -35,12 +35,14 @@ const serverEntry = resolve(here, "..", "dist", "index.mjs");
 // tick on the same host. `handedOut` stops one run from reusing a number it just
 // released to itself (the OS may re-offer a just-closed probe port).
 const handedOut = [];
-const freePort = () => new Promise((resolvePort) => {
+// Probe on the same host the consumer binds: no host (wildcard) for ports handed to the
+// api-server, "127.0.0.1" for the loopback JWKS stub. On a bindv6only host the two differ.
+const freePort = (host) => new Promise((resolvePort) => {
   const probe = netCreateServer();
-  probe.listen(0, () => {
+  probe.listen(...(host ? [0, host] : [0]), () => {
     const p = probe.address().port;
     probe.close(() => {
-      if (handedOut.includes(p)) return resolvePort(freePort());
+      if (handedOut.includes(p)) return resolvePort(freePort(host));
       handedOut.push(p);
       resolvePort(p);
     });
@@ -69,7 +71,7 @@ function sign(claims, { alg = "RS256", kid = KID } = {}) {
   return `${header}.${payload}.${signer.sign(privateKey).toString("base64url")}`;
 }
 
-const JWKS_PORT = await freePort();
+const JWKS_PORT = await freePort("127.0.0.1");
 const ISSUER = `http://127.0.0.1:${JWKS_PORT}`;
 const AUDIENCE = "signalgrid-api-test";
 const IDP_TENANT = "idp-tenant-abc";

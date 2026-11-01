@@ -17,6 +17,12 @@ import { buildCatalog, buildMarkdown, CODE_LIT, SIMULATOR_ENGINE, SIMULATOR_WRAP
 
 const CATALOG = "docs/REASON_CODES.md";
 const SPEC = "lib/api-spec/v1-openapi.yaml";
+// docs/ECOSYSTEM_FLOW_AND_RESOLUTION.md §2.1 quotes worker-facing copy per code. It
+// drifted from the engine on four of its seven rows (plan row 29) because nothing
+// compared it: a host-app developer reading §2.1 saw sentences the engine never says.
+// Every worker cell there must be byte-equal to the engine's own descriptor text.
+const ECOSYSTEM = "docs/ECOSYSTEM_FLOW_AND_RESOLUTION.md";
+const ECOSYSTEM_FLOOR = 7;
 const FLOOR = 30;
 // Bumped DELIBERATELY when the simulator gains a code — never trailed upward to
 // whatever today happens to parse. 25 is the measured count at 2026-09-03
@@ -108,6 +114,59 @@ export function auditReasonCodes({ catalog, committedMd, specYaml }) {
   return problems;
 }
 
+// Parse the §2.1 table: `| \`CODE\` | "worker sentence" | operator |`. Fail-closed:
+// a missing section, a collapsed table, an unknown code, a code with no engine
+// descriptor, or a cell that is not the engine's sentence each FAIL.
+export function auditEcosystemWorkerCopy({ catalog, ecosystemMd }) {
+  const problems = [];
+  // The section ends at the next heading of the SAME or higher level (###, ##, #),
+  // not at any `### ` — demoting §2.2 to `##` must not sweep later tables in.
+  const section = /### 2\.1 [^\n]*\n([\s\S]*?)(?=\n#{1,3} |$)/.exec(ecosystemMd);
+  if (!section) return [`${ECOSYSTEM} has no §2.1 section — the worker-copy table cannot be checked`];
+  const ROW = /^\| `([A-Z][A-Z0-9_]{4,})` \| (.*?) \| (.*?) \|$/;
+  const rows = [];
+  const seen = new Set();
+  const bad = (why, line) => problems.push(`${ECOSYSTEM} §2.1 ${why} — fix it, or nothing checks it: ${JSON.stringify(line.slice(0, 100))}`);
+  // A table inside an HTML comment or a code fence parses here but renders as no
+  // table at all: the reader sees nothing while the check reads seven rows.
+  for (const hide of ["<!--", "```", "~~~"]) {
+    if (section[1].includes(hide)) problems.push(`${ECOSYSTEM} §2.1 contains ${JSON.stringify(hide)} — a table hidden from the rendered doc is not worker copy anyone reads`);
+  }
+  // Fail closed on every table line the parser cannot read (review of PR #1302,
+  // then of #1328): before this, a row missing its trailing pipe, an un-backticked
+  // or indented code, an extra column, an empty operator cell or a duplicated code
+  // each passed, and a duplicate could hold the floor of 7 while a real row was lost.
+  // Only the header (the line above a separator) and the separator are exempt.
+  const lines = section[1].split("\n");
+  const SEPARATOR = /^\s*\|(\s*:?-+:?\s*\|)+\s*$/;
+  lines.forEach((line, i) => {
+    if (!/^\s*\|/.test(line) || SEPARATOR.test(line) || SEPARATOR.test(lines[i + 1] ?? "")) return;
+    const m = ROW.exec(line);
+    if (!m) return bad("row does not parse (want: pipe, backticked CODE, worker cell, operator cell, closing pipe)", line);
+    const [, code, , operator] = m;
+    if (/(^|[^\\])\|/.test(operator)) return bad(`row for ${code} has an extra column (an unescaped pipe in the operator cell)`, line);
+    if (operator.trim() === "") return bad(`row for ${code} has an empty operator cell`, line);
+    if (seen.has(code)) return bad(`names ${code} twice — a duplicate can hold the row floor while a real row is lost`, line);
+    seen.add(code);
+    rows.push(m);
+  });
+  if (rows.length < ECOSYSTEM_FLOOR) {
+    problems.push(`vacuity: only ${rows.length} row(s) parsed from ${ECOSYSTEM} §2.1 (floor ${ECOSYSTEM_FLOOR}) — the parser or the table collapsed`);
+  }
+  const byCode = new Map(catalog.rows.map((r) => [r.code, r]));
+  for (const [, code, cell] of rows) {
+    const row = byCode.get(code);
+    if (!row) { problems.push(`${ECOSYSTEM} §2.1 names ${code}, which the engine does not emit`); continue; }
+    if (!row.worker) { problems.push(`${ECOSYSTEM} §2.1 gives ${code} worker copy, but the engine has no descriptor for it`); continue; }
+    const quoted = /^"(.*)"$/.exec(cell);
+    const text = quoted ? quoted[1] : cell;
+    if (text !== row.worker) {
+      problems.push(`${ECOSYSTEM} §2.1 worker cell for ${code} is not the engine's text: ${JSON.stringify(text)} vs ${JSON.stringify(row.worker)} (copy it from ${CATALOG})`);
+    }
+  }
+  return problems;
+}
+
 function selfTest() {
   const checks = [];
   const catalog = buildCatalog();
@@ -194,6 +253,44 @@ function selfTest() {
     specYaml,
   });
   checks.push(["a collapsed SIMULATOR parse trips the simulator vacuity floor", p.some((x) => x.includes("simulator reason code(s) parsed"))]);
+  // ── §2.1 worker copy (plan row 29) ────────────────────────────────────────
+  const ecosystemMd = readFileSync(ECOSYSTEM, "utf8");
+  checks.push(["the committed §2.1 worker copy equals the engine", auditEcosystemWorkerCopy({ catalog, ecosystemMd }).length === 0]);
+  for (const [label, mutate] of [
+    ["restoring an OLD §2.1 worker cell (IDENTITY_DISABLED) FAILS", (md) => md.replace(
+      /(\| `IDENTITY_DISABLED` \| )"[^"]*"/, '$1"Your account is disabled. Contact your administrator."')],
+    ["a §2.1 row naming a code the engine never emits FAILS", (md) => md.replace("| `POSTURE_STALE` |", "| `DEVICE_POSTURE_STALE` |")],
+    ["a collapsed §2.1 table trips its vacuity floor", (md) => md.replace(/^\| `CUSTODY_EXCEPTION` .*\n/m, "")],
+    ["a missing §2.1 section FAILS", (md) => md.replace("### 2.1 ", "### 2.x ")],
+    ["a §2.1 row with its trailing pipe removed FAILS (not dropped silently)", (md) => md.replace(
+      /^(\| `CRITICAL_WORKFLOW_UNTRUSTED_DEVICE` .*)$/m, '$1\n| `POSTURE_STALE` | "Totally invented worker sentence." | op')],
+    ["a §2.1 row whose code fails the code regex FAILS (not dropped silently)", (md) => md.replace(
+      /^(\| `CRITICAL_WORKFLOW_UNTRUSTED_DEVICE` .*)$/m, '$1\n| `posture_stale` | "Totally invented worker sentence." | op |')],
+    ["a DUPLICATED §2.1 row (identical) FAILS", (md) => md.replace(/^(\| `POSTURE_STALE` .*)$/m, "$1\n$1")],
+    ["a duplicated §2.1 row holding the floor while CUSTODY_EXCEPTION is deleted FAILS", (md) => md
+      .replace(/^(\| `POSTURE_STALE` .*)$/m, "$1\n$1").replace(/^\| `CUSTODY_EXCEPTION` .*\n/m, "")],
+    ["a §2.1 row with an EMPTY operator cell FAILS", (md) => md.replace(/^(\| `POSTURE_STALE` \| "[^"]*" \| ).*( \|)$/m, "$1  $2")],
+    ["a §2.1 row with an EXTRA column FAILS", (md) => md.replace(/^(\| `POSTURE_STALE` .*)$/m, "$1 extra |")],
+    ["an INDENTED §2.1 row FAILS (not skipped by the prefix filter)", (md) => md.replace(/^(\| `POSTURE_STALE` )/m, " $1")],
+    ["an UN-BACKTICKED §2.1 code FAILS", (md) => md.replace("| `POSTURE_STALE` |", "| POSTURE_STALE |")],
+    ["a §2.1 table wrapped in an HTML COMMENT FAILS", (md) => md
+      .replace(/^(\| `POSTURE_STALE` )/m, "<!--\n$1").replace(/^(\| `CRITICAL_WORKFLOW_UNTRUSTED_DEVICE` .*)$/m, "$1\n-->")],
+    ["a §2.1 table wrapped in a CODE FENCE FAILS", (md) => md
+      .replace(/^(\| Reason code )/m, "```\n$1").replace(/^(\| `CRITICAL_WORKFLOW_UNTRUSTED_DEVICE` .*)$/m, "$1\n```")],
+  ]) {
+    const mutated = mutate(ecosystemMd);
+    if (mutated === ecosystemMd) { checks.push([label + " (mutation applied)", false]); continue; }
+    const found = auditEcosystemWorkerCopy({ catalog, ecosystemMd: mutated });
+    // A malformed-row case must fail by NAMING the row, not only by tripping the
+    // floor because the row went missing: the floor is exactly what a duplicate beats.
+    checks.push([label, found.length > 0 && (!/FAILS \(|DUPLICATED|duplicated|EMPTY|EXTRA|INDENTED|UN-BACKTICKED|COMMENT|FENCE/.test(label) || found.some((x) => !x.startsWith("vacuity")))]);
+  }
+  // Demoting §2.2 to `##` still ends §2.1 there: later tables must not be swept in.
+  const demoted = ecosystemMd.replace("\n### 2.2 ", "\n## 2.2 ");
+  checks.push([
+    "demoting §2.2 to `##` still ends §2.1 there (mutation applied, still passes)",
+    demoted !== ecosystemMd && auditEcosystemWorkerCopy({ catalog, ecosystemMd: demoted }).length === 0,
+  ]);
   const failed = checks.filter(([, ok]) => !ok);
   for (const [name, ok] of checks) console.log(`  ${ok ? "ok" : "FAIL"} — self-test: ${name}`);
   console.log(`\nself-test ${failed.length === 0 ? "passed" : "FAILED"} (${checks.length - failed.length}/${checks.length})`);
@@ -210,6 +307,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     committedMd: readFileSync(CATALOG, "utf8"),
     specYaml: readFileSync(SPEC, "utf8"),
   });
+  problems.push(...auditEcosystemWorkerCopy({ catalog, ecosystemMd: readFileSync(ECOSYSTEM, "utf8") }));
   console.log(`Reason-code check — ${catalog.rows.length} engine codes; catalog held to byte-faithful generation`);
   console.log(
     `  simulator vocabulary: ${catalog.simulator.codes.length} code(s) across ${SIMULATOR_ENGINE} + ${SIMULATOR_WRAPPERS.map((w) => w.path).join(" + ")} (${catalog.simulator.simulatorOnly.length} the core never emits) — REPORTED, not a launch surface`,

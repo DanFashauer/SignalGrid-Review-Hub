@@ -70,6 +70,15 @@ check("THE PSEUDONYM TRIPWIRE: an email-shaped subject refuses — a cross-syste
 check("garbled or missing instants refuse (issuedAt and occurredAt each)",
   buildCaepClaims(clean({ issuedAt: "just now" })).refusal === "ISSUED_AT_UNREADABLE" &&
   buildCaepClaims(clean({ occurredAt: undefined })).refusal === "OCCURRED_AT_UNREADABLE");
+// Pinned by the brace-less sweep (2026-10-01): with the strict-ISO-Zulu test in
+// `instantOf` gone, each of these is Date-parseable and was read as an instant — a
+// date-only string or an offset form would be stated to the receiver as a time the
+// source never gave in the shape the claims set promises.
+check("a Date-parseable instant that is NOT ISO-8601 Zulu refuses — date-only, offset form, prose date (issuedAt and occurredAt each)",
+  ["2026-07-31", "2026-07-31T15:00:05+00:00", "July 31, 2026 15:00:05 UTC"].every((t) =>
+    Number.isFinite(Date.parse(t)) &&
+    buildCaepClaims(clean({ issuedAt: t })).refusal === "ISSUED_AT_UNREADABLE" &&
+    buildCaepClaims(clean({ occurredAt: t })).refusal === "OCCURRED_AT_UNREADABLE"));
 check("missing issuer / audience / jti / subject each refuse with their own reason",
   buildCaepClaims(clean({ issuer: " " })).refusal === "ISSUER_MISSING" &&
   buildCaepClaims(clean({ audience: undefined })).refusal === "AUDIENCE_MISSING" &&

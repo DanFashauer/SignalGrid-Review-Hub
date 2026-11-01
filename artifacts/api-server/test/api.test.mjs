@@ -24,13 +24,23 @@ import { dirname, resolve } from "node:path";
 // `handedOut` is the run's own ledger: freePort never repeats a number within one run
 // (the OS may re-offer a just-closed probe port), and the port-hygiene check at the
 // end reads this ledger instead of scanning the file's text for constants.
+// The probe binds the WILDCARD address, the same one the server binds (`app.listen(port)`
+// is 0.0.0.0 / ::), never a fixed 127.0.0.1. A port can be free on loopback and taken on
+// the wildcard: an outbound connection from the box's own interface holds <eth0>:p, so
+// bind(127.0.0.1:p) succeeds while the server's bind(0.0.0.0:p) reads EADDRINUSE and the
+// test's fetch ECONNREFUSED. Measured 2026-10-02 23:0xZ on the cloud box: a sibling
+// process held 15,509 ESTABLISHED sockets (55% of the ephemeral range) and every
+// secondary server in this file lost its port in four runs out of four; probing the
+// wildcard made the same file pass 486/486.
 const handedOut = [];
-const freePort = () => new Promise((resolvePort) => {
+// freePort(host) probes on the host its consumer binds: no host (wildcard) for ports handed
+// to the api-server, "127.0.0.1" for the loopback Graph stubs. On a bindv6only host the two differ.
+const freePort = (host) => new Promise((resolvePort) => {
   const probe = netCreateServer();
-  probe.listen(0, "127.0.0.1", () => {
+  probe.listen(...(host ? [0, host] : [0]), () => {
     const p = probe.address().port;
     probe.close(() => {
-      if (handedOut.includes(p)) return resolvePort(freePort());
+      if (handedOut.includes(p)) return resolvePort(freePort(host));
       handedOut.push(p);
       resolvePort(p);
     });
@@ -534,6 +544,40 @@ async function run() {
   const simReset = await req("POST", "/simulator/reset", { body: {} });
   check("simulator reset → 200", simReset.status === 200 && Array.isArray(simReset.json?.auditEvidence));
 
+  // ── Row 99: both demo routers speak the envelope's requestId — the SAME one ──
+  // the header carries. /api/simulator/* minted a fresh uuid per body (a caller's
+  // x-request-id echoed in the header, contradicted in the body) and /api/sim/*
+  // carried none at all while forwarding the room-sim library's raw error text.
+  {
+    const demoCall = async (method, path, body) => {
+      const r = await fetch(`${BASE}${path}`, {
+        method,
+        headers: { "x-request-id": "row99-caller-id", ...(body ? { "content-type": "application/json" } : {}) },
+        body: body ? JSON.stringify(body) : undefined,
+      });
+      return { status: r.status, header: r.headers.get("x-request-id"), json: await r.json().catch(() => null) };
+    };
+    const firstSim = (scenarios.json?.scenarios ?? [])[0]?.id;
+    const cases = [
+      ["GET", "/simulator/scenarios", undefined],
+      ["POST", "/simulator/run", { scenarioId: firstSim }],
+      ["POST", "/simulator/run", { scenarioId: "no-such-scenario" }],
+      ["GET", "/sim/room-entry/scenarios", undefined],
+      ["POST", "/sim/room-entry", { scenarioId: "compliant-bedside" }],
+      ["POST", "/sim/room-entry", { scenarioId: "does-not-exist" }],
+    ];
+    for (const [method, path, body] of cases) {
+      const r = await demoCall(method, path, body);
+      check(`demo envelope: ${method} ${path} (${r.status}) body requestId is the header's x-request-id`,
+        r.header === "row99-caller-id" && r.json?.requestId === "row99-caller-id");
+    }
+    const unknownRoom = await demoCall("POST", "/sim/room-entry", { scenarioId: "does-not-exist" });
+    check("demo envelope: an unknown room-entry scenario is a fixed not_found message, not the library's error string",
+      unknownRoom.status === 404 && unknownRoom.json?.error === "not_found" &&
+      unknownRoom.json?.message === "Room-entry scenario not found." &&
+      !String(unknownRoom.json?.message).includes("does-not-exist"));
+  }
+
   // ── auth fails closed ───────────────────────────────────────────────────
   const noAuth = await req("GET", "/v1/decisions");
   check("unauthenticated request is 401", noAuth.status === 401);
@@ -594,6 +638,26 @@ async function run() {
   check("authorize with no token → 401", authzNoToken.status === 401);
   const authzBad = await req("POST", "/v1/authorize", { token: KEYS.operator, body: { identityRef: "x" } });
   check("authorize with a malformed body → 400 (same validation as evaluate)", authzBad.status === 400);
+
+  // The strict client parse landed (#1145): every Assist client (Kotlin, Rust, Swift)
+  // denies a 2xx whose decisionId is missing, not a string, or blank, or whose reasons
+  // is present but not a list of strings (absent reasons is accepted: allow-no-reasons)
+  // — native/shared/assist-wire-conformance.json is the shared vector file all three run
+  // against. A regression here would have every host app refuse its workers. The server
+  // emits both on every outcome, and this four-outcome assertion pins it. Inputs
+  // measured on a fresh demo core (tenant_northwind).
+  for (const [deviceRef, want] of [
+    ["ipad-ward-01", "allow"], ["ipad-ward-03", "step_up"], ["ipad-ward-02", "restrict"], ["ipad-badge-02", "deny"],
+  ]) {
+    const r = await req("POST", "/v1/authorize", {
+      token: KEYS.operator,
+      body: { identityRef: "nurse.compliant", deviceRef, workflowKey: "clinical-session" },
+    });
+    check(`authorize ${want}: a non-blank string decisionId and string-only reasons (what every Assist client requires)`,
+      r.status === 200 && r.json?.assist === want &&
+      typeof r.json?.decisionId === "string" && r.json.decisionId.trim() !== "" &&
+      Array.isArray(r.json?.reasons) && r.json.reasons.every((x) => typeof x === "string"));
+  }
 
   // ── evaluate: restrict + stale ──────────────────────────────────────────
   const restrict = await req("POST", "/v1/decisions/evaluate", {
@@ -1196,6 +1260,17 @@ async function run() {
   // else — no enrollment, tampered signature, replayed challenge, request-body
   // flags, cross-tenant credentials — must hold or 403, never release.
   const authenticator = makeStepUpAuthenticator("localhost", "http://localhost:3000");
+
+  // Route-level audit rows are witnessed at /metrics (the ledger has no HTTP route; see
+  // "admin actions leave an audit trail" below). The webauthn lib's OWN rows are not
+  // counted there, so a delta in this counter is exactly the route's refusal rows.
+  const auditCount = async (eventType) => {
+    const text = await (await fetch(`${BASE.replace(/\/api$/, "")}/metrics`)).text();
+    // A plain prefix match, no regex built from the event name: nothing to escape.
+    const prefix = `signalgrid_audit_events_total{event_type="${eventType}"} `;
+    const line = text.split("\n").find((l) => l.startsWith(prefix));
+    return line ? Number(line.slice(prefix.length)) : 0;
+  };
   const suIdentity = "nurse.baseline_drift";
   const suDevice = "ipad-ward-06";
 
@@ -1400,6 +1475,30 @@ async function run() {
   check("step-up challenge refuses a read-only auditor → 403 (no decision:evaluate)",
     auditorChallenge.status === 403 && auditorChallenge.json?.challengeId === undefined);
 
+  // AUTHORIZATION BEFORE WEBAUTHN on the COMPLETION route (backlog: "complete-step-up
+  // runs WebAuthn verification before the decision:evaluate authorization check").
+  // The mint sibling above refuses an auditor before touching WebAuthn; completion must
+  // run the SAME check first. An auditor (decision:read, no decision:evaluate) submits
+  // the legitimate holder's validly-signed assertion against the holder's pending
+  // challenge. It must be refused on authorization, and because verify fetches-and-
+  // deletes the challenge and advances the counter, the holder's own completion below
+  // (the SAME challenge and the SAME assertion) succeeding is the proof that WebAuthn
+  // was never reached. Before the fix the auditor's attempt consumed the challenge and
+  // the holder got "Unknown or expired".
+  const refusalsBeforeWorkflow = await auditCount("security.webauthn.step_up.failure");
+  const auditorComplete = await req("POST", "/v1/app-workflows/complete-step-up", {
+    token: KEYS.auditor,
+    body: {
+      integrationId: "bcma", identityRef: suIdentity, deviceRef: suDevice, actionKey: "controlled.administer",
+      challengeId: chalGood.json.challengeId, assertion: goodAssertion,
+    },
+  });
+  check("complete-step-up refuses a read-only auditor on decision:evaluate → 403, no plan",
+    auditorComplete.status === 403 && auditorComplete.json?.plan === undefined &&
+    /decision:evaluate/.test(auditorComplete.json?.message ?? ""));
+  check("...and the refused attempt is audited as a step-up FAILURE (refused, never success)",
+    (await auditCount("security.webauthn.step_up.failure")) === refusalsBeforeWorkflow + 1);
+
   const completed = await req("POST", "/v1/app-workflows/complete-step-up", {
     token: KEYS.operator,
     body: {
@@ -1407,6 +1506,8 @@ async function run() {
       challengeId: chalGood.json.challengeId, assertion: goodAssertion,
     },
   });
+  check("the holder's challenge SURVIVED the auditor's attempt (same challenge + assertion still complete → 200)",
+    completed.status === 200);
   check("verified assertion releases the BOUND action (no longer held)",
     completed.status === 200 && completed.json?.stepUp?.released === true &&
     completed.json?.stepUp?.actionKey === "controlled.administer" &&
@@ -1565,10 +1666,35 @@ async function run() {
     // THE ANSWER. A fresh challenge (the tampered attempt consumed the last one),
     // a genuinely signed UV assertion.
     const goodChallenge = await req("POST", `/v1/decisions/${stepUpDecisionId}/step-up/challenge`, { token: KEYS.operator, body: {} });
+    const goodDecisionAssertion = authenticator.assertion(goodChallenge.json.publicKey.challenge, { signCount: 50 });
+
+    // AUTHORIZATION BEFORE WEBAUTHN on the decision answer route, exactly as the mint
+    // sibling (/step-up/challenge) runs it. An auditor holds decision:read — enough to
+    // read the decision — but not decision:evaluate. Its attempt with the holder's
+    // validly-signed assertion must be refused BEFORE verify, so the holder's answer
+    // below (same challenge, same assertion) still succeeds; before the fix the auditor
+    // consumed the challenge, advanced the counter and left a success row in the ledger.
+    const refusalsBeforeDecision = await auditCount("security.webauthn.step_up.failure");
+    const successBeforeDecision = await auditCount("security.webauthn.step_up.success");
+    const auditorAnswer = await req("POST", `/v1/decisions/${stepUpDecisionId}/step-up`, {
+      token: KEYS.auditor,
+      body: { challengeId: goodChallenge.json.challengeId, assertion: goodDecisionAssertion },
+    });
+    check("decision step-up answer refuses a read-only auditor on decision:evaluate → 403, nothing recorded",
+      auditorAnswer.status === 403 && auditorAnswer.json?.stepUp === undefined &&
+      /decision:evaluate/.test(auditorAnswer.json?.message ?? ""));
+    check("...and the refused attempt is audited as a step-up FAILURE, with no success row",
+      (await auditCount("security.webauthn.step_up.failure")) === refusalsBeforeDecision + 1 &&
+      (await auditCount("security.webauthn.step_up.success")) === successBeforeDecision);
+    const unansweredAfterAuditor = await req("GET", `/v1/decisions/${stepUpDecisionId}`, { token: KEYS.operator });
+    check("...and the decision is STILL unanswered after the auditor's refusal", unansweredAfterAuditor.json?.stepUp === null);
+
     const answered = await req("POST", `/v1/decisions/${stepUpDecisionId}/step-up`, {
       token: KEYS.operator,
-      body: { challengeId: goodChallenge.json.challengeId, assertion: authenticator.assertion(goodChallenge.json.publicKey.challenge, { signCount: 50 }) },
+      body: { challengeId: goodChallenge.json.challengeId, assertion: goodDecisionAssertion },
     });
+    check("the holder's decision challenge SURVIVED the auditor's attempt (same challenge + assertion → 200)",
+      answered.status === 200);
     check("a verified assertion ANSWERS the step_up → 200 with the recorded answer",
       answered.status === 200 && answered.json?.stepUp?.decisionId === stepUpDecisionId &&
       answered.json?.stepUp?.method === "webauthn" && typeof answered.json?.stepUp?.answeredAt === "string");
@@ -1906,6 +2032,23 @@ async function run() {
       check(`metrics: process uptime measures the PROCESS, not the scraper (first scrape of a >0.9s-old server read ${uptime}s)`,
         uptime >= 0.7);
 
+      // ── Row 95: HEAD is served wherever GET is, and nowhere else ────────────
+      // Express answers HEAD from the GET handler, but the fence matched the verb
+      // literally and 404'd first — a healthy instance reporting 404 to a
+      // load-balancer probe that defaults to HEAD. Both halves, like the fence above.
+      const gwHeadHealth = await fetch(`${BASE4}/healthz`, { method: "HEAD" });
+      check(`gateway: HEAD /healthz is served as GET is (${gwHeadHealth.status}, was 404)`, gwHeadHealth.status === 200);
+      const gwHeadContext = await fetch(`${BASE4}/v1/context`, { method: "HEAD" });
+      check(`gateway: HEAD on the allowlisted GET /v1/context reaches the route and demands a credential (${gwHeadContext.status}, want 401)`,
+        gwHeadContext.status === 401);
+      const gwHeadKeys = await fetch(`${BASE4}/v1/keys`, { method: "HEAD" });
+      check("gateway: HEAD on an unlisted route is still fenced (404)", gwHeadKeys.status === 404);
+      // /v1/authorize is POST-only with no GET sibling pattern (unlike
+      // /v1/decisions/evaluate, which GET /v1/decisions/:id also matches).
+      const gwHeadAuthorize = await fetch(`${BASE4}/v1/authorize`, { method: "HEAD" });
+      check("gateway: HEAD on a POST-only launch route is still fenced (404) — only HEAD→GET is folded",
+        gwHeadAuthorize.status === 404);
+
       // NON-VACUITY. Every check above asserts an ABSENCE, and a server that failed to
       // boot, or a wrong base URL, would satisfy all of them. Something must still be
       // served, or these prove nothing.
@@ -2186,7 +2329,15 @@ async function run() {
   check("session end → 200 and the session is no longer active", ended.status === 200 && ended.json?.session?.status !== "active");
   // The one that would actually hurt: an ended session must not be revivable, or
   // "end" is advisory rather than an control.
+  const refreshAuditCount = async () => {
+    const t = await (await fetch(`${BASE.replace(/\/api$/, "")}/metrics`)).text();
+    const m = t.match(/signalgrid_audit_events_total\{event_type="session\.refresh"\} (\d+)/);
+    return m ? Number(m[1]) : 0;
+  };
+  const refreshAuditBefore = await refreshAuditCount();
   const refreshAfterEnd = await req("POST", `/v1/sessions/${sessionId}/refresh`, { token: KEYS.operator, body: { ttlSeconds: 900 } });
+  check("a refresh that did not happen appends no session.refresh audit row",
+    (await refreshAuditCount()) === refreshAuditBefore);
   // 404, specifically — not merely "not a 200 with active". The store used to hand
   // the ENDED session object back and the route answered 200 with status "ended"
   // plus a session.refresh audit row for a refresh that never happened; the old
@@ -2601,9 +2752,9 @@ async function run() {
   {
     const PORT12 = await freePort();
     const PORT13 = await freePort();
-    const STUB_PORT = await freePort();
+    const STUB_PORT = await freePort("127.0.0.1");
     const PORT14 = await freePort();
-    const GATED_STUB_PORT = await freePort();
+    const GATED_STUB_PORT = await freePort("127.0.0.1");
     const BASE12 = `http://localhost:${PORT12}/api`;
     // What the live transport actually put on the wire, recorded by the stub below.
     const graphStubSaw = [];
@@ -2812,6 +2963,30 @@ async function run() {
     const tooFastExit = await exitOf(tooFast);
     check("estate refresh: an interval below the 30s floor refuses at boot",
       tooFastExit !== "still-running" && tooFastExit !== 0);
+
+    // Above Node's timer ceiling: setInterval clamps a delay past 2^31-1 ms to 1ms, so a
+    // "monthly" 2592000 would have fired the refresh ~1000x a second. Refuse, never clamp.
+    for (const tooSlow of ["2592000", "2147484"]) {
+      const tooSlowChild = spawn("node", [serverEntry], {
+        env: estateEnv({ SIGNALGRID_ESTATE_REFRESH_SECONDS: tooSlow }),
+        stdio: ["ignore", "ignore", "ignore"],
+      });
+      const tooSlowExit = await exitOf(tooSlowChild);
+      check(`estate refresh: ${tooSlow}s is past setInterval's 2^31-1 ms ceiling and refuses at boot`,
+        tooSlowExit !== "still-running" && tooSlowExit !== 0);
+    }
+    // The ceiling itself (2147483s = 2147483000ms <= 2^31-1) is honoured, not refused.
+    const atCeiling = spawn("node", [serverEntry], {
+      env: estateEnv({ SIGNALGRID_ESTATE_REFRESH_SECONDS: "2147483" }),
+      stdio: ["ignore", "ignore", "ignore"],
+    });
+    try {
+      check("estate refresh: the largest interval Node can honour (2147483s) still boots",
+        await waitReady(PORT12));
+    } finally {
+      atCeiling.kill("SIGTERM");
+      await exitOf(atCeiling);
+    }
 
     // Set on a DEMO core: there is no estate connector to refresh, so a server that
     // booted anyway would report a loop that could never run.

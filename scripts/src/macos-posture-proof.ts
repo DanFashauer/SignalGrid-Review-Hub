@@ -473,6 +473,50 @@ check("macos: ...while two active endpoint-security extensions are still a confl
   twoReal.sysextConflict === true);
 
 
+// BRACE-LESS `readableString` / `normalizeSysext` GUARDS, EACH ISOLATED (joined the
+// one-line sweep 2026-09-30). Each string below trips exactly ONE clause: it is built to
+// pass every other clause, so a mutation of that one clause is the only thing that can
+// let it through. The `defaults read` fixture above trips BOTH the banner test and the
+// "does not exist" test, which is why neither was pinned — each covered for the other.
+const readsAs = (v: string) =>
+  normalizeReport("iso", { os: { product_version: v }, xprotect: { xprotect_definitions: v } } as MacosPostureReportRaw);
+for (const [label, v] of [
+  // `s === ""` — nothing else fires on an empty string, so without it "" is a VALUE:
+  // osVersion "" and definitions "present" for a probe that returned nothing.
+  ["a blank string", "   "],
+  // `/^[a-z]+error\b/i` — not "error…" (prefix test), no "%", no banner, no "does not exist".
+  ["a Python exception name", "PermissionError: [Errno 1] Operation not permitted"],
+  // `/\bdefaults\[\d+:[0-9a-f]+\]/i` — the stderr banner WITHOUT the "does not exist" sentence.
+  ["a bare `defaults` stderr banner", "2026-07-31 19:25:53.687 defaults[79610:19689790] output truncated"],
+  // `/\bdoes not exist\b/i` — the sentence WITHOUT the banner (already stripped).
+  ["a bare 'does not exist' sentence", "The domain/default pair of (XProtect.bundle/Contents/Info, Version) does not exist"],
+] as const) {
+  const r = readsAs(v);
+  check(`macos: ${label} is not a reading — osVersion null, definitions unknown`,
+    r.osVersion === null && r.malwareDefs === "unknown");
+}
+
+// `!e || typeof e !== "object"` in the extension filter. Without it a null/undefined entry
+// reaches `x.category` and the whole posture read THROWS — one hole in the list taking down
+// the report. Guarded by try/catch so the failure is a named check, not a crashed proof;
+// the two real extensions after the holes keep it non-vacuous (the hole is skipped, and the
+// list is still read to the end).
+let holey: ReturnType<typeof sysext> | null = null;
+try {
+  holey = sysext({
+    available: true, reliable: true, residual_count: 0,
+    extensions: [
+      null,
+      undefined,
+      { category: "endpoint_security", status: "active", enabled: true },
+      { category: "endpoint_security", status: "active", enabled: true },
+    ],
+  });
+} catch { holey = null; }
+check("macos: null/undefined entries in the extension list are skipped, not thrown on — the real pair still conflicts",
+  holey !== null && holey.sysextUnreliable === false && holey.sysextConflict === true);
+
+
 const total = passed + failures.length;
 console.log(`summary=${failures.length === 0 ? "pass" : "fail"} (${passed}/${total})`);
 if (failures.length > 0) { console.error("Failed checks:"); for (const f of failures) console.error(`  - ${f}`); process.exitCode = 1; }

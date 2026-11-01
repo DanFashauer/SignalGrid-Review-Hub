@@ -40,8 +40,10 @@ the same outcome.
 pnpm run db:verify-backup -- /var/backups/signalgrid/signalgrid-2026-08-08T....dump
 ```
 
-Recomputes the checksum and prints what the archive contains. Needs no `DATABASE_URL`,
-so it is safe to run against an archive on a shelf. **Run this on a schedule** — an
+Recomputes the checksum, lists the archive with `pg_restore --list` (so it needs
+`pg_restore` on the path) to refuse the same foreign machinery a restore would, and
+prints what the archive contains. Needs no `DATABASE_URL`, so it is safe to run against
+an archive on a shelf. **Run this on a schedule** — an
 archive that has silently rotted is discovered here, or during the incident.
 
 ## Restore
@@ -172,8 +174,8 @@ deliberate open decision, not an accident — until it is made, any statement ab
 
 ## What the CI proof actually establishes
 
-`proof:backup-restore` runs on every pull request against a real Postgres, 16
-assertions:
+`proof:backup-restore` runs on every pull request against a real Postgres and
+asserts:
 
 - a seeded ledger verifies **before** backup, and the manifest records its true head
 - the database is **genuinely destroyed** in between — asserted, not assumed. Without
@@ -186,6 +188,13 @@ assertions:
 - an archive with no manifest is refused rather than assumed good
 - and a positive control: a good archive is **accepted**, so the verifier cannot pass
   the negative tests by simply refusing everything
+- a checksum-valid archive whose table of contents lists a **trigger, rule, policy or
+  row-level security on a managed table, or any event trigger**, is refused *before*
+  `pg_restore` replaces anything — a sentinel row on the live ledger survives the
+  refusal, and nothing leaks into the live database. This reads the objects as `pg_dump`
+  labelled them in the archive's table of contents: it defends against a contaminated
+  source database, not a hand-crafted archive (the manifest proves integrity, not
+  authenticity, so whoever can write the archive can rewrite the manifest and the labels)
 
 ## What this does NOT give you
 

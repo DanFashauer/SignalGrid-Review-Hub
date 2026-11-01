@@ -543,9 +543,9 @@ check('an init lock whose creator PID was reused (other start time) is taken ove
 check('a paused initializer resuming never removes a replacement owner\'s lock',f=>{
  const {module,directory,lock}=uninitialized(f),preload=join(f.parent,'pause-init.cjs'),gate=join(f.parent,'gate');
  // Pause the initializer inside init (its lock is held) until the gate file exists.
- writeFileSync(preload,`const fs=require('node:fs'),m=fs.mkdirSync;fs.mkdirSync=function(p,...r){if(String(p)===${JSON.stringify(directory)}){fs.writeFileSync(${JSON.stringify(join(f.parent,'paused'))},'1');while(!fs.existsSync(${JSON.stringify(gate)}))Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0,50);}return m.call(this,p,...r)};require('node:module').syncBuiltinESMExports();`);
+ writeFileSync(preload,`const fs=require('node:fs'),m=fs.mkdirSync;fs.mkdirSync=function(p,...r){if(String(p)===process.env.SG_PAUSE_DIR){fs.writeFileSync(process.env.SG_PAUSE_FLAG,'1');while(!fs.existsSync(process.env.SG_PAUSE_GATE))Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0,50);}return m.call(this,p,...r)};require('node:module').syncBuiltinESMExports();`);
  // Started through a shell that exits at once, so the paused child is reaped by init, not by this (blocking) process.
- const child={pid:Number(spawnSync('/bin/sh',['-c','"$NODE" "$M" ensure "$R" >/dev/null 2>&1 & echo $!'],{cwd:f.root,encoding:'utf8',env:{PATH:dirname(process.execPath)+':/usr/bin:/bin',NODE:process.execPath,M:module,R:f.root,NODE_OPTIONS:'--require='+preload,GIT_CONFIG_NOSYSTEM:'1',GIT_CONFIG_GLOBAL:'/dev/null'}}).stdout.trim())};assert.ok(child.pid>0);
+ const child={pid:Number(spawnSync('/bin/sh',['-c','"$NODE" "$M" ensure "$R" >/dev/null 2>&1 & echo $!'],{cwd:f.root,encoding:'utf8',env:{PATH:dirname(process.execPath)+':/usr/bin:/bin',NODE:process.execPath,M:module,R:f.root,NODE_OPTIONS:'--require='+preload,SG_PAUSE_DIR:directory,SG_PAUSE_FLAG:join(f.parent,'paused'),SG_PAUSE_GATE:gate,GIT_CONFIG_NOSYSTEM:'1',GIT_CONFIG_GLOBAL:'/dev/null'}}).stdout.trim())};assert.ok(child.pid>0);
  for(let i=0;i<100&&!existsSync(join(f.parent,'paused'));i++)spawnSync('/bin/sleep',['0.1']);
  assert.ok(existsSync(join(f.parent,'paused')),'initializer reached init');
  // Another tick took the lock over meanwhile (created first, so its inode differs from the paused owner's).

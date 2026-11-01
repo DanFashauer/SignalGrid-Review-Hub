@@ -67,8 +67,8 @@ router.use(v1Router);
 // Without it an unknown /api path fell through to Express's HTML error page:
 // the one place an integrator is most lost (a typo'd path) answered in a
 // different content type and a shape no client parses. Same flat envelope as
-// every other error. Scoped to this router (mounted at /api) on purpose — the
-// root serves human surfaces (demo console, /metrics) whose defaults stand.
+// every other error. Unknown ROOT paths get the same envelope from the catch-all
+// in app.ts, registered after the human surfaces (demo console, /metrics).
 router.use((req, res) => {
   res.status(404).json({
     requestId: req.requestId ?? null,

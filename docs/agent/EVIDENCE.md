@@ -5011,18 +5011,18 @@ Verdict: six owner-accepted records are on `SignalGrid_Alpha`, each on a head wh
 
 **What happened.** The cloud ran `bash docs/agent/estate-20261023/delete-zero-loss-verified.sh` (dry run: 8 DONE already absent, 2 WOULD) and `--apply`, which SKIPPED both remaining branches: the cloud's GitHub proxy refuses tag creation (`git push origin <tip>:refs/tags/archive/<b>` → `send-pack: unexpected disconnect while reading sideband packet`; `POST repos/…/git/refs` → HTTP 403 "Write access to this GitHub API path is not permitted through this proxy"), and the script refuses to delete without the archive tag. The cloud mailed the Mac (lane-mail PR #1724). The Mac lane ran the script's checks by hand at ~04:31Z (its classifier refused the script invocation and the `--force-with-lease` form), pushed and read back the archive tags, and deleted both branches (mail `mac-od01-done-from-the-mac-the-two-remaining-zer`, PR #1725).
 
-**Command** (cloud, 2026-11-01 04:36Z):
+Command (cloud, 2026-11-01 04:36Z):
 ```
 for b in claude/build-gate-survivors-liveness-scratch-git mac/pr-1216-fix-backup; do git ls-remote --exit-code --heads origin $b >/dev/null 2>&1; echo "$b heads rc=$?"; git ls-remote origin refs/tags/archive/$b | cut -c1-12; done
 ```
-**Output:**
+Output:
 ```
 claude/build-gate-survivors-liveness-scratch-git heads rc=2
 531e141fdc7a
 mac/pr-1216-fix-backup heads rc=2
 5a2701745129
 ```
-**Verdict.** Both heads absent (rc 2), both archive tags present at the measured tips. Remote heads: 283 before, 282 after the deletes (the Mac's own mail branch then added one). Restore path, if ever needed: `git fetch origin refs/tags/archive/<b>:refs/tags/archive/<b> && git push origin <tip>:refs/heads/<b>`.
+Verdict: both heads absent (rc 2), both archive tags present at the measured tips. Remote heads: 283 before, 282 after the deletes (the Mac's own mail branch then added one). Restore path, if ever needed: `git fetch origin refs/tags/archive/<b>:refs/tags/archive/<b> && git push origin <tip>:refs/heads/<b>`.
 
 ## 2026-11-01 — The owner's brain:ready batch: nine of ten landed under DR-037/DR-061
 

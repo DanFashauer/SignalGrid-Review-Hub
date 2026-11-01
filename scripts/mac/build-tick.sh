@@ -222,7 +222,7 @@ raise_hand() {
           }
           if (JSON.parse(read(attempt + ".attempt.json")).receipt !== attempt + ".submission.json" || read(attempt + ".exit").trim() !== "0") throw Error("original parent is not known complete");
           read(attempt + ".output"); // missing original evidence never renews an attempt
-          const result = require("child_process").spawnSync(process.execPath, [path.join(repo, "scripts/lane-deliver.mjs"), "readback", attempt + ".submission.json", "--resolved-hand", "build-" + episode], { cwd: repo, encoding: "utf8" });
+          const result = require("child_process").spawnSync(process.execPath, [path.join(repo, "scripts/lane-deliver.mjs"), "readback", attempt + ".submission.json", "--resolved-hand", JSON.parse(read(attempt + ".attempt.json")).handId || "build-" + episode], { cwd: repo, encoding: "utf8" });
           const cleared = /^resolved hand ([a-f0-9]{40})$/m.exec(result.stdout ?? "");
           if (result.error || result.signal || result.status !== 0 || !cleared) throw Error("original hand not canonically resolved");
           episode = digest(cause + ":" + cleared[1]);
@@ -233,8 +233,9 @@ raise_hand() {
           throw error;
         }
       }
-      hand.id = "build-" + episode;
-      fs.writeFileSync(attempt + ".attempt.json", JSON.stringify({ at: stamp, state: "attempted; pending exact readback", receipt: attempt + ".submission.json", ...(retryOf ? { retryOf } : {}) }), { flag: "wx", mode: 0o600, flush: true });
+      // A resolved hand whose cause recurs is raised again under a new id.
+      hand.id = "build-" + episode + (retryOf && retryOf.reraise ? "-again-" + retryOf.n : "");
+      fs.writeFileSync(attempt + ".attempt.json", JSON.stringify({ at: stamp, state: "attempted; pending exact readback", receipt: attempt + ".submission.json", handId: hand.id, ...(retryOf ? { retryOf } : {}) }), { flag: "wx", mode: 0o600, flush: true });
       fs.writeFileSync(f, JSON.stringify([hand]));
       process.stdout.write(attempt);' \
       "$_ops" "$1" "${RUN_LOG:-launchd log ~/Library/Logs/signalgrid-build-tick.log}" "$_hand_records" "$STAMP" "$REPO_ROOT" 2>/dev/null)"; then

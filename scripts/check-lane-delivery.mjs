@@ -525,19 +525,21 @@ check('two concurrent initializations leave one valid store and both callers suc
  assert.equal(run(process.execPath,[module,'tick-guard',f.root],f.root).status,0,'the one store is valid');
  assert.deepEqual(readdirSync(dirname(directory)).filter(n=>n.startsWith('signalgrid-lane-records')).sort(),['signalgrid-lane-records','signalgrid-lane-records.json'],'no archived or extra store, no leftover lock');
 });
+// A process start time as the store records it: ps lstart under LC_ALL=C TZ=UTC0, as an ISO instant.
+function isoStartOf(pid){const r=spawnSync('/bin/ps',['-o','lstart=','-p',String(pid)],{encoding:'utf8',env:{PATH:'/usr/bin:/bin',LC_ALL:'C',TZ:'UTC0'}});return new Date(Date.parse(r.stdout.trim().replace(/\s+/g,' ')+' UTC')).toISOString();}
 function uninitialized(f){const module=join(f.root,'scripts/lib/lane-attempt-store.mjs'),directory=run(process.execPath,[module,'path',f.root],f.root).stdout.trim();rmSync(directory+'.json');rmSync(directory,{recursive:true});return {module,directory,lock:directory+'.init.lock'};}
 check('an init lock whose creator is dead is taken over',f=>{
- const {module,directory,lock}=uninitialized(f),dead=run('/usr/bin/true',[],f.root);writeFileSync(lock,JSON.stringify({pid:dead.pid,start:'Thu Jan 1 00:00:00 2026'})+'\n');
+ const {module,directory,lock}=uninitialized(f),dead=run('/usr/bin/true',[],f.root);writeFileSync(lock,JSON.stringify({pid:dead.pid,startMs:0})+'\n');
  const r=run(process.execPath,[module,'ensure',f.root],f.root);assert.equal(r.status,0,r.stderr);assert.equal(r.stdout.trim(),directory);assert.equal(existsSync(lock),false);
 });
 check('an init lock whose creator is alive is waited on, then held',f=>{
- const {module,directory,lock}=uninitialized(f),start=run('/bin/ps',['-o','lstart=','-p',String(process.pid)],f.root).stdout.trim().replace(/\s+/g,' ');
- const raw=JSON.stringify({pid:process.pid,start})+'\n';writeFileSync(lock,raw);
+ const {module,directory,lock}=uninitialized(f);
+ const raw=JSON.stringify({pid:process.pid,startMs:Date.parse(isoStartOf(process.pid))})+'\n';writeFileSync(lock,raw);
  const r=run(process.execPath,[module,'ensure',f.root],f.root,{SIGNALGRID_INIT_LOCK_WAIT_MS:'500'});
  assert.equal(r.status,1);assert.match(r.stderr,new RegExp('held by live pid '+process.pid));assert.equal(readFileSync(lock,'utf8'),raw,'a live owner\'s lock is never removed');assert.equal(existsSync(directory),false);
 });
 check('an init lock whose creator PID was reused (other start time) is taken over',f=>{
- const {module,lock}=uninitialized(f);writeFileSync(lock,JSON.stringify({pid:process.pid,start:'Thu Jan 1 00:00:00 2026'})+'\n');
+ const {module,lock}=uninitialized(f);writeFileSync(lock,JSON.stringify({pid:process.pid,startMs:Date.parse('2026-01-01T00:00:00.000Z')})+'\n');
  const r=run(process.execPath,[module,'ensure',f.root],f.root,{SIGNALGRID_INIT_LOCK_WAIT_MS:'500'});assert.equal(r.status,0,r.stderr);assert.equal(existsSync(lock),false);
 });
 check('a paused initializer resuming never removes a replacement owner\'s lock',f=>{
@@ -565,6 +567,19 @@ for(const [label,receipt,want] of [['without a receipt is raised again',false,2]
  assert.equal(second.status,0,second.stderr);assert.equal(readFileSync(calls,'utf8').trim().split('\n').length,want);
  assert.match(second.stdout,want===2?/written \(lane-deliver exit 0\)/:/already raised/);
  if(want===2){const third=run(process.execPath,[module,'raise-hold',f.root,'original tick shell 1 is still alive; holding'],f.root,{...env,HOLD_RC:'0'});assert.match(third.stdout,/already raised/);assert.equal(readFileSync(calls,'utf8').trim().split('\n').length,2);}
+});
+for(const [ledger,want] of [['open',1],['resolved',2]])check('a delivered hold hand whose Hub hand is '+ledger+(want===2?' is raised again under a new id':' stays already raised'),f=>{
+ const calls=join(f.parent,'hold-calls'),message='original tick shell 1 is still alive; holding',id='tick-hold-'+createHash('sha256').update(message).digest('hex');
+ writeFileSync(join(f.root,'scripts/lane-deliver.mjs'),`import fs from 'node:fs';const a=process.argv.slice(2);fs.appendFileSync(${JSON.stringify(calls)},JSON.parse(fs.readFileSync(a[1],'utf8'))[0].id+'\\n');process.exit(0);`);
+ const module=join(f.root,'scripts/lib/lane-attempt-store.mjs');
+ const first=run(process.execPath,[module,'raise-hold',f.root,message],f.root);assert.equal(first.status,0,first.stderr);assert.match(first.stdout,/written \(lane-deliver exit 0\)/);
+ // The Hub ledger as lane-deliver's fetch leaves it on origin/SignalGrid_Alpha.
+ const g=a=>{const r=scratchGit(f.root,a,{env:{GIT_CONFIG_NOSYSTEM:'1',GIT_CONFIG_GLOBAL:'/dev/null'}});assert.equal(r.status,0,r.stderr)};
+ mkdirSync(join(f.root,'artifacts/raised-hands'),{recursive:true});writeFileSync(join(f.root,'artifacts/raised-hands',id+'.json'),JSON.stringify({id,status:ledger})+'\n');
+ g(['add','artifacts']);g(['commit','-qm','ledger']);g(['update-ref','refs/remotes/origin/SignalGrid_Alpha','HEAD']);
+ const second=run(process.execPath,[module,'raise-hold',f.root,message],f.root);assert.equal(second.status,0,second.stderr);
+ const sent=readFileSync(calls,'utf8').trim().split('\n');assert.equal(sent.length,want);
+ if(want===2){assert.equal(sent[1],id+'-again-1');assert.match(second.stdout,new RegExp('hand '+id+'-again-1 written'));}else assert.match(second.stdout,/already raised/);
 });
 check('a store directory left without its marker is held, never reset',f=>{
  const module=join(f.root,'scripts/lib/lane-attempt-store.mjs');
@@ -662,10 +677,10 @@ function leaseContext(f){
  fs.writeFileSync=function(...v){gate(v[0]);return Reflect.apply(write,this,v)};
  require('node:module').syncBuiltinESMExports();\n`);
  const children=[];
- function start(label,{checkout=f.root,gate='',pre='',detached=false,dry=1}={}){
+ function start(label,{checkout=f.root,gate='',pre='',detached=false,dry=1,tz=null,pathPrefix=''}={}){
   const temp=join(f.parent,label+'-tmp');mkdirSync(temp);
   const script=`set -u\nDRY=${dry}\nREPO_ROOT="$FIXTURE_CHECKOUT"\nRECORD_DIR="$TICK_TEST_STORE"\nsay(){ printf '%s\\n' "$1"; }\n${source.slice(a,b)}\n${pre}\nprintf '{"event":"ENTER"}\\n' >&4\nread -r release\nexit 0\n`;
-  const env={PATH:dirname(process.execPath)+':/usr/bin:/bin',HOME:f.parent,TMPDIR:temp,
+  const env={PATH:pathPrefix+dirname(process.execPath)+':/usr/bin:/bin',HOME:f.parent,TMPDIR:temp,...(tz?{TZ:tz}:{}),
    GIT_CONFIG_NOSYSTEM:'1',GIT_CONFIG_GLOBAL:'/dev/null',FIXTURE_CHECKOUT:checkout,
    TICK_TEST_STORE:store,TICK_TEST_GATE_MODE:gate,TICK_TEST_GATE_USED:join(f.parent,label+'-gate-used'),
    NODE_OPTIONS:'--require='+preload};
@@ -751,26 +766,38 @@ for(const kind of ['live','missing','corrupt'])await leaseControl('preexisting l
 });
 await leaseControl('a live PID whose start time differs from the recorded one is a reused PID: recovered',async(f,c)=>{
  const a=c.start('reuse-A');assert.equal((await a.next()).event,'ENTER');const open=JSON.parse(readFileSync(c.slot,'utf8'));
- assert.match(JSON.parse(readFileSync(join(c.store,'tick-'+open.token+'.opened.json'),'utf8')).shellStart,/^\w{3} \w{3} \d+ \d\d:\d\d:\d\d \d{4}$/,'the owner record names its shell start time');
+ assert.match(JSON.parse(readFileSync(join(c.store,'tick-'+open.token+'.opened.json'),'utf8')).shellStart,/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.000Z$/,'the owner record names its shell start time as a UTC instant');
  assert.equal(a.child.kill('SIGKILL'),true);await a.closed;
- rewriteOwner(c,open,{shellPid:process.pid,shellStart:'Thu Jan 1 00:00:00 2026',pgid:undefined}); // a live process, but not the one recorded
+ rewriteOwner(c,open,{shellPid:process.pid,shellStart:'2026-01-01T00:00:00.000Z',pgid:undefined}); // a live process that started later than the one recorded
  c.kernelAvailable();await recovers(c,c.start('reuse-B'),open.token);
 });
-await leaseControl('a live PID with the recorded start time holds and raises a hand naming it',async(f,c)=>{
+await leaseControl('a live PID with the recorded start time holds (recorded under UTC, checked under Asia/Tokyo) and raises a hand naming it',async(f,c)=>{
  const a=c.start('same-A');assert.equal((await a.next()).event,'ENTER');const open=JSON.parse(readFileSync(c.slot,'utf8'));
  assert.equal(a.child.kill('SIGKILL'),true);await a.closed;
- const start=run('/bin/ps',['-o','lstart=','-p',String(process.pid)],f.root).stdout.trim().replace(/\s+/g,' ');assert.ok(start);
+ const start=isoStartOf(process.pid);
  rewriteOwner(c,open,{shellPid:process.pid,shellStart:start,pgid:undefined});
- c.kernelAvailable();const original=leaseTree(c.store),b=c.start('same-B',{dry:0});assert.equal((await b.next()).event,'CLOSED');await b.closed;
+ c.kernelAvailable();const original=leaseTree(c.store),b=c.start('same-B',{dry:0,tz:'Asia/Tokyo'});assert.equal((await b.next()).event,'CLOSED');await b.closed;
  assert.match(b.stdout+b.stderr,/still alive; holding/);assert.match(b.stdout,/RAISED HAND: tick recovery holding; hand tick-hold-[a-f0-9]{64} written/);
  assert.deepEqual(held(leaseTree(c.store)),held(original),'the live original is never finalized');assert.equal(c.state(),'OPEN');
  const ops=readdirSync(c.store).filter(n=>/^tick-hold-[a-f0-9]{64}\.ops\.json$/.test(n));assert.equal(ops.length,1,'exactly one hand record for the held cause');
  const op=JSON.parse(readFileSync(join(c.store,ops[0]),'utf8'))[0];assert.equal(op.op,'raise');assert.ok(op.blocked.includes(String(process.pid))&&op.blocked.includes(start),'the hand names the PID and its start time');
  // This fixture has no lane-deliver, so the hand's delivery exits 1 before any receipt: published
  // nothing, so the next hold raises it again (shared retry rule), keeping the first aside.
- const again=c.start('same-C',{dry:0});assert.equal((await again.next()).event,'CLOSED');await again.closed;
+ const again=c.start('same-C',{dry:0,tz:'Asia/Tokyo'});assert.equal((await again.next()).event,'CLOSED');await again.closed;
  assert.match(again.stdout,/hand tick-hold-[a-f0-9]{64} written \(lane-deliver exit 1\)/);
  assert.ok(existsSync(join(c.store,'refused',ops[0].replace('.ops.json','.refused-1.attempt.json'))),'the refused first hand is kept aside');
+});
+await leaseControl('a process-table line that does not parse holds recovery',async(f,c)=>{
+ const a=c.start('ps-A');assert.equal((await a.next()).event,'ENTER');assert.equal(a.child.kill('SIGKILL'),true);await a.closed;
+ const bin=join(f.parent,'fake-ps');mkdirSync(bin);writeFileSync(join(bin,'ps'),'#!/bin/sh\nif [ "$1" = -eo ]; then echo "  1 1 garbage that is not a process line"; exit 0; fi\nexec /bin/ps "$@"\n',{mode:0o755});
+ c.kernelAvailable();const original=leaseTree(c.store),b=c.start('ps-B',{pathPrefix:bin+':'});assert.equal((await b.next()).event,'CLOSED');await b.closed;
+ assert.match(b.stdout+b.stderr,/unparseable.*holding/);assert.deepEqual(held(leaseTree(c.store)),held(original));
+});
+await leaseControl('an invalid recorded start time degrades to PID-only liveness instead of stopping the tick',async(f,c)=>{
+ const a=c.start('badstart-A');assert.equal((await a.next()).event,'ENTER');const open=JSON.parse(readFileSync(c.slot,'utf8'));
+ assert.equal(a.child.kill('SIGKILL'),true);await a.closed;
+ rewriteOwner(c,open,{shellStart:'not a time'}); // the original shell is dead: PID-only liveness recovers
+ c.kernelAvailable();await recovers(c,c.start('badstart-B'),open.token);
 });
 await leaseControl('an OPEN slot whose original shell is still alive stays held',async(f,c)=>{
  const a=c.start('live-A');assert.equal((await a.next()).event,'ENTER');const open=JSON.parse(readFileSync(c.slot,'utf8'));
@@ -790,11 +817,11 @@ await leaseControl('failed immutable owner publication is recovered as ABANDONED
 });
 await leaseControl('a surviving child in the original tick process group holds recovery until it is gone',async(f,c)=>{
  const child=join(f.parent,'survivor.pid');
- const a=c.start('group-A',{detached:true,pre:`sleep 300 </dev/null >/dev/null 2>&1 4>&- 8<&- &\necho $! > ${q(child)}`});assert.equal((await a.next()).event,'ENTER');
+ const a=c.start('group-A',{detached:true,tz:'UTC0',pre:`sleep 300 </dev/null >/dev/null 2>&1 4>&- 8<&- &\necho $! > ${q(child)}`});assert.equal((await a.next()).event,'ENTER');
  const survivor=Number(readFileSync(child,'utf8'));const token=JSON.parse(readFileSync(c.slot,'utf8')).token;
  try {
   assert.equal(a.child.kill('SIGKILL'),true);await a.closed;process.kill(survivor,0);
-  c.kernelAvailable();const original=leaseTree(c.store),b=c.start('group-B');assert.equal((await b.next()).event,'CLOSED');await b.closed;
+  c.kernelAvailable();const original=leaseTree(c.store),b=c.start('group-B',{tz:'Asia/Tokyo'}); /* the scan must still find it under another TZ */assert.equal((await b.next()).event,'CLOSED');await b.closed;
   assert.match(b.stdout+b.stderr,/may survive.*holding/);assert.deepEqual(held(leaseTree(c.store)),held(original),'a live descendant is never finalized over');
  } finally { try{process.kill(survivor,'SIGKILL')}catch{} }
  for(let i=0;i<50;i++){try{process.kill(survivor,0);spawnSync('/bin/sleep',['0.1'])}catch{break}}
@@ -849,8 +876,13 @@ await leaseControl('normal own completion retains guard identity and admits the 
 
 {
 
-function handEpisodes(steps){
+function handEpisodes(steps,{ledger=null}={}){
  const root=mkdtempSync(join(tmpdir(),'sg-hand-episode-'));const records=join(root,'records'),cache=join(root,'cache'),calls=join(root,'calls');
+ if(ledger){ // the Hub-side ledger as lane-deliver leaves it: origin/SignalGrid_Alpha holds the hand file
+  const id='build-'+createHash('sha256').update('same source-backed fixture blocker').digest('hex'),g=a=>{const r=scratchGit(root,a,{env:{GIT_CONFIG_NOSYSTEM:'1',GIT_CONFIG_GLOBAL:'/dev/null'}});assert.equal(r.status,0,r.stderr)};
+  g(['init','-q']);mkdirSync(join(root,'artifacts/raised-hands'),{recursive:true});writeFileSync(join(root,'artifacts/raised-hands',id+'.json'),JSON.stringify({id,status:ledger})+'\n');
+  g(['add','artifacts']);g(['-c','user.name=F','-c','user.email=f@example.invalid','commit','-qm','ledger']);g(['update-ref','refs/remotes/origin/SignalGrid_Alpha','HEAD']);
+ }
  mkdirSync(records);mkdirSync(cache);mkdirSync(join(root,'scripts/lib'),{recursive:true});
  writeFileSync(join(root,'scripts/lib/lane-attempt-store.mjs'),readFileSync(join(ROOT,'scripts/lib/lane-attempt-store.mjs'))); // shared refused-retry rule
  const source=readFileSync(join(ROOT,'scripts/mac/build-tick.sh'),'utf8'),start=source.indexOf('raise_hand() {'),end=source.indexOf('\nfail() {',start);assert.ok(start>=0&&end>start);
@@ -872,7 +904,7 @@ const cases=[
  ['repeating a clear token cannot loop or create a third hand',[{phase:'pending'},{phase:'collide'},{phase:'collide'}],2],
 ];
 try{const r=handEpisodes([{phase:'pending',code:1},{phase:'pending'}]);assert.equal(r.sent.length,2,'a refused (exit 1) hand is retried, never consumed');assert.equal(r.sent[0].id,r.sent[1].id);passed++;console.log('PASS a refused hand (exit 1) is retried by the next raise')}catch(e){failed++;console.error('FAIL a refused hand (exit 1) is retried by the next raise: '+e.message)}
-try{const r=handEpisodes([{phase:'pending',code:2,exists:true},{phase:'pending'},{phase:'pending'}]);assert.equal(r.sent.length,1,'an existing hand id is done, never retried');assert.match(r.stdout,/already on the Hub/);passed++;console.log('PASS raise-hand "already exists" (exit 2) is done, not retried')}catch(e){failed++;console.error('FAIL raise-hand "already exists" (exit 2) is done, not retried: '+e.message)}
+for(const [ledger,want,label] of [['open',1,'raise-hand "already exists" (exit 2) for an open hand is done, not retried'],['resolved',2,'raise-hand "already exists" (exit 2) for a resolved hand is raised again under a new id']]){try{const r=handEpisodes([{phase:'pending',code:2,exists:true},{phase:'pending'},{phase:'pending'}],{ledger});assert.equal(r.sent.length,want);if(want===1)assert.match(r.stdout,/already on the Hub/);else assert.match(r.sent[1].id,/^build-[a-f0-9]{64}-again-1$/);passed++;console.log('PASS '+label)}catch(e){failed++;console.error('FAIL '+label+': '+e.message)}}
 for(const [label,steps,count]of cases){try{const r=handEpisodes(steps);assert.equal(r.sent.length,count);if(count>1){assert.equal(new Set(r.sent.map(x=>x.id)).size,count);assert.ok(r.sent.every(x=>/^build-[a-f0-9]{64}$/.test(x.id)));}assert.doesNotMatch(r.stdout,/hand delivered/);passed++;console.log('PASS '+label)}catch(e){failed++;console.error('FAIL '+label+': '+e.message)}}
 }
 
@@ -1033,6 +1065,24 @@ for(const [mode,want] of [['absent',true],['present',false],['fail',false]]){
   const r=spawnSync(process.execPath,[join(ROOT,'scripts/lib/lane-attempt-store.mjs'),'retry-refused',root,records,id,'1','move'],{cwd:root,encoding:'utf8',env:{PATH:bin+':/usr/bin:/bin',HOME:process.env.HOME,FIXTURE_LS_REMOTE:mode}});
   assert.equal(r.status,0,r.stderr);const out=JSON.parse(r.stdout);
   assert.equal(Boolean(out?.setAsideAs),want,r.stdout);assert.equal(existsSync(join(records,id+'.attempt.json')),!want);
+  passed++;console.log('PASS '+label);
+ } catch(e){failed++;console.error('FAIL '+label+': '+e.message);}
+ finally{rmSync(root,{recursive:true,force:true});}
+}
+{
+ // The notice ("move") path is capped too: the fourth refusal holds and is recorded.
+ const label='a notice refused a fourth time is capped: no move, .capped written';
+ const root=mkdtempSync(join(tmpdir(),'sg-notice-cap-'));
+ try {
+  const records=join(root,'records'),id='repair-build-'+'b'.repeat(64);mkdirSync(records);
+  const results=[];
+  for(let i=0;i<4;i++){
+   for(const suffix of ['.attempt.json','.ops.json','.output','.terminal.json'])writeFileSync(join(records,id+suffix),'{"try":'+i+'}\n');
+   const r=spawnSync(process.execPath,[join(ROOT,'scripts/lib/lane-attempt-store.mjs'),'retry-refused',root,records,id,'1','move'],{cwd:root,encoding:'utf8',env:{PATH:'/usr/bin:/bin',HOME:process.env.HOME}});
+   assert.equal(r.status,0,r.stderr);results.push(JSON.parse(r.stdout));
+  }
+  assert.deepEqual(results.slice(0,3).map(x=>x?.n),[1,2,3]);assert.equal(results[3],null,'the fourth refusal is held');
+  assert.equal(readFileSync(join(records,'refused',id+'.capped'),'utf8'),'4\n');assert.ok(existsSync(join(records,id+'.attempt.json')),'the capped attempt stays in place');
   passed++;console.log('PASS '+label);
  } catch(e){failed++;console.error('FAIL '+label+': '+e.message);}
  finally{rmSync(root,{recursive:true,force:true});}

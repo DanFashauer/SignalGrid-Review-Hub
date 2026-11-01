@@ -99,7 +99,8 @@ exec 8<"$TICK_GUARD_PATH" || { say "tick guard cannot be opened; READBACK ONLY";
 # verify the whole group is gone (not only this shell) before closing its slot.
 # Its start time (ps lstart) lets recovery tell this shell from a reused PID after a reboot.
 _tick_pgid="$(ps -o pgid= -p $$ | tr -d ' ')"
-_tick_start="$(ps -o lstart= -p $$ | sed 's/^ *//; s/ *$//')"
+# Read in the C locale and UTC: the store compares start times as epochs.
+_tick_start="$(LC_ALL=C TZ=UTC0 ps -o lstart= -p $$ | sed 's/^ *//; s/ *$//')"
 _tick_err="$(mktemp "${TMPDIR:-/tmp}/sg-tick-acquire.XXXXXX" 2>/dev/null)" || _tick_err=""
 # Redirect the shell's own stderr around the call: a redirection inside $(...) would
 # cost bash its exec shortcut, and the helper must stay a direct child of this shell.

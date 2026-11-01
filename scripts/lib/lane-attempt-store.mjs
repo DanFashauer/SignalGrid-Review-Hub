@@ -54,7 +54,7 @@ export function ensureDeliveryRecordDirectory(root) {
     for (let waited = 0; ; waited += 100) {
       try {
         const fd = openSync(lock, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600);
-        try { writeFileSync(fd, JSON.stringify({ pid: process.pid, start: lstartOf(process.pid) }) + "\n"); ownIno = fstatSync(fd).ino; } finally { closeSync(fd); }
+        try { writeFileSync(fd, JSON.stringify({ pid: process.pid, startMs: startEpochOf(process.pid) }) + "\n"); ownIno = fstatSync(fd).ino; } finally { closeSync(fd); }
         break;
       } catch (error) {
         if (error.code !== "EEXIST") throw error;
@@ -89,8 +89,8 @@ export function ensureDeliveryRecordDirectory(root) {
 function initLockHolderGone(holder) {
   if (!holder || !Number.isSafeInteger(holder.pid) || holder.pid <= 0) return false;
   try { process.kill(holder.pid, 0); } catch (error) { if (error.code === "ESRCH") return true; if (error.code !== "EPERM") return false; }
-  const now = lstartOf(holder.pid);
-  return typeof holder.start === "string" && now !== null && now !== holder.start.replace(/\s+/g, " ");
+  const now = startEpochOf(holder.pid);
+  return Number.isFinite(holder.startMs) && now !== null && now > holder.startMs; // started later: a reused PID
 }
 
 // This guard is persistent. Closing the owned FD releases the kernel lock;
@@ -199,34 +199,45 @@ function processGroupOf(pid) {
 // worktree (sg-lane-deliver-*) holds recovery.
 //
 // A PID or group survives a reboot only as a number: when the owner record carries
-// the shell's start time (`ps -o lstart=`), a live PID with a different start time is
-// a reused PID (the original is dead), and only processes started at or after that
-// time can belong to the original tick.
-const lstartOf = (pid) => {
-  const r = spawnSync("ps", ["-o", "lstart=", "-p", String(pid)], { encoding: "utf8" });
-  return r.status === 0 ? r.stdout.trim().replace(/\s+/g, " ") : null;
+// the shell's start time, a live PID that started strictly LATER is a reused PID (the
+// original is dead), and only processes started at or after it can belong to the
+// original tick. Start times are always read as `ps lstart` under LC_ALL=C TZ=UTC0
+// and compared as epochs, so a TZ change between ticks can never fake a reuse.
+const PS_ENV = { ...process.env, LC_ALL: "C", TZ: "UTC0" };
+const LSTART = /^\w{3} \w{3}\s+\d+ \d\d:\d\d:\d\d \d{4}$/;
+export const lstartEpoch = (lstart) => {
+  const text = String(lstart).trim().replace(/\s+/g, " ");
+  return LSTART.test(text) ? Date.parse(text + " UTC") : NaN;
 };
-const startMs = (lstart) => Date.parse(String(lstart).replace(/\s+/g, " "));
+const startEpochOf = (pid) => {
+  const r = spawnSync("ps", ["-o", "lstart=", "-p", String(pid)], { encoding: "utf8", env: PS_ENV });
+  const ms = r.status === 0 ? lstartEpoch(r.stdout) : NaN;
+  return Number.isFinite(ms) ? ms : null;
+};
+const recordedEpoch = (iso) => (typeof iso === "string" && /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/.test(iso) ? Date.parse(iso) : NaN);
 function assertOriginalGone(shellPid, { pgid = null, token = null, shellStart = null } = {}) {
+  // An unparseable recorded start degrades to PID-only liveness (never a silent exit).
+  const recorded = Number.isFinite(recordedEpoch(shellStart)) ? recordedEpoch(shellStart) : null;
   let alive = true, code = null;
   try { process.kill(shellPid, 0); } catch (error) { alive = false; code = error.code; }
   if (alive || code === "EPERM") {
-    const now = shellStart === null ? null : lstartOf(shellPid);
-    const reused = now !== null && now !== String(shellStart).replace(/\s+/g, " ");
-    if (!reused) throw Error(alive ? `original tick shell ${shellPid} (started ${shellStart ?? "unrecorded"}) is still alive; holding` :
+    const now = recorded === null ? null : startEpochOf(shellPid);
+    if (!(now !== null && now > recorded)) throw Error(alive ? `original tick shell ${shellPid} (started ${recorded === null ? "unrecorded" : new Date(recorded).toISOString()}) is still alive; holding` :
       `original tick shell ${shellPid} liveness is unknown (${code}); holding`);
   } else if (code !== "ESRCH") throw Error(`original tick shell ${shellPid} liveness is unknown (${code}); holding`);
   if (pgid === null && token === null) return;
-  const own = processGroupOf(process.pid), since = shellStart === null ? -Infinity : startMs(shellStart);
-  const ps = spawnSync("ps", ["-eo", "pid=,pgid=,lstart=,command="], { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
-  if (ps.error || ps.signal || ps.status !== 0 || own === null || Number.isNaN(since)) throw Error("process table is unreadable; holding");
+  const own = processGroupOf(process.pid), since = recorded ?? -Infinity;
+  const ps = spawnSync("ps", ["-eo", "pid=,pgid=,lstart=,command="], { encoding: "utf8", env: PS_ENV, maxBuffer: 64 * 1024 * 1024 });
+  if (ps.error || ps.signal || ps.status !== 0 || own === null) throw Error("process table is unreadable; holding");
   for (const line of ps.stdout.split("\n")) {
-    const m = /^\s*(\d+)\s+(\d+)\s+(\w{3} \w{3}\s+\d+ \d\d:\d\d:\d\d \d{4})\s(.*)$/.exec(line);
-    if (!m || Number(m[1]) === process.pid) continue;
-    const group = Number(m[2]), started = startMs(m[3]), command = m[4];
+    if (!line.trim()) continue;
+    const m = /^\s*(\d+)\s+(\d+)\s+(\w{3} \w{3}\s+\d+ \d\d:\d\d:\d\d \d{4})\s(.*)$/.exec(line), started = m ? lstartEpoch(m[3]) : NaN;
+    if (!m || !Number.isFinite(started)) throw Error(`process table line is unparseable (${line.slice(0, 80)}); holding`);
+    if (Number(m[1]) === process.pid) continue;
+    const group = Number(m[2]), command = m[4];
     if (!(started >= since)) continue; // started before the original tick: not its descendant
     if ((pgid !== null && group === pgid && pgid !== own) || (token && command.includes(token)) || command.includes("sg-lane-deliver-")) {
-      throw Error(`process ${m[1]} of the original tick (group ${pgid ?? "unrecorded"}, started ${shellStart ?? "unrecorded"}) may survive (${command.slice(0, 120)}); holding`);
+      throw Error(`process ${m[1]} of the original tick (group ${pgid ?? "unrecorded"}, started ${recorded === null ? "unrecorded" : new Date(recorded).toISOString()}) may survive (${command.slice(0, 120)}); holding`);
     }
   }
 }
@@ -305,7 +316,6 @@ function assertOwner(record, binding, token, shellPid) {
   keysExactly(record.value, ownerKeys(record.value));
   assertBinding(record.value, binding);
   if (Object.hasOwn(record.value, "pgid") && (!Number.isSafeInteger(record.value.pgid) || record.value.pgid <= 0)) throw Error("tick owner process group is invalid");
-  if (Object.hasOwn(record.value, "shellStart") && Number.isNaN(startMs(record.value.shellStart))) throw Error("tick owner start time is invalid");
   if (record.value.state !== "OPEN" || record.value.token !== token || record.value.shellPid !== shellPid ||
       typeof record.value.openedAt !== "string" || !Number.isFinite(Date.parse(record.value.openedAt))) throw Error("tick owner record differs");
 }
@@ -394,7 +404,8 @@ export function checkTickOwner(root, token, shellPid) {
 
 export function acquireTick(root, shellPid, pgid = null, shellStart = null) {
   if (pgid !== null && !/^[1-9][0-9]*$/.test(String(pgid))) throw Error("tick process group must be a positive integer");
-  if (shellStart !== null && Number.isNaN(startMs(shellStart))) throw Error("tick shell start time must be a ps lstart value");
+  // Stored as an ISO UTC instant; an unreadable lstart is simply not recorded (PID-only liveness).
+  const startIso = shellStart === null || !Number.isFinite(lstartEpoch(shellStart)) ? null : new Date(lstartEpoch(shellStart)).toISOString();
   const owned = ownedGuard(root, shellPid);
   const { binding } = owned;
   const stamp = new Date().toISOString().replace(/[:.]/g, "");
@@ -405,7 +416,7 @@ export function acquireTick(root, shellPid, pgid = null, shellStart = null) {
   const token = randomBytes(16).toString("hex");
   const base = { version: 1, directory: binding.directory, store: binding.store, guard: binding.guard };
   const owner = { ...base, state: "OPEN", token, shellPid: owned.shellPid, openedAt: new Date().toISOString(),
-    ...(pgid === null ? {} : { pgid: Number(pgid) }), ...(shellStart === null ? {} : { shellStart: String(shellStart).replace(/\s+/g, " ") }) };
+    ...(pgid === null ? {} : { pgid: Number(pgid) }), ...(startIso === null ? {} : { shellStart: startIso }) };
   const open = { ...base, state: "OPEN", token, shellPid: owned.shellPid, openedSha256: digest(encoded(owner)) };
   // OPEN is committed first. A failed/missing immutable owner never becomes a
   // fresh first run, even if this process and the kernel lock later disappear.
@@ -519,14 +530,36 @@ function cap(refused, root, count) {
   catch (error) { if (error.code !== "EEXIST") throw error; }
   return null;
 }
+// The Hub-side state of a raised hand: its ledger file on origin/SignalGrid_Alpha
+// (lane-deliver fetched it just before raise-hand ran). "resolved" | "open" | "absent"
+// (not on mainline yet: a pending PR) | "unknown" (unreadable: hold).
+export function handLedgerStatus(root, id) {
+  if (!/^[a-z0-9][a-z0-9-]{0,127}$/.test(id)) return "unknown";
+  const env = { ...process.env };
+  for (const key of ["GIT_DIR", "GIT_WORK_TREE", "GIT_COMMON_DIR"]) delete env[key];
+  const r = spawnSync("git", ["show", `origin/SignalGrid_Alpha:artifacts/raised-hands/${id}.json`], { cwd: root, env, encoding: "utf8", timeout: 60000 });
+  if (r.status !== 0) return /does not exist|exists on disk, but not in/.test(r.stderr ?? "") ? "absent" : "unknown";
+  try { return JSON.parse(r.stdout).status === "resolved" ? "resolved" : "open"; } catch { return "unknown"; }
+}
 export function setAsideRefusedAttempt(root, directory, name, exit, successor = "move") {
-  if (String(exit) === "2" && /raise-hand: \S+ already exists/.test(attemptText(directory, name))) return { done: true, attempt: name };
-  // A push terminal means lane-deliver reached its push and Git reported a remote
-  // refusal (a repository rule): resending the same cannot pass. That keeps the
-  // existing readback -> Cloud repair-hand path (LANE_COORDINATION.md L51).
-  try { lstatSync(join(directory, name + ".submission.json.push.json")); return null; }
-  catch (error) { if (error.code !== "ENOENT") throw error; }
-  if (refusedDisposition(root, join(directory, name + ".submission.json")) !== "unpublished") return null;
+  // raise-hand's "<id> already exists" (exit 2, before any push): done only while that
+  // hand is still open (or pending) on the Hub. A resolved hand whose cause recurs is
+  // raised again under a new id (`reraise`: the caller appends -again-<n>).
+  let reraise = false;
+  const exists = String(exit) === "2" ? /raise-hand: (\S+) already exists/.exec(attemptText(directory, name)) : null;
+  if (exists) {
+    const status = handLedgerStatus(root, exists[1]);
+    if (status === "unknown") return null;
+    if (status !== "resolved") return { done: true, attempt: name };
+    reraise = true;
+  } else {
+    // A push terminal means lane-deliver reached its push and Git reported a remote
+    // refusal (a repository rule): resending the same cannot pass. That keeps the
+    // existing readback -> Cloud repair-hand path (LANE_COORDINATION.md L51).
+    try { lstatSync(join(directory, name + ".submission.json.push.json")); return null; }
+    catch (error) { if (error.code !== "ENOENT") throw error; }
+    if (refusedDisposition(root, join(directory, name + ".submission.json")) !== "unpublished") return null;
+  }
   const refused = join(directory, "refused");
   mkdirSync(refused, { recursive: true, mode: 0o700 });
   const code = /^[0-9]+$/.test(String(exit)) ? Number(exit) : null;
@@ -548,19 +581,28 @@ export function setAsideRefusedAttempt(root, directory, name, exit, successor = 
     const marker = JSON.stringify({ root: chainRoot, n, successor, exit: code }) + "\n";
     if (existing) { writeFileSync(markerPath + ".next", marker, { mode: 0o600 }); renameSync(markerPath + ".next", markerPath); }
     else writeFileSync(markerPath, marker, { flag: "wx", mode: 0o600 });
-    return { attempt: name, exit: code, n, successor, retryRoot: chainRoot };
+    return { attempt: name, exit: code, n, successor, retryRoot: chainRoot, ...(reraise ? { reraise } : {}) };
   }
+  const n = archiveNotice(directory, name);
+  if (n === null) return null;
+  return { attempt: name, exit: code, n, setAsideAs: `refused/${name}.refused-${n}`, ...(reraise ? { reraise } : {}) };
+}
+
+// Move a notice's files to refused/<name>.refused-<n>.* (capped). Resumable: the
+// operation is recorded first and its marker removed last, so an interrupted move is
+// completed by the next tick before anything reads the id. Returns n, or null (capped).
+function archiveNotice(directory, name) {
+  const refused = join(directory, "refused");
+  mkdirSync(refused, { recursive: true, mode: 0o700 });
   resumeArchivals(directory);
   const taken = new Set(readdirSync(refused));
   let n = 1;
   while ([...taken].some((file) => file.startsWith(`${name}.refused-${n}.`))) n++;
   if (n > MAX_REFUSED_RETRIES) return cap(refused, name, n);
-  // Resumable: the operation is recorded first and its marker removed last, so an
-  // interrupted move is completed by the next tick before anything reads the id.
   const files = readdirSync(directory).filter((file) => file.startsWith(name + ".") && !file.endsWith(".repair-request.json"));
   writeFileSync(join(refused, name + ".archiving"), JSON.stringify({ name, n, files }) + "\n", { flag: "wx", mode: 0o600, flush: true });
   resumeArchivals(directory);
-  return { attempt: name, exit: code, n, setAsideAs: `refused/${name}.refused-${n}` };
+  return n;
 }
 
 // Complete every recorded notice archival (refused/<name>.archiving). Each step is
@@ -590,22 +632,30 @@ export function resumeArchivals(directory) {
 export function raiseTickHold(root, message) {
   const directory = deliveryRecordDirectory(root), id = "tick-hold-" + digest(Buffer.from(message));
   const prefix = join(directory, id);
-  let retryOf = null;
-  const write = () => writeFileSync(prefix + ".attempt.json", JSON.stringify({ state: "attempted; pending exact readback", receipt: prefix + ".submission.json", cause: message, ...(retryOf ? { retryOf } : {}) }) + "\n", { flag: "wx", mode: 0o600, flush: true });
+  let retryOf = null, handId = id;
+  const write = () => writeFileSync(prefix + ".attempt.json", JSON.stringify({ state: "attempted; pending exact readback", receipt: prefix + ".submission.json", cause: message, handId, ...(retryOf ? { retryOf } : {}) }) + "\n", { flag: "wx", mode: 0o600, flush: true });
   try { write(); }
   catch (error) {
     if (error.code !== "EEXIST") throw error;
     // An earlier hold notification that published nothing (exit 1/2, or killed before
-    // its exit) is retried under the shared readback-bound rule; anything else stays
-    // readback-only.
-    let exit = "none";
+    // its exit) is retried under the shared readback-bound rule. A delivered one is
+    // deduped on the Hub: while its hand is open (or still pending) it is "already
+    // raised"; once resolved, a hold that recurs is raised again under a new id.
+    let exit = "none", prior = {};
     try { exit = readFileSync(prefix + ".exit", "utf8").trim(); } catch (missing) { if (missing.code !== "ENOENT") throw missing; }
-    if (!["none", "1", "2"].includes(exit)) return `hand ${id} already raised`;
-    retryOf = setAsideRefusedAttempt(root, directory, id, exit, "move");
-    if (!retryOf?.setAsideAs) return `hand ${id} already raised`;
+    try { prior = JSON.parse(readFileSync(prefix + ".attempt.json", "utf8")); } catch { /* legacy intent: default id */ }
+    if (["none", "1", "2"].includes(exit)) {
+      retryOf = setAsideRefusedAttempt(root, directory, id, exit, "move");
+      if (!retryOf?.setAsideAs) return `hand ${prior.handId ?? id} already raised`;
+    } else if (exit === "0" && handLedgerStatus(root, prior.handId ?? id) === "resolved") {
+      const n = archiveNotice(directory, id);
+      if (n === null) return `hand ${prior.handId ?? id} already raised (re-raise cap reached)`;
+      retryOf = { attempt: id, exit: 0, n, setAsideAs: `refused/${id}.refused-${n}`, reraise: true };
+    } else return `hand ${prior.handId ?? id} already raised`;
+    if (retryOf.reraise) handId = `${id}-again-${retryOf.n}`;
     write();
   }
-  const op = { op: "raise", id, who: "mac lane", domain: "lane", where: "scripts/mac/lane-tick.sh",
+  const op = { op: "raise", id: handId, who: "mac lane", domain: "lane", where: "scripts/mac/lane-tick.sh",
     doing: "the unattended Mac lane tick (scripts/mac/lane-tick.sh)",
     blocked: "Tick recovery is holding: " + message.replace(/\/(?:Users|home)\/[^/\s:]+/g, "<HOME>"),
     need: "Mac lane: check whether the named original tick process (PID, group, start time) still runs; once it is gone the next tick recovers on its own." };
@@ -614,7 +664,7 @@ export function raiseTickHold(root, message) {
     { cwd: root, encoding: "utf8", timeout: 300000, stdio: ["ignore", "pipe", "pipe", "ignore", "ignore", "ignore", "ignore", "ignore", "ignore"] });
   writeFileSync(prefix + ".output", (r.stdout ?? "") + (r.stderr ?? ""), { flag: "wx", mode: 0o600 });
   writeFileSync(prefix + ".exit", `${r.status ?? 255}\n`, { flag: "wx", mode: 0o600 });
-  return `hand ${id} written (lane-deliver exit ${r.status ?? "signal"})`;
+  return `hand ${handId} written (lane-deliver exit ${r.status ?? "signal"})`;
 }
 
 let entrypoint;

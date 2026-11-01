@@ -385,6 +385,9 @@ for (const [label, header] of [
   check(
     "config: a non-blank OIDC_ISSUER with audience + JWKS but no tenant/role maps is invalid",
     status({ OIDC_ISSUER: ISSUER, ...rest }) === "invalid",
+  );
+}
+
 // ── JWKS CACHE: a null element on the fresh-hit path refuses, never throws ────
 {
   const nullKeyFetch: JwksFetch = async () => ({

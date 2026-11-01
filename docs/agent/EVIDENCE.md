@@ -5208,3 +5208,10 @@ c508cdb39 Merge pull request #1246: DR-061 (owner decision): lanes merge decisio
 ```
 
 Verdict: six owner-accepted records are on `SignalGrid_Alpha`, each on a head whose gating check and local preflight+breadth were green. Readiness dimension (b) reads low until the Mac re-mints live evidence on the final manifest; that request is already queued by the Mac's own tick (#1716). No new readiness figure is asserted.
+
+
+## 2026-11-01 - Repair handoff fixture contract, L53
+
+Full `node scripts/preflight.mjs` on feef1add exited1 at staged Mac worker self-test264/267; breadth was not started. A separate focused diagnostic retained the same three failing expectations. The production17ac repair deliberately routes a hand to `cloud lane` and uses `scripts/mac/build-tick.sh` as its public location rather than exporting private control-log locations or asking a Mac operator to delete claims and retry.
+
+Only those expected recipient/location values and the fallback case name changed. All267 cases remain, including exact failure-text redaction, four-field home/credential exclusion, unchanged private log text and protected-submission assertions. Executed `node scripts/mac/build-tick-stages.mjs --self-test` prints `self-test passed (267/267)` and exits0 on the corrected working tree; production build-tick and repair module bytes are unchanged. This focused result does not relabel the failed full run or establish full current-head gates, CI, source-review clearance, landing, activation or natural canonical heartbeat restoration.

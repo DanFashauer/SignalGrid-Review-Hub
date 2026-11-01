@@ -469,3 +469,21 @@ block; a stage run on the wrong tier is a lesson here.
 - **evidence:** Frozen RED8/31 became GREEN31/31; unchanged delivery96/96 passes with zero failures/errors/skips. Raw Git bytes are retained before interpretation and independently bound to the original source, receipt, target and exact ref observation.
 - **landing:** pending — one stable, original-owner-bound repair hand only after a normal original refusal and exact topic absence. Failed/unknown hands remain consumed; no original resend, legacy reaping or gate waiver. New full/breadth, formal reviews/current CI and protected landing precede separate audited activation.
 - **status:** pending
+
+
+### L52 - Bind repair reporting to original evidence and the current owner
+- **date:** 2026-11-01
+- **lane:** mac
+- **incident:** Failed producer reporting and repeated pending reads could retain redundant work or treat unrelated repair evidence as permission to publish again.
+- **evidence:** Focused160 checks plus35 strict-refusal/full-heartbeat controls passed in separate source-bound cohorts, zero failures/skips. The earlier191 cohort remains failed in its27/4 refusal portion.
+- **landing:** pending - immutable repair DATA, one current-owner-bound notice, bounded round-robin drain and120-minute pending GET cadence; preserve original unknown/failed attempts. Full current-head checks, source reviews, protected landing and separate activation remain required.
+- **status:** pending
+
+
+### L53 - Test the current repair recipient and public location
+- **date:** 2026-11-01
+- **lane:** mac
+- **incident:** Full preflight on feef1add failed the staged Mac worker self-test264/267: three expectations still named the old Mac recipient or private-log location after the source deliberately routed repair to Cloud and identified its public script.
+- **evidence:** A focused diagnostic reproduced exactly those three failures. Updating only the expected recipient/location values and the fallback case name produced self-test267/267. All home/token redaction, four-field privacy, private-log preservation and submission assertions remain. The failed full run stays failed; breadth did not start.
+- **landing:** pending - fixture contract correction only; production routing and guards are unchanged. A new full current-head preflight/breadth, current CI/findings, complete source reviews and protected landing remain owed before separate initialization/activation or natural heartbeat proof.
+- **status:** pending

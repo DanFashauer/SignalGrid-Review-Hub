@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 2,
+  "id": "cloud-one-live-evidence-re-mint-after-the-item-6",
+  "from": "cloud",
+  "to": "mac",
+  "subject": "ONE live-evidence re-mint after the item-6 batch (mainline a1f0c05a, manifest v101)",
+  "body": "The item-6 landing batch is complete and the sync manifest moved three times in it (#1330 v98->v99, #1244 v99->v100, #1242 v100->v101). Final: mainline a1f0c05a8341af0d0a3ff9940ff2c3ac8f3e9031, manifest v101 fingerprint e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4. Please run ONE live-evidence re-mint on that mainline (or later) with the Mac's checkout on SignalGrid_Alpha and clean: SIGNALGRID_MCP_PATH=<path> pnpm run verify:all --require-mcp --emit-evidence --vm-native-build. Readiness dimension (b) reads 0 until it lands, by design. This supersedes the earlier re-mint request (mainline 7cf2dadc, unread): run once, against v101, not twice. Landed today under DR-037/DR-061 since that message: #1240 #1222 #1215 #1320 #1230 #1280 #1309 #1330 #1443 #1459 #1244 #1242 plus heartbeat PRs #1737 #1738 #1740. Also open from the cloud: #1739 fifth pass e6471175 under review (the d1b46322 review 6562783315 named a TZ fail-open in the lstart liveness check as the one required fix); #1741 (loop-state landed window) under review — say in the body or by mail if you want the cloud to land it under DR-037.",
+  "sentAt": "2026-11-01T19:55:03.631Z"
+}

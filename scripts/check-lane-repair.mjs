@@ -10,6 +10,7 @@ import { dirname, join, resolve, sep } from 'node:path';
 import { tmpdir } from 'node:os';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
+import { scratchGit } from './lib/scratch-git.mjs';
 
 const SOURCE = process.argv[2] ? resolve(process.argv[2]) : fileURLToPath(new URL('../', import.meta.url));
 assert.ok(SOURCE, 'explicit disposable-source root argument required');
@@ -48,7 +49,7 @@ function fixture() {
   GIT_COMMITTER_NAME:'repair fixture',GIT_COMMITTER_EMAIL:'fixture@example.invalid',SIGNALGRID_LANE:'mac'};
  delete env.NODE_OPTIONS;
  function git(a,cwd=root) {
-  const r=spawnSync(GIT,['-c','commit.gpgsign=false','-c','tag.gpgsign=false','-c','core.hooksPath=/dev/null',...a],{cwd,env,encoding:'utf8'});
+  const r=scratchGit(cwd,a,{env});
   assert.equal(r.status,0,'disposable Git failed: '+r.stderr);assert.equal(r.signal,null);return r.stdout.trim();
  }
  git(['init','-q','-b','SignalGrid_Alpha']);

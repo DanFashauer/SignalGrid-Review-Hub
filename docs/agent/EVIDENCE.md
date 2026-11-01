@@ -5243,3 +5243,12 @@ The retained215cc full stopped at publication-boundary because two source lines 
 Two fixture lines now use the existing safety-check runtime-concatenation convention. A closed literal check preserved every input and forbidden value; all18 repair cases and the unchanged publication-boundary gate passed with actual network denial. Production and publication-policy bytes remained unchanged.
 
 New source qualification and protected delivery remain pending.
+
+
+## L58 — Disposable Git fixture isolation
+
+The retaineded390 full stopped at the unchanged scratch-repository hygiene gate: three new repair fixtures used a bespoke Git launcher instead of the shared helper.
+
+Each fixture now imports and calls scratchGit for its disposable local Git operations. All original assertion lines and cases are preserved; the current18 repair,12 caller and9 bounded-drain cases and unchanged hygiene gate passed with real network denial. Production and gate source bytes remained unchanged.
+
+New exact-head qualification and protected delivery remain pending.

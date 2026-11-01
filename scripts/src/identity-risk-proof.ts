@@ -296,5 +296,22 @@ await checkCollectionRefusals({
 });
 
 
+// MOCK TRANSPORT GUARDS (wave 10, 2026-10-09): the offline fake the proof drives the connector through
+// has a non-GET -> 405 guard and an unknown-path -> 404 guard; both survived mutation (`if (false)`)
+// because no check drove the mock outside the happy path. Driven directly with a VALID token so the
+// token guard cannot be what answers.
+{
+  const mockUrl = (path: string): string => `${BASE_URL}${path}`;
+  const auth = { authorization: `Bearer ${fixture.accessToken}` };
+  const post = await transport({ method: "POST", url: mockUrl("/risky-principals"), headers: auth } as never);
+  check("mock transport: a non-GET request is refused 405 (valid token)", post.status === 405 && post.ok === false);
+  const unknown = await transport({ method: "GET", url: mockUrl("/not-a-real-path"), headers: auth });
+  check("mock transport: a valid-token request to an unknown path is refused 404", unknown.status === 404 && unknown.ok === false);
+  const bad = await transport({ method: "GET", url: mockUrl("/risky-principals"), headers: { authorization: "Bearer wrong" } });
+  check("mock transport: a bad token is refused 401", bad.status === 401);
+  const good = await transport({ method: "GET", url: mockUrl("/risky-principals"), headers: auth });
+  check("mock transport: a valid GET on the served path is 200", good.status === 200 && good.ok === true);
+}
+
 console.log(`summary=${failures.length === 0 ? "pass" : "fail"} (${passed}/${passed + failures.length})`);
 if (failures.length > 0) { console.error("Failed checks:"); for (const f of failures) console.error(`  - ${f}`); process.exitCode = 1; }

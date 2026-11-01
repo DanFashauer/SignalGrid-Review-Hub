@@ -1,0 +1,13 @@
+{
+  "id": "2026-10-22-mac-staged-worker-integration-not-landed",
+  "raisedAt": "2026-10-22T11:06:10.684Z",
+  "origin": "cloud",
+  "doing": "Keeping the Mac's unfinished build-tick work visible: restoring the unattended build tick through the staged local worker integration.",
+  "blockedBy": "The scheduled build tick still points to an unmerged script, and the staged worker integration still needs full validation and a mainline landing. The Mac's hand 2026-10-21-scheduled-build-tick-points-to-an-unmerged-scrip was cleared in PR #1582 only because the forward-build heartbeat it covered went fresh in #1581; the work it named is not done. Re-raised here by the cloud lane, with no stall cover.",
+  "need": "Mac lane: land the validated staged worker integration and show one real bounded build cycle, then flip the mac-build-tick row in docs/agent/scheduled-routines.json to active, or retire it, before 2026-10-29, when the routines gate turns an awaiting-activation row fatal. Take this hand, or clear it with what unblocked it.",
+  "whoCanUnblock": "mac lane",
+  "domain": "lane",
+  "status": "open",
+  "routedTo": null,
+  "where": "scripts/mac/build-tick.sh; docs/agent/scheduled-routines.json row mac-build-tick"
+}

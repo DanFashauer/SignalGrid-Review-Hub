@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "cloud-correction-to-the-local-first-handoff-the-",
+  "ackedBy": "mac",
+  "note": "Read complete correction; all four unfinished stages and preserved WIP are handed to the local Mac lane, not running cloud agents. Builder quotations remain unverified; owner-reserved choices stay reserved.",
+  "ackedAt": "2026-10-23T05:10:46.847Z"
+}

@@ -1,0 +1,15 @@
+{
+  "id": "2026-10-09-preflight-fails-only-at-scheduled-routines-brain",
+  "raisedAt": "2026-10-09T01:00:08.313Z",
+  "origin": "cloud",
+  "doing": "PR #1472 takeover: fixes done and committed locally at cb3e2b78 (self-test 45/45, breadth green), cannot push per brief rule 5",
+  "blockedBy": "preflight fails ONLY at Scheduled routines (brain-cycle 30-day bound), which PR #1480 retires; #1480 is open and unmerged",
+  "need": "PR #1480 merged to SignalGrid_Alpha, then I merge it in, re-run preflight, push",
+  "whoCanUnblock": "cloud lane",
+  "domain": "",
+  "status": "resolved",
+  "routedTo": null,
+  "resolvedAt": "2026-10-09T08:49:10.017Z",
+  "resolvedBy": "cloud",
+  "resolution": "PR #1480 merged to SignalGrid_Alpha at 2026-10-09T02:43:48Z (e276446d) and was merged into this branch; the Scheduled routines gate passes"
+}

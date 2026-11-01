@@ -62,6 +62,10 @@ check("REDIS_URL is unset, so the IN-MEMORY path is the one under test",
   // every caller that forgot to pass an id, i.e. the original defect reintroduced.
   check('the EMPTY id is refused — it would rebuild the shared bucket as "nac:config:"',
     refuses(() => assertTenantIdForKey("")));
+  // The regex alone also refuses "" ({1,128}), so the refusal STILL happens with the empty-id guard
+  // flipped off — only its message changes. Pin the message (wave 8, store-scope joined the sweep).
+  check("...and it is refused BY the empty-id guard (named 'empty'), not merely by the character-class regex",
+    (() => { try { assertTenantIdForKey(""); return false; } catch (e) { return e instanceof TenantScopeError && e.message.includes("must not be empty"); } })());
 
   const REFUSED: Array<readonly [string, unknown]> = [
     ["the key separator, which collides ACROSS stores", "config:x"],

@@ -295,6 +295,12 @@
       "symbol": "IGNORED_UNTRACKED",
       "reason": "Known scratch and generated paths (virtualenvs, caches, node_modules, dist, build, .DS_Store) do not change which MCP code ran, so they do not mark live evidence dirty. Lockfiles are NOT scratch: an untracked uv.lock or poetry.lock changes resolved dependencies and counts as source (plan row 61; scripts/check-untracked-ignore.mjs --self-test).",
       "date": "2026-10-08"
+    },
+    {
+      "path": "scripts/loop-state.mjs",
+      "symbol": "REF_SKIP_WARNING",
+      "reason": "Not an exclusion of the subject but the opposite: the regex names the two warnings `git for-each-ref` prints when it silently SKIPS a ref it cannot read, so that a listing carrying either is treated as a hard failure (an unreadable ref is an unknown, and unknown is not clean) instead of a shorter list that reads as complete.",
+      "date": "2026-10-08"
     }
   ]
 }

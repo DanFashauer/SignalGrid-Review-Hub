@@ -496,3 +496,12 @@ block; a stage run on the wrong tier is a lesson here.
 - **evidence:** Actual source SHA256 a41a3859eacdf884e5b9774ed001c5b889ab1464940cf0c7a62414500766ce87 contains 977 newline-counted lines. Inspected protected ancestor 1691751207779b1a97af0a906c88bc3ff6d0ad57 was ordinarily integrated from 2f64a655fb92a77661aabbe819664ec8076ad93d as intermediate merge 39acc9396483820120eb451cd12407165700e090. Observed live 3d2829778952625cc79d13c369769c989f38cbc0 is newer unreviewed source; only the vetted ancestor was merged.
 - **landing:** pending - only the measured 970-to-977 doc number and append-only records are checkpointed locally; generators, full/breadth, reviews, current CI, protected landing and activation remain owed.
 - **status:** pending
+
+
+### L55 — Separate vetted-source integration and derived views from final qualification
+- **date:** 2026-11-01
+- **lane:** mac
+- **incident:** Protected canonical source advanced again while the owned checkpoint preserved the earlier inspected ancestor and exact inventory correction.
+- **evidence:** Vetted JWT/JWKS source 3d2829778952625cc79d13c369769c989f38cbc0 was integrated as d0427b5bea88cb31d4a33f87d63aeb6e23155770; later observed 5886f1e62441bbc272207dc541c9b89407d3e78a is still explicitly unreviewed. Preflight source SHA256 a41a3859eacdf884e5b9774ed001c5b889ab1464940cf0c7a62414500766ce87 and its977-line figure remain unchanged.
+- **landing:** pending — ordinary local source/journal/generated checkpoint only; actual generator outcomes are separately retained, and full/breadth/reviews/currentCI/protected landing/activation remain owed.
+- **status:** pending

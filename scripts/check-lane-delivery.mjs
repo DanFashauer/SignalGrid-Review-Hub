@@ -953,7 +953,7 @@ for(const item of [
   assert.ok(a>=0&&b>a,'actual sync block must be present');
   const childPid=join(root,'child.pid');
   const fd8=join(root,'fd8'),guard=join(root,'tick.guard');writeFileSync(guard,'guard\n');
-  mkdirSync(join(root,'bin'));writeFileSync(join(root,'bin/git'),'#!/bin/sh\nif { : >&8; } 2>/dev/null; then echo HELD > "$FIXTURE_FD8"; else echo CLOSED > "$FIXTURE_FD8"; fi\nsh -c \'echo $$ > "$FIXTURE_CHILD_PID"; exec sleep 300\' </dev/null >/dev/null 2>&1 &\nwait\n',{mode:0o755});
+  mkdirSync(join(root,'bin'));writeFileSync(join(root,'bin/git'),'#!/bin/sh\nif { true >&8; } 2>/dev/null; then echo HELD > "$FIXTURE_FD8"; else echo CLOSED > "$FIXTURE_FD8"; fi\nsh -c \'echo $$ > "$FIXTURE_CHILD_PID"; exec sleep 300\' </dev/null >/dev/null 2>&1 &\nwait\n',{mode:0o755});
   // The script holds the guard's kernel lock on FD8, as the real tick does.
   const script=`set -u\nexec 8<'${guard}'\nperl -MFcntl=:flock -e 'open(my $l,"<&=8") or exit 2; flock($l,LOCK_EX|LOCK_NB) or exit 3'\nsay(){ printf '%s\\n' "$1"; }\nheartbeat(){ printf 'HEARTBEAT %s\\n' "$RESULT"; }\n${tick.slice(a,b)}\necho NOT_REACHED\n`;
   const began=Date.now(),r=spawnSync('/bin/bash',['-c',script],{cwd:root,encoding:'utf8',timeout:15000,env:{PATH:join(root,'bin')+':/usr/bin:/bin',SIGNALGRID_TICK_FETCH_TIMEOUT_SEC:'3',FIXTURE_CHILD_PID:childPid,FIXTURE_FD8:fd8}});

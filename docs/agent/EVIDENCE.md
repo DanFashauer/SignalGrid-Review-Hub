@@ -3144,7 +3144,7 @@ self-test passed; Launch-claims gate passed — nothing deferred is presented as
 Preflight FAILED at: Preflight↔CI parity (a gate that runs only locally is not a gate). Fix before pushing.
   ✗ scripts/check-discovery-log.mjs / --self-test: runs in preflight but is referenced by NO workflow
 ```
-Verdict: **the new gate first failed its own repository's own rule** (a preflight-only gate is not a gate) — fixed by wiring both `check-discovery-log.mjs` steps into `.github/workflows/review-hub-ci.yml` beside `check-derived-doc-figures.mjs`, confirmed with `node scripts/check-preflight-ci-parity.mjs` on 2026-09-12 → `preflight↔CI parity: 375 preflight gates, 16 workflow files, 0 declared local-only, 0 unwired`. A second failure followed, expected and welcome: preflight's `Surface-read-coverage` gate caught the new tracked file — `docs/agent/SURFACE_REVIEW_COVERAGE.md is STALE versus … the tree` — fixed with `node scripts/check-surface-review-coverage.mjs --write` on the staged tree, which moved the `scripts` surface's file count 431 → 432 and the tracked-file total 2869 → 2870 (`git diff --stat`: 1 file, 2 lines). **After both fixes, a full re-run of every gate above plus `node scripts/preflight.mjs` and `pnpm run verify:breadth` from a clean re-stage was green**: preflight's own final lines end `EXIT_CODE=0`; breadth ends `Breadth lane PASSED — 56 breadth proofs green … EXIT_CODE=0`. The design: three columns (Rh/Ch/Ph) beside R/C/P in the Running tally table (`docs/agent/DISCOVERY_LOG.md`); a row's Rh/Ch/Ph cell counts only when the row's base R/C/P cell is also marked (enforced as a FATAL invariant, not assumed); the doc carries one derived sentence, `**Hardware (DR-043) — Rh: 0 of 15 · Ch: 0 of 15 · Ph: 0 of 15.**`, recomputed and string-matched on every run. **Today's honest count is zero on all three** — nobody has tagged a row hardware-specific yet, and none was retroactively tagged here (`docs/agent/DISCOVERY_LOG.md`'s single logged row is the unfilled template, row 1). `docs/SESSION_PUCK_HARDWARE_HYPOTHESIS.md`'s go/no-go table already typed no current count (checked before editing — the only numbers in it were the pre-registered thresholds, unchanged); the edit adds the tally-cell names (**Rh**, **Ch**, **Ph**) beside each threshold row and a sentence stating the count lives only at the Hardware (DR-043) line in `DISCOVERY_LOG.md`, never here. Two collateral figure fixes, both required by the edit itself and unrelated to the hardware tally's substance: `docs/COMPANY_BUILD_PLAN.md:4891` restated `scripts/preflight.mjs (737)` as `(741)` after the four new preflight lines: `wc -l scripts/preflight.mjs` → `741`; and `docs/agent/DISCOVERY_LOG.md`'s cited line numbers (121, 124, 149, 159 — all held by `docs/DECISION_RECORDS.md` DR-043, which this brief does not edit) were kept byte-identical by inserting every new line strictly AFTER line 159, verified with `cat -n docs/agent/DISCOVERY_LOG.md | sed -n '117,175p'` post-edit. Not done: no hardware row was tagged (none of the fifteen conversations has happened); the go/no-go table's own threshold NUMBERS (≥4 of 15, ≥3, ≥5) were left untouched per the backlog row's own instruction ("this adds the column, not a threshold").
+Verdict: **the new gate first failed its own repository's own rule** (a preflight-only gate is not a gate) — fixed by wiring both `check-discovery-log.mjs` steps into `.github/workflows/review-hub-ci.yml` beside `check-derived-doc-figures.mjs`, confirmed with `node scripts/check-preflight-ci-parity.mjs` on 2026-09-12 → `preflight↔CI parity: 375 preflight gates, 16 workflow files, 0 declared local-only, 0 unwired`. A second failure followed, expected and welcome: preflight's `Surface-read-coverage` gate caught the new tracked file — `docs/agent/SURFACE_REVIEW_COVERAGE.md is STALE versus … the tree` — fixed with `node scripts/check-surface-review-coverage.mjs --write` on the staged tree, which moved the `scripts` surface's file count 431 → 432 and the tracked-file total 2869 → 2870 (`git diff --stat`: 1 file, 2 lines). **After both fixes, a full re-run of every gate above plus `node scripts/preflight.mjs` and `pnpm run verify:breadth` from a clean re-stage was green**: preflight's own final lines end `EXIT_CODE=0`; breadth ends `Breadth lane PASSED — 56 breadth proofs green … EXIT_CODE=0`. The design: three columns (Rh/Ch/Ph) beside R/C/P in the Running tally table (`docs/agent/DISCOVERY_LOG.md`); a row's Rh/Ch/Ph cell counts only when the row's base R/C/P cell is also marked (enforced as a FATAL invariant, not assumed); the doc carries one derived sentence, `**Hardware (DR-043) — Rh: 0 of 15 · Ch: 0 of 15 · Ph: 0 of 15.**`, recomputed and string-matched on every run. **Today's honest count is zero on all three** — nobody has tagged a row hardware-specific yet, and none was retroactively tagged here (`docs/agent/DISCOVERY_LOG.md`'s single logged row is the unfilled template, row 1). `docs/SESSION_PUCK_HARDWARE_HYPOTHESIS.md`'s go/no-go table already typed no current count (checked before editing — the only numbers in it were the pre-registered thresholds, unchanged); the edit adds the tally-cell names (**Rh**, **Ch**, **Ph**) beside each threshold row and a sentence stating the count lives only at the Hardware (DR-043) line in `DISCOVERY_LOG.md`, never here. Two collateral figure fixes, both required by the edit itself and unrelated to the hardware tally's substance: `docs/COMPANY_BUILD_PLAN.md:4804` restated `scripts/preflight.mjs (737)` as `(741)` after the four new preflight lines: `wc -l scripts/preflight.mjs` → `741`; and `docs/agent/DISCOVERY_LOG.md`'s cited line numbers (121, 124, 149, 159 — all held by `docs/DECISION_RECORDS.md` DR-043, which this brief does not edit) were kept byte-identical by inserting every new line strictly AFTER line 159, verified with `cat -n docs/agent/DISCOVERY_LOG.md | sed -n '117,175p'` post-edit. Not done: no hardware row was tagged (none of the fifteen conversations has happened); the go/no-go table's own threshold NUMBERS (≥4 of 15, ≥3, ≥5) were left untouched per the backlog row's own instruction ("this adds the column, not a threshold").
 
 ## 2026-09-12 — "PR #690 (Codex review) on Puck 5: six findings fixed in scripts/check-discovery-log.mjs, docs/BUILD_BACKLOG.md and docs/agent/SURFACE_REVIEW_COVERAGE.json"
 Command:
@@ -4047,3 +4047,960 @@ Verdict:  holds, with corrections against earlier drafts of this entry: #1153's 
           are itemized in LOOP.md's LAST TOUCHED block, not repeated here. Every live GitHub/issue read above happened
           AFTER the close and is recorded, not re-runnable; every sha-bound claim is a local, immutable command against
           the frozen tree (or, for the wire-truth figure, against a worktree detached at that exact sha and then removed).
+
+## 2026-09-30 — "FIVE CODE LANDINGS UNDER DR-037 (#1295, #1237, #1305, #1277, #1312), ONE TICK LANDING (#1313) AND FOUR MAIL PRs closed the 12:30Z-~16:05Z window at #1310's merge (96338294); the Mac's land-5 ask was acked, and #1218 and #1252 landed at 16:22Z, just after the close"
+Command:  TZ=UTC git log --first-parent --format='%h %cd %s' --date=iso-local 10f78dc7..96338294 | grep -E 'Merge pull request #'
+Output:   ten merges, newest first: 96338294 16:06:25 #1310 "(steward, check run 109968956461)" / f1786167 16:06:19 #1312
+          "(steward, check run 109969353542)" / 1dc2f7d9 16:06:14 #1313 "(steward, check run 109969646817)" / 2fa150a3
+          14:52:30 #1306 "(steward, check run 109938166330)" / 3dee6a25 14:51:17 #1277 "(steward, check run 109935679941)" /
+          4a6a863c 14:27:08 #1305 "(steward, check run 109927316942)" / 3f91a9dd 13:59:59 #1304 "(steward, check run
+          109914242752)" / 3de208fe 13:47:23 #1237 "(steward, check run 109910058858)" / 35ac13c9 12:49:15 #1296 "(steward,
+          check run 109883771176)" / dde8c276 12:37:19 #1295 "(steward, check run 109882916391)". 10f78dc7 (12:26:31Z, a Mac
+          heartbeat) is the last first-parent commit before 12:30Z, so the range is exactly the window's landings; the other
+          12 first-parent commits in it are 11 Mac heartbeats and the Mac's 14:52Z mail send (0e311c2e).
+Command:  for n in 1295 1237 1305 1277 1312 1313 1300 1296 1304 1306 1310; do gh api repos/DanFashauer/SignalGrid-Review-Hub/pulls/$n --jq '"\(.number) merged=\(.merged) sha=\(.merge_commit_sha[0:8]) head=\(.head.sha[0:8]) at=\(.merged_at)"'; done (tool read after the close; recorded, not re-runnable as live state)
+Output:   "1295 merged=true sha=dde8c276 head=08c8e31f at=2026-09-30T12:37:20Z" / "1237 ... sha=3de208fe head=556d4237
+          at=...13:47:24Z" / "1305 ... sha=4a6a863c head=c424eb29 at=...14:27:09Z" / "1277 ... sha=3dee6a25 head=3c47f44e
+          at=...14:51:17Z" / "1312 ... sha=f1786167 head=c755ca11 at=...16:06:20Z" / "1313 ... sha=1dc2f7d9 head=edd39667
+          at=...16:06:14Z" / "1300 merged=true sha=49d055f8 head=4b62b608 at=...16:06:16Z" / "1296 ... sha=35ac13c9" / "1304 ...
+          sha=3f91a9dd" / "1306 ... sha=2fa150a3" / "1310 ... sha=96338294 head=c34c2a4e at=...16:06:25Z".
+Command:  for id in 109882916391 109910058858 109927316942 109935679941 109969353542 109969646817 109883771176 109914242752 109938166330 109968956461; do gh api repos/DanFashauer/SignalGrid-Review-Hub/check-runs/$id --jq '"\(.id) \(.name) \(.conclusion) head=\(.head_sha[0:8])"'; done; for m in dde8c276 3de208fe 4a6a863c 3dee6a25 f1786167 1dc2f7d9 35ac13c9 3f91a9dd 2fa150a3 96338294; do echo "$m^2=$(git rev-parse --short=8 $m^2)"; done
+Output:   all ten "Typecheck, build, and proof scaffold success", heads 08c8e31f, 556d4237, c424eb29, 3c47f44e, c755ca11,
+          edd39667, b5c31517, 90b97f99, 47da7e82, c34c2a4e — each equal to its merge commit's second parent (the local rev-parse
+          prints the same ten, in the same order), so every gating check is bound to its merged head by head_sha.
+Command:  gh api "repos/DanFashauer/SignalGrid-Review-Hub/commits/556d4237da9e5fd31ab2213d1799fd4726723aec/check-runs?check_name=Typecheck,%20build,%20and%20proof%20scaffold&filter=all" --jq '.check_runs[]|"\(.id) \(.conclusion) \(.started_at)"'; then each failed job's log grepped for 'last success|502 Bad Gateway'
+Output:   five attempts on #1237's one head: 109900760291 failure 13:08:41Z and 109902292865 failure 13:12:31Z ("✗ The mutation
+          sweep is not demonstrably alive — last success was 644.4h ago, over the 48h threshold." — the stale Actions listing
+          #1312 fixes); 109905365627 failure 13:20:05Z and 109907453934 failure 13:25:14Z ("GET …/actions/runs/36580204964/jobs
+          -> 502 Bad Gateway [… remaining=3968 …] — clears in 308s … not retried" and "[… remaining=4999 …] — clears in 3589s …
+          not retried" — the 5xx read as a rate limit that #1305 fixes); 109910058858 success 13:31:30Z (the landing's gate).
+Command:  gh api "repos/DanFashauer/SignalGrid-Review-Hub/pulls?state=all&per_page=40&sort=created&direction=desc" --jq '.[]|"\(.number) \(.state) \(.created_at) \(.head.ref)"'; git merge-base --is-ancestor 4b62b6080a82df2d33f0bffa9b8a9fab19b89ec7 1dc2f7d9; echo $?
+Output:   the newest mac/tick-* PR is #1300 (created 12:42:46Z); #1301-#1313 are all claude/* or lane/* heads, so after #1295
+          (12:37:19Z) the tick cut one more branch (#1300, the -2 re-mint request) and then none. "0" — #1300's head is an
+          ancestor of #1313's merge, which is why #1300 reads merged. Still open: #1257, #1262 and 24 mac/tick-* PRs in
+          #1269-#1299 (the other seven numbers in that range are #1272 #1274 #1277 #1280 #1285 #1295 #1296).
+Command:  cat artifacts/lane-messages/mac-mac-5-safety-machinery-prs-are-green-clean-p.json artifacts/lane-messages/acks/mac-mac-5-safety-machinery-prs-are-green-clean-p.json (worktree at 96338294)
+Output:   sentAt "2026-09-30T14:52:09.188Z", subject "Mac: 5 SAFETY_MACHINERY PRs are green + clean, please land under DR-037; 3
+          conflicts being cleared" (#1216, #1218, #1225, #1252, #1256; #1248 after the Mac's conflict push; DECISION_PATH
+          #1219 #1220 #1224 #1251 #1255 wait on #1246). Ack ackedAt "2026-09-30T15:26:40.640Z", landed by c34c2a4e (#1310):
+          "Each PR is going through an independent review plus an adversarial refutation pass before it lands under DR-037,
+          one at a time with merge-tree re-checked between landings."
+Command:  for n in 1218 1252 1216 1225 1256 1309; do gh api repos/DanFashauer/SignalGrid-Review-Hub/pulls/$n --jq '"\(.number) \(.state) merged=\(.merged) \(.merged_at)"'; done; gh api repos/DanFashauer/SignalGrid-Review-Hub/check-runs/109672057568 and /109767342465; each PR's issue comments since 14:50Z (tool reads after the close)
+Output:   "1218 closed merged=true 2026-09-30T16:22:40Z" (merge_commit_sha 29b97fef91d8eb8ebc2da6875614081cf1a5e335; check run
+          109672057568 success head c762ea87) and "1252 closed merged=true 2026-09-30T16:22:58Z" (859b0d947291dcee73d764e418ea02467ec6c0a4;
+          109767342465 success head 4b08a30c), each with a "Merged under DR-037 by the cloud lane … on the Mac lane's mail ask
+          of 2026-09-30 14:52Z" comment, #1218's reading "Independent review + adversarial refutation: ship, upheld." #1216
+          and #1225 open with "**Brain review: fix-needed** … (independent review, then an adversarial refutation that upheld
+          it …)" at 16:23:01Z / 16:23:03Z. #1256 open, no verdict comment. #1309 "**Brain review: owner-decision** on head
+          `61c1e547`" at 16:23:05Z: "the deletion of `lib/api-spec/product-openapi.json` matches the `lib/*` rule" on the
+          `--no-renames` diff form. All six reads postdate the ~16:05Z close.
+Command:  gh api repos/DanFashauer/SignalGrid-Review-Hub/issues/<n>/comments for 1277, 1280, 1272, 1274, 1265
+Output:   #1277 12:54:17Z "**Brain review: ship**" then 14:52:05Z "Merged under DR-037 at 3dee6a25…"; #1280 12:54:18Z
+          "**Brain review: fix-needed**" ("Row 91 is not built … Raise a hand … for the per-version test-binding decision …
+          Tier: DECISION_PATH, so the owner merges"), the PR body now carrying artifacts/raised-hands/2026-09-30-policytest-fixtures-are-pinned-per-policy-not-pe.json
+          on its branch; #1272 and #1274 15:43:35Z / 15:43:36Z "**Brain review, round 2: fix-needed**", answered by the
+          original workers at 16:04:30Z and 16:09:41Z (#1274's: "the remote was still at 710d8ed9 when I checked before
+          pushing, so there is no collision with the dispatched worker"); #1265 "Brain review (delta, head fe4282a3): …
+          fix-needed" at 10:38:59Z, before this window.
+Command:  mcp Claude_Code_Remote list_sessions (mine, limit 40; tool read after the close)
+Output:   "Build wave 2026-09-30 F2: fix PR #1272 …" created 15:43:37.977Z, updated 15:43:38.007Z, configured_model
+          claude-fable-5-1, ARCHIVED; "… F3: fix PR #1274 …" created 15:43:39.571Z, updated 15:43:39.602Z, claude-fable-5-1,
+          ARCHIVED — each archived ~30 ms after creation (lesson candidate a); the Opus F2/F3 re-spawns (15:44:51Z/15:44:52Z)
+          are ARCHIVED too, last updated 15:55Z (lesson candidate b: B16 and B17, the original workers, are the ones
+          answering). F1 (#1265) created 14:14:16Z; B23-B27 created 14:26:40Z-14:26:46Z; every B1-B27 and F1 session reads
+          configured_model claude-opus-5-5. B27 ("signalgrid CLI harness (DR-040)") had no PR among the 40 newest.
+Command:  mcp Claude_Code_Remote get_session session_01D3GJ2Fs8sVppPgzuJdnNLn (the coordinating session; tool read at 16:38Z)
+Output:   "configured_model":"claude-opus-4-8", session_context "model":"claude-fable-5-1", "last_served_model":"claude-fable-5-1",
+          "user_switched_model":"claude-fable-5-1" — the coordinator read Fable after a user model switch (read at 16:38Z, not at
+          15:43Z), consistent with create_session handing Fable to the first F2/F3 spawns (lesson candidate a).
+Command:  gh api repos/DanFashauer/SignalGrid-Review-Hub/pulls/1195 --jq .body; git diff 40af18d1^1 40af18d1 -- artifacts/raised-hands; gh api repos/DanFashauer/SignalGrid-Review-Hub/issues/comments/5899407214 --jq .body; git show 0aaf3d9f:docs/agent/LOOP.md | sed -n 78p
+Output:   #1195's body: "LOOP.md:78 is outside this batch's write scope and is corrected in the next record." Its owner hand
+          2026-09-28-1118-changes-decisionengine-swift-behaviour-clau asks for "(a) a decision record that authorises or refuses
+          the #1118 re-port …; a bare 'exception granted' reply does not authorise it", "(b) Pick the unsafe-allow repair shape",
+          "(c) Say whether #1121 … needs your decision too", and says "This supersedes the 'exception granted or revert' line in
+          docs/agent/LOOP.md, which the next record corrects." LOOP.md:78 at 0aaf3d9f is the "reply 'exception granted' or
+          'revert'" line (today's 2026-09-27 PREVIOUSLY entry). The owner's ruling, on #1118 (and #1121) at 2026-09-29T21:34Z:
+          "Grant exception (Recommended) — Swift port catches up to the TS engine. Unblocks #1118 and #1121."; #1246 (DR-061,
+          open) records it for #1118 and #1121. That line now says so.
+Command:  pnpm run loop:state   (worktree at 96338294, started 16:14Z)
+Output:   "Readiness (gates outreach) 0% = lowest of runbook 100% · launch-evidence 0% · end-to-end 100%" / "Review coverage 104
+          of 105 surfaces read, 0 partial, 1 not read" / "LOOP STATE date STATE (2026-09-30) within 0 day(s) of mainline's newest
+          commit" / "2 thing(s) need you." (exit 1) — the two failing seams are the shared container's 19 local attack-reproduction
+          branches (the open owner hand) and "claude/build-ci-rot-and-evidence-truth (+116)"; neither is this record's. The 0%
+          is the launch-evidence dimension waiting on the -2 re-mint request #1313 queued ("live evidence stays at its 04:23
+          -04:00 mint until then", #1313's body).
+Verdict:  holds, frozen at ~16:05Z except where marked. Ten PRs merged in the window on the first-parent chain 10f78dc7..96338294:
+          five code landings under DR-037 (#1295, #1237, #1305, #1277, #1312), one tick landing (#1313, carrying #1300), and
+          four mail PRs (#1296, #1304, #1306, #1310); each of the ten gating checks is bound to its merged head by head_sha.
+          #1237 took five gating attempts, and the two defects behind its four failures are the two ci-liveness fixes that
+          landed after it (#1305, #1312). The Mac tick cut no branch after #1300. After the close, and recorded on the
+          coordinator's instruction: #1218 and #1252 landed at 16:22Z on the Mac's ask; #1216 and #1225 are fix-needed; #1309 is
+          the owner's merge. The owner directive and the three HELD lesson candidates are in LOOP.md's LAST TOUCHED block, not
+          numbered in docs/agent/LESSONS.md (#1133 claims L23). Not verified here: the "Sonnet review + Opus refutation" tiers
+          (the PR comments say "independent review" and "adversarial refutation" without naming a model), the file-contention
+          holds (the coordinator's call, with no GitHub artifact), the 2h-timeout lesson (c), and B1-B22's individual PRs.
+
+## 2026-10-01 — "31 PR MERGES closed the 2026-09-30 17:35Z-2026-10-01 06:40Z window (twelve steward code landings, five Mac ticks, thirteen mail/heartbeat PRs and the prior record #1334); the forward-build routine now routes each bundle by model tier (DR-047) on the owner's 2026-10-01 ask"
+Command:  TZ=UTC git log --first-parent --format='%h %cd %s' --date=iso-local 6acabe8e..d4fd8a6f | grep -E 'Merge pull request #'
+Output:   31 merges, oldest first: f52e806f 17:43:14 #1274, e08b2d51 18:12:50 #1315, 3a59d864 18:36:28 #1324, 28a1b5d0
+          18:54:08 #1301, 6f2f1373 18:54:17 #1319, d761abf4 19:13:04 #1327, fc4e4427 19:28:46 #1325, f079a7ee 19:28:55 #1326,
+          ca8f3603 19:50:11 #1332, e30a5f4d 19:52:12 #1331, af70a1a6 19:57:04 #1334, c09705c2 20:43:03 #1303, c960416e
+          20:46:22 #1335, fd57b569 21:06:12 #1272, cc0f76c4 21:36:22 #1339, a2fce49e 21:41:19 #1318, c4faefea 22:24:17 #1317,
+          11844613 22:27:28 #1340, 7ff9093a 23:02:08 #1311, 67df1443 23:31:40 #1328, 29b61f82 23:40:59 #1341, 0847b506
+          00:07:07 #1236, 4830503e 00:30:38 #1343, c65c0403 00:33:45 #1342, 505167f6 00:50:41 #1344, e8806b7d 02:26:54 #1345,
+          8711bbef 02:38:34 #1346, 4c2fc1a9 02:58:39 #1329, 179c1b87 04:40:23 #1350, c71cf2c7 04:42:24 #1348, fb3a8cf2
+          06:31:08 #1355 — each subject reads "(steward, check run <id>)". 6acabe8e (17:29:12Z, a Mac heartbeat) is the
+          last first-parent commit before 17:35Z; the range holds 68 first-parent commits: the 31 merges, 36 Mac heartbeats
+          and the Mac's 18:09Z mail send b1d64a25. By kind: twelve code landings (#1274 #1301 #1319 #1303 #1272 #1318 #1317
+          #1311 #1328 #1236 #1329 #1348), five Mac ticks (#1315 #1325 #1326 #1331 #1342), thirteen mail/heartbeat PRs and
+          the prior record #1334.
+Command:  for each of the 31 merges: id from the subject's "check run <id>"; gh api repos/DanFashauer/SignalGrid-Review-Hub/check-runs/<id> --jq '"\(.conclusion) \(.head_sha[0:8]) \(.name)"'; git rev-parse --short=8 <merge>^2 (tool reads 06:4xZ)
+Output:   all 31 "success … Typecheck, build, and proof scaffold", each head_sha equal to its merge's second parent — e.g.
+          #1328 110142369156 76144738, #1236 110150187949 0e2aeb90, #1329 110194513710 5c700ae8, #1348 110218392620
+          8c726438, #1342 110153406566 91d08925, #1344 110162164756 031c68f1, #1346 110190353734 c0b33101, #1350
+          110218074296 b9f1cb58, #1355 110244982299 bbc81cc7, #1274 109987231008 93092963, #1311 110132363117 7e6b4c06.
+Command:  gh api repos/DanFashauer/SignalGrid-Review-Hub/issues/<n>/comments?since=2026-09-30T17:35:00Z for #1321 #1329 #1333 #1265 #1330 #1337 #1338 #1348 #1347 #1349 #1308 #1352 #1280 #1309 #1353 #1354 (verdict headings only)
+Output:   wave 8 at 00:30:47Z-00:30:52Z: "Review round 3 — verdict: **fix-needed**" on #1321 #1329 #1333 #1330 and "Review
+          round 7" on #1265; #1337/#1338 "Review round 2 — verdict: **owner-decision**" at 00:47:07Z/00:47:09Z. Wave 9 at
+          02:25:22Z-02:26:45Z: #1329 "Review round 4 — verdict: **ship**" (head aff7489a), #1321 #1330 #1337 #1338
+          owner-decision, #1333 round 4 and #1265 round 8 fix-needed. Wave 10 at 04:07:16Z-04:07:23Z: #1348 "Review round 1 —
+          verdict: **ship**" (head c58c9c5f), fix-needed #1347 #1349 #1265 (round 9) #1308 (round 9) #1333 (round 5). Wave
+          11 at 05:19:16Z-05:19:21Z: the same five, all fix-needed. Wave 12 at 06:36:15Z-06:36:22Z: those five plus #1352
+          "Review round 1 — verdict: **fix-needed**" (head 2931616d). Earlier rounds 17:43Z-23:18Z on #1265 #1308 #1321 #1329
+          #1333 #1330 #1337 #1338; #1308's round 2 read "**ship**" at 20:38:24Z, then fix-needed from round 3 on a moved head.
+          #1280: round 2 owner-decision 00:23:07Z; round 3 fix-needed 01:40:58Z, answered 02:01:02Z "I measured the stall
+          on the pre-refresh tree, 239 commits behind Alpha" (the hand removed in cd0da141); round 4 02:19:10Z
+          "owner-decision (no defect; the owner merges)". #1309 00:15:27Z "Delta verdict … owner-decision unchanged". #1353
+          06:24:38Z "Cloud review round 1 — verdict: **fix-needed**" ("2 unresolved review threads (CodeQL TOCTOU alerts …)",
+          "phase-pr-evidence = failure", "The token scrub does not reach git-invoked hooks"); #1354 06:28:16Z fix-needed
+          ("phase-pr-evidence (failure)", "a DR-063 that does not exist anywhere yet").
+Command:  gh api repos/DanFashauer/SignalGrid-Review-Hub/pulls/<n>/commits for #1242 #1244 #1280 #1330; git fetch origin pull/1242/head; M=3a0504c9 (dec1fa8a^); diff the added lines of git diff <merge-base> 7e67df47 and of git diff $M^2 $M, each limited to scripts/src/vuln-scan-proof.ts; then the same for git diff c71cf2c7^1 c71cf2c7 against git diff $M^1 $M
+Output:   refresh commits on the owner PRs: #1242 7e67df47 (00:32:37Z) and dec1fa8a (05:21:16Z), #1244 ffb9c0d7 (00:51:57Z)
+          and 500bcad9 (04:44:23Z), #1330 cb61ba43 (05:02:36Z) — each "sync: regenerate live-sync manifest and surface
+          coverage after merging SignalGrid_Alpha" — and #1280 7535fd6b (01:10:20Z, a two-parent merge of Alpha). On
+          3a0504c9, #1242's side keeps 13 added lines, byte-identical to its own, 0 removed; #1348's
+          6 added lines come in byte-identical, 0 removed: a keep-both, not a rewrite.
+Command:  for s in 21142a56 6ef3ff36 6651af8f f8831a42 (#1351's heads): gh api …/commits/<sha>/check-runs?check_name=Typecheck,%20build,%20and%20proof%20scaffold; failing job logs grepped for '✗'; the same check-runs listing on #1352's head 2931616d; and its 05:44:14Z comment
+Output:   #1351: 110222099820 failure (Cited commands: a "proof:sbom" script "which no package.json defines" in
+          docs/COMPANY_BUILD_PLAN.md — lesson candidate (h)), 110237676097 failure and 110238917942
+          failure (each a cited-paths line citation into docs/COMPANY_BUILD_PLAN.md "cites past the end of a 4834-line
+          file"), 110242261976 success on f8831a42; the PR is still open. #1352: "Prod stack (Docker compose smoke)"
+          110229167929 failure, then 110236990592 success; "Typecheck, build, and proof scaffold" 110229168081 and
+          110236991422 success; the comment quotes "received unexpected HTTP status: 502 Bad Gateway" pulling node:22-alpine.
+Command:  mcp Claude_Code_Remote get_trigger trig_01XLv3hGCPob8qcEDsZJ2xM8; git show 179c1b87:artifacts/agent-heartbeats/forward-build-cycle.json; the same file at e8806b7d, 4830503e and fb3a8cf2
+Output:   "SignalGrid forward-build cycle", cron "10 */2 * * *", updated_at 2026-10-01T03:33:31Z, prompt: "keeping at most 8
+          workers in flight (at most 4 of them Opus)", "MECHANICAL → claude-haiku-4-5-20251001", "BUILD → claude-sonnet-5-5",
+          "JUDGMENT → claude-opus-5-5", "Sonnet reviews every PR. Opus refutes only a PR that would LAND under DR-037 or that
+          touches DECISION_PATH / lib/* core / api-server", "the heartbeat carries the counts". 179c1b87 (04:24:36Z): "04:10Z
+          fire (first with tiered routing per DR-047, owner ask 2026-10-01: pool 12→8, max 4 Opus …)", "REFILL (planner
+          Sonnet classified): B41 Haiku … B42 Sonnet … (facility-trust-graph found already joined 2026-09-12, replaced); B43
+          Sonnet", "IN FLIGHT H/S/O = 1/2/5". e8806b7d: "the session disk allowance filled (409M free) … plus two stale Swift
+          toolchain downloads (~5.7G); freed to ~8G by deleting node_modules/dist and the toolchains (no worktree removed,
+          L22)", "worker brief now carries a STALE-TREE RULE". 4830503e: "GitHub delivery gap a FOURTH time (a32d9aa7 on
+          #1330 at 22:58Z had no pull_request run) — recovered with workflow_dispatch at 00:01Z". fb3a8cf2 (06:15:27Z): "B42
+          (Sonnet, brace-less wave 4) STOPPED 04:25Z: its session's security classifier blocked …; not laundered",
+          "IN FLIGHT H/S/O = 0/3/5".
+Command:  mcp Claude_Code_Remote list_sessions (mine, limit 30; tool read 06:5xZ), titles matching B38-B43
+Output:   B38, B39, B40 (created 02:21:08Z-02:21:11Z) configured_model claude-opus-5-5; "B41 (haiku)" 04:23:56Z
+          claude-haiku-4-5-20251001; "B42 (sonnet)" and "B43 (sonnet)" 04:23:57Z/04:23:59Z claude-sonnet-5-5; "B41b (sonnet,
+          raised)" 06:04:37Z claude-sonnet-5-5 — each session_context model equal to its configured_model.
+Command:  gh api repos/DanFashauer/signalgrid-mcp/pulls/14 and /15; gh api "repos/DanFashauer/SignalGrid-Review-Hub/pulls?state=open&per_page=100" filtered to mac/tick-* heads
+Output:   signalgrid-mcp #14 merged 2026-10-01T04:36:23Z (343339c4); #15 open, mergeable_state "dirty" (head 8355b7d6) — so
+          the coordinator's "two green PRs (#14, #15) waiting" is one PR now, and it needs a refresh before a merge. 27 open
+          tick PRs: #1257 #1262 and 24 in #1269-#1299 (26), plus #1336.
+Command:  gh api "repos/DanFashauer/SignalGrid-Review-Hub/issues/1330/comments" — the round-4 verdict at 02:26:45Z
+Output:   "**Two pre-existing safety gaps, outside this PR's scope.** I ran both on the head and on the base lib files swapped
+          in; both behave the same on base": in lib/handoff-sim/src/simulate.ts each exception step composes the device's
+          signals "with only the CURRENT exception's signal", and "A credential-shaped taskRef or exceptionRef … makes
+          refuseCredentialMaterial throw, so the whole exception step is refused" — lesson candidate (k).
+Command:  TZ=UTC git log -1 --format='%h %cd %s' --date=iso-local da002df4; grep -n facility-trust-graph scripts/mutation-guard.mjs; the brace-less row in docs/BUILD_BACKLOG.md
+Output:   "da002df4 2026-09-12 05:51:57 +0000 Merge pull request #672 … guard(facility-trust-graph)", an ancestor of the tip;
+          the sweep entry names proof:facility-trust-graph; the backlog row still reads "Pending, by survivors measured
+          2026-09-11: facility-trust-graph 22".
+Command:  pnpm run loop:state   (worktree at d4fd8a6f, 06:4xZ)
+Output:   "Readiness (gates outreach)" — the figure loop:state reads at the tip, with launch-evidence its lowest dimension /
+          "Review coverage 104 of 105 surfaces read, 0 partial, 1 not read" / "Raised hands 9 open, 5 overdue (>3d)" / "1
+          thing(s) need you." (exit 1) — the one failing seam is the shared container's 19 local attack-reproduction
+          branches (the open owner hand), not this record's.
+Verdict:  holds, frozen at 06:40Z. 31 PRs merged on the first-parent chain 6acabe8e..d4fd8a6f, each gating check bound to
+          its merged head by head_sha; the four landings the brain's waves reviewed (#1328, #1236, #1329, #1348) went in
+          under DR-037 one at a time, two of them on a wave SHIP (#1329 wave 9, #1348 wave 10). The owner ask, the routine
+          change, the owner queue and the eleven HELD lesson candidates are in LOOP.md's LAST TOUCHED block, not numbered in
+          docs/agent/LESSONS.md (#1133 still claims L23). Not verified here, recorded on the coordinator's word: the 14
+          review-worktree count and the 06:28Z second disk sweep (after the last committed heartbeat), the land chains'
+          4-minute self-dispatch, lesson candidates (c), (d) and (j) (no committed artifact names them), and the reviewer
+          and refuter tiers on the waves before 05:19Z (those comments say "independent reviewer" and "adversarial refuter"
+          without naming a model). The eight steward code landings before #1328 are recorded from their merge subjects and
+          check runs only; this record does not restate their reviews.
+
+## 2026-10-15 — "The weekly usage limit (seven_day) left the cloud brain and every worker dark for 5d17h (recorded from the owner hand), and mainline's scheduled-routines gate was fatal from 2026-10-12T00:00Z on one registry row (re-measured here); the record is frozen at #1501's merge e6acacc7"
+Command:  git show 1c2c6b94:artifacts/raised-hands/2026-10-15-the-account-s-weekly-claude-usage-limit-seven-da.json   (the owner hand #1513 raised; a committed file, read locally at a fixed sha)
+Output:   blockedBy: "The account's weekly Claude usage limit (seven_day) was exhausted at about 16:40Z on 2026-10-09 and reset only at 10:00Z
+          on 2026-10-15. The brain and every worker session were dark for 5d17h; four in-flight workers (L1501, L1468r27, B83, B84) and the
+          round-28 builder died with the limit error; 211 routine fires queued; the raised-hands gate and the scheduled-routines gate
+          (dependabot-queue-review past its 30-day awaiting-activation bound on 2026-10-12) went red repo-wide." Recorded, not re-run: the
+          limit type, the two instants, the 5d17h and the 211 are the brain's own account of the limit error it resumed under; this repo
+          holds the hand that records them, not the account scheduler's log. The brain resumed at 10:12Z on 2026-10-15 (the coordinator's
+          figure; this entry did not bind it to a committed artifact) and treated the backlog as one current fire per routine.
+Command:  git show 764cb99d:artifacts/agent-heartbeats/forward-build-cycle.json | sed -n 2p; git show 764cb99d:artifacts/agent-heartbeats/mac-lane-tick.json | sed -n 2p; git show 7dc78829:artifacts/agent-heartbeats/mac-lane-tick.json | sed -n 2p; git log -3 --format='%h %cI %s' 764cb99d -- artifacts/agent-heartbeats/mac-lane-tick.json
+Output:   "firedAt": "2026-10-09T16:33:56.085Z"    (forward-build-cycle at 764cb99d, the latest of the three cloud routines' heartbeats there: the steward's is 15:27:18Z and the hygiene sweep's 09:46:54Z; the limit ran out at about 16:40Z)
+          "firedAt": "2026-10-11T23:42:53.635Z"    (mac-lane-tick at 764cb99d, the newest Mac heartbeat on mainline before 7dc78829)
+          "firedAt": "2026-10-15T12:09:32.187Z"    (mac-lane-tick at 7dc78829, the first to land after #1513)
+          f3dccd957 2026-10-11T19:42:56-04:00, 8d6264985 2026-10-11T19:17:38-04:00, ae758dafd 2026-10-11T18:52:21-04:00 (all "Lane mail (mac): heartbeat mac-lane-tick": the last Mac heartbeat landed at 23:42:56Z, seventeen minutes before the crossing instant below, on a cadence of about 25 minutes)
+Command:  git log -1 --format='%H %cI %P' 764cb99d; git rev-parse 1c2c6b94^1; git show --stat --format='%h %s' 763376fbf; git show 763376fbf:artifacts/agent-heartbeats/forward-build-cycle.json | sed -n 2p   (the #1506 merge and its one-file change, read locally; the PR and check-run facts below are RECORDED API reads of 2026-10-15)
+Output:   764cb99d32bd00c27933f29c25a9514d279b3fb9 2026-10-15T06:22:22-04:00 f3dccd9571c5aec87c7b2bea58ec7365b300d26b 763376fbf34ce781db501fde6c101591ba97a212   (the first parent is f3dccd957, the 2026-10-11T23:42:56Z Mac heartbeat above)
+          764cb99d32bd00c27933f29c25a9514d279b3fb9   (1c2c6b94^1: #1513 merged directly on top of the #1506 merge)
+          763376fbf Lane mail (cloud): heartbeat forward-build-cycle / artifacts/agent-heartbeats/forward-build-cycle.json | 4 ++--, 1 file changed, 2 insertions(+), 2 deletions(-) / "firedAt": "2026-10-09T16:33:56.085Z",
+          Recorded: #1506 "Lane mail (cloud): forward-build heartbeat (16:11Z fire)", created 2026-10-09T16:34:20Z, merged_at 2026-10-15T10:22:23Z, one changed file (+2/-2), head 763376fbf (equal to 764cb99d^2); its check run 113920412710 "Typecheck, build, and proof scaffold" success, completed 2026-10-09T16:46:25Z, before the bound. So mainline's tip did not move between f3dccd957 and 764cb99d, and the heartbeat that landed at 10:22Z on 2026-10-15 was a PR whose gating check had passed before the bound, not a new delivery that passed the gate after it. What this record claims is therefore narrower than "no heartbeat could land": no NEW lane-deliver heartbeat delivery could pass the gate after 2026-10-12T00:00Z, which the gate's wiring (scripts/lane-deliver.mjs:232 runs it for any delivery that touches a heartbeat) and the CI record support.
+Command:  git show 764cb99d:docs/agent/scheduled-routines.json | grep -n '"awaitingSince"'; git show 764cb99d:scripts/check-scheduled-routines.mjs | grep -n 'AWAITING_FATAL_DAYS = '; node -e 'console.log(new Date(Date.parse("2026-09-12")+30*864e5).toISOString())'
+Output:   103:   "awaitingSince": "2026-09-09",    (brain-cycle, status retired since #1480)
+          128:   "awaitingSince": "2026-09-12",    (dependabot-queue-review, status awaiting-activation)
+          91:export const AWAITING_FATAL_DAYS = 30;
+          2026-10-12T00:00:00.000Z
+Command:  d=$(mktemp -d /tmp/sg-764cb99d-repro.XXXXXX) && git archive 764cb99d scripts docs/agent artifacts/agent-heartbeats | tar -x -C "$d" && (cd "$d" && git init -q && git config remote.origin.url https://github.com/DanFashauer/SignalGrid-Review-Hub && node scripts/check-scheduled-routines.mjs)   (run from a checkout of this repository that holds 764cb99d; the gate invocation is inside the final subshell, so it reads the extracted tree and never the caller's checkout; the Output below is this exact line, extracted from this ledger and run on 2026-10-15 at 17:32Z, after a first measurement at about 12:35Z that read 33.5 days; the gate compares awaitingSince with the wall clock, and for the retired nightly-build-agent row it lists origin heads, so it needs the remote and the network: without a remote the same run adds a second, unrelated incoherence, "could not list origin heads"; each run extracts into a new temp directory, so no earlier tree is reused)
+Output:   Scheduled-routine registry — 8 declared lane(s), 4 heartbeat(s)
+            · REPORTED: mac-lane-steward-duty-cycle: heartbeat is 146.1h old, beyond its 3h tolerance — the lane may be asleep (REPORTED, never silent)
+            · REPORTED: live-sync-loop-keeper: retired, no heartbeat at artifacts/agent-heartbeats/live-sync-loop-keeper.json — consistent with never having fired
+            · REPORTED: cloud-lane-hygiene-sweep: heartbeat is 151.8h old, beyond its 50h tolerance — the lane may be asleep (REPORTED, never silent)
+            · REPORTED: mac-lane-tick: heartbeat is 89.8h old, beyond its 3h tolerance — the lane may be asleep (REPORTED, never silent)
+            · REPORTED: brain-cycle: retired, no heartbeat at artifacts/agent-heartbeats/brain-cycle.json — consistent with never having fired
+            · REPORTED: dependabot-queue-review: awaiting activation, no heartbeat at artifacts/agent-heartbeats/dependabot-queue-review.json — consistent with a trigger that is not installed yet
+            · REPORTED: forward-build-cycle: heartbeat is 145.0h old, beyond its 6h tolerance — the lane may be asleep (REPORTED, never silent)
+          Scheduled-routine check FAILED: 1 incoherence(s).
+            ✗ dependabot-queue-review: awaiting-activation since 2026-09-12 — 33.7 days, past the 30-day bound. A wait this long is an undeclared retirement wearing a label: install it, or retire the row with evidence.
+          exit 1 (the 33.7 is the wall clock at 17:32Z; the 12:35Z reading was 33.5).
+Command:  d=$(mktemp -d /tmp/sg-764cb99d-repro-since-1015.XXXXXX) && git archive 764cb99d scripts docs/agent artifacts/agent-heartbeats | tar -x -C "$d" && (cd "$d" && sed -i.bak 's/"awaitingSince": "2026-09-12"/"awaitingSince": "2026-10-15"/' docs/agent/scheduled-routines.json && git init -q && git config remote.origin.url https://github.com/DanFashauer/SignalGrid-Review-Hub && node scripts/check-scheduled-routines.mjs)   (the same extraction in its own directory with only the dependabot-queue-review row's awaitingSince set to 2026-10-15; that is the one line of the file that holds "2026-09-12"; run from a checkout that holds 764cb99d, on 2026-10-15 at 17:33Z)
+Output:   Scheduled-routine registry — 8 declared lane(s), 4 heartbeat(s)
+            · REPORTED: mac-lane-steward-duty-cycle: heartbeat is 146.1h old, beyond its 3h tolerance — the lane may be asleep (REPORTED, never silent)
+            · REPORTED: live-sync-loop-keeper: retired, no heartbeat at artifacts/agent-heartbeats/live-sync-loop-keeper.json — consistent with never having fired
+            · REPORTED: cloud-lane-hygiene-sweep: heartbeat is 151.8h old, beyond its 50h tolerance — the lane may be asleep (REPORTED, never silent)
+            · REPORTED: mac-lane-tick: heartbeat is 89.8h old, beyond its 3h tolerance — the lane may be asleep (REPORTED, never silent)
+            · REPORTED: brain-cycle: retired, no heartbeat at artifacts/agent-heartbeats/brain-cycle.json — consistent with never having fired
+            · REPORTED: dependabot-queue-review: awaiting-activation since 2026-10-15 (0.7d of 30) — Declared in this pass to close the gap the 2026-09-12 self-evaluation found; the account trigger is deliberately not created here because creating a recurring fresh-session cadence requires an EXPLICIT owner go (no consent is inferred from a build/evaluation directive), per the awaiting-activation contract this registry already uses for brain-cycle. Neither the cloud lane nor a persistent session may self-authorize it.
+            · REPORTED: dependabot-queue-review: awaiting activation, no heartbeat at artifacts/agent-heartbeats/dependabot-queue-review.json — consistent with a trigger that is not installed yet
+            · REPORTED: forward-build-cycle: heartbeat is 145.0h old, beyond its 6h tolerance — the lane may be asleep (REPORTED, never silent)
+          Scheduled-routine check passed — every always-on lane is declared, authorized, scoped, and evidenced (or its gap is stated).
+          exit 0 (the 0.7d is the wall clock at 17:33Z; the 12:35Z reading was 0.5d) — the row's age is the only thing that made it fatal, and no fallback field is asked for.
+Command:  for s in 1f2b0f5f b743ae7c 3deddcf5 21bc1f85 eedcf7f6; do git log -1 --format='%h %cI %s' $s; done   (the five tick PR heads, bound to their commit times locally)
+Output:   1f2b0f5f7 2026-10-10T20:00:11-04:00 Mac tick 20261011T000008Z …   (#1508)
+          b743ae7c3 2026-10-11T20:03:09-04:00 Mac tick 20261012T000306Z …   (#1509)
+          3deddcf58 2026-10-12T20:03:51-04:00 Mac tick 20261013T000348Z …   (#1510)
+          21bc1f85b 2026-10-13T20:00:14-04:00 Mac tick 20261014T000011Z …   (#1511)
+          eedcf7f66 2026-10-14T20:03:18-04:00 Mac tick 20261015T000314Z …   (#1512)
+Command:  for h in 1f2b0f5f b743ae7c 3deddcf5 21bc1f85 eedcf7f6; do gh api "repos/DanFashauer/SignalGrid-Review-Hub/commits/$h/check-runs?check_name=Typecheck%2C%20build%2C%20and%20proof%20scaffold" --jq '.check_runs[0] | "\(.id) \(.conclusion) \(.completed_at)"'; done   (re-run 2026-10-15 at 14:52Z; the five heads are the tick PR heads #1508 to #1512 in that order, bound to their commit times by the local command above)
+Output:   114344648506 success 2026-10-11T00:15:39Z
+          114610006992 failure 2026-10-12T00:06:11Z
+          115062679308 failure 2026-10-13T00:07:04Z
+          115604960364 failure 2026-10-14T00:02:45Z
+          116171542140 failure 2026-10-15T00:05:11Z
+Command:  for h in 1f2b0f5f b743ae7c 3deddcf5 21bc1f85 eedcf7f6; do gh api "repos/DanFashauer/SignalGrid-Review-Hub/commits/$h/check-runs?check_name=Typecheck%2C%20build%2C%20and%20proof%20scaffold" --jq '"\(.check_runs[0].head_sha[0:8]) total_count=\(.total_count)"'; done   (the selection check: each head has exactly one run of that name, so `.check_runs[0]` is not a pick among reruns)
+Output:   1f2b0f5f total_count=1
+          b743ae7c total_count=1
+          3deddcf5 total_count=1
+          21bc1f85 total_count=1
+          eedcf7f6 total_count=1
+Command:  for j in 114344648506 114610006992 115062679308 115604960364 116171542140; do gh api "repos/DanFashauer/SignalGrid-Review-Hub/actions/jobs/$j" --jq '"\(.id) \(.conclusion) \(.completed_at) " + ([.steps[] | select(.conclusion=="failure") | "\(.number) \(.name)"] | join("; "))'; done   (re-run 2026-10-15 at 14:52Z; the job ids equal the check-run ids above)
+Output:   114344648506 success 2026-10-11T00:15:39Z
+          114610006992 failure 2026-10-12T00:06:11Z 59 Scheduled routines (every always-on lane declared, authorized, scoped, evidenced)
+          115062679308 failure 2026-10-13T00:07:04Z 59 Scheduled routines (every always-on lane declared, authorized, scoped, evidenced)
+          115604960364 failure 2026-10-14T00:02:45Z 59 Scheduled routines (every always-on lane declared, authorized, scoped, evidenced)
+          116171542140 failure 2026-10-15T00:05:11Z 59 Scheduled routines (every always-on lane declared, authorized, scoped, evidenced)
+Command:  gh api "repos/DanFashauer/SignalGrid-Review-Hub/actions/runs?created=2026-10-12T00:00:00Z..2026-10-15T12:04:35Z&per_page=100" --paginate --jq '.workflow_runs[] | select(.name=="SignalGrid CI") | "\(.id) \(.head_branch) \(.head_sha[0:8]) \(.conclusion) \(.created_at)"' | sort -k5   (re-run 2026-10-15 at 14:52Z; the window runs from the crossing instant to #1513's merged_at)
+Output:   38186554808 mac/tick-20261012T000306Z b743ae7c failure 2026-10-12T00:03:16Z
+          38325370806 mac/tick-20261013T000348Z 3deddcf5 failure 2026-10-13T00:03:58Z
+          38487620106 mac/tick-20261014T000011Z 21bc1f85 failure 2026-10-14T00:00:22Z
+          38657780194 mac/tick-20261015T000314Z eedcf7f6 failure 2026-10-15T00:03:25Z
+          38729629597 fix/retire-dependabot-queue-review-row b4dd1176 success 2026-10-15T11:45:38Z
+          So five "SignalGrid CI" runs were created between the bound and #1513's merge: the four tick PRs' (#1509 to #1512), each failed at step 59, and #1513's own, which ran on the tree that retires the row and passed. The red reached every validation that ran on a tree still carrying the row; it did not reach a check that had completed before the bound (#1501's run 113898621289, third entry below, stayed success and the PR merged on it at 12:31:32Z). The listing selects runs by creation time, so it would not show a re-run of an older run.
+          All five jobs are "Typecheck, build, and proof scaffold". The first failure (#1509) completed six minutes after the crossing instant above, and the failures run through #1512 on 2026-10-15. The tick PRs themselves arrived once a day between 00:00Z and 00:04Z (the commit times above), so the tick was running daily at least; that its 25-minute heartbeat deliveries were refused by this gate, rather than stopped for another reason, is an inference that the CI record and the timing are consistent with (7dc78829 landed five minutes after #1513 merged), not something the Mac's own log, which the cloud cannot read, was used to establish.
+Command:  for s in 1c2c6b94 7dc78829 845468d6 e6acacc7; do git log -1 --format='%h %cI %s' $s; done; for s in 1c2c6b94 845468d6 e6acacc7; do git rev-parse $s^2; done
+Output:   1c2c6b94c 2026-10-15T08:04:35-04:00 Merge pull request #1513 …    second parent b4dd1176eebe2b3c4ce27c599219d21bae0c35b0
+          7dc788299 2026-10-15T08:09:41-04:00 Lane mail (mac): heartbeat mac-lane-tick
+          845468d63 2026-10-15T08:27:16-04:00 Merge pull request #1514 …    second parent 29854dc1ba37a49e435e22e2fd6578a0733774be
+          e6acacc72 2026-10-15T08:31:32-04:00 Merge pull request #1501 …    second parent 29f0749e90145f57e74a0f97a1bccdcedc73d035
+          (UTC: 12:04:35Z, 12:09:41Z, 12:27:16Z, 12:31:32Z. #1501's merge is 12:31:32Z by both the merge commit and the PR's merged_at.)
+Command:  gh api repos/DanFashauer/SignalGrid-Review-Hub/check-runs/116412325370 --jq '"\(.id) \(.name) \(.head_sha) \(.conclusion) \(.completed_at)"'; gh api repos/DanFashauer/SignalGrid-Review-Hub/issues/comments/6191838619 --jq '"\(.created_at) \(.body | split("\n") | .[0])"'; gh api repos/DanFashauer/SignalGrid-Review-Hub/issues/comments/6191838619 --jq '.body' | grep -o -F -e 'Step 7 "Preflight on macOS" (job 116412325387, run 38732164377)' -e 'Preflight FAILED at: Raised hands (nothing stuck past its limit without a hand raised)'   (re-run 2026-10-15 at 14:52Z)
+Output:   116412325370 Typecheck, build, and proof scaffold 29854dc1ba37a49e435e22e2fd6578a0733774be success 2026-10-15T12:25:31Z
+          2026-10-15T12:17:01Z ## `PR — Mac-only checks` red on 29854dc: a measurement artifact of this PR's own shape, not a defect in it
+          Step 7 "Preflight on macOS" (job 116412325387, run 38732164377)
+          Preflight FAILED at: Raised hands (nothing stuck past its limit without a hand raised)
+          In words: 116412325370 "Typecheck, build, and proof scaffold" head 29854dc1ba37a49e435e22e2fd6578a0733774be (equal to 845468d6^2 above), success, completed 2026-10-15T12:25:31Z. Comment 6191838619 (12:17:01Z): "`PR — Mac-only checks` red on 29854dc: a measurement artifact of this PR's own shape, not a defect in it" — step 7 "Preflight on macOS", "Preflight FAILED at: Raised hands (nothing stuck past its limit without a hand raised)".
+Command:  d=$(mktemp -d /tmp/sg-29854dc1-repro.XXXXXX) && git archive 1c2c6b94 | tar -x -C "$d" && (cd "$d" && git init -q && git add -A && git -c user.name=repro -c user.email=repro@example.invalid commit -q --allow-empty -m base && git update-ref refs/remotes/origin/SignalGrid_Alpha HEAD) && git archive 29854dc1 | tar -x -C "$d" && (cd "$d" && node scripts/raised-hands.mjs --check; node scripts/raised-hands.mjs --check --warn)   (run from a checkout of this repository that holds 1c2c6b94 and 29854dc1; the scratch repo's one commit is the 1c2c6b94 tree with refs/remotes/origin/SignalGrid_Alpha pointing at it, and the 29854dc1 tree is then overlaid on the working tree, which changes exactly the four files #1514 changed (`git diff --stat 1c2c6b94 29854dc1`: 4 files changed, 11 insertions(+), 8 deletions(-)); both gate invocations are inside the final subshell; the script needs the origin ref by name, which is why this cannot be a bare local read; first read 2026-10-15 at about 12:40Z, and the Output below is this exact line, extracted from this ledger and run at 17:33Z)
+Output:   --check: "Raised hands check FAILED: 1 problem(s)." / "✗ heartbeat:forward-build-cycle: routine forward-build-cycle silent 6.0d (tolerance 6h) — 6.0d, past the 18h limit and NO hand raised. Act, or: pnpm run hand:raise -- --who "cloud lane" --covers heartbeat:forward-build-cycle --doing "…" --blocked "…" --need "…"" / exit 1.
+          --check --warn: "WARN (would fail locally): heartbeat:forward-build-cycle: routine forward-build-cycle silent 6.0d (tolerance 6h) — 6.0d, past the 18h limit and NO hand raised. Act, or: pnpm run hand:raise -- --who "cloud lane" --covers heartbeat:forward-build-cycle --doing "…" --blocked "…" --need "…"" / "Raised hands check passed in --warn mode — 1 stall(s) past the limit WARNED above (fatal in local preflight); the register itself is coherent." / exit 0.
+          The 6.0d is the wall clock at the 17:33Z run (the first read, at about 12:40Z, printed 5.8d; the heartbeat firedAt is 2026-10-09T16:33:56Z), so it grows each day. The exit codes are per invocation, taken in the same scratch tree after the run: --check 1, --check --warn 0 (the shell status after the recorded line is the second one's). This run: --check 1, --check --warn 0, and the documented line's last status 0. Not quoted: the open-hands listing each invocation prints after its verdict, and the header each invocation prints first ("Stalls measured at origin/SignalGrid_Alpha @ 777cd90b, committed 2026-10-15T17:33:21+00:00"), which names the replay's own scratch base commit, so its sha and time change on every replay. The call sites: scripts/preflight.mjs:597 runs `node scripts/raised-hands.mjs --check` and .github/workflows/review-hub-ci.yml:796 runs `node scripts/raised-hands.mjs --check --warn`; scripts/raised-hands.mjs:284 is `export const TIP_REF = "origin/SignalGrid_Alpha";` and it prints "this branch's own tree is not read for stalls".
+Verdict:  holds, frozen at e6acacc7 (12:31:32Z). The outage figures are recorded from the brain's hand, not re-measured: nothing in the tree can re-run a limit event. The gate failure is re-measured: one registry row, fatal by wall clock from 2026-09-12 + 30 days = 2026-10-12T00:00Z, reproduced on 764cb99d, and the CI record (jobs above) fails at that step from #1509 and not on #1508; of the five "SignalGrid CI" runs created between the bound and #1513's merge, four failed at that step and the fifth is #1513's own, on the tree that retires the row, while a check that had completed before the bound kept its result (#1501, third entry below), so the red reached every validation that ran, not every PR's existing check. Not verified here: the brain's resume instant (10:12Z); whether the Mac's heartbeat deliveries stopped because this gate refused them (the CI record and the timing are consistent with that, but the Mac's own log, which the cloud cannot read, was not consulted, and a tick that resumed on its own cadence would look the same); and the contents of the 211 queued fires. #1506 (above) is the one heartbeat that reached mainline between f3dccd957 and #1513, and it passed CI before the bound. #1515 (efdc9a2), which clears the heartbeat:mac-lane-tick hand, had its gating check pending when this record was briefed; it merged as 355ff646 at 12:39:09Z (gating check run 116420704196; recorded API reads, and locally `git log -1 --format='%H %cI %P' 355ff646` gives committed 12:39:08Z, parents e6acacc7 and efdc9a2e), after the freeze point, so it is the first event of the next record.
+
+## 2026-10-15 — "#1513 retired the dependabot-queue-review row with evidence and landed under DR-037 on a green gating check at 1c2c6b94, after four review rounds (round 4 ship); L23 records the two commits edited on the wrong tier"
+Command:  git rev-parse 1c2c6b94^2; git log -1 --format='%H %cI' 1c2c6b94; d=$(mktemp -d /tmp/sg-1c2c6b94-repro.XXXXXX) && git archive 1c2c6b94 | tar -x -C "$d" && (cd "$d" && git init -q && git config remote.origin.url https://github.com/DanFashauer/SignalGrid-Review-Hub && node scripts/check-scheduled-routines.mjs; node scripts/check-raised-hands.mjs)   (run from a checkout of this repository that holds 1c2c6b94; the whole tree is extracted because check-raised-hands reads artifacts/raised-hands; both gate invocations are inside the final subshell; the lines below are what this exact line printed on 2026-10-15 at 17:33Z, and check-raised-hands goes on to print the open-hands list after its verdict line, which is not quoted)
+Output:   b4dd1176eebe2b3c4ce27c599219d21bae0c35b0
+          1c2c6b94cb026028a5ec97f101851c97a5197d73 2026-10-15T08:04:35-04:00
+          Scheduled-routine registry — 8 declared lane(s), 4 heartbeat(s)
+            · REPORTED: mac-lane-steward-duty-cycle: heartbeat is 146.1h old, beyond its 3h tolerance — the lane may be asleep (REPORTED, never silent)
+            · REPORTED: live-sync-loop-keeper: retired, no heartbeat at artifacts/agent-heartbeats/live-sync-loop-keeper.json — consistent with never having fired
+            · REPORTED: cloud-lane-hygiene-sweep: heartbeat is 151.8h old, beyond its 50h tolerance — the lane may be asleep (REPORTED, never silent)
+            · REPORTED: mac-lane-tick: heartbeat is 89.9h old, beyond its 3h tolerance — the lane may be asleep (REPORTED, never silent)
+            · REPORTED: brain-cycle: retired, no heartbeat at artifacts/agent-heartbeats/brain-cycle.json — consistent with never having fired
+            · REPORTED: dependabot-queue-review: retired, no heartbeat at artifacts/agent-heartbeats/dependabot-queue-review.json — consistent with never having fired
+            · REPORTED: forward-build-cycle: heartbeat is 145.0h old, beyond its 6h tolerance — the lane may be asleep (REPORTED, never silent)
+          Scheduled-routine check passed — every always-on lane is declared, authorized, scoped, and evidenced (or its gap is stated). / exit 0
+          "Raised-hands schema check passed: 31 hand file(s) valid." / exit 0
+Command:  gh api repos/DanFashauer/SignalGrid-Review-Hub/pulls/1513 --jq '"merged_at=\(.merged_at) merge=\(.merge_commit_sha) head=\(.head.sha)"'; gh api repos/DanFashauer/SignalGrid-Review-Hub/check-runs/116403912993 --jq '"\(.id) \(.name) \(.head_sha) \(.conclusion) \(.completed_at)"'; gh api repos/DanFashauer/SignalGrid-Review-Hub/pulls/1513/comments --jq '.[] | "\(.id) \(.created_at) \(.path)"'; gh api repos/DanFashauer/SignalGrid-Review-Hub/pulls/1513 --jq '.body' | grep -o -F -e '400 gates ok' -e 'preflight rc=0' -e '58 breadth steps ok' -e 'breadth rc=0' -e 'gating check run 116403912993'   (re-run 2026-10-15 at 14:52Z; the head is bound above)
+Output:   merged_at=2026-10-15T12:04:35Z merge=1c2c6b94cb026028a5ec97f101851c97a5197d73 head=b4dd1176eebe2b3c4ce27c599219d21bae0c35b0
+          116403912993 Typecheck, build, and proof scaffold b4dd1176eebe2b3c4ce27c599219d21bae0c35b0 success 2026-10-15T12:04:04Z
+          4282594527 2026-10-15T11:51:12Z artifacts/raised-hands/2026-10-15-the-account-s-weekly-claude-usage-limit-seven-da.json
+          4282612631 2026-10-15T11:53:15Z artifacts/raised-hands/2026-10-15-the-account-s-weekly-claude-usage-limit-seven-da.json
+          400 gates ok / preflight rc=0 / 58 breadth steps ok / breadth rc=0 / gating check run 116403912993   (the five phrases the body contains; the body is the only source of the 400 and the 58)
+          In words: body, Validation, "Local, on head b4dd1176eebe2b3c4ce27c599219d21bae0c35b0": "400 gates ok (grep -c '… ok' on the log)" / "Preflight PASSED — everything it runs is green." / "preflight rc=0"; "58 breadth steps ok (grep -c '… ok' on the log)" / "Breadth lane PASSED — 58 breadth proofs green (deferred families, doctrine documents, and the DR-005 decision-palette design gate)." / "breadth rc=0". The 400 is the PR body's own `grep -c '… ok'` on its preflight log; the parity gate prints a different count of its own (459 at e6acacc7, in the #1501 entry below), and this entry reconciles neither.
+          check run 116403912993 "Typecheck, build, and proof scaffold": head_sha b4dd1176eebe2b3c4ce27c599219d21bae0c35b0, success, completed 2026-10-15T12:04:04Z; merged_at 2026-10-15T12:04:35Z, merge_commit_sha 1c2c6b94cb026028a5ec97f101851c97a5197d73.
+          Reviews (the PR body): round 1 fix-needed on three untrue statements (the Mac tick was alive and only its heartbeat was refused; a provenance read time later than the commit; a claim that the forward-build owner line listed the Dependabot queue on every fire), corrected in 50bb19d7. Round 2 fix-needed (four findings), corrected in 1729d458, "built by Sonnet with the message written by Haiku". Round 3 fix-needed (the mail hand copied the tick hand's 3h grace; mail's soft limit is 24h), corrected in b4dd1176. Round 4: "Sonnet review ship, Opus refute ship, both on b4dd1176".
+          The PR's change set, by its body: docs/agent/scheduled-routines.json (the row: status retired, retiredAt 2026-10-15T10:31Z, evidence fields, no clock field changed), and artifacts/raised-hands/ (raised: the owner hand, a mac-lane hand over five unread cloud-to-mac mails, a cloud-lane hand over heartbeat:mac-lane-tick, a cloud-lane hand over heartbeat:forward-build-cycle; resolved: the 2026-10-09 /dev/null hand). Nothing under scripts/.
+Command:  sed -n 27,31p AGENTS.md   (on e6acacc7; the lines a bot review cited), and the thread on artifacts/raised-hands/2026-10-15-the-account-s-weekly-claude-usage-limit-seven-da.json   (RECORDED tool read: review comment 4282594527 and the reply 4282612631, 11:53:15Z)
+Output:   AGENTS.md:29: "- Do not add secrets, credentials, tenant IDs, customer data, PHI, PII, or environment-specific private values." Review comment 4282594527 is a P1 from the Codex connector, "Keep live account telemetry out of the public ledger". The reply: "Verified against AGENTS.md L27-L31 and the tree; answered, not changed." It argues none of the values (limit type name, two instants, 5d17h, worker labels, a fire count) is one of the listed kinds, cites DR-047 and docs/COMPANY_BUILD_PLAN.md:141 as precedent for recording usage-limit events, and says that keeping such telemetry out of the ledger is the owner's call as a rule change to AGENTS.md or the raised-hands skill. Thread PRRT_kwDOSpuy-s6swUbP: is_resolved true, is_outdated false (RECORDED tool read, pull_request_read get_review_comments, 2026-10-15).
+Command:  git show 1c2c6b94:docs/agent/LESSONS.md | grep -n '^### L23'
+Output:   214:### L23 — The coordinator edited the registry row and the hands itself, on the wrong tier   (its evidence field names commits 2f5c8809 and 50bb19d7 on fix/retire-dependabot-queue-review-row)
+Verdict:  holds. #1513 landed under DR-037 as an autonomous-tier change (its body: classifyDiff matched no owner surface) with the gating check bound to its head, local preflight and breadth at exit 0 on that head as the PR body quotes them, and the registry gate re-run here on the merged tree passing. The 2026-10-09 /dev/null hand was resolved by the same PR; the owner hand (the budget decision, and the explicit go or decline for a NEW Dependabot queue-review row), the mac-lane hand and the two cloud-lane covers (heartbeat:mac-lane-tick, heartbeat:forward-build-cycle) were open when it merged; #1514 cleared the second cover (merged 845468d6, gating check 116412325370, above). Not verified here: the PR-body figures 400 and 58 and the preflight and breadth exit codes (recorded from the body; this entry did not re-run preflight or breadth) and the classifyDiff statement (recorded from the body).
+
+## 2026-10-15 — "#1501 (the eleven gate-survivor mutants pinned) landed under DR-037 at e6acacc7: gating check 113898621289, review round 1 ship; the merged tree's registry, parity and self-test gates are green"
+Command:  git rev-parse e6acacc7^2; git log -1 --format='%H %cI' e6acacc7; git log -1 --format='%H %cI' 29f0749e
+Output:   29f0749e90145f57e74a0f97a1bccdcedc73d035
+          e6acacc7246ca851498a071105537b5561a05851 2026-10-15T08:31:32-04:00
+          (the head the gating check ran on is the merge's second parent)
+Command:  gh api repos/DanFashauer/SignalGrid-Review-Hub/pulls/1501 --jq '"merged_at=\(.merged_at) head=\(.head.sha) merge=\(.merge_commit_sha)"'; gh api repos/DanFashauer/SignalGrid-Review-Hub/check-runs/113898621289 --jq '"\(.id) \(.name) \(.head_sha) \(.status) \(.conclusion) started=\(.started_at) completed=\(.completed_at)"'; gh api repos/DanFashauer/SignalGrid-Review-Hub/issues/comments/6084802068 --jq '"\(.created_at) \(.body | split("\n") | .[0])"'; gh api repos/DanFashauer/SignalGrid-Review-Hub/pulls/1501 --jq '.body' | grep -o -F -e 'SAFETY_MACHINERY only' -e 'the one review thread (CodeQL) resolved and outdated' -e 'merge-tree clean against SignalGrid_Alpha @ 1c2c6b94 (after #1513)' -e 'Preflight PASSED — everything it runs is green.' -e '58 breadth proofs green'   (re-run 2026-10-15 at 14:52Z; the head is bound above)
+Output:   merged_at=2026-10-15T12:31:32Z head=29f0749e90145f57e74a0f97a1bccdcedc73d035 merge=e6acacc7246ca851498a071105537b5561a05851
+          113898621289 Typecheck, build, and proof scaffold 29f0749e90145f57e74a0f97a1bccdcedc73d035 completed success started=2026-10-09T15:42:04Z completed=2026-10-09T15:58:12Z
+          2026-10-09T16:18:03Z ## Review round 1 — verdict: **ship** (head `29f0749e90145f57e74a0f97a1bccdcedc73d035`)
+          the body contains: "SAFETY_MACHINERY only" / "the one review thread (CodeQL) resolved and outdated" / "merge-tree clean against SignalGrid_Alpha @ 1c2c6b94 (after #1513)" / "Preflight PASSED — everything it runs is green." / "58 breadth proofs green"
+          In words: check run 113898621289 "Typecheck, build, and proof scaffold": head_sha 29f0749e90145f57e74a0f97a1bccdcedc73d035, success, completed 2026-10-09T15:58:12Z, before the registry gate went fatal at 2026-10-12T00:00Z and almost six days before the merge, so it cannot have run the failure that followed; the merged-tree re-runs below are what bind the landing to the post-#1513 registry.
+          Comment 6084802068 (2026-10-09T16:18:03Z): "Review round 1 — verdict: ship (head 29f0749e90145f57e74a0f97a1bccdcedc73d035)" / "Reviewed by the cloud lane (Sonnet review + Opus refute, DR-047 review tiers). Independent reviewer: ship; adversarial refuter: upheld." The PR body: classifyDiff tier owner-gated, matched SAFETY_MACHINERY only (scripts/check-scheduled-workflow-liveness.mjs and scripts/check-scratch-git-hygiene.mjs, rule scripts/**), so it lands under DR-037 by the cloud lane after review; "the one review thread (CodeQL) resolved and outdated"; "merge-tree clean against SignalGrid_Alpha @ 1c2c6b94 (after #1513)". The body's validation on 29f0749e: "Preflight PASSED — everything it runs is green." (exit 0) and "Breadth lane PASSED — 58 breadth proofs green (deferred families, doctrine documents, and the DR-005 decision-palette design gate)." (exit 0).
+Command:  node scripts/check-scheduled-routines.mjs; node scripts/check-preflight-ci-parity.mjs; node scripts/check-scheduled-workflow-liveness.mjs --self-test; node scripts/check-scratch-git-hygiene.mjs --self-test; node scripts/generate-sync-manifest.mjs --check; node scripts/check-surface-review-coverage.mjs   (in a worktree at e6acacc7 with only this record's documentation edits uncommitted, 2026-10-15)
+Output:   "Scheduled-routine check passed — every always-on lane is declared, authorized, scoped, and evidenced (or its gap is stated)." / exit 0
+          "preflight↔CI parity: 459 preflight gates, … workflow files (figure owned by the derived-figure guard, not restated here), 0 declared local-only, 1 declared warn-only in CI, 0 unwired" / "Preflight↔CI parity passed — every preflight gate is wired into a workflow." / exit 0
+          "self-test passed (109/109)" / exit 0
+          "self-test: 63/63 passed" / exit 0
+          the sync-manifest check / exit 0
+          "Surface-read-coverage gate passed — every tracked file belongs to a surface, every surface has a row, and every read in it is attributable." / exit 0 (the coverage gate the landing session ran; the coordinator's own runs, 12:29Z on the tree the #1501 merge would produce (merge 12:31:32Z) and 13:30Z on 04f97ddc, are recorded on the coordinator's word)
+          CodeQL thread PRRT_kwDOSpuy-s6q0x6w on scripts/check-scheduled-workflow-liveness.mjs: is_resolved true, is_outdated true (RECORDED tool read, pull_request_read get_review_comments, 2026-10-15).
+Verdict:  holds, with the caveats named. The merged tree passes the registry gate (the one #1513 repaired), the parity gate (459 gates, 0 unwired) and both self-tests the PR raised (109/109 from 85/85; 63/63 from 59/59, per its body). The surface-review coverage gate, which the landing session reported on the tree the merge would produce (run 12:29Z, merge 12:31:32Z), passes here too, at e6acacc7. Not verified here: the PR's preflight and breadth results (recorded from its body, on 29f0749e, not on the merged tree; this entry did not run either).
+
+## 2026-10-15 — "After the freeze point (as of 15:02Z): 17 hands are open in this record's base tree and 16 at the mainline tip, #1517 landed at 38003303, #1470's landing refutation was answered, #1490 round 8 was pushed, and the one unpushed branch and the gating-job durations are as LOOP states them"
+Command:  for f in artifacts/raised-hands/*.json; do node -e 'console.log(JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")).status)' "$f"; done | sort | uniq -c   (in the worktree at 2424fbb1; run 15:02Z)
+Output:   17 open
+          14 resolved
+Command:  node scripts/raised-hands.mjs | sed -n 1,3p | cut -c1-200   (the listing; it measures at the local origin/SignalGrid_Alpha ref, which the header names)
+Output:   Stalls measured at origin/SignalGrid_Alpha @ 38003303, committed 2026-10-15T10:41:12-04:00 (the local ref: only as fresh as its last fetch; this branch's own tree is not read for stalls)
+          Raised hands — 16 open (PRs and the weekly Mac-lane run NOT CHECKED here — the hourly issue job checks them)
+Command:  ref=38003303462fbe6e06202b46aa0e91dc25588fed; n=0; open=0; for f in $(gh api "repos/DanFashauer/SignalGrid-Review-Hub/contents/artifacts/raised-hands?ref=$ref" --jq '.[] | select(.name|endswith(".json")) | .name'); do n=$((n+1)); s=$(gh api "repos/DanFashauer/SignalGrid-Review-Hub/contents/artifacts/raised-hands/$f?ref=$ref" --jq '.content' | base64 -d | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log(JSON.parse(s).status))'); [ "$s" = open ] && open=$((open+1)); done; echo "files=$n open=$open at $ref"   (the count at the tip, from the API)
+Output:   files=31 open=16 at 38003303462fbe6e06202b46aa0e91dc25588fed
+Command:  gh api "repos/DanFashauer/SignalGrid-Review-Hub/contents/artifacts/raised-hands/2026-10-15-the-mac-tick-is-alive-tick-prs-1509-1512-one-per.json?ref=38003303462fbe6e06202b46aa0e91dc25588fed" --jq '.content' | base64 -d | grep -n '"status"\|"resolvedAt"'   (the 17th hand, open in the base tree, at the tip)
+Output:   10:  "status": "resolved",
+          17:  "resolvedAt": "2026-10-15T12:25:51.384Z",
+Command:  for b in claude/loop-state-20261008-gap claude/build-closure-restamp-lap-20261009 claude/build-graph-collection-transport-parity claude/build-gate-self-tests-run claude/build-url-guard-redirect-hand-mutant-pins claude/build-ci-validation-job-timeout; do printf '%s ' $b; gh api "repos/DanFashauer/SignalGrid-Review-Hub/branches/${b//\//%2F}" --jq '.commit.sha' 2>&1 | head -1; echo; done   (blank lines dropped below)
+Output:   claude/loop-state-20261008-gap c57cdc0d6e01840ba9c610555f8352692081718c
+          claude/build-closure-restamp-lap-20261009 bf7b2e538349ea155048ef2a66555420839643ea
+          claude/build-graph-collection-transport-parity 832041dc4b3c731d223a57dfb3c71bec74e0ef86
+          claude/build-gate-self-tests-run 19e51b660a0512a809c22012ea7b93a581c2b6da
+          claude/build-url-guard-redirect-hand-mutant-pins c7d6a6b02e179b181625b0db3cc1b97e143a5635
+          claude/build-ci-validation-job-timeout {"message":"Branch not found","documentation_url":"https://docs.github.com/rest/branches/branches#get-a-branch","status":"404"}gh: Branch not found (HTTP 404)
+Command:  for h in a0b465d1df486702ad3d336de350fecbc769bb2c bddf469f8ab57e185f716599adc0d6bf2d2eef36 a45f416a6747314d530187f811ddedc96134dd49 d87ce8bd35204c4ef35f6f6bcdac3a887da0f86d 19e51b660a0512a809c22012ea7b93a581c2b6da c70de689a2bf30582bf333f93d19d54d1c2b495f; do gh api "repos/DanFashauer/SignalGrid-Review-Hub/commits/$h/check-runs?check_name=Typecheck%2C%20build%2C%20and%20proof%20scaffold" --jq '.check_runs[] | "\(.head_sha[0:8]) \(.id) \(.conclusion) \(((.completed_at|fromdateiso8601) - (.started_at|fromdateiso8601))/60|floor)m\((((.completed_at|fromdateiso8601) - (.started_at|fromdateiso8601))%60))s"'; done; sed -n 48p .github/workflows/review-hub-ci.yml   (the gating job against its bound)
+Output:   a0b465d1 116438358653 success 18m48s
+          bddf469f 116452270716 success 19m3s
+          a45f416a 116451344696 success 19m14s
+          d87ce8bd 116475726666 success 19m16s
+          19e51b66 116473130171 success 19m43s
+          c70de689 116440190841 cancelled 20m5s
+          timeout-minutes: 20
+Command:  gh api repos/DanFashauer/SignalGrid-Review-Hub/pulls/1517 --jq '"merged_at=\(.merged_at) merge=\(.merge_commit_sha) head=\(.head.sha)"'; gh api repos/DanFashauer/SignalGrid-Review-Hub/check-runs/116475726666 --jq '"\(.id) \(.name) \(.head_sha) \(.conclusion) \(.completed_at)"'; git show 38003303:artifacts/agent-heartbeats/forward-build-cycle.json | grep -o 'in flight H/S/O = [^;]*;\|throttle: the post-outage fallback is[^;]*;'   (the #1517 landing and the throttle text it carries)
+Output:   merged_at=2026-10-15T14:41:13Z merge=38003303462fbe6e06202b46aa0e91dc25588fed head=d87ce8bd35204c4ef35f6f6bcdac3a887da0f86d
+          116475726666 Typecheck, build, and proof scaffold d87ce8bd35204c4ef35f6f6bcdac3a887da0f86d success 2026-10-15T14:40:29Z
+          in flight H/S/O = 0/4/1 local agents, remote workers B68 #1460, B78r2 #1490, B74 #1470 woken by PR comment (B82 done);
+          throttle: the post-outage fallback is <=3 concurrent workers until the owner's budget decision (the owner hand), and at this fire the LOCAL pool stood at 5 (0/4/1), OVER that cap - the overshoot is recorded, not excused: no new local worker is dispatched until the pool drains below 3, and the queued units (docs record round 3, #1490 round 8, #1468 round 31 review) wait for a slot;
+Command:  gh api repos/DanFashauer/SignalGrid-Review-Hub/issues/comments/6194392948 --jq '"\(.created_at) \(.body | split("\n") | .[0])"'; gh api repos/DanFashauer/SignalGrid-Review-Hub/issues/comments/6194392948 --jq '.body' | grep -o 'adversarial refuter: \*\*REFUTED\*\*\|the gate treats Unicode spaces as blank, and Bruno does not'; gh api repos/DanFashauer/SignalGrid-Review-Hub/pulls/1470 --jq '"head=\(.head.sha) updated=\(.updated_at)"'; gh api repos/DanFashauer/SignalGrid-Review-Hub/issues/comments/6194876170 --jq '"\(.created_at) \(.body | split("\n") | .[0])"'; gh api "repos/DanFashauer/SignalGrid-Review-Hub/commits/832041dc4b3c731d223a57dfb3c71bec74e0ef86/check-runs?check_name=Typecheck%2C%20build%2C%20and%20proof%20scaffold" --jq '.check_runs[] | "\(.id) \(.status) \(.conclusion)"'   (#1470: the Opus refutation and the worker's answer)
+Output:   2026-10-15T14:23:47Z ## Landing round — verdict: **fix-needed** (head `bddf469f8ab57e185f716599adc0d6bf2d2eef36`)
+          adversarial refuter: **REFUTED**
+          the gate treats Unicode spaces as blank, and Bruno does not
+          head=832041dc4b3c731d223a57dfb3c71bec74e0ef86 updated=2026-10-15T14:46:20Z
+          2026-10-15T14:46:20Z Landing-round fix-needed addressed on the same branch (new commits, `origin/SignalGrid_Alpha` merged, no rebase). New head: `832041dc4b3c731d223a57dfb3c71bec74e0ef86`. (Mainline has since added 3 commits; merge-tree is clean.)
+          116488591078 in_progress null
+Command:  gh api repos/DanFashauer/SignalGrid-Review-Hub/issues/comments/6085117608 --jq '"\(.created_at) \(.body | split("\n") | .[0])"'; for n in 1460 1468; do gh api "repos/DanFashauer/SignalGrid-Review-Hub/issues/$n/comments?per_page=100" --paginate --jq '.[-1] | "\(.id) \(.created_at)"' | tail -1; done; gh api repos/DanFashauer/SignalGrid-Review-Hub/issues/comments/6192173775 --jq '"\(.created_at) \(.body | split("\n") | .[0])"'   (#1468 round 27 and the latest comment ids on #1460 and #1468: no round 15 on #1460 and nothing after round 27 on #1468)
+Output:   2026-10-09T16:37:44Z ## Round 27 gating RED on `c57cdc0d` (check run 113919440642, Linux, git 2.55.0)
+          6194671942 2026-10-15T14:36:38Z
+          6085117608 2026-10-09T16:37:44Z
+          2026-10-15T12:35:25Z ## Review round 7 — verdict: **fix-needed** (head `1b613dd5d30c35f2616de5a46765999aab3b3965`)
+Command:  gh api repos/DanFashauer/SignalGrid-Review-Hub/pulls/1490 --jq '"head=\(.head.sha) updated=\(.updated_at)"'; gh api repos/DanFashauer/SignalGrid-Review-Hub/issues/comments/6195026102 --jq '"\(.created_at) \(.body | split("\n") | .[0])"'; gh api "repos/DanFashauer/SignalGrid-Review-Hub/commits/bf7b2e538349ea155048ef2a66555420839643ea/check-runs?check_name=Typecheck%2C%20build%2C%20and%20proof%20scaffold" --jq '.check_runs[] | "\(.id) \(.status) \(.conclusion)"'   (#1490 round 8)
+Output:   head=bf7b2e538349ea155048ef2a66555420839643ea updated=2026-10-15T14:55:34Z
+          2026-10-15T14:53:19Z **Round 8 pushed: head `bf7b2e538349ea155048ef2a66555420839643ea`** (parent 2a196993, a merge of origin/SignalGrid_Alpha at 60c5f52c; the previous head 1b613dd5 is an ancestor). The cloud lane took the branch over: its remote worker session had completed and did not wake on the round-7 fix list (comment 6192173775). The commit restores the three #1464 closures lost in 3c221589 byte-identical to 73685d15 and fixes the row-19 and row-29 wording; row 29 counts 12. Local preflight 400 ok (exit 0) and breadth 59 ok (exit 0) ran on this exact head before the push; the body carries the quoted lines. Round-8 Sonnet review next (autonomous docs tier), then the gating check on this head.
+          116492282545 in_progress null
+Verdict:  holds as of 15:02Z for every read above. The count of open hands is 17 in the tree this record was written on and 16 at the tip because #1515 (355ff646) resolved the mac-lane-tick cover after that base; LOOP's BLOCKED ON lists the 16. Recorded, not repeated here: the preflight and breadth results the #1470 and #1490 workers quote for their own heads (exit 0 each, from their comments), the coordinator's verdict that #1460 is fix-needed on round 15 (no such comment on the PR at 15:02Z), the existence of #1468 rounds 28 to 31 (origin carries only round 27 and no later comment), the local pool count of five (the heartbeat's own word; no gate observes a local pool), and the unpushed timeout-fix branch (its absence on origin is the read above; its contents were not inspected). The gating job is within 17 to 72 seconds of its 20-minute bound on every green run listed, which is the reason LOOP names the timeout fix as a push to make.
+
+
+## 2026-10-15 — "#1505 (16 per-family mock transports registered under their proofs, five brace-less proofs pinned, survivors 2 to 0 on five proofs) landed under DR-037 at 04f97ddc on gating check 116438358653 at head a0b465d1; review round 1 ship and an Opus landing refute upheld; the body states no Mac-only run"
+Command:  gh api repos/DanFashauer/SignalGrid-Review-Hub/pulls/1505 --jq '"#\(.number) | head=\(.head.ref) | headsha=\(.head.sha[0:8]) | merged=\(.merged_at) | merge=\(.merge_commit_sha[0:8])"'; gh api repos/DanFashauer/SignalGrid-Review-Hub/check-runs/116438358653 --jq '"\(.id) \(.name) head=\(.head_sha[0:8]) \(.status) \(.conclusion) completed=\(.completed_at)"'; gh api repos/DanFashauer/SignalGrid-Review-Hub/pulls/1505 --jq '.body' > bodies/pr1505.md; cat bodies/pr1505.md   (the Validation and Owner decision needed sections are quoted below)
+Output:   #1505 | head=claude/build-brace-less-sweep-wave-10-mock-transports | headsha=a0b465d1 | merged=2026-10-15T13:26:43Z | merge=04f97ddc
+          116438358653 Typecheck, build, and proof scaffold head=a0b465d1 completed success completed=2026-10-15T13:24:45Z
+          Body, Validation, on head a0b465d1df486702ad3d336de350fecbc769bb2c: "`node scripts/preflight.mjs`: exit 0 (2 DB proofs self-skip, DATABASE_URL unset)." / "`pnpm run verify:breadth`: `Breadth lane PASSED — 58 breadth proofs green (deferred families, doctrine documents, and the DR-005 decision-palette design gate).` exit 0." / "`node scripts/check-mutation-sharding.mjs`: `summary=pass (100/100)`." / "`node scripts/check-proof-counts.mjs`: `Proof-count check passed — all 63 documented counts match their proofs.`"
+          Body, Owner decision needed: "None. `classifyDiff` tier: owner-gated, all SAFETY_MACHINERY; lands under DR-037 after review." The merge paragraph: review round 1 ship (Sonnet, comment 6191983369), four LOWs closed in a0b465d1 (comment 6192774264), landing round Opus refute upheld.
+Verdict:  holds for the merge, the head and the gating run (completed success on a0b465d1, read above). The Mac-only run is not named in the body, so none is given here. The preflight, breadth and proof-count lines are the body's own, recorded on a0b465d1 before the push; they were not re-run here.
+
+## 2026-10-15 — "#1490 (closure and restamp lap: four backlog rows closed with evidence from #1444 and #1464, plan row 61 closed, 14-day stamps renewed) landed under DR-037 at dcdfcac4 on gating check 116492282545 and Mac-only check 116492279875 at head bf7b2e53; round 8 Sonnet review ship, no Opus refute (Sonnet review only, per the body)"
+Command:  gh api repos/DanFashauer/SignalGrid-Review-Hub/pulls/1490 --jq '"#\(.number) | head=\(.head.ref) | headsha=\(.head.sha[0:8]) | merged=\(.merged_at) | merge=\(.merge_commit_sha[0:8])"'; gh api repos/DanFashauer/SignalGrid-Review-Hub/check-runs/116492282545 --jq '"\(.id) \(.name) head=\(.head_sha[0:8]) \(.status) \(.conclusion) completed=\(.completed_at)"'; gh api repos/DanFashauer/SignalGrid-Review-Hub/check-runs/116492279875 --jq '"\(.id) \(.name) head=\(.head_sha[0:8]) \(.status) \(.conclusion) completed=\(.completed_at)"'; gh api repos/DanFashauer/SignalGrid-Review-Hub/pulls/1490 --jq '.body' > bodies/pr1490.md; cat bodies/pr1490.md
+Output:   #1490 | head=claude/build-closure-restamp-lap-20261009 | headsha=bf7b2e53 | merged=2026-10-15T15:20:02Z | merge=dcdfcac4
+          116492282545 Typecheck, build, and proof scaffold head=bf7b2e53 completed success completed=2026-10-15T15:05:59Z
+          116492279875 PR — Mac-only checks (full-clone provenance, preflight on macOS) head=bf7b2e53 completed success completed=2026-10-15T15:08:56Z
+          Body, Validation: "`node scripts/preflight.mjs` — 400 steps ok, exit 0 (the log's last line is `preflight rc=0`); `pnpm run verify:breadth` — 59 ok, 0 failed, exit 0." (re-run by the coordinator on bf7b2e53, 14:33Z to 14:49Z, before the push)
+          Body, Owner decision needed: "Merged under DR-037 by the cloud lane (autonomous docs tier, Sonnet review only): round-8 Sonnet review verdict ship on bf7b2e53 (note on this PR); gating check run 116492282545 ... success on that head; phase-pr-evidence re-run 116493413883 success; Mac-only 116492279875 success; local preflight 400 ok and breadth 59 ok on the same head before the push; merge-tree against SignalGrid_Alpha clean; review threads none."
+Verdict:  holds for the merge, the head and both check runs (read above). The round-8 ship and the phase-pr-evidence run 116493413883 are the body's statements; the body itemises no earlier round, and no Opus refute is named.
+
+## 2026-10-15 — "#1516 (the outage record: LOOP STATE, three EVIDENCE entries, LESSONS L24 and two backlog rows) landed under DR-037 at 9d280d96 on head 0a99fdd2; the body states no gating check run id, no Mac-only run id and no final review verdict"
+Command:  gh api repos/DanFashauer/SignalGrid-Review-Hub/pulls/1516 --jq '"#\(.number) | head=\(.head.ref) | headsha=\(.head.sha[0:8]) | merged=\(.merged_at) | merge=\(.merge_commit_sha[0:8])"'; gh api repos/DanFashauer/SignalGrid-Review-Hub/pulls/1516 --jq '.body' > bodies/pr1516.md; grep -o -E '1[01][0-9]{9,11}' bodies/pr1516.md | wc -l; cat bodies/pr1516.md
+Output:   #1516 | head=docs/outage-record-20261015 | headsha=0a99fdd2 | merged=2026-10-15T18:22:34Z | merge=9d280d96
+          0   (eleven-digit run ids in the body)
+          Body, Validation, round 5/6 head 0a99fdd2bb53b2b602f99c17fa80678203c2936d: "`node scripts/preflight.mjs` → `Preflight PASSED — everything it runs is green.` (400 ok, exit 0); `pnpm run verify:breadth` → `Breadth lane PASSED — 58 breadth proofs green` (exit 0), both run locally on this exact head before the push."
+          Body, Owner decision needed: "None. Autonomous tier; merged under DR-037 when the gating check is green on this head (run id recorded before the merge)."
+Verdict:  holds for the merge and the head. The gating and Mac-only run ids are not in the body, though it says the id was "recorded before the merge", so this entry gives none. The body names review rounds 1 (Sonnet docs review on 7a15353c, fix-needed on wording, applied in 2424fbb1), 3, 4 and 5/6, and states no final verdict.
+
+## 2026-10-15 — "#1520 queued the mainline-reachable evidence request objective-loop-evidence-fresh-2026-10-15 (the evidence re-mint) and landed at 66b776ca on head 443b553a; the body states no gating check run id and no full preflight or breadth run"
+Command:  gh api repos/DanFashauer/SignalGrid-Review-Hub/pulls/1520 --jq '"#\(.number) | head=\(.head.ref) | headsha=\(.head.sha[0:8]) | merged=\(.merged_at) | merge=\(.merge_commit_sha[0:8])"'; gh api repos/DanFashauer/SignalGrid-Review-Hub/pulls/1520 --jq '.body' > bodies/pr1520.md; grep -o -E '1[01][0-9]{9,11}' bodies/pr1520.md | wc -l; git show 64d0ca6d0:scripts/objective-loop.mjs | sed -n '496p;516p'
+Output:   #1520 | head=claude/sim-request-evidence-20261015 | headsha=443b553a | merged=2026-10-15T15:54:12Z | merge=66b776ca
+          0   (eleven-digit run ids in the body)
+          function requestAlreadyQueued(criterionId) {   (line 496)
+          }   (line 516)
+          Body, Validation: "`node scripts/check-sim-requests.mjs` on the branch: \"Simulation request loop passed — every result binds to a request it was asked for.\" exit 0." / "Not run: full preflight and breadth (one artifact file, no gate, doc figure or launch surface touched; CI's gating check runs the sim-request gate on this head)."
+          Body, Owner decision needed: "None. Lane coordination artifact, merged by the cloud lane when the gating check is green."
+Verdict:  holds for the merge and the head. The body's citation scripts/objective-loop.mjs:496-516 matches the function's extent at 64d0ca6d0. The gating run id and any Mac-only run are not in the body, so none is given. The sim-request gate line is the body's own; it was not re-run here.
+
+## 2026-10-15 — "#1524 raised the validation job's timeout-minutes from 20 to 45 by the margin rule and recorded three sre backlog rows; landed under DR-037 at df4ea3b8 on gating check 116631935708 at head 722f86b1 after a round-7 ship; the body states no Mac-only run"
+Command:  gh api repos/DanFashauer/SignalGrid-Review-Hub/pulls/1524 --jq '"#\(.number) | head=\(.head.ref) | headsha=\(.head.sha[0:8]) | merged=\(.merged_at) | merge=\(.merge_commit_sha[0:8])"'; gh api repos/DanFashauer/SignalGrid-Review-Hub/check-runs/116631935708 --jq '"\(.id) \(.name) head=\(.head_sha[0:8]) \(.status) \(.conclusion) completed=\(.completed_at)"'; gh api repos/DanFashauer/SignalGrid-Review-Hub/pulls/1524 --jq '.body' > bodies/pr1524.md; cat bodies/pr1524.md; gh api repos/DanFashauer/SignalGrid-Review-Hub/actions/jobs/116622158898 --jq '"\(.conclusion) \(.started_at) \(.completed_at) \(.name) \(.head_sha[0:8])"'
+Output:   #1524 | head=claude/build-ci-validation-job-timeout | headsha=722f86b1 | merged=2026-10-15T20:06:16Z | merge=df4ea3b8
+          116631935708 Typecheck, build, and proof scaffold head=722f86b1 completed success completed=2026-10-15T20:00:19Z
+          116622158898 cancelled 2026-10-15T19:20:01Z 2026-10-15T19:40:05Z Typecheck, build, and proof scaffold 46cdf302
+          Body, Validation, merged head 6b1f96df6f0db29748ecc1820baf386ec29b1438 and round-7 head 722f86b13482df5cd0b88e64af942f133d49155d: "`node scripts/preflight.mjs` → `Preflight PASSED — everything it runs is green.` (400 ok, exit 0); `pnpm run verify:breadth` → `Breadth lane PASSED — 58 breadth proofs green` (exit 0), both run locally on 722f86b1 before its push."
+          Body, Owner decision needed: "... gating check run \"Typecheck, build, and proof scaffold\" **116631935708** success on that head; local preflight (400 ok, exit 0) and breadth (58, exit 0) run on 722f86b1 before its push; 0 open threads; ... Sonnet rounds 1–2 ship, Opus round 1 fix-needed → round 4 ship, Opus landing refute on 6b1f96df fix-needed (one MEDIUM) → round 6 ship with one LOW → round 7 at 28 minutes with the projected range: **ship**"
+Verdict:  holds for the merge, the head and the gating run. The Mac-only run is not named in the body. The final verdict is round 7 ship, per the body. The body's count of the 20-minute bound's kills (four, three mid-step, the job 116622158898 kill at 20m04s) agrees with the job read above.
+
+## 2026-10-15 — "#1468 (loop-state: every seam zero is earned, with the review-wave helper and the .claude/workflows reads) landed under DR-037 at 760d5032 on head 80242deb (round 35, a plain mainline merge) with gating check 116655818855 and Mac-only check 116655817446; the Opus landing re-refute at round 34 was ship"
+Command:  gh api repos/DanFashauer/SignalGrid-Review-Hub/pulls/1468 --jq '"#\(.number) | head=\(.head.ref) | headsha=\(.head.sha[0:8]) | merged=\(.merged_at) | merge=\(.merge_commit_sha[0:8])"'; gh api repos/DanFashauer/SignalGrid-Review-Hub/check-runs/116655818855 --jq '"\(.id) \(.name) head=\(.head_sha[0:8]) \(.status) \(.conclusion) completed=\(.completed_at)"'; gh api repos/DanFashauer/SignalGrid-Review-Hub/check-runs/116655817446 --jq '"\(.id) \(.name) head=\(.head_sha[0:8]) \(.status) \(.conclusion) completed=\(.completed_at)"'; gh api repos/DanFashauer/SignalGrid-Review-Hub/actions/jobs/116622158898 --jq '"\(.conclusion) \(.started_at) \(.completed_at) \(.head_sha[0:8])"'; gh api repos/DanFashauer/SignalGrid-Review-Hub/pulls/1468 --jq '.body' > bodies/pr1468.md; cat bodies/pr1468.md (its Validation and Owner decision needed sections)
+Output:   #1468 | head=claude/loop-state-20261008-gap | headsha=80242deb | merged=2026-10-15T20:55:41Z | merge=760d5032
+          116655818855 Typecheck, build, and proof scaffold head=80242deb completed success completed=2026-10-15T20:53:23Z
+          116655817446 PR — Mac-only checks (full-clone provenance, preflight on macOS) head=80242deb completed success completed=2026-10-15T20:46:59Z
+          116622158898 cancelled 2026-10-15T19:20:01Z 2026-10-15T19:40:05Z 46cdf302
+          Body, Validation, round-35 head 80242deb006f95193d027a58b483f5269e4ea11c (mainline merge only): "`node scripts/preflight.mjs` → `Preflight PASSED — everything it runs is green.` (400 ok, exit 0); `pnpm run verify:breadth` → `Breadth lane PASSED — 58 breadth proofs green` (exit 0), both run locally on that exact head before its push; the same two verdicts on round-34 head 46cdf302 before its push; loop-state `--self-test` 316/316 on both."
+          Body, Owner decision needed: "None. SAFETY_MACHINERY PR ... merged under DR-037 on head 80242deb006f95193d027a58b483f5269e4ea11c (round 35 = round 34 46cdf302 + a plain merge of mainline df4ea3b8 ...): gating check run 116655818855 success on that head (the round-34 run 116622158898 on 46cdf302 was cancelled at 20m04s by the old 20-minute bound, 388/412 steps green); PR — Mac-only checks 116655817446 success; ... review: Sonnet rounds 28–33 and Opus refutes at rounds 28, 29 and 30; Opus landing refute on round 33 fix-needed (R16 port-file race; review-wave-verdict dead/blocked rendered as ship) → round 34 → Opus landing re-refute **ship** on 46cdf302 (five LOWs filed as follow-ups ...)"
+Verdict:  holds for the merge, the head and both check runs (completed success, read above). The round-34 run 116622158898 is cancelled at 20m04s, as the body says; 388 of its steps succeeded (385 before step 386, plus three post steps), step 386 was cancelled, and 23 later steps were skipped. The final verdict is the Opus landing re-refute at round 34, ship, per the body; round 35 is a mainline merge that changes no file under scripts/loop-state.mjs or .claude/workflows, per the body's statement.
+
+## 2026-10-15 — "#1470 (the Graph lab collection and permissions.json must match the connector's reads, plan row 30 part a) landed under DR-037 at 64d0ca6d on gating check 116687433426 and Mac-only check 116687433354 at head edccae8b; the Opus landing re-refute at round 17 was ship"
+Command:  gh api repos/DanFashauer/SignalGrid-Review-Hub/pulls/1470 --jq '"#\(.number) | head=\(.head.ref) | headsha=\(.head.sha[0:8]) | merged=\(.merged_at) | merge=\(.merge_commit_sha[0:8])"'; gh api repos/DanFashauer/SignalGrid-Review-Hub/check-runs/116687433426 --jq '"\(.id) \(.name) head=\(.head_sha[0:8]) \(.status) \(.conclusion) completed=\(.completed_at)"'; gh api repos/DanFashauer/SignalGrid-Review-Hub/check-runs/116687433354 --jq '"\(.id) \(.name) head=\(.head_sha[0:8]) \(.status) \(.conclusion) completed=\(.completed_at)"'; gh api repos/DanFashauer/SignalGrid-Review-Hub/pulls/1470 --jq '.body' > bodies/pr1470.md; cat bodies/pr1470.md
+Output:   #1470 | head=claude/build-graph-collection-transport-parity | headsha=edccae8b | merged=2026-10-15T22:07:46Z | merge=64d0ca6d
+          116687433426 Typecheck, build, and proof scaffold head=edccae8b completed success completed=2026-10-15T22:00:16Z
+          116687433354 PR — Mac-only checks (full-clone provenance, preflight on macOS) head=edccae8b completed success completed=2026-10-15T22:03:27Z
+          Body, Validation: "`node scripts/preflight.mjs`: `Preflight PASSED — everything it runs is green.` (exit 0)." / "`pnpm run verify:breadth`: `Breadth lane PASSED — 58 breadth proofs green` (exit 0)." / "`node scripts/check-graph-permission-boundary.mjs`: exit 0; `--self-test`: `self-test passed (238/238)`."
+          Body, Owner decision needed: "... merged under DR-037 on head edccae8b525ea66768e64c374420ec7fd3241e7f (round 17 = round 16's 268a7d34 + a plain merge of mainline d2cccb78 ...): gating check run 116687433426 success on that head (21:43:47Z to 22:00:16Z); PR — Mac-only checks 116687433354 success; local preflight and breadth run on edccae8b before its push; 0 review threads; ... Sonnet rounds through 15 (round 15 ship), the Opus landing refute on round 16 (fix-needed only on the mainline conflict ...) and the Opus landing re-refute on round 17: **ship**"
+Verdict:  holds for the merge, the head and both check runs (read above). The merge time is 22:07:46Z by the API; the dispatch note's "22:10Z" is the approximate figure. The final verdict is round 17 ship, per the body. The body's optional owner call (adopt the Bruno CLI as the oracle) is not a blocker per the body.
+
+## 2026-10-15 — "Lane heartbeat and tick landings of 2026-10-15: thirteen PRs of lane mail and tick records, none carrying product code (#1506 #1514 #1515 #1517 #1518 #1519 #1521 #1522 #1523 #1525 #1526 #1527 #1528), each with its merged sha"
+Command:  for n in 1506 1514 1515 1517 1518 1519 1521 1522 1523 1525 1526 1527 1528; do gh api repos/DanFashauer/SignalGrid-Review-Hub/pulls/$n --jq '"#\(.number) head=\(.head.sha[0:8]) merge=\(.merge_commit_sha[0:8]) merged=\(.merged_at) bodylen=\(.body|length)"'; done; gh api repos/DanFashauer/SignalGrid-Review-Hub/pulls/$n/files --paginate --jq '.[].filename' (the changed files of each PR, read in one pass); each body's "## Summary" section read (bodies/prN.md); and the #1528 window: git log origin/SignalGrid_Alpha --first-parent --since=2026-10-15T19:25:57Z --until=2026-10-15T21:26:43Z --format='%h %cI %s' (nine commits)
+Output:   #1506 head=763376fb merge=764cb99d merged=2026-10-15T10:22:23Z — the forward-build heartbeat of the 16:11Z fire of 2026-10-09, delivered by `lane-deliver batch` from a throwaway worktree at origin/SignalGrid_Alpha 54b65fb1; lane mail only.
+          #1514 head=29854dc1 merge=845468d6 merged=2026-10-15T12:27:16Z — the first lane-deliver batch after #1513 retired the dependabot-queue-review row; carries the three cloud-lane heartbeats the scheduled-routines gate had refused since 2026-10-12T00:00Z (forward-build-cycle, mac-lane-steward-duty-cycle, cloud-lane-hygiene-sweep); clears the cloud-lane hand that covered the forward-build stall.
+          #1515 head=efdc9a2e merge=355ff646 merged=2026-10-15T12:39:09Z — the Mac tick's own heartbeat (7dc78829, firedAt 12:09:32Z) and the clear of the cloud-lane hand over heartbeat:mac-lane-tick.
+          #1517 head=d87ce8bd merge=38003303 merged=2026-10-15T14:41:13Z — the forward-build heartbeat for the 14:10Z fire and the steward keepalive; live evidence 13.0 days old at that fire; manifest in sync at 96.
+          #1518 head=17428179 merge=ab5ba4d3 merged=2026-10-15T15:37:21Z — tick PR mac/tick-20261015T152345Z, titled "Mac tick 20261015T152345Z: sim results (0 request(s)); objective loop: escalate"; body empty.
+          #1519 head=7a20e9a5 merge=2b6fa3e2 merged=2026-10-15T15:54:57Z — the 15:24Z mac-lane-steward duty-cycle heartbeat (non-quiet); the objective loop's escalation that readiness-floor is unmet because live evidence was 12 days old.
+          #1521 head=3ea30112 merge=9b2f999d merged=2026-10-15T16:36:58Z — the 16:11Z forward-build heartbeat; records five landings since 14:10Z (#1517, #1490, #1518, #1520, #1519).
+          #1522 head=ebcb33f8 merge=67d083b8 merged=2026-10-15T17:10:21Z — tick PR mac/tick-20261015T155427Z, titled "Mac tick 20261015T155427Z: sim results (1 request(s)); objective loop: escalate"; body empty. Its head commit ebcb33f82 is the commit that holds the 2026-10-15 re-mint of artifacts/live-evidence/mac-run.json (mintedAt 2026-10-15T16:33:53.511Z).
+          #1523 head=4808841e merge=62040a76 merged=2026-10-15T17:45:06Z — the steward heartbeat for the 17:24Z cycle (one file); keepalive not due at 1h57m; the first commit's wording corrected by 4808841e (Codex thread 4286197795).
+          #1525 head=a9f6a452 merge=0e0b859a merged=2026-10-15T18:33:06Z — the forward-build heartbeat for the 18:11Z fire (one file).
+          #1526 head=5b99b53c merge=67ff76eb merged=2026-10-15T19:44:07Z — the steward keepalive heartbeat for the 19:24Z cycle (quiet; the prior heartbeat at 17:25:52Z had passed the 2-hour keepalive threshold at delivery); one file.
+          #1527 head=e1d5ab8c merge=9e7fc18b merged=2026-10-15T20:44:06Z — the forward-build heartbeat for the 20:11Z fire (one file).
+          #1528 head=3c08c60d merge=8023bc7d merged=2026-10-15T21:53:19Z — the steward keepalive heartbeat for the 21:24Z cycle (non-quiet). Its window, from the prior firedAt 19:25:57.719Z to its delivery commit 5703c7585 (21:26:43Z), holds four cloud landings: #1526 67ff76eb, #1524 df4ea3b8, #1527 9e7fc18b and #1468 760d5032; and five Mac tick heartbeats (nine first-parent commits in all). The Summary line of its body still says two and was not corrected; its What changed section says four. The prior heartbeat passed the 2-hour threshold at delivery (age 2h00m45s at 21:26:43Z); one file.
+Verdict:  holds for the numbers, shas and times (read above). The Summaries are quoted as their bodies state them; the #1528 Summary line says two landings, which the window above does not bear out (four). #1518 and #1522 have no body; their content is the title only. The changed files, from the pulls/N/files read above, are heartbeat, raised-hand, objective-state, sim-result and evidence files only: #1506 forward-build-cycle.json; #1514 three heartbeats and one hand; #1515 one hand; #1517 two heartbeats; #1518 docs/agent/objective-state.json; #1519, #1523, #1526 and #1528 mac-lane-steward-duty-cycle.json; #1521, #1525 and #1527 forward-build-cycle.json; #1522 artifacts/live-evidence/mac-run.json (the re-mint), artifacts/sim-results/objective-loop-evidence-fresh-2026-10-15.json, docs/agent/SURFACE_REVIEW_COVERAGE.md and docs/agent/objective-state.json. None of the thirteen touches scripts/, lib/ or native/.
+
+## 2026-10-16 — "Five lane PRs landed on mainline between 02:30Z and 04:30Z (#1535, #1536, #1537, #1538, #1539: forward-build and steward heartbeats, the live-evidence re-mint ask and one Mac tick record), each with its merged sha, UTC merge time and gating check run"
+Command:  for n in 1535 1536 1537 1538 1539; do gh api repos/DanFashauer/SignalGrid-Review-Hub/pulls/$n --jq '"#\(.number) head=\(.head.sha[0:8]) merge=\(.merge_commit_sha[0:8]) merged=\(.merged_at) state=\(.state)"'; done; for id in 116775327913 116786409708 116787586536 116796976650 116807305698; do gh api repos/DanFashauer/SignalGrid-Review-Hub/check-runs/$id --jq '"\(.id) \(.name) head=\(.head_sha[0:8]) \(.status) \(.conclusion) completed=\(.completed_at)"'; done; for s in 1ed88f9f 06e494a1 7fd78b48 1efb3fdd 511c0153; do git rev-parse --verify --quiet "$s^{commit}" | cut -c1-8; done; git merge-base --is-ancestor 511c0153 origin/SignalGrid_Alpha && echo "511c0153 is an ancestor of origin/SignalGrid_Alpha"
+Output:   #1535 head=c90777ad merge=1ed88f9f merged=2026-10-16T02:30:36Z state=closed
+          #1536 head=fb13ea10 merge=06e494a1 merged=2026-10-16T03:13:57Z state=closed
+          #1537 head=d0626843 merge=7fd78b48 merged=2026-10-16T03:29:32Z state=closed
+          #1538 head=e95a7898 merge=1efb3fdd merged=2026-10-16T03:55:57Z state=closed
+          #1539 head=76db3d4b merge=511c0153 merged=2026-10-16T04:29:46Z state=closed
+          116775327913 Typecheck, build, and proof scaffold head=c90777ad completed success completed=2026-10-16T02:29:37Z
+          116786409708 Typecheck, build, and proof scaffold head=d0626843 completed success completed=2026-10-16T03:15:09Z
+          116787586536 Typecheck, build, and proof scaffold head=fb13ea10 completed success completed=2026-10-16T03:12:55Z
+          116796976650 Typecheck, build, and proof scaffold head=e95a7898 completed success completed=2026-10-16T03:55:09Z
+          116807305698 Typecheck, build, and proof scaffold head=76db3d4b completed success completed=2026-10-16T04:29:27Z
+          1ed88f9f
+          06e494a1
+          7fd78b48
+          1efb3fdd
+          511c0153
+          511c0153 is an ancestor of origin/SignalGrid_Alpha
+Verdict:  holds for each PR's head, merged sha, merged time and gating check run (completed success on that head, read above). The Mac-only check is not named for these five, so none is given. The one-line descriptions are the coordinator's measured facts for the 2026-10-16 window and were not re-read from the PR bodies here.
+
+## 2026-10-16 — "#1504 (url-guard and redirect hand mutants pinned in proof:emitter-discipline, 139 to 150) landed under DR-037 at 2b7f81f3 on gating check 116776717682 and Mac-only check 116776521794 at head ca89f108; the merged head is tree-identical to the verified head 9613ac61 (tree 9a271679); the sync manifest moved v96 3c69fedd to v97 aa9ce381438ecb26"
+Command:  gh api repos/DanFashauer/SignalGrid-Review-Hub/pulls/1504 --jq '"#\(.number) head=\(.head.sha[0:8]) merge=\(.merge_commit_sha[0:8]) merged=\(.merged_at) state=\(.state)"'; for id in 116776717682 116776521794; do gh api repos/DanFashauer/SignalGrid-Review-Hub/check-runs/$id --jq '"\(.id) \(.name) head=\(.head_sha[0:8]) \(.status) \(.conclusion) completed=\(.completed_at)"'; done; git rev-parse ca89f108^{tree} 9613ac61^{tree}; pnpm run proof:emitter-discipline; node scripts/generate-sync-manifest.mjs --check; git show 04f97ddc1^1:artifacts/sync/live-sync-manifest.json | grep -E '"manifestVersion"|"fingerprint"'; git show 04f97ddc1:artifacts/sync/live-sync-manifest.json | grep -E '"manifestVersion"|"fingerprint"'; git show 2b7f81f3^1:artifacts/sync/live-sync-manifest.json | grep -E '"manifestVersion"|"fingerprint"'; git show 2b7f81f3:artifacts/sync/live-sync-manifest.json | grep -E '"manifestVersion"|"fingerprint"'
+Output:   #1504 head=ca89f108 merge=2b7f81f3 merged=2026-10-16T02:51:27Z state=closed
+          116776717682 Typecheck, build, and proof scaffold head=ca89f108 completed success completed=2026-10-16T02:38:32Z
+          116776521794 PR — Mac-only checks (full-clone provenance, preflight on macOS) head=ca89f108 completed success completed=2026-10-16T02:50:28Z
+          9a27167951a25d7c81f6ede92316f5eb2aa45e75
+          9a27167951a25d7c81f6ede92316f5eb2aa45e75
+          summary=pass (150/150)
+          live-sync manifest unchanged — version 97, fingerprint aa9ce381438ecb26…
+          "manifestVersion": 95,
+          "fingerprint": "73609a329ab41dafbc2d0009b0d60c496a763b6d61d3a4327312c6e6aa564ae9",
+          "manifestVersion": 96,
+          "fingerprint": "3c69fedd77548d613e9520a28a68daefe88423b7e8f7df5a652111841b4274bc",
+          "manifestVersion": 96,
+          "fingerprint": "3c69fedd77548d613e9520a28a68daefe88423b7e8f7df5a652111841b4274bc",
+          "manifestVersion": 97,
+          "fingerprint": "aa9ce381438ecb26874cdbe60b82a9339821d6b540f176e122291202a6b3885b",
+Verdict:  holds for the merge, the merged head, the tree identity, both check runs, the proof count and the manifest version (read above). The proof and the manifest check were run in the docs worktree at base fc9440a9, the proof with exit 0; the four `git show` outputs are, in order, the first parent of the #1505 merge (04f97ddc1^1), that merge (04f97ddc1), the first parent of the #1504 merge (2b7f81f3^1) and that merge (2b7f81f3), each filtered to its manifestVersion and fingerprint lines. The v96 → v97 move is #1504's own: 2b7f81f3^1 carries manifestVersion 96 and fingerprint 3c69fedd77548d613e9520a28a68daefe88423b7e8f7df5a652111841b4274bc, and 2b7f81f3 carries 97 and aa9ce381438ecb26874cdbe60b82a9339821d6b540f176e122291202a6b3885b (read above). The five landing-refute rounds are the coordinator's measured fact and were not re-run here. The v96 manifest first appears at the #1505 merge (04f97ddc): its first parent carries manifestVersion 95 and fingerprint 73609a329ab41dafbc2d0009b0d60c496a763b6d61d3a4327312c6e6aa564ae9, and the merge carries manifestVersion 96 and fingerprint 3c69fedd77548d613e9520a28a68daefe88423b7e8f7df5a652111841b4274bc (read above).
+
+## 2026-10-16 — "#1534 (the daily mutation sweep partitioned by cost, with the sharding gate pinning the plan, the sweep path and the job; the shard-3 root cause) landed under DR-037 at dd3ba58f on gating check 116782022894 and Mac-only check 116782022240 at head e15be07b; eleven review rounds; CodeQL alert 230 (js/file-system-race) fixed on the head"
+Command:  gh api repos/DanFashauer/SignalGrid-Review-Hub/pulls/1534 --jq '"#\(.number) head=\(.head.sha[0:8]) merge=\(.merge_commit_sha[0:8]) merged=\(.merged_at) state=\(.state)"'; for id in 116782022894 116782022240; do gh api repos/DanFashauer/SignalGrid-Review-Hub/check-runs/$id --jq '"\(.id) \(.name) head=\(.head_sha[0:8]) \(.status) \(.conclusion) completed=\(.completed_at)"'; done; gh api "repos/DanFashauer/SignalGrid-Review-Hub/code-scanning/alerts?pr=1534&per_page=50" --jq '.[] | select(.number==230) | "state=\(.state) fixed_at=\(.fixed_at) ref=\(.most_recent_instance.ref)"'; node scripts/check-mutation-sharding.mjs
+Output:   #1534 head=e15be07b merge=dd3ba58f merged=2026-10-16T03:06:14Z state=closed
+          116782022894 Typecheck, build, and proof scaffold head=e15be07b completed success completed=2026-10-16T02:58:32Z
+          116782022240 PR — Mac-only checks (full-clone provenance, preflight on macOS) head=e15be07b completed success completed=2026-10-16T03:05:25Z
+          state=fixed fixed_at=2026-10-16T02:39:47Z ref=refs/pull/1534/merge
+          56 targets · 185 files · 2026 mutations
+          summary=pass (277/277)
+Verdict:  holds for the merge, the head, both check runs, and the alert's state (read above); the commands and their outputs are listed in the same order, and the sharding gate was run in the docs worktree at base fc9440a9 with exit 0, its two quoted lines being its totals line and its summary line. The "eleven review rounds" in the claim is the coordinator's count of its own round notes on the PR and was not re-read here. The code-scanning list read for PR 1534 reports alert 230 as state=fixed, fixed_at 2026-10-16T02:39:47Z, on refs/pull/1534/merge. An earlier per-alert read of code-scanning/alerts/230 returned state=null and is not the source of the status. The sharding gate's reported total on the base is 2026 mutations with the brace-less opt-in counted, so the #1505 review's INFO on a 1594 total does not hold at this base.
+
+## 2026-10-16 — "Five PRs landed in the gap between the two LOOP windows (2026-10-15 22:07:46Z to 2026-10-16 02:11Z): #1529, #1530, #1531 and #1533 (lane mail) and #1532 (the 2026-10-15 docs batch), each with its merged sha, UTC merged_at and gating check run"
+Command:  for n in 1529 1530 1531 1532 1533; do gh api repos/DanFashauer/SignalGrid-Review-Hub/pulls/$n --jq '"#\(.number) head=\(.head.sha[0:8]) merge=\(.merge_commit_sha[0:8]) merged=\(.merged_at) state=\(.state)"'; done; for id in 116703665804 116726065910 116741518825 116741851860 116741851749 116764648248; do gh api repos/DanFashauer/SignalGrid-Review-Hub/check-runs/$id --jq '"\(.id) \(.name) head=\(.head_sha[0:8]) \(.status) \(.conclusion) completed=\(.completed_at)"'; done; git log origin/SignalGrid_Alpha --first-parent --merges --since=2026-10-15T22:07:46Z --until=2026-10-16T04:29:46Z --format='%h' | wc -l
+Output:   #1529 head=1d57978d merge=f304ca4d merged=2026-10-15T22:42:56Z state=closed
+          #1530 head=1c6d3c32 merge=f8625295 merged=2026-10-15T23:49:32Z state=closed
+          #1531 head=0daee16c merge=6b97d0ac merged=2026-10-16T00:33:15Z state=closed
+          #1532 head=5ae883f5 merge=468fd3e0 merged=2026-10-16T00:43:57Z state=closed
+          #1533 head=4e01e905 merge=e6795df0 merged=2026-10-16T01:48:58Z state=closed
+          116703665804 Typecheck, build, and proof scaffold head=1d57978d completed success completed=2026-10-15T22:41:18Z
+          116726065910 Typecheck, build, and proof scaffold head=1c6d3c32 completed success completed=2026-10-15T23:48:34Z
+          116741518825 Typecheck, build, and proof scaffold head=0daee16c completed success completed=2026-10-16T00:32:41Z
+          116741851860 Typecheck, build, and proof scaffold head=5ae883f5 completed success completed=2026-10-16T00:37:33Z
+          116741851749 PR — Mac-only checks (full-clone provenance, preflight on macOS) head=5ae883f5 completed success completed=2026-10-16T00:41:41Z
+          116764648248 Typecheck, build, and proof scaffold head=4e01e905 completed success completed=2026-10-16T01:48:32Z
+          13
+Verdict:  holds for each PR's head, merged sha, merged time and gating check run (read above). The Mac-only run is named only for #1532, because #1529, #1530, #1531 and #1533 have no Mac-only run on their heads. The 13 is the first-parent merge count of the whole window, of which these five are part. The review rounds of these PRs are not read here.
+
+## 2026-10-16 — "#1460 (a check-gate's --self-test that no step runs is run by a gate, and a gate with neither flag nor control fails; plan row 43 remainder) reached mainline at cc910439 at 00:28:14Z on gating check 116735582504 and Mac-only check 116735581757 at head 6945ab1a"
+Command:  gh api repos/DanFashauer/SignalGrid-Review-Hub/pulls/1460 --jq '"#\(.number) head=\(.head.sha[0:8]) merge=\(.merge_commit_sha[0:8]) merged=\(.merged_at) state=\(.state)"'; for id in 116735582504 116735581757; do gh api repos/DanFashauer/SignalGrid-Review-Hub/check-runs/$id --jq '"\(.id) \(.name) head=\(.head_sha[0:8]) \(.status) \(.conclusion) completed=\(.completed_at)"'; done
+Output:   #1460 head=6945ab1a merge=cc910439 merged=2026-10-16T00:28:14Z state=closed
+          116735582504 Typecheck, build, and proof scaffold head=6945ab1a completed success completed=2026-10-16T00:12:12Z
+          116735581757 PR — Mac-only checks (full-clone provenance, preflight on macOS) head=6945ab1a completed success completed=2026-10-16T00:23:24Z
+Verdict:  holds for the merge, the merged head, the merged time and both check runs (read above). The review rounds and any refute on this PR are not read here, and the title's "plan row 43 remainder" is quoted from the PR, not checked against the plan.
+
+
+## 2026-10-21 — "#1576 (restore staged Mac builders and align local worker verification) landed under DR-037 at b0a4568855ca2d2378698ba23e5ff867a7c6650b from head 418221363eea5dc66ff3eda7c21484247d03cfb9"
+Command:  git show --no-patch --format='commit=%H%nparents=%P%ncommittedAt=%cI%nsubject=%s' b0a4568855ca2d2378698ba23e5ff867a7c6650b; git merge-base --is-ancestor 418221363eea5dc66ff3eda7c21484247d03cfb9 b0a4568855ca2d2378698ba23e5ff867a7c6650b
+Output:   commit=b0a4568855ca2d2378698ba23e5ff867a7c6650b
+          parents=70075bd67b02f525b402b09820824f37663b93a7 418221363eea5dc66ff3eda7c21484247d03cfb9
+          committedAt=2026-10-21T17:33:02-04:00
+          subject=Merge pull request #1576 from DanFashauer/codex/project-worker-alignment-20261021
+          git show: exit 0; git merge-base --is-ancestor: exit 0, no stdout.
+Recorded GitHub API reads (snapshot at 2026-10-21T21:47Z; mutable receipts, not re-runnable commands):  gh api repos/DanFashauer/SignalGrid-Review-Hub/pulls/1576 --jq '"#\(.number) head=\(.head.sha) merge=\(.merge_commit_sha) merged=\(.merged_at) state=\(.state)"'; gh api repos/DanFashauer/SignalGrid-Review-Hub/check-runs/119486613085 --jq '"\(.id) \(.name) head=\(.head_sha) \(.status) \(.conclusion) completed=\(.completed_at)"'; gh api repos/DanFashauer/SignalGrid-Review-Hub/check-runs/119486610742 --jq '"\(.id) \(.name) head=\(.head_sha) \(.status) \(.conclusion) completed=\(.completed_at)"'; gh api repos/DanFashauer/SignalGrid-Review-Hub/pulls/1576 --jq '.body'
+Recorded API output:   #1576 head=418221363eea5dc66ff3eda7c21484247d03cfb9 merge=b0a4568855ca2d2378698ba23e5ff867a7c6650b merged=2026-10-21T21:33:03Z state=closed
+          119486613085 Typecheck, build, and proof scaffold head=418221363eea5dc66ff3eda7c21484247d03cfb9 completed success completed=2026-10-21T21:30:31Z
+          119486610742 PR — Mac-only checks (full-clone provenance, preflight on macOS) head=418221363eea5dc66ff3eda7c21484247d03cfb9 completed success completed=2026-10-21T21:25:12Z
+          Body, Validation: "Staged-worker self-test: **243/243**." / "Local worker primitives: **41/41**." / "Full local preflight: **PASSED — everything it runs is green**. Two web steps were unavailable on darwin-arm64; the separate Linux run below covers them." / "Full breadth: **PASSED — 58 breadth proofs green**." / "Linux all-package build and browser E2E: **exit 0; 53/53 passed**. Attestation binds this exact clean head."
+          Retained local preflight receipt: "Preflight PASSED — everything it runs is green." / "2 step(s) did NOT run — unavailable on darwin-arm64, not passed:"; the named steps are Build (all packages) and Browser E2E (review console, website, admin).
+          Retained breadth receipt: "Breadth lane PASSED — 58 breadth proofs green (deferred families, doctrine documents, and the DR-005 decision-palette design gate)."
+          Retained Linux browser receipt: "53 passed (1.3m)"; the separate native-build attestation records status=passed, treeSha=418221363eea5dc66ff3eda7c21484247d03cfb9, treeClean=true, ranAt=2026-10-21T21:00:53.277Z and runner=apple-container/amd64/node:22 for both named steps.
+          Body, Owner decision needed: "Completed independent primary source reviews and a final pre-merge API read found zero unresolved threads or posted bot findings. The optional GitHub Codex review was still running at landing; it is not claimed as completed review evidence."
+Verdict:  the pinned local reads confirm the merge parents, source-head ancestry and commit timestamp. The recorded API snapshot supplies the server merge time and both completed-success check runs on that exact head; the commit timestamp is 21:33:02Z and API merged_at is 21:33:03Z. The local results are the coordinator's recorded pre-push runs on that head, cross-checked against retained final logs and the clean-head Linux attestation; the graph reads do not rerun or independently prove those gate outcomes. The Mac preflight's two unavailable steps are not counted as passed by that run. Independent primary source review and the still-running optional review at landing are recorded from the PR body. This record closes at merge b0a4568855ca2d2378698ba23e5ff867a7c6650b; later review observations are recorded separately below. This landing restores development machinery and worker proof boundaries; it does not re-mint live evidence or assert a new product-readiness figure, owner attestation or merge authority.
+
+## 2026-10-21 — Post-landing optional Codex observation at 21:47Z for #1576
+Command:  git show --no-patch --format='head=%H%nsubject=%s' 418221363eea5dc66ff3eda7c21484247d03cfb9
+Output:   head=418221363eea5dc66ff3eda7c21484247d03cfb9
+          subject=Use shared hermetic Git fixtures for staged worker proofs
+Recorded GitHub API read (snapshot at 2026-10-21T21:47Z; mutable receipt, not a re-runnable command): gh api repos/DanFashauer/SignalGrid-Review-Hub/issues/comments/6326581589 --jq '{id,updated_at,body}'
+Recorded API output: Optional Codex comment 6326581589, re-read 2026-10-21T21:47Z: code_review.commit_sha=418221363eea5dc66ff3eda7c21484247d03cfb9, status=running, has_any_findings=null, has_unresolved_findings=null; updated_at=2026-10-21T21:07:48Z.
+Verdict:  this is a later observation after the b0a4568855ca2d2378698ba23e5ff867a7c6650b landing window. The pinned local read identifies the source commit named in the recorded comment; it does not reproduce that mutable API state. At the recorded read the optional review was running, and null finding fields are not a completed no-findings verdict. No completed Codex review is claimed.
+
+## 2026-10-21 — Post-landing fresh Mac and MCP evidence is committed at f3b55f7173ed5d5365a102ebadadef2e0e1dfcea, measured on clean source a70c36b3e0e897d8a80a863e7228417f729e487f
+Command:
+```bash
+git show f3b55f7173ed5d5365a102ebadadef2e0e1dfcea:artifacts/live-evidence/mac-run.json | node --input-type=module -e 'import fs from "node:fs"; const e=JSON.parse(fs.readFileSync(0,"utf8")), p=e.proofs, c=e.preflightCoverage, a=c.nativeBuildAttestation; console.log("schema="+e.schema+" mintedAt="+e.mintedAt+" platform="+e.platform); console.log("manifestVersion="+e.manifestVersion+" manifestFingerprint="+e.manifestFingerprint); console.log("reviewHubPass="+e.reviewHubPass+" mcpPass="+e.mcpPass+" mcpCheckoutFound="+e.mcpCheckoutFound); console.log("mcpCommit="+e.mcpCommit+" mcpDirty="+e.mcpDirty+" mcpTrackedModified="+e.mcpTrackedModified+" mcpUntrackedSource="+e.mcpUntrackedSource); console.log("contractSha="+e.contractSha); console.log("passedProofRecords="+Object.values(p.passed).filter(x=>x.status==="passed").length+" sourceCommits="+JSON.stringify([...new Set(Object.values(p.passed).map(x=>x.reviewHubCommit))])); console.log("notRecorded="+JSON.stringify(p.notRecorded)); console.log("recordedSteps="+Object.keys(p.steps).length+" stepsExcluded="+JSON.stringify(p.stepsExcluded)); console.log("nativeBuildExcluded="+c.nativeBuildExcluded+" target="+c.target+" stepsNotRun="+JSON.stringify(c.stepsNotRun)); console.log("nativeAttestedSteps="+JSON.stringify(a.steps)+" treeSha="+a.treeSha+" ranAt="+a.ranAt+" runner="+JSON.stringify(a.runner));'
+git show f3b55f7173ed5d5365a102ebadadef2e0e1dfcea:artifacts/sim-results/objective-loop-evidence-fresh-2026-10-17-2.json | node --input-type=module -e 'import fs from "node:fs"; const r=JSON.parse(fs.readFileSync(0,"utf8")); console.log("schemaVersion="+r.schemaVersion+" requestId="+r.requestId+" completedAt="+r.completedAt); console.log("sourceCommit="+r.provenance.commit+" workingTreeClean="+r.provenance.workingTreeClean+" platform="+r.provenance.platform+" arch="+r.provenance.arch); console.log("runs="+JSON.stringify(r.runs.map(({operation,status,exitCode,durationMs})=>({operation,status,exitCode,durationMs}))));'
+```
+Output:
+```text
+schema=signalgrid-live-evidence/v1 mintedAt=2026-10-21T22:14:07.453Z platform=darwin
+manifestVersion=97 manifestFingerprint=aa9ce381438ecb26874cdbe60b82a9339821d6b540f176e122291202a6b3885b
+reviewHubPass=true mcpPass=true mcpCheckoutFound=true
+mcpCommit=343339c436dea47818fa17cf3be486782e62d912 mcpDirty=false mcpTrackedModified=0 mcpUntrackedSource=0
+contractSha=ba32d196e154173d21f246b19364fd4b8f6a1d0f7d79db8082f195ac011d9e81
+passedProofRecords=141 sourceCommits=["a70c36b3e0e897d8a80a863e7228417f729e487f"]
+notRecorded=["proof:backup-restore","proof:db-role-split"]
+recordedSteps=411 stepsExcluded=["Mainline workflow red streaks (report-only — names every non-gating workflow red 3+ runs in a row; own errors REPORTED here, fatal only in CI)","Proof: backup-restore (the restore path, exercised not assumed)","Proof: db-role-split (the ledger append-only by privilege)"]
+nativeBuildExcluded=true target=darwin-arm64 stepsNotRun=[]
+nativeAttestedSteps=["Browser E2E (review console, website, admin)","Build (all packages)"] treeSha=a70c36b3e0e897d8a80a863e7228417f729e487f ranAt=2026-10-21T21:56:53.283Z runner={"kind":"apple-container","arch":"amd64","image":"node:22","host":"darwin"}
+schemaVersion=1 requestId=objective-loop-evidence-fresh-2026-10-17-2 completedAt=2026-10-21T22:14:10.153Z
+sourceCommit=a70c36b3e0e897d8a80a863e7228417f729e487f workingTreeClean=true platform=darwin arch=arm64
+runs=[{"operation":"evidence","status":"passed","exitCode":0,"durationMs":1196548}]
+```
+Verdict:  holds for the fields recorded in these two immutable JSON blobs: the evidence mint completed at 22:14:07.453Z and its request completed at 22:14:10.153Z with status passed, exit 0 and duration 1196548 ms. All 141 passed proof records name the clean source commit a70c36b3e0e897d8a80a863e7228417f729e487f; reviewHubPass and mcpPass are true, with the clean MCP commit and contract hash shown above. Native web build remains excluded on darwin-arm64 itself, but both native steps are attested from the amd64 Linux VM on that exact source commit, so preflightCoverage.stepsNotRun is empty. That does not erase the two notRecorded proof names or the three stepsExcluded entries quoted above; none is counted as passed here. These pinned reads verify the stored receipt and do not rerun its gates, evaluate a current readiness figure, or supply the owner-real-in-hand attestation. This is a post-landing evidence refresh, separate from the #1576 merge and the later optional-review observation.
+
+## 2026-10-21 — #1577 publishes the fresh-evidence receipt and public raised-hand redaction at 24eff86a940099e0725d474d1d5520bfbc71d368 from head e8fa4a6a64bc0ae937e56685cd0eaa3aac0afda5
+Command:
+```bash
+git show --no-patch --format='commit=%H%nparents=%P%ncommittedAt=%cI%nsubject=%s' 24eff86a940099e0725d474d1d5520bfbc71d368
+git merge-base --is-ancestor e8fa4a6a64bc0ae937e56685cd0eaa3aac0afda5 24eff86a940099e0725d474d1d5520bfbc71d368
+git merge-base --is-ancestor f3b55f7173ed5d5365a102ebadadef2e0e1dfcea e8fa4a6a64bc0ae937e56685cd0eaa3aac0afda5
+git show f3b55f7173ed5d5365a102ebadadef2e0e1dfcea:artifacts/live-evidence/mac-run.json | node --input-type=module -e 'import fs from "node:fs"; const e=JSON.parse(fs.readFileSync(0,"utf8")); console.log("mintedAt="+e.mintedAt+" manifestVersion="+e.manifestVersion+" manifestFingerprint="+e.manifestFingerprint);'
+git show f3b55f7173ed5d5365a102ebadadef2e0e1dfcea:artifacts/sim-results/objective-loop-evidence-fresh-2026-10-17-2.json | node --input-type=module -e 'import fs from "node:fs"; const r=JSON.parse(fs.readFileSync(0,"utf8")); console.log("completedAt="+r.completedAt+" sourceCommit="+r.provenance.commit+" workingTreeClean="+r.provenance.workingTreeClean);'
+git show 491bcaafcad47ad77f3b103994caa0c386d3ff6c:artifacts/lane-messages/acks/cloud-one-live-evidence-re-mint-after-today-s-la.json | node --input-type=module -e 'import fs from "node:fs"; import {createHash} from "node:crypto"; const b=fs.readFileSync(0), a=JSON.parse(b); console.log("ack sha256="+createHash("sha256").update(b).digest("hex")+" ackedBy="+a.ackedBy+" ackedAt="+a.ackedAt);'
+git show 24eff86a940099e0725d474d1d5520bfbc71d368:artifacts/lane-messages/acks/cloud-one-live-evidence-re-mint-after-today-s-la.json | node --input-type=module -e 'import fs from "node:fs"; import {createHash} from "node:crypto"; const b=fs.readFileSync(0), a=JSON.parse(b); console.log("ack sha256="+createHash("sha256").update(b).digest("hex")+" ackedBy="+a.ackedBy+" ackedAt="+a.ackedAt);'
+git show 491bcaafcad47ad77f3b103994caa0c386d3ff6c:artifacts/raised-hands/2026-10-21-the-last-evidence-remint-failed-in-scratch-copyi.json | node --input-type=module -e 'import fs from "node:fs"; import {createHash} from "node:crypto"; const b=fs.readFileSync(0), h=JSON.parse(b); console.log("hand sha256="+createHash("sha256").update(b).digest("hex")+" status="+h.status+" resolvedBy="+h.resolvedBy+" resolvedAt="+h.resolvedAt+" covers="+JSON.stringify(h.covers));'
+git show 24eff86a940099e0725d474d1d5520bfbc71d368:artifacts/raised-hands/2026-10-21-the-last-evidence-remint-failed-in-scratch-copyi.json | node --input-type=module -e 'import fs from "node:fs"; import {createHash} from "node:crypto"; const b=fs.readFileSync(0), h=JSON.parse(b); console.log("hand sha256="+createHash("sha256").update(b).digest("hex")+" status="+h.status+" resolvedBy="+h.resolvedBy+" resolvedAt="+h.resolvedAt+" covers="+JSON.stringify(h.covers));'
+```
+Output:
+```text
+commit=24eff86a940099e0725d474d1d5520bfbc71d368
+parents=491bcaafcad47ad77f3b103994caa0c386d3ff6c e8fa4a6a64bc0ae937e56685cd0eaa3aac0afda5
+committedAt=2026-10-21T19:10:52-04:00
+subject=Merge pull request #1577 from DanFashauer/codex/worker-runtime-evidence-20261021
+mintedAt=2026-10-21T22:14:07.453Z manifestVersion=97 manifestFingerprint=aa9ce381438ecb26874cdbe60b82a9339821d6b540f176e122291202a6b3885b
+completedAt=2026-10-21T22:14:10.153Z sourceCommit=a70c36b3e0e897d8a80a863e7228417f729e487f workingTreeClean=true
+ack sha256=2efd86f3c084758b96cfb1ca55c05d407475be9c1064dbf61f20144b00d6ba0b ackedBy=mac ackedAt=2026-10-21T23:08:53.841Z
+ack sha256=2efd86f3c084758b96cfb1ca55c05d407475be9c1064dbf61f20144b00d6ba0b ackedBy=mac ackedAt=2026-10-21T23:08:53.841Z
+hand sha256=91f20ddbc262bb121e74eaefe91006378f980ef5ad858b94c630d2fdf6386bf0 status=resolved resolvedBy=mac resolvedAt=2026-10-21T23:08:53.869Z covers=["mail:cloud-one-live-evidence-re-mint-after-today-s-la"]
+hand sha256=91f20ddbc262bb121e74eaefe91006378f980ef5ad858b94c630d2fdf6386bf0 status=resolved resolvedBy=mac resolvedAt=2026-10-21T23:08:53.869Z covers=["mail:cloud-one-live-evidence-re-mint-after-today-s-la"]
+```
+Both `git merge-base --is-ancestor` commands returned exit 0 with no stdout. Each JSON projection returned exit 0. The paired acknowledgement and hand hashes are, respectively, their bytes at the canonical mail-delivery commit 491bcaafcad47ad77f3b103994caa0c386d3ff6c and the #1577 merge; both records survived unchanged.
+
+Recorded GitHub API observations (the coordinator's pre-merge checks and merge confirmation, separate from the immutable local commands above; no API retrieval instant is inferred):
+```text
+#1577 head=e8fa4a6a64bc0ae937e56685cd0eaa3aac0afda5 merge=24eff86a940099e0725d474d1d5520bfbc71d368 merged=2026-10-21T23:10:53Z state=closed
+119530076408 Typecheck, build, and proof scaffold head=e8fa4a6a64bc0ae937e56685cd0eaa3aac0afda5 completed success started=2026-10-21T22:47:04Z completed=2026-10-21T23:09:01Z duration=21m57s
+119530076293 PR — Mac-only checks (full-clone provenance, preflight on macOS) head=e8fa4a6a64bc0ae937e56685cd0eaa3aac0afda5 completed success started=2026-10-21T22:47:04Z completed=2026-10-21T23:04:16Z duration=17m12s
+```
+The coordinator's retained pre-push receipts on that exact clean e8fa4a6a64bc0ae937e56685cd0eaa3aac0afda5 head record full local preflight passed in 937.51 seconds and breadth passed, 58 proofs, in 36.83 seconds. The Mac preflight explicitly excluded Build (all packages) and Browser E2E (review console, website, admin) as unavailable on darwin-arm64; neither is counted as passed by that run. The earlier Linux-VM attestation in the mint remains bound to source a70c36b3e0e897d8a80a863e7228417f729e487f and is not new native proof for the later redaction head.
+
+Recorded review and delivery observations: independent primary source review was clear. The optional GitHub Codex review completed with two findings. Finding 4342780962 was refuted by a fresh non-shallow fetch of the published branch: the coordinator's 2026-10-21T23:06:04.168254Z record reports f3b55f7173ed5d5365a102ebadadef2e0e1dfcea as an ancestor of published e8fa4a6a64bc0ae937e56685cd0eaa3aac0afda5 and successful fixed-commit reads of both JSON blobs. The immutable commands above reproduce that ancestry and those reads locally; they do not reproduce the historical network observation. Finding 4342780970 was addressed by the actual Mac reader's scoped acknowledgement and resolution of its covering remint-failure hand in canonical mail delivery 491bcaafcad47ad77f3b103994caa0c386d3ff6c. At their exact 23:08:53.841Z and 23:08:53.869Z timestamps, the records truthfully called #1577 pending merge; the later 23:10:53Z merge retained those historical statements unchanged. This covered only that one refresh message, not the separate multi-item unread messages or the old cloud scheduler.
+
+The coordinator's pre-merge observations recorded all review threads resolved and all triggered workflows successful, including the body-edit phase 39691582074. The landing used no author approval, force push, branch deletion or check bypass. These are recorded process observations, not conclusions produced by the local graph reads.
+
+Verdict: holds for the immutable merge identity, source-head and artifact ancestry, readable stored receipts, and unchanged scoped mail-resolution records. The Git commit timestamp is 23:10:52Z; the recorded GitHub server merge time is 23:10:53Z. The recorded checks and local gates support this landing on e8fa4a6a64bc0ae937e56685cd0eaa3aac0afda5 within their stated coverage; the graph reads do not rerun them. Publication carries the already-recorded mint (141 passed proof records, Review Hub and MCP pass) onto canonical mainline; it does not re-mint on e8fa4a6a64bc0ae937e56685cd0eaa3aac0afda5 or 24eff86a940099e0725d474d1d5520bfbc71d368. The earlier receipt's two notRecorded proofs (backup-restore and db-role-split), its three stepsExcluded entries, and its source-bound Linux attestation remain explicit ceilings. No new overall readiness figure, owner-real-in-hand attestation or later follow-up landing is asserted.
+
+## 2026-10-22 — #1578 makes self-hosted Mac CI share the local workers' host reservation, landed at 3c892ad96dded5d8e4630d4dc63c12e3fcf02bb0 from head 2493b26d100d398bd178ddc5a0052d8b5787e481
+Command:
+```bash
+git show --no-patch --format='commit=%H%nparents=%P%ncommittedAt=%cI%nsubject=%s' 3c892ad96dded5d8e4630d4dc63c12e3fcf02bb0
+git merge-base --is-ancestor 2493b26d100d398bd178ddc5a0052d8b5787e481 3c892ad96dded5d8e4630d4dc63c12e3fcf02bb0
+git merge-base --is-ancestor 24eff86a940099e0725d474d1d5520bfbc71d368 3c892ad96dded5d8e4630d4dc63c12e3fcf02bb0
+git show 2493b26d100d398bd178ddc5a0052d8b5787e481:scripts/mac/ci-host-verification.sh | shasum -a 256
+git show 24eff86a940099e0725d474d1d5520bfbc71d368:scripts/mac/host-verification-lock.sh | shasum -a 256
+git show 2493b26d100d398bd178ddc5a0052d8b5787e481:.github/workflows/mac-runner-auto.yml | node --input-type=module -e 'import fs from "node:fs"; for (const l of fs.readFileSync(0,"utf8").split("\n")) if (/^    timeout-minutes:/.test(l) || l.includes("bash scripts/mac/ci-host-verification.sh")) console.log(l.trim());'
+git show 2493b26d100d398bd178ddc5a0052d8b5787e481:.github/workflows/mac-runner-harness.yml | node --input-type=module -e 'import fs from "node:fs"; for (const l of fs.readFileSync(0,"utf8").split("\n")) if (/^    timeout-minutes:/.test(l) || l.includes("bash scripts/mac/ci-host-verification.sh")) console.log(l.trim());'
+```
+Output:
+```text
+commit=3c892ad96dded5d8e4630d4dc63c12e3fcf02bb0
+parents=733beff264aad52081e758469052f7bcc056ae9e 2493b26d100d398bd178ddc5a0052d8b5787e481
+committedAt=2026-10-21T20:05:38-04:00
+subject=Merge pull request #1578 from DanFashauer/codex/worker-runtime-final-record-20261021
+e3fdd47695514d06d8d900faba4014fa372a9bd2efa81f2ac0f8891ee873f068  -
+3e3b6f62fc74dd48a65bae03353a1ef225f520592d17f5a7772fbcae23f8d1c0  -
+timeout-minutes: 720
+bash scripts/mac/ci-host-verification.sh 24eff86a940099e0725d474d1d5520bfbc71d368 39600 2400 <<'CI_CHAIN'
+timeout-minutes: 780
+bash scripts/mac/ci-host-verification.sh 24eff86a940099e0725d474d1d5520bfbc71d368 39600 5400 <<'CI_CHAIN'
+```
+Recorded fixed-command exits: all seven commands returned exit 0; both ancestry checks produced no stdout. The SHA256 lines identify, in order, D's CI wrapper and the published C helper it pins; the following workflow projections name their declared job/admission/work budgets. The source reads identify the mechanism; they do not execute its timing, cancellation or process cleanup paths.
+
+Recorded GitHub API observations (the coordinator's final check and merge-confirmation receipts, separate from the fixed local source reads; no API retrieval instant is inferred):
+```text
+#1578 head=2493b26d100d398bd178ddc5a0052d8b5787e481 merge=3c892ad96dded5d8e4630d4dc63c12e3fcf02bb0 merged=2026-10-22T00:05:39Z state=closed
+119552326565 Typecheck, build, and proof scaffold head=2493b26d100d398bd178ddc5a0052d8b5787e481 status=completed conclusion=success started=2026-10-21T23:47:35Z completed=2026-10-22T00:03:04Z workflow=39695673531
+119552323893 PR — Mac-only checks (full-clone provenance, preflight on macOS) head=2493b26d100d398bd178ddc5a0052d8b5787e481 status=completed conclusion=success started=2026-10-21T23:47:33Z completed=2026-10-22T00:05:12Z workflow=39695672972
+```
+The coordinator's retained pre-push receipts on exact clean head 2493b26d100d398bd178ddc5a0052d8b5787e481 record full local preflight passed in 941.32 seconds and breadth passed, 58 proofs, in 36.78 seconds. Build (all packages) and Browser E2E (review console, website, admin) were unavailable on darwin-arm64, not passed by that local run. Three checks also self-skipped: backup-restore and db-role-split (DATABASE_URL unset), and the report-only Mainline workflow red streaks check (GITHUB_TOKEN unset); none is counted as passed by that local run. The new CI wrapper encloses install, initial port cleanup, selected proof chains and final teardown in one lock-owning shell; it waits only on busy exit 75, caps admitted PR work at 2400 seconds and harness work at 5400 seconds, and keeps normal local ticks nonblocking. Its helper source is pinned to published commit 24eff86a940099e0725d474d1d5520bfbc71d368. These source and validation claims do not grant new merge or product authority.
+
+Recorded live host observations (sanitized coordinator receipts, not re-runnable Git proof and not model-quality evidence):
+- At 2026-10-21T23:48:06.801950Z, the normal local audit was active; a Python worker held the persistent host-lock file, and a nonblocking Python lock probe observed contention. The manual validation guard had already been released before CI.
+- At 2026-10-21T23:49:29.148312Z, that audit had finished (44 reviewed units, no running audit). The self-hosted Actions Bash wrapper and Perl guardian held FD 9 on the **same persistent inode**, and a nonblocking Python lock probe again observed contention. No manual CI reservation existed and these observations triggered no model inference.
+
+The paired observations record local-worker ownership followed by CI ownership at the measured instants; they are not a continuous process census and do not substitute for either check's final conclusion. The Python probe recorded a Boolean contention result; the shell helper's exit-75 behavior is a separate source/fixture property. Raw PIDs, inode values, absolute home paths and private log locations are deliberately omitted.
+
+Recorded final review/workflow disposition: Independent primary source review recorded at 2026-10-21T23:31:42.805472Z was clear on exact head 2493b26d100d398bd178ddc5a0052d8b5787e481, with required validation still pending at that review. The subsequent local validation and both checks above completed before merge. The Codex review completed at 2026-10-21T23:50:31.644020Z on that exact head with no findings, per the coordinator's later pre-merge read. The final pre-merge read at 2026-10-22T00:05Z found zero review threads. All five PR-triggered workflows completed success before merge, including the main validation workflow 39695673531 and Mac workflow 39695672972.
+Recorded merge process: Normal merge commit using fresh full expected head SHA; no author approval, force push, branch deletion or check bypass.
+
+Verdict: holds for the pinned merge identity, source and prior-landing ancestry, and declared wrapper/helper configuration. Git committedAt is 2026-10-22T00:05:38Z; the recorded GitHub server merged_at is 2026-10-22T00:05:39Z. The recorded exact-head local gates, final check results and independent review support the landing within their stated coverage; these fixed reads do not rerun them. The local graph/source reads, the recorded local gates, the GitHub check/merge receipts and the live host observations are distinct evidence. This landing does not re-mint the existing artifact f3b55f7173ed5d5365a102ebadadef2e0e1dfcea, measured on clean source a70c36b3e0e897d8a80a863e7228417f729e487f. Manifest v97 remains aa9ce381438ecb26874cdbe60b82a9339821d6b540f176e122291202a6b3885b in that receipt; its 141 passed proof records, two notRecorded proofs, three stepsExcluded entries, and Linux-VM native attestation on exact a70 remain the earlier receipt's coverage, not new measurements of D or its merge. No new overall readiness, owner-real-in-hand attestation, completion of pending product/PR work, or later journal landing is asserted.
+
+
+## 2026-10-22 — #1593 aligns the Mac build tick's retry cadence, outage hand and loaded-status record, landed at 69258e30433f1a20c31975d50d746065032097c4 from head 79c403004707627f7b0431725c48dd713775af18
+
+Recorded exact-head local pre-push commands and receipt output:
+```text
+head=79c403004707627f7b0431725c48dd713775af18
+node scripts/preflight.mjs
+Preflight PASSED — everything it runs is green.
+PREFLIGHT_EXIT=0 duration_seconds=957.95 finished=2026-10-22T19:27:26.501852Z
+pnpm run verify:breadth
+Breadth lane PASSED — 58 breadth proofs green (deferred families, doctrine documents, and the DR-005 decision-palette design gate).
+BREADTH_EXIT=0 duration_seconds=36.34 finished=2026-10-22T19:28:02.915113Z
+```
+The retained clean-head snapshots bracket both gates and normal publication; all four operational source hashes stayed unchanged from reviewed source-fix head 6a3b7b18e771f5a5ee704e93d74cee65dcd485ff. The branch incorporated canonical 07ce83a0a30d79c49c948da05890160011b8c793 by a normal merge before those gates. Both repository generators exited 0 and produced no changed outputs. An ordinary push with hooks intact exited 0, and the remote was verified at that exact head at 2026-10-22T19:28:07.918305Z. The enclosing shared-host guardian completed normal cleanup; no other host holder was stopped or bypassed. These receipts do not rerun the commands here.
+
+Local coverage ceiling: Build (all packages) and Browser E2E (review console, website, admin) were unavailable on darwin-arm64 and did not run. Backup/restore and DB-role-split self-skipped with DATABASE_URL unset; the workflow-red-streak report self-skipped with GITHUB_TOKEN unset. None is counted as passed by the local run. The earlier interrupted validation and the publication guard's refusal remain unsuccessful historical attempts; they do not supply this combined-head result. Both fresh gates used project-pinned offline pnpm 10.28.1 and approved esbuild 0.28.2 without changing dependencies or the lockfile.
+
+Recorded GitHub API observations, separate from local commands (final pre-merge receipt at 2026-10-22T19:51:55.884173+00:00; merge/default-branch confirmation at 2026-10-22T19:52:50.633445+00:00):
+```text
+#1593 head=79c403004707627f7b0431725c48dd713775af18 final-premerge-unresolved-threads=0
+120039369859 Typecheck, build, and proof scaffold head=79c403004707627f7b0431725c48dd713775af18 status=completed conclusion=success completed=2026-10-22T19:50:15Z workflow=39840335177
+120039369379 Required docs and unsafe-claim sanity: completed / success
+120039369834 Breadth lane (deferred families + doctrine docs): completed / success
+120039369798 Durable persistence (Postgres audit ledger): completed / success
+120039369843 Prod stack (Podman): completed / success
+120039369933 Prod stack (Docker compose smoke): completed / success
+120039362022 PR — Mac-only checks (full-clone provenance, preflight on macOS): queued / no conclusion at final pre-merge observation
+rollup: 18 contexts fully enumerated; 14 success, 3 skipped, 1 queued; no failure conclusion
+#1593 state=MERGED merged=true merge=69258e30433f1a20c31975d50d746065032097c4 merged_at=2026-10-22T19:52:31Z
+merge-parents=fcdf27323337ac9dbacc997f7838b31eb1aba984 79c403004707627f7b0431725c48dd713775af18
+canonical-at-confirmation=69258e30433f1a20c31975d50d746065032097c4
+git-object-committedDate=2026-10-22T19:52:30Z
+```
+The three skipped contexts were Nightly — full harness + preflight, Nightly — MCP lane, and CycloneDX SBOM sync (dependabot); skips are not passes. The optional Mac-only job was queued, not passed, at this observation. All six jobs in the main SignalGrid CI run completed success on the tested head. The three source-review threads were resolved. The sole formal Codex review in the recorded review list names earlier head 100682a473ab4ca662baed7c0f73d78fb75e8370; it is not represented as a new review of 79c40300. The final compare receipt found only artifacts/agent-heartbeats/mac-lane-tick.json between the tested canonical pin 07ce83a0 and pre-merge fcdf2732, with no counted-surface movement. The merge call used the freshly re-read full expected head; no author approval, force push, branch deletion or check bypass is recorded. Git committedDate and GitHub merged_at differ by one second.
+
+Fixed Git graph/source reads executed at 2026-10-22T20:07:29.153449+00:00; the following fixed commands each exited 0:
+Command:
+```bash
+git --no-replace-objects show --no-patch --format='commit=%H%nparents=%P%ncommittedAt=%cI%nsubject=%s' 69258e30433f1a20c31975d50d746065032097c4
+git --no-replace-objects merge-base --is-ancestor 79c403004707627f7b0431725c48dd713775af18 69258e30433f1a20c31975d50d746065032097c4
+git --no-replace-objects merge-base --is-ancestor fcdf27323337ac9dbacc997f7838b31eb1aba984 69258e30433f1a20c31975d50d746065032097c4
+git --no-replace-objects merge-base --is-ancestor 3c892ad96dded5d8e4630d4dc63c12e3fcf02bb0 69258e30433f1a20c31975d50d746065032097c4
+git --no-replace-objects show 79c403004707627f7b0431725c48dd713775af18:scripts/mac/build-tick.sh | shasum -a 256
+git --no-replace-objects show 79c403004707627f7b0431725c48dd713775af18:scripts/mac/install-build-tick.sh | shasum -a 256
+git --no-replace-objects show 79c403004707627f7b0431725c48dd713775af18:docs/LANE_COORDINATION.md | shasum -a 256
+git --no-replace-objects show 79c403004707627f7b0431725c48dd713775af18:docs/agent/scheduled-routines.json | shasum -a 256
+```
+Output:
+```text
+commit=69258e30433f1a20c31975d50d746065032097c4
+parents=fcdf27323337ac9dbacc997f7838b31eb1aba984 79c403004707627f7b0431725c48dd713775af18
+committedAt=2026-10-22T15:52:30-04:00
+subject=Merge pull request #1593: align Mac build-tick cadence and loaded status
+d3caf9b528fb609a98aab7d2799b20a3a98cf37cf761f8d38fe4243d9a6d37fc  -
+165fdb63aa634bab8d34c63ccd844faa8ae613e2b9fa3b308ebcd3ed38caa66a  -
+8b1f10fbfb04c23f6220f20af9156a2f707a22f22d8127ffb8da52653fccfdf5  -
+f439e1aecf147d834bcfca3a12e3243f8d290fedbe1470337b160dab4802f7fd  -
+```
+Recorded exits: commands 1–8 each exited 0; all stderr was empty. Commands 2–4 have no stdout on successful ancestry checks. These reads identify the graph and source; they do not repeat preflight, breadth or a loaded-service observation.
+
+The four operational files set a five-minute build retry, align the origin-outage hand to 144 consecutive failed scheduled attempts, update the active registry/coordination record, and make installer status distinguish configured, installed and actually loaded intervals. The 12-hour figure assumes scheduled five-minute attempts; host sleep, delays and missed firings can extend elapsed time. The dated 2026-10-22T15:11:45Z activation firing found all three ranked tasks already claimed: it witnesses a firing, not a completed product build. Source alone does not establish current loaded service state, continuous execution or unattended success. This landing does not run the installer or alter host-specific admission wiring.
+
+Verdict: the recorded local and GitHub receipts support the exact landing and its stated coverage; the fixed Git reads independently confirm the graph and unchanged four-file source. This entry records #1593; it makes no claim that the later record-publishing PR has merged or passed its own checks. It does not re-mint artifact f3b55f7173ed5d5365a102ebadadef2e0e1dfcea, measured on clean a70c36b3e0e897d8a80a863e7228417f729e487f. Its 141 passed proof records, two notRecorded proofs, three stepsExcluded entries and Linux-VM native attestation remain that earlier receipt's coverage. No new readiness figure, owner-real-in-hand attestation, production claim, completion of other PR/backlog work, or validation of the later record-publishing head is inferred.
+
+
+## 2026-10-27 — Source preparation for delegated execution and truthful coordination
+
+Command:
+```bash
+node scripts/raised-hands.mjs --check
+node scripts/check-raised-hands.mjs
+```
+Output:
+```text
+Before new records: Raised hands check FAILED: 13 problem(s): 11 mail stalls and two heartbeat stalls.
+After three explicit open records: Raised hands check passed.
+Raised-hand schema and routing check: exit 0.
+```
+Verdict: the current branch explicitly records all 13 measured stalls with their actual responders. The mail work and both witnesses remain unfinished: no acknowledgment, Cloud run, fresh heartbeat, full validation, source-review clearance, publication, CI or merge is asserted by a covering hand. AGENTS and LOOP guidance now reflect the owner's delegated local-first workflow while preserving all protected-delivery conditions. This entry is source preparation; canonical state is unchanged until protected delivery.
+
+
+## 2026-10-27 — Source-pinned local coding capability and task-scope repair
+
+Command:
+```bash
+# RED: complete proposed tree with only the original validator restored from8243280; frozen tests unchanged.
+node --test --test-reporter=tap scripts/mac/local-brain/test/task-selector-control-scope.test.mjs
+# GREEN: corrected validator with the same frozen tests.
+node --test --test-reporter=tap scripts/mac/local-brain/test/task-selector-control-scope.test.mjs scripts/mac/local-brain/test/task-selector.test.mjs
+```
+Output:
+```text
+Frozen original source: 33 tests, 2 pass, 31 assertion failures, zero skips.
+Model-written implementation: 39 new and original checks pass, zero failures, zero skips.
+```
+Verdict: a bounded local OpenCode/Ollama coding trial read the complete implementation and both test files, ran assertion RED, wrote one expression and ran GREEN. The frozen tests remained unchanged. Independent comparison covered all65536 UTF-16 code units and four non-ASCII paths. Five sandbox-negative probes denied private access, source writes during checks, subprocesses and network. The local model/harness is qualified for this source trial only; the default worker is unchanged. This is not daemon build-to-PR integration, current-head CI, physical testing or issue1546 end-to-end acceptance. The13 coordination stalls remain open work, covered by the existing three correctly routed hands on this proposed source.
+
+
+## 2026-10-27 — Wire the C0 regression into both actual runners
+
+Command:
+```bash
+node scripts/check-test-execution.mjs
+node scripts/check-preflight-ci-parity.mjs
+node scripts/mac/local-brain/test/task-selector-control-scope.test.mjs
+```
+Output:
+```text
+Before wiring: one problem; no runner reached the new regression.
+After wiring: zero test-execution problems; preflight-CI parity green; all33 new checks pass.
+```
+Verdict: the first full preflight on the combined candidate stopped at the test-execution gate. The same unchanged regression now has an explicit command in both preflight and review-hub CI. The original task-selector command stays present. No test exemption, check removal, gate weakening or source/test rewrite was used. Full local validation and source/public delivery are still separate requirements.
+
+
+## 2026-10-27 — Refresh the measured preflight line count after runner wiring
+
+Command:
+```bash
+node scripts/check-doc-line-counts.mjs
+node scripts/check-doc-line-counts.mjs --self-test
+```
+Output:
+```text
+Before correction: COMPANY_BUILD_PLAN quoted967lines for the now968-line preflight.
+After the one-number source correction: zero line-count drift; self-test10/10.
+```
+Verdict: adding the missing explicit test runner row changed the measured preflight line count. Only the stale numeric citation is corrected; no line-count matcher, exemption, floor or gate is altered. The failed full preflight and the direct exact diagnostic remain retained.
+
+
+## 2026-10-27 — Regenerate the current surface inventory after adding a regression
+
+Command:
+```bash
+node scripts/generate-sync-manifest.mjs
+node scripts/check-surface-review-coverage.mjs --write
+node scripts/check-surface-review-coverage.mjs
+```
+Output:
+```text
+Full preflight detected a stale generated surface page after adding the new test file.
+Canonical pinned generators rederived their outputs; the review-history JSON is unchanged.
+```
+Verdict: the generated current-tree view is refreshed through the existing preparation contract. No review date, read claim, JSON history, matcher, exemption or gate is changed. Earlier full-preflight failures remain retained; new-head full validation and protected delivery remain required.
+
+
+## 2026-10-27 — Require a complete C0 proof execution envelope
+
+Command:
+```bash
+node scripts/mac/local-brain/test/task-selector-control-scope.test.mjs
+node scripts/check-local-worker-task-selector-proof.mjs --self-test
+node scripts/check-local-worker-task-selector-proof.mjs
+```
+Output:
+```text
+Before envelope, with the control loop forced to zero: exit0; one ordinary test passed; zero C0 cases executed.
+C0 proof envelope self-test PASSED: 1 positive / 12 negative / 0 skipped
+C0 task-selector proof PASSED: 32 control cases, 39 total tests, 0 skipped
+```
+Verdict: actual falsification found an empty-enumeration gap in the newly registered regression. The checked runner requires all32 named C0 assertions and zero missing/deferred results. The existing direct proof commands remain; an additional checked command is wired into both preflight and CI. The model implementation and both frozen tests are unchanged. These are initial source checks; final-source falsification, full local gates, fresh source lenses, publication, current CI and protected delivery remain separate requirements.
+
+
+## 2026-10-28 — Keep the checked proof compatible with the CI Node line
+
+Command:
+```bash
+node scripts/check-local-worker-task-selector-proof.mjs --self-test
+node scripts/check-local-worker-task-selector-proof.mjs
+```
+Output:
+```text
+C0 proof envelope self-test PASSED: 1 positive / 12 negative / 0 skipped
+C0 task-selector proof PASSED: 32 control cases, 39 total tests, 0 skipped
+```
+Verdict: the added runner originally used an optional isolation flag whose rename is recorded at Node23.6 in the official Node CLI history, while this repository's workflow uses Node22. The unnecessary flag is removed; the normal test runner's default isolation executes every frozen assertion and the checked envelope still refuses an empty domain. No Node version, workflow setup, model implementation, frozen test, proof floor or permission is changed. This is a local source correction; final-head full validation, fresh source review and exact-head CI remain separate requirements.
+
+
+## 2026-10-28 — Keep pending preparation outside an existing evidence record
+
+Command:
+```bash
+git diff c2b1bfe5e3420ea7e48208299797d815c88b5aae HEAD -- docs/agent/LOOP.md
+```
+Output:
+```text
+Source-comparison observations (interpretation, not literal Git output):
+The canonical2026-10-21 CURRENT EVIDENCE line and its original continuation are verbatim and adjacent.
+The new short preparation note has its own PENDING SOURCE PREPARATION label below the complete record.
+Every other LOOP byte is preserved after removing the exact old/new preparation lines.
+```
+Verdict: the first genuine native Ponytail source lens returned FIX for an ambiguous insertion between an older measurement and its continuation. The finding is accepted and corrected; the other three source lenses did not run. The original older artifact/source/coverage remain one dated record. No code, frozen test, workflow, proof floor or old evidence is changed by this correction. New-head full local checks, all four fresh source lenses, publication, current CI and protected landing remain required.
+
+
+## 2026-10-28 — Pair each recorded count with the command that executed it
+
+Command:
+```bash
+# RED: complete proposed tree, only the original validator restored; frozen tests unchanged.
+node --test --test-reporter=tap scripts/mac/local-brain/test/task-selector-control-scope.test.mjs
+# GREEN: corrected validator, same frozen tests.
+node --test --test-reporter=tap scripts/mac/local-brain/test/task-selector-control-scope.test.mjs scripts/mac/local-brain/test/task-selector.test.mjs
+```
+Output:
+```text
+Single-file RED:33tests/2pass/31fail/0skipped, exit1.
+Two-file GREEN:39tests/39pass/0fail/0skipped, exit0.
+```
+Verdict: the genuine Ponytail review of2382d7f4 returned FIX because a single-file RED result was listed beneath a two-file command. The finding is accepted; separate exact command reproductions confirm both recorded totals. No original model trial, failed job or helper was replayed. The inherited implementation and both frozen tests remain byte-identical, and previous source versions/reviews remain retained. These source checks do not establish new-head full validation, four-source-lens clearance, publication, CI, merge or issue1546 completion.
+
+
+## 2026-10-28 — Record the final preflight measurement after envelope wiring
+
+Command:
+```bash
+node scripts/check-doc-line-counts.mjs
+```
+Output:
+```text
+doc line counts: 32 figure(s) across 2 document(s), 4 in dated records (exempt, 1 exemption(s) each with a reason), 0 drifted
+Doc line-count gate passed — every `path (N)` figure matches the file it names.
+```
+Verdict: the checked C0 proof-envelope step added a second preflight row after the historical 968-line measurement. The final scripts/preflight.mjs now has969lines, and docs/COMPANY_BUILD_PLAN.md cites969. The actual line-count gate above confirms zero drift. The earlier dated968-line evidence and lesson L28 remain unchanged as historical records. The security source review's missing-measurement finding is accepted. This measurement does not claim fresh full preflight, source clearance, GitHub CI, merge or whole-system completion.
+
+
+## 2026-10-28 — R6p1d constructs its missing tracking reference explicitly
+
+Canonical SignalGrid CI [40624043339](https://github.com/DanFashauer/SignalGrid-Review-Hub/actions/runs/40624043339) on `8329d4f553f3b0f20a2f102b10e335d7273d8b64` failed R6p1d and nested R12 with Git2.56.0. The [official pinned release notes](https://github.com/git/git/blob/a018953688f1b10bddf91bff8747068f5f4746a4/Documentation/RelNotes/2.56.0.adoc) describe URL pushes updating tracking refs when the URL uniquely matches a configured remote. The fixture had inferred absence from URL syntax.
+
+The correction explicitly removes only the temporary fixture's `origin/other` tracking ref after its local bare-fixture push. The complete existing assertion, local `mine` branch and bare fixture's `other` branch are unchanged. Production seam logic and every unrelated executable source byte remain unchanged. A planted-state probe also verified the old required-absence assertion fails, then the missing-ref scenario passes without changing either branch tip.
+
+Command on the installed AppleGit2.54.0/Node24.18.0 toolchain:
+```sh
+node scripts/loop-state.mjs --self-test
+```
+Output, verbatim final summary:
+```text
+self-test: 6 case(s) SKIPPED, listed above; a skip asserted nothing and is in neither number below
+self-test passed (309/309)
+```
+
+A bounded build of the exact Git2.56 source also reproduced the original R6p1d failure and the corrected full R6p1d assertion passed. That resource trial is LIMITED, not generally qualified: its original complete run passed300/309 and corrected run301/309, with6explicit skips and8other failures retained, including the nested R12 aggregate. Its C-only build omits the installed HTTPS helper and uses an owned executable/template layout; the sole causes of all8other failures are not established. These runs are not full Git2.56 GREEN or equivalent to current-head GitHub CI.
+
+Resource preparation failures remain retained: missing dyld literal root-directory read, denied system-make xcrun-cache write followed by generic license text, unavailable Cargo before choosing Git2.56's officially supported optional C build, and absent standard init templates in a first partial trial. No Rust/toolchain installation, license acceptance, global Git/template/default change or private-source/network build grant was made. A surrounding verifier also assumed the Linux case count; the applicable Mac result above is the actual measurement.
+
+Verdict: holds for the complete applicable installed-toolchain self-test and the specific Git2.56 R6p1d assertion. Six platform-unavailable cases are not passes; two other unavailable platform preconditions still asserted their guarded answers on the installed toolchain. Full local preflight/breadth, fresh same-head source reviews and exact-current-head GitHub CI remain required for protected landing. No gate exemption, real remote branch deletion, source clearance or merge is claimed here.
+
+## 2026-11-01 — Six owner-accepted decision-record PRs landed one at a time
+
+The owner accepted six decision-record PRs in chat on 2026-10-31 (two groups of three). The cloud lane landed each under that acceptance, not as a DR-037 self-merge, one at a time, re-merging `SignalGrid_Alpha` before every push and letting GitHub's strict required-check policy force a branch refresh after every landing. No record's wording was changed by the lane except the owner-sanctioned DR-061 reconciliation note against DR-064.
+
+| PR | Record | Merged sha | Exact head | Gating check run | Local gates |
+| --- | --- | --- | --- | --- | --- |
+| #1357 | DR-063 brain ecosystem | 69501b56 | 7b5fbfcc | 124655707168 | preflight PASSED, breadth PASSED 58 |
+| #1246 | DR-061 lane merges (+ reconciliation note) | c508cdb3 | 76a132bf | 124667843871 | preflight PASSED, breadth PASSED 58 |
+| #1083 | DR-059 posture ages (decision core) | cfafb095 | 59f03938 | 124685646228 | preflight PASSED, breadth PASSED 58; Opus merge-refute SHIP; CORE_NORMALIZATION_VERSION 26→27; proof:estate-refresh 24/24; test:api 490/490 |
+| #1050 | DR-058 puck return binding (decision core) | 972751c4 | ab2ae448 | 124702966504 | preflight PASSED, breadth PASSED 58 on c49d3d60; Opus merge-refute SHIP (exhaustive loosenings: 0; 119/119; 610/610; 490/490); CORE_NORMALIZATION_VERSION 27→28 |
+| #1322 | DR-062 company scope, automatic by default | 702d6ca3 | 8652e9b3 | 124711433535 | preflight PASSED, breadth PASSED 58 on 7f18013c |
+| #1433 | DR-055 amendment, ARC puck note, launch-claims gate fixes | df1ff2df | 3af79ce1 | 124717727995 | preflight PASSED (PREFLIGHT_EXIT=0), breadth PASSED 58 on ee792b45; check-launch-claims self-test 87 vectors, docs ceiling 407/407 |
+
+Also landed in the same window, under DR-037: #1711 (two stale raised hands cleared; mainline preflight had failed "Raised hands check FAILED: 16 problem(s)"), #1714 (scratch-git hygiene detector: a quoted token must be the whole word — the false positive that blocked #1433), Mac tick PR #1716 (b1df078f; sim request `objective-loop-evidence-fresh-2026-10-31` queued), and the lane-mail heartbeats #1710, #1712, #1713, #1715, #1718, #1719.
+
+Observed, not dismissed: on #1433's head 7b3afc6c the gating check failed once at `node scripts/loop-state.mjs --self-test`, cases R18-display-rows and R19-display-bare (314/316), a script the PR does not touch; the same version passes locally (316/316) and passed on #1716's head in the same minute; one re-run (job 124711304420) was green. A second occurrence anywhere is real and gets investigated, not re-run.
+
+Open owner questions carried out of this batch (nothing in the tree decides them): (1) puck required vs optional factor; (2) who the "super admin" is; (3) on a lost or stolen puck, does immediate single-admin revocation govern, with dual control reserved for re-binding; (4) verify the target authenticator's CTAP 2.1 reset ceremony before moving all protection to re-binding; (5) DR-062: should the per-company switch default to "ask first" for revoke/lock/suspend/erase until an admin enables autonomy (the GHAS thread on #1322, answered as the owner's recorded decision). DR-055 still says "two questions"; the record is the owner's to amend.
+
+Command, in a checkout with `origin/SignalGrid_Alpha` fetched at df1ff2df:
+```sh
+git log --first-parent --format='%h %s' origin/SignalGrid_Alpha | grep -E 'Merge pull request #(1357|1246|1083|1050|1322|1433)'
+```
+Output, verbatim (first-parent order, newest first; titles cut at 100 columns):
+```text
+df1ff2df7 Merge pull request #1433: ARC kiosk photo + puck-as-token note absorbed as direction; DR-0
+702d6ca33 Merge pull request #1322: DR-062 — SignalGrid's scope is the whole company incl. legacy 
+972751c4e Merge pull request #1050: DR-058 — a holder-bound device_returned closes custody without
+cfafb095d Merge pull request #1083: DR-059 — estate posture ages at decision time; a refresh retra
+c508cdb39 Merge pull request #1246: DR-061 (owner decision): lanes merge decision-path PRs under con
+69501b56d Merge pull request #1357: DR-063 (owner decision): the brain ecosystem
+```
+
+Verdict: six owner-accepted records are on `SignalGrid_Alpha`, each on a head whose gating check and local preflight+breadth were green. Readiness dimension (b) reads low until the Mac re-mints live evidence on the final manifest; that request is already queued by the Mac's own tick (#1716). No new readiness figure is asserted.

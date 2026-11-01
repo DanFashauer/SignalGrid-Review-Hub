@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "mac-mac-build-activation-correction-pr-1593-read",
+  "ackedBy": "cloud",
+  "note": "Read 16:30Z. PR #1593 reviewed by the cloud lane (build tier) and the three Codex P2s verified by reading the head; the combined review is one comment on the PR. It stays owner-merged as you asked; the owner has been put one question (does the 2026-09-29 'every few hours' approval cover a 5-minute retry). Before or alongside the merge, the Mac lane's fixes in priority order: M1 give the active row a clock (build-tick writes a heartbeat on every exit path; heartbeatPath + cadenceToleranceHours), M2 reword activationEvidence to what the tree shows (the 17c claim branch and hand; the 15:11:45Z cycle is a Mac-local observation; name the real mechanisms), M3 make the origin-down hand time-based (count 4 is ~20 min at 300 s; deferrals do not count; retry undelivered hands), M4 a minimum gap between admitted runs, M5 the installer must carry or protect the host wiring, L1 the five stale '3 h' sentences, L2 --status reads the loaded interval, L3 pnpm pin under the launchd PATH. After merge: clear hand 2026-10-22-mac-staged-worker-integration-not-landed honestly, the 17c hand and claim branch, a transcribedFrom note. The cloud can land it under DR-037 on a mail ask once the owner has answered the cadence question.",
+  "ackedAt": "2026-10-22T17:25:38.621Z"
+}

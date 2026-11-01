@@ -97,22 +97,43 @@ if (probe.status !== 0) {
   process.exit(1);
 }
 
-const run = spawnSync(
-  "shellcheck",
-  ["-x", `--severity=${SEVERITY}`, "-f", "gcc", ...files],
-  { encoding: "utf8" },
-);
-const out = `${run.stdout ?? ""}${run.stderr ?? ""}`.trim();
-const findings = out ? out.split("\n").filter((l) => /: (error|warning|note|style):/.test(l)) : [];
-
-// Split findings into deferred (owned elsewhere, codes already recorded) and live.
-const parse = (line) => {
-  const file = line.split(":")[0];
-  const code = (line.match(/\[(SC\d+)\]/) ?? [])[1] ?? "";
-  return { file, code, line };
+const lint = (args, input) => {
+  const r = spawnSync("shellcheck", ["-x", `--severity=${SEVERITY}`, "-f", "gcc", ...args], { encoding: "utf8", input });
+  return `${r.stdout ?? ""}${r.stderr ?? ""}`.trim();
 };
-const parsed = findings.map(parse);
-const live = parsed.filter((f) => !DEFERRED.get(f.file)?.codes.includes(f.code));
+
+/** The verdict, as a pure function of shellcheck's gcc-format output: every finding
+ *  parsed, and the LIVE ones — those not already recorded against a deferred file. */
+function splitFindings(out) {
+  const findings = out ? out.split("\n").filter((l) => /: (error|warning|note|style):/.test(l)) : [];
+  // Split findings into deferred (owned elsewhere, codes already recorded) and live.
+  const parse = (line) => {
+    const file = line.split(":")[0];
+    const code = (line.match(/\[(SC\d+)\]/) ?? [])[1] ?? "";
+    return { file, code, line };
+  };
+  const parsed = findings.map(parse);
+  const live = parsed.filter((f) => !DEFERRED.get(f.file)?.codes.includes(f.code));
+  return { parsed, live };
+}
+
+// ── in-run control ───────────────────────────────────────────────────────────
+// The rule this gate most exists to hold, planted on every invocation through the
+// real shellcheck and the real verdict: a bare `cd` must be a live SC2164, and the
+// same line with `|| exit 1` must be clean. Fed on stdin, so nothing touches the tree.
+{
+  const planted = splitFindings(lint(["-"], "#!/bin/bash\ncd /nonexistent-control-dir\necho ok\n")).live;
+  const guarded = splitFindings(lint(["-"], "#!/bin/bash\ncd /nonexistent-control-dir || exit 1\necho ok\n")).live;
+  if (!planted.some((f) => f.code === "SC2164") || guarded.length !== 0) {
+    console.error(
+      `✗ SELF-TEST FAILED — planted bare \`cd\` caught as SC2164: ${planted.some((f) => f.code === "SC2164")}; ` +
+        `guarded \`cd\` live findings: ${guarded.length} (want 0). The lint no longer sees the defect it exists for.`,
+    );
+    process.exit(1);
+  }
+}
+
+const { parsed, live } = splitFindings(lint(files));
 
 // A deferral that no longer describes anything is itself a finding.
 const stale = [];
@@ -138,7 +159,7 @@ if (live.length > 0) {
 }
 
 const deferredCount = parsed.length - live.length;
-console.log(`Shell lint passed — ${files.length} script(s) clean at severity ${SEVERITY} and above.`);
+console.log(`Shell lint passed — ${files.length} script(s) clean at severity ${SEVERITY} and above; in-run control green.`);
 if (deferredCount > 0) {
   console.log(`  ${deferredCount} finding(s) DEFERRED, not ignored:`);
   for (const [file, { codes, reason }] of DEFERRED) console.log(`    · ${file} [${codes.join(", ")}] — ${reason}`);

@@ -21,6 +21,7 @@ import {
   createMockGraphTransport,
   guardReadOnly,
   resolveGraphPostureConnector,
+  toEstateSubjects,
   type GraphManagedDeviceRaw,
   type GraphPostureSignal,
   type GraphRequest,
@@ -256,6 +257,121 @@ checkLiveGateIsolated({
   });
 }
 
+
+// ── Posture-connector guards, each ISOLATED (wave 7 of the brace-less sweep) ───
+//
+// `graph/posture-connector.ts` is the connector pointed at a design partner's real tenant, and
+// the mutation sweep had never reached it. Each case below fails when its ONE guard alone is
+// turned into `if (false)`: a collection with no `value` array, a read that stops with pages
+// remaining, and a device whose management state is retire-pending.
+{
+  const jsonResponse = (body: unknown) => async (): Promise<{ status: number; ok: boolean; json: () => Promise<unknown> }> => ({
+    status: 200,
+    ok: true,
+    json: async () => body,
+  });
+  const codeOf = async (run: () => Promise<unknown>): Promise<string | null> => {
+    try {
+      await run();
+      return null;
+    } catch (err) {
+      return err instanceof GraphConnectorError ? err.code : `other:${String(err)}`;
+    }
+  };
+
+  // 1. A 200 whose body carries no `value` array is a bad_response, not an empty inventory.
+  const noValue = new GraphPostureConnector({ accessToken: fixture.accessToken, baseUrl: BASE_URL }, jsonResponse({ unexpected: true }));
+  check(
+    "a 200 collection with no `value` array is refused as bad_response, never read as empty",
+    (await codeOf(() => noValue.listUsers())) === "bad_response",
+  );
+
+  // 2. A cursor still in hand at the page cap is incomplete_read; an exactly-complete read is not.
+  const pagedTransport = (pages: number) => {
+    let n = 0;
+    return async (): Promise<{ status: number; ok: boolean; json: () => Promise<unknown> }> => {
+      n += 1;
+      const next = n < pages ? { "@odata.nextLink": `${BASE_URL}/users?page=${n + 1}` } : {};
+      return { status: 200, ok: true, json: async () => ({ value: [{ id: `u-${n}` }], ...next }) };
+    };
+  };
+  const capped = new GraphPostureConnector({ accessToken: fixture.accessToken, baseUrl: BASE_URL, pageLimit: 2 }, pagedTransport(5));
+  check(
+    "a read that hits the page cap with a next cursor remaining is refused as incomplete_read",
+    (await codeOf(() => capped.listUsers())) === "incomplete_read",
+  );
+  const exact = new GraphPostureConnector({ accessToken: fixture.accessToken, baseUrl: BASE_URL, pageLimit: 2 }, pagedTransport(2));
+  const exactRows = await exact.listUsers().catch(() => null);
+  check(
+    "a read that ends exactly on the page cap with no cursor remaining is complete (the refusal is not over-broad)",
+    exactRows !== null && exactRows.length === 2,
+  );
+
+  // 3. retirePending is its own management state, in both spellings, regardless of the agent.
+  const RETIRE_CASES: ReadonlyArray<readonly [string, string]> = [["retirePending", "camel"], ["retire_pending", "snake"]];
+  const retireDevices = RETIRE_CASES.map(([state], i) => ({
+    id: `device-retire-${i}`,
+    userId: "user-0001",
+    userPrincipalName: "ward.nurse@example.test",
+    deviceName: `retire-case-${i}`,
+    complianceState: "compliant",
+    managementState: state,
+    managementAgent: "",
+    deviceRegistrationState: "registered",
+    lastSyncDateTime: "2026-07-19T11:30:00Z",
+    operatingSystem: "iPadOS",
+    osVersion: "17.5",
+  }));
+  const retireConnector = new GraphPostureConnector(
+    { accessToken: fixture.accessToken, baseUrl: BASE_URL, pageLimit: 50 },
+    createMockGraphTransport({
+      users: fixture.users,
+      devices: retireDevices,
+      riskyUsers: fixture.riskyUsers,
+      expectedToken: fixture.accessToken,
+      pageSize: 10,
+      baseUrl: BASE_URL,
+    }),
+  );
+  const retireSignals = await retireConnector.fetchPosture(OBSERVED_AT);
+  RETIRE_CASES.forEach(([state, label], i) => {
+    const got = (retireSignals[i] as { deviceManagementState?: string } | undefined)?.deviceManagementState;
+    check(`managementState ${state} (${label}) with no agent -> retire_pending`, got === "retire_pending");
+  });
+}
+
+
+// THE MOCK TRANSPORT'S REFUSALS AND THE ESTATE MAPPING (wave 9 joined `graph/mock-transport.ts` and
+// `graph/estate.ts` to this target). Three guards survived `if (false)` with this proof green:
+//   * the mock's non-GET refusal (405) — the connector only ever sends GET, so it was never driven;
+//   * the mock's 403 for a tenant that has not granted IdentityRiskyUser.Read.All — the "403 -> every
+//     subject grades unknown" check above is real, but without this guard `page(undefined, ...)`
+//     throws inside the mock and the connector fails closed to the same unknown, so the check could
+//     not tell the mock was serving a 403 at all;
+//   * `toEstateSubjects`'s ownerless skip — an ownerless device must be SKIPPED AND COUNTED, never
+//     given a shared synthetic identity (the mapping's own header). No check here fed it a null owner.
+{
+  const mock = createMockGraphTransport({ users: fixture.users, devices: fixture.devices, expectedToken: fixture.accessToken, baseUrl: BASE_URL });
+  const auth = { authorization: `Bearer ${fixture.accessToken}` };
+  const post = await mock({ method: "POST", url: `${BASE_URL}/users`, headers: auth } as never);
+  check("mock transport: a non-GET request with a valid token is refused 405, not served", post.status === 405 && post.ok === false);
+  const risky = await mock({ method: "GET", url: `${BASE_URL}/identityProtection/riskyUsers`, headers: auth });
+  check("mock transport: riskyUsers absent from the tenant is a 403 Authorization_RequestDenied, not a thrown error or an empty 200",
+    risky.status === 403 && JSON.stringify(await risky.json()) === JSON.stringify({ error: { code: "Authorization_RequestDenied" } }));
+  const usersOk = await mock({ method: "GET", url: `${BASE_URL}/users`, headers: auth });
+  check("mock transport: NON-VACUITY — a valid-token GET to /users IS served (200)", usersOk.status === 200 && usersOk.ok === true);
+
+  const template = noScopeSignals[0]!;
+  const owned = { ...template, subjectId: "user-owned", deviceId: "dev-owned" };
+  const ownerless = { ...template, subjectId: null, deviceId: "dev-ownerless" };
+  const mapped = toEstateSubjects([owned, ownerless, { ...ownerless, deviceId: "dev-ownerless-2" }]);
+  check("estate: an ownerless device is SKIPPED and COUNTED, never given an invented subject",
+    mapped.skippedOwnerless === 2 && mapped.subjects.length === 1 && mapped.subjects[0]!.identity.externalRef === "user-owned");
+  check("estate: NON-VACUITY — a fully-owned read maps every device and skips none",
+    (() => { const m = toEstateSubjects([owned]); return m.skippedOwnerless === 0 && m.subjects.length === 1; })());
+  check("estate: no mapped subject carries the literal \"null\" or a shared synthetic identity",
+    mapped.subjects.every((sub) => sub.identity.externalRef !== "null" && sub.identity.externalRef !== "unknown"));
+}
 
 const total = passed + failures.length;
 console.log(`summary=${failures.length === 0 ? "pass" : "fail"} (${passed}/${total})`);

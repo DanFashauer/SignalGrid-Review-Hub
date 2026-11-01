@@ -107,16 +107,16 @@ data — only the reason code and the normalized signal shape.
 > The tables below are an illustrative subset. An earlier revision of this
 > section named four codes the engine has never emitted (DEVICE_POSTURE_STALE,
 > IDENTITY_UNVERIFIED, WRONG_BAY_OR_CUSTODY, CRITICAL_ON_UNTRUSTED_DEVICE) —
-> corrected 2026-08-21; absence corroborated four ways per code.
+> corrected 2026-08-21; absence corroborated four ways per code. Every worker cell below is the engine's own sentence, byte-for-byte — `scripts/check-reason-codes.mjs` fails if one drifts (four had, until 2026-09-30).
 
 | Reason code | Worker-facing | Operator-facing |
 | ----------- | ------------- | --------------- |
 | `POSTURE_STALE` | "Reconnect the device (or return it to its dock) to refresh its compliance check, then retry." | Posture freshness lapsed; request a posture re-sync from the device-management source, then re-evaluate. |
-| `IDENTITY_STATE_UNKNOWN` | "We couldn't confirm your account's status. Step up to continue." | Identity state unreported by the IdP source; unknown raises assurance (step-up), never lowers it. |
-| `DEVICE_NONCOMPLIANT` | "This device needs an admin fix before you can continue." | Intune compliance state non-compliant; remediation is owner/admin-gated. |
-| `DEVICE_UNMANAGED` | "This device isn't enrolled for this workflow." | Device not managed / not enrolled; enrollment is admin-gated. |
+| `IDENTITY_STATE_UNKNOWN` | "Re-verify your identity (re-badge at the reader or re-authenticate), then retry." | Identity state unreported by the IdP source; unknown raises assurance (step-up), never lowers it. |
+| `DEVICE_NONCOMPLIANT` | "Follow the on-device compliance prompt, or hand the device to IT to bring it back into compliance." | Intune compliance state non-compliant; remediation is owner/admin-gated. |
+| `DEVICE_UNMANAGED` | "Use a managed shared device for this task, or enrol this device via the company portal." | Device not managed / not enrolled; enrollment is admin-gated. |
 | `CUSTODY_EXCEPTION` | "A custody issue was flagged — an operator is reviewing the device's dock/bay status." | Custody exception raised (removed without a session?); review and clear or route it. |
-| `IDENTITY_DISABLED` | "Your account is disabled. Contact your administrator." | Entra identity disabled; hard block, no self-service path. |
+| `IDENTITY_DISABLED` | "Your account is disabled — contact your manager or IT to have it reviewed." | Entra identity disabled; hard block, no self-service path. |
 | `CRITICAL_WORKFLOW_UNTRUSTED_DEVICE` | "This high-risk workflow requires a managed, trusted device — switch to one to continue." | Critical workflow attempted on an untrusted device; do not grant on this device. |
 
 ### 2.2 Ordered resolution steps and resolution classes

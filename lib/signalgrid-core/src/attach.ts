@@ -162,10 +162,28 @@ export type CredentialStrength = "strong" | "legacy_125khz" | "unknown";
 /** What the organization knows about the credential itself. */
 export type CredentialStanding = "valid" | "lost" | "revoked" | "unknown";
 
+/** How the puck LEFT its seat, as the receiver reported it (Puck 6). `authorized` is the
+ *  holder's own release action; `unauthorized` is a seat release with no such action — a
+ *  tamper or seat-break reading lands here too; `unknown` is present but unreadable;
+ *  `not_applicable` is a receiver with no release channel at all. */
+export const RELEASE_STATES = ["authorized", "unauthorized", "unknown", "not_applicable"] as const;
+export type ReleaseState = (typeof RELEASE_STATES)[number];
+
+/** What a `device_returned` event binds to once the ledger has tried to bind it (Puck 6):
+ *  the holder's own credential, someone else's, a return claimed with no device sensed in
+ *  the bay, a return the ledger cannot read, or no return at all. Only `holder` closes
+ *  custody; every other value keeps it open. */
+export const RETURN_BINDINGS = ["holder", "other_credential", "device_absent", "unknown", "not_applicable"] as const;
+export type ReturnBinding = (typeof RETURN_BINDINGS)[number];
+
 export interface PuckSituation {
   readonly attach: AttachState;
   /** A forced/torn removal, as the receiver reported it. */
   readonly forced: boolean;
+  /** How the seat was released (Puck 6). Consulted only once the puck is `removed`. */
+  readonly release: ReleaseState;
+  /** What the return, if any, binds to (Puck 6). See `bindReturn`. */
+  readonly returned: ReturnBinding;
   /** Identity positively confirmed for THIS session. `false` covers unknown. */
   readonly identityConfirmed: boolean;
   /** Device posture positively confirmed. `false` covers unknown. */
@@ -218,6 +236,32 @@ export function puckVerdict(s: PuckSituation): PuckMatrixRow {
   if (s.attach === "removed" && s.forced) {
     return { verdict: "deny", reasonCode: "CUSTODY_TORN", reason: "the credential was torn out of the receiver" };
   }
+  // Puck 6 — how the seat released, and what the return binds to. Ordered so that no
+  // return can soften a torn or unauthorized release, and no release reading can turn a
+  // holder's own return into a walk-away. A seat release with no authorized release is
+  // the torn-removal case by another name; a release reading that is PRESENT but
+  // unreadable cannot rule that out, so it raises to the same rung rather than resting
+  // on the walk-away row. Only a return the ledger bound to the holder's own credential
+  // closes custody; a return by another credential, a return claimed with nothing in the
+  // bay, and a return the ledger cannot read all keep custody OPEN — each by name.
+  if (s.attach === "removed" && s.release === "unauthorized") {
+    return { verdict: "deny", reasonCode: "CUSTODY_TORN", reason: "the seat released with no authorized release — a tamper or seat-break is a torn removal by another name" };
+  }
+  if (s.attach === "removed" && s.release === "unknown") {
+    return { verdict: "deny", reasonCode: "CUSTODY_RELEASE_UNKNOWN", reason: "the release reading is unreadable, so nothing rules out a torn removal" };
+  }
+  if (s.attach === "removed" && s.returned === "other_credential") {
+    return { verdict: "deny", reasonCode: "CUSTODY_RETURN_UNBOUND", reason: "the device came back on a credential that is not the holder's — custody was never theirs to close" };
+  }
+  if (s.attach === "removed" && s.returned === "device_absent") {
+    return { verdict: "restrict", reasonCode: "CUSTODY_EXCEPTION", reason: "a return was claimed and no device is sensed in the bay — the device is still out" };
+  }
+  if (s.attach === "removed" && s.returned === "unknown") {
+    return { verdict: "restrict", reasonCode: "CUSTODY_RETURN_UNKNOWN", reason: "a return the ledger cannot bind to the holder does not close custody — read as still out" };
+  }
+  if (s.attach === "removed" && s.returned === "holder") {
+    return { verdict: "restrict", reasonCode: "CUSTODY_RETURNED", reason: "the holder's own credential returned the device at the dock — custody closed, session ended, nothing to escalate" };
+  }
   if (s.attach === "removed") {
     return { verdict: "restrict", reasonCode: "CUSTODY_REMOVED", reason: "the credential left the receiver — the key is out of the ignition" };
   }
@@ -226,6 +270,12 @@ export function puckVerdict(s: PuckSituation): PuckMatrixRow {
   }
   if (s.attach === "unknown") {
     return { verdict: "step_up", reasonCode: "CUSTODY_UNKNOWN", reason: "the attach state is unknown, which raises the bar and never grants" };
+  }
+  // Puck 6: a return reported while the puck is still SEATED is two planes disagreeing
+  // (the dock says the device is back, the receiver says the credential is in it). An
+  // unknown raises — it never closes custody and never grants.
+  if (s.returned !== "not_applicable") {
+    return { verdict: "step_up", reasonCode: "CUSTODY_STATE_CONFLICT", reason: "a return is reported while the credential is still seated — the planes disagree, which raises the bar" };
   }
   // Golden rule 2 on the downgrade row: when a strong→legacy downgrade cannot be RULED
   // OUT it raises. That is an unreadable read method, or a legacy read with nothing
@@ -254,6 +304,37 @@ export function puckVerdict(s: PuckSituation): PuckMatrixRow {
     return { verdict: "step_up", reasonCode: "ACTION_RISK_TIER", reason: "a higher-risk action asks for more than a seated credential and a fresh posture" };
   }
   return { verdict: "allow", reasonCode: "CUSTODY_AND_TRUST_CONFIRMED", reason: "known worker, compliant device, credential seated" };
+}
+
+// ── Puck 6 — binding a `device_returned` to the holder's credential ──────────
+
+/** A `device_returned` as the dock reported it, reduced to the two facts the binding
+ *  needs: which credential carried the return, and whether the bay sensed a device. A
+ *  field the dock did not report is `null`, never guessed. */
+export interface ReturnReading {
+  readonly credentialRef: string | null;
+  readonly deviceSensedInBay: boolean | null;
+}
+
+/**
+ * Bind a return to the custody it would close. Pure and total. Only a return carried by
+ * the holder's own credential, with a device sensed in the bay, binds as `holder`; a
+ * return with no device in the bay is an exception whatever credential carried it; a
+ * return whose credential or bay sensing is unreadable — or a holder the ledger cannot
+ * name — binds as `unknown` (still out); and no return at all is `not_applicable`.
+ * Every unreadable input lands on a value `puckVerdict` keeps custody OPEN on.
+ */
+export function bindReturn(
+  reading: ReturnReading | null | undefined,
+  holderCredentialRef: string | null | undefined,
+): ReturnBinding {
+  if (reading === null || reading === undefined) return "not_applicable";
+  if (reading.deviceSensedInBay === false) return "device_absent";
+  if (reading.deviceSensedInBay !== true) return "unknown";
+  const holder = typeof holderCredentialRef === "string" ? holderCredentialRef.trim() : "";
+  const carried = typeof reading.credentialRef === "string" ? reading.credentialRef.trim() : "";
+  if (holder.length === 0 || carried.length === 0) return "unknown";
+  return carried === holder ? "holder" : "other_credential";
 }
 
 // ── Puck 2 — removal → suspend, through the cascade's existing seam ──────────

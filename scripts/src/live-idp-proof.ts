@@ -86,7 +86,9 @@ function ecThumbprint(jwk: { crv: string; kty: string; x: string; y: string }): 
 // ── reserve an ephemeral port, then boot the provider bound to it ────────────────
 // The issuer is baked into the provider at construction, so we must know the port
 // first. Reserve one with a throwaway listener, release it, then hand it to the
-// provider — a standard local-port-acquisition pattern.
+// provider — a standard local-port-acquisition pattern. The probe binds 127.0.0.1, the
+// address the provider binds below: on a bindv6only host an omitted-host probe binds an
+// IPv6-only :: and can hand out a port that is busy on IPv4 (Codex P2, 2026-10-02).
 const port = await new Promise<number>((resolve, reject) => {
   const probe = createServer();
   probe.once("error", reject);

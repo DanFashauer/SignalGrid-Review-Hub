@@ -5004,3 +5004,66 @@ c508cdb39 Merge pull request #1246: DR-061 (owner decision): lanes merge decisio
 ```
 
 Verdict: six owner-accepted records are on `SignalGrid_Alpha`, each on a head whose gating check and local preflight+breadth were green. Readiness dimension (b) reads low until the Mac re-mints live evidence on the final manifest; that request is already queued by the Mac's own tick (#1716). No new readiness figure is asserted.
+
+## 2026-11-01 — OD01 approved; the verified zero-loss branch list is closed
+
+**Decision.** The owner approved OD01 (lane deletion authority for the verified zero-loss list only, `docs/agent/ESTATE_PLAN_20261023.md`) in the cloud session on 2026-11-01 at ~03:50Z, verbatim: "Yes go ahead and delete the zero-loss branches, approve OD01". Scope is that list and nothing else; every other branch still needs its own merge, close-with-evidence, or an explicit owner decision.
+
+**What happened.** The cloud ran `bash docs/agent/estate-20261023/delete-zero-loss-verified.sh` (dry run: 8 DONE already absent, 2 WOULD) and `--apply`, which SKIPPED both remaining branches: the cloud's GitHub proxy refuses tag creation (`git push origin <tip>:refs/tags/archive/<b>` → `send-pack: unexpected disconnect while reading sideband packet`; `POST repos/…/git/refs` → HTTP 403 "Write access to this GitHub API path is not permitted through this proxy"), and the script refuses to delete without the archive tag. The cloud mailed the Mac (lane-mail PR #1724). The Mac lane ran the script's checks by hand at ~04:31Z (its classifier refused the script invocation and the `--force-with-lease` form), pushed and read back the archive tags, and deleted both branches (mail `mac-od01-done-from-the-mac-the-two-remaining-zer`, PR #1725).
+
+Command (cloud, 2026-11-01 04:36Z):
+```
+for b in claude/build-gate-survivors-liveness-scratch-git mac/pr-1216-fix-backup; do git ls-remote --exit-code --heads origin $b >/dev/null 2>&1; echo "$b heads rc=$?"; git ls-remote origin refs/tags/archive/$b | cut -c1-12; done
+```
+Output:
+```
+claude/build-gate-survivors-liveness-scratch-git heads rc=2
+531e141fdc7a
+mac/pr-1216-fix-backup heads rc=2
+5a2701745129
+```
+Verdict: both heads absent (rc 2), both archive tags present at the measured tips. Remote heads: 283 before, 282 after the deletes (the Mac's own mail branch then added one). Restore path, if ever needed: `git fetch origin refs/tags/archive/<b>:refs/tags/archive/<b> && git push origin <tip>:refs/heads/<b>`.
+
+## 2026-11-01 — The owner's brain:ready batch: nine of ten landed under DR-037/DR-061
+
+**Decision.** On 2026-10-30 the owner approved ten PRs for the local second brain (label `brain:ready`; comment 6526000134 on each: #1556, #1445, #1440, #1441, #1431, #1438, #1439, #1337, #1117, #1239) and on 2026-11-01 ~03:50Z ordered them landed hands-free: the brain builds, Codex and Claude each review in their own system, the lane merges under DR-037, never parked on the owner. The cloud lane reviewed each head (Opus refute for the decision-path and api-server ones, DR-061), merged `SignalGrid_Alpha` in where a landing had moved a figure, ran the local half (preflight + breadth, plus `test:api` where the api-server was touched) on the tree it pushed, armed auto-merge, and let GitHub's strict required-check policy force one branch refresh per landing. Nothing was approved by the lane; nothing was force-pushed; no gate was bypassed.
+
+| PR | Change | Merged sha | Exact head | Gating check run | Local half |
+| --- | --- | --- | --- | --- | --- |
+| #1438 | session-store: unknown status never refreshes (pg + in-memory parity) | 09d4e16e | b9741ff4 | 124751478478 | preflight PASSED, breadth 58, test:api 505/505 |
+| #1439 | session-store: in-memory refresh racing end() (guard + proof) | 1928b654 | 9b9715be | 124761406769 | preflight PASSED, breadth 58; session-store proof 17/17 (14/17 without the guard) |
+| #1441 | estate-refresh upper bound | bb6d8072 | 00f39d17 | 124781707335 | preflight 417 PASSED, breadth 58; proof:estate-refresh 24/24 |
+| #1239 | api head + demo endpoint docs figures (merge-in c34c3bf4) | 0b9d68eb | c34c3bf4 | 124786883019 | test:api 505/505 |
+| #1445 | step-up authorization | 16917512 | 7f6063de | 124790667884 | quoted in body |
+| #1440 | JWT null-segment handling | 3d282977 | 394a7765 | 124795778597 | quoted in body |
+| #1556 | URL-guard transforms (lib/) | 5886f1e6 | 7cf6ed54 | 124801475640 | quoted in body |
+| #1117 | ephemeral ports: oidc/load/observability tests; Mac JWKS loopback probe 7ba3877d | 7cf2dadc | 12fba020 | 124817276118 | test:api 505/505, preflight PASSED, breadth 58 on f0382ce4 |
+| #1431 | port probes bind the host their consumer binds (brain fixes 306b0a8f, dafba1db for three Codex P2 threads) | be38c923 | 98371bf5 | 124836408448 | test:api 512/512, proof:live-idp 31/31, test:fixture-idp 12/12, preflight PASSED, breadth 58 on bf953bb3; Opus landing refute SHIP |
+
+Not landed, by rule: **#1337** edits `scripts/check-launch-claims.mjs` (the launch-claims gate) — reviewed SOUND, the owner's click under DR-037's exclusions.
+
+**Queue claims (standing-order item 3).** `scripts/work-queue.mjs claim --lane mac-brain` could not be taken for any of the ten: `scripts/mac/estate-queue.mjs plan()` classifies a DECISION_PATH PR as `owner` and a green refreshed PR as `wait`, so `pr:<n>` is reported as `unknown task` and is not claimable (measured 2026-11-01, `list` ~3 min). A claim ref therefore exists for none of these landings; the gap is the queue's classification, not a skipped step, and is left for the brain's builder wiring.
+
+**Post-landing gates on 7cf2dadc:** `generate-sync-manifest.mjs --check` clean (kinds=42 categories=20 taskExceptionCodes=13 ceilings=3 refusals=9 proofs=63 mcpTools=16); surface-read-coverage gate passed; doc line-count gate passed. Readiness on 7cf2dadc derives **(b) 0%** — evidence covers manifest aa9ce381438e, tree is 3749449260af — by design (DR-036); the ONE re-mint request for the batch went to the Mac as lane mail (PR #1734 → d32b32e6). No new readiness figure is asserted.
+
+**Hold list for the owner (one list, nothing else decides them):** #1337 (launch-claims gate click), #1641, #1314, #1321, #1190, #1133.
+
+Command, in a checkout with `origin/SignalGrid_Alpha` fetched at be38c923:
+```sh
+git log --first-parent --format='%h %s' origin/SignalGrid_Alpha | grep -E 'Merge pull request #(1438|1439|1441|1239|1445|1440|1556|1117|1431)\b' | cut -c1-100
+```
+Output, verbatim:
+```text
+be38c923d Merge pull request #1431 from DanFashauer/claude/fix-port-probe-wildcard-bind
+7cf2dadc7 Merge pull request #1117 from DanFashauer/claude/tests-ephemeral-ports-oidc-load-observabi
+5886f1e62 Merge pull request #1556 from DanFashauer/claude/build-url-guard-translated-form-trailing-
+3d2829778 Merge pull request #1440 from DanFashauer/claude/build-jwt-null-segments-refuse
+169175120 Merge pull request #1445 from DanFashauer/claude/build-step-up-authorize-before-webauthn
+0b9d68eb8 Merge pull request #1239 from DanFashauer/claude/build-api-head-and-demo-envelope
+bb6d80727 Merge pull request #1441 from DanFashauer/claude/build-estate-refresh-upper-bound
+1928b6548 Merge pull request #1439 from DanFashauer/claude/build-session-refresh-active-guard
+09d4e16e8 Merge pull request #1438 from DanFashauer/claude/build-session-store-status-normalize
+```
+**Lesson (lane mail).** The first copy of the re-mint request (PR #1733) was produced with flag syntax on `lane-deliver.mjs send`, whose arguments are positional (`send "subject" "body"`): the subject became `--to`, the id slugged to `cloud-to`, and the write overwrote a September message that already carries a Mac ack, so `auditLaneMessages()` (ids only) would never have shown it unread. Codex caught it (thread 4435371880); #1733 was closed unmerged and the request re-sent as a `batch` send op (PR #1734 → d32b32e6, id `cloud-one-live-evidence-re-mint-after-the-brain-`). The September `cloud-to` file is the same mistake made once before. The skill text that showed the flag form is corrected in this PR.
+
+Verdict: nine of the ten owner-accepted PRs are on `SignalGrid_Alpha`, each on a head whose gating check was green and whose local half is quoted; #1337 remains for the stated reason.

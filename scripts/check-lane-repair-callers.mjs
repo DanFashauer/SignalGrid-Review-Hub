@@ -173,7 +173,7 @@ function callerFixture() {
   const path=join(f.root,rel);mkdirSync(dirname(path),{recursive:true});copyFileSync(join(SOURCE,rel),path);
  }
  f.env.FIXTURE_ORIGINAL_HAND='build-'+sha(BLOCKER);
- const transport=`import fs from 'node:fs';\nconst a=process.argv.slice(2),ops=a[0]==='batch'?JSON.parse(fs.readFileSync(a[1],'utf8')):null;\nfs.appendFileSync(process.env.FIXTURE_CLI_LOG,JSON.stringify({args:a,ops})+'\\n');\nif(a[0]==='readback'){console.error('original canonical readback is unverified');process.exit(Number(process.env.FIXTURE_ORIGINAL_READBACK_EXIT||3));}\nconst original=a[0]==='send'||a[0]==='heartbeat'||a[0]==='batch'&&ops[0]?.id===process.env.FIXTURE_ORIGINAL_HAND;\nconst receipt=a[a.indexOf('--receipt')+1];\nif(receipt)fs.writeFileSync(receipt,JSON.stringify({version:1,at:'2026-10-31T01:00:00Z',repository:'fixture/route',base:process.env.FIXTURE_HEAD,head:process.env.FIXTURE_HEAD,target:'lane/mac-mail-20261031-010000Z-0123456789ab',blobs:[{path:'artifacts/agent-heartbeats/mac-lane-tick.json',oid:process.env.FIXTURE_PAYLOAD_OID}]})+'\\n',{flag:'wx',mode:0o600,flush:true});\nif(original){console.error('original publication fixture unconfirmed');process.exit(Number(process.env.FIXTURE_ORIGINAL_EXIT||0));}\nif(a[0]!=='batch'){console.error('forbidden publication operation');process.exit(99);}\nconsole.log('one distinct fixture repair submitted; canonical merge unverified');\n`;
+ const transport=`import fs from 'node:fs';\nconst a=process.argv.slice(2),ops=a[0]==='batch'?JSON.parse(fs.readFileSync(a[1],'utf8')):null;\nfs.appendFileSync(process.env.FIXTURE_CLI_LOG,JSON.stringify({args:a,ops})+'\\n');\nif(a[0]==='readback'){console.error('original canonical readback is unverified');process.exit(Number(process.env.FIXTURE_ORIGINAL_READBACK_EXIT||3));}\nconst original=a[0]==='send'||a[0]==='heartbeat'||a[0]==='batch'&&ops[0]?.id===process.env.FIXTURE_ORIGINAL_HAND;\nconst receipt=a[a.indexOf('--receipt')+1];\nif(receipt&&!process.env.FIXTURE_NO_RECEIPT)fs.writeFileSync(receipt,JSON.stringify({version:1,at:'2026-10-31T01:00:00Z',repository:'fixture/route',base:process.env.FIXTURE_HEAD,head:process.env.FIXTURE_HEAD,target:'lane/mac-mail-20261031-010000Z-0123456789ab',blobs:[{path:'artifacts/agent-heartbeats/mac-lane-tick.json',oid:process.env.FIXTURE_PAYLOAD_OID}]})+'\\n',{flag:'wx',mode:0o600,flush:true});\nif(original){console.error('original publication fixture unconfirmed');process.exit(Number(process.env.FIXTURE_ORIGINAL_EXIT||0));}\nif(a[0]!=='batch'){console.error('forbidden publication operation');process.exit(99);}\nconsole.log('one distinct fixture repair submitted; canonical merge unverified');\n`;
  writeFileSync(join(f.root,'scripts/lane-deliver.mjs'),transport,{mode:0o600});
  f.git(['add','scripts']);f.git(['commit','-qm','exact caller source and publication fixture']);
  f.head=f.git(['rev-parse','HEAD']);f.transport=transport;f.env.FIXTURE_HEAD=f.head;
@@ -260,9 +260,9 @@ callerCase('CW05','prior refused objective (exit2) is kept in place and sent aga
  const next=retried(f,o),retryIntent=JSON.parse(readFileSync(next+'.attempt.json','utf8'));
  assert.equal(retryIntent.escalation,'same-source-escalation');assert.equal(retryIntent.retryOf.exit,2);assert.equal(retryIntent.receipt,next+'.submission.json');
 });
-callerCase('CW06','a fresh build batch refused with exit1 records its terminal, queues no DATA, and is retried by the next raise',f=>{
+callerCase('CW06','a fresh build batch refused with exit1 before its receipt records its terminal, queues no DATA, and is retried by the next raise',f=>{
  const prefix=join(f.store,'hand-'+sha(BLOCKER));
- acceptOwned(runBuild(f,`raise_hand ${quote(BLOCKER)}\nraise_hand ${quote(BLOCKER)}`,{extra:{FIXTURE_ORIGINAL_EXIT:'1',FIXTURE_LS_REMOTE:'absent'}}));
+ acceptOwned(runBuild(f,`raise_hand ${quote(BLOCKER)}\nraise_hand ${quote(BLOCKER)}`,{extra:{FIXTURE_ORIGINAL_EXIT:'1',FIXTURE_NO_RECEIPT:'1'}}));
  assert.equal(f.originalPublications().length,2,'a refused hand is retried, never consumed');assert.equal(f.repairs().length,0);
  assert.equal(f.entries().filter(e=>e.argv[0]==='request').length,0,'a refused hand needs no repair DATA');
  assert.equal(readFileSync(prefix+'.exit','utf8'),'1\n','the original stays in place');const next=join(f.store,successorOf('hand-'+sha(BLOCKER)));
@@ -321,6 +321,17 @@ callerCase('CW14','a retried attempt that already had repair DATA keeps that req
  for(let i=0;i<2;i++)acceptOwned(spawnSync('/bin/bash',[script],{cwd:f.root,env:f.env,encoding:'utf8'}));
  const ids=new Set(f.repairs().map(c=>c.ops[0].id));
  assert.ok(ids.has('repair-build-'+sha('hand-'+cause)),'draining the original request still sends its notice');assert.ok(ids.has('repair-build-'+sha(next.split('/').at(-1))),'the retry request drains too');
+});
+callerCase('CW20','a build hand exit1 with its receipt (a push was reached) queues exactly one repair request and is not resent',f=>{
+ const prefix=join(f.store,'hand-'+sha(BLOCKER));
+ // One raise: the delivery itself must hand the receipt-backed failure to repair DATA.
+ acceptOwned(runBuild(f,`raise_hand ${quote(BLOCKER)}`,{extra:{FIXTURE_ORIGINAL_EXIT:'1',FIXTURE_LS_REMOTE:'present'}}));
+ assert.equal(f.originalPublications().length,1,'not resent: its ref is on origin');assert.ok(existsSync(prefix+'.submission.json'));
+ assert.equal(f.dataRequests().length,1,'exactly one repair request');assert.ok(f.entries().some(e=>e.argv[0]==='request'&&e.argv[3]===prefix));
+});
+callerCase('CW21','an objective send exit1 with its receipt queues its repair request',f=>{
+ const prefix=join(f.store,'objective-'+sha('same-source-escalation'));f.env.FIXTURE_ORIGINAL_EXIT='1';acceptOwned(emitObjective(f,{rounds:1}));
+ exactRequest(f,{producer:'objective',prefix});assert.equal(f.originalPublications().length,1);
 });
 callerCase('CW07','a fresh objective send failure records its actual terminal before the same-ID repair request',f=>{
  const prefix=join(f.store,'objective-'+sha('same-source-escalation'));f.env.FIXTURE_ORIGINAL_EXIT='3';acceptOwned(emitObjective(f,{rounds:2}));

@@ -671,7 +671,8 @@ function emit(state, { write, deliver }) {
         terminalRecorded = true;
       } catch { lines.push(`RAISED HAND: escalation ${e.id} terminal recording failed; READBACK ONLY`); }
       const accepted = terminalRecorded && !r.error && !r.signal && r.status === 0;
-      const refused = !r.error && !r.signal && (r.status === 1 || r.status === 2); // nothing published; retried next tick
+      // Only a proven prepublication refusal (no receipt) skips repair DATA; it is retried next tick.
+      const refused = !r.error && !r.signal && (r.status === 1 || r.status === 2) && !existsSync(attempt + ".submission.json");
       if (terminalRecorded && !accepted && !refused) queueRepair(attempt);
       lines.push(accepted ? `escalation ${e.id} submitted for protected PR merge` : `WARN escalation ${e.id} submission unconfirmed (lane-deliver exit ${r.status}); read back its original attempt`);
       if (accepted) submitted.add(e.id);

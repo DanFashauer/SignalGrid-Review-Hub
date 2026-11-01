@@ -218,7 +218,9 @@ raise_hand() {
               "retry-refused", repo, cache, path.basename(attempt), exit, "derive"], { cwd: repo, encoding: "utf8" });
             const retry = moved.status === 0 ? JSON.parse(moved.stdout) : null;
             if (retry && retry.done) process.exit(4); // the hand id already exists on the Hub: done, not refused
-            if (retry && retry.successor) { retryOf = { ...retry, stamp }; attempt = path.join(cache, retry.successor); continue; }
+            // A prepublication retry reuses the hand id the refused attempt meant to raise.
+            let meant = null; try { meant = JSON.parse(read(attempt + ".attempt.json")).handId || null; } catch { /* legacy intent */ }
+            if (retry && retry.successor) { retryOf = { ...retry, stamp, handId: retry.reraise ? null : meant }; attempt = path.join(cache, retry.successor); continue; }
           }
           if (JSON.parse(read(attempt + ".attempt.json")).receipt !== attempt + ".submission.json" || read(attempt + ".exit").trim() !== "0") throw Error("original parent is not known complete");
           read(attempt + ".output"); // missing original evidence never renews an attempt
@@ -234,7 +236,7 @@ raise_hand() {
         }
       }
       // A resolved hand whose cause recurs is raised again under a new id.
-      hand.id = "build-" + episode + (retryOf && retryOf.reraise ? "-again-" + retryOf.n : "");
+      hand.id = retryOf && retryOf.reraise ? "build-" + episode + "-again-" + retryOf.n : (retryOf && retryOf.handId) || "build-" + episode;
       fs.writeFileSync(attempt + ".attempt.json", JSON.stringify({ at: stamp, state: "attempted; pending exact readback", receipt: attempt + ".submission.json", handId: hand.id, ...(retryOf ? { retryOf } : {}) }), { flag: "wx", mode: 0o600, flush: true });
       fs.writeFileSync(f, JSON.stringify([hand]));
       process.stdout.write(attempt);' \
@@ -242,10 +244,16 @@ raise_hand() {
     if (umask 077; set -C; node "$REPO_ROOT/scripts/lane-deliver.mjs" batch "$_ops" --receipt "${_hand_attempt}.submission.json" >"${_hand_attempt}.output" 2>&1); then _hand_exit=0; else _hand_exit=$?; fi
     if [ -n "$RUN_LOG" ]; then cat "${_hand_attempt}.output" >> "$RUN_LOG"; fi
     if node -e 'require("fs").writeFileSync(process.argv[1], process.argv[2]+"\n", {flag:"wx",mode:0o600,flush:true})' "${_hand_attempt}.exit" "$_hand_exit"; then
+      # Only a proven prepublication refusal (exit 1/2 with no receipt: lane-deliver writes
+      # it right before its push) skips repair DATA; it is retried by the next raise.
+      _hand_repair=1
       case "$_hand_exit" in
-        0|1|2) ;; # 1/2 published nothing; the next raise retries it
-        *) node "$REPO_ROOT/scripts/lib/lane-repair.mjs" request "$REPO_ROOT" build "$_hand_attempt" >/dev/null 2>&1 || say "RAISED HAND: repair DATA request unavailable; original hand remains READBACK ONLY" ;;
+        0) _hand_repair=0 ;;
+        1|2) [ -e "${_hand_attempt}.submission.json" ] || _hand_repair=0 ;;
       esac
+      if [ "$_hand_repair" = "1" ]; then
+        node "$REPO_ROOT/scripts/lib/lane-repair.mjs" request "$REPO_ROOT" build "$_hand_attempt" >/dev/null 2>&1 || say "RAISED HAND: repair DATA request unavailable; original hand remains READBACK ONLY"
+      fi
     else
       say "RAISED HAND: terminal receipt unavailable; original hand remains READBACK ONLY"
     fi

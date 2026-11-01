@@ -347,7 +347,8 @@ function readSlot(binding) {
   assertBinding(slot.value, binding);
   if (slot.value.state === "READY") {
     keysExactly(slot.value, BASE_KEYS);
-    if (readdirSync(binding.directory).some((name) => /^tick-/.test(name))) throw Error("READY tick slot has earlier owner evidence");
+    // Token-bound owner records only (tick-<token>.*); tick-hold-* notices are not owners.
+    if (readdirSync(binding.directory).some((name) => /^tick-[0-9a-f]{32}\./.test(name))) throw Error("READY tick slot has earlier owner evidence");
     return slot;
   }
   if (slot.value.state === "OPEN") return slot; // acquireTick recovers it under the kernel guard
@@ -733,7 +734,8 @@ export function raiseTickHold(root, shellPid, message) {
       if (n === null) return `hand ${prior.handId ?? id} already raised (re-raise cap reached)`;
       retryOf = { attempt: id, exit: 0, n, setAsideAs: `refused/${id}.refused-${n}`, reraise: true };
     } else return `hand ${prior.handId ?? id} already raised`;
-    if (retryOf.reraise) handId = `${id}-again-${retryOf.n}`;
+    // A re-raise takes a new id; a prepublication retry reuses the id it meant to raise.
+    handId = retryOf.reraise ? `${id}-again-${retryOf.n}` : (prior.handId ?? id);
     write();
   }
   const op = { op: "raise", id: handId, who: "mac lane", domain: "lane", where: "scripts/mac/lane-tick.sh",

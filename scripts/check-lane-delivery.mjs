@@ -609,6 +609,18 @@ for(const [ledger,want] of [['open',1],['resolved',2]])check('a delivered hold h
  const sent=readFileSync(calls,'utf8').trim().split('\n');assert.equal(sent.length,want);
  if(want===2){assert.equal(sent[1],id+'-again-1');assert.match(second.stdout,new RegExp('hand '+id+'-again-1 written'));}else assert.match(second.stdout,/already raised/);
 });
+check('a re-raised hold hand refused before publication is retried under the same id',f=>{
+ const calls=join(f.parent,'reraise-calls'),message='original tick shell 6 is still alive; holding',id='tick-hold-'+createHash('sha256').update(message).digest('hex');
+ writeFileSync(join(f.root,'scripts/lane-deliver.mjs'),`import fs from 'node:fs';const a=process.argv.slice(2);fs.appendFileSync(${JSON.stringify(calls)},JSON.parse(fs.readFileSync(a[1],'utf8'))[0].id+'\\n');process.exit(Number(process.env.HOLD_RC||0));`);
+ const module=join(f.root,'scripts/lib/lane-attempt-store.mjs');
+ assert.match(holdRun(f,module,message).stdout,/written \(lane-deliver exit 0\)/);
+ const g=a=>{const r=scratchGit(f.root,a,{env:{GIT_CONFIG_NOSYSTEM:'1',GIT_CONFIG_GLOBAL:'/dev/null'}});assert.equal(r.status,0,r.stderr)};
+ mkdirSync(join(f.root,'artifacts/raised-hands'),{recursive:true});writeFileSync(join(f.root,'artifacts/raised-hands',id+'.json'),JSON.stringify({id,status:'resolved'})+'\n');
+ g(['add','artifacts']);g(['commit','-qm','ledger']);g(['update-ref','refs/remotes/origin/SignalGrid_Alpha','HEAD']);
+ assert.match(holdRun(f,module,message,{HOLD_RC:'1'}).stdout,new RegExp('hand '+id+'-again-1 written \\(lane-deliver exit 1\\)'));
+ assert.match(holdRun(f,module,message).stdout,new RegExp('hand '+id+'-again-1 written \\(lane-deliver exit 0\\)'));
+ assert.deepEqual(readFileSync(calls,'utf8').trim().split('\n'),[id,id+'-again-1',id+'-again-1']);
+});
 check('a delivered hold hand with an unreadable Hub ledger says so and holds',f=>{
  const calls=join(f.parent,'unknown-calls'),message='original tick shell 3 is still alive; holding';
  writeFileSync(join(f.root,'scripts/lane-deliver.mjs'),`import fs from 'node:fs';fs.appendFileSync(${JSON.stringify(calls)},'push\\n');`);
@@ -828,6 +840,16 @@ await leaseControl('preexisting legacy tick lock with a dead PID is renamed asid
  assert.equal(existsSync(old),false);const aside=readdirSync(c.store).filter(n=>n.startsWith('tick.lock.abandoned-'));assert.equal(aside.length,1,'kept aside, never deleted');
  assert.deepEqual(readFileSync(join(c.store,aside[0],'pid')),before);
 });
+await leaseControl('a hold hand written against a READY slot does not block the tick once the legacy holder is gone',async(f,c)=>{
+ const holder=spawn('/bin/sleep',['300'],{stdio:'ignore'});
+ try {
+  const old=join(c.store,'tick.lock');mkdirSync(old);writeFileSync(join(old,'pid'),String(holder.pid)+'\n');
+  const b=c.start('ready-hold',{dry:0});assert.equal((await b.next()).event,'CLOSED');await b.closed;assert.match(b.stdout,/hand tick-hold-[a-f0-9]{64} written/);
+  assert.equal(c.state(),'READY');assert.ok(readdirSync(c.store).some(n=>n.startsWith('tick-hold-')));
+ } finally { holder.kill('SIGKILL'); }
+ if(holder.exitCode===null&&holder.signalCode===null)await new Promise(r=>holder.on('exit',r));
+ await recovers(c,c.start('ready-after'),null);
+});
 await leaseControl('a dry-run hold says what it would raise and starts no delivery',async(f,c)=>{
  const old=join(c.store,'tick.lock');mkdirSync(old);writeFileSync(join(old,'pid'),String(process.pid)+'\n');
  const b=c.start('dry-hold');assert.equal((await b.next()).event,'CLOSED');await b.closed;
@@ -1028,6 +1050,8 @@ const cases=[
 ];
 try{const r=handEpisodes([{phase:'pending',code:1},{phase:'pending'}]);assert.equal(r.sent.length,2,'a refused (exit 1) hand is retried, never consumed');assert.equal(r.sent[0].id,r.sent[1].id);passed++;console.log('PASS a refused hand (exit 1) is retried by the next raise')}catch(e){failed++;console.error('FAIL a refused hand (exit 1) is retried by the next raise: '+e.message)}
 try{const r=handEpisodes([{phase:'pending',code:2,exists:true},{phase:'pending'}]);assert.equal(r.sent.length,1);assert.doesNotMatch(r.stdout,/already on the Hub/,'an unreadable ledger is never taken as done');assert.match(r.stdout,/RAISED HAND/);passed++;console.log('PASS raise-hand "already exists" with an unreadable ledger holds, never done')}catch(e){failed++;console.error('FAIL raise-hand "already exists" with an unreadable ledger holds, never done: '+e.message)}
+try{const r=handEpisodes([{phase:'pending',code:2,exists:true},{phase:'pending',code:1},{phase:'pending'}],{ledger:'resolved'});const base='build-'+createHash('sha256').update('same source-backed fixture blocker').digest('hex');
+ assert.deepEqual(r.sent.map(x=>x.id),[base,base+'-again-1',base+'-again-1'],'a refused re-raise is retried under the same -again-1 id');passed++;console.log('PASS a re-raised build hand refused before publication is retried under the same id')}catch(e){failed++;console.error('FAIL a re-raised build hand refused before publication is retried under the same id: '+e.message)}
 for(const [ledger,want,label] of [['open',1,'raise-hand "already exists" (exit 2) for an open hand is done, not retried'],['resolved',2,'raise-hand "already exists" (exit 2) for a resolved hand is raised again under a new id']]){try{const r=handEpisodes([{phase:'pending',code:2,exists:true},{phase:'pending'},{phase:'pending'}],{ledger});assert.equal(r.sent.length,want);if(want===1)assert.match(r.stdout,/already on the Hub/);else assert.match(r.sent[1].id,/^build-[a-f0-9]{64}-again-1$/);passed++;console.log('PASS '+label)}catch(e){failed++;console.error('FAIL '+label+': '+e.message)}}
 for(const [label,steps,count]of cases){try{const r=handEpisodes(steps);assert.equal(r.sent.length,count);if(count>1){assert.equal(new Set(r.sent.map(x=>x.id)).size,count);assert.ok(r.sent.every(x=>/^build-[a-f0-9]{64}$/.test(x.id)));}assert.doesNotMatch(r.stdout,/hand delivered/);passed++;console.log('PASS '+label)}catch(e){failed++;console.error('FAIL '+label+': '+e.message)}}
 }

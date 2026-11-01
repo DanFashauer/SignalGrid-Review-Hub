@@ -15,7 +15,7 @@ import { fileURLToPath } from "node:url";
 // SAME fixed port bound by another tree or tick on the same host.
 const PORT = await new Promise<number>((res) => {
   const probe = createServer();
-  probe.listen(0, "127.0.0.1", () => {
+  probe.listen(0, () => {
     const p = (probe.address() as AddressInfo).port;
     probe.close(() => res(p));
   });

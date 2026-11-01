@@ -37,7 +37,7 @@ const serverEntry = resolve(here, "..", "dist", "index.mjs");
 const handedOut = [];
 const freePort = () => new Promise((resolvePort) => {
   const probe = netCreateServer();
-  probe.listen(0, "127.0.0.1", () => {
+  probe.listen(0, () => {
     const p = probe.address().port;
     probe.close(() => {
       if (handedOut.includes(p)) return resolvePort(freePort());

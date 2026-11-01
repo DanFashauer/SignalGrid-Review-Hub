@@ -29,6 +29,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { execFileSync } from "node:child_process";
+import { scratchGitOk, scrubProcessGitEnv } from "./lib/scratch-git.mjs";
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -92,16 +93,17 @@ function audit(root, docs, exempt) {
 }
 
 function selfTest() {
+  scrubProcessGitEnv(); // inherited GIT_DIR/GIT_WORK_TREE/GIT_INDEX_FILE would aim the gate's own plain-git calls at the real repo
   const checks = [];
   const temp = mkdtempSync(join(tmpdir(), "sg-doc-line-counts-"));
   try {
-    execFileSync("git", ["-C", temp, "init", "-q"]);
+    scratchGitOk(temp, ["init", "-q"]);
     mkdirSync(join(temp, "lib/planted/src"), { recursive: true });
     mkdirSync(join(temp, "docs/agent"), { recursive: true });
     writeFileSync(join(temp, "lib/planted/src/index.ts"), "a\nb\nc\n"); // 3 lines
     writeFileSync(join(temp, "docs/PLAN.md"), "1. lib/planted/src/index.ts (3) — right.\n");
     writeFileSync(join(temp, "docs/agent/EVIDENCE.md"), "read `lib/planted/src/index.ts (99)` on a past day\n");
-    execFileSync("git", ["-C", temp, "add", "-A"]);
+    scratchGitOk(temp, ["add", "-A"]);
     const docs = ["docs/PLAN.md", "docs/agent/EVIDENCE.md"];
 
     const clean = audit(temp, docs, EXEMPT);

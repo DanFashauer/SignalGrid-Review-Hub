@@ -87,6 +87,7 @@ const STEPS = [
   { name: "Docker carries every install-hook entrypoint", cmd: ["node", "scripts/check-docker-lifecycle-copy.mjs"] },
   { name: "Invariant review self-test (a default-less switch / stray clock read must fail)", cmd: ["node", "scripts/review-invariants.mjs", "--self-test"] },
   { name: "Invariant review (fail-closed / determinism / Assist / truth)", cmd: ["node", "scripts/review-invariants.mjs"] },
+  { name: "Clock-spelling matcher mutation guard (every listed mutant of the shared matcher must fail its self-test)", cmd: ["node", "scripts/clock-spellings-mutants.mjs"] },
   // Shell was the only language here with no static analysis: CodeQL takes JS/TS,
   // tsc takes types, gitleaks takes secrets, the proofs take behaviour. See
   // scripts/check-shell.mjs for why the floor is `warning` and why the Mac lane's
@@ -106,6 +107,12 @@ const STEPS = [
   // script-side gate says so; this proves the gate refuses a missing, non-zero or
   // stale (previous-run, wrong-sha) sentinel.
   { name: "Land-branch push gate self-test (a missing, non-zero or stale sentinel must refuse the push)", cmd: ["node", "scripts/lib/land-branch-gate.mjs", "--self-test"] },
+  { name: "Staged Mac worker self-test (triage, review, limits and transport)", cmd: ["node", "scripts/mac/build-tick-stages.mjs", "--self-test"] },
+  { name: "Local worker job-state proofs", cmd: ["node", "scripts/mac/local-brain/test/job-state.test.mjs"] },
+  { name: "Local worker task-selector proofs", cmd: ["node", "scripts/mac/local-brain/test/task-selector.test.mjs"] },
+  { name: "Local worker task-selector C0 regressions", cmd: ["node", "scripts/mac/local-brain/test/task-selector-control-scope.test.mjs"] },
+  { name: "Local worker task-selector C0 proof envelope", cmd: ["node", "scripts/check-local-worker-task-selector-proof.mjs"] },
+  { name: "Local worker proof-policy proofs", cmd: ["node", "scripts/mac/local-brain/test/proof-policy.test.mjs"] },
   // DR-060 rule 3, first slice: docs/agent/mcp-roster.json names which lane or
   // first-party skill may call which MCP server, with signalgrid-mcp's tool count
   // DERIVED from artifacts/mcp-server/src/index.ts, never hand-typed.
@@ -206,6 +213,10 @@ const STEPS = [
   // citation that resolves to nothing reads as evidence and is not.
   { name: "Cited paths (a doc may not cite a file that does not exist)", cmd: ["node", "scripts/check-cited-paths.mjs"] },
   { name: "Cited-path self-test (the gate can actually fail)", cmd: ["node", "scripts/check-cited-paths.mjs", "--self-test"] },
+  // check-cited-paths only sees BACKTICKED paths; a re-measured stamp (dated 2026-10-08 on) that
+  // cites one in plain text passes it unchecked. Follow-up (d) of the PR #1456 review.
+  { name: "Stamp citations (a re-measured stamp must backtick the repo paths it cites)", cmd: ["node", "scripts/check-stamp-citations.mjs"] },
+  { name: "Stamp-citation self-test (the gate can actually fail)", cmd: ["node", "scripts/check-stamp-citations.mjs", "--self-test"] },
   // A document that instructs `SIGNALGRID_X=…` names a control; if nothing reads X the
   // control does not exist. SIGNALGRID_SANITIZE_OUTPUT was "required" in two documents
   // and read by nothing, anywhere, for as long as the documents existed.
@@ -246,6 +257,7 @@ const STEPS = [
   { name: "MCP-ecosystem-map self-test (the gate can fail both directions)", cmd: ["node", "scripts/check-mcp-ecosystem-map.mjs", "--self-test"] },
   { name: "MCP-ecosystem map (every externally-sourced family has an ecosystem row or a stated gap)", cmd: ["node", "scripts/check-mcp-ecosystem-map.mjs"] },
   { name: "Absence-check self-test (a word in a disclaimer is not the thing existing)", cmd: ["node", "scripts/agent/absence-check.mjs", "--self-test"] },
+  { name: "Untracked-ignore self-test (verify-all: an untracked lockfile is source, scratch stays ignored)", cmd: ["node", "scripts/check-untracked-ignore.mjs", "--self-test"] },
   // Brain cycle (DR-032). The live origin-diff is the cycle's STEP 0, not a per-push gate
   // (a feature branch legitimately differs from origin); preflight runs only the self-tests,
   // which prove each piece can fail in both directions.
@@ -332,9 +344,12 @@ const STEPS = [
   { name: "iOS restriction defaults (a DLP restriction may not default to permitted on an unknown session)", cmd: ["node", "scripts/check-ios-restriction-defaults.mjs"] },
   { name: "Shell backend paths self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-shell-backend-paths.mjs", "--self-test"] },
   { name: "Shell backend paths (every path EnterpriseShell's control-plane client builds is a declared /v1 path — no silent device 404)", cmd: ["node", "scripts/check-shell-backend-paths.mjs"] },
+  { name: "Screen inventory self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-screen-inventory.mjs", "--self-test"] },
+  { name: "Screen inventory (every page file listed; every stated launch status is launch-profile.mjs's)", cmd: ["node", "scripts/check-screen-inventory.mjs"] },
   { name: "Sim-script self-check self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-sim-scripts-selfcheck.mjs", "--self-test"] },
   { name: "Sim-script self-check (a queued Mac operation must name a script that runs)", cmd: ["node", "scripts/check-sim-scripts-selfcheck.mjs"] },
   { name: "Sim-request runner self-test (a result awaiting landing on a tick branch is never re-run; refused/unreadable stays pending)", cmd: ["node", "scripts/mac/run-requests.mjs", "--self-test"] },
+  { name: "Lane status line self-test (open hands and unread mail counted from a fixture tree; an unreadable part is left out, never zeroed)", cmd: ["bash", "scripts/mac/statusline.sh", "--self-test"] },
   { name: "Swift serious violations self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-swift-serious.mjs", "--self-test"] },
   { name: "Swift serious violations (the error-severity swiftlint rules, without a Swift toolchain)", cmd: ["node", "scripts/check-swift-serious.mjs"] },
   { name: "iOS demo flags (every simulator flag the shell reads is documented, and vice versa)", cmd: ["node", "scripts/check-demo-flags-documented.mjs"] },
@@ -354,6 +369,8 @@ const STEPS = [
   // a new rule fails this until a human classifies it — which is also one more
   // mechanical guard on the breadth freeze.
   { name: "Mutation sharding partitions the registry (the daily sweep loses no target)", cmd: ["node", "scripts/check-mutation-sharding.mjs"] },
+  { name: "Scratch-git hygiene self-test (it can actually fail)", cmd: ["node", "scripts/check-scratch-git-hygiene.mjs", "--self-test"] },
+  { name: "Scratch-repo self-tests spawn git through one hermetic helper", cmd: ["node", "scripts/check-scratch-git-hygiene.mjs"] },
   { name: "Backlog row citations name rows that exist", cmd: ["node", "scripts/check-row-citations.mjs"] },
   { name: "Row-citation gate self-test (it can actually fail)", cmd: ["node", "scripts/check-row-citations.mjs", "--self-test"] },
   { name: "IT-layer model (every refusal has an owner; nothing routes to a phantom)", cmd: ["node", "scripts/check-it-layer-model.mjs"] },
@@ -399,6 +416,8 @@ const STEPS = [
   { name: "Skill-plane conformance (every skill/agent carries the name+description the harness selects it by)", cmd: ["node", "scripts/check-skill-plane-conformance.mjs"] },
   { name: "Agent raise-your-hand self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-agent-raise-hand.mjs", "--self-test"] },
   { name: "Agent raise-your-hand (every subagent definition carries the surface-when-stuck contract)", cmd: ["node", "scripts/check-agent-raise-hand.mjs"] },
+  { name: "Gate self-tests run self-test (a gate's --self-test that no step runs is run by a gate)", cmd: ["node", "scripts/check-gate-self-tests-run.mjs", "--self-test"] },
+  { name: "Gate self-tests run (a flag-less gate names a control; an unregistered --self-test is spawned)", cmd: ["node", "scripts/check-gate-self-tests-run.mjs"] },
   { name: "Positioning trace (every ratified claim resolves by id in the launch profile; self-tested)", cmd: ["node", "scripts/check-positioning-trace.mjs"] },
   { name: "Module init order (a const read before it is initialised; self-tested)", cmd: ["node", "scripts/check-module-init-order.mjs"] },
   { name: "Walker-floor self-test (a floorless roots-array walk must fail)", cmd: ["node", "scripts/check-walker-floors.mjs", "--self-test"] },
@@ -418,7 +437,12 @@ const STEPS = [
   { name: "Freshness-divergence self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-freshness-divergence.mjs", "--self-test"] },
   { name: "Freshness divergence (one future/age rule, one body; exemptions REPORTED)", cmd: ["node", "scripts/check-freshness-divergence.mjs"] },
   { name: "CI liveness (a sweep that stops running must fail a build; self-tested)", cmd: ["node", "scripts/check-ci-liveness.mjs"] },
+  // Every `schedule:` workflow names what would notice it STOPPED, or carries a dated exemption
+  // with a reason (sre roster item; row 53's follow-on). Static: reads YAML + the registry only.
+  { name: "Scheduled-workflow liveness self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-scheduled-workflow-liveness.mjs", "--self-test"] },
+  { name: "Scheduled-workflow liveness (every scheduled workflow names its watcher or a dated exemption)", cmd: ["node", "scripts/check-scheduled-workflow-liveness.mjs"] },
   { name: "CI job timeouts (an unbounded job is an unbounded outage; self-tested)", cmd: ["node", "scripts/check-ci-job-timeouts.mjs"] },
+  { name: "Security controls matrix (every status in the legend; every Implemented row's paths + proof exist; self-tested)", cmd: ["node", "scripts/check-security-controls-matrix.mjs"] },
   { name: "Connector discipline (every family gated + proven, none acting on a device)", cmd: ["node", "scripts/check-connector-discipline.mjs"] },
   { name: "Launch profile (the declared product edge matches the real one)", cmd: ["node", "scripts/check-launch-profile.mjs"] },
   // DR-036's named follow-up (2026-09-12): every launch item binds the proof:* scripts that
@@ -482,6 +506,7 @@ const STEPS = [
   { name: "Proof: estate-refresh (a scheduled posture re-read re-decides, and fails closed)", cmd: ["pnpm", "run", "proof:estate-refresh"] },
   { name: "Proof: secrets (one read site, fail-closed, and a rotation that actually rotates)", cmd: ["pnpm", "run", "proof:secrets"] },
   { name: "Proof: data-lifecycle (retention, erasure and DSAR leave the audit chain verifiable)", cmd: ["pnpm", "run", "proof:data-lifecycle"] },
+  { name: "DMH domains exhaustive-by-construction self-test (a new field/member/raw key must fail tsc)", cmd: ["node", "scripts/check-dmh-domains-exhaustive.mjs"] },
   { name: "Figure-guard self-test (the baseline-age report must be able to fail)", cmd: ["node", "scripts/check-proof-figures.mjs", "--self-test"] },
   { name: "Docs\u2194proof FIGURE guard (a measured number must still be one)", cmd: ["node", "scripts/check-proof-figures.mjs"] },
   { name: "Proof-count self-test (a zeroed claim scan fails via the floor)", cmd: ["node", "scripts/check-proof-counts.mjs", "--self-test"] },
@@ -553,8 +578,11 @@ const STEPS = [
   { name: "Backlog ownership self-test (the gate can actually fail)", cmd: ["node", "scripts/check-backlog-ownership.mjs", "--self-test"] },
   { name: "Loop-state seam self-test (squash-of-a-merge-tree, whitespace twin and same-name-ahead fixtures can fail)", cmd: ["node", "scripts/loop-state.mjs", "--self-test"] },
   { name: "Raised-hands monitor self-test (DR-054 routing + gap detection must work)", cmd: ["node", "scripts/check-raised-hands.mjs", "--self-test"] },
+  { name: "Raised hands schema (every hand file has its fields, a valid status/unblocker, id == filename)", cmd: ["node", "scripts/check-raised-hands.mjs"] },
   { name: "Backlog evidence (a row that says DONE says how you'd check)", cmd: ["node", "scripts/check-backlog-evidence.mjs"] },
   { name: "Backlog evidence self-test (the gate can actually fail)", cmd: ["node", "scripts/check-backlog-evidence.mjs", "--self-test"] },
+  { name: "Row status drift (an open row still reading FIX PROPOSED for a merged PR; REPORTED, never fatal)", cmd: ["node", "scripts/check-row-status-drift.mjs"] },
+  { name: "Row status drift self-test (a planted stale row must be flagged)", cmd: ["node", "scripts/check-row-status-drift.mjs", "--self-test"] },
   { name: "Surface-ownership self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-surface-ownership.mjs", "--self-test"] },
   { name: "Surface ownership (every file is somebody's)", cmd: ["node", "scripts/check-surface-ownership.mjs"] },
   { name: "Role coverage (has each role read the portion it owns; ratcheted)", cmd: ["node", "scripts/check-role-coverage.mjs"] },
@@ -770,6 +798,16 @@ const STEPS = [
 const nativeExclusion = nativeBuildExclusion(repo);
 if (nativeExclusion.excluded) {
   console.log(`ℹ native web build unavailable on ${nativeExclusion.target} — ${nativeExclusion.reason}\n`);
+}
+
+// `--list-steps` prints the list the loop below iterates, as one JSON line, and stops. The registration gate
+// (scripts/check-gate-self-tests-run.mjs) reads what is registered from HERE rather than parsing this file's source:
+// source can be written to look like a step without being one, the list the loop runs cannot. Keep this block
+// directly above the loop; the gate checks that it is.
+if (process.argv.includes("--list-steps")) {
+  // wait for the write to flush: process.exit() straight after a pipe write cuts the output at the 64 KiB pipe buffer
+  await new Promise((done) => process.stdout.write(JSON.stringify(STEPS.map((s) => ({ name: s.name, cmd: s.cmd, heavy: s.heavy === true, needsNativeBuild: s.needsNativeBuild === true }))) + "\n", done));
+  process.exit(0);
 }
 
 const results = [];

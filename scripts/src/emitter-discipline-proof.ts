@@ -39,10 +39,12 @@ import { resolveTelemetryEmitter } from "@workspace/integrations/telemetry";
 import { resolveWebhooksEmitter } from "@workspace/integrations/webhooks";
 import { resolveCaepEmitter } from "@workspace/integrations/caep-events";
 import { REDIRECT_REFUSED } from "@workspace/integrations/emit-gate/redirect";
-import { WEBHOOK_URL_REFUSALS } from "@workspace/integrations/emit-gate/url-guard";
+import { WEBHOOK_URL_REFUSALS, decodeIPv4InIPv6, validateWebhookUrl } from "@workspace/integrations/emit-gate/url-guard";
 import { ITSM_WEBHOOK_REFUSALS } from "@workspace/integrations/itsm";
 import { verifySignedWebhook } from "@workspace/integrations/webhooks";
-import { VENDOR_ERROR_TEXT_LIMIT } from "@workspace/integrations/emit-gate/bounded-text";
+import { VENDOR_ERROR_TEXT_LIMIT, boundedText } from "@workspace/integrations/emit-gate/bounded-text";
+import { isRedirectRefusal, isRedirectStatus, redirectRefusal } from "@workspace/integrations/emit-gate/redirect";
+import { asNonEmptyString, asPositiveNumber, asVendorInstant, VendorFieldInvalid } from "@workspace/integrations/emit-gate/vendor-values";
 
 let passed = 0;
 const failures: string[] = [];
@@ -554,6 +556,159 @@ check("syslog: under a suppressing env the adapter reports status 'suppressed', 
     if (savedT === undefined) delete process.env.SIGNALGRID_TIER; else process.env.SIGNALGRID_TIER = savedT;
     if (savedL === undefined) delete process.env.SIGNALGRID_LIVE_INTEGRATIONS; else process.env.SIGNALGRID_LIVE_INTEGRATIONS = savedL;
   }
+}
+
+// ---- The shared outbound guards, driven directly (wave 8, 2026-10-09) -------------
+// url-guard, bounded-text and redirect are imported by every emitter family; they are
+// registered under this proof in scripts/mutation-guard.mjs with the brace-less sweep on, so
+// EACH refusing clause is pinned by an input only that clause refuses. Without this block the
+// family tests above reach them only through whichever hostnames those tests happened to use.
+{
+  const live = { live: true };
+  const refusedAs = (u: string, reason: string, opts = live): boolean => {
+    const v = validateWebhookUrl(u, opts);
+    return v.valid === false && v.error === reason;
+  };
+  check("url-guard: a plain-http target is refused at a live tier, naming HTTPS",
+    refusedAs("http://hook.example.com/x", WEBHOOK_URL_REFUSALS.httpsRequired));
+  check("url-guard: …and the same http target is NOT refused off a live tier (the clause is the live one)",
+    validateWebhookUrl("http://hook.example.com/x", { live: false }).valid === true);
+  check("url-guard: an https public host is valid", validateWebhookUrl("https://hook.example.com/x", live).valid === true);
+  const loopbacks = ["https://localhost/x", "https://app.localhost/x", "https://0.0.0.0/x", "https://[::]/x", "https://[::1]/x", "https://127.0.0.1/x"];
+  for (const u of loopbacks) {
+    check(`url-guard: loopback/unspecified ${u} is refused as loopback`, refusedAs(u, WEBHOOK_URL_REFUSALS.loopback));
+  }
+  const privates = ["https://10.1.2.3/x", "https://192.168.1.1/x", "https://172.16.0.1/x", "https://172.31.255.1/x",
+    "https://100.64.0.1/x", "https://100.127.0.1/x", "https://169.254.169.254/x", "https://[fc00::1]/x", "https://[fd12::1]/x", "https://[fe80::1]/x"];
+  for (const u of privates) {
+    check(`url-guard: private/link-local ${u} is refused as privateRange`, refusedAs(u, WEBHOOK_URL_REFUSALS.privateRange));
+  }
+  check("url-guard: the range edges just outside RFC1918/6598 stay valid (172.15, 172.32, 100.63, 100.128)",
+    ["https://172.15.0.1/x", "https://172.32.0.1/x", "https://100.63.0.1/x", "https://100.128.0.1/x"].every((u) => validateWebhookUrl(u, live).valid === true));
+  check("url-guard: an unparseable URL is refused as invalidUrl", refusedAs("not a url", WEBHOOK_URL_REFUSALS.invalidUrl));
+  // Hand-mutant pins (B83, #1498 review LOWs): the brace-less sweep cannot generate a regex-bound
+  // mutant, so each pin below is an input ONLY the narrowed/dropped alternative would let through.
+  check("url-guard: RFC6598 interior (every second octet 100.64-100.127, so each of the four alternatives end to end) is refused as privateRange, not just the 100.64 / 100.127 edges",
+    [...Array.from({ length: 64 }, (_, i) => `100.${64 + i}.0.1`), "100.69.255.255", "100.99.255.255", "100.126.255.255", "100.127.255.255"]
+      .every((h) => refusedAs(`https://${h}/x`, WEBHOOK_URL_REFUSALS.privateRange)));
+  check("url-guard: fe80::/10 interior (fe90, fea0, febf, and fe80::808:808 whose last 32 bits read as IPv4) is refused as privateRange, not just fe80",
+    ["[fe80::1]", "[fe90::1]", "[fea0::1]", "[febf::1]", "[fe80::808:808]"].every((h) => refusedAs(`https://${h}/x`, WEBHOOK_URL_REFUSALS.privateRange)));
+  check("url-guard: just outside fe80::/10 (fe7f::1, fec0::1) stays valid",
+    ["[fe7f::1]", "[fec0::1]"].every((h) => validateWebhookUrl(`https://${h}/x`, live).valid === true));
+  check("url-guard: IPv4-mapped IPv6 (dotted) is refused as its IPv4 twin (loopback, metadata, RFC1918, RFC6598)",
+    refusedAs("https://[::ffff:127.0.0.1]/x", WEBHOOK_URL_REFUSALS.loopback)
+    && refusedAs("https://[::ffff:169.254.169.254]/x", WEBHOOK_URL_REFUSALS.privateRange)
+    && refusedAs("https://[::ffff:10.0.0.7]/x", WEBHOOK_URL_REFUSALS.privateRange)
+    && refusedAs("https://[::ffff:100.100.1.1]/x", WEBHOOK_URL_REFUSALS.privateRange));
+  check("url-guard: the IPv4-compatible form [::127.0.0.1] (no ffff group) is refused as loopback",
+    refusedAs("https://[::127.0.0.1]/x", WEBHOOK_URL_REFUSALS.loopback));
+  check("url-guard: the hex spelling [::ffff:a9fe:a9fe] decodes (base 16) and is refused as the metadata address",
+    refusedAs("https://[::ffff:a9fe:a9fe]/x", WEBHOOK_URL_REFUSALS.privateRange));
+  check("url-guard: a documentation-range IPv4-mapped address and a documentation IPv6 address are NOT over-refused",
+    validateWebhookUrl("https://[::ffff:203.0.113.9]/x", live).valid === true && validateWebhookUrl("https://[2001:db8::1]/x", live).valid === true);
+  // B86 (backlog rows: the ::ffff:0: translated spelling, trailing-dot localhost, and the #1504
+  // residue). Each pin below is an input only the named hand mutant lets through or over-refuses;
+  // the plant each one answers is recorded in that PR's body.
+  check("url-guard: the IPv4-translated form [::ffff:0:a.b.c.d] (RFC 2765 SIIT, any spelling) is refused as its IPv4 twin (loopback, RFC1918, metadata)",
+    refusedAs("https://[::ffff:0:127.0.0.1]/x", WEBHOOK_URL_REFUSALS.loopback)
+    && refusedAs("https://[0:0:0:0:ffff:0:7f00:1]/x", WEBHOOK_URL_REFUSALS.loopback)
+    && refusedAs("https://[::ffff:0:0.0.0.0]/x", WEBHOOK_URL_REFUSALS.loopback)
+    && refusedAs("https://[::ffff:0:10.0.0.7]/x", WEBHOOK_URL_REFUSALS.privateRange)
+    && refusedAs("https://[::ffff:0:169.254.169.254]/x", WEBHOOK_URL_REFUSALS.privateRange));
+  check("url-guard: a documentation-range IPv4-translated address [::ffff:0:203.0.113.9] is NOT over-refused",
+    validateWebhookUrl("https://[::ffff:0:203.0.113.9]/x", live).valid === true);
+  check("url-guard: the trailing-dot FQDN spellings localhost., app.localhost., localhost.. and localhost... are refused as loopback",
+    ["https://localhost./x", "https://app.localhost./x", "https://localhost../x", "https://localhost.../x"].every((u) => refusedAs(u, WEBHOOK_URL_REFUSALS.loopback)));
+  check("url-guard: the dot strip never loosens a refusal — 127.., 10.. and 172.16.. (domains to the URL parser, refused by the raw prefix rules) stay refused",
+    refusedAs("https://127../x", WEBHOOK_URL_REFUSALS.loopback) && refusedAs("https://10../x", WEBHOOK_URL_REFUSALS.privateRange)
+    && refusedAs("https://172.16../x", WEBHOOK_URL_REFUSALS.privateRange));
+  check("url-guard: a trailing-dot public FQDN (hook.example.com.) stays valid",
+    validateWebhookUrl("https://hook.example.com./x", live).valid === true);
+  check("url-guard: the mapped unspecified address [::ffff:0.0.0.0] is refused as loopback (every decoded octet counts, not only the first)",
+    refusedAs("https://[::ffff:0.0.0.0]/x", WEBHOOK_URL_REFUSALS.loopback));
+  check("url-guard: decodeIPv4InIPv6 reads both 16-bit groups base 16 into all four octets, for the mapped, compatible and translated shapes, and leaves other IPv6 alone",
+    decodeIPv4InIPv6("::ffff:cb00:7109") === "203.0.113.9" && decodeIPv4InIPv6("::ffff:0:a") === "0.0.0.10"
+    && decodeIPv4InIPv6("::ffff:0:a9fe:a9fe") === "169.254.169.254" && decodeIPv4InIPv6("::7f00:1") === "127.0.0.1"
+    && decodeIPv4InIPv6("fe80::808:808") === null && decodeIPv4InIPv6("2001:db8::1") === null && decodeIPv4InIPv6("::1") === null);
+  check("url-guard: fe80::/10 with every fourth hex digit (fe80-fe8f, fe9c, feac, febc) and a nonzero second group ([fe80:1::1]) is refused as privateRange",
+    [...Array.from({ length: 16 }, (_, i) => `[fe8${i.toString(16)}::1]`), "[fe9c::1]", "[feac::1]", "[febc::1]", "[fe80:1::1]", "[febf:ffff::1]"]
+      .every((h) => refusedAs(`https://${h}/x`, WEBHOOK_URL_REFUSALS.privateRange)));
+  check("url-guard: the 172.16/12 interior (every second octet 172.16-172.31) is refused as privateRange",
+    Array.from({ length: 16 }, (_, i) => `172.${16 + i}.0.1`).every((h) => refusedAs(`https://${h}/x`, WEBHOOK_URL_REFUSALS.privateRange)));
+  check("url-guard: each private range's network and last address (10/8, 172.16/12, 192.168/16, 100.64/10, 169.254/16) is refused as privateRange",
+    ["10.0.0.0", "10.255.255.255", "172.16.0.0", "172.31.255.255", "192.168.0.0", "192.168.255.255", "100.64.0.0", "100.127.255.255", "169.254.0.0", "169.254.255.255"]
+      .every((h) => refusedAs(`https://${h}/x`, WEBHOOK_URL_REFUSALS.privateRange)));
+  check("url-guard: a DNS name that merely starts with a private prefix and no dot (100.64example.com, 10example.com, 172.16example.com, 192.168example.com, 169.254example.com, 127example.com), and 100.10/100.11 outside RFC6598, are NOT over-refused",
+    ["100.64example.com", "10example.com", "172.16example.com", "192.168example.com", "169.254example.com", "127example.com", "100.10.0.1", "100.11.0.1"]
+      .every((h) => validateWebhookUrl(`https://${h}/x`, live).valid === true));
+}
+{
+  check("bounded-text: a non-string yields the empty string, not a throw or the value",
+    boundedText(undefined as unknown as string) === "" && boundedText(42 as unknown as string) === "");
+  check("bounded-text: text at or under the limit is returned untouched",
+    boundedText("abc", 3) === "abc" && boundedText("", 3) === "");
+  check("bounded-text: text over the limit is cut and the cut is STATED with the full length",
+    boundedText("abcdef", 3) === "abc… [truncated, 6 characters total]");
+}
+{
+  check("redirect: a missing, null or empty Location reads as 'no Location header', never echoed",
+    [undefined, null, ""].every((l) => redirectRefusal(302, l).includes("no Location header")));
+  check("redirect: an unparseable Location is reported as unparseable and not echoed verbatim",
+    redirectRefusal(302, "http://[bad").includes("an unparseable Location header") && !redirectRefusal(302, "http://[bad").includes("[bad"));
+  check("redirect: a parseable Location names only its host, not its path",
+    (() => { const r = redirectRefusal(307, "https://evil.example/secret/path?q=1"); return r.includes('Location host "evil.example"') && !r.includes("secret"); })());
+  check("redirect: isRedirectStatus is true on 300, 301, 307, 308 and 399 (both bounds inclusive)",
+    [300, 301, 307, 308, 399].every((n) => isRedirectStatus(n) === true));
+  check("redirect: isRedirectStatus is false on 0, 200, 299 and 400",
+    [0, 200, 299, 400].every((n) => isRedirectStatus(n) === false));
+  check("redirect: isRedirectStatus is true on EVERY status 300-399, so no single one (304 included) is carved out",
+    Array.from({ length: 100 }, (_, i) => 300 + i).every((n) => isRedirectStatus(n) === true));
+  check("redirect: isRedirectStatus is false on NaN (a non-number is never read as a redirect)",
+    isRedirectStatus(Number.NaN) === false);
+  check("redirect: isRedirectRefusal is true for a reason redirectRefusal minted",
+    isRedirectRefusal(redirectRefusal(302, "https://evil.example/x")) === true);
+  check("redirect: isRedirectRefusal is false for undefined, another reason, the prefix appearing mid-string, a lowercase or space-led spelling, the bare word REDIRECT and a near-miss differing only in the prefix's last character",
+    isRedirectRefusal(undefined) === false && isRedirectRefusal("HTTP 500") === false
+    && isRedirectRefusal(`x ${redirectRefusal(302, null)}`) === false
+    && isRedirectRefusal(REDIRECT_REFUSED.toLowerCase()) === false && isRedirectRefusal(` ${redirectRefusal(302, null)}`) === false
+    && isRedirectRefusal("REDIRECT") === false && isRedirectRefusal(`${REDIRECT_REFUSED.slice(0, -1)}X`) === false);
+  check("redirect: isRedirectRefusal is false for a second spelling (REDIRECT_REFUSAL:), a first-character near-miss (XEDIRECT_REFUSED:) and a wrapped reason (Webhook failed: REDIRECT_REFUSED…)",
+    isRedirectRefusal("REDIRECT_REFUSAL: x") === false && isRedirectRefusal(`X${REDIRECT_REFUSED.slice(1)}: x`) === false
+    && isRedirectRefusal(`Webhook failed: ${redirectRefusal(302, null)}`) === false);
+}
+
+// ---- The vendor-value readers, driven directly (wave 8, 2026-10-09) -----------------
+// vendor-values.ts is what the servicenow/bmc-helix/ivanti/manageengine/sentinel adapters read a
+// token, lifetime or instant through. Each throw is pinned by the DETAIL it names (which also
+// pins shapeOf's branches), so a guard flipped off cannot hide behind a later guard's throw.
+{
+  const detailOf = (fn: () => unknown): string => {
+    try { fn(); return "RETURNED"; }
+    catch (err) { return err instanceof VendorFieldInvalid ? `${err.field}|${err.detail}` : "OTHER"; }
+  };
+  check("vendor-values: a non-string token is refused naming 'absent' for undefined",
+    detailOf(() => asNonEmptyString(undefined, "access_token")) === "access_token|expected a string, received absent");
+  check("vendor-values: …'null' for null", detailOf(() => asNonEmptyString(null, "access_token")).endsWith("received null"));
+  check("vendor-values: …'an array of N' for an array", detailOf(() => asNonEmptyString([1, 2], "f")).endsWith("received an array of 2"));
+  check("vendor-values: …'a number' for a number (never echoing it)", detailOf(() => asNonEmptyString(7, "f")).endsWith("received a number"));
+  check("vendor-values: whitespace-only is empty and refused", detailOf(() => asNonEmptyString("   ", "f")).includes("only whitespace"));
+  check("vendor-values: a real token is returned untouched", asNonEmptyString("tok-1", "f") === "tok-1");
+  check("vendor-values: a non-numeric lifetime is refused as not-a-finite-number, naming its shape",
+    detailOf(() => asPositiveNumber("abc", "expires_in")).includes("expected a finite number, received a 3-character string")
+    && detailOf(() => asPositiveNumber("", "expires_in")).includes("received an empty string")
+    && detailOf(() => asPositiveNumber(NaN, "expires_in")).includes("expected a finite number")
+    && detailOf(() => asPositiveNumber(Infinity, "expires_in")).includes("expected a finite number"));
+  check("vendor-values: zero and negative lifetimes are refused as non-positive (finite, so past the first guard)",
+    detailOf(() => asPositiveNumber(0, "expires_in")).includes("expected a positive number, received 0")
+    && detailOf(() => asPositiveNumber(-5, "expires_in")).includes("expected a positive number, received -5"));
+  check("vendor-values: 3600 and the decimal string \"3600\" are both accepted", asPositiveNumber(3600, "f") === 3600 && asPositiveNumber("3600", "f") === 3600);
+  check("vendor-values: a non-instant type is refused naming its shape",
+    detailOf(() => asVendorInstant(undefined, "created")).includes("expected an instant, received absent")
+    && detailOf(() => asVendorInstant({}, "created")).includes("expected an instant, received a object"));
+  check("vendor-values: an unparseable instant string is refused as unparseable",
+    detailOf(() => asVendorInstant("not a date", "created")).includes("unparseable") && detailOf(() => asVendorInstant(NaN, "created")).includes("unparseable"));
+  check("vendor-values: an ISO instant and an epoch number both normalise to ISO-8601",
+    asVendorInstant("2026-01-01T00:00:00Z", "f") === "2026-01-01T00:00:00.000Z" && asVendorInstant(0, "f") === "1970-01-01T00:00:00.000Z");
 }
 
 // Determinism: two identical resolutions produce identical fixture logs.

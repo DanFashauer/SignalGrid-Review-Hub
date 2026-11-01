@@ -1,0 +1,15 @@
+{
+  "id": "2026-10-02-the-landing-chain-s-local-preflight-fails-at-api",
+  "raisedAt": "2026-10-02T23:23:10.665Z",
+  "origin": "cloud",
+  "doing": "Landing #1421 (raised-hands schema gate, ship upheld) and the queued wave ships under DR-037 on the cloud box, 2026-10-02 23:0xZ.",
+  "blockedBy": "The landing chain's local preflight fails at 'API integration test (boots the server)' on every tree, because the session harness process (environment-manager, pid 86) holds 15,509 ESTABLISHED sockets - 55% of the ephemeral port range - and the test's port probe binds 127.0.0.1 while the server binds the wildcard: the probe succeeds, the server's bind reads EADDRINUSE, the test reads ECONNREFUSED (4/4 runs). The fix is PR #1431 (three probes bind the wildcard; test:api 486/486 on the same box). The auto-mode classifier denied the lane merging #1431 as self-approval, and the lane does not route around a denial. Until it lands, no cloud landing can pass condition 2 on this box.",
+  "need": "One click: merge PR #1431 when its CI is green (SAFETY_MACHINERY, test + proof harness only, no decision path). After that the lane re-runs the #1421 chain and the queued ships itself. Alternative that needs no one: the next container restart empties the leak for several hours.",
+  "whoCanUnblock": "owner",
+  "domain": "cloud-lane-gates",
+  "status": "resolved",
+  "routedTo": null,
+  "resolvedAt": "2026-10-08T10:38:33.261Z",
+  "resolvedBy": "cloud",
+  "resolution": "#1421 merged 2026-10-03T01:17:46Z at head 15776edf43c206f2f1e9ddfe7953d680e8878788 after the 2026-10-02T23:59Z container restart emptied the harness socket leak. Measured 2026-10-08T10:22Z: 17 ESTABLISHED sockets on the box. #1431 (the probe fix) remains open on the owner's queue as the durable fix."
+}

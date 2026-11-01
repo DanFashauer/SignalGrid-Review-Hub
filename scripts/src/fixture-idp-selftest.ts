@@ -96,10 +96,10 @@ const freePort = (): Promise<number> =>
   new Promise((resolve, reject) => {
     const srv = createServer();
     srv.once("error", reject);
-    // Bind the WILDCARD, as `fixture-idp.mjs serve` does (0.0.0.0): a port free on
-    // 127.0.0.1 can be held on <eth0> by an outbound connection, and the served IdP
-    // then reads EADDRINUSE and never comes up (2026-10-02, cloud box).
-    srv.listen(0, () => {
+    // Bind "0.0.0.0" explicitly, exactly as `fixture-idp.mjs serve` does: a port free on
+    // 127.0.0.1 can be held on <eth0> by an outbound connection (2026-10-02, cloud box), and an
+    // omitted host would bind an IPv6-only :: on a bindv6only host, missing IPv4 conflicts.
+    srv.listen(0, "0.0.0.0", () => {
       const { port } = srv.address() as { port: number };
       srv.close(() => resolve(port));
     });

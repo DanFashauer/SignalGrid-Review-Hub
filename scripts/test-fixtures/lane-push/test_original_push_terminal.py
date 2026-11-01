@@ -208,8 +208,16 @@ class RefusalRepairHandControls(unittest.TestCase):
     def test_qualified_current_owner_can_send_one_distinct_repair_hand(self):
         self.one_hand(self.fixture())
 
-    def test_known_refused_repair_hand_is_not_resent_inside_its_keepalive_window(self):
-        self.one_hand(self.fixture(reject='always'))
+    def test_known_refused_repair_hand_is_retried_only_after_readback_proves_its_ref_absent(self):
+        # The hand's own push is refused (exit 1); ls-remote of its target returns no ref,
+        # so the next tick moves it under refused/ and sends it once more (refused again).
+        f = self.fixture(reject='always'); first = f.heartbeat(); second = f.heartbeat()
+        self.assertEqual(first.returncode, 0, first.stdout + first.stderr)
+        self.assertEqual(second.returncode, 0, second.stdout + second.stderr)
+        ops = f.hand_ops(); self.assertEqual(len(ops), 1, 'the retried hand reuses its one identity')
+        self.assertEqual(len(f.rows(f.push_observed)), 3, 'original refusal, the hand, and its one readback-bound retry')
+        self.assertTrue(list((f.records / 'refused').glob('*.refused-1.terminal.json')), 'the refused hand is kept aside')
+        f.assert_original_preserved()
 
     def test_UNKNOWN_repair_hand_is_consumed_and_readback_only(self):
         self.one_hand(self.fixture(hand_outcome='unknown'))
@@ -239,16 +247,15 @@ class RefusalRepairHandControls(unittest.TestCase):
         f = self.fixture(diagnostic_changes={'producer_head': 'f' * 40})
         f.heartbeat(); self.assertEqual(f.hand_ops(), []); f.assert_original_preserved()
 
-    def test_legacy_tick_lock_no_longer_holds_the_repair_hand(self):
-        # Owner order 2026-11-01: tick-acquire renames a legacy tick.lock aside (bytes kept);
-        # it never blocks a qualified current owner.
+    def test_legacy_tick_lock_without_a_dead_holder_pid_stays_held(self):
+        # tick-acquire moves a legacy tick.lock aside only on positive evidence its
+        # recorded holder PID is dead; this one names no PID, so it stays held untouched.
         f = self.fixture(); lock = f.records / 'tick.lock'; lock.mkdir()
         owner = lock / 'owner'; owner.write_bytes(b'held original legacy evidence\n')
         before = owner.read_bytes(); result = f.heartbeat()
-        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertEqual(len(f.hand_ops()), 1); self.assertEqual(len(f.rows(f.push_observed)), 2)
-        self.assertFalse(lock.exists()); aside = list(f.records.glob('tick.lock.abandoned-*'))
-        self.assertEqual(len(aside), 1); self.assertEqual((aside[0] / 'owner').read_bytes(), before)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(f.hand_ops(), []); self.assertEqual(len(f.rows(f.push_observed)), 1)
+        self.assertTrue(lock.is_dir()); self.assertEqual(owner.read_bytes(), before)
         f.assert_original_preserved()
 
 

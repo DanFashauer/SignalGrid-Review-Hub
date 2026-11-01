@@ -34,7 +34,7 @@ function rawFiles(prefix) {
 // Owner order 2026-11-01: a refused original (exit 1/2) is moved under refused/, byte-identical, and retried.
 function setAside(f,before) {
  const moved=readdirSync(join(f.store,'refused'));
- for(const [name,state] of Object.entries(before)){const m=moved.filter(x=>x.endsWith('-'+name));assert.equal(m.length,1,'refused evidence kept aside: '+name);assert.equal(readFileSync(join(f.store,'refused',m[0])).toString('hex'),state.raw);}
+ for(const [name,state] of Object.entries(before)){const dot=name.indexOf('.',1),m=moved.filter(x=>x===name.slice(0,dot)+'.refused-1'+name.slice(dot));assert.equal(m.length,1,'refused evidence kept aside: '+name);assert.equal(readFileSync(join(f.store,'refused',m[0])).toString('hex'),state.raw);}
 }
 function preserved(prefix,before) {
  const now=rawFiles(prefix);for(const [name,state] of Object.entries(before))assert.deepEqual(now[name],state,'original bytes/inode/mode preserved: '+name);
@@ -74,7 +74,7 @@ function fixture() {
  put(join(root,'fixture.txt'),'disposable fixture\n');git(['add','.']);git(['commit','-qm','frozen source-copy fixture']);
  const head=git(['rev-parse','HEAD']);env.FIXTURE_HEAD=head;env.FIXTURE_CLI_LOG=cliLog;
  // Real local Git handles metadata; a remote/network operation is never forwarded.
- put(join(bin,'git'),`#!${process.execPath}\nimport fs from 'node:fs';import{spawnSync}from'node:child_process';const a=process.argv.slice(2);fs.appendFileSync(${JSON.stringify(gitLog)},JSON.stringify(a)+'\\n');if(a[0]==='remote'&&a[1]==='get-url'){console.log('https://github.com/fixture/route.git');process.exit(0)}if(a.some(x=>['push','fetch','ls-remote','clone'].includes(x))){console.error('fixture forbids remote transport');process.exit(97)}const r=spawnSync(${JSON.stringify(GIT)},a,{stdio:'inherit'});process.exit(r.status??96);\n`);chmodSync(join(bin,'git'),0o755);
+ put(join(bin,'git'),`#!${process.execPath}\nimport fs from 'node:fs';import{spawnSync}from'node:child_process';const a=process.argv.slice(2);fs.appendFileSync(${JSON.stringify(gitLog)},JSON.stringify(a)+'\\n');if(a[0]==='remote'&&a[1]==='get-url'){console.log('https://github.com/fixture/route.git');process.exit(0)}if(a[0]==='ls-remote'&&process.env.FIXTURE_LS_REMOTE==='absent')process.exit(0);if(a.some(x=>['push','fetch','ls-remote','clone'].includes(x))){console.error('fixture forbids remote transport');process.exit(97)}const r=spawnSync(${JSON.stringify(GIT)},a,{stdio:'inherit'});process.exit(r.status??96);\n`);chmodSync(join(bin,'git'),0o755);
  const storeModule=join(root,'scripts/lib/lane-attempt-store.mjs');
  const initialized=spawnSync(process.execPath,[storeModule,'init',root],{cwd:root,env,encoding:'utf8'});
  assert.equal(initialized.status,0,initialized.stderr);
@@ -145,7 +145,7 @@ function acceptOwned(r) { assert.equal(r.status,0,'actual own Bash must close no
 function noRemoteAttempt(f) {
  if(!existsSync(f.gitLog))return;
  for(const row of readFileSync(f.gitLog,'utf8').trim().split('\n').filter(Boolean).map(JSON.parse))
-  assert.ok(!row.some(a=>['push','fetch','ls-remote','clone'].includes(a)),'request/consumer must not retry or probe original remote operation');
+  assert.ok(!row.some(a=>['push','fetch','clone'].includes(a)),'request/consumer must not retry or probe original remote operation');
 }
 function oneRepair(f,count=1) {
  noRemoteAttempt(f);
@@ -204,7 +204,7 @@ function emitObjective(f,{existingState=false,rounds=1}={}) {
  const state={decisionAddress:'same frozen decision',derivedAt:'2026-11-01T01:00:00Z',derivedAtCommit:f.head,queue:[],escalations:[escalation],criteria:[],tasks:[],verdict:'building'};
  if(existingState)put(join(f.root,'frozen-state.json'),enc(state));
  const file=join(f.parent,'objective-caller-'+(++serial)+'.mjs');
- put(file,`import {createHash,randomBytes} from 'node:crypto';import {spawnSync} from 'node:child_process';import {mkdirSync,readFileSync,readdirSync,renameSync,existsSync,writeFileSync,rmSync} from 'node:fs';import {dirname,join} from 'node:path';import {fileURLToPath} from 'node:url';import {deliveryRecordDirectory} from ${JSON.stringify('file://'+join(f.root,'scripts/lib/lane-attempt-store.mjs'))};\nconst ROOT=${JSON.stringify(f.root)},STATE_REL='frozen-state.json',STAMP_REL='node_modules/frozen-objective-stamp.json';\n${text.slice(a,b)}\nconst state=${JSON.stringify(state)};for(let n=0;n<${rounds};n++){const r=emit(state,{write:true,deliver:true});console.log(r.lines.join('\\n'));}\n`);
+ put(file,`import {createHash,randomBytes} from 'node:crypto';import {spawnSync} from 'node:child_process';import {mkdirSync,readFileSync,readdirSync,renameSync,existsSync,writeFileSync,rmSync} from 'node:fs';import {dirname,join} from 'node:path';import {fileURLToPath} from 'node:url';import {deliveryRecordDirectory,setAsideRefusedAttempt} from ${JSON.stringify('file://'+join(f.root,'scripts/lib/lane-attempt-store.mjs'))};\nconst ROOT=${JSON.stringify(f.root)},STATE_REL='frozen-state.json',STAMP_REL='node_modules/frozen-objective-stamp.json';\n${text.slice(a,b)}\nconst state=${JSON.stringify(state)};for(let n=0;n<${rounds};n++){const r=emit(state,{write:true,deliver:true});console.log(r.lines.join('\\n'));}\n`);
  return spawnSync(process.execPath,[file],{cwd:f.root,env:f.env,encoding:'utf8'});
 }
 function exactRequest(f,o,{atLeast=1}={}) {
@@ -235,6 +235,7 @@ callerCase('CW02','repeated heartbeat HOLD does not repeat the original send or 
  exactRequest(f,o);oneDifferentRepair(f,o);assert.ok(f.calls().some(c=>c.args[0]==='readback'),'old original uses readback only');
 });
 for(const [id,status] of [['CW03',1],['CW04',2]])callerCase(id,'prior build exit'+status+' published nothing: it is set aside and the hand is sent again once',f=>{
+ f.env.FIXTURE_LS_REMOTE='absent'; // readback: the original target ref is absent, so nothing was published
  const cause=sha(BLOCKER),o=original(f,'build',{exit:status,legacy:true});
  // Existing source derives this exact blocker identity before the failing branch.
  const desired=join(f.store,'hand-'+cause);for(const suffix of Object.keys(o.initial).filter(n=>n.startsWith(o.prefix.split('/').at(-1)+'.')).map(n=>n.slice(o.prefix.split('/').at(-1).length)))renameSync(o.prefix+suffix,desired+suffix);
@@ -244,6 +245,7 @@ for(const [id,status] of [['CW03',1],['CW04',2]])callerCase(id,'prior build exit
  assert.equal(f.calls().filter(c=>c.args[0]==='batch').length,1,'the refused hand is retried exactly once, then the new attempt is held');assert.equal(f.entries().filter(e=>['notify','drain'].includes(e.argv[0])).length,0,'build DATA producer cannot invent FD8 ownership');setAside(f,o.initial);
 });
 callerCase('CW05','prior refused objective (exit2) is set aside and sent again once despite appearing submitted',f=>{
+ f.env.FIXTURE_LS_REMOTE='absent';
  const o=original(f,'objective',{exit:2,legacy:true}),desired=join(f.store,'objective-'+sha('same-source-escalation')),base=o.prefix.split('/').at(-1);
  for(const name of Object.keys(o.initial).filter(n=>n.startsWith(base+'.')))renameSync(o.prefix+name.slice(base.length),desired+name.slice(base.length));
  const intent=JSON.parse(readFileSync(desired+'.attempt.json','utf8'));intent.receipt=desired+'.submission.json';writeFileSync(desired+'.attempt.json',enc(intent));o.prefix=desired;o.initial=rawFiles(desired);
@@ -253,10 +255,11 @@ callerCase('CW05','prior refused objective (exit2) is set aside and sent again o
 });
 callerCase('CW06','a fresh build batch refused with exit1 records its terminal, queues no DATA, and is retried by the next raise',f=>{
  const prefix=join(f.store,'hand-'+sha(BLOCKER));
- acceptOwned(runBuild(f,`raise_hand ${quote(BLOCKER)}\nraise_hand ${quote(BLOCKER)}`,{extra:{FIXTURE_ORIGINAL_EXIT:'1'}}));
+ acceptOwned(runBuild(f,`raise_hand ${quote(BLOCKER)}\nraise_hand ${quote(BLOCKER)}`,{extra:{FIXTURE_ORIGINAL_EXIT:'1',FIXTURE_LS_REMOTE:'absent'}}));
  assert.equal(f.originalPublications().length,2,'a refused hand is retried, never consumed');assert.equal(f.repairs().length,0);
  assert.equal(f.entries().filter(e=>e.argv[0]==='request').length,0,'a refused hand needs no repair DATA');
- assert.equal(readFileSync(prefix+'.exit','utf8'),'1\n');assert.ok(readdirSync(join(f.store,'refused')).some(n=>n.endsWith('-hand-'+sha(BLOCKER)+'.exit')),'the first attempt is kept aside');
+ assert.equal(readFileSync(prefix+'.exit','utf8'),'1\n');assert.ok(existsSync(join(f.store,'refused','hand-'+sha(BLOCKER)+'.refused-1.exit')),'the first attempt is kept aside');
+ const retry=JSON.parse(readFileSync(prefix+'.attempt.json','utf8')).retryOf;assert.equal(retry.attempt,'hand-'+sha(BLOCKER));assert.equal(retry.exit,1);assert.equal(retry.setAsideAs,'refused/hand-'+sha(BLOCKER)+'.refused-1');assert.ok(retry.stamp,'the retry chain names its original attempt, exit and stamp');
 });
 callerCase('CW07','a fresh objective send failure records its actual terminal before the same-ID repair request',f=>{
  const prefix=join(f.store,'objective-'+sha('same-source-escalation'));f.env.FIXTURE_ORIGINAL_EXIT='3';acceptOwned(emitObjective(f,{rounds:2}));

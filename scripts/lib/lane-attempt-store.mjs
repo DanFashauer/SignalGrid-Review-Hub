@@ -2,7 +2,7 @@
 // Initialize separately after preserving old receipts and verifying no old attempt is in flight.
 import { spawnSync } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
-import { closeSync, constants, fstatSync, fsyncSync, ftruncateSync, lstatSync, mkdirSync, openSync, readFileSync, readdirSync, realpathSync, renameSync, writeFileSync } from "node:fs";
+import { closeSync, constants, fstatSync, fsyncSync, ftruncateSync, linkSync, lstatSync, mkdirSync, openSync, readFileSync, readdirSync, realpathSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -34,9 +34,9 @@ export function deliveryRecordDirectory(root, initialize = false) {
   return directory;
 }
 
-// The tick must recover on its own (owner, 2026-11-01). A missing marker means the
-// store was never (fully) initialized: initialize it, renaming any orphan directory
-// aside (never deleted). A present but damaged marker stays held.
+// The tick must recover on its own (owner, 2026-11-01), but only a store that does
+// not exist at all is initialized automatically. A directory without its marker, or
+// a marker without its directory, is never reset: it stays held, naming the path.
 export function ensureDeliveryRecordDirectory(root) {
   try { return deliveryRecordDirectory(root); } catch (first) {
     const env = { ...process.env };
@@ -44,16 +44,30 @@ export function ensureDeliveryRecordDirectory(root) {
     const common = spawnSync("git", ["rev-parse", "--path-format=absolute", "--git-common-dir"], { cwd: root, env, encoding: "utf8" });
     if (common.status !== 0) throw first;
     const directory = join(realpathSync(common.stdout.trim()), "signalgrid-lane-records");
-    let markerPresent = true;
-    try { lstatSync(directory + ".json"); } catch (error) { if (error.code !== "ENOENT") throw error; markerPresent = false; }
-    if (markerPresent) throw first; // a damaged marker stays held
+    // Serialize check + init across concurrent ticks with an O_EXCL lock beside the
+    // store. A lock older than 60 s belongs to an initializer that died (init takes
+    // milliseconds) and is taken over; a younger one is waited on, up to 15 s.
+    const lock = directory + ".init.lock";
+    for (let waited = 0; ; waited += 100) {
+      try { closeSync(openSync(lock, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600)); break; }
+      catch (error) {
+        if (error.code !== "EEXIST") throw error;
+        try { if (Date.now() - lstatSync(lock).mtimeMs > 60000) { unlinkSync(lock); continue; } }
+        catch (stale) { if (stale.code === "ENOENT") continue; throw stale; }
+        if (waited >= 15000) throw Error(`store initialization lock ${lock} is held; holding`);
+        Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 100);
+      }
+    }
     try {
-      lstatSync(directory);
-      const aside = `${directory}.orphan-${process.pid}-${randomBytes(4).toString("hex")}`;
-      renameSync(directory, aside);
-      console.error(`delivery record store recovered: orphan ${directory} moved aside to ${aside}`);
-    } catch (error) { if (error.code !== "ENOENT") throw error; }
-    try { return deliveryRecordDirectory(root, true); } catch { return deliveryRecordDirectory(root); } // a concurrent init won
+      try { return deliveryRecordDirectory(root); } catch { /* still uninitialized: decide under the lock */ }
+      let markerPresent = true;
+      try { lstatSync(directory + ".json"); } catch (error) { if (error.code !== "ENOENT") throw error; markerPresent = false; }
+      if (markerPresent) throw first; // a damaged marker stays held
+      let directoryPresent = true;
+      try { lstatSync(directory); } catch (error) { if (error.code !== "ENOENT") throw error; directoryPresent = false; }
+      if (directoryPresent) throw Error(`store directory ${directory} exists without its marker; held, never reset automatically`);
+      return deliveryRecordDirectory(root, true);
+    } finally { try { unlinkSync(lock); } catch { /* already taken over */ } }
   }
 }
 
@@ -145,11 +159,52 @@ function initializeTickGuard(directory, store) {
   writeTickJson(join(directory, "tick.slot.json"), { ...binding, state: "READY" });
 }
 
-// Called only while this tick holds the kernel guard: an old tick.lock is
-// renamed aside (kept as evidence), never deleted and never waited on.
+// Guard capacity alone is not cleanup: a descendant may have closed FD8 and kept
+// running. Recovery needs positive evidence that the original tick is gone: its
+// shell PID is dead (ESRCH; alive or EPERM holds) and, when its owner record names
+// a process group other than ours, that group is empty. launchd runs the tick from
+// ~/Library/LaunchAgents/com.signalgrid.lane-tick.plist, which sets no
+// AbandonProcessGroup key, so launchd's default (false) applies: when a tick job
+// exits, launchd kills its whole process group.
+function processGroupOf(pid) {
+  const r = spawnSync("ps", ["-o", "pgid=", "-p", String(pid)], { encoding: "utf8" });
+  const pgid = Number(r.stdout?.trim());
+  return r.status === 0 && Number.isSafeInteger(pgid) && pgid > 0 ? pgid : null;
+}
+// Descendants (objective-loop publishers, sim-request commands, lane-deliver) do not
+// hold FD8, so they are looked for directly: any process left in the recorded group
+// (when it is not our own), naming the old token, or running in a lane-deliver
+// worktree (sg-lane-deliver-*) holds recovery.
+function assertOriginalGone(shellPid, { pgid = null, token = null } = {}) {
+  try { process.kill(shellPid, 0); }
+  catch (error) {
+    if (error.code !== "ESRCH") throw Error(`original tick shell ${shellPid} liveness is unknown (${error.code}); holding`);
+    if (pgid === null && token === null) return;
+    const own = processGroupOf(process.pid);
+    const ps = spawnSync("ps", ["-axo", "pid=,pgid=,command="], { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+    if (ps.error || ps.signal || ps.status !== 0 || own === null) throw Error("process table is unreadable; holding");
+    for (const line of ps.stdout.split("\n")) {
+      const m = /^\s*(\d+)\s+(\d+)\s(.*)$/.exec(line);
+      if (!m || Number(m[1]) === process.pid) continue;
+      const group = Number(m[2]), command = m[3];
+      if ((pgid !== null && group === pgid && pgid !== own) || (token && command.includes(token)) || command.includes("sg-lane-deliver-")) {
+        throw Error(`process ${m[1]} of the original tick may survive (${command.slice(0, 120)}); holding`);
+      }
+    }
+    return;
+  }
+  throw Error(`original tick shell ${shellPid} is still alive; holding`);
+}
+
+// Called only while this tick holds the kernel guard: an old tick.lock whose
+// recorded PID is positively dead is renamed aside (kept), never deleted.
 function setAsideLegacyTickLock(directory, stamp) {
   const legacy = join(directory, "tick.lock");
   try { lstatSync(legacy); } catch (error) { if (error.code === "ENOENT") return null; throw error; }
+  let pid = NaN;
+  try { pid = Number(readFileSync(join(legacy, "pid"), "utf8").trim()); } catch { /* no recorded holder */ }
+  if (!Number.isSafeInteger(pid) || pid <= 0) throw Error("legacy tick.lock names no holder PID; no positive evidence it is gone; holding");
+  assertOriginalGone(pid);
   const aside = `tick.lock.abandoned-${stamp}-${randomBytes(4).toString("hex")}`;
   renameSync(legacy, join(directory, aside));
   return `legacy tick.lock moved aside to ${aside}`;
@@ -202,6 +257,7 @@ function ownedGuard(root, shellPid) {
 const BASE_KEYS = ["version", "directory", "store", "guard", "state"];
 const OPEN_KEYS = [...BASE_KEYS, "token", "shellPid", "openedSha256"];
 const OWNER_KEYS = [...BASE_KEYS, "token", "shellPid", "openedAt"];
+const ownerKeys = (value) => (value && Object.hasOwn(value, "pgid") ? [...OWNER_KEYS, "pgid"] : OWNER_KEYS);
 const TERMINAL_KEYS = [...BASE_KEYS, "token", "shellPid", "openedSha256", "exitTrapStatus", "closedAt"];
 
 // An ABANDONED tick may have died before publishing its owner record.
@@ -211,8 +267,9 @@ function readOwnerRecord(binding, token, abandoned) {
 }
 
 function assertOwner(record, binding, token, shellPid) {
-  keysExactly(record.value, OWNER_KEYS);
+  keysExactly(record.value, ownerKeys(record.value));
   assertBinding(record.value, binding);
+  if (Object.hasOwn(record.value, "pgid") && (!Number.isSafeInteger(record.value.pgid) || record.value.pgid <= 0)) throw Error("tick owner process group is invalid");
   if (record.value.state !== "OPEN" || record.value.token !== token || record.value.shellPid !== shellPid ||
       typeof record.value.openedAt !== "string" || !Number.isFinite(Date.parse(record.value.openedAt))) throw Error("tick owner record differs");
 }
@@ -257,15 +314,18 @@ function recoverOpenSlot(binding, slot, stamp) {
     assertOwner(owner, binding, token, shellPid);
     if (digest(owner.raw) !== openedSha256) throw Error("abandoned tick owner bytes differ");
   }
+  assertOriginalGone(shellPid, { pgid: owner?.value.pgid ?? null, token });
   const terminalPath = join(binding.directory, `tick-${token}.terminal.json`);
   let actual;
   try { actual = readTickJson(terminalPath); } catch (error) { if (error.code !== "ENOENT") throw error; }
   if (actual) {
-    // Interrupted between its own CLOSED terminal and the slot write: close onto that terminal.
+    // Interrupted between a terminal (its own CLOSED, or an earlier recovery's
+    // ABANDONED) and the slot write: close onto that exact terminal.
     keysExactly(actual.value, TERMINAL_KEYS);
     assertBinding(actual.value, binding);
-    if (actual.value.state !== "CLOSED" || actual.value.token !== token || actual.value.shellPid !== shellPid ||
-        actual.value.openedSha256 !== openedSha256) throw Error("open tick has a foreign terminal");
+    const st = actual.value.state;
+    if (!(st === "CLOSED" || (st === "ABANDONED" && actual.value.exitTrapStatus === null)) || actual.value.token !== token ||
+        actual.value.shellPid !== shellPid || actual.value.openedSha256 !== openedSha256) throw Error("open tick has a foreign terminal");
   } else {
     actual = writeTickJson(terminalPath, { version: 1, directory: binding.directory, store: binding.store, guard: binding.guard,
       state: "ABANDONED", token, shellPid, openedSha256, exitTrapStatus: null, closedAt: new Date().toISOString() });
@@ -296,7 +356,8 @@ export function checkTickOwner(root, token, shellPid) {
     openedSha256: slot.value.openedSha256 });
 }
 
-export function acquireTick(root, shellPid) {
+export function acquireTick(root, shellPid, pgid = null) {
+  if (pgid !== null && !/^[1-9][0-9]*$/.test(String(pgid))) throw Error("tick process group must be a positive integer");
   const owned = ownedGuard(root, shellPid);
   const { binding } = owned;
   const stamp = new Date().toISOString().replace(/[:.]/g, "");
@@ -306,7 +367,8 @@ export function acquireTick(root, shellPid) {
   acquireTick.recovered = recovered.filter(Boolean);
   const token = randomBytes(16).toString("hex");
   const base = { version: 1, directory: binding.directory, store: binding.store, guard: binding.guard };
-  const owner = { ...base, state: "OPEN", token, shellPid: owned.shellPid, openedAt: new Date().toISOString() };
+  const owner = { ...base, state: "OPEN", token, shellPid: owned.shellPid, openedAt: new Date().toISOString(),
+    ...(pgid === null ? {} : { pgid: Number(pgid) }) };
   const open = { ...base, state: "OPEN", token, shellPid: owned.shellPid, openedSha256: digest(encoded(owner)) };
   // OPEN is committed first. A failed/missing immutable owner never becomes a
   // fresh first run, even if this process and the kernel lock later disappear.
@@ -340,6 +402,47 @@ export function releaseTick(root, token, shellPid, exitTrapStatus) {
   readSlot(current);
 }
 
+// A refused original (lane-deliver exit 1/2) may be retried only on a readback
+// that proves nothing was published. lane-deliver writes its receipt, naming the
+// random target branch, immediately before its one push, so no receipt means no
+// push. With a receipt, the target ref is read on origin: present -> "published"
+// (readback-only, never resent); absent -> "unpublished" (retry); unreadable or
+// unnamed -> "unknown" (hold). A failed read is never taken as absence.
+export function refusedDisposition(root, receiptPath) {
+  let raw;
+  try { raw = readFileSync(receiptPath, "utf8"); } catch (error) { return error.code === "ENOENT" ? "unpublished" : "unknown"; }
+  let target;
+  try { target = JSON.parse(raw).target; } catch { return "unknown"; }
+  if (typeof target !== "string" || !/^lane\/[a-z]+-mail-[0-9]{8}-[0-9]{6}Z-[a-f0-9]{12}$/.test(target)) return "unknown";
+  const env = { ...process.env, GIT_TERMINAL_PROMPT: "0" };
+  for (const key of ["GIT_DIR", "GIT_WORK_TREE", "GIT_COMMON_DIR"]) delete env[key];
+  // ponytail: the timeout kills git only, not an ssh helper; same bound as the tick fetch would need a group wrapper.
+  const r = spawnSync("git", ["ls-remote", "origin", "refs/heads/" + target], { cwd: root, env, encoding: "utf8", timeout: 60000 });
+  if (r.error || r.signal || r.status !== 0) return "unknown";
+  return r.stdout.trim() ? "published" : "unpublished";
+}
+
+// The one rule for every refused-attempt retry branch (build-tick, objective-loop,
+// lane-repair, pending-heartbeat notice). Only when refusedDisposition proves nothing
+// was published are the attempt's files (all `<name>.*` except a repair request)
+// moved, byte-identical, to refused/<name>.refused-<n>.<suffix> with n the first
+// unused integer: deterministic, no clock or randomness, and link+unlink so an
+// existing name is never overwritten. Returns the retry identity, or null (held).
+export function setAsideRefusedAttempt(root, directory, name, exit) {
+  if (refusedDisposition(root, join(directory, name + ".submission.json")) !== "unpublished") return null;
+  const refused = join(directory, "refused");
+  mkdirSync(refused, { recursive: true, mode: 0o700 });
+  const taken = new Set(readdirSync(refused));
+  let n = 1;
+  while ([...taken].some((file) => file.startsWith(`${name}.refused-${n}.`))) n++;
+  for (const file of readdirSync(directory)) {
+    if (!file.startsWith(name + ".") || file.endsWith(".repair-request.json")) continue;
+    linkSync(join(directory, file), join(refused, `${name}.refused-${n}${file.slice(name.length)}`));
+    unlinkSync(join(directory, file));
+  }
+  return { attempt: name, exit: Number(exit), setAsideAs: `refused/${name}.refused-${n}` };
+}
+
 let entrypoint;
 // node -e consumers can use a label instead of a filename in argv[1].
 try { if (process.argv[1]) entrypoint = realpathSync(process.argv[1]); } catch { /* imported library */ }
@@ -351,9 +454,11 @@ if (entrypoint === fileURLToPath(import.meta.url)) {
     else if (mode === "ensure" && args.length === 0) console.log(ensureDeliveryRecordDirectory(root));
     else if (mode === "tick-guard" && args.length === 0) console.log(tickGuardPath(root));
     // Line 1 is the token; any further lines say what was recovered.
-    else if (mode === "tick-acquire" && args.length === 1) console.log([acquireTick(root, args[0]), ...acquireTick.recovered.map((n) => "recovered: " + n)].join("\n"));
+    else if (mode === "tick-acquire" && (args.length === 1 || args.length === 2)) console.log([acquireTick(root, args[0], args[1] ?? null), ...acquireTick.recovered.map((n) => "recovered: " + n)].join("\n"));
+    else if (mode === "refused-disposition" && args.length === 1) console.log(refusedDisposition(root, args[0]));
+    else if (mode === "retry-refused" && args.length === 3) console.log(JSON.stringify(setAsideRefusedAttempt(root, ...args)));
     else if (mode === "tick-release" && args.length === 3) releaseTick(root, ...args);
-    else throw Error("usage: lane-attempt-store.mjs path|init|ensure|tick-guard <checkout> | tick-acquire <checkout> <shell-pid> | tick-release <checkout> <token> <shell-pid> <exit-trap-status>");
+    else throw Error("usage: lane-attempt-store.mjs path|init|ensure|tick-guard <checkout> | tick-acquire <checkout> <shell-pid> [<pgid>] | refused-disposition <checkout> <receipt> | retry-refused <checkout> <records> <attempt-name> <exit> | tick-release <checkout> <token> <shell-pid> <exit-trap-status>");
   } catch (error) {
     console.error(`RAISED HAND: delivery record store unavailable: ${error.message}; READBACK ONLY`);
     process.exitCode = error instanceof TickBusy ? 75 : 1;

@@ -3,12 +3,12 @@
 // DIFFERENT Cloud uncertainty notice; its own intent consumes an unconfirmed send.
 // A refused send (lane-deliver exit 1/2: nothing published) is moved aside and retried.
 import { spawnSync } from 'node:child_process';
-import { createHash, randomBytes } from 'node:crypto';
-import { closeSync, constants, fstatSync, fsyncSync, lstatSync, mkdirSync, openSync,
-  opendirSync, readFileSync, readSync, realpathSync, renameSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { closeSync, constants, fstatSync, fsyncSync, lstatSync, openSync,
+  opendirSync, readdirSync, readFileSync, readSync, realpathSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { checkTickOwner, deliveryRecordDirectory } from './lane-attempt-store.mjs';
+import { checkTickOwner, deliveryRecordDirectory, setAsideRefusedAttempt } from './lane-attempt-store.mjs';
 
 const MAX_RECORD = 1024 * 1024;
 const MAX_TOTAL = 16 * MAX_RECORD;
@@ -256,6 +256,11 @@ function committedConsumer(root) {
   return { head, source_sha256: sha(named) };
 }
 function noticeRoot(store, id) { return join(store.directory, id); }
+// The set-aside terminals of earlier refused sends of this notice: the retry chain.
+function refusedNotices(store, id) {
+  try { return readdirSync(join(store.directory, 'refused')).filter(n => n.startsWith(id + '.refused-') && n.endsWith('.terminal.json')).sort().map(n => 'refused/' + n); }
+  catch (error) { if (error.code === 'ENOENT') return []; throw error; }
+}
 function inventory(store) {
   const requests = [], consumed = new Set(), directory = opendirSync(store.directory);
   let count = 0;
@@ -306,7 +311,8 @@ function publishPrepared(root, prepared, token, shellPid, store) {
       at: new Date().toISOString(), request_sha256: sha(record.raw), request_id: request.id,
       original_intent_sha256: request.original_attempt.intent_sha256, consumer,
       owner: { token: owner.token, shellPid: owner.shellPid, store: owner.store,
-        guard: owner.guard, openedSha256: owner.openedSha256 }, readback_only: true }));
+        guard: owner.guard, openedSha256: owner.openedSha256 }, readback_only: true,
+      ...(() => { const retry_of = refusedNotices(store, request.id); return retry_of.length ? { retry_of } : {}; })() }));
   } catch (error) {
     if (error.code === 'EEXIST') return { consumed: true, attempted: false };
     throw error;
@@ -326,11 +332,10 @@ function publishPrepared(root, prepared, token, shellPid, store) {
     at: new Date().toISOString(), request_id: request.id, status: result.status,
     signal: result.signal ?? null, error: result.error?.code ?? null, pid: result.pid ?? null,
     readback_only: true, canonical_merge_verified: false }));
-  if (!result.signal && !result.error && (result.status === 1 || result.status === 2)) {
-    // lane-deliver exit 1/2 published nothing: move this notice aside so the next drain retries it.
-    const aside = join(store.directory, 'refused', new Date().toISOString().replace(/[:.]/g, '') + '-' + process.pid + '-' + randomBytes(4).toString('hex') + '-');
-    mkdirSync(dirname(aside), { recursive: true, mode: 0o700 });
-    for (const file of Object.values(files)) if (present(file)) renameSync(file, aside + basename(file));
+  // A readback proving nothing was published moves this notice aside (shared rule)
+  // so the next drain retries it; the request itself stays.
+  if (!result.signal && !result.error && (result.status === 1 || result.status === 2) &&
+      setAsideRefusedAttempt(root, store.directory, request.id, result.status)) {
     throw Error('different repair notice was refused (exit ' + result.status + '); nothing published, retried next drain');
   }
   if (result.status !== 0 || result.signal || result.error) throw Error('different repair notice is unconfirmed and consumed');

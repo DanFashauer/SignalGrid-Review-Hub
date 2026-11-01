@@ -202,17 +202,19 @@ raise_hand() {
         if (repair.error || repair.signal || repair.status !== 0) throw Error("original held; repair DATA request is unconfirmed");
       };
       const hasEvidence = original => fs.readdirSync(cache).some(name => name.startsWith(path.basename(original) + "."));
-      let episode = cause, attempt = path.join(cache, "hand-" + episode);
+      let episode = cause, attempt = path.join(cache, "hand-" + episode), retryOf = null;
       while (hasEvidence(attempt)) {
         try {
           if (visited.has(attempt)) throw Error("repeated clearance binding");
           visited.add(attempt);
           let exit = null; try { exit = read(attempt + ".exit").trim(); } catch { /* unknown stays held below */ }
+          // Exit 1/2 is retried only when a readback proves nothing was published;
+          // a published or unreadable target falls through to the held path below.
           if (exit === "1" || exit === "2") {
-            // lane-deliver exit 1/2 published nothing: keep the evidence (renamed aside) and retry.
-            fs.mkdirSync(path.join(cache, "refused"), { recursive: true, mode: 0o700 });
-            for (const name of fs.readdirSync(cache)) if (name.startsWith(path.basename(attempt) + ".")) fs.renameSync(path.join(cache, name), path.join(cache, "refused", stamp + "-" + process.pid + "-" + require("crypto").randomBytes(4).toString("hex") + "-" + name));
-            break;
+            const moved = require("child_process").spawnSync(process.execPath, [path.join(repo, "scripts/lib/lane-attempt-store.mjs"),
+              "retry-refused", repo, cache, path.basename(attempt), exit], { cwd: repo, encoding: "utf8" });
+            retryOf = moved.status === 0 ? JSON.parse(moved.stdout) : null;
+            if (retryOf) { retryOf.stamp = stamp; break; }
           }
           if (JSON.parse(read(attempt + ".attempt.json")).receipt !== attempt + ".submission.json" || read(attempt + ".exit").trim() !== "0") throw Error("original parent is not known complete");
           read(attempt + ".output"); // missing original evidence never renews an attempt
@@ -228,7 +230,7 @@ raise_hand() {
         }
       }
       hand.id = "build-" + episode;
-      fs.writeFileSync(attempt + ".attempt.json", JSON.stringify({ at: stamp, state: "attempted; pending exact readback", receipt: attempt + ".submission.json" }), { flag: "wx", mode: 0o600, flush: true });
+      fs.writeFileSync(attempt + ".attempt.json", JSON.stringify({ at: stamp, state: "attempted; pending exact readback", receipt: attempt + ".submission.json", ...(retryOf ? { retryOf } : {}) }), { flag: "wx", mode: 0o600, flush: true });
       fs.writeFileSync(f, JSON.stringify([hand]));
       process.stdout.write(attempt);' \
       "$_ops" "$1" "${RUN_LOG:-launchd log ~/Library/Logs/signalgrid-build-tick.log}" "$_hand_records" "$STAMP" "$REPO_ROOT" 2>/dev/null)"; then

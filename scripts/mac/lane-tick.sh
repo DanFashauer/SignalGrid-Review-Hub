@@ -86,14 +86,18 @@ RECORD_DIR="$(node "$REPO_ROOT/scripts/lib/lane-attempt-store.mjs" ensure "$REPO
 # Linked checkouts share a persistent, identity-pinned descriptor lock. Only
 # explicit store initialization creates it; opening read-only cannot recreate it.
 # The next tick that holds the kernel guard recovers an interrupted tick's OPEN
-# slot (records it ABANDONED, CLOSES it) and renames an old tick.lock aside.
+# slot (records it ABANDONED, CLOSES it) and renames an old tick.lock aside, but
+# only on positive evidence the original is gone (dead shell, empty process group).
 # CLOSED records authorized lease finalization, not an independent parent exit,
 # accepted task, canonical delivery or provider-cleanup witness.
 TICK_LOCK_ROOT="$REPO_ROOT"
 TICK_LOCK_HELPER="$REPO_ROOT/scripts/lib/lane-attempt-store.mjs"
 TICK_GUARD_PATH="$(node "$TICK_LOCK_HELPER" tick-guard "$TICK_LOCK_ROOT")" || exit 1
 exec 8<"$TICK_GUARD_PATH" || { say "tick guard cannot be opened; READBACK ONLY"; exit 1; }
-_tick_acquired="$(node "$TICK_LOCK_HELPER" tick-acquire "$TICK_LOCK_ROOT" "$$")"
+# The owner record names this tick's process group, so a later recovery can
+# verify the whole group is gone (not only this shell) before closing its slot.
+_tick_pgid="$(ps -o pgid= -p $$ | tr -d ' ')"
+_tick_acquired="$(node "$TICK_LOCK_HELPER" tick-acquire "$TICK_LOCK_ROOT" "$$" ${_tick_pgid:+"$_tick_pgid"})"
 _tick_acquire_status=$?
 TICK_OWNER_TOKEN="$(printf '%s\n' "$_tick_acquired" | sed -n 1p)"
 TICK_RECOVERED="$(printf '%s\n' "$_tick_acquired" | sed -n '2,$p' | sed 's/^recovered: //' | paste -sd ';' -)"
@@ -364,7 +368,7 @@ heartbeat() {
     reason = observed.check_state === "failed" ? "terminal failed check" : observed.merge_state === "BEHIND" ? "behind canonical" : observed.age_seconds >= 3600 ? "pending at least one hour" : null;
     }
     if (!reason) { console.log("pending heartbeat metadata is current; no new notification needed"); process.exit(0); }
-    const { checkTickOwner } = await import(require("node:url").pathToFileURL(path.join(repo, "scripts/lib/lane-attempt-store.mjs")).href);
+    const { checkTickOwner, setAsideRefusedAttempt } = await import(require("node:url").pathToFileURL(path.join(repo, "scripts/lib/lane-attempt-store.mjs")).href);
     if (typeof checkTickOwner !== "function") throw Error("qualified read-only owner check unavailable");
     function activeOwner() {
       const owner = checkTickOwner(guardRoot, guardToken, shellPid), named = fs.lstatSync(records);
@@ -389,17 +393,17 @@ heartbeat() {
       push_result_sha256: observed.push_result_sha256, store: { dev: store.dev, ino: store.ino } } :
       { version: 1, kind: "pending-heartbeat-notification", attempt, receipt_sha256: sha(raw), repository: original.repository,
       target: original.target, original_head: original.head, pr_number: observed.pr_number, store: { dev: store.dev, ino: store.ino } };
+    let retryOf = null;
     if (Object.values(files).some(exists)) {
       const prior = JSON.parse(read(files.intent).toString("utf8"));
       if (JSON.stringify(prior.binding) !== JSON.stringify(binding)) throw Error("notification intent binding differs");
       read(files.ops); read(files.output);
       const terminal = JSON.parse(read(files.terminal).toString("utf8"));
       if (!Number.isInteger(terminal.status) || terminal.status < 0 || terminal.status > 255 || terminal.signal !== null || terminal.error !== null) throw Error("notification parent terminal unknown");
-      if (terminal.status === 1 || terminal.status === 2) {
-        // lane-deliver exit 1/2 published nothing: keep the evidence (renamed aside) and retry now.
-        const aside = path.join(records, "refused", new Date().toISOString().replace(/[:.]/g, "") + "-" + process.pid + "-" + crypto.randomBytes(4).toString("hex") + "-");
-        fs.mkdirSync(path.dirname(aside), { recursive: true, mode: 0o700 });
-        for (const file of Object.values(files)) if (exists(file)) fs.renameSync(file, aside + path.basename(file));
+      // Exit 1/2 is retried only when a readback proves nothing was published.
+      if ((terminal.status === 1 || terminal.status === 2) && typeof setAsideRefusedAttempt === "function" &&
+          (retryOf = setAsideRefusedAttempt(repo, records, id, terminal.status))) {
+        retryOf.stamp = new Date().toISOString();
       } else {
         read(files.receipt);
         console.log("pending heartbeat notification was already attempted; READBACK ONLY, no new hand");
@@ -413,7 +417,7 @@ heartbeat() {
         `Protected heartbeat PR #${observed.pr_number} is ${reason}; original topic ${original.target} @ ${original.head}.`,
       need: "Cloud lane: inspect the current PR checks and source, then repair or land only through the existing protected review/CI route. This hand does not authorize resending, reposting or closing the original attempt." };
     stillActive();
-    write(files.intent, { at: new Date().toISOString(), binding, state: "one distinct notification attempted; original heartbeat unchanged", receipt: files.receipt });
+    write(files.intent, { at: new Date().toISOString(), binding, state: "one distinct notification attempted; original heartbeat unchanged", receipt: files.receipt, ...(retryOf ? { retryOf } : {}) });
     write(files.ops, [op]);
     const fd = fs.openSync(files.output, fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL | fs.constants.O_NOFOLLOW, 0o600);
     let result;
@@ -565,9 +569,18 @@ use_tick_worktree() {
 }
 
 # ── a. sync, never over a person's work ──────────────────────────────────────
-# Bounded: a hung network must not hold the tick (and its guard) forever. perl's
-# alarm survives exec, so git itself receives SIGALRM at the limit.
-if ! perl -e 'alarm shift; exec @ARGV or exit 127' "${SIGNALGRID_TICK_FETCH_TIMEOUT_SEC:-120}" git fetch origin --prune >/dev/null 2>&1; then
+# Bounded: a hung network must not hold the tick (and its guard) forever. git runs
+# in its own session/process group; at the limit the WHOLE group (ssh, credential
+# helpers) gets TERM, then KILL 2 s later, and the wrapper exits 124.
+sg_run_bounded() {
+  perl -MPOSIX -e '
+    my $limit = shift; my $pid = fork; exit 125 unless defined $pid;
+    if (!$pid) { POSIX::setsid(); exec @ARGV or POSIX::_exit(127); }
+    $SIG{ALRM} = sub { kill "TERM", -$pid; sleep 2; kill "KILL", -$pid; waitpid($pid, 0); exit 124 };
+    alarm $limit; waitpid($pid, 0); my $status = $?; alarm 0;
+    exit(($status & 127) ? 128 + ($status & 127) : $status >> 8);' "$@"
+}
+if ! sg_run_bounded "${SIGNALGRID_TICK_FETCH_TIMEOUT_SEC:-120}" git fetch origin --prune >/dev/null 2>&1; then
   RESULT="skipped: origin unreachable (offline?)"
   say "$RESULT"
   heartbeat

@@ -66,10 +66,10 @@
 // not a model (no LLM is called; a model may propose by editing the prose the ranker reads), not
 // a second Mac routine (it is a step inside the pulse that already fires), not a merger (its output
 // rides the tick PR; DR-037 decides), and not the decision core (lib/*, /v1, native ports untouched).
-import { createHash, randomBytes } from "node:crypto";
+import { createHash } from "node:crypto";
 import { execFileSync, spawnSync } from "node:child_process";
-import { deliveryRecordDirectory } from "./lib/lane-attempt-store.mjs";
-import { existsSync, readFileSync, readdirSync, renameSync, writeFileSync, mkdirSync } from "node:fs";
+import { deliveryRecordDirectory, setAsideRefusedAttempt } from "./lib/lane-attempt-store.mjs";
+import { existsSync, readFileSync, readdirSync, writeFileSync, mkdirSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { auditBacklogOwnership, parseRows, rosterIds, statusText } from "./check-backlog-ownership.mjs";
@@ -637,19 +637,19 @@ function emit(state, { write, deliver }) {
         let hasEvidence = readdirSync(records).some(file => file.startsWith(name + "."));
         let prior = null;
         try { prior = JSON.parse(readFileSync(attempt + ".terminal.json", "utf8")); } catch { /* unknown stays held below */ }
-        if (hasEvidence && prior && !prior.signal && !prior.error && (prior.status === 1 || prior.status === 2)) {
-          // lane-deliver exit 1/2 published nothing: keep the evidence (renamed aside) and retry now.
-          const aside = join(records, "refused", new Date().toISOString().replace(/[:.]/g, "") + "-" + process.pid + "-" + randomBytes(4).toString("hex") + "-");
-          mkdirSync(dirname(aside), { recursive: true, mode: 0o700 });
-          for (const file of readdirSync(records)) if (file.startsWith(name + ".")) renameSync(join(records, file), aside + file);
-          hasEvidence = false; submitted.delete(e.id);
+        let retryOf = null;
+        // Exit 1/2 is retried only when a readback proves nothing was published
+        // (shared rule; deterministic aside name, no clock or randomness here).
+        if (hasEvidence && prior && !prior.signal && !prior.error && (prior.status === 1 || prior.status === 2) &&
+            (retryOf = setAsideRefusedAttempt(ROOT, records, name, prior.status))) {
+          retryOf.stamp = state.derivedAt; hasEvidence = false; submitted.delete(e.id);
         }
         if (submitted.has(e.id) || hasEvidence) {
           if (queueRepair(attempt)) lines.push(`RAISED HAND: escalation ${e.id} original attempt retained; READBACK ONLY`);
           continue;
         }
         writeFileSync(attempt + ".attempt.json", JSON.stringify({ at: state.derivedAt, escalation: e.id,
-          state: "attempted; pending exact readback", receipt: attempt + ".submission.json" }) + "\n", { flag: "wx", mode: 0o600, flush: true });
+          state: "attempted; pending exact readback", receipt: attempt + ".submission.json", ...(retryOf ? { retryOf } : {}) }) + "\n", { flag: "wx", mode: 0o600, flush: true });
       } catch {
         if (attempt) queueRepair(attempt);
         lines.push(`RAISED HAND: escalation ${e.id} already attempted or its intent cannot be preserved; READBACK ONLY (${attempt ? attempt + ".submission.json" : "shared record store unavailable"})`);

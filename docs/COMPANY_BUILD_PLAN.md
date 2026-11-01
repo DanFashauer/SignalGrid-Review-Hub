@@ -2412,7 +2412,25 @@ earlier — that is the loop working, not a reason to soften the record.
 
 82. **A credential REVOCATION can be silently undone by a concurrent enrolment —
     the one mutator in the store without the lock its neighbours carry.** — OPEN,
-    security-engineer. Found by the first read of `lib/webauthn/**` and
+    security-engineer. FIX PROPOSED 2026-09-30 (branch
+    claude/build-webauthn-revocation-race, owner merges): the defect as filed NO
+    LONGER REPRODUCES. `removeCredential` in `lib/webauthn/src/webauthn/store.ts`
+    already shares `withUserLock` and its fenced writes with `addCredential`.
+    `POST /v1/step-up/enroll/revoke` in `artifacts/api-server/src/routes/v1.ts` now
+    calls it, so the row is LIVE rather than latent. `proof:enrollment-race` passed
+    15/15 on a real Redis before any change. What was missing was a check that forces
+    the ordering. The twelve-way race only shows the bad ordering did not happen on
+    that run. Added `forcedRow82Orderings` to
+    `scripts/src/webauthn-enrollment-race-proof.ts`: it forces both orders on a real
+    Redis (enrolment reads → revocation → enrolment writes, and the mirror order). It
+    uses no timers or randomness; each step waits on an event from the store itself.
+    Falsified: with `removeCredential` put back to the unlocked
+    getUser → splice → saveUser in a scratch edit, ordering A reports `revoked=true`
+    and still leaves `cred-800` in the record, and ordering B loses the enrolment.
+    Items 2 and 3 below were already handled (the attestation policy gate in
+    `lib/webauthn/src/webauthn/verify.ts`; `hasValidStepUpSession` is marked
+    `@deprecated` in `lib/webauthn/src/stepUpStore.ts`, and deleting it is an owner
+    cut). Human compliance review still required. Found by the first read of `lib/webauthn/**` and
     `lib/enterprise-auth/**`, and INDEPENDENTLY CONFIRMED before filing.
     · `addCredential` (`store.ts:166-239`) takes a per-user `SET NX PX` Redis lock
       before its read-modify-write, and carries a long comment explaining exactly
@@ -2755,7 +2773,7 @@ earlier — that is the loop working, not a reason to soften the record.
     comments to name the write.
 
 98. **Under the gateway profile, unknown ROOT paths return Express's default HTML
-    error page.** — OPEN, api-contract-architect. RE-MEASURED 2026-10-22 (still open): `grep -n 'mounted at /api' artifacts/api-server/src/routes/index.ts` shows the JSON catch-all still scoped to the /api router (line 70), `grep -n 'demoSurfacesEnabled()' artifacts/api-server/src/app.ts` shows the only root handler registered inside `if (demoSurfacesEnabled())` at line 105, and `grep -rn not_found artifacts/api-server/src/middlewares artifacts/api-server/src/app.ts` printed no lines, so an unknown root path under the gateway profile still reaches Express's default page. RE-MEASURED 2026-10-08 (still open): `sed -n 66,78p artifacts/api-server/src/routes/index.ts` shows the JSON catch-all still scoped to the /api router on the root-serves-human-surfaces reasoning, and `grep -n demoSurfacesEnabled artifacts/api-server/src/app.ts` shows the root surfaces mounted only when the demo console is on (line 105), so an unknown root path under the gateway profile still reaches Express's default page. RE-MEASURED 2026-09-26 (still open, reproduced live today): under the gateway profile GET / and any unknown root path return Express's default HTML 404 page; the JSON catch-all in `artifacts/api-server/src/routes/index.ts` is still mounted under /api only and `artifacts/api-server/src/app.ts` registers nothing at the root when the demo console is off; the gateway console test asserts status only, not body shape. NOTE. The JSON catch-all is scoped
+    error page.** — OPEN, api-contract-architect. FIX PROPOSED 2026-09-30 (branch `claude/build-gateway-root-json-404`, owner merges): `artifacts/api-server/src/app.ts` now registers a JSON 404 catch-all after `/api` and the human surfaces (demo console, /metrics), so every unclaimed root path, including GET / under the gateway profile, answers the flat `not_found` envelope; test:api asserts it under both profiles (removing the catch-all fails both new assertions). RE-MEASURED 2026-10-22 (still open): `grep -n 'mounted at /api' artifacts/api-server/src/routes/index.ts` shows the JSON catch-all still scoped to the /api router (line 70), `grep -n 'demoSurfacesEnabled()' artifacts/api-server/src/app.ts` shows the only root handler registered inside `if (demoSurfacesEnabled())` at line 105, and `grep -rn not_found artifacts/api-server/src/middlewares artifacts/api-server/src/app.ts` printed no lines, so an unknown root path under the gateway profile still reaches Express's default page. RE-MEASURED 2026-10-08 (still open): `sed -n 66,78p artifacts/api-server/src/routes/index.ts` shows the JSON catch-all still scoped to the /api router on the root-serves-human-surfaces reasoning, and `grep -n demoSurfacesEnabled artifacts/api-server/src/app.ts` shows the root surfaces mounted only when the demo console is on (line 105), so an unknown root path under the gateway profile still reaches Express's default page. RE-MEASURED 2026-09-26 (still open, reproduced live today): under the gateway profile GET / and any unknown root path return Express's default HTML 404 page; the JSON catch-all in `artifacts/api-server/src/routes/index.ts` is still mounted under /api only and `artifacts/api-server/src/app.ts` registers nothing at the root when the demo console is off; the gateway console test asserts status only, not body shape. NOTE. The JSON catch-all is scoped
     to `/api` on the stated reasoning that "the root serves human surfaces (demo
     console, /metrics) whose defaults stand" — but under the gateway profile the demo
     console is not mounted, so that premise is false. The path IS escaped (no XSS, no

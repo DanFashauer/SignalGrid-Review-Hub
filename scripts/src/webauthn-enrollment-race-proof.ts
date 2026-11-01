@@ -226,6 +226,113 @@ async function lockLostMidWriteRace() {
   for (const c of cleanup?.credentials ?? []) await webauthnStore.removeCredential(userId, c.id);
 }
 
+/**
+ * THE ROW-82 ORDERINGS, FORCED (plan row 82, 2026-09-30). The twelve-way race in `main`
+ * shows that no lost update HAPPENED on this run, but whether its scheduling ever put the
+ * two writers in the one ordering that matters is luck. This case gives the result
+ * without the luck: it makes that ordering happen every run, on the real Redis, in both
+ * directions. There are no timers and no randomness in the test. Each step waits on an
+ * event the store itself produces.
+ *
+ *   A (the headline): the ENROLMENT reads the record, then the revocation runs, then the
+ *     enrolment writes. Unlocked, the enrolment's stale snapshot lands last and RESTORES
+ *     the credential that was just revoked, while the revocation still answers `true`.
+ *   B (the mirror): the REVOCATION reads, then the enrolment runs, then the revocation
+ *     writes. Unlocked, the revocation's snapshot erases the enrolment that just answered
+ *     `stored: true`.
+ *
+ * HOW. `IORedis.prototype.get` is wrapped (the same third-party-method stub shape as
+ * `lockLostMidWriteRace`). When the FIRST writer's read of the user record resolves, the
+ * wrapper starts the SECOND writer and holds the first writer's read open until one of two
+ * events. Either the second writer finishes (the unlocked store: nothing stops it), or its
+ * `SET NX` on the per-user lock key comes back refused (the locked store: it must wait).
+ * `IORedis.prototype.set` is wrapped only to observe that refusal. The first writer then
+ * writes, and the second completes after it. Either way both calls finish. Only the
+ * record they leave behind differs.
+ */
+async function forcedRow82Orderings() {
+  const realGet = IORedis.prototype.get;
+  const realSet = IORedis.prototype.set;
+
+  async function run(label: string, userId: string, firstIsEnrolment: boolean) {
+    const targetKey = `webauthn:user:${userId}`;
+    const lockKey = `${targetKey}:lock`;
+    const prior = await webauthnStore.getUser(userId).catch(() => null);
+    for (const c of prior?.credentials ?? []) await webauthnStore.removeCredential(userId, c.id);
+    // Two seeded credentials, so the revocation takes the SET branch and a stale write
+    // has something to restore or erase.
+    await webauthnStore.addCredential(userId, credential(800));
+    await webauthnStore.addCredential(userId, credential(801));
+
+    const enrol = () => webauthnStore.addCredential(userId, credential(802));
+    const revoke = () => webauthnStore.removeCredential(userId, "cred-800");
+
+    let secondRefused: () => void = () => undefined;
+    const secondRefusedOnce = new Promise<void>((r) => { secondRefused = r; });
+    let second: Promise<unknown> | undefined;
+    let fired = false;
+
+    (IORedis.prototype as unknown as { set: typeof realSet }).set = function (
+      this: unknown,
+      ...args: unknown[]
+    ) {
+      const call = (realSet as unknown as (...a: unknown[]) => Promise<unknown>).apply(this, args);
+      if (fired && args[0] === lockKey && args.includes("NX")) {
+        return call.then((value) => {
+          if (value !== "OK") secondRefused();
+          return value;
+        });
+      }
+      return call;
+    } as typeof realSet;
+    (IORedis.prototype as unknown as { get: typeof realGet }).get = function (
+      this: unknown,
+      ...args: Parameters<typeof realGet>
+    ) {
+      const call = (realGet as (...a: unknown[]) => Promise<string | null>).apply(this, args);
+      if (!fired && args[0] === targetKey) {
+        fired = true;
+        return call.then(async (value) => {
+          second = firstIsEnrolment ? revoke() : enrol();
+          // Swallow here only to observe completion; the real outcome is read below.
+          await Promise.race([second.then(() => undefined, () => undefined), secondRefusedOnce]);
+          return value;
+        });
+      }
+      return call;
+    } as typeof realGet;
+
+    let first: unknown;
+    let secondResult: unknown;
+    let threw: unknown;
+    try {
+      first = await (firstIsEnrolment ? enrol() : revoke());
+      secondResult = await second;
+    } catch (err) {
+      threw = err;
+    } finally {
+      IORedis.prototype.get = realGet;
+      IORedis.prototype.set = realSet;
+    }
+
+    const enrolled = (firstIsEnrolment ? first : secondResult) as { stored: boolean } | undefined;
+    const revoked = (firstIsEnrolment ? secondResult : first) as boolean | undefined;
+    const after = await webauthnStore.getUser(userId);
+    const ids = (after?.credentials ?? []).map((c) => c.id);
+    const detail = `fired=${fired} threw=${String(threw)} revoked=${String(revoked)} stored=${String(enrolled?.stored)} after=[${ids.join(", ")}]`;
+    check(`${label}: the ordering was actually forced (the first writer's read was intercepted)`, fired && second !== undefined, detail);
+    check(`${label}: both calls reported success`, threw === undefined && revoked === true && enrolled?.stored === true, detail);
+    check(`${label}: the revoked credential STAYS revoked`, !ids.includes("cred-800"), detail);
+    check(`${label}: the concurrent enrolment survived`, ids.includes("cred-802"), detail);
+    check(`${label}: the untouched credential survived`, ids.includes("cred-801"), detail);
+
+    for (const c of after?.credentials ?? []) await webauthnStore.removeCredential(userId, c.id);
+  }
+
+  await run("A enrolment reads → revocation → enrolment writes", "t_proof:row82-a", true);
+  await run("B revocation reads → enrolment → revocation writes", "t_proof:row82-b", false);
+}
+
 async function main() {
   console.log("Revocation/enrolment interleave (in-memory store)\n");
   await inMemoryRevocationSweep();
@@ -316,6 +423,10 @@ async function main() {
   check("the earlier enrolments were untouched by the revocation", stillThere.length === 0, `missing: ${stillThere.join(", ")}`);
 
   for (const c of afterRace?.credentials ?? []) await webauthnStore.removeCredential(USER_ID, c.id);
+
+  console.log("");
+  console.log("Row-82 orderings, forced — a revocation and an enrolment in the one order that matters\n");
+  await forcedRow82Orderings();
 
   console.log("");
   console.log("Lock-lease fence — a lock deleted mid-section must refuse the write, not apply it\n");

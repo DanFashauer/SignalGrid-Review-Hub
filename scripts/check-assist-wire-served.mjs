@@ -57,6 +57,43 @@ export function specDeclaresObligations(specYaml) {
   return /^\s{8}obligations:/m.test(m[2]);
 }
 
+/**
+ * Self-test only: `specYaml` with a synthetic `obligations` property spliced in right
+ * after the AssistResult's `decisionId` line, whatever that line's own contents are —
+ * so a later, unrelated edit to the line (a `minLength`, a description, a reformat)
+ * can never turn this plant into a silent no-op the way a literal two-line anchor once
+ * did. Measured 2026-09-27: adding `, minLength: 1` to `decisionId: { type: string }`
+ * broke a `.replace()` anchored on the old two-line literal `decisionId: { type: string
+ * }\n        reasons:`, and the self-test went on reporting the two checks that DEPEND
+ * on the plant as failures, with nothing naming the plant itself as the thing that
+ * broke. `the obligations plant found its anchor`, below, is the fix: it compares this
+ * function's output against its input, so a future anchor drift fails by that name
+ * instead of leaving two unexplained downstream FAILs.
+ *
+ * Scoped to the AssistResult block, not a file-wide replace: `decisionId` is also a
+ * property of other schemas further down this document (EvaluateResult, the step-up
+ * and audit records), so an unscoped regex would plant into whichever `decisionId:`
+ * line happens to come first in the file — the same "first match in the whole
+ * document, not the thing you meant" blind spot `gapNaming` above exists to avoid for
+ * `/v1/authorize`.
+ *
+ * Returns `specYaml` UNCHANGED when the AssistResult block, or a `decisionId` line
+ * inside it, cannot be found — noticing that is the self-test's job, not this
+ * function's, so it never throws.
+ */
+export function plantObligationsAfterDecisionId(specYaml) {
+  const block = specYaml.match(/^( {4})AssistResult:\n([\s\S]*?)(?=^\1\S)/m);
+  if (!block) return specYaml;
+  const decisionIdLine = /^ {8}decisionId:.*$/m;
+  if (!decisionIdLine.test(block[2])) return specYaml;
+  const dopedBody = block[2].replace(
+    decisionIdLine,
+    (line) => `${line}\n        obligations:\n          type: array\n          items: { type: string }`,
+  );
+  const bodyStart = block.index + block[1].length + "AssistResult:\n".length;
+  return specYaml.slice(0, bodyStart) + dopedBody + specYaml.slice(bodyStart + block[2].length);
+}
+
 export function auditAssistWire({ vectorsJson, specYaml, gapsSrc, kotlinSrc, rustSrc, appSrc = "", readmeSrcs = {} }) {
   const problems = [];
   let vectors;
@@ -215,10 +252,8 @@ function selfTest() {
   // READMEs say so"; each half is inverted against the real files.
   checks.push(["the committed spec's AssistResult declares NO obligations (premise for the two cases below)", specDeclaresObligations(base.specYaml) === false]);
   {
-    const specWithObligations = base.specYaml.replace(
-      "        decisionId: { type: string }\n        reasons:",
-      "        decisionId: { type: string }\n        obligations:\n          type: array\n          items: { type: string }\n        reasons:",
-    );
+    const specWithObligations = plantObligationsAfterDecisionId(base.specYaml);
+    checks.push(["the obligations plant found its anchor (the spec text actually changed)", specWithObligations !== base.specYaml]);
     checks.push(["planting `obligations` into the AssistResult schema is detected by the block reader", specDeclaresObligations(specWithObligations) === true]);
     r = auditAssistWire({ ...base, specYaml: specWithObligations });
     checks.push(["a spec that ADDS obligations while a README says it declares none FAILS (stale SDK doc)", r.problems.some((x) => x.includes("the SDK doc is stale"))]);

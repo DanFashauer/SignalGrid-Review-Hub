@@ -482,7 +482,7 @@ in one place.
   graded against a bound the caller poses — a replayed snapshot never grants when the caller stamps the age at evaluation time. Fail-closed;
   the sweep of all 4,320 combos pins the single grant and 230,400 raw wire reports grant
   exactly twice (the two spellings of a clear ledger); the family stays deferred in the
-  launch profile — built, not claimed. `proof:rtls-custody` (223 checks).
+  launch profile — built, not claimed. `proof:rtls-custody` (227 checks).
 
 - **Platform SSO** ([PLATFORM_SSO.md](PLATFORM_SSO.md)) — "passwordless" and "satisfies MFA"
   are not automatic; the **method** decides the credential's worth. Only a user-registered
@@ -505,7 +505,7 @@ in one place.
   emitter records what WOULD have been sent with a literal `delivered: false` on every entry —
   after the syslog family was found returning `status:'sent'` for events it silently dropped,
   the surface is shaped so that claim is unrepresentable. Routing (`response-accountability`)
-  stays a verdict; emission stays an act behind this gate. `proof:emitter-discipline` (139 checks).
+  stays a verdict; emission stays an act behind this gate. `proof:emitter-discipline` (164 checks).
 
 - **CAEP / Shared Signals session-signal emitter** — the sixth family, and the outbound half of
   continuous access evaluation (intake ledger row 17, built on the owner's keep-going): telling
@@ -717,7 +717,7 @@ proof reports — the numbers below are therefore evidence, not claims.
   model catalog, neither of which is a UEM read. The axis is also proved **carried, not
   graded** — swapping only `cellularHardware` across all 1,440 swept states changes no
   verdict, because a device's radio is not a management-posture fact.
-- **`proof:nac` (46 checks)** — Cisco ISE and Aruba ClearPass endpoint identity,
+- **`proof:nac` (59 checks)** — Cisco ISE and Aruba ClearPass endpoint identity,
   read-only. Hostile-identifier cases are asserted against the **filter builder**, not
   merely the validator, and fixture lookups are scoped to the identifier kind so a
   certificate query cannot be answered by a MAC match. The normalizers now take **no
@@ -784,7 +784,7 @@ proof reports — the numbers below are therefore evidence, not claims.
   deployment without `REDIS_URL` set, which is this package's documented default. The
   id rule is an **allowlist** (`/^[A-Za-z0-9._-]{1,128}$/`), so the characters nobody
   thought of are refused by default rather than enumerated by someone who tried.
-- **`proof:network-nac` (64 checks)** — 802.1X / NAC access posture, read-only. The
+- **`proof:network-nac` (68 checks)** — 802.1X / NAC access posture, read-only. The
   device's network SEGMENT is now evaluated against an operator-supplied policy rather
   than merely carried: an unexpected VLAN steps up, a segment the operator marked
   high-consequence (management / security / OT) restricts, and a policy that cannot be

@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 2,
+  "id": "cloud-live-evidence-is-7-7-days-old-one-refresh-",
+  "from": "cloud",
+  "to": "mac",
+  "subject": "Live evidence is 7.7 days old; one refresh when a Mac session is on SignalGrid_Alpha",
+  "body": "artifacts/live-evidence/mac-run.json was last committed 2026-10-24 (01:59 -0400). Your ack in #1709 said the 2026-10-21 re-mint covered the earlier ask; the file is now 7.7 days behind mainline 5295c762 and readiness dimension (b) reads it. When a Mac session next sits on a clean SignalGrid_Alpha checkout, run once: SIGNALGRID_MCP_PATH=<path> pnpm run verify:all --require-mcp --emit-evidence --vm-native-build. Not urgent ahead of #1698; no owner action.",
+  "sentAt": "2026-10-31T19:29:11.026Z"
+}

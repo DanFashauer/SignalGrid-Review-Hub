@@ -21,6 +21,7 @@ import {
   createMockGraphTransport,
   guardReadOnly,
   resolveGraphPostureConnector,
+  toEstateSubjects,
   type GraphManagedDeviceRaw,
   type GraphPostureSignal,
   type GraphRequest,
@@ -339,6 +340,38 @@ checkLiveGateIsolated({
   });
 }
 
+
+// THE MOCK TRANSPORT'S REFUSALS AND THE ESTATE MAPPING (wave 9 joined `graph/mock-transport.ts` and
+// `graph/estate.ts` to this target). Three guards survived `if (false)` with this proof green:
+//   * the mock's non-GET refusal (405) — the connector only ever sends GET, so it was never driven;
+//   * the mock's 403 for a tenant that has not granted IdentityRiskyUser.Read.All — the "403 -> every
+//     subject grades unknown" check above is real, but without this guard `page(undefined, ...)`
+//     throws inside the mock and the connector fails closed to the same unknown, so the check could
+//     not tell the mock was serving a 403 at all;
+//   * `toEstateSubjects`'s ownerless skip — an ownerless device must be SKIPPED AND COUNTED, never
+//     given a shared synthetic identity (the mapping's own header). No check here fed it a null owner.
+{
+  const mock = createMockGraphTransport({ users: fixture.users, devices: fixture.devices, expectedToken: fixture.accessToken, baseUrl: BASE_URL });
+  const auth = { authorization: `Bearer ${fixture.accessToken}` };
+  const post = await mock({ method: "POST", url: `${BASE_URL}/users`, headers: auth } as never);
+  check("mock transport: a non-GET request with a valid token is refused 405, not served", post.status === 405 && post.ok === false);
+  const risky = await mock({ method: "GET", url: `${BASE_URL}/identityProtection/riskyUsers`, headers: auth });
+  check("mock transport: riskyUsers absent from the tenant is a 403 Authorization_RequestDenied, not a thrown error or an empty 200",
+    risky.status === 403 && JSON.stringify(await risky.json()) === JSON.stringify({ error: { code: "Authorization_RequestDenied" } }));
+  const usersOk = await mock({ method: "GET", url: `${BASE_URL}/users`, headers: auth });
+  check("mock transport: NON-VACUITY — a valid-token GET to /users IS served (200)", usersOk.status === 200 && usersOk.ok === true);
+
+  const template = noScopeSignals[0]!;
+  const owned = { ...template, subjectId: "user-owned", deviceId: "dev-owned" };
+  const ownerless = { ...template, subjectId: null, deviceId: "dev-ownerless" };
+  const mapped = toEstateSubjects([owned, ownerless, { ...ownerless, deviceId: "dev-ownerless-2" }]);
+  check("estate: an ownerless device is SKIPPED and COUNTED, never given an invented subject",
+    mapped.skippedOwnerless === 2 && mapped.subjects.length === 1 && mapped.subjects[0]!.identity.externalRef === "user-owned");
+  check("estate: NON-VACUITY — a fully-owned read maps every device and skips none",
+    (() => { const m = toEstateSubjects([owned]); return m.skippedOwnerless === 0 && m.subjects.length === 1; })());
+  check("estate: no mapped subject carries the literal \"null\" or a shared synthetic identity",
+    mapped.subjects.every((sub) => sub.identity.externalRef !== "null" && sub.identity.externalRef !== "unknown"));
+}
 
 const total = passed + failures.length;
 console.log(`summary=${failures.length === 0 ? "pass" : "fail"} (${passed}/${total})`);

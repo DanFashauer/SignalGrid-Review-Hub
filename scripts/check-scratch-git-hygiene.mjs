@@ -109,7 +109,9 @@ export function stripComments(text) {
 
 const RE_MKDTEMP = /mkdtemp/;
 const RE_GIT = /["'`]git["'`]|\bgit\s/;
-const RE_INITCLONE = /["'`](?:git\s+(?:-[cC]\s+\S+\s+)*)?(?:init|clone)\b|\bgit\s+(?:-[cC]\s+\S+\s+)*(?:init|clone)\b/;
+// A quoted token must be the WHOLE word followed by a quote or whitespace: `"init"`, `"clone"`, `"git init -q"`.
+// `\b` alone matched `"clone-proof"` (a launch-claims marker string) and flagged a file that makes no repo.
+const RE_INITCLONE = /["'`](?:git\s+(?:-[cC]\s+\S+\s+)*)?(?:init|clone)(?=["'`\s])|\bgit\s+(?:-[cC]\s+\S+\s+)*(?:init|clone)\b/;
 const HELPER_CALLS = ["scratchGit", "scratchGitOk"];
 
 /** @param {{path:string,text:string}[]} files @returns {string[]} paths that create scratch repos */
@@ -267,6 +269,47 @@ export function helperBattery(mod, root) {
     writeFileSync(hcfg, `[core]\n\thooksPath = ${hooks}\n`);
     exercise("global failing hook", () => ({ GIT_CONFIG_GLOBAL: hcfg }));
     exercise("empty identity env", () => ({ GIT_AUTHOR_NAME: "", GIT_COMMITTER_NAME: "" }));
+    // GIT_NAMESPACE: only the receiving side of a push honours it (a local commit ignores it), so push into a bare
+    // scratch repo with a decoy namespace in the caller's env: the ref must land on refs/heads/main, not under refs/namespaces/.
+    {
+      const src = mkdtempSync(join(root, "scratch-ns-src-"));
+      const tgt = mkdtempSync(join(root, "scratch-ns-tgt-"));
+      set({ GIT_NAMESPACE: "decoy" });
+      try {
+        mod.scratchGitOk(tgt, ["init", "-q", "--bare"]);
+        mod.scratchGitOk(src, ["init", "-q"]);
+        writeFileSync(join(src, "f.txt"), "f\n");
+        mod.scratchGitOk(src, ["add", "-A"]);
+        mod.scratchGitOk(src, ["commit", "-qm", "scratch"]);
+        mod.scratchGitOk(src, ["push", "-q", tgt, "main"]);
+      } catch { /* judged below */ } finally { restore(); }
+      if (plain(tgt, ["rev-parse", "--verify", "-q", "refs/heads/main"]) === "") failures.push("GIT_NAMESPACE was honoured: a scratch push did not land on refs/heads/main");
+      if (plain(tgt, ["for-each-ref", "refs/namespaces"]) !== "") failures.push("GIT_NAMESPACE was honoured: a scratch push wrote refs under refs/namespaces/");
+    }
+    // tag.gpgsign and init.defaultBranch overridden by a hostile global config: unsigned tag, branch named main.
+    {
+      const tcfg = join(root, "hostile-tag.gitconfig");
+      writeFileSync(tcfg, "[tag]\n\tgpgsign = true\n[gpg]\n\tprogram = /bin/false\n[init]\n\tdefaultBranch = trunk\n");
+      const s = mkdtempSync(join(root, "scratch-tag-"));
+      const opts = { env: { GIT_CONFIG_GLOBAL: tcfg } };
+      let tagged = true;
+      try {
+        mod.scratchGitOk(s, ["init", "-q"], opts);
+        writeFileSync(join(s, "f.txt"), "f\n");
+        mod.scratchGitOk(s, ["add", "-A"], opts);
+        mod.scratchGitOk(s, ["commit", "-qm", "scratch"], opts);
+        mod.scratchGitOk(s, ["tag", "-a", "-m", "release", "v1"], opts);
+      } catch { tagged = false; }
+      if (!tagged) failures.push("a hostile tag.gpgsign=true global config broke an annotated scratch tag (tag.gpgsign not overridden)");
+      if (plain(s, ["symbolic-ref", "--short", "HEAD"]) !== "main") failures.push("a hostile init.defaultBranch=trunk global config named the scratch branch something other than main");
+    }
+    // The timeout must reach spawnSync: a hung child (an alias that sleeps) is killed, not waited for.
+    {
+      const acfg = join(root, "hang.gitconfig");
+      writeFileSync(acfg, "[alias]\n\thang = !sleep 5\n");
+      const r = mod.scratchGit(root, ["hang"], { timeout: 300, env: { GIT_CONFIG_GLOBAL: acfg } });
+      if (r.error?.code !== "ETIMEDOUT") failures.push("a hung git child was not killed by opts.timeout");
+    }
     // The throwing variant must throw, or a failed fixture step is silent.
     let threw = false;
     try { mod.scratchGitOk(root, ["rev-parse", "--verify", "no-such-ref^{commit}"]); } catch { threw = true; }
@@ -333,6 +376,8 @@ async function selfTest({ inner = false } = {}) {
   check("a regex holding `//` earlier on the line does not hide it", seen("e7", 'const u = /^https?:\\/\\//; ' + BARE.replace(/\n/g, " ") + "\n"));
   check("a backtick inside a regex does not hide a later creator", seen("e10", 'const R = /(?:^|[\\s`(])x/g;\nconst s = "covers `lib/**`";\n' + BARE));
   check("a trailing `// ...` comment is NOT stripped (false creator, never a miss)", seen("e11", 'import { mkdtempSync } from "node:fs";\nconst d = mkdtempSync("x");\nspawnSync("git", ["status"]); // later: "init" it\n'));
+  check("a quoted compound such as `\"clone-proof\"` beside mkdtemp + git is NOT a creator (exit 0)", (() => { const d = T("e13"); put(d, "scripts/x.mjs", 'import { mkdtempSync } from "node:fs";\nconst d = mkdtempSync("x");\nconst MARKERS = ["clone-proof", "tamper-proof"];\nspawnSync("git", ["status"], { cwd: d });\n'); const r = cli(d, ["--floor", "0"]); return r.status === 0 && /creators=0/.test(r.out); })());
+  check("a quoted `git clone` argument list is still seen", seen("e14", 'const d = mkdtempSync("x");\nspawnSync("git", ["clone", "-q", "u", d]);\n'));
   check("a template-literal `git -C ${d} init` is seen", seen("e2", 'const d = mkdtempSync("x");\nexecSync(`git -C ${d} init -q`);\n'));
   check("an unused helper import does not count as migrated (exit 1)", (() => { const d = T("e1"); put(d, "scripts/x.mjs", 'import { SCRATCH_GIT_SCRUB } from "./lib/scratch-git.mjs";\n' + BARE); return cli(d, ["--floor", "1"]).status === 1; })());
   check("an import written inside a string does not count as migrated (exit 1)", (() => { const d = T("e3"); put(d, "scripts/x.mjs", "const s = 'import { scratchGit } from \"./lib/scratch-git.mjs\"'; scratchGit(1);\n" + BARE); return cli(d, ["--floor", "1"]).status === 1; })());
@@ -401,6 +446,10 @@ async function selfTest({ inner = false } = {}) {
     ["opts.env ignored", (s) => s.replace("...SCRATCH_IDENTITY, ...extra }", "...SCRATCH_IDENTITY }")],
     ["opts.input ignored", (s) => s.replace("...(opts?.input === undefined ? {} : { input: opts.input }),", "")],
     ["scrubProcessGitEnv made a no-op", (s) => s.replace("export function scrubProcessGitEnv(env = process.env) {\n  for (const k of SCRATCH_GIT_SCRUB) delete env[k];", "export function scrubProcessGitEnv(env = process.env) {\n  void env;")],
+    ["GIT_NAMESPACE dropped from the scrub list", (s) => s.replace('  "GIT_NAMESPACE",\n', "")],
+    ["tag.gpgsign override deleted", (s) => s.replace('"-c", "tag.gpgsign=false",', "")],
+    ["init.defaultBranch override deleted", (s) => s.replace('"-c", "init.defaultBranch=main",', "")],
+    ["timeout option ignored", (s) => s.replace("timeout: opts?.timeout ?? 60000,", "timeout: undefined,")],
     ["scratchGitOk made non-throwing", (s) => s.replace("if (r.error || r.status !== 0) {", "if (false) {")],
   ];
   for (const [name, mutate] of helperMutants) {

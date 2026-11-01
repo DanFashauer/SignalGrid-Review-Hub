@@ -31,7 +31,7 @@ const JOB_FLOOR = 20;
 /** A job may be unbounded ONLY with a reason. Empty is the goal state. */
 const DECLARED_UNBOUNDED = new Map();
 // mac-runner-auto.yml's nightly-both/nightly-mcp (reusable-workflow callers of
-// mac-runner-harness.yml, whose mac-harness job is bounded at 90m) used to need a
+// mac-runner-harness.yml, whose mac-harness job bounds admission + 90m work) used to need a
 // DECLARED_UNBOUNDED entry each because this parser did not follow `uses:`. Now that
 // isBounded() resolves a local callee and inherits its bound, both jobs verify as
 // bounded directly and the entries are gone — the follow-up their own reason text

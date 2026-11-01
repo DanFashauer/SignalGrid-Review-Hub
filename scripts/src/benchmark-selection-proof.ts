@@ -34,6 +34,7 @@ import {
 import { SIGNAL_KINDS, composeDeviceRisk, fromBenchmarkSelection } from "@workspace/posture-composition";
 import { enumerateGrantSafety, productOf } from "./lib/grant-safety.js";
 import { checkDefaultTransport, checkLiveGateIsolated } from "./lib/live-gate.js";
+import { FAMILY_ACTIONS } from "@workspace/integrations/action-ladder";
 
 let passed = 0;
 const failures: string[] = [];
@@ -574,6 +575,6 @@ await checkDefaultTransport({
 });
 
 const total = passed + failures.length;
-console.log(`figures=catalogEntries=${catalog.derived.entries},catalogTitles=${catalog.derived.titles},supersededRows=${catalog.derived.supersededRows},normalizedCombos=${normRes.combos},rawCombos=${rawRes.combos},grantingCombos=${normRes.noneCount},rawGrantingCombos=${rawRes.noneCount},ladderRungs=6`);
+console.log(`figures=catalogEntries=${catalog.derived.entries},catalogTitles=${catalog.derived.titles},supersededRows=${catalog.derived.supersededRows},normalizedCombos=${normRes.combos},rawCombos=${rawRes.combos},grantingCombos=${normRes.noneCount},rawGrantingCombos=${rawRes.noneCount},ladderRungs=${FAMILY_ACTIONS.length}`);
 console.log(`summary=${failures.length === 0 ? "pass" : "fail"} (${passed}/${total})`);
 if (failures.length > 0) { console.error("Failed checks:"); for (const f of failures) console.error(`  - ${f}`); process.exitCode = 1; }

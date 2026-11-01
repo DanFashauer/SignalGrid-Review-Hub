@@ -56,6 +56,8 @@
 // update or wipe anything, and does not grade the device's posture, the worker's
 // identity or their custody of the device. Those stay with their own dimensions.
 
+import type { FamilyAction } from "../action-ladder";
+
 /** Does the management plane report an app-protection policy APPLIED to this app
  *  registration? TRUSTED (allowlisted) — the plane is the system of record. */
 export type MamPolicyState =
@@ -162,7 +164,7 @@ export type AppProtectionPosture =
   | "app_protection_stale" // the registration read is older than the caller's max age
   | "app_protection_unverified"; // any axis unknown / malformed / uncovered
 
-export type AppProtectionAction = "none" | "monitor" | "step_up" | "alert" | "restrict" | "escalate";
+export type AppProtectionAction = FamilyAction;
 
 export type AppProtectionReasonCode =
   | "APP_PROTECTED"

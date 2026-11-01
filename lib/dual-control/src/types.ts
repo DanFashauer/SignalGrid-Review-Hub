@@ -135,7 +135,10 @@ export interface NormalizedDualControl {
 /** The three outcomes this surface returns. `SecondAuthorizerRequired` is the default and
  *  the safe non-grant: it neither releases the action nor punishes a legitimate first
  *  authorizer — it says "not enough, yet". `Denied` is reserved for affirmative bad facts. */
-export type DualControlOutcome = "Granted" | "SecondAuthorizerRequired" | "Denied";
+/** A const array with the union derived from it, so `proof:dual-control` can print its
+ *  `ladderRungs` figure from the ladder itself rather than a hand-typed count. */
+export const DUAL_CONTROL_OUTCOMES = ["Granted", "SecondAuthorizerRequired", "Denied"] as const;
+export type DualControlOutcome = (typeof DUAL_CONTROL_OUTCOMES)[number];
 
 export type DualControlReasonCode =
   | "GRANTED_TWO_PERSON_CONFIRMED"

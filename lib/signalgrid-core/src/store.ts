@@ -204,6 +204,10 @@ export class MemoryStore {
     return scoped(this.devices.get(id), tenantId);
   }
 
+  listDevices(tenantId: string): Device[] {
+    return [...this.devices.values()].filter((d) => d.tenantId === tenantId);
+  }
+
   findDeviceByRef(tenantId: string, ref: string): Device | undefined {
     return this.deviceByRef.get(refKey(tenantId, ref));
   }

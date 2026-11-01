@@ -7,11 +7,14 @@
   "need": "The five-line plan edit merged to SignalGrid_Alpha (PR to follow from the cloud lane) and the Mac tick's next objective-loop --write dropping the five rows from needsExecutor[]; the hand is cleared from that state, never by editing objective-state.json (docs/agent/hand-routing.json, executor-gap).",
   "whoCanUnblock": "cloud lane",
   "domain": "",
-  "status": "open",
+  "status": "resolved",
   "routedTo": null,
   "covers": [
     "executor-gap:objective-state"
   ],
   "takenBy": "cloud",
-  "takenAt": "2026-10-08T12:11:05.433Z"
+  "takenAt": "2026-10-08T12:11:05.433Z",
+  "resolvedAt": "2026-10-08T15:25:20.900Z",
+  "resolvedBy": "cloud",
+  "resolution": "PR #1449 (merged 16cd1158, 2026-10-08) re-owned rows 33, 76 and 77 to roster roles with executors (api-contract-architect, web-engineer, docs-writer) and parked rows 22 and 38 AWAITING OWNER with their roles kept on the first line; the Mac tick's 14:30Z objective-state write (PR #1452, merged 6ca90aa9) lists needsExecutor as empty, and scripts/raised-hands.mjs --check on mainline reports the executor-gap stall as no longer stuck."
 }

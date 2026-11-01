@@ -631,7 +631,8 @@ function emit(state, { write, deliver }) {
       try {
         const records = deliveryRecordDirectory(ROOT);
         // A refused original stays in place; follow its retry chain to the current attempt.
-        let name = retryHead(records, "objective-" + createHash("sha256").update(e.id).digest("hex"));
+        const rootName = "objective-" + createHash("sha256").update(e.id).digest("hex");
+        let name = retryHead(records, rootName);
         attempt = join(records, name);
         // A tracked/stamp id is not proof of a known child terminal or landing.
         // Inspect the preserved attempt even when older state calls it submitted.
@@ -639,6 +640,9 @@ function emit(state, { write, deliver }) {
         let prior = null;
         try { prior = JSON.parse(readFileSync(attempt + ".terminal.json", "utf8")); } catch { /* unknown stays held below */ }
         let retryOf = null;
+        // A marker-backed successor with no evidence is a retry that never started
+        // (interrupted after its marker): start it now, whatever the tracked state says.
+        if (name !== rootName && !hasEvidence) { retryOf = { successor: name, resumed: true, stamp: state.derivedAt }; submitted.delete(e.id); }
         // Exit 1/2 is retried only when a readback proves nothing was published
         // (shared rule; deterministic successor prefix, no clock or randomness here).
         const retry = hasEvidence && prior && !prior.signal && !prior.error && (prior.status === 1 || prior.status === 2) ?

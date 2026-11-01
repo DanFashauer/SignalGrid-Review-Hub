@@ -45,16 +45,29 @@ export function ensureDeliveryRecordDirectory(root) {
     if (common.status !== 0) throw first;
     const directory = join(realpathSync(common.stdout.trim()), "signalgrid-lane-records");
     // Serialize check + init across concurrent ticks with an O_EXCL lock beside the
-    // store. A lock older than 60 s belongs to an initializer that died (init takes
-    // milliseconds) and is taken over; a younger one is waited on, up to 15 s.
-    const lock = directory + ".init.lock";
+    // store that names its creator (pid + process start time). A lock is taken over
+    // only when that creator is positively gone (ESRCH, or its PID now belongs to a
+    // process with another start time), never by age; a live creator is waited on,
+    // then held. We unlink only the lock inode we created, never a replacement's.
+    const lock = directory + ".init.lock", waitMs = Number(process.env.SIGNALGRID_INIT_LOCK_WAIT_MS ?? 15000);
+    let ownIno = null;
     for (let waited = 0; ; waited += 100) {
-      try { closeSync(openSync(lock, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600)); break; }
-      catch (error) {
+      try {
+        const fd = openSync(lock, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600);
+        try { writeFileSync(fd, JSON.stringify({ pid: process.pid, start: lstartOf(process.pid) }) + "\n"); ownIno = fstatSync(fd).ino; } finally { closeSync(fd); }
+        break;
+      } catch (error) {
         if (error.code !== "EEXIST") throw error;
-        try { if (Date.now() - lstatSync(lock).mtimeMs > 60000) { unlinkSync(lock); continue; } }
-        catch (stale) { if (stale.code === "ENOENT") continue; throw stale; }
-        if (waited >= 15000) throw Error(`store initialization lock ${lock} is held; holding`);
+        let held;
+        try {
+          const fd = openSync(lock, constants.O_RDONLY | constants.O_NOFOLLOW);
+          try { held = { ino: fstatSync(fd).ino, holder: JSON.parse(readFileSync(fd, "utf8")) }; } catch { held = null; } finally { closeSync(fd); }
+        } catch (gone) { if (gone.code === "ENOENT") continue; throw gone; }
+        if (held && initLockHolderGone(held.holder)) {
+          try { if (lstatSync(lock).ino === held.ino) unlinkSync(lock); } catch (gone) { if (gone.code !== "ENOENT") throw gone; }
+          continue;
+        }
+        if (waited >= waitMs) throw Error(`store initialization lock ${lock} is held by ${held ? "live pid " + held.holder.pid : "an unreadable owner"}; holding`);
         Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 100);
       }
     }
@@ -67,8 +80,17 @@ export function ensureDeliveryRecordDirectory(root) {
       try { lstatSync(directory); } catch (error) { if (error.code !== "ENOENT") throw error; directoryPresent = false; }
       if (directoryPresent) throw Error(`store directory ${directory} exists without its marker; held, never reset automatically`);
       return deliveryRecordDirectory(root, true);
-    } finally { try { unlinkSync(lock); } catch { /* already taken over */ } }
+    } finally {
+      try { if (lstatSync(lock).ino === ownIno) unlinkSync(lock); } catch (error) { if (error.code !== "ENOENT") throw error; }
+    }
   }
+}
+
+function initLockHolderGone(holder) {
+  if (!holder || !Number.isSafeInteger(holder.pid) || holder.pid <= 0) return false;
+  try { process.kill(holder.pid, 0); } catch (error) { if (error.code === "ESRCH") return true; if (error.code !== "EPERM") return false; }
+  const now = lstartOf(holder.pid);
+  return typeof holder.start === "string" && now !== null && now !== holder.start.replace(/\s+/g, " ");
 }
 
 // This guard is persistent. Closing the owned FD releases the kernel lock;
@@ -175,25 +197,38 @@ function processGroupOf(pid) {
 // hold FD8, so they are looked for directly: any process left in the recorded group
 // (when it is not our own), naming the old token, or running in a lane-deliver
 // worktree (sg-lane-deliver-*) holds recovery.
-function assertOriginalGone(shellPid, { pgid = null, token = null } = {}) {
-  try { process.kill(shellPid, 0); }
-  catch (error) {
-    if (error.code !== "ESRCH") throw Error(`original tick shell ${shellPid} liveness is unknown (${error.code}); holding`);
-    if (pgid === null && token === null) return;
-    const own = processGroupOf(process.pid);
-    const ps = spawnSync("ps", ["-axo", "pid=,pgid=,command="], { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
-    if (ps.error || ps.signal || ps.status !== 0 || own === null) throw Error("process table is unreadable; holding");
-    for (const line of ps.stdout.split("\n")) {
-      const m = /^\s*(\d+)\s+(\d+)\s(.*)$/.exec(line);
-      if (!m || Number(m[1]) === process.pid) continue;
-      const group = Number(m[2]), command = m[3];
-      if ((pgid !== null && group === pgid && pgid !== own) || (token && command.includes(token)) || command.includes("sg-lane-deliver-")) {
-        throw Error(`process ${m[1]} of the original tick may survive (${command.slice(0, 120)}); holding`);
-      }
+//
+// A PID or group survives a reboot only as a number: when the owner record carries
+// the shell's start time (`ps -o lstart=`), a live PID with a different start time is
+// a reused PID (the original is dead), and only processes started at or after that
+// time can belong to the original tick.
+const lstartOf = (pid) => {
+  const r = spawnSync("ps", ["-o", "lstart=", "-p", String(pid)], { encoding: "utf8" });
+  return r.status === 0 ? r.stdout.trim().replace(/\s+/g, " ") : null;
+};
+const startMs = (lstart) => Date.parse(String(lstart).replace(/\s+/g, " "));
+function assertOriginalGone(shellPid, { pgid = null, token = null, shellStart = null } = {}) {
+  let alive = true, code = null;
+  try { process.kill(shellPid, 0); } catch (error) { alive = false; code = error.code; }
+  if (alive || code === "EPERM") {
+    const now = shellStart === null ? null : lstartOf(shellPid);
+    const reused = now !== null && now !== String(shellStart).replace(/\s+/g, " ");
+    if (!reused) throw Error(alive ? `original tick shell ${shellPid} (started ${shellStart ?? "unrecorded"}) is still alive; holding` :
+      `original tick shell ${shellPid} liveness is unknown (${code}); holding`);
+  } else if (code !== "ESRCH") throw Error(`original tick shell ${shellPid} liveness is unknown (${code}); holding`);
+  if (pgid === null && token === null) return;
+  const own = processGroupOf(process.pid), since = shellStart === null ? -Infinity : startMs(shellStart);
+  const ps = spawnSync("ps", ["-eo", "pid=,pgid=,lstart=,command="], { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+  if (ps.error || ps.signal || ps.status !== 0 || own === null || Number.isNaN(since)) throw Error("process table is unreadable; holding");
+  for (const line of ps.stdout.split("\n")) {
+    const m = /^\s*(\d+)\s+(\d+)\s+(\w{3} \w{3}\s+\d+ \d\d:\d\d:\d\d \d{4})\s(.*)$/.exec(line);
+    if (!m || Number(m[1]) === process.pid) continue;
+    const group = Number(m[2]), started = startMs(m[3]), command = m[4];
+    if (!(started >= since)) continue; // started before the original tick: not its descendant
+    if ((pgid !== null && group === pgid && pgid !== own) || (token && command.includes(token)) || command.includes("sg-lane-deliver-")) {
+      throw Error(`process ${m[1]} of the original tick (group ${pgid ?? "unrecorded"}, started ${shellStart ?? "unrecorded"}) may survive (${command.slice(0, 120)}); holding`);
     }
-    return;
   }
-  throw Error(`original tick shell ${shellPid} is still alive; holding`);
 }
 
 // Called only while this tick holds the kernel guard: an old tick.lock whose
@@ -257,7 +292,7 @@ function ownedGuard(root, shellPid) {
 const BASE_KEYS = ["version", "directory", "store", "guard", "state"];
 const OPEN_KEYS = [...BASE_KEYS, "token", "shellPid", "openedSha256"];
 const OWNER_KEYS = [...BASE_KEYS, "token", "shellPid", "openedAt"];
-const ownerKeys = (value) => (value && Object.hasOwn(value, "pgid") ? [...OWNER_KEYS, "pgid"] : OWNER_KEYS);
+const ownerKeys = (value) => [...OWNER_KEYS, ...["pgid", "shellStart"].filter((key) => value && Object.hasOwn(value, key))];
 const TERMINAL_KEYS = [...BASE_KEYS, "token", "shellPid", "openedSha256", "exitTrapStatus", "closedAt"];
 
 // An ABANDONED tick may have died before publishing its owner record.
@@ -270,6 +305,7 @@ function assertOwner(record, binding, token, shellPid) {
   keysExactly(record.value, ownerKeys(record.value));
   assertBinding(record.value, binding);
   if (Object.hasOwn(record.value, "pgid") && (!Number.isSafeInteger(record.value.pgid) || record.value.pgid <= 0)) throw Error("tick owner process group is invalid");
+  if (Object.hasOwn(record.value, "shellStart") && Number.isNaN(startMs(record.value.shellStart))) throw Error("tick owner start time is invalid");
   if (record.value.state !== "OPEN" || record.value.token !== token || record.value.shellPid !== shellPid ||
       typeof record.value.openedAt !== "string" || !Number.isFinite(Date.parse(record.value.openedAt))) throw Error("tick owner record differs");
 }
@@ -314,7 +350,7 @@ function recoverOpenSlot(binding, slot, stamp) {
     assertOwner(owner, binding, token, shellPid);
     if (digest(owner.raw) !== openedSha256) throw Error("abandoned tick owner bytes differ");
   }
-  assertOriginalGone(shellPid, { pgid: owner?.value.pgid ?? null, token });
+  assertOriginalGone(shellPid, { pgid: owner?.value.pgid ?? null, token, shellStart: owner?.value.shellStart ?? null });
   const terminalPath = join(binding.directory, `tick-${token}.terminal.json`);
   let actual;
   try { actual = readTickJson(terminalPath); } catch (error) { if (error.code !== "ENOENT") throw error; }
@@ -356,8 +392,9 @@ export function checkTickOwner(root, token, shellPid) {
     openedSha256: slot.value.openedSha256 });
 }
 
-export function acquireTick(root, shellPid, pgid = null) {
+export function acquireTick(root, shellPid, pgid = null, shellStart = null) {
   if (pgid !== null && !/^[1-9][0-9]*$/.test(String(pgid))) throw Error("tick process group must be a positive integer");
+  if (shellStart !== null && Number.isNaN(startMs(shellStart))) throw Error("tick shell start time must be a ps lstart value");
   const owned = ownedGuard(root, shellPid);
   const { binding } = owned;
   const stamp = new Date().toISOString().replace(/[:.]/g, "");
@@ -368,7 +405,7 @@ export function acquireTick(root, shellPid, pgid = null) {
   const token = randomBytes(16).toString("hex");
   const base = { version: 1, directory: binding.directory, store: binding.store, guard: binding.guard };
   const owner = { ...base, state: "OPEN", token, shellPid: owned.shellPid, openedAt: new Date().toISOString(),
-    ...(pgid === null ? {} : { pgid: Number(pgid) }) };
+    ...(pgid === null ? {} : { pgid: Number(pgid) }), ...(shellStart === null ? {} : { shellStart: String(shellStart).replace(/\s+/g, " ") }) };
   const open = { ...base, state: "OPEN", token, shellPid: owned.shellPid, openedSha256: digest(encoded(owner)) };
   // OPEN is committed first. A failed/missing immutable owner never becomes a
   // fresh first run, even if this process and the kernel lock later disappear.
@@ -408,6 +445,13 @@ export function releaseTick(root, token, shellPid, exitTrapStatus) {
 // push. With a receipt, the target ref is read on origin: present -> "published"
 // (readback-only, never resent); absent -> "unpublished" (retry); unreadable or
 // unnamed -> "unknown" (hold). A failed read is never taken as absence.
+// Same shape as lane-tick.sh's sg_run_bounded: the command runs in its own session,
+// and at the limit its WHOLE group (ssh, credential helpers) gets TERM, then KILL.
+const GROUP_BOUNDED = `my $limit = shift; my $pid = fork; exit 125 unless defined $pid;
+if (!$pid) { POSIX::setsid(); exec @ARGV or POSIX::_exit(127); }
+$SIG{ALRM} = sub { kill "TERM", -$pid; sleep 2; kill "KILL", -$pid; waitpid($pid, 0); exit 124 };
+alarm $limit; waitpid($pid, 0); my $status = $?; alarm 0;
+exit(($status & 127) ? 128 + ($status & 127) : $status >> 8);`;
 export function refusedDisposition(root, receiptPath) {
   let raw;
   try { raw = readFileSync(receiptPath, "utf8"); } catch (error) { return error.code === "ENOENT" ? "unpublished" : "unknown"; }
@@ -416,8 +460,9 @@ export function refusedDisposition(root, receiptPath) {
   if (typeof target !== "string" || !/^lane\/[a-z]+-mail-[0-9]{8}-[0-9]{6}Z-[a-f0-9]{12}$/.test(target)) return "unknown";
   const env = { ...process.env, GIT_TERMINAL_PROMPT: "0" };
   for (const key of ["GIT_DIR", "GIT_WORK_TREE", "GIT_COMMON_DIR"]) delete env[key];
-  // ponytail: the timeout kills git only, not an ssh helper; same bound as the tick fetch would need a group wrapper.
-  const r = spawnSync("git", ["ls-remote", "origin", "refs/heads/" + target], { cwd: root, env, encoding: "utf8", timeout: 60000 });
+  const limit = /^[1-9][0-9]*$/.test(process.env.SIGNALGRID_LS_REMOTE_TIMEOUT_SEC ?? "") ? Number(process.env.SIGNALGRID_LS_REMOTE_TIMEOUT_SEC) : 60;
+  const r = spawnSync("perl", ["-MPOSIX", "-e", GROUP_BOUNDED, String(limit), "git", "ls-remote", "origin", "refs/heads/" + target],
+    { cwd: root, env, encoding: "utf8", timeout: (limit + 10) * 1000 });
   if (r.error || r.signal || r.status !== 0) return "unknown";
   return r.stdout.trim() ? "published" : "unpublished";
 }
@@ -517,6 +562,26 @@ export function setAsideRefusedAttempt(root, directory, name, exit, successor = 
   return { attempt: name, exit: code, n, setAsideAs: `refused/${name}.refused-${n}` };
 }
 
+// A liveness hold must not be silent (DR-054): write one hand per held cause through
+// the ordinary Mac hand path (attempt intent, ops, lane-deliver batch --receipt,
+// parent terminal). The cause text names the PID, group and recorded start time.
+export function raiseTickHold(root, message) {
+  const directory = deliveryRecordDirectory(root), id = "tick-hold-" + digest(Buffer.from(message));
+  const prefix = join(directory, id);
+  try { writeFileSync(prefix + ".attempt.json", JSON.stringify({ state: "attempted; pending exact readback", receipt: prefix + ".submission.json", cause: message }) + "\n", { flag: "wx", mode: 0o600, flush: true }); }
+  catch (error) { if (error.code === "EEXIST") return `hand ${id} already raised`; throw error; }
+  const op = { op: "raise", id, who: "mac lane", domain: "lane", where: "scripts/mac/lane-tick.sh",
+    doing: "the unattended Mac lane tick (scripts/mac/lane-tick.sh)",
+    blocked: "Tick recovery is holding: " + message.replace(/\/(?:Users|home)\/[^/\s:]+/g, "<HOME>"),
+    need: "Mac lane: check whether the named original tick process (PID, group, start time) still runs; once it is gone the next tick recovers on its own." };
+  writeFileSync(prefix + ".ops.json", JSON.stringify([op]) + "\n", { flag: "wx", mode: 0o600 });
+  const r = spawnSync(process.execPath, [join(root, "scripts/lane-deliver.mjs"), "batch", prefix + ".ops.json", "--receipt", prefix + ".submission.json"],
+    { cwd: root, encoding: "utf8", timeout: 300000, stdio: ["ignore", "pipe", "pipe", "ignore", "ignore", "ignore", "ignore", "ignore", "ignore"] });
+  writeFileSync(prefix + ".output", (r.stdout ?? "") + (r.stderr ?? ""), { flag: "wx", mode: 0o600 });
+  writeFileSync(prefix + ".exit", `${r.status ?? 255}\n`, { flag: "wx", mode: 0o600 });
+  return `hand ${id} written (lane-deliver exit ${r.status ?? "signal"})`;
+}
+
 let entrypoint;
 // node -e consumers can use a label instead of a filename in argv[1].
 try { if (process.argv[1]) entrypoint = realpathSync(process.argv[1]); } catch { /* imported library */ }
@@ -528,12 +593,13 @@ if (entrypoint === fileURLToPath(import.meta.url)) {
     else if (mode === "ensure" && args.length === 0) console.log(ensureDeliveryRecordDirectory(root));
     else if (mode === "tick-guard" && args.length === 0) console.log(tickGuardPath(root));
     // Line 1 is the token; any further lines say what was recovered.
-    else if (mode === "tick-acquire" && (args.length === 1 || args.length === 2)) console.log([acquireTick(root, args[0], args[1] ?? null), ...acquireTick.recovered.map((n) => "recovered: " + n)].join("\n"));
+    else if (mode === "tick-acquire" && args.length >= 1 && args.length <= 3) console.log([acquireTick(root, args[0], args[1] ?? null, args[2] ?? null), ...acquireTick.recovered.map((n) => "recovered: " + n)].join("\n"));
     else if (mode === "refused-disposition" && args.length === 1) console.log(refusedDisposition(root, args[0]));
     else if (mode === "retry-refused" && (args.length === 3 || args.length === 4)) console.log(JSON.stringify(setAsideRefusedAttempt(root, ...args)));
     else if (mode === "retry-head" && args.length === 2) console.log(retryHead(...args));
+    else if (mode === "raise-hold" && args.length === 1) console.log(raiseTickHold(root, args[0]));
     else if (mode === "tick-release" && args.length === 3) releaseTick(root, ...args);
-    else throw Error("usage: lane-attempt-store.mjs path|init|ensure|tick-guard <checkout> | tick-acquire <checkout> <shell-pid> [<pgid>] | refused-disposition <checkout> <receipt> | retry-refused <checkout> <records> <attempt-name> <exit> [<successor>|derive|move] | retry-head <checkout> <records> <attempt-name> | tick-release <checkout> <token> <shell-pid> <exit-trap-status>");
+    else throw Error("usage: lane-attempt-store.mjs path|init|ensure|tick-guard <checkout> | tick-acquire <checkout> <shell-pid> [<pgid> [<lstart>]] | raise-hold <checkout> <message> | refused-disposition <checkout> <receipt> | retry-refused <checkout> <records> <attempt-name> <exit> [<successor>|derive|move] | retry-head <checkout> <records> <attempt-name> | tick-release <checkout> <token> <shell-pid> <exit-trap-status>");
   } catch (error) {
     console.error(`RAISED HAND: delivery record store unavailable: ${error.message}; READBACK ONLY`);
     process.exitCode = error instanceof TickBusy ? 75 : 1;

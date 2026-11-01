@@ -78,7 +78,7 @@ function fixture() {
  put(join(root,'fixture.txt'),'disposable fixture\n');git(['add','.']);git(['commit','-qm','frozen source-copy fixture']);
  const head=git(['rev-parse','HEAD']);env.FIXTURE_HEAD=head;env.FIXTURE_CLI_LOG=cliLog;
  // Real local Git handles metadata; a remote/network operation is never forwarded.
- put(join(bin,'git'),`#!${process.execPath}\nimport fs from 'node:fs';import{spawnSync}from'node:child_process';const a=process.argv.slice(2);fs.appendFileSync(${JSON.stringify(gitLog)},JSON.stringify(a)+'\\n');if(a[0]==='remote'&&a[1]==='get-url'){console.log('https://github.com/fixture/route.git');process.exit(0)}if(a[0]==='ls-remote'&&process.env.FIXTURE_LS_REMOTE==='absent')process.exit(0);if(a.some(x=>['push','fetch','ls-remote','clone'].includes(x))){console.error('fixture forbids remote transport');process.exit(97)}const r=spawnSync(${JSON.stringify(GIT)},a,{stdio:'inherit'});process.exit(r.status??96);\n`);chmodSync(join(bin,'git'),0o755);
+ put(join(bin,'git'),`#!${process.execPath}\nimport fs from 'node:fs';import{spawnSync}from'node:child_process';const a=process.argv.slice(2);fs.appendFileSync(${JSON.stringify(gitLog)},JSON.stringify(a)+'\\n');if(a[0]==='remote'&&a[1]==='get-url'){console.log('https://github.com/fixture/route.git');process.exit(0)}if(a[0]==='ls-remote'&&process.env.FIXTURE_LS_REMOTE==='absent')process.exit(0);if(a[0]==='ls-remote'&&process.env.FIXTURE_LS_REMOTE==='present'){console.log('0'.repeat(40)+String.fromCharCode(9)+a[a.length-1]);process.exit(0)}if(a.some(x=>['push','fetch','ls-remote','clone'].includes(x))){console.error('fixture forbids remote transport');process.exit(97)}const r=spawnSync(${JSON.stringify(GIT)},a,{stdio:'inherit'});process.exit(r.status??96);\n`);chmodSync(join(bin,'git'),0o755);
  const storeModule=join(root,'scripts/lib/lane-attempt-store.mjs');
  const initialized=spawnSync(process.execPath,[storeModule,'init',root],{cwd:root,env,encoding:'utf8'});
  assert.equal(initialized.status,0,initialized.stderr);
@@ -268,6 +268,35 @@ callerCase('CW06','a fresh build batch refused with exit1 records its terminal, 
  assert.equal(readFileSync(prefix+'.exit','utf8'),'1\n','the original stays in place');const next=join(f.store,successorOf('hand-'+sha(BLOCKER)));
  assert.equal(readFileSync(next+'.exit','utf8'),'1\n');
  const retry=JSON.parse(readFileSync(next+'.attempt.json','utf8')).retryOf;assert.equal(retry.attempt,'hand-'+sha(BLOCKER));assert.equal(retry.exit,1);assert.equal(retry.n,1);assert.equal(retry.successor,successorOf('hand-'+sha(BLOCKER)));assert.ok(retry.stamp,'the retry chain names its original attempt, exit and stamp');
+});
+for(const [id,mode] of [['CW15','present'],['CW16','fail']])callerCase(id,'prior build exit1 whose receipt readback is '+mode+' is held, never resent',f=>{
+ f.env.FIXTURE_LS_REMOTE=mode;
+ const cause=sha(BLOCKER),o=original(f,'build',{exit:1,legacy:true});
+ const desired=join(f.store,'hand-'+cause);for(const suffix of Object.keys(o.initial).filter(n=>n.startsWith(o.prefix.split('/').at(-1)+'.')).map(n=>n.slice(o.prefix.split('/').at(-1).length)))renameSync(o.prefix+suffix,desired+suffix);
+ const prior=JSON.parse(readFileSync(desired+'.attempt.json','utf8'));prior.receipt=desired+'.submission.json';writeFileSync(desired+'.attempt.json',enc(prior));
+ o.prefix=desired;o.initial=rawFiles(desired);
+ acceptOwned(runBuild(f,`raise_hand ${quote(BLOCKER)}\nraise_hand ${quote(BLOCKER)}`));
+ assert.equal(f.calls().filter(c=>c.args[0]==='batch').length,0,'no resend without proof of non-publication');preserved(o.prefix,o.initial);
+ assert.equal(existsSync(join(f.store,'refused','hand-'+cause+'.retried')),false);assert.ok(f.entries().some(e=>e.argv[0]==='request'&&e.argv[3]===desired),'held: its repair DATA is queued');
+});
+for(const [id,mode] of [['CW17','present'],['CW18','fail']])callerCase(id,'prior refused objective whose receipt readback is '+mode+' is held, never resent',f=>{
+ f.env.FIXTURE_LS_REMOTE=mode;
+ const o=original(f,'objective',{exit:2,legacy:true}),desired=join(f.store,'objective-'+sha('same-source-escalation')),base=o.prefix.split('/').at(-1);
+ for(const name of Object.keys(o.initial).filter(n=>n.startsWith(base+'.')))renameSync(o.prefix+name.slice(base.length),desired+name.slice(base.length));
+ const intent=JSON.parse(readFileSync(desired+'.attempt.json','utf8'));intent.receipt=desired+'.submission.json';writeFileSync(desired+'.attempt.json',enc(intent));o.prefix=desired;o.initial=rawFiles(desired);
+ acceptOwned(emitObjective(f,{existingState:true,rounds:2}));
+ assert.equal(f.originalPublications().length,0,'no resend without proof of non-publication');preserved(o.prefix,o.initial);
+ assert.equal(existsSync(join(f.store,'refused','objective-'+sha('same-source-escalation')+'.retried')),false);
+});
+callerCase('CW19','a retry interrupted after its marker but before its attempt starts on the next tick, with no repair',f=>{
+ const o=original(f,'objective',{exit:2,legacy:true}),desired=join(f.store,'objective-'+sha('same-source-escalation')),base=o.prefix.split('/').at(-1);
+ for(const name of Object.keys(o.initial).filter(n=>n.startsWith(base+'.')))renameSync(o.prefix+name.slice(base.length),desired+name.slice(base.length));
+ const intent=JSON.parse(readFileSync(desired+'.attempt.json','utf8'));intent.receipt=desired+'.submission.json';writeFileSync(desired+'.attempt.json',enc(intent));o.prefix=desired;o.initial=rawFiles(desired);
+ const name=desired.split('/').at(-1),next=successorOf(name);
+ put(join(f.store,'refused',name+'.retried'),JSON.stringify({root:name,n:1,successor:next,exit:2})+'\n'); // marker only: the tick died here
+ acceptOwned(emitObjective(f,{existingState:true,rounds:1}));
+ assert.equal(f.originalPublications().length,1,'the unstarted retry starts');assert.equal(f.entries().filter(e=>e.argv[0]==='request').length,0,'and queues no repair');
+ assert.equal(JSON.parse(readFileSync(join(f.store,next+'.attempt.json'),'utf8')).retryOf.resumed,true);preserved(o.prefix,o.initial);
 });
 callerCase('CW13','after three retries the fourth refusal holds, queues repair DATA and is capped visibly',f=>{
  const raise=`raise_hand ${quote(BLOCKER)}\n`;

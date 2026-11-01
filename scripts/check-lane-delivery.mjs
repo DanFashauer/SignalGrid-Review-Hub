@@ -525,6 +525,35 @@ check('two concurrent initializations leave one valid store and both callers suc
  assert.equal(run(process.execPath,[module,'tick-guard',f.root],f.root).status,0,'the one store is valid');
  assert.deepEqual(readdirSync(dirname(directory)).filter(n=>n.startsWith('signalgrid-lane-records')).sort(),['signalgrid-lane-records','signalgrid-lane-records.json'],'no archived or extra store, no leftover lock');
 });
+function uninitialized(f){const module=join(f.root,'scripts/lib/lane-attempt-store.mjs'),directory=run(process.execPath,[module,'path',f.root],f.root).stdout.trim();rmSync(directory+'.json');rmSync(directory,{recursive:true});return {module,directory,lock:directory+'.init.lock'};}
+check('an init lock whose creator is dead is taken over',f=>{
+ const {module,directory,lock}=uninitialized(f),dead=run('/usr/bin/true',[],f.root);writeFileSync(lock,JSON.stringify({pid:dead.pid,start:'Thu Jan 1 00:00:00 2026'})+'\n');
+ const r=run(process.execPath,[module,'ensure',f.root],f.root);assert.equal(r.status,0,r.stderr);assert.equal(r.stdout.trim(),directory);assert.equal(existsSync(lock),false);
+});
+check('an init lock whose creator is alive is waited on, then held',f=>{
+ const {module,directory,lock}=uninitialized(f),start=run('/bin/ps',['-o','lstart=','-p',String(process.pid)],f.root).stdout.trim().replace(/\s+/g,' ');
+ const raw=JSON.stringify({pid:process.pid,start})+'\n';writeFileSync(lock,raw);
+ const r=run(process.execPath,[module,'ensure',f.root],f.root,{SIGNALGRID_INIT_LOCK_WAIT_MS:'500'});
+ assert.equal(r.status,1);assert.match(r.stderr,new RegExp('held by live pid '+process.pid));assert.equal(readFileSync(lock,'utf8'),raw,'a live owner\'s lock is never removed');assert.equal(existsSync(directory),false);
+});
+check('an init lock whose creator PID was reused (other start time) is taken over',f=>{
+ const {module,lock}=uninitialized(f);writeFileSync(lock,JSON.stringify({pid:process.pid,start:'Thu Jan 1 00:00:00 2026'})+'\n');
+ const r=run(process.execPath,[module,'ensure',f.root],f.root,{SIGNALGRID_INIT_LOCK_WAIT_MS:'500'});assert.equal(r.status,0,r.stderr);assert.equal(existsSync(lock),false);
+});
+check('a paused initializer resuming never removes a replacement owner\'s lock',f=>{
+ const {module,directory,lock}=uninitialized(f),preload=join(f.parent,'pause-init.cjs'),gate=join(f.parent,'gate');
+ // Pause the initializer inside init (its lock is held) until the gate file exists.
+ writeFileSync(preload,`const fs=require('node:fs'),m=fs.mkdirSync;fs.mkdirSync=function(p,...r){if(String(p)===${JSON.stringify(directory)}){fs.writeFileSync(${JSON.stringify(join(f.parent,'paused'))},'1');while(!fs.existsSync(${JSON.stringify(gate)}))Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0,50);}return m.call(this,p,...r)};require('node:module').syncBuiltinESMExports();`);
+ // Started through a shell that exits at once, so the paused child is reaped by init, not by this (blocking) process.
+ const child={pid:Number(spawnSync('/bin/sh',['-c','"$NODE" "$M" ensure "$R" >/dev/null 2>&1 & echo $!'],{cwd:f.root,encoding:'utf8',env:{PATH:dirname(process.execPath)+':/usr/bin:/bin',NODE:process.execPath,M:module,R:f.root,NODE_OPTIONS:'--require='+preload,GIT_CONFIG_NOSYSTEM:'1',GIT_CONFIG_GLOBAL:'/dev/null'}}).stdout.trim())};assert.ok(child.pid>0);
+ for(let i=0;i<100&&!existsSync(join(f.parent,'paused'));i++)spawnSync('/bin/sleep',['0.1']);
+ assert.ok(existsSync(join(f.parent,'paused')),'initializer reached init');
+ // Another tick took the lock over meanwhile (created first, so its inode differs from the paused owner's).
+ const replacement=JSON.stringify({pid:process.pid,start:'replacement owner'})+'\n';writeFileSync(lock+'.new',replacement);rmSync(lock);renameSync(lock+'.new',lock);
+ writeFileSync(gate,'go');
+ const status=spawnSync('/bin/sh',['-c','while kill -0 '+child.pid+' 2>/dev/null; do sleep 0.1; done']);assert.equal(status.status,0);
+ assert.equal(readFileSync(lock,'utf8'),replacement,'the resumed initializer leaves the replacement lock alone');
+});
 check('a store directory left without its marker is held, never reset',f=>{
  const module=join(f.root,'scripts/lib/lane-attempt-store.mjs');
  const directory=run(process.execPath,[module,'path',f.root],f.root).stdout.trim();assert.ok(directory);
@@ -672,6 +701,14 @@ await leaseControl('actual FD8 excludes another checkout before the first owners
  const original=leaseTree(c.store),b=c.start('startup-B',{checkout:f.linked});assert.equal((await b.next()).event,'CLOSED');await b.closed;
  assert.deepEqual(leaseTree(c.store),original);a.resume();assert.equal((await a.next()).event,'ENTER');a.resume();assert.equal((await a.closed).code,0);assert.equal(c.state(),'CLOSED');
 });
+// A hold writes only its own hand record (tick-hold-*); everything else is untouched.
+const held=t=>t.filter(e=>e.path!=='.'&&!e.path.startsWith('./tick-hold-'));
+function rewriteOwner(c,open,changes){
+ const ownerPath=join(c.store,'tick-'+open.token+'.opened.json'),owner={...JSON.parse(readFileSync(ownerPath,'utf8')),...changes};
+ for(const k of Object.keys(changes))if(changes[k]===undefined)delete owner[k];
+ const raw=JSON.stringify(owner)+'\n';writeFileSync(ownerPath,raw);
+ writeFileSync(c.slot,JSON.stringify({...open,shellPid:owner.shellPid,openedSha256:createHash('sha256').update(raw).digest('hex')})+'\n');
+}
 // Owner order 2026-11-01: the next tick holding the kernel guard recovers on its own.
 async function recovers(c,b,abandoned){
  assert.equal((await b.next()).event,'ENTER','the next tick must start work');assert.match(b.stdout,/recovered:/);
@@ -692,7 +729,26 @@ for(const kind of ['live','missing','corrupt'])await leaseControl('preexisting l
  if(kind==='live')writeFileSync(join(old,'pid'),String(process.pid)+'\n');
  if(kind==='corrupt')writeFileSync(join(old,'pid'),'not-a-pid\n');
  const original=leaseTree(c.store),b=c.start('legacy-'+kind);assert.equal((await b.next()).event,'CLOSED');await b.closed;
- assert.deepEqual(leaseTree(c.store),original,'a lock without positive evidence of a dead holder is never moved');
+ assert.deepEqual(held(leaseTree(c.store)),held(original),'a lock without positive evidence of a dead holder is never moved');
+});
+await leaseControl('a live PID whose start time differs from the recorded one is a reused PID: recovered',async(f,c)=>{
+ const a=c.start('reuse-A');assert.equal((await a.next()).event,'ENTER');const open=JSON.parse(readFileSync(c.slot,'utf8'));
+ assert.match(JSON.parse(readFileSync(join(c.store,'tick-'+open.token+'.opened.json'),'utf8')).shellStart,/^\w{3} \w{3} \d+ \d\d:\d\d:\d\d \d{4}$/,'the owner record names its shell start time');
+ assert.equal(a.child.kill('SIGKILL'),true);await a.closed;
+ rewriteOwner(c,open,{shellPid:process.pid,shellStart:'Thu Jan 1 00:00:00 2026',pgid:undefined}); // a live process, but not the one recorded
+ c.kernelAvailable();await recovers(c,c.start('reuse-B'),open.token);
+});
+await leaseControl('a live PID with the recorded start time holds and raises a hand naming it',async(f,c)=>{
+ const a=c.start('same-A');assert.equal((await a.next()).event,'ENTER');const open=JSON.parse(readFileSync(c.slot,'utf8'));
+ assert.equal(a.child.kill('SIGKILL'),true);await a.closed;
+ const start=run('/bin/ps',['-o','lstart=','-p',String(process.pid)],f.root).stdout.trim().replace(/\s+/g,' ');assert.ok(start);
+ rewriteOwner(c,open,{shellPid:process.pid,shellStart:start,pgid:undefined});
+ c.kernelAvailable();const original=leaseTree(c.store),b=c.start('same-B');assert.equal((await b.next()).event,'CLOSED');await b.closed;
+ assert.match(b.stdout+b.stderr,/still alive; holding/);assert.match(b.stdout,/RAISED HAND: tick recovery holding; hand tick-hold-[a-f0-9]{64} written/);
+ assert.deepEqual(held(leaseTree(c.store)),held(original),'the live original is never finalized');assert.equal(c.state(),'OPEN');
+ const ops=readdirSync(c.store).filter(n=>/^tick-hold-[a-f0-9]{64}\.ops\.json$/.test(n));assert.equal(ops.length,1,'exactly one hand record for the held cause');
+ const op=JSON.parse(readFileSync(join(c.store,ops[0]),'utf8'))[0];assert.equal(op.op,'raise');assert.ok(op.blocked.includes(String(process.pid))&&op.blocked.includes(start),'the hand names the PID and its start time');
+ const again=c.start('same-C');assert.equal((await again.next()).event,'CLOSED');await again.closed;assert.match(again.stdout,/already raised/);
 });
 await leaseControl('an OPEN slot whose original shell is still alive stays held',async(f,c)=>{
  const a=c.start('live-A');assert.equal((await a.next()).event,'ENTER');const open=JSON.parse(readFileSync(c.slot,'utf8'));
@@ -702,7 +758,7 @@ await leaseControl('an OPEN slot whose original shell is still alive stays held'
  rmSync(join(c.store,'tick-'+open.token+'.opened.json'));
  writeFileSync(c.slot,JSON.stringify({...open,shellPid:process.pid})+'\n');
  c.kernelAvailable();const original=leaseTree(c.store),b=c.start('live-B');assert.equal((await b.next()).event,'CLOSED');await b.closed;
- assert.match(b.stdout+b.stderr,/still alive; holding/);assert.deepEqual(leaseTree(c.store),original,'a live original is never finalized');
+ assert.match(b.stdout+b.stderr,/still alive; holding/);assert.deepEqual(held(leaseTree(c.store)),held(original),'a live original is never finalized');
 });
 await leaseControl('failed immutable owner publication is recovered as ABANDONED by the next tick',async(f,c)=>{
  const a=c.start('owner-failure-A',{gate:'owner'});assert.equal((await a.next()).event,'BEFORE_OWNER');assert.equal(c.state(),'OPEN');
@@ -717,7 +773,7 @@ await leaseControl('a surviving child in the original tick process group holds r
  try {
   assert.equal(a.child.kill('SIGKILL'),true);await a.closed;process.kill(survivor,0);
   c.kernelAvailable();const original=leaseTree(c.store),b=c.start('group-B');assert.equal((await b.next()).event,'CLOSED');await b.closed;
-  assert.match(b.stdout+b.stderr,/may survive.*holding/);assert.deepEqual(leaseTree(c.store),original,'a live descendant is never finalized over');
+  assert.match(b.stdout+b.stderr,/may survive.*holding/);assert.deepEqual(held(leaseTree(c.store)),held(original),'a live descendant is never finalized over');
  } finally { try{process.kill(survivor,'SIGKILL')}catch{} }
  for(let i=0;i<50;i++){try{process.kill(survivor,0);spawnSync('/bin/sleep',['0.1'])}catch{break}}
  await recovers(c,c.start('group-C'),token);
@@ -897,12 +953,12 @@ for(const item of [
   assert.ok(a>=0&&b>a,'actual sync block must be present');
   const childPid=join(root,'child.pid');
   const fd8=join(root,'fd8'),guard=join(root,'tick.guard');writeFileSync(guard,'guard\n');
-  mkdirSync(join(root,'bin'));writeFileSync(join(root,'bin/git'),'#!/bin/sh\nif { : >&8; } 2>/dev/null; then echo HELD > "$FIXTURE_FD8"; else echo CLOSED > "$FIXTURE_FD8"; fi\nsleep 300 &\necho $! > "$FIXTURE_CHILD_PID"\nwait\n',{mode:0o755});
+  mkdirSync(join(root,'bin'));writeFileSync(join(root,'bin/git'),'#!/bin/sh\nif { : >&8; } 2>/dev/null; then echo HELD > "$FIXTURE_FD8"; else echo CLOSED > "$FIXTURE_FD8"; fi\nsh -c \'echo $$ > "$FIXTURE_CHILD_PID"; exec sleep 300\' </dev/null >/dev/null 2>&1 &\nwait\n',{mode:0o755});
   // The script holds the guard's kernel lock on FD8, as the real tick does.
   const script=`set -u\nexec 8<'${guard}'\nperl -MFcntl=:flock -e 'open(my $l,"<&=8") or exit 2; flock($l,LOCK_EX|LOCK_NB) or exit 3'\nsay(){ printf '%s\\n' "$1"; }\nheartbeat(){ printf 'HEARTBEAT %s\\n' "$RESULT"; }\n${tick.slice(a,b)}\necho NOT_REACHED\n`;
-  const began=Date.now(),r=spawnSync('/bin/bash',['-c',script],{cwd:root,encoding:'utf8',timeout:15000,env:{PATH:join(root,'bin')+':/usr/bin:/bin',SIGNALGRID_TICK_FETCH_TIMEOUT_SEC:'1',FIXTURE_CHILD_PID:childPid,FIXTURE_FD8:fd8}});
+  const began=Date.now(),r=spawnSync('/bin/bash',['-c',script],{cwd:root,encoding:'utf8',timeout:15000,env:{PATH:join(root,'bin')+':/usr/bin:/bin',SIGNALGRID_TICK_FETCH_TIMEOUT_SEC:'3',FIXTURE_CHILD_PID:childPid,FIXTURE_FD8:fd8}});
   assert.equal(r.status,0,'the tick must not hang on fetch: '+(r.error?.code??r.stderr));assert.match(r.stdout,/HEARTBEAT skipped: origin unreachable/);assert.ok(Date.now()-began<10000);
-  const pid=Number(readFileSync(childPid,'utf8'));assert.ok(pid>0);let gone=false;
+  const pid=pidWhenWritten(childPid);assert.ok(pid>0);let gone=false;
   for(let i=0;i<40&&!gone;i++){try{process.kill(pid,0);spawnSync('/bin/sleep',['0.1']);}catch(e){gone=e.code==='ESRCH';if(!gone)throw e;}}
   assert.ok(gone,'a child the timed-out fetch spawned must be killed with its process group');
   assert.equal(readFileSync(fd8,'utf8').trim(),'CLOSED','the fetch and its helpers never inherit the tick guard FD8');
@@ -931,6 +987,47 @@ for(const [label,setup,want] of [
   if(setup!=='no-receipt')writeFileSync(receipt,JSON.stringify({version:1,target})+'\n');
   const r=spawnSync(process.execPath,[join(ROOT,'scripts/lib/lane-attempt-store.mjs'),'refused-disposition',repo,receipt],{cwd:repo,encoding:'utf8',env:{PATH:process.env.PATH,HOME:process.env.HOME,GIT_CONFIG_NOSYSTEM:'1',GIT_CONFIG_GLOBAL:'/dev/null'}});
   assert.equal(r.status,0,r.stderr);assert.equal(r.stdout.trim(),want);
+  passed++;console.log('PASS '+label);
+ } catch(e){failed++;console.error('FAIL '+label+': '+e.message);}
+ finally{rmSync(root,{recursive:true,force:true});}
+}
+
+// The helper writes its own PID before it sleeps; a slow runner may still be starting
+// it, so wait (up to 5 s) for the file rather than assuming it exists.
+function pidWhenWritten(file){
+ for(let i=0;i<50;i++){try{const pid=Number(readFileSync(file,'utf8'));if(pid>0)return pid;}catch(e){if(e.code!=='ENOENT')throw e;}spawnSync('/bin/sleep',['0.1']);}
+ throw Error('helper never wrote its PID: '+file);
+}
+// The pending-heartbeat notice and the lane-repair notice use the shared rule's "move"
+// shape: only proven non-publication moves a notice aside; a present ref or a failed read holds.
+for(const [mode,want] of [['absent',true],['present',false],['fail',false]]){
+ const label='a refused pending-heartbeat notice with readback '+mode+(want?' is moved aside for its retry':' is held in place');
+ const root=mkdtempSync(join(tmpdir(),'sg-notice-move-'));
+ try {
+  const records=join(root,'records'),bin=join(root,'bin'),id='pending-heartbeat-'+'a'.repeat(64);mkdirSync(records);mkdirSync(bin);
+  writeFileSync(join(bin,'git'),'#!/bin/sh\nif [ "$1" = ls-remote ]; then case "$FIXTURE_LS_REMOTE" in present) printf \'%s\\t%s\\n\' 0123456789012345678901234567890123456789 "$4"; exit 0;; absent) exit 0;; esac; exit 2; fi\nexit 2\n',{mode:0o755});
+  for(const suffix of ['.attempt.json','.ops.json','.output','.terminal.json'])writeFileSync(join(records,id+suffix),'{"fixture":true}\n');
+  writeFileSync(join(records,id+'.submission.json'),JSON.stringify({version:1,target:'lane/mac-mail-20261101-010000Z-0123456789ab'})+'\n');
+  const r=spawnSync(process.execPath,[join(ROOT,'scripts/lib/lane-attempt-store.mjs'),'retry-refused',root,records,id,'1','move'],{cwd:root,encoding:'utf8',env:{PATH:bin+':/usr/bin:/bin',HOME:process.env.HOME,FIXTURE_LS_REMOTE:mode}});
+  assert.equal(r.status,0,r.stderr);const out=JSON.parse(r.stdout);
+  assert.equal(Boolean(out?.setAsideAs),want,r.stdout);assert.equal(existsSync(join(records,id+'.attempt.json')),!want);
+  passed++;console.log('PASS '+label);
+ } catch(e){failed++;console.error('FAIL '+label+': '+e.message);}
+ finally{rmSync(root,{recursive:true,force:true});}
+}
+{
+ // The readback's ls-remote runs in its own process group: a hung helper dies with it.
+ const label='a hung readback ls-remote is bounded and its helper is killed with its group';
+ const root=mkdtempSync(join(tmpdir(),'sg-lsremote-timeout-'));
+ try {
+  const bin=join(root,'bin'),pidFile=join(root,'helper.pid'),receipt=join(root,'r.submission.json');mkdirSync(bin);
+  writeFileSync(join(bin,'git'),'#!/bin/sh\nsh -c \'echo $$ > "$FIXTURE_HELPER_PID"; exec sleep 300\' </dev/null >/dev/null 2>&1 &\nwait\n',{mode:0o755});
+  writeFileSync(receipt,JSON.stringify({version:1,target:'lane/mac-mail-20261101-010000Z-0123456789ab'})+'\n');
+  const began=Date.now(),r=spawnSync(process.execPath,[join(ROOT,'scripts/lib/lane-attempt-store.mjs'),'refused-disposition',root,receipt],{cwd:root,encoding:'utf8',timeout:30000,env:{PATH:bin+':/usr/bin:/bin',HOME:process.env.HOME,SIGNALGRID_LS_REMOTE_TIMEOUT_SEC:'3',FIXTURE_HELPER_PID:pidFile}});
+  assert.equal(r.status,0,r.stderr);assert.equal(r.stdout.trim(),'unknown','a timed-out read is never absence');assert.ok(Date.now()-began<15000);
+  const pid=pidWhenWritten(pidFile);let gone=false;
+  for(let i=0;i<40&&!gone;i++){try{process.kill(pid,0);spawnSync('/bin/sleep',['0.1']);}catch(e){gone=e.code==='ESRCH';if(!gone)throw e;}}
+  assert.ok(gone,'the helper spawned by the timed-out ls-remote is killed with its group');
   passed++;console.log('PASS '+label);
  } catch(e){failed++;console.error('FAIL '+label+': '+e.message);}
  finally{rmSync(root,{recursive:true,force:true});}

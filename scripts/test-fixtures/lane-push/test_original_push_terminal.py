@@ -248,7 +248,9 @@ class RefusalRepairHandControls(unittest.TestCase):
         owner = lock / 'owner'; owner.write_bytes(b'held original legacy evidence\n')
         before = owner.read_bytes(); result = f.heartbeat()
         self.assertNotEqual(result.returncode, 0)
-        self.assertEqual(f.hand_ops(), []); self.assertEqual(len(f.rows(f.push_observed)), 1)
+        # The hold is visible (DR-054): exactly one tick-hold hand, nothing else.
+        ops = f.hand_ops(); self.assertEqual(len(ops), 1, ops)
+        self.assertRegex(ops[0]['id'], r'^tick-hold-[a-f0-9]{64}$'); self.assertIn('holding', ops[0]['blocked'])
         self.assertTrue(lock.is_dir()); self.assertEqual(owner.read_bytes(), before)
         f.assert_original_preserved()
 

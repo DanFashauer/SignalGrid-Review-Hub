@@ -97,9 +97,19 @@ TICK_GUARD_PATH="$(node "$TICK_LOCK_HELPER" tick-guard "$TICK_LOCK_ROOT")" || ex
 exec 8<"$TICK_GUARD_PATH" || { say "tick guard cannot be opened; READBACK ONLY"; exit 1; }
 # The owner record names this tick's process group, so a later recovery can
 # verify the whole group is gone (not only this shell) before closing its slot.
+# Its start time (ps lstart) lets recovery tell this shell from a reused PID after a reboot.
 _tick_pgid="$(ps -o pgid= -p $$ | tr -d ' ')"
-_tick_acquired="$(node "$TICK_LOCK_HELPER" tick-acquire "$TICK_LOCK_ROOT" "$$" ${_tick_pgid:+"$_tick_pgid"})"
+_tick_start="$(ps -o lstart= -p $$ | sed 's/^ *//; s/ *$//')"
+_tick_err="$(mktemp "${TMPDIR:-/tmp}/sg-tick-acquire.XXXXXX" 2>/dev/null)" || _tick_err=""
+# Redirect the shell's own stderr around the call: a redirection inside $(...) would
+# cost bash its exec shortcut, and the helper must stay a direct child of this shell.
+if [ -n "$_tick_err" ]; then exec 9>&2 2>"$_tick_err"; fi
+_tick_acquired="$(node "$TICK_LOCK_HELPER" tick-acquire "$TICK_LOCK_ROOT" "$$" ${_tick_pgid:+"$_tick_pgid"} ${_tick_pgid:+${_tick_start:+"$_tick_start"}})"
 _tick_acquire_status=$?
+if [ -n "$_tick_err" ]; then exec 2>&9 9>&-; fi
+_tick_acquire_msg=""
+if [ -n "$_tick_err" ]; then _tick_acquire_msg="$(cat "$_tick_err" 2>/dev/null)"; rm -f "$_tick_err"; fi
+if [ -n "$_tick_acquire_msg" ]; then printf '%s\n' "$_tick_acquire_msg" >&2; fi
 TICK_OWNER_TOKEN="$(printf '%s\n' "$_tick_acquired" | sed -n 1p)"
 TICK_RECOVERED="$(printf '%s\n' "$_tick_acquired" | sed -n '2,$p' | sed 's/^recovered: //' | paste -sd ';' -)"
 if [ -n "$TICK_RECOVERED" ]; then say "recovered: $TICK_RECOVERED"; fi
@@ -110,6 +120,11 @@ if [ "$_tick_acquire_status" != "0" ]; then
     exit 0
   fi
   say "tick ownership is held or incomplete; no work started; READBACK ONLY"
+  # A liveness hold (original shell alive, its group busy, or EPERM) is made visible
+  # on the Hub: one hand per held cause, through the ordinary hand path (DR-054).
+  case "$_tick_acquire_msg" in
+    *holding*) say "RAISED HAND: tick recovery holding; $(node "$TICK_LOCK_HELPER" raise-hold "$TICK_LOCK_ROOT" "$_tick_acquire_msg" 2>&1)" ;;
+  esac
   exit 1
 fi
 TICK_INTERRUPTED=0

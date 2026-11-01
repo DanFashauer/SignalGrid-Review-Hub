@@ -45,6 +45,41 @@
 // severity changes. Those carry an allowlist entry with a reason, mirroring how the
 // source files already label them. An allowlist entry that stops matching is itself a
 // failure: it means the code moved and the justification was not revisited.
+//
+// WHY THE SHARDS ARE BALANCED BY COST AND NOT BY MUTATION COUNT (measured 2026-10-15).
+//
+// The daily sweep is split across four runners, and the split used to balance MUTATION
+// COUNT. That is only the time a shard takes if every mutation costs the same, and one does
+// not: a mutation costs one run of the target's proof, and the proofs differ by a factor of
+// twenty to forty. Bisected (same lib/, proof file at each commit): commit bb1a41fd9
+// (2026-10-08 11:11Z, "device-management-health domains exhaustive by construction") put
+// `rootCauseEvidence` into the exhaustive domains, so the proof's raw-wire enumeration went
+// from 1,354,752 to 9,483,264 reports and one run from 4.8s (its parent) to 31.9s; the four
+// later commits to the same proof (counterfactual counters, ~2.6s) are 8% of the rise. That
+// proof has 49 mutations. It landed in the 2026-10-09 sweep and not the 2026-10-08 one. The runner's
+// own log of the one shard-3 run that finished (2026-10-13, run 38419147070, 30m16s,
+// `hung=0`): device-management-health took 25.2 min (baseline 30.5s, 49 mutations at 30.9s
+// each, 83% of the shard) and the other 448 mutations took about 5 min between them (~0.7s
+// each). The count-balanced split filed that target under "49 mutations". Shard 3 was
+// cancelled at the 40-minute job bound on six of the seven scheduled runs from 2026-10-09
+// (the seventh took 30m33s), and nothing was hung: the proof is just slow, once per
+// mutation, and the runner varies by half. On the cancelled 2026-10-15 run (38736534439) the
+// same target had a 46.6s baseline and 45s per mutation: ~37 min for the target ALONE,
+// nearly the whole bound, so weighting it properly is not enough and it must be SLICED.
+// Re-partitioning by count could not fix it either: once the registry grew the target
+// moved to shard 1 and carried the same ~25-37 min with it.
+//
+// So a TARGETS entry may register `runSeconds` (what one unmutated run of its proof costs;
+// default DEFAULT_RUN_SECONDS), the sharder balances mutations x runSeconds, and any target
+// heavier than MAX_UNIT_SECONDS is cut into mutation SLICES that different runners take.
+// The partition is deterministic (registered numbers only, never a clock), so independent
+// runners still agree on it; `check-mutation-sharding.mjs` proves it covers every MUTATION
+// exactly once, by running the SAME `selectSliceMutations` that main() sweeps with (not a model
+// of it) and by running main() itself with `--plan` (its own selection, stopping before the
+// first mutation is written; no proof runs), and refuses a split whose registered load nears
+// the job's own timeout.
+// A registered cost can go stale (that is how this happened), so each run prints the
+// measured baseline beside it and flags a proof that outgrew its registration.
 
 import { readFileSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
@@ -57,10 +92,35 @@ const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
  *  registry without running the gate. */
 const IS_MAIN = process.argv[1] !== undefined && import.meta.url === new URL(`file://${resolve(process.argv[1])}`).href;
 
-/** Per-proof wall-clock ceiling. Generous enough for the largest enumeration
- *  (device-management-health runs 1.35M raw reports twice in ~11s) and tight enough that
- *  a hang is detected in seconds rather than at a CI job's timeout. */
+/** Per-proof wall-clock ceiling. It was sized when the largest proof took seconds, and that
+ *  proof no longer does: device-management-health now enumerates 9,483,264 raw reports (1,354,752
+ *  before commit bb1a41fd9 put rootCauseEvidence into its exhaustive domains) and one unmutated
+ *  run takes 31 to 47 s. Measured: 31.4 s locally at bb1a41fd9 and 33.2 s at the fix head;
+ *  30.5 s (2026-10-13) and 46.6 s (2026-10-15) as the sweep runner's own baselines, so 90 s is
+ *  1.93x the slow draw. A mutant can cost more than the baseline (one measured 64 s in a local
+ *  run; not re-measured), so a mutant on the slow draw can still reach this ceiling and read
+ *  "hung". In the sweep that is counted and non-fatal, and a BASELINE over it fails loudly.
+ *  check-pr-gate-falsification.mjs shares runProof and treats "hung" as INCONCLUSIVE, which
+ *  stops a merge authorization for a PR touching a file this proof covers. The value is not
+ *  changed here; the comment is the part that was wrong. */
 const PROOF_TIMEOUT_MS = 90_000;
+
+/** What one run of a proof costs, in seconds, when its TARGETS entry registers nothing.
+ *  Calibrated to the sweep's RUNNER, on its SLOW draw, because that is the machine whose
+ *  40-minute bound matters: an ordinary target took 0.67s per mutation on the 2026-10-13
+ *  shard-3 run and 1.04s on the slower 2026-10-15 run (benchmark-selection's 73 mutations:
+ *  49s, then 76s), `pnpm run` start-up included. (A 4-core dev box measured the same
+ *  proofs at a median 1.5s, 90th percentile 2.5s, heaviest ordinary 4.2s; only the ratio to
+ *  the one outlier matters, and it is similar.) The sharder weighs a target by mutations x
+ *  this, so a target that registers nothing is weighed exactly as the old mutation-count
+ *  split weighed it. */
+export const DEFAULT_RUN_SECONDS = 1;
+
+/** The most registered work (mutations x runSeconds) the sharder puts in one schedulable
+ *  unit. A target heavier than this is cut into slices so its mutations can run on
+ *  different runners. The costs are registered at the slow runner's pace, so ten minutes
+ *  keeps any one unit a quarter of the sweep job's 40-minute bound even on that draw. */
+export const MAX_UNIT_SECONDS = 600;
 
 // ── what to mutate ────────────────────────────────────────────────────────────
 //
@@ -188,10 +248,22 @@ export const TARGETS = [
     // Routing decides which humans see a finding. A finding sent to the wrong queue is
     // functionally a finding nobody got.
     proof: "proof:incident-playbook",
+    oneLine: true,
     files: ["lib/incident-playbook/src/map.ts"],
   },
   {
+    // The only registered proof that is expensive per RUN: its raw-wire pass enumerates
+    // 9,483,264 reports twice. A killed mutant still runs to its summary line, so a mutation
+    // costs about a run. Measured on the runner: 30.9s per mutation on 2026-10-13 (baseline
+    // 30.5s) and 45s on the slower 2026-10-15 draw (baseline 46.6s); 34.4s unmutated on a
+    // 4-core dev box; 4.8s before bb1a41fd9 put `rootCauseEvidence` in the domains (7x
+    // the space). 49 mutations x 45s ~= 37 min, which with the other targets of its shard
+    // overran the 40-minute job bound from 2026-10-09. Registered at the slow pace (like the
+    // default) so the sharder cuts it into slices that run on different runners.
+    // Re-measure whenever its enumeration grows: the sweep prints the baseline wall and
+    // flags one far above this number.
     proof: "proof:device-management-health",
+    runSeconds: 45,
     files: [
       "lib/integrations/src/integrations/device-management-health/evaluate.ts",
       "lib/integrations/src/integrations/device-management-health/device-management-health-connector.ts",
@@ -202,6 +274,7 @@ export const TARGETS = [
     proof: "proof:link-usability",
     oneLine: true,
     files: [
+      "lib/integrations/src/integrations/link-usability/mock-transport.ts",
       "lib/integrations/src/integrations/link-usability/evaluate.ts",
       "lib/integrations/src/integrations/link-usability/link-usability-connector.ts",
       "lib/integrations/src/integrations/link-usability/index.ts",
@@ -210,6 +283,7 @@ export const TARGETS = [
   {
     proof: "proof:task-exception",
     files: [
+      "lib/integrations/src/integrations/task-exception/mock-transport.ts",
       "lib/integrations/src/integrations/task-exception/evaluate.ts",
       "lib/integrations/src/integrations/task-exception/task-exception-connector.ts",
       "lib/integrations/src/integrations/task-exception/index.ts",
@@ -309,6 +383,7 @@ export const TARGETS = [
   },
   {
     proof: "proof:emitter-discipline",
+    oneLine: true,
     files: [
       // Ponytail cut 4 (2026-09-02) folded the six near-identical emitter bodies into
       // one factory. Each family's resolve.ts is now a thin binding — config literals
@@ -318,6 +393,13 @@ export const TARGETS = [
       // resolveItsmEmitter; register THAT. Fixed 2026-09-03 after the sweep flagged the
       // five empty bindings and the whole daily sweep went red.
       "lib/integrations/src/integrations/adapters/emitter-resolver.ts",
+      // The shared outbound guards the proof imports (emit-gate/url-guard, bounded-text,
+      // redirect). Registered 2026-10-09 (wave 8) with `oneLine`: url-guard is the SSRF-class
+      // check and bounded-text's two guards are brace-less.
+      "lib/integrations/src/integrations/adapters/url-guard.ts",
+      "lib/integrations/src/integrations/adapters/bounded-text.ts",
+      "lib/integrations/src/integrations/adapters/redirect.ts",
+      "lib/integrations/src/integrations/adapters/vendor-values.ts",
     ],
   },
 
@@ -444,6 +526,7 @@ export const TARGETS = [
     proof: "proof:agent-identity",
     oneLine: true,
     files: [
+      "lib/integrations/src/integrations/agent-identity/mock-transport.ts",
       "lib/integrations/src/integrations/agent-identity/evaluate.ts",
       "lib/integrations/src/integrations/agent-identity/agent-identity-connector.ts",
       "lib/integrations/src/integrations/agent-identity/index.ts",
@@ -451,17 +534,20 @@ export const TARGETS = [
   },
   {
     proof: "proof:oauth-consent",
+    oneLine: true,
     files: [
+      "lib/integrations/src/integrations/oauth-consent/mock-transport.ts",
       "lib/integrations/src/integrations/oauth-consent/evaluate.ts",
-      // oauth-consent-connector.ts dropped 2026-09-03: read-only normalize/transport in
-      // typeof/allowlist/ternary shapes the mutators do not express, 0 mutations — a false
-      // coverage claim. evaluate.ts carries this family's mutable guards.
+      // oauth-consent-connector.ts dropped 2026-09-03 for 0 braced mutations; re-registered
+      // 2026-10-09 (wave 7) now that `oneLine` reaches its brace-less guard.
+      "lib/integrations/src/integrations/oauth-consent/oauth-consent-connector.ts",
       "lib/integrations/src/integrations/oauth-consent/index.ts",
     ],
   },
   {
     proof: "proof:sso-session",
     files: [
+      "lib/integrations/src/integrations/sso-session/mock-transport.ts",
       "lib/integrations/src/integrations/sso-session/evaluate.ts",
       "lib/integrations/src/integrations/sso-session/sso-session-connector.ts",
       "lib/integrations/src/integrations/sso-session/index.ts",
@@ -472,16 +558,17 @@ export const TARGETS = [
     proof: "proof:access-governance",
     oneLine: true,
     files: [
+      "lib/integrations/src/integrations/access-governance/mock-transport.ts",
       "lib/integrations/src/integrations/access-governance/evaluate.ts",
-      // access-governance-connector.ts dropped 2026-09-03: its normalize/transport is
-      // defensive parsing (typeof / allowlist / ternary) the mutators do not express, so
-      // it registered 0 mutations — a false coverage claim. The proof still asserts its
-      // behaviour; evaluate.ts carries this family's mutable decision guards.
+      // access-governance-connector.ts dropped 2026-09-03 for 0 braced mutations; re-registered
+      // 2026-10-09 (wave 7) now that `oneLine` reaches its brace-less guards.
+      "lib/integrations/src/integrations/access-governance/access-governance-connector.ts",
       "lib/integrations/src/integrations/access-governance/index.ts",
     ],
   },
   {
     proof: "proof:break-glass",
+    oneLine: true,
     files: [
       "lib/integrations/src/integrations/break-glass/evaluate.ts",
       "lib/integrations/src/integrations/break-glass/index.ts",
@@ -521,6 +608,7 @@ export const TARGETS = [
     proof: "proof:ot-posture",
     oneLine: true,
     files: [
+      "lib/integrations/src/integrations/ot-posture/mock-transport.ts",
       "lib/integrations/src/integrations/ot-posture/evaluate.ts",
       // ot-connector.ts re-registered 2026-10-01: dropped 2026-09-03 for 0 mutations, but with
       // `oneLine` on it carries 4 (its brace-less `readableString` guards).
@@ -532,6 +620,7 @@ export const TARGETS = [
     proof: "proof:token-binding",
     oneLine: true,
     files: [
+      "lib/integrations/src/integrations/token-binding/mock-transport.ts",
       "lib/integrations/src/integrations/token-binding/index.ts",
       "lib/integrations/src/integrations/token-binding/evaluate.ts",
       // token-binding-connector.ts re-registered 2026-10-01: dropped 2026-09-03 for 0
@@ -543,6 +632,7 @@ export const TARGETS = [
     proof: "proof:pacs-access",
     oneLine: true,
     files: [
+      "lib/integrations/src/integrations/pacs-access/mock-transport.ts",
       "lib/integrations/src/integrations/pacs-access/evaluate.ts",
       "lib/integrations/src/integrations/pacs-access/pacs-access-connector.ts",
       "lib/integrations/src/integrations/pacs-access/index.ts",
@@ -568,7 +658,15 @@ export const TARGETS = [
   // gate in isolation. Built after the lesson, they needed registering, not fixing.
   {
     proof: "proof:graph-connector",
-    files: ["lib/integrations/src/integrations/graph/index.ts"],
+    oneLine: true,
+    files: [
+      "lib/integrations/src/integrations/graph/estate.ts",
+      "lib/integrations/src/integrations/graph/index.ts",
+      "lib/integrations/src/integrations/graph/mock-transport.ts",
+      // posture-connector.ts registered 2026-10-09 (wave 7): the proof drives GraphPostureConnector
+      // directly, and its normalizers (normalizeManagement, ...) are the shipped read path against a real tenant.
+      "lib/integrations/src/integrations/graph/posture-connector.ts",
+    ],
   },
   {
     proof: "proof:carrier-reachability",
@@ -584,6 +682,7 @@ export const TARGETS = [
     proof: "proof:credential-exposure",
     oneLine: true,
     files: [
+      "lib/integrations/src/integrations/credential-exposure/mock-transport.ts",
       "lib/integrations/src/integrations/credential-exposure/credential-connector.ts",
       "lib/integrations/src/integrations/credential-exposure/evaluate.ts",
       "lib/integrations/src/integrations/credential-exposure/index.ts",
@@ -593,6 +692,7 @@ export const TARGETS = [
     proof: "proof:data-protection",
     oneLine: true,
     files: [
+      "lib/integrations/src/integrations/data-protection/mock-transport.ts",
       "lib/integrations/src/integrations/data-protection/dlp-connector.ts",
       "lib/integrations/src/integrations/data-protection/evaluate.ts",
       "lib/integrations/src/integrations/data-protection/index.ts",
@@ -602,13 +702,16 @@ export const TARGETS = [
     proof: "proof:device-attestation",
     oneLine: true,
     files: [
+      "lib/integrations/src/integrations/device-attestation/mock-transport.ts",
       // `evaluate.ts` grants the TOP assurance tier for this family and was not
       // mutated at all: the registration named `index.ts`, which re-exports it.
       // Mutation operates on files, so a barrel buys nothing.
       "lib/integrations/src/integrations/device-attestation/evaluate.ts",
-      // device-attestation-connector.ts dropped 2026-09-03: same reason — defensive
-      // parsing the mutators do not express, 0 mutations. evaluate.ts carries the
-      // mutable guards.
+      // device-attestation-connector.ts dropped 2026-09-03 for 0 braced mutations; wave 7
+      // (2026-10-09) tried it with `oneLine` (62 mutations, 2 survivors at the empty-string and
+      // "not found"/"unavailable" guards of readableString) and left it out unpinned. Wave 8
+      // (2026-10-09) pinned both in device-attestation-proof.ts and registers it.
+      "lib/integrations/src/integrations/device-attestation/device-attestation-connector.ts",
       "lib/integrations/src/integrations/device-attestation/index.ts",
       // The supervision-identity lifecycle emits the trust-precondition verdict
       // (grant / step-up / restrict) and normalizes a UEM report, so its guards are
@@ -617,11 +720,20 @@ export const TARGETS = [
     ],
   },
   {
+    // Wave 8 (2026-10-09), stretch. store-scope.ts is the tenant-key guard every connector config store
+    // keys through; no TARGET named it. config-scope-proof drives all three exports directly.
+    proof: "proof:config-scope",
+    oneLine: true,
+    files: ["lib/integrations/src/integrations/store-scope.ts"],
+  },
+  {
     proof: "proof:edr-threat",
+    oneLine: true,
     files: [
       "lib/integrations/src/integrations/edr-threat/edr-connector.ts",
       "lib/integrations/src/integrations/edr-threat/evaluate.ts",
       "lib/integrations/src/integrations/edr-threat/index.ts",
+      "lib/integrations/src/integrations/edr-threat/mock-transport.ts",
     ],
   },
   {
@@ -652,6 +764,7 @@ export const TARGETS = [
     proof: "proof:identity-risk",
     oneLine: true,
     files: [
+      "lib/integrations/src/integrations/identity-risk/mock-transport.ts",
       "lib/integrations/src/integrations/identity-risk/evaluate.ts",
       "lib/integrations/src/integrations/identity-risk/identity-connector.ts",
       "lib/integrations/src/integrations/identity-risk/index.ts",
@@ -659,16 +772,19 @@ export const TARGETS = [
   },
   {
     proof: "proof:location-services",
+    oneLine: true,
     files: [
       "lib/integrations/src/integrations/location-services/evaluate.ts",
       "lib/integrations/src/integrations/location-services/index.ts",
       "lib/integrations/src/integrations/location-services/location-connector.ts",
+      "lib/integrations/src/integrations/location-services/mock-transport.ts",
     ],
   },
   {
     proof: "proof:macos-posture",
     oneLine: true,
     files: [
+      "lib/integrations/src/integrations/macos-posture/mock-transport.ts",
       "lib/integrations/src/integrations/macos-posture/evaluate.ts",
       "lib/integrations/src/integrations/macos-posture/index.ts",
       "lib/integrations/src/integrations/macos-posture/macos-connector.ts",
@@ -676,7 +792,10 @@ export const TARGETS = [
   },
   {
     proof: "proof:nac",
+    oneLine: true,
     files: [
+      "lib/integrations/src/integrations/nac/aruba-clearpass.ts",
+      "lib/integrations/src/integrations/nac/cisco-ise.ts",
       "lib/integrations/src/integrations/nac/identifier.ts",
       "lib/integrations/src/integrations/nac/index.ts",
       "lib/integrations/src/integrations/nac/store.ts",
@@ -686,6 +805,7 @@ export const TARGETS = [
     proof: "proof:network-nac",
     oneLine: true,
     files: [
+      "lib/integrations/src/integrations/network-nac/mock-transport.ts",
       "lib/integrations/src/integrations/network-nac/evaluate.ts",
       "lib/integrations/src/integrations/network-nac/index.ts",
       "lib/integrations/src/integrations/network-nac/network-connector.ts",
@@ -693,14 +813,17 @@ export const TARGETS = [
   },
   {
     proof: "proof:peripheral-control",
+    oneLine: true,
     files: [
       "lib/integrations/src/integrations/peripheral-control/evaluate.ts",
       "lib/integrations/src/integrations/peripheral-control/index.ts",
+      "lib/integrations/src/integrations/peripheral-control/mock-transport.ts",
       "lib/integrations/src/integrations/peripheral-control/peripheral-connector.ts",
     ],
   },
   {
     proof: "proof:response-accountability",
+    oneLine: true,
     files: [
       "lib/integrations/src/integrations/response-accountability/evaluate.ts",
       "lib/integrations/src/integrations/response-accountability/index.ts",
@@ -710,6 +833,7 @@ export const TARGETS = [
     proof: "proof:rtls-custody",
     oneLine: true,
     files: [
+      "lib/integrations/src/integrations/rtls-custody/mock-transport.ts",
       "lib/integrations/src/integrations/rtls-custody/evaluate.ts",
       "lib/integrations/src/integrations/rtls-custody/index.ts",
       "lib/integrations/src/integrations/rtls-custody/rtls-connector.ts",
@@ -1713,48 +1837,198 @@ export function isAllowed(mutation) {
   return ALLOWED.find((a) => a.file === mutation.file && resolveAllowedLine(a, mutation.original).line === mutation.lineNo);
 }
 
-/** Split TARGETS across N shards, balanced by MUTATION COUNT rather than by target
- *  count. The two are wildly different: one family can carry more mutations than
- *  ten others together, so an even split of targets is a lopsided split of work,
- *  and the slowest shard sets the wall clock. Counting is cheap — `mutationsFor`
- *  parses text and runs no proof — so the balance is computed from the real
- *  numbers instead of assumed.
+/** Registered cost of one unmutated run of this target's proof, in seconds. An absent
+ *  `runSeconds` is the default; a PRESENT but unusable one throws, because falling back to
+ *  the default would make exactly the target someone tried to flag as heavy look ordinary. */
+export function runSecondsOf(target) {
+  if (target.runSeconds === undefined) return DEFAULT_RUN_SECONDS;
+  if (typeof target.runSeconds !== "number" || !Number.isFinite(target.runSeconds) || target.runSeconds <= 0) {
+    throw new Error(`${target.proof}: runSeconds must be a positive finite number, got ${String(target.runSeconds)}`);
+  }
+  return target.runSeconds;
+}
+
+/** Mutations a target has across all its files, counted on the pristine tree. */
+export function mutationTotal(target) {
+  return target.files.reduce((n, f) => n + mutationsFor(f, { oneLine: target.oneLine === true }).length, 0);
+}
+
+/** A slice `{ index, count }` owns the mutations whose 0-based position in the TARGET (counted
+ *  across its files in registry order, each file's mutations in line order) is congruent to
+ *  `index` modulo `count`. No slice means the whole target. Residue classes partition the
+ *  positions, so the slices of one target cover every mutation exactly once. */
+export function sliceOwns(slice, ordinal) {
+  return slice === undefined || ordinal % slice.count === slice.index;
+}
+
+/** How many of a target's `total` mutations a slice owns (all of them for no slice). */
+export function sliceSize(total, slice) {
+  if (slice === undefined) return total;
+  return total > slice.index ? Math.ceil((total - slice.index) / slice.count) : 0;
+}
+
+/** Every file of a target with the mutations `mutationsFor` finds in it, in the target's registry
+ *  file order (the order the ordinal runs in). `read` is injectable so a caller that walks the same
+ *  files many times, the sharding gate, can parse each once; the sweep passes nothing. */
+export function mutationsByFile(target, read = mutationsFor) {
+  return target.files.map((file) => ({ file, mutations: read(file, { oneLine: target.oneLine === true }) }));
+}
+
+/** THE selection of what one schedulable unit (a target, or one slice of it) sweeps, and the only
+ *  place the ordinal is accumulated and the slice filter applied. `perFile` is
+ *  `mutationsByFile(target)`. Returns, per file in order, `{ file, allCount, owned }`: `allCount`
+ *  is the WHOLE file's mutation count (the zero-mutation check must look at the file, never the
+ *  slice), `owned` the `{ ordinal, mutation }` pairs this unit sweeps, where `ordinal` is the
+ *  0-based position in the TARGET and runs on across files by the whole count, never the filtered
+ *  one. Also `total` (the target's mutations) and `swept` (how many this unit owns).
  *
- *  Exported and self-tested because a sharder that silently DROPS a target would
- *  make the sweep report success over work it never did — the exact failure mode
+ *  Pure and exported because main() sweeps with exactly this and the sharding gate runs exactly
+ *  this over every real unit at several shard counts: a gate that re-implemented the ownership
+ *  loop covered a model, and three one-token regressions in main()'s own copy of it (the slice
+ *  ignored; the ordinal advanced by the filtered count, which silently skips and repeats
+ *  mutations with every shard green; the zero check on the filtered count) all stayed green. */
+export function selectSliceMutations(target, perFile) {
+  const files = [];
+  let ordinal = 0;
+  let swept = 0;
+  for (const { file, mutations: all } of perFile) {
+    const owned = [];
+    for (let i = 0; i < all.length; i += 1) {
+      if (sliceOwns(target.slice, ordinal + i)) owned.push({ ordinal: ordinal + i, mutation: all[i] });
+    }
+    files.push({ file, allCount: all.length, owned });
+    ordinal += all.length;
+    swept += owned.length;
+  }
+  return { files, total: ordinal, swept };
+}
+
+/** The schedulable unit's name: its proof, plus `[index/count]` when it is one slice of a target. */
+export function unitName(unit) {
+  return `${unit.proof}${unit.slice ? `[${unit.slice.index}/${unit.slice.count}]` : ""}`;
+}
+
+/** The units a run of `--proof=<only>` `--shard=<i>/<n>` is to sweep, by name, from the ARGUMENTS and the registry alone.
+ *  main() does not pass its own `targets` in: that variable is what the loop walks, so a statement that shortens or
+ *  rewrites it (a unit dropped on a time budget, on a cost-drift warning, or on the runner's environment) cannot also
+ *  rewrite the list the loop is held to. Throws on a shard main() would already have refused. */
+export function expectedUnitNames(all, only, shardArg) {
+  const pool = only ? all.filter((t) => t.proof === only) : all;
+  if (shardArg === undefined) return pool.map(unitName);
+  const [i, n] = shardArg.split("/").map((x) => Number.parseInt(x, 10));
+  return shardTargets(pool, i, n).map(unitName);
+}
+
+/** What is wrong with the units a run actually got to, against the ones it was to sweep. A unit counts when it reached
+ *  its written-vs-plan check (`counted`) or failed its baseline (`failedBaseline`, reported on its own and fatal on its
+ *  own): anything else was skipped, and a skip is silent by construction (the count that would have seen it never
+ *  started). A unit swept that is not expected, or counted twice, is as wrong as one missing. One line per problem. */
+export function unitAccountingProblems(expected, counted, failedBaseline) {
+  const problems = [];
+  const accounted = new Set([...counted, ...failedBaseline]);
+  for (const unit of expected) if (!accounted.has(unit)) problems.push(`UNIT-SKIPPED ${unit}: never reached its count check`);
+  const seen = new Set();
+  for (const unit of [...counted, ...failedBaseline]) {
+    if (!expected.includes(unit)) problems.push(`UNIT-UNEXPECTED ${unit}: swept, but this --proof/--shard does not select it`);
+    else if (seen.has(unit)) problems.push(`UNIT-UNEXPECTED ${unit}: reached its count check twice`);
+    seen.add(unit);
+  }
+  return problems;
+}
+
+/** One planned mutation as `--plan` prints it, fields in this fixed order. `ordinal` is the position
+ *  in the TARGET (the selector's number), `line` the 1-based source line. */
+export function placementOf(unit, file, ordinal, mutation) {
+  return { unit: unitName(unit), file, ordinal, mutator: mutation.mutator, line: mutation.lineNo };
+}
+
+/** The `--plan` document: one placement per line, so a diff of two plans reads line by line. Pure,
+ *  and the only thing `--plan` writes to stdout, which is why it parses as JSON whole. */
+export function planDocument(proof, shard, placements) {
+  return `{"proof":${JSON.stringify(proof ?? null)},"shard":${JSON.stringify(shard ?? null)},"count":${placements.length},"placements":[\n${placements.map((p) => JSON.stringify(p)).join(",\n")}\n]}`;
+}
+
+/** How many slices a target needs so none holds more than `maxUnitSeconds` of registered work:
+ *  one for an ordinary target, never more than one per mutation (an empty slice would run a
+ *  baseline for nothing). */
+export function sliceCount(total, runSeconds, maxUnitSeconds = MAX_UNIT_SECONDS) {
+  return Math.max(1, Math.min(total, Math.ceil((total * runSeconds) / maxUnitSeconds)));
+}
+
+/** Registered work in one unit (a target, or one slice of it), in seconds. */
+export function unitWeight(unit, total = mutationTotal(unit)) {
+  return sliceSize(total, unit.slice) * runSecondsOf(unit);
+}
+
+/** Split TARGETS across N shards, balanced by REGISTERED COST (mutations x `runSeconds`)
+ *  rather than by mutation count or by target count. Mutation count is only the time a
+ *  shard takes if every mutation costs the same, and one proof costs 20x the others
+ *  (see the header: that is what overran the sweep's 40-minute bound). A target heavier than
+ *  MAX_UNIT_SECONDS comes back as several `{ ...target, slice }` units, each owning a residue
+ *  class of its mutations, and the runner that gets a slice sweeps only those. Counting is
+ *  cheap, `mutationsFor` parses text and runs no proof, so the balance is computed from the
+ *  real numbers instead of assumed.
+ *
+ *  Exported and self-tested because a sharder that silently DROPS a target (or one slice of
+ *  one) would make the sweep report success over work it never did: the exact failure mode
  *  this whole script exists to prevent, reintroduced at the scheduling layer.
+ *  No clock and no measured time enters the partition: every runner computes it
+ *  independently from the registry and they must all get the same answer.
  */
-export function shardTargets(all, index, count) {
+export function shardTargets(all, index, count, maxUnitSeconds = MAX_UNIT_SECONDS) {
   if (!Number.isInteger(index) || !Number.isInteger(count) || count < 1 || index < 0 || index >= count) {
     throw new Error(`--shard expects i/N with 0 <= i < N and N >= 1, got ${index}/${count}`);
   }
-  const weighted = all.map((t) => ({
-    target: t,
-    weight: t.files.reduce((n, f) => n + mutationsFor(f, { oneLine: t.oneLine === true }).length, 0),
-  }));
-  // Longest-processing-time first: heaviest target into the currently lightest bin.
+  // `maxUnitSeconds` exists so the sharding gate can switch slicing OFF (Infinity) and show
+  // that the oversize shape it guards against really overruns; the sweep never passes it.
+  if (typeof maxUnitSeconds !== "number" || Number.isNaN(maxUnitSeconds) || maxUnitSeconds <= 0) {
+    throw new Error(`maxUnitSeconds must be a positive number, got ${String(maxUnitSeconds)}`);
+  }
+  const units = [];
+  for (const target of all) {
+    const total = mutationTotal(target);
+    const perRun = runSecondsOf(target);
+    const pieces = sliceCount(total, perRun, maxUnitSeconds);
+    for (let k = 0; k < pieces; k += 1) {
+      const unit = pieces === 1 ? target : { ...target, slice: { index: k, count: pieces } };
+      units.push({ target: unit, weight: sliceSize(total, unit.slice) * perRun });
+    }
+  }
+  // Longest-processing-time first: heaviest unit into the currently lightest bin.
   // CODEPOINT tie-break, never `localeCompare`. This sort decides WHICH SHARD each
-  // target lands in, so its result is the sweep's partition of the work. ICU
+  // unit lands in, so its result is the sweep's partition of the work. ICU
   // collation differs between builds and locales, so two runners could order equal
   // weights differently and a target could move shards between runs — or, with the
   // shard count changed at the same time, be swept twice while another is swept not
   // at all. The one sort in this file that must be identical everywhere was the one
-  // that followed the machine.
-  weighted.sort(
+  // that followed the machine. (Slices of one target tie on weight and proof, so the
+  // slice index is the last key.)
+  units.sort(
     (a, b) =>
       b.weight - a.weight ||
-      (a.target.proof < b.target.proof ? -1 : a.target.proof > b.target.proof ? 1 : 0),
+      (a.target.proof < b.target.proof ? -1 : a.target.proof > b.target.proof ? 1 : 0) ||
+      (a.target.slice?.index ?? 0) - (b.target.slice?.index ?? 0),
   );
   const bins = Array.from({ length: count }, () => ({ load: 0, targets: [] }));
-  for (const w of weighted) {
+  for (const u of units) {
     const lightest = bins.reduce((min, b) => (b.load < min.load ? b : min), bins[0]);
-    lightest.load += w.weight;
-    lightest.targets.push(w.target);
+    lightest.load += u.weight;
+    lightest.targets.push(u.target);
   }
   return bins[index].targets;
 }
 
-/** Arguments this script understands: `--proof=<name>` and `--shard=<i>/<n>`, and
+/** True when a proof's measured unmutated run is far above the cost registered for it, so the
+ *  sharder is under-weighing it (the state that cost a week of cancelled shards). Reported,
+ *  never fatal: a wall-clock threshold on a shared runner is a flaky gate. The 8s floor keeps
+ *  an ordinary proof that hiccups from 1s to 4s quiet, and the 1.75x ratio is wider than the
+ *  runner's own 1.5x swing between draws (DMH baseline 30.5s on 2026-10-13, 46.6s on 10-15). */
+export function costDrifted(measuredSeconds, registeredSeconds) {
+  return measuredSeconds > registeredSeconds * 1.75 && measuredSeconds - registeredSeconds >= 8;
+}
+
+/** Arguments this script understands: `--proof=<name>`, `--shard=<i>/<n>` and `--plan` (print
+ *  what would be swept and stop; see main()), and
  *  the bare `--` that `pnpm run guard:mutations -- --proof=...` forwards (ignored). Anything
  *  else is refused — `--help`, a typo, a bare positional (`... proof:ot-posture`), or an
  *  EMPTY `--proof=` (whose falsy value used to fall through to a FULL sweep). Each of those
@@ -1763,18 +2037,41 @@ export function unknownArgs(argv) {
   // Validate the VALUE main() will parse (`split("=")[1]`), not just the raw token: `--proof==`
   // and `--proof==x` have a non-empty token but an empty parsed value, which selected EVERY
   // target. A value may therefore hold no second `=`; a shard is exactly `<int>/<int>`.
-  return argv.filter((a) => a !== "--" && !/^--proof=[^=]+$/.test(a) && !/^--shard=\d+\/\d+$/.test(a));
+  return argv.filter((a) => a !== "--" && a !== "--plan" && !/^--proof=[^=]+$/.test(a) && !/^--shard=\d+\/\d+$/.test(a));
 }
 
+/** `--plan`: run main()'s own target resolution, shard split and selection, then stop where the first
+ *  mutation would be written. Nothing is mutated, no proof runs, no baseline is taken; stdout is the
+ *  `planDocument` JSON and nothing else (the human lines go to stderr). It exists so the sharding gate
+ *  can observe what main() actually sweeps instead of reading main()'s source: the placements are
+ *  recorded at the statement that would otherwise run the mutation.
+ *
+ *  After each unit's sweep main() compares the mutations it wrote with the selector's `swept` for that unit
+ *  and fails the sweep (exit 1, a `WRITTEN-vs-PLAN` line) on a difference: a statement between the plan and
+ *  the write that skips or re-selects mutations leaves the plan intact, and this count is what sees it. In
+ *  `--plan` the placements count in place of writes. That count agrees with itself when the selector returns
+ *  nothing (0 planned, 0 written), so each unit's `swept` is also held to `sliceSize(mutationTotal(target),
+ *  target.slice)`, which depends on the target and the slice alone (a `PLAN-vs-SIZE` line, exit 1 before the
+ *  survivor report): a selector that returns an empty or short selection fails it whatever it keyed on.
+ *
+ *  A count only sees a unit that was started, so the units are accounted for as well: the names this run is to
+ *  sweep are computed from the arguments before the loop (`expectedUnitNames`, never from `targets`), each unit that
+ *  reaches its count check is recorded and printed as `unit-done <unit> written=<n> planned=<m>`, and a unit that is
+ *  neither counted nor a recorded baseline failure ends the run as `✗ UNIT-SKIPPED <unit>` (exit 1). That is the
+ *  net under a `continue` that drops a unit on a time budget, on the cost-drift warning, or on the runner's
+ *  environment, none of which a stub that answers in microseconds will ever take. */
 function main() {
   const unknown = unknownArgs(process.argv.slice(2));
   if (unknown.length > 0) {
-    console.error(`Mutation guard: unknown argument(s) ${unknown.join(" ")}. Usage: node scripts/mutation-guard.mjs [--proof=proof:<name>] [--shard=<i>/<n>]`);
+    console.error(`Mutation guard: unknown argument(s) ${unknown.join(" ")}. Usage: node scripts/mutation-guard.mjs [--proof=proof:<name>] [--shard=<i>/<n>] [--plan]`);
     process.exit(1);
   }
   const only = process.argv.find((a) => a.startsWith("--proof="))?.split("=")[1];
   const shardArg = process.argv.find((a) => a.startsWith("--shard="))?.split("=")[1];
-  let targets = only ? TARGETS.filter((t) => t.proof === only) : TARGETS;
+  const planOnly = process.argv.includes("--plan");
+  const log = planOnly ? console.error : console.log;
+  const placements = [];
+  let targets = only ? TARGETS.filter((t) => t.proof === only) : [...TARGETS];
   if (targets.length === 0) {
     console.error(`No target matches --proof=${only}. Known: ${TARGETS.map((t) => t.proof).join(", ")}`);
     process.exit(1);
@@ -1789,8 +2086,14 @@ function main() {
       console.error(`Mutation guard FAILED: ${err instanceof Error ? err.message : String(err)}`);
       process.exit(1);
     }
-    console.log(`Shard ${i + 1} of ${n} — ${targets.length} of ${TARGETS.length} registered targets.`);
-    if (targets.length === 0) {
+    const slicedUnits = targets.filter((t) => t.slice !== undefined).length;
+    const registeredLoad = targets.reduce((sum, t) => sum + unitWeight(t), 0);
+    log(
+      `Shard ${i + 1} of ${n} — ${targets.length} of ${TARGETS.length} registered targets` +
+        (slicedUnits ? ` (${slicedUnits} of them a slice of a target too heavy for one runner)` : "") +
+        `; registered load ~${(registeredLoad / 60).toFixed(1)} min (mutations x runSeconds, not a measurement).`,
+    );
+    if (targets.length === 0 && !planOnly) {
       // Not an error: with more shards than targets, an empty shard is correct and
       // must stay GREEN, or the lane fails for a scheduling choice rather than a defect.
       console.log("This shard has no targets. Nothing to sweep.\n");
@@ -1798,7 +2101,9 @@ function main() {
     }
   }
 
-  console.log("Mutation guard — every registered guard must be falsifiable by its own proof\n");
+  const expectedUnits = expectedUnitNames(TARGETS, only, shardArg);
+
+  log("Mutation guard — every registered guard must be falsifiable by its own proof\n");
 
   // An allowlist entry that no longer matches any line is itself a finding: the code moved
   // and the justification was never revisited. Checked BEFORE any mutation runs, so a stale
@@ -1839,24 +2144,66 @@ function main() {
   const survivors = [];
   const zeroMutation = [];
   const baselineFailures = [];
+  const writeMismatches = [];
+  const sizeMismatches = [];
+  const countedUnits = [];
+  const failedBaselineUnits = [];
 
+  // Registered load of everything this run will sweep, on the pristine tree (the end-of-run
+  // line below must not re-count mutations after the loop has been writing to the files).
+  const registeredTotal = targets.reduce((n, t) => n + unitWeight(t), 0);
+  const sweepStart = performance.now();
+  const timings = [];
   for (const target of targets) {
-    console.log(`── ${target.proof}`);
-    // See baselineProbe(): without this, a harness that cannot run the proof at all
-    // reports a 100% kill rate and the sweep's verdict is printed over nothing.
-    const base = baselineProbe(target.proof, runProof);
-    if (!base.ok) {
-      baselineFailures.push(base);
-      console.error(
-        `   ✗ BASELINE  ${target.proof} reads "${base.verdict}" UNMUTATED — every mutation below would ` +
-          `read the same, so this sweep cannot tell a kill from a broken harness. Not swept.`,
+    log(`── ${target.proof}${target.slice ? ` (slice ${target.slice.index + 1} of ${target.slice.count})` : ""}`);
+    const targetStart = performance.now();
+    if (!planOnly) {
+      // See baselineProbe(): without this, a harness that cannot run the proof at all
+      // reports a 100% kill rate and the sweep's verdict is printed over nothing.
+      const base = baselineProbe(target.proof, runProof);
+      const baselineSeconds = (performance.now() - targetStart) / 1000;
+      if (!base.ok) {
+        baselineFailures.push(base);
+        failedBaselineUnits.push(unitName(target));
+        console.error(
+          `   ✗ BASELINE  ${target.proof} reads "${base.verdict}" UNMUTATED — every mutation below would ` +
+            `read the same, so this sweep cannot tell a kill from a broken harness. Not swept.`,
+        );
+        continue;
+      }
+      const registeredSeconds = runSecondsOf(target);
+      console.log(
+        `   baseline: ${target.proof} passes unmutated in ${baselineSeconds.toFixed(1)}s ` +
+          `(registered ${registeredSeconds}s) — a kill below is a real kill`,
       );
-      continue;
+      if (costDrifted(baselineSeconds, registeredSeconds)) {
+        const note =
+          `${target.proof} took ${baselineSeconds.toFixed(1)}s unmutated but ${registeredSeconds}s is registered, so the sharder ` +
+          `under-weighs it; set runSeconds: ${Math.ceil(baselineSeconds)} on its TARGETS entry (see WHY THE SHARDS ARE BALANCED BY COST)`;
+        console.log(`   ⚠ COST DRIFT  ${note}`);
+        if (process.env.GITHUB_ACTIONS === "true") console.log(`::warning title=Mutation sweep cost drift::${note}`);
+      }
     }
-    console.log(`   baseline: ${target.proof} passes unmutated — a kill below is a real kill`);
-    for (const file of target.files) {
-      const mutations = mutationsFor(file, { oneLine: target.oneLine === true });
-      console.log(`   ${file} — ${mutations.length} mutations`);
+    // WHAT this unit sweeps is chosen by the exported selector, the one the sharding gate proves
+    // covers every mutation exactly once; main() adds no filter and no counter of its own. A slice
+    // sweeps only its residue class of the TARGET's mutations; the zero-mutation check below looks
+    // at the whole file (allCount), never at the slice.
+    const plan = selectSliceMutations(target, mutationsByFile(target));
+    const swept = plan.swept;
+    const placedBefore = placements.length;
+    let writtenInUnit = 0;
+    // THE ARITHMETIC NET, independent of the selector: how many mutations a slice holds is a function of the target's
+    // mutation count and the slice alone. A selector that returns an empty or short selection, on a time budget or on the
+    // runner's environment, makes the written-vs-plan count below agree with itself (0 written, 0 planned); this one does not.
+    const sized = sliceSize(mutationTotal(target), target.slice);
+    if (plan.swept !== sized) {
+      const line = `${unitName(target)}: selector planned ${plan.swept}, the slice arithmetic says ${sized}`;
+      sizeMismatches.push(line);
+      console.error(`   ✗ PLAN-vs-SIZE ${line}`);
+      process.exitCode = 1;
+    }
+    for (const { file, allCount, owned } of plan.files) {
+      log(`   ${file} — ${owned.length} mutations${target.slice ? ` (of ${allCount} in the file)` : ""}`);
       // A registered file the mutators cannot touch is a FALSE COVERAGE CLAIM, and a
       // quiet one: the run says "every registered guard is falsifiable", which is
       // vacuously true of a file with no guards in it. Someone reading TARGETS sees the
@@ -1867,12 +2214,17 @@ function main() {
       // UnifiedAction` — with no branching to falsify, so the entry bought nothing while
       // looking like coverage. The entry was removed; this makes the next one impossible
       // rather than a thing someone has to notice.
-      if (mutations.length === 0) {
+      if (allCount === 0) {
         zeroMutation.push(`${target.proof} → ${file}`);
       }
-      for (const mutation of mutations) {
+      for (const { ordinal, mutation } of owned) {
+        if (planOnly) {
+          placements.push(placementOf(target, file, ordinal, mutation));
+          continue;
+        }
         total += 1;
         writeFileSync(mutation.abs, mutation.content);
+        writtenInUnit += 1;
         let verdict;
         try {
           verdict = runProof(target.proof);
@@ -1898,6 +2250,39 @@ function main() {
         }
       }
     }
+    // THE REAL-PATH NET, the one no text pin can give: what this unit actually wrote must equal what the
+    // selector planned for it. A statement between the plan stop and the write that skips or re-selects
+    // mutations leaves the plan and the pins intact, but not this count. Plan mode counts the placements it
+    // recorded instead of writes, so the same line also holds the plan to the selector.
+    const accounted = writtenInUnit + (placements.length - placedBefore);
+    if (accounted !== swept) {
+      const line = `${unitName(target)}: ${accounted} mutations written, the selector planned ${swept}`;
+      writeMismatches.push(line);
+      console.error(`   ✗ WRITTEN-vs-PLAN  ${line}`);
+      process.exitCode = 1;
+    }
+    countedUnits.push(unitName(target));
+    log(`unit-done ${unitName(target)} written=${accounted} planned=${swept}`);
+    timings.push({
+      proof: target.proof,
+      slice: target.slice,
+      mutations: swept,
+      seconds: (performance.now() - targetStart) / 1000,
+      registered: swept * runSecondsOf(target),
+    });
+  }
+
+  // THE NET UNDER THE LOOP. The count above runs once a unit has been started; a unit that never was (skipped on a
+  // time budget, on a cost-drift warning, on the runner's environment) has no count to fail, which is how a shard can
+  // sweep 462 of 475 mutations and exit 0. `expectedUnits` was computed from the arguments before the loop, not from
+  // `targets`, and every unit in it must have reached its count or be a recorded baseline failure.
+  const unitProblems = unitAccountingProblems(expectedUnits, countedUnits, failedBaselineUnits);
+  for (const problem of unitProblems) console.error(`✗ ${problem}`);
+  if (unitProblems.length > 0) process.exitCode = 1;
+
+  if (planOnly) {
+    process.stdout.write(`${planDocument(only, shardArg, placements)}\n`);
+    return;
   }
 
   console.log(
@@ -1909,6 +2294,16 @@ function main() {
   // the guard's historical markers already recognise).
   console.log(
     `figures=mutations=${total},killed=${killed},inert=${allowed},survivors=${survivors.length}`,
+  );
+  // WHERE THE TIME WENT, per target, beside what the sharder was told to expect. The sweep used
+  // to print no timing at all, so a proof that got 7x slower was invisible until a job hit its
+  // bound; this is the line that would have shown it on the first run. REPORTED, never fatal.
+  const wallSeconds = (performance.now() - sweepStart) / 1000;
+  const slowest = [...timings].sort((a, b) => b.seconds - a.seconds).slice(0, 3);
+  console.log(
+    `wall=${(wallSeconds / 60).toFixed(1)}min registered=${(registeredTotal / 60).toFixed(1)}min ` +
+      `slowest: ${slowest.map((t) => `${t.proof.replace(/^proof:/, "")}${t.slice ? `[${t.slice.index + 1}/${t.slice.count}]` : ""}=${(t.seconds / 60).toFixed(1)}min/${t.mutations}m (registered ${(t.registered / 60).toFixed(1)}min)`).join(", ")}` +
+      " (REPORTED, never fatal — compare wall to the job's timeout-minutes)",
   );
   // The brace-less ratchet, REPORTED on every run and never fatal: which targets have
   // joined the one-line sweep and which have not. A target that has not joined has
@@ -1935,6 +2330,24 @@ function main() {
         "resolve) and sweep again. Reporting a kill rate measured through a broken runner is the\n" +
         "exact unfalsifiable-guard defect this file exists to find.",
     );
+    process.exit(1);
+  }
+
+  if (sizeMismatches.length > 0) {
+    console.error("\nMutation guard FAILED — a unit's selection is not the size its slice holds, so the counts above are over a different set than the one the shards were balanced for:\n");
+    for (const m of sizeMismatches) console.error(`  ✗ PLAN-vs-SIZE ${m}`);
+    process.exit(1);
+  }
+
+  if (writeMismatches.length > 0) {
+    console.error("\nMutation guard FAILED — the sweep did not write what the plan selected, so the counts above are over a different set than the one the shards were balanced for:\n");
+    for (const m of writeMismatches) console.error(`  ✗ WRITTEN-vs-PLAN  ${m}`);
+    process.exit(1);
+  }
+
+  if (unitProblems.length > 0) {
+    console.error("\nMutation guard FAILED — the sweep did not cover the units it was to cover, so the counts above are over fewer (or other) units than the shards were balanced for:\n");
+    for (const problem of unitProblems) console.error(`  ✗ ${problem}`);
     process.exit(1);
   }
 

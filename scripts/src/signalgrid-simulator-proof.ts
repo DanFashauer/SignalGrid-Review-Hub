@@ -182,6 +182,57 @@ assertions.push(assertion("puck lifecycle: a re-dock within N seconds does not r
 assertions.push(assertion("puck lifecycle: the removal is still a custody exception after the re-dock",
   byId["puck-session-lifecycle"]?.decision.reasonCodes.includes("CUSTODY_EXCEPTION") === true));
 
+// ── THE THREE ATTRIBUTE KEYS NO FIXTURE SET (plan row 84, coverage half) ─────
+//
+// `evaluateScenario` branches on `deviceCompromised`, `managementState` and
+// `requiredApproval`, and until now no scenario, proof or harness set any of them — a
+// branch that was deleted or inverted would have left every figure green. Each is
+// planted on the healthy checkout (which allows) on the signal it belongs to, so the
+// case differs from the green run by exactly that one fact. PROOF-LOCAL on purpose:
+// adding them to scenarios.ts would move the replay vectors.
+const healthy = listSimulatorScenarios().find((s) => s.id === "healthy-shared-device-checkout");
+function plantedKey(id: string, type: SignalGridSignal["type"], attributes: Record<string, string | boolean>, expected: DecisionOutcome[]): SimulatorRunResult | undefined {
+  if (!healthy || !healthy.startingSignals.some((sig) => sig.type === type)) return undefined;
+  return runScenario({
+    ...healthy,
+    id,
+    expectedOutcomes: expected,
+    startingSignals: healthy.startingSignals.map((sig) => (sig.type === type ? withAttrs(sig, attributes) : sig)),
+  });
+}
+const deviceTrustSet: DecisionOutcome[] = ["restrict", "alert_operator", "create_ticket", "record_audit"];
+const compromised = plantedKey("key-device-compromised", "device.posture_observed", { deviceCompromised: true }, deviceTrustSet);
+const unmanaged = plantedKey("key-management-unmanaged", "device.posture_observed", { managementState: "unmanaged" }, deviceTrustSet);
+const approvalMissing = plantedKey("key-required-approval-missing", "workflow.assignment_changed", { requiredApproval: "missing" },
+  ["step_up", "alert_operator", "route_to_owner", "record_audit"]);
+for (const [label, result, reason] of [
+  ["deviceCompromised: true", compromised, "DEVICE_TRUST_FAILURE"],
+  ["managementState: unmanaged", unmanaged, "DEVICE_TRUST_FAILURE"],
+  ["requiredApproval: missing", approvalMissing, "WORKFLOW_ROUTE_UNAVAILABLE"],
+] as const) {
+  assertions.push(assertion(`attribute key / ${label}: exact outcome set, reason ${reason}, never allows`,
+    result !== undefined &&
+      sameOutcomeSet(result.decision.outcomes, result.scenario.expectedOutcomes) &&
+      result.decision.reasonCodes.includes(reason) &&
+      !result.decision.outcomes.includes("allow") &&
+      result.status === "PASS"));
+}
+
+// ── THE STATUS VERDICT CAN FAIL (plan row 85) ────────────────────────────────
+// `runScenario`'s status once ANDed two evidence conjuncts that were true for every
+// input. What is left must be able to go both ways: no expectations FAILs, an unmet
+// expectation FAILs, and only a met one PASSes — on the same input.
+if (healthy) {
+  assertions.push(assertion("status: an empty expectedOutcomes is a FAIL, never a vacuous pass",
+    runScenario({ ...healthy, id: "status-empty", expectedOutcomes: [] }).status === "FAIL"));
+  assertions.push(assertion("status: an unmet expectation is a FAIL",
+    runScenario({ ...healthy, id: "status-unmet", expectedOutcomes: ["allow", "restrict"] }).status === "FAIL"));
+  assertions.push(assertion("status: a met expectation is a PASS",
+    runScenario({ ...healthy, id: "status-met", expectedOutcomes: ["allow", "record_audit"] }).status === "PASS"));
+} else {
+  assertions.push(assertion("status: healthy-shared-device-checkout fixture present", false));
+}
+
 // ── ORDER LIST ≡ DecisionOutcome UNION (verdict-core finding V1, 2026-09-02) ──
 //
 // `orderOutcomes` in lib/signalgrid-simulator/src/decisionEngine.ts filters a

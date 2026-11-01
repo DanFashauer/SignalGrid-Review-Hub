@@ -1,0 +1,13 @@
+{
+  "id": "2026-10-21-plan-row-17c-the-build-session-stopped-and-asked",
+  "raisedAt": "2026-10-21T21:49:40.733Z",
+  "origin": "mac",
+  "doing": "the unattended build tick (scripts/mac/build-tick.sh)",
+  "blockedBy": "plan row 17c: the build session stopped and asked for a hand: Row 17c is still open and locally reproducible, but the required validation runner is blocked by this sandbox. The active rule matches only misfit (lib/signalgrid-core/src/policy.ts:672), the seed expects unverified to allow (lib/signalgrid-core/src/seed.ts:481), and the existing proof pins the absent default to allow (scripts/src/signalgrid-core-proof.ts:902). A temporary counterexample executed with `node --import ./scripts/node_modules/tsx/dist/loader.mjs scripts/src/signalgrid-core-proof.ts` returned `Assertions: 597/600 passed`; all three added checks failed with `outcome=allow reasons=TR. Claim mac/build-row-17c-20261021T214648Z stays until a person deletes it",
+  "need": "a person on the Mac to read the log named in where, fix the cause or re-rank the row, and delete the claim branch it names when the row should be retried",
+  "whoCanUnblock": "mac lane",
+  "domain": "lane",
+  "status": "open",
+  "routedTo": null,
+  "where": "<HOME>/Library/Logs/signalgrid/build-tick-20261021T214648Z.log"
+}

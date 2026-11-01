@@ -45,7 +45,30 @@ jobs:
     # Bounded so a regression that makes a proof HANG (an unbounded prototype walk
     # against a Proxy returning a fresh prototype each call) fails red instead of
     # silently consuming the default job timeout.
-    timeout-minutes: 20
+    #
+    # THE BOUND CARRIES A MARGIN RULE (set 2026-10-15): bound = 2 x the longest
+    # run measured, rounded UP to the next 5 minutes, where a run the bound
+    # itself killed MID-STEP counts at the time it was killed; a run whose every
+    # step had finished before the kill is a runner stall, not a run length, and
+    # is not counted (for a run killed mid-step, its true length is not less).
+    # The 2x is the floor of the "two to three times observed runtime" that
+    # scripts/check-ci-job-timeouts.mjs states for every job; a bound at the run
+    # time is a flaky gate. The longest completed green run of this job from
+    # 2026-09-15 to 2026-10-15 is 19m46s (job 113907256410, 2026-10-09), so the
+    # previous bound, 20, sat 14 seconds above it. That bound cancelled three
+    # runs in which no step had failed, each a red check on a branch that broke
+    # nothing: two mid-step, both at 20m05s (job 116440190841, 2026-10-15, 6 s
+    # into its final step, the Decision-throughput saturation gate, every earlier
+    # step green; and job 110943968637, 2026-10-02, attempt 1, 32 steps short of
+    # the end after a 4m16s Playwright install, whose re-run went green in
+    # 14m44s), and one stall after the work (job 113452376076, 2026-10-08,
+    # 24m26s: all 404 of its steps were done by 14m58s, when "Complete job"
+    # finished, and the runner then sat idle for 9m28s until the cancel). A
+    # stall after the work is not a run length, so it is not counted. 2 x 20m05s
+    # = 40m10s, which rounds up to 45. A true hang is still caught here, now at
+    # 45 minutes rather than 20. Re-derive this number from the longest run
+    # whenever one passes half of it (22m30s).
+    timeout-minutes: 45
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -69,6 +92,8 @@ jobs:
         run: node scripts/review-invariants.mjs --self-test
       - name: Invariant review (fail-closed / determinism / Assist / truth)
         run: pnpm run review:invariants
+      - name: Clock-spelling matcher mutation guard (every listed mutant of the shared matcher must fail its self-test)
+        run: node scripts/clock-spellings-mutants.mjs
 
       - name: Lib-build heal self-test (an orphaned tsbuildinfo with no dist must be flagged)
         run: node scripts/ensure-lib-build.mjs --self-test
@@ -282,6 +307,10 @@ jobs:
         run: node scripts/check-shell-backend-paths.mjs --self-test
       - name: Shell backend paths (every shell control-plane path is a declared /v1 path)
         run: node scripts/check-shell-backend-paths.mjs
+      - name: Screen inventory self-test (the gate must be able to fail)
+        run: node scripts/check-screen-inventory.mjs --self-test
+      - name: Screen inventory (every page file listed; every stated launch status is launch-profile.mjs's)
+        run: node scripts/check-screen-inventory.mjs
       - name: Sim-script self-check self-test (the gate must be able to fail)
         run: node scripts/check-sim-scripts-selfcheck.mjs --self-test
       - name: Sim-script self-check (a queued Mac operation must name a script that runs)
@@ -443,6 +472,10 @@ jobs:
         run: node scripts/check-agent-raise-hand.mjs --self-test
       - name: Agent raise-your-hand (every subagent definition carries the surface-when-stuck contract)
         run: node scripts/check-agent-raise-hand.mjs
+      - name: Gate self-tests run self-test (a gate's --self-test that no step runs is run by a gate)
+        run: node scripts/check-gate-self-tests-run.mjs --self-test
+      - name: Gate self-tests run (a flag-less gate names a control; an unregistered --self-test is spawned)
+        run: node scripts/check-gate-self-tests-run.mjs
       - name: Positioning trace (every ratified claim resolves by id in the launch profile)
         run: node scripts/check-positioning-trace.mjs
       - name: Module init order (a const read before it is initialised)
@@ -476,8 +509,15 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: node scripts/check-ci-liveness.mjs
+      - name: Scheduled-workflow liveness self-test (the gate must be able to fail)
+        run: node scripts/check-scheduled-workflow-liveness.mjs --self-test
+      - name: Scheduled-workflow liveness (every scheduled workflow names its watcher or a dated exemption)
+        run: node scripts/check-scheduled-workflow-liveness.mjs
       - name: CI job timeouts (an unbounded job is an unbounded outage)
         run: node scripts/check-ci-job-timeouts.mjs
+      # Plan row 49's residual: the assessor-facing matrix's status column had no drift gate.
+      - name: "Security controls matrix (every status in the legend; every Implemented row's paths + proof exist)"
+        run: node scripts/check-security-controls-matrix.mjs
 
       # The declared product edge must match the real one, in BOTH directions. The
       # omission direction is the freeze: a new connector family, signal kind, API
@@ -546,6 +586,12 @@ jobs:
         run: node scripts/check-backlog-evidence.mjs
       - name: Backlog evidence self-test (the gate can fail)
         run: node scripts/check-backlog-evidence.mjs --self-test
+      # REPORTED, never fatal. This checkout is shallow, so the real-tree run prints
+      # NOT MEASURED here; the self-test builds its own full repository and is real.
+      - name: Row status drift (open rows reading FIX PROPOSED for a merged PR; reported)
+        run: node scripts/check-row-status-drift.mjs
+      - name: Row status drift self-test (a planted stale row must be flagged)
+        run: node scripts/check-row-status-drift.mjs --self-test
       - name: Surface-ownership self-test (the gate must be able to fail)
         run: node scripts/check-surface-ownership.mjs --self-test
       - name: Surface ownership (every file is somebody's)
@@ -636,6 +682,18 @@ jobs:
       # script-side gate; a missing, non-zero or stale sentinel must refuse the push.
       - name: "Land-branch push gate self-test (a missing, non-zero or stale sentinel must refuse the push)"
         run: node scripts/lib/land-branch-gate.mjs --self-test
+      - name: "Staged Mac worker self-test (triage, review, limits and transport)"
+        run: node scripts/mac/build-tick-stages.mjs --self-test
+      - name: "Local worker job-state proofs"
+        run: node scripts/mac/local-brain/test/job-state.test.mjs
+      - name: "Local worker task-selector proofs"
+        run: node scripts/mac/local-brain/test/task-selector.test.mjs
+      - name: "Local worker task-selector C0 regressions"
+        run: node scripts/mac/local-brain/test/task-selector-control-scope.test.mjs
+      - name: "Local worker task-selector C0 proof envelope"
+        run: node scripts/check-local-worker-task-selector-proof.mjs
+      - name: "Local worker proof-policy proofs"
+        run: node scripts/mac/local-brain/test/proof-policy.test.mjs
       # DR-060 rule 3, first slice: docs/agent/mcp-roster.json names which lane or
       # first-party skill may call which MCP server, with signalgrid-mcp's tool count
       # DERIVED from artifacts/mcp-server/src/index.ts, never hand-typed.
@@ -824,6 +882,12 @@ jobs:
         run: node scripts/check-cited-paths.mjs
       - name: "Cited-path self-test (the gate can actually fail)"
         run: node scripts/check-cited-paths.mjs --self-test
+      # check-cited-paths only sees BACKTICKED paths; a re-measured stamp (dated 2026-10-08
+      # on) citing one in plain text passes it unchecked.
+      - name: "Stamp citations (a re-measured stamp must backtick the repo paths it cites)"
+        run: node scripts/check-stamp-citations.mjs
+      - name: "Stamp-citation self-test (the gate can actually fail)"
+        run: node scripts/check-stamp-citations.mjs --self-test
       # A document that instructs `SIGNALGRID_X=…` names a control; if nothing reads X
       # the control does not exist. SIGNALGRID_SANITIZE_OUTPUT was "required" in two
       # documents and read by nothing.
@@ -1140,8 +1204,8 @@ jobs:
       # passed — every gate and all 31 assertions of proof:live-idp — so the job
       # reported `cancelled` for a reason that had nothing to do with the branch.
       #
-      # A mirror flake is transient, so retry; but an unbounded step that eats a
-      # 20-minute budget and reports an ambiguous status is the same defect this
+      # A mirror flake is transient, so retry; but an unbounded step that eats the
+      # job's whole budget and reports an ambiguous status is the same defect this
       # workflow's concurrency comment already complains about — a result nobody
       # can tell apart from a real regression. The step timeout makes it fail
       # FAST and legibly instead.
@@ -1270,7 +1334,15 @@ jobs:
 
       - name: Shell lint (shellcheck)
         run: |
-          sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck
+          # Prefer the runner's preinstalled shellcheck; install only when absent, and
+          # wait for the dpkg lock (a concurrent apt-get on the runner made this step
+          # fail at once with exit 100). Still absent afterwards -> fail, never skip.
+          if ! command -v shellcheck >/dev/null 2>&1; then
+            sudo apt-get -o DPkg::Lock::Timeout=180 update -qq
+            sudo apt-get -o DPkg::Lock::Timeout=180 install -y -qq shellcheck
+          fi
+          command -v shellcheck >/dev/null 2>&1 || { echo "::error::shellcheck is unavailable; the shell lint cannot run"; exit 1; }
+          shellcheck --version
           node scripts/check-shell.mjs
 
       - name: Bash deny-list hook self-test (a wrapped `sh -c` payload and unreadable input must DENY)

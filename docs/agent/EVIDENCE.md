@@ -5215,3 +5215,12 @@ Verdict: six owner-accepted records are on `SignalGrid_Alpha`, each on a head wh
 Full `node scripts/preflight.mjs` on feef1add exited1 at staged Mac worker self-test264/267; breadth was not started. A separate focused diagnostic retained the same three failing expectations. The production17ac repair deliberately routes a hand to `cloud lane` and uses `scripts/mac/build-tick.sh` as its public location rather than exporting private control-log locations or asking a Mac operator to delete claims and retry.
 
 Only those expected recipient/location values and the fallback case name changed. All267 cases remain, including exact failure-text redaction, four-field home/credential exclusion, unchanged private log text and protected-submission assertions. Executed `node scripts/mac/build-tick-stages.mjs --self-test` prints `self-test passed (267/267)` and exits0 on the corrected working tree; production build-tick and repair module bytes are unchanged. This focused result does not relabel the failed full run or establish full current-head gates, CI, source-review clearance, landing, activation or natural canonical heartbeat restoration.
+
+
+## L54 - Vetted ancestor and exact inventory correction; final qualification pending
+
+Independent operator source checkpoint at 2026-11-01T09:08:10.520264+00:00.
+
+Ordinary integration merged inspected protected ancestor 1691751207779b1a97af0a906c88bc3ff6d0ad57 into 2f64a655fb92a77661aabbe819664ec8076ad93d as intermediate merge 39acc9396483820120eb451cd12407165700e090. Observed live 3d2829778952625cc79d13c369769c989f38cbc0 is newer unreviewed source; only the vetted ancestor was merged. Fresh current-main source inspection still precedes final validation and delivery.
+
+Preflight source stayed byte-identical at SHA256 a41a3859eacdf884e5b9774ed001c5b889ab1464940cf0c7a62414500766ce87 with 977 newline-counted lines; only its COMPANY_BUILD_PLAN inventory number changed from 970 to 977. This documentation step changes no runtime or tests. Prior failed full runs remain failed. Own generators, fresh full/breadth, formal same-head dual-system reviews, current CI/findings, protected landing, installation, activation and natural canonical Mac heartbeat remain pending. Other-lane approved deliveries receive no local native coding or accepted-checkpoint credit.

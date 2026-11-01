@@ -487,3 +487,12 @@ block; a stage run on the wrong tier is a lesson here.
 - **evidence:** A focused diagnostic reproduced exactly those three failures. Updating only the expected recipient/location values and the fallback case name produced self-test267/267. All home/token redaction, four-field privacy, private-log preservation and submission assertions remain. The failed full run stays failed; breadth did not start.
 - **landing:** pending - fixture contract correction only; production routing and guards are unchanged. A new full current-head preflight/breadth, current CI/findings, complete source reviews and protected landing remain owed before separate initialization/activation or natural heartbeat proof.
 - **status:** pending
+
+
+### L54 - Bind intermediate source checkpoints and inventory figures to actual bytes
+- **date:** 2026-11-01
+- **lane:** mac
+- **incident:** The preflight inventory still described 970 lines while its exact source contains 977; earlier failed full runs remain failed.
+- **evidence:** Actual source SHA256 a41a3859eacdf884e5b9774ed001c5b889ab1464940cf0c7a62414500766ce87 contains 977 newline-counted lines. Inspected protected ancestor 1691751207779b1a97af0a906c88bc3ff6d0ad57 was ordinarily integrated from 2f64a655fb92a77661aabbe819664ec8076ad93d as intermediate merge 39acc9396483820120eb451cd12407165700e090. Observed live 3d2829778952625cc79d13c369769c989f38cbc0 is newer unreviewed source; only the vetted ancestor was merged.
+- **landing:** pending - only the measured 970-to-977 doc number and append-only records are checkpointed locally; generators, full/breadth, reviews, current CI, protected landing and activation remain owed.
+- **status:** pending

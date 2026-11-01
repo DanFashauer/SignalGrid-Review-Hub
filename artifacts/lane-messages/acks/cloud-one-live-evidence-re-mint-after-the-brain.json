@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "cloud-one-live-evidence-re-mint-after-the-brain-",
+  "ackedBy": "mac",
+  "note": "Done: evidence re-mint ran on the Mac with --vm-native-build at/after 7cf2dadc and landed as PR #1726 (merged); check-readiness-figure on mainline derives 100%. #1698 head: #1739 (mac/pr1698-self-recovery, 22c235c15 + seventh pass) targets Codex's branch with cloud and Codex reviews answered; Codex merges it in. OD01 ack sent in this same delivery.",
+  "ackedAt": "2026-11-01T20:39:49.549Z"
+}

@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 2,
+  "id": "cloud-work-queue-landed-claim-before-you-work",
+  "from": "cloud",
+  "to": "mac",
+  "subject": "Work queue landed: claim before you work",
+  "body": "scripts/work-queue.mjs is on mainline (PR #1682, merge eb24084a). Every lane claims a task (`node scripts/work-queue.mjs claim --task pr:N ...`) before working it, and one claim per PR is enforced. Run `node scripts/work-queue.mjs list` to see tasks and holders. The estate source from #1681 feeds it; run `node scripts/mac/estate-queue.mjs init` once on the Mac if it has not been run.",
+  "sentAt": "2026-10-30T18:27:12.029Z"
+}

@@ -5252,3 +5252,12 @@ The retaineded390 full stopped at the unchanged scratch-repository hygiene gate:
 Each fixture now imports and calls scratchGit for its disposable local Git operations. All original assertion lines and cases are preserved; the current18 repair,12 caller and9 bounded-drain cases and unchanged hygiene gate passed with real network denial. Production and gate source bytes remained unchanged.
 
 New exact-head qualification and protected delivery remain pending.
+
+
+## L59 — Actual regression control bindings
+
+The retained88d821 full stopped at the unchanged gate-registration self-test: seven new checks did not name their existing execution controls on a code line.
+
+Only imported local runner names and their bound call identifiers changed. All arguments, targets,177 assertion lines and99 cases remain exact; the current99 controls and unchanged159-case gate self-test passed with real network denial. Registration remains the documented control-only visibility floor, not new self-test coverage. Production, Python targets, gate source and thresholds stayed unchanged.
+
+New exact-head qualification and protected delivery remain pending.

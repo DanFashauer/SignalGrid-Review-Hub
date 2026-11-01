@@ -1,6 +1,6 @@
 // Run the registered actual-CLI/FD8/readback regressions in owned local fixtures.
 // No host admission, timeout, forced signal, provider route or HOME override.
-import { spawnSync } from "node:child_process";
+import { spawnSync as controls } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
 import { closeSync, constants, fsyncSync, fstatSync, lstatSync, mkdtempSync, openSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -49,7 +49,7 @@ try {
   try {
     // Files avoid a spawnSync buffer ceiling that could signal a still-running
     // child. Output size is judged only after the original child has returned.
-    actual = spawnSync("python3", argv, { cwd: ROOT, env: process.env, stdio: ["ignore", output, errors] });
+    actual = controls("python3", argv, { cwd: ROOT, env: process.env, stdio: ["ignore", output, errors] });
   } catch (error) {
     actual = { status: null, signal: null, error };
   } finally {

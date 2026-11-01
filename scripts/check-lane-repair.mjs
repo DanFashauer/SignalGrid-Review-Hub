@@ -8,7 +8,7 @@ import { chmodSync, copyFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync,
   readFileSync, readdirSync, realpathSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve, sep } from 'node:path';
 import { tmpdir } from 'node:os';
-import test from 'node:test';
+import control from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { scratchGit } from './lib/scratch-git.mjs';
 
@@ -156,7 +156,7 @@ function oneRepair(f,count=1) {
  }
  return c;
 }
-function frozen(id,name,body) { test(id+' '+name,{concurrency:false},()=>{let f;try{f=fixture();body(f);}finally{if(f)f.clean();}}); }
+function frozen(id,name,body) { control(id+' '+name,{concurrency:false},()=>{let f;try{f=fixture();body(f);}finally{if(f)f.clean();}}); }
 
 frozen('R01','a source-bound original heartbeat uncertainty becomes immutable DATA without executing a delivery',f=>{
  const o=original(f,'heartbeat'),r=request(f,o);assert.equal(r.data.provenance,'SOURCE_BOUND');assert.equal(f.calls().length,0);noRemoteAttempt(f);

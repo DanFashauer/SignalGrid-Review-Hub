@@ -8,7 +8,7 @@ import { chmodSync, copyFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync,
   readFileSync, readdirSync, realpathSync, renameSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve, sep } from 'node:path';
 import { tmpdir } from 'node:os';
-import test from 'node:test';
+import control from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { scratchGit } from './lib/scratch-git.mjs';
 
@@ -156,7 +156,7 @@ function oneRepair(f,count=1) {
  }
  return c;
 }
-function frozen(id,name,body) { test(id+' '+name,{concurrency:false},()=>{let f;try{f=fixture();body(f);}finally{if(f)f.clean();}}); }
+function frozen(id,name,body) { control(id+' '+name,{concurrency:false},()=>{let f;try{f=fixture();body(f);}finally{if(f)f.clean();}}); }
 
 
 // Only external delivery is doubled. CLI entry logging observes the actual
@@ -181,7 +181,7 @@ function callerFixture() {
  f.repairs=()=>f.calls().filter(c=>c.args[0]==='batch'&&c.ops[0]?.id!==f.env.FIXTURE_ORIGINAL_HAND);
  return f;
 }
-function callerCase(id,name,body) {test(id+' '+name,{concurrency:false},()=>{let f;try{f=callerFixture();body(f);}finally{if(f)f.clean();}});}
+function callerCase(id,name,body) {control(id+' '+name,{concurrency:false},()=>{let f;try{f=callerFixture();body(f);}finally{if(f)f.clean();}});}
 function sourceFunction(file,start,end) {
  const text=readFileSync(join(SOURCE,file),'utf8'),a=text.indexOf(start),b=text.indexOf(end,a);
  assert.ok(a>=0&&b>a,'source function boundaries required: '+file);return text.slice(a,b);

@@ -10,7 +10,7 @@ import { dirname, join, resolve, sep } from 'node:path';
 import { tmpdir } from 'node:os';
 import control from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { scratchGit } from './lib/scratch-git.mjs';
+import { scratchGit, scratchGitEnv } from './lib/scratch-git.mjs';
 
 const SOURCE = process.argv[2] ? resolve(process.argv[2]) : fileURLToPath(new URL('../', import.meta.url));
 assert.ok(SOURCE, 'explicit disposable-source root argument required');
@@ -18,11 +18,7 @@ const MODULE = 'scripts/lib/lane-repair.mjs';
 const sha = b => createHash('sha256').update(b).digest('hex');
 const enc = x => Buffer.from(JSON.stringify(x) + '\n');
 const quote = s => "'" + String(s).replaceAll("'", "'\\''") + "'";
-const scrub = ['GIT_DIR','GIT_WORK_TREE','GIT_INDEX_FILE','GIT_OBJECT_DIRECTORY',
- 'GIT_ALTERNATE_OBJECT_DIRECTORIES','GIT_COMMON_DIR','GIT_NAMESPACE','GIT_PREFIX',
- 'GIT_CONFIG','GIT_CONFIG_COUNT','GIT_CONFIG_PARAMETERS','GIT_GRAFT_FILE',
- 'GIT_IMPLICIT_WORK_TREE','GIT_NO_REPLACE_OBJECTS','GIT_REPLACE_REF_BASE','GIT_SHALLOW_FILE'];
-const parentEnv = { ...process.env }; for (const k of scrub) delete parentEnv[k];
+const parentEnv = scratchGitEnv(process.env);
 // Both are known local executables; no repository hook or model helper is selected.
 const GIT = spawnSync('/bin/sh',['-c','command -v git'],{env:parentEnv,encoding:'utf8'}).stdout.trim();
 let serial = 0;

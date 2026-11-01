@@ -5261,3 +5261,12 @@ The retained88d821 full stopped at the unchanged gate-registration self-test: se
 Only imported local runner names and their bound call identifiers changed. All arguments, targets,177 assertion lines and99 cases remain exact; the current99 controls and unchanged159-case gate self-test passed with real network denial. Registration remains the documented control-only visibility floor, not new self-test coverage. Production, Python targets, gate source and thresholds stayed unchanged.
 
 New exact-head qualification and protected delivery remain pending.
+
+
+## L60 — Shared Git environment policy
+
+The retained4a4158e full stopped at the unchanged walker self-test. Its proximity heuristic classified three duplicated Git-environment-key arrays beside readdirSync as filesystem roots.
+
+The fixtures now use the existing scratchGitEnv function instead of duplicating its16-key policy. Final fixture environment values, executable lookup PATH,177 assertions and all39 cases are preserved. Actual39 controls,16 walker self-tests, the regular walker and scratch-hygiene gates and closed environment-equivalence vectors passed under real network denial. No copy walk, floor, threshold, waiver, PENDING entry or idle-empty rule changed.
+
+New exact-head qualification and protected delivery remain pending.

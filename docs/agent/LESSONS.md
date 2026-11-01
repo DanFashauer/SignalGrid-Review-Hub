@@ -541,3 +541,12 @@ block; a stage run on the wrong tier is a lesson here.
 - **evidence:** Only imported local runner names and their bound call identifiers changed. All arguments, targets,177 assertion lines and99 cases remain exact; the current99 controls and unchanged159-case gate self-test passed with real network denial. Registration remains the documented control-only visibility floor, not new self-test coverage. Production, Python targets, gate source and thresholds stayed unchanged.
 - **landing:** pending — local fixture/journal checkpoint only; every earlier full failure remains failed. New exact-head full/breadth, CI, formal reviews, protected landing and separate activation remain owed.
 - **status:** pending
+
+
+### L60 — Reuse the shared Git environment policy in repair fixtures
+- **date:** 2026-11-01
+- **lane:** mac
+- **incident:** The retained4a4158e full stopped at the unchanged walker self-test. Its proximity heuristic classified three duplicated Git-environment-key arrays beside readdirSync as filesystem roots.
+- **evidence:** The fixtures now use the existing scratchGitEnv function instead of duplicating its16-key policy. Final fixture environment values, executable lookup PATH,177 assertions and all39 cases are preserved. Actual39 controls,16 walker self-tests, the regular walker and scratch-hygiene gates and closed environment-equivalence vectors passed under real network denial. No copy walk, floor, threshold, waiver, PENDING entry or idle-empty rule changed.
+- **landing:** pending — local fixture/journal checkpoint only; earlier full failures remain failed. New exact-head full/breadth, CI, formal reviews, protected landing and separate activation remain owed.
+- **status:** pending

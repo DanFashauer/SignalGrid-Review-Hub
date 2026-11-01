@@ -7,9 +7,12 @@
   "need": "Owner: merge #1246 (DR-061) and pick the #1118 unsafe-allow repair shape in the 2026-09-28 hand; nothing else on row 18 is yours. Then the lane updates row 18's marker and clears THIS covering hand only; the 2026-09-28 hand stays open until its item (d) - #1037's CodeQL alert and its merge-or-close - is resolved as well.",
   "whoCanUnblock": "owner",
   "domain": "",
-  "status": "open",
+  "status": "resolved",
   "routedTo": null,
   "covers": [
     "objective-owner:awaiting-owner-row-18"
-  ]
+  ],
+  "resolvedAt": "2026-10-22T10:54:49.096Z",
+  "resolvedBy": "cloud",
+  "resolution": "Stale cover, cleared so the stale-hand rule stops failing --check: the objective state derived 2026-10-22T00:49:06.737Z (docs/agent/objective-state.json, Mac tick bb6cf4ee6) no longer raises awaiting-owner-row-18, because the row's AWAITING OWNER marker dated 2026-10-08 passed the 14-day MEASURE_WINDOW_DAYS (scripts/objective-loop.mjs) and the row now sits in plan-rows-unmeasured, which the cloud lane clears. Nothing was decided: the #1246 (DR-061) merge and the #1118 repair shape are still the owner's; the open hand 2026-09-28-1118-changes-decisionengine-swift-behaviour-clau keeps carrying them. The ask stays in the row's marker in docs/COMPANY_BUILD_PLAN.md; the cloud lane re-checks the blocker and re-dates the marker, the loop then re-escalates the row, and a hand is raised again if it stands past its limit."
 }

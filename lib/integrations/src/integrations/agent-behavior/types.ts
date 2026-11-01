@@ -23,6 +23,8 @@
 // monitor, a UEBA/behavior-analytics engine, or the agent gateway's own telemetry). It
 // takes no action of its own; it reports a posture the fabric fuses.
 
+import type { FamilyAction } from "../action-ladder";
+
 /** How the action's VOLUME compares to the identity's established baseline for this
  *  kind of action. `burst` = orders of magnitude over baseline (the prompt→40k case);
  *  `elevated` = materially above baseline but not a burst. */
@@ -120,7 +122,7 @@ export type AgentBehaviorReasonCode =
   | "NOT_COVERED";
 
 /** All members are on the unified action ladder used by posture-composition. */
-export type AgentBehaviorAction = "none" | "monitor" | "step_up" | "alert" | "restrict" | "escalate";
+export type AgentBehaviorAction = FamilyAction;
 
 export interface AgentBehaviorVerdict {
   posture: AgentBehaviorPosture;

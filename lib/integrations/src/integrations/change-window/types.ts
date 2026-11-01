@@ -57,6 +57,8 @@
 // grade the device's posture, the worker's identity, or their custody of the device.
 // Those stay with their own dimensions.
 
+import type { FamilyAction } from "../action-ladder";
+
 /** Where the operation stands against the record's authorized window, at the
  *  caller's reference instant. DERIVED, never believed. */
 export type ChangeWindowStanding =
@@ -157,7 +159,7 @@ export type ChangeWindowPosture =
   | "change_record_stale" // the read is older than the caller's maximum age
   | "change_unverified"; // any axis unknown / malformed / uncovered
 
-export type ChangeWindowAction = "none" | "monitor" | "step_up" | "alert" | "restrict" | "escalate";
+export type ChangeWindowAction = FamilyAction;
 
 export type ChangeWindowReasonCode =
   | "CHANGE_AUTHORIZED"

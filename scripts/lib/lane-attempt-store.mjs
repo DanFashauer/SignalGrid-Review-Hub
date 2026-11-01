@@ -687,7 +687,14 @@ export function raiseTickHold(root, message) {
     if (["none", "1", "2"].includes(exit)) {
       retryOf = setAsideRefusedAttempt(root, directory, id, exit, "move");
       if (!retryOf?.setAsideAs) return `hand ${prior.handId ?? id} already raised`;
-    } else if (exit === "0" && handLedgerStatus(root, prior.handId ?? id) === "resolved") {
+    } else if (exit === "0") {
+      // Read the Hub ledger fresh (best effort, bounded; a stale local ref is still read).
+      const env = { ...process.env, GIT_TERMINAL_PROMPT: "0" };
+      for (const key of ["GIT_DIR", "GIT_WORK_TREE", "GIT_COMMON_DIR"]) delete env[key];
+      spawnSync("perl", ["-MPOSIX", "-e", GROUP_BOUNDED, "60", "git", "fetch", "--quiet", "origin", "SignalGrid_Alpha"], { cwd: root, env, stdio: "ignore", timeout: 70000 });
+      const status = handLedgerStatus(root, prior.handId ?? id);
+      if (status === "unknown") return `hand ${prior.handId ?? id} ledger unreadable; holding`;
+      if (status !== "resolved") return `hand ${prior.handId ?? id} already raised`;
       const n = archiveNotice(directory, id);
       if (n === null) return `hand ${prior.handId ?? id} already raised (re-raise cap reached)`;
       retryOf = { attempt: id, exit: 0, n, setAsideAs: `refused/${id}.refused-${n}`, reraise: true };

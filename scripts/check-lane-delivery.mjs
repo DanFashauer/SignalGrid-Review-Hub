@@ -573,7 +573,7 @@ for(const [label,receipt,want] of [['without a receipt is raised again',false,2]
  const second=run(process.execPath,[module,'raise-hold',f.root,'original tick shell 1 is still alive; holding'],f.root,{...env,HOLD_RC:'0'});
  assert.equal(second.status,0,second.stderr);assert.equal(readFileSync(calls,'utf8').trim().split('\n').length,want);
  assert.match(second.stdout,want===2?/written \(lane-deliver exit 0\)/:/already raised/);
- if(want===2){const third=run(process.execPath,[module,'raise-hold',f.root,'original tick shell 1 is still alive; holding'],f.root,{...env,HOLD_RC:'0'});assert.match(third.stdout,/already raised/);assert.equal(readFileSync(calls,'utf8').trim().split('\n').length,2);}
+ if(want===2){const third=run(process.execPath,[module,'raise-hold',f.root,'original tick shell 1 is still alive; holding'],f.root,{...env,HOLD_RC:'0'});assert.match(third.stdout,/ledger unreadable; holding/,'delivered, and no ledger to dedupe on here: held, not resent');assert.equal(readFileSync(calls,'utf8').trim().split('\n').length,2);}
 });
 for(const [ledger,want] of [['open',1],['resolved',2]])check('a delivered hold hand whose Hub hand is '+ledger+(want===2?' is raised again under a new id':' stays already raised'),f=>{
  const calls=join(f.parent,'hold-calls'),message='original tick shell 1 is still alive; holding',id='tick-hold-'+createHash('sha256').update(message).digest('hex');
@@ -587,6 +587,14 @@ for(const [ledger,want] of [['open',1],['resolved',2]])check('a delivered hold h
  const second=run(process.execPath,[module,'raise-hold',f.root,message],f.root);assert.equal(second.status,0,second.stderr);
  const sent=readFileSync(calls,'utf8').trim().split('\n');assert.equal(sent.length,want);
  if(want===2){assert.equal(sent[1],id+'-again-1');assert.match(second.stdout,new RegExp('hand '+id+'-again-1 written'));}else assert.match(second.stdout,/already raised/);
+});
+check('a delivered hold hand with an unreadable Hub ledger says so and holds',f=>{
+ const calls=join(f.parent,'unknown-calls'),message='original tick shell 3 is still alive; holding';
+ writeFileSync(join(f.root,'scripts/lane-deliver.mjs'),`import fs from 'node:fs';fs.appendFileSync(${JSON.stringify(calls)},'push\\n');`);
+ const module=join(f.root,'scripts/lib/lane-attempt-store.mjs');
+ assert.match(run(process.execPath,[module,'raise-hold',f.root,message],f.root).stdout,/written \(lane-deliver exit 0\)/);
+ const second=run(process.execPath,[module,'raise-hold',f.root,message],f.root); // no origin/SignalGrid_Alpha: the ledger cannot be read
+ assert.equal(second.status,0,second.stderr);assert.match(second.stdout,/ledger unreadable; holding/);assert.equal(readFileSync(calls,'utf8').trim().split('\n').length,1);
 });
 check('two concurrent raise-holds publish exactly one hold hand',f=>{
  const calls=join(f.parent,'race-calls'),bin=join(f.parent,'race-bin'),message='original tick shell 1 is still alive; holding';mkdirSync(bin);
@@ -827,6 +835,22 @@ await leaseControl('a live PID with the recorded start time holds (recorded unde
  assert.match(again.stdout,/hand tick-hold-[a-f0-9]{64} written \(lane-deliver exit 1\)/);
  assert.ok(existsSync(join(c.store,'refused',ops[0].replace('.ops.json','.refused-1.attempt.json'))),'the refused first hand is kept aside');
 });
+await leaseControl('a tick recorded under America/Los_Angeles and checked under UTC still holds while its shell lives',async(f,c)=>{
+ // A releases the kernel guard but its shell stays alive: only the recorded start tells it apart.
+ const a=c.start('la-A',{tz:'America/Los_Angeles',pre:'exec 8<&-'});assert.equal((await a.next()).event,'ENTER');
+ const owner=JSON.parse(readFileSync(join(c.store,'tick-'+JSON.parse(readFileSync(c.slot,'utf8')).token+'.opened.json'),'utf8'));
+ assert.equal(owner.shellStart,isoStartOf(owner.shellPid),'recorded as the true UTC instant, whatever the tick TZ');
+ const original=leaseTree(c.store),b=c.start('la-B',{tz:'UTC0'});assert.equal((await b.next()).event,'CLOSED');await b.closed;
+ assert.match(b.stdout+b.stderr,/still alive; holding/);assert.deepEqual(held(leaseTree(c.store)),held(original));
+ a.resume();await a.closed;
+});
+await leaseControl('a live PID whose recorded start is later than its current one (clock stepped back) holds',async(f,c)=>{
+ const a=c.start('back-A');assert.equal((await a.next()).event,'ENTER');const open=JSON.parse(readFileSync(c.slot,'utf8'));
+ assert.equal(a.child.kill('SIGKILL'),true);await a.closed;
+ rewriteOwner(c,open,{shellPid:process.pid,shellStart:'2099-01-01T00:00:00.000Z',pgid:undefined});
+ c.kernelAvailable();const original=leaseTree(c.store),b=c.start('back-B');assert.equal((await b.next()).event,'CLOSED');await b.closed;
+ assert.match(b.stdout+b.stderr,/still alive; holding/);assert.deepEqual(held(leaseTree(c.store)),held(original));
+});
 await leaseControl('a process-table line that does not parse holds recovery',async(f,c)=>{
  const a=c.start('ps-A');assert.equal((await a.next()).event,'ENTER');assert.equal(a.child.kill('SIGKILL'),true);await a.closed;
  const bin=join(f.parent,'fake-ps');mkdirSync(bin);writeFileSync(join(bin,'ps'),'#!/bin/sh\nif [ "$1" = -eo ]; then echo "  1 1 garbage that is not a process line"; exit 0; fi\nexec /bin/ps "$@"\n',{mode:0o755});
@@ -861,7 +885,7 @@ await leaseControl('a surviving child in the original tick process group holds r
  const survivor=Number(readFileSync(child,'utf8'));const token=JSON.parse(readFileSync(c.slot,'utf8')).token;
  try {
   assert.equal(a.child.kill('SIGKILL'),true);await a.closed;process.kill(survivor,0);
-  c.kernelAvailable();const original=leaseTree(c.store),b=c.start('group-B',{tz:'Asia/Tokyo'}); /* the scan must still find it under another TZ */assert.equal((await b.next()).event,'CLOSED');await b.closed;
+  c.kernelAvailable();const original=leaseTree(c.store),b=c.start('group-B',{tz:'America/Los_Angeles'}); /* recorded under UTC, scanned under a TZ behind it */assert.equal((await b.next()).event,'CLOSED');await b.closed;
   assert.match(b.stdout+b.stderr,/may survive.*holding/);assert.deepEqual(held(leaseTree(c.store)),held(original),'a live descendant is never finalized over');
  } finally { try{process.kill(survivor,'SIGKILL')}catch{} }
  for(let i=0;i<50;i++){try{process.kill(survivor,0);spawnSync('/bin/sleep',['0.1'])}catch{break}}
@@ -944,6 +968,7 @@ const cases=[
  ['repeating a clear token cannot loop or create a third hand',[{phase:'pending'},{phase:'collide'},{phase:'collide'}],2],
 ];
 try{const r=handEpisodes([{phase:'pending',code:1},{phase:'pending'}]);assert.equal(r.sent.length,2,'a refused (exit 1) hand is retried, never consumed');assert.equal(r.sent[0].id,r.sent[1].id);passed++;console.log('PASS a refused hand (exit 1) is retried by the next raise')}catch(e){failed++;console.error('FAIL a refused hand (exit 1) is retried by the next raise: '+e.message)}
+try{const r=handEpisodes([{phase:'pending',code:2,exists:true},{phase:'pending'}]);assert.equal(r.sent.length,1);assert.doesNotMatch(r.stdout,/already on the Hub/,'an unreadable ledger is never taken as done');assert.match(r.stdout,/RAISED HAND/);passed++;console.log('PASS raise-hand "already exists" with an unreadable ledger holds, never done')}catch(e){failed++;console.error('FAIL raise-hand "already exists" with an unreadable ledger holds, never done: '+e.message)}
 for(const [ledger,want,label] of [['open',1,'raise-hand "already exists" (exit 2) for an open hand is done, not retried'],['resolved',2,'raise-hand "already exists" (exit 2) for a resolved hand is raised again under a new id']]){try{const r=handEpisodes([{phase:'pending',code:2,exists:true},{phase:'pending'},{phase:'pending'}],{ledger});assert.equal(r.sent.length,want);if(want===1)assert.match(r.stdout,/already on the Hub/);else assert.match(r.sent[1].id,/^build-[a-f0-9]{64}-again-1$/);passed++;console.log('PASS '+label)}catch(e){failed++;console.error('FAIL '+label+': '+e.message)}}
 for(const [label,steps,count]of cases){try{const r=handEpisodes(steps);assert.equal(r.sent.length,count);if(count>1){assert.equal(new Set(r.sent.map(x=>x.id)).size,count);assert.ok(r.sent.every(x=>/^build-[a-f0-9]{64}$/.test(x.id)));}assert.doesNotMatch(r.stdout,/hand delivered/);passed++;console.log('PASS '+label)}catch(e){failed++;console.error('FAIL '+label+': '+e.message)}}
 }

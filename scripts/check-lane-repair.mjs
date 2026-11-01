@@ -220,11 +220,11 @@ frozen('R14','legacy missing producer provenance is recorded UNVERIFIED and is n
  assert.deepEqual(readFileSync(o.prefix+'.submission.json'),before);preserved(o.prefix,o.initial);
 });
 frozen('R15','untrusted malformed original payload is retained as DATA and cannot become a command or public body',f=>{
- const injected=join(f.parent,'DO_NOT_EXECUTE'),secret='/Users/private-person/secret-vault token=ghp_0123456789abcdefghijk $(touch '+injected+')';
+ const injected=join(f.parent,'DO_NOT_EXECUTE'),syntheticToken='ghp_'+'0123456789abcdefghijk',secret='/Users/private-person/secret-vault token='+syntheticToken+' $(touch '+injected+')';
  const o=original(f,'objective',{exit:2,legacy:true,secret});writeFileSync(o.prefix+'.submission.json','{"bad":"'+secret.replaceAll('"','\\"')+'"');
  const before=rawFiles(o.prefix),r=request(f,o);assert.equal(r.data.provenance,'UNVERIFIED');assert.equal(f.calls().length,0);
  acceptOwned(owned(f,notifyCommand(f,r)+' || exit $?'));const [c]=oneRepair(f),body=JSON.stringify(c.ops);
- for(const forbidden of ['/Users/private-person','secret-vault','ghp_0123456789abcdefghijk','DO_NOT_EXECUTE',o.prefix,f.parent])assert.ok(!body.includes(forbidden),'raw private input must not reach public operation: '+forbidden);
+ for(const forbidden of ['/Users/private-person','secret-vault',syntheticToken,'DO_NOT_EXECUTE',o.prefix,f.parent])assert.ok(!body.includes(forbidden),'raw private input must not reach public operation: '+forbidden);
  preserved(o.prefix,before);assert.equal(existsSync(injected),false,'untrusted DATA must not execute its shell fragment');
 });
 frozen('R16','a DATA request is not authority for an unowned direct consumer',f=>{

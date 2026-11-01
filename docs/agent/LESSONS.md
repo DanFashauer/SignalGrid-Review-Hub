@@ -514,3 +514,12 @@ block; a stage run on the wrong tier is a lesson here.
 - **evidence:** The sole normal writer derives the unique current literal after source integration/owned generators. Every other parsed inventory field and row stays identical; the ratchet remains byte-exact, with no ceiling, floor or window waiver. Vetted source 5886f1e62441bbc272207dc541c9b89407d3e78a is an other-lane delivery.
 - **landing:** pending — one local source/citation/generated checkpoint only; a new exact-head full/breadth, current CI, formal reviews, protected landing and separate activation remain owed.
 - **status:** pending
+
+
+### L57 — Preserve runtime redaction controls with explicit synthetic marker construction
+- **date:** 2026-11-01
+- **lane:** mac
+- **incident:** The retained215cc full stopped at publication-boundary because two source lines in a malformed-payload negative fixture carried a literal synthetic credential-shaped marker. No actual credential or public source push was involved.
+- **evidence:** Two fixture lines now use the existing safety-check runtime-concatenation convention. A closed literal check preserved every input and forbidden value; all18 repair cases and the unchanged publication-boundary gate passed with actual network denial. Production and publication-policy bytes remained unchanged.
+- **landing:** pending — local fixture/journal checkpoint only; original full failures remain failed, and a new exact-head full/breadth, current CI, formal reviews, protected landing and separate activation remain owed.
+- **status:** pending

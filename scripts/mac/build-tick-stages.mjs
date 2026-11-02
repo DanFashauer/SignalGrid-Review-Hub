@@ -1631,6 +1631,22 @@ printf 'busy=%s code=%s\\n' "$busy" "$code"`, env);
     const plain = run('if [ -e /dev/fd/9 ]; then exit 8; fi\nprintf "stdin-body\\n" >> "$SG_CI_EVENTS"');
     ok("CI executes the actual stdin chain and closes its inherited lock FD only in the workload", plain.status === 0
       && readFileSync(events, "utf8").endsWith("stdin-body\nteardown\n"), `${plain.status} ${plain.stderr}`);
+    // The brain status is read through curl, so a file:// fixture stands in for the API.
+    const brain = join(dir, "brain.json"), brainUrl = `file://${brain}`;
+    const starved = { coordinator: { counts: { queued: 1 }, blocked_reason: "Host resources are reserved; queued work is deferred" } };
+    writeFileSync(brain, JSON.stringify(starved));
+    const yielded = run('printf "yield-body\\n" >> "$SG_CI_EVENTS"', 8, 4, base, { SG_CI_BRAIN_URL: brainUrl, SG_CI_BRAIN_YIELD_SECONDS: "2" });
+    ok("CI yields the host to a brain with queued work blocked on it, once per job, then admits", yielded.status === 0
+      && /yielding the host to the queued local brain/.test(yielded.stdout)
+      && readFileSync(events, "utf8").endsWith("yield-body\nteardown\n"), `${yielded.status} ${yielded.stdout} ${yielded.stderr}`);
+    writeFileSync(brain, JSON.stringify({ coordinator: { counts: { queued: 0 }, blocked_reason: null } }));
+    const idle = run('printf "idle-body\\n" >> "$SG_CI_EVENTS"', 2, 4, base, { SG_CI_BRAIN_URL: brainUrl });
+    ok("CI does not yield when the brain has nothing queued", idle.status === 0 && !/yielding/.test(idle.stdout)
+      && readFileSync(events, "utf8").endsWith("idle-body\nteardown\n"), `${idle.status} ${idle.stdout}`);
+    writeFileSync(brain, "not json");
+    const unreadable = run('printf "unreadable-body\\n" >> "$SG_CI_EVENTS"', 2, 4, base, { SG_CI_BRAIN_URL: brainUrl });
+    ok("an unreadable brain status never yields (fail-closed toward CI)", unreadable.status === 0 && !/yielding/.test(unreadable.stdout)
+      && readFileSync(events, "utf8").endsWith("unreadable-body\nteardown\n"), `${unreadable.status} ${unreadable.stdout}`);
     const child = join(dir, "child.pid");
     const sleeping = `sleep 20 >/dev/null 2>&1 &\nprintf '%s' "$!" > ${q(child)}\n`;
     const alive = () => {

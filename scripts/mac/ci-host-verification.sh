@@ -105,9 +105,32 @@ ci_capped() {
   ' "$@"
 }
 
+# The local second brain polls this same lock every 2 s non-blocking and never wins
+# against a 1 s retry loop that then holds the host for a whole job: measured
+# 2026-11-01, zero brain admissions in a day with 32 dispatch items queued. Once per
+# job, while the brain reports queued work blocked on the host, yield instead of
+# trying. Fail-closed toward CI: no brain, no node, bad JSON — no yield.
+SG_CI_BRAIN_URL="${SG_CI_BRAIN_URL:-http://127.0.0.1:8765/api/brain}"
+SG_CI_BRAIN_YIELD_SECONDS="${SG_CI_BRAIN_YIELD_SECONDS:-30}"
+case "$SG_CI_BRAIN_YIELD_SECONDS" in ""|*[!0-9]*) SG_CI_BRAIN_YIELD_SECONDS=30;; esac
+sg_brain_wants_host() {
+  curl -s -m 3 "$SG_CI_BRAIN_URL" 2>/dev/null | node -e '
+let s = ""; process.stdin.on("data", (d) => { s += d; }).on("end", () => {
+  let b; try { b = JSON.parse(s); } catch { process.exit(1); }
+  const c = (b && b.coordinator) || {}; const queued = c.counts && c.counts.queued;
+  process.exit(Number.isInteger(queued) && queued > 0
+    && /^Host resources are reserved/.test(String(c.blocked_reason || "")) ? 0 : 1);
+});' 2>/dev/null
+}
+
 START_SECONDS=$SECONDS
 WAIT_NOTED=0
+BRAIN_YIELDED=0
 while :; do
+  if [ "$BRAIN_YIELDED" -lt "$SG_CI_BRAIN_YIELD_SECONDS" ] && sg_brain_wants_host; then
+    if [ "$BRAIN_YIELDED" = 0 ]; then echo 'ci-host-verification: yielding the host to the queued local brain'; fi
+    BRAIN_YIELDED=$((BRAIN_YIELDED + 2)); sleep 2; continue
+  fi
   if sg_host_verify_acquire "$HOME/Library/Caches/signalgrid/host-verification.lock"; then break; else _ci_admit=$?; fi
   if [ "$_ci_admit" != 75 ]; then
     echo "ci-host-verification: admission failed ($_ci_admit): $SG_VERIFY_LOCK_REASON" >&2

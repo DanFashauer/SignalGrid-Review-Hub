@@ -1364,8 +1364,11 @@ export function provablyNonBlank(expr) {
   if (/^`[^`]*`$/.test(t)) return /\S/.test(t.slice(1, -1).replace(/\$\{[^}]*\}/g, ""));
   const tern = splitTernary(t);
   if (tern) return provablyNonBlank(tern[1]) && provablyNonBlank(tern[2]);
-  const fb = t.match(/(?:\|\||\?\?)\s*((["'`])[^"'`]*\2)\s*$/);
-  if (fb) return provablyNonBlank(fb[1]);
+  const fb = t.match(/(\|\||\?\?)\s*((["'`])[^"'`]*\3)\s*$/);
+  // `a || "x"` falls back whenever `a` is falsy, `""` included. `a ?? "x"` falls back
+  // only on null/undefined: an empty `a` passes through as "", so the fallback proves
+  // nothing unless `a` itself is provably non-blank (fail closed).
+  if (fb) return provablyNonBlank(fb[2]) && (fb[1] === "||" || provablyNonBlank(t.slice(0, fb.index)));
   return false;
 }
 
@@ -2134,6 +2137,12 @@ function selfTest() {
       ["<span hidden={false}>Delete</span>", '<span className="sr-only">Delete</span>', '<span className="md:hidden">Delete</span>',
        '<span data-hidden="true">Delete</span>', '<span title="hidden">Delete</span>'].every((c) =>
         checkIconButtons("x.tsx", `<button onClick={f}><Trash2 />${c}</button>`).length === 0)],
+    ["a `??` label fallback does not name a button unless its left side is provably non-blank, since an empty string passes through `??`",
+      checkIconButtons("x.tsx", 'const label = "";\n<button aria-label={label ?? "Delete"}><Trash2 /></button>').length === 1 &&
+      checkIconButtons("x.tsx", '<button aria-label={props.label ?? props.alt ?? "Delete"}><Trash2 /></button>').length === 1 &&
+      checkIconButtons("x.tsx", '<button aria-label={label || "Delete"}><Trash2 /></button>').length === 0 &&
+      checkIconButtons("x.tsx", '<button aria-label={"Remove" ?? "Delete"}><Trash2 /></button>').length === 0 &&
+      provablyNonBlank('x ?? "Close"') === false && provablyNonBlank('x || "Close"') === true],
     ["a same-name child inside an aria-hidden element does not close it early",
       checkIconButtons("x.tsx", '<button onClick={f}><span aria-hidden="true"><span>x</span>Y</span></button>').length === 1 &&
       checkIconButtons("x.tsx", '<button onClick={f}><span aria-hidden="true"><span>x</span></span>Close</button>').length === 0],
@@ -2288,9 +2297,9 @@ function selfTest() {
       checkIconButtons("x.tsx", '<button onClick={f} aria-label="Close">×</button>').length === 0 &&
       checkIconButtons("x.tsx", '<button onClick={f}>× Close</button>').length === 0],
     ["a label expression that can come out empty does not name a button",
-      ['aria-label={undefined}', 'aria-label={null}', 'aria-label={open ? "Close" : undefined}', 'aria-label={open && "Close"}', 'aria-labelledby={id ?? undefined}', 'aria-label={x ? "" : "Close"}'].every((a) =>
+      ['aria-label={undefined}', 'aria-label={null}', 'aria-label={open ? "Close" : undefined}', 'aria-label={open && "Close"}', 'aria-labelledby={id ?? undefined}', 'aria-label={x ? "" : "Close"}', 'aria-label={t("close") ?? "Close"}'].every((a) =>
         checkIconButtons("x.tsx", `<button onClick={f} ${a}><svg/></button>`).length === 1 && checkIconButtons("x.tsx", `<Button size="icon" ${a}><X /></Button>`).length === 1) &&
-      ['aria-label={t("close") ?? "Close"}', 'aria-label={open ? "Close" : "Open"}', 'aria-label={`Delete rule ${i + 1}`}', 'aria-label={!known ? "Alerts, state unknown" : `Alerts, ${n} active`}'].every((a) =>
+      ['aria-label={t("close") || "Close"}', 'aria-label={open ? "Close" : "Open"}', 'aria-label={`Delete rule ${i + 1}`}', 'aria-label={!known ? "Alerts, state unknown" : `Alerts, ${n} active`}'].every((a) =>
         checkIconButtons("x.tsx", `<button onClick={f} ${a}><svg/></button>`).length === 0)],
     ["the LiveRegion component keeps a polite channel and a role=alert channel without a redundant aria-live",
       checkLiveRegionComponent('<div role="status" aria-live="polite" aria-atomic="true">{m}</div><div role="alert" aria-atomic="true">{a}</div>').length === 0 &&

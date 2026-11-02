@@ -491,10 +491,14 @@ $SIG{ALRM} = sub { kill "TERM", -$pid; sleep 2; kill "KILL", -$pid; waitpid($pid
 alarm $limit; waitpid($pid, 0); my $status = $?; alarm 0;
 exit(($status & 127) ? 128 + ($status & 127) : $status >> 8);`;
 export function refusedDisposition(root, receiptPath) {
+  // Only a receipt that is truly absent (lstat ENOENT) means no push; a dangling
+  // symlink, a non-regular file or an unreadable one holds.
   let raw;
-  try { raw = readFileSync(receiptPath, "utf8"); } catch (error) { return error.code === "ENOENT" ? "unpublished" : "unknown"; }
-  let target;
-  try { target = JSON.parse(raw).target; } catch { return "unknown"; }
+  try { if (!lstatSync(receiptPath).isFile()) return "unknown"; }
+  catch (error) { return error.code === "ENOENT" ? "unpublished" : "unknown"; }
+  try { raw = readFileSync(receiptPath, "utf8"); } catch { return "unknown"; }
+  let target, receipt;
+  try { receipt = JSON.parse(raw); target = receipt.target; } catch { return "unknown"; }
   if (typeof target !== "string" || !/^lane\/[a-z]+-mail-[0-9]{8}-[0-9]{6}Z-[a-f0-9]{12}$/.test(target)) return "unknown";
   const env = { ...process.env, GIT_TERMINAL_PROMPT: "0" };
   for (const key of ["GIT_DIR", "GIT_WORK_TREE", "GIT_COMMON_DIR"]) delete env[key];
@@ -502,7 +506,24 @@ export function refusedDisposition(root, receiptPath) {
   const r = spawnSync("perl", ["-MPOSIX", "-e", GROUP_BOUNDED, String(limit), "git", "ls-remote", "origin", "refs/heads/" + target],
     { cwd: root, env, encoding: "utf8", timeout: (limit + 10) * 1000, stdio: NO_GUARD_PIPED });
   if (r.error || r.signal || r.status !== 0) return "unknown";
-  return r.stdout.trim() ? "published" : "unpublished";
+  if (r.stdout.trim()) return "published";
+  // An absent topic can also be one already merged and deleted (cleanup-merged-branches).
+  // Only the canonical readback decides: the receipt's commit in origin/SignalGrid_Alpha,
+  // or one of its blobs at its path there -> "landed" (delivered, never resent); a fetch
+  // or read that fails -> "unknown" (held). Absent there too -> "unpublished".
+  if (!/^[a-f0-9]{40}$/.test(receipt.head ?? "")) return "unknown";
+  const fetched = spawnSync("perl", ["-MPOSIX", "-e", GROUP_BOUNDED, String(limit), "git", "fetch", "--quiet", "origin", "SignalGrid_Alpha"],
+    { cwd: root, env, timeout: (limit + 10) * 1000, stdio: NO_GUARD_SILENT });
+  if (fetched.error || fetched.signal || fetched.status !== 0) return "unknown";
+  const ancestor = spawnSync("git", ["merge-base", "--is-ancestor", receipt.head, "origin/SignalGrid_Alpha"], { cwd: root, env, timeout: 60000, stdio: NO_GUARD_SILENT });
+  if (ancestor.status === 0) return "landed";
+  if (ancestor.error || ancestor.signal || ancestor.status !== 1) return "unknown";
+  for (const blob of Array.isArray(receipt.blobs) ? receipt.blobs : []) {
+    if (typeof blob?.path !== "string" || !/^[a-f0-9]{40}$/.test(blob.oid ?? "")) return "unknown";
+    const at = spawnSync("git", ["rev-parse", "--verify", "--quiet", `origin/SignalGrid_Alpha:${blob.path}`], { cwd: root, env, encoding: "utf8", timeout: 60000, stdio: NO_GUARD_PIPED });
+    if (at.stdout?.trim() === blob.oid) return "landed";
+  }
+  return "unpublished";
 }
 
 // The one rule for every refused-attempt retry branch (build-tick, objective-loop,
@@ -583,8 +604,12 @@ export function setAsideRefusedAttempt(root, directory, name, exit, successor = 
     // A push terminal means lane-deliver reached its push and Git reported a remote
     // refusal (a repository rule): resending the same cannot pass. That keeps the
     // existing readback -> Cloud repair-hand path (LANE_COORDINATION.md L51).
-    try { lstatSync(join(directory, name + ".submission.json.push.json")); return null; }
-    catch (error) { if (error.code !== "ENOENT") throw error; }
+    // lane-deliver writes the raw capture before the final terminal: either one is
+    // evidence that the push was reached.
+    for (const suffix of [".submission.json.push.json", ".submission.json.push.raw.json"]) {
+      try { lstatSync(join(directory, name + suffix)); return null; }
+      catch (error) { if (error.code !== "ENOENT") throw error; }
+    }
     if (refusedDisposition(root, join(directory, name + ".submission.json")) !== "unpublished") return null;
   }
   const refused = join(directory, "refused");

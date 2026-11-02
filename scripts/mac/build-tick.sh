@@ -249,7 +249,7 @@ raise_hand() {
       _hand_repair=1
       case "$_hand_exit" in
         0) _hand_repair=0 ;;
-        1|2) [ -e "${_hand_attempt}.submission.json" ] || _hand_repair=0 ;;
+        1|2) [ -e "${_hand_attempt}.submission.json" ] || [ -L "${_hand_attempt}.submission.json" ] || _hand_repair=0 ;;
       esac
       if [ "$_hand_repair" = "1" ]; then
         node "$REPO_ROOT/scripts/lib/lane-repair.mjs" request "$REPO_ROOT" build "$_hand_attempt" >/dev/null 2>&1 || say "RAISED HAND: repair DATA request unavailable; original hand remains READBACK ONLY"

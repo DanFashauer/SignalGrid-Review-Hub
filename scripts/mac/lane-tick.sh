@@ -531,7 +531,7 @@ JS
     fi
     # Killed after its push (receipt names a ref now on origin): read it back like exit 3.
     if [ -z "$_hb_retry" ] && [ -z "$_hb_previous_status" ] && [ -f "$_hb_previous_receipt" ] &&
-       [ "$(node scripts/lib/lane-attempt-store.mjs refused-disposition "$(pwd -P)" "$_hb_previous_receipt" 2>/dev/null)" = published ]; then
+       case "$(node scripts/lib/lane-attempt-store.mjs refused-disposition "$(pwd -P)" "$_hb_previous_receipt" 2>/dev/null)" in published|landed) true ;; *) false ;; esac; then
       _hb_previous_status=3
     fi
   fi

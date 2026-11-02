@@ -69,7 +69,7 @@
 import { createHash } from "node:crypto";
 import { execFileSync, spawnSync } from "node:child_process";
 import { deliveryRecordDirectory, retryHead, setAsideRefusedAttempt } from "./lib/lane-attempt-store.mjs";
-import { existsSync, readFileSync, readdirSync, writeFileSync, mkdirSync } from "node:fs";
+import { existsSync, lstatSync, readFileSync, readdirSync, writeFileSync, mkdirSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { auditBacklogOwnership, parseRows, rosterIds, statusText } from "./check-backlog-ownership.mjs";
@@ -672,7 +672,9 @@ function emit(state, { write, deliver }) {
       } catch { lines.push(`RAISED HAND: escalation ${e.id} terminal recording failed; READBACK ONLY`); }
       const accepted = terminalRecorded && !r.error && !r.signal && r.status === 0;
       // Only a proven prepublication refusal (no receipt) skips repair DATA; it is retried next tick.
-      const refused = !r.error && !r.signal && (r.status === 1 || r.status === 2) && !existsSync(attempt + ".submission.json");
+      let receiptAbsent = false;
+      try { lstatSync(attempt + ".submission.json"); } catch (error) { receiptAbsent = error.code === "ENOENT"; }
+      const refused = !r.error && !r.signal && (r.status === 1 || r.status === 2) && receiptAbsent;
       if (terminalRecorded && !accepted && !refused) queueRepair(attempt);
       lines.push(accepted ? `escalation ${e.id} submitted for protected PR merge` : `WARN escalation ${e.id} submission unconfirmed (lane-deliver exit ${r.status}); read back its original attempt`);
       if (accepted) submitted.add(e.id);

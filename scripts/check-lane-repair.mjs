@@ -242,7 +242,13 @@ frozen('R25','a notice with no terminal but push evidence is held, and the drain
  const r=drainOnce(f);acceptOwned(r);oneRepair(f);assert.match(r.stdout,new RegExp('held: '+x.idn+' no terminal, push evidence present'));
  assert.equal(existsSync(x.refused),false,'nothing set aside');preserved(x.o.prefix,x.o.initial);
 });
-for(const [id,label,body] of [['R26','garbage','{not json'],['R27','missing-fields','{"status":1}\n'],['R28','exit-3','{"status":3,"signal":null,"error":null}\n'],['R29','signalled','{"status":null,"signal":"SIGTERM","error":null}\n']])frozen(id,'a notice whose terminal is '+label+' stays held on the next drain',f=>{
+frozen('R35','a notice with no terminal and only its receipt (no push capture) is held, and the drain says so',f=>{
+ const x=refusedInPlace(f);rmSync(x.terminal);writeFileSync(join(f.store,x.idn+'.submission.json'),'{"version":1}\n',{mode:0o600});
+ const r=drainOnce(f);acceptOwned(r);oneRepair(f);assert.match(r.stdout,new RegExp('held: '+x.idn+' no terminal, push evidence present'));
+ assert.equal(existsSync(x.refused),false,'nothing set aside');preserved(x.o.prefix,x.o.initial);
+});
+for(const [id,label,body] of [['R26','garbage','{not json'],['R27','missing-fields','{"status":1}\n'],['R28','exit-3','{"status":3,"signal":null,"error":null}\n'],['R29','signalled','{"status":null,"signal":"SIGTERM","error":null}\n'],['R30','error-set','{"status":1,"signal":null,"error":"EPIPE"}\n'],
+ ['R31','JSON null','null\n'],['R32','JSON false','false\n'],['R33','JSON 0','0\n'],['R34','JSON empty string','""\n']])frozen(id,'a notice whose terminal is '+label+' stays held on the next drain',f=>{
  const x=refusedInPlace(f);writeFileSync(x.terminal,body);acceptOwned(drainOnce(f));oneRepair(f);assert.equal(existsSync(x.refused),false,'nothing set aside');preserved(x.o.prefix,x.o.initial);
 });
 frozen('R09','a signaled local repair child never creates a replacement notification identity',f=>{

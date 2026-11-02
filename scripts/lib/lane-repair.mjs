@@ -422,10 +422,14 @@ function recoverRefusedNotices(root, store, names) {
     const id = REQUEST_NAME.exec(name)[1];
     if (!names.consumed.has(id)) continue;
     const prefix = noticeRoot(store, id), absent = (path) => { try { lstatSync(path); return false; } catch (error) { return error.code === 'ENOENT'; } };
-    let terminal = null, exit;
+    // Only ENOENT is a missing terminal; one that exists must be a well-formed object
+    // (integer status, signal and error keys) or the notice holds, named.
+    let terminal, missing = false, exit;
     try { terminal = JSON.parse(readFileSync(prefix + '.terminal.json', 'utf8')); }
-    catch (error) { if (error.code !== 'ENOENT') continue; } // an unreadable terminal holds
-    if (terminal) {
+    catch (error) { if (error.code === 'ENOENT') missing = true; else { console.log(`held: ${id} terminal unreadable; readback only`); continue; } }
+    if (!missing) {
+      if (!terminal || typeof terminal !== 'object' || Array.isArray(terminal) || !Number.isInteger(terminal.status) ||
+          !Object.hasOwn(terminal, 'signal') || !Object.hasOwn(terminal, 'error')) { console.log(`held: ${id} terminal malformed; readback only`); continue; }
       if (terminal.signal !== null || terminal.error !== null || (terminal.status !== 1 && terminal.status !== 2)) continue;
       exit = terminal.status;
     } else {

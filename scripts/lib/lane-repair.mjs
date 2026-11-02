@@ -421,12 +421,26 @@ function recoverRefusedNotices(root, store, names) {
   for (const name of names.requests) {
     const id = REQUEST_NAME.exec(name)[1];
     if (!names.consumed.has(id)) continue;
-    const prefix = noticeRoot(store, id);
-    let terminal;
-    try { terminal = JSON.parse(readFileSync(prefix + '.terminal.json', 'utf8')); } catch { continue; }
-    if (terminal.signal !== null || terminal.error !== null || (terminal.status !== 1 && terminal.status !== 2)) continue;
-    try { lstatSync(prefix + '.submission.json'); continue; } catch (error) { if (error.code !== 'ENOENT') continue; }
-    if (setAsideRefusedAttempt(root, store.directory, id, terminal.status, 'move')?.setAsideAs) names.consumed.delete(id);
+    const prefix = noticeRoot(store, id), absent = (path) => { try { lstatSync(path); return false; } catch (error) { return error.code === 'ENOENT'; } };
+    let terminal = null, exit;
+    try { terminal = JSON.parse(readFileSync(prefix + '.terminal.json', 'utf8')); }
+    catch (error) { if (error.code !== 'ENOENT') continue; } // an unreadable terminal holds
+    if (terminal) {
+      if (terminal.signal !== null || terminal.error !== null || (terminal.status !== 1 && terminal.status !== 2)) continue;
+      exit = terminal.status;
+    } else {
+      // Killed during the child (no terminal; its ops and output were written just before
+      // the child started): recovered only with no receipt and no push capture at all;
+      // otherwise held, and said so. A partial notice without ops/output stays consumed.
+      if (absent(prefix + '.ops.json') || absent(prefix + '.output')) continue;
+      if (!['.submission.json', '.submission.json.push.json', '.submission.json.push.raw.json'].every((suffix) => absent(prefix + suffix))) {
+        console.log(`held: ${id} no terminal, push evidence present; readback only`);
+        continue;
+      }
+      exit = 'none';
+    }
+    if (exit !== 'none' && !absent(prefix + '.submission.json')) continue;
+    if (setAsideRefusedAttempt(root, store.directory, id, exit, 'move')?.setAsideAs) names.consumed.delete(id);
   }
 }
 export function drainRepairs(root, token, shellPid) {

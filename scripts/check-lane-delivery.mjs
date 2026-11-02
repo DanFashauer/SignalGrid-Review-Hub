@@ -1244,6 +1244,25 @@ for(const [mode,want] of [['absent',true],['present',false],['fail',false]]){
  finally{rmSync(root,{recursive:true,force:true});}
 }
 {
+ // A canonical blob read that FAILS (exit 128) is never absence: unknown, nothing set aside.
+ const label='a failing canonical blob read (rev-parse exit 128) is unknown, never unpublished';
+ const root=mkdtempSync(join(tmpdir(),'sg-revparse-fail-'));
+ try {
+  const records=join(root,'records'),bin=join(root,'bin'),name='hand-'+'9'.repeat(64);mkdirSync(records);mkdirSync(bin);
+  writeFileSync(join(bin,'git'),'#!/bin/sh\ncase "$1" in ls-remote|fetch) exit 0;; merge-base) exit 1;; rev-parse) exit 128;; esac\nexit 2\n',{mode:0o755});
+  for(const suffix of ['.attempt.json','.output','.exit'])writeFileSync(join(records,name+suffix),suffix==='.exit'?'1\n':'{"fixture":true}\n');
+  writeFileSync(join(records,name+'.submission.json'),JSON.stringify({version:1,target:'lane/mac-mail-20261101-010000Z-0123456789ab',head:'e'.repeat(40),blobs:[{path:'artifacts/x.json',oid:'f'.repeat(40)}]})+'\n');
+  const env={PATH:bin+':/usr/bin:/bin',HOME:process.env.HOME},store=join(ROOT,'scripts/lib/lane-attempt-store.mjs');
+  const d=spawnSync(process.execPath,[store,'refused-disposition',root,join(records,name+'.submission.json')],{cwd:root,encoding:'utf8',env});
+  assert.equal(d.status,0,d.stderr);assert.equal(d.stdout.trim(),'unknown');
+  const r=spawnSync(process.execPath,[store,'retry-refused',root,records,name,'1','derive'],{cwd:root,encoding:'utf8',env});
+  assert.equal(r.status,0,r.stderr);assert.equal(JSON.parse(r.stdout),null);
+  assert.equal(existsSync(join(records,'refused',name+'.retried')),false,'no retry marker');assert.ok(existsSync(join(records,name+'.attempt.json')),'nothing set aside');
+  passed++;console.log('PASS '+label);
+ } catch(e){failed++;console.error('FAIL '+label+': '+e.message);}
+ finally{rmSync(root,{recursive:true,force:true});}
+}
+{
  // Push evidence is the raw capture OR the final terminal (raw is written first); and
  // only a truly absent receipt means "no push" (a dangling symlink holds).
  for(const [label,setup,want] of [['a refused attempt with only the raw push capture is never retried','raw',null],['a dangling-symlink receipt holds instead of reading as no push','dangling',null]]){

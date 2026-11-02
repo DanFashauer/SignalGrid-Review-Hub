@@ -27,7 +27,10 @@
 //      own region. Everything a .ts exports is followed, whatever its case, and
 //      a default export the gate cannot classify is followed. A hook handed on without a visible call — a
 //      re-export, `export *`, `const useY = useX`, `export default useX` —
-//      fails closed.
+//      fails closed. A query a timer refetches (`q.refetch()`, or the `refetch` its
+//      binding destructures) is a polled query: its result and failure must reach
+//      the <LiveRegion>. A timer-polling view refreshing anything the gate cannot
+//      tie to a query binding (`invalidateQueries`, a `refetch` prop) fails closed.
 //      Query defaults are read from every .ts/.tsx in the tree — the balanced
 //      argument list of each `new QueryClient(…)`, `setDefaultOptions(…)` and
 //      `setQueryDefaults(…)`, wherever the construction lives — and must be an
@@ -257,6 +260,60 @@ export function timerPolls(code) {
     }
   }
   return false;
+}
+
+/**
+ * Which queries a timer-polling file refreshes. A timer that calls `refetch()`
+ * polls the query it belongs to even though that query's own arguments carry no
+ * `refetchInterval`, so its result and failure must reach the <LiveRegion> like
+ * any polled query's. Every refresh in such a file is read as timer-driven — the
+ * timer's callback may be a named helper (timerPolls reads the whole file too).
+ * A refresh resolves to a query hook binding through the binding itself
+ * (`q.refetch()`) or a name its pattern binds `refetch` to (`const { refetch: r }
+ * = useX()` then `r()`). Anything else — `invalidateQueries`/`resetQueries`,
+ * `queryClient.refetchQueries`, a `refetch` from props or a parameter, a call on
+ * an unbound hook — names no query the gate can check: it is returned as
+ * unresolved and fails closed. Returns { opens: Set of binding `(` indices,
+ * unresolved: [{ line, token }] }, one per distinct token at its first use.
+ */
+export function timerRefreshTargets(code) {
+  const opens = new Set();
+  const unresolved = [];
+  if (!timerPolls(code)) return { opens, unresolved };
+  const bindings = hookBindings(code);
+  const patternSpans = [];
+  const holders = new Map();  // whole-query name -> binding open
+  const aliases = new Map();  // name bound to a query's `refetch` -> binding open
+  for (const b of bindings) {
+    const at = code.indexOf(b.pattern, b.index);
+    patternSpans.push([at, at + b.pattern.length]);
+    if (/^[A-Za-z_$][\w$]*$/.test(b.pattern)) holders.set(b.pattern, b.open);
+    else if (b.pattern.startsWith("{")) {
+      for (const e of objectPattern(b.pattern)) {
+        if (e.rest) holders.set(e.rest, b.open);
+        else if (e.key === "refetch") for (const n of e.names) aliases.set(n, b.open);
+      }
+    }
+  }
+  const inPattern = (i) => patternSpans.some(([a, z]) => a <= i && i < z);
+  const lineAt = (i) => code.slice(0, i).split("\n").length;
+  // A refresh token used as a value, not an option key (`refetchInterval: 5`,
+  // `refetchOnWindowFocus: false`) and not inside a binding pattern.
+  for (const m of code.matchAll(/(?<![\w$])(refetch[\w$]*|invalidateQueries|resetQueries)(?![\w$])/g)) {
+    if (inPattern(m.index) || /^\s*:/.test(code.slice(m.index + m[0].length))) continue;
+    if (/^refetch(?:Interval|IntervalInBackground|OnWindowFocus|OnMount|OnReconnect|Type|Page)$/.test(m[1]) && !/\.\s*$/.test(code.slice(0, m.index))) continue;
+    const owner = /([A-Za-z_$][\w$]*)\s*\??\.\s*$/.exec(code.slice(Math.max(0, m.index - 80), m.index));
+    if (m[1] === "refetch" && owner && holders.has(owner[1])) { opens.add(holders.get(owner[1])); continue; }
+    if (!owner && aliases.has(m[1])) { opens.add(aliases.get(m[1])); continue; }
+    const token = owner ? `${owner[1]}.${m[1]}` : m[1];
+    if (!unresolved.some((u) => u.token === token)) unresolved.push({ line: lineAt(m.index), token });
+  }
+  // A name bound to a query's `refetch` under another name (`refetch: reload`).
+  for (const [n, open] of aliases) {
+    if (n === "refetch") continue;
+    for (const m of code.matchAll(new RegExp(`(?<![\\w$.])${escapeRegExp(n)}(?![\\w$])`, "g"))) if (!inPattern(m.index)) { opens.add(open); break; }
+  }
+  return { opens, unresolved };
 }
 
 /**
@@ -495,7 +552,11 @@ export function checkLiveRegions(files, defaultPolls, generated = new Set()) {
       // region like a direct `useQuery({ refetchInterval })` call's would.
       const carriers = new Set([...pollingLocals(f)].flatMap((n) => [n, n.split(".").pop()]));
       const isHook = queryHookNames(f.code, generated).isHook;
-      failures.push(...checkUnannouncedQueries(f.rel, f.code, (n) => isHook(n) || carriers.has(n), defaultPolls, shellSpoken, carriers));
+      // A timer driving `refetch()` polls that query: carry it into the state check,
+      // and fail closed on a refresh whose query the gate cannot identify.
+      const timer = timerRefreshTargets(f.code);
+      for (const u of timer.unresolved) failures.push(`${f.rel}:${u.line}: a timer-polling view refreshes through ${u.token} — the gate cannot identify which query it refreshes, so it cannot check that query's result and failure reach the <LiveRegion>; failing closed (bind the query and call its own \`refetch\`, WCAG 4.1.3)`);
+      failures.push(...checkUnannouncedQueries(f.rel, f.code, (n) => isHook(n) || carriers.has(n), defaultPolls, shellSpoken, carriers, timer.opens));
     }
   }
   return { polling, failures };
@@ -651,7 +712,7 @@ export function valueRead(expr, src) {
   return false;
 }
 
-export function checkUnannouncedQueries(rel, code, isHook, defaultPolls, shellSpoken = new Set(), carriers = new Set()) {
+export function checkUnannouncedQueries(rel, code, isHook, defaultPolls, shellSpoken = new Set(), carriers = new Set(), timerOpens = new Set()) {
   // A call polls when the tree's defaults poll, its own arguments set refetchInterval,
   // it IS a polling carrier (an imported polling wrapper), or its arguments pass one.
   const polled = (callee, args) => defaultPolls || /\brefetchInterval\b/.test(args) || carriers.has(callee) ||
@@ -684,10 +745,12 @@ export function checkUnannouncedQueries(rel, code, isHook, defaultPolls, shellSp
   }
   for (const b of hookBindings(code)) {
     const m = { index: b.index, 1: b.pattern, 2: b.callee };
-    if (!isHook(m[2])) continue;
+    // A binding a timer refetches (timerRefreshTargets) is a polled query whatever its callee.
+    const timed = timerOpens.has(b.open);
+    if (!isHook(m[2]) && !timed) continue;
     const { spans } = callSpans(code.slice(b.open), /\(/g);
     const args = spans.length ? code.slice(b.open).slice(spans[0][0], spans[0][1]) : "";
-    if (!polled(m[2], args)) continue;
+    if (!polled(m[2], args) && !timed) continue;
     // Only state a background refetch changes counts: the result and its error.
     // `isLoading`/`isPending` stay false while a poll refetches, so a region reading
     // only them stays silent through new data and through a failed refresh.
@@ -1841,6 +1904,16 @@ function selfTest() {
       checkChartMotion("c.tsx", 'import { Treemap } from "recharts";\n<Treemap data={d} />').length === 1],
     ["setInterval driving a refetch is polling",
       checkLiveRegions([view("t/src/pages/T.tsx", "const q = useThing(); useEffect(() => { const id = setInterval(() => q.refetch(), 5000); return () => clearInterval(id); }, []);")], false).failures.length === 1],
+    ["a query a timer refetches must reach the live region (no refetchInterval anywhere)",
+      checkLiveRegions([view("t/src/pages/T.tsx", 'const { data, refetch } = useQuery({ queryKey: ["s"], queryFn: f });\nuseEffect(() => { const id = setInterval(() => refetch(), 5000); return () => clearInterval(id); }, [refetch]);\nreturn <><LiveRegion message="Ready" alert="" /><p>{data?.value}</p></>;')], false).failures.length === 1 &&
+      checkLiveRegions([view("t/src/pages/T.tsx", 'const q = useThing();\nuseEffect(() => { const id = setInterval(() => q.refetch(), 5000); return () => clearInterval(id); }, []);\nreturn <><LiveRegion message="Ready" alert="" /><p>{q.data?.value}</p></>;')], false).failures.length === 1 &&
+      checkLiveRegions([view("t/src/pages/T.tsx", 'const { data, refetch: reload } = useQuery({ queryKey: ["s"], queryFn: f });\nconst tick = () => reload();\nuseEffect(() => { const id = setInterval(tick, 5000); return () => clearInterval(id); }, []);\nreturn <LiveRegion message="Ready" alert="" />;')], false).failures.length === 1],
+    ["a timer-refetched query whose result and failure reach the live region passes",
+      checkLiveRegions([view("t/src/pages/T.tsx", 'const { data, isError, refetch } = useQuery({ queryKey: ["s"], queryFn: f });\nuseEffect(() => { const id = setInterval(() => refetch(), 5000); return () => clearInterval(id); }, [refetch]);\nreturn <LiveRegion message={`Latest ${data?.id}`} alert={isError ? "Down." : ""} />;')], false).failures.length === 0 &&
+      checkLiveRegions([view("t/src/pages/T.tsx", 'const q = useThing();\nuseEffect(() => { const id = setInterval(() => q.refetch(), 5000); return () => clearInterval(id); }, []);\nreturn <LiveRegion message={`Latest ${q.data?.id}`} alert={q.isError ? "Down." : ""} />;')], false).failures.length === 0],
+    ["a timer refresh whose query cannot be identified fails closed",
+      checkLiveRegions([view("t/src/pages/T.tsx", 'const { data, isError } = useQuery({ queryKey: ["s"], queryFn: f });\nuseEffect(() => { const id = setInterval(() => qc.invalidateQueries(), 5000); return () => clearInterval(id); }, []);\nreturn <LiveRegion message={`Latest ${data?.id}`} alert={isError ? "Down." : ""} />;')], false).failures.length === 1 &&
+      checkLiveRegions([view("t/src/pages/T.tsx", 'export function Feed({ refetch }) {\nuseEffect(() => { const id = setInterval(() => refetch(), 5000); return () => clearInterval(id); }, [refetch]);\nreturn <LiveRegion message="Ready" alert="" />; }')], false).failures.length === 1],
     ["polling options exported by value are followed",
       checkLiveRegions([view("t/src/lib/poll.ts", "export const pollOpts = { refetchInterval: 5000 };\nexport function useUnrelated() { return 1; }"), view("t/src/pages/Q.tsx", 'import { pollOpts } from "../lib/poll";\nuseQuery({ ...pollOpts });')], false).failures.length === 1],
     ["a wrapper hook imported under an alias is followed",

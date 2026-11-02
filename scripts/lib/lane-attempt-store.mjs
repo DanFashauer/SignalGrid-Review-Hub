@@ -491,12 +491,14 @@ $SIG{ALRM} = sub { kill "TERM", -$pid; sleep 2; kill "KILL", -$pid; waitpid($pid
 alarm $limit; waitpid($pid, 0); my $status = $?; alarm 0;
 exit(($status & 127) ? 128 + ($status & 127) : $status >> 8);`;
 export function refusedDisposition(root, receiptPath) {
-  // Only a receipt that is truly absent (lstat ENOENT) means no push; a dangling
-  // symlink, a non-regular file or an unreadable one holds.
-  let raw;
-  try { if (!lstatSync(receiptPath).isFile()) return "unknown"; }
+  // Only a receipt that is truly absent (ENOENT) means no push. One no-follow open
+  // decides and reads: a symlink (ELOOP), a non-regular file or an unreadable one holds.
+  let raw, fd;
+  try { fd = openSync(receiptPath, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK); }
   catch (error) { return error.code === "ENOENT" ? "unpublished" : "unknown"; }
-  try { raw = readFileSync(receiptPath, "utf8"); } catch { return "unknown"; }
+  try { if (!fstatSync(fd).isFile()) return "unknown"; raw = readFileSync(fd, "utf8"); }
+  catch { return "unknown"; }
+  finally { closeSync(fd); }
   let target, receipt;
   try { receipt = JSON.parse(raw); target = receipt.target; } catch { return "unknown"; }
   if (typeof target !== "string" || !/^lane\/[a-z]+-mail-[0-9]{8}-[0-9]{6}Z-[a-f0-9]{12}$/.test(target)) return "unknown";

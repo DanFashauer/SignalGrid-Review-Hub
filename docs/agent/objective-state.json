@@ -12,7 +12,7 @@
       "scope": "machine",
       "state": "unmet",
       "measured": {
-        "headline": 3,
+        "headline": 0,
         "floor": 80
       },
       "source": "scripts/check-readiness-figure.mjs --json (headline, floor)"
@@ -22,8 +22,8 @@
       "scope": "machine",
       "state": "unmet",
       "measured": {
-        "pct": 3,
-        "reason": "14/20 bound proofs/steps current against manifest aa9ce381438e; not current (stale fingerprint, stale/absent source digest, or unrecorded): proof:evidence-adapter, proof:isolation-scope, proof:launch-seam, proof:signalgrid-core, step:API integration test (boots the server), step:Browser E2E (review console, website, admin); launch items fully current 1/28"
+        "pct": 0,
+        "reason": "0/20 bound proofs/steps current — evidence covers manifest aa9ce381438e, tree is e892a94fd5c4; refresh on the Mac; launch items fully current 0/28"
       },
       "source": "scripts/check-readiness-figure.mjs --json (.details.evidence)"
     },
@@ -203,7 +203,7 @@
       "criterionId": "evidence-fresh",
       "op": "evidence",
       "clears": "artifacts/live-evidence/mac-run.json",
-      "id": "objective-loop-evidence-fresh-2026-10-31",
+      "id": "objective-loop-evidence-fresh-2026-11-02",
       "queuedAs": "this tick"
     }
   ],
@@ -218,8 +218,8 @@
     "partialRows": 5
   },
   "staleAfterHours": 3,
-  "derivedAt": "2026-10-31T23:41:47.293Z",
-  "derivedAtCommit": "cfafb095de6807d8a39e9ab6149bf2edbc8d88f8",
+  "derivedAt": "2026-11-02T05:48:02.152Z",
+  "derivedAtCommit": "04168afcc8e5209d234dfd45b02633912962aa9c",
   "workingTreeCleanAtEntry": true,
-  "decisionAddress": "fa6f746ea31ad30c831d6e73db7393e23386bb45b8f1575c5f21d1791389dfbd"
+  "decisionAddress": "9d86d2fd7c61ed234d454a356041547be7d2df9098b3b2b1d24f746115c7db34"
 }

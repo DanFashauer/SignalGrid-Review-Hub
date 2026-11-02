@@ -209,6 +209,8 @@ class RefusalRepairHandControls(unittest.TestCase):
         self.one_hand(self.fixture())
 
     def test_known_refused_repair_hand_is_consumed_and_never_renamed_or_retried(self):
+        # A remote-rule refusal of the hand's own push (push terminal recorded) is not a
+        # retryable pre-push refusal: resending the same cannot pass.
         self.one_hand(self.fixture(reject='always'))
 
     def test_UNKNOWN_repair_hand_is_consumed_and_readback_only(self):
@@ -239,12 +241,17 @@ class RefusalRepairHandControls(unittest.TestCase):
         f = self.fixture(diagnostic_changes={'producer_head': 'f' * 40})
         f.heartbeat(); self.assertEqual(f.hand_ops(), []); f.assert_original_preserved()
 
-    def test_unqualified_legacy_guard_stays_held_without_hand_or_reaping(self):
+    def test_legacy_tick_lock_without_a_dead_holder_pid_stays_held(self):
+        # tick-acquire moves a legacy tick.lock aside only on positive evidence its
+        # recorded holder PID is dead; this one names no PID, so it stays held untouched.
         f = self.fixture(); lock = f.records / 'tick.lock'; lock.mkdir()
         owner = lock / 'owner'; owner.write_bytes(b'held original legacy evidence\n')
         before = owner.read_bytes(); result = f.heartbeat()
         self.assertNotEqual(result.returncode, 0)
-        self.assertEqual(f.hand_ops(), []); self.assertEqual(len(f.rows(f.push_observed)), 1)
+        # This fixture runs the guard block with DRY=1, so the hold names the hand it
+        # would raise and starts no delivery (the hand itself: check-lane-delivery.mjs).
+        self.assertIn('dry-run: would raise a hand: tick recovery holding', result.stdout)
+        self.assertEqual(f.hand_ops(), [])
         self.assertTrue(lock.is_dir()); self.assertEqual(owner.read_bytes(), before)
         f.assert_original_preserved()
 

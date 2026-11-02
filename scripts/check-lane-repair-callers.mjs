@@ -31,6 +31,15 @@ function rawFiles(prefix) {
  }
  return out;
 }
+// Owner order 2026-11-01: a refused original (exit 1/2) stays in place byte-identical,
+// is marked refused/<name>.retried, and its retry runs under its own successor prefix.
+const successorOf=name=>name.replace(/-[a-f0-9]{64}$/,'')+'-'+sha(name+':retry');
+function retried(f,o) {
+ const name=o.prefix.split('/').at(-1);preserved(o.prefix,o.initial);
+ const marker=JSON.parse(readFileSync(join(f.store,'refused',name+'.retried'),'utf8'));
+ assert.equal(marker.successor,successorOf(name));assert.equal(marker.n,1);assert.equal(marker.root,name);
+ return join(f.store,marker.successor);
+}
 function preserved(prefix,before) {
  const now=rawFiles(prefix);for(const [name,state] of Object.entries(before))assert.deepEqual(now[name],state,'original bytes/inode/mode preserved: '+name);
 }
@@ -69,7 +78,7 @@ function fixture() {
  put(join(root,'fixture.txt'),'disposable fixture\n');git(['add','.']);git(['commit','-qm','frozen source-copy fixture']);
  const head=git(['rev-parse','HEAD']);env.FIXTURE_HEAD=head;env.FIXTURE_CLI_LOG=cliLog;
  // Real local Git handles metadata; a remote/network operation is never forwarded.
- put(join(bin,'git'),`#!${process.execPath}\nimport fs from 'node:fs';import{spawnSync}from'node:child_process';const a=process.argv.slice(2);fs.appendFileSync(${JSON.stringify(gitLog)},JSON.stringify(a)+'\\n');if(a[0]==='remote'&&a[1]==='get-url'){console.log('https://github.com/fixture/route.git');process.exit(0)}if(a.some(x=>['push','fetch','ls-remote','clone'].includes(x))){console.error('fixture forbids remote transport');process.exit(97)}const r=spawnSync(${JSON.stringify(GIT)},a,{stdio:'inherit'});process.exit(r.status??96);\n`);chmodSync(join(bin,'git'),0o755);
+ put(join(bin,'git'),`#!${process.execPath}\nimport fs from 'node:fs';import{spawnSync}from'node:child_process';const a=process.argv.slice(2);fs.appendFileSync(${JSON.stringify(gitLog)},JSON.stringify(a)+'\\n');if(a[0]==='remote'&&a[1]==='get-url'){console.log('https://github.com/fixture/route.git');process.exit(0)}if(a[0]==='ls-remote'&&process.env.FIXTURE_LS_REMOTE==='absent')process.exit(0);const canon=process.env.FIXTURE_CANONICAL??(process.env.FIXTURE_LS_REMOTE==='absent'?'absent':'');if(a[0]==='fetch'&&canon)process.exit(0);if(a[0]==='merge-base'&&canon)process.exit(canon==='landed'?0:1);if(a[0]==='ls-remote'&&process.env.FIXTURE_LS_REMOTE==='present'){console.log('0'.repeat(40)+String.fromCharCode(9)+a[a.length-1]);process.exit(0)}if(a.some(x=>['push','fetch','ls-remote','clone'].includes(x))){console.error('fixture forbids remote transport');process.exit(97)}const r=spawnSync(${JSON.stringify(GIT)},a,{stdio:'inherit'});process.exit(r.status??96);\n`);chmodSync(join(bin,'git'),0o755);
  const storeModule=join(root,'scripts/lib/lane-attempt-store.mjs');
  const initialized=spawnSync(process.execPath,[storeModule,'init',root],{cwd:root,env,encoding:'utf8'});
  assert.equal(initialized.status,0,initialized.stderr);
@@ -140,7 +149,7 @@ function acceptOwned(r) { assert.equal(r.status,0,'actual own Bash must close no
 function noRemoteAttempt(f) {
  if(!existsSync(f.gitLog))return;
  for(const row of readFileSync(f.gitLog,'utf8').trim().split('\n').filter(Boolean).map(JSON.parse))
-  assert.ok(!row.some(a=>['push','fetch','ls-remote','clone'].includes(a)),'request/consumer must not retry or probe original remote operation');
+  assert.ok(!row.some(a=>['push','clone'].includes(a)),'request/consumer must not retry or probe original remote operation');
 }
 function oneRepair(f,count=1) {
  noRemoteAttempt(f);
@@ -164,7 +173,7 @@ function callerFixture() {
   const path=join(f.root,rel);mkdirSync(dirname(path),{recursive:true});copyFileSync(join(SOURCE,rel),path);
  }
  f.env.FIXTURE_ORIGINAL_HAND='build-'+sha(BLOCKER);
- const transport=`import fs from 'node:fs';\nconst a=process.argv.slice(2),ops=a[0]==='batch'?JSON.parse(fs.readFileSync(a[1],'utf8')):null;\nfs.appendFileSync(process.env.FIXTURE_CLI_LOG,JSON.stringify({args:a,ops})+'\\n');\nif(a[0]==='readback'){console.error('original canonical readback is unverified');process.exit(Number(process.env.FIXTURE_ORIGINAL_READBACK_EXIT||3));}\nconst original=a[0]==='send'||a[0]==='heartbeat'||a[0]==='batch'&&ops[0]?.id===process.env.FIXTURE_ORIGINAL_HAND;\nconst receipt=a[a.indexOf('--receipt')+1];\nif(receipt)fs.writeFileSync(receipt,JSON.stringify({version:1,at:'2026-10-31T01:00:00Z',repository:'fixture/route',base:process.env.FIXTURE_HEAD,head:process.env.FIXTURE_HEAD,target:'lane/mac-mail-20261031-010000Z-0123456789ab',blobs:[{path:'artifacts/agent-heartbeats/mac-lane-tick.json',oid:process.env.FIXTURE_PAYLOAD_OID}]})+'\\n',{flag:'wx',mode:0o600,flush:true});\nif(original){console.error('original publication fixture unconfirmed');process.exit(Number(process.env.FIXTURE_ORIGINAL_EXIT||0));}\nif(a[0]!=='batch'){console.error('forbidden publication operation');process.exit(99);}\nconsole.log('one distinct fixture repair submitted; canonical merge unverified');\n`;
+ const transport=`import fs from 'node:fs';\nconst a=process.argv.slice(2),ops=a[0]==='batch'?JSON.parse(fs.readFileSync(a[1],'utf8')):null;\nfs.appendFileSync(process.env.FIXTURE_CLI_LOG,JSON.stringify({args:a,ops})+'\\n');\nif(a[0]==='readback'){console.error('original canonical readback is unverified');process.exit(Number(process.env.FIXTURE_ORIGINAL_READBACK_EXIT||3));}\nconst original=a[0]==='send'||a[0]==='heartbeat'||a[0]==='batch'&&ops[0]?.id===process.env.FIXTURE_ORIGINAL_HAND;\nconst receipt=a[a.indexOf('--receipt')+1];\nif(receipt&&!process.env.FIXTURE_NO_RECEIPT)fs.writeFileSync(receipt,JSON.stringify({version:1,at:'2026-10-31T01:00:00Z',repository:'fixture/route',base:process.env.FIXTURE_HEAD,head:process.env.FIXTURE_HEAD,target:'lane/mac-mail-20261031-010000Z-0123456789ab',blobs:[{path:'artifacts/agent-heartbeats/mac-lane-tick.json',oid:process.env.FIXTURE_PAYLOAD_OID}]})+'\\n',{flag:'wx',mode:0o600,flush:true});\nif(original){console.error('original publication fixture unconfirmed');process.exit(Number(process.env.FIXTURE_ORIGINAL_EXIT||0));}\nif(a[0]!=='batch'){console.error('forbidden publication operation');process.exit(99);}\nconsole.log('one distinct fixture repair submitted; canonical merge unverified');\n`;
  writeFileSync(join(f.root,'scripts/lane-deliver.mjs'),transport,{mode:0o600});
  f.git(['add','scripts']);f.git(['commit','-qm','exact caller source and publication fixture']);
  f.head=f.git(['rev-parse','HEAD']);f.transport=transport;f.env.FIXTURE_HEAD=f.head;
@@ -184,7 +193,8 @@ function sourceFunction(file,start,end) {
 }
 function heartbeatScript(f,body) {
  const text=readFileSync(join(SOURCE,'scripts/mac/lane-tick.sh'),'utf8'),a=text.indexOf('heartbeat() {'),b=text.indexOf('\n}\n',a)+3;
- assert.ok(a>=0&&b>a);return `DRY=0\nRESULT=quiet\nQUIET_HEARTBEAT_MIN=120\nSTAMP=20261101T010000Z\nHB_LAST_RESULT=${quote(join(f.store,'.sg-last-heartbeat-result'))}\nHB_LAST_ATTEMPT=${quote(join(f.store,'.sg-last-heartbeat-attempt'))}\nESTATE_RESULT=${quote(join(f.store,'.sg-estate-result'))}\nappend_unread_state(){ :; }\nappend_raised_hands_state(){ :; }\n${text.slice(a,b)}\n${body}`;
+ const w=text.indexOf('tick_record() {'),we=text.indexOf('\nJS\n}\n',w)+7;
+ assert.ok(a>=0&&b>a&&w>=0&&we>w);return `${text.slice(w,we)}\nDRY=0\nRESULT=quiet\nQUIET_HEARTBEAT_MIN=120\nSTAMP=20261101T010000Z\nHB_LAST_RESULT=${quote(join(f.store,'.sg-last-heartbeat-result'))}\nHB_LAST_ATTEMPT=${quote(join(f.store,'.sg-last-heartbeat-attempt'))}\nESTATE_RESULT=${quote(join(f.store,'.sg-estate-result'))}\nappend_unread_state(){ :; }\nappend_raised_hands_state(){ :; }\n${text.slice(a,b)}\n${body}`;
 }
 function runBuild(f,body,{extra={}}={}) {
  const source=sourceFunction('scripts/mac/build-tick.sh','raise_hand() {','\nfail() {');
@@ -199,7 +209,7 @@ function emitObjective(f,{existingState=false,rounds=1}={}) {
  const state={decisionAddress:'same frozen decision',derivedAt:'2026-11-01T01:00:00Z',derivedAtCommit:f.head,queue:[],escalations:[escalation],criteria:[],tasks:[],verdict:'building'};
  if(existingState)put(join(f.root,'frozen-state.json'),enc(state));
  const file=join(f.parent,'objective-caller-'+(++serial)+'.mjs');
- put(file,`import {createHash} from 'node:crypto';import {spawnSync} from 'node:child_process';import {mkdirSync,readFileSync,readdirSync,existsSync,writeFileSync,rmSync} from 'node:fs';import {dirname,join} from 'node:path';import {fileURLToPath} from 'node:url';import {deliveryRecordDirectory} from ${JSON.stringify('file://'+join(f.root,'scripts/lib/lane-attempt-store.mjs'))};\nconst ROOT=${JSON.stringify(f.root)},STATE_REL='frozen-state.json',STAMP_REL='node_modules/frozen-objective-stamp.json';\n${text.slice(a,b)}\nconst state=${JSON.stringify(state)};for(let n=0;n<${rounds};n++){const r=emit(state,{write:true,deliver:true});console.log(r.lines.join('\\n'));}\n`);
+ put(file,`import {createHash,randomBytes} from 'node:crypto';import {spawnSync} from 'node:child_process';import {lstatSync,mkdirSync,readFileSync,readdirSync,renameSync,existsSync,writeFileSync,rmSync} from 'node:fs';import {dirname,join} from 'node:path';import {fileURLToPath} from 'node:url';import {deliveryRecordDirectory,retryHead,setAsideRefusedAttempt} from ${JSON.stringify('file://'+join(f.root,'scripts/lib/lane-attempt-store.mjs'))};\nconst ROOT=${JSON.stringify(f.root)},STATE_REL='frozen-state.json',STAMP_REL='node_modules/frozen-objective-stamp.json';\n${text.slice(a,b)}\nconst state=${JSON.stringify(state)};for(let n=0;n<${rounds};n++){const r=emit(state,{write:true,deliver:true});console.log(r.lines.join('\\n'));}\n`);
  return spawnSync(process.execPath,[file],{cwd:f.root,env:f.env,encoding:'utf8'});
 }
 function exactRequest(f,o,{atLeast=1}={}) {
@@ -229,29 +239,99 @@ callerCase('CW02','repeated heartbeat HOLD does not repeat the original send or 
  acceptOwned(owned(f,heartbeatScript(f,'heartbeat || :\nRESULT="different observation wording"\nheartbeat || :\nRESULT=quiet\nheartbeat || :')));
  exactRequest(f,o);oneDifferentRepair(f,o);assert.ok(f.calls().some(c=>c.args[0]==='readback'),'old original uses readback only');
 });
-for(const [id,status] of [['CW03',1],['CW04',2]])callerCase(id,'prior build exit'+status+' queues DATA inside the failed-attempt branch without another batch',f=>{
+for(const [id,status] of [['CW03',1],['CW04',2]])callerCase(id,'prior build exit'+status+' published nothing: kept in place, sent again once under its successor prefix',f=>{
+ f.env.FIXTURE_LS_REMOTE='absent'; // readback: the original target ref is absent, so nothing was published
  const cause=sha(BLOCKER),o=original(f,'build',{exit:status,legacy:true});
  // Existing source derives this exact blocker identity before the failing branch.
  const desired=join(f.store,'hand-'+cause);for(const suffix of Object.keys(o.initial).filter(n=>n.startsWith(o.prefix.split('/').at(-1)+'.')).map(n=>n.slice(o.prefix.split('/').at(-1).length)))renameSync(o.prefix+suffix,desired+suffix);
  const prior=JSON.parse(readFileSync(desired+'.attempt.json','utf8'));prior.receipt=desired+'.submission.json';writeFileSync(desired+'.attempt.json',enc(prior));
  o.prefix=desired;o.initial=rawFiles(desired);
  acceptOwned(runBuild(f,`raise_hand ${quote(BLOCKER)}\nraise_hand ${quote(BLOCKER)}\nraise_hand ${quote(BLOCKER)}`));
- exactRequest(f,o);assert.equal(f.calls().length,0,'no original batch/readback after known prior nonzero terminal');assert.equal(f.entries().filter(e=>['notify','drain'].includes(e.argv[0])).length,0,'build DATA producer cannot invent FD8 ownership');preserved(o.prefix,o.initial);
+ assert.equal(f.calls().filter(c=>c.args[0]==='batch').length,1,'the refused hand is retried exactly once, then the new attempt is held');assert.equal(f.entries().filter(e=>['notify','drain'].includes(e.argv[0])).length,0,'build DATA producer cannot invent FD8 ownership');
+ const next=retried(f,o);assert.equal(readFileSync(next+'.exit','utf8'),'0\n');assert.equal(JSON.parse(readFileSync(next+'.attempt.json','utf8')).retryOf.attempt,'hand-'+cause);
 });
-callerCase('CW05','prior failed objective queues repair despite the tracked escalation already appearing submitted',f=>{
+callerCase('CW05','prior refused objective (exit2) is kept in place and sent again once under its successor prefix despite appearing submitted',f=>{
+ f.env.FIXTURE_LS_REMOTE='absent';
  const o=original(f,'objective',{exit:2,legacy:true}),desired=join(f.store,'objective-'+sha('same-source-escalation')),base=o.prefix.split('/').at(-1);
  for(const name of Object.keys(o.initial).filter(n=>n.startsWith(base+'.')))renameSync(o.prefix+name.slice(base.length),desired+name.slice(base.length));
  const intent=JSON.parse(readFileSync(desired+'.attempt.json','utf8'));intent.receipt=desired+'.submission.json';writeFileSync(desired+'.attempt.json',enc(intent));o.prefix=desired;o.initial=rawFiles(desired);
  acceptOwned(emitObjective(f,{existingState:true,rounds:3}));
- exactRequest(f,o);assert.equal(f.calls().length,0,'old escalation send is consumed, including after state/stamp reuse');assert.equal(f.entries().filter(e=>['notify','drain'].includes(e.argv[0])).length,0);preserved(o.prefix,o.initial);
- assert.equal(JSON.parse(readFileSync(o.prefix+'.attempt.json','utf8')).escalation,'same-source-escalation');
+ assert.equal(f.originalPublications().length,1,'a refused escalation is retried exactly once');assert.equal(f.entries().filter(e=>['notify','drain'].includes(e.argv[0])).length,0);
+ const next=retried(f,o),retryIntent=JSON.parse(readFileSync(next+'.attempt.json','utf8'));
+ assert.equal(retryIntent.escalation,'same-source-escalation');assert.equal(retryIntent.retryOf.exit,2);assert.equal(retryIntent.receipt,next+'.submission.json');
 });
-callerCase('CW06','a fresh build batch failure records its actual independent terminal before requesting repair DATA',f=>{
+callerCase('CW06','a fresh build batch refused with exit1 before its receipt records its terminal, queues no DATA, and is retried by the next raise',f=>{
  const prefix=join(f.store,'hand-'+sha(BLOCKER));
- acceptOwned(runBuild(f,`raise_hand ${quote(BLOCKER)}\nraise_hand ${quote(BLOCKER)}`,{extra:{FIXTURE_ORIGINAL_EXIT:'1'}}));
- const o={producer:'build',prefix};exactRequest(f,o);assert.equal(f.originalPublications().length,1,'fresh original batch is attempted once');assert.equal(f.repairs().length,0,'build producer records DATA only');
- for(const e of f.entries().filter(e=>e.argv[0]==='request'))assert.equal(e.original_exit,'1\n','independently written actual parent result precedes DATA handoff');
- assert.equal(readFileSync(prefix+'.exit','utf8'),'1\n');assert.ok(existsSync(prefix+'.submission.json'),'old receipt survives an exit1 result');
+ acceptOwned(runBuild(f,`raise_hand ${quote(BLOCKER)}\nraise_hand ${quote(BLOCKER)}`,{extra:{FIXTURE_ORIGINAL_EXIT:'1',FIXTURE_NO_RECEIPT:'1'}}));
+ assert.equal(f.originalPublications().length,2,'a refused hand is retried, never consumed');assert.equal(f.repairs().length,0);
+ assert.equal(f.entries().filter(e=>e.argv[0]==='request').length,0,'a refused hand needs no repair DATA');
+ assert.equal(readFileSync(prefix+'.exit','utf8'),'1\n','the original stays in place');const next=join(f.store,successorOf('hand-'+sha(BLOCKER)));
+ assert.equal(readFileSync(next+'.exit','utf8'),'1\n');
+ const retry=JSON.parse(readFileSync(next+'.attempt.json','utf8')).retryOf;assert.equal(retry.attempt,'hand-'+sha(BLOCKER));assert.equal(retry.exit,1);assert.equal(retry.n,1);assert.equal(retry.successor,successorOf('hand-'+sha(BLOCKER)));assert.ok(retry.stamp,'the retry chain names its original attempt, exit and stamp');
+});
+for(const [id,mode] of [['CW15','present'],['CW16','fail']])callerCase(id,'prior build exit1 whose receipt readback is '+mode+' is held, never resent',f=>{
+ f.env.FIXTURE_LS_REMOTE=mode;
+ const cause=sha(BLOCKER),o=original(f,'build',{exit:1,legacy:true});
+ const desired=join(f.store,'hand-'+cause);for(const suffix of Object.keys(o.initial).filter(n=>n.startsWith(o.prefix.split('/').at(-1)+'.')).map(n=>n.slice(o.prefix.split('/').at(-1).length)))renameSync(o.prefix+suffix,desired+suffix);
+ const prior=JSON.parse(readFileSync(desired+'.attempt.json','utf8'));prior.receipt=desired+'.submission.json';writeFileSync(desired+'.attempt.json',enc(prior));
+ o.prefix=desired;o.initial=rawFiles(desired);
+ acceptOwned(runBuild(f,`raise_hand ${quote(BLOCKER)}\nraise_hand ${quote(BLOCKER)}`));
+ assert.equal(f.calls().filter(c=>c.args[0]==='batch').length,0,'no resend without proof of non-publication');preserved(o.prefix,o.initial);
+ assert.equal(existsSync(join(f.store,'refused','hand-'+cause+'.retried')),false);assert.ok(f.entries().some(e=>e.argv[0]==='request'&&e.argv[3]===desired),'held: its repair DATA is queued');
+});
+for(const [id,mode] of [['CW17','present'],['CW18','fail']])callerCase(id,'prior refused objective whose receipt readback is '+mode+' is held, never resent',f=>{
+ f.env.FIXTURE_LS_REMOTE=mode;
+ const o=original(f,'objective',{exit:2,legacy:true}),desired=join(f.store,'objective-'+sha('same-source-escalation')),base=o.prefix.split('/').at(-1);
+ for(const name of Object.keys(o.initial).filter(n=>n.startsWith(base+'.')))renameSync(o.prefix+name.slice(base.length),desired+name.slice(base.length));
+ const intent=JSON.parse(readFileSync(desired+'.attempt.json','utf8'));intent.receipt=desired+'.submission.json';writeFileSync(desired+'.attempt.json',enc(intent));o.prefix=desired;o.initial=rawFiles(desired);
+ acceptOwned(emitObjective(f,{existingState:true,rounds:2}));
+ assert.equal(f.originalPublications().length,0,'no resend without proof of non-publication');preserved(o.prefix,o.initial);
+ assert.equal(existsSync(join(f.store,'refused','objective-'+sha('same-source-escalation')+'.retried')),false);
+});
+callerCase('CW19','a retry interrupted after its marker but before its attempt starts on the next tick, with no repair',f=>{
+ const o=original(f,'objective',{exit:2,legacy:true}),desired=join(f.store,'objective-'+sha('same-source-escalation')),base=o.prefix.split('/').at(-1);
+ for(const name of Object.keys(o.initial).filter(n=>n.startsWith(base+'.')))renameSync(o.prefix+name.slice(base.length),desired+name.slice(base.length));
+ const intent=JSON.parse(readFileSync(desired+'.attempt.json','utf8'));intent.receipt=desired+'.submission.json';writeFileSync(desired+'.attempt.json',enc(intent));o.prefix=desired;o.initial=rawFiles(desired);
+ const name=desired.split('/').at(-1),next=successorOf(name);
+ put(join(f.store,'refused',name+'.retried'),JSON.stringify({root:name,n:1,successor:next,exit:2})+'\n'); // marker only: the tick died here
+ acceptOwned(emitObjective(f,{existingState:true,rounds:1}));
+ assert.equal(f.originalPublications().length,1,'the unstarted retry starts');assert.equal(f.entries().filter(e=>e.argv[0]==='request').length,0,'and queues no repair');
+ assert.equal(JSON.parse(readFileSync(join(f.store,next+'.attempt.json'),'utf8')).retryOf.resumed,true);preserved(o.prefix,o.initial);
+});
+callerCase('CW13','after three retries the fourth refusal holds, queues repair DATA and is capped visibly',f=>{
+ const raise=`raise_hand ${quote(BLOCKER)}\n`;
+ acceptOwned(runBuild(f,raise.repeat(5),{extra:{FIXTURE_ORIGINAL_EXIT:'1',FIXTURE_LS_REMOTE:'absent'}}));
+ assert.equal(f.originalPublications().length,4,'the original plus exactly three retries');
+ const root='hand-'+sha(BLOCKER);assert.equal(readFileSync(join(f.store,'refused',root+'.capped'),'utf8'),'4\n');
+ const head=[root];for(let i=0;i<3;i++)head.push(successorOf(head.at(-1)));
+ assert.ok(f.entries().some(e=>e.argv[0]==='request'&&e.argv[2]==='build'&&e.argv[3]===join(f.store,head.at(-1))),'the capped head queues its repair DATA');
+});
+callerCase('CW14','a retried attempt that already had repair DATA keeps that request valid; the retry gets its own',f=>{
+ const cause=sha(BLOCKER),o=original(f,'build',{exit:1,legacy:true});
+ const desired=join(f.store,'hand-'+cause);for(const suffix of Object.keys(o.initial).filter(n=>n.startsWith(o.prefix.split('/').at(-1)+'.')).map(n=>n.slice(o.prefix.split('/').at(-1).length)))renameSync(o.prefix+suffix,desired+suffix);
+ const prior=JSON.parse(readFileSync(desired+'.attempt.json','utf8'));prior.receipt=desired+'.submission.json';writeFileSync(desired+'.attempt.json',enc(prior));
+ o.prefix=desired;o.initial=rawFiles(desired);const first=request(f,o); // the old policy queued DATA for every nonzero exit
+ acceptOwned(runBuild(f,`raise_hand ${quote(BLOCKER)}`,{extra:{FIXTURE_ORIGINAL_EXIT:'3',FIXTURE_LS_REMOTE:'absent'}}));
+ const next=retried(f,o);assert.equal(readFileSync(next+'.exit','utf8'),'3\n');
+ const again=f.cli(['request',f.root,'build',o.prefix]);assert.equal(again.status,0,'the original request binding is unchanged: '+again.stderr);assert.equal(again.stdout.trim(),first.path);
+ assert.ok(f.entries().some(e=>e.argv[0]==='request'&&e.argv[3]===next),'the exit-3 retry queues its own request');
+ const own=f.cli(['request',f.root,'build',next]);assert.equal(own.status,0,'and that request is valid: '+own.stderr);
+ const text=readFileSync(join(SOURCE,'scripts/mac/lane-tick.sh'),'utf8'),a=text.indexOf('# Resolve once before use_tick_worktree'),b=text.indexOf('# An UNCHANGED tick',a);
+ const script=join(f.parent,'drain-caller.sh');put(script,`set -u\nDRY=0\nREPO_ROOT=${quote(f.root)}\nsay(){ printf '%s\\n' "$1"; }\n${text.slice(a,b)}\nexit 0\n`);
+ for(let i=0;i<2;i++)acceptOwned(spawnSync('/bin/bash',[script],{cwd:f.root,env:f.env,encoding:'utf8'}));
+ const ids=new Set(f.repairs().map(c=>c.ops[0].id));
+ assert.ok(ids.has('repair-build-'+sha('hand-'+cause)),'draining the original request still sends its notice');assert.ok(ids.has('repair-build-'+sha(next.split('/').at(-1))),'the retry request drains too');
+});
+callerCase('CW20','a build hand exit1 with its receipt (a push was reached) queues exactly one repair request and is not resent',f=>{
+ const prefix=join(f.store,'hand-'+sha(BLOCKER));
+ // One raise: the delivery itself must hand the receipt-backed failure to repair DATA.
+ acceptOwned(runBuild(f,`raise_hand ${quote(BLOCKER)}`,{extra:{FIXTURE_ORIGINAL_EXIT:'1',FIXTURE_LS_REMOTE:'present'}}));
+ assert.equal(f.originalPublications().length,1,'not resent: its ref is on origin');assert.ok(existsSync(prefix+'.submission.json'));
+ assert.equal(f.dataRequests().length,1,'exactly one repair request');assert.ok(f.entries().some(e=>e.argv[0]==='request'&&e.argv[3]===prefix));
+});
+callerCase('CW21','an objective send exit1 with its receipt queues its repair request',f=>{
+ const prefix=join(f.store,'objective-'+sha('same-source-escalation'));f.env.FIXTURE_ORIGINAL_EXIT='1';acceptOwned(emitObjective(f,{rounds:1}));
+ exactRequest(f,{producer:'objective',prefix});assert.equal(f.originalPublications().length,1);
 });
 callerCase('CW07','a fresh objective send failure records its actual terminal before the same-ID repair request',f=>{
  const prefix=join(f.store,'objective-'+sha('same-source-escalation'));f.env.FIXTURE_ORIGINAL_EXIT='3';acceptOwned(emitObjective(f,{rounds:2}));
@@ -284,13 +364,14 @@ callerCase('CW10','generic successful readback without exact resolved blob never
 // New independently discovered gap: legacy exit1/2 alone is not a
 // producing-source-bound proof that publication did not occur. Ten minutes, a
 // changed result or a new tick owner cannot clear that original uncertainty.
-for(const [id,status] of [['CW11',1],['CW12',2]])callerCase(id,'legacy missing heartbeat receipt after exit'+status+' remains HELD with DATA instead of a new heartbeat',f=>{
+for(const [id,status] of [['CW11',1],['CW12',2]])callerCase(id,'heartbeat exit'+status+' with no receipt (refused before its push) is sent again once, the original kept in place',f=>{
  const o=original(f,'heartbeat',{exit:status,legacy:true,receipt:false});
  utimesSync(join(f.store,'.sg-last-heartbeat-attempt'),new Date(0),new Date(0));
- acceptOwned(owned(f,heartbeatScript(f,'heartbeat || :\nRESULT="different outcome does not clear missing provenance"\nheartbeat || :')));
- exactRequest(f,o);const records=f.dataRequests();assert.equal(records[0].value.provenance,'UNVERIFIED');
- assert.equal(f.originalPublications().length,0,'legacy exit1/2 and elapsed ten minutes never prove no original publication');
- oneDifferentRepair(f,o);assert.equal(existsSync(o.prefix+'.submission.json'),false,'missing old receipt is never synthesized or adopted');
- assert.equal(readFileSync(join(f.store,'.sg-last-heartbeat-attempt'),'utf8'),o.intent.attempt,'old unknown pointer remains unchanged');
- preserved(o.prefix,o.initial);
+ const r=owned(f,heartbeatScript(f,'heartbeat || :\nRESULT="different outcome"\nheartbeat || :'));acceptOwned(r);
+ assert.equal(f.originalPublications().length,1,'no receipt means no push: exactly one resend');
+ assert.equal(existsSync(o.prefix+'.submission.json'),false,'missing old receipt is never synthesized or adopted');
+ const marker=JSON.parse(readFileSync(join(f.store,'refused',o.prefix.split('/').at(-1)+'.retried'),'utf8'));
+ const now=readFileSync(join(f.store,'.sg-last-heartbeat-attempt'),'utf8');assert.equal('.sg-heartbeat-'+now,marker.successor,'the pointer moves to the resend');
+ const log=readFileSync(join(f.store,marker.successor+'.log'),'utf8');assert.equal(JSON.parse(log.split('\n')[0]).retryOf.attempt,o.prefix.split('/').at(-1));
+ const base=o.prefix.split('/').at(-1);preserved(o.prefix,Object.fromEntries(Object.entries(o.initial).filter(([n])=>n.startsWith(base+'.'))));
 });

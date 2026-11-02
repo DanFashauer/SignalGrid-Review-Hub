@@ -1,13 +1,14 @@
 // One bounded DATA-to-notice bridge. A request never grants execution or retries
 // an original delivery. Only the actual current Bash/FD8 owner may issue the one
-// DIFFERENT Cloud uncertainty notice; its own intent consumes even a failed send.
+// DIFFERENT Cloud uncertainty notice; its own intent consumes an unconfirmed send.
+// A refused send (lane-deliver exit 1/2: nothing published) is moved aside and retried.
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { closeSync, constants, fstatSync, fsyncSync, lstatSync, openSync,
-  opendirSync, readFileSync, readSync, realpathSync, writeFileSync } from 'node:fs';
+  opendirSync, readdirSync, readFileSync, readSync, realpathSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { checkTickOwner, deliveryRecordDirectory } from './lane-attempt-store.mjs';
+import { checkTickOwner, deliveryRecordDirectory, resumeArchivals, setAsideRefusedAttempt } from './lane-attempt-store.mjs';
 
 const MAX_RECORD = 1024 * 1024;
 const MAX_TOTAL = 16 * MAX_RECORD;
@@ -255,7 +256,13 @@ function committedConsumer(root) {
   return { head, source_sha256: sha(named) };
 }
 function noticeRoot(store, id) { return join(store.directory, id); }
+// The set-aside terminals of earlier refused sends of this notice: the retry chain.
+function refusedNotices(store, id) {
+  try { return readdirSync(join(store.directory, 'refused')).filter(n => n.startsWith(id + '.refused-') && n.endsWith('.terminal.json')).sort().map(n => 'refused/' + n); }
+  catch (error) { if (error.code === 'ENOENT') return []; throw error; }
+}
 function inventory(store) {
+  resumeArchivals(store.directory); // an interrupted notice archival must not read as consumed
   const requests = [], consumed = new Set(), directory = opendirSync(store.directory);
   let count = 0;
   try {
@@ -299,13 +306,14 @@ function publishPrepared(root, prepared, token, shellPid, store) {
     need: 'Cloud lane: inspect the current source, protected PR checks and findings. Preserve the original attempt as readback-only; this separate uncertainty notice grants no execution, landing or retry authority.',
   };
   activeOwner(root, token, shellPid, store, owner);
-  // The intent is the fence. Any subsequent failure stays consumed forever.
+  // The intent is the fence. An unconfirmed (not refused) failure stays consumed.
   try {
     writeNew(files.intent, encoded({ version: 1, kind: 'lane-delivery-repair-notification',
       at: new Date().toISOString(), request_sha256: sha(record.raw), request_id: request.id,
       original_intent_sha256: request.original_attempt.intent_sha256, consumer,
       owner: { token: owner.token, shellPid: owner.shellPid, store: owner.store,
-        guard: owner.guard, openedSha256: owner.openedSha256 }, readback_only: true }));
+        guard: owner.guard, openedSha256: owner.openedSha256 }, readback_only: true,
+      ...(() => { const retry_of = refusedNotices(store, request.id); return retry_of.length ? { retry_of } : {}; })() }));
   } catch (error) {
     if (error.code === 'EEXIST') return { consumed: true, attempted: false };
     throw error;
@@ -325,6 +333,12 @@ function publishPrepared(root, prepared, token, shellPid, store) {
     at: new Date().toISOString(), request_id: request.id, status: result.status,
     signal: result.signal ?? null, error: result.error?.code ?? null, pid: result.pid ?? null,
     readback_only: true, canonical_merge_verified: false }));
+  // A readback proving nothing was published moves this notice aside (shared rule)
+  // so the next drain retries it; the request itself stays.
+  if (!result.signal && !result.error && (result.status === 1 || result.status === 2) &&
+      setAsideRefusedAttempt(root, store.directory, request.id, result.status, 'move')?.setAsideAs) {
+    throw Error('different repair notice was refused (exit ' + result.status + '); nothing published, retried next drain');
+  }
   if (result.status !== 0 || result.signal || result.error) throw Error('different repair notice is unconfirmed and consumed');
   readOwned(files.receipt); // A missing/unsafe receipt never permits a second send.
   return { consumed: true, attempted: true };
@@ -398,9 +412,27 @@ function advanceCursor(root, token, shellPid, store, owner, prior, last, expecte
   if (current.seq !== payload.s || current.last !== last) throw Error('repair progress append readback differs');
   return current;
 }
+// A notice whose lane-deliver exited 1/2 before writing a receipt (a proven
+// prepublication failure) but whose tick died before the retry set-aside ran would
+// read as consumed forever. Under the active guard and before the consumed filter,
+// run the shared set-aside for it; receipt-backed or unknown terminals are untouched.
+// Uses the one bounded inventory; touches only consumed ids that have a request.
+function recoverRefusedNotices(root, store, names) {
+  for (const name of names.requests) {
+    const id = REQUEST_NAME.exec(name)[1];
+    if (!names.consumed.has(id)) continue;
+    const prefix = noticeRoot(store, id);
+    let terminal;
+    try { terminal = JSON.parse(readFileSync(prefix + '.terminal.json', 'utf8')); } catch { continue; }
+    if (terminal.signal !== null || terminal.error !== null || (terminal.status !== 1 && terminal.status !== 2)) continue;
+    try { lstatSync(prefix + '.submission.json'); continue; } catch (error) { if (error.code !== 'ENOENT') continue; }
+    if (setAsideRefusedAttempt(root, store.directory, id, terminal.status, 'move')?.setAsideAs) names.consumed.delete(id);
+  }
+}
 export function drainRepairs(root, token, shellPid) {
   root = resolve(root); const store = storeFor(root);
   const owner = activeOwner(root, token, shellPid, store), names = inventory(store), cursor = readCursor(store);
+  recoverRefusedNotices(root, store, names);
   // Consumption is a namespace fence, not a reason to reopen old source evidence.
   const candidates = names.requests.filter(name => !names.consumed.has(REQUEST_NAME.exec(name)[1])).sort();
   if (!candidates.length) return { consumed: false, attempted: false };

@@ -68,8 +68,8 @@
 // rides the tick PR; DR-037 decides), and not the decision core (lib/*, /v1, native ports untouched).
 import { createHash } from "node:crypto";
 import { execFileSync, spawnSync } from "node:child_process";
-import { deliveryRecordDirectory } from "./lib/lane-attempt-store.mjs";
-import { existsSync, readFileSync, readdirSync, writeFileSync, mkdirSync } from "node:fs";
+import { deliveryRecordDirectory, retryHead, setAsideRefusedAttempt } from "./lib/lane-attempt-store.mjs";
+import { existsSync, lstatSync, readFileSync, readdirSync, writeFileSync, mkdirSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { auditBacklogOwnership, parseRows, rosterIds, statusText } from "./check-backlog-ownership.mjs";
@@ -630,17 +630,33 @@ function emit(state, { write, deliver }) {
       let attempt;
       try {
         const records = deliveryRecordDirectory(ROOT);
-        const name = "objective-" + createHash("sha256").update(e.id).digest("hex");
+        // A refused original stays in place; follow its retry chain to the current attempt.
+        const rootName = "objective-" + createHash("sha256").update(e.id).digest("hex");
+        let name = retryHead(records, rootName);
         attempt = join(records, name);
         // A tracked/stamp id is not proof of a known child terminal or landing.
         // Inspect the preserved attempt even when older state calls it submitted.
-        const hasEvidence = readdirSync(records).some(file => file.startsWith(name + "."));
+        let hasEvidence = readdirSync(records).some(file => file.startsWith(name + "."));
+        let prior = null;
+        try { prior = JSON.parse(readFileSync(attempt + ".terminal.json", "utf8")); } catch { /* unknown stays held below */ }
+        let retryOf = null;
+        // A marker-backed successor with no evidence is a retry that never started
+        // (interrupted after its marker): start it now, whatever the tracked state says.
+        if (name !== rootName && !hasEvidence) { retryOf = { successor: name, resumed: true, stamp: state.derivedAt }; submitted.delete(e.id); }
+        // Exit 1/2 is retried only when a readback proves nothing was published
+        // (shared rule; deterministic successor prefix, no clock or randomness here).
+        const retry = hasEvidence && prior && !prior.signal && !prior.error && (prior.status === 1 || prior.status === 2) ?
+          setAsideRefusedAttempt(ROOT, records, name, prior.status, "derive") : null;
+        if (retry?.successor) {
+          retryOf = { ...retry, stamp: state.derivedAt }; name = retry.successor; attempt = join(records, name);
+          hasEvidence = false; submitted.delete(e.id);
+        }
         if (submitted.has(e.id) || hasEvidence) {
           if (queueRepair(attempt)) lines.push(`RAISED HAND: escalation ${e.id} original attempt retained; READBACK ONLY`);
           continue;
         }
         writeFileSync(attempt + ".attempt.json", JSON.stringify({ at: state.derivedAt, escalation: e.id,
-          state: "attempted; pending exact readback", receipt: attempt + ".submission.json" }) + "\n", { flag: "wx", mode: 0o600, flush: true });
+          state: "attempted; pending exact readback", receipt: attempt + ".submission.json", ...(retryOf ? { retryOf } : {}) }) + "\n", { flag: "wx", mode: 0o600, flush: true });
       } catch {
         if (attempt) queueRepair(attempt);
         lines.push(`RAISED HAND: escalation ${e.id} already attempted or its intent cannot be preserved; READBACK ONLY (${attempt ? attempt + ".submission.json" : "shared record store unavailable"})`);
@@ -655,7 +671,11 @@ function emit(state, { write, deliver }) {
         terminalRecorded = true;
       } catch { lines.push(`RAISED HAND: escalation ${e.id} terminal recording failed; READBACK ONLY`); }
       const accepted = terminalRecorded && !r.error && !r.signal && r.status === 0;
-      if (terminalRecorded && !accepted) queueRepair(attempt);
+      // Only a proven prepublication refusal (no receipt) skips repair DATA; it is retried next tick.
+      let receiptAbsent = false;
+      try { lstatSync(attempt + ".submission.json"); } catch (error) { receiptAbsent = error.code === "ENOENT"; }
+      const refused = !r.error && !r.signal && (r.status === 1 || r.status === 2) && receiptAbsent;
+      if (terminalRecorded && !accepted && !refused) queueRepair(attempt);
       lines.push(accepted ? `escalation ${e.id} submitted for protected PR merge` : `WARN escalation ${e.id} submission unconfirmed (lane-deliver exit ${r.status}); read back its original attempt`);
       if (accepted) submitted.add(e.id);
     }

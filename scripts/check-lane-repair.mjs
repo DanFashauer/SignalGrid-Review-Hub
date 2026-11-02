@@ -63,13 +63,13 @@ function fixture() {
  assert.ok(start>=0&&finish>start,'exact source guard boundaries required');
  const guardBlock=tick.slice(start,finish+'# END OWNED TICK GUARD'.length);
  const cliLog=join(parent,'transport.jsonl'),gitLog=join(parent,'git.jsonl');
- const transport=`import fs from 'node:fs';\nconst a=process.argv.slice(2);let ops=null;\nif(a[0]==='batch')ops=JSON.parse(fs.readFileSync(a[1],'utf8'));\nfs.appendFileSync(process.env.FIXTURE_CLI_LOG,JSON.stringify({args:a,ops})+'\\n');\nif(a[0]!=='batch'){console.error('forbidden original operation');process.exit(99)}\nconst mode=process.env.FIXTURE_TRANSPORT_MODE||'ok';\nif(mode==='signal')process.kill(process.pid,'SIGTERM');\nif(mode==='exit1'){console.error('fixture repair transport unconfirmed');process.exit(1)}\nif(mode==='exit2'){console.error('fixture repair transport refused');process.exit(2)}\nconst receipt=a[a.indexOf('--receipt')+1];if(!receipt)process.exit(98);\nfs.writeFileSync(receipt,JSON.stringify({version:1,fixtureRepair:true,canonical_merge_verified:false})+'\\n',{flag:'wx',mode:0o600,flush:true});\nconsole.log('fixture repair submitted; canonical merge unverified');\n`;
+ const transport=`import fs from 'node:fs';\nconst a=process.argv.slice(2);let ops=null;\nif(a[0]==='batch')ops=JSON.parse(fs.readFileSync(a[1],'utf8'));\nfs.appendFileSync(process.env.FIXTURE_CLI_LOG,JSON.stringify({args:a,ops})+'\\n');\nif(a[0]!=='batch'){console.error('forbidden original operation');process.exit(99)}\nconst mode=process.env.FIXTURE_TRANSPORT_MODE||'ok';\nif(mode==='signal')process.kill(process.pid,'SIGTERM');\nif(mode==='exit1'){console.error('fixture repair transport unconfirmed');process.exit(1)}\nif(mode==='exit1-receipt'){fs.writeFileSync(a[a.indexOf('--receipt')+1],JSON.stringify({version:1,target:'lane/mac-mail-20261031-010000Z-0123456789ab'})+'\\n',{flag:'wx',mode:0o600});console.error('fixture push refused after its receipt');process.exit(1)}\nif(mode==='exit2'){console.error('fixture repair transport refused');process.exit(2)}\nconst receipt=a[a.indexOf('--receipt')+1];if(!receipt)process.exit(98);\nfs.writeFileSync(receipt,JSON.stringify({version:1,fixtureRepair:true,canonical_merge_verified:false})+'\\n',{flag:'wx',mode:0o600,flush:true});\nconsole.log('fixture repair submitted; canonical merge unverified');\n`;
  put(join(root,'scripts/lane-deliver.mjs'),transport);
  put(join(root,'artifacts/agent-heartbeats/mac-lane-tick.json'),'{"result":"original frozen heartbeat"}\n');
  put(join(root,'fixture.txt'),'disposable fixture\n');git(['add','.']);git(['commit','-qm','frozen source-copy fixture']);
  const head=git(['rev-parse','HEAD']);env.FIXTURE_HEAD=head;env.FIXTURE_CLI_LOG=cliLog;
  // Real local Git handles metadata; a remote/network operation is never forwarded.
- put(join(bin,'git'),`#!${process.execPath}\nimport fs from 'node:fs';import{spawnSync}from'node:child_process';const a=process.argv.slice(2);fs.appendFileSync(${JSON.stringify(gitLog)},JSON.stringify(a)+'\\n');if(a[0]==='remote'&&a[1]==='get-url'){console.log('https://github.com/fixture/route.git');process.exit(0)}if(a.some(x=>['push','fetch','ls-remote','clone'].includes(x))){console.error('fixture forbids remote transport');process.exit(97)}const r=spawnSync(${JSON.stringify(GIT)},a,{stdio:'inherit'});process.exit(r.status??96);\n`);chmodSync(join(bin,'git'),0o755);
+ put(join(bin,'git'),`#!${process.execPath}\nimport fs from 'node:fs';import{spawnSync}from'node:child_process';const a=process.argv.slice(2);fs.appendFileSync(${JSON.stringify(gitLog)},JSON.stringify(a)+'\\n');if(a[0]==='remote'&&a[1]==='get-url'){console.log('https://github.com/fixture/route.git');process.exit(0)}if(a[0]==='ls-remote'&&process.env.FIXTURE_LS_REMOTE==='absent')process.exit(0);const canon=process.env.FIXTURE_CANONICAL??(process.env.FIXTURE_LS_REMOTE==='absent'?'absent':'');if(a[0]==='fetch'&&canon)process.exit(0);if(a[0]==='merge-base'&&canon)process.exit(canon==='landed'?0:1);if(a[0]==='ls-remote'&&process.env.FIXTURE_LS_REMOTE==='present'){console.log('0'.repeat(40)+String.fromCharCode(9)+a[a.length-1]);process.exit(0)}if(a.some(x=>['push','fetch','ls-remote','clone'].includes(x))){console.error('fixture forbids remote transport');process.exit(97)}const r=spawnSync(${JSON.stringify(GIT)},a,{stdio:'inherit'});process.exit(r.status??96);\n`);chmodSync(join(bin,'git'),0o755);
  const storeModule=join(root,'scripts/lib/lane-attempt-store.mjs');
  const initialized=spawnSync(process.execPath,[storeModule,'init',root],{cwd:root,env,encoding:'utf8'});
  assert.equal(initialized.status,0,initialized.stderr);
@@ -140,7 +140,7 @@ function acceptOwned(r) { assert.equal(r.status,0,'actual own Bash must close no
 function noRemoteAttempt(f) {
  if(!existsSync(f.gitLog))return;
  for(const row of readFileSync(f.gitLog,'utf8').trim().split('\n').filter(Boolean).map(JSON.parse))
-  assert.ok(!row.some(a=>['push','fetch','ls-remote','clone'].includes(a)),'request/consumer must not retry or probe original remote operation');
+  assert.ok(!row.some(a=>['push','clone'].includes(a)),'request/consumer must not retry or probe original remote operation');
 }
 function oneRepair(f,count=1) {
  noRemoteAttempt(f);
@@ -190,9 +190,41 @@ frozen('R07','a replaced guard pathname cannot authorize notification or release
  assert.equal(run.signal,null);assert.equal(f.calls().length,0);assert.equal(JSON.parse(readFileSync(join(f.store,'tick.slot.json'),'utf8')).state,'OPEN');
  assert.equal(readFileSync(guard,'utf8'),'replacement guard\n');assert.ok(existsSync(guard+'.original-preserved'));
 });
-frozen('R08','a failed different repair hand remains consumed on a later valid tick',f=>{
- const o=original(f,'heartbeat'),r=request(f,o);acceptOwned(owned(f,notifyCommand(f,r)+'; :',{extra:{FIXTURE_TRANSPORT_MODE:'exit1'}}));oneRepair(f);
- acceptOwned(owned(f,notifyCommand(f,r)+'; :'));oneRepair(f);preserved(o.prefix,o.initial);
+frozen('R08','a refused (exit1) different repair hand is retried on a later valid tick, then consumed',f=>{
+ const o=original(f,'heartbeat'),r=request(f,o);acceptOwned(owned(f,notifyCommand(f,r)+'; :',{extra:{FIXTURE_TRANSPORT_MODE:'exit1',FIXTURE_LS_REMOTE:'absent'}}));oneRepair(f);
+ acceptOwned(owned(f,notifyCommand(f,r)+'; :'));oneRepair(f,2);acceptOwned(owned(f,notifyCommand(f,r)+'; :'));oneRepair(f,2);preserved(o.prefix,o.initial);
+});
+for(const [id,mode] of [['R19','present'],['R20','fail']])frozen(id,'a refused repair notice whose receipt readback is '+mode+' is never resent',f=>{
+ const o=original(f,'heartbeat'),r=request(f,o);acceptOwned(owned(f,notifyCommand(f,r)+'; :',{extra:{FIXTURE_TRANSPORT_MODE:'exit1-receipt',FIXTURE_LS_REMOTE:mode}}));oneRepair(f);
+ acceptOwned(owned(f,notifyCommand(f,r)+'; :',{extra:{FIXTURE_LS_REMOTE:mode}}));oneRepair(f);preserved(o.prefix,o.initial);
+ assert.equal(existsSync(join(f.store,'refused')),false,'nothing is set aside without proof of non-publication');
+});
+frozen('R21','an archival interrupted after its first move is completed by the next tick, and the retry proceeds',f=>{
+ const o=original(f,'heartbeat'),r=request(f,o);acceptOwned(owned(f,notifyCommand(f,r)+'; :',{extra:{FIXTURE_TRANSPORT_MODE:'exit1',FIXTURE_LS_REMOTE:'absent'}}));oneRepair(f);
+ const id=r.data.id,refused=join(f.store,'refused'),moved=readdirSync(refused).filter(n=>n.startsWith(id+'.refused-1.'));assert.ok(moved.length>=3,'the refused notice was archived');
+ // Rebuild the state of a tick killed right after moving .attempt.json: the rest are back in place, the operation marker remains.
+ const files=moved.map(n=>id+n.slice((id+'.refused-1').length));
+ for(const n of moved)if(!n.endsWith('.attempt.json'))renameSync(join(refused,n),join(f.store,id+n.slice((id+'.refused-1').length)));
+ writeFileSync(join(refused,id+'.archiving'),JSON.stringify({name:id,n:1,files})+'\n',{mode:0o600});
+ acceptOwned(owned(f,notifyCommand(f,r)+'; :',{extra:{FIXTURE_LS_REMOTE:'absent'}}));oneRepair(f,2);
+ assert.equal(existsSync(join(refused,id+'.archiving')),false,'the operation marker is removed last');
+ for(const n of files)assert.ok(existsSync(join(refused,id+'.refused-1'+n.slice(id.length))),'archived: '+n);
+ preserved(o.prefix,o.initial);
+});
+for(const [id,receipt] of [['R22',false],['R23',true]])frozen(id,receipt?'a refused notice exit1 WITH its receipt left in place stays readback-only on the next drain':'a refused notice exit1 with no receipt whose tick died before the set-aside is retried by the next drain',f=>{
+ const o=original(f,'heartbeat'),r=request(f,o),idn=r.data.id,refused=join(f.store,'refused');
+ acceptOwned(owned(f,notifyCommand(f,r)+'; :',{extra:{FIXTURE_TRANSPORT_MODE:receipt?'exit1-receipt':'exit1',FIXTURE_LS_REMOTE:'absent'}}));oneRepair(f);
+ if(!receipt){ // rebuild the state of a tick that died after the exit-1 terminal, before the set-aside
+  const moved=readdirSync(refused).filter(n=>n.startsWith(idn+'.refused-1.'));assert.ok(moved.length>=3);
+  for(const n of moved)renameSync(join(refused,n),join(f.store,idn+n.slice((idn+'.refused-1').length)));
+  rmSync(refused,{recursive:true});
+ }
+ assert.ok(existsSync(join(f.store,idn+'.terminal.json')),'the refused notice is in place');
+ const cmd=`${quote(process.execPath)} ${quote(join(f.root,MODULE))} drain ${quote(f.root)} "$TICK_OWNER_TOKEN" "$$"`;
+ acceptOwned(owned(f,cmd+' || :',{extra:{FIXTURE_LS_REMOTE:'absent'}}));
+ if(receipt){oneRepair(f);assert.equal(existsSync(refused),false,'nothing set aside: readback only');}
+ else{oneRepair(f,2);assert.ok(existsSync(join(refused,idn+'.refused-1.terminal.json')),'the chain shows n=1');assert.equal(readdirSync(refused).some(n=>n.includes('.refused-2.')),false);}
+ preserved(o.prefix,o.initial);
 });
 frozen('R09','a signaled local repair child never creates a replacement notification identity',f=>{
  const o=original(f,'heartbeat'),r=request(f,o);acceptOwned(owned(f,notifyCommand(f,r)+'; :',{extra:{FIXTURE_TRANSPORT_MODE:'signal'}}));oneRepair(f);

@@ -71,7 +71,7 @@ function fixture() {
  put(join(root,'fixture.txt'),'disposable fixture\n');git(['add','.']);git(['commit','-qm','frozen source-copy fixture']);
  const head=git(['rev-parse','HEAD']);env.FIXTURE_HEAD=head;env.FIXTURE_CLI_LOG=cliLog;
  // Real local Git handles metadata; a remote/network operation is never forwarded.
- put(join(bin,'git'),`#!${process.execPath}\nimport fs from 'node:fs';import{spawnSync}from'node:child_process';const a=process.argv.slice(2);fs.appendFileSync(${JSON.stringify(gitLog)},JSON.stringify(a)+'\\n');if(a[0]==='remote'&&a[1]==='get-url'){console.log('https://github.com/fixture/route.git');process.exit(0)}if(a.some(x=>['push','fetch','ls-remote','clone'].includes(x))){console.error('fixture forbids remote transport');process.exit(97)}const r=spawnSync(${JSON.stringify(GIT)},a,{stdio:'inherit'});process.exit(r.status??96);\n`);chmodSync(join(bin,'git'),0o755);
+ put(join(bin,'git'),`#!${process.execPath}\nimport fs from 'node:fs';import{spawnSync}from'node:child_process';const a=process.argv.slice(2);fs.appendFileSync(${JSON.stringify(gitLog)},JSON.stringify(a)+'\\n');if(a[0]==='remote'&&a[1]==='get-url'){console.log('https://github.com/fixture/route.git');process.exit(0)}if(a[0]==='ls-remote'&&process.env.FIXTURE_LS_REMOTE==='absent')process.exit(0);const canon=process.env.FIXTURE_CANONICAL??(process.env.FIXTURE_LS_REMOTE==='absent'?'absent':'');if(a[0]==='fetch'&&canon)process.exit(0);if(a[0]==='merge-base'&&canon)process.exit(canon==='landed'?0:1);if(a[0]==='ls-remote'&&process.env.FIXTURE_LS_REMOTE==='present'){console.log('0'.repeat(40)+String.fromCharCode(9)+a[a.length-1]);process.exit(0)}if(a.some(x=>['push','fetch','ls-remote','clone'].includes(x))){console.error('fixture forbids remote transport');process.exit(97)}const r=spawnSync(${JSON.stringify(GIT)},a,{stdio:'inherit'});process.exit(r.status??96);\n`);chmodSync(join(bin,'git'),0o755);
  const storeModule=join(root,'scripts/lib/lane-attempt-store.mjs');
  const initialized=spawnSync(process.execPath,[storeModule,'init',root],{cwd:root,env,encoding:'utf8'});
  assert.equal(initialized.status,0,initialized.stderr);
@@ -142,7 +142,7 @@ function acceptOwned(r) { assert.equal(r.status,0,'actual own Bash must close no
 function noRemoteAttempt(f) {
  if(!existsSync(f.gitLog))return;
  for(const row of readFileSync(f.gitLog,'utf8').trim().split('\n').filter(Boolean).map(JSON.parse))
-  assert.ok(!row.some(a=>['push','fetch','ls-remote','clone'].includes(a)),'request/consumer must not retry or probe original remote operation');
+  assert.ok(!row.some(a=>['push','clone'].includes(a)),'request/consumer must not retry or probe original remote operation');
 }
 function oneRepair(f,count=1) {
  noRemoteAttempt(f);
@@ -201,7 +201,7 @@ function emitObjective(f,{existingState=false,rounds=1}={}) {
  const state={decisionAddress:'same frozen decision',derivedAt:'2026-11-01T01:00:00Z',derivedAtCommit:f.head,queue:[],escalations:[escalation],criteria:[],tasks:[],verdict:'building'};
  if(existingState)put(join(f.root,'frozen-state.json'),enc(state));
  const file=join(f.parent,'objective-caller-'+(++serial)+'.mjs');
- put(file,`import {createHash} from 'node:crypto';import {spawnSync} from 'node:child_process';import {mkdirSync,readFileSync,readdirSync,existsSync,writeFileSync,rmSync} from 'node:fs';import {dirname,join} from 'node:path';import {fileURLToPath} from 'node:url';import {deliveryRecordDirectory} from ${JSON.stringify('file://'+join(f.root,'scripts/lib/lane-attempt-store.mjs'))};\nconst ROOT=${JSON.stringify(f.root)},STATE_REL='frozen-state.json',STAMP_REL='node_modules/frozen-objective-stamp.json';\n${text.slice(a,b)}\nconst state=${JSON.stringify(state)};for(let n=0;n<${rounds};n++){const r=emit(state,{write:true,deliver:true});console.log(r.lines.join('\\n'));}\n`);
+ put(file,`import {createHash,randomBytes} from 'node:crypto';import {spawnSync} from 'node:child_process';import {lstatSync,mkdirSync,readFileSync,readdirSync,renameSync,existsSync,writeFileSync,rmSync} from 'node:fs';import {dirname,join} from 'node:path';import {fileURLToPath} from 'node:url';import {deliveryRecordDirectory,retryHead,setAsideRefusedAttempt} from ${JSON.stringify('file://'+join(f.root,'scripts/lib/lane-attempt-store.mjs'))};\nconst ROOT=${JSON.stringify(f.root)},STATE_REL='frozen-state.json',STAMP_REL='node_modules/frozen-objective-stamp.json';\n${text.slice(a,b)}\nconst state=${JSON.stringify(state)};for(let n=0;n<${rounds};n++){const r=emit(state,{write:true,deliver:true});console.log(r.lines.join('\\n'));}\n`);
  return spawnSync(process.execPath,[file],{cwd:f.root,env:f.env,encoding:'utf8'});
 }
 function exactRequest(f,o,{atLeast=1}={}) {

@@ -88,7 +88,7 @@
 // fingerprint the evidence records and the ones this gate (and the readiness
 // figure) require cannot come from two separate readings.
 
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
@@ -357,33 +357,59 @@ export function proofScriptPath(rootCmd, subCmd) {
 
 /** LIVE: every `proof:*` package.json defines, resolved (proofScriptPath) to a
  *  repo-relative path that actually EXISTS on disk. A resolvable-but-missing
- *  path is omitted, not guessed at. */
-export function proofScriptFiles(repoRoot, rootScripts, subScripts) {
+ *  path is omitted, not guessed at.
+ *
+ *  `keepUnreadable`: existsSync is false for a path it cannot stat at all — an
+ *  untraversable parent (EACCES), an ELOOP symlink — not only for an absent one.
+ *  The self-skip roster passes true so ONLY ENOENT is omitted and every other path
+ *  reaches its reader, which refuses it (DR-054 sweep #7). The digest callers keep
+ *  the default: there an omitted proof has no digest and reads as NOT current. */
+export function proofScriptFiles(repoRoot, rootScripts, subScripts, { keepUnreadable = false, stat = statSync } = {}) {
   const out = new Map();
   for (const [name, cmd] of Object.entries(rootScripts ?? {})) {
     if (!name.startsWith("proof:")) continue;
     const rel = proofScriptPath(cmd, subScripts?.[name]);
-    if (rel && existsSync(resolve(repoRoot, rel))) out.set(name, rel);
+    if (!rel) continue;
+    const abs = resolve(repoRoot, rel);
+    if (keepUnreadable ? presentOrUnreadable(abs, stat) : statOk(abs, stat)) out.set(name, rel);
   }
   return out;
+}
+
+/** existsSync's semantics through an injectable stat: false on ANY stat error. */
+function statOk(abs, stat) {
+  try { stat(abs); return true; } catch { return false; }
+}
+
+/** True unless stat says ENOENT: a path that cannot be stat'ed for any other reason
+ *  is present-but-unreadable, never absent. */
+function presentOrUnreadable(abs, stat) {
+  try { stat(abs); return true; } catch (e) { return e.code !== "ENOENT"; }
 }
 
 /** LIVE: every proof:* resolved to a file (proofScriptFiles), scanned for a
  *  self-skip (selfSkipEnv). Name -> ENV var. Used by check-launch-proof-bindings
  *  itself and by verify-all.mjs (imported), so the evidence emitter and the
  *  binding gate cannot derive two different self-skip rosters. */
-export function liveSelfSkipping(repoRoot = repo) {
+export function liveSelfSkipping(repoRoot = repo, read = readFileSync, stat = statSync) {
   const rootScripts = JSON.parse(readFileSync(join(repoRoot, "package.json"), "utf8")).scripts ?? {};
   const subScripts = JSON.parse(readFileSync(join(repoRoot, "scripts/package.json"), "utf8")).scripts ?? {};
-  const files = proofScriptFiles(repoRoot, rootScripts, subScripts);
+  const files = proofScriptFiles(repoRoot, rootScripts, subScripts, { keepUnreadable: true, stat });
   if (files.size === 0) throw new Error("resolved zero proof:* scripts to a file on disk — package.json's shape changed");
   const map = new Map();
+  const unreadable = [];
   for (const [name, relPath] of files) {
     let text;
-    try { text = readFileSync(resolve(repoRoot, relPath), "utf8"); } catch { continue; }
+    // proofScriptFiles (keepUnreadable) dropped only what stat calls ENOENT, so ENOENT
+    // here is a race. Any other error — EACCES on the file or a parent, ELOOP, EISDIR —
+    // is a PRESENT proof never read; skipping it left the proof off this roster, i.e.
+    // read as "never self-skips" (DR-054 sweep #7). Fail closed.
+    try { text = read(resolve(repoRoot, relPath), "utf8"); }
+    catch (e) { if (e.code !== "ENOENT") unreadable.push(`${relPath}: ${e.message}`); continue; }
     const env = selfSkipEnv(text);
     if (env) map.set(name, env);
   }
+  if (unreadable.length) throw new Error(`proof script(s) present but unreadable — self-skip status unknown, refusing to call them non-skipping: ${unreadable.join("; ")}`);
   return map;
 }
 
@@ -394,11 +420,15 @@ export function liveSelfSkipping(repoRoot = repo) {
  * always match, but a proof's sourceDigest (below) must track what the package
  * actually calls itself, not a naming convention that happens to hold.
  */
-export function workspacePackageDirs(repoRoot) {
+export function workspacePackageDirs(repoRoot, readdir = readdirSync) {
   const map = new Map();
   for (const root of ["lib", "artifacts"]) {
     let entries = [];
-    try { entries = readdirSync(join(repoRoot, root), { withFileTypes: true }); } catch { continue; }
+    // ENOENT: a tree without this root has no packages in it — a legitimate skip. Any
+    // other error dropped EVERY package under the root from the map, so digests stopped
+    // covering their workspace deps in silence (DR-054 sweep #7). Fail closed.
+    try { entries = readdir(join(repoRoot, root), { withFileTypes: true }); }
+    catch (e) { if (e.code === "ENOENT") continue; throw new Error(`workspacePackageDirs: ${root}/ present but unreadable: ${e.message}`); }
     for (const e of entries) {
       if (!e.isDirectory()) continue;
       try {
@@ -755,6 +785,46 @@ function selfTest() {
 
   // ── LIVE smoke checks against the real repo — cheap, and the whole point
   // is that this derivation is read from the tree, not hand-maintained. ──
+  // DR-054 sweep #7: EACCES must throw at both read sites; ENOENT must stay a skip.
+  const thrower = (code) => () => { throw Object.assign(new Error(`${code}: synthetic`), { code }); };
+  const throws = (fn) => { try { fn(); return false; } catch { return true; } };
+  checks.push(["liveSelfSkipping: an EACCES proof script THROWS, never reads as non-skipping", throws(() => liveSelfSkipping(repo, thrower("EACCES")))]);
+  // ONE unreadable proof among readable ones must throw (a `length > 1` threshold fails),
+  // and a non-EACCES code must too (a narrowed `=== "EACCES"` fails).
+  const oneBad = (code, at = 0) => { let n = 0; return (p, enc) => { if (n++ === at) thrower(code)(); return readFileSync(p, enc); }; };
+  checks.push(["liveSelfSkipping: exactly ONE unreadable proof script (EACCES) still THROWS", throws(() => liveSelfSkipping(repo, oneBad("EACCES")))]);
+  checks.push(["liveSelfSkipping: an EISDIR proof script THROWS too — every non-ENOENT code, not only EACCES", throws(() => liveSelfSkipping(repo, oneBad("EISDIR")))]);
+  checks.push(["liveSelfSkipping: an unreadable proof LATER in the roster (not the first read) still THROWS", throws(() => liveSelfSkipping(repo, oneBad("EACCES", 2)))]);
+  // The LAST read, after the self-skipping proofs have filled the map: a record that only
+  // fires while the map is empty (or only early in the loop) goes red here.
+  const rosterSize = proofScriptFiles(
+    repo,
+    JSON.parse(readFileSync(join(repo, "package.json"), "utf8")).scripts ?? {},
+    JSON.parse(readFileSync(join(repo, "scripts/package.json"), "utf8")).scripts ?? {},
+  ).size;
+  checks.push(["liveSelfSkipping: the LAST proof read unreadable (map already holding self-skippers) still THROWS", rosterSize > 1 && throws(() => liveSelfSkipping(repo, oneBad("EACCES", rosterSize - 1)))]);
+  checks.push(["liveSelfSkipping: an ENOENT proof script (raced away) is skipped, not fatal", liveSelfSkipping(repo, thrower("ENOENT")).size === 0]);
+  // A path stat cannot reach (untraversable parent, ELOOP) must reach the reader and
+  // refuse — not be filtered out first as if absent (Codex review on #1337).
+  {
+    const baseFiles = proofScriptFiles(
+      repo,
+      JSON.parse(readFileSync(join(repo, "package.json"), "utf8")).scripts ?? {},
+      JSON.parse(readFileSync(join(repo, "scripts/package.json"), "utf8")).scripts ?? {},
+    );
+    const victim = resolve(repo, [...baseFiles.values()].at(-1));
+    const onVictim = (code, real) => (p, ...a) => { if (resolve(p) === victim) thrower(code)(); return real(p, ...a); };
+    checks.push(["liveSelfSkipping: a proof whose PARENT is untraversable (stat + read EACCES) THROWS, never filtered as absent",
+      throws(() => liveSelfSkipping(repo, onVictim("EACCES", readFileSync), onVictim("EACCES", statSync)))]);
+    checks.push(["liveSelfSkipping: a proof stat calls ENOENT is still omitted, not fatal",
+      !throws(() => liveSelfSkipping(repo, readFileSync, onVictim("ENOENT", statSync)))]);
+  }
+  checks.push(["workspacePackageDirs: an EACCES package root THROWS, never an empty map", throws(() => workspacePackageDirs(repo, thrower("EACCES")))]);
+  checks.push(["workspacePackageDirs: an EIO (non-EACCES) error on a package root THROWS too", throws(() => workspacePackageDirs(repo, thrower("EIO")))]);
+  checks.push(["workspacePackageDirs: an ENOENT package root is skipped (empty map, no throw)", workspacePackageDirs(repo, thrower("ENOENT")).size === 0]);
+  // Only the SECOND root failing, with ENOTDIR (artifacts/ replaced by a file): the throw
+  // must not depend on which root fails, nor allowlist ENOTDIR.
+  checks.push(["workspacePackageDirs: artifacts/ alone failing with ENOTDIR THROWS", throws(() => workspacePackageDirs(repo, (p, o) => (p.endsWith("artifacts") ? thrower("ENOTDIR")() : readdirSync(p, o))))]);
   const livePkgDirs = workspacePackageDirs(repo);
   checks.push(["workspacePackageDirs: LIVE — @workspace/signalgrid-core resolves to lib/signalgrid-core", livePkgDirs.get("@workspace/signalgrid-core") === "lib/signalgrid-core"]);
   const liveFiles = proofScriptFiles(

@@ -211,6 +211,21 @@ frozen('R21','an archival interrupted after its first move is completed by the n
  for(const n of files)assert.ok(existsSync(join(refused,id+'.refused-1'+n.slice(id.length))),'archived: '+n);
  preserved(o.prefix,o.initial);
 });
+for(const [id,receipt] of [['R22',false],['R23',true]])frozen(id,receipt?'a refused notice exit1 WITH its receipt left in place stays readback-only on the next drain':'a refused notice exit1 with no receipt whose tick died before the set-aside is retried by the next drain',f=>{
+ const o=original(f,'heartbeat'),r=request(f,o),idn=r.data.id,refused=join(f.store,'refused');
+ acceptOwned(owned(f,notifyCommand(f,r)+'; :',{extra:{FIXTURE_TRANSPORT_MODE:receipt?'exit1-receipt':'exit1',FIXTURE_LS_REMOTE:'absent'}}));oneRepair(f);
+ if(!receipt){ // rebuild the state of a tick that died after the exit-1 terminal, before the set-aside
+  const moved=readdirSync(refused).filter(n=>n.startsWith(idn+'.refused-1.'));assert.ok(moved.length>=3);
+  for(const n of moved)renameSync(join(refused,n),join(f.store,idn+n.slice((idn+'.refused-1').length)));
+  rmSync(refused,{recursive:true});
+ }
+ assert.ok(existsSync(join(f.store,idn+'.terminal.json')),'the refused notice is in place');
+ const cmd=`${quote(process.execPath)} ${quote(join(f.root,MODULE))} drain ${quote(f.root)} "$TICK_OWNER_TOKEN" "$$"`;
+ acceptOwned(owned(f,cmd+' || :',{extra:{FIXTURE_LS_REMOTE:'absent'}}));
+ if(receipt){oneRepair(f);assert.equal(existsSync(refused),false,'nothing set aside: readback only');}
+ else{oneRepair(f,2);assert.ok(existsSync(join(refused,idn+'.refused-1.terminal.json')),'the chain shows n=1');assert.equal(readdirSync(refused).some(n=>n.includes('.refused-2.')),false);}
+ preserved(o.prefix,o.initial);
+});
 frozen('R09','a signaled local repair child never creates a replacement notification identity',f=>{
  const o=original(f,'heartbeat'),r=request(f,o);acceptOwned(owned(f,notifyCommand(f,r)+'; :',{extra:{FIXTURE_TRANSPORT_MODE:'signal'}}));oneRepair(f);
  const again=request(f,o);assert.equal(again.path,r.path);acceptOwned(owned(f,notifyCommand(f,again)+'; :'));oneRepair(f);preserved(o.prefix,o.initial);

@@ -412,9 +412,27 @@ function advanceCursor(root, token, shellPid, store, owner, prior, last, expecte
   if (current.seq !== payload.s || current.last !== last) throw Error('repair progress append readback differs');
   return current;
 }
+// A notice whose lane-deliver exited 1/2 before writing a receipt (a proven
+// prepublication failure) but whose tick died before the retry set-aside ran would
+// read as consumed forever. Under the active guard and before the consumed filter,
+// run the shared set-aside for it; receipt-backed or unknown terminals are untouched.
+// Uses the one bounded inventory; touches only consumed ids that have a request.
+function recoverRefusedNotices(root, store, names) {
+  for (const name of names.requests) {
+    const id = REQUEST_NAME.exec(name)[1];
+    if (!names.consumed.has(id)) continue;
+    const prefix = noticeRoot(store, id);
+    let terminal;
+    try { terminal = JSON.parse(readFileSync(prefix + '.terminal.json', 'utf8')); } catch { continue; }
+    if (terminal.signal !== null || terminal.error !== null || (terminal.status !== 1 && terminal.status !== 2)) continue;
+    try { lstatSync(prefix + '.submission.json'); continue; } catch (error) { if (error.code !== 'ENOENT') continue; }
+    if (setAsideRefusedAttempt(root, store.directory, id, terminal.status, 'move')?.setAsideAs) names.consumed.delete(id);
+  }
+}
 export function drainRepairs(root, token, shellPid) {
   root = resolve(root); const store = storeFor(root);
   const owner = activeOwner(root, token, shellPid, store), names = inventory(store), cursor = readCursor(store);
+  recoverRefusedNotices(root, store, names);
   // Consumption is a namespace fence, not a reason to reopen old source evidence.
   const candidates = names.requests.filter(name => !names.consumed.has(REQUEST_NAME.exec(name)[1])).sort();
   if (!candidates.length) return { consumed: false, attempted: false };

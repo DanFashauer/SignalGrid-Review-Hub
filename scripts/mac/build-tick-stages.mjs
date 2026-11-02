@@ -1655,6 +1655,14 @@ printf 'busy=%s code=%s\\n' "$busy" "$code"`, env);
     const otherReason = run('printf "reason-body\\n" >> "$SG_CI_EVENTS"', 2, 4, base, { SG_CI_BRAIN_URL: brainUrl });
     ok("CI does not yield to queued work blocked on something other than the host", otherReason.status === 0 && !/yielding/.test(otherReason.stdout)
       && readFileSync(events, "utf8").endsWith("reason-body\nteardown\n"), `${otherReason.status} ${otherReason.stdout}`);
+    ok("an admission without a yield says why (the probe's answer is logged)",
+      /brain probe at admission: not starved: queued=3, reason=Waiting for operator approval/.test(otherReason.stdout), otherReason.stdout);
+    // The live brain's status can carry raw control characters inside job text, which
+    // strict JSON.parse rejects; a starved status with one must still yield.
+    writeFileSync(brain, JSON.stringify({ ...starved, coordinator: { ...starved.coordinator }, note: "x" }).replace('"x"', '"line\u0001\tend"'));
+    const ctl = run('printf "ctl-body\\n" >> "$SG_CI_EVENTS"', 30, 4, base, { SG_CI_BRAIN_URL: brainUrl, SG_CI_BRAIN_YIELD_SECONDS: "2" });
+    ok("a starved status carrying raw control characters still yields", ctl.status === 0 && /yielding the host to the queued local brain/.test(ctl.stdout)
+      && readFileSync(events, "utf8").endsWith("ctl-body\nteardown\n"), `${ctl.status} ${ctl.stdout} ${ctl.stderr}`);
     writeFileSync(brain, JSON.stringify({ coordinator: { counts: { queued: 0 }, blocked_reason: starved.coordinator.blocked_reason } }));
     const nothingQueued = run('printf "empty-body\\n" >> "$SG_CI_EVENTS"', 2, 4, base, { SG_CI_BRAIN_URL: brainUrl });
     ok("CI does not yield on a host-reserved reason with nothing queued", nothingQueued.status === 0 && !/yielding/.test(nothingQueued.stdout)

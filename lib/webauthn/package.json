@@ -7,7 +7,7 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "ioredis": "^5.4.1",
+    "ioredis": "^6.0.0",
     "@workspace/audit": "workspace:*"
   },
   "devDependencies": {

@@ -1194,7 +1194,7 @@ function buttonText(src, openEnd, tagName = "button") {
   const cm = closeRe.exec(src);
   if (!cm) return null;
   let body = src.slice(openEnd + 1, cm.index);
-  // An aria-hidden subtree is left out of the accessible name: drop it whole.
+  // An aria-hidden or hidden subtree is left out of the accessible name: drop it whole.
   body = dropAriaHidden(body);
   if (body === null) return null;
   body = body.replace(/\{\s*(["'`])((?:\\[\s\S]|(?!\1)[^\\])*)\1\s*\}/g, (m, _q, inner) =>
@@ -1230,8 +1230,16 @@ export function emptyExpression(inner) {
 /** Is this opening tag aria-hidden (any value but false)? */
 // `(?<![\w-])` so `data-aria-hidden` is not read as aria-hidden.
 const ARIA_HIDDEN = (tag) => /(?<![\w-])aria-hidden(?![\w-])/.test(tag) && !/(?<![\w-])aria-hidden\s*=\s*(?:["']false["']|\{\s*false\s*\}|\{\s*["']false["']\s*\})/.test(tag);
+// A `hidden` element renders nothing and names nothing (unlike `sr-only`, which is
+// visually hidden but read): the HTML attribute — boolean, so any value but a JSX
+// `{false}` hides, and an expression the gate cannot read is taken as hidden — or a
+// literal className whose whitespace-separated tokens include exactly `hidden`
+// (Tailwind's display:none; a `md:hidden` variant is not definitively hidden).
+const HIDDEN = (tag) => (/(?<=\s)hidden(?=[\s/>]|\s*=|$)/.test(tag) && !/(?<=\s)hidden\s*=\s*\{\s*false\s*\}/.test(tag)) ||
+  [...tag.matchAll(/(?<![\w-])className\s*=\s*(?:["']([^"']*)["']|\{\s*(["'`])((?:\\[\s\S]|(?!\2)[^\\$])*)\2\s*\})/g)]
+    .some((m) => (m[1] ?? m[3]).split(/\s+/).includes("hidden"));
 
-/** Remove every aria-hidden element and its children; null if a tag cannot be closed. */
+/** Remove every aria-hidden or hidden element and its children; null if a tag cannot be closed. */
 function dropAriaHidden(body) {
   for (let from = 0; ; ) {
     const i = body.slice(from).search(/<[A-Za-z]/);
@@ -1239,7 +1247,7 @@ function dropAriaHidden(body) {
     const at = from + i;
     const tag = openingTag(body, at);
     if (tag === null) return null;
-    if (!ARIA_HIDDEN(tag)) { from = at + 1; continue; }
+    if (!ARIA_HIDDEN(tag) && !HIDDEN(tag)) { from = at + 1; continue; }
     const end = at + tag.length + 1;
     if (tag.trimEnd().endsWith("/")) { body = body.slice(0, at) + body.slice(end); from = at; continue; }
     const name = tag.match(/^<([A-Za-z][\w.:-]*)/)[1];
@@ -1748,7 +1756,10 @@ export function motionConfigWraps(src, accept = () => true) {
 
 /**
  * JSX applies attributes in order, so a spread AFTER `reducedMotion="user"` on a
- * `<MotionConfig>` opening tag can set it back (`{...{ reducedMotion: "never" }}`).
+ * `<MotionConfig>` opening tag can set it back (`{...{ reducedMotion: "never" }}`),
+ * and a provider with NO explicit attribute (a nested `<MotionConfig {...config}>`
+ * under the verified one) sets it for its whole subtree through the spread alone,
+ * since framer-motion merges a child provider's config over its parent's.
  * Each such spread must resolve to ONE same-file `const X = { … }` object literal,
  * used nowhere else but in spreads, with no nested spread or computed key, whose
  * `reducedMotion` (if present) is literally "user" or "always". Anything else —
@@ -1757,22 +1768,24 @@ export function motionConfigWraps(src, accept = () => true) {
  */
 export function motionSpreadGaps(tag, code) {
   const attr = /\breducedMotion\s*=\s*["'](?:user|always)["']/.exec(tag);
-  if (!attr) return [];
-  const rest = tag.slice(attr.index + attr[0].length);
+  // With the attribute present only a LATER spread can override it; without it,
+  // every spread on the tag can set reducedMotion for the subtree.
+  const rest = attr ? tag.slice(attr.index + attr[0].length) : tag;
+  const where = attr ? "after reducedMotion" : "on a provider with no explicit reducedMotion";
   const gaps = [];
   for (const o of rest.matchAll(/\{\s*\.\.\./g)) {
     const id = /^\{\s*\.\.\.\s*([A-Za-z_$][\w$]*)\s*\}/.exec(rest.slice(o.index));
-    if (!id) { gaps.push("spreads an expression after reducedMotion that is not a plain name the gate can resolve"); continue; }
+    if (!id) { gaps.push(`spreads an expression ${where} that is not a plain name the gate can resolve`); continue; }
     const n = id[1], e = escapeRegExp(n);
     const decl = new RegExp(`(?<![\\w$.])const\\s+${e}\\s*(?::[^=]+)?=\\s*\\{`, "g");
     const decls = [...code.matchAll(decl)];
-    if (decls.length !== 1) { gaps.push(`spreads {...${n}} after reducedMotion, which is not one same-file \`const ${n} = { … }\` literal`); continue; }
+    if (decls.length !== 1) { gaps.push(`spreads {...${n}} ${where}, which is not one same-file \`const ${n} = { … }\` literal`); continue; }
     // Every other mention of the name must be a spread: a parameter, a reassignment
     // or a call it is passed to could rebind or mutate it.
     const declAt = decls[0].index + decls[0][0].indexOf(n, 5);
     const others = [...code.matchAll(new RegExp(`(?<![\\w$.])${e}(?![\\w$])`, "g"))]
       .filter((u) => u.index !== declAt && !/\.\.\.\s*$/.test(code.slice(0, u.index)));
-    if (others.length) { gaps.push(`spreads {...${n}} after reducedMotion, but ${n} is also bound or used outside a spread — the gate cannot prove its value`); continue; }
+    if (others.length) { gaps.push(`spreads {...${n}} ${where}, but ${n} is also bound or used outside a spread — the gate cannot prove its value`); continue; }
     const start = decls[0].index + decls[0][0].length - 1;
     let depth = 0, end = -1;
     for (let i = start; i < code.length; i++) {
@@ -1780,11 +1793,11 @@ export function motionSpreadGaps(tag, code) {
       else if (code[i] === "}" && --depth === 0) { end = i; break; }
     }
     const body = end < 0 ? null : code.slice(start + 1, end);
-    if (body === null) { gaps.push(`spreads {...${n}} after reducedMotion, whose object literal does not balance`); continue; }
-    if (/\.\.\./.test(body) || /(?:^|[,{])\s*\[/.test(body)) { gaps.push(`spreads {...${n}} after reducedMotion, whose object holds a nested spread or computed key`); continue; }
+    if (body === null) { gaps.push(`spreads {...${n}} ${where}, whose object literal does not balance`); continue; }
+    if (/\.\.\./.test(body) || /(?:^|[,{])\s*\[/.test(body)) { gaps.push(`spreads {...${n}} ${where}, whose object holds a nested spread or computed key`); continue; }
     for (const k of body.matchAll(/(?<![\w$])["']?reducedMotion["']?(?![\w$])/g)) {
       const v = /^\s*:\s*(["'])(user|always)\1/.exec(body.slice(k.index + k[0].length));
-      if (!v) gaps.push(`spreads {...${n}} after reducedMotion, and ${n} sets reducedMotion to ${body.slice(k.index + k[0].length).replace(/^\s*:?\s*/, "").split(/[,}\n]/)[0].trim() || "a shorthand value"}`);
+      if (!v) gaps.push(`spreads {...${n}} ${where}, and ${n} sets reducedMotion to ${body.slice(k.index + k[0].length).replace(/^\s*:?\s*/, "").split(/[,}\n]/)[0].trim() || "a shorthand value"}`);
     }
   }
   return gaps;
@@ -1848,7 +1861,7 @@ export function checkFramerMotion(treeRel, files) {
     for (const t of code.matchAll(/<MotionConfig(?=[\s/>])/g)) {
       const tag = openingTag(code, t.index);
       if (tag === null) continue;
-      for (const g of motionSpreadGaps(tag, code)) failures.push(`${f.rel}:${code.slice(0, t.index).split("\n").length}: <MotionConfig> ${g} — a later spread overrides the attribute, so the animated tree may ignore prefers-reduced-motion (failing closed) (WCAG 2.3.3)`);
+      for (const g of motionSpreadGaps(tag, code)) failures.push(`${f.rel}:${code.slice(0, t.index).split("\n").length}: <MotionConfig> ${g} — a spread can set reducedMotion for the tree it wraps, so the animated tree may ignore prefers-reduced-motion (failing closed) (WCAG 2.3.3)`);
     }
   }
   const roots = mountedTrees(files);
@@ -2083,6 +2096,13 @@ function selfTest() {
     ["a data-aria-label or data-aria-labelledby is not a label",
       ['data-aria-label="Close"', 'data-aria-labelledby="x"'].every((a) =>
         checkIconButtons("x.tsx", `<button onClick={f} ${a}><svg/></button>`).length === 1 && checkIconButtons("x.tsx", `<Button size="icon" ${a}><X /></Button>`).length === 1)],
+    ["text inside a hidden child does not name a button, while sr-only text does",
+      ["<span hidden>Delete</span>", '<span hidden="">Delete</span>', "<span hidden={show}>Delete</span>", '<span className="hidden">Delete</span>',
+       '<span className="hidden md:block">Delete</span>', '<span className={"sm:inline hidden"}>Delete</span>', "<span hidden><b>Delete</b></span>"].every((c) =>
+        checkIconButtons("x.tsx", `<button onClick={f}><Trash2 />${c}</button>`).length === 1) &&
+      ["<span hidden={false}>Delete</span>", '<span className="sr-only">Delete</span>', '<span className="md:hidden">Delete</span>',
+       '<span data-hidden="true">Delete</span>', '<span title="hidden">Delete</span>'].every((c) =>
+        checkIconButtons("x.tsx", `<button onClick={f}><Trash2 />${c}</button>`).length === 0)],
     ["a same-name child inside an aria-hidden element does not close it early",
       checkIconButtons("x.tsx", '<button onClick={f}><span aria-hidden="true"><span>x</span>Y</span></button>').length === 1 &&
       checkIconButtons("x.tsx", '<button onClick={f}><span aria-hidden="true"><span>x</span></span>Close</button>').length === 0],
@@ -2479,6 +2499,19 @@ function selfTest() {
           fm('import { motionProps } from "./motion";', 'reducedMotion="user" {...motionProps}').some((f) => /not one same-file/.test(f)) &&
           fm("", 'reducedMotion="user" {...{ reducedMotion: "never" }}').some((f) => /not a plain name/.test(f)) &&
           fm("const base = { reducedMotion: 'never' };\nconst motionProps = { ...base };", 'reducedMotion="user" {...motionProps}').some((f) => /nested spread/.test(f));
+      })()],
+    ["a nested <MotionConfig> with no explicit reducedMotion is held to the same spread rule, since its config merges over the verified provider's",
+      (() => {
+        const anim = view("t/src/H.tsx", 'import { motion } from "framer-motion";\n<motion.div animate={{ x: 100 }} />');
+        const main = view("t/src/main.tsx", 'import App from "./App";\ncreateRoot(el).render(<App />);');
+        const app = (pre, inner) => view("t/src/App.tsx", `import { MotionConfig } from "framer-motion";\n${pre}\nexport default function App() { return <MotionConfig reducedMotion="user"><MotionConfig ${inner}><Router /></MotionConfig></MotionConfig>; }`);
+        const fm = (pre, inner) => checkFramerMotion("t", [anim, main, app(pre, inner)]);
+        return fm("const config = { reducedMotion: 'never' } as const;", "{...config}").some((f) => /no explicit reducedMotion, and config sets reducedMotion to 'never'/.test(f)) &&
+          fm("const config = { transition: { duration: 0.2 } } as const;", "{...config}").length === 0 &&
+          fm("const config = { reducedMotion: 'user' } as const;", "{...config}").length === 0 &&
+          fm('import { config } from "./motion";', "{...config}").some((f) => /no explicit reducedMotion, which is not one same-file/.test(f)) &&
+          fm("", '{...{ reducedMotion: "never" }}').some((f) => /not a plain name/.test(f)) &&
+          fm("", 'transition={{ duration: 0.2 }}').length === 0;
       })()],
     ["every result of a polled useQueries batch must reach the live region, or the batch fails closed",
       (() => {

@@ -1660,17 +1660,20 @@ printf 'busy=%s code=%s\\n' "$busy" "$code"`, env);
     ok("CI does not yield on a host-reserved reason with nothing queued", nothingQueued.status === 0 && !/yielding/.test(nothingQueued.stdout)
       && readFileSync(events, "utf8").endsWith("empty-body\nteardown\n"), `${nothingQueued.status} ${nothingQueued.stdout}`);
     // An HTTP error carrying a starved body must not yield (curl -f).
+    // A constant server script: every value reaches it through process.env, none through code.
+    const fixtureServer = 'const fs = require("fs"); const e = process.env; require("http").createServer((req, res) => { fs.writeFileSync(e.SG_FIXTURE_HITS_FILE, "hit"); res.writeHead(Number(e.SG_FIXTURE_STATUS)); res.end(e.SG_FIXTURE_BODY); }).listen(0, "127.0.0.1", function () { fs.writeFileSync(e.SG_FIXTURE_PORT_FILE, String(this.address().port)); });';
     const http500 = bash(`cd ${q(repo)}
-node -e ${q(`require("http").createServer((req, res) => { require("fs").writeFileSync(${JSON.stringify(join(dir, "hit"))}, "hit"); res.writeHead(500); res.end(${JSON.stringify(JSON.stringify(starved))}); }).listen(0, "127.0.0.1", function () { require("fs").writeFileSync(${JSON.stringify(join(dir, "port"))}, String(this.address().port)); });`)} 9>&- &
+node -e "$SG_FIXTURE_SERVER" 9>&- &
 srv=$!
-for i in $(seq 1 100); do [ -s ${q(join(dir, "port"))} ] && break; sleep 0.05; done
-[ -s ${q(join(dir, "port"))} ] || { kill "$srv"; exit 5; }
-SG_CI_BRAIN_URL="http://127.0.0.1:$(cat ${q(join(dir, "port"))})/api/brain" /bin/bash ${q(wrapper)} ${q(base)} 2 4 <<'SG_CI_CHAIN'
+for i in $(seq 1 100); do [ -s "$SG_FIXTURE_PORT_FILE" ] && break; sleep 0.05; done
+[ -s "$SG_FIXTURE_PORT_FILE" ] || { kill "$srv"; exit 5; }
+SG_CI_BRAIN_URL="http://127.0.0.1:$(cat "$SG_FIXTURE_PORT_FILE")/api/brain" /bin/bash ${q(wrapper)} ${q(base)} 2 4 <<'SG_CI_CHAIN'
 printf "http-body\\n" >> "$SG_CI_EVENTS"
 SG_CI_CHAIN
 code=$?
 kill "$srv"
-exit "$code"`, env);
+exit "$code"`, { ...env, SG_FIXTURE_SERVER: fixtureServer, SG_FIXTURE_PORT_FILE: join(dir, "port"), SG_FIXTURE_HITS_FILE: join(dir, "hit"),
+      SG_FIXTURE_STATUS: "500", SG_FIXTURE_BODY: JSON.stringify(starved) });
     ok("an HTTP error status never yields, even with a starved body", http500.status === 0 && existsSync(join(dir, "hit")) && !/yielding/.test(http500.stdout)
       && readFileSync(events, "utf8").endsWith("http-body\nteardown\n"), `${http500.status} ${http500.stdout} ${http500.stderr}`);
     // F1: another chain holds the lock past the whole budget; CI must not spend the budget

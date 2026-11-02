@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-11-02T18:33:27.774Z",
-  "result": "18:24Z cycle (fired 18:30:44Z): keepalive (age >2h since 16:18:20Z). Cloud landed #1760 (hands-free loop leg map + OmniRoute rule) at 25039555 under DR-037 (gating 125455331555). Raised hand #1763 for the Mac-owned Obsidian-loop legs. No mac/* branch moved; no mail to cloud; manifest clean. Mac tick heartbeat on mainline still 2026-10-24T07:30:38Z (fix rides #1698); owner already told today, no new escalation. Live evidence last committed 2026-11-02T10:07:04-05:00."
+  "firedAt": "2026-11-02T21:25:36.210Z",
+  "result": "21:24Z cycle: keepalive (age 2h51m since 18:33Z). Quiet: no mac/* branch moved, no mail to cloud, manifest clean, 0 work-queue claims. Mac tick heartbeat still 2026-10-24T07:30:38Z (fix rides #1698); raised hand #1763 open for the Mac-owned Obsidian-loop legs; owner already told today, no new escalation."
 }

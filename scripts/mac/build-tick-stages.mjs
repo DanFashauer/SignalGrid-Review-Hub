@@ -1642,10 +1642,64 @@ printf 'busy=%s code=%s\\n' "$busy" "$code"`, env);
     const brain = join(dir, "brain.json"), brainUrl = `file://${brain}`;
     const starved = { coordinator: { counts: { queued: 1 }, blocked_reason: "Host resources are reserved; queued work is deferred" } };
     writeFileSync(brain, JSON.stringify(starved));
-    const yielded = run('printf "yield-body\\n" >> "$SG_CI_EVENTS"', 8, 4, base, { SG_CI_BRAIN_URL: brainUrl, SG_CI_BRAIN_YIELD_SECONDS: "2" });
-    ok("CI yields the host to a brain with queued work blocked on it, once per job, then admits", yielded.status === 0
-      && /yielding the host to the queued local brain/.test(yielded.stdout)
-      && readFileSync(events, "utf8").endsWith("yield-body\nteardown\n"), `${yielded.status} ${yielded.stdout} ${yielded.stderr}`);
+    // Wall-time budget: 5 s with a 3 s pass yields at ~0 and ~3, admits at ~6. Never
+    // under the budget (halved fails) and never more than one pass over (unbounded fails).
+    const yieldStart = Date.now();
+    const yielded = run('printf "yield-body\\n" >> "$SG_CI_EVENTS"', 30, 4, base, { SG_CI_BRAIN_URL: brainUrl, SG_CI_BRAIN_YIELD_SECONDS: "5" });
+    const yieldMs = Date.now() - yieldStart;
+    ok("CI yields a free host to a starved brain for the wall-time budget, never more than one pass over, once per job, then admits",
+      yielded.status === 0 && (yielded.stdout.match(/yielding the host to the queued local brain/g) ?? []).length === 1
+      && yieldMs >= 5000 && yieldMs <= 10500
+      && readFileSync(events, "utf8").endsWith("yield-body\nteardown\n"), `${yielded.status} ${yieldMs}ms ${yielded.stdout} ${yielded.stderr}`);
+    writeFileSync(brain, JSON.stringify({ coordinator: { counts: { queued: 3 }, blocked_reason: "Waiting for operator approval" } }));
+    const otherReason = run('printf "reason-body\\n" >> "$SG_CI_EVENTS"', 2, 4, base, { SG_CI_BRAIN_URL: brainUrl });
+    ok("CI does not yield to queued work blocked on something other than the host", otherReason.status === 0 && !/yielding/.test(otherReason.stdout)
+      && readFileSync(events, "utf8").endsWith("reason-body\nteardown\n"), `${otherReason.status} ${otherReason.stdout}`);
+    writeFileSync(brain, JSON.stringify({ coordinator: { counts: { queued: 0 }, blocked_reason: starved.coordinator.blocked_reason } }));
+    const nothingQueued = run('printf "empty-body\\n" >> "$SG_CI_EVENTS"', 2, 4, base, { SG_CI_BRAIN_URL: brainUrl });
+    ok("CI does not yield on a host-reserved reason with nothing queued", nothingQueued.status === 0 && !/yielding/.test(nothingQueued.stdout)
+      && readFileSync(events, "utf8").endsWith("empty-body\nteardown\n"), `${nothingQueued.status} ${nothingQueued.stdout}`);
+    // An HTTP error carrying a starved body must not yield (curl -f).
+    const http500 = bash(`cd ${q(repo)}
+node -e ${q(`require("http").createServer((req, res) => { require("fs").writeFileSync(${JSON.stringify(join(dir, "hit"))}, "hit"); res.writeHead(500); res.end(${JSON.stringify(JSON.stringify(starved))}); }).listen(0, "127.0.0.1", function () { require("fs").writeFileSync(${JSON.stringify(join(dir, "port"))}, String(this.address().port)); });`)} 9>&- &
+srv=$!
+for i in $(seq 1 100); do [ -s ${q(join(dir, "port"))} ] && break; sleep 0.05; done
+[ -s ${q(join(dir, "port"))} ] || { kill "$srv"; exit 5; }
+SG_CI_BRAIN_URL="http://127.0.0.1:$(cat ${q(join(dir, "port"))})/api/brain" /bin/bash ${q(wrapper)} ${q(base)} 2 4 <<'SG_CI_CHAIN'
+printf "http-body\\n" >> "$SG_CI_EVENTS"
+SG_CI_CHAIN
+code=$?
+kill "$srv"
+exit "$code"`, env);
+    ok("an HTTP error status never yields, even with a starved body", http500.status === 0 && existsSync(join(dir, "hit")) && !/yielding/.test(http500.stdout)
+      && readFileSync(events, "utf8").endsWith("http-body\nteardown\n"), `${http500.status} ${http500.stdout} ${http500.stderr}`);
+    // F1: another chain holds the lock past the whole budget; CI must not spend the budget
+    // waiting. The holder releases right after a brain poll, so a CI that no longer yields
+    // (1 s retry) beats the brain's next 2 s poll; one that yields lets the brain in first.
+    writeFileSync(brain, JSON.stringify(starved)); writeFileSync(events, "");
+    const polls = join(dir, "brain-polls"); writeFileSync(polls, "");
+    writeFileSync(body, 'printf "ci-body\\n" >> "$SG_CI_EVENTS"\n');
+    const raced = bash(`cd ${q(repo)}
+. ${q(helper)}
+sg_host_verify_acquire ${q(lock)} || exit 2
+/bin/bash ${q(wrapper)} ${q(base)} 30 4 < ${q(body)} > ${q(join(dir, "race.log"))} 2>&1 9>&- &
+ci=$!
+/bin/bash -c ${q(`. ${q(helper)}
+while :; do
+  if sg_host_verify_acquire ${q(lock)}; then
+    printf 'brain\n' >> ${q(events)}
+    printf '%s' ${q(JSON.stringify({ coordinator: { counts: { queued: 0 }, blocked_reason: null } }))} > ${q(brain)}
+    sleep 2; sg_host_verify_release; exit 0
+  fi
+  printf p >> ${q(polls)}; sleep 2
+done`)} 9>&- &
+sim=$!
+while [ "$(wc -c < ${q(polls)})" -lt 3 ]; do sleep 0.05; done
+sg_host_verify_release
+wait "$sim"; wait "$ci"
+exit $?`, { ...env, SG_CI_BRAIN_URL: brainUrl, SG_CI_BRAIN_YIELD_SECONDS: "2" });
+    ok("CI held off past its yield budget by another chain still lets a polling brain in before it", raced.status === 0
+      && readFileSync(events, "utf8") === "brain\nci-body\nteardown\n", `${raced.status} ${JSON.stringify(readFileSync(events, "utf8"))} ${raced.stderr}`);
     writeFileSync(brain, JSON.stringify({ coordinator: { counts: { queued: 0 }, blocked_reason: null } }));
     const idle = run('printf "idle-body\\n" >> "$SG_CI_EVENTS"', 2, 4, base, { SG_CI_BRAIN_URL: brainUrl });
     ok("CI does not yield when the brain has nothing queued", idle.status === 0 && !/yielding/.test(idle.stdout)

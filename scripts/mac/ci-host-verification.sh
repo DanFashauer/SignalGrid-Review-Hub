@@ -107,14 +107,18 @@ ci_capped() {
 
 # The local second brain polls this same lock every 2 s non-blocking and never wins
 # against a 1 s retry loop that then holds the host for a whole job: measured
-# 2026-11-01, zero brain admissions in a day with 32 dispatch items queued. Once per
-# job, while the brain reports queued work blocked on the host, yield instead of
-# trying. Fail-closed toward CI: no brain, no node, bad JSON — no yield.
+# 2026-11-01, zero brain admissions in a day with 32 dispatch items queued. So once
+# CI has SEEN the lock free (acquired it), and the brain reports queued work blocked
+# on the host, CI releases it and sleeps past one brain poll. Budget is wall time from
+# the first such yield, so waiting behind another chain never spends it, and a brain
+# that is not starved costs one probe per admission, not one per retry.
+# Fail-closed toward CI: no brain, no node, HTTP error, bad JSON — no yield.
 SG_CI_BRAIN_URL="${SG_CI_BRAIN_URL:-http://127.0.0.1:8765/api/brain}"
 SG_CI_BRAIN_YIELD_SECONDS="${SG_CI_BRAIN_YIELD_SECONDS:-30}"
 case "$SG_CI_BRAIN_YIELD_SECONDS" in ""|*[!0-9]*) SG_CI_BRAIN_YIELD_SECONDS=30;; esac
+if [ "${#SG_CI_BRAIN_YIELD_SECONDS}" -gt 3 ] || [ "$SG_CI_BRAIN_YIELD_SECONDS" -gt 120 ]; then SG_CI_BRAIN_YIELD_SECONDS=120; fi
 sg_brain_wants_host() {
-  curl -s -m 3 "$SG_CI_BRAIN_URL" 2>/dev/null | node -e '
+  curl -q -s -f --noproxy '*' --max-filesize 1000000 -m 3 "$SG_CI_BRAIN_URL" 2>/dev/null | node -e '
 let s = ""; process.stdin.on("data", (d) => { s += d; }).on("end", () => {
   let b; try { b = JSON.parse(s); } catch { process.exit(1); }
   const c = (b && b.coordinator) || {}; const queued = c.counts && c.counts.queued;
@@ -122,16 +126,26 @@ let s = ""; process.stdin.on("data", (d) => { s += d; }).on("end", () => {
     && /^Host resources are reserved/.test(String(c.blocked_reason || "")) ? 0 : 1);
 });' 2>/dev/null
 }
+sg_brain_yield_left() {
+  [ "$SG_CI_BRAIN_YIELD_SECONDS" -gt 0 ] || return 1
+  [ -z "$BRAIN_YIELD_START" ] || [ "$((SECONDS - BRAIN_YIELD_START))" -lt "$SG_CI_BRAIN_YIELD_SECONDS" ]
+}
 
 START_SECONDS=$SECONDS
 WAIT_NOTED=0
-BRAIN_YIELDED=0
+BRAIN_YIELD_START=""
 while :; do
-  if [ "$BRAIN_YIELDED" -lt "$SG_CI_BRAIN_YIELD_SECONDS" ] && sg_brain_wants_host; then
-    if [ "$BRAIN_YIELDED" = 0 ]; then echo 'ci-host-verification: yielding the host to the queued local brain'; fi
-    BRAIN_YIELDED=$((BRAIN_YIELDED + 2)); sleep 2; continue
-  fi
-  if sg_host_verify_acquire "$HOME/Library/Caches/signalgrid/host-verification.lock"; then break; else _ci_admit=$?; fi
+  if sg_host_verify_acquire "$HOME/Library/Caches/signalgrid/host-verification.lock"; then
+    if sg_brain_yield_left && sg_brain_wants_host; then
+      sg_host_verify_release
+      if [ -z "$BRAIN_YIELD_START" ]; then
+        BRAIN_YIELD_START=$SECONDS
+        echo 'ci-host-verification: yielding the host to the queued local brain'
+      fi
+      sleep 3; continue
+    fi
+    break
+  else _ci_admit=$?; fi
   if [ "$_ci_admit" != 75 ]; then
     echo "ci-host-verification: admission failed ($_ci_admit): $SG_VERIFY_LOCK_REASON" >&2
     exit "$_ci_admit"

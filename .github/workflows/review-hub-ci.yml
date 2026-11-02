@@ -1446,7 +1446,10 @@ jobs:
 
   durable-persistence:
     name: Durable persistence (Postgres audit ledger)
-    runs-on: ubuntu-latest
+    # Pinned, not -latest: ubuntu-latest became ubuntu-26.04 (2026-11), whose archive
+    # has no postgresql-client-16; the backup/restore proof needs the client major to
+    # equal the postgres:16 server (see the pin step below). Move with production.
+    runs-on: ubuntu-24.04
     timeout-minutes: 25
     services:
       postgres:
@@ -1542,15 +1545,25 @@ jobs:
       # REFUSED). A backup nobody has restored is not a backup, and until this existed
       # the repository had no `pg_dump` anywhere at all.
       #
-      # pg_dump/pg_restore must be at least as new as the server (16). ubuntu-latest
-      # ships 16 client tools; asserted rather than assumed, because a silent version
-      # skew would fail here in a confusing way.
+      # pg_dump/pg_restore must be the SAME major as the server (16, as in
+      # docker-compose.prod.yml). "At least 16" was not enough: on 2026-11-02
+      # ubuntu-latest became ubuntu-26.04 with a newer client, whose dumps carry
+      # `SET transaction_timeout`, which a 16 server rejects at pg_restore — every PR
+      # went red on this job. (The Mac lane hit the same skew with client 18 on
+      # 2026-09-10.) So the 16 client is pinned on PATH, then asserted equal.
+      - name: Pin the Postgres client tools to the server major (16)
+        run: |
+          if [ ! -x /usr/lib/postgresql/16/bin/pg_dump ]; then
+            sudo apt-get update -qq
+            sudo apt-get install -y -qq --no-install-recommends postgresql-client-16
+          fi
+          echo /usr/lib/postgresql/16/bin >> "$GITHUB_PATH"
       - name: Assert the Postgres client tools match the server major
         run: |
           CLIENT=$(pg_dump --version | grep -oE '[0-9]+' | head -1)
           echo "pg_dump major: $CLIENT"
-          if [ "$CLIENT" -lt 16 ]; then
-            echo "::error::pg_dump $CLIENT cannot dump a PostgreSQL 16 server"
+          if [ "$CLIENT" != 16 ]; then
+            echo "::error::pg_dump $CLIENT does not match the PostgreSQL 16 server (a newer client writes settings 16 rejects at restore)"
             exit 1
           fi
 

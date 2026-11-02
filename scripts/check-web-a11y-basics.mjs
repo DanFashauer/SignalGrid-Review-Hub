@@ -847,23 +847,30 @@ export function batchCoverageGap(code, pattern, args, messages, alerts) {
     return out;
   };
   const msg = expand(messages), alr = expand(alerts);
+  // How many queries the batch starts, when `queries` is a literal array without a spread.
+  const q = /(?<![\w$])queries\s*:\s*\[/.exec(args);
+  let count = null;
+  if (q) {
+    let depth = 0;
+    for (let i = q.index + q[0].length - 1; i < args.length; i++) {
+      if (args[i] === "[") depth++;
+      else if (args[i] === "]" && --depth === 0) {
+        const els = splitTop(args.slice(q.index + q[0].length, i), ",");
+        if (!els.some((x) => x.startsWith("..."))) count = els.length;
+        break;
+      }
+    }
+  }
+  // An array pattern that binds fewer names than the batch has queries leaves the
+  // rest unbound: those results still poll, and nothing can read them into the region.
+  if (!isList) {
+    if (count === null) return "an array pattern binds a batch whose `queries` is not a literal array, so the gate cannot tell whether every result is bound (failing closed)";
+    if (roots.length < count) return `the array pattern binds ${roots.length} of the batch's ${count} results; the unbound result(s) never reach a <LiveRegion> (failing closed)`;
+  }
   if (isList) {
     const r = escapeRegExp(pattern);
     const dyn = new RegExp(`(?<![\\w$.])${r}\\s*(?:\\?\\.)?\\s*\\[(?!\\s*\\d+\\s*\\])|(?<![\\w$.])${r}\\s*\\??\\.\\s*at\\s*\\(`);
     if (dyn.test(msg) || dyn.test(alr)) return `the region reads ${pattern}[…] by a non-literal index, so the gate cannot tell which queries it covers (failing closed)`;
-    const q = /(?<![\w$])queries\s*:\s*\[/.exec(args);
-    let count = null;
-    if (q) {
-      let depth = 0;
-      for (let i = q.index + q[0].length - 1; i < args.length; i++) {
-        if (args[i] === "[") depth++;
-        else if (args[i] === "]" && --depth === 0) {
-          const els = splitTop(args.slice(q.index + q[0].length, i), ",");
-          if (!els.some((x) => x.startsWith("..."))) count = els.length;
-          break;
-        }
-      }
-    }
     const each = (text, re, iter, spoken) => iterationBodies(text, pattern, iter).some((b) => spoken ? valueRead(b, re) : new RegExp(re).test(b)) ||
       (count !== null && count > 0 && Array.from({ length: count }, (_, i) => `(?<![\\w$.])${r}\\s*(?:\\?\\.)?\\s*\\[\\s*${i}\\s*\\]${re}`)
         .every((src) => spoken ? valueRead(text, src) : new RegExp(src).test(text)));
@@ -1735,7 +1742,7 @@ export function jsxElements(src) {
  * `<MotionConfig … />`, or one beside `<AppRoutes />` in a fragment, configures nothing.
  * Returns true, false, or null when the file's JSX cannot be parsed.
  */
-export function motionConfigWraps(src, accept = () => true) {
+export function motionConfigWraps(src, accept = () => true, names = new Set(["MotionConfig"])) {
   const nodes = jsxElements(src);
   if (nodes === null) return null;
   // `src` is ONE rendered tree (the app component's body, or the render() argument):
@@ -1743,7 +1750,7 @@ export function motionConfigWraps(src, accept = () => true) {
   // not what mounts, so the configured tree must be the only one.
   if (nodes.filter((n) => n.parent === null).length !== 1) return false;
   return nodes.some((mc) => {
-    if (mc.name !== "MotionConfig" || !/\breducedMotion\s*=\s*["'](?:user|always)["']/.test(mc.tag) || !accept(mc.tag)) return false;
+    if (!names.has(mc.name) || !/\breducedMotion\s*=\s*["'](?:user|always)["']/.test(mc.tag) || !accept(mc.tag)) return false;
     const inside = (n) => n.start > mc.start && n.end <= mc.end;
     if (!nodes.some(inside)) return false;
     let root = mc;
@@ -1804,6 +1811,27 @@ export function motionSpreadGaps(tag, code) {
 }
 
 /**
+ * Every local name that renders framer-motion's MotionConfig in `code`: the plain
+ * import, a renamed one (`MotionConfig as Nested`), a namespace import
+ * (`M.MotionConfig`), and any capitalised local alias or wrapper of those
+ * (`const Nested = MotionConfig`). The literal name is always included, so a tag
+ * the gate cannot trace to an import is still checked (fail closed).
+ */
+export function motionConfigNames(code) {
+  const names = new Set(["MotionConfig"]);
+  for (const m of code.matchAll(/import\s+(?!type\b)([^;]*?)\s*from\s*["'](?:framer-motion|motion|motion\/react)["']/g)) {
+    const ns = /\*\s*as\s+([A-Za-z_$][\w$]*)/.exec(m[1]);
+    if (ns) names.add(`${ns[1]}.MotionConfig`);
+    const braces = /\{([^}]*)\}/.exec(m[1]);
+    if (braces) for (const part of braces[1].split(",")) {
+      const a = /^\s*MotionConfig\s+as\s+([A-Za-z_$][\w$]*)\s*$/.exec(part);
+      if (a) names.add(a[1]);
+    }
+  }
+  return new Set(withLocalAliases(code, [...names]));
+}
+
+/**
  * The trees a web app actually mounts: main.tsx's `createRoot(…).render(…)` argument,
  * and — when that argument renders the default import of ./App — App.tsx's
  * default-exported component body. A helper component or an unused JSX expression
@@ -1823,7 +1851,7 @@ export function mountedTrees(files) {
   if (end < 0) return [{ rel: main.rel, wraps: null }];
   const arg = code.slice(call.index + call[0].length, end);
   // A provider whose later spread may override reducedMotion encloses nothing the gate can prove.
-  const out = [{ rel: main.rel, wraps: motionConfigWraps(arg, (tag) => motionSpreadGaps(tag, code).length === 0) }];
+  const out = [{ rel: main.rel, wraps: motionConfigWraps(arg, (tag) => motionSpreadGaps(tag, code).length === 0, motionConfigNames(code)) }];
   const appName = /import\s+([A-Za-z_$][\w$]*)\s+from\s*["']\.\/App(?:\.tsx)?["']/.exec(code)?.[1];
   const app = files.find((f) => /\/src\/App\.tsx$/.test(f.rel));
   if (appName && app && new RegExp(`<${escapeRegExp(appName)}(?=[\\s/>])`).test(arg)) {
@@ -1831,7 +1859,7 @@ export function mountedTrees(files) {
     const named = /export\s+default\s+(?:function\s+([A-Za-z_$][\w$]*)|([A-Za-z_$][\w$]*)\s*;?\s*$)/m.exec(appCode);
     const name = named?.[1] ?? named?.[2];
     const body = name ? functionBody(appCode, name) : null;
-    out.push({ rel: app.rel, wraps: body ? motionConfigWraps(body.text.slice(body.text.indexOf("{")), (tag) => motionSpreadGaps(tag, appCode).length === 0) : null });
+    out.push({ rel: app.rel, wraps: body ? motionConfigWraps(body.text.slice(body.text.indexOf("{")), (tag) => motionSpreadGaps(tag, appCode).length === 0, motionConfigNames(appCode)) : null });
   }
   return out;
 }
@@ -1848,7 +1876,7 @@ export function checkFramerMotion(treeRel, files) {
   const MOTION_IMPORT = /import\s+(?!type\b)([^;]*?)\s*from\s*["'](?:framer-motion|motion|motion\/react)["']/g;
   // An import of MotionConfig alone animates nothing; any other value import is followed.
   const animates = files.filter((f) => [...stripComments(f.src).matchAll(MOTION_IMPORT)]
-    .some((m) => m[1].replace(/[{}\s]/g, "").split(",").filter(Boolean).some((n) => !/^(?:type[^,]*|MotionConfig)$/.test(n))));
+    .some((m) => m[1].replace(/[{}\s]/g, "").split(",").filter(Boolean).some((n) => !/^(?:type[^,]*|MotionConfig(?:as[A-Za-z_$][\w$]*)?)$/.test(n))));
   if (animates.length === 0) return [];
   const failures = [];
   for (const f of files) {
@@ -1858,10 +1886,13 @@ export function checkFramerMotion(treeRel, files) {
   }
   for (const f of files) {
     const code = stripComments(f.src);
-    for (const t of code.matchAll(/<MotionConfig(?=[\s/>])/g)) {
-      const tag = openingTag(code, t.index);
-      if (tag === null) continue;
-      for (const g of motionSpreadGaps(tag, code)) failures.push(`${f.rel}:${code.slice(0, t.index).split("\n").length}: <MotionConfig> ${g} — a spread can set reducedMotion for the tree it wraps, so the animated tree may ignore prefers-reduced-motion (failing closed) (WCAG 2.3.3)`);
+    // Every provider, under whatever local name it is imported or aliased as.
+    for (const name of motionConfigNames(code)) {
+      for (const t of code.matchAll(new RegExp(`<${escapeRegExp(name)}(?=[\\s/>])`, "g"))) {
+        const tag = openingTag(code, t.index);
+        if (tag === null) continue;
+        for (const g of motionSpreadGaps(tag, code)) failures.push(`${f.rel}:${code.slice(0, t.index).split("\n").length}: <${name}> ${g} — a spread can set reducedMotion for the tree it wraps, so the animated tree may ignore prefers-reduced-motion (failing closed) (WCAG 2.3.3)`);
+      }
     }
   }
   const roots = mountedTrees(files);
@@ -2329,7 +2360,9 @@ function selfTest() {
       checkReducedMotion("a.css", ".fade { transition: opacity 1s; } @keyframes spin { from { animation-timing-function: linear !important; } } @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; } }").length === 0],
     ["useQueries array bindings must reach the live region",
       checkUnannouncedQueries("x.tsx", 'const [metrics, decisions] = useQueries({ queries }); <LiveRegion message="Ready" />', (n) => n.startsWith("use"), true).length === 1 &&
-      checkUnannouncedQueries("x.tsx", 'const [metrics] = useQueries({ queries }); <LiveRegion message={metrics.data ? `${metrics.data.n}` : ""} alert={metrics.isError ? "Down." : ""} />', (n) => n.startsWith("use"), true).length === 0 &&
+      // A shorthand `queries` is not a literal array: an array pattern over it cannot be shown to bind every result.
+      checkUnannouncedQueries("x.tsx", 'const [metrics] = useQueries({ queries }); <LiveRegion message={metrics.data ? `${metrics.data.n}` : ""} alert={metrics.isError ? "Down." : ""} />', (n) => n.startsWith("use"), true).some((f) => /not a literal array, so the gate cannot tell whether every result is bound/.test(f)) &&
+      checkUnannouncedQueries("x.tsx", 'const [metrics] = useQueries({ queries: [{ queryKey: ["m"], queryFn: fm }] }); <LiveRegion message={metrics.data ? `${metrics.data.n}` : ""} alert={metrics.isError ? "Down." : ""} />', (n) => n.startsWith("use"), true).length === 0 &&
       checkUnannouncedQueries("x.tsx", 'const results = useQueries({ queries }); <LiveRegion message="Ready" />', (n) => n.startsWith("use"), true).length === 1 &&
       checkUnannouncedQueries("x.tsx", 'const results = useQueries({ queries }); <LiveRegion message={results.map((r) => r.data?.n).join(", ")} alert={results.some((r) => r.isError) ? "Down." : ""} />', (n) => n.startsWith("use"), true).length === 0],
     ["live-region markup inside a string or template literal is not a live region",
@@ -2499,6 +2532,28 @@ function selfTest() {
           fm('import { motionProps } from "./motion";', 'reducedMotion="user" {...motionProps}').some((f) => /not one same-file/.test(f)) &&
           fm("", 'reducedMotion="user" {...{ reducedMotion: "never" }}').some((f) => /not a plain name/.test(f)) &&
           fm("const base = { reducedMotion: 'never' };\nconst motionProps = { ...base };", 'reducedMotion="user" {...motionProps}').some((f) => /nested spread/.test(f));
+      })()],
+    ["a MotionConfig imported under another name, through a namespace, or aliased locally is still a provider the gate checks",
+      (() => {
+        const anim = view("t/src/H.tsx", 'import { motion } from "framer-motion";\n<motion.div animate={{ x: 100 }} />');
+        const main = view("t/src/main.tsx", 'import App from "./App";\ncreateRoot(el).render(<App />);');
+        const app = (imp, pre, tree) => view("t/src/App.tsx", `${imp}\n${pre}\nexport default function App() { return ${tree}; }`);
+        const fm = (imp, pre, tree) => checkFramerMotion("t", [anim, main, app(imp, pre, tree)]);
+        const never = "const config = { reducedMotion: 'never' } as const;";
+        return fm('import { MotionConfig, MotionConfig as Nested } from "framer-motion";', never, '<MotionConfig reducedMotion="user"><Nested {...config}><Router /></Nested></MotionConfig>').some((f) => /<Nested> spreads \{\.\.\.config\} on a provider with no explicit reducedMotion, and config sets reducedMotion to 'never'/.test(f)) &&
+          fm('import * as M from "framer-motion";', never, '<M.MotionConfig reducedMotion="user"><M.MotionConfig {...config}><Router /></M.MotionConfig></M.MotionConfig>').some((f) => /<M\.MotionConfig> spreads/.test(f)) &&
+          fm('import { MotionConfig } from "framer-motion";', "const Nested = MotionConfig;\n" + never, '<MotionConfig reducedMotion="user"><Nested {...config}><Router /></Nested></MotionConfig>').some((f) => /<Nested> spreads/.test(f)) &&
+          fm('import { MotionConfig as Nested } from "framer-motion";', "", '<Nested reducedMotion="user"><Router /></Nested>').length === 0 &&
+          fm('import * as M from "framer-motion";', "", '<M.MotionConfig reducedMotion="user"><Router /></M.MotionConfig>').length === 0 &&
+          [...motionConfigNames('import { MotionConfig as A } from "motion/react";\nconst B = A;\nconst c = A;')].sort().join() === "A,B,MotionConfig";
+      })()],
+    ["an array pattern must bind every result of a useQueries batch, and the batch size must be a literal",
+      (() => {
+        const lr = (src) => checkLiveRegions([view("t/src/pages/T.tsx", src)], false).failures;
+        const two = 'useQueries({ queries: [{ queryKey: ["a"], queryFn: fa, refetchInterval: 5000 }, { queryKey: ["b"], queryFn: fb, refetchInterval: 5000 }] })';
+        return lr(`const [a] = ${two};\nreturn <LiveRegion message={\`\${a.data?.id}\`} alert={a.isError ? "Down." : ""} />;`).some((f) => /binds 1 of the batch's 2 results/.test(f)) &&
+          lr(`const [a, b] = ${two};\nreturn <LiveRegion message={\`\${a.data?.id} \${b.data?.id}\`} alert={a.isError || b.isError ? "Down." : ""} />;`).length === 0 &&
+          lr('const [a, b] = useQueries({ queries: ids.map((id) => ({ queryKey: [id], refetchInterval: 5000 })) });\nreturn <LiveRegion message={`${a.data?.id} ${b.data?.id}`} alert={a.isError || b.isError ? "Down." : ""} />;').some((f) => /not a literal array, so the gate cannot tell whether every result is bound/.test(f));
       })()],
     ["a nested <MotionConfig> with no explicit reducedMotion is held to the same spread rule, since its config merges over the verified provider's",
       (() => {

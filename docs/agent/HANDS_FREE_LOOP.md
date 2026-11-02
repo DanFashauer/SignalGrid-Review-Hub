@@ -39,6 +39,16 @@ It can only say that this repository holds no code for them.
   
   The second option weakens "each system uses its own credentials". It needs the Mac's and Codex's agreement, written into `work-queue.mjs`'s trust model, before it is used.
 
+## When a paid model runs out (owner rule, 2026-11-02)
+
+The owner, verbatim: "In any point of credit and or usage is up on any paid models then must switch to OmniRoute so it can determine best model to use and or allow LLM / Obsidian to gain and learn new skills to get the job done too."
+
+- A lane whose paid model reports a usage or credit limit switches its model traffic to OmniRoute (DR-029, `docs/AGENT_GATEWAY.md`). OmniRoute picks the model, and the work continues. A limit is never a reason for a leg to stop or to be skipped.
+- The switch happens where OmniRoute runs: on the Mac, keys out of tree. The cloud lane's model is set by its session and cannot be pointed at the gateway from here. When the cloud lane hits a limit, it says so by lane mail, and the Mac picks up the work through OmniRoute.
+- Leg 4 has already hit this. On 2026-11-02 at 15:31Z, Codex's review of #1265 at `cc8cf974` ended with "You have reached your Codex usage limits for code reviews." Under this rule, the Mac runs that review through an OmniRoute-routed model and records which model and which head it read. Codex's own review resumes when its quota resets.
+- A review routed through OmniRoute is recorded as what it is: the model and the route, never as a Codex review. The work-queue rule that `merged` needs both reviews is unchanged.
+- The local LLM and the Obsidian brain may learn new skills to finish a job. A new skill lands as a reviewed PR like any other change, and vault content never enters the tree (rule 8).
+
 ## Never
 
 - Never commit vault content, a vault path's contents, or a note title from the vault.

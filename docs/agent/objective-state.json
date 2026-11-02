@@ -10,9 +10,9 @@
     {
       "id": "readiness-floor",
       "scope": "machine",
-      "state": "met",
+      "state": "unmet",
       "measured": {
-        "headline": 100,
+        "headline": 3,
         "floor": 80
       },
       "source": "scripts/check-readiness-figure.mjs --json (headline, floor)"
@@ -20,10 +20,10 @@
     {
       "id": "evidence-fresh",
       "scope": "machine",
-      "state": "met",
+      "state": "unmet",
       "measured": {
-        "pct": 100,
-        "reason": "20/20 bound proofs/steps current (passed, matching manifest fingerprint and, for proofs, source digest) — green on both halves, 1 day(s) old, manifest aa9ce381438e; launch items fully current 28/28"
+        "pct": 3,
+        "reason": "14/20 bound proofs/steps current against manifest aa9ce381438e; not current (stale fingerprint, stale/absent source digest, or unrecorded): proof:evidence-adapter, proof:isolation-scope, proof:launch-seam, proof:signalgrid-core, step:API integration test (boots the server), step:Browser E2E (review console, website, admin); launch items fully current 1/28"
       },
       "source": "scripts/check-readiness-figure.mjs --json (.details.evidence)"
     },
@@ -50,6 +50,8 @@
     }
   ],
   "unmet": [
+    "readiness-floor",
+    "evidence-fresh",
     "owner-real-in-hand"
   ],
   "unknown": [],
@@ -95,38 +97,7 @@
     }
   ],
   "needsExecutor": [],
-  "unmeasured": [
-    {
-      "rowId": "29",
-      "title": "Assurance-pass advisories, batch one (2026-08-21)",
-      "measuredAt": "2026-10-09",
-      "reason": "stamp 2026-10-09 is older than 14 days"
-    },
-    {
-      "rowId": "43",
-      "title": "Falsifiability is enforced only for the connector tier",
-      "measuredAt": "2026-10-09",
-      "reason": "stamp 2026-10-09 is older than 14 days"
-    },
-    {
-      "rowId": "50",
-      "title": "Operability claims without live evidence",
-      "measuredAt": "2026-10-09",
-      "reason": "stamp 2026-10-09 is older than 14 days"
-    },
-    {
-      "rowId": "80",
-      "title": "The Rust Assist client is the strongest of the three, and it is worth recording that a clean read happened.",
-      "measuredAt": "2026-10-09",
-      "reason": "stamp 2026-10-09 is older than 14 days"
-    },
-    {
-      "rowId": "180",
-      "title": "The permission gate credits a call inside `if (false)`.",
-      "measuredAt": "2026-10-09",
-      "reason": "stamp 2026-10-09 is older than 14 days"
-    }
-  ],
+  "unmeasured": [],
   "awaiting": [
     {
       "rowId": "17",
@@ -173,12 +144,6 @@
   ],
   "escalations": [
     {
-      "id": "plan-rows-unmeasured",
-      "clears": "cloud",
-      "asks": "5 open row(s) in docs/COMPANY_BUILD_PLAN.md carry no `re-measured YYYY-MM-DD` stamp within 14 days and were ranked from nothing — a row nobody measured against the tree is an unknown input: 29, 43, 50, 80, 180. Measure each against the tree; close it, or restamp it with what was measured (a row whose AWAITING OWNER / BLOCKED ON LAB marker is expired or future-dated needs the blocker re-checked and the marker re-dated or removed — restamping alone does not rank it)",
-      "since": "2026-10-23T00:27:33.214Z"
-    },
-    {
       "id": "awaiting-owner-row-17",
       "clears": "owner",
       "asks": "row 17 (\"Run the two remaining wire-truth shifts and bind the records to the code\") in docs/COMPANY_BUILD_PLAN.md is parked, not ranked, because only the owner or a lab can unblock it: lab (ITSM lab for the seven vendor adapters; shift-context live source - both NON-PRODUCTION with synthetic data, read-only; owner hand re-raised 2026-10-22), checked 2026-10-22. Clear the blocker, or remove its marker once cleared",
@@ -215,26 +180,46 @@
       "since": "2026-10-22T12:28:51.447Z"
     },
     {
+      "id": "stalled-top-task",
+      "clears": "cloud",
+      "asks": "row 17b (\"Drive access-governance against the Keycloak lab that already exists\") has been ranked #1 for over 7 days with no change in docs/COMPANY_BUILD_PLAN.md — build it, re-rank it, or record why it waits",
+      "since": "2026-10-29T13:42:17.316Z"
+    },
+    {
+      "id": "readiness-floor-no-clearing-op",
+      "clears": "mac",
+      "asks": "readiness fell below the DR-036 floor — read the dimension that fell and re-mint or repair it",
+      "since": "2026-10-31T23:41:47.293Z"
+    },
+    {
       "id": "owner-real-in-hand",
       "clears": "owner",
       "asks": "Owner decision: is something real in hand for partners/collaborators (DR-033)? If yes, add a decision record carrying the attestation token and point attestedIn at it; if no, the loop keeps building the ranked queue.",
       "since": "2026-09-24T14:47:57.548Z"
     }
   ],
-  "queue": [],
+  "queue": [
+    {
+      "criterionId": "evidence-fresh",
+      "op": "evidence",
+      "clears": "artifacts/live-evidence/mac-run.json",
+      "id": "objective-loop-evidence-fresh-2026-10-31",
+      "queuedAs": "this tick"
+    }
+  ],
   "probeErrors": [],
   "report": {
     "pendingSimRequests": [],
     "badRequestFiles": [],
     "needsExecutorCount": 0,
-    "unmeasuredCount": 5,
+    "unmeasuredCount": 0,
     "awaitingCount": 6,
     "openRows": 52,
     "partialRows": 5
   },
   "staleAfterHours": 3,
-  "derivedAt": "2026-10-23T00:27:33.214Z",
-  "derivedAtCommit": "9f2990ae12d3ec8446cc377f8daba2d48b87305e",
+  "derivedAt": "2026-10-31T23:41:47.293Z",
+  "derivedAtCommit": "cfafb095de6807d8a39e9ab6149bf2edbc8d88f8",
   "workingTreeCleanAtEntry": true,
-  "decisionAddress": "181184f7c7e1ba757bca62fe8f64bf61459df899a8a07eb86e74bbfdfffccf3e"
+  "decisionAddress": "fa6f746ea31ad30c831d6e73db7393e23386bb45b8f1575c5f21d1791389dfbd"
 }

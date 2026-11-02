@@ -53,6 +53,43 @@ const DOCS_DIR = join(repoRoot, "docs");
  *  this guard never invents a figure it was not given. */
 export const PROOFS = ["proof:device-management-health", "proof:link-usability", "proof:task-exception", "proof:verdict-attestation", "proof:work-context", "proof:handoff-sim", "proof:adaptive-proposals", "proof:self-audit", "proof:reliability", "proof:iac", "proof:agent-behavior", "proof:dual-control", "proof:custody-beacon", "proof:rtls-custody", "proof:app-update", "proof:platform-sso", "proof:passkey-assurance", "proof:benchmark-selection", "proof:shift-context", "proof:change-window", "proof:app-protection", "proof:change-draft", "proof:affected-audience", "proof:remediation-verification", "proof:bootstrap-credential", "proof:caep-events", "proof:facility-trust-graph", "proof:emitter-discipline", "proof:policy-binding", "proof:isolation-scope", "proof:mcp-answer-discipline", "proof:decision-continuity", "proof:decision-cascade", "proof:service-lifecycle", "proof:session-readiness", "proof:evidence-coverage", "proof:break-glass", "proof:signalgrid-core", "proof:credential-rotation", "proof:observability-integrity", "proof:local-authority", "proof:launch-profile", "proof:launch-seam", "proof:operating-method", "proof:evidence-adapter", "proof:mobile-app-catalog", "proof:sim-requests", "proof:lane-messages", "proof:remediation-allow", "proof:posture-allow"];
 
+/** Figures a proof may only print COMPUTED, never as a digit literal.
+ *
+ *  The docs half of this guard compares documents against what proofs print; it trusts
+ *  the proof's own line. That trust was misplaced for these keys: thirteen proofs printed
+ *  `ladderRungs=` as a hand-typed number sitting on the same line as genuinely derived
+ *  values, and they disagreed — eleven said 6, agent-behavior said 5 against its
+ *  six-member action union, and the guard held docs to the 5 (plan rows 124 and 150).
+ *  A key listed here must be printed from `${...}`; a literal fails the gate.
+ *
+ *  SCOPE, stated so it is not over-read: this catches HONEST drift — someone typing the
+ *  count they believe. It does not catch `${6}`, a const that is itself a typed number,
+ *  or a figures template split across lines. Those are deliberate evasions, not drift. */
+export const DERIVED_ONLY_KEYS = ["ladderRungs", "gateClausesPerFamily"];
+
+/** Every `key=<digits>` a proof source prints for a derived-only key. Pure over the
+ *  source text so the self-test can plant one. */
+export function typedDerivedFigures(src) {
+  const found = [];
+  const re = new RegExp(`\\b(${DERIVED_ONLY_KEYS.join("|")})=(\\d+)`, "g");
+  for (const line of src.split("\n")) {
+    if (!line.includes("figures=")) continue;
+    for (const m of line.matchAll(re)) found.push(`${m[1]}=${m[2]}`);
+  }
+  return found;
+}
+
+/** Scan every proof source; one failure per literal found. */
+export function derivedOnlyFailures(srcDir = join(repoRoot, "scripts", "src")) {
+  const failures = [];
+  for (const f of readdirSync(srcDir).filter((n) => n.endsWith("-proof.ts")).sort()) {
+    for (const hit of typedDerivedFigures(readFileSync(join(srcDir, f), "utf8"))) {
+      failures.push(`scripts/src/${f} prints ${hit} as a literal — compute it from the ladder or list it describes`);
+    }
+  }
+  return failures;
+}
+
 /** Words marking a number as a deliberate reference to a PAST value or a counterfactual.
  *
  *  Checked on BOTH sides. The first version looked only behind the number, and missed
@@ -414,6 +451,14 @@ function main(opts = {}) {
 
   let failures = 0;
   let checked = 0;
+  // A live run (no injected figures) also checks the proofs' OWN lines: a figure the
+  // docs are held to is worthless if the proof typed it. See DERIVED_ONLY_KEYS.
+  if (opts.figuresFor === undefined) {
+    for (const why of derivedOnlyFailures()) {
+      console.error(`✗ ${why}.`);
+      failures += 1;
+    }
+  }
   /** DISTINCT figures reached, keyed by file + line + value.
    *
    *  `checked` counts (proof, figure) PAIRS, and one figure can be paired with several
@@ -679,6 +724,18 @@ function selfTest() {
   checks.push(["a `figures=` line parses to its values, comma-formatted and bare", parsed.has(1234) && parsed.has("1,234") && parsed.has(15)]);
   checks.push(["…and keeps the KEYS for the named comparison", parsed.named.get("pairs") === 1234 && parsed.named.get("categories") === 15]);
   checks.push(["a transcript with NO figures line parses to null, never an empty set", parseFigures("no figures here") === null]);
+
+  // ── DERIVED-ONLY figures: a typed literal is caught, a computed one is not ──
+  checks.push(["a proof printing ladderRungs as a LITERAL is caught — the planted defect",
+    typedDerivedFigures("console.log(`figures=combos=${n},signals=5,ladderRungs=5`);").join() === "ladderRungs=5"]);
+  checks.push(["…and gateClausesPerFamily likewise",
+    typedDerivedFigures("console.log(`figures=families=${F.length},gateClausesPerFamily=4`);").join() === "gateClausesPerFamily=4"]);
+  checks.push(["a COMPUTED ladderRungs passes (the scan is not always-red)",
+    typedDerivedFigures("console.log(`figures=combos=${n},ladderRungs=${FAMILY_ACTIONS.length}`);").length === 0]);
+  checks.push(["a literal OUTSIDE a figures= line is not this scan's business",
+    typedDerivedFigures("const note = 'ladderRungs=5 was the old value';").length === 0]);
+  checks.push(["LIVE: no committed proof prints a derived-only figure as a literal",
+    derivedOnlyFailures().length === 0]);
 
   // ── THE COMPARISON ITSELF, planted in both directions ─────────────────────
   // Until this existed, nothing in the self-test touched the thing the gate is FOR:

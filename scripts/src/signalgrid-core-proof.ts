@@ -32,6 +32,10 @@ import {
   EVIDENCE_VALUE_DOMAINS,
   canonicalJson,
   constantTimeEquals,
+  digest,
+  deterministicId,
+  DIGEST_ALG,
+  type EvidenceSnapshot,
   CoreError,
   evaluatePolicy,
   fixedClock,
@@ -211,7 +215,7 @@ const LEGACY_SNAPSHOT_DIGEST = "43b8b1702ae630de";
 const freshSnapshot = core.getSnapshot(T.operator, decisions[0].evidenceSnapshotId);
 
 // The exact shape a pre-stamp row deserializes into: every field the same, no stamp.
-const { coreNormalizationVersion: _omitted, ...legacyFields } = freshSnapshot;
+const { coreNormalizationVersion: _omitted, digestAlg: _alg, ...legacyFields } = freshSnapshot;
 const legacySnapshot = { ...legacyFields, digest: LEGACY_SNAPSHOT_DIGEST };
 
 check(
@@ -231,6 +235,81 @@ check(
     digest: LEGACY_SNAPSHOT_DIGEST,
   }) === false,
 );
+// ── 1c. digest(): WTF-8 bytes, not the low byte of each UTF-16 unit ─────────────
+// Until 2026-09 digest() hashed `charCodeAt(i) & 0xff`, so any two characters sharing a
+// low byte aliased, and deterministicId's bare "|" join was ambiguous. ASCII digests and
+// ids did NOT move (one byte per char either way), which is why the pins above hold.
+check("DIGEST: standard FNV-1a 64 vectors (a, foobar) — ASCII digests are unchanged by the WTF-8 fix",
+  digest("a") === "af63dc4c8601ec8c" && digest("foobar") === "85944171f73967e8");
+check("DIGEST: characters sharing a low byte no longer alias (Alice vs \u0141lice; lone surrogate vs U+FFFD)",
+  digest("Alice") !== digest("\u0141lice") && digest("a\uD800") !== digest("a\uFFFD"));
+check("DIGEST_ALG: the stamped identifier names what digest() actually hashes (\"fnv1a64-wtf8\", not \"-utf8\")",
+  DIGEST_ALG === "fnv1a64-wtf8");
+// For every WELL-FORMED string, WTF-8 and UTF-8 are the same bytes by definition — they
+// diverge only on an unpaired surrogate. So a from-scratch FNV-1a 64 over Node's own
+// TextEncoder (real UTF-8, independent of digest()'s hand-rolled encoder loop) must match
+// digest() exactly across ASCII, Latin-1, CJK and an astral (surrogate-pair) emoji.
+function fnv1a64OverBytes(bytes: Uint8Array): string {
+  const FNV_PRIME = 0x100000001b3n;
+  const MASK = 0xffffffffffffffffn;
+  let hash = 0xcbf29ce484222325n;
+  for (const byte of bytes) {
+    hash = ((hash ^ BigInt(byte)) * FNV_PRIME) & MASK;
+  }
+  return hash.toString(16).padStart(16, "0");
+}
+const WELL_FORMED_DIGEST_SAMPLES = ["hello world", "caf\u00e9", "\u65e5\u672c\u8a9e", "\ud83d\ude00"];
+check("DIGEST: for well-formed strings (ASCII, Latin-1, CJK, astral emoji), digest() matches FNV-1a 64 over TextEncoder's real UTF-8 bytes exactly",
+  WELL_FORMED_DIGEST_SAMPLES.every((s) => digest(s) === fnv1a64OverBytes(new TextEncoder().encode(s))));
+check("IDS: the join is injective — a '|' inside a part, or U+017C (low byte 0x7C), cannot shift a part boundary",
+  deterministicId("dec", "t|a", "b") !== deterministicId("dec", "t", "a|b") &&
+    deterministicId("dec", "t\u017Ca", "b") !== deterministicId("dec", "t", "a", "b"));
+check("IDS: parts with no '|' or '\\' mint the same id as before the fix (dec_4851ac1906a7425e)",
+  deterministicId("dec", "t", "a", "b") === "dec_4851ac1906a7425e");
+// A NON-ASCII row minted by the PRE-FIX code (digest measured with it, not hand-picked):
+// the one shape whose digest the fix moves. It must still verify, via its missing marker.
+const PRE_FIX_ROW = {
+  id: "evid_prefix_row", tenantId: "t-\u0142\u00f3d\u017a", decisionId: "dec_prefix_row",
+  capturedAt: "2026-09-01T00:00:00.000Z", evidence: {} as EvidenceSnapshot["evidence"],
+  signalsUsed: [], policyVersionId: "pv_prefix", policyVersion: 1,
+  sourceReferences: ["fixture:\u0141ukasz"], digest: "277d335d96ad0713",
+} satisfies EvidenceSnapshot;
+check("MIGRATION: a non-ASCII row minted before the fix (no digestAlg) still verifies — no false tamper alarm",
+  verifySnapshot(PRE_FIX_ROW) === true);
+check("MIGRATION: forging the marker onto a pre-fix row fails; an unknown digestAlg fails closed",
+  verifySnapshot({ ...PRE_FIX_ROW, digestAlg: DIGEST_ALG }) === false &&
+    verifySnapshot({ ...PRE_FIX_ROW, digestAlg: "sha256" as unknown as typeof DIGEST_ALG }) === false);
+check("MIGRATION: a snapshot stamped with the OLD name \"fnv1a64-utf8\" verifies false — no row was ever minted under it, and the verifier must not start accepting it",
+  verifySnapshot({ ...freshSnapshot, digestAlg: "fnv1a64-utf8" as unknown as typeof DIGEST_ALG }) === false);
+check("MIGRATION: a fresh snapshot is marked, and stripping the marker (downgrade to the legacy check) fails",
+  freshSnapshot.digestAlg === DIGEST_ALG && verifySnapshot(freshSnapshot) === true &&
+    verifySnapshot({ ...freshSnapshot, digestAlg: undefined }) === false);
+const aliasEdit = (s: string): string => String.fromCharCode(s.charCodeAt(0) + 0x100) + s.slice(1);
+check("TAMPER: a same-low-byte substitution in a MARKED snapshot is now detected",
+  verifySnapshot({ ...freshSnapshot, tenantId: aliasEdit(freshSnapshot.tenantId) }) === false);
+// Part two of the digest/deterministicId check named in BUILD_BACKLOG.md's util.ts row: not
+// the impossible universal no-collisions claim for a 64-bit hash, but a FIXED, literal corpus
+// spanning the alphabets the fix touches — ASCII, Latin-1, CJK, astral (surrogate-pair emoji
+// plus two lone/unpaired halves), and delimiter-bearing strings (`|`, `\`) — asserted pairwise
+// distinct. Against the unpatched (pre-fix) `charCodeAt(i) & 0xff` loop this collides: "Alice"
+// and "Łlice" share every low byte, so DIGEST_COLLISION_CORPUS's Set would shrink.
+const DIGEST_COLLISION_CORPUS = [
+  "", "a", "b", "Alice", "alice", "hello world", "The quick brown fox",
+  "café", "über", "señor", "Łlice", "Łukasz",
+  "日本語", "中文你好", "한국어",
+  "😀", "🎉", "𝄞",
+  "a\ud800", "\ud800", "\udc00", "a�",
+  "t|a", "t\\a", "a|b", "b|a", "a\\|b", "\\|", "|\\",
+];
+check(
+  `DIGEST: a fixed ${DIGEST_COLLISION_CORPUS.length}-member regression corpus (ASCII, Latin-1, CJK, astral, lone surrogates, '|'/'\\\\' strings) digests pairwise-distinct`,
+  new Set(DIGEST_COLLISION_CORPUS.map((s) => digest(s))).size === DIGEST_COLLISION_CORPUS.length,
+);
+check(
+  "IDS: deterministicId over the same corpus (as lone parts) also stays pairwise-distinct",
+  new Set(DIGEST_COLLISION_CORPUS.map((s) => deterministicId("dec", s))).size === DIGEST_COLLISION_CORPUS.length,
+);
+
 check(
   `all three carriers report the version that was actually digested (v${CORE_NORMALIZATION_VERSION})`,
   freshSnapshot.coreNormalizationVersion === CORE_NORMALIZATION_VERSION &&
@@ -363,6 +442,42 @@ expectError("rbac: operator cannot read the audit ledger", "forbidden", () =>
     () => core.listDecisions(connectorToken),
   );
 }
+// registerVerifiedPrincipal validates the role at the boundary (plan row 86): a
+// role outside the five — including inherited Object members, which an `in` check
+// would wrongly accept — is a validation/400 at registration, and the token is
+// never bound, so it cannot surface later as an accepted-then-broken principal.
+// Every inherited Object.prototype member is enumerated, not a hand-picked four, so a
+// deny-list of known-bad names cannot pass where the own-property allow-list is needed.
+// Case and whitespace variants pin EXACT-match semantics: a normalising check would
+// accept "OWNER" here and then fail later on the raw-keyed matrix lookup.
+for (const [badIndex, badRole] of ["superuser", "OWNER", " owner", "owner ", ...Object.getOwnPropertyNames(Object.prototype)].entries()) {
+  const badToken = `sgk_proof_bad_role_${badIndex}`;
+  let status: number | undefined;
+  expectError(
+    `registerVerifiedPrincipal: role "${badRole}" is refused as validation at registration`,
+    "validation",
+    () => {
+      try {
+        return core.registerVerifiedPrincipal(badToken, {
+          tenantId: core.context(T.owner).tenant.id,
+          role: badRole as Role,
+          subjectId: "svc_proof_bad_role",
+          principalType: "service",
+          keyReference: "proof:bad-role",
+        });
+      } catch (err) {
+        if (err instanceof CoreError) status = err.status;
+        throw err;
+      }
+    },
+  );
+  check(`registerVerifiedPrincipal: role "${badRole}" refusal is a 400`, status === 400, `got ${status}`);
+  expectError(
+    `registerVerifiedPrincipal: the "${badRole}" token was never bound (unknown token → unauthorized)`,
+    "unauthorized",
+    () => core.context(badToken),
+  );
+}
 check(
   "rbac: auditor CAN read the audit ledger",
   core.listAudit(T.auditor).length > 0,
@@ -437,11 +552,11 @@ check(
 // It must count FOURTEEN — the original six plus the eight the puck lifecycle needs —
 // and it must REFUSE a fifteenth. Both halves: a census that only counts would pass on
 // a tree where any string is admitted.
-check(`audit vocabulary: the ledger names exactly 15 event types (found ${AUDIT_EVENT_TYPES.length})`, AUDIT_EVENT_TYPES.length === 15);
+check(`audit vocabulary: the ledger names exactly 16 event types (found ${AUDIT_EVENT_TYPES.length})`, AUDIT_EVENT_TYPES.length === 16);
 check("audit vocabulary: no type is named twice", new Set(AUDIT_EVENT_TYPES).size === AUDIT_EVENT_TYPES.length);
 check("audit vocabulary: every member passes its own membership test", AUDIT_EVENT_TYPES.every((t) => isAuditEventType(t)));
-check(`audit vocabulary: the eight puck-lifecycle types are all members (found ${PUCK_LIFECYCLE_EVENT_TYPES.length})`,
-  PUCK_LIFECYCLE_EVENT_TYPES.length === 8 && PUCK_LIFECYCLE_EVENT_TYPES.every((t) => isAuditEventType(t)));
+check(`audit vocabulary: the nine puck-lifecycle types are all members (found ${PUCK_LIFECYCLE_EVENT_TYPES.length})`,
+  PUCK_LIFECYCLE_EVENT_TYPES.length === 9 && PUCK_LIFECYCLE_EVENT_TYPES.every((t) => isAuditEventType(t)));
 check("audit vocabulary: the original six survive the extension",
   ["decision.evaluated", "connector.synced", "policy.version_activated", "evidence.captured", "remediation.requested", "remediation.approved"].every((t) => isAuditEventType(t)));
 check("audit vocabulary: a FIFTEENTH type is not a member", !isAuditEventType("session.hijacked"));
@@ -1945,6 +2060,69 @@ for (const [fromRow, fromSignal, want, why] of [
 
 
 
+// ── MEMORY BOUND (F6e): step-up answers are evicted WITH their decision ─────────
+// A read-side filter alone would pass the first check and leave the map growing, so
+// the second check counts the collection itself.
+{
+  const answered = SignalGridCore.demo(undefined, { maxDecisionsPerTenant: 1 });
+  const answeredStore = (answered as unknown as { store: MemoryStore }).store;
+  const stepUpIds: string[] = [];
+  for (let i = 0; i < 3; i += 1) {
+    const d = answered.evaluate(T.operator, { identityRef: "nurse.stale", deviceRef: "ipad-ward-03", workflowKey: "clinical-session" });
+    if (d.outcome === "step_up") {
+      answered.answerStepUp(T.operator, d.decisionId, { credentialReference: `cred_${i}` });
+      stepUpIds.push(d.decisionId);
+    }
+  }
+  check("step-up eviction: three step_up decisions were each answered (floor, so the checks below measure real rows)", stepUpIds.length === 3);
+  // Count BEFORE any read: a getStepUpAnswer that lazily dropped dead rows would otherwise
+  // empty the map before it is measured, and a store with no eviction delete would pass.
+  const answeredCount = answeredStore.stepUpAnswerCount();
+  check("step-up eviction: an answer is unreadable once its decision has been evicted",
+    answered.getStepUpAnswer(T.operator, stepUpIds[0]) === undefined && answered.getStepUpAnswer(T.operator, stepUpIds[1]) === undefined);
+  check("step-up eviction: the newest decision keeps its answer", answered.getStepUpAnswer(T.operator, stepUpIds[2])?.decisionId === stepUpIds[2]);
+  check(`step-up eviction: the stepUpAnswers collection itself holds exactly 1 answer, not 3 (got ${answeredCount})`,
+    answeredCount === 1);
+
+  // A RETAINED decision must keep its answer. Bound 2, answers minted out of decision
+  // order (d1 before d0), then a third decision evicts d0 only: a mutant that wipes every
+  // answer on each eviction, or gives answers their own FIFO, turns this red.
+  const retained = SignalGridCore.demo(undefined, { maxDecisionsPerTenant: 2 });
+  const retainedStore = (retained as unknown as { store: MemoryStore }).store;
+  const stale = { identityRef: "nurse.stale", deviceRef: "ipad-ward-03", workflowKey: "clinical-session" };
+  const d0 = retained.evaluate(T.operator, stale);
+  const d1 = retained.evaluate(T.operator, stale);
+  retained.answerStepUp(T.operator, d1.decisionId, { credentialReference: "cred_d1" });
+  retained.answerStepUp(T.operator, d0.decisionId, { credentialReference: "cred_d0" });
+  const d2 = retained.evaluate(T.operator, stale);
+  const retainedCount = retainedStore.stepUpAnswerCount(); // before any read, as above
+  check("step-up eviction (bound 2): the evicted decision's answer is gone", retained.getStepUpAnswer(T.operator, d0.decisionId) === undefined);
+  check("step-up eviction (bound 2): the RETAINED decision keeps its answer", retained.getStepUpAnswer(T.operator, d1.decisionId)?.credentialReference === "cred_d1");
+  check(`step-up eviction (bound 2): the collection holds exactly the retained decision's answer (got ${retainedCount})`,
+    retainedCount === 1 && d2.outcome === "step_up");
+  let secondAccepted = true;
+  try { retained.answerStepUp(T.operator, d1.decisionId, { credentialReference: "replay" }); } catch { secondAccepted = false; }
+  check("step-up eviction (bound 2): a second answer for the retained decision is still refused (replay guard intact)", secondAccepted === false);
+
+  // Tenant isolation of the eviction: one tenant's FIFO must never touch another tenant's
+  // answers. Decisions are cloned from a real one so the store is exercised directly.
+  const template = retained.listDecisions(T.operator)[0];
+  const tenantStore = new MemoryStore({ maxDecisionsPerTenant: 1 });
+  const putAnswered = (tenantId: string, id: string): void => {
+    tenantStore.putDecision({ ...template, id, tenantId, evidenceSnapshotId: `snap_${id}` });
+    tenantStore.putStepUpAnswer({ id: `sua_${id}`, tenantId, decisionId: id, identityId: template.identityId, method: "webauthn", credentialReference: `cred_${id}`, answeredAt: "2026-01-01T00:00:00.000Z" });
+  };
+  putAnswered("tenant_atlas", "dec_atlas_1");
+  putAnswered("tenant_northwind", "dec_nw_1");
+  putAnswered("tenant_northwind", "dec_nw_2"); // evicts dec_nw_1 only
+  const tenantCount = tenantStore.stepUpAnswerCount(); // before any read
+  check("step-up eviction (tenants): one tenant's eviction removes only its own answer",
+    tenantStore.getStepUpAnswer("tenant_northwind", "dec_nw_1") === undefined
+      && tenantStore.getStepUpAnswer("tenant_northwind", "dec_nw_2")?.credentialReference === "cred_dec_nw_2");
+  check(`step-up eviction (tenants): another tenant's answer survives (collection holds 2, got ${tenantCount})`,
+    tenantStore.getStepUpAnswer("tenant_atlas", "dec_atlas_1")?.credentialReference === "cred_dec_atlas_1" && tenantCount === 2);
+}
+
 // ── MEMORY BOUND (F6): the in-process store must not grow without limit ─────────
 // A bound of 3 makes the eviction observable in a handful of evaluates. FIFO by
 // insertion: after five evaluates only the newest three remain, the oldest two are
@@ -3338,6 +3516,8 @@ const monotonicityTable: string[] = [];
     const confirmed: PuckSituation = {
       attach: "attached",
       forced: false,
+      release: "not_applicable",
+      returned: "not_applicable",
       identityConfirmed: true,
       postureCompliant: true,
       credentialStanding: "valid",

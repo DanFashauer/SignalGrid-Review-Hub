@@ -778,7 +778,29 @@ const SCRATCH_FILE = "docs/agent/local-scratch-branches.json";
 // Bounded walk of mainline history for the landed checks: an unbounded walk is a check
 // nobody waits for, and a check nobody waits for gets switched off. Exhausting the bound
 // without a match returns FALSE — reported, never cleared.
+// LOOP_STATE_MAX_HISTORY can only SHORTEN the bound (the self-test uses it); a longer value is ignored.
 const MAX_HISTORY = 400;
+function maxHistory() {
+  const n = Number(process.env.LOOP_STATE_MAX_HISTORY);
+  return Number.isInteger(n) && n > 0 && n < MAX_HISTORY ? n : MAX_HISTORY;
+}
+// BOTH ENDS of the range, each bounded. A landing is found near the FORK (a squash shortly after the branch
+// forked) or near the TIP (a recent landing); walking only the newest MAX_HISTORY commits found the first
+// kind until the shared file moved on. docs/BUILD_BACKLOG.md took 474 mainline commits between a September
+// squash and 2026-11-01, so five branches this check had cleared for six weeks read as unpushed again, one
+// per landing, and the only remedy left was a person deleting local branches. So: the newest window, and
+// when the range is longer than one window, the oldest window too (`--skip` past the newest commits). The
+// count is read with the same exclusions; an unreadable count walks the newest window only (fail-closed:
+// fewer commits can only report more). Still bounded: at most two windows per file.
+function historyWindows(git, globals, format, mainline, branch, exclude, pathArgs) {
+  const range = [mainline, `^${headRef(branch)}`, ...exclude.map((p) => `^${p}`)];
+  const bound = maxHistory();
+  const newest = git(...globals, "log", `--max-count=${bound}`, `--format=${format}`, ...range, ...pathArgs);
+  const count = Number(git(...globals, "rev-list", "--count", ...range, ...pathArgs));
+  if (!Number.isInteger(count) || count <= bound) return newest;
+  const oldest = git(...globals, "log", `--skip=${count - bound}`, `--max-count=${bound}`, `--format=${format}`, ...range, ...pathArgs);
+  return oldest ? `${newest}\n${oldest}` : newest;
+}
 
 if (process.argv.includes("--self-test")) process.exit(selfTest());
 
@@ -1015,7 +1037,7 @@ function fileEverMatchedMainline(branch, file, mainline = MAINLINE, cwd = repo, 
   // (round-6 refute C1, both merge orders). Everything reachable from the branch is by definition not a post-fork landing of it.
   // ...minus what a shallow boundary on the branch's own side HIDES from "reachable from the branch" (sb.exclude: the real parents of every
   // boundary commit under the tip, see shallowBounds).
-  const hist = git("--literal-pathspecs", "log", `--max-count=${MAX_HISTORY}`, "--format=%H", mainline, `^${headRef(branch)}`, ...sb.exclude.map((p) => `^${p}`), "--", file);
+  const hist = historyWindows(git, ["--literal-pathspecs"], "%H", mainline, branch, sb.exclude, ["--", file]);
   if (!hist) return false;
   for (const commit of hist.split("\n").map((c) => c.trim()).filter(Boolean)) {
     if (entryAt(cwd, commit, file).entry === mine.entry && landsAfterCut(cwd, sb, commit, trace)) return true;
@@ -1059,7 +1081,7 @@ function landedByPatchId(branch, mainline = MAINLINE, cwd = repo, trace = null) 
   const want = patchIdOf(cwd, patch);
   if (!want) return false;
   // the walk ends at the BRANCH, not at one merge base, and not at a shallow cut either (fileEverMatchedMainline says why)
-  const hist = git("log", `--max-count=${MAX_HISTORY}`, "--format=%H %P", mainline, `^${headRef(branch)}`, ...sb.exclude.map((p) => `^${p}`));
+  const hist = historyWindows(git, [], "%H %P", mainline, branch, sb.exclude, []);
   if (!hist) return false;
   for (const line of hist.split("\n")) {
     const [commit, ...parents] = line.trim().split(" ");
@@ -2563,6 +2585,22 @@ function selfTest() {
       shortNames(g3l).includes("heads/tg") && !!g3lA2 && g3lA2.state === "fail" && g3lA2.detail.startsWith("tg (+2)") &&
       !/but confirmed on the Hub under another branch/.test(g3lA2.detail) && !/squash-landed/.test(JSON.stringify(g3lR)));
     // (caution-bytes) a local-only branch with real work; a tag with its name on the ORIGINAL commit of a squash-merged change whose bytes are in mainline.
+    // (window) a squash that landed right after the fork, then MORE than one window of mainline commits
+    // touching the same file: the oldest window finds it; a branch whose bytes never landed stays reported.
+    const win = mkFx("window");
+    win.f("checkout", "-q", "-b", "old"); win.c("busy.md", "old work\n");
+    win.f("checkout", "-q", "main"); win.c("busy.md", "old work\n", "squash of old");
+    for (let i = 0; i < 6; i++) win.c("busy.md", `churn ${i}\n`, `churn ${i}`);
+    win.f("push", "-q", "origin", "main");
+    process.env.LOOP_STATE_MAX_HISTORY = "3";
+    const winLanded = hasLandedByContent("old", "refs/remotes/origin/main", win.w);
+    win.f("checkout", "-q", "-b", "never"); win.c("busy.md", "never landed\n"); win.f("checkout", "-q", "main");
+    const winNever = hasLandedByContent("never", "refs/remotes/origin/main", win.w);
+    const winShort = maxHistory();
+    process.env.LOOP_STATE_MAX_HISTORY = "100000"; const winLong = maxHistory(); delete process.env.LOOP_STATE_MAX_HISTORY;
+    check("a squash landed near the fork still clears after more than one window of mainline commits touched the same file (both ends walked)", winLanded === true);
+    check("...and a branch whose bytes never landed stays reported under the same short window", winNever === false);
+    check("LOOP_STATE_MAX_HISTORY can only shorten the window", winShort === 3 && winLong === 400 && maxHistory() === 400);
     const cauA = mkFx("cautionA");
     cauA.f("checkout", "-q", "--detach"); const cauAz = cauA.c("f.txt", "landed\n"); cauA.f("tag", "X", cauAz);
     cauA.f("checkout", "-q", "main"); cauA.c("f.txt", "landed\n", "squash of f"); cauA.f("push", "-q", "origin", "main");
@@ -2778,9 +2816,11 @@ function selfTest() {
     pk.f("checkout", "-q", "main"); pk.c("h.txt", "h\n"); pk.f("push", "-q", "origin", "main");
     check("a branch that deletes a file mainline still has is a difference, not cleared (R6-del-kept)",
       pk.f("ls-tree", "--name-only", R6M, "g.txt") === "g.txt" && hasLandedByContent("rmkeep", R6M, pk.w) === false);
-    // (A) ancestry against the Hub's own listing. p1d: the tip IS the sha the Hub lists for another name, pushed by URL (no tracking ref written)
+    // (A) ancestry against the Hub's own listing. p1d: the tip IS the sha the Hub lists for another name, with no local tracking ref.
     const pd = mkFx("r6d");
     pd.f("checkout", "-q", "-b", "mine"); const pdT = pd.c("m.txt", "work\n"); pd.f("push", "-q", pd.h, "mine:refs/heads/other");
+    // Git 2.56 may update tracking refs for a URL matching origin. Construct the missing-ref scenario explicitly in this temporary fixture.
+    pd.f("update-ref", "-d", "refs/remotes/origin/other");
     const pdMap = hubMapOf(pd.h), pdRows = pd.rows(), pdC = rowOf(pdRows, T_CLEAN);
     check("a tip equal to a sha the Hub lists for another name is on the Hub even with no tracking ref for it: cleared and named (R6-p1d)",
       pd.f("for-each-ref", "refs/remotes/origin/other") === "" && pdMap.get("other") === pdT && hubNamesHoldingTip("mine", pdMap, pd.w).join() === "other" &&

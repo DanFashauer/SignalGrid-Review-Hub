@@ -8,8 +8,8 @@
 // even if that rejection ever stopped happening the call resolves nothing.
 // Everything else runs against a recording `globalThis.fetch`.
 //
-// The five outbound emitter families (itsm, siem, syslog, telemetry, webhooks)
-// were this repository's longest-standing KNOWN_GAPS: real delivery code with no
+// The six outbound emitter families (itsm, siem, syslog, telemetry, webhooks,
+// caep-events) were this repository's longest-standing KNOWN_GAPS: real delivery code with no
 // tier gate, listed by the connector-discipline gate as "ungated-emitter" since
 // the gate existed. This proof closes the gap by asserting, for EVERY family,
 // the same unanimous fail-closed gate every read-only connector already has:
@@ -39,7 +39,7 @@ import { resolveTelemetryEmitter } from "@workspace/integrations/telemetry";
 import { resolveWebhooksEmitter } from "@workspace/integrations/webhooks";
 import { resolveCaepEmitter } from "@workspace/integrations/caep-events";
 import { REDIRECT_REFUSED } from "@workspace/integrations/emit-gate/redirect";
-import { WEBHOOK_URL_REFUSALS, validateWebhookUrl } from "@workspace/integrations/emit-gate/url-guard";
+import { WEBHOOK_URL_REFUSALS, decodeIPv4InIPv6, validateWebhookUrl } from "@workspace/integrations/emit-gate/url-guard";
 import { ITSM_WEBHOOK_REFUSALS } from "@workspace/integrations/itsm";
 import { verifySignedWebhook } from "@workspace/integrations/webhooks";
 import { VENDOR_ERROR_TEXT_LIMIT, boundedText } from "@workspace/integrations/emit-gate/bounded-text";
@@ -48,9 +48,10 @@ import { asNonEmptyString, asPositiveNumber, asVendorInstant, VendorFieldInvalid
 
 let passed = 0;
 const failures: string[] = [];
-const check = (name: string, ok: boolean): void => {
+const check = (name: string, ok: boolean): boolean => {
   if (ok) { passed += 1; console.log(`  ok — ${name}`); }
   else { failures.push(name); console.log(`  FAIL — ${name}`); }
+  return ok;
 };
 
 console.log("Emitter-discipline proof");
@@ -132,6 +133,18 @@ const FAMILIES: FamilyUnderTest[] = [
 
 const noopTransport = async (): Promise<void> => {};
 
+// The gate's clauses, and which of them each family's checks flipped AND PASSED: a
+// clause is recorded only when its check returns ok, so a deleted or failing clause
+// check lowers the figure. `gateClausesPerFamily` is MEASURED from this map, never typed: it printed a
+// literal 4 for as long as nothing could notice the count moving (plan row 124).
+const GATE_CLAUSES = ["tier", "live flag", "credential", "transport"] as const;
+const clausesExercised = new Map<string, Set<(typeof GATE_CLAUSES)[number]>>();
+const exercise = (family: string, clause: (typeof GATE_CLAUSES)[number]): void => {
+  const seen = clausesExercised.get(family) ?? new Set();
+  seen.add(clause);
+  clausesExercised.set(family, seen);
+};
+
 for (const fam of FAMILIES) {
   const armed: NodeJS.ProcessEnv = {
     SIGNALGRID_TIER: "beta",
@@ -142,21 +155,21 @@ for (const fam of FAMILIES) {
   // The gate, clause by clause. Each check flips exactly ONE condition off a
   // fully-armed environment, so a pass is attributable to the clause it names.
   const dev = fam.resolve({ ...armed, SIGNALGRID_TIER: "dev" }, noopTransport);
-  check(`${fam.name}: dev tier never emits, even fully armed with an injected transport`,
-    dev.mode === "fixture" && (dev.reason ?? "").includes("never makes live vendor calls"));
+  if (check(`${fam.name}: dev tier never emits, even fully armed with an injected transport`,
+    dev.mode === "fixture" && (dev.reason ?? "").includes("never makes live vendor calls"))) exercise(fam.name, "tier");
   const noFlag = fam.resolve({ ...armed, SIGNALGRID_LIVE_INTEGRATIONS: "TRUE" }, noopTransport);
   // The REASON, not just the mode. `mode === "fixture"` is satisfied by refusing for
   // ANY of the four clauses — so this assertion passed while proving nothing about
   // the flag it names. Five of the six families would still have satisfied it if the
   // flag check had been deleted and the token check caught the call instead.
-  check(`${fam.name}: the live flag is an exact lowercase 'true' — 'TRUE' does not arm it`,
-    noFlag.mode === "fixture" && (noFlag.reason ?? "") === "SIGNALGRID_LIVE_INTEGRATIONS is not 'true'");
+  if (check(`${fam.name}: the live flag is an exact lowercase 'true' — 'TRUE' does not arm it`,
+    noFlag.mode === "fixture" && (noFlag.reason ?? "") === "SIGNALGRID_LIVE_INTEGRATIONS is not 'true'")) exercise(fam.name, "live flag");
   const noToken = fam.resolve({ ...armed, [fam.tokenVar]: "   " }, noopTransport);
-  check(`${fam.name}: a whitespace-only credential reads as absent → fixture`,
-    noToken.mode === "fixture" && (noToken.reason ?? "").includes(fam.tokenVar));
+  if (check(`${fam.name}: a whitespace-only credential reads as absent → fixture`,
+    noToken.mode === "fixture" && (noToken.reason ?? "").includes(fam.tokenVar))) exercise(fam.name, "credential");
   const noTransport = fam.resolve(armed, undefined);
-  check(`${fam.name}: EVERYTHING set but no injected transport → fixture ("this repository ships none")`,
-    noTransport.mode === "fixture" && (noTransport.reason ?? "").includes("ships none"));
+  if (check(`${fam.name}: EVERYTHING set but no injected transport → fixture ("this repository ships none")`,
+    noTransport.mode === "fixture" && (noTransport.reason ?? "").includes("ships none"))) exercise(fam.name, "transport");
   const live = fam.resolve(armed, noopTransport);
   check(`${fam.name}: the live mode exists and carries exactly the INJECTED transport — the repo adds nothing to it`,
     live.mode === "live" && live.deliver === noopTransport);
@@ -606,6 +619,41 @@ check("syslog: under a suppressing env the adapter reports status 'suppressed', 
     refusedAs("https://[::ffff:a9fe:a9fe]/x", WEBHOOK_URL_REFUSALS.privateRange));
   check("url-guard: a documentation-range IPv4-mapped address and a documentation IPv6 address are NOT over-refused",
     validateWebhookUrl("https://[::ffff:203.0.113.9]/x", live).valid === true && validateWebhookUrl("https://[2001:db8::1]/x", live).valid === true);
+  // B86 (backlog rows: the ::ffff:0: translated spelling, trailing-dot localhost, and the #1504
+  // residue). Each pin below is an input only the named hand mutant lets through or over-refuses;
+  // the plant each one answers is recorded in that PR's body.
+  check("url-guard: the IPv4-translated form [::ffff:0:a.b.c.d] (RFC 2765 SIIT, any spelling) is refused as its IPv4 twin (loopback, RFC1918, metadata)",
+    refusedAs("https://[::ffff:0:127.0.0.1]/x", WEBHOOK_URL_REFUSALS.loopback)
+    && refusedAs("https://[0:0:0:0:ffff:0:7f00:1]/x", WEBHOOK_URL_REFUSALS.loopback)
+    && refusedAs("https://[::ffff:0:0.0.0.0]/x", WEBHOOK_URL_REFUSALS.loopback)
+    && refusedAs("https://[::ffff:0:10.0.0.7]/x", WEBHOOK_URL_REFUSALS.privateRange)
+    && refusedAs("https://[::ffff:0:169.254.169.254]/x", WEBHOOK_URL_REFUSALS.privateRange));
+  check("url-guard: a documentation-range IPv4-translated address [::ffff:0:203.0.113.9] is NOT over-refused",
+    validateWebhookUrl("https://[::ffff:0:203.0.113.9]/x", live).valid === true);
+  check("url-guard: the trailing-dot FQDN spellings localhost., app.localhost., localhost.. and localhost... are refused as loopback",
+    ["https://localhost./x", "https://app.localhost./x", "https://localhost../x", "https://localhost.../x"].every((u) => refusedAs(u, WEBHOOK_URL_REFUSALS.loopback)));
+  check("url-guard: the dot strip never loosens a refusal — 127.., 10.. and 172.16.. (domains to the URL parser, refused by the raw prefix rules) stay refused",
+    refusedAs("https://127../x", WEBHOOK_URL_REFUSALS.loopback) && refusedAs("https://10../x", WEBHOOK_URL_REFUSALS.privateRange)
+    && refusedAs("https://172.16../x", WEBHOOK_URL_REFUSALS.privateRange));
+  check("url-guard: a trailing-dot public FQDN (hook.example.com.) stays valid",
+    validateWebhookUrl("https://hook.example.com./x", live).valid === true);
+  check("url-guard: the mapped unspecified address [::ffff:0.0.0.0] is refused as loopback (every decoded octet counts, not only the first)",
+    refusedAs("https://[::ffff:0.0.0.0]/x", WEBHOOK_URL_REFUSALS.loopback));
+  check("url-guard: decodeIPv4InIPv6 reads both 16-bit groups base 16 into all four octets, for the mapped, compatible and translated shapes, and leaves other IPv6 alone",
+    decodeIPv4InIPv6("::ffff:cb00:7109") === "203.0.113.9" && decodeIPv4InIPv6("::ffff:0:a") === "0.0.0.10"
+    && decodeIPv4InIPv6("::ffff:0:a9fe:a9fe") === "169.254.169.254" && decodeIPv4InIPv6("::7f00:1") === "127.0.0.1"
+    && decodeIPv4InIPv6("fe80::808:808") === null && decodeIPv4InIPv6("2001:db8::1") === null && decodeIPv4InIPv6("::1") === null);
+  check("url-guard: fe80::/10 with every fourth hex digit (fe80-fe8f, fe9c, feac, febc) and a nonzero second group ([fe80:1::1]) is refused as privateRange",
+    [...Array.from({ length: 16 }, (_, i) => `[fe8${i.toString(16)}::1]`), "[fe9c::1]", "[feac::1]", "[febc::1]", "[fe80:1::1]", "[febf:ffff::1]"]
+      .every((h) => refusedAs(`https://${h}/x`, WEBHOOK_URL_REFUSALS.privateRange)));
+  check("url-guard: the 172.16/12 interior (every second octet 172.16-172.31) is refused as privateRange",
+    Array.from({ length: 16 }, (_, i) => `172.${16 + i}.0.1`).every((h) => refusedAs(`https://${h}/x`, WEBHOOK_URL_REFUSALS.privateRange)));
+  check("url-guard: each private range's network and last address (10/8, 172.16/12, 192.168/16, 100.64/10, 169.254/16) is refused as privateRange",
+    ["10.0.0.0", "10.255.255.255", "172.16.0.0", "172.31.255.255", "192.168.0.0", "192.168.255.255", "100.64.0.0", "100.127.255.255", "169.254.0.0", "169.254.255.255"]
+      .every((h) => refusedAs(`https://${h}/x`, WEBHOOK_URL_REFUSALS.privateRange)));
+  check("url-guard: a DNS name that merely starts with a private prefix and no dot (100.64example.com, 10example.com, 172.16example.com, 192.168example.com, 169.254example.com, 127example.com), and 100.10/100.11 outside RFC6598, are NOT over-refused",
+    ["100.64example.com", "10example.com", "172.16example.com", "192.168example.com", "169.254example.com", "127example.com", "100.10.0.1", "100.11.0.1"]
+      .every((h) => validateWebhookUrl(`https://${h}/x`, live).valid === true));
 }
 {
   check("bounded-text: a non-string yields the empty string, not a throw or the value",
@@ -626,6 +674,10 @@ check("syslog: under a suppressing env the adapter reports status 'suppressed', 
     [300, 301, 307, 308, 399].every((n) => isRedirectStatus(n) === true));
   check("redirect: isRedirectStatus is false on 0, 200, 299 and 400",
     [0, 200, 299, 400].every((n) => isRedirectStatus(n) === false));
+  check("redirect: isRedirectStatus is true on EVERY status 300-399, so no single one (304 included) is carved out",
+    Array.from({ length: 100 }, (_, i) => 300 + i).every((n) => isRedirectStatus(n) === true));
+  check("redirect: isRedirectStatus is false on NaN (a non-number is never read as a redirect)",
+    isRedirectStatus(Number.NaN) === false);
   check("redirect: isRedirectRefusal is true for a reason redirectRefusal minted",
     isRedirectRefusal(redirectRefusal(302, "https://evil.example/x")) === true);
   check("redirect: isRedirectRefusal is false for undefined, another reason, the prefix appearing mid-string, a lowercase or space-led spelling, the bare word REDIRECT and a near-miss differing only in the prefix's last character",
@@ -633,6 +685,9 @@ check("syslog: under a suppressing env the adapter reports status 'suppressed', 
     && isRedirectRefusal(`x ${redirectRefusal(302, null)}`) === false
     && isRedirectRefusal(REDIRECT_REFUSED.toLowerCase()) === false && isRedirectRefusal(` ${redirectRefusal(302, null)}`) === false
     && isRedirectRefusal("REDIRECT") === false && isRedirectRefusal(`${REDIRECT_REFUSED.slice(0, -1)}X`) === false);
+  check("redirect: isRedirectRefusal is false for a second spelling (REDIRECT_REFUSAL:), a first-character near-miss (XEDIRECT_REFUSED:) and a wrapped reason (Webhook failed: REDIRECT_REFUSED…)",
+    isRedirectRefusal("REDIRECT_REFUSAL: x") === false && isRedirectRefusal(`X${REDIRECT_REFUSED.slice(1)}: x`) === false
+    && isRedirectRefusal(`Webhook failed: ${redirectRefusal(302, null)}`) === false);
 }
 
 // ---- The vendor-value readers, driven directly (wave 8, 2026-10-09) -----------------
@@ -681,7 +736,11 @@ if (r1.mode === "fixture" && r2.mode === "fixture") {
   check("emitters are deterministic: identical inputs yield identical fixture logs", false);
 }
 
+const gateClausesPerFamily = Math.min(...FAMILIES.map((f) => clausesExercised.get(f.name)?.size ?? 0));
+check(`every family's checks flipped every gate clause (${GATE_CLAUSES.join(", ")}) — the published per-family figure is the weakest family's`,
+  gateClausesPerFamily === GATE_CLAUSES.length);
+
 const total = passed + failures.length;
-console.log(`figures=families=${FAMILIES.length},gateClausesPerFamily=4,fixtureRecordsNeverDelivered=1`);
+console.log(`figures=families=${FAMILIES.length},gateClausesPerFamily=${gateClausesPerFamily},fixtureRecordsNeverDelivered=1`);
 console.log(`summary=${failures.length === 0 ? "pass" : "fail"} (${passed}/${total})`);
 if (failures.length > 0) { console.error("Failed checks:"); for (const f of failures) console.error(`  - ${f}`); process.exitCode = 1; }

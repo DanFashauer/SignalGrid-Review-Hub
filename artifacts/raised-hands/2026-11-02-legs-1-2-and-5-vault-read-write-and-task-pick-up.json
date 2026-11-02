@@ -1,0 +1,12 @@
+{
+  "id": "2026-11-02-legs-1-2-and-5-vault-read-write-and-task-pick-up",
+  "raisedAt": "2026-11-02T18:30:38.836Z",
+  "origin": "cloud",
+  "doing": "Closing the owner's 2026-11-02 Obsidian loop (repo -> Obsidian -> Mac local LLM -> repo -> Codex/Claude review -> repo). Cloud legs run: review + DR-037 landing; leg map landed in docs/agent/HANDS_FREE_LOOP.md at 25039555.",
+  "blockedBy": "Legs 1, 2 and 5 (vault read/write and task pick-up) run only on the Mac (rule 8) and are not visible from the cloud; the builder has made 0 work-queue claims (git ls-remote origin 'refs/queue/*' empty); the Mac tick heartbeat on mainline is still 2026-10-24T07:30:38Z (fix in #1698); Codex review quota is out and the OmniRoute fallback runs on the Mac. Mail #1757 and #1759 have no reply.",
+  "need": "The Mac lane reports by lane mail which script and schedule carries each vault leg (never vault content), makes its first work-queue claim on a real build, lands #1698 so the tick heartbeat reaches mainline, and runs the Codex-limited reviews (#1265, #1745) through OmniRoute, naming the model and head.",
+  "whoCanUnblock": "mac lane",
+  "domain": "lane-coordination",
+  "status": "open",
+  "routedTo": null
+}

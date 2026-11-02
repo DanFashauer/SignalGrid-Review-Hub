@@ -787,14 +787,29 @@ export function valueRead(expr, src) {
   return false;
 }
 
-/** The callback text of every `name.method(…)` call in `text` (balanced parentheses). */
+/**
+ * Every `name.method(callback…)` call in `text` (balanced parentheses), as
+ * `{ item, body }`: `item` is the callback's parameter that receives each RESULT
+ * (the second for `reduce`, the first otherwise) and `body` is what follows the
+ * parameter list. A callback whose item cannot be named — a destructured or
+ * missing parameter, or a callback that is not an inline arrow/function — yields
+ * `item: null`, which covers nothing: an iteration counts only when its own item
+ * is read, so `results.map(() => results[0].data)` covers one query, not each.
+ */
 function iterationBodies(text, name, methods) {
   const out = [];
-  for (const c of text.matchAll(new RegExp(`(?<![\\w$.])${escapeRegExp(name)}\\s*\\??\\.\\s*(?:${methods})\\s*\\(`, "g"))) {
+  for (const c of text.matchAll(new RegExp(`(?<![\\w$.])${escapeRegExp(name)}\\s*\\??\\.\\s*(${methods})\\s*\\(`, "g"))) {
     let depth = 0;
     for (let i = c.index + c[0].length - 1; i < text.length; i++) {
       if (text[i] === "(") depth++;
-      else if (text[i] === ")" && --depth === 0) { out.push(text.slice(c.index + c[0].length, i)); break; }
+      else if (text[i] === ")" && --depth === 0) {
+        const call = text.slice(c.index + c[0].length, i);
+        const head = /^\s*(?:async\s+)?(?:\(([^()]*)\)\s*=>|([A-Za-z_$][\w$]*)\s*=>|function\s*[A-Za-z_$]?[\w$]*\s*\(([^()]*)\))/.exec(call);
+        const params = head ? (head[2] !== undefined ? [head[2]] : splitTop(head[1] ?? head[3] ?? "", ",")) : [];
+        const raw = (splitTop(params[c[1] === "reduce" ? 1 : 0] ?? "", "=")[0] ?? "").trim();
+        out.push({ item: /^[A-Za-z_$][\w$]*$/.test(raw) ? raw : null, body: head ? call.slice(head[0].length) : call });
+        break;
+      }
     }
   }
   return out;
@@ -871,7 +886,11 @@ export function batchCoverageGap(code, pattern, args, messages, alerts) {
     const r = escapeRegExp(pattern);
     const dyn = new RegExp(`(?<![\\w$.])${r}\\s*(?:\\?\\.)?\\s*\\[(?!\\s*\\d+\\s*\\])|(?<![\\w$.])${r}\\s*\\??\\.\\s*at\\s*\\(`);
     if (dyn.test(msg) || dyn.test(alr)) return `the region reads ${pattern}[…] by a non-literal index, so the gate cannot tell which queries it covers (failing closed)`;
-    const each = (text, re, iter, spoken) => iterationBodies(text, pattern, iter).some((b) => spoken ? valueRead(b, re) : new RegExp(re).test(b)) ||
+    const each = (text, re, iter, spoken) => iterationBodies(text, pattern, iter).some(({ item, body }) => {
+      if (item === null) return false;
+      const own = `(?<![\\w$.])${escapeRegExp(item)}\\s*${re}`;
+      return spoken ? valueRead(body, own) : new RegExp(own).test(body);
+    }) ||
       (count !== null && count > 0 && Array.from({ length: count }, (_, i) => `(?<![\\w$.])${r}\\s*(?:\\?\\.)?\\s*\\[\\s*${i}\\s*\\]${re}`)
         .every((src) => spoken ? valueRead(text, src) : new RegExp(src).test(text)));
     const known = count === null ? "the number of queries is not a literal array, so only an iteration over the results covers each one" : `each of its ${count} queries must be read by index or through an iteration`;
@@ -2591,6 +2610,20 @@ function selfTest() {
           lr('const results = useQueries({ queries: ids.map((id) => ({ queryKey: [id], refetchInterval: 5000 })) });\nreturn <LiveRegion message={`${results[0].data?.n}`} alert={results[0].isError ? "Down." : ""} />;').some((f) => /not a literal array/.test(f)) &&
           lr('const results = useQueries({ queries: [{ queryKey: ["a"], refetchInterval: 5000 }], combine: (r) => r });\nreturn <LiveRegion message={`${results[0].data?.n}`} alert={results[0].isError ? "Down." : ""} />;').some((f) => /combine/.test(f)) &&
           lr('const [a, ...more] = useQueries({ queries: [{ queryKey: ["a"], refetchInterval: 5000 }] });\nreturn <LiveRegion message={`${a.data?.n}`} alert={a.isError ? "Down." : ""} />;').some((f) => /rest element/.test(f));
+      })()],
+    ["an iteration over a useQueries batch covers each result only when its callback reads its OWN item",
+      (() => {
+        const Q = 'const results = useQueries({ queries: [{ queryKey: ["a"], queryFn: fa, refetchInterval: 5000 }, { queryKey: ["b"], queryFn: fb, refetchInterval: 5000 }] });\n';
+        const lr = (src) => checkLiveRegions([view("t/src/pages/T.tsx", src)], false).failures;
+        const ok = 'alert={results.some((r) => r.isError) ? "Down." : ""}';
+        return lr(Q + 'return <LiveRegion message={results.map(() => results[0].data?.id).join(", ")} ' + ok + ' />;').some((f) => /does not speak every result's data/.test(f)) &&
+          lr(Q + 'return <LiveRegion message={results.map((r) => r.data?.id).join(", ")} alert={results.some(() => results[0].isError) ? "Failed" : ""} />;').some((f) => /does not read every result's failure/.test(f)) &&
+          lr(Q + 'return <LiveRegion message={results.map((r) => other.data?.id).join(", ")} ' + ok + ' />;').some((f) => /does not speak every result's data/.test(f)) &&
+          lr(Q + 'return <LiveRegion message={results.map(({ data }) => data?.id).join(", ")} ' + ok + ' />;').some((f) => /does not speak every result's data/.test(f)) &&
+          lr(Q + 'return <LiveRegion message={results.map(fmt).join(", ")} ' + ok + ' />;').some((f) => /does not speak every result's data/.test(f)) &&
+          lr(Q + 'return <LiveRegion message={String(results.reduce((acc, r) => acc + (r.data?.n ?? 0), 0))} ' + ok + ' />;').length === 0 &&
+          lr(Q + 'return <LiveRegion message={results.map(function (q) { return q.data?.n; }).join(", ")} alert={results.some(async (q) => q.isError) ? "Down." : ""} />;').length === 0 &&
+          lr(Q + 'return <LiveRegion message={results.map((r) => r.data?.n).join(", ")} ' + ok + ' />;').length === 0;
       })()],
     ["a recurring timer calling an imported, prop or undeclared function polls and fails closed",
       (() => {

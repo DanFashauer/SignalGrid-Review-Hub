@@ -523,6 +523,8 @@ export function refusedDisposition(root, receiptPath) {
   for (const blob of Array.isArray(receipt.blobs) ? receipt.blobs : []) {
     if (typeof blob?.path !== "string" || !/^[a-f0-9]{40}$/.test(blob.oid ?? "")) return "unknown";
     const at = spawnSync("git", ["rev-parse", "--verify", "--quiet", `origin/SignalGrid_Alpha:${blob.path}`], { cwd: root, env, encoding: "utf8", timeout: 60000, stdio: NO_GUARD_PIPED });
+    // Exit 1 is "not there"; any other failure is an unread store, never absence.
+    if (at.error || at.signal || (at.status !== 0 && at.status !== 1)) return "unknown";
     if (at.stdout?.trim() === blob.oid) return "landed";
   }
   return "unpublished";

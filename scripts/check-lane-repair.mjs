@@ -226,6 +226,31 @@ for(const [id,receipt] of [['R22',false],['R23',true]])frozen(id,receipt?'a refu
  else{oneRepair(f,2);assert.ok(existsSync(join(refused,idn+'.refused-1.terminal.json')),'the chain shows n=1');assert.equal(readdirSync(refused).some(n=>n.includes('.refused-2.')),false);}
  preserved(o.prefix,o.initial);
 });
+// A refused notice (exit 1, no receipt) in place, as if its tick died before the set-aside.
+function refusedInPlace(f){
+ const o=original(f,'heartbeat'),r=request(f,o),idn=r.data.id,refused=join(f.store,'refused');
+ acceptOwned(owned(f,notifyCommand(f,r)+'; :',{extra:{FIXTURE_TRANSPORT_MODE:'exit1',FIXTURE_LS_REMOTE:'absent'}}));oneRepair(f);
+ for(const n of readdirSync(refused).filter(n=>n.startsWith(idn+'.refused-1.')))renameSync(join(refused,n),join(f.store,idn+n.slice((idn+'.refused-1').length)));
+ rmSync(refused,{recursive:true});return {o,r,idn,refused,terminal:join(f.store,idn+'.terminal.json')};
+}
+function drainOnce(f){return owned(f,`${quote(process.execPath)} ${quote(join(f.root,MODULE))} drain ${quote(f.root)} "$TICK_OWNER_TOKEN" "$$" || :`,{extra:{FIXTURE_LS_REMOTE:'absent'}});}
+frozen('R24','a notice killed during its child (no terminal, no receipt, no push capture) is recovered by the next drain',f=>{
+ const x=refusedInPlace(f);rmSync(x.terminal);acceptOwned(drainOnce(f));oneRepair(f,2);assert.ok(existsSync(join(x.refused,x.idn+'.refused-1.attempt.json')));preserved(x.o.prefix,x.o.initial);
+});
+frozen('R25','a notice with no terminal but push evidence is held, and the drain says so',f=>{
+ const x=refusedInPlace(f);rmSync(x.terminal);writeFileSync(join(f.store,x.idn+'.submission.json.push.raw.json'),'{"raw":true}\n',{mode:0o600});
+ const r=drainOnce(f);acceptOwned(r);oneRepair(f);assert.match(r.stdout,new RegExp('held: '+x.idn+' no terminal, push evidence present'));
+ assert.equal(existsSync(x.refused),false,'nothing set aside');preserved(x.o.prefix,x.o.initial);
+});
+frozen('R35','a notice with no terminal and only its receipt (no push capture) is held, and the drain says so',f=>{
+ const x=refusedInPlace(f);rmSync(x.terminal);writeFileSync(join(f.store,x.idn+'.submission.json'),'{"version":1}\n',{mode:0o600});
+ const r=drainOnce(f);acceptOwned(r);oneRepair(f);assert.match(r.stdout,new RegExp('held: '+x.idn+' no terminal, push evidence present'));
+ assert.equal(existsSync(x.refused),false,'nothing set aside');preserved(x.o.prefix,x.o.initial);
+});
+for(const [id,label,body] of [['R26','garbage','{not json'],['R27','missing-fields','{"status":1}\n'],['R28','exit-3','{"status":3,"signal":null,"error":null}\n'],['R29','signalled','{"status":null,"signal":"SIGTERM","error":null}\n'],['R30','error-set','{"status":1,"signal":null,"error":"EPIPE"}\n'],
+ ['R31','JSON null','null\n'],['R32','JSON false','false\n'],['R33','JSON 0','0\n'],['R34','JSON empty string','""\n']])frozen(id,'a notice whose terminal is '+label+' stays held on the next drain',f=>{
+ const x=refusedInPlace(f);writeFileSync(x.terminal,body);acceptOwned(drainOnce(f));oneRepair(f);assert.equal(existsSync(x.refused),false,'nothing set aside');preserved(x.o.prefix,x.o.initial);
+});
 frozen('R09','a signaled local repair child never creates a replacement notification identity',f=>{
  const o=original(f,'heartbeat'),r=request(f,o);acceptOwned(owned(f,notifyCommand(f,r)+'; :',{extra:{FIXTURE_TRANSPORT_MODE:'signal'}}));oneRepair(f);
  const again=request(f,o);assert.equal(again.path,r.path);acceptOwned(owned(f,notifyCommand(f,again)+'; :'));oneRepair(f);preserved(o.prefix,o.initial);

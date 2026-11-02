@@ -223,6 +223,74 @@ function functionBody(code, name) {
   return { start: decl.index, end: code.length, text: rest };
 }
 
+const TIMER_SAFE_CALLS = new Set(["Date", "Math", "JSON", "Number", "String", "Boolean", "Array", "Object", "Promise", "console", "window", "document", "globalThis", "performance", "setTimeout", "setInterval", "clearTimeout", "clearInterval", "requestAnimationFrame", "cancelAnimationFrame", "parseInt", "parseFloat", "if", "for", "while", "switch", "return", "function", "catch", "typeof", "await", "void", "new"]);
+
+/**
+ * Timer callbacks the gate cannot read. A recurring timer — every `setInterval`,
+ * and a `setTimeout` an effect re-arms (see timerPolls) — whose callback calls,
+ * or is, a function that is imported, a parameter or prop, destructured from
+ * anything but `useState`/`useReducer`, or otherwise not declared in the file may
+ * refresh queries (`setInterval(poll, n)` with `poll` invalidating in another
+ * module) with no refresh word in this file at all. Each such callee is returned
+ * as [{ line, name }], once per name, and the view fails closed on it. An in-file
+ * function the callback names is read one level deep for the same callees.
+ */
+export function opaqueTimerCallees(code) {
+  const imported = new Set();
+  for (const m of code.matchAll(/import\s+(?!type\b)([^;]*?)\s+from\s*["'][^"']+["']/g)) {
+    for (const part of m[1].replace(/[{}]/g, ",").split(",")) {
+      const id = part.trim().replace(/^type\s+/, "").split(/\s+as\s+/).pop()?.replace(/^\*\s*/, "").trim();
+      if (id && /^[A-Za-z_$][\w$]*$/.test(id)) imported.add(id);
+    }
+  }
+  const e = escapeRegExp;
+  const setter = (n) => new RegExp(`\\b(?:const|let|var)\\s*\\[[^\\]=]*(?<![\\w$.])${e(n)}(?![\\w$])[^\\]=]*\\]\\s*=\\s*(?:React\\.)?use(?:State|Reducer)\\b`).test(code);
+  const declared = (n) => !imported.has(n) && (TIMER_SAFE_CALLS.has(n) || setter(n) || functionBody(code, n) !== null ||
+    new RegExp(`\\b(?:const|let|var|class)\\s+${e(n)}(?![\\w$])`).test(code));
+  // Names the callback text calls or passes as the timer's own callback; their own
+  // `(x) =>` parameters are the callback's, not unreadable outer names.
+  const callees = (text) => {
+    const own = new Set([...text.matchAll(/\(([^()]*)\)\s*=>|(?<![\w$.])([A-Za-z_$][\w$]*)\s*=>|function\s*[\w$]*\s*\(([^()]*)\)/g)]
+      .flatMap((m) => (m[1] ?? m[2] ?? m[3] ?? "").match(/[A-Za-z_$][\w$]*/g) ?? []));
+    const out = [];
+    for (const c of text.matchAll(/(?<![\w$.])([A-Za-z_$][\w$]*)(?:\s*\??\.\s*[A-Za-z_$][\w$]*)*\s*(?:\(|,)/g)) {
+      // A bare `name,` counts only as the timer's first argument (`setInterval(poll, n)`).
+      if (c[0].trimEnd().endsWith(",") && c.index !== text.search(/\S/)) continue;
+      // A chain naming a refresh (`qc.invalidateQueries()`) is timerRefreshTargets' to resolve.
+      if (!own.has(c[1]) && !REFRESH.test(c[0])) out.push(c[1]);
+    }
+    return out;
+  };
+  const effects = callSpans(code, /\buse(?:Layout)?Effect\s*\(/g);
+  const out = [];
+  for (const [kind, re] of [["interval", /\bsetInterval\s*\(/g], ["timeout", /\bsetTimeout\s*\(/g]]) {
+    const { spans } = callSpans(code, re);
+    for (const [a, b] of spans) {
+      if (kind === "timeout") {
+        // Only a setTimeout an effect with dependencies (or none) re-arms recurs.
+        const rearmed = effects.spans.some(([ea, eb]) => {
+          if (!(ea < a && b <= eb)) return false;
+          const deps = code.slice(code.indexOf("(", ea) + 1, eb - 1).match(/,\s*\[([^\]]*)\]\s*$/);
+          return !deps || deps[1].trim() !== "";
+        });
+        if (!rearmed) continue;
+      }
+      const args = code.slice(code.indexOf("(", a) + 1, b - 1);
+      const names = callees(args);
+      // One level into an in-file function the callback names: an import it calls is as unreadable.
+      for (const n of [...names]) {
+        const fn = !imported.has(n) ? functionBody(code, n) : null;
+        if (fn && !(fn.start <= a && b <= fn.end)) for (const m of callees(fn.text.slice(fn.text.indexOf("{") + 1 || fn.text.indexOf("=>") + 2))) if (imported.has(m)) names.push(m);
+      }
+      for (const n of names) {
+        if (REFRESH.test(n) || declared(n) || out.some((o) => o.name === n)) continue;
+        out.push({ line: code.slice(0, a).split("\n").length, name: n });
+      }
+    }
+  }
+  return out;
+}
+
 /**
  * True when a timer drives a refetch (or invalidates/resets queries, which
  * TanStack refetches) on a RECURRING schedule. `setInterval` recurs by itself:
@@ -235,6 +303,9 @@ function functionBody(code, name) {
  * with `[]` — updates nothing on a schedule and is not polling.
  */
 export function timerPolls(code) {
+  // A recurring timer whose callback the gate cannot read may refresh queries with no
+  // refresh word in this file (an imported `poll`): it polls, and fails closed below.
+  if (opaqueTimerCallees(code).length) return true;
   if (!REFRESH.test(code)) return false;
   if (/\bsetInterval\s*\(/.test(code)) return true;
   const timeouts = callSpans(code, /\bsetTimeout\s*\(/g);
@@ -280,6 +351,8 @@ export function timerRefreshTargets(code) {
   const opens = new Set();
   const unresolved = [];
   if (!timerPolls(code)) return { opens, unresolved };
+  // A timer callee the gate cannot read refreshes no query it can name: fail closed.
+  for (const o of opaqueTimerCallees(code)) unresolved.push({ line: o.line, token: o.name, opaque: true });
   const bindings = hookBindings(code);
   const patternSpans = [];
   const holders = new Map();  // whole-query name -> binding open
@@ -555,7 +628,9 @@ export function checkLiveRegions(files, defaultPolls, generated = new Set()) {
       // A timer driving `refetch()` polls that query: carry it into the state check,
       // and fail closed on a refresh whose query the gate cannot identify.
       const timer = timerRefreshTargets(f.code);
-      for (const u of timer.unresolved) failures.push(`${f.rel}:${u.line}: a timer-polling view refreshes through ${u.token} — the gate cannot identify which query it refreshes, so it cannot check that query's result and failure reach the <LiveRegion>; failing closed (bind the query and call its own \`refetch\`, WCAG 4.1.3)`);
+      for (const u of timer.unresolved) failures.push(u.opaque
+        ? `${f.rel}:${u.line}: a recurring timer calls ${u.token}, which the gate cannot read (imported, a parameter or prop, or not declared in this file) — it may refresh a query whose result and failure never reach the <LiveRegion>; failing closed (call the bound query's own \`refetch\` from an in-file callback, WCAG 4.1.3)`
+        : `${f.rel}:${u.line}: a timer-polling view refreshes through ${u.token} — the gate cannot identify which query it refreshes, so it cannot check that query's result and failure reach the <LiveRegion>; failing closed (bind the query and call its own \`refetch\`, WCAG 4.1.3)`);
       failures.push(...checkUnannouncedQueries(f.rel, f.code, (n) => isHook(n) || carriers.has(n), defaultPolls, shellSpoken, carriers, timer.opens));
     }
   }
@@ -712,6 +787,98 @@ export function valueRead(expr, src) {
   return false;
 }
 
+/** The callback text of every `name.method(…)` call in `text` (balanced parentheses). */
+function iterationBodies(text, name, methods) {
+  const out = [];
+  for (const c of text.matchAll(new RegExp(`(?<![\\w$.])${escapeRegExp(name)}\\s*\\??\\.\\s*(?:${methods})\\s*\\(`, "g"))) {
+    let depth = 0;
+    for (let i = c.index + c[0].length - 1; i < text.length; i++) {
+      if (text[i] === "(") depth++;
+      else if (text[i] === ")" && --depth === 0) { out.push(text.slice(c.index + c[0].length, i)); break; }
+    }
+  }
+  return out;
+}
+
+/**
+ * Per-result coverage of a `useQueries` batch. `pattern` is the binding (`results`
+ * or `[a, b]`), `args` the call's arguments, `messages`/`alerts` the region text.
+ * A list binding is covered by an iteration whose callback speaks each result's data
+ * (`results.map((r) => r.data…)`) and one whose callback reads each error
+ * (`results.some((r) => r.isError)`), or — when `queries` is a literal array of N
+ * queries — by `results[0]…results[N-1]` each read. An array pattern needs every
+ * bound element read the same way. A `combine`, a rest element, a nested element
+ * pattern, a dynamic index, or an index read over an unknown number of queries
+ * cannot be mapped back to each query: the batch fails closed. Values derived from
+ * the batch (`const name = results[0].data?.name`) are followed into the region.
+ * Returns a reason, or null when every result is covered.
+ */
+export function batchCoverageGap(code, pattern, args, messages, alerts) {
+  if (/(?<![\w$])combine(?![\w$])/.test(args)) return "its `combine` reshapes the results, so the gate cannot map what the region reads back to each query (failing closed)";
+  const ITER_DATA = "map|flatMap|reduce|forEach|filter";
+  const ITER_ERR = "some|find|findIndex|filter|map|flatMap|reduce|forEach";
+  const RESULT_RE = "\\??\\.\\s*(?:data|dataUpdatedAt)(?![\\w$])";
+  const ERR_RE = "\\??\\.\\s*(?:error|isError|isRefetchError|isLoadingError|status|failureCount|failureReason)(?![\\w$])";
+  const isList = !pattern.startsWith("[");
+  const roots = isList ? [pattern] : [];
+  if (!isList) {
+    const els = splitTop(pattern.slice(1, -1), ",");
+    for (const raw of els) {
+      if (raw.startsWith("...")) return `the rest element \`${raw}\` binds an unknown number of results the gate cannot follow one by one (failing closed)`;
+      const el = splitTop(raw, "=")[0] ?? "";
+      if (!/^[A-Za-z_$][\w$]*$/.test(el)) return `the element pattern \`${el}\` destructures a result further; bind each result to a name (failing closed)`;
+      roots.push(el);
+    }
+    if (roots.length === 0) return "no result of the batch is bound to a name (failing closed)";
+  }
+  // Follow `const X = …root…` into the region text: the derived initializer is what is said.
+  const expand = (text) => {
+    let out = text;
+    const seen = new Set();
+    for (let grew = true; grew; ) {
+      grew = false;
+      for (const d of code.matchAll(/\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*([^;\n]+)/g)) {
+        if (seen.has(d[1]) || roots.includes(d[1])) continue;
+        if (!new RegExp(`(?<![\\w$.])${escapeRegExp(d[1])}(?![\\w$])`).test(out)) continue;
+        if (!roots.some((r) => new RegExp(`(?<![\\w$.])${escapeRegExp(r)}(?![\\w$])`).test(d[2]))) continue;
+        seen.add(d[1]); out += "\n" + stripLiterals(d[2]); grew = true;
+      }
+    }
+    return out;
+  };
+  const msg = expand(messages), alr = expand(alerts);
+  if (isList) {
+    const r = escapeRegExp(pattern);
+    const dyn = new RegExp(`(?<![\\w$.])${r}\\s*(?:\\?\\.)?\\s*\\[(?!\\s*\\d+\\s*\\])|(?<![\\w$.])${r}\\s*\\??\\.\\s*at\\s*\\(`);
+    if (dyn.test(msg) || dyn.test(alr)) return `the region reads ${pattern}[…] by a non-literal index, so the gate cannot tell which queries it covers (failing closed)`;
+    const q = /(?<![\w$])queries\s*:\s*\[/.exec(args);
+    let count = null;
+    if (q) {
+      let depth = 0;
+      for (let i = q.index + q[0].length - 1; i < args.length; i++) {
+        if (args[i] === "[") depth++;
+        else if (args[i] === "]" && --depth === 0) {
+          const els = splitTop(args.slice(q.index + q[0].length, i), ",");
+          if (!els.some((x) => x.startsWith("..."))) count = els.length;
+          break;
+        }
+      }
+    }
+    const each = (text, re, iter, spoken) => iterationBodies(text, pattern, iter).some((b) => spoken ? valueRead(b, re) : new RegExp(re).test(b)) ||
+      (count !== null && count > 0 && Array.from({ length: count }, (_, i) => `(?<![\\w$.])${r}\\s*(?:\\?\\.)?\\s*\\[\\s*${i}\\s*\\]${re}`)
+        .every((src) => spoken ? valueRead(text, src) : new RegExp(src).test(text)));
+    const known = count === null ? "the number of queries is not a literal array, so only an iteration over the results covers each one" : `each of its ${count} queries must be read by index or through an iteration`;
+    if (!each(msg, RESULT_RE, ITER_DATA, true)) return `a <LiveRegion> message does not speak every result's data (${known}) — a refresh that changes an unread query is silent`;
+    if (!each(alr, ERR_RE, ITER_ERR, false)) return `a <LiveRegion> alert does not read every result's failure (${known}) — a failed refresh of an unread query is silent`;
+    return null;
+  }
+  const unspoken = roots.filter((el) => !valueRead(msg, `(?<![\\w$.])${escapeRegExp(el)}${RESULT_RE}`));
+  if (unspoken.length) return `result(s) ${unspoken.join(", ")} never reach a <LiveRegion> message — a refresh that changes only them is silent`;
+  const unalerted = roots.filter((el) => !new RegExp(`(?<![\\w$.])${escapeRegExp(el)}${ERR_RE}`).test(alr));
+  if (unalerted.length) return `result(s) ${unalerted.join(", ")} never reach a <LiveRegion> alert — a failed refresh of them is silent`;
+  return null;
+}
+
 export function checkUnannouncedQueries(rel, code, isHook, defaultPolls, shellSpoken = new Set(), carriers = new Set(), timerOpens = new Set()) {
   // A call polls when the tree's defaults poll, its own arguments set refetchInterval,
   // it IS a polling carrier (an imported polling wrapper), or its arguments pass one.
@@ -779,6 +946,12 @@ export function checkUnannouncedQueries(rel, code, isHook, defaultPolls, shellSp
     // through an element: `results[0].data`, or `results.some((r) => r.isError)`.
     const listHook = /Queries$/.test(m[2]) && !m[1].startsWith("[") && !m[1].startsWith("{");
     const names = [...direct, ...holders.map((h) => `${h}.data|error`)];
+    // A batch (`useQueries`) is one call for many queries: a region reading one of its
+    // results must not stand in for the rest. Every result needs its own coverage.
+    if (/Queries$/.test(m[2]) && !m[1].startsWith("{")) {
+      const gap = batchCoverageGap(code, m[1], args, messages, alerts);
+      if (gap) { failures.push(`${rel}:${code.slice(0, m.index).split("\n").length}: polled ${m[2]}() batch — ${gap} (WCAG 4.1.3)`); continue; }
+    }
     const reads = (re) => re.test(announced);
     // Every polled query's FAILURE must reach an alert: a failed background refetch
     // keeps the cached data, so a region reading only `data` stays silent through it.
@@ -1554,7 +1727,7 @@ export function jsxElements(src) {
  * `<MotionConfig … />`, or one beside `<AppRoutes />` in a fragment, configures nothing.
  * Returns true, false, or null when the file's JSX cannot be parsed.
  */
-export function motionConfigWraps(src) {
+export function motionConfigWraps(src, accept = () => true) {
   const nodes = jsxElements(src);
   if (nodes === null) return null;
   // `src` is ONE rendered tree (the app component's body, or the render() argument):
@@ -1562,7 +1735,7 @@ export function motionConfigWraps(src) {
   // not what mounts, so the configured tree must be the only one.
   if (nodes.filter((n) => n.parent === null).length !== 1) return false;
   return nodes.some((mc) => {
-    if (mc.name !== "MotionConfig" || !/\breducedMotion\s*=\s*["'](?:user|always)["']/.test(mc.tag)) return false;
+    if (mc.name !== "MotionConfig" || !/\breducedMotion\s*=\s*["'](?:user|always)["']/.test(mc.tag) || !accept(mc.tag)) return false;
     const inside = (n) => n.start > mc.start && n.end <= mc.end;
     if (!nodes.some(inside)) return false;
     let root = mc;
@@ -1571,6 +1744,50 @@ export function motionConfigWraps(src) {
     for (let a = mc.parent; a; a = a.parent) ancestors.add(a);
     return nodes.filter((n) => n.start >= root.start && n.end <= root.end).every((n) => n === mc || ancestors.has(n) || inside(n));
   });
+}
+
+/**
+ * JSX applies attributes in order, so a spread AFTER `reducedMotion="user"` on a
+ * `<MotionConfig>` opening tag can set it back (`{...{ reducedMotion: "never" }}`).
+ * Each such spread must resolve to ONE same-file `const X = { … }` object literal,
+ * used nowhere else but in spreads, with no nested spread or computed key, whose
+ * `reducedMotion` (if present) is literally "user" or "always". Anything else —
+ * an import, a prop, a call, a member, a `let` — is unresolvable. `code` is the
+ * whole (comment-stripped) file. Returns the reasons the spread is not proven safe.
+ */
+export function motionSpreadGaps(tag, code) {
+  const attr = /\breducedMotion\s*=\s*["'](?:user|always)["']/.exec(tag);
+  if (!attr) return [];
+  const rest = tag.slice(attr.index + attr[0].length);
+  const gaps = [];
+  for (const o of rest.matchAll(/\{\s*\.\.\./g)) {
+    const id = /^\{\s*\.\.\.\s*([A-Za-z_$][\w$]*)\s*\}/.exec(rest.slice(o.index));
+    if (!id) { gaps.push("spreads an expression after reducedMotion that is not a plain name the gate can resolve"); continue; }
+    const n = id[1], e = escapeRegExp(n);
+    const decl = new RegExp(`(?<![\\w$.])const\\s+${e}\\s*(?::[^=]+)?=\\s*\\{`, "g");
+    const decls = [...code.matchAll(decl)];
+    if (decls.length !== 1) { gaps.push(`spreads {...${n}} after reducedMotion, which is not one same-file \`const ${n} = { … }\` literal`); continue; }
+    // Every other mention of the name must be a spread: a parameter, a reassignment
+    // or a call it is passed to could rebind or mutate it.
+    const declAt = decls[0].index + decls[0][0].indexOf(n, 5);
+    const others = [...code.matchAll(new RegExp(`(?<![\\w$.])${e}(?![\\w$])`, "g"))]
+      .filter((u) => u.index !== declAt && !/\.\.\.\s*$/.test(code.slice(0, u.index)));
+    if (others.length) { gaps.push(`spreads {...${n}} after reducedMotion, but ${n} is also bound or used outside a spread — the gate cannot prove its value`); continue; }
+    const start = decls[0].index + decls[0][0].length - 1;
+    let depth = 0, end = -1;
+    for (let i = start; i < code.length; i++) {
+      if (code[i] === "{") depth++;
+      else if (code[i] === "}" && --depth === 0) { end = i; break; }
+    }
+    const body = end < 0 ? null : code.slice(start + 1, end);
+    if (body === null) { gaps.push(`spreads {...${n}} after reducedMotion, whose object literal does not balance`); continue; }
+    if (/\.\.\./.test(body) || /(?:^|[,{])\s*\[/.test(body)) { gaps.push(`spreads {...${n}} after reducedMotion, whose object holds a nested spread or computed key`); continue; }
+    for (const k of body.matchAll(/(?<![\w$])["']?reducedMotion["']?(?![\w$])/g)) {
+      const v = /^\s*:\s*(["'])(user|always)\1/.exec(body.slice(k.index + k[0].length));
+      if (!v) gaps.push(`spreads {...${n}} after reducedMotion, and ${n} sets reducedMotion to ${body.slice(k.index + k[0].length).replace(/^\s*:?\s*/, "").split(/[,}\n]/)[0].trim() || "a shorthand value"}`);
+    }
+  }
+  return gaps;
 }
 
 /**
@@ -1592,7 +1809,8 @@ export function mountedTrees(files) {
   }
   if (end < 0) return [{ rel: main.rel, wraps: null }];
   const arg = code.slice(call.index + call[0].length, end);
-  const out = [{ rel: main.rel, wraps: motionConfigWraps(arg) }];
+  // A provider whose later spread may override reducedMotion encloses nothing the gate can prove.
+  const out = [{ rel: main.rel, wraps: motionConfigWraps(arg, (tag) => motionSpreadGaps(tag, code).length === 0) }];
   const appName = /import\s+([A-Za-z_$][\w$]*)\s+from\s*["']\.\/App(?:\.tsx)?["']/.exec(code)?.[1];
   const app = files.find((f) => /\/src\/App\.tsx$/.test(f.rel));
   if (appName && app && new RegExp(`<${escapeRegExp(appName)}(?=[\\s/>])`).test(arg)) {
@@ -1600,7 +1818,7 @@ export function mountedTrees(files) {
     const named = /export\s+default\s+(?:function\s+([A-Za-z_$][\w$]*)|([A-Za-z_$][\w$]*)\s*;?\s*$)/m.exec(appCode);
     const name = named?.[1] ?? named?.[2];
     const body = name ? functionBody(appCode, name) : null;
-    out.push({ rel: app.rel, wraps: body ? motionConfigWraps(body.text.slice(body.text.indexOf("{"))) : null });
+    out.push({ rel: app.rel, wraps: body ? motionConfigWraps(body.text.slice(body.text.indexOf("{")), (tag) => motionSpreadGaps(tag, appCode).length === 0) : null });
   }
   return out;
 }
@@ -1623,6 +1841,14 @@ export function checkFramerMotion(treeRel, files) {
   for (const f of files) {
     for (const m of stripComments(f.src).matchAll(/\breducedMotion\s*=\s*(\{[^}]*\}|["'][^"']*["'])/g)) {
       if (!/^["'](?:user|always)["']$/.test(m[1])) failures.push(`${f.rel}: reducedMotion=${m[1]} — framer-motion animations ignore prefers-reduced-motion unless it is "user" or "always" (WCAG 2.3.3)`);
+    }
+  }
+  for (const f of files) {
+    const code = stripComments(f.src);
+    for (const t of code.matchAll(/<MotionConfig(?=[\s/>])/g)) {
+      const tag = openingTag(code, t.index);
+      if (tag === null) continue;
+      for (const g of motionSpreadGaps(tag, code)) failures.push(`${f.rel}:${code.slice(0, t.index).split("\n").length}: <MotionConfig> ${g} — a later spread overrides the attribute, so the animated tree may ignore prefers-reduced-motion (failing closed) (WCAG 2.3.3)`);
     }
   }
   const roots = mountedTrees(files);
@@ -2240,6 +2466,44 @@ function selfTest() {
         const hook = view("t/src/hooks/feed.ts", 'export function useFeed() { return useQuery({ queryKey: ["f"], queryFn: f, refetchInterval: 5000 }); }');
         return checkLiveRegions([hook, view("t/src/pages/A.tsx", 'import { useFeed } from "../hooks/feed";\nconst { data, isError } = useFeed();\nreturn <LiveRegion message="Ready" alert="" />;')], false).failures.length > 0 &&
           checkLiveRegions([hook, view("t/src/pages/A.tsx", 'import { useFeed } from "../hooks/feed";\nconst { data, isError } = useFeed();\nreturn <LiveRegion message={`${data?.id}`} alert={isError ? "Down." : ""} />;')], false).failures.length === 0;
+      })()],
+    ["a spread after <MotionConfig reducedMotion> must resolve to a value that keeps it, or the provider fails closed",
+      (() => {
+        const anim = view("t/src/H.tsx", 'import { motion } from "framer-motion";\n<motion.div />');
+        const main = view("t/src/main.tsx", 'import App from "./App";\ncreateRoot(el).render(<App />);');
+        const app = (pre, attr) => view("t/src/App.tsx", `import { MotionConfig } from "framer-motion";\n${pre}\nexport default function App() { return <MotionConfig ${attr}><Router /></MotionConfig>; }`);
+        const fm = (pre, attr) => checkFramerMotion("t", [anim, main, app(pre, attr)]);
+        return fm("const motionProps = { reducedMotion: 'never' } as const;", 'reducedMotion="user" {...motionProps}').length === 2 &&
+          fm("const motionProps = { transition: { duration: 0.2 }, reducedMotion: 'user' } as const;", 'reducedMotion="user" {...motionProps}').length === 0 &&
+          fm("const motionProps = { reducedMotion: 'never' } as const;", '{...motionProps} reducedMotion="user"').length === 0 &&
+          fm('import { motionProps } from "./motion";', 'reducedMotion="user" {...motionProps}').some((f) => /not one same-file/.test(f)) &&
+          fm("", 'reducedMotion="user" {...{ reducedMotion: "never" }}').some((f) => /not a plain name/.test(f)) &&
+          fm("const base = { reducedMotion: 'never' };\nconst motionProps = { ...base };", 'reducedMotion="user" {...motionProps}').some((f) => /nested spread/.test(f));
+      })()],
+    ["every result of a polled useQueries batch must reach the live region, or the batch fails closed",
+      (() => {
+        const Q = 'const results = useQueries({ queries: [{ queryKey: ["a"], queryFn: fa, refetchInterval: 5000 }, { queryKey: ["b"], queryFn: fb, refetchInterval: 5000 }] });\n';
+        const D = 'const [a, b] = useQueries({ queries: [{ queryKey: ["a"], queryFn: fa, refetchInterval: 5000 }, { queryKey: ["b"], queryFn: fb, refetchInterval: 5000 }] });\n';
+        const lr = (src) => checkLiveRegions([view("t/src/pages/T.tsx", src)], false).failures;
+        return lr(Q + 'return <><LiveRegion message={`Name ${results[0].data?.name}`} alert={results[0].isError ? "Down." : ""} /><p>{results[1].data?.count}</p></>;').length === 1 &&
+          lr(D + 'return <><LiveRegion message={`${a.data?.n}`} alert={a.isError ? "Down." : ""} /><p>{b.data?.n}</p></>;').length === 1 &&
+          lr(Q + 'return <LiveRegion message={`${results[0].data?.name} ${results[1].data?.count}`} alert={results[0].isError || results[1].isError ? "Down." : ""} />;').length === 0 &&
+          lr(D + 'return <LiveRegion message={`${a.data?.n} ${b.data?.n}`} alert={a.isError || b.isError ? "Down." : ""} />;').length === 0 &&
+          lr(Q + 'return <LiveRegion message={results.map((r) => r.data?.n).join(", ")} alert={results.some((r) => r.isError) ? "Down." : ""} />;').length === 0 &&
+          lr(Q + 'return <LiveRegion message={`${results[i].data?.n}`} alert={results[i].isError ? "Down." : ""} />;').some((f) => /non-literal index/.test(f)) &&
+          lr('const results = useQueries({ queries: ids.map((id) => ({ queryKey: [id], refetchInterval: 5000 })) });\nreturn <LiveRegion message={`${results[0].data?.n}`} alert={results[0].isError ? "Down." : ""} />;').some((f) => /not a literal array/.test(f)) &&
+          lr('const results = useQueries({ queries: [{ queryKey: ["a"], refetchInterval: 5000 }], combine: (r) => r });\nreturn <LiveRegion message={`${results[0].data?.n}`} alert={results[0].isError ? "Down." : ""} />;').some((f) => /combine/.test(f)) &&
+          lr('const [a, ...more] = useQueries({ queries: [{ queryKey: ["a"], refetchInterval: 5000 }] });\nreturn <LiveRegion message={`${a.data?.n}`} alert={a.isError ? "Down." : ""} />;').some((f) => /rest element/.test(f));
+      })()],
+    ["a recurring timer calling an imported, prop or undeclared function polls and fails closed",
+      (() => {
+        const poll = view("t/src/lib/poll.ts", "export function poll() { queryClient.invalidateQueries(); }");
+        const page = (cb) => view("t/src/pages/A.tsx", `import { poll } from "../lib/poll";\nconst { data, isError } = useQuery({ queryKey: ["a"] });\nuseEffect(() => { const t = setInterval(${cb}, 5000); return () => clearInterval(t); }, []);\nreturn <LiveRegion message={\`\${data?.id}\`} alert={isError ? "Down." : ""} />;`);
+        const opaque = (r) => r.failures.length === 1 && /cannot read/.test(r.failures[0]);
+        return ["poll", "() => poll()", "() => { void poll(); }"].every((cb) => opaque(checkLiveRegions([poll, page(cb)], false))) &&
+          checkLiveRegions([poll, view("t/src/pages/A.tsx", "import { poll } from '../lib/poll'; const { data } = useQuery({ queryKey: ['a'] }); useEffect(() => { const t = setInterval(poll, 5000); return () => clearInterval(t); }, []); return <div>{data?.x}</div>;")], false).failures.length === 1 &&
+          opaque(checkLiveRegions([view("t/src/pages/A.tsx", "export function A({ poll }) { useEffect(() => { const t = setInterval(poll, 5000); return () => clearInterval(t); }, []); return <LiveRegion message=\"Ready\" alert=\"\" />; }")], false)) &&
+          checkLiveRegions([view("t/src/pages/A.tsx", "const [time, setTime] = useState(new Date());\nuseEffect(() => { const t = setInterval(() => setTime(new Date()), 1000); return () => clearInterval(t); }, []);\nreturn <p>{time.toString()}</p>;")], false).polling.length === 0;
       })()],
     ["stylesheet with reduced-motion passes",
       checkReducedMotion("a.css", "@media (prefers-reduced-motion: reduce) { *, ::before, ::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; } }").length === 0],

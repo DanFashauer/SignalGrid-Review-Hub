@@ -1446,7 +1446,10 @@ jobs:
 
   durable-persistence:
     name: Durable persistence (Postgres audit ledger)
-    runs-on: ubuntu-latest
+    # Pinned, not -latest: ubuntu-latest became ubuntu-26.04 (2026-11), whose archive
+    # has no postgresql-client-16; the backup/restore proof needs the client major to
+    # equal the postgres:16 server (see the pin step below). Move with production.
+    runs-on: ubuntu-24.04
     timeout-minutes: 25
     services:
       postgres:
@@ -1543,8 +1546,8 @@ jobs:
       # the repository had no `pg_dump` anywhere at all.
       #
       # pg_dump/pg_restore must be the SAME major as the server (16, as in
-      # docker-compose.prod.yml). "At least 16" was not enough: on 2026-11-02 the
-      # ubuntu-latest image moved to client 17, whose dumps carry
+      # docker-compose.prod.yml). "At least 16" was not enough: on 2026-11-02
+      # ubuntu-latest became ubuntu-26.04 with a newer client, whose dumps carry
       # `SET transaction_timeout`, which a 16 server rejects at pg_restore — every PR
       # went red on this job. (The Mac lane hit the same skew with client 18 on
       # 2026-09-10.) So the 16 client is pinned on PATH, then asserted equal.

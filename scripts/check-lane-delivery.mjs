@@ -75,7 +75,7 @@ function fixture({ lane = "mac", reject = false, loseResponse = false, failBefor
 }
 else if(a[0]==='auth'&&a[1]==='status'){${ghAuthFails ? "process.exit(1)" : "process.exit(0)"}}\nelse if(a[0]==='pr'&&a[1]==='create'){${ghCreateFails ? "console.error('fixture creation response lost or unauthenticated');process.exit(1)" : "console.log('https://github.com/fixture/route/pull/7')"}}\nelse if(a[0]==='pr'&&a[1]==='merge'&&a.includes('--auto')){${ghAutoFails ? "console.error('fixture auto-merge response lost');process.exit(1)" : `${denyCleanup ? `chmodSync(${JSON.stringify(root)},0o500);` : ""}console.log('fixture auto-merge request')`}}\nelse process.exit(2);\n`);
   chmodSync(gh, 0o755);
-  const records = (p) => existsSync(p) ? readFileSync(p, "utf8").trim().split("\n").filter(Boolean).map(JSON.parse) : [];
+  const records = (p) => { try { return readFileSync(p, "utf8").trim().split("\n").filter(Boolean).map(JSON.parse); } catch (error) { if (error.code === "ENOENT") return []; throw error; } };
   let runNumber = 0;
   return { root, repo, base, git, run(extra = []) {
     if (lane === "mac" && !omitReceipt && !extra.includes("--receipt")) {
@@ -194,6 +194,8 @@ for (const damaged of ["missing", "malformed"]) control(`a ${damaged} independen
 });
 // Execute the real heartbeat function and estate block, with only their I/O
 // dependencies replaced. This is a Bash/file control, not a launchd or live-gh proof.
+// Read a line log without a prior existence check (no check-then-use on the path).
+function linesOrNone(path) { try { return readFileSync(path, "utf8").trim().split("\n"); } catch (error) { if (error.code === "ENOENT") return []; throw error; } }
 function heartbeatFixture({ age = 30, result = "quiet", dry = false,
   deliveryCode = 0, priorAttempt = null, agedPrior = false } = {}) {
   const root = mkdtempSync(join(tmpdir(), "sg-heartbeat-test-"));
@@ -218,7 +220,7 @@ function heartbeatFixture({ age = 30, result = "quiet", dry = false,
     writeFileSync(join(cache, `.sg-heartbeat-${id}.log`), "untrusted output: exit_code=0\n");
     if (priorAttempt !== "interrupted") writeFileSync(join(cache, `.sg-heartbeat-${id}.exit`), priorAttempt === "malformed" ? "1\n" : "3\n");
   }
-  if (existsSync(stamp)) utimesSync(stamp, aged, aged);
+  try { utimesSync(stamp, aged, aged); } catch (error) { if (error.code !== "ENOENT") throw error; }
   const tick = readFileSync(join(ROOT, "scripts/mac/lane-tick.sh"), "utf8");
   const start = tick.indexOf("heartbeat() {");
   const end = tick.indexOf("\n}\n", start) + 3;
@@ -238,7 +240,7 @@ function heartbeatFixture({ age = 30, result = "quiet", dry = false,
     const script = `set -u\nREPO_ROOT=${quote(root)}\nRECORD_DIR=${quote(cache)}\n${declarations}\nSTAMP=20261030T010000Z\nDRY=${dry ? 1 : 0}\nRESULT=${quote(result)}\nDELIVERY_RC=${deliveryCode}\nESTATE_RC=0\nESTATE_OUTPUT='estate: 0 open ()'\nsay(){ printf '%s\\n' "$1"; }\nappend_unread_state(){ :; }\nappend_raised_hands_state(){ :; }\ngh(){ return 0; }\nnode(){ if [ "$1" = scripts/lane-deliver.mjs ]; then if [ "$2" = readback ]; then printf 'readback\\n' >> "$FIXTURE_READBACK_LOG"; if [ "\${READBACK_RC:-$DELIVERY_RC}" = 0 ]; then printf 'canonical fixture merge verified\\n'; else printf 'original fixture PR still pending or unavailable\\n'; fi; return "\${READBACK_RC:-$DELIVERY_RC}"; fi; printf '%s\\n' "$*" >> ${quote(deliveries)}; for _arg in "$@"; do if [ "\${_want_receipt:-0}" = 1 ]; then printf '{"fixtureSubmission":true,"target":"lane/mac-mail-20261030-010000Z-0123456789ab","head":"cccccccccccccccccccccccccccccccccccccccc","blobs":[]}\\n' > "$_arg"; _want_receipt=0; fi; if [ "$_arg" = --receipt ]; then _want_receipt=1; fi; done; printf 'untrusted fixture output: exit_code=0\\n'; return "$DELIVERY_RC"; elif [ "$1" = scripts/mac/estate-queue.mjs ]; then printf '%s\\n' "$ESTATE_OUTPUT"; return "$ESTATE_RC"; else "$FIXTURE_NODE" "$@"; fi; }\n${recordHelper}\n${heartbeat}\nrun_estate(){\n${estate}\n}\n${body}\ntrue\n`;
     return spawnSync("/bin/bash", ["-c", script], { cwd: root,
       env: { PATH: join(root, "bin") + ":/usr/bin:/bin", HOME: process.env.HOME, LANG: "C", FIXTURE_NODE:process.execPath, FIXTURE_READBACK_LOG:readbacks }, encoding: "utf8", timeout: 10000 });
-  }, deliveries: () => existsSync(deliveries) ? readFileSync(deliveries, "utf8").trim().split("\n") : [], readbacks:()=>existsSync(readbacks)?readFileSync(readbacks,"utf8").trim().split("\n"):[] };
+  }, deliveries: () => linesOrNone(deliveries), readbacks: () => linesOrNone(readbacks) };
 }
 control("unchanged heartbeat stays quiet for almost two hours", { tick: true, age: 115 }, (f) => {
   const r = f.runTick(); assert.equal(r.status, 0, r.stderr); assert.equal(f.deliveries().length, 0);
@@ -799,7 +801,7 @@ function leaseContext(f){
   state:()=>JSON.parse(readFileSync(slot,'utf8')).state,
   kernelAvailable:()=>{const r=run('/usr/bin/perl',['-MFcntl=:flock','-e','open(my $f,"<",$ARGV[0]) or die $!; exit(flock($f,LOCK_EX|LOCK_NB)?0:17);',guard],f.root);assert.equal(r.status,0,r.stderr)},
   async cleanup(){
-   if(existsSync(store))chmodSync(store,0o700);
+   try{chmodSync(store,0o700);}catch(error){if(error.code!=='ENOENT')throw error;}
    for(const item of children)if(!item.child.stdin.destroyed)item.child.stdin.end('continue\n'.repeat(4));
    // Original close handles include stdio completion. No PID probing, detached
    // replacement, timeout cleanup claim, forced signal, or unknown replay.
@@ -1239,6 +1241,25 @@ for(const [mode,want] of [['absent',true],['present',false],['fail',false]]){
   const r=spawnSync(process.execPath,[join(ROOT,'scripts/lib/lane-attempt-store.mjs'),'retry-refused',root,records,id,'1','move'],{cwd:root,encoding:'utf8',env:{PATH:bin+':/usr/bin:/bin',HOME:process.env.HOME,FIXTURE_LS_REMOTE:mode}});
   assert.equal(r.status,0,r.stderr);const out=JSON.parse(r.stdout);
   assert.equal(Boolean(out?.setAsideAs),want,r.stdout);assert.equal(existsSync(join(records,id+'.attempt.json')),!want);
+  passed++;console.log('PASS '+label);
+ } catch(e){failed++;console.error('FAIL '+label+': '+e.message);}
+ finally{rmSync(root,{recursive:true,force:true});}
+}
+{
+ // A canonical blob read that FAILS (exit 128) is never absence: unknown, nothing set aside.
+ const label='a failing canonical blob read (rev-parse exit 128) is unknown, never unpublished';
+ const root=mkdtempSync(join(tmpdir(),'sg-revparse-fail-'));
+ try {
+  const records=join(root,'records'),bin=join(root,'bin'),name='hand-'+'9'.repeat(64);mkdirSync(records);mkdirSync(bin);
+  writeFileSync(join(bin,'git'),'#!/bin/sh\ncase "$1" in ls-remote|fetch) exit 0;; merge-base) exit 1;; rev-parse) exit 128;; esac\nexit 2\n',{mode:0o755});
+  for(const suffix of ['.attempt.json','.output','.exit'])writeFileSync(join(records,name+suffix),suffix==='.exit'?'1\n':'{"fixture":true}\n');
+  writeFileSync(join(records,name+'.submission.json'),JSON.stringify({version:1,target:'lane/mac-mail-20261101-010000Z-0123456789ab',head:'e'.repeat(40),blobs:[{path:'artifacts/x.json',oid:'f'.repeat(40)}]})+'\n');
+  const env={PATH:bin+':/usr/bin:/bin',HOME:process.env.HOME},store=join(ROOT,'scripts/lib/lane-attempt-store.mjs');
+  const d=spawnSync(process.execPath,[store,'refused-disposition',root,join(records,name+'.submission.json')],{cwd:root,encoding:'utf8',env});
+  assert.equal(d.status,0,d.stderr);assert.equal(d.stdout.trim(),'unknown');
+  const r=spawnSync(process.execPath,[store,'retry-refused',root,records,name,'1','derive'],{cwd:root,encoding:'utf8',env});
+  assert.equal(r.status,0,r.stderr);assert.equal(JSON.parse(r.stdout),null);
+  assert.equal(existsSync(join(records,'refused',name+'.retried')),false,'no retry marker');assert.ok(existsSync(join(records,name+'.attempt.json')),'nothing set aside');
   passed++;console.log('PASS '+label);
  } catch(e){failed++;console.error('FAIL '+label+': '+e.message);}
  finally{rmSync(root,{recursive:true,force:true});}

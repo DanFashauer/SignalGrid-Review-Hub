@@ -19,8 +19,8 @@
 // DECISION_PATH; a path in DENY (governance text classifyDiff calls autonomous — AGENTS.md was
 // checked on 2026-11-02 and is); a path outside the repo or under artifacts/agent-heartbeats/; a
 // patch that does not apply cleanly; a title/result naming a private path (it goes in a public
-// PR body). SAFETY_MACHINERY (scripts/**, workflows) is PRINTED, not refused — the spec leaves it
-// to review on the PR.
+// PR body); and SAFETY_MACHINERY (scripts/**, workflows, fixtures) too — a local-brain build
+// never changes the gates that judge it through this route.
 //
 // NOT a gate. --publish needs network and an authenticated gh (run sandbox-off).
 
@@ -103,7 +103,7 @@ export async function run({ job, db = DEFAULT_DB, repo = REPO, publish = false, 
     if (DENY.some((re) => re.test(f))) bad.push(`${f} (governance/heartbeat deny list)`);
   }
   const cls = classifyDiff(files);
-  for (const m of cls.matched) if (m.category !== "SAFETY_MACHINERY") bad.push(`${m.file} (${m.category}: ${m.rule})`);
+  for (const m of cls.matched) bad.push(`${m.file} (${m.category}: ${m.rule})`);
   log(`job ${job}: ${title}`);
   log(`files (${files.length}):\n${files.map((f) => `  ${f}`).join("\n")}`);
   log(`classification: ${cls.tier}${cls.matched.map((m) => `\n  ${m.category} ${m.file} — ${m.rule}`).join("")}`);
@@ -136,7 +136,7 @@ export async function run({ job, db = DEFAULT_DB, repo = REPO, publish = false, 
       "## What changed", "", ...files.map((f) => `- \`${f}\``), "",
       "## Validation", "", "The job's own result, verbatim:", "", ...result.split("\n").map((l) => `> ${l}`), "",
       "Codex and Claude review on this PR; the lane lands it under DR-037.", "",
-      "## Public-safety note", "", "The diff was refused if any file classified OWNER_RESERVED or DECISION_PATH, or touched governance text (AGENTS.md, CLAUDE.md, decision records, PURPOSE, .github). No private path or brain state is included here beyond the job id and title.", "",
+      "## Public-safety note", "", "The diff was refused if any file classified OWNER_RESERVED, DECISION_PATH or SAFETY_MACHINERY, or touched governance text (AGENTS.md, CLAUDE.md, decision records, PURPOSE, .github). No private path or brain state is included here beyond the job id and title.", "",
       "## Remaining risks", "", "The brain built on an older base; the patch was 3-way replayed onto the current base and has not run preflight here. CI on this PR is the first full run.", "",
       "🤖 Generated with [Claude Code](https://claude.com/claude-code)", "",
     ].join("\n");
@@ -187,12 +187,13 @@ async function selfTest() {
     };
     const wDocs = brain("w-docs", (w) => { writeFileSync(join(w, "docs/x.md"), "one\nTWO\nthree\n"); writeFileSync(join(w, "docs/new.md"), "new\n"); });
     const wAgents = brain("w-agents", (w) => writeFileSync(join(w, "AGENTS.md"), "changed\n"));
+    const wGate = brain("w-gate", (w) => { mkdirSync(join(w, "scripts"), { recursive: true }); writeFileSync(join(w, "scripts/check-x.mjs"), "gate\n"); });
     const wEmpty = brain("w-empty", () => {});
     const wConflict = brain("w-conflict", (w) => writeFileSync(join(w, "docs/x.md"), "one\nBRAIN\nthree\n"));
 
     const db = join(root, "autonomy.sqlite3");
     const rows = [
-      ["jdocs", "build", "review", wDocs], ["jagents", "build", "review", wAgents],
+      ["jdocs", "build", "review", wDocs], ["jagents", "build", "review", wAgents], ["jgate", "build", "review", wGate],
       ["jqueued", "build", "queued", wDocs], ["jempty", "build", "review", wEmpty],
       ["jconflict", "build", "review", wConflict],
     ];
@@ -226,6 +227,7 @@ async function selfTest() {
     check("(1) dry run left no remote branch", scratchGitOk(repo, ["ls-remote", "origin", "refs/heads/brain/job-jdocs"]) === "");
     // (2)-(5) refusals
     await refused("(2) AGENTS.md refused", { job: "jagents", db, repo }, "AGENTS.md");
+    await refused("(2b) a gate change (SAFETY_MACHINERY) refused", { job: "jgate", db, repo }, "SAFETY_MACHINERY");
     await refused("(3) non-review job refused", { job: "jqueued", db, repo }, "status=queued");
     await refused("(4) empty diff refused", { job: "jempty", db, repo }, "empty");
     await refused("(5) non-applying patch refused", { job: "jconflict", db, repo }, "does not apply");

@@ -1602,7 +1602,14 @@ raise_hand ${q(text)}`, { HOME: home, SG_HAND_CAPTURE: capture });
     writeFileSync(join(repo, "scripts/mac/free-test-port.sh"), '/bin/bash -c \'. "$SG_CI_LOCK_HELPER"; sg_host_verify_acquire "$SG_CI_LOCK_LOCATION"\' >/dev/null 2>&1\n[ "$?" = 75 ] || exit 12\nprintf "teardown\\n" >> "$SG_CI_EVENTS"\nexit "${SG_CI_CLEANUP_EXIT:-0}"\n');
     G(repo, "init", "-q", "-b", "SignalGrid_Alpha"); G(repo, "add", "-A"); G(repo, "commit", "-q", "-m", "trusted helper fixture");
     const base = G(repo, "rev-parse", "HEAD"), inode = statSync(lock).ino;
-    const env = { HOME: home, RUNNER_TEMP: dir, SG_CI_EVENTS: events, SG_CI_LOCK_HELPER: helper, SG_CI_LOCK_LOCATION: lock };
+    // Every wrapper run reads a brain status through SG_CI_BRAIN_URL; the shared env points
+    // at an IDLE fixture so no check depends on this Mac's live brain (a starved brain
+    // would make the wrapper yield 30 s and break the 3 s windows below). The queued case
+    // overrides it explicitly.
+    const idleBrain = join(dir, "brain-idle.json");
+    writeFileSync(idleBrain, JSON.stringify({ coordinator: { counts: { queued: 0 }, blocked_reason: null } }));
+    const env = { HOME: home, RUNNER_TEMP: dir, SG_CI_EVENTS: events, SG_CI_LOCK_HELPER: helper, SG_CI_LOCK_LOCATION: lock,
+      SG_CI_BRAIN_URL: `file://${idleBrain}` };
     const run = (body, wait = 2, work = 4, sha = base, extra = {}) => bash(`cd ${q(repo)}
 /bin/bash ${q(wrapper)} ${q(sha)} ${wait} ${work} <<'SG_CI_CHAIN'
 ${body}

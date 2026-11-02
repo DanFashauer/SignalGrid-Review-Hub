@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { useListDecisions, useListLatestSignals } from "@workspace/api-client-react";
 import { CheckCircle2, AlertTriangle, Clock, GitBranch } from "lucide-react";
 import { outcomeTone } from "@/lib/outcome-tone";
+import { LiveRegion } from "@/components/LiveRegion";
 
 const SHIFT_ZONES = ["ICU", "ZONE 3B", "ZONE 1A", "ER", "PHARMACY", "LAB", "FLOOR 4", "DOCK A"];
 const DEVICE_IDS = [
@@ -41,10 +42,18 @@ export default function HandoffPage() {
   const complete = handoffs.filter(h => h.status === "checked-in");
   const inProgress = handoffs.filter(h => h.status === "in-progress");
 
-  const { data: recentDecisions } = useListDecisions({ limit: 5 });
+  const { data: recentDecisions, isError: recentDecisionsError } = useListDecisions({ limit: 5 });
 
   return (
     <div className="p-6 space-y-6">
+      <LiveRegion
+        message={
+          recentDecisions?.decisions[0]
+            ? `Most recent decision: ${recentDecisions.decisions[0].outcome.replace("_", " ")}, record ${recentDecisions.decisions[0].id.slice(-6)} at ${new Date(recentDecisions.decisions[0].evaluatedAt).toLocaleTimeString()}.`
+            : ""
+        }
+        alert={recentDecisionsError ? "Recent custody decisions could not be loaded." : ""}
+      />
       <div className="flex items-center gap-3">
         <GitBranch className="w-5 h-5 text-primary" />
         <div>

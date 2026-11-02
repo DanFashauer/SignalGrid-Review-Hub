@@ -203,3 +203,18 @@
 .bg-signal-critical { @apply bg-red-500/10 text-red-500 border-red-500/20; }
 .text-signal-unknown { @apply text-gray-500; }
 .bg-signal-unknown { @apply bg-gray-500/10 text-gray-500 border-gray-500/20; }
+
+/* Honour the OS reduced-motion setting across CSS-driven motion (Tailwind
+   animate-* utilities, transitions, smooth scrolling) — plan row 76, the same
+   block signalgrid-web carries. scripts/check-web-a11y-basics.mjs fails a web
+   tree whose stylesheet drops it. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

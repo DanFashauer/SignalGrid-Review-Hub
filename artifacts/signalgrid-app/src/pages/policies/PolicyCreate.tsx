@@ -271,6 +271,7 @@ export function PolicyCreate() {
                         size="icon" 
                         className="mt-6 text-muted-foreground hover:text-destructive h-8 w-8"
                         onClick={() => remove(index)}
+                        aria-label={`Delete rule ${index + 1}`}
                       >
                         <Trash2 className="w-4 h-4" />
                       </Button>

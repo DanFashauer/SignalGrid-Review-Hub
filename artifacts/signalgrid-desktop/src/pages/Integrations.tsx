@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { useListIntegrations } from "@workspace/api-client-react";
+import { LiveRegion } from "@/components/LiveRegion";
 
 const STATUS_COLOR: Record<string, string> = {
   connected: "text-green-400",
@@ -26,9 +27,16 @@ export default function IntegrationsPage() {
 
   const connected = data?.integrations.filter(i => i.status === "connected").length ?? 0;
   const degraded = data?.integrations.filter(i => i.status === "degraded").length ?? 0;
+  // A poll can change one integration's status, latency or sync time while both
+  // counts stay the same: name the most recently synced one, with its state.
+  const lastSynced = data?.integrations.reduce<(typeof data.integrations)[number] | undefined>((a, b) => (b.lastSync && (!a?.lastSync || b.lastSync > a.lastSync) ? b : a), undefined);
 
   return (
     <div className="p-6 space-y-4">
+      <LiveRegion
+        message={data ? `${connected} integrations connected, ${degraded} degraded${lastSynced?.lastSync ? `; last sync: ${lastSynced.vendor} ${lastSynced.product} (${lastSynced.status}, ${lastSynced.latencyMs}ms) at ${new Date(lastSynced.lastSync).toLocaleTimeString()}` : ""}.` : ""}
+        alert={isError ? "Integrations could not be loaded." : ""}
+      />
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold tracking-tight">Integrations</h1>

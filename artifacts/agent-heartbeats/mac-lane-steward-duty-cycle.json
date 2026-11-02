@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-11-02T21:25:36.210Z",
-  "result": "21:24Z cycle: keepalive (age 2h51m since 18:33Z). Quiet: no mac/* branch moved, no mail to cloud, manifest clean, 0 work-queue claims. Mac tick heartbeat still 2026-10-24T07:30:38Z (fix rides #1698); raised hand #1763 open for the Mac-owned Obsidian-loop legs; owner already told today, no new escalation."
+  "firedAt": "2026-11-02T23:26:01.215Z",
+  "result": "23:24Z cycle (11-02): keepalive (mainline hb 18:33Z, age >2h; the 21:24Z keepalive PR #1767 conflicted with 2941d392 after #1768 and was closed superseded). Window: #1768 landed 2941d392 (Postgres check fixed); Mac mail on #1769 (vault legs 1-2 run, gateway 4B only) in CI, ack follows once it lands; owner order to switch the Mac builder to OmniRoute delivered in #1770; mac/ci-yield-probe-evidence moved 23:21Z = #1766, CI running. Tick heartbeat firedAt 2026-10-24T07:30:38Z (stale; escalation already spent, tracked on the #1698 path). Live evidence committed 2026-11-02 15:07Z (<1 day). Sim loop and manifest clean; 3 stale unread messages reported. Owner not escalated this cycle."
 }

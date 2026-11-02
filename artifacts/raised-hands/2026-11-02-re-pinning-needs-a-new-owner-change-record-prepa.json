@@ -1,0 +1,12 @@
+{
+  "id": "2026-11-02-re-pinning-needs-a-new-owner-change-record-prepa",
+  "raisedAt": "2026-11-02T01:19:46.180Z",
+  "origin": "mac",
+  "doing": "Making the local second brain hands-free under the owner's 2026-11-01 order. The host-lock starvation is fixed in ~/SignalGrid-Local-AI/signalgrid_brain.py (bounded queue wait; brain admitted 3 jobs since 22:14Z). That edit changed the file's hash, and the brain's accounting scope (an owner-change integrity record) pins the old hash, so the brain's PR-dispatch and new-build publication now stop with 'Accounting runtime changed; stop without replay'.",
+  "blockedBy": "Re-pinning needs a new owner-change record (prepare/freeze/install, as Codex did for cap-30 on 2026-10-30). The Claude Code classifier refused to let the Mac Claude session write that script (Security Weaken) - correct: it is an integrity control. Codex has had the request (brain notes afbf9b12, 458ab5a3) for 3+ hours without acting.",
+  "need": "ONE decision: (a) let Codex apply the owner-change re-pin for signalgrid_brain.py (hash 64c0627f959a; backup of the pinned bytes at backups/signalgrid_brain-before-host-queue-20261101-215821.py) - recommended; (b) grant the Mac Claude session Write/Edit permission under ~/SignalGrid-Local-AI/brain-state/repository-reconciliation-20261022/ so it runs the mirrored procedure itself (fastest); or (c) revert the brain edit (restores dispatch, host starvation returns). Until one of these, the brain finds and is admitted to work but cannot publish PRs.",
+  "whoCanUnblock": "owner",
+  "domain": "second-brain",
+  "status": "open",
+  "routedTo": null
+}

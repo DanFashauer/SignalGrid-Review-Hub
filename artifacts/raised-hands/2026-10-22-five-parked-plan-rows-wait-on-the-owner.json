@@ -1,0 +1,13 @@
+{
+  "id": "2026-10-22-five-parked-plan-rows-wait-on-the-owner",
+  "raisedAt": "2026-10-22T11:06:10.639Z",
+  "origin": "cloud",
+  "doing": "Keeping five parked rows of docs/COMPANY_BUILD_PLAN.md visible (17, 18, 22, 24, 38) while the cloud lane re-checks and re-dates their markers.",
+  "blockedBy": "Each of the five rows waits on something only the owner can give. The five hands that covered them since 2026-10-08 were cleared in PR #1582, because the objective loop stopped escalating these rows once their 2026-10-08 markers passed the 14-day window; that made the hands stale covers, and the stale-hand rule failed raised-hands --check. None of the asks has been answered. This hand carries all five with no stall cover, so it stays open until each one is answered.",
+  "need": "Owner, in any order: (1) row 17: grant a NON-PRODUCTION ITSM sandbox and shift-context source with synthetic, read-only data (name it privately, never on GitHub), or decline the lab and rule on the gap row 17 records, by a decision record or an order to repair it without the lab; (2) row 18: merge #1246 (DR-061) and pick the #1118 unsafe-allow repair shape, as the open hand 2026-09-28-1118-changes-decisionengine-swift-behaviour-clau asks; (3) row 22: make the deployment decision (which VM and backup host) and say whether any customer needs Fleet Premium; (4) row 24: read #1190 draft 4 and say publish, revise (with what) or drop; (5) row 38: name a pilot whose stack matches the row's trigger, or say the row stays parked. This replaces the 2026-10-08 hands for rows 17, 18, 22, 24 and 38.",
+  "whoCanUnblock": "owner",
+  "domain": "",
+  "status": "open",
+  "routedTo": null,
+  "where": "docs/COMPANY_BUILD_PLAN.md rows 17, 18, 22, 24 and 38"
+}

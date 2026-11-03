@@ -406,7 +406,7 @@ export const SAFETY_MACHINERY = [
 export const TEST_SOURCE_EXCLUSIONS = [
   { rule: "vendored third_party/ code (pinned upstream, not this repo's own gate surface — e.g. third_party/cli-anything/tests/test_skill_generator.py)", re: /^third_party\// },
   { rule: "k6 load drivers (tests/load/**) — CLAUDE.md and scripts/check-test-execution.mjs:46 already document these as REPORTED, invoked by nothing, deliberately outside the correctness gate", re: /^tests\/load\// },
-  { rule: "two test-shaped files inside ordinary, deliberately-autonomous skill directories (see the existing \"an unrelated skill dir stays autonomous\" self-test)", re: /^\.claude\/skills\/(?:ios-simulator-skill\/scripts\/test_recorder\.py|node\/rules\/assets\/graceful-server\.test\.ts)$/ },
+  { rule: "two test-shaped files inside ordinary, deliberately-autonomous skill directories (these skill directories are also owner-gated wholesale by the .claude/skills rule; see the \"unrelated skill dir is owner-gated too\" self-test)", re: /^\.claude\/skills\/(?:ios-simulator-skill\/scripts\/test_recorder\.py|node\/rules\/assets\/graceful-server\.test\.ts)$/ },
   // Completeness sweep on #1133 (round 2): adding `.bru$` to TEST_CONVENTION_NAME_RE
   // (below) so the tree guard sees the Bruno families gated above. This entry used to
   // also list environments/ and collection.bru here, autonomous, on the claim that

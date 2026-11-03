@@ -301,6 +301,12 @@
       "symbol": "REF_SKIP_WARNING",
       "reason": "Not an exclusion of the subject but the opposite: the regex names the two warnings `git for-each-ref` prints when it silently SKIPS a ref it cannot read, so that a listing carrying either is treated as a hard failure (an unreadable ref is an unknown, and unknown is not clean) instead of a shorter list that reads as complete.",
       "date": "2026-10-08"
+    },
+    {
+      "path": "scripts/check-owner-gated-surfaces.mjs",
+      "symbol": "TEST_SOURCE_EXCLUSIONS",
+      "reason": "The repo-wide test-source guard's own record of what it deliberately leaves out: vendored third_party/, the k6 load drivers (tests/load/**, REPORTED not gated) and two test-shaped skill files; each rule carries its per-site reason. None hides in-scope gate content: the .claude/skills files are also owner-gated by the instruction-surface rule, so the exclusion cannot make an ungated gate input look covered.",
+      "date": "2026-11-03"
     }
   ]
 }

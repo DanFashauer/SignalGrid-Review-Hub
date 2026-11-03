@@ -295,13 +295,22 @@ export async function verifyLedger(limit = 10000): Promise<LedgerVerification> {
 // Pages through the backend in `batchSize` reads, carrying the linking hash
 // across batch boundaries, so a ledger of any length is verified end to end
 // without ever holding more than one batch in memory. This is the verifier the
-// restore procedure and the `db:verify-ledger` CLI use; `truncated` is always
-// false here by construction — this function does not stop until the backend
-// runs out of records.
-export async function verifyLedgerFull(options?: { batchSize?: number }): Promise<LedgerVerification> {
+// restore procedure and the `db:verify-ledger` CLI use. An INTACT result
+// (`ok: true`) read every record to the end of the ledger. A BROKEN result
+// (`ok: false`) stops at the first broken batch: its `count`/`headHash` run to
+// the end of that batch, and the rows after it were not read. `truncated` is
+// false either way — it reports a read cap, and this walk has none.
+//
+// Pages by keyset (`getRecordsAfter`) when the backend offers it, so the walk
+// stays linear in ledger length; OFFSET otherwise. `signal` aborts the walk
+// between batches (it rejects with the signal's reason) — never a partial
+// all-clear.
+export async function verifyLedgerFull(options?: { batchSize?: number; signal?: AbortSignal }): Promise<LedgerVerification> {
   const batchSize = Math.max(1, Math.floor(options?.batchSize ?? 1000));
+  const backend = getAuditBackend();
 
   let offset = 0;
+  let cursor = "";
   let prevHash = "";
   let count = 0;
   let batches = 0;
@@ -309,7 +318,15 @@ export async function verifyLedgerFull(options?: { batchSize?: number }): Promis
   let lastTs = "";
 
   for (;;) {
-    const records = await getAuditRecords(batchSize, offset);
+    options?.signal?.throwIfAborted();
+    let records: AuditRecord[];
+    if (backend.getRecordsAfter) {
+      const page = await backend.getRecordsAfter(cursor, batchSize);
+      records = page.records;
+      cursor = page.cursor;
+    } else {
+      records = await backend.getRecords(batchSize, offset);
+    }
     if (records.length === 0) break;
     batches += 1;
 

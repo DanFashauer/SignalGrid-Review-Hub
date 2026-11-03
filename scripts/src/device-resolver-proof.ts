@@ -17,6 +17,9 @@
 // narrowing "is NOT enforced at the one call site that matters". A type that nothing
 // tests is a comment with syntax highlighting.
 
+import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { adapterTypes as _adapterTypes, deviceResolver } from "@workspace/integrations";
 import type { NACAdapter, NACEndpointInfo, UEMAdapter } from "@workspace/integrations/adapters/types";
 
@@ -151,6 +154,34 @@ await (async () => {
   check("...and an unmatched identifier returns null WITHOUT reporting a fault — absence is not an error",
     (await working.resolve("aa:bb:cc:dd:ee:99")) === null && faults.length === 0);
 })();
+
+// ── the class docstring names only sources the code can return (plan row 130) ──
+//
+// The docstring listed FOUR aggregation sources; the fourth, FleetDM, had no code
+// path and `DeviceIdentity.source` could not represent it. Prose asserting a source
+// the code does not have. Held by counting: the numbered sources in the docstring
+// must be exactly the members of the `source` union, no more.
+{
+  const src = readFileSync(
+    resolve(dirname(fileURLToPath(import.meta.url)), "../../lib/integrations/src/integrations/deviceResolver.ts"),
+    "utf8",
+  );
+  const doc = src.match(/\/\*\*((?:(?!\*\/)[\s\S])*)\*\/\s*export class DeviceIdentityResolver/);
+  const listed = doc ? [...doc[1].matchAll(/^[ \t]*\*[ \t]*\d+\.[ \t]+(.+)$/gm)].map((m) => m[1]) : [];
+  // One line, no nested quantifier (a `(…\s*\|?\s*)+` group backtracks exponentially);
+  // the members are pulled out of the captured line separately.
+  const union = src.match(/^[ \t]*source:[ \t]*('[^;\n]*);/m);
+  const members = union ? [...union[1].matchAll(/'([a-z]+)'/g)].map((m) => m[1]) : [];
+  check("the resolver docstring and the source union were both located (assertion is not vacuous)",
+    listed.length > 0 && members.length > 0);
+  check(`the docstring lists exactly as many sources as DeviceIdentity.source can hold (${listed.length} vs ${members.length})`,
+    listed.length === members.length);
+  // Counts alone would pass a docstring that swapped one real source for a fictional
+  // one. Each union member must be NAMED by exactly one listed source.
+  const unnamed = members.filter((m) => listed.filter((l) => l.toLowerCase().includes(m)).length !== 1);
+  check(`every DeviceIdentity.source member is named by exactly one docstring source (unnamed: ${unnamed.join(",") || "none"})`,
+    members.length > 0 && unnamed.length === 0);
+}
 
 console.log(`\nsummary=${failures.length === 0 ? "pass" : "fail"} (${passed}/${passed + failures.length})`);
 if (failures.length) {

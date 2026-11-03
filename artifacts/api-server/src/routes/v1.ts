@@ -11,7 +11,7 @@ import {
   type StandingBound,
 } from "@workspace/signalgrid-core";
 import { getDecisionStore, getSessionStore, type Session } from "@workspace/persistence";
-import { appendAuditRecord, getAuditBackend, getAuditRecordsForTenant, verifyLedger, type Target as AuditTarget } from "@workspace/audit";
+import { appendAuditRecord, getAuditBackend, getAuditRecordsForTenant, verifyLedgerFull, type LedgerVerification, type Target as AuditTarget } from "@workspace/audit";
 import { listAppIntegrations, findAppIntegration, planAppSession } from "@workspace/app-workflows";
 import { webauthn, webauthnStore } from "@workspace/webauthn";
 import { readSecret, secretMatches } from "@workspace/secrets";
@@ -441,16 +441,59 @@ router.post("/v1/connectors/:id/sync", async (req: Request, res: Response, next:
   }
 });
 
+// ONE whole-chain walk at a time for GET /v1/audit. Requests that arrive while a
+// walk is in flight share its verdict instead of starting their own, so N
+// concurrent callers cost one walk, not N (each walk holds a pool connection and
+// hashes every row on the decision-serving process). Nothing is cached: once a
+// walk settles the next request starts a fresh one. When every waiting client has
+// disconnected the walk is aborted between batches — work nobody will read is
+// not finished. A failed or aborted walk REJECTS (→ 500), never an all-clear.
+let ledgerWalk: { promise: Promise<LedgerVerification>; controller: AbortController; waiters: number } | null = null;
+
+function sharedLedgerWalk(res: Response): Promise<LedgerVerification> {
+  // A client that left before the handler got here (during auth or the tenant read) will never fire
+  // 'close' again, so it would join as a waiter nothing can remove and keep the walk alive for nobody.
+  // Refuse instead: no walk is started or joined for a response that is already gone.
+  if (res.destroyed || res.closed) return Promise.reject(new Error("audit: client disconnected before the ledger walk"));
+  if (!ledgerWalk) {
+    const controller = new AbortController();
+    const walk = {
+      controller,
+      waiters: 0,
+      promise: verifyLedgerFull({ signal: controller.signal }).finally(() => {
+        if (ledgerWalk === walk) ledgerWalk = null;
+      }),
+    };
+    ledgerWalk = walk;
+  }
+  const walk = ledgerWalk;
+  walk.waiters += 1;
+  res.once("close", () => {
+    walk.waiters -= 1;
+    if (walk.waiters === 0 && !res.writableFinished) {
+      // Detach first, so a request arriving now starts a fresh walk instead of
+      // joining one that is about to reject.
+      if (ledgerWalk === walk) ledgerWalk = null;
+      walk.controller.abort();
+    }
+  });
+  return walk.promise;
+}
+
 router.get("/v1/audit", async (req: Request, res: Response, next: NextFunction) => {
   try {
-    // Durable (Postgres, the /readyz predicate): the tenant's rows + the whole chain's verdict — DR-025 / listAudit in v1-openapi.yaml.
+    // Durable (Postgres, the /readyz predicate): the tenant's rows + the WHOLE chain's verdict — DR-025 item 3 / listAudit in
+    // v1-openapi.yaml. verifyLedgerFull pages the entire ledger in bounded memory (one batch held at a time, keyset on seq),
+    // the same verifier `db:verify-ledger` runs; the capped verifyLedger() stopped at 10,000 rows, so past that a tampered
+    // row went unchecked. ok:true read every row; ok:false stopped at the first broken batch. chain.truncated is false
+    // either way: there is no read cap on this path.
     if (typeof getAuditBackend().ping === "function") {
       const tenantId = core.authorizedContext(token(req), "audit:read").tenant.id;
       // parseInt, as clampLimit does: "1.5" must never reach a bigint bind parameter
       const limit = Math.min(Math.max(Number.parseInt(String(req.query["limit"] ?? 200), 10) || 200, 1), 1000);
       const offset = Math.max(Number.parseInt(String(req.query["offset"] ?? 0), 10) || 0, 0);
       const events = await getAuditRecordsForTenant(tenantId, limit, offset);
-      const chain = { ...(await verifyLedger()), scope: "global-ledger" as const };
+      const chain = { ...(await sharedLedgerWalk(res)), scope: "global-ledger" as const };
       res.json(envelope(req, { events, chain, source: "durable" as const, limit, offset }));
       return;
     }

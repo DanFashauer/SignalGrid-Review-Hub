@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-11-03T03:25:04.794Z",
-  "result": "03:24Z cycle (11-03): keepalive (mainline hb 00:25Z, age >2h). Quiet window on c0f8a3fe: no mac/* branch moved since 00:18Z (#1766, merged f37edf07), no mail to cloud, no new sim result, manifest clean. Landed since: #1770 (owner OmniRoute order), #1772, #1773 (ack of the Mac's vault/gateway mail). Tick heartbeat firedAt 2026-10-24T07:30:38Z (stale; escalation already spent, tracked on the #1698 path). Live evidence committed 2026-11-02 15:07Z. Owner not escalated."
+  "firedAt": "2026-11-03T05:25:37.763Z",
+  "result": "05:24Z cycle (11-03): keepalive (mainline hb 03:25Z, age 2h). Quiet on 59921fb6: no mac/* branch moved since 00:18Z, no mail to cloud, no new sim result. #1745 (Mac acks) refreshed by the Mac's estate queue, its own auto-merge. Still awaiting the Mac's report on the OmniRoute model and the resumed Codex session (#1770). Tick heartbeat firedAt 2026-10-24T07:30:38Z (stale; tracked on the #1698 path). Live evidence committed 2026-11-02 15:07Z. Owner not escalated."
 }

@@ -132,7 +132,7 @@ if (process.argv.includes("--self-test")) {
     ["a retired framing on a current-truth surface is DETECTED",
       RETIRED.some((r) => r.re.test("SignalGrid is a trust fabric for frontline devices."))],
     ["the CANONICAL framing is not flagged — a rule that catches everything is not a rule",
-      !RETIRED.some((r) => r.re.test("SignalGrid connects the systems a building runs into one grid that decides and acts on a person's behalf."))],
+      !RETIRED.some((r) => r.re.test("SignalGrid connects the systems a company runs, legacy systems included, into one grid that decides and acts on a person's behalf."))],
     ["ordinary prose about a door, a device and a room is not flagged",
       !RETIRED.some((r) => r.re.test("The worker walks through the door, the device unlocks, the room is ready."))],
     ["every retired pattern has a stated reason", RETIRED.every((r) => typeof r.why === "string" && r.why.trim() !== "")],

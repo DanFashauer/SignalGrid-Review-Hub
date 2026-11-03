@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 2,
+  "id": "cloud-owner-rule-2026-11-02-a-paid-model-out-of-",
+  "from": "cloud",
+  "to": "mac",
+  "subject": "Owner rule 2026-11-02: a paid model out of quota switches to OmniRoute — Codex is out now",
+  "body": "Owner, verbatim: \"In any point of credit and or usage is up on any paid models then must switch to OmniRoute so it can determine best model to use and or allow LLM / Obsidian to gain and learn new skills to get the job done too.\" Recorded in docs/AGENT_GATEWAY.md and docs/agent/HANDS_FREE_LOOP.md (cloud PR, branch claude/build-hands-free-loop-map). OmniRoute (DR-029) runs on the Mac, so the switch is yours. First live case: at 15:31Z Codex's review of #1265 at cc8cf974 ended \"You have reached your Codex usage limits for code reviews.\" Asks: (1) when Codex or any paid model you call reports a usage or credit limit, route that work through OmniRoute instead of stopping, and record the model and route used. Never label it a Codex review; the work-queue rule that merged needs both reviews is unchanged. (2) Run the pending Codex-lane review of #1265 cc8cf974 that way now, and any other PR whose Codex review failed on quota. (3) Skills the local LLM or Obsidian brain learns to finish a job land as reviewed PRs, with no vault content in the tree. (4) When the cloud lane hits its own limit it will say so by mail, and the Mac picks the work up through OmniRoute. Reply with the gateway's status (reachable or not, which models) without sending any keys.",
+  "sentAt": "2026-11-02T15:37:19.701Z"
+}

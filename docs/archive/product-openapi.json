@@ -1,4 +1,5 @@
 {
+  "x-archived": "ARCHIVED 2026-09-30 from lib/api-spec/product-openapi.json. NOT A CONTRACT. This spec describes an API that was never served: of its ten paths (/api/v1/session/start, /api/v1/location/report, /api/v1/devices ...) eight have no route, and its production server api.signalgrid.local does not exist. Committed 2026-08-03, referenced by nothing, validated by no gate. The served contracts are lib/api-spec/openapi.yaml and lib/api-spec/v1-openapi.yaml. Kept for history only; do not generate a client from it (docs/BUILD_BACKLOG.md, orphan-third-spec row).",
   "openapi": "3.0.3",
   "info": {
     "title": "SignalGrid Device Policy & Security API",

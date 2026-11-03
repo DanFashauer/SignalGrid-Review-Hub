@@ -22,6 +22,7 @@ import { fileURLToPath } from "node:url";
 import { resolveEmission, EMIT_SUPPRESSED, NO_CREDENTIAL } from "@workspace/integrations/emit-gate";
 import {
   createITSMAdapter,
+  ITSMAdapterManager,
   ZendeskAdapter,
   JiraAdapter,
   ServiceNowAdapter,
@@ -1326,6 +1327,71 @@ check(
     "every declared builder names a closed set and every open slot states why",
     OUTBOUND_BUILDERS.every((b) => b.closed.length > 0 && b.open.every((o) => o.why.trim().length > 20)),
   );
+}
+
+// ── PLAN ROW 128: a health check the gate withheld says WHY, not just "unhealthy" ──
+//
+// Every ITSM adapter's healthCheck() consults the emit gate first and, suppressed,
+// returned `false` without touching the network — which the aggregate recorded as
+// 'unhealthy'. At dev tier that was eight "outages" for calls never made, while an
+// adapter exposing no healthCheck was correctly 'unchecked'. Same ignorance, two
+// answers. But the fix must not over-correct: at beta/prod with live integrations ON,
+// a MISSING CREDENTIAL is a broken integration (every createTicket is suppressed
+// too), and reading it as merely 'unchecked' would make that prod state look exactly
+// like a quiet dev box. So the two causes are pinned separately, on the REAL classes
+// with empty credentials, with a fetch spy that must never fire in either.
+{
+  const realFetch = globalThis.fetch;
+  const savedTier = process.env.SIGNALGRID_TIER;
+  const savedLive = process.env.SIGNALGRID_LIVE_INTEGRATIONS;
+  let reached = 0;
+  globalThis.fetch = ((): never => { reached += 1; throw new Error("FETCH ATTEMPTED"); }) as unknown as typeof globalThis.fetch;
+  const sweep = async () => {
+    const mgr = new ITSMAdapterManager();
+    mgr.registerAdapter("zendesk", new ZendeskAdapter({ instanceUrl: "https://acme.zendesk.com", email: "agent@acme.test", apiToken: "" }));
+    mgr.registerAdapter("jira", new JiraAdapter({ baseUrl: "https://acme.atlassian.net", email: "agent@acme.test", apiToken: "", serviceDeskId: "1" }));
+    mgr.registerAdapter("servicenow", new ServiceNowAdapter({ instanceUrl: "https://acme.service-now.com", auth: { type: "api_token", apiToken: "" } }));
+    mgr.registerAdapter("freshservice", new FreshserviceAdapter({ instanceUrl: "https://acme.freshservice.com", apiKey: "" }));
+    mgr.registerAdapter("bmc-helix", new BMCHelixAdapter({ instanceUrl: "https://acme.bmc.test", auth: { type: "api_token", apiToken: "" } }));
+    mgr.registerAdapter("ivanti", new IvantiAdapter({ instanceUrl: "https://acme.ivanti.test", clientId: "cid", clientSecret: "" }));
+    mgr.registerAdapter("manageengine", new ManageEngineAdapter({ instanceUrl: "https://acme.me.test", technicianKey: "" }));
+    mgr.registerAdapter("generic_webhook", new GenericWebhookAdapter({ url: "https://hooks.example.test/x", method: "POST", headers: {}, bodyTemplate: '{"t":"{{title}}"}', signingSecret: "" }));
+    return mgr.healthCheck();
+  };
+  const off = (h: Record<string, string>, want: string) => Object.keys(h).filter((v) => h[v] !== want);
+  try {
+    // (a) dev tier — the deployment chose not to emit: UNCHECKED.
+    process.env.SIGNALGRID_TIER = "dev";
+    delete process.env.SIGNALGRID_LIVE_INTEGRATIONS;
+    const dev = await sweep();
+    check(`itsm aggregate: at dev tier all eight suppressed adapters report 'unchecked', not 'unhealthy' (${Object.keys(dev).length} swept, wrong: ${off(dev, "unchecked").join(",") || "none"})`,
+      Object.keys(dev).length === 8 && off(dev, "unchecked").length === 0);
+    // (b) beta with the flag OFF — still a policy choice: UNCHECKED.
+    process.env.SIGNALGRID_TIER = "beta";
+    process.env.SIGNALGRID_LIVE_INTEGRATIONS = "false";
+    const flagOff = await sweep();
+    check(`itsm aggregate: at beta with live integrations OFF all eight report 'unchecked' (wrong: ${off(flagOff, "unchecked").join(",") || "none"})`,
+      Object.keys(flagOff).length === 8 && off(flagOff, "unchecked").length === 0);
+    // (c) prod with the flag ON and the credential MISSING — a misconfiguration: UNHEALTHY.
+    process.env.SIGNALGRID_TIER = "prod";
+    process.env.SIGNALGRID_LIVE_INTEGRATIONS = "true";
+    const broken = await sweep();
+    check(`itsm aggregate: at prod + live ON a MISSING credential reports 'unhealthy', never 'unchecked' (wrong: ${off(broken, "unhealthy").join(",") || "none"})`,
+      Object.keys(broken).length === 8 && off(broken, "unhealthy").length === 0);
+    check(`itsm aggregate: ...and none of those three sweeps reached the network (fetch fired ${reached}x)`, reached === 0);
+
+    const made = new ITSMAdapterManager();
+    const stub = (answer: boolean) => ({ vendor: "stub", createTicket: async () => { throw new Error("unused"); }, healthCheck: async () => answer });
+    made.registerAdapter("zendesk", stub(true) as never);
+    made.registerAdapter("jira", stub(false) as never);
+    const madeHealth = await made.healthCheck();
+    check("itsm aggregate: a check that WAS made still maps true -> healthy and false -> unhealthy",
+      madeHealth.zendesk === "healthy" && madeHealth.jira === "unhealthy");
+  } finally {
+    globalThis.fetch = realFetch;
+    if (savedTier === undefined) delete process.env.SIGNALGRID_TIER; else process.env.SIGNALGRID_TIER = savedTier;
+    if (savedLive === undefined) delete process.env.SIGNALGRID_LIVE_INTEGRATIONS; else process.env.SIGNALGRID_LIVE_INTEGRATIONS = savedLive;
+  }
 }
 
 const total = passed + failures.length;

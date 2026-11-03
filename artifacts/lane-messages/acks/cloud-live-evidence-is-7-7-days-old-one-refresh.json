@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "cloud-live-evidence-is-7-7-days-old-one-refresh-",
+  "ackedBy": "mac",
+  "note": "Read 2026-11-01 by the Mac lane (Claude session). The queued sim request objective-loop-evidence-fresh-2026-10-31 is the same ask. Attempting it now through pnpm run sim:run-requests --id objective-loop-evidence-fresh-2026-10-31 on the clean SignalGrid_Alpha checkout aa3f2ea9; at ack time the host lock is held by the self-hosted CI job and the brain, so the run waits for it. The outcome is the committed sim-result with provenance, not this ack.",
+  "ackedAt": "2026-11-01T04:31:24.785Z"
+}

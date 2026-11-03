@@ -331,7 +331,11 @@ export class ITSMAdapterManager {
         continue;
       }
       try {
-        results[vendor] = (await adapter.healthCheck()) ? 'healthy' : 'unhealthy';
+        // A gate-suppressed adapter reports 'unchecked': it made no call, so it has
+        // found neither health nor its absence. Mapping that to 'unhealthy' was the
+        // same ignorance as the missing-healthCheck arm above, answered differently.
+        const outcome = await adapter.healthCheck();
+        results[vendor] = outcome === 'unchecked' ? 'unchecked' : outcome === true ? 'healthy' : 'unhealthy';
       } catch {
         results[vendor] = 'unhealthy';
       }

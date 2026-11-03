@@ -308,7 +308,11 @@ target — the same reasoning behind that bench's own 6,000x floor headroom.
    merges a change to the launch profile / launch-claims gate / publication boundary,
    and never deletes a branch. The Mac lane's landing PRs are merged by the cloud
    only when the Mac asked for it in mail (as #653 did). The first landings under
-   this rule: #656, #657, #653, #649, #654 on 2026-09-12.
+   this rule: #656, #657, #653, #649, #654 on 2026-09-12. DR-061 (owner-directed
+   2026-09-29) extends lane merges to DECISION_PATH PRs under two added conditions —
+   an adversarial Opus review by an agent that did not author the change, and an
+   executed counterexample quoted in the body; its rule 2 paths stay the owner's
+   merge. The landing skill carries the full text.
 8. **Evidence age is read from `mintedAt` inside the artifact, never from the file's git date (2026-10-15).** The re-mint of
    `artifacts/live-evidence/mac-run.json` landed via tick PR #1522 with `mintedAt` 2026-10-15T16:33:53.511Z, read with
    `node -e 'console.log(JSON.parse(require("fs").readFileSync("artifacts/live-evidence/mac-run.json","utf8")).mintedAt)'`.

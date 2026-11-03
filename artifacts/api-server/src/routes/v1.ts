@@ -11,7 +11,7 @@ import {
   type StandingBound,
 } from "@workspace/signalgrid-core";
 import { getDecisionStore, getSessionStore, type Session } from "@workspace/persistence";
-import { appendAuditRecord, getAuditBackend, getAuditRecordsForTenant, verifyLedger, type Target as AuditTarget } from "@workspace/audit";
+import { appendAuditRecord, getAuditBackend, getAuditRecordsForTenant, verifyLedgerFull, type LedgerVerification, type Target as AuditTarget } from "@workspace/audit";
 import { listAppIntegrations, findAppIntegration, planAppSession } from "@workspace/app-workflows";
 import { webauthn, webauthnStore } from "@workspace/webauthn";
 import { readSecret, secretMatches } from "@workspace/secrets";
@@ -441,16 +441,59 @@ router.post("/v1/connectors/:id/sync", async (req: Request, res: Response, next:
   }
 });
 
+// ONE whole-chain walk at a time for GET /v1/audit. Requests that arrive while a
+// walk is in flight share its verdict instead of starting their own, so N
+// concurrent callers cost one walk, not N (each walk holds a pool connection and
+// hashes every row on the decision-serving process). Nothing is cached: once a
+// walk settles the next request starts a fresh one. When every waiting client has
+// disconnected the walk is aborted between batches — work nobody will read is
+// not finished. A failed or aborted walk REJECTS (→ 500), never an all-clear.
+let ledgerWalk: { promise: Promise<LedgerVerification>; controller: AbortController; waiters: number } | null = null;
+
+function sharedLedgerWalk(res: Response): Promise<LedgerVerification> {
+  // A client that left before the handler got here (during auth or the tenant read) will never fire
+  // 'close' again, so it would join as a waiter nothing can remove and keep the walk alive for nobody.
+  // Refuse instead: no walk is started or joined for a response that is already gone.
+  if (res.destroyed || res.closed) return Promise.reject(new Error("audit: client disconnected before the ledger walk"));
+  if (!ledgerWalk) {
+    const controller = new AbortController();
+    const walk = {
+      controller,
+      waiters: 0,
+      promise: verifyLedgerFull({ signal: controller.signal }).finally(() => {
+        if (ledgerWalk === walk) ledgerWalk = null;
+      }),
+    };
+    ledgerWalk = walk;
+  }
+  const walk = ledgerWalk;
+  walk.waiters += 1;
+  res.once("close", () => {
+    walk.waiters -= 1;
+    if (walk.waiters === 0 && !res.writableFinished) {
+      // Detach first, so a request arriving now starts a fresh walk instead of
+      // joining one that is about to reject.
+      if (ledgerWalk === walk) ledgerWalk = null;
+      walk.controller.abort();
+    }
+  });
+  return walk.promise;
+}
+
 router.get("/v1/audit", async (req: Request, res: Response, next: NextFunction) => {
   try {
-    // Durable (Postgres, the /readyz predicate): the tenant's rows + the whole chain's verdict — DR-025 / listAudit in v1-openapi.yaml.
+    // Durable (Postgres, the /readyz predicate): the tenant's rows + the WHOLE chain's verdict — DR-025 item 3 / listAudit in
+    // v1-openapi.yaml. verifyLedgerFull pages the entire ledger in bounded memory (one batch held at a time, keyset on seq),
+    // the same verifier `db:verify-ledger` runs; the capped verifyLedger() stopped at 10,000 rows, so past that a tampered
+    // row went unchecked. ok:true read every row; ok:false stopped at the first broken batch. chain.truncated is false
+    // either way: there is no read cap on this path.
     if (typeof getAuditBackend().ping === "function") {
       const tenantId = core.authorizedContext(token(req), "audit:read").tenant.id;
       // parseInt, as clampLimit does: "1.5" must never reach a bigint bind parameter
       const limit = Math.min(Math.max(Number.parseInt(String(req.query["limit"] ?? 200), 10) || 200, 1), 1000);
       const offset = Math.max(Number.parseInt(String(req.query["offset"] ?? 0), 10) || 0, 0);
       const events = await getAuditRecordsForTenant(tenantId, limit, offset);
-      const chain = { ...(await verifyLedger()), scope: "global-ledger" as const };
+      const chain = { ...(await sharedLedgerWalk(res)), scope: "global-ledger" as const };
       res.json(envelope(req, { events, chain, source: "durable" as const, limit, offset }));
       return;
     }
@@ -793,6 +836,13 @@ router.post("/v1/step-up/challenge", async (req: Request, res: Response, next: N
 //    plan with the step-up satisfied.
 router.post("/v1/app-workflows/complete-step-up", async (req: Request, res: Response, next: NextFunction) => {
   try {
+    // Authorize BEFORE anything is read from or done to the challenge store — the same
+    // `decision:evaluate` its mint sibling (/v1/step-up/challenge) runs first. This
+    // route used to verify the assertion and only then reach core.evaluate's check, so
+    // a same-tenant auditor holding a validly-signed assertion consumed the holder's
+    // single-use challenge, advanced the counter and left a step-up success row before
+    // being refused. A refusal is audited as a failure; WebAuthn is never reached.
+    await authorizeStepUpCompletion(req, core.context(token(req)).principal, undefined);
     const body = (req.body ?? {}) as Record<string, unknown>;
     const integrationId = requireString(body, "integrationId");
     const identityRef = requireString(body, "identityRef");
@@ -1045,12 +1095,17 @@ router.post("/v1/decisions/:id/step-up/challenge", async (req: Request, res: Res
 
 router.post("/v1/decisions/:id/step-up", async (req: Request, res: Response, next: NextFunction) => {
   try {
+    // Authorize FIRST, mirroring the mint sibling (/v1/decisions/:id/step-up/challenge):
+    // `decision:evaluate`, before the decision lookup, the challenge store or WebAuthn.
+    // decision:read (an auditor) is enough to READ the decision but must never be enough
+    // to spend the holder's challenge — see authorizeStepUpCompletion.
     const decisionId = param(req, "id");
+    const ctx = core.context(token(req));
+    await authorizeStepUpCompletion(req, ctx.principal, { type: "decision", id: decisionId });
     const body = (req.body ?? {}) as Record<string, unknown>;
     const challengeId = requireString(body, "challengeId");
     const assertion = requireObject(body, "assertion", "WebAuthn authentication");
-    const ctx = core.context(token(req));
-    // 404 before anything else: a decision this tenant does not hold gets the same
+    // 404 before any challenge work: a decision this tenant does not hold gets the same
     // answer a nonexistent id gets.
     const decision = core.getDecision(token(req), decisionId);
 
@@ -1100,6 +1155,29 @@ router.post("/v1/decisions/:id/step-up", async (req: Request, res: Response, nex
 
 export default router;
 
+/** The authorization a step-up COMPLETION runs before it touches WebAuthn: exactly the
+ *  `decision:evaluate` its mint sibling runs, no new permission. A refusal is appended to
+ *  the ledger as `security.webauthn.step_up.failure` (reason `not_authorized`) — the
+ *  attempt happened and was refused, and the ledger must say refused, never success —
+ *  and then rethrown unchanged, so the caller gets the same 403 `authorize` gives
+ *  everywhere else. */
+async function authorizeStepUpCompletion(
+  req: Request,
+  principal: Parameters<typeof authorize>[0],
+  target: AuditTarget | undefined,
+): Promise<void> {
+  try {
+    authorize(principal, "decision:evaluate");
+  } catch (err) {
+    await audit(req, "security.webauthn.step_up.failure", principal.subjectId, target, {
+      reason: "not_authorized",
+      permission: "decision:evaluate",
+      route: req.route?.path,
+    });
+    throw err;
+  }
+}
+
 /** Append a route-level audit event through the real redacting ledger path and
  *  witness it at /metrics. AWAITED, not fire-and-forget: an admin action whose
  *  audit record silently failed to persist is the unearned affirmative with a
@@ -1108,7 +1186,7 @@ async function audit(
   req: Request,
   eventType: Parameters<typeof appendAuditRecord>[0],
   subjectId: string | undefined,
-  target: AuditTarget,
+  target: AuditTarget | undefined,
   meta?: Record<string, unknown>,
 ): Promise<void> {
   await appendAuditRecord(eventType, { type: "user", id: subjectId }, {

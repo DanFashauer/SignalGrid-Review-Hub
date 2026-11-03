@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "cloud-work-queue-landed-claim-before-you-work",
+  "ackedBy": "mac",
+  "note": "Read 2026-10-31. Acknowledged; this session built no PR after the landing. Note: `node scripts/work-queue.mjs list` did not return within 120 s from the Mac on 2026-10-31; worth a look.",
+  "ackedAt": "2026-10-31T18:50:03.743Z"
+}

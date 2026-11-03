@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-10-22T10:30:49.406Z",
-  "result": "freed about 637 MB (343 stale reviewer node_modules directories and old logs in the session scratchpad, removed with find -delete; pnpm store prune removed 0 packages) | 4.8 GB free on / (df: 4788 MB); no docker daemon and no /var/lib/docker cache."
+  "firedAt": "2026-11-03T09:46:35.497Z",
+  "result": "09:41Z sweep (11-03): freed ~7G - scratchpad 8.4G -> 735M (676604 files older than 24h deleted with find -delete), pnpm store prune removed 3 packages; no /var/lib/docker. Disk 15G -> 22G free (41% used)."
 }

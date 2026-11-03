@@ -73,7 +73,8 @@ Then measure rather than assume: `git ls-files | grep …`, not "the doc says."
 5. **Read-only and fixture-backed first.** New connectors start read-only unless
    the task explicitly says otherwise and supplies a safe private context.
 6. **Approval gates are explicit.** A default path must never bypass one.
-7. **Don't merge your own PR.** Merge decisions belong to the owner. Ask before
+7. **Don't merge your own PR.** Merge decisions belong to the owner, except where
+   DR-037 or DR-061 hand one to a lane (see the checklist below). Ask before
    destructive git, before sending data anywhere external, and before pushing.
 
 ---
@@ -202,7 +203,7 @@ announce in the commit message, not only in chat.
   main way this repo breaks.
 - **Record what you did NOT verify.** Coverage gaps are findings. An honest
   "not checked: iOS build, no Xcode here" is worth more than silence.
-- **Prefer deleting to adding.** With ~1,800 files, 144 `proof:*` scripts (2026-09-06; `node scripts/check-status-figures.mjs` prints the live count) and four native
+- **Prefer deleting to adding.** With thousands of tracked files (`git ls-files | wc -l` counts them; never type the number here), well over a hundred `proof:*` scripts (`node scripts/check-status-figures.mjs` prints the live count) and four native
   surfaces maintained by one non-engineer, added surface area is a cost. The
   question is rarely "can this be built" — it is "should this exist."
 
@@ -218,4 +219,6 @@ announce in the commit message, not only in chat.
 - [ ] Docs cite only paths that exist; no figure quoted that will age
 - [ ] PR body: summary, what changed, validation performed, public-safety note,
       remaining risks, and what you could not verify
-- [ ] Owner merges, not you
+- [ ] Owner merges, not you — unless every DR-037 or DR-061
+      (DECISION_PATH) condition holds on the current head; DR-061 rule 2's paths
+      are always the owner's

@@ -7,7 +7,7 @@
   "need": "On the Mac, in a session: pnpm run lane:inbox and ack the five messages with what was done; then a live-evidence refresh (SIGNALGRID_MCP_PATH=... pnpm run verify:all --require-mcp --emit-evidence; the current evidence was minted 2026-10-02T16:07Z and committed to SignalGrid_Alpha at 16:08Z the same day, e78a7ae1). Clear this hand in the same delivery as the five acks: its stale-cover grace runs 24h from raisedAt (mail's soft limit, to 2026-10-16T10:52Z), so after that instant an ack without the clear in the same batch leaves the hand covering a stall that is no longer measured, which is FATAL in local raised-hands --check.",
   "whoCanUnblock": "mac lane",
   "domain": "",
-  "status": "open",
+  "status": "resolved",
   "routedTo": null,
   "covers": [
     "mail:cloud-cloud-back-after-a-5-5-day-gap-live-eviden",
@@ -15,5 +15,8 @@
     "mail:cloud-row-17b-waits-on-you-re-merge-mainline-int",
     "mail:cloud-shared-surface-changed-scripts-mac-statusl",
     "mail:cloud-tick-prs-after-the-1480-landing-1471-merge"
-  ]
+  ],
+  "resolvedAt": "2026-10-31T20:06:00.496Z",
+  "resolvedBy": "cloud",
+  "resolution": "The Mac lane read and acknowledged all 19 outstanding cloud-to-mac messages in one batch (#1709, mainline 5295c762, 2026-10-31 19:07Z); the unread-mail stalls this hand covered are no longer measured."
 }

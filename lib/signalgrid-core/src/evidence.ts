@@ -1,5 +1,5 @@
 import { CORE_NORMALIZATION_VERSION } from "./core-normalization-version";
-import { canonicalJson, deterministicId, digest } from "./util";
+import { DIGEST_ALG, canonicalJson, classifyFreshness, deterministicId, digest, FRESH_WINDOW_HOURS, STALE_WINDOW_HOURS } from "./util";
 import { OWNER_TYPES, RISK_TIERS } from "./types";
 import type {
   BadgeBindingState,
@@ -35,6 +35,12 @@ export function buildEvidence(
   device: Device,
   workflow: Workflow,
   signals: NormalizedSignal[],
+  // The decision instant (DR-059). When given, posture freshness is re-derived
+  // from each reading's observedAt against it and folded worst-wins with the
+  // value the sync stamped — so a posture read fresh at sync and never refreshed
+  // ages into stale and expired instead of staying fresh forever. Absent (older
+  // callers, proofs of the stamped path) the stamped value stands, as before.
+  nowIso?: string,
 ): DecisionEvidence {
   // Group the signals into the single latest-per-category entry in one pass,
   // instead of filtering+sorting the whole array once per category (this was 9
@@ -48,7 +54,7 @@ export function buildEvidence(
   const managed = readBoolean(latestByCategory, "device_management");
   const encrypted = readBoolean(latestByCategory, "device_encryption");
   const osSupported = readBoolean(latestByCategory, "os_support");
-  const postureFreshness = readFreshness(latestByCategory);
+  const postureFreshness = readFreshness(latestByCategory, nowIso);
 
   // Two sources can speak to whether the account is enabled: the resolved
   // identity row, and an `identity_state` signal from the identity connector.
@@ -185,7 +191,7 @@ type SnapshotDigestFields = Pick<
   | "policyVersionId"
   | "policyVersion"
   | "sourceReferences"
-> & Pick<EvidenceSnapshot, "coreNormalizationVersion">;
+> & Pick<EvidenceSnapshot, "coreNormalizationVersion" | "digestAlg">;
 
 function snapshotDigestBody(fields: SnapshotDigestFields): string {
   return canonicalJson({
@@ -206,7 +212,19 @@ function snapshotDigestBody(fields: SnapshotDigestFields): string {
     ...(fields.coreNormalizationVersion === undefined
       ? {}
       : { coreNormalizationVersion: fields.coreNormalizationVersion }),
+    // Same conditional-spread migration: an unmarked (pre-fix) row's body is byte-identical.
+    ...(fields.digestAlg === undefined ? {} : { digestAlg: fields.digestAlg }),
   });
+}
+
+/** The pre-fix digest: FNV-1a 64 over the LOW BYTE of each UTF-16 code unit. Verifies rows
+ *  minted before `digestAlg` existed and nothing else — never used to mint. */
+function legacyLowByteDigest(input: string): string {
+  let hash = 0xcbf29ce484222325n;
+  for (let i = 0; i < input.length; i++) {
+    hash = ((hash ^ BigInt(input.charCodeAt(i) & 0xff)) * 0x100000001b3n) & 0xffffffffffffffffn;
+  }
+  return hash.toString(16).padStart(16, "0");
 }
 
 export function buildSnapshot(
@@ -231,6 +249,7 @@ export function buildSnapshot(
     policyVersion: version.version,
     sourceReferences,
     coreNormalizationVersion: CORE_NORMALIZATION_VERSION,
+    digestAlg: DIGEST_ALG,
   };
   return {
     id,
@@ -241,7 +260,11 @@ export function buildSnapshot(
 
 /** Recompute a snapshot digest to confirm it has not been altered. */
 export function verifySnapshot(snapshot: EvidenceSnapshot): boolean {
-  return digest(snapshotDigestBody(snapshot)) === snapshot.digest;
+  const fn =
+    snapshot.digestAlg === undefined ? legacyLowByteDigest
+    : snapshot.digestAlg === DIGEST_ALG ? digest
+    : null; // an algorithm this build does not know verifies false — fail closed
+  return fn !== null && fn(snapshotDigestBody(snapshot)) === snapshot.digest;
 }
 
 /**
@@ -807,17 +830,22 @@ function readEnum<T extends string>(
  * stays what it says (it may still accuse). Mixed with a parseable sibling, the
  * parseable one is the answer unless the illegible one is worse.
  */
-function readFreshness(latestByCategory: LatestByCategory): Freshness {
+function readFreshness(latestByCategory: LatestByCategory, nowIso?: string): Freshness {
   const reading = latestByCategory.get("posture_freshness");
   if (!reading) {
     return "missing";
   }
+  // DR-059: the age of the reading itself, at the decision instant. A stamp the
+  // clock cannot place (unparseable, or in the future) classifies as "unknown",
+  // which only tightens.
+  const aged = (signal: NormalizedSignal): Freshness =>
+    nowIso === undefined ? "fresh" : classifyFreshness(signal.observedAt, nowIso, FRESH_WINDOW_HOURS, STALE_WINDOW_HOURS);
   // The posture reading states its freshness in its VALUE, not in the `freshness`
   // field, but the out-of-union rule is the same one `asFreshness` applies.
-  let ordered = reading.ordered ? asFreshness(reading.ordered.value) : undefined;
+  let ordered = reading.ordered ? worseFreshness(asFreshness(reading.ordered.value), aged(reading.ordered)) : undefined;
   // A same-instant twin folds worst-wins with no floor (eighth-round finding).
   for (const signal of reading.tied) {
-    ordered = worseFreshness(ordered ?? "fresh", asFreshness(signal.value));
+    ordered = worseFreshness(ordered ?? "fresh", worseFreshness(asFreshness(signal.value), aged(signal)));
   }
   if (reading.illegible.length === 0) {
     return ordered ?? "unknown";

@@ -1,7 +1,7 @@
 {
-  "$comment": "This $comment and `landing` describe the THIRD-PARTY servers[] entries only — everything below except `signalgrid-mcp`, the repository's own first-party server, which is documented by its own `firstParty`/`config`/`offline`/`reads`/`writes`/`network` fields on its entry and is exempt from this paragraph by name. Third-party MCP servers evaluated BY USE for SignalGrid (docs/agent/RESOURCE_INTAKE.md rules). Every third-party entry was cloned at the pinned sha, read for what it reads/writes/sends/hooks, built, and probed over stdio with every socket denied. None of them runs from this repository's .mcp.json (which carries only signalgrid-mcp) and none of them may enter the decision path. The four live-lane servers are aids for the Mac lane's rehearsal, added to a PERSON'S user-level MCP config by hand, never to a hook; context7 is the one exception in kind — a dev-docs aid both lanes register at user scope through `pnpm run mcp:setup` (scripts/install-context7.mjs), still never .mcp.json and never a hook. Measured 2026-09-18 on the cloud lane; context7 row measured 2026-09-19 on the Mac.",
+  "$comment": "This $comment and `landing` describe the THIRD-PARTY servers[] entries only — everything below except the two first-party servers, `signalgrid-mcp` (this repository's own) and `signalgrid-macos` (the sibling repository's, registered by mac-kickoff.sh and NOT by the tracked .mcp.json), each documented by its own `firstParty`/`config`/`offline`/`reads`/`writes`/`network` fields on its entry and exempt from this paragraph by name. Third-party MCP servers evaluated BY USE for SignalGrid (docs/agent/RESOURCE_INTAKE.md rules). Every third-party entry was cloned at the pinned sha, read for what it reads/writes/sends/hooks, built, and probed over stdio with every socket denied. None of them runs from this repository's .mcp.json (which carries only signalgrid-mcp) and none of them may enter the decision path. The four live-lane servers are aids for the Mac lane's rehearsal, added to a PERSON'S user-level MCP config by hand, never to a hook; context7 is the one exception in kind — a dev-docs aid both lanes register at user scope through `pnpm run mcp:setup` (scripts/install-context7.mjs), still never .mcp.json and never a hook. Measured 2026-09-18 on the cloud lane; context7 row measured 2026-09-19 on the Mac; signalgrid-macos row read from source at its pinned sha on 2026-10-01, not probed offline.",
   "measuredAt": "2026-09-18",
-  "landing": "For every THIRD-PARTY server: documented, registered by hand at USER scope on the machine that needs it (`claude mcp add … --scope user`), the same way the parity doc treats GitHub; never .mcp.json, never a hook, never the decision path. No installer script: an automated registration into a session config was refused by the harness on 2026-09-18, and the manual command is one line. `signalgrid-mcp` is the one exception, named on its own entry: it is registered through this repository's tracked `.mcp.json`, which both lanes get on pull, and its `evaluate_decision` tool is a first-party read of the same decision core the API server calls, not a third-party call into the decision path.",
+  "landing": "For every THIRD-PARTY server: documented, registered by hand at USER scope on the machine that needs it (`claude mcp add … --scope user`), the same way the parity doc treats GitHub; never .mcp.json, never a hook, never the decision path. No installer script: an automated registration into a session config was refused by the harness on 2026-09-18, and the manual command is one line. `signalgrid-mcp` and `signalgrid-macos` are the two first-party exceptions, each named on its own entry. `signalgrid-mcp` is registered through this repository's tracked `.mcp.json`, which both lanes get on pull, and its `evaluate_decision` tool is a first-party read of the same decision core the API server calls, not a third-party call into the decision path. `signalgrid-macos` is the sibling repository's server: the Mac lane registers it with mac-kickoff.sh (step 4/7, `claude mcp add` at the CLI's default scope), never through the tracked `.mcp.json` (DR-060 rule 3), and all 22 of its tools are annotated read-only.",
   "external": [
     {
       "id": "github",
@@ -66,6 +66,11 @@
           "source": "docs/MCP_AND_SKILLS_LANE_PARITY.md"
         },
         {
+          "server": "signalgrid-macos",
+          "for": "Mac-native grid_collected posture reads from the sibling repository's server",
+          "source": "mac-kickoff.sh (step 4/7, MCP_SERVER_NAME)"
+        },
+        {
           "server": "context7",
           "for": "dependency work — current library docs before a version or API change; registered via scripts/install-context7.mjs on this lane",
           "source": "docs/MCP_AND_SKILLS_LANE_PARITY.md"
@@ -105,7 +110,7 @@
       ],
       "signalgrid-evidence-toolchain": [
         {
-          "server": "signalgrid-mcp",
+          "server": "signalgrid-macos",
           "for": "the first-party Mac-native grid_collected evidence path"
         },
         {
@@ -119,7 +124,7 @@
       ],
       "signalgrid-native": [
         {
-          "server": "signalgrid-mcp",
+          "server": "signalgrid-macos",
           "for": "the first-party Mac-native grid_collected path"
         }
       ]
@@ -170,6 +175,16 @@
         {
           "server": "github",
           "why": "links a third-party skill's GitHub repository (mvanhorn/last30days-skill) as its provenance, not a call to the github MCP server"
+        },
+        {
+          "server": "signalgrid-mcp",
+          "why": "names the sibling repository signalgrid-mcp (SKILL.md lines 52/134/138), whose server registers as signalgrid-macos — the repository's name, not a call to this tree's 16-tool server"
+        }
+      ],
+      "signalgrid-native": [
+        {
+          "server": "signalgrid-mcp",
+          "why": "names the sibling repository signalgrid-mcp (SKILL.md line 74), whose server registers as signalgrid-macos — the repository's name, not a call to this tree's 16-tool server"
         }
       ],
       "landing-under-dr-037": [
@@ -240,6 +255,25 @@
       "disposition": "adopted",
       "reason": "first-party; DR-060 rule 3: where a tool call exists the coordinator prefers it over a hand read",
       "config": ".mcp.json (tracked; both lanes on pull)"
+    },
+    {
+      "id": "signalgrid-macos",
+      "firstParty": true,
+      "upstream": "https://github.com/DanFashauer/signalgrid-mcp (sibling repository, not this tree)",
+      "sha": "10c5b52e0181720cd6497fabeb1f4892d83ad1f4",
+      "license": "MIT",
+      "language": "python",
+      "reads": "local macOS system state through system binaries (scutil, system_profiler, sw_vers, launchctl, defaults, csrutil, fdesetup, systemsetup, pmset, socketfilterfw, networksetup, systemextensionsctl, codesign, spctl, profiles, kextstat, kmutil, dscl, tmutil, lsof, ps, stat, uname and others); a direct directory listing (names and mtimes) of /Library/LaunchDaemons, /Library/LaunchAgents, ~/Library/LaunchAgents and ~/Library/LaunchDaemons; and the file path handed to signalgrid_codesign_inspect",
+      "writes": "nothing on disk",
+      "network": "no socket of its own (imports no HTTP client); signalgrid_software_updates with check_online=true runs `softwareupdate -l`, which contacts Apple's update catalog, and signalgrid_codesign_inspect runs `spctl --assess`, which may make a Gatekeeper lookup",
+      "hooks": "none",
+      "tools": 22,
+      "readOnlyTools": 22,
+      "mutatingTools": 0,
+      "offline": "not probed under this roster's by-use protocol (no stdio run with sockets denied); 22 mcp__signalgrid-macos__ tools were listed in a Mac session on 2026-10-01, matching 22 @mcp.tool(… READ_ONLY) decorators at the pinned sha",
+      "disposition": "adopted",
+      "reason": "first-party sibling; the Mac-native grid_collected path the signalgrid-evidence-toolchain and signalgrid-native skills name (SKILL.md 134 / 74); its code is also exercised by verify-all --require-mcp through the sibling's pytest, not through this registration",
+      "config": "mac-kickoff.sh step 4/7: claude mcp add signalgrid-macos -- uv run --python 3.12 --with 'mcp[cli]<2' python <sibling>/server.py (the CLI's default scope, a departure from DR-060 rule 3's user scope that mac-kickoff.sh keeps; not yet a BUILD_BACKLOG row; never .mcp.json)"
     },
     {
       "id": "context7",

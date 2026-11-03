@@ -1,5 +1,5 @@
 // codeOnly — comments and string/regex content blanked, for gates that read code shapes. Split out of
-// check-entry-guards.mjs so scripts/lib/shipped-imports.mjs can use it without an import cycle.
+// check-entry-guards.mjs so other code-shape gates (the shipped-import model, PR #1611) can use it without an import cycle.
 
 // Is a `/` here the start of a regex literal (not a division)? Decided by the last significant char before it.
 function regexAllowed(out) {

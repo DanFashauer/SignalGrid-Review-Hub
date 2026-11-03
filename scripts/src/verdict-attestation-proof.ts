@@ -26,6 +26,7 @@ import {
   verifyVerdict,
   type AttestationKey,
   type AttestedVerdict,
+  UNIFIED_ACTIONS,
 } from "@workspace/verdict-attestation";
 import { enumerateGrantSafety, productOf } from "./lib/grant-safety.js";
 
@@ -50,8 +51,8 @@ interface Verdict { recommendedAction: string; reasonCode: string; deviceId: str
 const ALLOW: Verdict = { recommendedAction: "none", reasonCode: "MANAGEMENT_HEALTHY", deviceId: "ipad-ward-01" };
 const RESTRICT: Verdict = { recommendedAction: "restrict", reasonCode: "ENROLLMENT_RETIRED", deviceId: "ipad-ward-02" };
 
-const LADDER = ["none", "monitor", "patch", "locate", "step_up", "alert", "restrict", "escalate"];
-const rank = (a: string): number => LADDER.indexOf(a);
+// The package's own ladder, not a local restatement of it (plan row 124).
+const rank = (a: string): number => (UNIFIED_ACTIONS as readonly string[]).indexOf(a);
 
 const seal = (v: Verdict, opts: Partial<{ tenantId: string; issuedAt: number; nonce: string }> = {}): AttestedVerdict<Verdict> =>
   sealVerdict(v, KEY, { tenantId: opts.tenantId ?? TENANT, issuedAt: opts.issuedAt ?? NOW, nonce: opts.nonce ?? "nonce-1" });

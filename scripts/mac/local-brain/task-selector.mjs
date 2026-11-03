@@ -1,6 +1,6 @@
 export function selectEligible(tasks, allowedScope) {
   const safePath = p => typeof p === 'string' && p.length > 0 &&
-    !p.startsWith('/') && !p.includes('\\') && !p.includes('\0') &&
+    !p.startsWith('/') && !p.includes('\\') && !/[^\u0020-\uFFFF]/.test(p) &&
     p.split('/').every(x => x !== '' && x !== '.' && x !== '..');
   if (!Array.isArray(tasks) || !safePath(allowedScope)) throw new TypeError('Invalid task selection input');
   const byId = new Map();

@@ -7,6 +7,9 @@
   "need": "Two owner decisions. (1) Budget: raise the plan or usage limit, or accept the throttled cadence the brain adopts now by default (at most 3 concurrent workers, Sonnet reviews, Opus refute only for a DR-037 landing). (2) The Dependabot queue review: give the explicit go for a weekly fresh-session trigger, and the brain declares a NEW registry row and creates the trigger (the retired row stays as the record); or decline, and the nine open Dependabot PRs (#1379, #1381-#1387, #1495) wait for your merge decisions with no routine watching the queue.",
   "whoCanUnblock": "owner",
   "domain": "",
-  "status": "open",
-  "routedTo": null
+  "status": "resolved",
+  "routedTo": null,
+  "resolvedAt": "2026-11-03T15:28:20.915Z",
+  "resolvedBy": "cloud",
+  "resolution": "Owner answered part (2) 2026-11-03: yes, weekly; registry row dependabot-queue-review-weekly declared and account trigger trig_012Lh3q196QWZhJ7Fy79xrCc created (Mondays 08:47Z, fresh session). Part (1), the budget, is moot: the routines resumed 2026-10-15 and the throttled cadence has run since; re-raise if the limit bites again"
 }

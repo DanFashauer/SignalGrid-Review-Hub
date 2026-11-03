@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-11-02T14:34:19.572Z",
-  "result": "Catch-up for the 09:40Z sweep missed during the restarts (previous hygiene heartbeat 2026-11-01T10:11Z, ~28h). Ran at ~14:30Z: disk / 60% (16G free); scratchpad 8.3G -> 8.2G (55 stale top-level files deleted with find -delete, finished scratch worktree for #1749 removed with git worktree remove); no docker daemon and no /var/lib/docker layers; pnpm store prune removed 2 packages. Quiet otherwise."
+  "firedAt": "2026-11-03T09:46:35.497Z",
+  "result": "09:41Z sweep (11-03): freed ~7G - scratchpad 8.4G -> 735M (676604 files older than 24h deleted with find -delete), pnpm store prune removed 3 packages; no /var/lib/docker. Disk 15G -> 22G free (41% used)."
 }

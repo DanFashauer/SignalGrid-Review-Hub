@@ -7,6 +7,9 @@
   "need": "Owner: two yes/no answers — (1) puck = one offered factor (keeps PURPOSE.md:38) or the required factor; (2) re-bind/revoke = customer IdP/PACS admin under dual control, or a SignalGrid-held super-admin role. Answer here or in the PR; the section is rewritten to the answers.",
   "whoCanUnblock": "owner",
   "domain": "product",
-  "status": "open",
-  "routedTo": null
+  "status": "resolved",
+  "routedTo": null,
+  "resolvedAt": "2026-11-03T15:28:20.877Z",
+  "resolvedBy": "cloud",
+  "resolution": "Owner answered 2026-11-03: (1) the puck is one offered factor, PURPOSE.md:38 stands; (2) re-bind/revoke is the customer's IdP/PACS admin under dual control, not a SignalGrid role. docs/SESSION_PUCK_HARDWARE_HYPOTHESIS.md rewritten to the answers"
 }

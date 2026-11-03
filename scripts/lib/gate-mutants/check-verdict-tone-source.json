@@ -261,8 +261,8 @@
  },
  {
   "name": "F7 a ceiling's footer text cut",
-  "find": "a switch clause that falls into the next with statements; and any verdict choice not made by an object property, a comparison, `.includes()` / `.has()` or a `switch` case",
-  "replace": "and any verdict choice not made by an object property, a comparison, `.includes()` / `.has()` or a `switch` case"
+  "find": "so it misses any other verdict choice — another name or operator, a verdict constant, a class written before its comparison",
+  "replace": "so it misses any other verdict choice — a class written before its comparison"
  },
  {
   "name": "F7 an eighth-plus-one header item added",

@@ -2173,6 +2173,7 @@ async function selfTest() {
     checks.push(["S3 alone: a side-effect import", only('import "./verdicts";', "S3")]);
     checks.push(["S3: `import type` and inline `type` specifiers are admitted", sp('import type { A } from "./a";\nimport { type B } from "./b";').length === 0]);
     checks.push(["S4 alone: a bare reference in a function", only("export function f(): object { return OUTCOME_TONE; }", "S4")]);
+    checks.push(["S4 alone: a spread copy inside a function (`{ ...OUTCOME_TONE }`)", only("export function f(o: string): string { const c: Record<string, string> = { ...OUTCOME_TONE }; return c[o]; }", "S4")]);
     checks.push(["S4: a spread in a module-scope Record initializer is admitted", sp("export const MORE = { ...OUTCOME_TONE, x: \"y\" };").length === 0]);
     checks.push(["S4: `typeof OUTCOME_TONE` in a type is admitted", sp("export type T = keyof typeof OUTCOME_TONE;").length === 0]);
     checks.push(["S4: the lookup inside a method (not module scope) is refused", only("export const o = { m(k: string) { return OUTCOME_TONE[k as Outcome]; } };", "S4")]);

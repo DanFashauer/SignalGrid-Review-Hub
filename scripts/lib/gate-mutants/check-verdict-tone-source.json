@@ -628,5 +628,115 @@
   "name": "F16 the backlog row is not checked",
   "find": "if (c.backlog && !c.phrases.some((ph) => backlogRow.includes(ph))) problems.push(",
   "replace": "if (false) problems.push("
+ },
+ {
+  "name": "F22 M3 .includes() on a non-subject counts",
+  "find": "return isSubject(n.arguments[0]) && lits.size > 0 ? lits.has(s) : null;",
+  "replace": "return lits.size > 0 ? lits.has(s) : null;"
+ },
+ {
+  "name": "F22 M7 namespace member not a judged ref in the branch judge",
+  "find": " || (ts.isPropertyAccessExpression(n) && n.name.text === nm));",
+  "replace": " );"
+ },
+ {
+  "name": "F22 M16 boolean !== evaluated as ===",
+  "find": "return a !== null && b !== null ? (eq ? a === b : a !== b) : null;",
+  "replace": "return a !== null && b !== null ? (a === b) : null;"
+ },
+ {
+  "name": "F22 M21 element-access subject not the subject",
+  "find": "if (ts.isElementAccessExpression(n)) { const l = strOf(n.argumentExpression); const b = keyOf(n.expression);",
+  "replace": "if (ts.isElementAccessExpression(n)) { return null; const l = strOf(n.argumentExpression); const b = keyOf(n.expression);"
+ },
+ {
+  "name": "F22 M23 template-span literals not scanned",
+  "find": "for (const span of n.templateSpans) { walk(span.expression, ctx); scan(span.literal.text, span, ctx); }",
+  "replace": "for (const span of n.templateSpans) { walk(span.expression, ctx); }"
+ },
+ {
+  "name": "F22 M6 && both-true gives unknown",
+  "find": "return a === false || b === false ? false : a === true && b === true ? true : null;",
+  "replace": "return a === false || b === false ? false : null;"
+ },
+ {
+  "name": "F22 M17 Boolean() not unwrapped",
+  "find": "if (ts.isIdentifier(c) && c.text === \"Boolean\" && n.arguments.length === 1) return tv(n.arguments[0], s);",
+  "replace": ""
+ },
+ {
+  "name": "S lane removed from runGate",
+  "find": "    for (const msg of toneShapeProblems(src, Object.keys(expectedMap))) registryProblems.push(`${mod}:${msg}`);\n",
+  "replace": ""
+ },
+ {
+  "name": "S1 verdict literal in a function body admitted",
+  "find": "        if (fn) out.push(`line ${lineOf(n)}: the verdict literal",
+  "replace": "        if (false) out.push(`line ${lineOf(n)}: the verdict literal"
+ },
+ {
+  "name": "S1 verdict word case-sensitive",
+  "find": "const w = t.trim().toLowerCase().replace(/_/g, \"-\");",
+  "replace": "const w = t.trim().replace(/_/g, \"-\");"
+ },
+ {
+  "name": "S1 template literal not evaluated",
+  "find": "if (ts.isTemplateExpression(n)) {\n      let t = n.head.text;",
+  "replace": "if (ts.isTemplateExpression(n)) {\n      return null; let t = n.head.text;"
+ },
+ {
+  "name": "S3 concatenation not evaluated",
+  "find": "if (ts.isBinaryExpression(n) && n.operatorToken.kind === K.PlusToken) { const a = staticText(n.left), b = staticText(n.right);",
+  "replace": "if (false) { const a = staticText(n.left), b = staticText(n.right);"
+ },
+ {
+  "name": "S3 module-scope verdict constant admitted",
+  "find": "else if (!judged.has(topDeclName(n) ?? \"\")) out.push(",
+  "replace": "else if (false) out.push("
+ },
+ {
+  "name": "S2 verdict-named member admitted",
+  "find": "if (fn && ts.isPropertyAccessExpression(n) && verdictWord(n.name.text)) out.push(",
+  "replace": "if (false) out.push("
+ },
+ {
+  "name": "S2 destructured verdict property admitted",
+  "find": "if (fn && ts.isBindingElement(n) && verdictWord(",
+  "replace": "if (false && ts.isBindingElement(n) && verdictWord("
+ },
+ {
+  "name": "S4 any other reference admitted",
+  "find": "else if (!(isDecl || isExport || isPropKey || spreadTop || lookup)) out.push(",
+  "replace": "else if (false) out.push("
+ },
+ {
+  "name": "S4 key need not be the function's own parameter",
+  "find": "if (param && !paramDisturbed(fn, k.text)) { lookup = true;",
+  "replace": "if (true) { lookup = true;"
+ },
+ {
+  "name": "S4 a disturbed key parameter admitted",
+  "find": "if (param && !paramDisturbed(fn, k.text)) { lookup = true;",
+  "replace": "if (param) { lookup = true;"
+ },
+ {
+  "name": "S4 lookup admitted in a nested function",
+  "find": "&& topLevelFnName(fn) !== null && !isWriteTarget(ea)) {",
+  "replace": "&& !isWriteTarget(ea)) {"
+ },
+ {
+  "name": "S4 a write through the lookup admitted",
+  "find": "&& topLevelFnName(fn) !== null && !isWriteTarget(ea)) {",
+  "replace": "&& topLevelFnName(fn) !== null) {"
+ },
+ {
+  "name": "S4 spread admitted inside a function",
+  "find": "const spreadTop = ts.isSpreadAssignment(p) && !fn && topDeclName(p) !== null",
+  "replace": "const spreadTop = ts.isSpreadAssignment(p)"
+ },
+ {
+  "name": "S5 toner referenced in its module admitted",
+  "find": "if (!ownName && !ts.isExportSpecifier(p) && !inType(m)",
+  "replace": "if (false && !ownName && !ts.isExportSpecifier(p) && !inType(m)"
  }
 ]

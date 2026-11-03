@@ -1136,6 +1136,154 @@ export function mutationProblems(src, names, file = "x.tsx") {
 }
 
 /** A judged Record, or a helper the tone module exports beside it, exported under another name (`export { A as B, B as A }`, `export { failModeTone as outcomeTone }`) is judged by its local name; refuse the alias. */
+/**
+ * Round 8 (F18-F21): THE STRUCTURAL RULE for a tone module. Seven rounds of a growing branch evaluator kept leaving
+ * a spelling it did not model (a literal key, a wrapper call, a constant, a guard clause, a decoy subject). A tone
+ * module does not need to branch on a verdict at all — every real one is Records plus a restrictive `??` fallback —
+ * so a tone module may not, and the evaluator above is left as a second judge rather than the only one:
+ *   S1  no verdict-name literal (`"deny"`, `"step_up"`, `"DENY"`, a `+` concatenation of them) in any function body;
+ *   S2  no verdict-named member (`.allow`, `.DENY`, `["deny"]`) or destructured verdict property in a function body;
+ *   S3  outside function bodies, a verdict-name literal only inside the initializer of a judged Record or of the
+ *       verdict data the chart lane already judges (OUTCOME_CHART_MARK, OUTCOME_ORDER) — so `const DENY = "deny"`,
+ *       `new Set(["deny"])` and `{ DENY: "deny" }` are refused where they are declared;
+ *   S4  a judged Record (and that verdict data) is referenced only as `NAME[p]` (or `NAME[p as T]`), read-only, in a
+ *       function declared at module scope, where `p` is one of THAT function's own identifier parameters, never
+ *       written, re-declared or destructured in it — or as a spread directly inside a module-scope Record initializer,
+ *       in a type, or in an `export { … }`. `T = OUTCOME_TONE`, `OUTCOME_TONE.allow`, `Object.values(…)`, a spread in a
+ *       function, `d.outcome` / a destructured parameter as the key, a nested helper, `NS.OUTCOME_TONE` are refused;
+ *   S5  a function that indexes a judged Record (a toner) is never referenced inside its own module — no recursion,
+ *       no wrapper (`toneFor("allow")`, `toneFor(previous)`), no alias. Compose at the call site.
+ * Recorded decision (round 8): this rejects CODEX-1's correct `deny && other !== "allow"` conjunction and the correct
+ * `!==` ternary inside a tone module. They were correct; they are refused anyway, because the evaluator that admitted
+ * them could not be kept from admitting their wrong twins. Branching on a verdict belongs nowhere in a tone module.
+ */
+export const VERDICT_DATA = ["OUTCOME_CHART_MARK", "OUTCOME_ORDER"];
+export function toneShapeProblems(src, judged0 = []) {
+  const sf = ts.createSourceFile("tone.ts", src, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+  const K = ts.SyntaxKind;
+  const out = [];
+  const judged = new Set([...judged0, ...VERDICT_DATA]);
+  const lineOf = (n) => sf.getLineAndCharacterOfPosition(n.getStart(sf)).line + 1;
+  const unwrap = (n) => (ts.isParenthesizedExpression(n) || ts.isAsExpression(n) || ts.isNonNullExpression(n) || ts.isSatisfiesExpression(n) || ts.isTypeAssertionExpression(n) ? unwrap(n.expression) : n);
+  const verdictWord = (t) => { if (typeof t !== "string") return null; const w = t.trim().toLowerCase().replace(/_/g, "-"); return w === "stepup" ? "step-up" : Object.hasOwn(KEY_VERDICT, w) ? KEY_VERDICT[w] : null; };
+  const staticText = (n0) => {
+    const n = unwrap(n0);
+    if (ts.isStringLiteral(n) || ts.isNoSubstitutionTemplateLiteral(n)) return n.text;
+    if (ts.isBinaryExpression(n) && n.operatorToken.kind === K.PlusToken) { const a = staticText(n.left), b = staticText(n.right); return a !== null && b !== null ? a + b : null; }
+    if (ts.isTemplateExpression(n)) {
+      let t = n.head.text;
+      for (const sp of n.templateSpans) { const e = staticText(sp.expression); if (e === null) return null; t += e + sp.literal.text; }
+      return t;
+    }
+    return null;
+  };
+  const isFn = (n) => ts.isFunctionDeclaration(n) || ts.isFunctionExpression(n) || ts.isArrowFunction(n) || ts.isMethodDeclaration(n) || ts.isConstructorDeclaration(n) || ts.isGetAccessorDeclaration(n) || ts.isSetAccessorDeclaration(n);
+  const inType = (n) => { for (let p = n.parent; p; p = p.parent) { if (ts.isTypeNode(p) && !ts.isExpressionWithTypeArguments(p)) return true; if (ts.isStatement(p) || isFn(p)) return false; } return false; };
+  const enclosingFn = (n) => { for (let p = n.parent; p; p = p.parent) if (isFn(p)) return p; return null; };
+  /** A function declared at module scope: `function f(…)` or `const f = (…) => …` / `function (…)` as a top-level statement. */
+  const topLevelFnName = (fn) => {
+    if (ts.isFunctionDeclaration(fn) && fn.parent === sf && fn.name) return fn.name.text;
+    if ((ts.isArrowFunction(fn) || ts.isFunctionExpression(fn)) && ts.isVariableDeclaration(fn.parent) && fn.parent.initializer === fn && ts.isIdentifier(fn.parent.name)
+      && ts.isVariableDeclarationList(fn.parent.parent) && ts.isVariableStatement(fn.parent.parent.parent) && fn.parent.parent.parent.parent === sf) return fn.parent.name.text;
+    return null;
+  };
+  /** The top-level declaration whose initializer holds `n` (outside any function), or null. */
+  const topDeclName = (n) => {
+    for (let p = n.parent; p; p = p.parent) {
+      if (isFn(p)) return null;
+      if (ts.isVariableDeclaration(p) && ts.isIdentifier(p.name) && ts.isVariableDeclarationList(p.parent) && ts.isVariableStatement(p.parent.parent) && p.parent.parent.parent === sf) return p.name.text;
+    }
+    return null;
+  };
+  const isWriteTarget = (n) => {
+    let c = n;
+    while (c.parent && (ts.isParenthesizedExpression(c.parent) || ts.isNonNullExpression(c.parent) || ts.isAsExpression(c.parent))) c = c.parent;
+    const p = c.parent;
+    if (!p) return false;
+    if (ts.isBinaryExpression(p) && p.left === c && ASSIGN_TOKENS.has(p.operatorToken.kind)) return true;
+    if ((ts.isPrefixUnaryExpression(p) || ts.isPostfixUnaryExpression(p)) && (p.operator === K.PlusPlusToken || p.operator === K.MinusMinusToken)) return true;
+    if (ts.isDeleteExpression(p)) return true;
+    // a destructuring-assignment target: `[x] = …`, `({ a: x } = …)`
+    if (ts.isArrayLiteralExpression(p) || ts.isShorthandPropertyAssignment(p) || ts.isPropertyAssignment(p) || ts.isSpreadElement(p) || ts.isSpreadAssignment(p)) {
+      for (let q = p; q; q = q.parent) {
+        if (ts.isBinaryExpression(q) && q.operatorToken.kind === K.EqualsToken) return q.left.pos <= n.pos && n.end <= q.left.end;
+        if (ts.isStatement(q) || isFn(q)) return false;
+      }
+    }
+    return false;
+  };
+  /** Is parameter `name` of `fn` written, re-declared, or shadowed anywhere in its body? */
+  const paramDisturbed = (fn, name) => {
+    let bad = false;
+    const visit = (m) => {
+      if (bad) return;
+      if (ts.isIdentifier(m) && m.text === name) {
+        const p = m.parent;
+        const declares = (ts.isVariableDeclaration(p) || ts.isBindingElement(p) || ts.isParameter(p) || ts.isFunctionDeclaration(p) || ts.isFunctionExpression(p) || ts.isClassDeclaration(p)) && p.name === m;
+        if (declares || (ts.isBindingElement(p) && p.propertyName === m && !p.name) || isWriteTarget(m)) bad = true;
+      }
+      ts.forEachChild(m, visit);
+    };
+    if (fn.body) visit(fn.body);
+    return bad;
+  };
+
+  // The toners: module-scope functions holding an admitted `NAME[p]` lookup (filled during the walk).
+  const toners = new Map(); // name -> declaration identifier node
+  const visit = (n) => {
+    const fn = enclosingFn(n);
+    // S1 / S3: a verdict-name literal.
+    const isLit = ts.isStringLiteral(n) || ts.isNoSubstitutionTemplateLiteral(n) || ts.isTemplateExpression(n) || (ts.isBinaryExpression(n) && n.operatorToken.kind === K.PlusToken && !(ts.isBinaryExpression(n.parent) && n.parent.operatorToken.kind === K.PlusToken));
+    if (isLit && !inType(n) && !ts.isImportDeclaration(n.parent) && !ts.isExportDeclaration(n.parent) && !ts.isExternalModuleReference(n.parent)
+      && !((ts.isPropertyAssignment(n.parent) || ts.isPropertySignature(n.parent) || ts.isMethodDeclaration(n.parent) || ts.isPropertyDeclaration(n.parent)) && n.parent.name === n)) {
+      const v = verdictWord(staticText(n));
+      if (v) {
+        if (fn) out.push(`line ${lineOf(n)}: the verdict literal "${staticText(n)}" inside a function in a tone module — a tone module does not branch on, remap or name a verdict in code; it indexes its Records by the verdict parameter (S1)`);
+        else if (!judged.has(topDeclName(n) ?? "")) out.push(`line ${lineOf(n)}: the verdict literal "${staticText(n)}" outside a judged Record or the chart lane's verdict data — a verdict constant, set or list in a tone module is a verdict choice the gate cannot pair (S3)`);
+      }
+      if (!ts.isTemplateExpression(n) && !ts.isBinaryExpression(n)) return;
+    }
+    // S2: a verdict-named member or destructured verdict property, inside a function.
+    if (fn && ts.isPropertyAccessExpression(n) && verdictWord(n.name.text)) out.push(`line ${lineOf(n)}: the verdict-named member .${n.name.text} inside a function in a tone module — a member lookup by a verdict name is a remap (S2)`);
+    if (fn && ts.isBindingElement(n) && verdictWord((n.propertyName && ts.isIdentifier(n.propertyName) ? n.propertyName : n.name)?.text)) out.push(`line ${lineOf(n)}: a destructured verdict property inside a function in a tone module is a remap (S2)`);
+    // S4: a reference to a judged Record or the verdict data.
+    const refName = ts.isIdentifier(n) && judged.has(n.text) ? n.text : null;
+    if (refName && !inType(n)) {
+      const p = n.parent;
+      const isDecl = ts.isVariableDeclaration(p) && p.name === n;
+      const isExport = ts.isExportSpecifier(p);
+      const isPropKey = (ts.isPropertyAssignment(p) || ts.isPropertySignature(p)) && p.name === n;
+      const isMember = ts.isPropertyAccessExpression(p) && p.name === n;
+      const spreadTop = ts.isSpreadAssignment(p) && !fn && topDeclName(p) !== null && (() => { let o = p.parent; while (o.parent && (ts.isAsExpression(o.parent) || ts.isSatisfiesExpression(o.parent) || ts.isParenthesizedExpression(o.parent))) o = o.parent; return ts.isVariableDeclaration(o.parent) && o.parent.initializer === o; })();
+      let lookup = false;
+      let outer = n;
+      while (outer.parent && (ts.isParenthesizedExpression(outer.parent) || ts.isAsExpression(outer.parent) || ts.isSatisfiesExpression(outer.parent) || ts.isNonNullExpression(outer.parent))) outer = outer.parent;
+      const ea = outer.parent;
+      if (ea && ts.isElementAccessExpression(ea) && ea.expression === outer && fn && topLevelFnName(fn) !== null && !isWriteTarget(ea)) {
+        const k = unwrap(ea.argumentExpression);
+        const param = ts.isIdentifier(k) ? fn.parameters.find((q) => ts.isIdentifier(q.name) && q.name.text === k.text) : undefined;
+        if (param && !paramDisturbed(fn, k.text)) { lookup = true; toners.set(topLevelFnName(fn), fn); }
+      }
+      if (isMember) out.push(`line ${lineOf(n)}: ${refName} is reached as a member of another object — a namespace or alias of a judged Record is a remap (S4)`);
+      else if (!(isDecl || isExport || isPropKey || spreadTop || lookup)) out.push(`line ${lineOf(n)}: ${refName} is used other than as \`${refName}[p]\` by a module-scope function's own unmodified parameter (an alias, a member, a spread or Object.* call in code, a lookup by a member, a destructured or a second key, a write, a nested helper) — the lookup remaps the verdict (S4)`);
+    }
+    ts.forEachChild(n, visit);
+  };
+  visit(sf);
+  // S5: a toner is not referenced inside its own module.
+  const refs = (m) => {
+    if (ts.isIdentifier(m) && toners.has(m.text)) {
+      const p = m.parent;
+      const ownName = (ts.isFunctionDeclaration(p) || ts.isVariableDeclaration(p)) && p.name === m;
+      if (!ownName && !ts.isExportSpecifier(p) && !inType(m) && !(ts.isPropertyAccessExpression(p) && p.name === m) && !((ts.isPropertyAssignment(p) || ts.isPropertySignature(p)) && p.name === m))
+        out.push(`line ${lineOf(m)}: the toner ${m.text}() is referenced inside its own tone module (a wrapper, a recursion or an alias) — its argument would choose another verdict's tone; compose at the call site (S5)`);
+    }
+    ts.forEachChild(m, refs);
+  };
+  refs(sf);
+  return out;
+}
+
 export function toneExportProblems(src, names0) {
   const sf = ts.createSourceFile("tone.ts", src, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
   const out = [];
@@ -1481,7 +1629,7 @@ async function selfTest() {
   await e2e("F1: a template form `bg-status-${v}` does demand the bare rules", 1, "no canonical .bg-status-", { "a/src/Chip.tsx": "export const C = ({ v }) => <i className={`bg-status-${v}`} />;\n" });
   await e2e("F1: a bare use beside the opacity form still demands the rules", 1, "no canonical .bg-status-", { "a/src/Chip.tsx": 'export const C = () => <i className="bg-status-step-up bg-status-allow/5" />;\n' });
   await e2e("F3: a mis-paired verdict ternary INSIDE a tone module exits 1", 1, "returns status-allow", { "a/src/lib/outcome-tone.ts": e2eTone + 'export function t2(outcome: string): string { return outcome === "deny" ? "text-status-allow" : outcome === "allow" ? "text-status-deny" : "text-status-restrict"; }\n' });
-  await e2e("F3: a correctly paired helper inside a tone module still exits 0", 0, "", { "a/src/lib/outcome-tone.ts": e2eTone + 'export function t2(outcome: string): string { return outcome === "deny" ? "text-status-deny" : "text-status-restrict"; }\n' });
+  await e2e("F3 (round 8, recorded decision): a correctly paired verdict helper inside a tone module is refused by S1", 1, "(S1)", { "a/src/lib/outcome-tone.ts": e2eTone + 'export function t2(outcome: string): string { return outcome === "deny" ? "text-status-deny" : "text-status-restrict"; }\n' });
   const swappedMarks = 'const OUTCOME_CHART_MARK = { allow: { dataKey: "allow", token: "--decision-deny", pattern: "solid" }, "step-up": { dataKey: "stepUp", token: "--decision-review", pattern: "solid" }, restrict: { dataKey: "restrict", token: "--decision-deny", pattern: "hatch" }, deny: { dataKey: "deny", token: "--decision-allow", pattern: "solid" } };\nconst hatchPatternId = (o: string) => `h-${o}`;\nfunction chartFill(o: string) { const m = (OUTCOME_CHART_MARK as any)[o]; return m.pattern === "hatch" ? `url(#${hatchPatternId(o)})` : `hsl(var(${m.token}))`; }\nconst HATCH_PATTERN = { size: 4, stripeWidth: 2 };\nexport { OUTCOME_CHART_MARK, chartFill, hatchPatternId, HATCH_PATTERN };\n';
   await e2e("F4: a chart map exported through `export { … }` with swapped tokens exits 1", 1, "not its ratified", { "a/src/lib/outcome-tone.ts": e2eTone + swappedMarks });
   await e2e("F4: ...and the same module with sound tokens exits 0", 0, "", { "a/src/lib/outcome-tone.ts": e2eTone + swappedMarks.replace('token: "--decision-deny", pattern: "solid" }, "step-up"', 'token: "--decision-allow", pattern: "solid" }, "step-up"').replace('deny: { dataKey: "deny", token: "--decision-allow"', 'deny: { dataKey: "deny", token: "--decision-deny"') });
@@ -1622,7 +1770,7 @@ async function selfTest() {
   await e2e("L4: `Object.assign(OUTCOME_TONE, …)` in the tone module exits 1", 1, "OUTCOME_TONE is mutated at runtime", { "a/src/lib/outcome-tone.ts": e2eTone + 'Object.assign(OUTCOME_TONE, { deny: "text-status-allow" });\n' });
   await e2e("L4: reading OUTCOME_TONE (an `==` comparison, an index) is not a mutation", 0, "", { "a/src/Page.tsx": 'import { OUTCOME_TONE } from "./lib/outcome-tone";\nexport const same = OUTCOME_TONE.deny == OUTCOME_TONE.allow;\nexport const g = OUTCOME_TONE["deny"];\n' });
   await e2e("C2: a mis-paired reversed-operand ternary inside the tone module exits 1", 1, "returns status-allow", { "a/src/lib/outcome-tone.ts": e2eTone + 'export function t3(outcome: string): string { return "deny" === outcome ? "text-status-allow" : "text-status-restrict"; }\n' });
-  await e2e("C2: the correct `!==` form exits 0", 0, "", { "a/src/lib/outcome-tone.ts": e2eTone + 'export function t4(outcome: string): string { return outcome !== "deny" ? "text-status-allow" : "text-status-deny"; }\n' });
+  await e2e("C2 (round 8, recorded decision): the correct `!==` form inside a tone module is refused by S1", 1, "(S1)", { "a/src/lib/outcome-tone.ts": e2eTone + 'export function t4(outcome: string): string { return outcome !== "deny" ? "text-status-allow" : "text-status-deny"; }\n' });
   await e2e("C3: `deny: \"text-status-deny/0\"` in the expected Record exits 1", 1, "text-status-deny/0", { "a/src/lib/outcome-tone.ts": e2eTone.replace('deny: "text-status-deny"', 'deny: "text-status-deny/0"') });
   await e2e("C3: a bg class in a text Record exits 1", 1, "expected exactly `text-status-deny`", { "a/src/lib/outcome-tone.ts": e2eTone.replace('deny: "text-status-deny"', 'deny: "bg-status-deny"') });
   await e2e("O12: the chart-site lane — a verdict-keyed <Bar> in a tree with a chart map exits 1", 1, "keyed on a verdict literal", { "a/src/lib/outcome-tone.ts": e2eTone + soundMarks, "a/src/Chart.tsx": 'import { Bar, Legend, Tooltip } from "recharts";\nimport { OUTCOME_CHART_MARK } from "./lib/outcome-tone";\nexport const C = () => <><Tooltip /><Legend /><Bar dataKey="deny" /></>;\n' });
@@ -1915,6 +2063,88 @@ async function selfTest() {
   const scanned = TREES.flatMap((t) => walk(join(repo, t)).files);
   checks.push([`the real trees contain files to scan (${scanned.length})`, scanned.length > 0]);
 
+  // ── Round 8, F22: the branch judge's survivors from the round-7 refute (it stays as the second judge) ───────────
+  {
+    const H = 'export type Outcome = "allow" | "step-up" | "restrict" | "deny";\n';
+    const tb = (sig, body, judged = ["OUTCOME_TONE"]) => toneBranchProblems(`${H}export function t(${sig}): string {\n${body}\n}\n`, judged);
+    const LKF = 'OUTCOME_TONE[outcome as Outcome] ?? "text-status-restrict"';
+    checks.push(["F22 M3: `.includes()` on a NON-subject narrows nothing (`switch (true) case [\"allow\"].includes(previous)`)", tb("outcome: string, previous: string", 'switch (true) { case ["allow"].includes(previous): return "text-status-allow"; default: return "text-status-restrict"; }').some((m) => /returns status-allow/.test(m))]);
+    checks.push(["F22 M7: a namespace member `NS.OUTCOME_TONE[key]` is a judged ref", tb("outcome: string", 'const key = outcome === "deny" ? "allow" : outcome; return NS.OUTCOME_TONE[key as Outcome] ?? "text-status-restrict";').some((m) => /verdict remap/.test(m))]);
+    checks.push(["F22 M16: a boolean `!== false` keeps its polarity", tb("outcome: string", 'return (outcome === "deny") !== false ? "text-status-allow" : "text-status-restrict";').some((m) => /returns status-allow/.test(m))]);
+    checks.push(["F22 M21: an element-access subject `d[\"outcome\"]` is the subject", tb('d: { outcome: string }', 'return d["outcome"] === "deny" ? "text-status-allow" : "text-status-restrict";').some((m) => /returns status-allow/.test(m))]);
+    checks.push(["F22 M23: template-span literals are scanned", tb("outcome: string", 'return outcome === "deny" ? `${""} text-status-allow` : "text-status-restrict";').some((m) => /returns status-allow/.test(m))]);
+    checks.push(["F22 M6 (strict side): `!== deny && !== restrict` with a lookup / deny passes", tb("outcome: string", `return outcome !== "deny" && outcome !== "restrict" ? OUTCOME_TONE[outcome as Outcome] : "text-status-deny";`).length === 0]);
+    checks.push(["F22 M17 (strict side): `Boolean(deny)` is unwrapped and passes", tb("outcome: string", `return Boolean(outcome === "deny") ? "text-status-deny" : ${LKF};`).length === 0]);
+  }
+  // ── Round 8 (F18-F21): the structural rule, planted END TO END on the REAL desktop module ─────────────────────
+  {
+    const DESK = "artifacts/signalgrid-desktop/src/lib/outcome-tone.ts";
+    const realDesk = readFileSync(join(repo, DESK), "utf8");
+    const FN = /export function outcomeTone\(outcome: string\): string \{\n  return OUTCOME_TONE\[outcome as Outcome\] \?\? "text-status-restrict";\n\}/;
+    checks.push(["round 8: the real desktop outcomeTone() has the shape the plants replace", FN.test(realDesk)]);
+    const onDesk = async (label, expectCode, expectInErr, fnText, prelude = "") => {
+      const planted = realDesk.replace(FN, () => `${prelude}${fnText}`);
+      const r = await runGate({ ...REAL_CONFIG, readFile: (f, enc) => (f === join(repo, DESK) ? planted : readFileSync(f, enc)) });
+      checks.push([`real desktop plant: ${label}`, FN.test(realDesk) && planted.includes(fnText) ? r.code === expectCode && [].concat(expectInErr).every((x) => r.err.join("\n").includes(x)) : false]);
+    };
+    const FB = 'OUTCOME_TONE[outcome as Outcome] ?? "text-status-restrict"';
+    const sig = "export function outcomeTone(outcome: string): string";
+    await onDesk("control: the real body, re-planted, exits 0", 0, "", `${sig} {\n  return ${FB};\n}`);
+    await onDesk("control: failModeTone stays legal (a non-verdict test)", 0, "", `${sig} {\n  return ${FB};\n}\nexport function f2(m: string): string { return m === "fail-closed" ? "text-status-allow" : "text-status-deny"; }`);
+    // F18: a remap by a literal key or a wrapper.
+    await onDesk("F18a: `if deny return OUTCOME_TONE.allow`", 1, "(S2)", `${sig} { if (outcome === "deny") return OUTCOME_TONE.allow; return ${FB}; }`);
+    await onDesk("F18b: `OUTCOME_TONE[\"allow\"]` under the deny arm", 1, ["(S1)", "(S4)"], `${sig} { return outcome === "deny" ? OUTCOME_TONE["allow"] : ${FB}; }`);
+    await onDesk("F18c: `case \"deny\": return OUTCOME_TONE.allow`", 1, ["(S1)", "(S2)"], `${sig} { switch (outcome) { case "deny": return OUTCOME_TONE.allow; default: return ${FB}; } }`);
+    await onDesk("F18d: a spread remap inside the function", 1, "(S4)", `${sig} { return ({ ...OUTCOME_TONE, deny: OUTCOME_TONE.allow } as Record<string, string>)[outcome] ?? "text-status-restrict"; }`);
+    await onDesk("F18e: a nested wrapper `toneFor(\"allow\")`", 1, ["(S1)", "(S4)"], `${sig} { const toneFor = (v: string): string => OUTCOME_TONE[v as Outcome] ?? "text-status-restrict"; return outcome === "deny" ? toneFor("allow") : toneFor(outcome); }`);
+    await onDesk("F18e': a module-scope wrapper `toneFor(previous)` (no literal)", 1, "(S5)", `const toneFor = (v: string): string => OUTCOME_TONE[v as Outcome] ?? "text-status-restrict";\nexport function outcomeTone(outcome: string, previous = ""): string { return previous ? toneFor(previous) : toneFor(outcome); }`);
+    await onDesk("F18f: recursion `outcomeTone(\"allow\")`", 1, ["(S1)", "(S5)"], `${sig} { if (outcome === "deny") return outcomeTone("allow"); return ${FB}; }`);
+    await onDesk("F18g: `pick(outcome === \"deny\" ? \"allow\" : outcome)`", 1, "(S1)", `${sig} { const pick = (outcome: string): string => OUTCOME_TONE[outcome as Outcome] ?? "text-status-restrict"; return pick(outcome === "deny" ? "allow" : outcome); }`);
+    await onDesk("F18h: an alias `const T = OUTCOME_TONE`", 1, ["(S2)", "(S4)"], `${sig} { const T = OUTCOME_TONE; return outcome === "deny" ? T.allow : ${FB}; }`);
+    await onDesk("F18i: `Object.values(OUTCOME_TONE)[0]`", 1, "(S4)", `${sig} { return outcome === "deny" ? Object.values(OUTCOME_TONE)[0] : ${FB}; }`);
+    // F19: a verdict named through a constant.
+    await onDesk("F19a: `const DENY: Outcome = \"deny\"`", 1, "(S3)", `${sig} { return outcome === DENY ? "text-status-allow" : ${FB}; }`, 'const DENY: Outcome = "deny";\n');
+    await onDesk("F19b: `OUTCOMES.DENY`", 1, ["(S3)", "(S2)"], `${sig} { return outcome === OUTCOMES.DENY ? "text-status-allow" : ${FB}; }`, 'const OUTCOMES = { DENY: "deny", ALLOW: "allow" } as const;\n');
+    await onDesk("F19c: `case DENY:`", 1, "(S3)", `${sig} { switch (outcome) { case DENY: return "text-status-allow"; default: return ${FB}; } }`, 'const DENY: Outcome = "deny";\n');
+    await onDesk("F19d: `new Set([\"deny\"]).has`", 1, "(S3)", `${sig} { return DENIED.has(outcome) ? "text-status-allow" : ${FB}; }`, 'const DENIED = new Set(["deny"]);\n');
+    await onDesk("F19e: `[\"deny\", \"restrict\"].includes` via a constant", 1, "(S3)", `${sig} { return DENIED.includes(outcome) ? "text-status-allow" : ${FB}; }`, 'const DENIED = ["deny", "restrict"];\n');
+    await onDesk("F19f: a concatenated constant `\"de\" + \"ny\"`", 1, "(S3)", `${sig} { return outcome === DENY ? "text-status-allow" : ${FB}; }`, 'const DENY = "de" + "ny";\n');
+    // F20: a guard clause.
+    await onDesk("F20a: `if (!== deny) return lookup; return legacyTone ? allow : deny`", 1, "(S1)", `${sig} { if (outcome !== "deny") return ${FB}; return legacyTone ? "text-status-allow" : "text-status-deny"; }`, "export let legacyTone = false;\n");
+    await onDesk("F20b: a three-verdict guard then `if (legacyTone) return allow`", 1, "(S1)", `${sig} { if (outcome === "allow" || outcome === "step-up" || outcome === "restrict") { return OUTCOME_TONE[outcome as Outcome]; } if (legacyTone) { return "text-status-allow"; } return "text-status-deny"; }`, "export let legacyTone = false;\n");
+    // F21: a decoy or destructured subject.
+    await onDesk("F21a: a decoy `d.previous` before `d.outcome`", 1, ["(S1)", "(S4)"], `export function outcomeTone(d: { outcome: string; previous?: string }): string { if (d.previous === "allow") return OUTCOME_TONE[d.previous as Outcome]; return d.outcome === "deny" ? "text-status-allow" : "text-status-restrict"; }`);
+    await onDesk("F21b: a destructured first parameter", 1, "(S1)", `export function outcomeTone({ outcome }: { outcome: string }): string { return outcome === "deny" ? "text-status-allow" : outcome === "allow" ? "text-status-allow" : "text-status-restrict"; }`);
+    await onDesk("F21c: a destructured parameter as the Record key (no literal)", 1, "(S4)", `export function outcomeTone({ outcome }: { outcome: string }): string { return ${FB}; }`);
+    await onDesk("F21d: `const { outcome } = d` in the body", 1, ["(S1)", "(S4)"], `export function outcomeTone(d: { outcome: string }): string { const { outcome } = d; return outcome === "deny" ? "text-status-allow" : ${FB}; }`);
+    // S4 write / shadow / second-key forms that carry no verdict literal at all.
+    await onDesk("S4: the key parameter reassigned from a second parameter", 1, "(S4)", `export function outcomeTone(outcome: string, previous = ""): string { if (previous) outcome = previous; return ${FB}; }`);
+    await onDesk("S4: the key parameter shadowed in a block", 1, "(S4)", `export function outcomeTone(outcome: string, previous = ""): string { { const outcome = previous; return ${FB}; } }`);
+    await onDesk("control: a second, non-verdict parameter beside the lookup exits 0", 0, "", `export function outcomeTone(outcome: string, scope = ""): string { return scope ? ${FB} : ${FB}; }`);
+    await onDesk("S4: a namespace member `NS.OUTCOME_TONE[outcome]` (M7's shape)", 1, "(S4)", `const NS = { OUTCOME_TONE };\n${sig} { return NS.OUTCOME_TONE[outcome as Outcome] ?? "text-status-restrict"; }`);
+    await onDesk("S4: a write through the lookup `OUTCOME_TONE[outcome] = …`", 1, "(S4)", `${sig} { OUTCOME_TONE[outcome as Outcome] = "text-status-allow"; return ${FB}; }`);
+    await onDesk("S1: a template-literal verdict `${\"\"}deny`", 1, "(S1)", `${sig} { return outcome === \`\${""}deny\` ? "text-status-allow" : ${FB}; }`);
+    await onDesk("S1: an upper-case `\"DENY\"` compared after toUpperCase()", 1, "(S1)", `${sig} { return outcome.toUpperCase() === "DENY" ? "text-status-allow" : ${FB}; }`);
+  }
+  // Unit: toneShapeProblems on the three REAL tone modules is empty, and each S-rule fires alone.
+  {
+    for (const rel of TONE_MODULES) checks.push([`round 8: toneShapeProblems is empty on the real ${rel}`, toneShapeProblems(readFileSync(join(repo, rel), "utf8"), Object.keys(TONE_EXPECTED[rel])).length === 0]);
+    const sp = (code) => toneShapeProblems(`export type Outcome = "allow" | "step-up" | "restrict" | "deny";\n${goodRecord}\n${code}`, ["OUTCOME_TONE"]);
+    const only = (code, tag) => { const p = sp(code); return p.length > 0 && p.every((m) => m.includes(`(${tag})`)); };
+    checks.push(["S1 alone: a verdict literal in a function body", only('export function f(o: string): string { return o === "deny" ? "x" : "y"; }', "S1")]);
+    checks.push(["S2 alone: a verdict-named member in a function body", only("export function f(o: { deny: string }): string { return o.deny; }", "S2")]);
+    checks.push(["S2 alone: a destructured verdict property", only("export function f(o: { deny: string }): string { const { deny: d } = o; return d; }", "S2")]);
+    checks.push(["S3 alone: a module-scope verdict constant", only('export const DENY = "deny";', "S3")]);
+    checks.push(["S3: OUTCOME_ORDER and OUTCOME_CHART_MARK literals are verdict data, not refused", sp('export const OUTCOME_ORDER = ["allow", "step-up", "restrict", "deny"];\nexport const OUTCOME_CHART_MARK = { deny: { dataKey: "deny", label: "Deny" } };').length === 0]);
+    checks.push(["S4 alone: a bare reference in a function", only("export function f(): object { return OUTCOME_TONE; }", "S4")]);
+    checks.push(["S4: a spread in a module-scope Record initializer is admitted", sp("export const MORE = { ...OUTCOME_TONE, x: \"y\" };").length === 0]);
+    checks.push(["S4: `typeof OUTCOME_TONE` in a type is admitted", sp("export type T = keyof typeof OUTCOME_TONE;").length === 0]);
+    checks.push(["S4: the lookup inside a method (not module scope) is refused", only("export const o = { m(k: string) { return OUTCOME_TONE[k as Outcome]; } };", "S4")]);
+    checks.push(["S4: `[outcome] = …` destructuring-assigns the key", only("export function f(outcome: string, p: string[]): string { [outcome] = p; return OUTCOME_TONE[outcome as Outcome]; }", "S4")]);
+    checks.push(["S4: `outcome++` disturbs the key", only("export function f(outcome: any): string { outcome++; return OUTCOME_TONE[outcome as Outcome]; }", "S4")]);
+    checks.push(["S5 alone: a toner referenced in its module", only("export function f(o: string): string { return OUTCOME_TONE[o as Outcome]; }\nexport const g = (x: string) => f(x);", "S5")]);
+    checks.push(["S5: an exported toner with no in-module reference is admitted", sp("export function f(o: string): string { return OUTCOME_TONE[o as Outcome]; }\nexport { f as g2 };").every((m) => !m.includes("(S5)"))]);
+  }
   const failed = checks.filter(([, ok]) => !ok);
   for (const [label, ok] of checks) console.log(`  ${ok ? "✓" : "✗"} ${label}`);
   console.log(`\nself-test ${failed.length === 0 ? "passed" : "FAILED"} (${checks.length - failed.length}/${checks.length})`);
@@ -2019,6 +2249,7 @@ export async function runGate(cfg) {
     for (const msg of r.problems) registryProblems.push(`${mod}:${msg}`);
     const expectedMap = Array.isArray(toneModules[mod]) ? Object.fromEntries(toneModules[mod].map((n) => [n, null])) : toneModules[mod];
     for (const msg of toneBranchProblems(src, Object.keys(expectedMap))) registryProblems.push(`${mod}:${msg}`);
+    for (const msg of toneShapeProblems(src, Object.keys(expectedMap))) registryProblems.push(`${mod}:${msg}`);
     for (const [n, kind] of Object.entries(expectedMap)) {
       if (kind !== "text" && kind !== "bg") registryProblems.push(`${mod}: ${n} is listed without a class kind (\`text\` or \`bg\`) — an unkinded Record is not held to one canonical class`);
     }

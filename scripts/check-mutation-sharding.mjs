@@ -1640,7 +1640,13 @@ console.log(`  ${TARGETS.length} targets · ${TARGETS.reduce((n, t) => n + t.fil
     check("restore: a journal whose owner is live (or cannot be identified) is refused, never cleared", live.ok === false && live.problems.join(" ").includes("another sweep"));
     const fixed = createJournal({ root, dir: jdir, pid: 4242004, isLive: () => false }).begin({ restoreStale: true });
     check("restore: --restore-stale applies the journal and the file is the original again", fixed.ok === true && readFileSync(target, "utf8") === "ORIGINAL\n");
-    check("restore: the pid of the process itself is never 'live' (pid reuse), a dead pid is not live, a live pid that is not a mutation-guard (pid reuse) is not live", ownerIsLive(process.pid) === false && ownerIsLive(2 ** 22 + 77) === false && ownerIsLive(1) === false);
+    // A process this gate owns, so the answer does not depend on what pid 1 is (or whether /proc is readable) on the machine running the gate.
+    const bystander = spawn(process.execPath, ["-e", "setTimeout(() => {}, 30000)"], { stdio: "ignore" });
+    let readable = true;
+    try { readFileSync(`/proc/${bystander.pid}/cmdline`, "utf8"); } catch { readable = false; }
+    const bystanderLive = ownerIsLive(bystander.pid);
+    bystander.kill("SIGKILL");
+    check("restore: the pid of the process itself is never 'live' (pid reuse), a dead pid is not live, a live pid that is not a mutation-guard is not live when its identity is readable, and IS live (fail closed) when it is not", ownerIsLive(process.pid) === false && ownerIsLive(2 ** 22 + 77) === false && bystanderLive === !readable);
 
     let inRepo = false;
     try { privateJournalDir(REPO, join(REPO, "scripts")); } catch { inRepo = true; }

@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-11-02T16:18:20.990Z",
-  "result": "non-quiet: Mac tick #1758 verified and merged 8c689167 (live evidence 15:06:59Z, the v101 re-mint); Mac mail #1756 (hand clear) open on auto-merge; no mail unread to cloud. Tick heartbeat on mainline still 2026-10-24 (direct push refused by ruleset 25774497 since then; fix rides #1698). Owner not escalated again (already told in chat)."
+  "firedAt": "2026-11-02T23:26:01.215Z",
+  "result": "23:24Z cycle (11-02): keepalive (mainline hb 18:33Z, age >2h; the 21:24Z keepalive PR #1767 conflicted with 2941d392 after #1768 and was closed superseded). Window: #1768 landed 2941d392 (Postgres check fixed); Mac mail on #1769 (vault legs 1-2 run, gateway 4B only) in CI, ack follows once it lands; owner order to switch the Mac builder to OmniRoute delivered in #1770; mac/ci-yield-probe-evidence moved 23:21Z = #1766, CI running. Tick heartbeat firedAt 2026-10-24T07:30:38Z (stale; escalation already spent, tracked on the #1698 path). Live evidence committed 2026-11-02 15:07Z (<1 day). Sim loop and manifest clean; 3 stale unread messages reported. Owner not escalated this cycle."
 }

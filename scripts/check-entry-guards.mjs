@@ -33,24 +33,29 @@
 //
 // WHAT IS GATED: three things, outside the declared lists.
 //   1. in any tracked `scripts/**/*.mjs`, the SUFFIX form (the first defect above);
-//   2. in the same files, a SHAPE (rawGuards): a statement that compares `process.argv[1]` with the module's
-//      own path unless it goes through `isMainModule` or a realpath call wraps EACH compared operand; a literal
+//   2. in the same files, a BEHAVIOUR (rawGuards), not a list of spellings: any expression that reads `process.argv`
+//      (any accessor - `.argv`, `?.argv`, `["argv"]` - at any index the detector cannot rule out as not-1; ruled out
+//      are an integer index other than 1, `.length`, `.slice(k)` with k >= 2 and `.at(k)` with k >= 0, k != 1) AND
+//      holds the module's own path, whatever joins them (an operator of any kind, a method, a call, an object key),
+//      judged at the smallest term that holds both. The only excuses: the exact call
+//      `isMainModule(process.argv[1], import.meta.url)`, an `===`/`!==`/`==`/`!=` with a realpath call on each side,
+//      and an `Object.is` (as `Object.is`, `Object[<string>]`, a `const` alias or destructure, `.call`/`.apply`,
+//      `Reflect.apply`) whose two compared arguments are each wrapped whole in a realpath call. Also: a literal
 //      `.endsWith(..)`/`.startsWith(..)`/`.includes(..)` test or a basename compare of `process.argv[1]`; every
-//      `isMainModule` reference that is not the named import or an exact direct call (swapped, aliased, nested, member, `?.(`,
-//      `.call`, a wrapper function, `new`/`typeof`/`void` before the call); `Object.is` as `Object.is`, `Object[<string>]`, a `const`
-//      alias or destructure, `.call`/`.apply` or `Reflect.apply`, unless a realpath call wraps EACH compared argument. Judged one comparison at a time. Read from code through a lexer (comments, strings and regex
-//      literals blanked, template expressions kept); `process.argv[1]` is recognised as .argv[1], ?.[1], .at(1),
-//      ["argv"][1] and through `const x = process.argv[1]` / `const [, x] = process.argv`; the self path as
-//      import.meta.url / .filename and through a `const` bound to fileURLToPath(..), resolve(..) of it or
-//      `new URL(import.meta.url).pathname`. NOT detected, each pinned as a miss in the self-test:
+//      `isMainModule` reference that is not the named import or an exact direct call (swapped, aliased, nested,
+//      member, `?.(`, `.call`, a wrapper function, `new`/`typeof`/`void` before the call). Read from code through a
+//      lexer (comments, strings and regex literals blanked, template expressions kept); an argv read is followed
+//      through `const x = <argv read>` and `const [, x] = process.argv`; the self path is import.meta.url /
+//      .filename and a `const` bound to fileURLToPath(..), resolve(..) of it or `new URL(import.meta.url).pathname`.
+//      NOT detected, each pinned as a miss in the self-test:
 //      a self path built by a function the detector cannot see; a comparison split across two statements by a
-//      boolean; `let x; x = process.argv[1]`; `const args = process.argv; args[1]`; `const { argv: [, x] } =
-//      process`; `import { argv } from "node:process"`; any argv read through a parameter; `switch
-//      (process.argv[1]) { case <self path>: }`; `new Set([process.argv[1]]).has(<self path>)`; `Object.is` reached other than as `Object.is`, `Object[<string>]`, a `const` alias, `const { is } = Object`, `.call`/`.apply` or `Reflect.apply` (`let eq; eq = Object.is` is not seen); any call whose name starts with `real` is read as a realpath call (`realName(process.argv[1]) === realName(<self path>)` is excused); inversion of an
-//      exact helper call (`!(isMainModule(..))`, `=== false`, `|| run()`); a `/` after `)` read as a division,
-//      which can hide an import later on the same line; a gate started as `node -e "await import('<gate>')" <gate
-//      path>` (argv[1] is then the gate path; the helper has the same property). The lexer is a heuristic, not a
-//      parser;
+//      boolean; `let x; x = process.argv[1]`; `const { argv: [, x] } = process`; `import { argv } from
+//      "node:process"`; any argv read through a parameter; `switch (process.argv[1]) { case <self path>: }`; any
+//      call whose name starts with `real` is read as a realpath call (`realName(process.argv[1]) ===
+//      realName(<self path>)` is excused); inversion of an exact helper call (`!(isMainModule(..))`, `=== false`,
+//      `|| run()`); a `/` after `)` read as a division, which can hide an import later on the same line; a gate
+//      started as `node -e "await import('<gate>')" <gate path>` (argv[1] is then the gate path; the helper has the
+//      same property). The lexer is a heuristic, not a parser;
 //   3. the fixture-IdP compose overlay (fixtureOverlayProblems): scripts/fixture-idp.compose.yml bind-mounts the converted
 //      fixture-idp.mjs into a bare container, so it must mount scripts/lib/is-main.mjs beside it; two literal, non-comment
 //      volume lines are asserted. That is a LITERAL assertion: a mount moved to another service still passes it, and the
@@ -169,6 +174,37 @@ const SELF_VALUE = String.raw`(?:(?:\w+\.)?(?:resolve|normalize)\s*\(\s*)?(?:(?:
 const SELF_ALIAS = new RegExp(String.raw`\b(?:const|let|var)\s+${NAME}\s*=\s*${SELF_VALUE}\s*[;,\n]`, "g");
 const ARGV_ALIAS = new RegExp(String.raw`\b(?:const|let|var)\s+${NAME}\s*=\s*${ARGV1_SRC}`, "g");
 const ARGV_DESTRUCTURE = new RegExp(String.raw`\b(?:const|let|var)\s*\[[^\],]*,\s*${NAME}[^\]]*\]\s*=\s*process\s*\.\s*argv\b`, "g");
+// ANY read of process.argv (R9-A): `.argv`, `?.argv`, `["argv"]` (blanked by codeOnly, so any string key is read as it),
+// followed by any accessor. The only reads ruled out are the ones that provably cannot yield argv[1]: an integer index
+// other than 1, `.length`, `.slice(k)` with k >= 2 and `.at(k)` with a non-negative k other than 1.
+const ARGV_ANY = /process\s*(?:(?:\?\.|\.)\s*argv(?![\w$])|\[\s*(?:"\s*"|'\s*'|\x60\s*\x60)\s*\])/g;
+const NOT_ARGV1 = [
+  [/^\s*(?:\?\.)?\s*\[\s*(\d+)\s*\]/, (m) => Number(m[1]) !== 1],
+  [/^\s*(?:\?\.|\.)\s*length(?![\w$])/, () => true],
+  [/^\s*(?:\?\.|\.)\s*slice\s*\(\s*(\d+)\s*[,)]/, (m) => Number(m[1]) >= 2],
+  [/^\s*(?:\?\.|\.)\s*at\s*\(\s*(\d+)\s*\)/, (m) => Number(m[1]) !== 1],
+];
+/** Pure: the first read of process.argv in `text` that may yield argv[1], as { index }; null when there is none. */
+export function argvRead(text) {
+  for (const m of text.matchAll(ARGV_ANY)) {
+    const rest = text.slice(m.index + m[0].length);
+    if (NOT_ARGV1.some(([re, rules]) => {
+      const r = re.exec(rest);
+      return r !== null && rules(r);
+    })) continue;
+    return { index: m.index };
+  }
+  return null;
+}
+/** Pure: names bound by `const|let|var x = <a read of process.argv that may yield argv[1]>`. */
+function argvAliases(code) {
+  const out = [];
+  for (const m of code.matchAll(/\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(?=process\b)/g)) {
+    const r = argvRead(code.slice(m.index + m[0].length, m.index + m[0].length + 200));
+    if (r && r.index === 0) out.push(m[1]);
+  }
+  return out;
+}
 const escapeRe = (n) => n.replace(/[\\^$.*+?()[\]{}|]/g, "\\$&");
 const wordOf = (names) => (names.length ? new RegExp(`(?<![\\w$])(?:${names.map(escapeRe).join("|")})(?![\\w$])`) : null);
 const REAL_CALL = /\breal\w*\s*\(/;
@@ -197,6 +233,19 @@ const dropAllScratch = () => {
  * Each term is { text, offset } (offset into `expr`); a term keeps its nested groups' text.
  */
 export function termsOf(expr, base = 0, out = []) {
+  // A bracket with no partner (a statement cut at a `;` inside a callback leaves some) is a SEPARATOR, so the text on
+  // each side of it is still split into its own comparisons instead of being swallowed by a group that never closes.
+  const unmatched = new Set();
+  const stack = [];
+  for (let i = 0; i < expr.length; i += 1) {
+    const c = expr[i];
+    if (c === "(" || c === "[" || c === "{") stack.push(i);
+    else if (c === ")" || c === "]" || c === "}") {
+      if (stack.length && "([{".indexOf(expr[stack[stack.length - 1]]) === ")]}".indexOf(c)) stack.pop();
+      else unmatched.add(i);
+    }
+  }
+  for (const i of stack) unmatched.add(i);
   let depth = 0;
   let start = 0;
   let open = 0;
@@ -207,7 +256,9 @@ export function termsOf(expr, base = 0, out = []) {
   for (let i = 0; i < expr.length; i += 1) {
     const c = expr[i];
     const d = expr[i + 1];
-    if (c === "(" || c === "[" || c === "{") {
+    if (unmatched.has(i)) {
+      if (depth === 0) cut(i, i + 1);
+    } else if (c === "(" || c === "[" || c === "{") {
       if (depth === 0) open = i;
       depth += 1;
     } else if (c === ")" || c === "]" || c === "}") {
@@ -393,7 +444,7 @@ function helperReferences(code) {
 export function rawGuards(text, { callsHelperFreely = false } = {}) {
   const code = codeOnly(text);
   const names = (re) => [...code.matchAll(re)].map((m) => m[1]);
-  const argvWord = wordOf([...names(ARGV_ALIAS), ...names(ARGV_DESTRUCTURE)]);
+  const argvWord = wordOf([...argvAliases(code), ...names(ARGV_DESTRUCTURE)]);
   const selfWord = wordOf(names(SELF_ALIAS));
   const isWord = wordOf(objectIsAliases(code));
   const out = [];
@@ -405,13 +456,27 @@ export function rawGuards(text, { callsHelperFreely = false } = {}) {
   let start = 0;
   const flush = (end) => {
     const raw = code.slice(start, end);
-    const whole = raw.replace(/\bisMainModule\s*\(\s*process\s*\.\s*argv\s*\[\s*1\s*\]\s*,\s*import\s*\.\s*meta\s*\.\s*url\s*\)/g, " ");
-    for (const term of termsOf(whole)) {
-      const argvHit = ARGV1.exec(term.text) ?? (argvWord ? argvWord.exec(term.text) : null);
+    // Every isMainModule CALL is blanked (same length, so offsets hold): helperReferences judges each one, exact or not.
+    let whole = raw;
+    for (const m of raw.matchAll(/(?<![\w$])isMainModule\s*\(/g)) {
+      const end = closeParenOf(raw, m.index + m[0].length - 1);
+      if (end > 0) whole = whole.slice(0, m.index) + " ".repeat(end - m.index) + whole.slice(end);
+    }
+    const terms = termsOf(whole).map((term) => {
+      const argvHit = argvRead(term.text) ?? (argvWord ? argvWord.exec(term.text) : null);
+      const selfHit = argvHit !== null && (SELF_PATH.test(term.text) || (selfWord !== null && selfWord.test(term.text)));
+      return { ...term, argvHit, selfHit };
+    });
+    // BEHAVIOUR, not spellings (R9-A): an expression that reads process.argv (at any index the detector cannot rule out as
+    // not-1, by any accessor) AND holds this module's own path is a finding, whatever joins them - an operator, a method,
+    // a call, an object key. It is judged at the SMALLEST term that holds both, so `if (a === b)` is judged at `a === b`.
+    const within = (inner, outer) => inner !== outer && inner.offset >= outer.offset && inner.offset + inner.text.length <= outer.offset + outer.text.length && inner.text.length < outer.text.length;
+    for (const term of terms) {
+      const { argvHit, selfHit } = term;
       if (!argvHit) continue;
-      const selfHit = SELF_PATH.test(term.text) || (selfWord !== null && selfWord.test(term.text));
+      if (selfHit && terms.some((t) => t.selfHit && within(t, term))) continue; // a smaller term holds both: judged there
       const method = /\.\s*(?:endsWith|startsWith|includes)\s*\(/.test(term.text);
-      // depth-0 comparison operator of THIS term
+      // depth-0 equality operator of THIS term: the only operator a realpath pair can excuse
       let depth = 0;
       let op = null;
       for (let i = 0; i < term.text.length && !op; i += 1) {
@@ -424,20 +489,19 @@ export function rawGuards(text, { callsHelperFreely = false } = {}) {
         }
       }
       let realBoth = op !== null && REAL_CALL.test(term.text.slice(0, op.index)) && REAL_CALL.test(term.text.slice(op.index + op.length));
-      // Object.is(a, b) is a comparison too (also as Object["is"], a const alias or destructure, .call/.apply, Reflect.apply):
-      // a realpath call must WRAP each of its two compared arguments, judged argument by argument (objectIsArgs).
-      const isArgs = objectIsArgs(term.text, isWord);
-      const objectIs = isArgs !== null;
-      if (objectIs && !op) {
-        op = { index: 0, length: 0 };
-        realBoth = isArgs.length >= 2 && isArgs.slice(0, 2).every(wrapsInRealpath);
+      // Object.is(a, b) is excused the same way (also as Object["is"], a const alias or destructure, .call/.apply, Reflect.apply):
+      // a realpath call must WRAP each of its two compared arguments, judged argument by argument (objectIsArgs). Any other
+      // shape holding both is a finding with no excuse.
+      if (!op) {
+        const isArgs = objectIsArgs(term.text, isWord);
+        realBoth = isArgs !== null && isArgs.length >= 2 && isArgs.slice(0, 2).every(wrapsInRealpath);
       }
       let reason = null;
       let kind = "raw";
       if (method && selfHit) {
         reason = "tests process.argv[1] against this module's own path with endsWith/startsWith/includes (the basename-suffix defect)";
         kind = "suffix";
-      } else if (op && selfHit && !realBoth) reason = "compares process.argv[1] with this module's own path";
+      } else if (selfHit && !realBoth) reason = "reads process.argv and this module's own path in one expression";
       else if (new RegExp(`(?:${ARGV1_SRC})\\s*\\)?\\s*\\.\\s*(?:endsWith|startsWith|includes)\\s*\\(`).test(term.text)) {
         reason = "tests process.argv[1] against a literal (the basename-suffix defect)";
         kind = "suffix";
@@ -449,7 +513,14 @@ export function rawGuards(text, { callsHelperFreely = false } = {}) {
     }
     start = end + 1;
   };
-  for (let i = 0; i < code.length; i += 1) if (code[i] === ";" || code[i] === "{" || code[i] === "}") flush(i);
+  // Statements end at `;`, and at a brace outside any ( or [ (an object literal inside a call is part of its statement).
+  let nest = 0;
+  for (let i = 0; i < code.length; i += 1) {
+    const c = code[i];
+    if (c === "(" || c === "[") nest += 1;
+    else if (c === ")" || c === "]") nest = Math.max(0, nest - 1);
+    if (c === ";" || ((c === "{" || c === "}") && nest === 0)) flush(i);
+  }
   flush(code.length);
   return out;
 }
@@ -459,18 +530,18 @@ export const KNOWN_MISSES = [
   "a self path built by a function the detector cannot see",
   "a comparison split across two statements by a boolean",
   "`let x; x = process.argv[1]`",
-  "`const args = process.argv; args[1]`",
   "`const { argv: [, x] } = process`",
   '`import { argv } from "node:process"`',
   "any argv read through a parameter",
   "`switch (process.argv[1]) { case <self path>: }`",
-  "`new Set([process.argv[1]]).has(<self path>)`",
-  "`Object.is` reached other than as `Object.is`, `Object[<string>]`, a `const` alias, `const { is } = Object`, `.call`/`.apply` or `Reflect.apply` (`let eq; eq = Object.is` is not seen)",
   "any call whose name starts with `real` is read as a realpath call (`realName(process.argv[1]) === realName(<self path>)` is excused)",
   "inversion of an exact helper call (`!(isMainModule(..))`, `=== false`, `|| run()`)",
   "a `/` after `)` read as a division, which can hide an import later on the same line",
   "a gate started as `node -e \"await import('<gate>')\" <gate path>` (argv[1] is then the gate path; the helper has the same property)",
 ];
+
+/** Misses CLOSED by the round-10 behaviour rule; the self-test refuses them in the header or the backlog row. */
+const CLOSED_MISSES = ["`const args = process.argv; args[1]`", "`new Set([process.argv[1]]).has(<self path>)`", "`let eq; eq = Object.is` is not seen"];
 
 const HELPER_CALL = /(?<![\w$.])isMainModule\s*\(\s*process\.argv\[1\]\s*,\s*import\.meta\.url\s*\)/;
 
@@ -813,7 +884,24 @@ async function selfTest() {
   checks.push(["R8-A/N6 Reflect.apply(Object.is, t, [a, b]) is a comparison", raw("if (Reflect.apply(Object.is, null, [process.argv[1], import.meta.filename])) run();\n") === 1]);
   checks.push(["R8-A/N4 the Object.is realpath excuse is PER ARGUMENT: two realpath calls in one argument, or one nested inside it, do not excuse", raw(`if (Object.is(realpathSync(realpathSync(process.argv[1])), ${SELF_U})) run();\n`) === 1 && raw(`if (Object.is(realpathSync(process.argv[1] ?? realpathSync(".")), ${SELF_U})) run();\n`) === 1 && raw(`if (Object.is(realpathSync(process.argv[1]), realpathSync(${SELF_U}))) run();\n`) === 0]);
   checks.push(["R8-A/N7-N9 new / typeof / void before the exact helper call is a finding (the body runs on import)", ["new", "typeof", "void"].every((w) => rg(`import { isMainModule } from "./lib/is-main.mjs";\nif (${w} isMainModule(process.argv[1], import.meta.url)) run();\n`) === 1)]);
-  checks.push(["R7-C KNOWN MISSES: switch (process.argv[1]) { case <self path>: } and new Set([process.argv[1]]).has(<self path>) are not seen", raw("switch (process.argv[1]) {\n  case fileURLToPath(import.meta.url):\n    run();\n}\n") === 0 && raw("const here = fileURLToPath(import.meta.url);\nif (new Set([process.argv[1]]).has(here)) run();\n") === 0]);
+  // ROUND 10 (R9-A). Each of these exited 0 at round 9; the rule is now BEHAVIOUR (an argv read and the self path in one
+  // expression, whatever joins them), so each is a finding, and the provably-other argv reads stay clean.
+  for (const [label, expr] of [
+    ["argv[1.0]", "process.argv[1.0] === self"],
+    ['argv["1"]', 'process.argv["1"] === self'],
+    [">= / <=", "process.argv[1] >= self && process.argv[1] <= self"],
+    ["Object.is?.(", "Object.is?.(process.argv[1], self)"],
+    ["an object key", "({[self]: true})[process.argv[1]]"],
+    ["Array.prototype.includes.call", "Array.prototype.includes.call([self], process.argv[1])"],
+    ["Object.is.bind", "Object.is.bind(Object)(process.argv[1], self)"],
+    ["Function.prototype.call.call", "Function.prototype.call.call(Object.is, null, process.argv[1], self)"],
+    ["localeCompare", "!process.argv[1].localeCompare(self)"],
+    ["argv.slice(1)[0]", "process.argv.slice(1)[0] === self"],
+  ]) checks.push([`R9-A ${label} with the self path is a finding`, raw(`const self = fileURLToPath(import.meta.url);\nif (${expr}) {\n  run();\n}\n`) === 1]);
+  checks.push(["R9-A argv reads that cannot be argv[1] (argv[2], .length, .slice(2), .at(0)) beside the self path are not findings", ["process.argv[2] === self", "process.argv.length > 2 && self", "process.argv.slice(2).includes(self)", "process.argv.at(0) === self"].every((e) => raw(`const self = fileURLToPath(import.meta.url);\nif (${e}) run();\n`) === 0)]);
+  checks.push(["R9-A a realpath guard inside a callback cut at `;` is still judged per comparison (an unmatched bracket is a separator)", raw("const IS = (() => {\n  try {\n    return Boolean(process.argv[1]) && realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url));\n  } catch {\n    return false;\n  }\n})();\n") === 0 && raw("const IS = (() => {\n  try {\n    return Boolean(process.argv[1]) && process.argv[1] === fileURLToPath(import.meta.url);\n  } catch {\n    return false;\n  }\n})();\n") === 1]);
+  checks.push(["R7-C KNOWN MISS: switch (process.argv[1]) { case <self path>: } is not seen", raw("switch (process.argv[1]) {\n  case fileURLToPath(import.meta.url):\n    run();\n}\n") === 0]);
+  checks.push(["R9-A new Set([process.argv[1]]).has(<self path>) is a finding (any expression holding both, closed in round 10)", raw("const here = fileURLToPath(import.meta.url);\nif (new Set([process.argv[1]]).has(here)) run();\n") === 1]);
   checks.push(["R7-E/O02 .startsWith(..) between the self path and argv[1] is a suffix-class finding", sg("if (fileURLToPath(import.meta.url).startsWith(process.argv[1])) run();\n") === 1]);
   checks.push(["R7-E/O07 `import { isMainModule as im }` rebinding is a finding", rg('import { isMainModule as im } from "./lib/is-main.mjs";\nif (im(import.meta.url, process.argv[1])) run();\n') >= 1]);
   checks.push(["R7-E/O08 a call whose SECOND argument is wrong is a finding (not only the first)", rg("if (isMainModule(process.argv[1], import.meta.filename)) run();\n") === 1]);
@@ -895,20 +983,22 @@ async function selfTest() {
   // Known misses, pinned as misses so the header's claim is the measured one:
   for (const [label, text] of [
     ["let entry; entry = process.argv[1]", "let entry;\nentry = process.argv[1];\nif (entry === import.meta.filename) {}\n"],
-    ["const args = process.argv; args[1]", "const args = process.argv;\nif (args[1] === import.meta.filename) {}\n"],
     ["const { argv: [, entry] } = process", "const { argv: [, entry] } = process;\nif (entry === import.meta.filename) {}\n"],
     ["import { argv } from \"node:process\"", 'import { argv } from "node:process";\nif (argv[1] === import.meta.filename) {}\n'],
   ]) checks.push([`L2 KNOWN MISS: ${label}`, raw(text) === 0]);
   checks.push(["KNOWN MISS: inversion of an exact helper call is not judged (`!(isMainModule(..))`, `=== false`, `|| run()`)", ["if (!(isMainModule(process.argv[1], import.meta.url))) run();\n", "const off = isMainModule(process.argv[1], import.meta.url) === false;\n", "isMainModule(process.argv[1], import.meta.url) || run();\n"].every((t) => raw(t) === 0)]);
   checks.push(["KNOWN MISS: the gate imported by `node -e` with its OWN path as argv[1] runs its body (the helper has the same property)", spawnSync(process.execPath, ["--input-type=module", "-e", `await import(${JSON.stringify(import.meta.url)});`, fileURLToPath(import.meta.url)], { encoding: "utf8", timeout: 120000 }).stdout.includes("entry-guards:")]);
   checks.push(["R8 KNOWN MISS: any call named real* is read as a realpath call", raw("if (realName(process.argv[1]) === realName(fileURLToPath(import.meta.url))) run();\n") === 0]);
-  checks.push(["R8 KNOWN MISS: Object.is reached through a later assignment (`let eq; eq = Object.is`)", raw("let eq;\neq = Object.is;\nif (eq(process.argv[1], import.meta.filename)) run();\n") === 0]);
+  checks.push(["R9-A `const args = process.argv; args[1]` and `let eq; eq = Object.is` (misses until round 10) are findings", raw("const args = process.argv;\nif (args[1] === import.meta.filename) {}\n") === 1 && raw("let eq;\neq = Object.is;\nif (eq(process.argv[1], import.meta.filename)) run();\n") === 1]);
   // R8-F: the ceiling list is ONE list. The header and the backlog row each hold every KNOWN_MISSES item (whitespace-normalised).
   {
     const flat = (t) => t.replace(/\n\s*\/\/\s*/g, " ").replace(/\s+/g, " ");
     const header = flat(readFileSync(fileURLToPath(import.meta.url), "utf8").split("\nimport ")[0]);
     const row = flat(readFileSync(join(repoRoot, "docs/BUILD_BACKLOG.md"), "utf8").split("\n").find((l) => l.includes("files skip their gate body and exit 0 when started through a symlinked path")) ?? "");
     const missing = KNOWN_MISSES.filter((m) => !header.includes(flat(m)) || !row.includes(flat(m)));
+    // …and a miss CLOSED in round 10 may not linger in either list as if it were still a ceiling
+    const lingering = CLOSED_MISSES.filter((m) => header.includes(flat(m)) || row.includes(flat(m)));
+    checks.push([`R9-A no miss closed in round 10 is still listed as a ceiling${lingering.length ? ` (lingering: ${lingering.join(" | ")})` : ""}`, lingering.length === 0]);
     checks.push([`R8-F every KNOWN_MISSES item is in the gate header AND the backlog row${missing.length ? ` (missing: ${missing.join(" | ")})` : ""}`, missing.length === 0]);
   }
   checks.push(["L2 KNOWN MISS: a self path built by a function the detector cannot see", raw(`const here = getSelf();\nif (resolve(${ARGV}) === here) {}\n`) === 0]);
@@ -955,7 +1045,7 @@ const HELPER = "scripts/lib/is-main.mjs";
  * exits non-zero) and which SURVIVED or did not apply. The tally in the PR comes from this command, not from memory.
  */
 export const MUTANTS = [
-  ["argv aliases not followed", GATE, "const argvWord = wordOf([...names(ARGV_ALIAS), ...names(ARGV_DESTRUCTURE)]);", "const argvWord = null;"],
+  ["argv aliases not followed", GATE, "const argvWord = wordOf([...argvAliases(code), ...names(ARGV_DESTRUCTURE)]);", "const argvWord = null;"],
   ["realpath anywhere in the term excuses the comparison", GATE, "let realBoth = op !== null && REAL_CALL.test(term.text.slice(0, op.index)) && REAL_CALL.test(term.text.slice(op.index + op.length));", "let realBoth = REAL_CALL.test(term.text);"],
   ["$-leading alias names not bounded", GATE, "(?<![\\\\w$])(?:", "\\\\b(?:"],
   ["helper canary not run by the gate", GATE, "const canary = helperCanary(isMainModule);", "const canary = [];"],
@@ -970,7 +1060,7 @@ export const MUTANTS = [
   ["a signalled child is counted killed (R7-F)", GATE, "const signalled = r.signal || r.status === 130 || r.status === 143;", "const signalled = false;"],
   ["a child that exits 143 through its own handler is counted killed (R7-F)", GATE, "const signalled = r.signal || r.status === 130 || r.status === 143;", "const signalled = r.signal || r.status === 130;"],
   ["the child's TMPDIR is not parent-owned (R7-F)", GATE, "env: { ...process.env, TMPDIR: childTmp } });", "env: { ...process.env } });"],
-  ["Object.is is not a comparison (R7-C)", GATE, "const objectIs = isArgs !== null;", "const objectIs = false;"],
+  ["Object.is is not a comparison (R7-C)", GATE, "realBoth = isArgs !== null && isArgs.length >= 2 && isArgs.slice(0, 2).every(wrapsInRealpath);", "realBoth = false;"],
   ["startsWith is not a suffix-class method (O02)", GATE, "const method = /\\.\\s*(?:endsWith|startsWith|includes)\\s*\\(/.test(term.text);", "const method = /\\.\\s*(?:endsWith|includes)\\s*\\(/.test(term.text);"],
   ["an `isMainModule as x` rebinding is not flagged (O07)", GATE, "if (new RegExp(String.raw`(?<![\\w$])isMainModule\\s+as\\s`).test(clause[2]))", "if (false)"],
   ["only the first isMainModule argument is compared (O08)", GATE, "if (args !== EXACT_ARGS)", 'if (args.split(",")[0] !== "process.argv[1]")'],
@@ -1005,11 +1095,20 @@ export const MUTANTS = [
   ["Object.is aliases are not followed (R8-A/N2-N3)", GATE, "const isWord = wordOf(objectIsAliases(code));", "const isWord = null;"],
   ["Object.is.call is not read (R8-A/N5)", GATE, "    [new RegExp(String.raw`${callee}\\s*\\.\\s*call\\s*\\(`), \"call\"],\n", ""],
   ["Reflect.apply(Object.is, ..) is not read (R8-A/N6)", GATE, "    [new RegExp(String.raw`\\bReflect\\s*\\.\\s*apply\\s*\\(\\s*${callee}`), \"reflect\"],\n", ""],
-  ["the Object.is realpath excuse counts calls anywhere in the term (R8-A/N4)", GATE, "realBoth = isArgs.length >= 2 && isArgs.slice(0, 2).every(wrapsInRealpath);", "realBoth = (term.text.match(/\\breal\\w*\\s*\\(/g) ?? []).length >= 2;"],
+  ["the Object.is realpath excuse counts calls anywhere in the term (R8-A/N4)", GATE, "realBoth = isArgs !== null && isArgs.length >= 2 && isArgs.slice(0, 2).every(wrapsInRealpath);", "realBoth = isArgs !== null && (term.text.match(/\\breal\\w*\\s*\\(/g) ?? []).length >= 2;"],
   ["new/typeof/void before the exact call is allowed (R8-A/N7-N9)", GATE, "if (/(?<![\\w$])(?:new|typeof|void)\\s+$/.test(before)) {", "if (false) {"],
   ["the runner does not own SIGHUP/SIGQUIT (R8-B)", GATE, "  [\"SIGHUP\", 129],\n  [\"SIGQUIT\", 131],\n", ""],
   ["the runner's handlers are installed after the baseline (R8-E)", GATE, "  for (const [name, h] of handlers) process.on(name, h);\n  try {\n    const baseline = await runSelfTest();\n", "  try {\n    const baseline = await runSelfTest();\n    for (const [name, h] of handlers) process.on(name, h);\n"],
   ["the realpath excuse reads the whole statement, not the comparison's term (R5-B)", GATE, "let realBoth = op !== null && REAL_CALL.test(term.text.slice(0, op.index)) && REAL_CALL.test(term.text.slice(op.index + op.length));", "let realBoth = op !== null && REAL_CALL.test(whole);"],
+  ["argv reads are only the old argv[1] spellings (R9-A)", GATE, "const argvHit = argvRead(term.text) ?? (argvWord ? argvWord.exec(term.text) : null);", "const argvHit = ARGV1.exec(term.text) ?? (argvWord ? argvWord.exec(term.text) : null);"],
+  ["a term holding both needs an equality or an Object.is to be a finding (R9-A)", GATE, "else if (selfHit && !realBoth) reason = \"reads process.argv", "else if (selfHit && !realBoth && (op || objectIsArgs(term.text, isWord))) reason = \"reads process.argv"],
+  ["judged at the outermost term, not the smallest holding both (R9-A)", GATE, "if (selfHit && terms.some((t) => t.selfHit && within(t, term))) continue;", "if (false) continue;"],
+  ["an unmatched bracket is not a separator (R9-A)", GATE, "    if (unmatched.has(i)) {\n      if (depth === 0) cut(i, i + 1);\n", "    if (unmatched.has(i)) {\n      void 0;\n"],
+  ["a brace inside ( or [ ends the statement (R9-A)", GATE, "(c === \";\" || ((c === \"{\" || c === \"}\") && nest === 0))", "(c === \";\" || c === \"{\" || c === \"}\")"],
+  ["isMainModule calls are not blanked before the raw scan (R9-A)", GATE, "      if (end > 0) whole = whole.slice(0, m.index) + \" \".repeat(end - m.index) + whole.slice(end);", "      void end;"],
+  ["argv.length is read as argv[1] (R9-A)", GATE, "  [/^\\s*(?:\\?\\.|\\.)\\s*length(?![\\w$])/, () => true],\n", ""],
+  ["argv[k] for k != 1 is read as argv[1] (R9-A)", GATE, "  [/^\\s*(?:\\?\\.)?\\s*\\[\\s*(\\d+)\\s*\\]/, (m) => Number(m[1]) !== 1],\n", ""],
+  ["a closed miss may linger in the ceiling lists (R9-A)", GATE, "const lingering = CLOSED_MISSES.filter(", "const lingering = [].filter("],
 ];
 
 /** The signals the mutant runner (and the self-test's scratch cleanup) owns, with the exit code each one ends the run with. */

@@ -17647,9 +17647,9 @@
     {
       "type": "library",
       "name": "proxy-addr",
-      "version": "2.0.7",
-      "bom-ref": "pkg:npm/proxy-addr@2.0.7",
-      "purl": "pkg:npm/proxy-addr@2.0.7",
+      "version": "2.0.8",
+      "bom-ref": "pkg:npm/proxy-addr@2.0.8",
+      "purl": "pkg:npm/proxy-addr@2.0.8",
       "licenses": [
         {
           "license": {

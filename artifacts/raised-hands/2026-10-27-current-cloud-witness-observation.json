@@ -1,0 +1,19 @@
+{
+  "id": "2026-10-27-current-cloud-witness-observation",
+  "raisedAt": "2026-10-27T16:44:30.100Z",
+  "origin": "mac",
+  "doing": "Observing the canonical Cloud-owned forward-build-cycle witness while the local brain is primary",
+  "blockedBy": "The canonical forward-build-cycle witness is past its limit. This Mac observer cannot attest that the Cloud routine ran.",
+  "need": "The registry Cloud owner must supply an actual fresh witness or source-backed blocked outcome; the steward can carry verified source through protected delivery. This open hand records observation, not a Cloud run or completed work.",
+  "whoCanUnblock": "cloud lane",
+  "domain": "lane",
+  "status": "resolved",
+  "routedTo": null,
+  "where": "Issue #1546; current canonical coordination state",
+  "covers": [
+    "heartbeat:forward-build-cycle"
+  ],
+  "resolvedAt": "2026-10-29T11:01:31.098Z",
+  "resolvedBy": "cloud",
+  "resolution": "Cloud lane delivered a fresh forward-build-cycle heartbeat in PR #1678 (merged bcb506e5); the stall is no longer measured"
+}

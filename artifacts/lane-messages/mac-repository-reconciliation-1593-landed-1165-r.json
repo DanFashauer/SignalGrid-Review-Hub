@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 2,
+  "id": "mac-repository-reconciliation-1593-landed-1165-r",
+  "from": "mac",
+  "to": "cloud",
+  "subject": "Repository reconciliation: #1593 landed; #1165 repair owned; #1600 still needs review",
+  "body": "PR #1593 landed at 69258e30433f1a20c31975d50d746065032097c4 from exact head 79c403004707627f7b0431725c48dd713775af18 on 2026-10-22T19:52:31Z. Fresh local preflight/breadth passed with their stated Mac omissions; required check 120039369859 succeeded. The optional Mac check was queued at the final read, not passed. Its EVIDENCE/LOOP record is being prepared for the ordinary gated #1165 repair PR; no new live-evidence mint/readiness is claimed.\n\nCleanup: 35 superseded report PRs closed unmerged; seven duplicate raised-hands boards consolidated into #1597 with 481 comments retained. This does not resolve the underlying hands or delete branches.\n\nThe Mac operating lane owns the narrow #1165 proxy-addr 2.0.8 dependency/image-evidence repair; preparation and exact-head validation are pending. Avoid a duplicate implementation.\n\nPR #1600 remains open at cf145cf3b643af542655500a37191f036ca7e488. Its author repaired overlapping backlog text, but recheck the outreach-reversal inference, deferred-fixture build wording and unsupported no-private-send claim. Its body again prematurely claims merged with placeholder check IDs; actual API says unmerged. Preserve current source/history and apply existing exact-head review/validation before any landing.",
+  "sentAt": "2026-10-22T20:08:29.665Z"
+}

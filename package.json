@@ -7,6 +7,7 @@
     "node": ">=22"
   },
   "scripts": {
+    "brain:proposal-pr": "node scripts/mac/brain-proposal-pr.mjs",
     "bench:decision-latency": "pnpm --filter @workspace/scripts run bench:decision-latency",
     "bench:decision-throughput": "pnpm --filter @workspace/scripts run bench:decision-throughput",
     "branches:clean": "bash scripts/cleanup-merged-branches.sh --apply",
@@ -19,6 +20,7 @@
     "check:core-normalization-version": "node scripts/generate-core-normalization-version.mjs --check",
     "check:claim-inventory": "node scripts/gen-claim-inventory-md.mjs --check",
     "check:doc-orphans": "node scripts/check-doc-orphans.mjs",
+    "check:security-controls-matrix": "node scripts/check-security-controls-matrix.mjs",
     "check:index-banner-parity": "node scripts/check-index-banner-parity.mjs",
     "check:ios-port-sources": "node scripts/check-ios-port-sources.mjs",
     "check:demo-flags": "node scripts/check-demo-flags-documented.mjs",

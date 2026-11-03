@@ -1,4 +1,4 @@
-import { assertSameTenant, authenticate, authorize } from "./auth";
+import { assertSameTenant, authenticate, authorize, isKnownRole } from "./auth";
 import { runFixtureSync, runPostureSync, type FixturePostureRecord } from "./connector";
 import { buildEstateStore, type EstateSpec } from "./estate";
 import { runDockSync, type DockCustodyRecord } from "./dock";
@@ -226,6 +226,12 @@ export class SignalGridCore {
     }
     // The tenant must already exist — an OIDC identity cannot conjure one.
     this.requireTenant(input.tenantId);
+    // The role must be one of the five in the matrix. Refused here, at the
+    // boundary, so a bad role claim is a clean 400 rather than a principal that
+    // is accepted and then fails on every later call.
+    if (!isKnownRole(input.role)) {
+      throw new CoreError("validation", "Unknown role for a verified principal.", 400);
+    }
     const record: ApiKeyRecord = {
       id: `evk_${input.tenantId}_${input.subjectId}`,
       tenantId: input.tenantId,

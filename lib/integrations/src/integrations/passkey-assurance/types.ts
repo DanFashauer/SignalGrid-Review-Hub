@@ -34,6 +34,8 @@
 // re-implement WebAuthn verification; `lib/webauthn` does that, and this grades the
 // standing worth of the credential rather than one assertion.
 
+import type { FamilyAction } from "../action-ladder";
+
 /** How the credential is held. `security_key` = external FIDO2 authenticator;
  *  `device_bound_authenticator` = a passkey pinned to one device (Windows Hello, a
  *  platform authenticator app); `synced` = replicated by a cloud passkey provider. */
@@ -151,7 +153,7 @@ export type PasskeyPosture =
   | "not_registered"
   | "unverified";
 
-export type PasskeyAction = "none" | "monitor" | "step_up" | "alert" | "restrict" | "escalate";
+export type PasskeyAction = FamilyAction;
 
 export type PasskeyReasonCode =
   | "ATTESTED_DEVICE_BOUND"

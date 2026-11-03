@@ -164,6 +164,21 @@ check("attestable:false + an attested serial/OS → step_up conflict, NEVER not_
 // report (no chain, no attested facts) abstains to none.
 check("a self-CONSISTENT not-capable report still abstains (none) — the guard is surgical", intel.posture === "not_attestable" && intel.recommendedAction === "none");
 
+// Unreadable identity strings (wave 8 pins). A bridge that could not read the serial or OS
+// version says so in prose ("Not found", "unavailable", "error: ..."); that text must become
+// null, never an attested identity — an attested serial beside attestable:false is a CONFLICT.
+{
+  const norm = (extra: Record<string, unknown>) => normalizeReport("dev-x", { attestable: true, ...extra } as never);
+  check("an all-whitespace or empty serial/OS normalises to null, not \"\"",
+    norm({ serial: "   " }).attestedSerial === null && norm({ osVersion: "" }).attestedOsVersion === null);
+  check("\"Not found\" / \"unavailable\" / \"error\" prose (any case, padded) is null, not an attested identity",
+    ["Not found", "  NOT FOUND: serial  ", "Unavailable", "unavailable (bridge)", "Error: timeout", "error"].every(
+      (t) => norm({ serial: t }).attestedSerial === null && norm({ osVersion: t }).attestedOsVersion === null));
+  check("a real serial and OS version are kept (trimmed), and a non-string is null",
+    norm({ serial: " C02XYZ " }).attestedSerial === "C02XYZ" && norm({ osVersion: "14.5" }).attestedOsVersion === "14.5"
+    && norm({ serial: 12345 }).attestedSerial === null && norm({}).attestedOsVersion === null);
+}
+
 // Determinism.
 const d = await connector.fetchAttestation(fixture.devices["secureboot-permissive"].deviceId);
 check("evaluator is deterministic", JSON.stringify(evaluateAttestation(d)) === JSON.stringify(evaluateAttestation(d)));

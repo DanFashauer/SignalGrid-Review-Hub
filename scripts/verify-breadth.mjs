@@ -250,6 +250,16 @@ if (process.argv.includes("--self-test")) {
   process.exit(0);
 }
 
+// `--list-steps` prints the list the loop below iterates, as one JSON line, and stops. The registration gate
+// (scripts/check-gate-self-tests-run.mjs) reads what is registered from HERE rather than parsing this file's source:
+// source can be written to look like a step without being one, the list the loop runs cannot. Keep this block
+// directly above the loop; the gate checks that it is.
+if (process.argv.includes("--list-steps")) {
+  // wait for the write to flush: process.exit() straight after a pipe write cuts the output at the 64 KiB pipe buffer
+  await new Promise((done) => process.stdout.write(JSON.stringify(STEPS.map((s) => ({ name: s.name, cmd: s.cmd, heavy: s.heavy === true, needsNativeBuild: s.needsNativeBuild === true }))) + "\n", done));
+  process.exit(0);
+}
+
 const results = [];
 let failed = null;
 for (const step of STEPS) {

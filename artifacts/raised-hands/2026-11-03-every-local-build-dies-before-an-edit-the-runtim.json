@@ -1,0 +1,12 @@
+{
+  "id": "2026-11-03-every-local-build-dies-before-an-edit-the-runtim",
+  "raisedAt": "2026-11-03T07:08:39.368Z",
+  "origin": "mac",
+  "doing": "Closing the owner's Obsidian loop: a local-LLM build reaching a PR, review, lane merge and back to Obsidian",
+  "blockedBy": "Every local build dies before an edit: the runtime still offers 'read' after two reads and a third read kills the job; new-file tasks are refused at intake. The one-hunk fix (brain note bc642fe2) is in signalgrid_agent_runtime.py, which is hash-pinned inside signalgrid_brain.py, itself under the accounting pin",
+  "need": "Owner says 'apply it' (Mac Claude applies the fix and re-pins both hashes, with backups and a test), or Codex applies it after its quota resets 2026-11-04 01:36Z",
+  "whoCanUnblock": "owner",
+  "domain": "local-brain",
+  "status": "open",
+  "routedTo": null
+}

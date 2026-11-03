@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-11-03T00:11:47.724Z",
-  "result": "00:10Z fire (11-03): quiet for builds - no cloud wave (DR-064; 0 mac/build-row-* claims); in flight H/S/O = 0/0/0; landed 0 this fire. Lane-mail chain: #1767 (21:24Z keepalive) merged 18477a7e, #1771 (23:24Z keepalive) merged c3c8c380; Mac mail #1769 (vault legs 1-2 run; gateway 4B only) refreshed onto mainline, CI running, ack follows its landing; owner order #1770 (Codex quota out until 11-04 01:36 -> Mac builder to OmniRoute with a stronger model) refreshes after #1769. Mac #1766 (host-share probe) CI running; #1698 dirty, the Mac's. Sub-brains: signalgrid-mcp #17 unchanged (fdc50f61, owner's). Owner queue: #1265, #1698 path."
+  "firedAt": "2026-11-03T04:11:40.798Z",
+  "result": "04:10Z fire (11-03): quiet for builds - no cloud wave (DR-064; 0 mac/build-row-* claims); in flight H/S/O = 0/0/0; landed 0 this fire. Since 00:10Z: owner order #1770 (Codex quota out until 11-04 01:36 -> Mac builder to OmniRoute with a stronger model) merged; Mac vault/gateway mail #1769 merged and acked (#1773); keepalives #1772, #1774 merged. Awaiting the Mac's report on the gateway model and the resumed Codex session. Sub-brains: signalgrid-mcp #17 unchanged (fdc50f61, owner's). Owner queue: #1265, #1698 path."
 }

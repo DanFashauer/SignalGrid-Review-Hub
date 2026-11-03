@@ -145,6 +145,22 @@ function dockFreshnessFor(observedAt: string): string {
   return buildEvidence(ident, dev, wf, signals).dockEvidenceFreshness;
 }
 
+/** Two posture_freshness readings at the SAME instant (no healthy posture sibling), in the given arrival order. */
+function postureTieFor(first: string, second: string): string {
+  const signals = [
+    sig("s_a", "posture_freshness", first, "2026-07-13T12:00:00.000Z"),
+    sig("s_b", "posture_freshness", second, "2026-07-13T12:00:00.000Z"),
+    sig("s_c", "device_compliance", "compliant", BASE),
+    ...healthy().filter((x) => x.category !== "posture_freshness"),
+  ];
+  return String(buildEvidence(identity, device, workflow, signals).postureFreshness);
+}
+
+/** The freshness classifier with an offset-less EVALUATION clock: the clock names no instant either. */
+function freshnessAtOffsetlessNow(observedAt: string): string {
+  return classifyFreshness(observedAt, "2026-07-13T13:00:00", 1, 24);
+}
+
 if (process.argv[2] === "--worker") {
   const [mode, a, b, c] = process.argv.slice(3);
   const out =
@@ -154,6 +170,8 @@ if (process.argv[2] === "--worker") {
     : mode === "tie" ? tieFor(a as SignalCategory, b!, c!, process.argv[7]!)
     : mode === "freshness" ? freshnessFor(a!)
     : mode === "dock" ? dockFreshnessFor(a!)
+    : mode === "ptie" ? postureTieFor(a!, b!)
+    : mode === "freshnow" ? freshnessAtOffsetlessNow(a!)
     : "BAD-MODE";
   console.log(`VERDICT ${out}`);
   process.exit(0);
@@ -369,6 +387,45 @@ for (const stamp of ["2026-03-02T08:00:00+00", "2026-03-02", "2024-02-29T08:00:0
     });
   }
   check("accusation orders match the shipped rules' outcomes, and every accusing member is ranked", problems.length === 0, problems.join("; "));
+}
+
+// The POSTURE freshness fold is hand-ordered (POSTURE_SEVERITY in evidence.ts); hold it to the shipped rules too.
+// For every pair the rules separate, a same-instant tie must resolve to the value with the harsher shipped outcome,
+// in either arrival order. A reorder such as stale above missing turns a restrict into a step-up and fails here.
+{
+  const RANK: Record<string, number> = { allow: 0, step_up: 1, restrict: 2, deny: 3 };
+  const base = buildEvidence(identity, device, workflow, [sig("s_c", "device_compliance", "compliant", BASE), ...healthy()]);
+  const pv = { id: "pv_p", tenantId: "tenant_northwind", policyId: "pol_p", version: 1, status: "active" as const, rules: SHARED_DEVICE_RULES_V1, createdAt: BASE, digest: "test" };
+  const outcomeOf = (member: string) =>
+    RANK[evaluatePolicy(pv, { ...base, postureFreshness: member } as typeof base).outcome]!;
+  const values = ["fresh", "stale", "expired", "missing", "unknown"];
+  const problems: string[] = [];
+  for (const x of values) for (const y of values) {
+    if (outcomeOf(x) <= outcomeOf(y)) continue;
+    for (const [first, second] of [[x, y], [y, x]] as const) {
+      const got = inZone("UTC", "ptie", first, second);
+      if (outcomeOf(got) !== outcomeOf(x)) problems.push(`${first}+${second} -> ${got} (outcome ${outcomeOf(got)}, want ${outcomeOf(x)})`);
+    }
+  }
+  check("posture freshness: a same-instant tie resolves to the harsher shipped outcome, in either arrival order", problems.length === 0, problems.join("; "));
+}
+
+// A NEGATIVE offset is applied with its sign: 06:00-02:00 is 08:00Z, LATER than the 07:30Z accusation, so the vouch
+// wins. Dropping or flipping the sign reads it as 04:00Z (older) or illegible and the accusation stands.
+{
+  const r = ZONES.map((z) => inZone(z, "verdict", "2026-07-13T06:00:00-02:00"));
+  check(
+    "explicit -02:00 observedAt: the negative offset is applied (06:00-02:00 = 08:00Z is LATER than the accusation), identically in every zone",
+    new Set(r).size === 1 && r[0]!.endsWith("|compliant"),
+    r.join(","),
+  );
+}
+
+// The EVALUATION clock goes through the same strict parser: an offset-less `now` names no instant, so freshness is
+// "unknown" in every zone rather than a host-local fresh/stale.
+{
+  const r = ZONES.map((z) => inZone(z, "freshnow", "2026-07-13T12:30:00Z"));
+  check("classifyFreshness: an offset-less evaluation clock is 'unknown' in every zone", r.every((v) => v === "unknown"), r.join(","));
 }
 
 console.log(`\nsummary=${failures.length === 0 ? "pass" : "FAIL"} (${passed}/${passed + failures.length})`);

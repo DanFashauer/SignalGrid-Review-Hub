@@ -860,12 +860,12 @@ function readEnum<T extends string>(
  * `observedAt` nothing can order is present-but-illegible; an orderable answer is
  * whatever it says.
  *
- * The illegible case resolves WORST-WINS against the value rule in
- * `resolveWorst`, on the freshness severity ladder rather than the three-level
- * one: a sole illegible reading is floored at "unknown", so an illegible "fresh"
- * reads "unknown" (it may not vouch) while an illegible "stale" or "expired"
- * stays what it says (it may still accuse). Mixed with a parseable sibling, the
- * parseable one is the answer unless the illegible one is worse.
+ * The illegible case resolves WORST-WINS on the rule-aligned POSTURE_SEVERITY
+ * order (missing/unknown restrict, above stale/expired, which step up): a sole
+ * illegible reading is floored at "unknown", so an illegible "fresh", "stale" or
+ * "expired" reads "unknown" (it may not vouch, and "unknown" is the harsher
+ * shipped outcome). Mixed with a parseable sibling, the parseable one is the
+ * answer unless the illegible one is worse on that order.
  */
 function readFreshness(latestByCategory: LatestByCategory, nowIso?: string): Freshness {
   const reading = latestByCategory.get("posture_freshness");

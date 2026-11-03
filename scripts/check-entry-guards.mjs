@@ -476,7 +476,7 @@ export function rawGuards(text, { callsHelperFreely = false } = {}) {
     const excusedIs = terms.filter((t) => {
       if (!t.selfHit) return false;
       const isArgs = objectIsArgs(t.text, isWord);
-      return isArgs !== null && isArgs.length >= 2 && isArgs.slice(0, 2).every(wrapsInRealpath);
+      return isArgs !== null && isArgs.length >= 2 && isArgs.slice(0, 2).every(wrapsInRealpath); // each compared argument, whole
     });
     for (const term of terms) {
       const { argvHit, selfHit } = term;
@@ -496,14 +496,9 @@ export function rawGuards(text, { callsHelperFreely = false } = {}) {
           if (m) op = { index: i, length: m[0].length };
         }
       }
-      let realBoth = op !== null && REAL_CALL.test(term.text.slice(0, op.index)) && REAL_CALL.test(term.text.slice(op.index + op.length));
-      // Object.is(a, b) is excused the same way (also as Object["is"], a const alias or destructure, .call/.apply, Reflect.apply):
-      // a realpath call must WRAP each of its two compared arguments, judged argument by argument (objectIsArgs). Any other
-      // shape holding both is a finding with no excuse.
-      if (!op) {
-        const isArgs = objectIsArgs(term.text, isWord);
-        realBoth = isArgs !== null && isArgs.length >= 2 && isArgs.slice(0, 2).every(wrapsInRealpath);
-      }
+      // An equality is excused by a realpath call on each side; an excused Object.is was skipped above (excusedIs). Any
+      // other shape holding both is a finding with no excuse.
+      const realBoth = op !== null && REAL_CALL.test(term.text.slice(0, op.index)) && REAL_CALL.test(term.text.slice(op.index + op.length));
       let reason = null;
       let kind = "raw";
       if (method && selfHit) {
@@ -1069,7 +1064,7 @@ const HELPER = "scripts/lib/is-main.mjs";
  */
 export const MUTANTS = [
   ["argv aliases not followed", GATE, "const argvWord = wordOf([...argvAliases(code), ...names(ARGV_DESTRUCTURE)]);", "const argvWord = null;"],
-  ["realpath anywhere in the term excuses the comparison", GATE, "let realBoth = op !== null && REAL_CALL.test(term.text.slice(0, op.index)) && REAL_CALL.test(term.text.slice(op.index + op.length));", "let realBoth = REAL_CALL.test(term.text);"],
+  ["realpath anywhere in the term excuses the comparison", GATE, "const realBoth = op !== null && REAL_CALL.test(term.text.slice(0, op.index)) && REAL_CALL.test(term.text.slice(op.index + op.length));", "const realBoth = REAL_CALL.test(term.text);"],
   ["$-leading alias names not bounded", GATE, "(?<![\\\\w$])(?:", "\\\\b(?:"],
   ["helper canary not run by the gate", GATE, "const canary = helperCanary(isMainModule);", "const canary = [];"],
   ["helper canary skips the symlink probe", GATE, "if (call(link) !== true) bad.push(", "if (false) bad.push("],
@@ -1083,7 +1078,7 @@ export const MUTANTS = [
   ["a signalled child is counted killed (R7-F)", GATE, "const signalled = r.signal || r.status === 130 || r.status === 143;", "const signalled = false;"],
   ["a child that exits 143 through its own handler is counted killed (R7-F)", GATE, "const signalled = r.signal || r.status === 130 || r.status === 143;", "const signalled = r.signal || r.status === 130;"],
   ["the child's TMPDIR is not parent-owned (R7-F)", GATE, "env: { ...process.env, TMPDIR: childTmp } });", "env: { ...process.env } });"],
-  ["Object.is is not a comparison (R7-C)", GATE, "realBoth = isArgs !== null && isArgs.length >= 2 && isArgs.slice(0, 2).every(wrapsInRealpath);", "realBoth = false;"],
+  ["an Object.is with a realpath on each argument is not excused (R7-C)", GATE, "return isArgs !== null && isArgs.length >= 2 && isArgs.slice(0, 2).every(wrapsInRealpath); // each compared argument, whole", "return false; // each compared argument, whole"],
   ["startsWith is not a suffix-class method (O02)", GATE, "const method = /\\.\\s*(?:endsWith|startsWith|includes)\\s*\\(/.test(term.text);", "const method = /\\.\\s*(?:endsWith|includes)\\s*\\(/.test(term.text);"],
   ["an `isMainModule as x` rebinding is not flagged (O07)", GATE, "if (new RegExp(String.raw`(?<![\\w$])isMainModule\\s+as\\s`).test(clause[2]))", "if (false)"],
   ["only the first isMainModule argument is compared (O08)", GATE, "if (args !== EXACT_ARGS)", 'if (args.split(",")[0] !== "process.argv[1]")'],
@@ -1117,11 +1112,11 @@ export const MUTANTS = [
   ["Object.is aliases are not followed (R8-A/N2-N3)", GATE, "const isWord = wordOf(objectIsAliases(code));", "const isWord = null;"],
   ["Object.is.call is not read (R8-A/N5)", GATE, "    [new RegExp(String.raw`${callee}\\s*\\.\\s*call\\s*\\(`), \"call\"],\n", ""],
   ["Reflect.apply(Object.is, ..) is not read (R8-A/N6)", GATE, "    [new RegExp(String.raw`\\bReflect\\s*\\.\\s*apply\\s*\\(\\s*${callee}`), \"reflect\"],\n", ""],
-  ["the Object.is realpath excuse counts calls anywhere in the term (R8-A/N4)", GATE, "realBoth = isArgs !== null && isArgs.length >= 2 && isArgs.slice(0, 2).every(wrapsInRealpath);", "realBoth = isArgs !== null && (term.text.match(/\\breal\\w*\\s*\\(/g) ?? []).length >= 2;"],
+  ["the Object.is realpath excuse counts calls anywhere in the term (R8-A/N4)", GATE, "return isArgs !== null && isArgs.length >= 2 && isArgs.slice(0, 2).every(wrapsInRealpath); // each compared argument, whole", "return isArgs !== null && (t.text.match(/\\breal\\w*\\s*\\(/g) ?? []).length >= 2; // each compared argument, whole"],
   ["new/typeof/void before the exact call is allowed (R8-A/N7-N9)", GATE, "if (/(?<![\\w$])(?:new|typeof|void)\\s+$/.test(before)) {", "if (false) {"],
   ["the runner does not own SIGHUP/SIGQUIT (R8-B)", GATE, "  [\"SIGHUP\", 129],\n  [\"SIGQUIT\", 131],\n", ""],
   ["the runner's handlers are installed after the baseline (R8-E)", GATE, "  for (const [name, h] of handlers) process.on(name, h);\n  try {\n    const baseline = await runSelfTest();\n", "  try {\n    const baseline = await runSelfTest();\n    for (const [name, h] of handlers) process.on(name, h);\n"],
-  ["the realpath excuse reads the whole statement, not the comparison's term (R5-B)", GATE, "let realBoth = op !== null && REAL_CALL.test(term.text.slice(0, op.index)) && REAL_CALL.test(term.text.slice(op.index + op.length));", "let realBoth = op !== null && REAL_CALL.test(whole);"],
+  ["the realpath excuse reads the whole statement, not the comparison's term (R5-B)", GATE, "const realBoth = op !== null && REAL_CALL.test(term.text.slice(0, op.index)) && REAL_CALL.test(term.text.slice(op.index + op.length));", "const realBoth = op !== null && REAL_CALL.test(whole);"],
   ["argv reads are only the old argv[1] spellings (R9-A)", GATE, "const argvHit = argvRead(term.text) ?? (argvWord ? argvWord.exec(term.text) : null);", "const argvHit = ARGV1.exec(term.text) ?? (argvWord ? argvWord.exec(term.text) : null);"],
   ["a term holding both needs an equality or an Object.is to be a finding (R9-A)", GATE, "else if (selfHit && !realBoth) reason = \"reads process.argv", "else if (selfHit && !realBoth && (op || objectIsArgs(term.text, isWord))) reason = \"reads process.argv"],
   ["judged at the outermost term, not the smallest holding both (R9-A)", GATE, "if (selfHit && terms.some((t) => t.selfHit && within(t, term))) continue;", "if (false) continue;"],

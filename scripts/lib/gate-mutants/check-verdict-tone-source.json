@@ -740,16 +740,6 @@
   "replace": "if (false && !ownName && !ts.isExportSpecifier(p) && !inType(m)"
  },
  {
-  "name": "S6 literal class in a toner admitted",
-  "find": "if (!fallback && /(?:text|bg|border)-status-/.test(m.text)) out.push(",
-  "replace": "if (false) out.push("
- },
- {
-  "name": "S6 any literal counted as the fallback",
-  "find": "const fallback = ts.isBinaryExpression(c.parent) && c.parent.operatorToken.kind === K.QuestionQuestionToken && c.parent.right === c && ts.isStringLiteral(m);",
-  "replace": "const fallback = true;"
- },
- {
   "name": "S3 value import admitted",
   "find": "    if (!typeOnly) out.push(`line ${lineOf(st)}: a value import",
   "replace": "    if (false) out.push(`line ${lineOf(st)}: a value import"
@@ -758,5 +748,85 @@
   "name": "S3 side-effect import counted as type-only",
   "find": "const typeOnly = ts.isImportEqualsDeclaration(st) ? st.isTypeOnly : c !== undefined && c !== null && (",
   "replace": "const typeOnly = ts.isImportEqualsDeclaration(st) ? st.isTypeOnly : (!c || "
+ },
+ {
+  "name": "S1 regex literal admitted",
+  "find": "if (n.kind === K.RegularExpressionLiteral || (ts.isIdentifier(n) && n.text === \"RegExp\" && !inType(n))) out.push(",
+  "replace": "if (false) out.push("
+ },
+ {
+  "name": "S1 RegExp constructor admitted",
+  "find": "(ts.isIdentifier(n) && n.text === \"RegExp\" && !inType(n))",
+  "replace": "false"
+ },
+ {
+  "name": "S6 closed-shape finding removed",
+  "find": "    if (!shape) out.push(`line ${lineOf(fn)}: ${name}() in a tone module is not one of the three closed shapes",
+  "replace": "    if (false) out.push(`line ${lineOf(fn)}: ${name}() in a tone module is not one of the three closed shapes"
+ },
+ {
+  "name": "S6 toner admits any body ending in the lookup",
+  "find": "    const r = bodyReturn(fn);\n    if (!r) return false;",
+  "replace": "    const r = fn.body && ts.isBlock(fn.body) && fn.body.statements.length > 0 && ts.isReturnStatement(fn.body.statements.at(-1)) ? fn.body.statements.at(-1).expression : bodyReturn(fn);\n    if (!r) return false;"
+ },
+ {
+  "name": "S6 picker leaves may be any expression",
+  "find": "const pickerExpr = (e0, P) => { const e = unwrap(e0); return isStr(e) ||",
+  "replace": "const pickerExpr = (e0, P) => { const e = unwrap(e0); return true ||"
+ },
+ {
+  "name": "S6 picker tests may be any expression",
+  "find": "    if (ts.isIfStatement(st)) return litCompare(st.expression, P) && pickerStmt(",
+  "replace": "    if (ts.isIfStatement(st)) return true && pickerStmt("
+ },
+ {
+  "name": "S6 picker compare need not be against a literal",
+  "find": "return (ts.isIdentifier(l) && P.has(l.text) && isStr(r)) || (ts.isIdentifier(r) && P.has(r.text) && isStr(l));",
+  "replace": "return (ts.isIdentifier(l) && P.has(l.text)) || (ts.isIdentifier(r) && P.has(r.text));"
+ },
+ {
+  "name": "S6 picker comparison of a non-parameter",
+  "find": "return (ts.isIdentifier(l) && P.has(l.text) && isStr(r)) || (ts.isIdentifier(r) && P.has(r.text) && isStr(l));",
+  "replace": "return isStr(r) || isStr(l);"
+ },
+ {
+  "name": "S6 templater template parts not checked for status text",
+  "find": "if (ts.isTemplateExpression(x)) return !STATUS_TEXT.test(x.head.text) && x.templateSpans.every((sp) => atom(sp.expression) && !STATUS_TEXT.test(sp.literal.text));",
+  "replace": "if (ts.isTemplateExpression(x)) return x.templateSpans.every((sp) => atom(sp.expression));"
+ },
+ {
+  "name": "S6 templater spans need not be atoms",
+  "find": "x.templateSpans.every((sp) => atom(sp.expression) && !STATUS_TEXT.test(sp.literal.text))",
+  "replace": "x.templateSpans.every((sp) => !STATUS_TEXT.test(sp.literal.text))"
+ },
+ {
+  "name": "S6 templater admits a let",
+  "find": "if (!(ts.isVariableStatement(st) && (st.declarationList.flags & ts.NodeFlags.Const) && st.declarationList.declarations.length === 1)) return false;",
+  "replace": "if (!(ts.isVariableStatement(st) && st.declarationList.declarations.length === 1)) return false;"
+ },
+ {
+  "name": "S6 destructured parameters admitted",
+  "find": "const paramsPlain = (fn) => fn.parameters.every((q) => ts.isIdentifier(q.name) && !q.dotDotDotToken && (",
+  "replace": "const paramsPlain = (fn) => fn.parameters.every((q) => (true || ts.isIdentifier(q.name)) && !q.dotDotDotToken && ("
+ },
+ {
+  "name": "S6 status-text parameter default admitted",
+  "find": "!STATUS_TEXT.test(q.initializer.text ?? \"\")",
+  "replace": "true"
+ },
+ {
+  "name": "S7 nested function admitted",
+  "find": "    if (isFn(m) && !(fnDecls.has(topLevelFnName(m) ?? \"\") && fnDecls.get(topLevelFnName(m)) === m)) out.push(",
+  "replace": "    if (false) out.push("
+ },
+ {
+  "name": "S7 module-scope status text admitted",
+  "find": "      if (!inRecord) out.push(`line ${lineOf(m)}: status text",
+  "replace": "      if (false) out.push(`line ${lineOf(m)}: status text"
+ },
+ {
+  "name": "S4 unjudged colour Records not held",
+  "find": "        if (hit) { judged.add(name); grew = true; }",
+  "replace": "        if (false) { judged.add(name); grew = true; }"
  }
 ]

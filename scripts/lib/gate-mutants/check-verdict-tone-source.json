@@ -828,5 +828,35 @@
   "name": "S4 unjudged colour Records not held",
   "find": "        if (hit) { judged.add(name); grew = true; }",
   "replace": "        if (false) { judged.add(name); grew = true; }"
+ },
+ {
+  "name": "F25 templater may call any module function",
+  "find": "c.text !== topLevelFnName(fn) && isTemplater(c.text) && x.arguments",
+  "replace": "c.text !== topLevelFnName(fn) && x.arguments"
+ },
+ {
+  "name": "F25 a templater call cycle answers yes",
+  "find": "    templaterMemo.set(name, false);\n",
+  "replace": "    templaterMemo.set(name, true);\n"
+ },
+ {
+  "name": "F25 templater call args admit any string literal",
+  "find": "(isStr(a) && !STATUS_TEXT.test(unwrap(a).text))",
+  "replace": "isStr(a)"
+ },
+ {
+  "name": "F26 value re-export admitted",
+  "find": "    if (!typeOnly) out.push(`line ${lineOf(st)}: a value re-export",
+  "replace": "    if (false) out.push(`line ${lineOf(st)}: a value re-export"
+ },
+ {
+  "name": "F26 a mixed type/value re-export counted as type-only",
+  "find": "st.exportClause.elements.every((e) => e.isTypeOnly)",
+  "replace": "st.exportClause.elements.some((e) => e.isTypeOnly)"
+ },
+ {
+  "name": "F26 export * counted as type-only",
+  "find": "const typeOnly = st.isTypeOnly || (st.exportClause &&",
+  "replace": "const typeOnly = st.isTypeOnly || !st.exportClause || (st.exportClause &&"
  }
 ]

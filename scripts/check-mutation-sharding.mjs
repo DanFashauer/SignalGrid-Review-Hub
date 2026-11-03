@@ -1609,7 +1609,7 @@ console.log(`  ${TARGETS.length} targets · ${TARGETS.reduce((n, t) => n + t.fil
 // never leave a guard mutated. The real signal runs are in separate processes: a child journals a mutation in the scratch dir and waits.
 {
   const restoreUrl = pathToFileURL(join(REPO, "scripts/lib/mutation-restore.mjs")).href;
-  const { createJournal, privateJournalDir, TERMINATING_SIGNALS, ownerIsLive } = await import(restoreUrl);
+  const { createJournal, privateJournalDir, TERMINATING_SIGNALS, ownerIsLive, journalShapeOk } = await import(restoreUrl);
   const scratch = mkdtempSync(join(tmpdir(), "sg-restore-gate-"));
   const root = join(scratch, "repo");
   const jdir = join(scratch, "journals");
@@ -1640,13 +1640,44 @@ console.log(`  ${TARGETS.length} targets · ${TARGETS.reduce((n, t) => n + t.fil
     check("restore: a journal whose owner is live (or cannot be identified) is refused, never cleared", live.ok === false && live.problems.join(" ").includes("another sweep"));
     const fixed = createJournal({ root, dir: jdir, pid: 4242004, isLive: () => false }).begin({ restoreStale: true });
     check("restore: --restore-stale applies the journal and the file is the original again", fixed.ok === true && readFileSync(target, "utf8") === "ORIGINAL\n");
-    // A process this gate owns, so the answer does not depend on what pid 1 is (or whether /proc is readable) on the machine running the gate.
-    const bystander = spawn(process.execPath, ["-e", "setTimeout(() => {}, 30000)"], { stdio: "ignore" });
-    let readable = true;
-    try { readFileSync(`/proc/${bystander.pid}/cmdline`, "utf8"); } catch { readable = false; }
-    const bystanderLive = ownerIsLive(bystander.pid);
-    bystander.kill("SIGKILL");
-    check("restore: the pid of the process itself is never 'live' (pid reuse), a dead pid is not live, a live pid that is not a mutation-guard is not live when its identity is readable, and IS live (fail closed) when it is not", ownerIsLive(process.pid) === false && ownerIsLive(2 ** 22 + 77) === false && bystanderLive === !readable);
+    // ownerIsLive, driven through its injectable reader so every branch is observed, and once for real on a process this gate owns.
+    const io = (kill, cmd) => ({ kill, readCmdline: cmd });
+    const alive = () => {};
+    const gone = () => { throw Object.assign(new Error("gone"), { code: "ESRCH" }); };
+    const denied = () => { throw Object.assign(new Error("denied"), { code: "EPERM" }); };
+    check("restore: ownerIsLive — the pid of the process itself and a non-positive pid are never live; a dead pid (ESRCH) is not live",
+      ownerIsLive(process.pid) === false && ownerIsLive(0) === false && ownerIsLive(-5) === false && ownerIsLive(4242, 1, io(gone, () => "x")) === false);
+    check("restore: ownerIsLive — a live mutation-guard (or the sharding gate) is LIVE; a live process that is neither is pid reuse, not live",
+      ownerIsLive(4242, 1, io(alive, () => "node\0scripts/mutation-guard.mjs\0--shard=0/4")) === true && ownerIsLive(4242, 1, io(alive, () => "node\0scripts/check-mutation-sharding.mjs")) === true && ownerIsLive(4242, 1, io(alive, () => "sleep\x00100")) === false);
+    check("restore: ownerIsLive — FAIL CLOSED: EPERM and an unreadable identity both read LIVE",
+      ownerIsLive(4242, 1, io(denied, () => "sleep")) === true && ownerIsLive(4242, 1, io(alive, () => { throw new Error("no /proc"); })) === true);
+    {
+      const guardLike = spawn(process.execPath, ["-e", "setTimeout(() => {}, 30000)", "mutation-guard"], { stdio: "ignore" });
+      const bystander = spawn(process.execPath, ["-e", "setTimeout(() => {}, 30000)"], { stdio: "ignore" });
+      let readable = true;
+      try { readFileSync(`/proc/${bystander.pid}/cmdline`, "utf8"); } catch { readable = false; }
+      const guardLive = ownerIsLive(guardLike.pid);
+      const bystanderLive = ownerIsLive(bystander.pid);
+      guardLike.kill("SIGKILL");
+      bystander.kill("SIGKILL");
+      check("restore: ownerIsLive on real processes — a live process whose argv names mutation-guard is LIVE; a bystander is live only when its identity is unreadable (fail closed)", guardLive === true && bystanderLive === !readable);
+    }
+
+    // A journal that parses but is the wrong shape is CORRUPT: the next start refuses and --restore-stale refuses too, never "nothing to restore".
+    const planted = ["null", "{}", "[]", "\"x\"", "{\"pid\":999999,\"entries\":null}", "{\"pid\":999999,\"entries\":[\"x\"]}", "{\"pid\":999999,\"entries\":[{\"path\":\"guard.ts\"}]}", "{\"pid\":\"1\",\"entries\":[]}", "not json"];
+    const shapeOk = [journalShapeOk({ pid: 1, entries: [] }), journalShapeOk({ pid: 1, entries: [{ path: "a", original: "" }] })];
+    let allRefused = true;
+    for (const text of planted) {
+      const cdir = mkdtempSync(join(scratch, "c-"));
+      const probe = createJournal({ root, dir: cdir, pid: 4242020, isLive: () => false });
+      writeFileSync(probe.file, text);
+      writeFileSync(target, "MUTANT\n");
+      let plain; let stale;
+      try { plain = probe.begin(); stale = probe.begin({ restoreStale: true }); } catch { allRefused = false; continue; } // a throw is a regression too, named below
+      if (plain.ok !== false || stale.ok !== false || readFileSync(probe.file, "utf8") !== text || readFileSync(target, "utf8") !== "MUTANT\n") allRefused = false;
+    }
+    writeFileSync(target, "ORIGINAL\n");
+    check(`restore: a journal of the wrong shape (${planted.length} plants: null, {}, [], a string, entries null/strings/without original, a string pid, garbage) is REFUSED by begin and by --restore-stale, and left untouched`, allRefused && shapeOk[0] && shapeOk[1]);
 
     let inRepo = false;
     try { privateJournalDir(REPO, join(REPO, "scripts")); } catch { inRepo = true; }

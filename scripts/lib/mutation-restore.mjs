@@ -45,21 +45,27 @@ export function privateJournalDir(root, base = tmpdir()) {
 
 /** Is `pid` a live mutation-guard (or the gate that shares its lock)? An identity that cannot be read is
  *  LIVE: the journal is refused, never cleared. */
-export function ownerIsLive(pid, selfPid = process.pid) {
+export function ownerIsLive(pid, selfPid = process.pid, io = { kill: (p) => process.kill(p, 0), readCmdline: (p) => readFileSync(`/proc/${p}/cmdline`, "utf8") }) {
   if (!Number.isInteger(pid) || pid <= 0) return false;
   if (pid === selfPid) return false; // a journal named after this very process is a reused pid
   try {
-    process.kill(pid, 0);
+    io.kill(pid);
   } catch (e) {
     if (e?.code === "ESRCH") return false;
     return true; // EPERM: it exists and is not ours to inspect
   }
   try {
-    const cmd = readFileSync(`/proc/${pid}/cmdline`, "utf8");
-    return /mutation-guard|check-mutation-sharding/.test(cmd);
+    return /mutation-guard|check-mutation-sharding/.test(io.readCmdline(pid));
   } catch {
-    return true;
+    return true; // identity unreadable: LIVE, so the journal is refused, never cleared
   }
+}
+
+/** A journal that parses but is not the shape persist() writes is CORRUPT, never "no journal": `null`, `{}`, `[]`, a missing `entries`
+ *  or an entry without string `path`/`original` all fail closed. Pure, so a gate can drive it on fixtures. */
+export function journalShapeOk(doc) {
+  return doc !== null && typeof doc === "object" && !Array.isArray(doc) && Number.isInteger(doc.pid) && Array.isArray(doc.entries)
+    && doc.entries.every((e) => e !== null && typeof e === "object" && typeof e.path === "string" && typeof e.original === "string");
 }
 
 export function createJournal({ root, dir, pid = process.pid, isLive = ownerIsLive }) {
@@ -78,10 +84,16 @@ export function createJournal({ root, dir, pid = process.pid, isLive = ownerIsLi
     renameSync(tmp, file);
   };
   const readOther = () => {
+    let text;
     try {
-      return JSON.parse(readFileSync(file, "utf8"));
+      text = readFileSync(file, "utf8");
     } catch (e) {
-      if (e?.code === "ENOENT") return null;
+      return e?.code === "ENOENT" ? null : { corrupt: true };
+    }
+    try {
+      const doc = JSON.parse(text);
+      return journalShapeOk(doc) ? doc : { corrupt: true }; // a parsed `null` is a journal, not an absent one
+    } catch {
       return { corrupt: true };
     }
   };
@@ -99,7 +111,7 @@ export function createJournal({ root, dir, pid = process.pid, isLive = ownerIsLi
       if (prior.corrupt) return { ok: false, problems: [`journal ${file} is unreadable; refusing (inspect it, then delete it)`] };
       if (prior.pid !== pid && isLive(prior.pid)) return { ok: false, problems: [`another sweep (pid ${prior.pid}) holds ${file}`] };
       const differing = [];
-      for (const { path, original } of prior.entries ?? []) {
+      for (const { path, original } of prior.entries) {
         const abs = resolve(rootReal, path);
         if (inside(abs) === null) return { ok: false, problems: [`journal names a path outside the repo: ${path}`] };
         let now = null;

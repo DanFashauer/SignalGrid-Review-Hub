@@ -82,9 +82,9 @@
  *     THE SHARDS ARE BALANCED BY COST). An unregistered cost is invisible to this gate by
  *     construction; the sweep's own COST DRIFT line is the net for that.
  */
-import { execFile, execFileSync } from "node:child_process";
+import { execFile, execFileSync, spawn } from "node:child_process";
 import { createHash } from "node:crypto";
-import { chmodSync, closeSync, constants as fsConstants, copyFileSync, fstatSync, mkdirSync, mkdtempSync, openSync, readdirSync, readFileSync, readlinkSync, rmSync, statSync, utimesSync, writeFileSync } from "node:fs";
+import { existsSync, chmodSync, closeSync, constants as fsConstants, copyFileSync, fstatSync, mkdirSync, mkdtempSync, openSync, readdirSync, readFileSync, readlinkSync, rmSync, statSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { isBuiltin } from "node:module";
@@ -365,7 +365,7 @@ check("fixture: stripComments drops line and block comments and keeps '//', '/*'
 // Whitespace is folded to single spaces after the comments go, so a pin reads one statement per
 // string and is neither tripped by a reformat nor satisfied by a comment.
 function mainBody(src) {
-  const start = src.indexOf("\nfunction main() {");
+  const start = src.indexOf("\nasync function main() {");
   const end = src.indexOf("\nif (IS_MAIN) main();", start);
   return start < 0 || end < 0 ? "" : stripComments(src.slice(start, end)).replace(/\s+/g, " ");
 }
@@ -382,8 +382,8 @@ const PIN_ZERO = "if (allCount === 0) {";
 const foldPin = (text) => text.replace(/\s+/g, " ").trim();
 const PIN_PLAN_STOP = foldPin(`for (const { ordinal, mutation } of owned) {
   if (planOnly) { placements.push(placementOf(target, file, ordinal, mutation)); continue; }
-  total += 1; writeFileSync(mutation.abs, mutation.content); writtenInUnit += 1;
-  let verdict; try { verdict = runProof(target.proof); } finally { writeFileSync(mutation.abs, mutation.original); }`);
+  total += 1; journal.mutate(mutation.abs, mutation.content, mutation.original); writtenInUnit += 1;
+  let verdict; try { const ran = await journal.spawnProof(target.proof, { cwd: repoRoot, timeoutMs: PROOF_TIMEOUT_MS }); verdict = classifyRun(ran.out, ran.timedOut); } finally { journal.restore(mutation.abs); }`);
 const PIN_NO_BASELINE = "if (!planOnly) { const base = baselineProbe(target.proof, runProof);";
 // The runtime net (what a unit actually wrote must equal what the selector planned) and its report.
 const PIN_COUNT_INIT = foldPin("const swept = plan.swept; const placedBefore = placements.length; let writtenInUnit = 0;");
@@ -427,10 +427,10 @@ const MAIN_PINS = [PIN_SELECT, PIN_SHARD, PIN_FILES, PIN_ZERO, PIN_PLAN_STOP, PI
 //   countedUnits, failedBaselineUnits, expectedUnits, unitProblems: a skipped unit recorded as done, or the list it is
 //     held to shortened.
 const FORK_COUNTS = {
-  planOnly: 6, "process.argv": 4, "process.env": 1,
-  continue: 2, break: 0, return: 3, throw: 0, try: 2, catch: 2, "process.exit(": 9, "process.exitCode": 4,
+  planOnly: 7, "process.argv": 5, "process.env": 1,
+  continue: 2, break: 0, return: 3, throw: 0, try: 2, catch: 2, "process.exit(": 11, "process.exitCode": 4,
   "targets =": 2, targets: 16, TARGETS: 8,
-  if: 26, else: 5, for: 12, while: 0, switch: 0, "?": 9, "&&": 1, "||": 0,
+  if: 29, else: 5, for: 13, while: 0, switch: 0, "?": 11, "&&": 1, "||": 0,
   countedUnits: 3, failedBaselineUnits: 3, expectedUnits: 2, unitProblems: 5,
 };
 const FORK_PATTERNS = {
@@ -455,8 +455,8 @@ const forksPinned = (body) => { const got = forkCountsOf(body); return body !== 
 const AMBIENT_COUNTS = {
   "process[": 0, "process.env": 1, globalThis: 0, getBuiltinModule: 0, eval: 0, "new Function": 0, "import(": 0, "require(": 0,
   performance: 5, "performance (not .now())": 0, Date: 0, "high-resolution time": 0,
-  "process.execArgv": 0, "process.argv": 6, "process.pid": 0, "process.platform": 0, "os.": 0,
-  "import.meta": 2, readFileSync: 3, writeFileSync: 3, spawnSync: 2, Function: 0, "timers, entropy, locale": 0,
+  "process.execArgv": 0, "process.argv": 7, "process.pid": 0, "process.platform": 0, "os.": 0,
+  "import.meta": 2, readFileSync: 3, writeFileSync: 0, spawnSync: 2, Function: 0, "timers, entropy, locale": 0,
 };
 const AMBIENT_PATTERNS = {
   "process[": /\bprocess\s*\[/g, "process.env": /\bprocess\.env\b/g, globalThis: /\bglobalThis\b/g, getBuiltinModule: /getBuiltinModule/g, eval: /\beval\s*\(/g, "new Function": /\bnew\s+Function\b/g, "import(": /\bimport\s*\(/g, "require(": /\brequire\s*\(/g,
@@ -467,9 +467,9 @@ const AMBIENT_PATTERNS = {
 };
 // Everything the file does with `process`: these members and no others, and no use of `process` that is not a member access (an alias, an argument, a
 // destructuring would hide the members from the counts). Strings are blanked first: `Date` is 0 although four ALLOWED reasons say `Date.parse(null)`.
-const PROCESS_MEMBERS = { argv: 6, env: 1, exit: 9, exitCode: 4, stdout: 1 };
-const IMPORT_LINES = ['import { readFileSync, writeFileSync } from "node:fs";', 'import { spawnSync } from "node:child_process";', 'import { dirname, join, resolve } from "node:path";', 'import { fileURLToPath } from "node:url";'];
-const IMPORT_SPECIFIERS = ["node:child_process", "node:fs", "node:path", "node:url"];
+const PROCESS_MEMBERS = { argv: 7, env: 1, exit: 11, exitCode: 4, stdout: 1 };
+const IMPORT_LINES = ['import { readFileSync } from "node:fs";', 'import { spawnSync } from "node:child_process";', 'import { dirname, join, resolve } from "node:path";', 'import { fileURLToPath } from "node:url";', 'import { createJournal, privateJournalDir } from "./lib/mutation-restore.mjs";'];
+const IMPORT_SPECIFIERS = ["./lib/mutation-restore.mjs", "node:child_process", "node:fs", "node:path", "node:url"];
 const processReadsOf = (text) => {
   const members = {};
   for (const m of text.matchAll(/\bprocess\s*\.\s*([A-Za-z_$][\w$]*)/g)) members[m[1]] = (members[m[1]] ?? 0) + 1;
@@ -569,7 +569,7 @@ for (const [name, from, to] of [
   ["n3f: the unit's body is wrapped in a catch that swallows what drops it", "    if (!planOnly) {\n      // See baselineProbe()", "    try { if (target.proof === \"x\") continue; } catch { /* swallowed */ }\n    if (!planOnly) {\n      // See baselineProbe()"],
   ["n13: a new condition where no pin looks (nothing pinned is near it)", "  const timings = [];\n", "  const timings = [];\n  if (process.argv.length > 99) { timings.length = 0; }\n"],
   ["n3c: the loop walks a filtered copy of the list (no assignment, no new name)", "for (const target of targets) {", "for (const target of targets.filter((t) => t.proof !== \"proof:device-management-health\")) {"],
-  ["n4: a unit is cut short on an in-unit time budget (the count sees this one in a slow run)", "          writeFileSync(mutation.abs, mutation.original);\n        }\n", "          writeFileSync(mutation.abs, mutation.original);\n        }\n        if (writtenInUnit * runSecondsOf(target) > 120) break;\n"],
+  ["n4: a unit is cut short on an in-unit time budget (the count sees this one in a slow run)", "          journal.restore(mutation.abs);\n        }\n", "          journal.restore(mutation.abs);\n        }\n        if (writtenInUnit * runSecondsOf(target) > 120) break;\n"],
   ["n5: the sweep ends early with exit 0 on a total time budget", "    if (!planOnly) {\n      // See baselineProbe()", "    if (timings.length > 20) return;\n    if (!planOnly) {\n      // See baselineProbe()"],
   ["n6: the sweep exits 0 on a total time budget", "    if (!planOnly) {\n      // See baselineProbe()", "    if (timings.length > 20) process.exit(0);\n    if (!planOnly) {\n      // See baselineProbe()"],
   ["n7: a unit that is skipped is recorded as done (the unit accounting is satisfied by its own record)", "      if (!base.ok) {\n", "      if (baselineSeconds > 40) { countedUnits.push(unitName(target)); continue; }\n      if (!base.ok) {\n"],
@@ -578,7 +578,7 @@ for (const [name, from, to] of [
   ["n10: the unit accounting no longer ends the sweep before the survivor report", "for (const problem of unitProblems) console.error(`  ✗ ${problem}`);\n    process.exit(1);", "for (const problem of unitProblems) console.error(`  ✗ ${problem}`);"],
   ["n11: a mutation that survives its proof is counted as known-inert", "            survivors.push(mutation);\n", "            allowed += 1;\n"],
   ["n12: a unit's baseline failure is no longer recorded for the unit accounting", "        failedBaselineUnits.push(unitName(target));\n", ""],
-  ["n3d: the environment is read at module level through a computed key (nothing in main() names it)", "\nfunction main() {", "\nconst UNDER_GATE = typeof process[\"en\" + \"v\"].NOWRITE_ALLOW === \"string\";\nfunction main() {"],
+  ["n3d: the environment is read at module level through a computed key (nothing in main() names it)", "\nasync function main() {", "\nconst UNDER_GATE = typeof process[\"en\" + \"v\"].NOWRITE_ALLOW === \"string\";\nasync function main() {"],
   // Skips in the exported helpers, where main()'s own counts do not look. Each of g1 to g3 was measured through the real main() in a CI-shaped run (stubs and a
   // 600 ms device-management-health delay through NODE_OPTIONS, so execArgv is empty) with the gate at 224/224: g3 swept 13 of 475 mutations, g1 490 with the heavy
   // proof's slice absent, g2 462 with `unit-done ... written=0 planned=0` for it, every exit 0. The runtime nets agree with a helper that is wrong the same way in
@@ -770,7 +770,12 @@ const spawnGuard = (preloads, args, env = {}) => new Promise((done) => {
   });
 });
 const runPlan = (args, env) => spawnGuard([PRELOAD_NOWRITE], ["--plan", ...args], env);
-const runStubSweep = (args, env) => spawnGuard([PRELOAD_NOWRITE, PRELOAD_STUB], args, env);
+// Each stubbed sweep gets its OWN TMPDIR: the restore journal (scripts/lib/mutation-restore.mjs) lives there, and the lock it takes is per TMPDIR, so the
+// four shards this gate runs side by side do not refuse one another (they mutate nothing; a real sweep on a real tree is what the lock protects).
+const runStubSweep = async (args, env) => {
+  const scratch = mkdtempSync(join(tmpdir(), "sg-stub-sweep-"));
+  try { return await spawnGuard([PRELOAD_NOWRITE, PRELOAD_STUB], args, { TMPDIR: scratch, ...env }); } finally { rmSync(scratch, { recursive: true, force: true }); }
+};
 // The first child to hit its time limit is remembered; the pool starts no more after it.
 let firstHung;
 const watched = (label, fn) => async () => {
@@ -1530,7 +1535,7 @@ check("unknown flags are refused (--help, a bare -h, a space-separated --proof)"
 check("a bare positional is refused (`mutation-guard.mjs proof:ot-posture` used to sweep everything)", unknownArgs(["proof:ot-posture"]).length === 1);
 check("an EMPTY --proof= / --shard= is refused (a falsy value used to select every target)", unknownArgs(["--proof="]).length === 1 && unknownArgs(["--shard="]).length === 1);
 check("a malformed value is refused: --proof==, --proof==x, --proof=a=b, --shard=1/4/9, --shard==1/4, --shard=a/b", ["--proof==", "--proof==proof:x", "--proof=a=b", "--shard=1/4/9", "--shard==1/4", "--shard=a/b"].every((a) => unknownArgs([a]).length === 1));
-check("known flags (--proof=, --shard=, --plan) and pnpm's forwarded bare -- are accepted; --plan takes no value", unknownArgs(["--", "--proof=proof:x", "--shard=0/4", "--plan"]).length === 0 && unknownArgs(["--plan=1"]).length === 1 && unknownArgs(["--Plan"]).length === 1);
+check("known flags (--proof=, --shard=, --plan, --restore-stale) and pnpm's forwarded bare -- are accepted; --plan takes no value", unknownArgs(["--", "--proof=proof:x", "--shard=0/4", "--plan", "--restore-stale"]).length === 0 && unknownArgs(["--plan=1"]).length === 1 && unknownArgs(["--Plan"]).length === 1);
 
 // ── The allowlist resolves each entry to EXACTLY ONE line ─────────────────────
 //
@@ -1595,6 +1600,100 @@ const totalMutations = [...TOTALS.values()].reduce((a, b) => a + b, 0);
 console.log(`\n  balance at N=${N}, by REGISTERED MINUTES per shard: ${secondsPerShard.map((x) => (x / 60).toFixed(1)).join(" · ")} (the job's bound is ${BOUND_SECONDS / 60} min, refused above ${REFUSE_FRACTION * 100}%)`);
 console.log(`  by MUTATIONS per shard: ${mutationsPerShard.join(" · ")}`);
 console.log(`  ${TARGETS.length} targets · ${TARGETS.reduce((n, t) => n + t.files.length, 0)} files · ${totalMutations} mutations`);
+
+// ── Journal-based restore (supersedes PR #1398) ───────────────────────────────
+//
+// A sweep killed mid-mutation used to leave a registered source file MUTATED: the proof was awaited with `spawnSync`, which blocks the event loop,
+// so no handler could run (`timeout 8 node scripts/mutation-guard.mjs --proof=proof:carrier-reachability` exited 124 with reachability-connector.ts
+// modified). Everything below drives scripts/lib/mutation-restore.mjs against a THROWAWAY directory, never the real tree, so the gate itself can
+// never leave a guard mutated. The real signal runs are in separate processes: a child journals a mutation in the scratch dir and waits.
+{
+  const restoreUrl = pathToFileURL(join(REPO, "scripts/lib/mutation-restore.mjs")).href;
+  const { createJournal, privateJournalDir, TERMINATING_SIGNALS, ownerIsLive } = await import(restoreUrl);
+  const scratch = mkdtempSync(join(tmpdir(), "sg-restore-gate-"));
+  const root = join(scratch, "repo");
+  const jdir = join(scratch, "journals");
+  mkdirSync(root);
+  mkdirSync(jdir, { mode: 0o700 });
+  const target = join(root, "guard.ts");
+  writeFileSync(target, "ORIGINAL\n");
+  try {
+    const j = createJournal({ root, dir: jdir, pid: 4242000, isLive: () => false });
+    check("restore: a fresh start takes the lock (an empty journal is written BEFORE any baseline)", j.begin().ok === true && existsSync(j.file));
+    j.mutate(target, "MUTANT\n", "ORIGINAL\n");
+    check("restore: a mutation is journalled, then written", readFileSync(target, "utf8") === "MUTANT\n" && readFileSync(j.file, "utf8").includes("ORIGINAL"));
+    j.restore(target);
+    check("restore: restore() puts the original bytes back", readFileSync(target, "utf8") === "ORIGINAL\n");
+    j.mutate(target, "MUTANT\n", "ORIGINAL\n");
+    check("restore: restoreAll() restores every journalled file and drops the marker", j.restoreAll() === true && readFileSync(target, "utf8") === "ORIGINAL\n" && !existsSync(j.file));
+    let threw = false;
+    try { j.mutate(join(scratch, "outside.ts"), "x", "y"); } catch { threw = true; }
+    check("restore: a path outside the repo root is refused, nothing is written", threw && !existsSync(join(scratch, "outside.ts")));
+
+    // A SIGKILL leaves the journal: simulate it by journalling a mutation and abandoning the journal object.
+    const dead = createJournal({ root, dir: jdir, pid: 4242001, isLive: () => false });
+    dead.begin();
+    dead.mutate(target, "MUTANT\n", "ORIGINAL\n");
+    const next = createJournal({ root, dir: jdir, pid: 4242002, isLive: () => false }).begin();
+    check("restore: the next start REFUSES while a dead sweep's file still differs, naming it", next.ok === false && next.problems.join(" ").includes("guard.ts") && readFileSync(target, "utf8") === "MUTANT\n");
+    const live = createJournal({ root, dir: jdir, pid: 4242003, isLive: () => true }).begin();
+    check("restore: a journal whose owner is live (or cannot be identified) is refused, never cleared", live.ok === false && live.problems.join(" ").includes("another sweep"));
+    const fixed = createJournal({ root, dir: jdir, pid: 4242004, isLive: () => false }).begin({ restoreStale: true });
+    check("restore: --restore-stale applies the journal and the file is the original again", fixed.ok === true && readFileSync(target, "utf8") === "ORIGINAL\n");
+    check("restore: the pid of the process itself is never 'live' (pid reuse), a dead pid is not live, a live pid that is not a mutation-guard (pid reuse) is not live", ownerIsLive(process.pid) === false && ownerIsLive(2 ** 22 + 77) === false && ownerIsLive(1) === false);
+
+    let inRepo = false;
+    try { privateJournalDir(REPO, join(REPO, "scripts")); } catch { inRepo = true; }
+    check("restore: a journal directory inside the repo is refused", inRepo);
+    const priv = privateJournalDir(REPO, scratch);
+    check("restore: the private journal directory is mode 0700", (statSync(priv).mode & 0o777) === 0o700);
+    check(`restore: the signal list covers INT TERM HUP QUIT USR2 ALRM XCPU IO (${TERMINATING_SIGNALS.length} signals), not only INT/TERM/HUP`, ["SIGINT", "SIGTERM", "SIGHUP", "SIGQUIT", "SIGUSR2", "SIGALRM", "SIGXCPU", "SIGIO"].every((s) => TERMINATING_SIGNALS.includes(s)));
+
+    // REAL signals to a REAL process: the child journals + writes a mutant in the scratch repo, then waits. Each signal must leave the original, no journal, exit 128+n.
+    const childSrc = `import { createJournal } from ${JSON.stringify(restoreUrl)};
+      const j = createJournal({ root: process.argv[2], dir: process.argv[3] });
+      if (!j.begin().ok) process.exit(9);
+      j.installHandlers();
+      j.mutate(process.argv[4], "MUTANT\\n", "ORIGINAL\\n");
+      process.stdout.write("mutated\\n");
+      setInterval(() => {}, 1000);`;
+    const childPath = join(scratch, "child.mjs");
+    writeFileSync(childPath, childSrc);
+    const NUM = { SIGTERM: 15, SIGINT: 2, SIGHUP: 1, SIGQUIT: 3, SIGUSR2: 12, SIGALRM: 14, SIGIO: 29 };
+    for (const [sig, n] of Object.entries(NUM)) {
+      const sdir = mkdtempSync(join(scratch, "j-"));
+      writeFileSync(target, "ORIGINAL\n");
+      const r = await new Promise((done) => {
+        const child = spawn(process.execPath, [childPath, root, sdir, target], { stdio: ["ignore", "pipe", "pipe"] });
+        let sent = false;
+        child.stdout.on("data", (d) => { if (!sent && String(d).includes("mutated")) { sent = true; child.kill(sig); } });
+        const guard = setTimeout(() => child.kill("SIGKILL"), 20000);
+        child.on("close", (code, signal) => { clearTimeout(guard); done({ code, signal }); });
+      });
+      check(`restore: ${sig} to a sweep mid-mutation leaves the ORIGINAL file, no journal, and exits ${128 + n} (before the fix: mutated, exit by signal)`,
+        r.code === 128 + n && readFileSync(target, "utf8") === "ORIGINAL\n" && readdirSync(sdir).length === 0);
+    }
+    // SIGKILL cannot be handled: the mutant stays, the journal stays, the next start refuses and --restore-stale repairs it.
+    {
+      const sdir = mkdtempSync(join(scratch, "j-"));
+      writeFileSync(target, "ORIGINAL\n");
+      const r = await new Promise((done) => {
+        const child = spawn(process.execPath, [childPath, root, sdir, target], { stdio: ["ignore", "pipe", "pipe"] });
+        child.stdout.on("data", () => child.kill("SIGKILL"));
+        child.on("close", (code, signal) => done({ code, signal }));
+      });
+      const refused = createJournal({ root, dir: sdir, pid: 4242010, isLive: () => false }).begin();
+      const repaired = createJournal({ root, dir: sdir, pid: 4242011, isLive: () => false }).begin({ restoreStale: true });
+      check("restore: SIGKILL leaves the mutant and the journal; the next start refuses naming the file; --restore-stale repairs it", r.signal === "SIGKILL" && refused.ok === false && repaired.ok === true && readFileSync(target, "utf8") === "ORIGINAL\n");
+    }
+  } finally {
+    rmSync(scratch, { recursive: true, force: true });
+  }
+  const guardSrc = stripComments(readFileSync(GUARD_PATH, "utf8")).replace(/\s+/g, " ");
+  check("restore: the real guard journals before it writes, installs the handlers before the first mutation, awaits the proof asynchronously, and registers carrier/evaluate.ts",
+    guardSrc.includes("journal.installHandlers(); } let total = 0;") && guardSrc.includes("journal.mutate(mutation.abs, mutation.content, mutation.original);") && guardSrc.includes("await journal.spawnProof(")
+    && guardSrc.includes('"lib/integrations/src/integrations/carrier/evaluate.ts"') && TARGETS.some((t) => t.proof === "proof:carrier-reachability" && t.files.includes("lib/integrations/src/integrations/carrier/evaluate.ts")));
+}
 
 const total = passed + failures.length;
 console.log(`\nsummary=${failures.length === 0 ? "pass" : "fail"} (${passed}/${total})`);

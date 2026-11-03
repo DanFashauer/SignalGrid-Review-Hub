@@ -114,14 +114,14 @@ a re-sync does. How they keep the four rules:
   boot; refresh after rendering) are loaded from a temp copy and each turns
   it red. A cache or TTL added to the scrape later must keep this case
   green.
-- **As of the last completed sync, and not an outage detector.**
-  `freshness` is the value stamped on each signal when it was ingested, and
-  a connector's `status` changes only when a sync completes. Both gauges
-  report what the core holds, not a re-evaluation against the clock at
-  scrape time. So a source that stops answering leaves both series at their
-  last value: an estate whose posture source is unreachable keeps reading
-  `healthy` and `fresh` until a sync completes. An alert on
-  `status!="healthy"` or on `stale > 0` does not fire for that outage. The
-  underlying gaps are the open BUILD_BACKLOG rows "Estate posture must age"
-  and "A posture refresh must retract"; these series inherit them and do
-  not close them.
+- **What the series hold, and not an outage detector.** A connector's
+  `status` changes only when a sync completes, so a source that stops
+  answering leaves `signalgrid_connectors` at its last value: an alert on
+  `status!="healthy"` does not fire for that outage. `signalgrid_evidence_signals`
+  ages the posture reading at the core's clock (the decision instant), with the decision path's
+  own windows and worst-wins rule (DR-059, `agedSignalFreshness`), so a
+  posture reading nobody has refreshed moves to `stale`, then `expired`,
+  instead of staying `fresh`. Every other signal category reads the freshness
+  stamped at ingest. The store reads no clock; the core uses the one it was
+  constructed with. `unknown` is a real value as well as the fold: a
+  stamp the clock cannot place, or a retraction, reads `unknown`.

@@ -1,10 +1,10 @@
-import { assertSameTenant, authenticate, authorize } from "./auth";
+import { assertSameTenant, authenticate, authorize, isKnownRole } from "./auth";
 import { runFixtureSync, runPostureSync, type FixturePostureRecord } from "./connector";
 import { buildEstateStore, type EstateSpec } from "./estate";
 import { runDockSync, type DockCustodyRecord } from "./dock";
 import { runShiftSync, type ShiftContextRecord } from "./shift";
 import { evaluateDecision } from "./decision";
-import { verifySnapshot } from "./evidence";
+import { agedSignalFreshness, verifySnapshot } from "./evidence";
 import { verifyAuditChain, type ChainVerification } from "./audit";
 import { appendAudit } from "./audit";
 import { computeMetrics } from "./metrics";
@@ -226,6 +226,12 @@ export class SignalGridCore {
     }
     // The tenant must already exist — an OIDC identity cannot conjure one.
     this.requireTenant(input.tenantId);
+    // The role must be one of the five in the matrix. Refused here, at the
+    // boundary, so a bad role claim is a clean 400 rather than a principal that
+    // is accepted and then fails on every later call.
+    if (!isKnownRole(input.role)) {
+      throw new CoreError("validation", "Unknown role for a verified principal.", 400);
+    }
     const record: ApiKeyRecord = {
       id: `evk_${input.tenantId}_${input.subjectId}`,
       tenantId: input.tenantId,
@@ -453,7 +459,11 @@ export class SignalGridCore {
   /** How many signals this process holds, per freshness value. Same rule as
    *  `signalInventory()`: no token, no id, ref, subject or tenant. */
   signalFreshnessInventory(): ReturnType<MemoryStore["signalFreshnessInventory"]> {
-    return this.store.signalFreshnessInventory();
+    // Posture readings are aged at THIS core's clock, the instant its decisions
+    // are made at (DR-059): wall time in a deployment, the fixed clock in the
+    // demo. The clock is the one handed to the constructor; nothing new is read.
+    const nowIso = this.clock.now().toISOString();
+    return this.store.signalFreshnessInventory((signal) => agedSignalFreshness(signal, nowIso));
   }
 
   listSyncRuns(token: string, connectorId: string): ConnectorSyncRun[] {

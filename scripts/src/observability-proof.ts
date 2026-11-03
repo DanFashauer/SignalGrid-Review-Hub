@@ -8,11 +8,21 @@
 import { spawn } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
+import { createServer } from "node:net";
+import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { resolve, dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-const PORT = 5388;
+// OS-assigned port, as `live-idp-proof.ts` does — a fixed port collides with the
+// SAME fixed port bound by another tree or tick on the same host.
+const PORT = await new Promise<number>((res) => {
+  const probe = createServer();
+  probe.listen(0, () => {
+    const p = (probe.address() as AddressInfo).port;
+    probe.close(() => res(p));
+  });
+});
 const BASE = `http://localhost:${PORT}/api`;
 const METRICS = `http://localhost:${PORT}/metrics`;
 const TOKEN = "sgk_demo_northwind_operator";
@@ -291,7 +301,7 @@ function plant(store: StoreLike, template: Row): void {
 }
 
 const STORE_MUTANTS: Array<{ name: string; from: string; to: string }> = [
-  { name: "report every held signal fresh", from: "const freshness = String(signal.freshness as string);", to: 'const freshness = "fresh";' },
+  { name: "report every held signal fresh", from: "const freshness = age ? age(signal) : String(signal.freshness as string);", to: 'const freshness = "fresh";' },
   { name: "report every connector healthy", from: "const status = String(connector.status as string);", to: 'const status = "healthy";' },
   {
     name: "drop the connectors that are not healthy",
@@ -321,6 +331,47 @@ async function coreInventoryProof(m: MetricsModule): Promise<void> {
     FRESHNESS.every((f) => freshSeries(t, f) === (sigOracle.get(f) ?? 0)) && (freshSeries(t, "stale") ?? 0) > 0);
   check("core oracle: the planted degraded and never_synced connectors reach the exposition",
     (conn(t, "wfm-shift", "degraded") ?? 0) >= 1 && (conn(t, "dockbridge-custody", "never_synced") ?? 0) >= 1);
+
+  // Aging (DR-059): the same core, its clock moved 40 days past every reading,
+  // must stop reporting those posture readings fresh. Non-posture categories
+  // keep their ingest stamp. Without this the gauge says "fresh" while the
+  // decision path treats the same posture as stale or expired.
+  const clockedCore = core as unknown as { clock: { now(): Date } };
+  const demoNow = clockedCore.clock.now();
+  const heldFresh = freshSeries(t, "fresh") ?? 0;
+  const postureFresh = [...store.signals.values()].filter((x) => x.category === "posture_freshness" && x.freshness === "fresh").length;
+  clockedCore.clock = { now: () => new Date(demoNow.getTime() + 40 * 24 * 3600 * 1000) };
+  m.refreshInventoryGauges(core);
+  const aged = m.renderMetrics();
+  check("aging: the demo core holds fresh posture readings to age", postureFresh > 0);
+  check("aging: 40 days later the posture readings no longer read fresh, other categories keep their stamp",
+    (freshSeries(aged, "fresh") ?? -1) === heldFresh - postureFresh &&
+      ((freshSeries(aged, "stale") ?? 0) + (freshSeries(aged, "expired") ?? 0)) > ((freshSeries(t, "stale") ?? 0) + (freshSeries(t, "expired") ?? 0)));
+  clockedCore.clock = { now: () => demoNow };
+  m.refreshInventoryGauges(core);
+
+  const evidenceSource = readFileSync(resolve(coreSrcDir, "evidence.ts"), "utf8");
+  const agingFrom = "return worseFreshness(\n    asFreshness(signal.freshness),\n    classifyFreshness(signal.observedAt, nowIso, FRESH_WINDOW_HOURS, STALE_WINDOW_HOURS),\n  );";
+  const agingHits = evidenceSource.split(agingFrom).length - 1;
+  check('evidence mutant "ignore the reading\'s age": its target text is present exactly once', agingHits === 1);
+  if (agingHits === 1) {
+    const evDir = mkdtempSync(join(tmpdir(), "sg-evidence-mutant-"));
+    try {
+      const file = join(evDir, "evidence-mutant.ts");
+      writeFileSync(file, evidenceSource
+        .replace(agingFrom, "return asFreshness(signal.freshness);")
+        .replace(/from "\.\/([a-z-]+)"/g, (_all, mod: string) => `from ${JSON.stringify(pathToFileURL(join(coreSrcDir, `${mod}.ts`)).href)}`));
+      const mutant = (await import(pathToFileURL(file).href)) as { agedSignalFreshness(s: unknown, nowIso: string): string };
+      const probe = [...store.signals.values()].find((x) => x.category === "posture_freshness" && x.freshness === "fresh");
+      const later = new Date(demoNow.getTime() + 40 * 24 * 3600 * 1000).toISOString();
+      const real = (await import(pathToFileURL(join(coreSrcDir, "evidence.ts")).href)) as { agedSignalFreshness(s: unknown, nowIso: string): string };
+      check("evidence mutant control: the real function ages the probe reading", Boolean(probe) && real.agedSignalFreshness(probe, later) !== "fresh");
+      check('evidence mutant "ignore the reading\'s age": the mutant still reads it fresh (the aging check above is what catches it)',
+        Boolean(probe) && mutant.agedSignalFreshness(probe, later) === "fresh");
+    } finally {
+      rmSync(evDir, { recursive: true, force: true });
+    }
+  }
 
   const source = readFileSync(storeSource, "utf8");
   const dir = mkdtempSync(join(tmpdir(), "sg-store-mutant-"));

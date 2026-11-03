@@ -201,12 +201,13 @@ const processUptime = new Gauge("signalgrid_process_uptime_seconds", "Process up
 // reads healthy), and EVERY series is written on EVERY scrape, zeros included,
 // so an absent series never reads as an absent problem.
 //
-// AS OF THE LAST COMPLETED SYNC: both gauges report what the core HOLDS. A
-// connector's status changes only when a sync completes and a signal's freshness
-// is stamped at ingest, so a source that stops answering leaves these series at
-// their last value. They do not detect an outage of the source on their own
-// (docs/METRIC_STANDARDS.md; BUILD_BACKLOG "Estate posture must age" and "A
-// posture refresh must retract").
+// WHAT THEY HOLD: connector status changes only when a sync completes, so a
+// source that stops answering leaves the connector series at its last value. The
+// evidence series ages the posture reading at the core's clock with the same
+// windows the decision path uses (DR-059: worst-wins between the ingest stamp
+// and the reading's own age), so a posture reading nobody has refreshed stops
+// reading fresh. Every other signal category reads its ingest stamp. Neither
+// gauge detects an outage of a source on its own (docs/METRIC_STANDARDS.md).
 // 4 kinds x 4 statuses + 5 freshness values is far under MAX_SERIES_PER_METRIC.
 
 /** The fold for any label value outside a declared vocabulary. */
@@ -250,7 +251,7 @@ const connectorsGauge = new Gauge(
 );
 const evidenceGauge = new Gauge(
   "signalgrid_evidence_signals",
-  "Normalized signals held by this process, by freshness as stamped at ingest; a source that stops answering leaves this at its last value. Only freshness=fresh is affirmative; unknown counts as not fresh.",
+  "Normalized signals held by this process, by freshness; posture readings are aged at the core clock as the decision path ages them, every other category reads its ingest stamp. Only freshness=fresh is affirmative; unknown counts as not fresh.",
 );
 
 /** Write EVERY kind x status series from the core's connector inventory. */

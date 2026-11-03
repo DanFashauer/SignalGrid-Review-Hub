@@ -31,7 +31,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const ROOT = "artifacts/lab-collections";
 
-const REQUEST_BLOCK = /(get|post|put|delete|patch)\s*\{[^}]*url:\s*(\S+)/;
+export const REQUEST_BLOCK = /(get|post|put|delete|patch)\s*\{[^}]*url:\s*(\S+)/;
 /** Auth bootstraps are the ONLY writes the README allows. */
 const AUTH_BOOTSTRAP = /(login|token|session|auth)/i;
 

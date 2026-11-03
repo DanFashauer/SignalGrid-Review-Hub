@@ -67,8 +67,14 @@ function withExpiry(s: Session, nowMs: number): Session {
   if (s.status === "active" && (!Number.isFinite(expiresAtMs) || expiresAtMs < nowMs)) {
     return { ...s, status: "expired" };
   }
+  // `status` is TEXT NOT NULL with no CHECK, so a durable row can hold any string
+  // and `rowToSession` only casts it. An unrecognised status is unknown state and
+  // reads EXPIRED, never verbatim (fail closed: unknown tightens, never loosens).
+  if (!KNOWN_STATUSES.has(s.status)) return { ...s, status: "expired" };
   return s;
 }
+
+const KNOWN_STATUSES: ReadonlySet<string> = new Set<SessionStatus>(["active", "expired", "ended"]);
 
 // ── in-memory (default, fixture-safe) ───────────────────────────────────────
 export class InMemorySessionStore implements SessionStore {
@@ -94,6 +100,10 @@ export class InMemorySessionStore implements SessionStore {
       lastSeenAt: new Date(nowMs).toISOString(),
       expiresAt: new Date(nowMs + ttlSeconds * 1000).toISOString(),
     };
+    // Parity with the Postgres `UPDATE … WHERE status = 'active'`: the read above
+    // awaited, so an end() that landed in that window must win. Re-check the live
+    // row immediately before the write; a non-active row is never revived.
+    if (this.byId.get(id)?.status !== "active") return null;
     this.byId.set(id, next);
     return next;
   }
@@ -296,11 +306,15 @@ export class PostgresSessionStore implements SessionStore {
     if (!current || current.status !== "active") return null;
     const lastSeenAt = new Date(nowMs).toISOString();
     const expiresAt = new Date(nowMs + ttlSeconds * 1000).toISOString();
-    await this.pool.query(
-      "UPDATE public.sessions SET last_seen_at = $1, expires_at = $2 WHERE id = $3 AND tenant_id = $4",
+    // The status guard makes the UPDATE the arbiter: an end() that committed after
+    // the read above matches no row, so the losing refresh returns null (the route
+    // answers 404 and appends no session.refresh audit row) instead of echoing an
+    // `active` session that is already ended.
+    const res = await this.pool.query(
+      "UPDATE public.sessions SET last_seen_at = $1, expires_at = $2 WHERE id = $3 AND tenant_id = $4 AND status = 'active' RETURNING *",
       [lastSeenAt, expiresAt, id, tenantId],
     );
-    return { ...current, lastSeenAt, expiresAt };
+    return res.rows[0] ? this.rowToSession(res.rows[0]) : null;
   }
 
   async end(tenantId: string, id: string): Promise<Session | null> {

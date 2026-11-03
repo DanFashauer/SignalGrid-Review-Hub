@@ -1,4 +1,5 @@
 import { test, expect, type Locator, type Page } from "@playwright/test";
+import { guardEgress } from "./egress-guard";
 
 /**
  * signalgrid-review (operator/review console) — browser-level E2E.
@@ -14,19 +15,12 @@ import { test, expect, type Locator, type Page } from "@playwright/test";
 const PORT = Number(process.env.E2E_REVIEW_PORT ?? 4611);
 const BASE = `http://localhost:${PORT}`;
 
-// index.html references Google Fonts. Block everything non-localhost so the
-// assertions witness only what we serve — a CDN hiccup must never be able to
-// masquerade as an app regression (and the suite stays offline-capable).
-async function blockExternal(page: Page): Promise<void> {
-  await page.route("**/*", (route) => {
-    const host = new URL(route.request().url()).hostname;
-    if (host === "localhost" || host === "127.0.0.1") return route.continue();
-    return route.abort();
-  });
-}
+// index.html references Google Fonts — the two hosts allowed below, still aborted so
+// the assertions witness only what we serve (a CDN hiccup must never masquerade as an
+// app regression, and the suite stays offline-capable). Any other host fails the test.
+guardEgress(test, ["fonts.googleapis.com", "fonts.gstatic.com"]);
 
 test.beforeEach(async ({ page }) => {
-  await blockExternal(page);
   await page.goto(BASE, { waitUntil: "domcontentloaded" });
 });
 
@@ -319,8 +313,8 @@ test("the rendered report and the control-plane route agree, number for number",
   // and a Node server), so "same source" does not by itself mean "same numbers". This
   // is the check that earns the claim for the pair under test.
   //
-  // `page.request` is not subject to the page's route interception, so the localhost-only
-  // block in beforeEach does not apply; the api-server is a webServer of this config.
+  // `page.request` is not subject to route interception, so the egress guard installed by
+  // `guardEgress` above does not apply; the api-server is a webServer of this config.
   // Every route is mounted under `/api` — the same prefix `api.test.mjs` uses.
   const apiPort = Number(process.env.E2E_API_PORT ?? 4613);
   const res = await page.request.get(

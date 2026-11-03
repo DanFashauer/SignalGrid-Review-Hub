@@ -31,6 +31,7 @@
 // resolves each gate to its underlying script and matches EITHER form.
 
 import { readFileSync, readdirSync, existsSync } from "node:fs";
+import { execFileSync } from "node:child_process";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -127,6 +128,96 @@ const census = gates.map((gate) => {
 
 const orphans = census.filter((c) => !c.lanes.length && !c.ci.length && !EXEMPT.has(c.gate));
 
+// ── exclusion registry (plan row 61) ────────────────────────────────────────
+// A checker that cannot see part of its subject does not report uncertainty
+// about that part; it reports confidence about the rest. Row 61 audited 97
+// scripts for that shape by hand, once. This makes the audit standing: every
+// exclusion SITE is DERIVED from the scripts, and each must have a reasoned
+// entry in docs/agent/gate-exclusions.json. A site with no entry fails; an
+// entry whose site is gone fails (stale). The shapes derived:
+//   - a named constant whose name carries EXCLUDE/EXCLUSION/SKIP/IGNORE/EXEMPT
+//     (`const SKIP = ...`, `export const CONTENT_EXEMPT = ...`);
+//   - a quoted git pathspec negation, ':!x' or ':(exclude)x'.
+// A name is derived whether it is declared plain (`const SKIP =`), with a type
+// annotation (`const EXEMPTIONS: {...}[] =`, the annotation may span lines), or as
+// a later declarator (`const a = 1, B_SKIP = ...`) — review of PR #1317 found a
+// typed site the first regex could not see.
+// NOT derived, the edge of this guard, stated rather than hidden: an inline filter
+// with no name (`.filter((p) => !p.startsWith(...))`), a camelCase local, a pathspec
+// assembled by concatenation, and a script not yet tracked by git (CI's checkout
+// tracks everything, so that last gap is local-only).
+// THE REASON IS HUMAN-REVIEWED, NOT MACHINE-JUDGED: an entry is checked for a
+// reason of >= 20 characters and a YYYY-MM-DD date, nothing more. A junk reason
+// silences UNREGISTERED; what stops it is the registry being a reviewed file in
+// the diff that adds the exclusion, the same review the exclusion itself gets.
+export const REGISTRY_PATH = "docs/agent/gate-exclusions.json";
+const EXCL_WORD = String.raw`([A-Z0-9_]*(?:EXCLUDE|EXCLUSION|SKIP|IGNORE|EXEMPT)[A-Z0-9_]*)`;
+// First declarator: `=` or a type annotation's `:` follows the name. Later
+// declarator (after a comma): `=` only, so an object key `{ a: 1, B_SKIP: x }`
+// is not mistaken for a declaration. `=>` and `==` are never an assignment.
+const EXCL_NAME = new RegExp(
+  String.raw`\b(?:const|let|var)\s+${EXCL_WORD}\s*(?::|=(?![=>]))|,\s*${EXCL_WORD}\s*=(?![=>])`,
+  "g",
+);
+const EXCL_PATHSPEC = /["'`]:(?:!|\(exclude\))([^"'`\s]+)/g;
+const COMMENT_LINE = /^\s*(?:\/\/|\/\*|\*|#)/;
+
+/** Pure: every exclusion site in {path: text}, as "path|symbol:NAME" / "path|pathspec::!x" keys. */
+export function exclusionSites(files) {
+  const sites = new Set();
+  for (const [path, text] of Object.entries(files)) {
+    for (const line of text.split("\n")) {
+      if (COMMENT_LINE.test(line)) continue;
+      for (const m of line.matchAll(EXCL_NAME)) sites.add(`${path}|symbol:${m[1] ?? m[2]}`);
+      for (const m of line.matchAll(EXCL_PATHSPEC)) sites.add(`${path}|pathspec::!${m[1]}`);
+    }
+  }
+  return sites;
+}
+
+const entryKey = (e) =>
+  e && typeof e.path === "string" && (typeof e.symbol === "string") !== (typeof e.pathspec === "string")
+    ? `${e.path}|${e.symbol ? `symbol:${e.symbol}` : `pathspec:${e.pathspec.replace(/^:\(exclude\)/, ":!")}`}`
+    : null;
+
+/** Pure: compare derived sites against registry entries. Every problem is a string. */
+export function auditExclusions(sites, entries) {
+  const problems = [];
+  if (!Array.isArray(entries)) return [`${REGISTRY_PATH} has no "entries" array`];
+  const seen = new Set();
+  for (const e of entries) {
+    const k = entryKey(e);
+    if (!k) { problems.push(`malformed entry (needs path and exactly one of symbol/pathspec): ${JSON.stringify(e)}`); continue; }
+    if (seen.has(k)) problems.push(`duplicate entry: ${k}`);
+    seen.add(k);
+    if (typeof e.reason !== "string" || e.reason.trim().length < 20) problems.push(`no reason (>= 20 chars) recorded: ${k}`);
+    if (typeof e.date !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(e.date)) problems.push(`no YYYY-MM-DD date: ${k}`);
+    if (!sites.has(k)) problems.push(`STALE entry, its site is gone: ${k}`);
+  }
+  for (const s of [...sites].sort()) if (!seen.has(s)) problems.push(`UNREGISTERED exclusion, no reason recorded: ${s}`);
+  return problems;
+}
+
+const scriptFiles = () => {
+  let listed;
+  try {
+    listed = execFileSync("git", ["ls-files", "scripts"], { cwd: repo, encoding: "utf8" });
+  } catch {
+    return null; // no index: refuse below rather than report zero sites
+  }
+  return Object.fromEntries(
+    listed.split("\n").filter((f) => /\.(mjs|cjs|js|ts|sh)$/.test(f)).map((f) => [f, read(f)]),
+  );
+};
+
+function loadRegistry() {
+  try {
+    return JSON.parse(read(REGISTRY_PATH));
+  } catch {
+    return { entries: null }; // missing or unparseable: every site reads unregistered
+  }
+}
+
 if (process.argv.includes("--self-test")) {
   // A guard nobody has watched fail is a guard nobody should trust — and the
   // previous self-test could not fail (ECC first-pass finding #4): it asked
@@ -159,12 +250,57 @@ if (process.argv.includes("--self-test")) {
     failures.push("prefix gate name matched a longer gate's invocation");
   }
 
+  // 5-10. The exclusion registry. Fixtures are built by concatenation so this
+  //       file's own source never spells a site the census would then derive.
+  const realFiles = scriptFiles() ?? {};
+  const realSites = exclusionSites(realFiles);
+  const realEntries = loadRegistry().entries;
+  const Q = "'";
+  const planted = { ...realFiles };
+  const victim = "scripts/check-gate-census.mjs";
+  planted[victim] = `${planted[victim] ?? ""}\nconst PLANTED_` + `SKIP = /^docs\\//;\n`;
+  const treeProblems = auditExclusions(realSites, realEntries);
+  if (treeProblems.length) failures.push(`the current tree is not green: ${treeProblems.join("; ")}`);
+  if (!auditExclusions(exclusionSites(planted), realEntries).some((p) => p.includes("UNREGISTERED") && p.includes("PLANTED_"))) {
+    failures.push("a planted named exclusion in a scratch copy of a real script was not reported UNREGISTERED");
+  }
+  const plantedSpec = { ...realFiles, [victim]: `${realFiles[victim] ?? ""}\ngit(["grep", ${Q}:` + `!docs/research/**${Q}]);\n` };
+  if (!auditExclusions(exclusionSites(plantedSpec), realEntries).some((p) => p.includes("UNREGISTERED") && p.includes("docs/research"))) {
+    failures.push("a planted ':!' pathspec in a scratch copy was not reported UNREGISTERED");
+  }
+  const gone = [...(realEntries ?? []), { path: "scripts/no-such-gate.mjs", symbol: "GONE_" + "EXEMPT", reason: "a site that was deleted from the tree", date: "2026-09-30" }];
+  if (!auditExclusions(realSites, gone).some((p) => p.includes("STALE") && p.includes("no-such-gate"))) {
+    failures.push("a registry entry whose site is gone was not reported STALE");
+  }
+  const reasonless = (realEntries ?? []).map((e, i) => (i === 0 ? { ...e, reason: "" } : e));
+  if (!auditExclusions(realSites, reasonless).some((p) => p.includes("no reason"))) {
+    failures.push("an entry with an empty reason was accepted");
+  }
+  if (exclusionSites({ "scripts/x.mjs": "// const OLD_" + "SKIP = 1;\n * " + Q + ":" + "!x" + Q }).size !== 0) {
+    failures.push("a commented-out exclusion was derived as a live site");
+  }
+  // Review of PR #1317: typed and later-declarator names must be derived too.
+  const shapes = exclusionSites({
+    "scripts/t1.ts": "const NOSCAN_" + "SKIP: string[] = [" + Q + "docs" + Q + "];",
+    "scripts/t2.ts": "  const MULTI_" + "EXEMPTIONS: {\n    name: string;\n  }[] = [];",
+    "scripts/t3.mjs": "const a = 1, B_" + "SKIP = [];",
+    "scripts/t4.mjs": "const cfg = { a: 1, OBJ_" + "SKIP: 2 }; if (X_" + "SKIP === 1) {} const f = (Y_" + "SKIP) => 1;",
+  });
+  for (const want of ["scripts/t1.ts|symbol:NOSCAN_" + "SKIP", "scripts/t2.ts|symbol:MULTI_" + "EXEMPTIONS", "scripts/t3.mjs|symbol:B_" + "SKIP"]) {
+    if (!shapes.has(want)) failures.push(`a declared exclusion was not derived: ${want}`);
+  }
+  for (const k of shapes) if (k.startsWith("scripts/t4.mjs")) failures.push(`a non-declaration was derived as a site: ${k}`);
+  if (realSites.size < 30) failures.push(`only ${realSites.size} exclusion sites derived (floor 30): the derivation drifted, not the tree`);
+
   if (failures.length) {
     console.log("FAIL  self-test:");
     for (const f of failures) console.log(`      - ${f}`);
     process.exit(1);
   }
-  console.log("PASS  self-test - covers() distinguishes invocation from mention, and coverage disappears when the lane text does");
+  console.log(
+    "PASS  self-test - covers() distinguishes invocation from mention, and coverage disappears when the lane text does; " +
+      "a planted exclusion (named, typed, later-declarator or pathspec) is UNREGISTERED, a gone site is STALE, a reasonless entry fails",
+  );
   process.exit(0);
 }
 
@@ -201,7 +337,29 @@ underlying 'scripts/<file>'. Matching only one style is how an audit reports
   process.exit(1);
 }
 
+const exclFiles = scriptFiles();
+if (!exclFiles) {
+  console.error(`x exclusion registry: could not list scripts/ from the git index - refusing rather than reporting zero sites`);
+  process.exit(1);
+}
+const exclSites = exclusionSites(exclFiles);
+const exclProblems = auditExclusions(exclSites, loadRegistry().entries);
+if (exclProblems.length) {
+  console.error(`x ${exclProblems.length} exclusion-registry problem(s) (${REGISTRY_PATH}):\n`);
+  for (const p of exclProblems) console.error(`    ${p}`);
+  console.error(`
+Every exclusion in a gate is part of its subject the gate cannot see, and a gate
+that sees less still prints that it passed (plan row 61). Record why each exists:
+add {path, symbol|pathspec, reason, date} to ${REGISTRY_PATH}, or remove the
+entry whose site is gone. If the exclusion hides in-scope content, add "finding".
+`);
+  process.exit(1);
+}
+
+const flagged = (loadRegistry().entries ?? []).filter((e) => e.finding).length;
 console.log(
   `OK Gate census - all ${gates.length} gates run somewhere ` +
-    `(${EXEMPT.size} exempt by name with a reason).`,
+    `(${EXEMPT.size} exempt by name with a reason); ` +
+    `${exclSites.size} exclusion sites in ${new Set([...exclSites].map((k) => k.split("|")[0])).size} scripts, ` +
+    `each with a recorded reason (${flagged} filed as findings, ${REGISTRY_PATH}).`,
 );

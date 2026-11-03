@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { evaluateV1, type V1Decision, type V1EvaluateRequest, type V1Outcome } from "@/lib/v1";
+import { evaluateV1, type V1Decision, type V1EvaluateRequest } from "@/lib/v1";
+import { outcomeTone } from "@/lib/outcomeTone";
 
 /**
  * Live decision panel — calls the `/v1` deterministic core for a real,
@@ -18,13 +19,6 @@ const PRESETS: Preset[] = [
   { label: "Tamper flag", sub: "med-admin", req: { identityRef: "nurse.tamper", deviceRef: "ipad-loan-02", workflowKey: "med-admin" } },
   { label: "Disabled account", sub: "med-admin", req: { identityRef: "nurse.disabled", deviceRef: "ipad-ward-04", workflowKey: "med-admin" } },
 ];
-
-const TONE: Record<V1Outcome, { dot: string; text: string; ring: string; label: string }> = {
-  allow: { dot: "bg-[hsl(var(--decision-allow))]", text: "text-status-allow", ring: "border-[hsl(var(--decision-allow)/0.4)]", label: "ALLOW" },
-  step_up: { dot: "bg-[hsl(var(--decision-review))]", text: "text-status-step-up", ring: "border-[hsl(var(--decision-review)/0.4)]", label: "STEP-UP" },
-  restrict: { dot: "bg-[hsl(var(--decision-deny))]", text: "text-status-restrict", ring: "border-[hsl(var(--decision-deny)/0.4)]", label: "RESTRICT" },
-  deny: { dot: "bg-[hsl(var(--decision-deny))]", text: "text-status-deny", ring: "border-[hsl(var(--decision-deny)/0.4)]", label: "DENY" },
-};
 
 export function LiveDecisionPanel() {
   const [activeIdx, setActiveIdx] = useState<number | null>(null);
@@ -47,7 +41,7 @@ export function LiveDecisionPanel() {
     }
   }
 
-  const tone = decision ? TONE[decision.outcome] : null;
+  const tone = decision ? outcomeTone(decision.outcome) : null;
 
   return (
     <Card className="border-border">
@@ -113,7 +107,7 @@ export function LiveDecisionPanel() {
                 {decision.matchedRules.map((r) => (
                   <div key={r.ruleId} className="flex items-center justify-between text-xs font-mono border-t border-border/50 pt-1.5">
                     <span className="text-muted-foreground">{r.ruleId}</span>
-                    <span className={TONE[r.outcome as V1Outcome]?.text ?? "text-muted-foreground"}>
+                    <span className={outcomeTone(r.outcome).text}>
                       {r.outcome} · {r.severity}
                     </span>
                   </div>

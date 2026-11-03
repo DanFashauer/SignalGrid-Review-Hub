@@ -45,7 +45,7 @@
 //       exit path (success, failure, or the job's own `cd` failing) releases it —
 //       never a trailing `&& (...; rm)` that only runs if everything before it did.
 //   L15 a stacked branch merges Alpha after its base lands, never the base tip.
-//   L23 a worktree with no root node_modules (or a symlink to one) fails the chain
+//   L36 a worktree with no root node_modules (or a symlink to one) fails the chain
 //       at the first tsx proof; the Merge stage installs it from the lockfile
 //       (`pnpm install --frozen-lockfile`) before anything else — and so does the Pre
 //       stage (Codex #1133 P2), when a `preBrief` is given: a Pre stage runs its own
@@ -62,7 +62,7 @@ export const meta = {
   description: 'Optional pre-edit, merge Alpha + regenerate on a clean index, one sequential preflight+breadth chain, push only on 0/0 verified by the script, open the PR',
   phases: [
     { title: 'Pre', detail: 'optional Sonnet edit stage from args.preBrief' },
-    { title: 'Merge', detail: 'Sonnet installs the worktree if needed (L23), merges origin/SignalGrid_Alpha, regenerates on a clean index, runs the quick gates' },
+    { title: 'Merge', detail: 'Sonnet installs the worktree if needed (L36), merges origin/SignalGrid_Alpha, regenerates on a clean index, runs the quick gates' },
     { title: 'Chain', detail: 'Haiku runs preflight + breadth with sentinels; the SCRIPT gates the push on 0/0, a Haiku push agent runs only when it clears' },
     { title: 'PR', detail: 'Sonnet drafts the body from the diff; Haiku opens the PR' },
   ],

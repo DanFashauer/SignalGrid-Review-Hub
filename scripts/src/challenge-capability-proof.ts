@@ -145,6 +145,27 @@ check("a hostile report whose key enumeration THROWS (Proxy ownKeys trap) is mal
   const hostile = new Proxy({}, { ownKeys() { throw new Error("trap"); } });
   return normalizeChallengeReport("p", hostile as ChallengeCapabilityReportRaw).reportIntegrity === "malformed";
 })());
+
+// The brace-less guards the mutation sweep could not reach until this family joined it
+// (`oneLine: true`, 2026-09-30). Each check below fails with its guard removed.
+//
+// A key the report only INHERITS is not one it asserts — value reads are own-only, so an
+// inherited `methods` would be silently dropped. The key scan walks the chain precisely
+// so that such a report is malformed rather than a clean read with a hole.
+check("a report that INHERITS a recognized key (on its prototype) is malformed, never a clean read", (() => {
+  const inherited = Object.assign(Object.create({ methods: [entry("fingerprint", true, true, true)] }) as object, { bridge_reachable: true });
+  const control = norm({ bridge_reachable: true });
+  return control.reportIntegrity === "clean" && norm(inherited as ChallengeCapabilityReportRaw).reportIntegrity === "malformed";
+})());
+// The prototype walk is BOUNDED: a chain past MAX_PROTOTYPE_DEPTH (64) is refused rather
+// than walked. The control shows the same shape under the bound reads clean, so the
+// refusal is the bound's and nothing else's.
+const chainedReport = (levels: number): ChallengeCapabilityReportRaw => {
+  let proto: object = Object.create(null) as object;
+  for (let i = 0; i < levels; i += 1) proto = Object.create(proto) as object;
+  return Object.assign(Object.create(proto) as object, { methods: [], bridge_reachable: true }) as ChallengeCapabilityReportRaw;
+};
+check("a report whose (empty) prototype chain runs past the 64-level bound is malformed; the same shape under it is clean", norm(chainedReport(8)).reportIntegrity === "clean" && norm(chainedReport(70)).reportIntegrity === "malformed");
 check("an absent methods slot is CLEAN and empty — the bridge said nothing, which is absence, not corruption", (() => {
   const n = norm({ bridge_reachable: true });
   return n.reportIntegrity === "clean" && n.methods.length === 0;

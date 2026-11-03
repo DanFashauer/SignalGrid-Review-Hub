@@ -342,7 +342,7 @@ const proofOutput = {
   routedActionCount: routedActionsAll.length,
 };
 
-assertPublicSafety(JSON.stringify({ scenarios, proofOutput }, null, 2));
+assertPublicSafety({ scenarios, proofOutput });
 
 const failed = assertions.filter((item) => !item.passed);
 const unsafeAllowCount = mutationResults.filter(isPlainAllow).length;
@@ -1051,17 +1051,123 @@ function toEvidenceRecord(result: SimulatorRunResult) {
   };
 }
 
-function assertPublicSafety(content: string): void {
+// SECRETS ARE FOUND BY WALKING THE OBJECT, not by regexing its serialisation (plan
+// row 145). The old pattern — `(api_key|secret|token|password)\s*[:=]\s*value` — ran
+// against JSON.stringify output, where a key is followed by `"` before the colon and
+// a value opens with `"`; neither is `\s`, `[:=]` nor a value character, so the check
+// could not fire on the one shape this proof produces and had always passed.
+//
+// The walk is fail-closed on shape (widened after an adversarial review of the row):
+//   - a key is split into words (camelCase, snake_case, kebab-case) and is secret-
+//     named when a word, or a two-word pair, is on the list — so `privateKey`,
+//     `accessKey`, `Authorization`, `pwd` and `pass` count, while `passed`,
+//     `bypass` and `tokenizer` do not;
+//   - ANY non-empty string under a secret-named key, or anywhere in its subtree
+//     (`{ token: ["…"] }`, `{ secrets: { prod: "…" } }`), is a finding — whatever its
+//     length or alphabet, spaces included;
+//   - a `key=value` inside a single string literal is still caught, with a value
+//     class that runs to whitespace or a quote (so `password=Abc!…` is not cut at `!`).
+// The evidence payload carries no secret-named key at all today, so the strictness
+// costs nothing; a future fixture that trips it renames the key.
+// (The patterns live inside the functions: they run from top-level code above this
+// point in the file, before a module-level const would be initialised.)
+
+/** True when a key names a credential. Split into lower-cased words first, so the
+ *  test is on whole words, never substrings. */
+function isSecretKey(key: string): boolean {
+  const WORDS = new Set([
+    "secret", "secrets", "token", "tokens", "password", "passwords", "passwd", "pwd", "pass",
+    "passphrase", "credential", "credentials", "bearer", "authorization", "apikey", "privatekey",
+    "accesskey", "cookie",
+  ]);
+  const PAIRS = new Set(["api key", "private key", "access key", "secret key", "client secret", "auth token"]);
+  const words = key
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .split(/[^A-Za-z0-9]+/)
+    .filter(Boolean)
+    .map((w) => w.toLowerCase());
+  if (words.some((w) => WORDS.has(w))) return true;
+  for (let i = 0; i + 1 < words.length; i += 1) if (PAIRS.has(`${words[i]} ${words[i + 1]}`)) return true;
+  return false;
+}
+
+/** Every `path` holding a string under a secret-named key (at any depth beneath it),
+ *  plus every string anywhere holding an inline `key=value` credential. */
+function findSecretLikePairs(value: unknown, path = "$", inSecret = false): string[] {
+  const SECRET_IN_STRING =
+    /(api[_-]?key|private[_-]?key|access[_-]?key|secret|token|passw(?:or)?d|pwd|authorization|bearer)\s*[:=]\s*[^\s"'`]{4,}/i;
+  const found: string[] = [];
+  if (typeof value === "string") {
+    if ((inSecret && value.trim() !== "") || SECRET_IN_STRING.test(value)) found.push(path);
+  } else if (Array.isArray(value)) {
+    value.forEach((v, i) => found.push(...findSecretLikePairs(v, `${path}[${i}]`, inSecret)));
+  } else if (value !== null && typeof value === "object") {
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+      found.push(...findSecretLikePairs(v, `${path}.${k}`, inSecret || isSecretKey(k)));
+    }
+  }
+  return found;
+}
+
+function assertPublicSafety(payload: unknown): void {
+  const content = JSON.stringify(payload, null, 2);
+  const secretPaths = findSecretLikePairs(payload);
+  assertions.push(
+    assertion(
+      "public safety: secret-like strings",
+      secretPaths.length === 0,
+      secretPaths.slice(0, 5).join(", ") || "none found",
+    ),
+  );
+  // NEGATIVE CONTROL: a synthetic object carrying fake credentials in exactly the
+  // serialisation shape above must be caught — the old regex returned false on all
+  // three, so without this control the check is invisible again the moment it rots.
+  // One planted control PER SHAPE, each asserted on its own so a regression names
+  // the shape it reopened.
+  const plantedShapes: Array<[string, unknown]> = [
+    ["camelCase apiKey", { apiKey: "FAKE0000example0000" }],
+    ["nested snake_case client_secret", { config: { client_secret: "FAKE-not-a-real-secret-0000" } }],
+    ["password inside an array element", { steps: [{ password: "FAKEpassword0000" }] }],
+    ["array under a secret-named key", { token: ["FAKE-tok-0000"] }],
+    ["object under a secret-named parent", { secrets: { prod: "FAKE-prod-0000" } }],
+    ["privateKey", { privateKey: "FAKE-pk" }],
+    ["accessKey", { accessKey: "FAKE-ak" }],
+    ["Authorization header", { headers: { Authorization: "Bearer FAKE" } }],
+    ["pwd", { pwd: "FAKE" }],
+    ["pass", { pass: "FAKE" }],
+    ["value with spaces", { passphrase: "fake correct horse battery" }],
+    ["value under 12 characters", { password: "Fk1!" }],
+    ["inline key=value with punctuation", { note: "set password=Abc!FAKE#0000 here" }],
+  ];
+  for (const [shape, obj] of plantedShapes) {
+    const hits = findSecretLikePairs(obj);
+    assertions.push(
+      assertion(`public safety self-test: secret walk catches a planted credential (${shape})`, hits.length > 0, hits.join(", ") || "none caught"),
+    );
+  }
+  // ...and does not fire on words that merely CONTAIN a secret word, or on non-string
+  // values, so the check stays one a real payload can pass.
+  const benign = findSecretLikePairs({
+    passed: "yes, every one",
+    bypassReason: "none recorded",
+    tokenizer: "whitespace",
+    sessionless: "true",
+    password: null,
+    token: 123456789012345,
+  });
+  assertions.push(
+    assertion(
+      "public safety self-test: secret walk ignores lookalike keys and non-string values",
+      benign.length === 0,
+      benign.join(", ") || "none matched",
+    ),
+  );
+
   // A phone number stands alone: not preceded or followed by a letter or digit,
   // so ten digits inside a hex hash or an alphanumeric id are not mistaken for one.
   const PHONE_NUMBER_PATTERN =
     /(?<![0-9A-Za-z])(?:\+1[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}(?![0-9A-Za-z])/;
   const checks = [
-    {
-      name: "secret-like strings",
-      pattern:
-        /(api[_-]?key|secret|token|password)\s*[:=]\s*[a-z0-9_\-.]{12,}/i,
-    },
     {
       name: "tenant IDs",
       pattern:

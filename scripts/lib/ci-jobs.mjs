@@ -82,22 +82,42 @@ export const NOT_A_GATE = new Map([
     "commits a regenerated SBOM back to a dependabot branch; bot plumbing, and the drift it fixes is gated by supply-chain.yml:sbom",
   ],
   [
-    // NOT "a cron re-run of the same suite" — that reason stood here and contradicted
-    // the workflow's own header, which states in capitals that it is NOT the full
-    // suite and runs a hand-picked selection. It is exempt because it is report-only:
-    // it opens or updates a tracking issue and never blocks a pull request.
+    // Exempt because it is report-only: it opens or updates a tracking issue and never
+    // blocks a pull request. Since plan row 171 (2026-09-30) it runs preflight whole
+    // plus the breadth lane — no longer a hand-picked selection, which this reason said
+    // until then; scripts/check-scheduled-verification-scope.mjs holds that shape.
     "scheduled-verification.yml:verify",
-    "report-only rot detection on a hand-picked selection of gates (see the workflow header); opens a tracking issue, never blocks a PR",
+    "report-only daily rot detection running full preflight + the breadth lane (see the workflow header); opens a tracking issue, never blocks a PR",
   ],
 ]);
 
 /** Every job defined in `.github/workflows/`, as `file.yml:job-id`. */
-export function enumerateCiJobs() {
+export function enumerateCiJobs(dir = workflowDir) {
+  const { files, parsed, jobs } = readCiWorkflows(dir);
+  // Fail closed: a workflow file that contributed no `jobs:` block would otherwise
+  // vanish from the count and shorten preflight's "not covered" disclaimer.
+  if (parsed.length !== files.length) {
+    const lost = files.filter((f) => !parsed.includes(f));
+    throw new Error(`ci-jobs: ${lost.join(", ")} has no top-level \`jobs:\` this parser can find — refusing to enumerate a partial CI job list`);
+  }
+  return jobs;
+}
+
+/**
+ * Read every workflow in `dir`. `files` is the readdir count, `parsed` the files a
+ * top-level `jobs:` was found in; callers compare the two. `jobs:` is anchored with
+ * /^jobs:/m, NOT indexOf("\njobs:") — the newline form missed a workflow whose FIRST
+ * line is `jobs:` and dropped it with no log (BUILD_BACKLOG, finding #5).
+ */
+export function readCiWorkflows(dir) {
+  const files = readdirSync(dir).filter((f) => /\.ya?ml$/.test(f)).sort();
+  const parsed = [];
   const jobs = [];
-  for (const file of readdirSync(workflowDir).filter((f) => /\.ya?ml$/.test(f))) {
-    const text = readFileSync(join(workflowDir, file), "utf8");
-    const at = text.indexOf("\njobs:");
+  for (const file of files) {
+    const text = readFileSync(join(dir, file), "utf8");
+    const at = text.search(/^jobs:/m);
     if (at < 0) continue;
+    parsed.push(file);
     const body = text.slice(at);
     for (const m of body.matchAll(/^ {2}([a-zA-Z0-9_-]+):$/gm)) {
       const after = body.slice(m.index + m[0].length, m.index + m[0].length + 400);
@@ -108,7 +128,7 @@ export function enumerateCiJobs() {
       });
     }
   }
-  return jobs.sort((a, b) => a.id.localeCompare(b.id));
+  return { files, parsed, jobs: jobs.sort((a, b) => a.id.localeCompare(b.id)) };
 }
 
 /**

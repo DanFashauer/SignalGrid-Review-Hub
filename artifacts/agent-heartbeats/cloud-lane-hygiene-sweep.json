@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-09-26T09:42:51.637Z",
-  "result": "freed ~57 MB (302 scratchpad files older than 24h) + pnpm store prune (18 packages, 196 files) | 5.3G free of 252G after the sweep (5.1G before); no /var/lib/docker on this host; scratchpad worktrees hold 5.7G (wt-1019 693M, wt-t2 179M) and are left in place - they are git worktrees, outside this routine's remit; owner not escalated (free space well above 1GB); keepalive delivery: the previous heartbeat was 24.0h old"
+  "firedAt": "2026-11-03T09:46:35.497Z",
+  "result": "09:41Z sweep (11-03): freed ~7G - scratchpad 8.4G -> 735M (676604 files older than 24h deleted with find -delete), pnpm store prune removed 3 packages; no /var/lib/docker. Disk 15G -> 22G free (41% used)."
 }

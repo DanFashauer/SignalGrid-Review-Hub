@@ -61,6 +61,7 @@ function referencedPaths(command) {
 
 function main() {
   console.log("Docker ↔ lifecycle-hook drift guard\n");
+  selfTest();
 
   const pkg = JSON.parse(readFileSync(join(repoRoot, "package.json"), "utf8"));
   const scripts = pkg.scripts ?? {};
@@ -89,36 +90,9 @@ function main() {
   let checked = 0;
 
   for (const file of dockerfiles) {
-    const stages = parseStages(readFileSync(join(repoRoot, file), "utf8"));
-    const installing = stages.filter((s) => s.runsInstall);
-    if (installing.length === 0) {
-      console.log(`\n  ${file} — runs no pnpm install; hooks never execute here.`);
-      continue;
-    }
-    for (const stage of installing) {
-      console.log(`\n  ${file} [${stage.name}] — runs pnpm install; must carry every hook entrypoint.`);
-      for (const h of hooks) {
-        if (h.files.length === 0) {
-          failures.push(
-            `${file} [${stage.name}]: root "${h.hook}" is \`${h.command}\` and no file path could be parsed ` +
-              `from it — this guard cannot confirm the image carries what the hook needs. Make the hook's ` +
-              `entrypoint an explicit .mjs/.cjs/.js path, or the Docker build is unguarded.`,
-          );
-          continue;
-        }
-        for (const needed of h.files) {
-          checked += 1;
-          if (stage.copiedPaths.some((p) => satisfies(p, needed))) {
-            console.log(`    ok — ${needed} (${h.hook})`);
-            continue;
-          }
-          failures.push(
-            `${file} [${stage.name}] runs \`pnpm install\` but never COPYs ${needed}, which the root ` +
-              `"${h.hook}" hook executes. The build will fail with "Cannot find module /app/${needed}".`,
-          );
-        }
-      }
-    }
+    const r = auditDockerfile(file, readFileSync(join(repoRoot, file), "utf8"), hooks, console.log);
+    failures.push(...r.failures);
+    checked += r.checked;
   }
 
   console.log(`\nhook×dockerfile pairs checked: ${checked}`);
@@ -133,7 +107,73 @@ function main() {
     process.exit(1);
   }
 
-  console.log("Docker lifecycle-copy check passed — every root install hook's entrypoint reaches every image that installs.");
+  console.log("Docker lifecycle-copy check passed — every root install hook's entrypoint reaches every image that installs; in-run control green.");
+}
+
+/** The verdict for ONE Dockerfile, as a pure function of its text and the root
+ *  hooks: every installing stage must COPY every hook entrypoint. `log` receives
+ *  the per-stage narration (a no-op for the in-run control). */
+function auditDockerfile(file, text, hooks, log) {
+  const failures = [];
+  let checked = 0;
+  const stages = parseStages(text);
+  const installing = stages.filter((s) => s.runsInstall);
+  if (installing.length === 0) {
+    log(`\n  ${file} — runs no pnpm install; hooks never execute here.`);
+    return { failures, checked };
+  }
+  for (const stage of installing) {
+    log(`\n  ${file} [${stage.name}] — runs pnpm install; must carry every hook entrypoint.`);
+    for (const h of hooks) {
+      if (h.files.length === 0) {
+        failures.push(
+          `${file} [${stage.name}]: root "${h.hook}" is \`${h.command}\` and no file path could be parsed ` +
+            `from it — this guard cannot confirm the image carries what the hook needs. Make the hook's ` +
+            `entrypoint an explicit .mjs/.cjs/.js path, or the Docker build is unguarded.`,
+        );
+        continue;
+      }
+      for (const needed of h.files) {
+        checked += 1;
+        if (stage.copiedPaths.some((p) => satisfies(p, needed))) {
+          log(`    ok — ${needed} (${h.hook})`);
+          continue;
+        }
+        failures.push(
+          `${file} [${stage.name}] runs \`pnpm install\` but never COPYs ${needed}, which the root ` +
+            `"${h.hook}" hook executes. The build will fail with "Cannot find module /app/${needed}".`,
+        );
+      }
+    }
+  }
+  return { failures, checked };
+}
+
+/** In-run control, on every invocation: a builder stage that installs without
+ *  COPYing the hook's file (and merely NAMES it in a comment — the prose trap the
+ *  first version fell into) must fail; the same stage with the COPY must pass. A
+ *  verdict that stopped seeing the missing copy would otherwise pass every real
+ *  Dockerfile forever. */
+function selfTest() {
+  const command = "node scripts/__control_hook__.mjs";
+  const hooks = [{ hook: "prepare", command, files: referencedPaths(command) }];
+  const missing =
+    "FROM docker.io/library/node:22 AS build\n# copies scripts/__control_hook__.mjs? it does not\n" +
+    "COPY package.json ./\nRUN pnpm install --frozen-lockfile\n";
+  const carried =
+    "FROM docker.io/library/node:22 AS build\nCOPY package.json \\\n  scripts/__control_hook__.mjs ./\n" +
+    "RUN pnpm install --frozen-lockfile\n";
+  const noop = () => {};
+  const bad = auditDockerfile("Dockerfile.control", missing, hooks, noop);
+  const good = auditDockerfile("Dockerfile.control", carried, hooks, noop);
+  if (bad.failures.length !== 1 || good.failures.length !== 0 || good.checked !== 1) {
+    console.error(
+      `✗ SELF-TEST FAILED — missing hook copy caught: ${bad.failures.length}/1, carried copy failures: ` +
+        `${good.failures.length} (want 0, checked ${good.checked}/1). The verdict can no longer tell a ` +
+        "Dockerfile that carries the hook from one that does not.",
+    );
+    process.exit(1);
+  }
 }
 
 /**

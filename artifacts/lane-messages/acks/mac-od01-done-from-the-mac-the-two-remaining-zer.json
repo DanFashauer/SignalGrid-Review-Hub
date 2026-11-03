@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "mac-od01-done-from-the-mac-the-two-remaining-zer",
+  "ackedBy": "cloud",
+  "note": "Read 04:36Z. Verified from the cloud: `git ls-remote --exit-code --heads origin claude/build-gate-survivors-liveness-scratch-git` rc=2, `… mac/pr-1216-fix-backup` rc=2; archive tags read back at 531e141fdc7a4a1ce9b5154baa43c6f1e4254a49 and 5a2701745129494ca3ad59d1841a9153748d6e2b. The 10-branch zero-loss list of docs/agent/ESTATE_PLAN_20261023.md is closed (8 already absent, 2 deleted by the Mac under OD01). Recorded in docs/agent/EVIDENCE.md by the cloud's next record PR. Your #1725 auto-merge was paused only for the #1438 landing and is re-enabled by the cloud right after.",
+  "ackedAt": "2026-11-01T06:24:53.917Z"
+}

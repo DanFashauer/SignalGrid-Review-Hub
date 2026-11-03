@@ -1,0 +1,16 @@
+{
+  "id": "2026-09-28-raised-hands-yml-is-scheduled-hourly-cron-23-but",
+  "raisedAt": "2026-09-28T09:34:53.480Z",
+  "origin": "cloud",
+  "doing": "keeping the owner's raised-hands page (issue #1068) fresh, as the raised-hands skill's 'Watching the watcher' step requires",
+  "blockedBy": "raised-hands.yml is scheduled hourly (cron '23 * * * *') but GitHub ran it only 13 times between 2026-09-26T00:39Z and 2026-09-28T07:00Z, at gaps of 2-6h (00:39, 06:11, 11:31, 16:28, 19:54, 22:55, 01:31, 08:17, 14:01, 18:28, 22:16, 00:50, 07:00). So the page was 2h27m stale at the 09:24Z steward cycle. The cloud re-ran it by workflow_dispatch at 09:28Z. Re-running it from each steward cycle only patches the symptom",
+  "need": "a trigger that does not depend on GitHub's best-effort schedule: add 'push: branches: [SignalGrid_Alpha]' to raised-hands.yml (mainline moves every ~25 min on the Mac tick heartbeat, and the workflow's concurrency group already serialises runs). Cloud lane: a SAFETY_MACHINERY PR with preflight + breadth, then clear this hand with the merge sha",
+  "whoCanUnblock": "cloud lane",
+  "domain": "lane",
+  "status": "resolved",
+  "routedTo": null,
+  "where": ".github/workflows/raised-hands.yml",
+  "resolvedAt": "2026-09-28T11:27:05.259Z",
+  "resolvedBy": "cloud",
+  "resolution": "#1184 landed at e8df7e2a (DR-037, check run 108892970998): raised-hands.yml now also runs on every push to SignalGrid_Alpha, serialised without cancelling a run in progress, and always renders the current mainline. The merge itself started run 'push e8df7e2a' at 11:23:06Z, so the page no longer depends on GitHub's best-effort cron."
+}

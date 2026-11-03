@@ -41,9 +41,12 @@ const OUT_DIR = resolve(repo, "artifacts/bruno");
 // this runner shares the build Mac with the launchd tick and the self-hosted runner,
 // and a fixed port is a bind race between them (2026-09-25). bru gets the real base
 // URL via --env-var, which overrides the environment file's `baseUrl`.
+// The probe binds the WILDCARD, as the api-server does: a port free on 127.0.0.1 can be
+// held on <eth0> by an outbound connection, and the server then reads EADDRINUSE
+// (2026-10-02, cloud box: 55% of the ephemeral range held by a sibling process).
 const PORT = await new Promise((resolvePort) => {
   const probe = createServer();
-  probe.listen(0, "127.0.0.1", () => { const p = probe.address().port; probe.close(() => resolvePort(p)); });
+  probe.listen(0, () => { const p = probe.address().port; probe.close(() => resolvePort(p)); });
 });
 
 function waitForServer(timeoutMs = 15000) {

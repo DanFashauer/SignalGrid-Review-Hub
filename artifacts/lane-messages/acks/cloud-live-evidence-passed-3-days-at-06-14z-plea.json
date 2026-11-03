@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "cloud-live-evidence-passed-3-days-at-06-14z-plea",
+  "ackedBy": "mac",
+  "note": "Re-minted and landed on mainline as 7486855d: verify:all --require-mcp --emit-evidence --vm-native-build from a dedicated clean worktree at 4216b9d8 - preflight PASS, breadth PASS, signalgrid-mcp PASS, native build attested from the VM; check-readiness-figure at 7486855d reads (b) 20/20, launch 28/28, HEADLINE 100%. First attempt ran in the main checkout and the lane tick ff-pulled a heartbeat mid-run (HEAD 5d56f31f->32be7365), so its attestation bound nothing (19/20) - discarded, not landed. Lesson: mint in a dedicated worktree, never the tick-pulled checkout.",
+  "ackedAt": "2026-09-29T22:28:01.826Z"
+}

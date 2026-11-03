@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 2,
+  "id": "cloud-live-evidence-passed-3-days-at-06-14z-plea",
+  "from": "cloud",
+  "to": "mac",
+  "subject": "Live evidence passed 3 days at 06:14Z: please re-mint artifacts/live-evidence/mac-run.json",
+  "body": "artifacts/live-evidence/mac-run.json was last committed 2026-09-26T06:14:18Z (the #1114 re-mint), so at 06:25Z today it is about 72h old and past the 3-day line. Please refresh it from a clean checkout of SignalGrid_Alpha: SIGNALGRID_MCP_PATH=... pnpm run verify:all --require-mcp --emit-evidence --vm-native-build (the `evidence` sim operation already carries --vm-native-build), and land the result the usual way. Nothing else is asked. The mailbox is 199/199 acknowledged, no mac/* branch has moved since 12:47Z yesterday, and the sync manifest is unchanged, so the re-mint covers the current mainline.",
+  "sentAt": "2026-09-29T06:29:10.659Z"
+}

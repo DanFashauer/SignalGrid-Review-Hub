@@ -22,7 +22,8 @@
 //       stop all work. Staleness is surfaced so the scheduled bot / owner can see a
 //       real-device run is due — not enforced.
 //
-// Exit code: non-zero ONLY when half (a) fails.
+// Exit code: non-zero on a hard failure only: half (a) drift, a doc restating a status
+// wrongly, or a doc present but unreadable. Half (b) never fails.
 import { readdirSync, readFileSync } from "node:fs";
 import { execSync } from "node:child_process";
 import { dirname, join, resolve } from "node:path";
@@ -118,6 +119,19 @@ if (process.argv.includes("--self-test")) {
     ["the legacy mac-run.json with NO kind is grandfathered as hardware", classifyEvidence("mac-run.json", { manifestFingerprint: "x" }) === "hardware"],
     ["a NEW file with no kind is NOT hardware — grandfathering is by name, not by absence", classifyEvidence("new-lane.json", { manifestFingerprint: "x" }) === "unreadable"],
     ["an UNREADABLE file (parse failed → null) is NOT hardware — the planted defect", classifyEvidence("mac-run.json", null) === "unreadable"],
+    // A doc that is present but unreadable must be REPORTED, never scanned as clean. A
+    // DIRECTORY gives a real EISDIR with no chmod; a missing path gives a real ENOENT
+    // (skipped: a doc deleted since `git ls-files` is not a defect).
+    ["a present-but-unreadable doc (EISDIR) is reported, naming the path", (() => {
+      const u = [];
+      findRestatedStatuses(repoRoot, ["docs"], u);
+      return u.length === 1 && u[0].startsWith("docs: ");
+    })()],
+    ["a missing doc (ENOENT) is skipped, not reported", (() => {
+      const u = [];
+      findRestatedStatuses(repoRoot, ["docs/__no_such_doc__.md"], u);
+      return u.length === 0;
+    })()],
     ["the container lane's LEGACY spelling is not hardware", classifyEvidence("docker-run.json", { kind: "docker-run" }) === "other"],
     ["the container lane's CURRENT spelling is not hardware either", classifyEvidence("docker-run.json", { kind: "container-run" }) === "other"],
     ["an unknown lane is not hardware", classifyEvidence("whatever.json", { kind: "something-new" }) === "other"],
@@ -195,7 +209,12 @@ console.log(`liveEvidence=${status}`);
 // this script printed STALE, for sixteen days and seven manifest versions (flagged
 // in ROLE_LENS_REVIEW_2026-08-21.md, still there on 2026-09-06). Any doc line that
 // says this tool REPORTS a status must match what it reports right now.
-const restated = findRestatedStatuses(repoRoot);
+const unreadableDocs = [];
+const restated = findRestatedStatuses(repoRoot, null, unreadableDocs);
+for (const u of unreadableDocs) {
+  console.error(`  ✗ doc present but unreadable, NOT scanned for a restated status: ${u}`);
+  hardFail = true;
+}
 for (const { file, line, word } of restated) {
   if (word !== status) {
     console.error(`  ✗ ${file}:${line} says check-live-sync reports liveEvidence=${word}; it reports ${status} — a status is printed, never restated`);
@@ -206,12 +225,13 @@ for (const { file, line, word } of restated) {
 process.exit(hardFail ? 1 : 0);
 
 /** Every `reports \`liveEvidence=<word>\`` line in tracked markdown under docs/. */
-export function findRestatedStatuses(root, files = null) {
+export function findRestatedStatuses(root, files = null, unreadable = []) {
   const out = [];
   const list = files ?? execSync("git ls-files -- 'docs/*.md' 'docs/**/*.md'", { cwd: root, encoding: "utf8" }).split("\n").filter(Boolean);
   for (const rel of list) {
     let text;
-    try { text = readFileSync(join(root, rel), "utf8"); } catch { continue; }
+    try { text = readFileSync(join(root, rel), "utf8"); }
+    catch (e) { if (e.code !== "ENOENT") unreadable.push(`${rel}: ${e.message}`); continue; }
     text.split("\n").forEach((l, i) => {
       // A QUOTATION of a restated status is a record of the drift, not a
       // restatement: the 2026-08-21 role-lens review cites the backlog's wrong

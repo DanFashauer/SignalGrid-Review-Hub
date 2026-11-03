@@ -22,6 +22,7 @@ import { fileURLToPath } from "node:url";
 import { resolveEmission, EMIT_SUPPRESSED, NO_CREDENTIAL } from "@workspace/integrations/emit-gate";
 import {
   createITSMAdapter,
+  ITSMAdapterManager,
   ZendeskAdapter,
   JiraAdapter,
   ServiceNowAdapter,
@@ -305,11 +306,45 @@ gateBeforeFirstCall(
 // methods already guard on — so assert the choke point itself, not each caller.
 // Asserted as "config flag AND emission gate": returning `config.enabled` alone was
 // the defect, and a tenant-controlled value is not a deployment boundary.
+//
+// The body is cut by `sliceBetween`, which returns null when EITHER anchor is
+// missing (plan row 121). The old inline `slice(0, indexOf("\n  }"))` turned a
+// missing closing anchor (-1) into `slice(0, -1)` — nearly the whole file — so both
+// body assertions below became whole-file greps and would pass on an `isEnabled()`
+// that returned `true`, as long as any other method mentioned the flag and the gate.
+/** The text from `start` up to (not including) the first `end` after it, or null
+ *  when either anchor is absent. Never widens: a missing anchor is a failed locate. */
+function sliceBetween(src: string, start: string, end: string): string | null {
+  const from = src.indexOf(start);
+  if (from === -1) return null;
+  const to = src.indexOf(end, from + start.length);
+  if (to === -1) return null;
+  return src.slice(from, to);
+}
+{
+  // Self-test: the helper must refuse, not widen, on a missing closing anchor. The
+  // planted source is the exact fail-open shape: a tab-indented (so "\n  }" never
+  // matches) isEnabled() that returns true, with the flag and the gate named only
+  // in a LATER method.
+  const planted =
+    "class X {\n\tisEnabled(): boolean {\n\t\treturn true;\n\t}\n" +
+    "\tother() { if (this.config?.enabled && resolveEmission(e).mode === 'live') {} }\n}";
+  check("sliceBetween self-test: a missing closing anchor yields null, not the rest of the file",
+    sliceBetween(planted, "isEnabled(): boolean", "\n  }") === null);
+  check("sliceBetween self-test: a missing opening anchor yields null",
+    sliceBetween(planted, "isEnabled(): number", "\n\t}") === null);
+  const cut = sliceBetween(planted, "isEnabled(): boolean", "\n\t}");
+  check("sliceBetween self-test: a present pair cuts the body only (later methods excluded)",
+    cut !== null && cut.includes("return true") && !cut.includes("config?.enabled"));
+}
 const mdeSrc = readFileSync(resolve(repo, "lib/integrations/src/integrations/telemetry/mde.ts"), "utf8");
-const mdeEnabled = mdeSrc.slice(mdeSrc.indexOf("isEnabled(): boolean"));
-const mdeBody = mdeEnabled.slice(0, mdeEnabled.indexOf("\n  }"));
-check("mde.isEnabled(): requires the local config flag", /config\?\.enabled/.test(mdeBody));
-check("mde.isEnabled(): ALSO requires the emission gate", /resolveEmission\s*\([^;]*\)\.mode === ['"]live['"]/.test(mdeBody));
+const mdeBody = sliceBetween(mdeSrc, "isEnabled(): boolean", "\n  }");
+check("mde.isEnabled(): method body located (both anchors present)", mdeBody !== null);
+check("mde.isEnabled(): requires the local config flag", mdeBody !== null && /config\?\.enabled/.test(mdeBody));
+check(
+  "mde.isEnabled(): ALSO requires the emission gate",
+  mdeBody !== null && /resolveEmission\s*\([^;]*\)\.mode === ['"]live['"]/.test(mdeBody),
+);
 check(
   "mde: every outbound method still routes through isEnabled()",
   (mdeSrc.match(/if \(!this\.isEnabled\(\)\)/g) ?? []).length >= 5,
@@ -1292,6 +1327,71 @@ check(
     "every declared builder names a closed set and every open slot states why",
     OUTBOUND_BUILDERS.every((b) => b.closed.length > 0 && b.open.every((o) => o.why.trim().length > 20)),
   );
+}
+
+// ── PLAN ROW 128: a health check the gate withheld says WHY, not just "unhealthy" ──
+//
+// Every ITSM adapter's healthCheck() consults the emit gate first and, suppressed,
+// returned `false` without touching the network — which the aggregate recorded as
+// 'unhealthy'. At dev tier that was eight "outages" for calls never made, while an
+// adapter exposing no healthCheck was correctly 'unchecked'. Same ignorance, two
+// answers. But the fix must not over-correct: at beta/prod with live integrations ON,
+// a MISSING CREDENTIAL is a broken integration (every createTicket is suppressed
+// too), and reading it as merely 'unchecked' would make that prod state look exactly
+// like a quiet dev box. So the two causes are pinned separately, on the REAL classes
+// with empty credentials, with a fetch spy that must never fire in either.
+{
+  const realFetch = globalThis.fetch;
+  const savedTier = process.env.SIGNALGRID_TIER;
+  const savedLive = process.env.SIGNALGRID_LIVE_INTEGRATIONS;
+  let reached = 0;
+  globalThis.fetch = ((): never => { reached += 1; throw new Error("FETCH ATTEMPTED"); }) as unknown as typeof globalThis.fetch;
+  const sweep = async () => {
+    const mgr = new ITSMAdapterManager();
+    mgr.registerAdapter("zendesk", new ZendeskAdapter({ instanceUrl: "https://acme.zendesk.com", email: "agent@acme.test", apiToken: "" }));
+    mgr.registerAdapter("jira", new JiraAdapter({ baseUrl: "https://acme.atlassian.net", email: "agent@acme.test", apiToken: "", serviceDeskId: "1" }));
+    mgr.registerAdapter("servicenow", new ServiceNowAdapter({ instanceUrl: "https://acme.service-now.com", auth: { type: "api_token", apiToken: "" } }));
+    mgr.registerAdapter("freshservice", new FreshserviceAdapter({ instanceUrl: "https://acme.freshservice.com", apiKey: "" }));
+    mgr.registerAdapter("bmc-helix", new BMCHelixAdapter({ instanceUrl: "https://acme.bmc.test", auth: { type: "api_token", apiToken: "" } }));
+    mgr.registerAdapter("ivanti", new IvantiAdapter({ instanceUrl: "https://acme.ivanti.test", clientId: "cid", clientSecret: "" }));
+    mgr.registerAdapter("manageengine", new ManageEngineAdapter({ instanceUrl: "https://acme.me.test", technicianKey: "" }));
+    mgr.registerAdapter("generic_webhook", new GenericWebhookAdapter({ url: "https://hooks.example.test/x", method: "POST", headers: {}, bodyTemplate: '{"t":"{{title}}"}', signingSecret: "" }));
+    return mgr.healthCheck();
+  };
+  const off = (h: Record<string, string>, want: string) => Object.keys(h).filter((v) => h[v] !== want);
+  try {
+    // (a) dev tier — the deployment chose not to emit: UNCHECKED.
+    process.env.SIGNALGRID_TIER = "dev";
+    delete process.env.SIGNALGRID_LIVE_INTEGRATIONS;
+    const dev = await sweep();
+    check(`itsm aggregate: at dev tier all eight suppressed adapters report 'unchecked', not 'unhealthy' (${Object.keys(dev).length} swept, wrong: ${off(dev, "unchecked").join(",") || "none"})`,
+      Object.keys(dev).length === 8 && off(dev, "unchecked").length === 0);
+    // (b) beta with the flag OFF — still a policy choice: UNCHECKED.
+    process.env.SIGNALGRID_TIER = "beta";
+    process.env.SIGNALGRID_LIVE_INTEGRATIONS = "false";
+    const flagOff = await sweep();
+    check(`itsm aggregate: at beta with live integrations OFF all eight report 'unchecked' (wrong: ${off(flagOff, "unchecked").join(",") || "none"})`,
+      Object.keys(flagOff).length === 8 && off(flagOff, "unchecked").length === 0);
+    // (c) prod with the flag ON and the credential MISSING — a misconfiguration: UNHEALTHY.
+    process.env.SIGNALGRID_TIER = "prod";
+    process.env.SIGNALGRID_LIVE_INTEGRATIONS = "true";
+    const broken = await sweep();
+    check(`itsm aggregate: at prod + live ON a MISSING credential reports 'unhealthy', never 'unchecked' (wrong: ${off(broken, "unhealthy").join(",") || "none"})`,
+      Object.keys(broken).length === 8 && off(broken, "unhealthy").length === 0);
+    check(`itsm aggregate: ...and none of those three sweeps reached the network (fetch fired ${reached}x)`, reached === 0);
+
+    const made = new ITSMAdapterManager();
+    const stub = (answer: boolean) => ({ vendor: "stub", createTicket: async () => { throw new Error("unused"); }, healthCheck: async () => answer });
+    made.registerAdapter("zendesk", stub(true) as never);
+    made.registerAdapter("jira", stub(false) as never);
+    const madeHealth = await made.healthCheck();
+    check("itsm aggregate: a check that WAS made still maps true -> healthy and false -> unhealthy",
+      madeHealth.zendesk === "healthy" && madeHealth.jira === "unhealthy");
+  } finally {
+    globalThis.fetch = realFetch;
+    if (savedTier === undefined) delete process.env.SIGNALGRID_TIER; else process.env.SIGNALGRID_TIER = savedTier;
+    if (savedLive === undefined) delete process.env.SIGNALGRID_LIVE_INTEGRATIONS; else process.env.SIGNALGRID_LIVE_INTEGRATIONS = savedLive;
+  }
 }
 
 const total = passed + failures.length;

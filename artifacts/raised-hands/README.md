@@ -4,7 +4,7 @@ Durable blocker records. When any lane, routine, gate, or session gets stuck and
 clear it alone, it **raises its hand** here instead of failing silently — the fail-closed
 rule applied to its own progress.
 
-- **Raise one:** `node scripts/raise-hand.mjs --doing "…" --blocked "…" --need "…" --domain <d> --who <owner|other-lane|tool:x>` writes `<date>-<slug>.json`.
+- **Raise one:** `node scripts/raise-hand.mjs --doing "…" --blocked "…" --need "…" --domain <d> --who <owner|"mac lane"|"cloud lane"|"the other lane"|tool:x|an org-roster role id> [--covers kind:id]` writes `<date>-<slug>.json`, and refuses a `--who` or `--covers` the schema (`node scripts/check-raised-hands.mjs`, run by preflight, CI and `lane:deliver`) would reject. `kind` is one of the auto-stall kinds in `scripts/raised-hands.mjs` (`mail`, `sim`, `heartbeat`, `pr-red`, …).
 - **Take one before working it:** `pnpm run hand:take -- <id>` (so two sessions never work the same hand).
 - **Monitor:** `node scripts/check-raised-hands.mjs` (also surfaced by `loop:state` and the Mac tick) reports every OPEN hand, routes each to the org-roster role that owns it, and flags any with **no owner** as a capability GAP.
 - **Everything stuck + the gate + the owner's page:** `pnpm run hands` (`scripts/raised-hands.mjs`) adds the stalls nobody raised a hand for, fails preflight/CI when one sits past 3× its limit uncovered, and feeds the hourly `raised-hands` issue.

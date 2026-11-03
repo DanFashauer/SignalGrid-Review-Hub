@@ -38,6 +38,7 @@
 import { readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { isMainModule } from "./lib/is-main.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const SPEC = "lib/api-spec/v1-openapi.yaml";
@@ -228,7 +229,7 @@ function selfTest() {
   process.exit(bad === 0 ? 0 : 1);
 }
 
-const IS_MAIN = process.argv[1] !== undefined && import.meta.url === new URL(`file://${resolve(process.argv[1])}`).href;
+const IS_MAIN = isMainModule(process.argv[1], import.meta.url);
 
 function main() {
   if (process.argv.includes("--self-test")) selfTest();

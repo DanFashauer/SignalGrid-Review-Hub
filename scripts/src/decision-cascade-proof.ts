@@ -55,6 +55,8 @@ import {
   outboundSummary,
   pendingOutbound,
   puckVerdict,
+  bindReturn,
+  isAuditEventType,
   recordNoticeDelivered,
   recordOutboundAttempt,
   redockWithinWindow,
@@ -395,12 +397,26 @@ const MATRIX: ReadonlyArray<readonly [string, Partial<PuckSituation>, PuckVerdic
   ["enrollment unreadable, strong read", { enrolledStrength: "unknown" }, "allow", "CUSTODY_AND_TRUST_CONFIRMED"],
   ["enrollment unreadable, 125 kHz read", { enrolledStrength: "unknown", readStrength: LEGACY_125 }, "step_up", "CREDENTIAL_STRENGTH_UNKNOWN"],
   ["enrollment and read method both unreadable", { enrolledStrength: "unknown", readStrength: "unknown" }, "step_up", "CREDENTIAL_STRENGTH_UNKNOWN"],
+  // Puck 6: the return leg and the release reading. A holder's own return closes custody
+  // without CUSTODY_REMOVED; an authorized release with no return is still the walk-away
+  // (restrict, never deny); a seat release with no authorized release is torn; and every
+  // return the ledger cannot bind to the holder keeps custody open by name.
+  ["holder's own credential returns the device at the dock", { attach: "removed", release: "authorized", returned: "holder" }, "restrict", "CUSTODY_RETURNED"],
+  ["authorized release, no return (an ordinary walk-away)", { attach: "removed", release: "authorized" }, "restrict", "CUSTODY_REMOVED"],
+  ["seat released with no authorized release", { attach: "removed", release: "unauthorized" }, "deny", "CUSTODY_TORN"],
+  ["release reading present but unreadable", { attach: "removed", release: "unknown" }, "deny", "CUSTODY_RELEASE_UNKNOWN"],
+  ["a return carried by someone else's credential", { attach: "removed", returned: "other_credential" }, "deny", "CUSTODY_RETURN_UNBOUND"],
+  ["a return claimed with no device sensed in the bay", { attach: "removed", returned: "device_absent" }, "restrict", "CUSTODY_EXCEPTION"],
+  ["a return the ledger cannot read", { attach: "removed", returned: "unknown" }, "restrict", "CUSTODY_RETURN_UNKNOWN"],
+  ["a return reported while the puck is still seated", { returned: "holder" }, "step_up", "CUSTODY_STATE_CONFLICT"],
+  ["torn removal, holder return claimed afterwards", { attach: "removed", forced: true, returned: "holder" }, "deny", "CUSTODY_TORN"],
+  ["unauthorized release, holder return claimed afterwards", { attach: "removed", release: "unauthorized", returned: "holder" }, "deny", "CUSTODY_TORN"],
 ];
 for (const [label, overrides, verdict, reasonCode] of MATRIX) {
   const row = puckVerdict(situation(overrides));
   check(`matrix: ${label} → ${verdict} (${reasonCode})`, row.verdict === verdict && row.reasonCode === reasonCode);
 }
-check(`matrix: every row is graded (${MATRIX.length} rows)`, MATRIX.length === 18);
+check(`matrix: every row is graded (${MATRIX.length} rows)`, MATRIX.length === 28);
 // The LIVE /v1 gate (SHARED_DEVICE_RULES_V1) carries the same step-up cells, and its
 // seeded policy tests pin them — so deleting the live rows fails THIS proof too, not
 // only the core proof's cell-by-cell parity.
@@ -409,6 +425,36 @@ const liveStrengthTests = core
   .filter((r) => r.expectedReasonCode === "CREDENTIAL_STRENGTH_UNKNOWN");
 check(`matrix: the live /v1 gate steps up the same cells (${liveStrengthTests.filter((r) => r.passed).length}/${liveStrengthTests.length} seeded policy tests)`,
   liveStrengthTests.length === 4 && liveStrengthTests.every((r) => r.passed));
+// Puck 6: the binder that turns a `device_returned` into the return input above. Only the
+// holder's own credential, with a device sensed in the bay, closes anything; every
+// unreadable input lands on a value that keeps custody OPEN.
+const HOLDER = "puck-7741";
+check("bindReturn: the holder's own credential with a device in the bay binds as holder",
+  bindReturn({ credentialRef: HOLDER, deviceSensedInBay: true }, HOLDER) === "holder");
+check("bindReturn: another credential with a device in the bay binds as other_credential",
+  bindReturn({ credentialRef: "puck-0002", deviceSensedInBay: true }, HOLDER) === "other_credential");
+check("bindReturn: no device sensed in the bay is device_absent, whatever credential carried it",
+  bindReturn({ credentialRef: HOLDER, deviceSensedInBay: false }, HOLDER) === "device_absent");
+check("bindReturn (fail-closed): bay sensing unreadable → unknown, even on the holder's credential",
+  bindReturn({ credentialRef: HOLDER, deviceSensedInBay: null }, HOLDER) === "unknown");
+check("bindReturn (fail-closed): a return with no credential, or a holder the ledger cannot name, is unknown — never holder",
+  bindReturn({ credentialRef: null, deviceSensedInBay: true }, HOLDER) === "unknown" &&
+    bindReturn({ credentialRef: HOLDER, deviceSensedInBay: true }, null) === "unknown" &&
+    bindReturn({ credentialRef: HOLDER, deviceSensedInBay: true }, "   ") === "unknown");
+check("bindReturn: no return at all is not_applicable (the walk-away rows stand)",
+  bindReturn(null, HOLDER) === "not_applicable" && bindReturn(undefined, HOLDER) === "not_applicable");
+check("bindReturn: a bound holder return grades CUSTODY_RETURNED end to end, never CUSTODY_REMOVED",
+  puckVerdict(situation({ attach: "removed", release: "authorized", returned: bindReturn({ credentialRef: HOLDER, deviceSensedInBay: true }, HOLDER) })).reasonCode === "CUSTODY_RETURNED");
+check("bindReturn: every non-holder binding keeps custody open (no allow, no CUSTODY_RETURNED)",
+  (["other_credential", "device_absent", "unknown", "not_applicable"] as const).every((b) => {
+    const row = puckVerdict(situation({ attach: "removed", returned: b }));
+    return row.verdict !== "allow" && row.reasonCode !== "CUSTODY_RETURNED";
+  }));
+// Puck 6: the ledger can name a return distinctly from a removal.
+const AUDIT_TYPES_DISTINCT = new Set<string>(["dock.returned", "dock.removed"]).size === 2;
+check("hop 8 (Puck 6): dock.returned is a lifecycle event type beside dock.removed, not a relabeling of it",
+  isAuditEventType("dock.returned") && isAuditEventType("dock.removed") && (AUDIT_TYPES_DISTINCT as boolean));
+
 // The one row that must NOT move: "radio says gone" is not "gone". It raises, and it
 // never suspends — both halves, because either one alone is the defect.
 check("matrix: a lost presence radio never SUSPENDS a session with the puck seated",
@@ -478,6 +524,8 @@ function situation(overrides: Partial<PuckSituation>): PuckSituation {
   return {
     attach: "attached",
     forced: false,
+    release: "not_applicable",
+    returned: "not_applicable",
     identityConfirmed: true,
     postureCompliant: true,
     credentialStanding: "valid",

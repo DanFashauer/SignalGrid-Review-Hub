@@ -44,9 +44,10 @@ Every claim below is checked against the `launch` class in scripts/launch-profil
 exactly how a canonical sentence drifts — the rule `check-product-framing.mjs`
 exists to enforce:
 
-> **SignalGrid connects the systems a building already runs - access control,
-> identity, device management, location, applications, ticketing - into one grid
-> that decides and acts on the person's behalf.**
+> **SignalGrid connects the systems a company already runs - access control,
+> identity, device management, location, applications, ticketing, the legacy ones
+> never built to talk to each other included - into one grid that decides and acts
+> on the person's behalf.**
 >
 > — `docs/PURPOSE.md` §2, verbatim
 

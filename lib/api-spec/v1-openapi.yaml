@@ -542,7 +542,7 @@ paths:
         - { name: limit, in: query, required: false, schema: { type: integer, minimum: 1, maximum: 1000, default: 200 }, description: Durable ledger only. }
         - { name: offset, in: query, required: false, schema: { type: integer, minimum: 0, default: 0 }, description: Durable ledger only. }
       responses:
-        "200": { description: "Audit events + chain verification; `source` names the ledger that answered. `chain.truncated`/`chain.evictedCount` report eviction by the per-tenant memory bound: a truncated `chain.valid: true` covers the RETAINED window only, never the whole history." }
+        "200": { description: "Audit events + chain verification; `source` names the ledger that answered, and `chain.truncated` means something different on each. `source: memory`: `chain.truncated`/`chain.evictedCount` report eviction by the per-tenant memory bound: a truncated `chain.valid: true` covers the RETAINED window only, never the whole history. `source: durable`: `chain` is the whole-ledger walk (`verifyLedgerFull`, the `db:verify-ledger` verifier). When `chain.ok` is `true` the walk read every row of the global chain to its end, and `chain.count`/`chain.headHash` cover all of it. When `chain.ok` is `false` the walk stopped at the first broken batch: `chain.brokenAtIndex` names the first broken row, `chain.count`/`chain.headHash` run to the end of that batch (batch-granular), and the rows after it were not read. `chain.truncated` is always `false` on this path because it reports a read cap or eviction, and there is neither; a 5xx, never a verdict, answers a walk that could not finish." }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "429": { $ref: "#/components/responses/TooManyRequests" }
@@ -1026,6 +1026,7 @@ paths:
       tags: [control-plane]
       security: []
       summary: Ingest a telemetry batch reported UP by an edge node
+      description: The nodeId must be one of the seeded edge nodes (GET /cp/v1/edge-nodes); any other id is refused 404 and not stored.
       requestBody:
         required: true
         content:
@@ -1044,6 +1045,7 @@ paths:
       responses:
         "200": { description: Ingested }
         "400": { $ref: "#/components/responses/ValidationError" }
+        "404": { $ref: "#/components/responses/NotFound" }
 
   /cp/v1/health:
     get:
@@ -1396,7 +1398,16 @@ components:
         assist:
           type: string
           enum: [allow, step_up, restrict, deny]
-        decisionId: { type: string }
+        # decisionId is always a dec_ id on a real decision: minLength 1 plus pattern \S
+        # (at least one non-whitespace character, the same "non-blank" every client
+        # checks — length alone would admit "   "). The strict
+        # client parse landed (#1145): every Assist client (Kotlin, Rust, Swift) denies
+        # a 2xx whose decisionId is missing, not a string, or blank, or whose reasons is
+        # present but not a list of strings (absent reasons is accepted:
+        # allow-no-reasons) — native/shared/assist-wire-conformance.json is the shared
+        # vector file all three run against. Documentation only: the enforcement is
+        # artifacts/api-server/test/api.test.mjs's four-outcome /v1/authorize assertion.
+        decisionId: { type: string, minLength: 1, pattern: '\S' }
         reasons:
           type: array
           items: { type: string }
@@ -1673,6 +1684,19 @@ components:
           description: Sorted, deduplicated roll-up of signalsUsed[].sourceReference.
         digest: { type: string }
         coreNormalizationVersion: { type: integer }
+        digestAlg:
+          type: string
+          enum: [fnv1a64-wtf8]
+          description: >-
+            Which digest function minted `digest`: FNV-1a 64 over the WTF-8 encoding of
+            the string. WTF-8 is identical to UTF-8 for every well-formed string; the
+            one difference is an unpaired UTF-16 surrogate, which WTF-8 encodes as its
+            own 3-byte sequence instead of substituting U+FFFD. A verifier must
+            implement WTF-8, not just UTF-8 — a standard UTF-8 encoder (e.g.
+            TextEncoder) is correct here only for well-formed input, and will compute a
+            different digest for a snapshot whose evidence contains an unpaired
+            surrogate. Absent means the row was minted before this digest fix and
+            verifies against the legacy low-byte function instead — never re-stamped.
       required:
         [id, tenantId, decisionId, capturedAt, evidence, signalsUsed,
          policyVersionId, policyVersion, sourceReferences]

@@ -32,10 +32,11 @@
 //      chosen only by comparing its parameters to non-verdict string literals, which nothing in the module calls — no
 //      verdict answers such a test differently from another, so it tones no verdict, and what a page passes it is not
 //      judged; every other function there must be a Record toner or a chart templater that calls only templaters (the
-//      closed shapes, S1-S7); outside the tone modules, the inline scan sees only `outcome` / `verdict` / `decision`
-//      `===` a string literal followed in the same expression by a status class, so it misses any other verdict
-//      choice — another name or operator, a verdict constant, a class written before its comparison, `clsx({ … })`
-//      keys,
+//      closed shapes, S1-S7), and every exported function but a toner is run with each verdict and refused if its
+//      output carries a status class, or, for a picker, if it answers one verdict differently from another (S8);
+//      outside the tone modules, the inline scan sees only `outcome` / `verdict` / `decision` `===` a string literal
+//      followed in the same expression by a status class, so it misses any other verdict choice — another name or
+//      operator, a verdict constant, a class written before its comparison, `clsx({ … })` keys,
 //      an aliased mutation or a copy of a judged Record (`const t = OUTCOME_TONE; t.deny = …`, a spread, `structuredClone`)
 //   4. the desktop tree's chart (it exports no OUTCOME_CHART_MARK; its Dashboard carries literal fills) —
 //      chart sites are judged only where a tone module exports OUTCOME_CHART_MARK
@@ -1157,7 +1158,9 @@ export function mutationProblems(src, names, file = "x.tsx") {
  *   S3  outside function bodies, a verdict-name literal only inside the initializer of a judged Record or of the
  *       verdict data the chart lane already judges (OUTCOME_CHART_MARK, OUTCOME_ORDER) — so `const DENY = "deny"`,
  *       `new Set(["deny"])` and `{ DENY: "deny" }` are refused where they are declared, and a tone module imports
- *       types only and re-exports types only (a value import or `export … from` could carry code in unjudged — F26);
+ *       types only and re-exports types only (a value import or `export … from` could carry code in unjudged — F26),
+ *       holds no `import()` or `require` (F28), and an OUTCOME_CHART_MARK only when exported, members dataKey / label /
+ *       token / pattern (the ones the chart lane judges);
  *   S4  a judged Record (and that verdict data) is referenced only as `NAME[p]` (or `NAME[p as T]`), read-only, in a
  *       function declared at module scope, where `p` is one of THAT function's own identifier parameters, never
  *       written, re-declared or destructured in it — or as a spread directly inside a module-scope Record initializer,
@@ -1175,7 +1178,10 @@ export function mutationProblems(src, names, file = "x.tsx") {
  *       A `+`, `.concat`, `.join`, a template with a literal span, `.length`, a call, a `let` — refused (F23);
  *   S7  no function below module scope, and no status text outside a module-scope object Record — a split class
  *       held in a constant (`const SPLIT = "text-" + "status-allow"`) is refused where it is written. Every
- *       module-scope colour Record (an object literal holding status text, or spreading one) is held to S4 too.
+ *       module-scope colour Record (an object literal holding status text, or spreading one) is held to S4 too, and a
+ *       module-scope value binding is a closed-shape function or a literal value / Record, never computed at load;
+ *   S8  (round 11, F27) the OUTPUT is judged too — see toneOutputProblems: the spelling rules judge pieces, and a
+ *       class split across pieces passed them, so every exported non-toner is run with each verdict.
  * Recorded decision (round 8): this rejects CODEX-1's correct `deny && other !== "allow"` conjunction and the correct
  * `!==` ternary inside a tone module. They were correct; they are refused anyway, because the evaluator that admitted
  * them could not be kept from admitting their wrong twins. Branching on a verdict belongs nowhere in a tone module.
@@ -1184,6 +1190,44 @@ export function mutationProblems(src, names, file = "x.tsx") {
  * shapes the real modules use, so there is nowhere left for a computed class to be built.
  */
 export const VERDICT_DATA = ["OUTCOME_CHART_MARK", "OUTCOME_ORDER"];
+const CHART_MARK_MEMBERS = new Set(["dataKey", "label", "token", "pattern"]);
+
+/**
+ * S8 (round 11, F27): JUDGE THE OUTPUT. Rounds 7-10 each closed the spellings named and the next refute found a sibling
+ * (a class split across chart-map members, literal arguments, default parameters). So the gate also runs the module: the
+ * tone-module text it read is transpiled and imported, and every exported function that is not a toner is called with
+ * each verdict spelling in each of the first four parameter positions (the others undefined, so their defaults apply).
+ *   - a TEMPLATER (or any function S6 did not admit): no result may carry a status class;
+ *   - a PICKER: every result must be identical — a picker that answers one verdict differently from another tones it.
+ * A call that throws paints nothing and is not counted; a module that cannot be imported fails closed.
+ */
+export const VERDICT_ARGS = ["allow", "step-up", "step_up", "stepUp", "restrict", "deny"];
+const STATUS_IN_OUTPUT = /(?:text|bg|border)-status-/;
+export async function toneOutputProblems(src, shapes) {
+  const out = [];
+  let ns;
+  try {
+    const js = ts.transpileModule(src, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText;
+    ns = await import(`data:text/javascript;base64,${Buffer.from(js).toString("base64")}`);
+  } catch (e) {
+    return [`could not be imported to judge what its functions return (${String(e.message).split("\n")[0]}) — a tone module whose output cannot be judged fails (S8)`];
+  }
+  const show = (v) => { try { return typeof v === "string" ? v : JSON.stringify(v) ?? String(v); } catch { return String(v); } };
+  for (const [name, fn] of Object.entries(ns)) {
+    if (typeof fn !== "function" || shapes?.get(name) === "toner") continue;
+    const results = [];
+    const call = (args) => { try { results.push(show(fn(...args))); } catch { /* a throw paints nothing */ } };
+    // `fn.length` stops at the first default parameter, so the verdict is tried in at least the first four positions.
+    const arity = Math.max(fn.length, 4);
+    for (let i = 0; i < arity; i++) for (const v of VERDICT_ARGS) { const a = new Array(i + 1).fill(undefined); a[i] = v; call(a); }
+    const painted = results.filter((r) => STATUS_IN_OUTPUT.test(r));
+    if (painted.length === 0) continue;
+    if (shapes?.get(name) === "picker") {
+      if (new Set(results).size > 1) out.push(`${name}() is a literal picker that answers one verdict differently from another ("${results.find((r) => r !== results[0])}" vs "${results[0]}") — it tones a verdict (S8)`);
+    } else out.push(`${name}() returns a status class ("${painted[0].slice(0, 60)}") — only a toner's Record or a literal picker may return one; a class built any other way is refused by what it returns (S8)`);
+  }
+  return out;
+}
 export function toneShapeProblems(src, judged0 = []) {
   const sf = ts.createSourceFile("tone.ts", src, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
   const K = ts.SyntaxKind;
@@ -1429,6 +1473,8 @@ export function toneShapeProblems(src, judged0 = []) {
     }
     return false;
   };
+  const shapes = new Map(); // name -> "toner" | "picker" | "templater" | null — read by the output judge (S8)
+  out.shapes = shapes;
   const templaterMemo = new Map();
   /** Is the module function `name` a templater (and not a toner or picker)? A cycle answers no. */
   function isTemplater(name) {
@@ -1445,6 +1491,7 @@ export function toneShapeProblems(src, judged0 = []) {
     const P = paramNames(fn);
     const plain = paramsPlain(fn);
     const shape = plain && (tonerShape(fn, P) ? "toner" : fn.body && ts.isBlock(fn.body) && fn.body.statements.length > 0 && pickerStmt(fn.body, P) ? "picker" : fn.body && !ts.isBlock(fn.body) && pickerExpr(fn.body, P) ? "picker" : templaterShape(fn, P) ? "templater" : null);
+    shapes.set(name, shape || null);
     if (!shape) out.push(`line ${lineOf(fn)}: ${name}() in a tone module is not one of the three closed shapes — a toner (\`return R[p] ?? "…"\`), a literal picker (\`p === "…"\` tests, string-literal results) or a chart templater; any other computation can build or choose a class the gate cannot see whole (S6)`);
   }
   // S7: no function below module scope (a method, a callback, an IIFE, a nested helper), and no status text outside a
@@ -1461,6 +1508,47 @@ export function toneShapeProblems(src, judged0 = []) {
     ts.forEachChild(m, s7);
   };
   s7(sf);
+  // S3 (round 11, F28): `import(…)` and `require` bring code in at run time, where nothing judges it.
+  const dyn = (m) => {
+    if (ts.isCallExpression(m) && m.expression.kind === K.ImportKeyword) out.push(`line ${lineOf(m)}: a dynamic import() in a tone module — the code it loads is never judged (S3)`);
+    if (ts.isIdentifier(m) && m.text === "require" && !inType(m)) out.push(`line ${lineOf(m)}: require in a tone module — the code it loads is never judged (S3)`);
+    ts.forEachChild(m, dyn);
+  };
+  dyn(sf);
+  // S7 (round 11): a module-scope value binding is a closed-shape function, a literal, or a literal Record / list —
+  // never a destructuring, an alias, a call, an `await` or anything else computed at load.
+  const literalValue = (e0, depth = 0) => {
+    const e = unwrap(e0);
+    if (ts.isStringLiteral(e) || ts.isNoSubstitutionTemplateLiteral(e) || ts.isNumericLiteral(e) || e.kind === K.TrueKeyword || e.kind === K.FalseKeyword || e.kind === K.NullKeyword) return true;
+    if (ts.isPrefixUnaryExpression(e) && e.operator === K.MinusToken && ts.isNumericLiteral(e.operand)) return true;
+    if (ts.isArrayLiteralExpression(e)) return e.elements.every((x) => literalValue(x, depth + 1));
+    if (ts.isObjectLiteralExpression(e)) return e.properties.every((pr) => (ts.isPropertyAssignment(pr) && !ts.isComputedPropertyName(pr.name) && literalValue(pr.initializer, depth + 1)) || (ts.isSpreadAssignment(pr) && depth === 0 && ts.isIdentifier(unwrap(pr.expression)) && judged.has(unwrap(pr.expression).text)));
+    return false;
+  };
+  const exportedNames = new Set();
+  for (const st of sf.statements) {
+    if (ts.isExportDeclaration(st) && !st.moduleSpecifier && st.exportClause && ts.isNamedExports(st.exportClause)) for (const el of st.exportClause.elements) exportedNames.add((el.propertyName ?? el.name).text);
+    if (ts.isVariableStatement(st) && st.modifiers?.some((m) => m.kind === K.ExportKeyword)) for (const d of st.declarationList.declarations) if (ts.isIdentifier(d.name)) exportedNames.add(d.name.text);
+  }
+  for (const st of sf.statements) {
+    if (!ts.isVariableStatement(st)) continue;
+    for (const d of st.declarationList.declarations) {
+      const init = d.initializer && unwrap(d.initializer);
+      const ok = ts.isIdentifier(d.name) && init && (ts.isArrowFunction(init) || ts.isFunctionExpression(init) || literalValue(init));
+      if (!ok) out.push(`line ${lineOf(d)}: a module-scope value binding in a tone module that is not a closed-shape function or a literal value / Record (a destructuring, an alias, a call, an await) — what it holds is computed where nothing judges it (S7)`);
+      // A chart map is verdict data only where the chart lane judges it: exported, members dataKey/label/token/pattern.
+      if (ts.isIdentifier(d.name) && VERDICT_DATA.includes(d.name.text)) {
+        if (!exportedNames.has(d.name.text)) out.push(`line ${lineOf(d)}: ${d.name.text} is not exported, so the chart lane never judges it — a tone module's chart data is exported or absent (S3)`);
+        if (d.name.text === "OUTCOME_CHART_MARK" && init && ts.isObjectLiteralExpression(init)) {
+          for (const pr of init.properties) {
+            const v = ts.isPropertyAssignment(pr) ? unwrap(pr.initializer) : null;
+            const bad = !v || !ts.isObjectLiteralExpression(v) ? ["(not an object)"] : v.properties.map((q) => (q.name && (ts.isIdentifier(q.name) || ts.isStringLiteral(q.name)) ? q.name.text : "(computed)")).filter((k) => !CHART_MARK_MEMBERS.has(k));
+            if (bad.length) out.push(`line ${lineOf(pr)}: OUTCOME_CHART_MARK entry carries ${bad.join(", ")} — a chart mark holds only ${[...CHART_MARK_MEMBERS].join(", ")}, the members the chart lane judges (S3)`);
+          }
+        }
+      }
+    }
+  }
   return out;
 }
 
@@ -2325,6 +2413,18 @@ async function selfTest() {
     await onDesk("F26b: `export * from \"./tone-impl.ts\"`", 1, "(S3)", 'export * from "./tone-impl.ts";');
     await onDesk("F26c: `export * as T from \"./tone-impl.ts\"`", 1, "(S3)", `${sig} {\n  return ${FB};\n}\nexport * as T from "./tone-impl.ts";`);
     await onDesk("control: a type-only re-export exits 0", 0, "", `${sig} {\n  return ${FB};\n}\nexport type { Outcome as O2 } from "./outcome-tone";`);
+    // Round 11: F27 (a split class through chart members, literal arguments, defaults) and F28 (import()) — each
+    // exited 0 at 711ec38d. S8 judges what the functions RETURN, so a split no spelling rule names is still caught.
+    const X1C = 'const OUTCOME_CHART_MARK = { allow: { a: "xt-stat", b: "us-allow" }, "step-up": { a: "xt-stat", b: "us-step-up" }, restrict: { a: "xt-stat", b: "us-restrict" }, deny: { a: "xt-stat", b: "us-allow" } };\nexport function outcomeTone(outcome: string): string { const m = OUTCOME_CHART_MARK[outcome as Outcome]; return `te${m.a}${m.b}`; }';
+    await onDesk("F27 X1c: a split class through a module-local chart map's members", 1, ["(S3)", "(S8)"], X1C);
+    await onDesk("F27: the same split through EXPORTED chart members the lane admits (label, token)", 1, "(S8)", 'export const OUTCOME_CHART_MARK = { allow: { label: "xt-stat", token: "us-allow" }, "step-up": { label: "xt-stat", token: "us-step-up" }, restrict: { label: "xt-stat", token: "us-restrict" }, deny: { label: "xt-stat", token: "us-allow" } };\nexport function outcomeTone(outcome: string): string { const m = OUTCOME_CHART_MARK[outcome as Outcome]; return `te${m.label}${m.token}`; }');
+    await onDesk("F27: the verdict in the SECOND position of a templater", 1, "(S8)", `${sig} {\n  return ${FB};\n}\nexport const OUTCOME_CHART_MARK = { allow: { label: "xt-status-allow" }, "step-up": { label: "xt-status-step-up" }, restrict: { label: "xt-status-restrict" }, deny: { label: "xt-status-allow" } };\nexport function t2(scope: string, outcome: Outcome): string { const m = OUTCOME_CHART_MARK[outcome]; return \`te\${m.label}\`; }`);
+    await onDesk("F27: a split class in default parameters", 1, "(S8)", 'export function outcomeTone(outcome: string, a = "te", b = "xt-stat", c = "us-allow"): string { return `${a}${b}${c}`; }');
+    await onDesk("F28 X5: `export const { outcomeTone } = await import(…)`", 1, ["(S3)", "(S7)"], 'export const { outcomeTone } = await import("./tone-impl.ts");');
+    await onDesk("F28: `const T = await import(…); export const outcomeTone = T.outcomeTone`", 1, ["(S3)", "(S7)"], 'const T = await import("./tone-impl.ts");\nexport const outcomeTone = T.outcomeTone;');
+    await onDesk("F28: `require(…)`", 1, ["(S3)", "(S7)"], 'declare const require: (s: string) => { outcomeTone: (o: string) => string };\nexport const outcomeTone = require("./tone-impl").outcomeTone;');
+    await onDesk("S3: an OUTCOME_CHART_MARK entry with a member the chart lane does not judge", 1, "(S3)", `${sig} {\n  return ${FB};\n}\nexport const OUTCOME_CHART_MARK = { allow: { token: "--decision-allow", extra: "x" }, "step-up": { token: "--decision-review" }, restrict: { token: "--decision-deny" }, deny: { token: "--decision-deny" } };`);
+    await onDesk("control: failModeTone's literal picker is judged by its output and still exits 0", 0, "", `${sig} {\n  return ${FB};\n}`);
     await onDesk("S1: an upper-case `\"DENY\"` compared after toUpperCase()", 1, "(S1)", `${sig} { return outcome.toUpperCase() === "DENY" ? "text-status-allow" : ${FB}; }`);
   }
   // Round 10, F25 on the REAL mobile PWA module (its chart data is the verdict-keyed OUTCOME_CHART_MARK).
@@ -2339,6 +2439,7 @@ async function selfTest() {
     await onPwa("control: the real module, unchanged, exits 0", 0, "", "");
     await onPwa("F25a: `patternTone(mark.pattern)` — restrict would wear allow", 1, "(S6)", '\nexport function patternTone(p: string): string { return p === "hatch" ? "text-status-allow" : "text-status-deny"; }\nexport function outcomeTextTone(outcome: Outcome): string { const mark = OUTCOME_CHART_MARK[outcome]; return patternTone(mark.pattern); }\n');
     await onPwa("F25b: `${tokTone(mark.token)}` in a template", 1, "(S6)", '\nexport function tokTone(t: string): string { return t === "--decision-allow" ? "text-status-allow" : "text-status-deny"; }\nexport function outcomeTextTone(outcome: Outcome): string { const mark = OUTCOME_CHART_MARK[outcome]; return `${tokTone(mark.token)}`; }\n');
+    await onPwa("F27 M1: `cat3(\"te\", \"xt-stat\", \"us-allow\")` — restrict would wear allow", 1, "(S8)", '\nexport function cat3(a: string, b: string, c: string): string { return `${a}${b}${c}`; }\nexport function outcomeTextTone(outcome: Outcome): string { const m = OUTCOME_CHART_MARK[outcome]; return m.pattern === "hatch" ? cat3("te", "xt-stat", "us-allow") : cat3("te", "xt-stat", "us-deny"); }\n');
     await onPwa("F25: a templater calling a templater stays legal (control)", 0, "", '\nexport function fillId(outcome: Outcome): string { return `${hatchPatternId(outcome, "legend")}-x`; }\n');
   }
   // Unit: toneShapeProblems on the three REAL tone modules is empty, and each S-rule fires alone.
@@ -2392,8 +2493,32 @@ async function selfTest() {
     checks.push(["S3 alone (F26): `export * as ns from`", only('export * as ns from "./a";', "S3")]);
     checks.push(["S3 (F26): `export type { X } from` and `export { type X } from` are admitted", sp('export type { X } from "./a";\nexport { type Y } from "./b";').length === 0]);
     checks.push(["S3 (F26): a mixed `export { type X, y } from` is refused", only('export { type X, y } from "./a";', "S3")]);
+    checks.push(["S3 alone (F28): a dynamic import()", only('export async function f(): Promise<unknown> { return import("./a"); }', "S3")]);
+    checks.push(["S7 alone (round 11): a module-scope binding initialised by a call", only("export const X = Object.freeze({ a: 1 });", "S7")]);
+    checks.push(["S7 alone (round 11): a destructured module-scope binding", only("const o = { a: 1 };\nexport const { a } = o;", "S7")]);
+    checks.push(["S7 (round 11): literal values, lists and Records with a spread of a colour Record are admitted", sp('export let legacy = false;\nexport const N = -1;\nexport const L = ["a", 2];\nexport const R = { ...OUTCOME_TONE, x: { y: "z" } } as const;').length === 0]);
+    checks.push(["S3 alone (round 11): a non-exported OUTCOME_CHART_MARK", only('const OUTCOME_CHART_MARK = { deny: { token: "--decision-deny" } };', "S3")]);
+    checks.push(["S3 (round 11): an OUTCOME_CHART_MARK exported by `export { … }` is admitted", sp('const OUTCOME_CHART_MARK = { deny: { dataKey: "deny", label: "Deny", token: "--decision-deny", pattern: "solid" } };\nexport { OUTCOME_CHART_MARK };').length === 0]);
     checks.push(["S5 alone: a toner referenced in its module", only("export function f(o: string): string { return OUTCOME_TONE[o as Outcome]; }\nexport const g = (x: string) => f(x);", "S5")]);
     checks.push(["S5: an exported toner with no in-module reference is admitted", sp("export function f(o: string): string { return OUTCOME_TONE[o as Outcome]; }\nexport { f as g2 };").every((m) => !m.includes("(S5)"))]);
+  }
+  // Round 11, S8 unit: the output judge alone, on hand-built shape maps.
+  {
+    const H = 'export type Outcome = "allow" | "step-up" | "restrict" | "deny";\n';
+    const op = (code, shapes) => toneOutputProblems(H + code, new Map(Object.entries(shapes)));
+    checks.push(["S8: a templater returning a status class is refused", (await op('export function f(o: string): string { return `te${"xt-status-"}${o}`; }', { f: "templater" })).some((m) => /f\(\) returns a status class/.test(m))]);
+    checks.push(["S8: a function of no admitted shape returning a status class is refused", (await op('export function f(o: string): string { return "text-status-" + o; }', { f: null })).some((m) => /returns a status class/.test(m))]);
+    checks.push(["S8: a picker answering one verdict differently is refused", (await op('export function f(o: string): string { return o === "deny" ? "text-status-allow" : "text-status-deny"; }', { f: "picker" })).some((m) => /answers one verdict differently/.test(m))]);
+    checks.push(["S8: a picker answering every verdict alike passes (failModeTone)", (await op('export function f(m: string): string { return m === "fail-closed" ? "text-status-allow" : "text-status-deny"; }', { f: "picker" })).length === 0]);
+    checks.push(["S8: a toner is not called (its Record is judged)", (await op('export function f(o: string): string { return "text-status-allow"; }', { f: "toner" })).length === 0]);
+    checks.push(["S8: a templater with no status class passes", (await op('export const f = (o: string, s = "chart"): string => `sg-hatch-${s}-${o}`;', { f: "templater" })).length === 0]);
+    checks.push(["S8: a call that throws paints nothing and is not counted", (await op('export function f(o: string): string { throw new Error(o); }', { f: "templater" })).length === 0]);
+    checks.push(["S8: the verdict in the third position is tried", (await op('export function f(a: string, b: string, c: string): string { return c === "deny" ? "text-status-allow" : "x"; }', { f: null })).some((m) => /returns a status class/.test(m))]);
+    checks.push(["S8: the verdict after a default parameter is tried (`fn.length` is 0)", (await op('export function f(s = "x", o = ""): string { return o === "deny" ? "text-status-allow" : "x"; }', { f: null })).some((m) => /returns a status class/.test(m))]);
+    checks.push(["S8: an undefined (defaulted) first argument is tried", (await op('export function f(o?: string): string { return o === undefined ? "text-status-allow" : "x"; }', { f: null })).some((m) => /returns a status class/.test(m))]);
+    checks.push(["S8: a status class inside a returned object is seen", (await op('export function f(o: string): object { return { c: "bg-status-allow" }; }', { f: null })).some((m) => /returns a status class/.test(m))]);
+    checks.push(["S8: a module that cannot be imported fails closed", (await op('throw new Error("boom");\nexport function f(): string { return ""; }', {})).some((m) => /could not be imported to judge/.test(m))]);
+    checks.push(["S8: a non-function export is not called", (await op('export const X = "text-status-allow";', {})).length === 0]);
   }
   const failed = checks.filter(([, ok]) => !ok);
   for (const [label, ok] of checks) console.log(`  ${ok ? "✓" : "✗"} ${label}`);
@@ -2409,7 +2534,7 @@ async function selfTest() {
 export const CEILINGS = [
   { phrases: ["restrict vs deny TOKENS"], text: "restrict vs deny TOKENS: they share --decision-deny by design (DR-005/006); they differ by class suffix and chart pattern only" },
   { phrases: ["badge Records outside the three tone modules", "TONE_EXPECTED", "extra utilities"], text: "badge Records outside the three tone modules, and any Record not named in TONE_EXPECTED or typed Record<…Outcome…, string> (e.g. CONNECTOR_DECISION_TONE); an unnamed Record is held to canonical class tokens but may carry extra utilities beside them" },
-  { backlog: true, phrases: ["literal picker", "S1-S7", "inline scan sees only", "clsx", "aliased mutation", "copy of a judged Record"], text: "in a tone module, a literal picker (failModeTone): a module-scope function returning string-literal classes chosen only by comparing its parameters to non-verdict string literals, which nothing in the module calls — no verdict answers such a test differently from another, so it tones no verdict, and what a page passes it is not judged; every other function there must be a Record toner or a chart templater that calls only templaters (the closed shapes, S1-S7); outside the tone modules, the inline scan sees only `outcome` / `verdict` / `decision` `===` a string literal followed in the same expression by a status class, so it misses any other verdict choice — another name or operator, a verdict constant, a class written before its comparison, `clsx({ … })` keys, an aliased mutation or a copy of a judged Record (`const t = OUTCOME_TONE; t.deny = …`, a spread, `structuredClone`)" },
+  { backlog: true, phrases: ["literal picker", "S1-S7", "(S8)", "inline scan sees only", "clsx", "aliased mutation", "copy of a judged Record"], text: "in a tone module, a literal picker (failModeTone): a module-scope function returning string-literal classes chosen only by comparing its parameters to non-verdict string literals, which nothing in the module calls — no verdict answers such a test differently from another, so it tones no verdict, and what a page passes it is not judged; every other function there must be a Record toner or a chart templater that calls only templaters (the closed shapes, S1-S7), and every exported function but a toner is run with each verdict and refused if its output carries a status class, or, for a picker, if it answers one verdict differently from another (S8); outside the tone modules, the inline scan sees only `outcome` / `verdict` / `decision` `===` a string literal followed in the same expression by a status class, so it misses any other verdict choice — another name or operator, a verdict constant, a class written before its comparison, `clsx({ … })` keys, an aliased mutation or a copy of a judged Record (`const t = OUTCOME_TONE; t.deny = …`, a spread, `structuredClone`)" },
   { phrases: ["desktop tree's chart"], text: "the desktop tree's chart (it exports no OUTCOME_CHART_MARK; its Dashboard carries literal fills) — chart sites are judged only where a tone module exports OUTCOME_CHART_MARK" },
   { phrases: ["signalgrid-app's TSX", "new app tree"], text: "signalgrid-app's TSX (its stylesheet is judged, its sources are not inline-scanned: its LiveDecisionPanel map would trip the scan) and a new app tree with neither a tone module nor verdict CSS" },
   { phrases: ["Tailwind theme", "@plugin", "opacity forms", "@fontsource", "Tailwind packages themselves", "workspace package"], text: "Tailwind theme/config colours, an `@plugin` or `@config` that adds rules from JavaScript, the Tailwind opacity forms (`bg-status-allow/5`) that no stylesheet rule generates (plan row 153), font-package stylesheets (`@fontsource/…`, @font-face only) and the Tailwind packages themselves (`tailwindcss`, `tw-animate-css`), the only package specifiers the gate lets through, and a stylesheet imported from inside a workspace package a tree depends on, which is not followed" },
@@ -2499,7 +2624,9 @@ export async function runGate(cfg) {
     for (const msg of r.problems) registryProblems.push(`${mod}:${msg}`);
     const expectedMap = Array.isArray(toneModules[mod]) ? Object.fromEntries(toneModules[mod].map((n) => [n, null])) : toneModules[mod];
     for (const msg of toneBranchProblems(src, Object.keys(expectedMap))) registryProblems.push(`${mod}:${msg}`);
-    for (const msg of toneShapeProblems(src, Object.keys(expectedMap))) registryProblems.push(`${mod}:${msg}`);
+    const shapeProblems = toneShapeProblems(src, Object.keys(expectedMap));
+    for (const msg of shapeProblems) registryProblems.push(`${mod}:${msg}`);
+    for (const msg of await toneOutputProblems(src, shapeProblems.shapes)) registryProblems.push(`${mod}: ${msg}`);
     for (const [n, kind] of Object.entries(expectedMap)) {
       if (kind !== "text" && kind !== "bg") registryProblems.push(`${mod}: ${n} is listed without a class kind (\`text\` or \`bg\`) — an unkinded Record is not held to one canonical class`);
     }

@@ -666,7 +666,7 @@
  },
  {
   "name": "S lane removed from runGate",
-  "find": "    for (const msg of toneShapeProblems(src, Object.keys(expectedMap))) registryProblems.push(`${mod}:${msg}`);\n",
+  "find": "    for (const msg of shapeProblems) registryProblems.push(`${mod}:${msg}`);\n",
   "replace": ""
  },
  {
@@ -858,5 +858,70 @@
   "name": "F26 export * counted as type-only",
   "find": "const typeOnly = st.isTypeOnly || (st.exportClause &&",
   "replace": "const typeOnly = st.isTypeOnly || !st.exportClause || (st.exportClause &&"
+ },
+ {
+  "name": "S8 output lane removed from runGate",
+  "find": "    for (const msg of await toneOutputProblems(src, shapeProblems.shapes)) registryProblems.push(`${mod}: ${msg}`);\n",
+  "replace": ""
+ },
+ {
+  "name": "S8 templater status output admitted",
+  "find": "    } else out.push(`${name}() returns a status class",
+  "replace": "    } else if (false) out.push(`${name}() returns a status class"
+ },
+ {
+  "name": "S8 picker answering differently admitted",
+  "find": "      if (new Set(results).size > 1) out.push(",
+  "replace": "      if (false) out.push("
+ },
+ {
+  "name": "S8 unimportable module passes",
+  "find": "    return [`could not be imported to judge what its functions return",
+  "replace": "    return []; [`could not be imported to judge what its functions return"
+ },
+ {
+  "name": "S8 verdict tried in the first position only",
+  "find": "    const arity = Math.max(fn.length, 4);",
+  "replace": "    const arity = 1;"
+ },
+ {
+  "name": "S8 object results not stringified",
+  "find": "typeof v === \"string\" ? v : JSON.stringify(v) ?? String(v)",
+  "replace": "typeof v === \"string\" ? v : String(v)"
+ },
+ {
+  "name": "S3 dynamic import() admitted",
+  "find": "    if (ts.isCallExpression(m) && m.expression.kind === K.ImportKeyword) out.push(",
+  "replace": "    if (false) out.push("
+ },
+ {
+  "name": "S3 require admitted",
+  "find": "    if (ts.isIdentifier(m) && m.text === \"require\" && !inType(m)) out.push(",
+  "replace": "    if (false) out.push("
+ },
+ {
+  "name": "S7 computed module-scope binding admitted",
+  "find": "      if (!ok) out.push(`line ${lineOf(d)}: a module-scope value binding",
+  "replace": "      if (false) out.push(`line ${lineOf(d)}: a module-scope value binding"
+ },
+ {
+  "name": "S7 a call counted as a literal value",
+  "find": "    if (ts.isPrefixUnaryExpression(e) && e.operator === K.MinusToken && ts.isNumericLiteral(e.operand)) return true;",
+  "replace": "    if (ts.isPrefixUnaryExpression(e) && e.operator === K.MinusToken && ts.isNumericLiteral(e.operand)) return true;\n    if (ts.isCallExpression(e)) return true;"
+ },
+ {
+  "name": "S3 a non-exported chart map admitted",
+  "find": "        if (!exportedNames.has(d.name.text)) out.push(",
+  "replace": "        if (false) out.push("
+ },
+ {
+  "name": "S3 export { } specifiers not counted as exports",
+  "find": "for (const el of st.exportClause.elements) exportedNames.add((el.propertyName ?? el.name).text);",
+  "replace": "for (const el of st.exportClause.elements) void el;"
+ },
+ {
+  "name": "S3 chart-mark extra members admitted",
+  "find": "            if (bad.length) out.push(",
+  "replace": "            if (false) out.push("
  }
 ]

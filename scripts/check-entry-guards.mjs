@@ -970,7 +970,7 @@ export const MUTANTS = [
   ["a signalled child is counted killed (R7-F)", GATE, "const signalled = r.signal || r.status === 130 || r.status === 143;", "const signalled = false;"],
   ["a child that exits 143 through its own handler is counted killed (R7-F)", GATE, "const signalled = r.signal || r.status === 130 || r.status === 143;", "const signalled = r.signal || r.status === 130;"],
   ["the child's TMPDIR is not parent-owned (R7-F)", GATE, "env: { ...process.env, TMPDIR: childTmp } });", "env: { ...process.env } });"],
-  ["Object.is is not a comparison (R7-C)", GATE, "const objectIs = /\\bObject\\s*\\.\\s*is\\s*\\(/.test(term.text);", "const objectIs = false;"],
+  ["Object.is is not a comparison (R7-C)", GATE, "const objectIs = isArgs !== null;", "const objectIs = false;"],
   ["startsWith is not a suffix-class method (O02)", GATE, "const method = /\\.\\s*(?:endsWith|startsWith|includes)\\s*\\(/.test(term.text);", "const method = /\\.\\s*(?:endsWith|includes)\\s*\\(/.test(term.text);"],
   ["an `isMainModule as x` rebinding is not flagged (O07)", GATE, "if (new RegExp(String.raw`(?<![\\w$])isMainModule\\s+as\\s`).test(clause[2]))", "if (false)"],
   ["only the first isMainModule argument is compared (O08)", GATE, "if (args !== EXACT_ARGS)", 'if (args.split(",")[0] !== "process.argv[1]")'],

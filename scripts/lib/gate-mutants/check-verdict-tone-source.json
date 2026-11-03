@@ -738,5 +738,25 @@
   "name": "S5 toner referenced in its module admitted",
   "find": "if (!ownName && !ts.isExportSpecifier(p) && !inType(m)",
   "replace": "if (false && !ownName && !ts.isExportSpecifier(p) && !inType(m)"
+ },
+ {
+  "name": "S6 literal class in a toner admitted",
+  "find": "if (!fallback && /(?:text|bg|border)-status-/.test(m.text)) out.push(",
+  "replace": "if (false) out.push("
+ },
+ {
+  "name": "S6 any literal counted as the fallback",
+  "find": "const fallback = ts.isBinaryExpression(c.parent) && c.parent.operatorToken.kind === K.QuestionQuestionToken && c.parent.right === c && ts.isStringLiteral(m);",
+  "replace": "const fallback = true;"
+ },
+ {
+  "name": "S3 value import admitted",
+  "find": "    if (!typeOnly) out.push(`line ${lineOf(st)}: a value import",
+  "replace": "    if (false) out.push(`line ${lineOf(st)}: a value import"
+ },
+ {
+  "name": "S3 side-effect import counted as type-only",
+  "find": "const typeOnly = ts.isImportEqualsDeclaration(st) ? st.isTypeOnly : c !== undefined && c !== null && (",
+  "replace": "const typeOnly = ts.isImportEqualsDeclaration(st) ? st.isTypeOnly : (!c || "
  }
 ]

@@ -28,13 +28,13 @@
 //   2. badge Records outside the three tone modules, and any Record not named in TONE_EXPECTED or typed
 //      Record<…Outcome…, string> (e.g. CONNECTOR_DECISION_TONE); an unnamed Record is held to canonical class
 //      tokens but may carry extra utilities beside them
-//   3. the default arm of a verdict branch and the complement arm of a negative test; every status class
-//      under a branch whose test names no verdict on the verdict parameter and that is not inside a verdict arm
-//      (`if (typeof x === 'string') { const DENY = … }`, `failMode === 'fail-closed'`); a switch clause that
-//      falls into the next with statements; and any verdict choice not made by an object property, a
-//      comparison, `.includes()` / `.has()` or a `switch` case — a class written before its comparison, `clsx({
-//      … })` keys, an aliased mutation or a copy of a judged Record (`const t = OUTCOME_TONE; t.deny = …`, a
-//      spread, `structuredClone`)
+//   3. in a tone module, a status class in a function that indexes no judged Record, under a test that names no
+//      verdict (`failMode === 'fail-closed'`) — every verdict branch, verdict constant and remapped or wrapped lookup
+//      there is refused outright (the structural rule, S1-S6); outside the tone modules, the inline scan sees only
+//      `outcome` / `verdict` / `decision` `===` a string literal followed in the same expression by a status class,
+//      so it misses any other verdict choice — another name or operator, a verdict constant, a class written before
+//      its comparison, `clsx({ … })` keys, an aliased mutation or a copy of a judged Record (`const t = OUTCOME_TONE;
+//      t.deny = …`, a spread, `structuredClone`)
 //   4. the desktop tree's chart (it exports no OUTCOME_CHART_MARK; its Dashboard carries literal fills) —
 //      chart sites are judged only where a tone module exports OUTCOME_CHART_MARK
 //   5. signalgrid-app's TSX (its stylesheet is judged, its sources are not inline-scanned: its
@@ -739,12 +739,20 @@ export function cssToneProblems(src) {
 /**
  * Judge the status classes in a tone module on its syntax tree (TypeScript compiler API), not on text.
  *
- * THE SUBJECT. Each function has one toned subject: the first expression rooted at its FIRST parameter (or an alias of
- * it, `const o = outcome`) that is compared to a verdict literal, tested with `.includes()` / `.has()`, or switched on —
- * else the first parameter itself.
- * A call that only normalises it (`.toLowerCase()`, `.trim()`, `String(x)`) is still the subject. A comparison on any
- * other expression — another parameter (`previous === "allow"`), another member of the same object (`d.previous`), a
- * free variable — is unknown and narrows nothing.
+ * THE SECOND JUDGE (round 8). In a tone module this evaluator is no longer what decides: toneShapeProblems (below)
+ * refuses every verdict literal, verdict constant, verdict-named member, remapped or wrapped lookup there outright,
+ * because this evaluator kept admitting spellings it did not model (F18-F21). It still runs, and still judges what it
+ * models; read its limits as limits, not as the gate's.
+ *
+ * THE SUBJECT. Each function has one toned subject: the FIRST expression in tree order rooted at its FIRST parameter
+ * (or an identifier alias of it, `const o = outcome`) that is compared to a verdict literal, tested with
+ * `.includes()` / `.has()`, or switched on — else the first parameter itself. A call that only normalises it
+ * (`.toLowerCase()`, `.trim()`, `String(x)`) is still the subject. A comparison on any other expression — another
+ * parameter (`previous === "allow"`), a free variable — is unknown and narrows nothing. Because the subject is the
+ * first one SEEN, a decoy comparison on another member of the same object (`d.previous === "allow"` before
+ * `d.outcome === "deny"`) becomes the subject and makes the real test unknown, and a destructured first parameter or
+ * a destructured alias (`{ outcome }`, `const { outcome } = d`) has no subject at all, so its arms go unjudged here.
+ * In a tone module the structural rule refuses both (S1 and S4).
  *
  * THE EVALUATION. A branch's test is evaluated, for each verdict the subject could hold, to true / false / unknown
  * (Kleene logic: `!`, `&&`, `||`, `===`/`==`/`!==`/`!=` against a verdict or a boolean, `.includes()`, `.has()`,
@@ -1145,14 +1153,17 @@ export function mutationProblems(src, names, file = "x.tsx") {
  *   S2  no verdict-named member (`.allow`, `.DENY`, `["deny"]`) or destructured verdict property in a function body;
  *   S3  outside function bodies, a verdict-name literal only inside the initializer of a judged Record or of the
  *       verdict data the chart lane already judges (OUTCOME_CHART_MARK, OUTCOME_ORDER) — so `const DENY = "deny"`,
- *       `new Set(["deny"])` and `{ DENY: "deny" }` are refused where they are declared;
+ *       `new Set(["deny"])` and `{ DENY: "deny" }` are refused where they are declared, and a tone module imports
+ *       types only (a value import could carry such a constant in);
  *   S4  a judged Record (and that verdict data) is referenced only as `NAME[p]` (or `NAME[p as T]`), read-only, in a
  *       function declared at module scope, where `p` is one of THAT function's own identifier parameters, never
  *       written, re-declared or destructured in it — or as a spread directly inside a module-scope Record initializer,
  *       in a type, or in an `export { … }`. `T = OUTCOME_TONE`, `OUTCOME_TONE.allow`, `Object.values(…)`, a spread in a
  *       function, `d.outcome` / a destructured parameter as the key, a nested helper, `NS.OUTCOME_TONE` are refused;
  *   S5  a function that indexes a judged Record (a toner) is never referenced inside its own module — no recursion,
- *       no wrapper (`toneFor("allow")`, `toneFor(previous)`), no alias. Compose at the call site.
+ *       no wrapper (`toneFor("allow")`, `toneFor(previous)`), no alias. Compose at the call site;
+ *   S6  inside a toner the only status class is its `??` fallback — `if (legacyTone) return "text-status-allow"`
+ *       beside the lookup is refused, whatever the test.
  * Recorded decision (round 8): this rejects CODEX-1's correct `deny && other !== "allow"` conjunction and the correct
  * `!==` ternary inside a tone module. They were correct; they are refused anyway, because the evaluator that admitted
  * them could not be kept from admitting their wrong twins. Branching on a verdict belongs nowhere in a tone module.
@@ -1228,6 +1239,13 @@ export function toneShapeProblems(src, judged0 = []) {
     return bad;
   };
 
+  // S3 (imports): a tone module imports types only — a value import could carry a verdict constant in from elsewhere.
+  for (const st of sf.statements) {
+    if (!ts.isImportDeclaration(st) && !ts.isImportEqualsDeclaration(st)) continue;
+    const c = ts.isImportDeclaration(st) ? st.importClause : null;
+    const typeOnly = ts.isImportEqualsDeclaration(st) ? st.isTypeOnly : c !== undefined && c !== null && (c.isTypeOnly || (!c.name && c.namedBindings && ts.isNamedImports(c.namedBindings) && c.namedBindings.elements.every((e) => e.isTypeOnly)));
+    if (!typeOnly) out.push(`line ${lineOf(st)}: a value import in a tone module — it may carry a verdict constant in from another file; a tone module imports types only (S3)`);
+  }
   // The toners: module-scope functions holding an admitted `NAME[p]` lookup (filled during the walk).
   const toners = new Map(); // name -> declaration identifier node
   const visit = (n) => {
@@ -1281,6 +1299,19 @@ export function toneShapeProblems(src, judged0 = []) {
     ts.forEachChild(m, refs);
   };
   refs(sf);
+  // S6: inside a toner, the only status class is the restrictive `??` fallback (its direction is judged elsewhere).
+  for (const fn of toners.values()) {
+    const lit = (m) => {
+      if (ts.isStringLiteral(m) || ts.isNoSubstitutionTemplateLiteral(m) || ts.isTemplateHead(m) || ts.isTemplateMiddle(m) || ts.isTemplateTail(m)) {
+        let c = m;
+        while (c.parent && (ts.isParenthesizedExpression(c.parent) || ts.isAsExpression(c.parent))) c = c.parent;
+        const fallback = ts.isBinaryExpression(c.parent) && c.parent.operatorToken.kind === K.QuestionQuestionToken && c.parent.right === c && ts.isStringLiteral(m);
+        if (!fallback && /(?:text|bg|border)-status-/.test(m.text)) out.push(`line ${lineOf(m)}: a status class "${m.text}" inside the toner ${topLevelFnName(fn)}() other than its \`??\` fallback — a toner returns its Record's class, never one of its own (S6)`);
+      }
+      ts.forEachChild(m, lit);
+    };
+    if (fn.body) lit(fn.body);
+  }
   return out;
 }
 
@@ -1798,7 +1829,7 @@ async function selfTest() {
     checks.push([`ceilings: the real header, plan row 168 and backlog row agree with CEILINGS (${CEILINGS.length} items, word for word)`, row.length > 200 && backlogRow.length > 200 && ceilingAgreement(real).length === 0]);
     const cut = (text, from) => text.replace(from, "");
     const t3 = CEILINGS[2].text;
-    checks.push(["F16 MUTANT cutting 'the complement arm of a negative test' from the plan row is RED", ceilingAgreement({ ...real, row: cut(row, " and the complement arm of a negative test") }).length >= 1]);
+    checks.push(["F16 MUTANT cutting 'the structural rule, S1-S6' from the plan row is RED", ceilingAgreement({ ...real, row: cut(row, " (the structural rule, S1-S6)") }).length >= 1]);
     checks.push(["F16 MUTANT cutting 'a copy of a judged Record' from the header is RED", ceilingAgreement({ ...real, header: header.replace("an aliased mutation or a copy of a judged Record", "an aliased mutation") }).length >= 1]);
     checks.push(["F16 MUTANT cutting a clause the key phrases do not cover (the 'extra utilities' sentence) from the row is RED", ceilingAgreement({ ...real, row: cut(row, "; an unnamed Record is held to canonical class tokens but may carry extra utilities beside them") }).length >= 1]);
     checks.push(["F16 MUTANT adding a ninth header item is RED", ceilingAgreement({ ...real, header: header.replace("// Option (b) of row 168", "//   9. an extra item\n// Option (b) of row 168") }).length >= 1]);
@@ -2124,6 +2155,8 @@ async function selfTest() {
     await onDesk("S4: a namespace member `NS.OUTCOME_TONE[outcome]` (M7's shape)", 1, "(S4)", `const NS = { OUTCOME_TONE };\n${sig} { return NS.OUTCOME_TONE[outcome as Outcome] ?? "text-status-restrict"; }`);
     await onDesk("S4: a write through the lookup `OUTCOME_TONE[outcome] = …`", 1, "(S4)", `${sig} { OUTCOME_TONE[outcome as Outcome] = "text-status-allow"; return ${FB}; }`);
     await onDesk("S1: a template-literal verdict `${\"\"}deny`", 1, "(S1)", `${sig} { return outcome === \`\${""}deny\` ? "text-status-allow" : ${FB}; }`);
+    await onDesk("S3: an imported verdict constant", 1, "(S3)", `${sig} { return outcome === DENY ? "text-status-allow" : ${FB}; }`, 'import { DENY } from "./verdicts";\n');
+    await onDesk("S6: a non-verdict guard returning a literal class beside the lookup", 1, "(S6)", `${sig} { if (legacyTone) return "text-status-allow"; return ${FB}; }`, "export let legacyTone = false;\n");
     await onDesk("S1: an upper-case `\"DENY\"` compared after toUpperCase()", 1, "(S1)", `${sig} { return outcome.toUpperCase() === "DENY" ? "text-status-allow" : ${FB}; }`);
   }
   // Unit: toneShapeProblems on the three REAL tone modules is empty, and each S-rule fires alone.
@@ -2136,12 +2169,17 @@ async function selfTest() {
     checks.push(["S2 alone: a destructured verdict property", only("export function f(o: { deny: string }): string { const { deny: d } = o; return d; }", "S2")]);
     checks.push(["S3 alone: a module-scope verdict constant", only('export const DENY = "deny";', "S3")]);
     checks.push(["S3: OUTCOME_ORDER and OUTCOME_CHART_MARK literals are verdict data, not refused", sp('export const OUTCOME_ORDER = ["allow", "step-up", "restrict", "deny"];\nexport const OUTCOME_CHART_MARK = { deny: { dataKey: "deny", label: "Deny" } };').length === 0]);
+    checks.push(["S3 alone: a value import", only('import { DENY } from "./verdicts";', "S3")]);
+    checks.push(["S3 alone: a side-effect import", only('import "./verdicts";', "S3")]);
+    checks.push(["S3: `import type` and inline `type` specifiers are admitted", sp('import type { A } from "./a";\nimport { type B } from "./b";').length === 0]);
     checks.push(["S4 alone: a bare reference in a function", only("export function f(): object { return OUTCOME_TONE; }", "S4")]);
     checks.push(["S4: a spread in a module-scope Record initializer is admitted", sp("export const MORE = { ...OUTCOME_TONE, x: \"y\" };").length === 0]);
     checks.push(["S4: `typeof OUTCOME_TONE` in a type is admitted", sp("export type T = keyof typeof OUTCOME_TONE;").length === 0]);
     checks.push(["S4: the lookup inside a method (not module scope) is refused", only("export const o = { m(k: string) { return OUTCOME_TONE[k as Outcome]; } };", "S4")]);
     checks.push(["S4: `[outcome] = …` destructuring-assigns the key", only("export function f(outcome: string, p: string[]): string { [outcome] = p; return OUTCOME_TONE[outcome as Outcome]; }", "S4")]);
     checks.push(["S4: `outcome++` disturbs the key", only("export function f(outcome: any): string { outcome++; return OUTCOME_TONE[outcome as Outcome]; }", "S4")]);
+    checks.push(["S6 alone: a literal class in a toner", only('export function f(o: string, x: boolean): string { return x ? "bg-status-allow" : OUTCOME_TONE[o as Outcome] ?? "text-status-restrict"; }', "S6")]);
+    checks.push(["S6: the `??` fallback is not an S6 finding", sp('export function f(o: string): string { return OUTCOME_TONE[o as Outcome] ?? "text-status-restrict"; }').length === 0]);
     checks.push(["S5 alone: a toner referenced in its module", only("export function f(o: string): string { return OUTCOME_TONE[o as Outcome]; }\nexport const g = (x: string) => f(x);", "S5")]);
     checks.push(["S5: an exported toner with no in-module reference is admitted", sp("export function f(o: string): string { return OUTCOME_TONE[o as Outcome]; }\nexport { f as g2 };").every((m) => !m.includes("(S5)"))]);
   }
@@ -2159,7 +2197,7 @@ async function selfTest() {
 export const CEILINGS = [
   { phrases: ["restrict vs deny TOKENS"], text: "restrict vs deny TOKENS: they share --decision-deny by design (DR-005/006); they differ by class suffix and chart pattern only" },
   { phrases: ["badge Records outside the three tone modules", "TONE_EXPECTED", "extra utilities"], text: "badge Records outside the three tone modules, and any Record not named in TONE_EXPECTED or typed Record<…Outcome…, string> (e.g. CONNECTOR_DECISION_TONE); an unnamed Record is held to canonical class tokens but may carry extra utilities beside them" },
-  { backlog: true, phrases: ["default arm", "complement arm", "names no verdict on the verdict parameter", "falls into the next", "clsx", "aliased mutation", "copy of a judged Record"], text: "the default arm of a verdict branch and the complement arm of a negative test; every status class under a branch whose test names no verdict on the verdict parameter and that is not inside a verdict arm (`if (typeof x === 'string') { const DENY = … }`, `failMode === 'fail-closed'`); a switch clause that falls into the next with statements; and any verdict choice not made by an object property, a comparison, `.includes()` / `.has()` or a `switch` case — a class written before its comparison, `clsx({ … })` keys, an aliased mutation or a copy of a judged Record (`const t = OUTCOME_TONE; t.deny = …`, a spread, `structuredClone`)" },
+  { backlog: true, phrases: ["names no verdict", "S1-S6", "inline scan sees only", "clsx", "aliased mutation", "copy of a judged Record"], text: "in a tone module, a status class in a function that indexes no judged Record, under a test that names no verdict (`failMode === 'fail-closed'`) — every verdict branch, verdict constant and remapped or wrapped lookup there is refused outright (the structural rule, S1-S6); outside the tone modules, the inline scan sees only `outcome` / `verdict` / `decision` `===` a string literal followed in the same expression by a status class, so it misses any other verdict choice — another name or operator, a verdict constant, a class written before its comparison, `clsx({ … })` keys, an aliased mutation or a copy of a judged Record (`const t = OUTCOME_TONE; t.deny = …`, a spread, `structuredClone`)" },
   { phrases: ["desktop tree's chart"], text: "the desktop tree's chart (it exports no OUTCOME_CHART_MARK; its Dashboard carries literal fills) — chart sites are judged only where a tone module exports OUTCOME_CHART_MARK" },
   { phrases: ["signalgrid-app's TSX", "new app tree"], text: "signalgrid-app's TSX (its stylesheet is judged, its sources are not inline-scanned: its LiveDecisionPanel map would trip the scan) and a new app tree with neither a tone module nor verdict CSS" },
   { phrases: ["Tailwind theme", "@plugin", "opacity forms", "@fontsource", "Tailwind packages themselves", "workspace package"], text: "Tailwind theme/config colours, an `@plugin` or `@config` that adds rules from JavaScript, the Tailwind opacity forms (`bg-status-allow/5`) that no stylesheet rule generates (plan row 153), font-package stylesheets (`@fontsource/…`, @font-face only) and the Tailwind packages themselves (`tailwindcss`, `tw-animate-css`), the only package specifiers the gate lets through, and a stylesheet imported from inside a workspace package a tree depends on, which is not followed" },

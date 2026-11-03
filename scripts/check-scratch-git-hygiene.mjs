@@ -66,6 +66,7 @@ export const PENDING = {
   "scripts/check-cited-paths.mjs": { pr: "#1356", reason: "open PR touches this file; migrate when it lands" },
   "scripts/check-launch-proof-bindings.mjs": { pr: "#1337", reason: "open PR touches this file; its :738 helper already passes commit.gpgsign=false" },
   "scripts/check-sim-scripts-selfcheck.mjs": { pr: "#1225", reason: "open PR touches this file; migrate when it lands" },
+  "scripts/check-owner-gated-surfaces.mjs": { pr: "#1133", reason: "#1133 adds the withTempRepo --classify-branch self-tests here, written before the helper existed; migrate to scratchGit() when #1133 lands" },
   "scripts/lib/land-branch-gate.mjs": { pr: "#1133", reason: ".claude/workflows/land-branch.js's verifier; #1133 rewrites it" },
   "scripts/loop-state.mjs": { pr: "branch claude/loop-state-20261008-gap (cloud lane)", reason: "branch claude/loop-state-20261008-gap (cloud lane), landing under review" },
 };

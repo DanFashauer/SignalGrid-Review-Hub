@@ -1234,8 +1234,10 @@ item 6(v)), every row reads the workstation.
 **Added 2026-10-02 under DR-055 (the owner's puck-token note and ARC kiosk photo)** — one more
 hardware-free row, filed from the fail-closed review of the note, not built: the requirements are
 the hypothesis page's *Credential binding and reset (owner note 2026-10-02; DR-055 amendment)*
-section, and the two open owner questions are the raised hand
-`artifacts/raised-hands/2026-10-02-two-readings-of-the-note-conflict-with-canonical.json`.
+section. The two owner questions that hand
+`artifacts/raised-hands/2026-10-02-two-readings-of-the-note-conflict-with-canonical.json` asked were
+answered on 2026-11-03: the puck is one offered factor, and re-bind or revoke is the customer's
+own administrator under dual control. Puck 16 stands as filed.
 
 - [ ] **Puck 16 — proof vectors for the credential attach and re-bind path: a reset, unbound or unreadable puck never yields `allow`, and a re-bind or revoke needs two authorizers.**
       The change: a fixture-backed proof with three vectors, registered so `validate-sim-macos.sh`

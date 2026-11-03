@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-11-03T12:17:06.018Z",
-  "result": "12:10Z fire (11-03, fired 12:16Z): quiet for builds - no cloud wave (DR-064; 0 mac/build-row-* claims); in flight H/S/O = 0/0/0; landed 0. Mac quiet since 07:08Z (no mac/* push, no mail). Sub-brains: signalgrid-mcp #17 unchanged (fdc50f61, owner's). Owner queue: apply-it for the local-build fix (hand 2026-11-03-every-local-build-dies-before-an-edit); resume the stopped Codex session on the 9B or wait for the 2026-11-04 01:36Z reset; #1265; #1698 path."
+  "firedAt": "2026-11-03T20:11:52.430Z",
+  "result": "20:10Z fire (11-03): harvest of the fix-all wave; landed 0 (heartbeat #1793 merged 0f36c3be at 18:43Z). Refutes this window: #1585 round 9 @ 777558ce FIX-NEEDED (F25 templater→picker, F26 value re-export; worker woken 19:36Z), #1792 @ 273a248f SHIP for the owner (moved to cd30d8c7), #1790 round 1 FIX-NEEDED → round 2 @ 0209d594 gating green, Sonnet delta re-review running (lands under DR-037 on SHIP). #1586 round 10 owed by W1. In flight H/S/O = 0/3/4. 0 mac/build-row-* claims; no Mac branch moved since 2026-11-03 00:18Z. Sub-brains: signalgrid-mcp #17 unchanged (fdc50f61, owner's). Owner queue: #1791 DR-065, #1792, #1463, #1338, #1337, #1265, #1321, #1314, #1190, #1133."
 }

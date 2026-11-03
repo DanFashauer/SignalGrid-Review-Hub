@@ -37,7 +37,8 @@
 //      own path unless it goes through `isMainModule` or a realpath call wraps EACH compared operand; a literal
 //      `.endsWith(..)`/`.startsWith(..)`/`.includes(..)` test or a basename compare of `process.argv[1]`; every
 //      `isMainModule` reference that is not the named import or an exact direct call (swapped, aliased, nested, member, `?.(`,
-//      `.call`, a wrapper function). Judged one comparison at a time. Read from code through a lexer (comments, strings and regex
+//      `.call`, a wrapper function, `new`/`typeof`/`void` before the call); `Object.is` as `Object.is`, `Object[<string>]`, a `const`
+//      alias or destructure, `.call`/`.apply` or `Reflect.apply`, unless a realpath call wraps EACH compared argument. Judged one comparison at a time. Read from code through a lexer (comments, strings and regex
 //      literals blanked, template expressions kept); `process.argv[1]` is recognised as .argv[1], ?.[1], .at(1),
 //      ["argv"][1] and through `const x = process.argv[1]` / `const [, x] = process.argv`; the self path as
 //      import.meta.url / .filename and through a `const` bound to fileURLToPath(..), resolve(..) of it or
@@ -45,7 +46,7 @@
 //      a self path built by a function the detector cannot see; a comparison split across two statements by a
 //      boolean; `let x; x = process.argv[1]`; `const args = process.argv; args[1]`; `const { argv: [, x] } =
 //      process`; `import { argv } from "node:process"`; any argv read through a parameter; `switch
-//      (process.argv[1]) { case <self path>: }`; `new Set([process.argv[1]]).has(<self path>)`; inversion of an
+//      (process.argv[1]) { case <self path>: }`; `new Set([process.argv[1]]).has(<self path>)`; `Object.is` reached other than as `Object.is`, `Object[<string>]`, a `const` alias, `const { is } = Object`, `.call`/`.apply` or `Reflect.apply` (`let eq; eq = Object.is` is not seen); any call whose name starts with `real` is read as a realpath call (`realName(process.argv[1]) === realName(<self path>)` is excused); inversion of an
 //      exact helper call (`!(isMainModule(..))`, `=== false`, `|| run()`); a `/` after `)` read as a division,
 //      which can hide an import later on the same line; a gate started as `node -e "await import('<gate>')" <gate
 //      path>` (argv[1] is then the gate path; the helper has the same property). The lexer is a heuristic, not a
@@ -174,7 +175,7 @@ const REAL_CALL = /\breal\w*\s*\(/;
 
 const nowhite = (t) => t.replace(/\s+/g, "");
 
-/** Scratch directories this process made; removed on exit and on SIGINT/SIGTERM so an interrupted run leaks none. */
+/** Scratch directories this process made; removed on exit and on every OWNED_SIGNALS signal so an interrupted run leaks none. */
 const SCRATCH = new Set();
 const scratchDir = (prefix) => {
   const dir = mkdtempSync(join(tmpdir(), prefix));
@@ -236,6 +237,91 @@ function closeParen(code, open) {
   return -1;
 }
 
+// Object.is under the spellings the detector follows: `Object.is`, `Object["is"]` (codeOnly blanks the string, so any
+// `Object[<string>]` is read as it - fail-closed), and a name bound by `const x = Object.is` or `const { is[: x] } = Object`.
+const OBJECT_IS_SRC = String.raw`(?<![\w$])Object\s*(?:\.\s*is|\[\s*(?:"\s*"|'\s*'|\x60\s*\x60)\s*\])(?![\w$])`;
+const OBJECT_IS_ALIAS = new RegExp(String.raw`\b(?:const|let|var)\s+${NAME}\s*=\s*${OBJECT_IS_SRC}(?!\s*(?:\.|\(|\[))`, "g");
+const OBJECT_DESTRUCTURE = /\b(?:const|let|var)\s*\{([^}]*)\}\s*=\s*Object\b(?!\s*\.)/g;
+
+/** Pure: the names bound to Object.is in code form (`const same = Object.is`, `const { is } = Object`, `const { is: eq } = Object`). */
+function objectIsAliases(code) {
+  const out = [...code.matchAll(OBJECT_IS_ALIAS)].map((m) => m[1]);
+  for (const m of code.matchAll(OBJECT_DESTRUCTURE)) {
+    for (const part of m[1].split(",")) {
+      const d = /^\s*is\s*(?::\s*([A-Za-z_$][\w$]*))?\s*(?:=.*)?$/.exec(part);
+      if (d) out.push(d[1] ?? "is");
+    }
+  }
+  return out;
+}
+
+/** Pure: split the text inside one balanced group at its depth-0 commas. */
+function splitArgs(inner) {
+  const args = [];
+  let depth = 0;
+  let start = 0;
+  for (let i = 0; i < inner.length; i += 1) {
+    const c = inner[i];
+    if ("([{".includes(c)) depth += 1;
+    else if (")]}".includes(c)) depth -= 1;
+    else if (c === "," && depth === 0) {
+      args.push(inner.slice(start, i));
+      start = i + 1;
+    }
+  }
+  if (inner.slice(start).trim() !== "") args.push(inner.slice(start));
+  return args.map((a) => a.trim());
+}
+
+/** The elements of an argument that is an array literal, or null (an array the detector cannot see is not two operands). */
+const arrayItems = (arg) => (arg !== undefined && /^\[[\s\S]*\]$/.test(arg) && closeParenOf(arg, 0) === arg.length ? splitArgs(arg.slice(1, -1)) : null);
+
+/**
+ * Pure: the COMPARED arguments of the first Object.is call in `text` (code form), or null when there is none. Direct and
+ * `Object["is"]`/alias calls give their arguments; `.call(t, a, b)` drops the receiver; `.apply(t, [a, b])` and
+ * `Reflect.apply(Object.is, t, [a, b])` give the array's items ([] when the array is not a literal: no realpath excuse).
+ */
+export function objectIsArgs(text, isWord = null) {
+  const callee = isWord ? `(?:${OBJECT_IS_SRC}|${isWord.source})` : OBJECT_IS_SRC;
+  const forms = [
+    [new RegExp(String.raw`\bReflect\s*\.\s*apply\s*\(\s*${callee}`), "reflect"],
+    [new RegExp(String.raw`${callee}\s*\.\s*call\s*\(`), "call"],
+    [new RegExp(String.raw`${callee}\s*\.\s*apply\s*\(`), "apply"],
+    [new RegExp(String.raw`${callee}\s*\(`), "direct"],
+  ];
+  for (const [re, form] of forms) {
+    const m = re.exec(text);
+    if (!m) continue;
+    const open = form === "reflect" ? text.indexOf("(", m.index) : m.index + m[0].length - 1;
+    const end = closeParenOf(text, open);
+    if (end < 0) return [];
+    const args = splitArgs(text.slice(open + 1, end - 1));
+    if (form === "direct") return args;
+    if (form === "call") return args.slice(1);
+    return arrayItems(args[form === "apply" ? 1 : 2]) ?? [];
+  }
+  return null;
+}
+
+/** Does a realpath call wrap this WHOLE argument (not merely appear inside it)? */
+function wrapsInRealpath(arg) {
+  const m = /^(?:[\w$]+\s*\.\s*)*real\w*\s*\(/.exec(arg);
+  return m !== null && closeParenOf(arg, m[0].length - 1) === arg.length;
+}
+
+/** Index just past the bracket that closes the one at `open` (any of ( [ {), in code form; -1 when unbalanced. */
+function closeParenOf(code, open) {
+  let depth = 0;
+  for (let i = open; i < code.length; i += 1) {
+    if ("([{".includes(code[i])) depth += 1;
+    else if (")]}".includes(code[i])) {
+      depth -= 1;
+      if (depth === 0) return i + 1;
+    }
+  }
+  return -1;
+}
+
 const EXACT_ARGS = "process.argv[1],import.meta.url";
 
 /**
@@ -274,6 +360,10 @@ function helperReferences(code) {
       found.push([i, "calls or reads isMainModule through a member or namespace"]);
       continue;
     }
+    if (/(?<![\w$])(?:new|typeof|void)\s+$/.test(before)) {
+      found.push([i, "puts new/typeof/void before isMainModule - the result is no longer the boolean, so the body runs on import or never"]);
+      continue;
+    }
     const open = after.search(/\S/);
     if (open < 0 || after[open] !== "(") {
       found.push([i, "references isMainModule other than as a direct call (an alias, ?.(, .call or a re-export)"]);
@@ -305,6 +395,7 @@ export function rawGuards(text, { callsHelperFreely = false } = {}) {
   const names = (re) => [...code.matchAll(re)].map((m) => m[1]);
   const argvWord = wordOf([...names(ARGV_ALIAS), ...names(ARGV_DESTRUCTURE)]);
   const selfWord = wordOf(names(SELF_ALIAS));
+  const isWord = wordOf(objectIsAliases(code));
   const out = [];
   const add = (reason, at, from, to, kind = "raw") => {
     const t = code.slice(from, to).replace(/\s+/g, " ").trim();
@@ -333,11 +424,13 @@ export function rawGuards(text, { callsHelperFreely = false } = {}) {
         }
       }
       let realBoth = op !== null && REAL_CALL.test(term.text.slice(0, op.index)) && REAL_CALL.test(term.text.slice(op.index + op.length));
-      // Object.is(a, b) is a comparison too: a realpath call must wrap each of its two arguments.
-      const objectIs = /\bObject\s*\.\s*is\s*\(/.test(term.text);
+      // Object.is(a, b) is a comparison too (also as Object["is"], a const alias or destructure, .call/.apply, Reflect.apply):
+      // a realpath call must WRAP each of its two compared arguments, judged argument by argument (objectIsArgs).
+      const isArgs = objectIsArgs(term.text, isWord);
+      const objectIs = isArgs !== null;
       if (objectIs && !op) {
         op = { index: 0, length: 0 };
-        realBoth = (term.text.match(/\breal\w*\s*\(/g) ?? []).length >= 2;
+        realBoth = isArgs.length >= 2 && isArgs.slice(0, 2).every(wrapsInRealpath);
       }
       let reason = null;
       let kind = "raw";
@@ -372,6 +465,8 @@ export const KNOWN_MISSES = [
   "any argv read through a parameter",
   "`switch (process.argv[1]) { case <self path>: }`",
   "`new Set([process.argv[1]]).has(<self path>)`",
+  "`Object.is` reached other than as `Object.is`, `Object[<string>]`, a `const` alias, `const { is } = Object`, `.call`/`.apply` or `Reflect.apply` (`let eq; eq = Object.is` is not seen)",
+  "any call whose name starts with `real` is read as a realpath call (`realName(process.argv[1]) === realName(<self path>)` is excused)",
   "inversion of an exact helper call (`!(isMainModule(..))`, `=== false`, `|| run()`)",
   "a `/` after `)` read as a division, which can hide an import later on the same line",
   "a gate started as `node -e \"await import('<gate>')\" <gate path>` (argv[1] is then the gate path; the helper has the same property)",
@@ -464,6 +559,14 @@ function trackedScripts() {
 
 async function selfTest() {
   const checks = [];
+  // A case whose expression throws is that case's FAIL, not a crash that skips every later case (R8-D).
+  const noThrow = (f) => {
+    try {
+      return f() === true;
+    } catch {
+      return false;
+    }
+  };
   // ASSEMBLED FROM PARTS, deliberately. Spelled out, these fixture lines are themselves
   // matches, and this file would fail its own gate the moment it became tracked — which
   // is exactly the shape the self-referential guards elsewhere in this repo are written
@@ -622,7 +725,7 @@ async function selfTest() {
   const overlayMinus = (re) => GOOD_OVERLAY.split("\n").filter((l) => !re.test(l)).join("\n");
   checks.push(["OVERLAY the fixture-IdP compose overlay must mount BOTH the script and its helper (the round-2 CI red), as non-comment volume lines", fixtureOverlayProblems(GOOD_OVERLAY).length === 0 && fixtureOverlayProblems(overlayMinus(/is-main/)).length === 1 && fixtureOverlayProblems(overlayMinus(/fixture-idp\.mjs:/)).length === 1 && fixtureOverlayProblems(GOOD_OVERLAY.replace(/^(\s*- \.\/scripts\/lib\/is-main.*)$/m, "# $1")).length === 1 && fixtureOverlayProblems(undefined).length === 1 && fixtureOverlayProblems("").length === 2]);
   checks.push(["OVERLAY the scan reports an overlay problem (and an unreadable overlay is a problem, never clean)", scanOf({ overlayText: overlayMinus(/is-main/) }).problems.length === 1 && scanOf({ overlayText: undefined }).problems.length === 1]);
-  checks.push(["OVERLAY a host path carrying a backslash, a `+` and a `.` is compared as text (CodeQL js/incomplete-sanitization, alerts 235 and 236)", hasVolumeLine(["- ./a\\b+c.mjs:/app/x.mjs:ro"], "./a\\b+c.mjs", "/app/x.mjs") && !hasVolumeLine(["- ./a\\b+c.mjs:/app/x.mjs"], "./a\\b+c.mjs", "/app/xymjs") && !hasVolumeLine(["- ./aab+c.mjs:/app/x.mjs"], "./a\\b+c.mjs", "/app/x.mjs") && !hasVolumeLine(["- ./abbc.mjs:/app/x.mjs"], "./ab+c.mjs", "/app/x.mjs") && hasVolumeLine(['- "./s.mjs:/a.mjs"'], "./s.mjs", "/a.mjs")]);
+  checks.push(["OVERLAY a host path carrying a backslash, a `+` and a `.` is compared as text (CodeQL js/incomplete-sanitization, alerts 235 and 236); a throw is this case's FAIL (R8-D)", noThrow(() => hasVolumeLine(["- ./a\\b+c.mjs:/app/x.mjs:ro"], "./a\\b+c.mjs", "/app/x.mjs") && !hasVolumeLine(["- ./a\\b+c.mjs:/app/x.mjs"], "./a\\b+c.mjs", "/app/xymjs") && !hasVolumeLine(["- ./aab+c.mjs:/app/x.mjs"], "./a\\b+c.mjs", "/app/x.mjs") && !hasVolumeLine(["- ./abbc.mjs:/app/x.mjs"], "./ab+c.mjs", "/app/x.mjs") && hasVolumeLine(['- "./s.mjs:/a.mjs"'], "./s.mjs", "/a.mjs"))]);
   checks.push(["OVERLAY LIVE: the real overlay is sound", fixtureOverlayProblems(readFileSync(join(repoRoot, FIXTURE_OVERLAY), "utf8")).length === 0]);
   const PLANT = `if (${RAW_URL}) {}\n`;
   checks.push(["R7-D the declared-occurrence key is defined (a detector that sees nothing must fail HERE, not by a crash in a later case)", typeof rawGuards(PLANT)[0]?.key === "string"]);
@@ -701,6 +804,15 @@ async function selfTest() {
   checks.push(["L3 a realpath call ELSEWHERE in the statement does not excuse a raw comparison", raw("if (really() && realize() && process.argv[1] === import.meta.url) run();\n") === 1 && raw("if (realLog() && realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)) run();\n") === 1 && raw("if (realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url))) run();\n") === 0]);
   // ROUND 8. Each case pins a finding from the round-7 refute.
   checks.push(["R7-C Object.is(process.argv[1], <self path>) is a comparison; a realpath on each argument excuses it", raw("if (Object.is(process.argv[1], fileURLToPath(import.meta.url))) run();\n") === 1 && raw("if (Object.is(realpathSync(process.argv[1]), realpathSync(fileURLToPath(import.meta.url)))) run();\n") === 0]);
+  // ROUND 9. Each case pins a finding from the round-8 refute (R8-A): every plant below exited 0.
+  const SELF_U = "fileURLToPath(import.meta.url)";
+  checks.push(["R8-A/N1 Object[\"is\"](process.argv[1], <self path>) is a comparison", raw(`if (Object["is"](process.argv[1], ${SELF_U})) run();\n`) === 1]);
+  checks.push(["R8-A/N2 a destructured `const { is } = Object` (and `{ is: eq }`) is Object.is", raw(`const { is } = Object;\nif (is(process.argv[1], ${SELF_U})) run();\n`) === 1 && raw(`const { keys, is: eq } = Object;\nif (eq(process.argv[1], ${SELF_U})) run();\n`) === 1 && raw("const { is } = Object;\nif (is(a, b)) run();\n") === 0]);
+  checks.push(["R8-A/N3 `const same = Object.is` is Object.is", raw("const same = Object.is;\nif (same(process.argv[1], import.meta.filename)) run();\n") === 1]);
+  checks.push(["R8-A/N5 Object.is.call(t, a, b) and Object.is.apply(t, [a, b]) are comparisons; realpath on each compared argument excuses .call", raw("if (Object.is.call(null, process.argv[1], import.meta.filename)) run();\n") === 1 && raw("if (Object.is.apply(null, [process.argv[1], import.meta.filename])) run();\n") === 1 && raw("if (Object.is.call(null, realpathSync(process.argv[1]), realpathSync(import.meta.filename))) run();\n") === 0]);
+  checks.push(["R8-A/N6 Reflect.apply(Object.is, t, [a, b]) is a comparison", raw("if (Reflect.apply(Object.is, null, [process.argv[1], import.meta.filename])) run();\n") === 1]);
+  checks.push(["R8-A/N4 the Object.is realpath excuse is PER ARGUMENT: two realpath calls in one argument, or one nested inside it, do not excuse", raw(`if (Object.is(realpathSync(realpathSync(process.argv[1])), ${SELF_U})) run();\n`) === 1 && raw(`if (Object.is(realpathSync(process.argv[1] ?? realpathSync(".")), ${SELF_U})) run();\n`) === 1 && raw(`if (Object.is(realpathSync(process.argv[1]), realpathSync(${SELF_U}))) run();\n`) === 0]);
+  checks.push(["R8-A/N7-N9 new / typeof / void before the exact helper call is a finding (the body runs on import)", ["new", "typeof", "void"].every((w) => rg(`import { isMainModule } from "./lib/is-main.mjs";\nif (${w} isMainModule(process.argv[1], import.meta.url)) run();\n`) === 1)]);
   checks.push(["R7-C KNOWN MISSES: switch (process.argv[1]) { case <self path>: } and new Set([process.argv[1]]).has(<self path>) are not seen", raw("switch (process.argv[1]) {\n  case fileURLToPath(import.meta.url):\n    run();\n}\n") === 0 && raw("const here = fileURLToPath(import.meta.url);\nif (new Set([process.argv[1]]).has(here)) run();\n") === 0]);
   checks.push(["R7-E/O02 .startsWith(..) between the self path and argv[1] is a suffix-class finding", sg("if (fileURLToPath(import.meta.url).startsWith(process.argv[1])) run();\n") === 1]);
   checks.push(["R7-E/O07 `import { isMainModule as im }` rebinding is a finding", rg('import { isMainModule as im } from "./lib/is-main.mjs";\nif (im(import.meta.url, process.argv[1])) run();\n') >= 1]);
@@ -716,7 +828,7 @@ async function selfTest() {
   // R7-F: the runner owns the signals. REAL signals to a REAL runner process in a scratch repository, one-mutant set,
   // a sleeping child. After each: the exit code is the signal's, the mutated file is restored, no scratch directory is
   // left, and nothing was counted as killed.
-  const realSignal = async (target, signal, childHandler) => {
+  const realSignal = async (target, signal, childHandler, phase = "mutant") => {
     const dir = scratchDir("entry-guard-sig-");
     const repo = join(dir, "repo"); // the scratch repository; the sleeper, config and sentinels live OUTSIDE it so its status stays comparable
     try {
@@ -728,7 +840,7 @@ async function selfTest() {
       const pidFile = join(dir, "pid");
       writeFileSync(
         join(dir, "sleeper.mjs"),
-        `import { mkdirSync, readFileSync, writeFileSync } from "node:fs";\nimport { tmpdir } from "node:os";\nif (!readFileSync(${JSON.stringify(join(repo, "scripts", "victim.mjs"))}, "utf8").includes("a = 2")) process.exit(0);\nmkdirSync(tmpdir() + "/entry-guard-leak-marker");\n` +
+        `import { mkdirSync, readFileSync, writeFileSync } from "node:fs";\nimport { tmpdir } from "node:os";\nif (${phase === "mutant" ? "!" : ""}readFileSync(${JSON.stringify(join(repo, "scripts", "victim.mjs"))}, "utf8").includes("a = 2")) process.exit(0);\nmkdirSync(tmpdir() + "/entry-guard-leak-marker");\n` +
           `${childHandler}writeFileSync(${JSON.stringify(pidFile)}, String(process.pid));\nwriteFileSync(${JSON.stringify(ready)}, "1");\nsetTimeout(() => {}, 60000);\n`,
       );
       const cfg = join(dir, "cfg.json");
@@ -773,6 +885,11 @@ async function selfTest() {
   checks.push(["R7-F a REAL SIGTERM to the runner: exit 143, the mutated file restored, the tree clean, no scratch left, nothing counted killed", toParent[0].ok && toParent[0].mutatedWhileRunning && toParent[0].code === 143 && toParent[0].restored && toParent[0].clean && toParent[0].leaked === 0 && !toParent[0].childAlive && !/\bkilled\b/.test(toParent[0].text.replace(/Nothing here is a tally/, "")) && toParent[0].text.includes("INTERRUPTED")]);
   checks.push(["R7-F a REAL SIGINT to the runner: exit 130 with the same guarantees", toParent[1].ok && toParent[1].code === 130 && toParent[1].restored && toParent[1].clean && toParent[1].leaked === 0 && !toParent[1].childAlive && toParent[1].text.includes("INTERRUPTED")]);
   const toChild = [await realSignal("child", "SIGTERM", handlerExit), await realSignal("child", "SIGTERM", "")];
+  // R8-B: SIGHUP (a closed terminal, a dropped SSH session) and SIGQUIT are owned too; R8-E: so is a signal during the baseline.
+  const hupQuit = [await realSignal("parent", "SIGHUP", ""), await realSignal("parent", "SIGQUIT", "")];
+  checks.push(["R8-B a REAL SIGHUP / SIGQUIT to the runner: exit 129 / 131, the mutated file restored, the tree clean, no scratch left, the child gone", hupQuit.every((r, k) => r.ok && r.mutatedWhileRunning && r.code === [129, 131][k] && r.restored && r.clean && r.leaked === 0 && !r.childAlive && r.text.includes(`INTERRUPTED (${["SIGHUP", "SIGQUIT"][k]})`))]);
+  const inBaseline = [await realSignal("parent", "SIGTERM", "", "baseline"), await realSignal("parent", "SIGHUP", "", "baseline")];
+  checks.push(["R8-E a REAL SIGTERM / SIGHUP during the BASELINE run: exit 143 / 129, the child gone, no scratch left, nothing counted", inBaseline.every((r, k) => r.ok && !r.mutatedWhileRunning && r.code === [143, 129][k] && r.clean && r.leaked === 0 && !r.childAlive && r.text.includes("INTERRUPTED") && !/\bmutants:/.test(r.text))]);
   checks.push(["R7-F a signal sent to the CHILD alone (its own handler exits 143, or it dies of the signal) is INTERRUPTED, never counted killed; the tree is restored", toChild.every((r) => r.ok && r.restored && r.clean && r.leaked === 0 && /INTERRUPTED\s+m1/.test(r.text) && !/\bok\s+killed\b/.test(r.text) && r.code === 1)]);
 
   // Known misses, pinned as misses so the header's claim is the measured one:
@@ -784,6 +901,16 @@ async function selfTest() {
   ]) checks.push([`L2 KNOWN MISS: ${label}`, raw(text) === 0]);
   checks.push(["KNOWN MISS: inversion of an exact helper call is not judged (`!(isMainModule(..))`, `=== false`, `|| run()`)", ["if (!(isMainModule(process.argv[1], import.meta.url))) run();\n", "const off = isMainModule(process.argv[1], import.meta.url) === false;\n", "isMainModule(process.argv[1], import.meta.url) || run();\n"].every((t) => raw(t) === 0)]);
   checks.push(["KNOWN MISS: the gate imported by `node -e` with its OWN path as argv[1] runs its body (the helper has the same property)", spawnSync(process.execPath, ["--input-type=module", "-e", `await import(${JSON.stringify(import.meta.url)});`, fileURLToPath(import.meta.url)], { encoding: "utf8", timeout: 120000 }).stdout.includes("entry-guards:")]);
+  checks.push(["R8 KNOWN MISS: any call named real* is read as a realpath call", raw("if (realName(process.argv[1]) === realName(fileURLToPath(import.meta.url))) run();\n") === 0]);
+  checks.push(["R8 KNOWN MISS: Object.is reached through a later assignment (`let eq; eq = Object.is`)", raw("let eq;\neq = Object.is;\nif (eq(process.argv[1], import.meta.filename)) run();\n") === 0]);
+  // R8-F: the ceiling list is ONE list. The header and the backlog row each hold every KNOWN_MISSES item (whitespace-normalised).
+  {
+    const flat = (t) => t.replace(/\n\s*\/\/\s*/g, " ").replace(/\s+/g, " ");
+    const header = flat(readFileSync(fileURLToPath(import.meta.url), "utf8").split("\nimport ")[0]);
+    const row = flat(readFileSync(join(repoRoot, "docs/BUILD_BACKLOG.md"), "utf8").split("\n").find((l) => l.includes("files skip their gate body and exit 0 when started through a symlinked path")) ?? "");
+    const missing = KNOWN_MISSES.filter((m) => !header.includes(flat(m)) || !row.includes(flat(m)));
+    checks.push([`R8-F every KNOWN_MISSES item is in the gate header AND the backlog row${missing.length ? ` (missing: ${missing.join(" | ")})` : ""}`, missing.length === 0]);
+  }
   checks.push(["L2 KNOWN MISS: a self path built by a function the detector cannot see", raw(`const here = getSelf();\nif (resolve(${ARGV}) === here) {}\n`) === 0]);
   checks.push(["L2 KNOWN MISS: a comparison split across two statements by a boolean", raw(`const same = resolve(${ARGV}) === resolve(getSelf());\nif (same) {}\n`) === 0]);
   checks.push(["OVERLAY MUTANT: the real overlay with its is-main mount removed is a problem", fixtureOverlayProblems(readFileSync(join(repoRoot, FIXTURE_OVERLAY), "utf8").replace(/^(.*is-main\.mjs.*)$/gm, "")).length >= 1]);
@@ -874,13 +1001,31 @@ export const MUTANTS = [
   ["a second isMainModule definition is allowed (R5-E)", GATE, 'if (rel !== "scripts/lib/is-main.mjs" && /', "if (false && /"],
   ["the gate's own guard runs the gate when imported from node -e", GATE, "  } catch {\n    return false;\n  }\n})();", "  } catch {\n    return true;\n  }\n})();"],
   ["helper with a basename shortcut", HELPER, "return realpathSync(argv1) === realpathSync(fileURLToPath(moduleUrl));", "return realpathSync(argv1).split('/').pop() === fileURLToPath(moduleUrl).split('/').pop() || realpathSync(argv1) === realpathSync(fileURLToPath(moduleUrl));"],
+  ["Object[\"is\"] is not Object.is (R8-A/N1)", GATE, "const OBJECT_IS_SRC = String.raw`(?<![\\w$])Object\\s*(?:\\.\\s*is|\\[\\s*(?:\"\\s*\"|'\\s*'|\\x60\\s*\\x60)\\s*\\])(?![\\w$])`;", "const OBJECT_IS_SRC = String.raw`(?<![\\w$])Object\\s*(?:\\.\\s*is)(?![\\w$])`;"],
+  ["Object.is aliases are not followed (R8-A/N2-N3)", GATE, "const isWord = wordOf(objectIsAliases(code));", "const isWord = null;"],
+  ["Object.is.call is not read (R8-A/N5)", GATE, "    [new RegExp(String.raw`${callee}\\s*\\.\\s*call\\s*\\(`), \"call\"],\n", ""],
+  ["Reflect.apply(Object.is, ..) is not read (R8-A/N6)", GATE, "    [new RegExp(String.raw`\\bReflect\\s*\\.\\s*apply\\s*\\(\\s*${callee}`), \"reflect\"],\n", ""],
+  ["the Object.is realpath excuse counts calls anywhere in the term (R8-A/N4)", GATE, "realBoth = isArgs.length >= 2 && isArgs.slice(0, 2).every(wrapsInRealpath);", "realBoth = (term.text.match(/\\breal\\w*\\s*\\(/g) ?? []).length >= 2;"],
+  ["new/typeof/void before the exact call is allowed (R8-A/N7-N9)", GATE, "if (/(?<![\\w$])(?:new|typeof|void)\\s+$/.test(before)) {", "if (false) {"],
+  ["the runner does not own SIGHUP/SIGQUIT (R8-B)", GATE, "  [\"SIGHUP\", 129],\n  [\"SIGQUIT\", 131],\n", ""],
+  ["the runner's handlers are installed after the baseline (R8-E)", GATE, "  for (const [name, h] of handlers) process.on(name, h);\n  try {\n    const baseline = await runSelfTest();\n", "  try {\n    const baseline = await runSelfTest();\n    for (const [name, h] of handlers) process.on(name, h);\n"],
+  ["the realpath excuse reads the whole statement, not the comparison's term (R5-B)", GATE, "let realBoth = op !== null && REAL_CALL.test(term.text.slice(0, op.index)) && REAL_CALL.test(term.text.slice(op.index + op.length));", "let realBoth = op !== null && REAL_CALL.test(whole);"],
+];
+
+/** The signals the mutant runner (and the self-test's scratch cleanup) owns, with the exit code each one ends the run with. */
+export const OWNED_SIGNALS = [
+  ["SIGINT", 130],
+  ["SIGTERM", 143],
+  ["SIGHUP", 129],
+  ["SIGQUIT", 131],
+  ...(process.platform === "win32" ? [["SIGBREAK", 149]] : []),
 ];
 
 /**
  * Apply each mutant to the working tree, run the self-test, restore. Refuses a tree with uncommitted changes and a failing
- * unmutated baseline (a "killed" mutant would prove nothing). While it runs THIS FUNCTION OWNS SIGINT/SIGTERM: it restores
+ * unmutated baseline (a "killed" mutant would prove nothing). From BEFORE the baseline run THIS FUNCTION OWNS SIGINT, SIGTERM, SIGHUP and SIGQUIT (and SIGBREAK on Windows): it restores
  * the mutated file, kills the child's whole process group, removes the parent-owned scratch directory (which is the child's
- * TMPDIR, so nothing the child made survives even a SIGKILL) and exits 130/143. A child that dies of a signal, exits 130/143
+ * TMPDIR, so nothing the child made survives even a SIGKILL) and exits 128+n (130/143/129/131). A child that dies of a signal, exits 130/143
  * through its own handler, or times out is INTERRUPTED/TIMEOUT, never "killed". `deps` is injectable for the self-test:
  * `run()` replaces the child, `childArgv` replaces the command, `mutants` the mutation set.
  */
@@ -928,11 +1073,6 @@ export async function runMutants(deps = {}) {
     console.error(dirty.split("\n").slice(0, 10).map((l) => `    ${l}`).join("\n"));
     return 2;
   }
-  const baseline = await runSelfTest();
-  if (baseline.status !== 0) {
-    console.error("✗ the unmutated self-test does not pass, so a 'killed' mutant would prove nothing; fix that first.");
-    return 2;
-  }
   const results = [];
   let live = null; // { path, original } while a mutant is applied
   const restore = () => {
@@ -940,7 +1080,7 @@ export async function runMutants(deps = {}) {
     live = null;
   };
   let interrupted = 0;
-  const onSignal = (code) => () => {
+  const onSignal = (name, code) => () => {
     interrupted = code;
     restore();
     if (child) {
@@ -951,14 +1091,20 @@ export async function runMutants(deps = {}) {
       }
     }
     dropChildTmp();
-    console.log(`\nINTERRUPTED (${code === 130 ? "SIGINT" : "SIGTERM"}): the tree was restored; ${results.length} of ${mutants.length} mutants had a verdict. Nothing here is a tally.`);
+    console.log(`\nINTERRUPTED (${name}): the tree was restored; ${results.length} of ${mutants.length} mutants had a verdict. Nothing here is a tally.`);
     if (!deps.keepAlive) process.exit(code);
   };
-  const sigint = onSignal(130);
-  const sigterm = onSignal(143);
-  process.on("SIGINT", sigint);
-  process.on("SIGTERM", sigterm);
+  // Installed BEFORE the baseline run (R8-E), and for every signal that ends a run from a terminal (R8-B: SIGHUP is a
+  // closed terminal or a dropped SSH session, SIGQUIT is Ctrl-backslash; SIGBREAK is Windows' Ctrl-Break).
+  const handlers = OWNED_SIGNALS.map(([name, code]) => [name, onSignal(name, code)]);
+  for (const [name, h] of handlers) process.on(name, h);
   try {
+    const baseline = await runSelfTest();
+    if (interrupted) return interrupted;
+    if (baseline.status !== 0) {
+      console.error("✗ the unmutated self-test does not pass, so a 'killed' mutant would prove nothing; fix that first.");
+      return 2;
+    }
     for (const [name, file, from, to] of mutants) {
       if (interrupted) break;
       const path = join(root, file);
@@ -984,8 +1130,7 @@ export async function runMutants(deps = {}) {
       }
     }
   } finally {
-    process.off("SIGINT", sigint);
-    process.off("SIGTERM", sigterm);
+    for (const [name, h] of handlers) process.off(name, h);
     restore();
     dropChildTmp();
   }
@@ -1179,19 +1324,17 @@ if (IS_ENTRY) {
     for (const c of canary) console.error(`  ✗ ${c}`);
     process.exitCode = 1;
   } else if (process.argv.includes("--mutants")) {
-    // The runner owns SIGINT/SIGTERM while it runs (it restores the tree first); no handler here may pre-empt it.
+    // The runner owns OWNED_SIGNALS while it runs (it restores the tree first); no handler here may pre-empt it.
     const cfgAt = process.argv.indexOf("--mutants-config");
     const cfg = cfgAt >= 0 ? JSON.parse(readFileSync(process.argv[cfgAt + 1], "utf8")) : {};
     process.exitCode = await runMutants({ ...(cfg.mutants ? { mutants: cfg.mutants } : {}), ...(cfg.child ? { childArgv: cfg.child } : {}) });
   } else {
-    process.once("SIGINT", () => {
-      dropAllScratch();
-      process.exit(130);
-    });
-    process.once("SIGTERM", () => {
-      dropAllScratch();
-      process.exit(143);
-    });
+    for (const [name, code] of OWNED_SIGNALS) {
+      process.once(name, () => {
+        dropAllScratch();
+        process.exit(code);
+      });
+    }
     if (process.argv.includes("--self-test")) process.exitCode = await selfTest();
     else process.exitCode = runGate();
   }

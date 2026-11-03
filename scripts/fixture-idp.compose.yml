@@ -27,7 +27,8 @@ services:
     volumes:
       - ./scripts/fixture-idp.mjs:/app/fixture-idp.mjs:ro
       # fixture-idp.mjs imports ./lib/is-main.mjs; the container holds only what is mounted here
-      # (scripts/check-entry-guards.mjs reads this file and fails if an import is not shipped).
+      # (scripts/check-entry-guards.mjs fails if either of these two volume lines is missing; it does NOT
+      # see a new import added to fixture-idp.mjs - that general check is the shipped-import model, PR #1611).
       - ./scripts/lib/is-main.mjs:/app/lib/is-main.mjs:ro
     command: ["node", "/app/fixture-idp.mjs", "serve"]
     ports:

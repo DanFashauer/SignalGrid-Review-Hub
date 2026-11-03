@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-11-03T00:25:48.149Z",
-  "result": "00:24Z cycle (11-03): non-quiet - acked the Mac's vault/gateway mail (landed #1769 ab541e77); keepalive #1771 merged c3c8c380; owner order #1770 refreshed onto mainline; forward-build heartbeat #1772 in the chain; mac/ci-yield-probe-evidence moved 00:18Z (#1766, CI running). Tick heartbeat firedAt 2026-10-24T07:30:38Z (stale; escalation already spent, tracked on the #1698 path). Live evidence committed 2026-11-02 15:07Z. Owner not escalated."
+  "firedAt": "2026-11-03T03:25:04.794Z",
+  "result": "03:24Z cycle (11-03): keepalive (mainline hb 00:25Z, age >2h). Quiet window on c0f8a3fe: no mac/* branch moved since 00:18Z (#1766, merged f37edf07), no mail to cloud, no new sim result, manifest clean. Landed since: #1770 (owner OmniRoute order), #1772, #1773 (ack of the Mac's vault/gateway mail). Tick heartbeat firedAt 2026-10-24T07:30:38Z (stale; escalation already spent, tracked on the #1698 path). Live evidence committed 2026-11-02 15:07Z. Owner not escalated."
 }

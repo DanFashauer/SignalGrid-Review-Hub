@@ -85,6 +85,9 @@ export function createJournal({ root, dir, pid = process.pid, isLive = ownerIsLi
       return realpathSync(p);
     } catch {
       try {
+        if (lstatSync(p).isSymbolicLink()) return null; // a DANGLING link: a write through it would create its target wherever that is
+      } catch {}
+      try {
         return join(realpathSync(dirname(resolve(p))), basename(p));
       } catch {
         return resolve(p);
@@ -92,7 +95,9 @@ export function createJournal({ root, dir, pid = process.pid, isLive = ownerIsLi
     }
   };
   const inside = (abs) => {
-    const rel = relative(rootReal, real(abs));
+    const at = real(abs);
+    if (at === null) return null;
+    const rel = relative(rootReal, at);
     return rel !== "" && !rel.startsWith("..") && !isAbsolute(rel) ? rel : null;
   };
   const persist = () => {

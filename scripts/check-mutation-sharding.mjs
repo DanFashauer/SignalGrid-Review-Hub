@@ -1647,6 +1647,16 @@ console.log(`  ${TARGETS.length} targets · ${TARGETS.reduce((n, t) => n + t.fil
       try { ej.mutate(join(root, "escape.ts"), "X", "keep\n"); } catch { escaped = false; }
       ej.restoreAll();
       rmSync(join(root, "escape.ts"));
+      const dangling = join(scratch, "not-yet.ts");
+      symlinkSync(dangling, join(root, "dangling.ts"));
+      const dj = createJournal({ root, dir: mkdtempSync(join(scratch, "l-")), pid: 4242032, isLive: () => false });
+      dj.begin();
+      let created = true;
+      try { dj.mutate(join(root, "dangling.ts"), "X", ""); } catch { created = false; }
+      dj.restoreAll();
+      const danglingMade = existsSync(dangling);
+      rmSync(join(root, "dangling.ts"), { force: true });
+      check("restore: a DANGLING symlink inside the repo that points outside it is refused, and its target is not created", created === false && danglingMade === false);
       check("restore: a file inside the repo that is a symlink to a path OUTSIDE it is refused, and the outside file is untouched", escaped === false && readFileSync(outside, "utf8") === "keep\n");
     }
     let threw = false;

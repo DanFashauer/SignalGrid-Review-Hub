@@ -22,8 +22,8 @@
 
 import { chmodSync, lstatSync, mkdirSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { spawn } from "node:child_process";
-import { tmpdir } from "node:os";
-import { isAbsolute, join, relative, resolve, sep } from "node:path";
+import { constants as osConstants, tmpdir } from "node:os";
+import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
 
 /** Every catchable signal whose default action terminates the process. SIGKILL and SIGSTOP cannot be
  *  handled (the journal covers them); SIGUSR1 is node's inspector switch and is left alone; the
@@ -33,6 +33,8 @@ export const TERMINATING_SIGNALS = ["SIGINT", "SIGTERM", "SIGHUP", "SIGQUIT", "S
 /** The private journal directory: under the OS temp dir, mode 0700, owned by this user, never a symlink,
  *  never inside the repo (a journal in the tree would itself be a mutation the sweep makes). */
 export function privateJournalDir(root, base = tmpdir()) {
+  const baseRel = relative(realpathSync(root), realpathSync(base));
+  if (baseRel === "" || (!baseRel.startsWith("..") && !isAbsolute(baseRel))) throw new Error(`journal base ${base} is inside the repo ${root}; set TMPDIR outside it`); // before anything is created
   const dir = join(base, `signalgrid-mutation-guard-${process.getuid?.() ?? "u"}`);
   mkdirSync(dir, { recursive: true, mode: 0o700 });
   const st = lstatSync(dir);
@@ -76,9 +78,22 @@ export function createJournal({ root, dir, pid = process.pid, isLive = ownerIsLi
   const entries = new Map(); // relative path -> original text
   const children = new Set();
 
+  // Containment is decided on REAL paths: a repo reached through a symlink (macOS /var -> /private/var) is still the repo, and a file inside it that is
+  // a symlink to somewhere else is NOT inside (a write through it would land outside). A path that does not exist yet falls back to its resolved parent.
+  const real = (p) => {
+    try {
+      return realpathSync(p);
+    } catch {
+      try {
+        return join(realpathSync(dirname(resolve(p))), basename(p));
+      } catch {
+        return resolve(p);
+      }
+    }
+  };
   const inside = (abs) => {
-    const rel = relative(rootReal, resolve(abs));
-    return rel !== "" && !rel.startsWith("..") && !resolve(rel).startsWith(sep + "..") ? rel : null;
+    const rel = relative(rootReal, real(abs));
+    return rel !== "" && !rel.startsWith("..") && !isAbsolute(rel) ? rel : null;
   };
   const persist = () => {
     const tmp = `${file}.${pid}.tmp`;
@@ -178,7 +193,7 @@ export function createJournal({ root, dir, pid = process.pid, isLive = ownerIsLi
     },
     /** Restore on exit and on every catchable terminating signal (exit code 128 + signal number). */
     installHandlers(proc = process, signals = TERMINATING_SIGNALS, numbers = null) {
-      const nums = numbers ?? { SIGHUP: 1, SIGINT: 2, SIGQUIT: 3, SIGALRM: 14, SIGTERM: 15, SIGXCPU: 24, SIGXFSZ: 25, SIGVTALRM: 26, SIGPROF: 27, SIGIO: 29, SIGPOLL: 29, SIGPWR: 30, SIGUSR2: 12, SIGSTKFLT: 16 };
+      const nums = numbers ?? osConstants.signals; // the PLATFORM's numbers: SIGUSR2 is 12 on Linux and 31 on macOS
       for (const sig of signals) {
         try {
           proc.on(sig, () => {

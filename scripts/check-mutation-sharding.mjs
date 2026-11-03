@@ -84,8 +84,8 @@
  */
 import { execFile, execFileSync, spawn } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, chmodSync, closeSync, constants as fsConstants, copyFileSync, fstatSync, mkdirSync, mkdtempSync, openSync, readdirSync, readFileSync, readlinkSync, rmSync, statSync, utimesSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { symlinkSync, existsSync, chmodSync, closeSync, constants as fsConstants, copyFileSync, fstatSync, mkdirSync, mkdtempSync, openSync, readdirSync, readFileSync, readlinkSync, rmSync, statSync, utimesSync, writeFileSync } from "node:fs";
+import { constants as osConstants, tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { isBuiltin } from "node:module";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -1626,6 +1626,29 @@ console.log(`  ${TARGETS.length} targets · ${TARGETS.reduce((n, t) => n + t.fil
     check("restore: restore() puts the original bytes back", readFileSync(target, "utf8") === "ORIGINAL\n");
     j.mutate(target, "MUTANT\n", "ORIGINAL\n");
     check("restore: restoreAll() restores every journalled file and drops the marker", j.restoreAll() === true && readFileSync(target, "utf8") === "ORIGINAL\n" && !existsSync(j.file));
+    // A repo reached through a symlink (macOS: /var -> /private/var, so every tmpdir path; any symlinked checkout) is still INSIDE the repo. The first
+    // version compared the unresolved path with the real-pathed root and refused every mutation there (the Mac-only check caught it).
+    {
+      const linkRoot = join(scratch, "repo-link");
+      symlinkSync(root, linkRoot);
+      const lj = createJournal({ root: linkRoot, dir: mkdtempSync(join(scratch, "l-")), pid: 4242030, isLive: () => false });
+      lj.begin();
+      let ok = true;
+      try { lj.mutate(join(linkRoot, "guard.ts"), "MUTANT\n", "ORIGINAL\n"); } catch { ok = false; }
+      const mutated = readFileSync(target, "utf8") === "MUTANT\n";
+      lj.restoreAll();
+      check("restore: a repo root reached through a symlink still accepts its own files (mutated, then restored) — the macOS /var -> /private/var shape", ok && mutated && readFileSync(target, "utf8") === "ORIGINAL\n");
+      const outside = join(scratch, "elsewhere.ts");
+      writeFileSync(outside, "keep\n");
+      symlinkSync(outside, join(root, "escape.ts"));
+      const ej = createJournal({ root, dir: mkdtempSync(join(scratch, "l-")), pid: 4242031, isLive: () => false });
+      ej.begin();
+      let escaped = true;
+      try { ej.mutate(join(root, "escape.ts"), "X", "keep\n"); } catch { escaped = false; }
+      ej.restoreAll();
+      rmSync(join(root, "escape.ts"));
+      check("restore: a file inside the repo that is a symlink to a path OUTSIDE it is refused, and the outside file is untouched", escaped === false && readFileSync(outside, "utf8") === "keep\n");
+    }
     let threw = false;
     try { j.mutate(join(scratch, "outside.ts"), "x", "y"); } catch { threw = true; }
     check("restore: a path outside the repo root is refused, nothing is written", threw && !existsSync(join(scratch, "outside.ts")));
@@ -1696,7 +1719,7 @@ console.log(`  ${TARGETS.length} targets · ${TARGETS.reduce((n, t) => n + t.fil
       setInterval(() => {}, 1000);`;
     const childPath = join(scratch, "child.mjs");
     writeFileSync(childPath, childSrc);
-    const NUM = { SIGTERM: 15, SIGINT: 2, SIGHUP: 1, SIGQUIT: 3, SIGUSR2: 12, SIGALRM: 14, SIGIO: 29 };
+    const NUM = Object.fromEntries(["SIGTERM", "SIGINT", "SIGHUP", "SIGQUIT", "SIGUSR2", "SIGALRM", "SIGIO"].map((n) => [n, osConstants.signals[n]])); // this platform's numbers
     for (const [sig, n] of Object.entries(NUM)) {
       const sdir = mkdtempSync(join(scratch, "j-"));
       writeFileSync(target, "ORIGINAL\n");

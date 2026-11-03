@@ -1664,7 +1664,7 @@ console.log(`  ${TARGETS.length} targets · ${TARGETS.reduce((n, t) => n + t.fil
     }
 
     // A journal that parses but is the wrong shape is CORRUPT: the next start refuses and --restore-stale refuses too, never "nothing to restore".
-    const planted = ["null", "{}", "[]", "\"x\"", "{\"pid\":999999,\"entries\":null}", "{\"pid\":999999,\"entries\":[\"x\"]}", "{\"pid\":999999,\"entries\":[{\"path\":\"guard.ts\"}]}", "{\"pid\":\"1\",\"entries\":[]}", "not json"];
+    const planted = ["null", "{}", "[]", "\"x\"", "{\"pid\":999999,\"entries\":null}", "{\"pid\":999999,\"entries\":[\"x\"]}", "{\"pid\":999999,\"entries\":[{\"path\":\"guard.ts\"}]}", "{\"pid\":\"1\",\"entries\":[]}", "{\"pid\":-3,\"entries\":[]}", "{\"pid\":0,\"entries\":[]}", "not json"];
     const shapeOk = [journalShapeOk({ pid: 1, entries: [] }), journalShapeOk({ pid: 1, entries: [{ path: "a", original: "" }] })];
     let allRefused = true;
     for (const text of planted) {
@@ -1677,7 +1677,7 @@ console.log(`  ${TARGETS.length} targets · ${TARGETS.reduce((n, t) => n + t.fil
       if (plain.ok !== false || stale.ok !== false || readFileSync(probe.file, "utf8") !== text || readFileSync(target, "utf8") !== "MUTANT\n") allRefused = false;
     }
     writeFileSync(target, "ORIGINAL\n");
-    check(`restore: a journal of the wrong shape (${planted.length} plants: null, {}, [], a string, entries null/strings/without original, a string pid, garbage) is REFUSED by begin and by --restore-stale, and left untouched`, allRefused && shapeOk[0] && shapeOk[1]);
+    check(`restore: a journal of the wrong shape (${planted.length} plants: null, {}, [], a string, entries null/strings/without original, a string pid, a zero or negative pid, garbage) is REFUSED by begin and by --restore-stale, and left untouched`, allRefused && shapeOk[0] && shapeOk[1]);
 
     let inRepo = false;
     try { privateJournalDir(REPO, join(REPO, "scripts")); } catch { inRepo = true; }

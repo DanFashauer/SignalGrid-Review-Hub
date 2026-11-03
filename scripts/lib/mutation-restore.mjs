@@ -14,6 +14,8 @@
 //      so a signal that cannot be caught (SIGKILL, SIGSTOP) still leaves the record. The next start
 //      REFUSES while a journal's file differs from its original, and `--restore-stale` applies it.
 //
+// CEILING (stated, not fixed): a well-formed journal with a dead pid and NO entries is indistinguishable from a real empty
+// one, which is also what a crash inside the persist-before-write window leaves; nothing in it names a file to repair.
 // Fail-closed: a journal whose owner process cannot be identified counts as LIVE (refuse, never clear);
 // a journalled path outside the repo root is refused; a private-directory problem refuses the sweep.
 // No clock, no randomness: the journal is named after the repo root and holds the pid.
@@ -64,7 +66,7 @@ export function ownerIsLive(pid, selfPid = process.pid, io = { kill: (p) => proc
 /** A journal that parses but is not the shape persist() writes is CORRUPT, never "no journal": `null`, `{}`, `[]`, a missing `entries`
  *  or an entry without string `path`/`original` all fail closed. Pure, so a gate can drive it on fixtures. */
 export function journalShapeOk(doc) {
-  return doc !== null && typeof doc === "object" && !Array.isArray(doc) && Number.isInteger(doc.pid) && Array.isArray(doc.entries)
+  return doc !== null && typeof doc === "object" && !Array.isArray(doc) && Number.isInteger(doc.pid) && doc.pid > 0 && Array.isArray(doc.entries)
     && doc.entries.every((e) => e !== null && typeof e === "object" && typeof e.path === "string" && typeof e.original === "string");
 }
 

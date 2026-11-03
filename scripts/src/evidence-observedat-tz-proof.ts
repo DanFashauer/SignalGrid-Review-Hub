@@ -1,0 +1,375 @@
+// Proof: the evidence verdict does not depend on the evaluating host's timezone.
+//
+// BUILD_BACKLOG row "groupLatest's Date.parse ordering is host-timezone-dependent
+// for an offset-less observedAt". `Date.parse("2026-07-13T08:00:00")` is LOCAL
+// time per ECMA-262, so the same two wire readings ordered differently on a host
+// in Asia/Tokyo than on one in UTC — a different security decision from nothing
+// but the evaluator's clock zone. An offset-less stamp is an unknown instant; it
+// is treated as illegible (never wins as latest, cannot vouch, worst-wins), the
+// same rule that already governs an unparseable stamp.
+//
+// The fixture runs as a SEPARATE CHILD PROCESS per TZ value, so this process's
+// own TZ cannot mask the defect. Asia/Tokyo (+09:00) is the zone that reorders
+// the two readings; UTC and America/New_York alone already agree today.
+
+import { spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
+import {
+  buildEvidence,
+  classifyFreshness,
+  EVIDENCE_VALUE_DOMAINS,
+  evaluatePolicy,
+  fixedClock,
+  runDockSync,
+  seedDemoStore,
+  SHARED_DEVICE_RULES_V1,
+  type Device,
+  type Identity,
+  type NormalizedSignal,
+  type SignalCategory,
+  type Workflow,
+} from "@workspace/signalgrid-core";
+
+const SELF = fileURLToPath(import.meta.url);
+
+const identity: Identity = {
+  id: "id_tz", tenantId: "tenant_northwind", externalRef: "nurse.tz",
+  displayName: "Nurse", state: "enabled", assignedRole: "nurse",
+};
+const device: Device = {
+  id: "dev_tz", tenantId: "tenant_northwind", externalRef: "ipad-tz", name: "Ward iPad",
+  osPlatform: "iPadOS", osVersion: "18.5", ownerType: "shared", managementAgent: "intune",
+};
+const workflow: Workflow = {
+  id: "wf_tz", tenantId: "tenant_northwind", key: "clinical-session",
+  name: "Clinical session", riskTier: "elevated",
+};
+const BASE = "2026-07-13T13:00:00.000Z";
+const sig = (id: string, category: SignalCategory, value: NormalizedSignal["value"], observedAt: string): NormalizedSignal => ({
+  id, tenantId: "tenant_northwind", connectorId: "conn", subjectType: "device", subjectId: device.id,
+  category, value, observedAt, freshness: "fresh", sourceReference: "fixture:tz",
+});
+const healthy = (): NormalizedSignal[] => [
+  sig("s_m", "device_management", true, BASE),
+  sig("s_e", "device_encryption", true, BASE),
+  sig("s_o", "os_support", true, BASE),
+  sig("s_p", "posture_freshness", "fresh", BASE),
+];
+
+/** Two device_compliance readings: an accusation at 07:30Z and a vouch at `vouchObservedAt`. */
+function verdictFor(vouchObservedAt: string, accusedAt = "2026-07-13T07:30:00Z"): string {
+  const signals = [
+    sig("s_nc", "device_compliance", "non_compliant", accusedAt),
+    sig("s_c", "device_compliance", "compliant", vouchObservedAt),
+    ...healthy(),
+  ];
+  const ev = buildEvidence(identity, device, workflow, signals);
+  const pv = {
+    id: "pv_tz", tenantId: "tenant_northwind", policyId: "pol_tz", version: 1,
+    status: "active" as const, rules: SHARED_DEVICE_RULES_V1,
+    createdAt: BASE, digest: "test",
+  };
+  return `${evaluatePolicy(pv, ev).outcome}|${ev.deviceCompliance}`;
+}
+
+/** An OLDER parseable accusation against a NEWER accusation whose stamp is `newerObservedAt`. */
+function accusationFor(category: "tamper_state" | "badge_binding", older: string, newer: string, newerObservedAt: string): string {
+  const signals = [
+    sig("s_old", category, older, "2026-07-13T04:00:00.000Z"),
+    sig("s_new", category, newer, newerObservedAt),
+    sig("s_c", "device_compliance", "compliant", BASE),
+    ...healthy(),
+  ];
+  const ev = buildEvidence(identity, device, workflow, signals);
+  return category === "tamper_state" ? ev.tamperState : ev.badgeBinding;
+}
+
+/** Every family with more than one accusing value: [category, evidence field, older (milder), newer (stronger)]. */
+const FAMILIES: ReadonlyArray<readonly [SignalCategory, string, string, string]> = [
+  ["tamper_state", "tamperState", "suspected", "confirmed"],
+  ["badge_binding", "badgeBinding", "removed", "forced"],
+  ["battery_health", "batteryHealth", "degraded", "failing"],
+  ["device_management_health", "managementHealthState", "degraded", "broken"],
+  ["charge_state", "dockChargeState", "low", "critical"],
+  ["security_baseline", "baselineCompliance", "partial", "drifted"],
+  ["dock_state", "dockState", "offline", "faulted"],
+  ["posture_freshness", "postureFreshness", "stale", "unknown"],
+];
+
+/** For each family, an OLDER parseable milder value against a NEWER stronger one stamped `newerObservedAt`. */
+function matrixFor(newerObservedAt: string): string {
+  return FAMILIES.map(([category, field, older, newer]) => {
+    const signals = [
+      sig("s_old", category, older, "2026-07-13T04:00:00.000Z"),
+      sig("s_new", category, newer, newerObservedAt),
+      sig("s_c", "device_compliance", "compliant", BASE),
+      ...healthy().filter((x) => x.category !== category),
+    ];
+    const ev = buildEvidence(identity, device, workflow, signals) as unknown as Record<string, unknown>;
+    return `${category}=${String(ev[field])}`;
+  }).join(";");
+}
+
+/** Two accusations at the SAME instant, in the given arrival order. */
+function tieFor(category: SignalCategory, field: string, first: string, second: string): string {
+  const signals = [
+    sig("s_a", category, first, "2026-07-13T12:00:00.000Z"),
+    sig("s_b", category, second, "2026-07-13T12:00:00.000Z"),
+    sig("s_c", "device_compliance", "compliant", BASE),
+    ...healthy(),
+  ];
+  const ev = buildEvidence(identity, device, workflow, signals) as unknown as Record<string, unknown>;
+  return String(ev[field]);
+}
+
+/** The freshness classifier on one stamp, at a fixed reference clock. */
+function freshnessFor(observedAt: string): string {
+  return classifyFreshness(observedAt, "2026-07-13T13:00:00.000Z", 1, 24);
+}
+
+/** runDockSync end to end: a second dock feed carries `observedAt`; report the dock-wide freshness. */
+function dockFreshnessFor(observedAt: string): string {
+  const seeded = seedDemoStore(fixedClock("2026-07-13T15:00:00.000Z"));
+  const store = seeded.store;
+  const connector = store.listConnectors(seeded.tenants.northwind).find((c) => c.kind === "dockbridge-custody");
+  const base = connector ? seeded.dockRecords[connector.id]?.[0] : undefined;
+  if (!connector || !base) return "SETUP-MISSING";
+  const dev = store.findDeviceByRef(connector.tenantId, base.deviceRef);
+  const ident = store.findIdentityByRef(connector.tenantId, "nurse.compliant");
+  const wf = store.findWorkflowByKey(connector.tenantId, "clinical-session");
+  if (!dev || !ident || !wf) return "SETUP-MISSING";
+  runDockSync(store, fixedClock("2026-07-13T15:00:00.000Z"), { ...connector, id: "conn_dock_tz" }, [
+    { ...base, observedAt },
+  ]);
+  const signals = store.listSignalsForSubject(connector.tenantId, "device", dev.id);
+  return buildEvidence(ident, dev, wf, signals).dockEvidenceFreshness;
+}
+
+if (process.argv[2] === "--worker") {
+  const [mode, a, b, c] = process.argv.slice(3);
+  const out =
+    mode === "verdict" ? verdictFor(a!, b)
+    : mode === "accuse" ? accusationFor(a as "tamper_state" | "badge_binding", b!, c!, process.argv[7]!)
+    : mode === "matrix" ? matrixFor(a!)
+    : mode === "tie" ? tieFor(a as SignalCategory, b!, c!, process.argv[7]!)
+    : mode === "freshness" ? freshnessFor(a!)
+    : mode === "dock" ? dockFreshnessFor(a!)
+    : "BAD-MODE";
+  console.log(`VERDICT ${out}`);
+  process.exit(0);
+}
+
+function inZone(tz: string, ...args: string[]): string {
+  const r = spawnSync(process.execPath, ["--import", "tsx", SELF, "--worker", ...args], {
+    env: { ...process.env, TZ: tz }, encoding: "utf8",
+  });
+  const m = /^VERDICT (.+)$/m.exec(r.stdout ?? "");
+  return m ? m[1]! : `CRASH(status=${r.status}) ${(r.stderr ?? "").slice(0, 200)}`;
+}
+
+const failures: string[] = [];
+let passed = 0;
+const check = (name: string, ok: boolean, detail = "") => {
+  if (ok) { passed++; console.log(`  ok   ${name}`); }
+  else { failures.push(name); console.log(`  FAIL ${name}${detail ? ` — ${detail}` : ""}`); }
+};
+
+const ZONES = ["UTC", "America/New_York", "Asia/Tokyo"];
+const OFFSETLESS = "2026-07-13T08:00:00";
+
+const offsetless = ZONES.map((z) => [z, inZone(z, "verdict", OFFSETLESS)] as const);
+console.log(offsetless.map(([z, v]) => `${z}=${v}`).join("  "));
+check(
+  "offset-less observedAt: identical verdict under UTC, America/New_York and Asia/Tokyo",
+  new Set(offsetless.map(([, v]) => v)).size === 1,
+  offsetless.map(([z, v]) => `${z}=${v}`).join(" "),
+);
+check(
+  "offset-less observedAt: the non_compliant accusation is not vouched down (never allow)",
+  offsetless.every(([, v]) => !v.startsWith("allow") && !v.includes("CRASH")),
+  offsetless.map(([, v]) => v).join(","),
+);
+
+// Control: an explicit-offset stamp keeps ordering by instant, in every zone.
+const explicit = ZONES.map((z) => inZone(z, "verdict", "2026-07-13T08:00:00Z"));
+check(
+  "explicit-Z observedAt: later compliant reading still wins by instant, identically in every zone",
+  new Set(explicit).size === 1 && explicit[0]!.endsWith("|compliant"),
+  explicit.join(","),
+);
+// +02:00 control that BITES: 09:00+02:00 is 07:00Z, OLDER than the 07:30Z accusation, so the accusation
+// must stand. A parser that ignores the offset reads it as 09:00Z, a later vouch, and flips to allow.
+const explicitOff = ZONES.map((z) => inZone(z, "verdict", "2026-07-13T09:00:00+02:00"));
+check(
+  "explicit +02:00 observedAt: the offset is applied (09:00+02:00 = 07:00Z is OLDER than the accusation), identically in every zone",
+  new Set(explicitOff).size === 1 && explicitOff[0]!.endsWith("|non_compliant"),
+  explicitOff.join(","),
+);
+
+// Date-only is UTC by spec. 2026-07-13 = 00:00Z is LATER than a 2026-07-12T23:00Z accusation; read as host-local
+// midnight, Asia/Tokyo gives 2026-07-12T15:00Z, which is EARLIER, and the verdict flips.
+const dateOnly = ZONES.map((z) => inZone(z, "verdict", "2026-07-13", "2026-07-12T23:00:00Z"));
+check(
+  "date-only observedAt: parsed as UTC midnight (later than 23:00Z the day before), identically in every zone",
+  new Set(dateOnly).size === 1 && dateOnly[0]!.endsWith("|compliant"),
+  dateOnly.join(","),
+);
+
+// An offset-less NEWER accusation must still beat an OLDER one of lower severity, in every zone. Two accusing
+// values tie at the coarse severity level, so without a per-family order the older parseable one would stand.
+const tamper = ZONES.map((z) => inZone(z, "accuse", "tamper_state", "suspected", "confirmed", "2026-07-13T14:50:00"));
+check(
+  "offset-less confirmed tamper is not outranked by an older suspected one (deny stays deny), identically in every zone",
+  new Set(tamper).size === 1 && tamper[0] === "confirmed",
+  tamper.join(","),
+);
+const badge = ZONES.map((z) => inZone(z, "accuse", "badge_binding", "removed", "forced", "2026-07-13T14:50:00"));
+check(
+  "offset-less forced badge is not outranked by an older removed one, identically in every zone",
+  new Set(badge).size === 1 && badge[0] === "forced",
+  badge.join(","),
+);
+const tamperRfc = ZONES.map((z) => inZone(z, "accuse", "tamper_state", "suspected", "confirmed", "Mon, 13 Jul 2026 14:50:00 GMT"));
+check(
+  "non-ISO zoned (RFC 2822) confirmed tamper is not outranked by an older suspected one, identically in every zone",
+  new Set(tamperRfc).size === 1 && tamperRfc[0] === "confirmed",
+  tamperRfc.join(","),
+);
+
+// The freshness classifier must not read an offset-less stamp in host-local time.
+const fresh = ZONES.map((z) => inZone(z, "freshness", "2026-07-13T08:00:00"));
+check(
+  "classifyFreshness: an offset-less stamp is 'unknown' in every zone (never host-local fresh or stale)",
+  fresh.every((v) => v === "unknown"),
+  fresh.join(","),
+);
+const freshZ = ZONES.map((z) => inZone(z, "freshness", "2026-07-13T12:30:00Z"));
+check(
+  "classifyFreshness: an explicit-Z stamp is classified by instant, identically in every zone",
+  new Set(freshZ).size === 1 && freshZ[0] === "fresh",
+  freshZ.join(","),
+);
+
+// runDockSync end to end: the dock-wide freshness for a second feed with an offset-less stamp must not depend on the host zone.
+const dock = ZONES.map((z) => inZone(z, "dock", "2026-07-13T08:00:00"));
+check(
+  "runDockSync: dock-wide freshness with an offset-less feed is identical in every zone and never 'fresh'",
+  new Set(dock).size === 1 && dock[0] !== "fresh" && !dock[0]!.includes("MISSING") && !dock[0]!.includes("CRASH"),
+  dock.join(","),
+);
+
+
+// Zoned forms that name an exact instant are ORDERED, not discarded. A vouch at 08:00Z is later than the 07:30Z
+// accusation, so each of these must read `compliant`; one that fell to illegible could not vouch and would not.
+for (const stamp of [
+  "2026-07-13 08:00:00Z",
+  "2026-07-13 08:00:00+00",
+  "2026-07-13T08:00:00+0000",
+  "2026-07-13T10:00:00+02",
+  "2026-07-13 10:00:00+02:00",
+]) {
+  const r = ZONES.map((z) => inZone(z, "verdict", stamp));
+  check(
+    `zoned stamp '${stamp}' is ordered by instant (later vouch wins), identically in every zone`,
+    new Set(r).size === 1 && r[0]!.endsWith("|compliant"),
+    r.join(","),
+  );
+}
+
+// Every family with two accusing values: a NEWER, STRONGER accusation whose stamp cannot be ordered must not be
+// outranked by an OLDER, milder ordered one. Expected per family: the stronger value, in every zone and for every
+// stamp shape (offset-less, RFC 2822 text, and a plain explicit Z as the control).
+const strongerOf = FAMILIES.map(([category, , , newer]) => `${category}=${newer}`).join(";");
+for (const stamp of ["2026-07-13T14:50:00", "Mon, 13 Jul 2026 14:50:00 GMT", "2026-07-13T14:50:00Z"]) {
+  const r = ZONES.map((z) => inZone(z, "matrix", stamp));
+  check(
+    `all families, newer stronger accusation stamped '${stamp}': the stronger value stands, identically in every zone`,
+    new Set(r).size === 1 && r[0] === strongerOf,
+    r.join(" | "),
+  );
+}
+
+// Same-instant pairs resolve by severity, not by arrival order, in both orders.
+for (const [category, field, mild, strong] of FAMILIES.filter(([c]) => c !== "posture_freshness")) {
+  const ab = inZone("UTC", "tie", category, field, mild, strong);
+  const ba = inZone("UTC", "tie", category, field, strong, mild);
+  check(`same-instant ${category}: ${mild}+${strong} resolves to ${strong} in either arrival order`, ab === strong && ba === strong, `${ab}/${ba}`);
+}
+
+// Impossible calendar or clock values are NOT instants. `Date.parse` rolls "2026-02-30" over to March 2, so a
+// vouch carrying one would outrank a valid March 1 accusation and read `compliant`. Every one of these must be
+// illegible (cannot vouch) in every zone, including the `Z` form that mainline already rolled over.
+for (const stamp of [
+  "2026-02-30T08:00:00+00",
+  "2026-02-30T08:00:00Z",
+  "2026-02-30",
+  "2026-02-29T08:00:00Z",
+  "2026-13-01T08:00:00Z",
+  "2026-03-02T24:00:00Z",
+  "2026-03-02T08:60:00Z",
+  "2026-03-02T08:00:60Z",
+  "2026-03-02T08:00:00+24:00",
+  "2026-03-02T08:00:00+00:60",
+]) {
+  const r = ZONES.map((z) => inZone(z, "verdict", stamp, "2026-03-01T00:00:00Z"));
+  check(
+    `impossible stamp '${stamp}' is illegible (cannot vouch past a valid March 1 accusation), identically in every zone`,
+    new Set(r).size === 1 && r[0]!.endsWith("|non_compliant"),
+    r.join(","),
+  );
+}
+// Control: the valid neighbours of those stamps still order by instant (2026-03-02 is a real, later date).
+for (const stamp of ["2026-03-02T08:00:00+00", "2026-03-02", "2024-02-29T08:00:00Z"]) {
+  const accused = stamp.startsWith("2024") ? "2024-02-28T00:00:00Z" : "2026-03-01T00:00:00Z";
+  const r = ZONES.map((z) => inZone(z, "verdict", stamp, accused));
+  check(
+    `valid stamp '${stamp}' is ordered by instant (later vouch wins), identically in every zone`,
+    new Set(r).size === 1 && r[0]!.endsWith("|compliant"),
+    r.join(","),
+  );
+}
+
+// Accusing values the shipped rules treat ALIKE sit in one tier and TIE: the first arrival stands (as on mainline),
+// because a tenant's own active policy may tell them apart and collapsing them to the later-listed one loses that.
+{
+  const ab = inZone("UTC", "tie", "custody_state", "custodyState", "overdue", "maintenance");
+  const ba = inZone("UTC", "tie", "custody_state", "custodyState", "maintenance", "overdue");
+  check("same-instant custody overdue+maintenance (same shipped outcome): the FIRST arrival stands, in either order", ab === "overdue" && ba === "maintenance", `${ab}/${ba}`);
+  const cd = inZone("UTC", "tie", "charge_state", "dockChargeState", "low", "not_present");
+  const dc = inZone("UTC", "tie", "charge_state", "dockChargeState", "not_present", "low");
+  check("same-instant charge low+not_present (same shipped outcome): the FIRST arrival stands, in either order", cd === "low" && dc === "not_present", `${cd}/${dc}`);
+}
+
+// The accusation orders are not hand-trusted: derive each member's outcome from the SHIPPED rule set, require
+// every accusing member to be listed, and require the order to be non-decreasing in outcome.
+{
+  const RANK: Record<string, number> = { allow: 0, step_up: 1, restrict: 2, deny: 3 };
+  const FIELD_OF: Record<string, string> = {
+    tamper: "tamperState", badge: "badgeBinding", battery: "batteryHealth", managementHealth: "managementHealthState",
+    charge: "dockChargeState", baseline: "baselineCompliance", dock: "dockState", custody: "custodyState",
+  };
+  const base = buildEvidence(identity, device, workflow, [sig("s_c", "device_compliance", "compliant", BASE), ...healthy()]);
+  const pv = { id: "pv_o", tenantId: "tenant_northwind", policyId: "pol_o", version: 1, status: "active" as const, rules: SHARED_DEVICE_RULES_V1, createdAt: BASE, digest: "test" };
+  const outcomeOf = (field: string, member: string) =>
+    RANK[evaluatePolicy(pv, { ...base, [field]: member } as typeof base).outcome]!;
+  const problems: string[] = [];
+  for (const [key, field] of Object.entries(FIELD_OF)) {
+    const domain = (EVIDENCE_VALUE_DOMAINS as Record<string, { members: readonly unknown[]; good: readonly unknown[]; worse?: readonly unknown[] }>)[key === "battery" ? "batteryHealth" : key];
+    if (!domain) { problems.push(`${key}: no such domain`); continue; }
+    const accusing = domain.members.filter((m) => !domain.good.includes(m)) as string[];
+    const tiers = (domain.worse ?? []) as unknown as string[][];
+    const listed = tiers.flat();
+    for (const m of accusing) if (!listed.includes(m)) problems.push(`${key}: accusing member '${m}' is not ranked`);
+    let prevTier = -1;
+    tiers.forEach((tier, i) => {
+      const ranks = tier.map((m) => outcomeOf(field, m));
+      if (new Set(ranks).size > 1) problems.push(`${key}: tier ${i} [${tier.join(",")}] mixes outcomes ${ranks.join(",")}`);
+      if (ranks[0]! <= prevTier) problems.push(`${key}: tier ${i} [${tier.join(",")}] (${ranks[0]}) does not outrank the tier before it (${prevTier})`);
+      prevTier = Math.max(prevTier, ...ranks);
+    });
+  }
+  check("accusation orders match the shipped rules' outcomes, and every accusing member is ranked", problems.length === 0, problems.join("; "));
+}
+
+console.log(`\nsummary=${failures.length === 0 ? "pass" : "FAIL"} (${passed}/${passed + failures.length})`);
+if (failures.length > 0) { for (const f of failures) console.error(`  - ${f}`); process.exit(1); }

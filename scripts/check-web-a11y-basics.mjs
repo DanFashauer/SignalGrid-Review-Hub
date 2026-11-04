@@ -906,6 +906,20 @@ export function batchCoverageGap(code, pattern, args, messages, alerts) {
   return null;
 }
 
+/** Local name -> original hook name, for `import { X as Y }` and `const Y = X` rebindings (followed to a fixpoint). */
+function importAliasOrigins(code) {
+  const map = new Map();
+  for (const m of code.matchAll(/import\s+(?:type\s+)?\{([^}]*)\}\s*from/g)) {
+    for (const part of m[1].split(",").map((x) => x.trim()).filter(Boolean)) {
+      const [orig, alias] = part.replace(/^type\s+/, "").split(/\s+as\s+/).map((x) => x.trim());
+      if (alias && orig) map.set(alias, orig);
+    }
+  }
+  for (const m of code.matchAll(/\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:[A-Za-z_$][\w$]*\.)?(use[A-Z][\w$]*)\s*(?=[;\n])/g)) map.set(m[1], m[2]);
+  for (const [k, v] of map) { let o = v, n = 0; while (map.has(o) && n++ < 10) o = map.get(o); map.set(k, o); }
+  return map;
+}
+
 export function checkUnannouncedQueries(rel, code, isHook, defaultPolls, shellSpoken = new Set(), carriers = new Set(), timerOpens = new Set()) {
   // A call polls when the tree's defaults poll, its own arguments set refetchInterval,
   // it IS a polling carrier (an imported polling wrapper), or its arguments pass one.
@@ -922,6 +936,10 @@ export function checkUnannouncedQueries(rel, code, isHook, defaultPolls, shellSp
   const alerts = stripLiterals(tags.map((t) => attrExpression(t, "alert") ?? "").join("\n"));
   const messages = stripLiterals(tags.map((t) => attrExpression(t, "message") ?? "").join("\n"));
   const failures = [];
+  // A batch hook imported under another name (`useQueries as useBatch`, or rebound
+  // `const useBatch = useQueries`) is still the batch: resolve back to the original.
+  const original = importAliasOrigins(code);
+  const batchName = (n) => original.get(n) ?? n;
   // Typed (`const q: UseQueryResult<D> = useX()`) and nested (`const { data: { items } }
   // = useX()`) bindings are parsed, not matched by one regex.
   // A polled hook call NOT bound straight to a name (`const s = { q: useQuery(…) }`,
@@ -971,11 +989,11 @@ export function checkUnannouncedQueries(rel, code, isHook, defaultPolls, shellSp
     } else holders.push(m[1]);
     // An identifier bound to a list of queries (`const results = useQueries(…)`) is read
     // through an element: `results[0].data`, or `results.some((r) => r.isError)`.
-    const listHook = /Queries$/.test(m[2]) && !m[1].startsWith("[") && !m[1].startsWith("{");
+    const listHook = /Queries$/.test(batchName(m[2])) && !m[1].startsWith("[") && !m[1].startsWith("{");
     const names = [...direct, ...holders.map((h) => `${h}.data|error`)];
     // A batch (`useQueries`) is one call for many queries: a region reading one of its
     // results must not stand in for the rest. Every result needs its own coverage.
-    if (/Queries$/.test(m[2]) && !m[1].startsWith("{")) {
+    if (/Queries$/.test(batchName(m[2])) && !m[1].startsWith("{")) {
       const gap = batchCoverageGap(code, m[1], args, messages, alerts);
       if (gap) { failures.push(`${rel}:${code.slice(0, m.index).split("\n").length}: polled ${m[2]}() batch — ${gap} (WCAG 4.1.3)`); continue; }
     }
@@ -1585,6 +1603,60 @@ export function checkChartMotion(rel, raw, viaImports = []) {
   return failures;
 }
 
+/** The expression starting at `i`: to the first `;` or newline outside brackets. */
+function expressionFrom(src, i) {
+  let end = i;
+  for (let depth = 0; end < src.length; end++) {
+    const ch = src[end];
+    if ("([{".includes(ch)) depth++;
+    else if (")]}".includes(ch)) { if (depth === 0) break; depth--; }
+    else if (depth === 0 && (ch === ";" || ch === "\n")) { if (src.slice(i, end).trim()) break; }
+  }
+  return src.slice(i, end).trim();
+}
+
+// A `matchMedia` read of the user's motion preference: `.matches` of the `reduce` query.
+const MOTION_MEDIA_READ = /matchMedia\s*\(\s*(["'`])[^"'`]*prefers-reduced-motion\s*:\s*reduce[^"'`]*\1\s*\)\s*\??\.matches/;
+
+/**
+ * Does `name` provably hold (or return) the user's reduced-motion preference? Only
+ * a known preference hook (framer-motion's `useReducedMotion`, this repo's
+ * `usePrefersReducedMotion`, each imported from where it lives) or a direct
+ * `matchMedia('(prefers-reduced-motion: reduce)').matches` read counts. A name that
+ * merely contains "reduce" (`const reduced = false`), a parameter, or anything the
+ * gate cannot trace to such a source is NOT verified: fail closed.
+ */
+function tracesToMotionPreference(src, name) {
+  const hooks = new Set();
+  for (const m of src.matchAll(/import\s+(?:type\s+)?\{([^}]*)\}\s*from\s*["']([^"']+)["']/g)) {
+    for (const part of m[1].split(",").map((x) => x.trim()).filter(Boolean)) {
+      const [orig, alias] = part.split(/\s+as\s+/).map((x) => x.trim());
+      const ok = (orig === "useReducedMotion" && /^(?:framer-motion|motion|motion\/react)$/.test(m[2])) ||
+        (orig === "usePrefersReducedMotion" && /(?:^|\/)use-reduced-motion$/.test(m[2]));
+      if (ok) hooks.add(alias || orig);
+    }
+  }
+  const esc = escapeRegExp(name);
+  const rhsOk = (rhs) => {
+    if (rhs.startsWith("!")) return false; // inverted: `reduced` would mean "motion allowed"
+    for (const h of hooks) if (new RegExp(`^${escapeRegExp(h)}\\s*\\(\\s*\\)$`).test(rhs)) return true;
+    return MOTION_MEDIA_READ.test(rhs);
+  };
+  let found = 0;
+  for (const d of src.matchAll(new RegExp(`(?<![\\w$.])(?:const|let|var)\\s+${esc}\\s*(?::[^=]+)?=\\s*`, "g"))) {
+    found++;
+    if (!rhsOk(expressionFrom(src, d.index + d[0].length))) return false;
+  }
+  for (const d of src.matchAll(new RegExp(`(?<![\\w$.])function\\s+${esc}\\s*\\(`, "g"))) {
+    found++;
+    const open = src.indexOf("{", d.index);
+    let j = open, depth = 0;
+    for (; j >= 0 && j < src.length; j++) { if (src[j] === "{") depth++; else if (src[j] === "}" && --depth === 0) break; }
+    if (open < 0 || !MOTION_MEDIA_READ.test(src.slice(open, j + 1))) return false;
+  }
+  return found > 0;
+}
+
 /**
  * Rule 4, scrolling half. A JS `behavior: "smooth"` ignores the stylesheet's
  * `scroll-behavior` override, so a literal "smooth" is ungated motion; the value
@@ -1612,8 +1684,12 @@ export function checkScrollMotion(rel, raw) {
     // A computed value passes only as `<reduced-motion test> ? "auto" : "smooth"` (or
     // its negation with the arms swapped): the preference must pick the non-smooth arm.
     const t = value.match(/^(!?)\s*([^?]+?)\s*\?\s*(["'`])(\w+)\3\s*:\s*(["'`])(\w+)\5$/);
-    const fromPreference = t && /reduce/i.test(t[2]) && (t[1] ? t[6] !== "smooth" : t[4] !== "smooth");
-    if (!fromPreference) failures.push(`${rel}:${lineOf(m.index)}: scroll behavior \`${value}\` is not chosen from prefers-reduced-motion — the gate cannot prove reduced-motion users get "auto" (failing closed, WCAG 2.3.3)`);
+    // The test must read the preference, traced to a verified source: a name that merely
+    // contains "reduce" (`const reduced = false`) proves nothing.
+    const cond = t ? t[2].replace(/\(\s*\)$/, "").trim() : "";
+    const traced = t && (MOTION_MEDIA_READ.test(t[2]) || (/^[A-Za-z_$][\w$]*$/.test(cond) && tracesToMotionPreference(src, cond)));
+    const fromPreference = t && traced && (t[1] ? t[6] !== "smooth" : t[4] !== "smooth");
+    if (!fromPreference) failures.push(`${rel}:${lineOf(m.index)}: scroll behavior \`${value}\` is not chosen from prefers-reduced-motion — the gate cannot trace its condition to a reduced-motion hook or matchMedia read, so cannot prove reduced-motion users get "auto" (failing closed, WCAG 2.3.3)`);
   }
   // Shorthand `{ behavior }` hides where the value came from: fail closed.
   for (const m of src.matchAll(/[{,]\s*behavior\s*(?=[,}])/g)) failures.push(`${rel}:${lineOf(m.index)}: shorthand \`{ behavior }\` hides the scroll behavior's value — write \`behavior: <reduced> ? "auto" : "smooth"\` (failing closed, WCAG 2.3.3)`);
@@ -2266,7 +2342,7 @@ function selfTest() {
     ["a literal smooth scroll fails",
       checkScrollMotion("x.tsx", 'window.scrollTo({ top, behavior: "smooth" });').length === 1],
     ["a preference-chosen scroll behaviour passes",
-      checkScrollMotion("x.tsx", 'window.scrollTo({ top, behavior: reduced ? "auto" : "smooth" });').length === 0],
+      checkScrollMotion("x.tsx", 'import { useReducedMotion } from "framer-motion";\nconst reduced = useReducedMotion();\nwindow.scrollTo({ top, behavior: reduced ? "auto" : "smooth" });').length === 0],
     ["an expression child that renders only a tag (or nothing) does not name a button",
       ['{show && <Trash2 />}', '{show && (<Trash2 />)}', '{a ? <X /> : null}', '{null}'].every((c) =>
         checkIconButtons("x.tsx", `<Button size="icon">${c}</Button>`).length === 1 && checkIconButtons("x.tsx", `<button onClick={f}>${c}</button>`).length === 1) &&
@@ -2404,8 +2480,32 @@ function selfTest() {
     ["a computed scroll behavior must be chosen from the reduced-motion preference",
       ['window.scrollTo({ top, behavior: enabled ? "smooth" : "auto" });', 'window.scrollTo({ top, behavior: b });', 'el.scrollIntoView({ behavior });',
         'window.scrollTo({ top, behavior: reduced ? "smooth" : "auto" });'].every((c) => checkScrollMotion("x.tsx", c).length === 1) &&
-      ['window.scrollTo({ top, behavior: prefersReducedMotion() ? "auto" : "smooth" });', 'window.scrollTo({ top, behavior: !reduced ? "smooth" : "auto" });',
+      ['function prefersReducedMotion() { return window.matchMedia("(prefers-reduced-motion: reduce)").matches; }\nwindow.scrollTo({ top, behavior: prefersReducedMotion() ? "auto" : "smooth" });',
+        'import { useReducedMotion } from "framer-motion";\nconst reduced = useReducedMotion();\nwindow.scrollTo({ top, behavior: !reduced ? "smooth" : "auto" });',
         'window.scrollTo({ top, behavior: "auto" });'].every((c) => checkScrollMotion("x.tsx", c).length === 0)],
+    ["a scroll condition must trace to a real reduced-motion source, not merely contain \"reduce\"",
+      ['const reduced = false;\nwindow.scrollTo({ top, behavior: reduced ? "auto" : "smooth" });',
+        'window.scrollTo({ top, behavior: reduced ? "auto" : "smooth" });',
+        'const reduced = !window.matchMedia("(prefers-reduced-motion: reduce)").matches;\nwindow.scrollTo({ behavior: reduced ? "auto" : "smooth" });',
+        'const reduced = window.matchMedia("(prefers-reduced-motion: no-preference)").matches;\nwindow.scrollTo({ behavior: reduced ? "auto" : "smooth" });',
+        'import { useReducedMotion } from "./local-stub";\nconst reduced = useReducedMotion();\nwindow.scrollTo({ behavior: reduced ? "auto" : "smooth" });',
+        'const reduceMotion = prefs.reduce;\nwindow.scrollTo({ behavior: reduceMotion ? "auto" : "smooth" });'].every((c) => checkScrollMotion("x.tsx", c).length === 1) &&
+      ['import { useReducedMotion as useCalm } from "motion/react";\nconst calm = useCalm();\nwindow.scrollTo({ behavior: calm ? "auto" : "smooth" });',
+        'import { usePrefersReducedMotion } from "@/hooks/use-reduced-motion";\nconst reduceMotion = usePrefersReducedMotion();\nel.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth" });',
+        'const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;\nwindow.scrollTo({ behavior: reduced ? "auto" : "smooth" });',
+        'window.scrollTo({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });'].every((c) => checkScrollMotion("x.tsx", c).length === 0)],
+    ["a useQueries batch imported under another name is still a batch: every result must reach the live region",
+      (() => {
+        const q = 'queries: [{ queryKey: ["a"], queryFn: fa, refetchInterval: 5000 }, { queryKey: ["b"], queryFn: fb, refetchInterval: 5000 }]';
+        const lr = (imp, call, tail) => checkLiveRegions([view("t/src/pages/T.tsx", `${imp}\nconst [a, b] = ${call}({ ${q} });\n${tail}`)], false).failures;
+        const half = 'return <><LiveRegion message={`${a.data?.id}`} alert={a.isError ? "Down." : ""} /><p>{b.data?.id}</p></>;';
+        const full = 'return <LiveRegion message={`${a.data?.id} ${b.data?.id}`} alert={a.isError || b.isError ? "Down." : ""} />;';
+        return lr('import { useQueries } from "@tanstack/react-query";', "useQueries", half).length === 1 &&
+          lr('import { useQueries as useBatch } from "@tanstack/react-query";', "useBatch", half).length === 1 &&
+          lr('import { useQueries } from "@tanstack/react-query";\nconst useBatch = useQueries;', "useBatch", half).length === 1 &&
+          lr('import { useQueries } from "@tanstack/react-query";', "useQueries", full).length === 0 &&
+          lr('import { useQueries as useBatch } from "@tanstack/react-query";', "useBatch", full).length === 0;
+      })()],
     ["a spread after the label can erase it",
       checkIconButtons("x.tsx", '<button aria-label="Close" {...props}><X /></button>').length === 1 &&
       checkIconButtons("x.tsx", '<button {...props} aria-label="Close"><X /></button>').length === 0 &&

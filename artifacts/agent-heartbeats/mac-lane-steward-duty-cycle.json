@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-11-04T20:49:39.003Z",
-  "result": "keepalive with the 20:10Z forward-build batch (11-04; mainline hb 18:11Z). Cycles 18:25Z, 19:24Z and 20:24Z: the Mac is active again, with acks for the Obsidian goal, the tick message and the OmniRoute order, and a land ask for #1819, which landed 802e84fc. Its tick still cannot land a heartbeat because ruleset 25774497 refuses the direct push; the fix is #1698, which Codex owns (dirty; refresh asked in #1817). Live evidence committed 2026-11-02 15:07Z; re-mint requested, hand raised. Owner told today that the install-launchd ask was wrong: the Mac does tick."
+  "firedAt": "2026-11-04T22:20:08.462Z",
+  "result": "22:24Z cycle, delivered early with the 22:10Z batch (mainline hb 20:49Z). The Mac lane is active: OmniRoute ack #1816, hand clear #1822, re-mint ack #1823 (all merged), OD01 ack #1825 queued, and the owner-order relay #1824 queued. The Mac says a second local-brain build is in flight and it will mail a land ask. Tick heartbeat still 2026-10-24T07:30:38Z; the fix is #1698 (being refreshed now). Live evidence 2026-11-02 15:07Z at v101. Owner not escalated."
 }

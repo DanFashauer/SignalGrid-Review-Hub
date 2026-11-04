@@ -32,6 +32,9 @@ import {
   verifyRemediation,
 } from "@workspace/signalgrid-core";
 
+import { ageMs, deriveFreshness } from "@workspace/integrations/utils/freshness";
+import { fromDevicePosture } from "@workspace/posture-composition";
+
 const SELF = fileURLToPath(import.meta.url);
 
 const identity: Identity = {
@@ -190,6 +193,23 @@ function clockFor(iso: string): string {
   try { return fixedClock(iso).now().toISOString(); } catch { return "THROWS"; }
 }
 
+/** The shared connector freshness helper on one sighting, reference 13:00Z, 7-day bound. */
+function sharedFreshnessFor(seenAt: string): string {
+  const now = parseInt("1783947600000", 10); // 2026-07-13T13:00:00Z, as epoch ms so no parse is involved
+  const age = ageMs(seenAt, now);
+  return `${deriveFreshness(seenAt, now, 7 * 24 * 3600 * 1000)}|${age === null ? "null" : "age"}`;
+}
+
+/** Graph device posture composed with a healthy record whose last sighting is `lastSeenAt`; read at `observedAt`. */
+function devicePostureFor(lastSeenAt: string, observedAt: string): string {
+  const out = fromDevicePosture({
+    sourceSystem: "microsoft-graph", correlationId: "c_tz", observedAt, subjectId: "u_tz",
+    identityStatus: "enabled", userRisk: "none", deviceId: "d_tz", deviceComplianceState: "compliant",
+    deviceManagementState: "managed", deviceRegistrationState: "registered", deviceLastSeenAt: lastSeenAt,
+  });
+  return `${out.action}|${out.reason}`;
+}
+
 if (process.argv[2] === "--worker") {
   const [mode, a, b, c] = process.argv.slice(3);
   const out =
@@ -204,6 +224,8 @@ if (process.argv[2] === "--worker") {
     : mode === "attach" ? attachFor(a!)
     : mode === "verify" ? verifyFor(a!)
     : mode === "clock" ? clockFor(a!)
+    : mode === "sharedfresh" ? sharedFreshnessFor(a!)
+    : mode === "devposture" ? devicePostureFor(a!, b!)
     : "BAD-MODE";
   console.log(`VERDICT ${out}`);
   process.exit(0);
@@ -476,6 +498,21 @@ for (const stamp of ["2026-03-02T08:00:00+00", "2026-03-02", "2024-02-29T08:00:0
   check("fixedClock: an offset-less stamp is refused in every zone (never a host-local pinned instant)", offsetlessClock.every((v) => v === "THROWS"), offsetlessClock.join(","));
   const zonedClock = ZONES.map((z) => inZone(z, "clock", "2026-07-13T08:00:00Z"));
   check("fixedClock: a Z stamp pins that instant in every zone (control)", zonedClock.every((v) => v === "2026-07-13T08:00:00.000Z"), zonedClock.join(","));
+}
+
+// The CONNECTOR side reads instants through one shared helper (lib/integrations/src/utils/freshness.ts) and the
+// Graph device-posture adapter. They must read an offset-less stamp the same way the core does: as no instant.
+{
+  const offsetless = ZONES.map((z) => inZone(z, "sharedfresh", "2026-07-13T12:30:00"));
+  check("integrations deriveFreshness/ageMs: an offset-less sighting is unknown with no age, in every zone", offsetless.every((v) => v === "unknown|null"), offsetless.join(","));
+  const zoned = ZONES.map((z) => inZone(z, "sharedfresh", "2026-07-13T14:30:00+02:00"));
+  check("integrations deriveFreshness/ageMs: a zoned sighting 30 min old is fresh, in every zone (control)", zoned.every((v) => v === "fresh|age"), zoned.join(","));
+  const lastSeen = ZONES.map((z) => inZone(z, "devposture", "2026-07-13T12:30:00", "2026-07-13T13:00:00Z"));
+  check("device posture: an offset-less deviceLastSeenAt is DEVICE_LAST_SEEN_UNKNOWN, in every zone", lastSeen.every((v) => v === "step_up|DEVICE_LAST_SEEN_UNKNOWN"), lastSeen.join(","));
+  const readAt = ZONES.map((z) => inZone(z, "devposture", "2026-07-13T12:30:00Z", "2026-07-13T13:00:00"));
+  check("device posture: an offset-less read instant cannot vouch, identically in every zone and never COMPLIANT_MANAGED", new Set(readAt).size === 1 && !readAt[0]!.includes("COMPLIANT_MANAGED"), readAt.join(","));
+  const control = ZONES.map((z) => inZone(z, "devposture", "2026-07-13T12:30:00Z", "2026-07-13T13:00:00Z"));
+  check("device posture: zoned stamps compose to COMPLIANT_MANAGED, in every zone (control)", control.every((v) => v === "none|COMPLIANT_MANAGED"), control.join(","));
 }
 
 console.log(`\nsummary=${failures.length === 0 ? "pass" : "FAIL"} (${passed}/${passed + failures.length})`);

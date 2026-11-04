@@ -55,6 +55,17 @@
 // states why beside the call; there is exactly one such reason in the tree today
 // (see `ageMs`), and `scripts/check-freshness-divergence.mjs` reports every
 // exemption so none of them is silent.
+import { parseObservedInstant } from "@workspace/signalgrid-core";
+
+/**
+ * The instant a connector timestamp names, or NaN. The core's strict parser, not `Date.parse`: an offset-less
+ * date-time is HOST-LOCAL under `Date.parse`, so the same sighting was fresh on a UTC host and unknown or
+ * future-dated on another. An offset-less stamp names no instant; NaN here is the existing "unknown" path.
+ */
+export function parseSightingInstant(value: string): number {
+  return parseObservedInstant(value);
+}
+
 export const FUTURE_SKEW_TOLERANCE_MS = 60 * 1000;
 
 export type Freshness = "fresh" | "stale" | "unknown";
@@ -89,7 +100,7 @@ export function ageMs(
 ): number | null {
   if (typeof nowMs !== "number" || !Number.isFinite(nowMs)) return null;
   if (seenAt === null || seenAt === undefined || seenAt === "") return null;
-  const t = typeof seenAt === "number" ? seenAt : Date.parse(seenAt);
+  const t = typeof seenAt === "number" ? seenAt : parseSightingInstant(seenAt);
   if (!Number.isFinite(t)) return null;
   const tolerance = Number.isFinite(skewToleranceMs) && skewToleranceMs > 0 ? skewToleranceMs : 0;
   if (t - nowMs > tolerance) return null;
@@ -99,7 +110,7 @@ export function ageMs(
 
 export function deriveFreshness(seenAt: string | null, nowMs: number, staleAfterMs: number | null): Freshness {
   if (!seenAt) return "unknown";
-  const t = Date.parse(seenAt);
+  const t = parseSightingInstant(seenAt);
   if (Number.isNaN(t)) return "unknown";
   // A garbled REFERENCE resolves to STALE, not unknown — same reasoning as a garbled
   // bound below, and it is why this cannot simply be `ageMs(...) === null`.

@@ -39,7 +39,7 @@
 //      holds the module's own path, whatever joins them (an operator of any kind, a method, a call, an object key),
 //      judged at the smallest term that holds both. The only excuses: the exact call
 //      `isMainModule(process.argv[1], import.meta.url)`, an `===`/`!==`/`==`/`!=` with a realpath call on each side,
-//      and an `Object.is` (as `Object.is`, `Object[<string>]`, a `const` alias or destructure, `.call`/`.apply`,
+//      and an `Object.is` (as `Object.is`, a `const` alias or destructure, `.call`/`.apply`,
 //      `Reflect.apply`) whose two compared arguments are each wrapped whole in a realpath call. Also: a literal
 //      `.endsWith(..)`/`.startsWith(..)`/`.includes(..)` test or a basename compare of `process.argv[1]`; every
 //      `isMainModule` reference that is not the named import or an exact direct call (swapped, aliased, nested,
@@ -288,9 +288,9 @@ function closeParen(code, open) {
   return -1;
 }
 
-// Object.is under the spellings the detector follows: `Object.is`, `Object["is"]` (codeOnly blanks the string, so any
-// `Object[<string>]` is read as it - fail-closed), and a name bound by `const x = Object.is` or `const { is[: x] } = Object`.
-const OBJECT_IS_SRC = String.raw`(?<![\w$])Object\s*(?:\.\s*is|\[\s*(?:"\s*"|'\s*'|\x60\s*\x60)\s*\])(?![\w$])`;
+// Object.is under the spellings whose realpath pair is EXCUSED: `Object.is`, and a name bound by `const x = Object.is` or
+// `const { is[: x] } = Object`. `Object["is"]` is not one: codeOnly blanks the key, and `Object["keys"](..)` is truthy.
+const OBJECT_IS_SRC = String.raw`(?<![\w$])Object\s*(?:\.\s*is)(?![\w$])`;
 const OBJECT_IS_ALIAS = new RegExp(String.raw`\b(?:const|let|var)\s+${NAME}\s*=\s*${OBJECT_IS_SRC}(?!\s*(?:\.|\(|\[))`, "g");
 const OBJECT_DESTRUCTURE = /\b(?:const|let|var)\s*\{([^}]*)\}\s*=\s*Object\b(?!\s*\.)/g;
 
@@ -471,9 +471,17 @@ export function rawGuards(text, { callsHelperFreely = false } = {}) {
     // not-1, by any accessor) AND holds this module's own path is a finding, whatever joins them - an operator, a method,
     // a call, an object key. It is judged at the SMALLEST term that holds both, so `if (a === b)` is judged at `a === b`.
     const within = (inner, outer) => inner !== outer && inner.offset >= outer.offset && inner.offset + inner.text.length <= outer.offset + outer.text.length && inner.text.length < outer.text.length;
+    // An Object.is call whose two compared arguments are each wrapped in realpath is excused as a WHOLE: the terms inside
+    // it (Reflect.apply's array, say) are its operands, not comparisons of their own.
+    const excusedIs = terms.filter((t) => {
+      if (!t.selfHit) return false;
+      const isArgs = objectIsArgs(t.text, isWord);
+      return isArgs !== null && isArgs.length >= 2 && isArgs.slice(0, 2).every(wrapsInRealpath); // each compared argument, whole
+    });
     for (const term of terms) {
       const { argvHit, selfHit } = term;
       if (!argvHit) continue;
+      if (selfHit && excusedIs.some((t) => t === term || within(term, t))) continue; // inside an excused Object.is call
       if (selfHit && terms.some((t) => t.selfHit && within(t, term))) continue; // a smaller term holds both: judged there
       const method = /\.\s*(?:endsWith|startsWith|includes)\s*\(/.test(term.text);
       // depth-0 equality operator of THIS term: the only operator a realpath pair can excuse
@@ -488,14 +496,9 @@ export function rawGuards(text, { callsHelperFreely = false } = {}) {
           if (m) op = { index: i, length: m[0].length };
         }
       }
-      let realBoth = op !== null && REAL_CALL.test(term.text.slice(0, op.index)) && REAL_CALL.test(term.text.slice(op.index + op.length));
-      // Object.is(a, b) is excused the same way (also as Object["is"], a const alias or destructure, .call/.apply, Reflect.apply):
-      // a realpath call must WRAP each of its two compared arguments, judged argument by argument (objectIsArgs). Any other
-      // shape holding both is a finding with no excuse.
-      if (!op) {
-        const isArgs = objectIsArgs(term.text, isWord);
-        realBoth = isArgs !== null && isArgs.length >= 2 && isArgs.slice(0, 2).every(wrapsInRealpath);
-      }
+      // An equality is excused by a realpath call on each side; an excused Object.is was skipped above (excusedIs). Any
+      // other shape holding both is a finding with no excuse.
+      const realBoth = op !== null && REAL_CALL.test(term.text.slice(0, op.index)) && REAL_CALL.test(term.text.slice(op.index + op.length));
       let reason = null;
       let kind = "raw";
       if (method && selfHit) {
@@ -539,6 +542,20 @@ export const KNOWN_MISSES = [
   "a `/` after `)` read as a division, which can hide an import later on the same line",
   "a gate started as `node -e \"await import('<gate>')\" <gate path>` (argv[1] is then the gate path; the helper has the same property)",
 ];
+
+/**
+ * Pure: how the gate header and the backlog row drift from KNOWN_MISSES (whitespace and `//` line prefixes ignored):
+ * `missing` items absent from either, `lingering` CLOSED_MISSES still present in either.
+ */
+export function ceilingDrift(headerText, rowText) {
+  const flat = (t) => t.replace(/\n\s*\/\/\s*/g, " ").replace(/\s+/g, " ");
+  const header = flat(headerText);
+  const row = flat(rowText);
+  return {
+    missing: KNOWN_MISSES.filter((m) => !header.includes(flat(m)) || !row.includes(flat(m))),
+    lingering: CLOSED_MISSES.filter((m) => header.includes(flat(m)) || row.includes(flat(m))),
+  };
+}
 
 /** Misses CLOSED by the round-10 behaviour rule; the self-test refuses them in the header or the backlog row. */
 const CLOSED_MISSES = ["`const args = process.argv; args[1]`", "`new Set([process.argv[1]]).has(<self path>)`", "`let eq; eq = Object.is` is not seen"];
@@ -877,7 +894,8 @@ async function selfTest() {
   checks.push(["R7-C Object.is(process.argv[1], <self path>) is a comparison; a realpath on each argument excuses it", raw("if (Object.is(process.argv[1], fileURLToPath(import.meta.url))) run();\n") === 1 && raw("if (Object.is(realpathSync(process.argv[1]), realpathSync(fileURLToPath(import.meta.url)))) run();\n") === 0]);
   // ROUND 9. Each case pins a finding from the round-8 refute (R8-A): every plant below exited 0.
   const SELF_U = "fileURLToPath(import.meta.url)";
-  checks.push(["R8-A/N1 Object[\"is\"](process.argv[1], <self path>) is a comparison", raw(`if (Object["is"](process.argv[1], ${SELF_U})) run();\n`) === 1]);
+  checks.push(["R8-A/N1 Object[\"is\"](process.argv[1], <self path>) is a finding, and Object[<string>] is NO realpath excuse (Object[\"keys\"](..) is truthy)", raw(`if (Object["is"](process.argv[1], ${SELF_U})) run();\n`) === 1 && raw(`if (Object["keys"](realpathSync(process.argv[1]), realpathSync(${SELF_U}))) run();\n`) === 1]);
+  checks.push(["R8-A/N2-N3/N6 a realpath pair excuses Object.is through a const alias, a destructure and Reflect.apply", raw(`const same = Object.is;\nif (same(realpathSync(process.argv[1]), realpathSync(${SELF_U}))) run();\n`) === 0 && raw(`const { is } = Object;\nif (is(realpathSync(process.argv[1]), realpathSync(${SELF_U}))) run();\n`) === 0 && raw(`if (Reflect.apply(Object.is, null, [realpathSync(process.argv[1]), realpathSync(${SELF_U})])) run();\n`) === 0]);
   checks.push(["R8-A/N2 a destructured `const { is } = Object` (and `{ is: eq }`) is Object.is", raw(`const { is } = Object;\nif (is(process.argv[1], ${SELF_U})) run();\n`) === 1 && raw(`const { keys, is: eq } = Object;\nif (eq(process.argv[1], ${SELF_U})) run();\n`) === 1 && raw("const { is } = Object;\nif (is(a, b)) run();\n") === 0]);
   checks.push(["R8-A/N3 `const same = Object.is` is Object.is", raw("const same = Object.is;\nif (same(process.argv[1], import.meta.filename)) run();\n") === 1]);
   checks.push(["R8-A/N5 Object.is.call(t, a, b) and Object.is.apply(t, [a, b]) are comparisons; realpath on each compared argument excuses .call", raw("if (Object.is.call(null, process.argv[1], import.meta.filename)) run();\n") === 1 && raw("if (Object.is.apply(null, [process.argv[1], import.meta.filename])) run();\n") === 1 && raw("if (Object.is.call(null, realpathSync(process.argv[1]), realpathSync(import.meta.filename))) run();\n") === 0]);
@@ -903,9 +921,9 @@ async function selfTest() {
   checks.push(["R7-C KNOWN MISS: switch (process.argv[1]) { case <self path>: } is not seen", raw("switch (process.argv[1]) {\n  case fileURLToPath(import.meta.url):\n    run();\n}\n") === 0]);
   checks.push(["R9-A new Set([process.argv[1]]).has(<self path>) is a finding (any expression holding both, closed in round 10)", raw("const here = fileURLToPath(import.meta.url);\nif (new Set([process.argv[1]]).has(here)) run();\n") === 1]);
   checks.push(["R7-E/O02 .startsWith(..) between the self path and argv[1] is a suffix-class finding", sg("if (fileURLToPath(import.meta.url).startsWith(process.argv[1])) run();\n") === 1]);
-  checks.push(["R7-E/O07 `import { isMainModule as im }` rebinding is a finding", rg('import { isMainModule as im } from "./lib/is-main.mjs";\nif (im(import.meta.url, process.argv[1])) run();\n') >= 1]);
+  checks.push(["R7-E/O07 `import { isMainModule as im }` rebinding is a finding", rawGuards('import { isMainModule as im } from "./lib/is-main.mjs";\nif (im(process.argv[1], import.meta.url)) run();\n').some((h) => /re-binds the imported isMainModule/.test(h.reason))]);
   checks.push(["R7-E/O08 a call whose SECOND argument is wrong is a finding (not only the first)", rg("if (isMainModule(process.argv[1], import.meta.filename)) run();\n") === 1]);
-  checks.push(["R7-E/O13 process.argv?.[1] is process.argv[1] (the `?.` is not a ternary separator)", rg("if (process.argv?.[1] === fileURLToPath(import.meta.url)) run();\n") === 1]);
+  checks.push(["R7-E/O13 process.argv?.[1] is process.argv[1] (the `?.` is not a ternary separator)", rg("if (process.argv?.[1] === fileURLToPath(import.meta.url)) run();\n") === 1 && rg("const m = process.argv?.[1] === fileURLToPath(import.meta.url);\n") === 1]);
   checks.push(["R7-E/O14 a mutant whose target text is absent is NOT APPLIED and fails the run (never counted as killed)", (await mutRun({ gitStatus: () => "", run: async () => ({ status: 0 }), mutants: [["absent", "scripts/lib/is-main.mjs", "THIS TEXT IS NOT IN THE FILE", "x"]] })) === 1]);
   checks.push(["R7-E/O22 an unreadable .js/.cjs definition file is a problem, not silence", scanOf({ definitionFiles: ["scripts/x/other.js"], readText: (f) => { if (f === "scripts/x/other.js") throw Object.assign(new Error("x"), { code: "EACCES" }); return "export const x = 1;\n"; } }).problems.length === 1]);
   checks.push(["R7-H a faithful re-export more than 40 characters after `export {` is not a finding; `x as isMainModule` is", rg('import { isMainModule } from "./is-main.mjs";\nexport {\n  aVeryLongBindingNameNumberOne,\n  anotherVeryLongBindingNameNumberTwo,\n  isMainModule,\n};\n') === 0 && rg("export {\n  aVeryLongBindingNameNumberOne,\n  anotherVeryLongBindingNameNumberTwo,\n  check as isMainModule,\n};\n") >= 1]);
@@ -992,12 +1010,12 @@ async function selfTest() {
   checks.push(["R9-A `const args = process.argv; args[1]` and `let eq; eq = Object.is` (misses until round 10) are findings", raw("const args = process.argv;\nif (args[1] === import.meta.filename) {}\n") === 1 && raw("let eq;\neq = Object.is;\nif (eq(process.argv[1], import.meta.filename)) run();\n") === 1]);
   // R8-F: the ceiling list is ONE list. The header and the backlog row each hold every KNOWN_MISSES item (whitespace-normalised).
   {
-    const flat = (t) => t.replace(/\n\s*\/\/\s*/g, " ").replace(/\s+/g, " ");
-    const header = flat(readFileSync(fileURLToPath(import.meta.url), "utf8").split("\nimport ")[0]);
-    const row = flat(readFileSync(join(repoRoot, "docs/BUILD_BACKLOG.md"), "utf8").split("\n").find((l) => l.includes("files skip their gate body and exit 0 when started through a symlinked path")) ?? "");
-    const missing = KNOWN_MISSES.filter((m) => !header.includes(flat(m)) || !row.includes(flat(m)));
-    // …and a miss CLOSED in round 10 may not linger in either list as if it were still a ceiling
-    const lingering = CLOSED_MISSES.filter((m) => header.includes(flat(m)) || row.includes(flat(m)));
+    const header = readFileSync(fileURLToPath(import.meta.url), "utf8").split("\nimport ")[0];
+    const row = readFileSync(join(repoRoot, "docs/BUILD_BACKLOG.md"), "utf8").split("\n").find((l) => l.includes("files skip their gate body and exit 0 when started through a symlinked path")) ?? "";
+    const { missing, lingering } = ceilingDrift(header, row);
+    // the drift check itself, on planted lists: a dropped item is missing, a closed miss left in is lingering
+    const planted = ceilingDrift(KNOWN_MISSES.slice(1).join("; "), [...KNOWN_MISSES, CLOSED_MISSES[0]].join("; "));
+    checks.push(["R9-A the ceiling-drift check sees a dropped item and a lingering closed miss (planted lists)", planted.missing.length === 1 && planted.lingering.length === 1 && ceilingDrift(KNOWN_MISSES.join("; "), KNOWN_MISSES.join("; ")).lingering.length === 0]);
     checks.push([`R9-A no miss closed in round 10 is still listed as a ceiling${lingering.length ? ` (lingering: ${lingering.join(" | ")})` : ""}`, lingering.length === 0]);
     checks.push([`R8-F every KNOWN_MISSES item is in the gate header AND the backlog row${missing.length ? ` (missing: ${missing.join(" | ")})` : ""}`, missing.length === 0]);
   }
@@ -1046,7 +1064,7 @@ const HELPER = "scripts/lib/is-main.mjs";
  */
 export const MUTANTS = [
   ["argv aliases not followed", GATE, "const argvWord = wordOf([...argvAliases(code), ...names(ARGV_DESTRUCTURE)]);", "const argvWord = null;"],
-  ["realpath anywhere in the term excuses the comparison", GATE, "let realBoth = op !== null && REAL_CALL.test(term.text.slice(0, op.index)) && REAL_CALL.test(term.text.slice(op.index + op.length));", "let realBoth = REAL_CALL.test(term.text);"],
+  ["realpath anywhere in the term excuses the comparison", GATE, "const realBoth = op !== null && REAL_CALL.test(term.text.slice(0, op.index)) && REAL_CALL.test(term.text.slice(op.index + op.length));", "const realBoth = REAL_CALL.test(term.text);"],
   ["$-leading alias names not bounded", GATE, "(?<![\\\\w$])(?:", "\\\\b(?:"],
   ["helper canary not run by the gate", GATE, "const canary = helperCanary(isMainModule);", "const canary = [];"],
   ["helper canary skips the symlink probe", GATE, "if (call(link) !== true) bad.push(", "if (false) bad.push("],
@@ -1060,7 +1078,7 @@ export const MUTANTS = [
   ["a signalled child is counted killed (R7-F)", GATE, "const signalled = r.signal || r.status === 130 || r.status === 143;", "const signalled = false;"],
   ["a child that exits 143 through its own handler is counted killed (R7-F)", GATE, "const signalled = r.signal || r.status === 130 || r.status === 143;", "const signalled = r.signal || r.status === 130;"],
   ["the child's TMPDIR is not parent-owned (R7-F)", GATE, "env: { ...process.env, TMPDIR: childTmp } });", "env: { ...process.env } });"],
-  ["Object.is is not a comparison (R7-C)", GATE, "realBoth = isArgs !== null && isArgs.length >= 2 && isArgs.slice(0, 2).every(wrapsInRealpath);", "realBoth = false;"],
+  ["an Object.is with a realpath on each argument is not excused (R7-C)", GATE, "return isArgs !== null && isArgs.length >= 2 && isArgs.slice(0, 2).every(wrapsInRealpath); // each compared argument, whole", "return false; // each compared argument, whole"],
   ["startsWith is not a suffix-class method (O02)", GATE, "const method = /\\.\\s*(?:endsWith|startsWith|includes)\\s*\\(/.test(term.text);", "const method = /\\.\\s*(?:endsWith|includes)\\s*\\(/.test(term.text);"],
   ["an `isMainModule as x` rebinding is not flagged (O07)", GATE, "if (new RegExp(String.raw`(?<![\\w$])isMainModule\\s+as\\s`).test(clause[2]))", "if (false)"],
   ["only the first isMainModule argument is compared (O08)", GATE, "if (args !== EXACT_ARGS)", 'if (args.split(",")[0] !== "process.argv[1]")'],
@@ -1091,24 +1109,24 @@ export const MUTANTS = [
   ["a second isMainModule definition is allowed (R5-E)", GATE, 'if (rel !== "scripts/lib/is-main.mjs" && /', "if (false && /"],
   ["the gate's own guard runs the gate when imported from node -e", GATE, "  } catch {\n    return false;\n  }\n})();", "  } catch {\n    return true;\n  }\n})();"],
   ["helper with a basename shortcut", HELPER, "return realpathSync(argv1) === realpathSync(fileURLToPath(moduleUrl));", "return realpathSync(argv1).split('/').pop() === fileURLToPath(moduleUrl).split('/').pop() || realpathSync(argv1) === realpathSync(fileURLToPath(moduleUrl));"],
-  ["Object[\"is\"] is not Object.is (R8-A/N1)", GATE, "const OBJECT_IS_SRC = String.raw`(?<![\\w$])Object\\s*(?:\\.\\s*is|\\[\\s*(?:\"\\s*\"|'\\s*'|\\x60\\s*\\x60)\\s*\\])(?![\\w$])`;", "const OBJECT_IS_SRC = String.raw`(?<![\\w$])Object\\s*(?:\\.\\s*is)(?![\\w$])`;"],
   ["Object.is aliases are not followed (R8-A/N2-N3)", GATE, "const isWord = wordOf(objectIsAliases(code));", "const isWord = null;"],
   ["Object.is.call is not read (R8-A/N5)", GATE, "    [new RegExp(String.raw`${callee}\\s*\\.\\s*call\\s*\\(`), \"call\"],\n", ""],
   ["Reflect.apply(Object.is, ..) is not read (R8-A/N6)", GATE, "    [new RegExp(String.raw`\\bReflect\\s*\\.\\s*apply\\s*\\(\\s*${callee}`), \"reflect\"],\n", ""],
-  ["the Object.is realpath excuse counts calls anywhere in the term (R8-A/N4)", GATE, "realBoth = isArgs !== null && isArgs.length >= 2 && isArgs.slice(0, 2).every(wrapsInRealpath);", "realBoth = isArgs !== null && (term.text.match(/\\breal\\w*\\s*\\(/g) ?? []).length >= 2;"],
+  ["the Object.is realpath excuse counts calls anywhere in the term (R8-A/N4)", GATE, "return isArgs !== null && isArgs.length >= 2 && isArgs.slice(0, 2).every(wrapsInRealpath); // each compared argument, whole", "return isArgs !== null && (t.text.match(/\\breal\\w*\\s*\\(/g) ?? []).length >= 2; // each compared argument, whole"],
   ["new/typeof/void before the exact call is allowed (R8-A/N7-N9)", GATE, "if (/(?<![\\w$])(?:new|typeof|void)\\s+$/.test(before)) {", "if (false) {"],
   ["the runner does not own SIGHUP/SIGQUIT (R8-B)", GATE, "  [\"SIGHUP\", 129],\n  [\"SIGQUIT\", 131],\n", ""],
   ["the runner's handlers are installed after the baseline (R8-E)", GATE, "  for (const [name, h] of handlers) process.on(name, h);\n  try {\n    const baseline = await runSelfTest();\n", "  try {\n    const baseline = await runSelfTest();\n    for (const [name, h] of handlers) process.on(name, h);\n"],
-  ["the realpath excuse reads the whole statement, not the comparison's term (R5-B)", GATE, "let realBoth = op !== null && REAL_CALL.test(term.text.slice(0, op.index)) && REAL_CALL.test(term.text.slice(op.index + op.length));", "let realBoth = op !== null && REAL_CALL.test(whole);"],
+  ["the realpath excuse reads the whole statement, not the comparison's term (R5-B)", GATE, "const realBoth = op !== null && REAL_CALL.test(term.text.slice(0, op.index)) && REAL_CALL.test(term.text.slice(op.index + op.length));", "const realBoth = op !== null && REAL_CALL.test(whole);"],
   ["argv reads are only the old argv[1] spellings (R9-A)", GATE, "const argvHit = argvRead(term.text) ?? (argvWord ? argvWord.exec(term.text) : null);", "const argvHit = ARGV1.exec(term.text) ?? (argvWord ? argvWord.exec(term.text) : null);"],
   ["a term holding both needs an equality or an Object.is to be a finding (R9-A)", GATE, "else if (selfHit && !realBoth) reason = \"reads process.argv", "else if (selfHit && !realBoth && (op || objectIsArgs(term.text, isWord))) reason = \"reads process.argv"],
   ["judged at the outermost term, not the smallest holding both (R9-A)", GATE, "if (selfHit && terms.some((t) => t.selfHit && within(t, term))) continue;", "if (false) continue;"],
-  ["an unmatched bracket is not a separator (R9-A)", GATE, "    if (unmatched.has(i)) {\n      if (depth === 0) cut(i, i + 1);\n", "    if (unmatched.has(i)) {\n      void 0;\n"],
+  ["unmatched brackets are read as group delimiters (R9-A)", GATE, "    if (unmatched.has(i)) {\n      if (depth === 0) cut(i, i + 1);\n    } else if", "    if (false) {\n      if (depth === 0) cut(i, i + 1);\n    } else if"],
   ["a brace inside ( or [ ends the statement (R9-A)", GATE, "(c === \";\" || ((c === \"{\" || c === \"}\") && nest === 0))", "(c === \";\" || c === \"{\" || c === \"}\")"],
   ["isMainModule calls are not blanked before the raw scan (R9-A)", GATE, "      if (end > 0) whole = whole.slice(0, m.index) + \" \".repeat(end - m.index) + whole.slice(end);", "      void end;"],
   ["argv.length is read as argv[1] (R9-A)", GATE, "  [/^\\s*(?:\\?\\.|\\.)\\s*length(?![\\w$])/, () => true],\n", ""],
   ["argv[k] for k != 1 is read as argv[1] (R9-A)", GATE, "  [/^\\s*(?:\\?\\.)?\\s*\\[\\s*(\\d+)\\s*\\]/, (m) => Number(m[1]) !== 1],\n", ""],
-  ["a closed miss may linger in the ceiling lists (R9-A)", GATE, "const lingering = CLOSED_MISSES.filter(", "const lingering = [].filter("],
+  ["a term inside an excused Object.is call is judged on its own (R9-A)", GATE, "if (selfHit && excusedIs.some((t) => t === term || within(term, t))) continue;", "if (false) continue;"],
+  ["a closed miss may linger in the ceiling lists (R9-A)", GATE, "lingering: CLOSED_MISSES.filter(", "lingering: [].filter("],
 ];
 
 /** The signals the mutant runner (and the self-test's scratch cleanup) owns, with the exit code each one ends the run with. */

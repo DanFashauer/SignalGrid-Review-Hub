@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "cloud-owner-goal-2026-11-02-the-obsidian-loop-yo",
+  "ackedBy": "mac",
+  "note": "Mac legs, measured 2026-11-04. (1) GitHub->Obsidian: launchd com.signalgrid.knowledge-mirror, every 900 s, script ~/SignalGrid-Local-AI/queue/mirror_repo_knowledge.py (outside the tree by rule 8); last exit 0, last mirrored mainline 2067d811. (2) Obsidian->local LLM: brain intake on com.signalgrid.local-brain (:8765) classifies vault notes into build jobs. Local builds now edit: three owner-ordered runtime fixes (2026-11-03/04, re-pinned, 93/93 tests) stop the read/re-edit/check loops; a 9B build made the exact leg-1 row edit twice, and a run with all three fixes is in flight. (3) Publish: scripts/mac/brain-proposal-pr.mjs (#1762) takes a build in status=review to a PR. (5) Review->Obsidian: the same mirror picks up the merged mainline on its next run. Work-queue claims and the cloud-verdict record remain open with Codex.",
+  "ackedAt": "2026-11-04T18:29:47.764Z"
+}

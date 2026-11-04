@@ -789,6 +789,55 @@ export function valueRead(expr, src) {
 }
 
 /**
+ * What a callback body PRODUCES. An expression body is its own value. A block body
+ * (`(q) => { …; return X }`, `function (q) { … }`) produces only its `return`
+ * expressions, so reading the parameter elsewhere in the block (`console.log(q.data)`)
+ * is not coverage. Every return must read the parameter, directly or through a local
+ * `const` initialised from it; a block with no return, or with a return that discards
+ * the parameter, yields "" and covers nothing (failing closed).
+ */
+function returnedValue(body, item) {
+  const t = body.trimStart();
+  if (!t.startsWith("{")) return body;
+  let end = -1;
+  for (let i = 0, depth = 0; i < t.length; i++) {
+    if (t[i] === "{") depth++;
+    else if (t[i] === "}" && --depth === 0) { end = i; break; }
+  }
+  const block = end < 0 ? t.slice(1) : t.slice(1, end);
+  const named = (k, x) => new RegExp(`(?<![\\w$.])${escapeRegExp(k)}(?![\\w$])`).test(x);
+  // Locals derived from the parameter: `const d = q.data;` then `return d?.id`.
+  const derived = new Map();
+  for (let grew = true; grew; ) {
+    grew = false;
+    for (const d of block.matchAll(/\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*([^;\n]+)/g)) {
+      if (derived.has(d[1])) continue;
+      if (named(item, d[2]) || [...derived.keys()].some((k) => named(k, d[2]))) { derived.set(d[1], d[2]); grew = true; }
+    }
+  }
+  const rets = [];
+  for (const r of block.matchAll(/(?<![\w$.])return(?![\w$])/g)) {
+    let e = r.index + r[0].length;
+    for (let depth = 0; e < block.length; e++) {
+      const ch = block[e];
+      if ("([{".includes(ch)) depth++;
+      else if (")]}".includes(ch)) { if (depth === 0) break; depth--; }
+      else if (ch === ";" && depth === 0) break;
+    }
+    rets.push(block.slice(r.index + r[0].length, e));
+  }
+  if (rets.length === 0) return "";
+  let out = "";
+  for (const x of rets) {
+    // The return must be tied to the parameter itself or to a local derived from it.
+    const via = [...derived.keys()].filter((k) => named(k, x));
+    if (!named(item, x) && via.length === 0) return "";
+    out += "\n" + x + via.map((k) => "\n" + derived.get(k)).join("");
+  }
+  return out;
+}
+
+/**
  * Every `name.method(callback…)` call in `text` (balanced parentheses), as
  * `{ item, body }`: `item` is the callback's parameter that receives each RESULT
  * (the second for `reduce`, the first otherwise) and `body` is what follows the
@@ -808,7 +857,9 @@ function iterationBodies(text, name, methods) {
         const head = /^\s*(?:async\s+)?(?:\(([^()]*)\)\s*=>|([A-Za-z_$][\w$]*)\s*=>|function\s*[A-Za-z_$]?[\w$]*\s*\(([^()]*)\))/.exec(call);
         const params = head ? (head[2] !== undefined ? [head[2]] : splitTop(head[1] ?? head[3] ?? "", ",")) : [];
         const raw = (splitTop(params[c[1] === "reduce" ? 1 : 0] ?? "", "=")[0] ?? "").trim();
-        out.push({ item: /^[A-Za-z_$][\w$]*$/.test(raw) ? raw : null, body: head ? call.slice(head[0].length) : call });
+        const item = /^[A-Za-z_$][\w$]*$/.test(raw) ? raw : null;
+        const body = head ? call.slice(head[0].length) : call;
+        out.push({ item, body: item !== null && head ? returnedValue(body, item) : body });
         break;
       }
     }
@@ -1729,6 +1780,22 @@ export function checkReducedMotion(rel, raw, { requireUniversal = true } = {}) {
     const pseudo = /^\*?::?(before|after)$/.exec(t);
     return pseudo ? `*::${pseudo[1]}` : null;
   };
+  // The conditions enclosing the block at `idx`: the prelude of every `{` still open
+  // there. A damper counts as unconditional coverage only when nothing but
+  // `@layer` (no condition) or another exact reduced-motion query encloses it; a
+  // surrounding `@media (min-width: 768px)`, `@supports`, `@container`, a style rule
+  // (CSS nesting) or an unrecognised prelude leaves it conditional, so it covers nothing.
+  const conditionalAt = (idx) => {
+    const stack = [];
+    let start = 0;
+    for (let i = 0; i < idx; i++) {
+      if (css[i] === "{") { stack.push(css.slice(start, i).trim()); start = i + 1; }
+      else if (css[i] === "}") { stack.pop(); start = i + 1; }
+      else if (css[i] === ";") start = i + 1;
+    }
+    return stack.some((pre) => !/^@layer\b[^{;]*$/i.test(pre) && !/^@media\s*\(\s*prefers-reduced-motion\s*:\s*reduce\s*\)$/i.test(pre));
+  };
+  let conditional = 0;
   const covered = new Set();
   let unimportant = false;
   const reversals = [];
@@ -1763,7 +1830,8 @@ export function checkReducedMotion(rel, raw, { requireUniversal = true } = {}) {
             if (!motion.filter((d) => !MOTION_NEUTRAL.has(d[1])).every((d) => /!\s*important\s*$/.test(d[2].trim()))) { unimportant = true; return false; }
             return ["animation", "transition", "scroll"].every((f) => own.has(f));
           });
-        for (const r of damping) for (const sel of r[1].split(",")) if (universalOf(sel)) covered.add(universalOf(sel));
+        if (conditionalAt(m.index)) { if (damping.length) conditional++; }
+        else for (const r of damping) for (const sel of r[1].split(",")) if (universalOf(sel)) covered.add(universalOf(sel));
         blocks.push([m.index, i + 1]);
         // Every block's motion declarations must damp: a later block that re-enables
         // motion (`.spinner { animation: spin 2s infinite !important }`) reverses the first.
@@ -1797,6 +1865,7 @@ export function checkReducedMotion(rel, raw, { requireUniversal = true } = {}) {
   if (covered.size > 0 && !ok && !unimportant) return [`${rel}: the reduced-motion block damps ${[...covered].join(", ")} but not ${missed.join(", ")} — an animated pseudo-element keeps moving (WCAG 2.3.3)`];
   if (!ok && unimportant) return [`${rel}: the reduced-motion universal (*) rule's dampers are not all !important — any more specific rule re-enables motion — WCAG 2.3.3`];
   if (ok) return [];
+  if (conditional > 0 && covered.size === 0) return [`${rel}: the reduced-motion universal (*) damper is nested inside another @media/@supports/@container condition, so it does not apply to every reduced-motion user — move it to the top level (WCAG 2.3.3)`];
   return [`${rel}: no @media (prefers-reduced-motion: reduce) block whose universal (*) rule damps animation, transition and scroll-behavior — WCAG 2.3.3`];
 }
 
@@ -2735,6 +2804,34 @@ function selfTest() {
           checkLiveRegions([poll, view("t/src/pages/A.tsx", "import { poll } from '../lib/poll'; const { data } = useQuery({ queryKey: ['a'] }); useEffect(() => { const t = setInterval(poll, 5000); return () => clearInterval(t); }, []); return <div>{data?.x}</div>;")], false).failures.length === 1 &&
           opaque(checkLiveRegions([view("t/src/pages/A.tsx", "export function A({ poll }) { useEffect(() => { const t = setInterval(poll, 5000); return () => clearInterval(t); }, []); return <LiveRegion message=\"Ready\" alert=\"\" />; }")], false)) &&
           checkLiveRegions([view("t/src/pages/A.tsx", "const [time, setTime] = useState(new Date());\nuseEffect(() => { const t = setInterval(() => setTime(new Date()), 1000); return () => clearInterval(t); }, []);\nreturn <p>{time.toString()}</p>;")], false).polling.length === 0;
+      })()],
+    ["a reduced-motion damper nested inside another condition is conditional, so it is not coverage",
+      (() => {
+        const D = "animation: none !important; transition: none !important; scroll-behavior: auto !important;";
+        const U = `*, *::before, *::after { ${D} }`;
+        const rm = (inner) => `@media (prefers-reduced-motion: reduce) { ${inner} }`;
+        const cr = (css) => checkReducedMotion("a.css", css).length;
+        return cr(`@media (min-width: 768px) { ${rm(U)} }`) === 1 &&
+          cr(`@supports (display: grid) { ${rm(U)} }`) === 1 &&
+          cr(`@container (min-width: 10px) { ${rm(U)} }`) === 1 &&
+          cr(`.app { ${rm(U)} }`) === 1 &&
+          cr(rm(U)) === 0 &&
+          cr(`@layer base { ${rm(U)} }`) === 0 &&
+          cr(`@media (min-width: 768px) { ${rm(U)} } ${rm(U)}`) === 0;
+      })()],
+    ["a useQueries callback with a block body covers a result only through what it RETURNS",
+      (() => {
+        const Q = 'const results = useQueries({ queries: [{ queryKey: ["a"], queryFn: fa, refetchInterval: 5000 }, { queryKey: ["b"], queryFn: fb, refetchInterval: 5000 }] });\n';
+        const lr = (src) => checkLiveRegions([view("t/src/pages/T.tsx", src)], false).failures;
+        const al = 'alert={results.some((q) => q.isError) ? "Failed" : ""}';
+        const msg = 'message={results.map((q) => q.data?.id).join(", ")}';
+        return lr(Q + 'return <LiveRegion message={results.map(q => { console.log(q.data?.id); return "Ready"; }).join(", ")} ' + al + ' />;').some((f) => /does not speak every result's data/.test(f)) &&
+          lr(Q + 'return <LiveRegion ' + msg + ' alert={results.some(q => { console.log(q.isError); return false; }) ? "Failed" : ""} />;').some((f) => /does not read every result's failure/.test(f)) &&
+          lr(Q + 'return <LiveRegion message={results.map(q => { if (q.data) { return q.data.id; } return "Ready"; }).join(", ")} ' + al + ' />;').length === 1 &&
+          lr(Q + 'return <LiveRegion message={results.map(q => { q.data?.id; }).join(", ")} ' + al + ' />;').length === 1 &&
+          lr(Q + 'return <LiveRegion message={results.map(q => q.data?.id).join(", ")} alert={results.some(q => q.isError) ? "Failed" : ""} />;').length === 0 &&
+          lr(Q + 'return <LiveRegion message={results.map(q => { return q.data; }).join(", ")} alert={results.some(q => { return q.isError; }) ? "Failed" : ""} />;').length === 0 &&
+          lr(Q + 'return <LiveRegion message={results.map(q => { const d = q.data; return d?.id; }).join(", ")} alert={results.some(q => { const e = q.isError; return e; }) ? "Failed" : ""} />;').length === 0;
       })()],
     ["stylesheet with reduced-motion passes",
       checkReducedMotion("a.css", "@media (prefers-reduced-motion: reduce) { *, ::before, ::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; } }").length === 0],

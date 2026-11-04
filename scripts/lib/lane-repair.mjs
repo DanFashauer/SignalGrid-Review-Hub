@@ -8,6 +8,7 @@ import { closeSync, constants, fstatSync, fsyncSync, lstatSync, openSync,
   opendirSync, readdirSync, readFileSync, readSync, realpathSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { isMainModule } from './is-main.mjs';
 import { checkTickOwner, deliveryRecordDirectory, resumeArchivals, setAsideRefusedAttempt } from './lane-attempt-store.mjs';
 
 const MAX_RECORD = 1024 * 1024;
@@ -476,8 +477,9 @@ export function drainRepairs(root, token, shellPid) {
   return { consumed: false, attempted: false };
 }
 
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const [mode, root, ...args] = process.argv.slice(2);
+if (isMainModule(process.argv[1], import.meta.url)) {
+  const cliArgs = process.argv.slice(2);
+  const [mode, root, ...args] = cliArgs;
   try {
     if (!root) throw Error('repository required');
     if (mode === 'request' && args.length === 2) console.log(requestRepair(root, ...args));

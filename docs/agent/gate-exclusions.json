@@ -301,6 +301,12 @@
       "symbol": "REF_SKIP_WARNING",
       "reason": "Not an exclusion of the subject but the opposite: the regex names the two warnings `git for-each-ref` prints when it silently SKIPS a ref it cannot read, so that a listing carrying either is treated as a hard failure (an unreadable ref is an unknown, and unknown is not clean) instead of a shorter list that reads as complete.",
       "date": "2026-10-08"
+    },
+    {
+      "path": "scripts/check-verdict-tone-source.mjs",
+      "symbol": "IGNORE",
+      "reason": "The context the branch judge (toneBranchProblems) gives an arm it does not bind to a verdict: the default arm of a verdict branch, the complement arm of a negative test, a branch whose test names no verdict on its chosen subject, and code after a guard clause. In a tone module the branch judge is only the second judge, and this context excludes nothing the gate would otherwise pass there. toneShapeProblems refuses every verdict literal, regular expression, verdict constant, verdict-named member, value import, value re-export, `import()` and `require` in the module, every Record reference other than `NAME[p]` by a module-scope function's own unmodified parameter, every function below module scope, all status text outside a module-scope Record, every module-scope value binding but a closed-shape function or a literal value or Record, and an OUTCOME_CHART_MARK that is not exported or carries a member other than dataKey, label, token and pattern; it admits only three closed function shapes (S1-S7). Those rules judge pieces, and a class split across pieces passed them in round 10, so toneOutputProblems (S8) also runs the module: every exported function but a toner is called with each verdict spelling in each of its first four positions, and a status class in a templater's result, or a picker that answers one verdict differently from another, is refused. What remains is the literal picker itself: ceiling 3's first clause (failModeTone), whose output S8 confirms is the same for every verdict, stated in the gate's header, its printed footer and plan row 168, which the self-test checks agree item by item.",
+      "date": "2026-10-22"
     }
   ]
 }

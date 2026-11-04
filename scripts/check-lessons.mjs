@@ -32,6 +32,7 @@ import { readFileSync } from "node:fs";
 import { execSync } from "node:child_process";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { isMainModule } from "./lib/is-main.mjs";
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const FILE = "docs/agent/LESSONS.md";
@@ -156,4 +157,4 @@ function main() {
   console.log(`check-lessons: ok — ${v.rows.length} lesson(s), ${v.rows.length - pending} landed, ${pending} pending, ${v.stale.length} pending past ${STALE_DAYS} days (DR-060)`);
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main();
+if (isMainModule(process.argv[1], import.meta.url)) main();

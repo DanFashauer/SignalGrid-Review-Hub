@@ -18,6 +18,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
+import { isMainModule } from "./lib/is-main.mjs";
 
 const FILES = {
   "lib/signalgrid-core/src/decision.ts": "decision",
@@ -490,4 +491,4 @@ function generate() {
   );
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) generate();
+if (isMainModule(process.argv[1], import.meta.url)) generate();

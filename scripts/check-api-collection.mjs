@@ -18,6 +18,7 @@
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import { join } from "node:path";
+import { isMainModule } from "./lib/is-main.mjs";
 
 const COLLECTION = "artifacts/api-collection";
 const ROUTES_DIR = "artifacts/api-server/src/routes";
@@ -353,7 +354,7 @@ function selfTest() {
 // Exact-entry guard, not a basename suffix match: an unrelated entry script
 // that merely IMPORTS this module must never trigger the gate (an adversarial
 // review proved the suffix form fires for an entry named like this file).
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (isMainModule(process.argv[1], import.meta.url)) {
   if (process.argv.includes("--self-test")) process.exit(selfTest());
   const { fatal, summary } = auditApiCollection(load());
   if (fatal.length > 0) {

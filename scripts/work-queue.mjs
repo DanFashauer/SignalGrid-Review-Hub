@@ -66,6 +66,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { readdirSync, readFileSync, existsSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { isMainModule } from "./lib/is-main.mjs";
 
 const REPO = process.env.SIGNALGRID_REPO ?? "DanFashauer/SignalGrid-Review-Hub";
 const BASE = "SignalGrid_Alpha";
@@ -686,4 +687,4 @@ async function main(argv) {
   return 2;
 }
 
-if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) main(process.argv.slice(2)).then((c) => process.exit(c));
+if (isMainModule(process.argv[1], import.meta.url)) main(process.argv.slice(2)).then((c) => process.exit(c));

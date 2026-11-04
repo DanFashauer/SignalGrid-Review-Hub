@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-11-04T06:12:20.734Z",
-  "result": "06:10Z fire (11-04): quiet. Nothing landed since the 04:10Z fire except heartbeat #1799 (merged 1db60032, by hand on the exact head after auto-merge stalled; gating 126382770166). No cloud wave (DR-064: the local brain builds); no worker PRs to harvest. #1463 (owner's) moved to 386adf3c at 05:03Z; #1792 faa7d945 and #1791 1c0b655d are behind only, not conflicted. In flight H/S/O = 0/0/0. 0 mac/build-row-* claims; no Mac branch moved since 2026-11-03 00:18Z. Codex review quota still exhausted. Sub-brains: signalgrid-mcp #17 unchanged (fdc50f61, owner's). Owner queue: #1791 DR-065, #1792, #1463, #1338, #1337, #1265, #1321, #1314, #1190, #1133."
+  "firedAt": "2026-11-04T08:13:16.485Z",
+  "result": "08:10Z fire (11-04): quiet. Nothing landed since the 06:10Z fire except heartbeat #1800 (merged; mainline 042e9ece). No cloud wave (DR-064: the local brain builds); no worker PRs to harvest. #1463 (owner's) moved again at 07:42Z; #1792 and #1791 unchanged (owner's). In flight H/S/O = 0/0/0. 0 mac/build-row-* claims; no Mac branch moved since 2026-11-03 00:18Z. Codex review quota still exhausted. Sub-brains: signalgrid-mcp #17 unchanged (fdc50f61, owner's). Owner queue: #1791 DR-065, #1792, #1463, #1338, #1337, #1265, #1321, #1314, #1190, #1133."
 }

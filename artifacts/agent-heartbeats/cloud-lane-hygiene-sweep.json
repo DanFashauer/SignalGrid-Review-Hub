@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-11-03T09:46:35.497Z",
-  "result": "09:41Z sweep (11-03): freed ~7G - scratchpad 8.4G -> 735M (676604 files older than 24h deleted with find -delete), pnpm store prune removed 3 packages; no /var/lib/docker. Disk 15G -> 22G free (41% used)."
+  "firedAt": "2026-11-04T09:46:36.662Z",
+  "result": "09:40Z sweep (11-04): freed ~1.3G of scratchpad files older than 24h (55137 files; 1.5G to 222M) and pnpm store prune removed 2 packages (66 files); no docker daemon or layer cache present; 23G free on / (40% used)."
 }

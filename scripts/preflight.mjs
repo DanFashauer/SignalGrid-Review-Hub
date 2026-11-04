@@ -173,7 +173,7 @@ const STEPS = [
   // The `path (N)` line counts in the build plan's tier lists: measured once,
   // quoted forever — 20 of 29 were wrong on 2026-09-05, three by 100+ lines.
   { name: "Doc line-count self-test (a planted drift must fail; the real tree must be clean)", cmd: ["node", "scripts/check-doc-line-counts.mjs", "--self-test"] },
-  { name: "Doc line counts (every `path (N)` figure matches the file it names)", cmd: ["node", "scripts/check-doc-line-counts.mjs"] },
+  { name: "Doc line counts (every `path (N)` figure is within ±5% of the file it names)", cmd: ["node", "scripts/check-doc-line-counts.mjs"] },
   // The four capacity figures RELIABILITY_SLO.md owns, wherever a document restates
   // them. `check-derived-doc-figures` sweeps tree-derived values and never read a bare
   // `240` or `585`; COMPANY_BUILD_PLAN.md carried the superseded 5,128 for twelve days.

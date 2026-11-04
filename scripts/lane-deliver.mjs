@@ -9,7 +9,7 @@
 //                                               #   (a raised hand — artifacts/raised-hands/, scripts/raise-hand.mjs, DR-054)
 //
 //   The commit carries the mail directories and, when a message file was added,
-//   the regenerated docs/agent/SURFACE_REVIEW_COVERAGE.md (its file count moved).
+//   the regenerated docs/agent/SURFACE_REVIEW_COVERAGE.md when it changed (it prints no file counts, so mail alone never moves it).
 //   flags: --dry-run        build and gate the commit, push nothing, keep nothing
 //          --via-pr         push a lane/<lane>-mail-<stamp> branch even on the Mac
 //          --trailer "K: v" append a commit trailer (repeatable)

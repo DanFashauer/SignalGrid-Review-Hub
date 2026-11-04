@@ -737,14 +737,15 @@ export function renderPage(audit) {
   );
   L.push("");
   if (c) {
-    const mailbox = c.mailbox ?? 0;
+    // NO FILE COUNT is printed, for any surface (2026-11-04). Every PR that added one file moved this generated page, and
+    // every other open PR then conflicted on it (#1321, #1314, #1265, #1190 at once). The mailbox trees taught the same
+    // lesson in 2026-09; the rule now covers every tree. The assertion is unchanged: a file belonging to no surface fails the gate.
     L.push(
-      `Coverage of the tree is asserted, not assumed: **${c.total - c.outOfScope - mailbox - c.uncovered.length} of ` +
-        `${c.total - c.outOfScope - mailbox} in-scope tracked files** belong to a surface on this page ` +
-        `(${c.outOfScope} more are in declared out-of-scope trees). A file belonging to no surface fails the gate. ` +
-        `The mailbox trees (${[...MAILBOX_TREES.keys()].map((k) => `\`${k}\``).join(", ")}) are surfaces like any other and ` +
-        "every record in them is claimed, but their counts are not printed and are left out of the figures above: " +
-        "every lane delivery appends a record, and a page that moved on mail made every open pull request unmergeable.",
+      `Coverage of the tree is asserted, not assumed: **every in-scope tracked file belongs to a surface on this page** ` +
+        "(a file belonging to no surface fails the gate; files in declared out-of-scope trees are listed below). " +
+        "File counts are not printed here, for any surface: a generated page that moves when a file is added makes every " +
+        "other open pull request unmergeable on it. `node scripts/check-surface-review-coverage.mjs` prints them. " +
+        `The mailbox trees (${[...MAILBOX_TREES.keys()].map((k) => `\`${k}\``).join(", ")}) are surfaces like any other.`,
     );
     L.push("");
   }
@@ -756,11 +757,11 @@ export function renderPage(audit) {
     "`node scripts/check-surface-review-coverage.mjs --write`.",
   );
   L.push("");
-  L.push("| Surface | Kind | Files | State | Reads | Last read | Reviewer | Record | Closed | Open |");
-  L.push("| --- | --- | ---: | --- | ---: | --- | --- | --- | ---: | ---: |");
+  L.push("| Surface | Kind | State | Reads | Last read | Reviewer | Record | Closed | Open |");
+  L.push("| --- | --- | --- | ---: | --- | --- | --- | ---: | ---: |");
   for (const r of audit.table) {
     L.push(
-      `| \`${r.id}\` | ${r.kind} | ${MAILBOX_TREES.has(r.id) ? "mailbox" : r.files} | ${r.state === "READ" ? "read" : r.state === "PARTIAL" ? "**partial**" : "**NOT READ**"} | ` +
+      `| \`${r.id}\` | ${r.kind} | ${r.state === "READ" ? "read" : r.state === "PARTIAL" ? "**partial**" : "**NOT READ**"} | ` +
         `${r.count} | ${r.last ?? "—"} | ${r.reviewer || "—"} | ${r.record || "—"} | ${r.closed} | ${r.open} |`,
     );
   }
@@ -957,10 +958,16 @@ function selfTest() {
     if (cover.uncovered.length !== 0 || cover.mailbox !== baseCover.mailbox + 2) return false;
     return renderPage(auditSurfaceCoverage(base, ledger, { cover })) === before;
   });
-  check("…and one more file under a NON-mailbox surface DOES change the page (the identity test is not vacuous)", () => {
+  check("one more file under an ordinary (non-mailbox) surface ALSO leaves the page BYTE-IDENTICAL (2026-11-04: no file counts at all)", () => {
     const before = renderPage(auditReal(ledger));
     const cover = coverTracked(base, [...tracked, "lib/integrations/self-test-planted.ts"]);
-    return cover.uncovered.length === 0 && renderPage(auditSurfaceCoverage(base, ledger, { cover })) !== before;
+    return cover.uncovered.length === 0 && renderPage(auditSurfaceCoverage(base, ledger, { cover })) === before;
+  });
+  check("…and a read-state change DOES change the page (the identity tests are not vacuous)", () => {
+    const before = renderPage(auditReal(ledger));
+    const audit = auditReal(ledger);
+    const flipped = { ...audit, table: audit.table.map((r, i) => (i === 0 ? { ...r, count: r.count + 1 } : r)) };
+    return renderPage(flipped) !== before;
   });
 
   // ── plants on a REAL but THROWAWAY git tree ────────────────────────────────

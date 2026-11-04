@@ -152,6 +152,19 @@
    }
   },
   {
+   "id": "dependabot-queue-review-weekly",
+   "trigger": "trig_012Lh3q196QWZhJ7Fy79xrCc",
+   "cron": "47 8 * * 1",
+   "binding": "fresh session per fire (cloud lane)",
+   "authorizedBy": "Dan Fashauer (owner)",
+   "authorizedOn": "2026-11-03",
+   "authorizationEvidence": "The explicit owner go the retired dependabot-queue-review row required and never got: on 2026-11-03 the owner answered the cloud lane's question 'Nine Dependabot update PRs are waiting with nothing reviewing them. Set up a weekly routine that reviews them?' with 'Yes, weekly' (option text: 'A new weekly routine reviews the Dependabot queue and lands the safe ones'). This answers part (2) of the owner hand 2026-10-15-the-account-s-weekly-claude-usage-limit-seven-da. The account trigger was created the same minute by the cloud lane (create_trigger, fresh session per fire, Monday 08:47Z).",
+   "writeScope": "Lands only patch and minor Dependabot bumps, one at a time, under DR-037's conditions on the exact head (gating check passed, preflight and verify:breadth run and quoted on that head, no open threads, clean merge-tree), merging with the full 40-char head sha; asks Dependabot to rebase by PR comment and never pushes to a Dependabot branch. Its other repository write is its heartbeat at artifacts/agent-heartbeats/dependabot-queue-review-weekly.json, delivered through lane-deliver. It never approves, never force-pushes, never merges a major bump, and never edits .github/dependabot.yml or any OWNER_RESERVED file. Owned by the devex-tooling-engineer role, which the retired row named.",
+   "escalationBoundary": "Escalates to the owner only a major-version bump, a red PR it cannot explain, or a run stuck in action_required needing the owner's one-time workflow approval; a quiet week sends no owner message beyond the heartbeat.",
+   "heartbeatPath": "artifacts/agent-heartbeats/dependabot-queue-review-weekly.json",
+   "cadenceToleranceHours": 216
+  },
+  {
    "id": "forward-build-cycle",
    "trigger": "trig_01XLv3hGCPob8qcEDsZJ2xM8",
    "cron": "10 */2 * * *",

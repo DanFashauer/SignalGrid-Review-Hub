@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-11-01T10:11:24.856Z",
-  "result": "09:40Z sweep, keepalive (mainline heartbeat 2026-10-31T10:45Z, >20h): quiet, 23G free of 252G (40% used); 0 scratchpad files older than 24h (408M total); no docker daemon and no /var/lib/docker cache; pnpm store prune removed 70 files / 3 packages; nothing notable freed; no owner escalation."
+  "firedAt": "2026-11-04T09:46:36.662Z",
+  "result": "09:40Z sweep (11-04): freed ~1.3G of scratchpad files older than 24h (55137 files; 1.5G to 222M) and pnpm store prune removed 2 packages (66 files); no docker daemon or layer cache present; 23G free on / (40% used)."
 }

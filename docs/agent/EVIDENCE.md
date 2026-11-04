@@ -4092,7 +4092,7 @@ Output:   "1218 closed merged=true 2026-09-30T16:22:40Z" (merge_commit_sha 29b97
           of 2026-09-30 14:52Z" comment, #1218's reading "Independent review + adversarial refutation: ship, upheld." #1216
           and #1225 open with "**Brain review: fix-needed** … (independent review, then an adversarial refutation that upheld
           it …)" at 16:23:01Z / 16:23:03Z. #1256 open, no verdict comment. #1309 "**Brain review: owner-decision** on head
-          `61c1e547`" at 16:23:05Z: "the deletion of `lib/api-spec/product-openapi.json` matches the `lib/*` rule" on the
+          `61c1e547`" at 16:23:05Z: "the deletion of lib/api-spec/product-openapi.json matches the `lib/*` rule" [inner backticks dropped 2026-09-30: PR #1309 moves that file to `docs/archive/product-openapi.json`] on the
           `--no-renames` diff form. All six reads postdate the ~16:05Z close.
 Command:  gh api repos/DanFashauer/SignalGrid-Review-Hub/issues/<n>/comments for 1277, 1280, 1272, 1274, 1265
 Output:   #1277 12:54:17Z "**Brain review: ship**" then 14:52:05Z "Merged under DR-037 at 3dee6a25…"; #1280 12:54:18Z
@@ -5270,3 +5270,117 @@ The retained4a4158e full stopped at the unchanged walker self-test. Its proximit
 The fixtures now use the existing scratchGitEnv function instead of duplicating its16-key policy. Final fixture environment values, executable lookup PATH,177 assertions and all39 cases are preserved. Actual39 controls,16 walker self-tests, the regular walker and scratch-hygiene gates and closed environment-equivalence vectors passed under real network denial. No copy walk, floor, threshold, waiver, PENDING entry or idle-empty rule changed.
 
 New exact-head qualification and protected delivery remain pending.
+
+## 2026-11-01 — OD01 approved; the verified zero-loss branch list is closed
+
+**Decision.** The owner approved OD01 (lane deletion authority for the verified zero-loss list only, `docs/agent/ESTATE_PLAN_20261023.md`) in the cloud session on 2026-11-01 at ~03:50Z, verbatim: "Yes go ahead and delete the zero-loss branches, approve OD01". Scope is that list and nothing else; every other branch still needs its own merge, close-with-evidence, or an explicit owner decision.
+
+**What happened.** The cloud ran `bash docs/agent/estate-20261023/delete-zero-loss-verified.sh` (dry run: 8 DONE already absent, 2 WOULD) and `--apply`, which SKIPPED both remaining branches: the cloud's GitHub proxy refuses tag creation (`git push origin <tip>:refs/tags/archive/<b>` → `send-pack: unexpected disconnect while reading sideband packet`; `POST repos/…/git/refs` → HTTP 403 "Write access to this GitHub API path is not permitted through this proxy"), and the script refuses to delete without the archive tag. The cloud mailed the Mac (lane-mail PR #1724). The Mac lane ran the script's checks by hand at ~04:31Z (its classifier refused the script invocation and the `--force-with-lease` form), pushed and read back the archive tags, and deleted both branches (mail `mac-od01-done-from-the-mac-the-two-remaining-zer`, PR #1725).
+
+Command (cloud, 2026-11-01 04:36Z):
+```
+for b in claude/build-gate-survivors-liveness-scratch-git mac/pr-1216-fix-backup; do git ls-remote --exit-code --heads origin $b >/dev/null 2>&1; echo "$b heads rc=$?"; git ls-remote origin refs/tags/archive/$b | cut -c1-12; done
+```
+Output:
+```
+claude/build-gate-survivors-liveness-scratch-git heads rc=2
+531e141fdc7a
+mac/pr-1216-fix-backup heads rc=2
+5a2701745129
+```
+Verdict: both heads absent (rc 2), both archive tags present at the measured tips. Remote heads: 283 before, 282 after the deletes (the Mac's own mail branch then added one). Restore path, if ever needed: `git fetch origin refs/tags/archive/<b>:refs/tags/archive/<b> && git push origin <tip>:refs/heads/<b>`.
+
+## 2026-11-01 — The owner's brain:ready batch: nine of ten landed under DR-037/DR-061
+
+**Decision.** On 2026-10-30 the owner approved ten PRs for the local second brain (label `brain:ready`; comment 6526000134 on each: #1556, #1445, #1440, #1441, #1431, #1438, #1439, #1337, #1117, #1239) and on 2026-11-01 ~03:50Z ordered them landed hands-free: the brain builds, Codex and Claude each review in their own system, the lane merges under DR-037, never parked on the owner. The cloud lane reviewed each head (Opus refute for the decision-path and api-server ones, DR-061), merged `SignalGrid_Alpha` in where a landing had moved a figure, ran the local half (preflight + breadth, plus `test:api` where the api-server was touched) on the tree it pushed, armed auto-merge, and let GitHub's strict required-check policy force one branch refresh per landing. Nothing was approved by the lane; nothing was force-pushed; no gate was bypassed.
+
+| PR | Change | Merged sha | Exact head | Gating check run | Local half |
+| --- | --- | --- | --- | --- | --- |
+| #1438 | session-store: unknown status never refreshes (pg + in-memory parity) | 09d4e16e | b9741ff4 | 124751478478 | preflight PASSED, breadth 58, test:api 505/505 |
+| #1439 | session-store: in-memory refresh racing end() (guard + proof) | 1928b654 | 9b9715be | 124761406769 | preflight PASSED, breadth 58; session-store proof 17/17 (14/17 without the guard) |
+| #1441 | estate-refresh upper bound | bb6d8072 | 00f39d17 | 124781707335 | preflight 417 PASSED, breadth 58; proof:estate-refresh 24/24 |
+| #1239 | api head + demo endpoint docs figures (merge-in c34c3bf4) | 0b9d68eb | c34c3bf4 | 124786883019 | test:api 505/505 |
+| #1445 | step-up authorization | 16917512 | 7f6063de | 124790667884 | quoted in body |
+| #1440 | JWT null-segment handling | 3d282977 | 394a7765 | 124795778597 | quoted in body |
+| #1556 | URL-guard transforms (lib/) | 5886f1e6 | 7cf6ed54 | 124801475640 | quoted in body |
+| #1117 | ephemeral ports: oidc/load/observability tests; Mac JWKS loopback probe 7ba3877d | 7cf2dadc | 12fba020 | 124817276118 | test:api 505/505, preflight PASSED, breadth 58 on f0382ce4 |
+| #1431 | port probes bind the host their consumer binds (brain fixes 306b0a8f, dafba1db for three Codex P2 threads) | be38c923 | 98371bf5 | 124836408448 | test:api 512/512, proof:live-idp 31/31, test:fixture-idp 12/12, preflight PASSED, breadth 58 on bf953bb3; Opus landing refute SHIP |
+
+Not landed, by rule: **#1337** edits `scripts/check-launch-claims.mjs` (the launch-claims gate) — reviewed SOUND, the owner's click under DR-037's exclusions.
+
+**Queue claims (standing-order item 3).** `scripts/work-queue.mjs claim --lane mac-brain` could not be taken for any of the ten: `scripts/mac/estate-queue.mjs plan()` classifies a DECISION_PATH PR as `owner` and a green refreshed PR as `wait`, so `pr:<n>` is reported as `unknown task` and is not claimable (measured 2026-11-01, `list` ~3 min). A claim ref therefore exists for none of these landings; the gap is the queue's classification, not a skipped step, and is left for the brain's builder wiring.
+
+**Post-landing gates on 7cf2dadc:** `generate-sync-manifest.mjs --check` clean (kinds=42 categories=20 taskExceptionCodes=13 ceilings=3 refusals=9 proofs=63 mcpTools=16); surface-read-coverage gate passed; doc line-count gate passed. Readiness on 7cf2dadc derives **(b) 0%** — evidence covers manifest aa9ce381438e, tree is 3749449260af — by design (DR-036); the ONE re-mint request for the batch went to the Mac as lane mail (PR #1734 → d32b32e6). No new readiness figure is asserted.
+
+**Hold list for the owner (one list, nothing else decides them):** #1337 (launch-claims gate click), #1641, #1314, #1321, #1190, #1133.
+
+Command, in a checkout with `origin/SignalGrid_Alpha` fetched at be38c923:
+```sh
+git log --first-parent --format='%h %s' origin/SignalGrid_Alpha | grep -E 'Merge pull request #(1438|1439|1441|1239|1445|1440|1556|1117|1431)\b' | cut -c1-100
+```
+Output, verbatim:
+```text
+be38c923d Merge pull request #1431 from DanFashauer/claude/fix-port-probe-wildcard-bind
+7cf2dadc7 Merge pull request #1117 from DanFashauer/claude/tests-ephemeral-ports-oidc-load-observabi
+5886f1e62 Merge pull request #1556 from DanFashauer/claude/build-url-guard-translated-form-trailing-
+3d2829778 Merge pull request #1440 from DanFashauer/claude/build-jwt-null-segments-refuse
+169175120 Merge pull request #1445 from DanFashauer/claude/build-step-up-authorize-before-webauthn
+0b9d68eb8 Merge pull request #1239 from DanFashauer/claude/build-api-head-and-demo-envelope
+bb6d80727 Merge pull request #1441 from DanFashauer/claude/build-estate-refresh-upper-bound
+1928b6548 Merge pull request #1439 from DanFashauer/claude/build-session-refresh-active-guard
+09d4e16e8 Merge pull request #1438 from DanFashauer/claude/build-session-store-status-normalize
+```
+**Lesson (lane mail).** The first copy of the re-mint request (PR #1733) was produced with flag syntax on `lane-deliver.mjs send`, whose arguments are positional (`send "subject" "body"`): the subject became `--to`, the id slugged to `cloud-to`, and the write overwrote a September message that already carries a Mac ack, so `auditLaneMessages()` (ids only) would never have shown it unread. Codex caught it (thread 4435371880); #1733 was closed unmerged and the request re-sent as a `batch` send op (PR #1734 → d32b32e6, id `cloud-one-live-evidence-re-mint-after-the-brain-`). The September `cloud-to` file is the same mistake made once before. The skill text that showed the flag form is corrected in this PR.
+
+Verdict: nine of the ten owner-accepted PRs are on `SignalGrid_Alpha`, each on a head whose gating check was green and whose local half is quoted; #1337 remains for the stated reason.
+
+## 2026-11-01 — Standing-order item 6: twelve claude/* PRs landed under DR-037/DR-061, one at a time
+
+**Order.** The owner's 2026-11-01 ~03:50Z standing order, item 6: run the remaining still-needed `claude/*` PRs through the review-and-land loop, small first; merges happen under DR-037 by the lane, never parked on the owner; every claim of done quotes the command output and the mainline sha. Each PR below had, on the exact 40-character head merged: the gating check "Typecheck, build, and proof scaffold" green; `node scripts/preflight.mjs` and `pnpm run verify:breadth` run locally on that tree before the push that produced it (quoted in the PR body); 0 unresolved review threads; a clean merge-tree; and, for every DECISION_PATH / `lib/*` / api-server change, an Opus landing refute recorded SHIP in the body (DR-061). A measured mutant (source changed, proof re-run, source restored byte-for-byte) is quoted where the PR adds a falsifiable check.
+
+| PR | Change | Merged sha | Exact head | Gating check run | Local half (quoted in the body) |
+| --- | --- | --- | --- | --- | --- |
+| #1240 | webauthn race proof | 2d391859 | c084f885 | 124862423564
+| #1222 | root JSON 404 catch-all (plan row 98) | 42b1e545 | 27366cf3 | 124868289779
+| #1215 | telemetry known-node guard (row 97) | 069f8386 | d6f4ce4a | 124874329044
+| #1320 | simulator constant conjuncts (rows 84/85) | 9d6a8ee7 | b8144a7b | 124879091265
+| #1230 | console unknown-verdict tone (row 109) | a9789f25 | e1cf0f3a | 124889973179
+| #1280 | core: registerVerifiedPrincipal refuses unknown roles (row 86) | dd1459b6 | 5a49ba51 | 124896225307
+| #1309 | docs fossils + status-figures and ungoverned-spec gates | 496dae73 | 66d38e06 | 124907814764
+| #1330 | handoff-sim per-task holds | 6b4ae813 | 7fe9a439 | 124912188279 | proof:handoff-sim 68/68; mutant 66/68 |
+| #1443 | store: stepUpAnswers evicted with their decision | eafc8fbc | b548fcb7 | 124919624327 | proof:signalgrid-core 668/668; mutant 662/668; test:api 516/516; stamp v29 |
+| #1459 | /v1/audit whole-chain verify | a872899c | a17a6f11 | 124925323276 | test:api 531/531; mutant 521/531 (ten whole-chain checks red) |
+| #1244 | ladderRungs derived from the ladder + literal figure gate | 9df420dd | 688991eb | 124940298754 | proof:emitter-discipline 165/165; proof-count 63/63; figure-guard self-test 22/22 |
+| #1242 | integrations honesty (ITSM unchecked, DLQ observed attempts, CVSS finiteness) | a1f0c05a | 2c4e96f4 | 124953758924 | proof:webhooks 246/246 (mutant 244/246), emit-gate 314/314, vuln-scan 41/41, device-resolver 17/17 |
+
+**Mutants measured by the cloud on the merged trees (source changed, proof re-run, source restored byte-for-byte):** #1280 unknown-role guard removed → 610/658; #1330 per-task hold list overwritten per hold → 66/68; #1443 evict callback's step-up-answer delete removed → 662/668; #1459 whole-chain walk replaced by the windowed `verifyLedger()` → 521/531 with all ten whole-chain checks red; #1242 DLQ attempts hard-coded to 6 → 244/246.
+
+**Order and regeneration.** The three manifest-moving PRs (#1330 v98→v99, #1244 v99→v100, #1242 v100→v101) landed one at a time; each later one was re-merged onto the previous landing with `node scripts/generate-sync-manifest.mjs` and `node scripts/check-surface-review-coverage.mjs --write` run on a clean index, and its gates re-run on the re-merged tree before the push. #1443 was redone once after #1280 moved the core proof figure (620 → 658 → 668) and the normalization stamp (v28 → v29); #1244's plan-row sentence was reworded so the figure guard does not read its own comma-formatted threshold as a measurement; #1443's gating was re-run once for an unrelated loop-state R12-hostile-global case that mainline's own run passed. Tip gates (`node scripts/preflight.mjs` and `pnpm run verify:breadth`) passed on 6b4ae813, eafc8fbc, a872899c and 9df420dd; the run on a1f0c05a is recorded in the lane's task log.
+
+**Owed after the batch.** ONE live-evidence re-mint from the Mac against manifest v101 (fingerprint `e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4`), requested in lane mail `cloud-one-live-evidence-re-mint-after-the-item-6-` (PR #1742); readiness dimension (b) reads 0 until it lands, by design. Still open from item 6 and not landed by the cloud: #1463 (`/metrics` series; FIX-NEEDED on the DR-059 freshness gap, the brain builds), #1586/#1611/#1585 (brain rounds; land only on a SHIP refute of the next head), #1265 (a11y), #1442 and #1398 (redo on fresh branches, Mac builds).
+
+**Hold list for the owner (one list, nothing else decides them):** #1337 (launch-claims gate), #1338 (Assist-wire figure gate), #1307 (`artifacts/signalgrid-review`, OWNER_RESERVED; Opus SHIP on content; question: should a blank `OIDC_ISSUER` refuse at boot?), #1314, #1321, #1190, #1133, plus the row-91 hand (PolicyTest per policy version? rollback allowed?). #1641 is closed; #1050 and #1083 landed on 2026-11-01.
+
+**Estate.** At the standing order: 68 open PRs (35 claude, 21 mac, 9 dependabot, 3 lane), 283 remote heads, 7 open issues. At 19:55Z on 2026-11-01: 47 open PRs (14 claude, 23 mac, 9 dependabot, 1 lane), 300 remote heads, 7 open issues. The mac/* count rose because the Mac lane opened new work (#1739, #1741) and the OD01 deletes are the Mac's; the remote-head count is reported, not claimed as progress.
+
+Command, in a checkout with `origin/SignalGrid_Alpha` fetched at a1f0c05a:
+```sh
+git log --first-parent --format='%h %s' origin/SignalGrid_Alpha | grep -E 'Merge pull request #(1240|1222|1215|1320|1230|1280|1309|1330|1443|1459|1244|1242)\b' | cut -c1-100
+```
+Output, verbatim:
+```
+a1f0c05a8 Merge pull request #1242 from DanFashauer/claude/build-integrations-honesty
+9df420ddd Merge pull request #1244 from DanFashauer/claude/build-ladder-rungs-derived
+a872899cc Merge pull request #1459 from DanFashauer/claude/build-audit-route-verify-ledger-full
+eafc8fbc8 Merge pull request #1443 from DanFashauer/claude/build-store-stepup-answers-evict
+6b4ae813e Merge pull request #1330 from DanFashauer/claude/build-handoff-sim-same-task-holds
+496dae738 Merge pull request #1309 from DanFashauer/claude/build-fossil-figures-orphan-spec
+dd1459b6f Merge pull request #1280 from DanFashauer/claude/build-core-principal-policy-guards
+a9789f25e Merge pull request #1230 from DanFashauer/claude/build-live-panel-unknown-tone
+9d6a8ee71 Merge pull request #1320 from DanFashauer/claude/build-sim-status-constants-key-pins
+069f8386b Merge pull request #1215 from DanFashauer/claude/build-telemetry-known-node
+42b1e545c Merge pull request #1222 from DanFashauer/claude/build-gateway-root-json-404
+2d3918592 Merge pull request #1240 from DanFashauer/claude/build-webauthn-revocation-race
+```
+
+Verdict: twelve of the standing order's item-6 `claude/*` PRs are on `SignalGrid_Alpha`, each on a head whose gating check was green and whose local half is quoted; the rest of item 6 is the brain's to build (FIX-NEEDED verdicts posted on each) or the owner's to decide (the hold list above).

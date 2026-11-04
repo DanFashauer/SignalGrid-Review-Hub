@@ -761,11 +761,12 @@ function withTempRepo(fn) {
   }
 }
 
-function runClassifyBranchCli(cwd, baseRef) {
+function runClassifyBranchCli(cwd, base) {
+  const selfPath = fileURLToPath(import.meta.url); // this module, re-run as a fresh CLI process (not an entry guard)
   try {
     const stdout = execFileSync(
       process.execPath,
-      [fileURLToPath(import.meta.url), "--classify-branch", baseRef],
+      [selfPath, "--classify-branch", base],
       { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
     );
     return { code: 0, stdout: stdout.trim() };

@@ -174,5 +174,7 @@ docs/plans/
 build-gate-ledger.md
 .lock-compass/
 
+# Gate-mutant scratch copy (scripts/run-gate-mutants.mjs)
+/scripts/.mutant-*
 # Scratch copy written by scripts/clock-spellings-mutants.mjs (removed when a run completes; a killed run can leave it)
 scripts/lib/clock-spellings.mutant.mjs

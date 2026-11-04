@@ -34,6 +34,7 @@
 import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
+import { isMainModule } from "../lib/is-main.mjs";
 
 const REPO = process.env.SIGNALGRID_REPO ?? "DanFashauer/SignalGrid-Review-Hub";
 const DEFAULT_BASE = "SignalGrid_Alpha";
@@ -163,4 +164,4 @@ async function main() {
   process.exit(2);
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) await main();
+if (isMainModule(process.argv[1], import.meta.url)) await main();

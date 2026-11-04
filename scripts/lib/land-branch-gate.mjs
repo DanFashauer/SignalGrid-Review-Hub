@@ -3,6 +3,7 @@ import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { isMainModule } from "./is-main.mjs";
 
 // Pure push-gate for the land-branch saved workflow (docs/agent/LESSONS.md L2,
 // docs/BUILD_BACKLOG.md row "The plan-row measurement tranche is a scripted
@@ -803,7 +804,7 @@ function selfTest() {
   if (pass !== total) process.exit(1);
 }
 
-const invokedDirectly = process.argv[1] && process.argv[1].endsWith("land-branch-gate.mjs");
+const invokedDirectly = isMainModule(process.argv[1], import.meta.url);
 if (invokedDirectly && process.argv.includes("--verify")) {
   runVerifyCli(process.argv.slice(2));
 } else if (invokedDirectly && process.argv.includes("--self-test")) {

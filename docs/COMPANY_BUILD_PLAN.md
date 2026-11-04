@@ -4861,13 +4861,8 @@ Served surface and durable path:
 20. lib/persistence/src/session-store.ts (346) — durable session writes and tenant scoping.
 
 Meta-gates (what green means) and launch connectors:
-<<<<<<< HEAD
-21. scripts/preflight.mjs (975) — the per-push lane CI mirrors; a gate mis-registered here disappears quietly.
+21. scripts/preflight.mjs (977) — the per-push lane CI mirrors; a gate mis-registered here disappears quietly.
 22. scripts/launch-profile.mjs (877) — the 180-item (2026-09-06; `node scripts/check-launch-profile.mjs` prints the live total) classification every launch claim trusts; audit each 'launch' reason against source.
-=======
-21. scripts/preflight.mjs (972) — the per-push lane CI mirrors; a gate mis-registered here disappears quietly.
-22. scripts/launch-profile.mjs (876) — the 180-item (2026-09-06; `node scripts/check-launch-profile.mjs` prints the live total) classification every launch claim trusts; audit each 'launch' reason against source.
->>>>>>> origin/SignalGrid_Alpha
 23. scripts/check-guard-registries.mjs (206) — the registry-drift detector; a hole here makes gaps silent by construction.
 24. lib/integrations/src/integrations/local-authority/evaluate.ts (190) — launch family; device-reported authority, the frontline half of the product.
 25. lib/integrations/src/integrations/device-management-health/evaluate.ts (290) — launch family; grades whether a compliance answer is CURRENT — the anti-unearned-affirmative connector, which had better not contain one.

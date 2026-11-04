@@ -7,6 +7,9 @@
   "need": "ONE decision: (a) let Codex apply the owner-change re-pin for signalgrid_brain.py (hash 64c0627f959a; backup of the pinned bytes at backups/signalgrid_brain-before-host-queue-20261101-215821.py) - recommended; (b) grant the Mac Claude session Write/Edit permission under ~/SignalGrid-Local-AI/brain-state/repository-reconciliation-20261022/ so it runs the mirrored procedure itself (fastest); or (c) revert the brain edit (restores dispatch, host starvation returns). Until one of these, the brain finds and is admitted to work but cannot publish PRs.",
   "whoCanUnblock": "owner",
   "domain": "second-brain",
-  "status": "open",
-  "routedTo": null
+  "status": "resolved",
+  "routedTo": null,
+  "resolvedAt": "2026-11-02T14:55:26.138Z",
+  "resolvedBy": "mac",
+  "resolution": "Resolved 2026-11-02 14:54Z without an owner-change record: #1749 (CI runner yields the host lock to a queued brain) landed on mainline as 68cc378f3, so the brain-side host-queue edit was no longer needed; on Dan's 'Fix it' the Mac session restored ~/SignalGrid-Local-AI/signalgrid_brain.py to the pinned bytes 8a0847d0 (edited copy kept at backups/signalgrid_brain-host-queue-edit-64c0627f-20261102.py) and restarted the brain. Readback: repository_dispatch error=None, new_build_publication error=None."
 }

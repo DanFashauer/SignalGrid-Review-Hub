@@ -56,6 +56,7 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
+import { isMainModule } from "./lib/is-main.mjs";
 
 const WRITE = process.argv.includes("--write");
 const SELF_TEST = process.argv.includes("--self-test");
@@ -230,7 +231,7 @@ function selfTest() {
   return 0;
 }
 
-const IS_MAIN = process.argv[1] !== undefined && import.meta.url === pathToFileURL(resolve(process.argv[1])).href;
+const IS_MAIN = isMainModule(process.argv[1], import.meta.url);
 if (IS_MAIN) main();
 
 function main() {

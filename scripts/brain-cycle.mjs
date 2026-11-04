@@ -28,6 +28,7 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { decide } from "./brain-cycle-decide.mjs";
+import { isMainModule } from "./lib/is-main.mjs";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const CONFIG_PATH = join(repoRoot, "docs", "agent", "brain-cycle-config.json");
@@ -231,7 +232,7 @@ function selfTest() {
   return 0;
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (isMainModule(process.argv[1], import.meta.url)) {
   if (process.argv.includes("--self-test")) process.exit(selfTest());
   run(process.argv.slice(2));
 }

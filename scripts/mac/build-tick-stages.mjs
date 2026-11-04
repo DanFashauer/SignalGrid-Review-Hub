@@ -54,7 +54,7 @@ import { createHash } from "node:crypto";
 import { accessSync, appendFileSync, chmodSync, closeSync, constants, copyFileSync, existsSync, mkdirSync, mkdtempSync, openSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { basename, delimiter, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { marks, parseRows, statusText } from "../check-backlog-ownership.mjs";
 import { scratchGit, scratchGitOk, scratchGitEnv, scrubProcessGitEnv } from "../lib/scratch-git.mjs";
 
@@ -885,6 +885,7 @@ function selfTestBody(root, ok) {
       copyFileSync(join(HERE, "../check-backlog-ownership.mjs"), join(repo, "scripts/check-backlog-ownership.mjs"));
       mkdirSync(join(repo, "scripts/lib"));
       copyFileSync(join(HERE, "../lib/scratch-git.mjs"), join(repo, "scripts/lib/scratch-git.mjs"));
+      copyFileSync(join(HERE, "../lib/is-main.mjs"), join(repo, "scripts/lib/is-main.mjs")); // check-backlog-ownership.mjs imports it
     }
     git("add", "-A");
     git("commit", "-q", "-m", "base");
@@ -1449,6 +1450,28 @@ process.stdout.write(JSON.stringify(result)); process.stderr.write(r.stderr || '
       /if \[ -n "\$MAINLINE_SHA" \] && git cat-file -e "\$MAINLINE_SHA:scripts\/mac\/pr-refresh\.mjs"[^\n]*; then\n\s*say "dry-run: would run mainline's/.test(sh));
     ok("S4 preflight and breadth run under capped (a group kill), and no bare `alarm shift` + exec launcher is left anywhere",
       /^capped "\$PREFLIGHT_SECONDS" node scripts\/preflight\.mjs > /m.test(sh) && /^\s*capped "\$BREADTH_SECONDS" pnpm run verify:breadth > /m.test(sh) && !/alarm shift/.test(sh));
+    // The pinned objective reader is IMPORTED from a cache dir holding only the files `git show` put there, so
+    // a helper that one of them imports and the list leaves out is ERR_MODULE_NOT_FOUND on every Mac tick (the
+    // symlink-entry-guard PR added lib/is-main.mjs to two of them). Linux runs this: the darwin-only N-7 cases
+    // that would notice are skipped here, which is how the first version of that PR looked green.
+    {
+      const importFromListed = (files) => {
+        const dir = mkdtempSync(join(tmpdir(), "sg-contract-"));
+        try {
+          for (const f of files) { mkdirSync(dirname(join(dir, f)), { recursive: true }); copyFileSync(join(HERE, "..", f.replace(/^scripts\//, "")), join(dir, f)); }
+          const r = spawnSync(process.execPath, ["--input-type=module", "-e", `await import(${JSON.stringify(pathToFileURL(join(dir, "scripts/objective-loop.mjs")).href)});`], { encoding: "utf8", timeout: 60000 });
+          return { good: r.status === 0, detail: `${r.status} ${(r.stderr || "").split("\n")[0]}` };
+        } catch (x) { return { good: false, detail: String(x.message) }; } finally { rmSync(dir, { recursive: true, force: true }); }
+      };
+      const tickList = (/^for _contract_file in ([^;\n]+); do$/m.exec(sh)?.[1] ?? "").trim().split(/\s+/).filter(Boolean);
+      const own = readFileSync(fileURLToPath(import.meta.url), "utf8");
+      const copyList = [...(/const copyObjectiveContract = [\s\S]*?for \(const file of \[([^\]]+)\]/.exec(own)?.[1] ?? "").matchAll(/"([^"]+)"/g)].map((m) => `scripts/${m[1]}`);
+      const fromTick = importFromListed(tickList), fromCopy = importFromListed(copyList);
+      ok("F1 the files build-tick.sh extracts from mainline for the objective reader are enough to IMPORT objective-loop.mjs (a missing helper is ERR_MODULE_NOT_FOUND on every tick)", tickList.length >= 4 && fromTick.good, fromTick.detail);
+      ok("F1 copyObjectiveContract copies enough to import objective-loop.mjs, so the darwin-only N-7 cases can run", copyList.length >= 5 && fromCopy.good, fromCopy.detail);
+      const bare = importFromListed(tickList.filter((f) => f !== "scripts/lib/is-main.mjs"));
+      ok("F1 MUTANT: the same list without scripts/lib/is-main.mjs cannot import it (the case above is not vacuous)", !bare.good, bare.detail);
+    }
     ok("S4 the EXIT trap that releases the lock also removes the extracted classifier (one trap: a second would replace the first)",
       (sh.match(/^trap /gm) ?? []).length === 1 && /^trap '[^\n]*"\$CLASSIFIER"[^\n]*rmdir "\$LOCK"[^\n]*' EXIT$/m.test(sh));
     const classifyFn = /^classify_change\(\) \{[\s\S]*?^\}/m.exec(sh)?.[0];
@@ -1558,7 +1581,7 @@ function shellTests(root, ok) {
   const bash = (script, extra = {}) => spawnSync("/bin/bash", ["-c", `set -u\n${script}`], { env: { ...gitEnv, ...extra }, encoding: "utf8", timeout: 120000 });
   const q = (v) => `'${String(v).replace(/'/g, "'\\''")}'`;
   const copyObjectiveContract = (repo) => {
-    for (const file of ["objective-loop.mjs", "check-backlog-ownership.mjs", "lib/sim-operations.mjs", "lib/raised-hand-kinds.mjs", "lib/scratch-git.mjs"]) {
+    for (const file of ["objective-loop.mjs", "check-backlog-ownership.mjs", "lib/sim-operations.mjs", "lib/raised-hand-kinds.mjs", "lib/scratch-git.mjs", "lib/is-main.mjs"]) {
       mkdirSync(dirname(join(repo, "scripts", file)), { recursive: true });
       copyFileSync(join(HERE, "..", file), join(repo, "scripts", file));
     }
@@ -1655,6 +1678,14 @@ printf 'busy=%s code=%s\\n' "$busy" "$code"`, env);
     const otherReason = run('printf "reason-body\\n" >> "$SG_CI_EVENTS"', 2, 4, base, { SG_CI_BRAIN_URL: brainUrl });
     ok("CI does not yield to queued work blocked on something other than the host", otherReason.status === 0 && !/yielding/.test(otherReason.stdout)
       && readFileSync(events, "utf8").endsWith("reason-body\nteardown\n"), `${otherReason.status} ${otherReason.stdout}`);
+    ok("an admission without a yield says why (the probe's answer is logged)",
+      /brain probe at admission: not starved: queued=3, reason=Waiting for operator approval/.test(otherReason.stdout), otherReason.stdout);
+    // The live brain's status can carry raw control characters inside job text, which
+    // strict JSON.parse rejects; a starved status with one must still yield.
+    writeFileSync(brain, JSON.stringify({ ...starved, coordinator: { ...starved.coordinator }, note: "x" }).replace('"x"', '"line\u0001\tend"'));
+    const ctl = run('printf "ctl-body\\n" >> "$SG_CI_EVENTS"', 30, 4, base, { SG_CI_BRAIN_URL: brainUrl, SG_CI_BRAIN_YIELD_SECONDS: "2" });
+    ok("a starved status carrying raw control characters still yields", ctl.status === 0 && /yielding the host to the queued local brain/.test(ctl.stdout)
+      && readFileSync(events, "utf8").endsWith("ctl-body\nteardown\n"), `${ctl.status} ${ctl.stdout} ${ctl.stderr}`);
     writeFileSync(brain, JSON.stringify({ coordinator: { counts: { queued: 0 }, blocked_reason: starved.coordinator.blocked_reason } }));
     const nothingQueued = run('printf "empty-body\\n" >> "$SG_CI_EVENTS"', 2, 4, base, { SG_CI_BRAIN_URL: brainUrl });
     ok("CI does not yield on a host-reserved reason with nothing queued", nothingQueued.status === 0 && !/yielding/.test(nothingQueued.stdout)

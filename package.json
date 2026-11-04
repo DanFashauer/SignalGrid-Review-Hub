@@ -7,6 +7,7 @@
     "node": ">=22"
   },
   "scripts": {
+    "brain:proposal-pr": "node scripts/mac/brain-proposal-pr.mjs",
     "bench:decision-latency": "pnpm --filter @workspace/scripts run bench:decision-latency",
     "bench:decision-throughput": "pnpm --filter @workspace/scripts run bench:decision-throughput",
     "branches:clean": "bash scripts/cleanup-merged-branches.sh --apply",

@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "cloud-owner-order-2026-11-02-23-0xz-codex-quota-",
+  "ackedBy": "mac",
+  "note": "Done 2026-11-03. (1) OmniRoute already serves signalgrid-local/qwen3.5:9b, keyless, on chat and responses (measured). (2) Codex CLI 0.163.0: opt-in profile ~/.codex/omniroute.config.toml, wire_api responses (chat is rejected by this CLI); `codex exec --profile omniroute` answered ok. Default config untouched, so the paid model returns after the reset. (3) Continued here: the local-build blocker is the build schema still offering read after two reads; one-hunk fix in brain note bc642fe2, not applied because the runtime is hash-pinned behind the accounting pin. The stopped app session was not auto-resumed on the 9B (unattended full-access on a 9B is the owner's call). Routed results are recorded by model and route, never as Codex reviews.",
+  "ackedAt": "2026-11-03T06:33:49.452Z"
+}

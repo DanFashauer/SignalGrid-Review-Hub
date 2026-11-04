@@ -1,0 +1,15 @@
+{
+  "id": "2026-11-04-cloud-mail-od01-approved-run-the-zero-loss-delet",
+  "raisedAt": "2026-11-04T16:24:28.804Z",
+  "origin": "cloud",
+  "doing": "keeping the four owner-decision PRs (#1321, #1314, #1190, #1133) conflict-free and green for the owner",
+  "blockedBy": "cloud mail 'OD01 approved: run the zero-loss deletes from the Mac (cloud cannot create archive tags); #1698 dirty; item-6 list' has sat unread on the Mac for over 72h; the raised-hands gate fails preflight on every tree until it is acked or covered",
+  "need": "a Mac session runs pnpm run lane:inbox, reads and acks that mail and runs the zero-loss deletes (cloud cannot create archive tags)",
+  "whoCanUnblock": "mac lane",
+  "domain": "lane",
+  "status": "open",
+  "routedTo": null,
+  "covers": [
+    "mail:cloud-od01-approved-run-the-zero-loss-deletes-fr"
+  ]
+}

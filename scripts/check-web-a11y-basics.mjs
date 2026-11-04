@@ -83,6 +83,7 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { isMainModule } from "./lib/is-main.mjs";
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -2644,7 +2645,7 @@ function selfTest() {
   console.log(`OK web a11y basics self-test — ${cases.length}/${cases.length} cases`);
 }
 
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (isMainModule(process.argv[1], import.meta.url)) {
   if (process.argv.includes("--self-test")) selfTest();
   else run();
 }

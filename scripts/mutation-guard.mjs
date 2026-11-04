@@ -81,10 +81,11 @@
 // A registered cost can go stale (that is how this happened), so each run prints the
 // measured baseline beside it and flags a proof that outgrew its registration.
 
-import { readFileSync, writeFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { createJournal, privateJournalDir } from "./lib/mutation-restore.mjs";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -673,9 +674,11 @@ export const TARGETS = [
     oneLine: true,
     // reachability-connector.ts registered 2026-10-01: the proof drives the real connector, and
     // its one-line decision guards (normalizeReachability) are what `oneLine` sweeps.
+    // evaluate.ts registered 2026-11-03 (redo of #1398): the proof drives it and kills its guards.
     files: [
       "lib/integrations/src/integrations/carrier/index.ts",
       "lib/integrations/src/integrations/carrier/reachability-connector.ts",
+      "lib/integrations/src/integrations/carrier/evaluate.ts",
     ],
   },
   {
@@ -1669,8 +1672,12 @@ export function runProof(proof) {
   // `spawnSync` reports a timeout via `error.code === "ETIMEDOUT"` on some platforms and
   // via a null status with a signal on others. Treat both as a hang.
   const timedOut = run.error?.code === "ETIMEDOUT" || (run.status === null && run.signal !== null);
+  return classifyRun(`${run.stdout ?? ""}${run.stderr ?? ""}`, timedOut);
+}
+
+/** One verdict for both runners (the synchronous `runProof` and the sweep's asynchronous run). */
+export function classifyRun(out, timedOut) {
   if (timedOut) return "hung";
-  const out = `${run.stdout ?? ""}${run.stderr ?? ""}`;
   const summary = out.match(/summary=(pass|fail) \((\d+)\/(\d+)\)/);
   // No summary line at all means the proof crashed — the mutation broke it, which counts
   // as killed.
@@ -2037,7 +2044,7 @@ export function unknownArgs(argv) {
   // Validate the VALUE main() will parse (`split("=")[1]`), not just the raw token: `--proof==`
   // and `--proof==x` have a non-empty token but an empty parsed value, which selected EVERY
   // target. A value may therefore hold no second `=`; a shard is exactly `<int>/<int>`.
-  return argv.filter((a) => a !== "--" && a !== "--plan" && !/^--proof=[^=]+$/.test(a) && !/^--shard=\d+\/\d+$/.test(a));
+  return argv.filter((a) => a !== "--" && a !== "--plan" && a !== "--restore-stale" && !/^--proof=[^=]+$/.test(a) && !/^--shard=\d+\/\d+$/.test(a));
 }
 
 /** `--plan`: run main()'s own target resolution, shard split and selection, then stop where the first
@@ -2060,15 +2067,16 @@ export function unknownArgs(argv) {
  *  neither counted nor a recorded baseline failure ends the run as `✗ UNIT-SKIPPED <unit>` (exit 1). That is the
  *  net under a `continue` that drops a unit on a time budget, on the cost-drift warning, or on the runner's
  *  environment, none of which a stub that answers in microseconds will ever take. */
-function main() {
+async function main() {
   const unknown = unknownArgs(process.argv.slice(2));
   if (unknown.length > 0) {
-    console.error(`Mutation guard: unknown argument(s) ${unknown.join(" ")}. Usage: node scripts/mutation-guard.mjs [--proof=proof:<name>] [--shard=<i>/<n>] [--plan]`);
+    console.error(`Mutation guard: unknown argument(s) ${unknown.join(" ")}. Usage: node scripts/mutation-guard.mjs [--proof=proof:<name>] [--shard=<i>/<n>] [--plan] [--restore-stale]`);
     process.exit(1);
   }
   const only = process.argv.find((a) => a.startsWith("--proof="))?.split("=")[1];
   const shardArg = process.argv.find((a) => a.startsWith("--shard="))?.split("=")[1];
   const planOnly = process.argv.includes("--plan");
+  const restoreStale = process.argv.includes("--restore-stale");
   const log = planOnly ? console.error : console.log;
   const placements = [];
   let targets = only ? TARGETS.filter((t) => t.proof === only) : [...TARGETS];
@@ -2135,6 +2143,23 @@ function main() {
   if (staleAllowlist > 0) {
     console.error(`\nMutation guard FAILED: ${staleAllowlist} stale or out-of-scope allowlist entr${staleAllowlist === 1 ? "y" : "ies"}.`);
     process.exit(1);
+  }
+
+  // THE JOURNAL: every mutation is recorded (path + original bytes) in a private directory BEFORE it is written,
+  // and every catchable terminating signal restores the tree (see scripts/lib/mutation-restore.mjs). A refusal
+  // here means a previous sweep died mid-mutation; `--restore-stale` applies its journal and stops.
+  const journal = planOnly ? null : createJournal({ root: repoRoot, dir: privateJournalDir(repoRoot) });
+  if (journal) {
+    const start = journal.begin({ restoreStale });
+    if (!start.ok) {
+      for (const problem of start.problems) console.error(`Mutation guard REFUSES: ${problem}`);
+      process.exit(1);
+    }
+    if (restoreStale) {
+      console.log(`Mutation guard: journal applied${start.restored?.length ? `, restored ${start.restored.join(", ")}` : ", nothing to restore"}.`);
+      process.exit(0);
+    }
+    journal.installHandlers();
   }
 
   let total = 0;
@@ -2223,15 +2248,16 @@ function main() {
           continue;
         }
         total += 1;
-        writeFileSync(mutation.abs, mutation.content);
+        journal.mutate(mutation.abs, mutation.content, mutation.original);
         writtenInUnit += 1;
         let verdict;
         try {
-          verdict = runProof(target.proof);
+          const ran = await journal.spawnProof(target.proof, { cwd: repoRoot, timeoutMs: PROOF_TIMEOUT_MS });
+          verdict = classifyRun(ran.out, ran.timedOut);
         } finally {
           // ALWAYS restore, including on an unexpected throw. A mutation left on disk would
           // be catastrophic — it is a deliberately broken security guard.
-          writeFileSync(mutation.abs, mutation.original);
+          journal.restore(mutation.abs);
         }
         if (verdict === "killed") {
           killed += 1;

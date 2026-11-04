@@ -64,6 +64,7 @@ import { computeBody, fingerprintOf } from "./generate-sync-manifest.mjs";
 // binding gate's own functions so the ratio divides by, and verifies against,
 // exactly what that gate certifies.
 import { boundProofs, bindingRecord, validateBindings, proofScriptFiles, workspacePackageDirs, proofSourceDigest, stepSourceDigest } from "./check-launch-proof-bindings.mjs";
+import { isMainModule } from "./lib/is-main.mjs";
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 export const FLOOR = 80, TARGET_LOW = 92, TARGET_HIGH = 95, GOAL = 100, FRESH_DAYS = 7;
@@ -426,7 +427,7 @@ function selfTest() {
   return failed.length ? 1 : 0;
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (isMainModule(process.argv[1], import.meta.url)) {
   if (process.argv.includes("--self-test")) process.exit(selfTest());
   derive().then((r) => {
     if (process.argv.includes("--json")) { console.log(JSON.stringify(r)); return; }

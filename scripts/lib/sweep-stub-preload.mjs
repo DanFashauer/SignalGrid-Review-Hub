@@ -15,6 +15,7 @@
 import fs from "node:fs";
 import cp from "node:child_process";
 import { createHash } from "node:crypto";
+import { EventEmitter } from "node:events";
 import { syncBuiltinESMExports } from "node:module";
 import { dirname, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -46,6 +47,23 @@ cp.spawnSync = function stubbed(bin, args, ...rest) {
   if (bin !== "pnpm" || !Array.isArray(args) || args[0] !== "run") return denySpawn.call(this, bin, args, ...rest);
   proofRuns += 1;
   return { status: 0, signal: null, pid: 0, output: null, stderr: "", stdout: onDisk.size === 0 || writes.length === SURVIVE ? "summary=pass (1/1)\n" : "summary=fail (0/1)\n" };
+};
+// The sweep waits on the proof ASYNCHRONOUSLY (a synchronous wait is why no signal handler could run), so the same answer is
+// given through `spawn`: a child that emits the summary and closes. Its pid is 0 and the restore code never signals pid 0.
+const denySpawnAsync = cp.spawn;
+cp.spawn = function stubbedAsync(bin, args, ...rest) {
+  if (bin !== "pnpm" || !Array.isArray(args) || args[0] !== "run") return denySpawnAsync.call(this, bin, args, ...rest);
+  proofRuns += 1;
+  const text = onDisk.size === 0 || writes.length === SURVIVE ? "summary=pass (1/1)\n" : "summary=fail (0/1)\n";
+  const child = new EventEmitter();
+  child.pid = 0;
+  child.stdout = new EventEmitter();
+  child.stderr = new EventEmitter();
+  setImmediate(() => {
+    child.stdout.emit("data", text);
+    child.emit("close", 0, null);
+  });
+  return child;
 };
 process.on("exit", () => {
   // The report is tens of kilobytes for the whole registry and stderr may be a pipe: finish the write even if it is

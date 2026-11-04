@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-11-04T18:11:38.580Z",
-  "result": "keepalive with the 18:10Z forward-build batch (11-04; mainline hb 16:12Z, about 2h). Cycles 16:24Z and 17:24Z quiet: no mac/* branch moved (newest 2026-11-03 00:18Z), no mail to cloud. Mac ack PR #1745 landed 2067d811. Tick heartbeat still 2026-10-24T07:30:38Z. Live evidence committed 2026-11-02 15:07Z. Owner reminded in chat today; not re-escalated."
+  "firedAt": "2026-11-04T20:49:39.003Z",
+  "result": "keepalive with the 20:10Z forward-build batch (11-04; mainline hb 18:11Z). Cycles 18:25Z, 19:24Z and 20:24Z: the Mac is active again, with acks for the Obsidian goal, the tick message and the OmniRoute order, and a land ask for #1819, which landed 802e84fc. Its tick still cannot land a heartbeat because ruleset 25774497 refuses the direct push; the fix is #1698, which Codex owns (dirty; refresh asked in #1817). Live evidence committed 2026-11-02 15:07Z; re-mint requested, hand raised. Owner told today that the install-launchd ask was wrong: the Mac does tick."
 }

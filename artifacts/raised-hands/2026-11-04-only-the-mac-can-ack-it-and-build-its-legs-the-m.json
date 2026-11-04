@@ -7,10 +7,13 @@
   "need": "The Mac lane reads and acks it: pnpm run lane:deliver ack cloud-owner-goal-2026-11-02-the-obsidian-loop-yo \"<what was done>\".",
   "whoCanUnblock": "mac lane",
   "domain": "lane-coordination",
-  "status": "open",
+  "status": "resolved",
   "routedTo": null,
   "where": "artifacts/lane-messages/cloud-owner-goal-2026-11-02-the-obsidian-loop-yo.json",
   "covers": [
     "mail:cloud-owner-goal-2026-11-02-the-obsidian-loop-yo"
-  ]
+  ],
+  "resolvedAt": "2026-11-04T20:49:40.690Z",
+  "resolvedBy": "cloud",
+  "resolution": "The Mac acked cloud-owner-goal-2026-11-02-the-obsidian-loop-yo in PR #1814, merged 2026-11-04 20:12:56Z."
 }

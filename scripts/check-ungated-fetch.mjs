@@ -84,12 +84,24 @@
 // imports `createEmitterResolver` — so a seventh emitter family is covered the day it
 // is added, and a hand-maintained copy of the list cannot go stale.
 
-import { readFileSync, readdirSync } from "node:fs";
-import { execFileSync } from "node:child_process";
-import { resolve, dirname } from "node:path";
+import { readFileSync, readdirSync, mkdtempSync, mkdirSync, rmSync, cpSync, lstatSync, symlinkSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { execFileSync, spawnSync } from "node:child_process";
+import { resolve, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { scratchGitOk, scratchGitEnv } from "./lib/scratch-git.mjs";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+/** A tracked source the gate cannot read is a gate that scanned nothing in it: name the path and refuse, never crash or skip. */
+function readTracked(file) {
+  try {
+    return readFileSync(resolve(repoRoot, file), "utf8");
+  } catch (e) {
+    console.error(`\n✗ ${file}: a tracked source cannot be read (${e.code ?? e.message}) — nothing in it was scanned; refusing to report a pass.`);
+    process.exit(1);
+  }
+}
+
 const SCAN_ROOT = "lib/integrations/src/integrations";
 const UTIL_ROOT = "lib/integrations/src/utils";
 /** Comments must not clear a gate (review finding): a body containing
@@ -182,12 +194,25 @@ function callSitesGated(text, name, gateTokens) {
  * family iff its `resolve.ts` imports `createEmitterResolver` — the shared
  * fail-closed factory every emitter's resolve.ts is built from. Hand-listing them
  * here is what `adapters/emit-gate.ts` and two proofs already did wrong once.
+ *
+ * A missing `resolve.ts` (ENOENT) is a legitimate skip — the directory is not a
+ * family. Any other read error means a resolve.ts is present but unreadable, so the
+ * family list would silently shrink; it is pushed onto `unreadable` for the caller
+ * to fail on (same shape as check-emitter-wire-discipline.mjs). `isPresent` (an lstat in
+ * the real call) separates a truly absent resolve.ts from a dangling symlink.
  */
-export function deriveEmitterFamilies(readDir, readFile) {
+export function deriveEmitterFamilies(readDir, readFile, unreadable = [], isPresent = () => false) {
   const families = [];
   for (const entry of readDir()) {
     let src;
-    try { src = readFile(`${entry}/resolve.ts`); } catch { continue; }
+    try { src = readFile(`${entry}/resolve.ts`); }
+    catch (e) {
+      // ENOENT is "absent" only if nothing is there: a dangling symlink, or a file that vanished after the
+      // directory was listed, is a resolver that is PRESENT but unreadable.
+      if (e.code !== "ENOENT") unreadable.push(`${entry}/resolve.ts: ${e.message}`);
+      else if (isPresent(`${entry}/resolve.ts`)) unreadable.push(`${entry}/resolve.ts: present but unreadable (${e.message})`);
+      continue;
+    }
     if (/createEmitterResolver/.test(src)) families.push(entry);
   }
   return families.sort();
@@ -444,7 +469,7 @@ function assertNoUnseenWrapper() {
     .filter((f) => f.endsWith(".ts") && !f.endsWith(".test.ts"));
   const unseen = [];
   for (const file of utilFiles) {
-    const text = readFileSync(resolve(repoRoot, file), "utf8");
+    const text = readTracked(file);
     // Does this helper reach a real network primitive? `fetch(` AND WebSocket
     // construction both count — a utils helper wrapping `new WebSocket` would
     // otherwise recreate the exact fetchWithTimeout blind spot this function
@@ -641,7 +666,104 @@ function selfTest() {
         rel.startsWith("nac/") ? "export const x = 1;" : "import { createEmitterResolver } from '../adapters/emitter-resolver';")) ===
         JSON.stringify(["itsm", "siem"])],
     ["a directory with NO resolve.ts is not an emitter family",
-      deriveEmitterFamilies(() => ["graph"], () => { throw new Error("ENOENT"); }).length === 0],
+      deriveEmitterFamilies(() => ["graph"], () => { throw Object.assign(new Error("ENOENT"), { code: "ENOENT" }); }).length === 0],
+    // Real fs errors, no chmod (a root container reads chmod-000 files): a DIRECTORY
+    // named resolve.ts is EISDIR, a missing path is ENOENT.
+    ["a present-but-unreadable resolve.ts (a DIRECTORY, EISDIR) is reported, naming the path", (() => {
+      const root = mkdtempSync(join(tmpdir(), "ungated-fetch-"));
+      try {
+        mkdirSync(join(root, "fam", "resolve.ts"), { recursive: true });
+        const u = [];
+        const fams = deriveEmitterFamilies(() => ["fam"], (rel) => readFileSync(join(root, rel), "utf8"), u);
+        return u.length === 1 && u[0].startsWith("fam/resolve.ts: ") && /EISDIR/.test(u[0]) && fams.length === 0;
+      } finally { rmSync(root, { recursive: true, force: true }); }
+    })()],
+    ["a missing resolve.ts (real ENOENT) is skipped, not reported", (() => {
+      const u = [];
+      const fams = deriveEmitterFamilies(() => ["nope"], (rel) => readFileSync(resolve(repoRoot, "nope-no-such-dir", rel), "utf8"), u);
+      return u.length === 0 && fams.length === 0;
+    })()],
+    ["a read failing with EACCES is reported, not skipped", (() => {
+      const u = [];
+      deriveEmitterFamilies(() => ["x"], () => { throw Object.assign(new Error("denied"), { code: "EACCES" }); }, u);
+      return u.length === 1;
+    })()],
+    ["a read failing with ELOOP is reported, not skipped", (() => {
+      const u = [];
+      deriveEmitterFamilies(() => ["x"], () => { throw Object.assign(new Error("loop"), { code: "ELOOP" }); }, u);
+      return u.length === 1;
+    })()],
+    ["an ENOENT where something IS present (isPresent) is reported", (() => {
+      const u = [];
+      deriveEmitterFamilies(() => ["x"], () => { throw Object.assign(new Error("gone"), { code: "ENOENT" }); }, u, () => true);
+      return u.length === 1 && /present but unreadable/.test(u[0]);
+    })()],
+    ["a real DANGLING symlink resolve.ts is reported (lstat sees it, readFile says ENOENT)", (() => {
+      const root = mkdtempSync(join(tmpdir(), "ungated-fetch-sym-"));
+      try {
+        mkdirSync(join(root, "fam"));
+        symlinkSync(join(root, "no-such-target.ts"), join(root, "fam", "resolve.ts"));
+        const u = [];
+        const fams = deriveEmitterFamilies(() => ["fam"], (rel) => readFileSync(join(root, rel), "utf8"), u, (rel) => { try { lstatSync(join(root, rel)); return true; } catch { return false; } });
+        return u.length === 1 && u[0].startsWith("fam/resolve.ts: ") && fams.length === 0;
+      } finally { rmSync(root, { recursive: true, force: true }); }
+    })()],
+    ["an ENOENT that is only a message, with no .code, IS reported (the old fixture shape)",
+      (() => { const u = []; deriveEmitterFamilies(() => ["graph"], () => { throw new Error("ENOENT"); }, u); return u.length === 1; })()],
+    // The WHOLE gate, run as a child process against a temp git repo holding a copy of
+    // its scan roots: the unit cases above prove deriveEmitterFamilies reports an
+    // unreadable resolve.ts, these prove main() passes the sink and exits on it.
+    ...(() => {
+      const run = (plant) => {
+        const tmp = mkdtempSync(join(tmpdir(), "ungated-fetch-e2e-"));
+        try {
+          for (const root of [SCAN_ROOT, UTIL_ROOT]) cpSync(resolve(repoRoot, root), join(tmp, root), { recursive: true });
+          mkdirSync(join(tmp, "scripts", "lib"), { recursive: true });
+          cpSync(fileURLToPath(import.meta.url), join(tmp, "scripts", "check-ungated-fetch.mjs"));
+          cpSync(resolve(repoRoot, "scripts/lib/scratch-git.mjs"), join(tmp, "scripts", "lib", "scratch-git.mjs"), { recursive: true });
+          // An EXTRA family directory, so the six-family floor still holds and the unreadable
+          // report is the only thing that can fail the run (replacing a real family's
+          // resolve.ts would also trip that floor and hide a dropped exit).
+          const tracked = plant === "trackedDir" || plant === "trackedGone";
+          // A tracked source OTHER than a resolve.ts, so the family-derivation report cannot be what fails the run.
+          const trackedPick = tracked
+            ? readdirSync(join(tmp, SCAN_ROOT), { withFileTypes: true }).filter((d) => d.isDirectory()).flatMap((d) => readdirSync(join(tmp, SCAN_ROOT, d.name)).filter((f) => /\.ts$/.test(f) && f !== "resolve.ts" && !/\.test\.ts$/.test(f)).map((f) => `${d.name}/${f}`))[0]
+            : null;
+          const fam = tracked ? trackedPick : plant ? "zz-planted" : null;
+          if (plant === "dir") mkdirSync(join(tmp, SCAN_ROOT, fam, "resolve.ts"), { recursive: true });
+          scratchGitOk(tmp, ["init", "-q"]);
+          scratchGitOk(tmp, ["add", "-A"]);
+          // After the index is built: a TRACKED dangling file would crash the scan before the derivation report.
+          if (plant === "dangling") {
+            mkdirSync(join(tmp, SCAN_ROOT, fam), { recursive: true });
+            symlinkSync(join(tmp, "no-such-target.ts"), join(tmp, SCAN_ROOT, fam, "resolve.ts"));
+          }
+          // A TRACKED source replaced after the index is built: the tracked-source read must name it, not crash.
+          if (tracked) {
+            rmSync(join(tmp, SCAN_ROOT, fam));
+            if (plant === "trackedDir") mkdirSync(join(tmp, SCAN_ROOT, fam));
+          }
+          const r = spawnSync(process.execPath, ["scripts/check-ungated-fetch.mjs"], { cwd: tmp, encoding: "utf8", env: scratchGitEnv() });
+          return { status: r.status, text: `${r.stdout}${r.stderr}`, fam };
+        } finally { rmSync(tmp, { recursive: true, force: true }); }
+      };
+      const control = run(false);
+      const planted = run("dir");
+      const dangling = run("dangling");
+      const trackedDir = run("trackedDir");
+      const trackedGone = run("trackedGone");
+      return [
+        ["end to end: the gate over an untouched copy of its roots exits 0 (control)", control.status === 0],
+        ["end to end: a DIRECTORY named resolve.ts makes the whole gate exit 1, naming the path",
+          planted.status === 1 && planted.text.includes(`${planted.fam}/resolve.ts`) && /EISDIR/.test(planted.text)],
+        ["end to end: a DANGLING SYMLINK resolve.ts makes the whole gate exit 1, naming the path",
+          dangling.status === 1 && dangling.text.includes(`${dangling.fam}/resolve.ts: present but unreadable`)],
+        ["end to end: a TRACKED source replaced by a directory exits 1 naming the path, with no stack trace",
+          trackedDir.status === 1 && trackedDir.text.includes(trackedDir.fam) && /EISDIR/.test(trackedDir.text) && !/\n\s+at /.test(trackedDir.text)],
+        ["end to end: a TRACKED source deleted from disk exits 1 naming the path, with no stack trace",
+          trackedGone.status === 1 && trackedGone.text.includes(trackedGone.fam) && /ENOENT/.test(trackedGone.text) && !/\n\s+at /.test(trackedGone.text)],
+      ];
+    })(),
     ["the real tree still yields at least six emitter families",
       deriveEmitterFamilies(
         () => readdirSync(resolve(repoRoot, SCAN_ROOT), { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name),
@@ -668,12 +790,15 @@ let fetchSites = 0;
 // ── ASSERTIONS 2 AND 3 ───────────────────────────────────────────────────────
 // The emitter families, derived (see deriveEmitterFamilies). Enforced scope for
 // bounding and for the timeout-knob check; everything else is REPORTED.
+const unreadableResolvers = [];
 const EMITTER_FAMILIES = deriveEmitterFamilies(
   () =>
     readdirSync(resolve(repoRoot, SCAN_ROOT), { withFileTypes: true })
       .filter((d) => d.isDirectory())
       .map((d) => d.name),
   (rel) => readFileSync(resolve(repoRoot, SCAN_ROOT, rel), "utf8"),
+  unreadableResolvers,
+  (rel) => { try { lstatSync(resolve(repoRoot, SCAN_ROOT, rel)); return true; } catch { return false; } },
 );
 const EMITTER_FAMILY_RE = new RegExp(`/(${EMITTER_FAMILIES.map((f) => f.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})/`);
 
@@ -684,7 +809,7 @@ const SELF_BOUNDING_WRAPPERS = new Set();
 for (const file of execFileSync("git", ["ls-files", UTIL_ROOT], { cwd: repoRoot, encoding: "utf8" })
   .split("\n")
   .filter((f) => f.endsWith(".ts") && !f.endsWith(".test.ts"))) {
-  const text = readFileSync(resolve(repoRoot, file), "utf8");
+  const text = readTracked(file);
   if (!/AbortSignal\.timeout/.test(text)) continue;
   for (const m of text.matchAll(/^export\s+(?:async\s+)?function\s+([\w$]+)/gm)) SELF_BOUNDING_WRAPPERS.add(m[1]);
 }
@@ -705,7 +830,7 @@ let boundedSites = 0;
 for (const file of files) {
   const rel = file.slice(`${SCAN_ROOT}/`.length);
   if (EXEMPT.has(rel)) continue;
-  const text = readFileSync(resolve(repoRoot, file), "utf8");
+  const text = readTracked(file);
   if (!FETCH_CALL.test(text)) continue;
   scanned += 1;
   const localBounded = selfBoundingLocals(text);
@@ -908,7 +1033,7 @@ for (const file of files) {
 // factory gates without fetching, and a call that skips the clause is a hole wherever
 // it sits.
 for (const file of files) {
-  const text = readFileSync(resolve(repoRoot, file), "utf8");
+  const text = readTracked(file);
   const code = stripComments(text);
   for (const m of code.matchAll(/(?<![\w$.])resolveEmission\s*\(/g)) {
     const before = code.slice(Math.max(0, m.index - 30), m.index);
@@ -1017,6 +1142,13 @@ if (delegatedSites.length > 0) {
 // FLOORS. Both derivations can silently stop matching, and a scan that finds
 // nothing reports everything as clean. Six emitter families exist; a change that
 // leaves fewer than six is a broken derivation, not a deleted family.
+if (unreadableResolvers.length > 0) {
+  console.error(
+    `\n✗ ${unreadableResolvers.length} resolve.ts present but unreadable — its family was NOT derived, so its sources were never scanned:\n` +
+      unreadableResolvers.map((u) => `    ${SCAN_ROOT}/${u}`).join("\n"),
+  );
+  process.exit(1);
+}
 if (EMITTER_FAMILIES.length < 6) {
   console.error(
     `\n✗ derived only ${EMITTER_FAMILIES.length} emitter families (expected >= 6): ${EMITTER_FAMILIES.join(", ") || "none"}.\n` +

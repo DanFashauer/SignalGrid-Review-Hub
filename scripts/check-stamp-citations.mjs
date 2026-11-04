@@ -72,6 +72,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { execFileSync, spawnSync } from "node:child_process";
+import { isMainModule } from "./lib/is-main.mjs";
 
 // check-cited-paths shells out to git at import time; a broken checkout must read as a
 // stated failure, not a stack trace that happens to exit 1.
@@ -443,7 +444,7 @@ async function selfTest() {
   return pass === total ? 0 : 1;
 }
 
-const isEntry = process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+const isEntry = isMainModule(process.argv[1], import.meta.url);
 if (isEntry) {
   const argv = process.argv.slice(2);
   if (argv.includes("--self-test")) process.exit(await selfTest());

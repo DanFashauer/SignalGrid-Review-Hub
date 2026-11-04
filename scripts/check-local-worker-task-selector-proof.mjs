@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import {spawnSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import {resolve} from 'node:path';
+import {isMainModule} from './lib/is-main.mjs';
 
 // C0 is the fixed Unicode range U+0000..U+001F. Check real completed
 // assertions, so an accidentally empty enumeration cannot certify this gate.
@@ -49,7 +50,7 @@ export function selfTest(){
   return {positive:1,negative:bad.length,skipped:0};
 }
 
-if(process.argv[1]&&fileURLToPath(import.meta.url)===resolve(process.argv[1])){
+if(isMainModule(process.argv[1], import.meta.url)){
   assert(process.argv.length===2||(process.argv.length===3&&process.argv[2]==='--self-test'),'Unknown C0 gate arguments');
   const tested=selfTest();
   console.log(`C0 proof envelope self-test PASSED: ${tested.positive} positive / ${tested.negative} negative / 0 skipped`);

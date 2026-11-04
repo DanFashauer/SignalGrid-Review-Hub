@@ -68,6 +68,7 @@ import { execSync } from "node:child_process";
 import { collectionRequestFiles, registeredRoutePairCount } from "./check-api-collection.mjs";
 import { connectorEndpoints } from "./check-graph-permission-boundary.mjs";
 import { wireTruthFigures } from "./check-wire-truth-ledger.mjs";
+import { isMainModule } from "./lib/is-main.mjs";
 
 /**
  * Cases in the shared Assist-wire conformance fixture. The OpenAPI description of
@@ -1512,7 +1513,7 @@ function selfTest() {
 }
 
 // Exact-entry guard: importing this module must never gate as a side effect.
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (isMainModule(process.argv[1], import.meta.url)) {
   if (process.argv.includes("--self-test")) process.exit(selfTest());
   const results = auditAll();
   const sweep = sweepAll();

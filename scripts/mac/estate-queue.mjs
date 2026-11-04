@@ -39,8 +39,8 @@ import { spawnSync } from "node:child_process";
 import { readFileSync, writeFileSync, openSync, writeSync, fsyncSync, closeSync, mkdirSync, mkdtempSync, fstatSync, statSync, realpathSync, linkSync, symlinkSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
-import { pathToFileURL } from "node:url";
 import { classifyDiff } from "../check-owner-gated-surfaces.mjs";
+import { isMainModule } from "../lib/is-main.mjs";
 
 const REPO = process.env.SIGNALGRID_REPO ?? "DanFashauer/SignalGrid-Review-Hub";
 const BASE = "SignalGrid_Alpha";
@@ -651,4 +651,4 @@ function main(argv) {
   return 2;
 }
 
-if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) process.exit(main(process.argv.slice(2)));
+if (isMainModule(process.argv[1], import.meta.url)) process.exit(main(process.argv.slice(2)));

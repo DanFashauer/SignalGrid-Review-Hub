@@ -31,6 +31,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { isMainModule } from "./lib/is-main.mjs";
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const REGISTRY = join(REPO, "docs/agent/FALSE_CLAIMS.json");
@@ -308,7 +309,7 @@ export function evidenceEntries(text) {
   return { complete, incomplete };
 }
 
-const IS_ENTRY = process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+const IS_ENTRY = isMainModule(process.argv[1], import.meta.url);
 const argv = process.argv.slice(2);
 
 if (IS_ENTRY && argv.includes("--self-test")) process.exit(selfTest());

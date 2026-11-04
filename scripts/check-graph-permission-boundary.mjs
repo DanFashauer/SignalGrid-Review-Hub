@@ -58,6 +58,7 @@ import { spawnSync } from "node:child_process";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { REQUEST_BLOCK } from "./check-lab-collections.mjs";
+import { isMainModule } from "./lib/is-main.mjs";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 export const CONNECTOR = "lib/integrations/src/integrations/graph/posture-connector.ts";
@@ -745,7 +746,7 @@ function selfTest() {
   return failed.length === 0 ? 0 : 1;
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (isMainModule(process.argv[1], import.meta.url)) {
   if (process.argv.includes("--self-test")) process.exit(selfTest());
   const ri = process.argv.indexOf("--root");
   const root = ri > -1 && process.argv[ri + 1] ? resolve(process.argv[ri + 1]) : repoRoot;

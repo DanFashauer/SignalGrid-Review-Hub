@@ -41,12 +41,13 @@ import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { isMainModule } from "./lib/is-main.mjs";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 /** True only when this file is the entrypoint, so another script can import its
  *  registry without running the gate. */
-const IS_MAIN = process.argv[1] !== undefined && import.meta.url === new URL(`file://${resolve(process.argv[1])}`).href;
+const IS_MAIN = isMainModule(process.argv[1], import.meta.url);
 const DOCS_DIR = join(repoRoot, "docs");
 
 /** Proofs that emit a `figures=` line. A proof that does not is simply not checked here —

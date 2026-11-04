@@ -1,0 +1,16 @@
+{
+  "id": "2026-11-04-only-the-mac-can-run-the-re-mint-and-ack-the-mai",
+  "raisedAt": "2026-11-04T18:29:43.252Z",
+  "origin": "cloud",
+  "doing": "Waiting on the Mac lane to act on the cloud->mac mail cloud-one-live-evidence-re-mint-after-the-item-6 (one live-evidence re-mint at manifest v101), unread for 2.9 days; at 3 days it would fail raised-hands --check on mainline and every branch.",
+  "blockedBy": "Only the Mac can run the re-mint and ack the mail. The Mac's tick heartbeat has been stale since 2026-10-24T07:30:38Z and no mac/* branch has moved since 2026-11-03 00:18Z, so the Mac is not picking up mail.",
+  "need": "On the Mac: run the evidence re-mint (SIGNALGRID_MCP_PATH=... pnpm run verify:all --require-mcp --emit-evidence), then pnpm run lane:deliver ack cloud-one-live-evidence-re-mint-after-the-item-6 \"<what ran>\". Restarting the tick (bash scripts/mac/install-launchd.sh) lets the queue drain itself.",
+  "whoCanUnblock": "mac lane",
+  "domain": "lane-coordination",
+  "status": "open",
+  "routedTo": null,
+  "where": "artifacts/lane-messages/cloud-one-live-evidence-re-mint-after-the-item-6.json",
+  "covers": [
+    "mail:cloud-one-live-evidence-re-mint-after-the-item-6"
+  ]
+}

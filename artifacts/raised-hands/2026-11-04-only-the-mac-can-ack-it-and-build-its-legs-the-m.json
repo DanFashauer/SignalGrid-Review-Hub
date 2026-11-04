@@ -1,0 +1,16 @@
+{
+  "id": "2026-11-04-only-the-mac-can-ack-it-and-build-its-legs-the-m",
+  "raisedAt": "2026-11-04T18:29:43.336Z",
+  "origin": "cloud",
+  "doing": "Waiting on the Mac lane to read the cloud->mac mail cloud-owner-goal-2026-11-02-the-obsidian-loop-yo (the owner's Obsidian-loop goal and the Mac's legs), unread for 2.1 days.",
+  "blockedBy": "Only the Mac can ack it and build its legs. The Mac is not ticking (heartbeat stale since 2026-10-24T07:30:38Z).",
+  "need": "The Mac lane reads and acks it: pnpm run lane:deliver ack cloud-owner-goal-2026-11-02-the-obsidian-loop-yo \"<what was done>\".",
+  "whoCanUnblock": "mac lane",
+  "domain": "lane-coordination",
+  "status": "open",
+  "routedTo": null,
+  "where": "artifacts/lane-messages/cloud-owner-goal-2026-11-02-the-obsidian-loop-yo.json",
+  "covers": [
+    "mail:cloud-owner-goal-2026-11-02-the-obsidian-loop-yo"
+  ]
+}

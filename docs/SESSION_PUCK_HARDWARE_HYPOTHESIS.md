@@ -796,23 +796,23 @@ truthfully, and the words it will not use are listed at the end of this section.
    (`lib/signalgrid-core/src/attach.ts:14`–`:18`: an unknown attach state is at least `step_up`
    and never a grant).
 
-### Two open owner questions — recorded, not answered
+### The two owner questions — answered 2026-11-03
 
-Raised as a hand on 2026-10-02:
-`artifacts/raised-hands/2026-10-02-two-readings-of-the-note-conflict-with-canonical.json`
-(open; whoCanUnblock: owner). This section is rewritten to the answers.
+Raised as a hand on 2026-10-02
+(`artifacts/raised-hands/2026-10-02-two-readings-of-the-note-conflict-with-canonical.json`) and
+answered by the owner on 2026-11-03, in the cloud lane's session, choosing the option
+"One option, customer admin". The note's two readings resolve as follows.
 
-1. **One offered factor, or the required factor?** The note says the puck is *"replacing of your
-   ID badge/key card/2fa/MFA all of the above"*. `docs/PURPOSE.md:38` says *"The factor is the
-   customer's choice, and the grid is agnostic to it."* Making the puck the required factor is a
-   PURPOSE change only the owner can make. Until he answers, this page treats the puck as one
-   factor a customer may choose to offer, and PURPOSE.md stands.
-2. **Who is the "super admin of the system"?** The customer's IdP and PACS administrator acting
-   under dual control (consistent with DR-043 item 2 and R5), or a role SignalGrid itself holds
-   over enrolment and keys (which would contradict DR-043 item 2 and `:353` — a doctrine change,
-   not a requirement)? The clause also parses two ways: only a super admin can clear a puck,
-   after additional verification; or a super admin can do it without additional verification and
-   no one else can. R5 fits either reading, because it removes a single point of compromise.
+1. **The puck is ONE offered factor, not the required one.** A customer may choose to offer it;
+   it is not mandatory. `docs/PURPOSE.md:38` stands unchanged: *"The factor is the customer's
+   choice, and the grid is agnostic to it."* The note's *"replacing of your ID badge/key
+   card/2fa/MFA"* describes what the puck can replace where a customer chooses it.
+2. **The "super admin" is the customer's own IT administrator, acting under two-person
+   approval.** That means the customer's IdP and PACS administrator, under dual control (R5), and
+   not a role SignalGrid holds over enrolment or keys. This keeps DR-043 item 2 and `:353`. R5
+   stands as written: a re-bind or revoke needs a new dual-control action class and two distinct
+   authorizers, and a single super-admin credential able to re-bind alone remains the failure to
+   avoid. Puck 16 in `docs/BUILD_BACKLOG.md` keeps the proof vectors.
 
 ### Where the kiosk fits
 

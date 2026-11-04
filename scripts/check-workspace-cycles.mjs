@@ -26,6 +26,7 @@
 import { readFileSync, readdirSync, existsSync, statSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { isMainModule } from "./lib/is-main.mjs";
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const PACKAGE_FLOOR = 20; // 42 at the time of writing: 35 lib, 6 artifacts, scripts
@@ -162,7 +163,7 @@ function selfTest() {
   console.log(`workspace-cycles self-test green — ${live.length} packages, ${edges} workspace edges read live; a planted 3-package cycle, a self-edge and a peer edge are all named`);
 }
 
-const invokedDirectly = process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+const invokedDirectly = isMainModule(process.argv[1], import.meta.url);
 if (invokedDirectly) {
   if (process.argv.includes("--self-test")) {
     selfTest();

@@ -43,6 +43,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import {fileURLToPath, pathToFileURL } from "node:url";
 import { GREEN_STATUSES } from "./lib/sim-operations.mjs";
+import { isMainModule } from "./lib/is-main.mjs";
 
 const REGISTRY = "docs/agent/open-source-lab-registry.json";
 const HUMAN_HALF = "docs/OPEN_SOURCE_LAB_REGISTRY.md";
@@ -357,7 +358,7 @@ function selfTest() {
 // Exact-entry guard, not a basename suffix match: an unrelated entry script
 // that merely IMPORTS this module must never trigger the gate (an adversarial
 // review proved the suffix form fires for an entry named like this file).
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (isMainModule(process.argv[1], import.meta.url)) {
   if (process.argv.includes("--self-test")) process.exit(selfTest());
   const registry = JSON.parse(readFileSync(join(repoRoot, REGISTRY), "utf8"));
   const mdText = readFileSync(join(repoRoot, HUMAN_HALF), "utf8");

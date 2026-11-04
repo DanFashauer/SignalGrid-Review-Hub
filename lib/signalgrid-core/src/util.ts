@@ -10,9 +10,11 @@ export interface Clock {
 }
 
 export function fixedClock(iso: string): Clock {
-  const ms = Date.parse(iso);
+  // The strict parser: an offset-less stamp would pin a different instant per host zone, so the "same" run would
+  // not be the same run. A clock must name its zone.
+  const ms = parseObservedInstant(iso);
   if (Number.isNaN(ms)) {
-    throw new Error(`fixedClock requires a valid ISO timestamp, got: ${iso}`);
+    throw new Error(`fixedClock requires a zoned ISO timestamp (Z or ±HH:MM), got: ${iso}`);
   }
   return {
     now(): Date {

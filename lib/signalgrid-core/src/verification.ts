@@ -50,7 +50,7 @@
 // `lib/integrations`. No IO, no randomness, no network — the verdict is a pure
 // function of the action, the reads the caller already holds, and `asOf`.
 
-import { deterministicId } from "./util";
+import { deterministicId, parseObservedInstant } from "./util";
 import type { RemediationAction } from "./types";
 
 /**
@@ -95,7 +95,9 @@ export interface RemediationVerification {
 /** Parse an instant, or null. Never silently 0, which would place an unreadable
  *  instant before every request and admit it as evidence. */
 function instant(iso: string): number | null {
-  const ms = Date.parse(iso);
+  // The strict parser: an offset-less read is host-local under Date.parse, so the same read cleared a restriction
+  // in one zone and fell outside the window in another. Unparseable means inadmissible, and the restriction holds.
+  const ms = parseObservedInstant(iso);
   return Number.isFinite(ms) ? ms : null;
 }
 

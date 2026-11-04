@@ -32,7 +32,7 @@
 
 import { CoreError } from "./types";
 import type { RemediationAction } from "./types";
-import { deterministicId } from "./util";
+import { deterministicId, parseObservedInstant } from "./util";
 
 /** The three states, and only three. Anything else is `unknown` by construction. */
 export const ATTACH_STATES = ["attached", "removed", "unknown"] as const;
@@ -82,7 +82,9 @@ const blank = (value: unknown): boolean => typeof value !== "string" || value.tr
 
 function parse(instant: string | undefined): number | null {
   if (blank(instant)) return null;
-  const ms = Date.parse(instant as string);
+  // The strict parser, not Date.parse: an offset-less stamp names no instant, and reading it host-local made the
+  // same record attached in one zone and stale or future in another. NaN here resolves to `unknown` below.
+  const ms = parseObservedInstant(instant as string);
   return Number.isNaN(ms) ? null : ms;
 }
 

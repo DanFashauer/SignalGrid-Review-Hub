@@ -20,6 +20,7 @@ import {
   EVIDENCE_VALUE_DOMAINS,
   evaluatePolicy,
   fixedClock,
+  normalizeAttachRecord,
   runDockSync,
   seedDemoStore,
   SHARED_DEVICE_RULES_V1,
@@ -28,6 +29,7 @@ import {
   type NormalizedSignal,
   type SignalCategory,
   type Workflow,
+  verifyRemediation,
 } from "@workspace/signalgrid-core";
 
 const SELF = fileURLToPath(import.meta.url);
@@ -161,6 +163,33 @@ function freshnessAtOffsetlessNow(observedAt: string): string {
   return classifyFreshness(observedAt, "2026-07-13T13:00:00", 1, 24);
 }
 
+/** The attach normalizer on one stamp: 3600 s bound, reference 13:00Z. */
+function attachFor(observedAt: string): string {
+  return normalizeAttachRecord(
+    { credentialRef: "puck-tz", deviceRef: "ipad-tz", receiverRef: "rx-tz", wireState: "attached", observedAt },
+    "2026-07-13T13:00:00Z",
+    3600,
+  ).state;
+}
+
+/** Remediation verification with one evidence read stamped `observedAt`; request 11:30Z, as-of 13:00Z. */
+function verifyFor(observedAt: string): string {
+  return verifyRemediation(
+    {
+      id: "rem_tz", tenantId: "tenant_northwind", decisionId: "dec_tz", kind: "request_device_remediation",
+      targetType: "device", targetRef: "ipad-tz", reasonCode: "DEVICE_NONCOMPLIANT", status: "approved_simulated",
+      approvalRequired: true, simulatedOnly: true, requestedAt: "2026-07-13T11:30:00Z", approvedAt: "2026-07-13T11:31:00Z", note: "",
+    },
+    [{ targetRef: "ipad-tz", reasonCodes: [], observedAt }],
+    "2026-07-13T13:00:00Z",
+  ).state;
+}
+
+/** fixedClock on one stamp: the instant it pins, or THROWS. */
+function clockFor(iso: string): string {
+  try { return fixedClock(iso).now().toISOString(); } catch { return "THROWS"; }
+}
+
 if (process.argv[2] === "--worker") {
   const [mode, a, b, c] = process.argv.slice(3);
   const out =
@@ -172,6 +201,9 @@ if (process.argv[2] === "--worker") {
     : mode === "dock" ? dockFreshnessFor(a!)
     : mode === "ptie" ? postureTieFor(a!, b!)
     : mode === "freshnow" ? freshnessAtOffsetlessNow(a!)
+    : mode === "attach" ? attachFor(a!)
+    : mode === "verify" ? verifyFor(a!)
+    : mode === "clock" ? clockFor(a!)
     : "BAD-MODE";
   console.log(`VERDICT ${out}`);
   process.exit(0);
@@ -426,6 +458,24 @@ for (const stamp of ["2026-03-02T08:00:00+00", "2026-03-02", "2024-02-29T08:00:0
 {
   const r = ZONES.map((z) => inZone(z, "freshnow", "2026-07-13T12:30:00Z"));
   check("classifyFreshness: an offset-less evaluation clock is 'unknown' in every zone", r.every((v) => v === "unknown"), r.join(","));
+}
+
+// The other core readers of an instant use the same strict parser. An offset-less stamp names no instant, so the
+// answer must not move with the host zone, and it must be the fail-closed one: attach `unknown`, remediation
+// `unobserved` (the restriction holds), and a test clock that refuses to pin a zone-dependent instant.
+{
+  const offsetlessAttach = ZONES.map((z) => inZone(z, "attach", "2026-07-13T12:30:00"));
+  check("attach: an offset-less observation is 'unknown' in every zone (never host-local attached)", offsetlessAttach.every((v) => v === "unknown"), offsetlessAttach.join(","));
+  const zonedAttach = ZONES.map((z) => inZone(z, "attach", "2026-07-13T14:30:00+02:00"));
+  check("attach: a zoned observation 30 min before the reference is 'attached' in every zone (control)", zonedAttach.every((v) => v === "attached"), zonedAttach.join(","));
+  const offsetlessVerify = ZONES.map((z) => inZone(z, "verify", "2026-07-13T12:00:00"));
+  check("remediation: an offset-less evidence read is not admissible, 'unobserved' in every zone (never host-local cleared)", offsetlessVerify.every((v) => v === "unobserved"), offsetlessVerify.join(","));
+  const zonedVerify = ZONES.map((z) => inZone(z, "verify", "2026-07-13T08:00:00-04:00"));
+  check("remediation: a zoned read inside the window clears, in every zone (control)", zonedVerify.every((v) => v === "cleared"), zonedVerify.join(","));
+  const offsetlessClock = ZONES.map((z) => inZone(z, "clock", "2026-07-13T08:00:00"));
+  check("fixedClock: an offset-less stamp is refused in every zone (never a host-local pinned instant)", offsetlessClock.every((v) => v === "THROWS"), offsetlessClock.join(","));
+  const zonedClock = ZONES.map((z) => inZone(z, "clock", "2026-07-13T08:00:00Z"));
+  check("fixedClock: a Z stamp pins that instant in every zone (control)", zonedClock.every((v) => v === "2026-07-13T08:00:00.000Z"), zonedClock.join(","));
 }
 
 console.log(`\nsummary=${failures.length === 0 ? "pass" : "FAIL"} (${passed}/${passed + failures.length})`);

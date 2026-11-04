@@ -38,6 +38,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { AUTO_KINDS } from "./lib/raised-hand-kinds.mjs"; // the one list of auto-stall kinds a hand may cover
+import { isMainModule } from "./lib/is-main.mjs";
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 export const LEDGER = join(repo, "artifacts/raised-hands");
@@ -254,6 +255,7 @@ function selfTest() {
     copyFileSync(fileURLToPath(import.meta.url), join(tmp, "scripts/check-raised-hands.mjs"));
     mkdirSync(join(tmp, "scripts/lib"), { recursive: true });
     copyFileSync(join(dirname(fileURLToPath(import.meta.url)), "lib/raised-hand-kinds.mjs"), join(tmp, "scripts/lib/raised-hand-kinds.mjs"));
+    copyFileSync(join(dirname(fileURLToPath(import.meta.url)), "lib/is-main.mjs"), join(tmp, "scripts/lib/is-main.mjs"));
     writeFileSync(join(tmp, "docs/agent/org-roster.json"), JSON.stringify({ roles: [{ id: "sre" }] }));
     const hp = join(tmp, "artifacts/raised-hands/h.json");
     const runMain = () => spawnSync("node", [join(tmp, "scripts/check-raised-hands.mjs")], { encoding: "utf8" });
@@ -319,4 +321,4 @@ function main() {
   console.log(`\nThe blocker-dispatcher agent addresses these; loop:state and the mac tick keep them visible until resolved (mark status:"resolved" via scripts/raise-hand.mjs --resolve <id>).`);
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main();
+if (isMainModule(process.argv[1], import.meta.url)) main();

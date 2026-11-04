@@ -82,6 +82,7 @@ import { execFileSync } from "node:child_process";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { SURFACES, STATUSES } from "./launch-profile.mjs";
+import { isMainModule } from "./lib/is-main.mjs";
 
 const JSON_PATH = "docs/agent/CLAIM_INVENTORY.json";
 const RATCHET = "docs/agent/claim-inventory-anchors-ratchet.json";
@@ -673,7 +674,7 @@ function selfTest() {
 
 // Importable: the pure functions above are reused by one-off inventory scripts,
 // so the live check runs only when this file is the entry point.
-const IS_MAIN = process.argv[1] !== undefined && import.meta.url === pathToFileURL(resolve(process.argv[1])).href;
+const IS_MAIN = isMainModule(process.argv[1], import.meta.url);
 if (IS_MAIN) main();
 
 function main() {

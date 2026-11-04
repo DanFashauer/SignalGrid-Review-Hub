@@ -24,6 +24,7 @@
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { isMainModule } from "./lib/is-main.mjs";
 
 export const CANON = {
   dark: { allow: "639779", review: "B08B57", deny: "C67070" },
@@ -500,7 +501,7 @@ function selfTest() {
     const src = readFileSync(fileURLToPath(import.meta.url), "utf8");
     checks.push([
       "the entry guard is EXACT, not a basename suffix match",
-      /import\.meta\.url === pathToFileURL\(process\.argv\[1\]\)\.href/.test(src) &&
+      /isMainModule\(process\.argv\[1\], import\.meta\.url\)/.test(src) &&
         !/import\.meta\.url\.endsWith\(/.test(src),
     ]);
   }
@@ -517,7 +518,7 @@ function selfTest() {
 // `check-decision-palette.mjs` that only imported this module ran the whole gate, and the
 // same file renamed did not — the gate's scope depended on the caller's filename.
 // `check-lab-registry.mjs` diagnosed this exact hazard and fixed it; these two had not.
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (isMainModule(process.argv[1], import.meta.url)) {
   if (process.argv.includes("--self-test")) process.exit(selfTest());
   const { problems, table } = audit(loadTree());
   console.log("Decision-palette gate v2 — parity, block-scoped contrast, and COMPOSITED chip grounds\n");

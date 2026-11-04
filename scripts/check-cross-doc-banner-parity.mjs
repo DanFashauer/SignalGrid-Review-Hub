@@ -96,6 +96,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { tmpdir } from "node:os";
 import { parseLinks, readBanner, trackedDocs, ECHO, HEAD_LINES } from "./check-index-banner-parity.mjs";
 import { fencedLineFlags } from "./lib/markdown-scope.mjs";
+import { isMainModule } from "./lib/is-main.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -568,7 +569,7 @@ function main() {
 }
 
 // Guarded so importing a helper does not run the gate.
-const isEntry = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
+const isEntry = isMainModule(process.argv[1], import.meta.url);
 if (isEntry) {
   if (process.argv.includes("--self-test")) selfTest();
   else main();

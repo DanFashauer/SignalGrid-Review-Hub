@@ -499,7 +499,7 @@ fi
 # Import the canonical readVerdict contract from pinned objects, never from a topic checkout.
 _contract_dir="$(mktemp -d "$CACHE/objective-contract.XXXXXX")" || fail "could not prepare the pinned objective reader"
 mkdir -p "$_contract_dir/scripts/lib" || fail "could not prepare the pinned objective reader's imports"
-for _contract_file in scripts/objective-loop.mjs scripts/check-backlog-ownership.mjs scripts/lib/sim-operations.mjs scripts/lib/raised-hand-kinds.mjs; do
+for _contract_file in scripts/objective-loop.mjs scripts/check-backlog-ownership.mjs scripts/lib/sim-operations.mjs scripts/lib/raised-hand-kinds.mjs scripts/lib/is-main.mjs; do
   if ! git -C "$REPO_ROOT" show "$MAINLINE_SHA:$_contract_file" > "$_contract_dir/$_contract_file" 2>/dev/null; then
     rm -rf "$_contract_dir"
     fail "pinned mainline $MAINLINE_SHA has no readable objective contract ($_contract_file)"

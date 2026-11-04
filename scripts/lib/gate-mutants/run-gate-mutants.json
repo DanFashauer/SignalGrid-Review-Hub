@@ -1,0 +1,27 @@
+[
+ {
+  "name": "runner: red no longer requires exit 1",
+  "find": "if (r.status === 1 && r.tally && !r.tally.ok && r.tally.n < r.tally.total) return \"red\";",
+  "replace": "if (r.tally && !r.tally.ok && r.tally.n < r.tally.total) return \"red\";"
+ },
+ {
+  "name": "runner: LIVE no longer requires exit 0",
+  "find": "if (r.status === 0 && r.tally?.ok) return \"LIVE\";",
+  "replace": "if (r.tally?.ok) return \"LIVE\";"
+ },
+ {
+  "name": "runner: red no longer requires N < M",
+  "find": "if (r.status === 1 && r.tally && !r.tally.ok && r.tally.n < r.tally.total) return \"red\";",
+  "replace": "if (r.status === 1 && r.tally && !r.tally.ok) return \"red\";"
+ },
+ {
+  "name": "runner: anything else counts as a kill",
+  "find": "  return \"BROKEN\";\n}",
+  "replace": "  return \"red\";\n}"
+ },
+ {
+  "name": "runner: a missing tally line is a kill",
+  "find": "  if (r.status === 0 && r.tally?.ok) return \"LIVE\";",
+  "replace": "  if (r.status === 0 && r.tally?.ok) return \"LIVE\";\n  if (!r.tally) return \"red\";"
+ }
+]

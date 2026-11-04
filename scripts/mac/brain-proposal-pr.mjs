@@ -28,10 +28,11 @@ import { spawnSync } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync, chmodSync, mkdirSync } from "node:fs";
 import { tmpdir, homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { fileURLToPath } from "node:url";
 import { isBuiltin } from "node:module";
 import { classifyDiff } from "../check-owner-gated-surfaces.mjs";
 import { scratchGitOk, scrubProcessGitEnv } from "../lib/scratch-git.mjs";
+import { isMainModule } from "../lib/is-main.mjs";
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const BASE = "SignalGrid_Alpha";
@@ -251,7 +252,7 @@ async function selfTest() {
   console.log(`self-test passed (${pass}/${total})`);
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (isMainModule(process.argv[1], import.meta.url)) {
   const a = process.argv.slice(2);
   const opt = (n) => { const i = a.indexOf(n); return i >= 0 ? a[i + 1] : undefined; };
   try {

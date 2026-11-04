@@ -52,6 +52,7 @@ import { parseFragment } from "parse5";
 import ts from "typescript";
 import { LAUNCH_PROFILE_VERSION, SURFACES } from "./launch-profile.mjs";
 import { scratchGitEnv, scratchGitOk } from "./lib/scratch-git.mjs";
+import { isMainModule } from "./lib/is-main.mjs";
 
 const DOC = "docs/SCREEN_INVENTORY.md";
 const ADMIN = "signalgrid-app";
@@ -782,19 +783,8 @@ export function decodeDoc(bytes) {
   }
 }
 
-/**
- * Is this module the script node was started with? Compared by real path on both
- * sides (round 15): `import.meta.url` is already the real path, `process.argv[1]` is
- * not, so a symlinked start used to skip the whole gate and exit 0.
- */
-export function isMainModule(argv1, moduleUrl) {
-  if (!argv1) return false;
-  try {
-    return realpathSync(argv1) === realpathSync(fileURLToPath(moduleUrl));
-  } catch {
-    return false;
-  }
-}
+// isMainModule is the shared helper (scripts/lib/is-main.mjs); this gate used to carry the only copy.
+export { isMainModule };
 
 function trackedPages() {
   const out = execFileSync("git", ["ls-files", "-z", "--", "artifacts/*/src/pages/*.tsx", "artifacts/*/src/pages/**/*.tsx"], { encoding: "utf8" });

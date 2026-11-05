@@ -7,6 +7,9 @@
   "need": "One owner call: (a) an emitted out-of-domain reading in a deferred family raises to step_up like the DR-043 fields (the lane then writes the DR-051 proposal + proof), or (b) day-one-quiet covers it and the ledger note records that as doctrine. Either answer closes the hand.",
   "whoCanUnblock": "owner",
   "domain": "decision-core",
-  "status": "open",
-  "routedTo": null
+  "status": "resolved",
+  "routedTo": null,
+  "resolvedAt": "2026-11-03T15:37:42.206Z",
+  "resolvedBy": "cloud",
+  "resolution": "Owner chose (a) 2026-11-03; built in this PR (DR-065 proposal + proof)"
 }

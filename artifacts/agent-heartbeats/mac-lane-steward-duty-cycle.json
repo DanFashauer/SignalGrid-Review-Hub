@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-11-05T04:25:06.580Z",
-  "result": "04:24Z cycle (11-05): non-quiet. Landed Mac tick results PR #1830 (mac/tick-20261105T024217Z; 0 sim requests, generated objective-state.json only) as aec169e1 on exact head c497ea3c with gating green; the non-required Mac-only check sat queued 33 min (no Mac runner) and does not gate. No new mac/* branches since; no mail to cloud. Tick firedAt on mainline still 2026-10-24T07:30Z (tick PRs do not carry mac-lane-tick.json), but the tick ran 02:42Z. Live evidence 2026-11-02 (<3d). Owner not escalated."
+  "firedAt": "2026-11-05T07:36:19.224Z",
+  "result": "07:24Z cycle (11-05): non-quiet. Mac tick 06:32Z ran sim request objective-loop-evidence-fresh-2026-11-05: evidence passed exit 0 on clean source b475b9fd; artifacts/live-evidence/mac-run.json re-minted 2026-11-05T07:04:05Z (reviewHubPass=true, mcpPass=true). Landed tick PR #1837 as 00344be5 on exact head 97484465 with gating green. Mac estate queue merged mainline into #1133 (green) and #1190 (gating red: coverage page not regenerated after the merge; cloud regenerating it on #1190). Tick heartbeat file on mainline still 2026-10-24T07:30Z (tick PRs do not carry it) though ticks ran 02:42Z, 04:50Z, 06:32Z. Owner not escalated."
 }

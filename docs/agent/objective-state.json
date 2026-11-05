@@ -23,7 +23,7 @@
       "state": "met",
       "measured": {
         "pct": 100,
-        "reason": "20/20 bound proofs/steps current (passed, matching manifest fingerprint and, for proofs, source digest) — green on both halves, 2 day(s) old, manifest e892a94fd5c4; launch items fully current 28/28"
+        "reason": "20/20 bound proofs/steps current (passed, matching manifest fingerprint and, for proofs, source digest) — green on both halves, 0 day(s) old, manifest e892a94fd5c4; launch items fully current 28/28"
       },
       "source": "scripts/check-readiness-figure.mjs --json (.details.evidence)"
     },
@@ -418,8 +418,8 @@
     "partialRows": 5
   },
   "staleAfterHours": 3,
-  "derivedAt": "2026-11-05T02:42:19.307Z",
-  "derivedAtCommit": "c8c947acb6455c568f84f2a29455b51b9208a1a4",
-  "workingTreeCleanAtEntry": true,
+  "derivedAt": "2026-11-05T07:04:08.822Z",
+  "derivedAtCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
+  "workingTreeCleanAtEntry": false,
   "decisionAddress": "5f727447cdbd359793c1372a308f55f4a41c0b4741f0c7754afc474ccbce1d76"
 }

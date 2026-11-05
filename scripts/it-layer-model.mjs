@@ -273,6 +273,9 @@ export const REASON_CODE_LAYERS = [
   { code: "BATTERY_FAILING", layer: "it_operations", domain: "IT Asset Management", systemOfRecord: "dock telemetry", evidenceType: "battery health", owner: "facilities_operations_owner" },
   { code: "DOCK_FAULTED", layer: "it_operations", domain: "IT Monitoring & Maintenance", systemOfRecord: "SmartDock", evidenceType: "dock health", owner: "facilities_operations_owner" },
   { code: "DOCK_OFFLINE", layer: "it_operations", domain: "IT Monitoring & Maintenance", systemOfRecord: "SmartDock", evidenceType: "dock reachability", owner: "facilities_operations_owner" },
+  // DR-065: an emitted dock-family reading nothing could be read from is a feed
+  // fault on the dock plane (no accusation), so it routes with DOCK_OFFLINE.
+  { code: "DOCK_EVIDENCE_UNREADABLE", layer: "it_operations", domain: "IT Monitoring & Maintenance", systemOfRecord: "SmartDock", evidenceType: "dock-family reading legibility", owner: "facilities_operations_owner" },
   { code: "BADGE_REMOVED", layer: "it_security_risk_management", domain: "Identity & Access Management", systemOfRecord: "badge reader case", evidenceType: "physical credential binding", owner: "facilities_operations_owner" },
   // Forced removal is a security INCIDENT, not a custody hiccup — different owner on
   // purpose. This is the one pair in the table where two neighbouring codes route to

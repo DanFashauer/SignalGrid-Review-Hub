@@ -51,25 +51,26 @@ The owner, verbatim: "In any point of credit and or usage is up on any paid mode
 
 ## Publishing a reviewed local build
 
-Use the [publisher source](../../scripts/mac/brain-proposal-pr.mjs) for one
-`kind=build`/`status=review` job in SignalGrid-Review-Hub, with an owned
-worktree and a nonempty public-safe diff.
+Use the [publisher](../../scripts/mac/brain-proposal-pr.mjs) for one
+`kind=build`/`status=review` job in SignalGrid-Review-Hub.
 
-Replace each `job-id` with the reviewed job's ID.
+Caller preconditions: an owned worktree and a nonempty diff inspected for
+secrets and private paths. Inspect the job's diff before `--publish`, which
+pushes to the public origin. Replace `<id>` with the reviewed job ID:
 
 ```bash
-node scripts/mac/brain-proposal-pr.mjs --job job-id
-node scripts/mac/brain-proposal-pr.mjs --job job-id --publish
+node scripts/mac/brain-proposal-pr.mjs --job "<id>"
+node scripts/mac/brain-proposal-pr.mjs --job "<id>" --publish
 ```
 
-The default dry run still fetches and prepares a scratch commit. Publishing
-pushes `brain/job-job-id` and opens a PR. The CLI refuses owner/safety/decision
-paths and specified private-path patterns; it does not certify arbitrary text
-as secret-free, run full preflight/breadth, perform independent reviews, or
-merge. Secret-safety review, full preflight/breadth and independent reviews
-remain separate requirements before Cloud DR-037 landing.
+Default dry run fetches and prepares a scratch commit. Publishing pushes
+`brain/job-<id>` and opens a PR. The CLI refuses owner/safety/decision paths.
+Its private-path regex checks only job title/result, not changed paths or
+patch text. Secret-safety review, full preflight/breadth and independent
+reviews remain required before Cloud DR-037 landing; the CLI never merges.
 
-With `--publish`, an existing branch means no push or PR creation. Read back an uncertain publish; never retry it.
+With `--publish`, an existing branch means no push or PR. Read back an
+uncertain publish; never retry it.
 
 ## Never
 

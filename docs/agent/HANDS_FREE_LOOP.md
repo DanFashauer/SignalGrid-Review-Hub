@@ -49,6 +49,24 @@ The owner, verbatim: "In any point of credit and or usage is up on any paid mode
 - A review routed through OmniRoute is recorded as what it is: the model and the route, never as a Codex review. The work-queue rule that `merged` needs both reviews is unchanged.
 - The local LLM and the Obsidian brain may learn new skills to finish a job. A new skill lands as a reviewed PR like any other change, and vault content never enters the tree (rule 8).
 
+## Publishing a reviewed local build
+
+Use the [publisher source](../../scripts/mac/brain-proposal-pr.mjs) for one
+`kind=build`/`status=review` job in SignalGrid-Review-Hub, with an owned
+worktree and a nonempty public-safe diff.
+
+```bash
+node scripts/mac/brain-proposal-pr.mjs --job JOB_ID
+node scripts/mac/brain-proposal-pr.mjs --job JOB_ID --publish
+```
+
+The default dry run still fetches and prepares a scratch commit. Publishing
+pushes `brain/job-JOB_ID` and opens a PR. The CLI refuses owner/safety/decision
+paths and specified private-path patterns; it does not certify arbitrary text
+as secret-free, run full preflight/breadth, perform independent reviews, or
+merge. Secret-safety review, full preflight/breadth and independent reviews
+remain separate requirements before Cloud DR-037 landing.
+
 ## Never
 
 - Never commit vault content, a vault path's contents, or a note title from the vault.

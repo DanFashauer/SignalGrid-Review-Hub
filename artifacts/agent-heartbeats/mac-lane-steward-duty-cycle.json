@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-11-05T10:24:40.318Z",
-  "result": "10:24Z cycle (11-05): non-quiet (acked Mac mail mac-land-1819… — #1819 landed 802e84fc earlier) and 2h keepalive due. No new/moved mac/* since 06:32Z tick; live evidence 2026-11-05T07:04Z (fresh). Mac estate queue refreshing PRs hourly; #1133 and #1190 green after refresh. Tick heartbeat file still 2026-10-24T07:30Z on mainline (tick PRs do not carry it) though ticks ran 02:42Z/04:50Z/06:32Z. Owner not escalated."
+  "firedAt": "2026-11-05T12:25:38.972Z",
+  "result": "12:25Z cycle (11-05): keepalive (last 10:24Z). No new/moved mac/* since the 06:32Z tick; no mail to cloud; live evidence 2026-11-05T07:04Z. Mac estate queue alive (refreshed #1133/#1190 at 12:04Z). Cleared stale mainline hand 2026-11-04-the-mac-lane-has-not-read-or-acked-the-mail-in-3 via #1844 before it turned fatal. Tick heartbeat file still 2026-10-24T07:30Z on mainline (tick PRs do not carry it). Owner not escalated."
 }

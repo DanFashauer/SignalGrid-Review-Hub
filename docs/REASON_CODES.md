@@ -11,7 +11,7 @@ Under the embedded-UX law the verdict plus its reason codes ARE the product
 surface: the host app renders the worker's message from them, so this catalog
 is the contract a host-app developer builds against.
 
-**44 codes** the decision core can emit: 32 reachable
+**45 codes** the decision core can emit: 33 reachable
 through the launch evaluate surface, 5 only via the draft-policy
 test route, 7 only through deferred routes. Worker/operator
 language comes from the engine's own resolution descriptors; a code without a
@@ -46,6 +46,7 @@ falsify the contract for every tenant with a custom rule.
 | `CUSTODY_UNKNOWN` | step_up | *(none)* | *(no resolution descriptor — no step; the plan carries it in `unresolvedCodes` and escalates, see the note below)* | — | `attach reading present but unreadable → step-up, never a gra` |
 | `DEVICE_NONCOMPLIANT` | restrict | requires_approval | Follow the on-device compliance prompt, or hand the device to IT to bring it back into compliance. | Approve a compliance remediation request to the device-management owner, then re-evaluate. | `non-compliant → restrict` |
 | `DEVICE_UNMANAGED` | restrict | requires_approval | Use a managed shared device for this task, or enrol this device via the company portal. | Approve an enrolment request, or direct the worker to a managed device. | — |
+| `DOCK_EVIDENCE_UNREADABLE` | step_up | *(none)* | *(no resolution descriptor — no step; the plan carries it in `unresolvedCodes` and escalates, see the note below)* | — | `tamper reading emitted but unreadable → step-up, never a gra` |
 | `DOCK_FAULTED` | restrict | requires_approval | The dock holding this device is faulted — an operator will move it to a healthy dock/bay before it can be used. | Move the device to a healthy SmartDock/bay to re-establish custody (and service the faulted dock), then re-evaluate. | `SmartDock faulted → restrict` |
 | `DOCK_OFFLINE` | step_up | auto_proposed | This dock is offline — return the device to an online dock/bay to refresh its custody state, then retry. | Confirm the device is on an online SmartDock/bay (or reconnect the dock), then re-evaluate. | `SmartDock offline → step-up` |
 | `ENCRYPTION_REQUIRED_FOR_WORKFLOW` | step_up | requires_approval | Wait for device encryption to be enforced before starting this workflow. | Approve an encryption-enforcement request for this device. | — |
@@ -97,7 +98,7 @@ them as launch surface.
 
 ## The descriptor gap, stated
 
-14 of 44 codes have no resolution descriptor, so
+15 of 45 codes have no resolution descriptor, so
 `buildResolutionPlan` has no STEP to offer for them. What changed on
 2026-09-02 (verdict-core finding V9) is that it no longer stays quiet about it.
 

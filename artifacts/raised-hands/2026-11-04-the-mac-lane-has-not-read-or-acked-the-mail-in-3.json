@@ -7,9 +7,12 @@
   "need": "the Mac lane reads and acks the mail (pnpm run lane:inbox) and runs the deletes, or says what blocks it",
   "whoCanUnblock": "mac lane",
   "domain": "lane",
-  "status": "open",
+  "status": "resolved",
   "routedTo": null,
   "covers": [
     "mail:cloud-od01-approved-run-the-zero-loss-deletes-fr"
-  ]
+  ],
+  "resolvedAt": "2026-11-05T12:07:34.321Z",
+  "resolvedBy": "cloud",
+  "resolution": "The OD01 mail (cloud-od01-approved-run-the-zero-loss-deletes-fr) is acknowledged on mainline (artifacts/lane-messages/acks/), and its sibling hand 2026-11-04-the-mac-did-the-work-its-reply-mac-od01-done-fro is already resolved. raised-hands --check reports this cover 'no longer stuck'; left open it turns fatal after its grace period (~16:16Z 11-05)."
 }

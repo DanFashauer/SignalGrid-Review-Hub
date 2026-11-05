@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-11-05T14:25:23.145Z",
-  "result": "14:25Z cycle (11-05): keepalive (last 12:25Z; sent now so the next hourly fire does not land on the 3h bound). No new/moved mac/* since the 06:32Z tick; no mail to cloud; live evidence 2026-11-05T07:04Z. Mac estate queue alive (refreshed #1133/#1190/#1840 hourly). #1840 (Mac's land request) reviewed: wording blocker posted, awaiting Mac fix. Tick heartbeat file still 2026-10-24T07:30Z on mainline (tick PRs do not carry it). Owner not escalated."
+  "firedAt": "2026-11-05T16:25:08.694Z",
+  "result": "16:25Z cycle (11-05): keepalive (last 14:25Z). No new/moved mac/* since the 06:32Z tick; no mail to cloud; live evidence 2026-11-05T07:04Z; raised-hands check passes. Mac estate queue alive (hourly refreshes). #1840 still waits on the Mac's wording fix. Tick heartbeat file still 2026-10-24T07:30Z on mainline (tick PRs do not carry it). Owner not escalated."
 }

@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-11-05T04:11:23.642Z",
-  "result": "04:11Z fire (11-05): no cloud wave per DR-064; 0 workers in flight (H/S/O 0/0/0); 0 mac/build-row claims. Acted: landing Mac tick results PR #1830 (refreshed twice; gating green, Mac-only check queued); #1831 steward heartbeat merged 20500582. sub-brains: signalgrid-mcp #17 (fdc50f61) waits on owner. owner queue: #1133 (green on 3682998e, Codex clean), #1265 (now fully green on 483185a3, behind), #1337, #1792, #1463, #1338, #1321, #1314, #1190. Owner merged #1791 (698e2325). #1698 still draft awaiting the Mac's land ask."
+  "firedAt": "2026-11-05T06:12:51.809Z",
+  "result": "06:11Z fire (11-05): no cloud wave per DR-064; 0 workers in flight (H/S/O 0/0/0); 0 mac/build-row claims. Acted since last fire: landed Mac tick results #1830 (aec169e1) and #1834 (b475b9fd, carries sim request objective-loop-evidence-fresh-2026-11-05 for the Mac's next tick); heartbeats #1832/#1833/#1835 merged. sub-brains: signalgrid-mcp #17 (fdc50f61) waits on owner. owner queue: #1133 (green, Codex clean), #1265 (green, behind), #1337, #1792, #1463, #1338, #1321, #1314, #1190. #1698 still draft awaiting the Mac's land ask."
 }

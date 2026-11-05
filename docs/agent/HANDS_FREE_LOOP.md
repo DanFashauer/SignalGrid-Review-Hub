@@ -52,19 +52,22 @@ The owner, verbatim: "In any point of credit and or usage is up on any paid mode
 ## Publishing a reviewed local build
 
 Use the [publisher source](../../scripts/mac/brain-proposal-pr.mjs) for one
-`kind=build`/`status=review` job in SignalGrid-Review-Hub, with an owned
-worktree and a nonempty public-safe diff.
+`kind=build`/`status=review` job in SignalGrid-Review-Hub. The script checks
+that the job's worktree exists and that its diff is nonempty. That the
+worktree is owned and the diff is public-safe are the caller's preconditions.
 
-Replace each `job-id` with the reviewed job's ID.
+Replace `<id>` with the reviewed job's ID.
 
 ```bash
-node scripts/mac/brain-proposal-pr.mjs --job job-id
-node scripts/mac/brain-proposal-pr.mjs --job job-id --publish
+node scripts/mac/brain-proposal-pr.mjs --job <id>
+node scripts/mac/brain-proposal-pr.mjs --job <id> --publish
 ```
 
-The default dry run still fetches and prepares a scratch commit. Publishing
-pushes `brain/job-job-id` and opens a PR. The CLI refuses owner/safety/decision
-paths and specified private-path patterns; it does not certify arbitrary text
+The default dry run still fetches and prepares a scratch commit. Inspect the
+dry-run diff before `--publish`: publishing pushes `brain/job-<id>` to the
+public origin and opens a PR before any secret-safety review. The CLI refuses
+owner/safety/decision paths and a job whose title or result names a private
+path; it does not scan the diff for private paths, and it does not certify arbitrary text
 as secret-free, run full preflight/breadth, perform independent reviews, or
 merge. Secret-safety review, full preflight/breadth and independent reviews
 remain separate requirements before Cloud DR-037 landing.

@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-11-05T02:12:04.038Z",
-  "result": "keepalive with the 02:10Z batch (11-05). 01:24Z cycle quiet: no new/moved mac/* since 21:36Z, sim loop 31/31 bound, manifest clean. Tick last firedAt 2026-10-24T07:30Z (blocked by ruleset; fix is #1698, no owner re-escalation). Live evidence 2026-11-02 (<3d). 3 cloud->mac messages unread (1.9h-7.6h)."
+  "firedAt": "2026-11-05T04:25:06.580Z",
+  "result": "04:24Z cycle (11-05): non-quiet. Landed Mac tick results PR #1830 (mac/tick-20261105T024217Z; 0 sim requests, generated objective-state.json only) as aec169e1 on exact head c497ea3c with gating green; the non-required Mac-only check sat queued 33 min (no Mac runner) and does not gate. No new mac/* branches since; no mail to cloud. Tick firedAt on mainline still 2026-10-24T07:30Z (tick PRs do not carry mac-lane-tick.json), but the tick ran 02:42Z. Live evidence 2026-11-02 (<3d). Owner not escalated."
 }

@@ -7,9 +7,12 @@
   "need": "a Mac session runs pnpm run lane:inbox, reads and acks that mail and runs the zero-loss deletes (cloud cannot create archive tags)",
   "whoCanUnblock": "mac lane",
   "domain": "lane",
-  "status": "open",
+  "status": "resolved",
   "routedTo": null,
   "covers": [
     "mail:cloud-od01-approved-run-the-zero-loss-deletes-fr"
-  ]
+  ],
+  "resolvedAt": "2026-11-05T17:04:16.789Z",
+  "resolvedBy": "cloud",
+  "resolution": "Stale duplicate: the OD01 mail is acknowledged on mainline and its covering hands there are resolved (2026-11-04-the-mac-did-the-work-its-reply-mac-od01-done-fro; 2026-11-04-the-mac-lane-has-not-read-or-acked-the-mail-in-3 cleared in #1844). Open, it fails raised-hands --check (Mac-only check job 127386786903 on #1133)."
 }

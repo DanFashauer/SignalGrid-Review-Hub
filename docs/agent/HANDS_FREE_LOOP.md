@@ -63,16 +63,29 @@ node scripts/mac/brain-proposal-pr.mjs --job <id>
 node scripts/mac/brain-proposal-pr.mjs --job <id> --publish
 ```
 
-The default dry run still fetches and prepares a scratch commit. Inspect the
-dry-run diff before `--publish`: publishing pushes `brain/job-<id>` to the
-public origin and opens a PR before any secret-safety review. The CLI refuses
-owner/safety/decision paths and a job whose title or result names a private
-path; it does not scan the diff for private paths, and it does not certify arbitrary text
-as secret-free, run full preflight/breadth, perform independent reviews, or
-merge. Secret-safety review, full preflight/breadth and independent reviews
-remain separate requirements before Cloud DR-037 landing.
+The default dry run still fetches and prepares a scratch commit, but it prints
+only the job title, the file list and the classification; it does not show the
+diff or the job result, and it removes its scratch worktree. Before
+`--publish`, review the job worktree yourself (`git -C <worktree> diff HEAD`
+plus every untracked, non-ignored file, binaries included) and the job's title
+and result: the title becomes the PR title and the result is quoted verbatim
+in the PR body. Publishing pushes `brain/job-<id>` to the public origin and
+opens a PR before any secret-safety review, and a secret that reaches origin
+is compromised: rotate it and ask the owner before any branch deletion.
 
-With `--publish`, an existing branch means no push or PR creation. Read back an uncertain publish; never retry it.
+The CLI refuses owner-reserved, safety-machinery, decision and governance
+paths, paths outside the repository, and a job whose title or result matches
+its private-path pattern (Mac home paths and the brain's directory names, a
+narrow denylist, not a scan); it does not scan the diff for private paths, and
+it does not certify arbitrary text as secret-free, run full preflight/breadth,
+perform independent reviews, or merge. Secret-safety review, full
+preflight/breadth and independent reviews remain separate requirements before
+Cloud DR-037 landing.
+
+With `--publish`, an existing branch means no push or PR creation. Read back an
+uncertain publish; never retry it. If the push succeeded but PR creation
+failed, a rerun does nothing: open the PR by hand with
+`gh pr create --base SignalGrid_Alpha --head brain/job-<id>`.
 
 ## Never
 

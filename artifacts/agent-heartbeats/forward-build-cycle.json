@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-11-05T16:14:24.830Z",
-  "result": "16:13Z fire (11-05): quiet. No cloud wave per DR-064; 0 workers in flight (H/S/O 0/0/0); 0 mac/build-row claims. #1847/#1848 merged. #1840 (Mac land request) still holds the posted wording blocker (private-path sentence overstates the CLI; diff unchanged since review). #1133 and #1190 green 14/14 after hourly estate-queue refreshes. sub-brains: signalgrid-mcp #17 (fdc50f61) waits on owner. owner queue: #1133 (green), #1190 (green), #1265, #1337, #1792, #1463, #1338, #1321, #1314."
+  "firedAt": "2026-11-05T18:11:36.322Z",
+  "result": "18:11Z fire (11-05): no cloud wave per DR-064; 0 workers in flight (H/S/O 0/0/0); 0 mac/build-row claims. Acted since last fire: #1133's Mac-only check failed on a stale duplicate OD01 hand carried on its branch (raised-hands --check); resolved it (c66e01f2, preflight+breadth green), pushed; #1133 now green 14/14 incl. Mac-only, Codex clean. #1849/#1850 merged. #1840 still holds the posted wording blocker. sub-brains: signalgrid-mcp #17 (fdc50f61) waits on owner. owner queue: #1133 (green), #1190 (green), #1265, #1337, #1792, #1463, #1338, #1321, #1314."
 }

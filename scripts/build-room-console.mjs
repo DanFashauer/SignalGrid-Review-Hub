@@ -196,15 +196,17 @@ const EXPECTED_CLASSES = {
   // Risk tier describes the ACTION, not the device. No tier is a device fault, so the
   // graded tiers raise attention rather than reporting a failure.
   RiskTier: { low: "ok", standard: "ok", elevated: "warn", critical: "warn" },
-  CustodyState: { checked_in: "ok", checked_out: "ok", overdue: "bad", exception: "bad", maintenance: "bad", unknown: "warn" },
-  ChargeState: { charging: "ok", charged: "ok", low: "warn", critical: "bad", not_present: "bad", unknown: "warn" },
-  BatteryHealthState: { healthy: "ok", degraded: "warn", failing: "bad", unknown: "warn" },
-  TamperState: { none: "ok", suspected: "warn", confirmed: "bad", sensor_unavailable: "warn", unknown: "warn" },
-  DockState: { occupied: "ok", empty: "ok", reserved: "ok", faulted: "bad", offline: "bad", unknown: "warn" },
+  // DR-065: `unreadable` (an emitted reading nothing could be read from) steps up,
+  // so it is amber like every other no-answer — never green, and not an accusation.
+  CustodyState: { checked_in: "ok", checked_out: "ok", overdue: "bad", exception: "bad", maintenance: "bad", unknown: "warn", unreadable: "warn" },
+  ChargeState: { charging: "ok", charged: "ok", low: "warn", critical: "bad", not_present: "bad", unknown: "warn", unreadable: "warn" },
+  BatteryHealthState: { healthy: "ok", degraded: "warn", failing: "bad", unknown: "warn", unreadable: "warn" },
+  TamperState: { none: "ok", suspected: "warn", confirmed: "bad", sensor_unavailable: "warn", unknown: "warn", unreadable: "warn" },
+  DockState: { occupied: "ok", empty: "ok", reserved: "ok", faulted: "bad", offline: "bad", unknown: "warn", unreadable: "warn" },
   BaselineState: { aligned: "ok", partial: "warn", drifted: "bad", not_assessed: "warn", unknown: "warn" },
   BenchmarkSelectionState: { confirmed: "ok", misfit: "bad", unverified: "warn" },
   ShiftContextState: { confirmed: "ok", misfit: "bad", unverified: "warn" },
-  BadgeBindingState: { present: "ok", removed: "bad", forced: "bad", absent: "warn", unknown: "warn" },
+  BadgeBindingState: { present: "ok", removed: "bad", forced: "bad", absent: "warn", unknown: "warn", unreadable: "warn" },
   ManagementHealthState: { healthy: "ok", degraded: "warn", broken: "bad", unknown: "warn" },
   LocalAuthorityGrantState: { verified: "ok", withheld: "bad", unverified: "warn" },
   // DR-043. `not_applicable` (no such credential in play) is amber like every other

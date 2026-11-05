@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-11-05T18:25:01.516Z",
-  "result": "18:24Z cycle (11-05): keepalive (last 16:25Z). No new/moved mac/* since the 06:32Z tick; no mail to cloud; manifest check clean; sim-request loop passes; live evidence 2026-11-05T07:04Z. Three cloud->mac messages unread (oldest 23.9h, hand-offs 2026-11-04). #1851 forward-build heartbeat landing. #1840 still waits on the Mac's wording fix. Tick heartbeat file still 2026-10-24T07:30Z on mainline (tick PRs do not carry it). Owner not escalated."
+  "firedAt": "2026-11-05T20:25:19.953Z",
+  "result": "20:24Z cycle (11-05): non-quiet. Mac mail #1853 (1840 fixed at 706c23fe) and #1854 (3 acks) landed; acked the 1840 mail. #1840 re-qualified, security finding fixed as b7c94ef7, awaiting owner ready-tap. New mac/pr1840-accuracy-aa2 branch (a28a8881) superseded, no PR, on prune list. Tick heartbeat file still 2026-10-24T07:30Z (tick heartbeat push to protected mainline fails; fix proposed to owner). Live evidence 2026-11-05T07:04Z. Owner not escalated by this cycle."
 }

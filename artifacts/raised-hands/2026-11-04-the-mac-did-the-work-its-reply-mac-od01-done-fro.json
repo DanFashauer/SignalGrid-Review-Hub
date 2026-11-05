@@ -7,10 +7,13 @@
   "need": "The Mac lane acks it: pnpm run lane:deliver ack cloud-od01-approved-run-the-zero-loss-deletes-fr \"done: see mac-od01-done-from-the-mac-the-two-remaining-zer\". Then clear this hand.",
   "whoCanUnblock": "mac lane",
   "domain": "lane-coordination",
-  "status": "open",
+  "status": "resolved",
   "routedTo": null,
   "where": "artifacts/lane-messages/cloud-od01-approved-run-the-zero-loss-deletes-fr.json",
   "covers": [
     "mail:cloud-od01-approved-run-the-zero-loss-deletes-fr"
-  ]
+  ],
+  "resolvedAt": "2026-11-04T18:29:43.391Z",
+  "resolvedBy": "cloud",
+  "resolution": "The Mac's ack of cloud-od01-approved-run-the-zero-loss-deletes-fr landed on mainline with PR #1745 (merge 2067d811, 2026-11-04 17:43Z); the mail is no longer unread."
 }

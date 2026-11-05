@@ -1,0 +1,15 @@
+{
+  "id": "2026-11-04-the-mac-lane-has-not-read-or-acked-the-mail-in-3",
+  "raisedAt": "2026-11-04T16:16:15.697Z",
+  "origin": "cloud",
+  "doing": "Mac lane: running the OD01-approved zero-loss branch deletes (cloud cannot create archive tags), plus #1698 and the item-6 list, per the cloud mail cloud-od01-approved-run-the-zero-loss-deletes-fr",
+  "blockedBy": "The Mac lane has not read or acked the mail in 3.5 days (past the 72h limit); the cloud lane cannot run the deletes itself because it cannot create archive tags",
+  "need": "the Mac lane reads and acks the mail (pnpm run lane:inbox) and runs the deletes, or says what blocks it",
+  "whoCanUnblock": "mac lane",
+  "domain": "lane",
+  "status": "open",
+  "routedTo": null,
+  "covers": [
+    "mail:cloud-od01-approved-run-the-zero-loss-deletes-fr"
+  ]
+}

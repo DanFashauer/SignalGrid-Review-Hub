@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-11-05T18:11:36.322Z",
-  "result": "18:11Z fire (11-05): no cloud wave per DR-064; 0 workers in flight (H/S/O 0/0/0); 0 mac/build-row claims. Acted since last fire: #1133's Mac-only check failed on a stale duplicate OD01 hand carried on its branch (raised-hands --check); resolved it (c66e01f2, preflight+breadth green), pushed; #1133 now green 14/14 incl. Mac-only, Codex clean. #1849/#1850 merged. #1840 still holds the posted wording blocker. sub-brains: signalgrid-mcp #17 (fdc50f61) waits on owner. owner queue: #1133 (green), #1190 (green), #1265, #1337, #1792, #1463, #1338, #1321, #1314."
+  "firedAt": "2026-11-05T22:11:38.512Z",
+  "result": "quiet: no cloud wave (DR-064). #1840 (second brain-built change) qualified at b7c94ef7 - gating success, preflight PASSED, breadth PASSED (58), 0 threads, security finding fixed - blocked only on draft->ready, which the classifier refuses to both lanes (owner tap). Landed since last fire: #1856, #1857. In flight H/S/O = 0/0/0. sub-brains: signalgrid-mcp #17 fdc50f61 unchanged. Owner queue: #1840 ready-tap; #1133, #1190 green; #1265, #1337, #1792, #1463, #1338, #1321, #1314."
 }

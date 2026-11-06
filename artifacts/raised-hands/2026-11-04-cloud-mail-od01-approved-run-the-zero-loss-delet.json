@@ -7,9 +7,12 @@
   "need": "a Mac session runs pnpm run lane:inbox, reads and acks that mail and runs the zero-loss deletes (cloud cannot create archive tags)",
   "whoCanUnblock": "mac lane",
   "domain": "lane",
-  "status": "open",
+  "status": "resolved",
   "routedTo": null,
   "covers": [
     "mail:cloud-od01-approved-run-the-zero-loss-deletes-fr"
-  ]
+  ],
+  "resolvedAt": "2026-11-06T18:03:45.991Z",
+  "resolvedBy": "cloud",
+  "resolution": "stale: mail cloud-od01-approved-run-the-zero-loss-deletes-fr is now acked on mainline, so its stall is no longer measured"
 }

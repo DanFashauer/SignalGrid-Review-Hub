@@ -6,7 +6,7 @@ day a brain install dropped a guard, a repair was written outside the tree, the 
 classifier refused to run it, and a hand asked the owner to type two lines. This file is
 the repair, in the tree, reviewed before it can run.
 
-The guards (each measured on a real build before it was written; four as of 2026-11-06 18:30Z):
+The guards (each measured on a real build before it was written; four as of 2026-11-06 18:27Z):
   call_cap_600     signalgrid_brain.py: the OmniRoute / direct-Ollama request ceiling is
                    600 s, not 180 s. A 12k-token step on this 16 GB Mac takes 2m27s-2m59s;
                    at 180 s the client aborted every one (OmniRoute 499, Ollama 500).
@@ -86,6 +86,7 @@ GUARDS = {
     "reedit_schema": {
         "file": RUNTIME,
         "present": re.compile(r'allowed = \["check", "finish"\] if any\(c >= 2 for c in build_read_counts\.values\(\)\) else \["read", "check", "finish"\]'),
+        "order": ("RECOVER FROM THE ACTUAL TOOL RESULT", 'allowed = ["check", "finish"]'),
         "patch": [
             (re.compile(r'^(?P<i>[ \t]+)(?P<line>instruction \+= "\\nRECOVER FROM THE ACTUAL TOOL RESULT: [^\n]*)\n', re.M),
              "\\g<i>\\g<line>\n"
@@ -101,6 +102,7 @@ GUARDS = {
     "noop_edit_refused": {
         "file": RUNTIME,
         "present": re.compile(r'raise AgentBlocked\("Replacement changes nothing: the file already holds that content"\)'),
+        "order": ('content = previous.replace(action["old_text"], action["content"], 1)', "if content == previous:", "target.write_text(content)"),
         "patch": [
             (re.compile(r'^(?P<i>[ \t]+)(?P<line>content = previous\.replace\(action\["old_text"\], action\["content"\], 1\))\n', re.M),
              "\\g<i>\\g<line>\n"
@@ -116,11 +118,18 @@ GUARDS = {
 def sha(p): return hashlib.sha256(Path(p).read_bytes()).hexdigest()
 
 
+def placed(text, g):
+    # `present` alone would accept the guard's text anywhere (a dead branch, after the write);
+    # `order` names the lines that must appear in this sequence, each exactly once.
+    idx = [text.find(s) for s in g.get("order", ())]
+    return all(i >= 0 for i in idx) and idx == sorted(idx) and all(text.count(s) == 1 for s in g.get("order", ()))
+
+
 def check(home, say=print):
     missing = []
     for name, g in GUARDS.items():
         text = (home / g["file"]).read_text()
-        ok = bool(g["present"].search(text))
+        ok = bool(g["present"].search(text)) and placed(text, g)
         say(f"{'present' if ok else 'MISSING'}  {name}  ({g['file']})")
         if not ok:
             missing.append(name)
@@ -163,9 +172,13 @@ def apply(home, instruction, run_tests=True, say=print):
         shutil.copy2(f, bdir / f.name)
     before = {f.name: sha(f) for f in files}
 
+    sdir = None
+
     def rollback():
         for f in files:
             shutil.copy2(bdir / f.name, f)
+        if sdir is not None:
+            shutil.rmtree(sdir, ignore_errors=True)  # a scope never approved is not left behind
         say(f"ROLLED BACK from {bdir}")
 
     try:
@@ -174,8 +187,8 @@ def apply(home, instruction, run_tests=True, say=print):
             g = GUARDS[name]
             p = home / g["file"]
             p.write_text(patch_text(p.read_text(), g))
-            if not g["present"].search(p.read_text()):
-                raise SystemExit(f"REFUSED: {name} still missing after its patch")
+            if not (g["present"].search(p.read_text()) and placed(p.read_text(), g)):
+                raise SystemExit(f"REFUSED: {name} still missing or misplaced after its patch")
         new_rt = sha(files[0])
         if new_rt != old_rt:
             replace_once(files[1], old_rt, new_rt)
@@ -293,6 +306,10 @@ def self_test():
         ok("(7) the schema guard sits inside the RECOVER branch, keeping a first-refusal corrected edit", 'enum": allowed' in runtime_txt and runtime_txt.index("RECOVER FROM") < runtime_txt.index("allowed = ["))
         ok("(7b) the no-op refusal sits between the replace and the write, so an identical result never reaches write_text",
            runtime_txt.index("content = previous.replace(") < runtime_txt.index("if content == previous:") < runtime_txt.index("target.write_text(content)"))
+        # Cloud review L1 (6f6b7adf): the raise text alone must not read as present when it sits after the write.
+        moved = runtime_txt.replace("if content == previous:\n", "", 1).replace("target.write_text(content)\n",
+                "target.write_text(content)\nif content == previous:\n", 1)
+        ok("(7c) --check refuses the guard's text in the wrong place", not placed(moved, GUARDS["noop_edit_refused"]))
         snap = {n: sha(home / n) for n in (RUNTIME, BRAIN, HANDOFF, OPCFG)}
         ok("(8) a second --apply is a no-op", apply(home, "again", run_tests=False, say=quiet) is None and snap == {n: sha(home / n) for n in snap})
         # A brain whose anchor changed shape is refused and left untouched, not half-edited.

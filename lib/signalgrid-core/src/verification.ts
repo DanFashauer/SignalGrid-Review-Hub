@@ -83,7 +83,8 @@ export interface RemediationVerification {
   readonly reasonCode: string;
   readonly state: VerificationState;
   /** The instant of the read this verdict rests on. Null when `unobserved` — there is
-   *  no observation to name, and naming one would be a fabricated status. */
+   *  no observation to name, and naming one would be a fabricated status — and null on a
+   *  `not_cleared` held by a read whose own instant is unreadable. */
   readonly observedAt: string | null;
   /** Consecutive times this remediation has come up unobserved, including this one. */
   readonly misses: number;
@@ -158,22 +159,46 @@ export function verifyRemediation(
   if (requestedMs === null) return miss("request instant is unparseable — nothing can be shown to postdate it");
   if (asOfMs === null) return miss("reference instant is unparseable — no window to judge within");
 
-  const admissible = reads
-    .map((r) => ({ read: r, ms: instant(r.observedAt) }))
-    .filter(
-      (x): x is { read: EvidenceRead; ms: number } =>
-        x.ms !== null && x.read.targetRef === action.targetRef && x.ms > requestedMs && x.ms <= asOfMs,
-    )
+  const forTarget = reads
+    .filter((r) => r.targetRef === action.targetRef)
+    .map((r) => ({ read: r, ms: instant(r.observedAt) }));
+
+  // A read for this target that still CARRIES the code but whose instant cannot be read
+  // (garbled, or offset-less: no zone, so no instant) cannot be placed before the request
+  // or after the reference — so nothing rules out that it is the FIRST read in the window.
+  // It cannot clear anything, but it must not vanish either: dropping it let a later
+  // clearing read decide, which turned a UTC host's `not_cleared` into `cleared` once the
+  // strict parser made the stamp unreadable. An unreadable accusation blocks clearing.
+  const unplaceableAccusation = forTarget.some((x) => x.ms === null && x.read.reasonCodes.includes(action.reasonCode));
+
+  const admissible = forTarget
+    .filter((x): x is { read: EvidenceRead; ms: number } => x.ms !== null && x.ms > requestedMs && x.ms <= asOfMs)
     .sort((a, b) => a.ms - b.ms);
 
   const first = admissible[0];
   if (first === undefined) {
-    return miss("no evidence read for this target between the request and the reference instant");
+    return miss(
+      unplaceableAccusation
+        ? "no placeable evidence read for this target in the window; a read still carrying the code has an unreadable instant"
+        : "no evidence read for this target between the request and the reference instant",
+    );
   }
 
   // The EARLIEST admissible read decides. A later one may show the problem returning,
   // which is a new decision's business, not evidence that this fix never landed.
   const stillPresent = first.read.reasonCodes.includes(action.reasonCode);
+  if (!stillPresent && unplaceableAccusation) {
+    return {
+      ...base,
+      state: "not_cleared",
+      // The read that holds the restriction names no readable instant, and naming the
+      // clearing read's instant here would point at the wrong observation.
+      observedAt: null,
+      misses: 0,
+      escalated: false,
+      note: `${action.reasonCode} still present at a read whose instant is unreadable — it cannot be placed outside the window, so it may be the first read after the request; the restriction holds`,
+    };
+  }
   return {
     ...base,
     state: stillPresent ? "not_cleared" : "cleared",

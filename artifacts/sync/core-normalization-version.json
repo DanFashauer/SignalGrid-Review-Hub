@@ -1,11 +1,11 @@
 {
   "schema": "signalgrid.core-normalization-version/1",
-  "version": 31,
-  "sourcesDigest": "bbb2e619e53f6c41787a8c04417b6656d52dc936b716add2fb99de6d33fd35fe",
+  "version": 32,
+  "sourcesDigest": "1616710e10593d168d04f0867ec83571bf91b10dc318f725b04513b4f93b26d6",
   "sources": [
     {
       "path": "lib/signalgrid-core/src/attach.ts",
-      "sha256": "2a3602f57382638b09dacca296cba5ba45fca7b304293d736d9dfa58177f8f68"
+      "sha256": "c57f561a9a8bceb70240bc97082ec9a0ee0fa5717e7c41ce703a53c8f92279cc"
     },
     {
       "path": "lib/signalgrid-core/src/audit.ts",

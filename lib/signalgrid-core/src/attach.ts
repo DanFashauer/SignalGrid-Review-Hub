@@ -95,7 +95,10 @@ function parse(instant: string | undefined): number | null {
  *
  * Everything below resolves to `unknown`: a wire value outside the two positive
  * states, an unparseable or absent observation instant, a missing receiver identity,
- * an observation older than the bound, and an observation from the future.
+ * an observation older than the bound, and an observation from the future. One exception,
+ * in the raising direction: a `removed` report whose observation or reference instant is
+ * present but unreadable stays `removed` (with `observedAt: null`), because an unreadable
+ * time cannot make an accusation milder than a readable one.
  */
 export function normalizeAttachRecord(
   record: AttachRecord,
@@ -122,6 +125,19 @@ export function normalizeAttachRecord(
   }
   const observedMs = parse(record.observedAt);
   const referenceMs = parse(referenceInstant);
+  // A REMOVAL is an accusation, and an instant that is present but unreadable (garbled, or offset-less: no zone,
+  // so no instant) cannot show it stale. Resolving it to `unknown` graded a torn puck step_up instead of deny —
+  // milder than the same report with a readable, timely stamp, which golden rule 2 forbids. The removal stands,
+  // forced flag and all; it names no instant because it has none. An ABSENT stamp and a stale or future one keep
+  // their existing `unknown` below; `attached` is not an accusation, so an unreadable one stays `unknown` (raises).
+  if (record.wireState === "removed" && (observedMs === null || referenceMs === null) && !blank(record.observedAt) && !blank(referenceInstant)) {
+    return {
+      ...base,
+      state: "removed",
+      observedAt: null,
+      reason: `the receiver reports the credential ${base.forced ? "torn out" : "lifted"}; the ${observedMs === null ? "observation" : "reference"} instant is unreadable, which cannot show the removal stale, so it stands`,
+    };
+  }
   if (observedMs === null) return unknown("the observation instant is unparseable");
   if (referenceMs === null) return unknown("the reference instant is unparseable — no window to judge within");
   // freshness: local-by-design — same rule as utils/freshness (tolerance 0, future reads `unknown`); signalgrid-core is the BASE package with zero dependencies and cannot import @workspace/integrations, the same reason util.ts's classifyFreshness carries this marker

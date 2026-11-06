@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-11-06T00:26:00.657Z",
-  "result": "00:24Z cycle (11-06): keepalive (last 22:24Z) and non-quiet: the cloud is refreshing #1698 (the Mac's protected-lane-delivery fix, the real repair for the tick heartbeat) onto mainline - merge done locally, preflight/breadth running, push follows green; an Opus refute of head 26a9a42b is running; landing still waits on the Mac's written land ask. Mac ack mail #1860 open with auto-merge. No new/moved mac/* since the 06:32Z tick; no mail to cloud. Tick heartbeat file still 2026-10-24T07:30Z on mainline. Live evidence 2026-11-05T07:04Z. #1840 qualified at b7c94ef7, draft, awaiting owner ready-tap. Owner not escalated."
+  "firedAt": "2026-11-06T02:25:55.111Z",
+  "result": "02:24Z cycle (11-06): non-quiet. The Mac tick is back: mac/tick-20261106T021527Z (02:15Z, 0 sim requests, objective loop: escalate) with its own PR #1867; check-sim-requests binds 32/32; the cloud lands it on the gating check. #1840 landed under DR-037 (c63574d6 -> 86039343); #1862 landed; both Mac #1840 mails acked. #1698 refreshed (f7d10a3b) and reviewed: FINDINGS, Mac mailed, HIGH item is the owner's design call. Held mail PRs landing serially: #1865, #1866, #1864, then this one and #1867. Tick heartbeat file still 2026-10-24T07:30Z (tick PRs do not carry it). Live evidence 2026-11-05T07:04Z. Owner not escalated."
 }

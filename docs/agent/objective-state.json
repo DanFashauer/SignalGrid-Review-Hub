@@ -23,7 +23,7 @@
       "state": "met",
       "measured": {
         "pct": 100,
-        "reason": "20/20 bound proofs/steps current (passed, matching manifest fingerprint and, for proofs, source digest) — green on both halves, 2 day(s) old, manifest e892a94fd5c4; launch items fully current 28/28"
+        "reason": "20/20 bound proofs/steps current (passed, matching manifest fingerprint and, for proofs, source digest) — green on both halves, 0 day(s) old, manifest e892a94fd5c4; launch items fully current 28/28"
       },
       "source": "scripts/check-readiness-figure.mjs --json (.details.evidence)"
     },
@@ -56,8 +56,8 @@
   "tasks": [
     {
       "rank": 1,
-      "rowId": "29",
-      "title": "Assurance-pass advisories, batch one (2026-08-21)",
+      "rowId": "124",
+      "title": "`ladderRungs` is published as a derived figure by twelve proofs, is a literal in all twelve, and they disagree.",
       "role": "devex-tooling-engineer",
       "executor": "agent:gate-and-proof-engineer",
       "kind": "role",
@@ -65,12 +65,12 @@
         "path": "docs/COMPANY_BUILD_PLAN.md",
         "section": "Global backlog"
       },
-      "firstRankedAt": "2026-11-05T02:42:19.307Z"
+      "firstRankedAt": "2026-11-06T02:15:29.728Z"
     },
     {
       "rank": 2,
-      "rowId": "43",
-      "title": "Falsifiability is enforced only for the connector tier",
+      "rowId": "168",
+      "title": "The palette gate cannot see a verdict painted with the WRONG ratified token.",
       "role": "devex-tooling-engineer",
       "executor": "agent:gate-and-proof-engineer",
       "kind": "role",
@@ -78,20 +78,7 @@
         "path": "docs/COMPANY_BUILD_PLAN.md",
         "section": "Global backlog"
       },
-      "firstRankedAt": "2026-11-05T02:42:19.307Z"
-    },
-    {
-      "rank": 3,
-      "rowId": "50",
-      "title": "Operability claims without live evidence",
-      "role": "mac-lane-steward",
-      "executor": "skill:signalgrid-native",
-      "kind": "role",
-      "source": {
-        "path": "docs/COMPANY_BUILD_PLAN.md",
-        "section": "Global backlog"
-      },
-      "firstRankedAt": "2026-11-05T02:42:19.307Z"
+      "firstRankedAt": "2026-11-06T02:15:29.728Z"
     }
   ],
   "needsExecutor": [],
@@ -145,6 +132,12 @@
       "reason": "stamp 2026-10-22 is older than 14 days"
     },
     {
+      "rowId": "29",
+      "title": "Assurance-pass advisories, batch one (2026-08-21)",
+      "measuredAt": "2026-10-23",
+      "reason": "stamp 2026-10-23 is older than 14 days"
+    },
+    {
       "rowId": "30",
       "title": "Graph launch-subset Bruno collection + transport abstraction check",
       "measuredAt": "2026-10-22",
@@ -181,6 +174,12 @@
       "reason": "stamp 2026-10-22 is older than 14 days"
     },
     {
+      "rowId": "43",
+      "title": "Falsifiability is enforced only for the connector tier",
+      "measuredAt": "2026-10-23",
+      "reason": "stamp 2026-10-23 is older than 14 days"
+    },
+    {
       "rowId": "48",
       "title": "Native parity is textual, not behavioral",
       "measuredAt": "2026-10-22",
@@ -191,6 +190,12 @@
       "title": "Assessor-facing overstatement",
       "measuredAt": "2026-10-22",
       "reason": "owner marker 2026-10-22 is older than 14 days - re-check the blocker"
+    },
+    {
+      "rowId": "50",
+      "title": "Operability claims without live evidence",
+      "measuredAt": "2026-10-23",
+      "reason": "stamp 2026-10-23 is older than 14 days"
     },
     {
       "rowId": "61",
@@ -227,6 +232,12 @@
       "title": "What the first iOS execution found — including that CLAUDE.md's own way of checking one of its rules returns a false clean.",
       "measuredAt": "2026-10-22",
       "reason": "stamp 2026-10-22 is older than 14 days"
+    },
+    {
+      "rowId": "80",
+      "title": "The Rust Assist client is the strongest of the three, and it is worth recording that a clean read happened.",
+      "measuredAt": "2026-10-23",
+      "reason": "stamp 2026-10-23 is older than 14 days"
     },
     {
       "rowId": "81",
@@ -337,6 +348,12 @@
       "reason": "stamp 2026-10-22 is older than 14 days"
     },
     {
+      "rowId": "150",
+      "title": "`ladderRungs=5` in the agent-behavior proof matches nothing in its source of truth.",
+      "measuredAt": "2026-10-23",
+      "reason": "stamp 2026-10-23 is older than 14 days"
+    },
+    {
       "rowId": "152",
       "title": "`artifacts/signalgrid-desktop` dresses a web app as a native window, and the repo has a REAL desktop shell somewhere else entirely.",
       "measuredAt": "2026-10-22",
@@ -379,6 +396,12 @@
       "reason": "stamp 2026-10-22 is older than 14 days"
     },
     {
+      "rowId": "180",
+      "title": "The permission gate credits a call inside `if (false)`.",
+      "measuredAt": "2026-10-23",
+      "reason": "stamp 2026-10-23 is older than 14 days"
+    },
+    {
       "rowId": "176",
       "title": "\"Adding a signal to the grid\" is already the architecture, and I recommended against it on a mis-framing.",
       "measuredAt": "2026-10-22",
@@ -396,7 +419,7 @@
     {
       "id": "plan-rows-unmeasured",
       "clears": "cloud",
-      "asks": "49 open row(s) in docs/COMPANY_BUILD_PLAN.md carry no `re-measured YYYY-MM-DD` stamp within 14 days and were ranked from nothing — a row nobody measured against the tree is an unknown input: 17, 17b, 17c, 18, 22, 24, 26, 27, 30, 33, 35, 36, 38, 40, 48, 49, 61, 73, 76, 76a, 77, 78, 81, 84, 85, 86, 91, 95, 97, 98, 99, 101, 102, 109, 128, 130, 131, 138, 140, 149, 152, 154, 161, 162, 165, 166, 182, 176, 170. Measure each against the tree; close it, or restamp it with what was measured (a row whose AWAITING OWNER / BLOCKED ON LAB marker is expired or future-dated needs the blocker re-checked and the marker re-dated or removed — restamping alone does not rank it)",
+      "asks": "55 open row(s) in docs/COMPANY_BUILD_PLAN.md carry no `re-measured YYYY-MM-DD` stamp within 14 days and were ranked from nothing — a row nobody measured against the tree is an unknown input: 17, 17b, 17c, 18, 22, 24, 26, 27, 29, 30, 33, 35, 36, 38, 40, 43, 48, 49, 50, 61, 73, 76, 76a, 77, 78, 80, 81, 84, 85, 86, 91, 95, 97, 98, 99, 101, 102, 109, 128, 130, 131, 138, 140, 149, 150, 152, 154, 161, 162, 165, 166, 182, 180, 176, 170. Measure each against the tree; close it, or restamp it with what was measured (a row whose AWAITING OWNER / BLOCKED ON LAB marker is expired or future-dated needs the blocker re-checked and the marker re-dated or removed — restamping alone does not rank it)",
       "since": "2026-11-05T02:42:19.307Z"
     },
     {
@@ -412,14 +435,14 @@
     "pendingSimRequests": [],
     "badRequestFiles": [],
     "needsExecutorCount": 0,
-    "unmeasuredCount": 49,
+    "unmeasuredCount": 55,
     "awaitingCount": 0,
     "openRows": 52,
     "partialRows": 5
   },
   "staleAfterHours": 3,
-  "derivedAt": "2026-11-05T02:42:19.307Z",
-  "derivedAtCommit": "c8c947acb6455c568f84f2a29455b51b9208a1a4",
+  "derivedAt": "2026-11-06T02:15:29.728Z",
+  "derivedAtCommit": "8603934326f1e65d694491ab09d11e29537c4c36",
   "workingTreeCleanAtEntry": true,
-  "decisionAddress": "5f727447cdbd359793c1372a308f55f4a41c0b4741f0c7754afc474ccbce1d76"
+  "decisionAddress": "e209a7c2b10fe19a8a4a447600e2dfe71cd4a54159bde88e7ffb134d6461f9a9"
 }

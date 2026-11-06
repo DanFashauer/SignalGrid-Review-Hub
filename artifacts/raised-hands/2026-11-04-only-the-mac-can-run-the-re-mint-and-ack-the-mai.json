@@ -7,10 +7,13 @@
   "need": "On the Mac: run the evidence re-mint (SIGNALGRID_MCP_PATH=... pnpm run verify:all --require-mcp --emit-evidence), then pnpm run lane:deliver ack cloud-one-live-evidence-re-mint-after-the-item-6 \"<what ran>\". Restarting the tick (bash scripts/mac/install-launchd.sh) lets the queue drain itself.",
   "whoCanUnblock": "mac lane",
   "domain": "lane-coordination",
-  "status": "open",
+  "status": "resolved",
   "routedTo": null,
   "where": "artifacts/lane-messages/cloud-one-live-evidence-re-mint-after-the-item-6.json",
   "covers": [
     "mail:cloud-one-live-evidence-re-mint-after-the-item-6"
-  ]
+  ],
+  "resolvedAt": "2026-11-04T22:20:10.217Z",
+  "resolvedBy": "cloud",
+  "resolution": "The Mac acked cloud-one-live-evidence-re-mint-after-the-item-6 in PR #1823 (merged 2026-11-04): mac-run.json on mainline was already minted 2026-11-02T15:06:59Z at manifest v101 (e892a94fd5c4)."
 }

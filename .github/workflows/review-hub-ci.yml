@@ -799,7 +799,7 @@ jobs:
       # once and quoted forever — 20 of 29 were wrong on 2026-09-05.
       - name: "Doc line-count self-test (a planted drift must fail; the real tree must be clean)"
         run: node scripts/check-doc-line-counts.mjs --self-test
-      - name: "Doc line counts (every path (N) figure matches the file it names)"
+      - name: "Doc line counts (every path (N) figure is within max(25 lines, 5%) of the file it names)"
         run: node scripts/check-doc-line-counts.mjs
       # BUILD_BACKLOG.md: "Vendor-doc drift is unwatched". Decided: a
       # report-only watcher, cheaper than fetching every vendor page —

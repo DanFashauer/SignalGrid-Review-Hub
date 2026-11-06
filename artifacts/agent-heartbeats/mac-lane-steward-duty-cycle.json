@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-11-04T18:11:38.580Z",
-  "result": "keepalive with the 18:10Z forward-build batch (11-04; mainline hb 16:12Z, about 2h). Cycles 16:24Z and 17:24Z quiet: no mac/* branch moved (newest 2026-11-03 00:18Z), no mail to cloud. Mac ack PR #1745 landed 2067d811. Tick heartbeat still 2026-10-24T07:30:38Z. Live evidence committed 2026-11-02 15:07Z. Owner reminded in chat today; not re-escalated."
+  "firedAt": "2026-11-06T16:57:54.931Z",
+  "result": "16:24Z cycle (11-06): non-quiet. Mac activity: cleared the fix_reedit_schema2 hand (#1889; owner typed the two lines 15:25Z, brain restarted 15:27Z) whose resolution records the first end-to-end loop proof: Codex build 125c1dd1 -> PR #1885 -> mainline 7472bc24. Cloud actions: landed #1885 under DR-037 (7472bc24) and the Mac's #1886 (e8b09135); refreshed and re-armed #1887; paused #1889 behind #1888/#1887 and chained its re-arm; the landing-record PR for #1813/#1869/#1885 is being gated. 0 new/moved mac/* or brain/* branches, 0 new sim results, manifest clean; the Mac still has three cloud->mac messages unread (#1698 findings, the owner's automation directive, access widened). Tick last firedAt on mainline 2026-10-24T07:30Z (file frozen until #1698 lands; tick alive); no owner escalation. The 14:24Z/15:24Z steward heartbeat rides #1888, in CI as this is written."
 }

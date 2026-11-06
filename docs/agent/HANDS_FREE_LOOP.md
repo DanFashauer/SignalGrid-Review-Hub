@@ -49,6 +49,44 @@ The owner, verbatim: "In any point of credit and or usage is up on any paid mode
 - A review routed through OmniRoute is recorded as what it is: the model and the route, never as a Codex review. The work-queue rule that `merged` needs both reviews is unchanged.
 - The local LLM and the Obsidian brain may learn new skills to finish a job. A new skill lands as a reviewed PR like any other change, and vault content never enters the tree (rule 8).
 
+## Publishing a reviewed local build
+
+Use the [publisher source](../../scripts/mac/brain-proposal-pr.mjs) for one
+`kind=build`/`status=review` job in SignalGrid-Review-Hub. The script checks
+that the job's worktree exists and that its diff is nonempty. That the
+worktree is owned and the diff is public-safe are the caller's preconditions.
+
+Replace `<id>` with the reviewed job's ID.
+
+```bash
+node scripts/mac/brain-proposal-pr.mjs --job <id>
+node scripts/mac/brain-proposal-pr.mjs --job <id> --publish
+```
+
+The default dry run still fetches and prepares a scratch commit, but it prints
+only the job title, the file list and the classification; it does not show the
+diff or the job result, and it removes its scratch worktree. Before
+`--publish`, review the job worktree yourself (`git -C <worktree> diff HEAD`
+plus every untracked, non-ignored file, binaries included) and the job's title
+and result: the title becomes the PR title and the result is quoted verbatim
+in the PR body. Publishing pushes `brain/job-<id>` to the public origin and
+opens a PR before any secret-safety review, and a secret that reaches origin
+is compromised: rotate it and ask the owner before any branch deletion.
+
+The CLI refuses owner-reserved, safety-machinery, decision and governance
+paths, paths outside the repository, and a job whose title or result matches
+its private-path pattern (Mac home paths and the brain's directory names, a
+narrow denylist, not a scan); it does not scan the diff for private paths, and
+it does not certify arbitrary text as secret-free, run full preflight/breadth,
+perform independent reviews, or merge. Secret-safety review, full
+preflight/breadth and independent reviews remain separate requirements before
+Cloud DR-037 landing.
+
+With `--publish`, an existing branch means no push or PR creation. Read back an
+uncertain publish; never retry it. If the push succeeded but PR creation
+failed, a rerun does nothing: open the PR by hand with
+`gh pr create --base SignalGrid_Alpha --head brain/job-<id>`.
+
 ## Never
 
 - Never commit vault content, a vault path's contents, or a note title from the vault.

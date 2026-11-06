@@ -138,5 +138,5 @@ console.log("lane-tick.sh calls the refresh for its own pending heartbeat, befor
 }
 
 rmSync(dir, { recursive: true, force: true });
-console.log(`\nlane-heartbeat-refresh: ${passed} passed, ${failed} failed`);
+console.log(`\nlane-heartbeat-refresh controls (planted fake gh): ${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

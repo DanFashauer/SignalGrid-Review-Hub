@@ -7,6 +7,9 @@
   "need": "Owner types two lines in the Mac session: ! python3 ~/fix_job_budget.py   then   ! launchctl kickstart -k gui/$(id -u)/com.signalgrid.local-brain . Claude then requeues the leg-5 task and publishes it on review with scripts/mac/brain-proposal-pr.mjs.",
   "whoCanUnblock": "owner",
   "domain": "local-brain",
-  "status": "open",
-  "routedTo": null
+  "status": "resolved",
+  "routedTo": null,
+  "resolvedAt": "2026-11-06T11:02:45.875Z",
+  "resolvedBy": "mac",
+  "resolution": "Owner typed the two lines on 2026-11-06 (09:27:27Z: 900 s -> 1800 s, runtime 3cc3d453 -> a08518a5, 125 tests); the script applied (tests OK, backup + re-pin recorded) and the brain restarted. The loop's local leg now stops in the planner (capability_wait), tracked in Codex's brain notes, not in this hand."
 }

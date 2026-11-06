@@ -7,6 +7,9 @@
   "need": "Owner types two lines in the Mac session: ! python3 ~/fix_reedit_schema2.py   then   ! launchctl kickstart -k gui/$(id -u)/com.signalgrid.local-brain . Claude then requeues the leg-5 task and publishes it on review.",
   "whoCanUnblock": "owner",
   "domain": "local-brain",
-  "status": "open",
-  "routedTo": null
+  "status": "resolved",
+  "routedTo": null,
+  "resolvedAt": "2026-11-06T16:20:11.110Z",
+  "resolvedBy": "mac",
+  "resolution": "Owner typed the two lines at 2026-11-06 15:25Z; fix_reedit_schema2.py applied (runtime cf49cc3c -> e39f2877, tests OK) and the brain restarted 15:27Z. The loop proof came from Codex build 125c1dd1 -> PR #1885 -> mainline 7472bc24."
 }

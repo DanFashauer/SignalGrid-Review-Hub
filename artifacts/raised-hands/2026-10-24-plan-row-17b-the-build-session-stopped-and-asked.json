@@ -7,7 +7,10 @@
   "need": "a person on the Mac to read the log named in where, fix the cause or re-rank the row, and delete the claim branch it names when the row should be retried",
   "whoCanUnblock": "mac lane",
   "domain": "lane",
-  "status": "open",
+  "status": "resolved",
   "routedTo": null,
-  "where": "<HOME>/Library/Logs/signalgrid/build-tick-20261024T001639Z.log"
+  "where": "<HOME>/Library/Logs/signalgrid/build-tick-20261024T001639Z.log",
+  "resolvedAt": "2026-11-05T20:01:43.412Z",
+  "resolvedBy": "mac",
+  "resolution": "2026-11-05: the claim branch mac/build-row-17b-20261024T001639Z no longer exists on the Hub (git ls-remote empty), so the hand's ask is satisfied. The row needs a running Keycloak lab (scripts/run-live-lanes.sh) to produce its live result; that is lab provisioning, not a code change, and the build tick re-raises it if it picks the row again."
 }

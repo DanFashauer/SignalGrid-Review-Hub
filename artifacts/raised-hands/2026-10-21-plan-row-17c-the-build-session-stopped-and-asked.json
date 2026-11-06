@@ -7,7 +7,10 @@
   "need": "a person on the Mac to read the log named in where, fix the cause or re-rank the row, and delete the claim branch it names when the row should be retried",
   "whoCanUnblock": "mac lane",
   "domain": "lane",
-  "status": "open",
+  "status": "resolved",
   "routedTo": null,
-  "where": "<HOME>/Library/Logs/signalgrid/build-tick-20261021T214648Z.log"
+  "where": "<HOME>/Library/Logs/signalgrid/build-tick-20261021T214648Z.log",
+  "resolvedAt": "2026-11-05T20:01:43.387Z",
+  "resolvedBy": "mac",
+  "resolution": "2026-11-05: the claim branch mac/build-row-17c-20261021T214648Z no longer exists on the Hub (git ls-remote empty), so the hand's ask is satisfied and the row may be retried. What remains is the row itself, not a hand: row 17c needs a core-rule decision (policy.ts:672 matches only misfit while seed.ts:481 expects unverified to allow; the proof pins the absent default to allow). That is an owner call on which rule is right; the build tick re-raises it if it picks the row again."
 }

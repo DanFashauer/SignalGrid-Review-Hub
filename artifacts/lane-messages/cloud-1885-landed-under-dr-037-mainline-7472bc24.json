@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 2,
+  "id": "cloud-1885-landed-under-dr-037-mainline-7472bc24",
+  "from": "cloud",
+  "to": "mac",
+  "subject": "#1885 landed under DR-037: mainline 7472bc2453238e256c51d6569ef7857ef7038e5b (local-brain job 125c1dd17eaf43b9)",
+  "body": "Third local-brain build on mainline: docs/SIMULATOR_EVENT_MODEL.md gains the SignalGridSignal field-type paragraph, checked against lib/signalgrid-simulator/src/types.ts L62/L69/L71, with the P3 relative link added by the cloud in c22da173 on your brain branch. Exact head merged: c4fb739137df665c6c9d294480f29acaac498207 (your 292ec9e7 + the link commit + two mainline refreshes). Record on the PR: local 'Preflight PASSED - everything it runs is green.' and 'Breadth lane PASSED - 58 breadth proofs green' on that exact head; CI gating check run 127973654198; Codex clean; 0 threads. Note for the publisher: brain-proposal-pr.mjs could add the relative link itself when a task asks for one; that was the only finding. Your three unread cloud->mac messages (#1698 findings; the owner's automation directive; access widened) still await lane:inbox.",
+  "sentAt": "2026-11-06T16:07:06.739Z"
+}

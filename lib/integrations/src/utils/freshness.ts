@@ -60,7 +60,8 @@ import { parseObservedInstant } from "@workspace/signalgrid-core";
 /**
  * The instant a connector timestamp names, or NaN. The core's strict parser, not `Date.parse`: an offset-less
  * date-time is HOST-LOCAL under `Date.parse`, so the same sighting was fresh on a UTC host and unknown or
- * future-dated on another. An offset-less stamp names no instant; NaN here is the existing "unknown" path.
+ * future-dated on another. An offset-less stamp names no instant: `ageMs` gives it no age (null), and
+ * `deriveFreshness` grades a present-but-unreadable sighting `stale`, never `unknown` (see there).
  */
 export function parseSightingInstant(value: string): number {
   return parseObservedInstant(value);
@@ -76,7 +77,7 @@ export type Freshness = "fresh" | "stale" | "unknown";
  * `null` — never a number, never zero, never a negative — for ALL FOUR ways an age
  * is unestablishable, because a caller that must handle one must handle all of them:
  *   · no sighting at all (`null` / `undefined` / empty);
- *   · a timestamp that does not parse (`Date.parse` → NaN);
+ *   · a timestamp that does not parse (`parseSightingInstant` → NaN, offset-less included);
  *   · a reference instant that is not a finite number;
  *   · a sighting AFTER the reference by more than `skewToleranceMs` — the
  *     contradiction this whole file exists for.
@@ -109,9 +110,14 @@ export function ageMs(
 }
 
 export function deriveFreshness(seenAt: string | null, nowMs: number, staleAfterMs: number | null): Freshness {
+  // `unknown` is reserved for an ABSENT sighting. One that is PRESENT but unreadable (garbled, an impossible
+  // calendar value, or offset-less and so naming no instant) resolves to STALE, the raising member in every
+  // family that consumes this — same reasoning as a garbled reference or bound below. It used to be `unknown`,
+  // and once the strict parser made offset-less stamps unreadable that LOWERED a sighting a UTC host had read as
+  // stale (NAC step_up -> monitor, carrier and location locate -> monitor), which golden rule 2 forbids.
   if (!seenAt) return "unknown";
   const t = parseSightingInstant(seenAt);
-  if (Number.isNaN(t)) return "unknown";
+  if (Number.isNaN(t)) return "stale";
   // A garbled REFERENCE resolves to STALE, not unknown — same reasoning as a garbled
   // bound below, and it is why this cannot simply be `ageMs(...) === null`.
   if (!Number.isFinite(nowMs)) return "stale";

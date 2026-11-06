@@ -36,6 +36,9 @@ import {
 
 import { ageMs, deriveFreshness } from "@workspace/integrations/utils/freshness";
 import { fromDevicePosture } from "@workspace/posture-composition";
+import { evaluateNetwork } from "@workspace/integrations/network-nac";
+import { evaluateReachability } from "@workspace/integrations/carrier";
+import { evaluateLocation } from "@workspace/integrations/location-services";
 
 const SELF = fileURLToPath(import.meta.url);
 
@@ -248,6 +251,41 @@ function devicePostureFor(lastSeenAt: string, observedAt: string): string {
   return `${out.action}|${out.reason}`;
 }
 
+/**
+ * One connector family's verdict for an otherwise-trusted signal whose sighting is `stamp` ("-" = absent), judged at
+ * 13:00Z with a 30-minute bound. NAC: authenticated + compliant, no segment policy. Carrier: provisioned, online,
+ * not roaming, backchannel present. Location: inside the geofence.
+ */
+function familyFor(family: string, stamp: string): string {
+  const now = parseInt("1783947600000", 10); // 2026-07-13T13:00:00Z, as epoch ms so no parse is involved
+  const seen = stamp === "-" ? null : stamp;
+  const bound = { staleAfterMs: 30 * 60 * 1000 };
+  if (family === "nac") {
+    const r = evaluateNetwork({
+      sourceSystem: "network-nac", correlationId: "c_tz", observedAt: "2026-07-13T13:00:00Z", deviceId: "d_tz",
+      authState: "authenticated", segment: "corp", accessLocation: null, nacCompliant: true, lastAuthAt: seen, freshness: "unknown",
+    }, now, bound);
+    return `${r.recommendedAction}|${r.reasonCode}`;
+  }
+  if (family === "carrier") {
+    const r = evaluateReachability({
+      sourceSystem: "carrier", correlationId: "c_tz", observedAt: "2026-07-13T13:00:00Z", deviceId: "d_tz",
+      cellularReachability: "online", smsReachable: true, lastSeenAt: seen, freshness: "unknown", roaming: false,
+      provisioning: "active", cellularBackchannel: "present",
+    } as Parameters<typeof evaluateReachability>[0], now, bound);
+    return `${r.recommendedAction}|${r.reasonCode}`;
+  }
+  if (family === "location") {
+    const r = evaluateLocation({
+      sourceSystem: "location-services", correlationId: "c_tz", observedAt: "2026-07-13T13:00:00Z", deviceId: "d_tz",
+      geofenceState: "inside", geofenceId: "g_tz", source: "gps", accuracyMeters: 10, capturedAt: seen,
+      freshness: "unknown", hasPreciseCoordinates: false,
+    } as Parameters<typeof evaluateLocation>[0], now, bound);
+    return `${r.recommendedAction}|${r.reasonCode}`;
+  }
+  return "BAD-FAMILY";
+}
+
 if (process.argv[2] === "--worker") {
   const [mode, a, b, c] = process.argv.slice(3);
   const out =
@@ -267,6 +305,7 @@ if (process.argv[2] === "--worker") {
     : mode === "puckref" ? puckFor(a!, b!, "2026-07-13T08:00:00Z", c!)
     : mode === "sharedfresh" ? sharedFreshnessFor(a!)
     : mode === "devposture" ? devicePostureFor(a!, b!)
+    : mode === "family" ? familyFor(a!, b!)
     : "BAD-MODE";
   console.log(`VERDICT ${out}`);
   process.exit(0);
@@ -585,15 +624,60 @@ for (const stamp of ["2026-03-02T08:00:00+00", "2026-03-02", "2024-02-29T08:00:0
 // Graph device-posture adapter. They must read an offset-less stamp the same way the core does: as no instant.
 {
   const offsetless = ZONES.map((z) => inZone(z, "sharedfresh", "2026-07-13T12:30:00"));
-  check("integrations deriveFreshness/ageMs: an offset-less sighting is unknown with no age, in every zone", offsetless.every((v) => v === "unknown|null"), offsetless.join(","));
+  check("integrations deriveFreshness/ageMs: an offset-less sighting is stale (present but unreadable) with no age, in every zone", offsetless.every((v) => v === "stale|null"), offsetless.join(","));
   const zoned = ZONES.map((z) => inZone(z, "sharedfresh", "2026-07-13T14:30:00+02:00"));
   check("integrations deriveFreshness/ageMs: a zoned sighting 30 min old is fresh, in every zone (control)", zoned.every((v) => v === "fresh|age"), zoned.join(","));
   const lastSeen = ZONES.map((z) => inZone(z, "devposture", "2026-07-13T12:30:00", "2026-07-13T13:00:00Z"));
-  check("device posture: an offset-less deviceLastSeenAt is DEVICE_LAST_SEEN_UNKNOWN, in every zone", lastSeen.every((v) => v === "step_up|DEVICE_LAST_SEEN_UNKNOWN"), lastSeen.join(","));
+  check("device posture: an offset-less deviceLastSeenAt is DEVICE_POSTURE_STALE (same step_up rung as unknown), in every zone", lastSeen.every((v) => v === "step_up|DEVICE_POSTURE_STALE"), lastSeen.join(","));
   const readAt = ZONES.map((z) => inZone(z, "devposture", "2026-07-13T12:30:00Z", "2026-07-13T13:00:00"));
   check("device posture: an offset-less read instant cannot vouch, identically in every zone and never COMPLIANT_MANAGED", new Set(readAt).size === 1 && !readAt[0]!.includes("COMPLIANT_MANAGED"), readAt.join(","));
   const control = ZONES.map((z) => inZone(z, "devposture", "2026-07-13T12:30:00Z", "2026-07-13T13:00:00Z"));
   check("device posture: zoned stamps compose to COMPLIANT_MANAGED, in every zone (control)", control.every((v) => v === "none|COMPLIANT_MANAGED"), control.join(","));
+}
+
+// FAIL-CLOSED ON THE CONNECTOR SIDE. NAC, carrier and location rank `stale` ABOVE `unknown` (stale -> step_up/locate,
+// unknown -> monitor; deliberate, and the owner's to change). So an offset-less sighting that a UTC host read as stale
+// under Date.parse must not become `unknown` and drop to monitor: a PRESENT but unreadable stamp derives `stale`, and
+// `unknown` stays reserved for an ABSENT one. Each check below that names a stale outcome failed on head 4cca56a5.
+{
+  const STALE_ON_UTC = "2026-07-13T12:00:00"; // a UTC host read this as 60 min old against a 30 min bound
+  const expectStale: Record<string, string> = {
+    nac: "step_up|STALE_NETWORK_STATE",
+    carrier: "locate|STALE_LAST_SEEN",
+    location: "locate|STALE_LOCATION_FIX",
+  };
+  const expectAbsent: Record<string, string> = {
+    nac: "monitor|AUTHENTICATED_POSTURE_UNVERIFIED",
+    carrier: "monitor|LAST_SEEN_UNVERIFIED",
+    location: "monitor|UNVERIFIED_LOCATION_FRESHNESS",
+  };
+  // Ranked within each family's own action set; the shared table is safe because no family mixes the tied rungs.
+  const RANK: Record<string, number> = { none: 0, monitor: 1, locate: 2, step_up: 2, alert: 3, restrict: 3, escalate: 4 };
+  const rank = (v: string): number => RANK[v.split("|")[0] ?? ""] ?? -1;
+  for (const family of ["nac", "carrier", "location"]) {
+    const utcTwin = inZone("UTC", "family", family, `${STALE_ON_UTC}Z`);
+    check(`${family}: the Z twin of the stale-on-UTC stamp is ${expectStale[family]} (what a UTC host gave under Date.parse)`, utcTwin === expectStale[family], utcTwin);
+    const got = ZONES.map((z) => inZone(z, "family", family, STALE_ON_UTC));
+    check(`${family}: an offset-less sighting a UTC host read as stale stays ${expectStale[family]} in every zone (never unknown/monitor)`, got.every((v) => v === expectStale[family]), got.join(","));
+    const absent = ZONES.map((z) => inZone(z, "family", family, "-"));
+    check(`${family}: an ABSENT sighting is still unknown, ${expectAbsent[family]}, in every zone (control)`, absent.every((v) => v === expectAbsent[family]), absent.join(","));
+    // The general rule: for an offset-less stamp anywhere (fresh, stale or future on a UTC host) and a garbled one,
+    // no zone answers more mildly than a UTC host did under Date.parse (the Z twin; a garbled stamp was NaN there).
+    for (const [label, stamp, twin] of [
+      ["fresh-on-UTC", "2026-07-13T12:59:00", "2026-07-13T12:59:00Z"],
+      ["stale-on-UTC", STALE_ON_UTC, `${STALE_ON_UTC}Z`],
+      ["future-on-UTC", "2026-07-13T13:30:00", "2026-07-13T13:30:00Z"],
+      ["garbled", "garbled", "-"],
+    ] as const) {
+      const before = inZone("UTC", "family", family, twin);
+      const after = ZONES.map((z) => inZone(z, "family", family, stamp));
+      check(
+        `${family}: a ${label} unreadable stamp is never milder than a UTC host's Date.parse answer (${before}), in every zone`,
+        rank(before) >= 0 && after.every((v) => rank(v) >= rank(before)),
+        after.join(","),
+      );
+    }
+  }
 }
 
 console.log(`\nsummary=${failures.length === 0 ? "pass" : "FAIL"} (${passed}/${passed + failures.length})`);

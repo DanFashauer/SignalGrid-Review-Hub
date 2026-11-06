@@ -6,7 +6,7 @@ day a brain install dropped a guard, a repair was written outside the tree, the 
 classifier refused to run it, and a hand asked the owner to type two lines. This file is
 the repair, in the tree, reviewed before it can run.
 
-The guards (each measured on a real build before it was written):
+The guards (each measured on a real build before it was written; four as of 2026-11-06 18:30Z):
   call_cap_600     signalgrid_brain.py: the OmniRoute / direct-Ollama request ceiling is
                    600 s, not 180 s. A 12k-token step on this 16 GB Mac takes 2m27s-2m59s;
                    at 180 s the client aborted every one (OmniRoute 499, Ollama 500).
@@ -16,6 +16,12 @@ The guards (each measured on a real build before it was written):
                    action schema offers read/check/finish (one corrective re-read), then
                    check/finish once a path was read twice. Prose alone does not stop the 9B
                    from replaying a refused edit (4ec05dc3 x3) or re-reading (a6619d01 x5).
+  noop_edit_refused signalgrid_agent_runtime.py: an edit whose replacement leaves the file
+                   byte-identical is REFUSED, not "EDIT APPLIED". Build 2fd0db8d (2026-11-06):
+                   step 3 applied the right edit, step 4 replayed it (refused), steps 5-8 sent
+                   old_text == content four times; each was accepted as progress, cleared the
+                   refusal counter so reedit_schema never fired, and the job budget expired at
+                   step 9 with the correct edit sitting unverified in the worktree.
 Not here yet: a read-loop guard (a third identical read of an unchanged path not
 selectable) — JSON-schema enums narrow the action, not the path, and Codex's own test
 requires `read` to stay offered while a never-read dependency exists. That one is the
@@ -90,6 +96,18 @@ GUARDS = {
              "\\g<i>    allowed = [\"check\", \"finish\"] if any(c >= 2 for c in build_read_counts.values()) else [\"read\", \"check\", \"finish\"]\n"
              "\\g<i>    schema = {**ACTION_SCHEMA, \"properties\": {**ACTION_SCHEMA[\"properties\"],\n"
              "\\g<i>        \"action\": {\"type\": \"string\", \"enum\": allowed}}}\n"),
+        ],
+    },
+    "noop_edit_refused": {
+        "file": RUNTIME,
+        "present": re.compile(r'raise AgentBlocked\("Replacement changes nothing: the file already holds that content"\)'),
+        "patch": [
+            (re.compile(r'^(?P<i>[ \t]+)(?P<line>content = previous\.replace\(action\["old_text"\], action\["content"\], 1\))\n', re.M),
+             "\\g<i>\\g<line>\n"
+             "\\g<i># Guard noop_edit_refused (scripts/mac/local-brain/repairs/guards.py): a byte-identical result is an\n"
+             "\\g<i># attempted mutation, not a real one; accepting it cleared the refusal counter (build 2fd0db8d x4).\n"
+             "\\g<i>if content == previous:\n"
+             "\\g<i>    raise AgentBlocked(\"Replacement changes nothing: the file already holds that content\")\n"),
         ],
     },
 }
@@ -228,7 +246,13 @@ UNREPAIRED_RUNTIME = (
     "                    if not tdd and not private_document and (any(k[0] == \"edit\" for k in build_refusal_counts) or any(c >= 2 for c in build_read_counts.values())):\n"
     "                        instruction += \"\\nRECOVER FROM THE ACTUAL TOOL RESULT: do not replay the refused replacement. Read the current needed worktree source.\"\n"
     "                if intake_read_pending:\n"
-    "                    pass\n")
+    "                    pass\n"
+    "                        if action[\"old_text\"]:\n"
+    "                            previous = target.read_bytes().decode(\"utf-8\", errors=\"strict\")\n"
+    "                            if previous.count(action[\"old_text\"]) != 1:\n"
+    "                                raise AgentBlocked(\"Replacement fragment must occur exactly once\")\n"
+    "                            content = previous.replace(action[\"old_text\"], action[\"content\"], 1)\n"
+    "                        target.write_text(content)\n")
 
 
 def self_test():
@@ -256,7 +280,7 @@ def self_test():
 
         ok("(1) every guard reported MISSING on the stripped brain", sorted(check(home, quiet)) == sorted(GUARDS))
         rec = apply(home, "self-test", run_tests=False, say=quiet)
-        ok("(2) --apply restored all three", rec is not None and sorted(rec["restored"]) == sorted(GUARDS))
+        ok("(2) --apply restored every guard", rec is not None and sorted(rec["restored"]) == sorted(GUARDS))
         ok("(3) --check passes afterwards", check(home, quiet) == [])
         rt2 = sha(home / RUNTIME)
         brain_txt = (home / BRAIN).read_text()
@@ -267,6 +291,8 @@ def self_test():
         runtime_txt = (home / RUNTIME).read_text()
         ok("(6) 15-minute wording became 30-minute at every site", "15-minute" not in runtime_txt and runtime_txt.count("30-minute") == 3)
         ok("(7) the schema guard sits inside the RECOVER branch, keeping a first-refusal corrected edit", 'enum": allowed' in runtime_txt and runtime_txt.index("RECOVER FROM") < runtime_txt.index("allowed = ["))
+        ok("(7b) the no-op refusal sits between the replace and the write, so an identical result never reaches write_text",
+           runtime_txt.index("content = previous.replace(") < runtime_txt.index("if content == previous:") < runtime_txt.index("target.write_text(content)"))
         snap = {n: sha(home / n) for n in (RUNTIME, BRAIN, HANDOFF, OPCFG)}
         ok("(8) a second --apply is a no-op", apply(home, "again", run_tests=False, say=quiet) is None and snap == {n: sha(home / n) for n in snap})
         # A brain whose anchor changed shape is refused and left untouched, not half-edited.

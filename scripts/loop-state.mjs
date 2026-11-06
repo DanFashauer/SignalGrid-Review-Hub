@@ -1693,7 +1693,10 @@ function detachedHeadWork(cwd, hubShaMap) {
   for (const e of wl.list) {
     if (e.bare || (self && realOrSame(e.path) === self)) continue;
     if (e.ref.startsWith("refs/heads/")) continue;
-    const base = { where: e.path, ...(e.ref ? { symref: e.ref } : {}), ...(e.prunable ? { prunable: true } : {}), agent: e.path.includes("/.claude/worktrees/") };
+    // A lane-deliver worktree (mkdtemp "sg-lane-deliver-*", scripts/lane-deliver.mjs) is the same shape as an agent checkout: a live
+    // delivery commits there, pushes, and removes it. Three times on 2026-11-06 this gate failed on one mid-flight while the
+    // delivery waited for the host lock; reported, never fatal, like an agent worktree — a stale one stays visible in the warn row.
+    const base = { where: e.path, ...(e.ref ? { symref: e.ref } : {}), ...(e.prunable ? { prunable: true } : {}), agent: e.path.includes("/.claude/worktrees/") || /\/sg-lane-deliver-[^/]+$/.test(e.path) };
     if (!e.sha || /^0+$/.test(e.sha)) { out.linked.push({ ...base, head: null, count: null, unreadable: e.ref ? `${e.ref} does not resolve to a commit` : "HEAD does not resolve to a commit" }); continue; }
     if (!byHead.has(e.sha)) {
       const v = gitRun(cwd, ["rev-parse", "--verify", "-q", `${e.sha}^{commit}`]);
@@ -1717,7 +1720,7 @@ function detachedHeadRows(found) {
   const gatedL = found.linked.filter((f) => !f.agent), agentL = found.linked.filter((f) => f.agent);
   const list = (fs) => `${fs.slice(0, 5).map(describeHead).join("; ")}${fs.length > 5 ? `; +${fs.length - 5} more` : ""}`;
   if (gatedL.length) rows.push({ state: "fail", what: "Linked worktree HEAD work not on the Review Hub", detail: list(gatedL), gated: true });
-  if (agentL.length) rows.push({ state: "warn", what: "Agent-worktree HEADs carrying commits", detail: `${list(agentL)} — reported, never fatal: they belong to a live agent's isolated checkout`, gated: false });
+  if (agentL.length) rows.push({ state: "warn", what: "Agent-worktree HEADs carrying commits", detail: `${list(agentL)} — reported, never fatal: they belong to a live agent's isolated checkout or a lane-deliver worktree mid-delivery`, gated: false });
   return rows;
 }
 // "a, b — <remedy>; c — <remedy>": the branches grouped by the remedy each needs, so one cause reads one way everywhere.

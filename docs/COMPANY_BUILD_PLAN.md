@@ -4830,7 +4830,7 @@ COST MODEL SKELETON (draft for docs/COST_MODEL.md — every figure below is repo
 
 ### From the review-coverage strategy lens
 
-TIERED READ-LIST — SignalGrid-Review-Hub (all listed files verified UNREAD against docs/agent/review-coverage.json as of 2026-08-20; line counts from wc -l)
+TIERED READ-LIST — SignalGrid-Review-Hub (all listed files verified UNREAD against docs/agent/review-coverage.json as of 2026-08-20; line counts from wc -l, a size signal held within ±5% (at least 25 lines) by scripts/check-doc-line-counts.mjs)
 
 == TIER 1 — 25 files, ~7,900 lines. An unread defect here costs the most. Target: 25/25 at depth >= audited within 5 shift-days. ==
 

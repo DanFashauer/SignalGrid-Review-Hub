@@ -5118,3 +5118,86 @@ a9789f25e Merge pull request #1230 from DanFashauer/claude/build-live-panel-unkn
 ```
 
 Verdict: twelve of the standing order's item-6 `claude/*` PRs are on `SignalGrid_Alpha`, each on a head whose gating check was green and whose local half is quoted; the rest of item 6 is the brain's to build (FIX-NEEDED verdicts posted on each) or the owner's to decide (the hold list above).
+
+## 2026-11-06 — #1840 landed under DR-037: the second local-brain-built change
+
+**What.** PR #1840 "brain/job-c8ee0dca1f6a4db3" is the second change built by the local brain (job c8ee0dca; #1819 was the first). Docs only: a "Publishing a reviewed local build" section in `docs/agent/HANDS_FREE_LOOP.md` and the lane message `artifacts/lane-messages/mac-pr1840-final-head-review-land.json`. Mac-authored; the owner marked it ready for review at 2026-11-06 00:27Z; the Mac asked the cloud to land it in mail `mac-1840-is-ready-for-review-owner-marked-it-00-`.
+
+**Landed.** By the cloud lane under DR-037 on the exact head `c63574d646991adb4b994e95cbab528dc0970d97`; merge commit on SignalGrid_Alpha `8603934326f1e65d694491ab09d11e29537c4c36` (2026-11-06, about 01:57Z).
+
+**Conditions on that head.**
+- Gating check "Typecheck, build, and proof scaffold": success. CI at merge time: 13 success, 3 skipped, 1 queued non-required.
+- Local `node scripts/preflight.mjs` printed "Preflight PASSED — everything it runs is green."
+- Local `pnpm run verify:breadth` printed "Breadth lane PASSED — 58 breadth proofs green".
+- 0 unresolved review threads. Codex code review completed on `c63574d6` with no findings.
+
+**Earlier heads.** Three independent Claude reviews on 706c23fe: fail-closed and code CLEAN; security 2 MEDIUM. The security finding (the doc told the operator to inspect a dry-run diff the dry run never prints) was fixed by the cloud as b7c94ef7 (docs only). The branch was then refreshed from mainline twice by GitHub update-branch merges (b7a23bf4, c63574d6) because the strict up-to-date ruleset refused a behind merge; preflight and breadth were re-run locally on each of those heads and passed. Records: PR comment 6668219081 (review record) and the PR body.
+
+**Not done.** Codex-system reviews and the third-party Ponytail methods the Mac's mail asked for were not run by the cloud; both are named as limitations on the PR. No new readiness figure, evidence mint or owner attestation is asserted.
+
+Command, in a checkout with `origin/SignalGrid_Alpha` fetched:
+```sh
+git log -1 --format='%H %s' 8603934326f1e65d694491ab09d11e29537c4c36 | cut -c1-120
+git log -1 --format=%P 8603934326f1e65d694491ab09d11e29537c4c36
+git merge-base --is-ancestor 8603934326f1e65d694491ab09d11e29537c4c36 origin/SignalGrid_Alpha && echo ancestor
+```
+Output, verbatim:
+```
+8603934326f1e65d694491ab09d11e29537c4c36 Merge pull request #1840 from DanFashauer/brain/job-c8ee0dca1f6a4db3
+d69357219f53ce6e3db3e1cd6f94e68595d86ecf c63574d646991adb4b994e95cbab528dc0970d97
+ancestor
+```
+The second parent of the merge is the exact head `c63574d6` the conditions above were measured on.
+
+Verdict: #1840 is on `SignalGrid_Alpha` at 8603934326f1e65d694491ab09d11e29537c4c36, merged from the exact head c63574d646991adb4b994e95cbab528dc0970d97 whose gating check, local preflight and breadth were green; the cloud did not run Codex-system reviews or the Ponytail methods.
+
+## 2026-11-06 — three landings under DR-037: #1813 (897464ce), #1869 (83577eec), #1885 (7472bc24)
+
+**What.** Three PRs landed by the cloud lane under DR-037 on 2026-11-06, each on its exact head with the gating check green and local preflight and breadth run on that head in the main checkout.
+
+### #1813 "gates: generated and derived figures stop making every open PR conflict"
+
+Branch claude/stop-generated-figure-conflicts. Classification: SAFETY_MACHINERY (scripts/**, .github/workflows/**). Effect: the coverage page prints no per-surface file counts; plan `path (N)` figures hold within max(25 lines, 5%) with zero failing closed.
+
+**Landed.** Merged under DR-037 at 2026-11-06T14:13:48Z: exact head `5e06c45eaee100af4379633826b3c36122308f8d` → mainline `897464ceeb231237baaf968293726b9fd80cd4da`. Gating check run 127928378268: success. Record comment on the PR: 6686362829.
+
+**Review.** Independent adversarial review (Opus): NO BLOCKER. Two findings were folded into commit 5e06c45e before landing: `withinBand` now fails closed when either side is 0 lines (previously withinBand(0,25) and withinBand(25,0) passed), and the preflight/CI step names now say "max(25 lines, 5%)" instead of "±5%". Stale lane-deliver.mjs texts and the page's "files … are listed below" sentence were corrected.
+
+Command: the five gates named in the left column below, run on that exact head in the main checkout.
+Output, verbatim (command -> printed line):
+```
+node scripts/preflight.mjs                        -> Preflight PASSED — everything it runs is green.
+pnpm run verify:breadth                           -> Breadth lane PASSED — 58 breadth proofs green (deferred families, doctrine documents, and the DR-005 decision-palette design gate).
+node scripts/check-doc-line-counts.mjs --self-test          -> self-test passed (12/12)
+node scripts/check-surface-review-coverage.mjs --self-test  -> self-test: 58/58 controls passed
+node scripts/check-preflight-ci-parity.mjs        -> Preflight↔CI parity passed — every preflight gate is wired into a workflow.
+```
+Verdict: #1813 is on `SignalGrid_Alpha` at 897464ceeb231237baaf968293726b9fd80cd4da, merged from exact head 5e06c45eaee100af4379633826b3c36122308f8d whose gating check and the five local lines above were green.
+
+### #1869 "loop-state: a live lane-deliver worktree is reported, never fatal"
+
+Mac lane, branch mac/loop-state-lane-deliver-worktree, 7 lines in scripts/loop-state.mjs. Landed on the Mac's written ask (lane mail mac-1869-loop-state-lane-deliver-worktree-report). The draft was flipped ready by the cloud after the owner added an allow rule for the ready-for-review call on 2026-11-06.
+
+**Landed.** Merged at 2026-11-06T14:45Z: exact head `8fc1e25042e57386404ab749daa18e5ecc1652b9` → mainline `83577eecfe4233f3e0ed5a7394488eeae3e4acb1`. Gating check run 127940328755: success. Cloud review findings (comment 6676049377): no blocker; Codex clean. Record comment: 6687563695.
+
+Command: `node scripts/preflight.mjs` and `pnpm run verify:breadth`, run on that exact head.
+Output, verbatim (command -> printed line):
+```
+node scripts/preflight.mjs   -> Preflight PASSED — everything it runs is green.
+pnpm run verify:breadth      -> Breadth lane PASSED — 58 breadth proofs green (deferred families, doctrine documents, and the DR-005 decision-palette design gate).
+```
+Verdict: #1869 is on `SignalGrid_Alpha` at 83577eecfe4233f3e0ed5a7394488eeae3e4acb1, merged from exact head 8fc1e25042e57386404ab749daa18e5ecc1652b9 whose gating check, local preflight and breadth were green.
+
+### #1885 "brain: Update SIMULATOR_EVENT_MODEL.md with SignalGridSignal field types (job 125c1dd17eaf43b9)"
+
+The third local-brain build, branch brain/job-125c1dd17eaf43b9, docs only (+4 lines in docs/SIMULATOR_EVENT_MODEL.md), on the Mac's landing request of 14:22Z. The P3 finding (missing relative link to the contract) was fixed by the cloud in commit c22da173 on the branch; the paragraph's claims were checked against lib/signalgrid-simulator/src/types.ts (L62 `export interface SignalGridSignal {`, L69 severity union, L71 attributes record).
+
+**Landed.** Merged at about 2026-11-06T16:05Z: exact head `c4fb739137df665c6c9d294480f29acaac498207` → mainline `7472bc2453238e256c51d6569ef7857ef7038e5b`. Gating check run 127973654198: success. Codex clean, 0 threads. Record comment: 6688968639.
+
+Command: `node scripts/preflight.mjs` and `pnpm run verify:breadth`, run on that exact head.
+Output, verbatim (command -> printed line):
+```
+node scripts/preflight.mjs   -> Preflight PASSED — everything it runs is green.
+pnpm run verify:breadth      -> Breadth lane PASSED — 58 breadth proofs green (deferred families, doctrine documents, and the DR-005 decision-palette design gate).
+```
+Verdict: #1885 is on `SignalGrid_Alpha` at 7472bc2453238e256c51d6569ef7857ef7038e5b, merged from exact head c4fb739137df665c6c9d294480f29acaac498207 whose gating check, local preflight and breadth were green.

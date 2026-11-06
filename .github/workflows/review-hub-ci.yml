@@ -295,6 +295,8 @@ jobs:
         run: node scripts/check-lane-repair-bounds.mjs
       - name: Lane readback (bounded cadence and exact durable observations)
         run: node scripts/check-lane-readback.mjs
+      - name: Lane heartbeat self-refresh (own behind PR only, pinned head, verified)
+        run: node scripts/check-lane-heartbeat-refresh.mjs
       - name: iOS dynamic type self-test (the gate must be able to fail)
         run: node scripts/check-ios-dynamic-type.mjs --self-test
       - name: iOS dynamic type (no raw system font outside DesignSystem.swift)

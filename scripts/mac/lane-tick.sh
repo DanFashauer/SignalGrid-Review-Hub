@@ -560,6 +560,19 @@ JS
   if [ ! -e "$HB_LAST_ATTEMPT" ] && [ -n "$(find "$RECORD_DIR" -maxdepth 1 -name '.sg-heartbeat-*' -print -quit)" ]; then
     _hb_hold "heartbeat pointer missing beside original attempt evidence"; return 1
   fi
+  # Keep the tick's OWN delivered heartbeat PR current. The mainline ruleset is
+  # strict, so every mainline merge leaves that PR behind and nothing else refreshes
+  # it; the next heartbeat waits for it to merge, so a behind PR makes a running Mac
+  # look silent (PR #1698 review, HIGH). This runs on every tick, before the
+  # throttle below, and only for an attempt that exited 0. The script updates the
+  # branch only when a fresh GET proves the PR is the tick's own (lane/mac-mail-*
+  # topic, this repo, our gh user) at the head the tick recorded, and claims a
+  # refresh only after a second GET shows the head moved; any doubt touches
+  # nothing. Its outcome is logged and never fails or delays the tick.
+  if [ -n "$_hb_submission" ] && [ "$_hb_previous_status" = "0" ]; then
+    _hb_refresh="$(node scripts/lane-heartbeat-refresh.mjs "$_hb_submission" 2>&1)"
+    say "${_hb_refresh:-heartbeat-refresh: no output}"
+  fi
   # Throttle a result IDENTICAL to the last attempted one ("quiet" again, the same
   # "skipped: …" again, the same failure again) inside the window; anything that
   # differs from the previous attempt submits now. A tick that ACTED names

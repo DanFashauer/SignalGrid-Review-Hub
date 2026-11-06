@@ -578,6 +578,7 @@ const STEPS = [
   { name: "Lane repair callers (durable handoff and current tick ownership)", cmd: ["node", "scripts/check-lane-repair-callers.mjs"] },
   { name: "Lane repair bounds (fair cursor and healthy hand suppression)", cmd: ["node", "scripts/check-lane-repair-bounds.mjs"] },
   { name: "Lane readback (bounded cadence and exact durable observations)", cmd: ["node", "scripts/check-lane-readback.mjs"] },
+  { name: "Lane heartbeat self-refresh (own behind PR only, pinned head, verified)", cmd: ["node", "scripts/check-lane-heartbeat-refresh.mjs"] },
   { name: "Lab registry self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-lab-registry.mjs", "--self-test"] },
   { name: "Lab source collections are declared, openable, read-only and parseable", cmd: ["node", "scripts/check-lab-collections.mjs"] },
   { name: "Lab registry (both halves agree; every deployment claim cites evidence on disk)", cmd: ["node", "scripts/check-lab-registry.mjs"] },

@@ -5163,7 +5163,8 @@ Branch claude/stop-generated-figure-conflicts. Classification: SAFETY_MACHINERY 
 
 **Review.** Independent adversarial review (Opus): NO BLOCKER. Two findings were folded into commit 5e06c45e before landing: `withinBand` now fails closed when either side is 0 lines (previously withinBand(0,25) and withinBand(25,0) passed), and the preflight/CI step names now say "max(25 lines, 5%)" instead of "±5%". Stale lane-deliver.mjs texts and the page's "files … are listed below" sentence were corrected.
 
-Command, Output, Verdict (local gates on that exact head, main checkout):
+Command: the five gates named in the left column below, run on that exact head in the main checkout.
+Output, verbatim (command -> printed line):
 ```
 node scripts/preflight.mjs                        -> Preflight PASSED — everything it runs is green.
 pnpm run verify:breadth                           -> Breadth lane PASSED — 58 breadth proofs green (deferred families, doctrine documents, and the DR-005 decision-palette design gate).
@@ -5179,7 +5180,8 @@ Mac lane, branch mac/loop-state-lane-deliver-worktree, 7 lines in scripts/loop-s
 
 **Landed.** Merged at 2026-11-06T14:45Z: exact head `8fc1e25042e57386404ab749daa18e5ecc1652b9` → mainline `83577eecfe4233f3e0ed5a7394488eeae3e4acb1`. Gating check run 127940328755: success. Cloud review findings (comment 6676049377): no blocker; Codex clean. Record comment: 6687563695.
 
-Command, Output, Verdict (local gates on that exact head):
+Command: `node scripts/preflight.mjs` and `pnpm run verify:breadth`, run on that exact head.
+Output, verbatim (command -> printed line):
 ```
 node scripts/preflight.mjs   -> Preflight PASSED — everything it runs is green.
 pnpm run verify:breadth      -> Breadth lane PASSED — 58 breadth proofs green (deferred families, doctrine documents, and the DR-005 decision-palette design gate).
@@ -5192,7 +5194,8 @@ The third local-brain build, branch brain/job-125c1dd17eaf43b9, docs only (+4 li
 
 **Landed.** Merged at about 2026-11-06T16:05Z: exact head `c4fb739137df665c6c9d294480f29acaac498207` → mainline `7472bc2453238e256c51d6569ef7857ef7038e5b`. Gating check run 127973654198: success. Codex clean, 0 threads. Record comment: 6688968639.
 
-Command, Output, Verdict (local gates on that exact head):
+Command: `node scripts/preflight.mjs` and `pnpm run verify:breadth`, run on that exact head.
+Output, verbatim (command -> printed line):
 ```
 node scripts/preflight.mjs   -> Preflight PASSED — everything it runs is green.
 pnpm run verify:breadth      -> Breadth lane PASSED — 58 breadth proofs green (deferred families, doctrine documents, and the DR-005 decision-palette design gate).

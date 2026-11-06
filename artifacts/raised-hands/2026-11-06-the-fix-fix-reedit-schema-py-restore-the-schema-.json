@@ -1,0 +1,12 @@
+{
+  "id": "2026-11-06-the-fix-fix-reedit-schema-py-restore-the-schema-",
+  "raisedAt": "2026-11-06T12:20:46.223Z",
+  "origin": "mac",
+  "doing": "Closing the owner's hands-free loop on the local-brain leg. With the 600 s cap and 30-minute budget live, build 4ec05dc3 (leg-5 row) completed six OmniRoute calls and made the exact edit at step 3, then re-sent the same edit three times and failed on Codex's three-refusal guard: the v7 install kept the recovery prose but dropped the schema narrowing to check/finish after a refused replay.",
+  "blockedBy": "The fix (~/fix_reedit_schema.py: restore the schema guard right after the recovery text, transactional with backup, re-pin and rollback) is written; the Mac auto-mode classifier refuses to let Claude run it.",
+  "need": "Owner types two lines in the Mac session: ! python3 ~/fix_reedit_schema.py   then   ! launchctl kickstart -k gui/$(id -u)/com.signalgrid.local-brain . Claude then requeues the leg-5 task and publishes it on review.",
+  "whoCanUnblock": "owner",
+  "domain": "local-brain",
+  "status": "open",
+  "routedTo": null
+}

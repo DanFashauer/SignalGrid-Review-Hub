@@ -7,9 +7,12 @@
   "need": "a Mac session runs pnpm run lane:inbox, reads and acks that mail and runs the zero-loss deletes (cloud cannot create archive tags)",
   "whoCanUnblock": "mac lane",
   "domain": "lane",
-  "status": "open",
+  "status": "resolved",
   "routedTo": null,
   "covers": [
     "mail:cloud-od01-approved-run-the-zero-loss-deletes-fr"
-  ]
+  ],
+  "resolvedAt": "2026-11-06T17:31:02.763Z",
+  "resolvedBy": "cloud",
+  "resolution": "Stale: the OD01 zero-loss-delete mail it covered is no longer measured as a stall (gate output 2026-11-06); the owner approved zero-loss pruning again on 2026-11-06 and the cloud ran it (tag push blocked by the cloud proxy, nothing deleted; the Mac runs it)."
 }

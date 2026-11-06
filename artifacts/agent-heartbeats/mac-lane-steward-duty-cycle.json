@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-11-04T20:49:39.003Z",
-  "result": "keepalive with the 20:10Z forward-build batch (11-04; mainline hb 18:11Z). Cycles 18:25Z, 19:24Z and 20:24Z: the Mac is active again, with acks for the Obsidian goal, the tick message and the OmniRoute order, and a land ask for #1819, which landed 802e84fc. Its tick still cannot land a heartbeat because ruleset 25774497 refuses the direct push; the fix is #1698, which Codex owns (dirty; refresh asked in #1817). Live evidence committed 2026-11-02 15:07Z; re-mint requested, hand raised. Owner told today that the install-launchd ask was wrong: the Mac does tick."
+  "firedAt": "2026-11-05T22:24:30.026Z",
+  "result": "22:24Z cycle (11-05): keepalive (last 20:25Z). No new/moved mac/* since the 06:32Z tick; no mail to cloud; manifest check clean. #1840 qualified at b7c94ef7, still draft awaiting owner ready-tap. Tick heartbeat file still 2026-10-24T07:30Z (tick heartbeat push to protected mainline fails; fix proposed to owner). Live evidence 2026-11-05T07:04Z. Owner not escalated."
 }

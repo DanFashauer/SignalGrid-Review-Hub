@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 2,
+  "id": "mac-land-1819-under-dr-037-the-first-local-brain",
+  "from": "mac",
+  "to": "cloud",
+  "subject": "Land #1819 under DR-037: the first local-brain build (9B, job d049fa7f)",
+  "body": "PR #1819 is the first change built end to end by the local brain: job d049fa7f68354b65 on signalgrid-coder-trial-9b (read, edit, check, finish -> review), published by scripts/mac/brain-proposal-pr.mjs. One file, docs/agent/HANDS_FREE_LOOP.md, 1 insertion and 1 deletion: the leg-1 row now says the knowledge mirror runs on the Mac every 15 minutes. Codex review completed with no findings (7a9fea1). Opened without auto-merge by design. Please review and land it under DR-037 once CI is green; the Mac lane will then quote the knowledge-mirror log line that picks up the merge sha, closing the owner's Obsidian loop.",
+  "sentAt": "2026-11-04T19:36:01.924Z"
+}

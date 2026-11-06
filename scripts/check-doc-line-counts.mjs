@@ -56,6 +56,7 @@ const SLACK_RATIO = 0.05;
 const MIN_SLACK = 25;
 /** Pure: is a stated line count close enough to the real one to stand as the size signal it is? */
 export function withinBand(stated, actual) {
+  if (actual <= 0 || stated <= 0) return false; // fail closed: an emptied or absent file never passes against a small stated figure
   return Math.abs(stated - actual) <= Math.max(MIN_SLACK, Math.round(actual * SLACK_RATIO));
 }
 
@@ -129,7 +130,7 @@ function selfTest() {
     checks.push(["a figure outside the band FAILS and names the real count", drift.problems.length === 1 && /is 3 lines/.test(drift.problems[0])]);
     writeFileSync(join(temp, "docs/PLAN.md"), "1. lib/planted/src/index.ts (4) — one line off.\n");
     checks.push(["a figure inside the band passes (a one-line edit to a cited file needs no doc edit)", audit(temp, docs, EXEMPT).problems.length === 0]);
-    checks.push(["the band: the drifts this gate was written for still FAIL (340 for 750, 923 for 1023); small drifts pass (972 for 990, 80 for 100)", !withinBand(340, 750) && !withinBand(923, 1023) && withinBand(972, 990) && withinBand(80, 100) && !withinBand(80, 106) && withinBand(1050, 1100) && !withinBand(1040, 1100)]);
+    checks.push(["the band: the drifts this gate was written for still FAIL (340 for 750, 923 for 1023); small drifts pass (972 for 990, 80 for 100)", !withinBand(340, 750) && !withinBand(923, 1023) && withinBand(972, 990) && withinBand(80, 100) && !withinBand(80, 106) && withinBand(1050, 1100) && !withinBand(1040, 1100) && !withinBand(0, 25) && !withinBand(25, 0)]);
 
     writeFileSync(join(temp, "docs/PLAN.md"), "1. `lib/planted/src/index.ts` (3) in backticks.\n");
     checks.push(["a backticked path is matched", audit(temp, docs, EXEMPT).figures.some((f) => f.doc === "docs/PLAN.md" && f.stated === 3)]);

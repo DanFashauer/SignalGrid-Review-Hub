@@ -742,7 +742,7 @@ export function renderPage(audit) {
     // lesson in 2026-09; the rule now covers every tree. The assertion is unchanged: a file belonging to no surface fails the gate.
     L.push(
       `Coverage of the tree is asserted, not assumed: **every in-scope tracked file belongs to a surface on this page** ` +
-        "(a file belonging to no surface fails the gate; files in declared out-of-scope trees are listed below). " +
+        "(a file belonging to no surface fails the gate; the declared out-of-scope trees are listed below). " +
         "File counts are not printed here, for any surface: a generated page that moves when a file is added makes every " +
         "other open pull request unmergeable on it. `node scripts/check-surface-review-coverage.mjs` prints them. " +
         `The mailbox trees (${[...MAILBOX_TREES.keys()].map((k) => `\`${k}\``).join(", ")}) are surfaces like any other.`,

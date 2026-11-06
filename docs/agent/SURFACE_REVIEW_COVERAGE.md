@@ -8,7 +8,7 @@ that choice, so an unread surface is visible rather than silent.
 
 **105 of 106 surfaces have been read. 1 are partially read. 0 have not been read at all.**
 
-Coverage of the tree is asserted, not assumed: **every in-scope tracked file belongs to a surface on this page** (a file belonging to no surface fails the gate; files in declared out-of-scope trees are listed below). File counts are not printed here, for any surface: a generated page that moves when a file is added makes every other open pull request unmergeable on it. `node scripts/check-surface-review-coverage.mjs` prints them. The mailbox trees (`artifacts/lane-messages`, `artifacts/agent-heartbeats`, `artifacts/raised-hands`) are surfaces like any other.
+Coverage of the tree is asserted, not assumed: **every in-scope tracked file belongs to a surface on this page** (a file belonging to no surface fails the gate; the declared out-of-scope trees are listed below). File counts are not printed here, for any surface: a generated page that moves when a file is added makes every other open pull request unmergeable on it. `node scripts/check-surface-review-coverage.mjs` prints them. The mailbox trees (`artifacts/lane-messages`, `artifacts/agent-heartbeats`, `artifacts/raised-hands`) are surfaces like any other.
 
 A surface counts READ only when some read covers the whole of it. A read of a named
 slice is PARTIAL. Building or running a surface is neither, and is listed separately

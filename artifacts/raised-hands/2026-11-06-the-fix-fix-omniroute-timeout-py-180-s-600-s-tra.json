@@ -7,6 +7,9 @@
   "need": "Owner types two lines in the Mac session: ! python3 ~/fix_omniroute_timeout.py   then   ! launchctl kickstart -k gui/$(id -u)/com.signalgrid.local-brain . Claude then requeues the leg-5 build and publishes it when it reaches review. Separately the cloud lane lands #1840 (CI green at b7a23bf4, mail #1862 sent 00:25Z).",
   "whoCanUnblock": "owner",
   "domain": "local-brain",
-  "status": "open",
-  "routedTo": null
+  "status": "resolved",
+  "routedTo": null,
+  "resolvedAt": "2026-11-06T11:02:45.815Z",
+  "resolvedBy": "mac",
+  "resolution": "Owner typed the two lines on 2026-11-06 (01:18:59Z: 180 s -> 600 s, brain 515815f6 -> 834d81af, 43 tests); the script applied (tests OK, backup + re-pin recorded) and the brain restarted. The loop's local leg now stops in the planner (capability_wait), tracked in Codex's brain notes, not in this hand."
 }

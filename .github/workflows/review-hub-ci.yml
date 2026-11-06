@@ -319,6 +319,8 @@ jobs:
         run: node scripts/mac/run-requests.mjs --self-test
       - name: Brain proposal-PR route self-test (review build only; governance, decision-path and non-applying patches refused; publish idempotent)
         run: node scripts/mac/brain-proposal-pr.mjs --self-test
+      - name: Local-brain guard repairs self-test (stripped synthetic brain: --check fails, --apply restores and re-pins, drift refused; needs python3, FAILS without it)
+        run: python3 scripts/mac/local-brain/repairs/guards.py --self-test
       - name: Lane status line self-test (open hands and unread mail counted from a fixture tree; an unreadable part is left out, never zeroed)
         run: bash scripts/mac/statusline.sh --self-test
       # Runs in this Node-only job on purpose. The rules it mirrors are enforced

@@ -795,7 +795,7 @@ jobs:
       # once and quoted forever — 20 of 29 were wrong on 2026-09-05.
       - name: "Doc line-count self-test (a planted drift must fail; the real tree must be clean)"
         run: node scripts/check-doc-line-counts.mjs --self-test
-      - name: "Doc line counts (every path (N) figure matches the file it names)"
+      - name: "Doc line counts (every path (N) figure is within max(25 lines, 5%) of the file it names)"
         run: node scripts/check-doc-line-counts.mjs
       # BUILD_BACKLOG.md: "Vendor-doc drift is unwatched". Decided: a
       # report-only watcher, cheaper than fetching every vendor page —
@@ -995,6 +995,10 @@ jobs:
         run: node scripts/check-entry-guards.mjs
       - name: "Entry-guard self-test (the suffix form is flagged, the exact form is not)"
         run: node scripts/check-entry-guards.mjs --self-test
+      - name: "Container shipped-import model (every script a container ships alone has its relative imports shipped beside it)"
+        run: node scripts/check-shipped-imports.mjs
+      - name: "Shipped-import model self-test (an import the container does not ship is flagged)"
+        run: node scripts/check-shipped-imports.mjs --self-test
       - name: "Plugin manifest (the signalgrid plugin's agent list equals the tracked agent files; skills and commands present)"
         run: node scripts/check-plugin-manifest.mjs
       - name: "Plugin-manifest self-test (a manifest missing or inventing an agent is flagged)"

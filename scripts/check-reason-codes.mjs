@@ -14,6 +14,7 @@
 import { readFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import { buildCatalog, buildMarkdown, CODE_LIT, SIMULATOR_ENGINE, SIMULATOR_WRAPPERS } from "./gen-reason-codes.mjs";
+import { isMainModule } from "./lib/is-main.mjs";
 
 const CATALOG = "docs/REASON_CODES.md";
 const SPEC = "lib/api-spec/v1-openapi.yaml";
@@ -299,7 +300,7 @@ function selfTest() {
 
 // Direct invocation only — importing this module must not run the gate
 // (assurance advisory: an import-time run can exit the importing process).
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (isMainModule(process.argv[1], import.meta.url)) {
   if (process.argv.includes("--self-test")) process.exit(selfTest());
   const catalog = buildCatalog();
   const problems = auditReasonCodes({

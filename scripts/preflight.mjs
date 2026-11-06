@@ -173,7 +173,7 @@ const STEPS = [
   // The `path (N)` line counts in the build plan's tier lists: measured once,
   // quoted forever — 20 of 29 were wrong on 2026-09-05, three by 100+ lines.
   { name: "Doc line-count self-test (a planted drift must fail; the real tree must be clean)", cmd: ["node", "scripts/check-doc-line-counts.mjs", "--self-test"] },
-  { name: "Doc line counts (every `path (N)` figure matches the file it names)", cmd: ["node", "scripts/check-doc-line-counts.mjs"] },
+  { name: "Doc line counts (every `path (N)` figure is within max(25 lines, 5%) of the file it names)", cmd: ["node", "scripts/check-doc-line-counts.mjs"] },
   // The four capacity figures RELIABILITY_SLO.md owns, wherever a document restates
   // them. `check-derived-doc-figures` sweeps tree-derived values and never read a bare
   // `240` or `585`; COMPANY_BUILD_PLAN.md carried the superseded 5,128 for twelve days.
@@ -285,6 +285,8 @@ const STEPS = [
   { name: "Inspiration catalog structure self-test (the check can actually fail)", cmd: ["node", "scripts/check-inspiration-catalog-structure.mjs", "--self-test"] },
   { name: "Entry guards (a module's gate body runs only when it IS the entry, never on a filename match)", cmd: ["node", "scripts/check-entry-guards.mjs"] },
   { name: "Entry-guard self-test (the suffix form is flagged, the exact form is not)", cmd: ["node", "scripts/check-entry-guards.mjs", "--self-test"] },
+  { name: "Container shipped-import model (every script a container ships alone has its relative imports shipped beside it)", cmd: ["node", "scripts/check-shipped-imports.mjs"] },
+  { name: "Shipped-import model self-test (an import the container does not ship is flagged)", cmd: ["node", "scripts/check-shipped-imports.mjs", "--self-test"] },
   { name: "Plugin manifest (the signalgrid plugin's agent list equals the tracked agent files; skills and commands present; claude plugin validate passes when the CLI is on PATH)", cmd: ["node", "scripts/check-plugin-manifest.mjs"] },
   { name: "Plugin-manifest self-test (a manifest missing or inventing an agent is flagged)", cmd: ["node", "scripts/check-plugin-manifest.mjs", "--self-test"] },
   { name: "Rendered assets (a committed PNG must be a render of the committed HTML; unpinned PNGs reported)", cmd: ["node", "scripts/check-rendered-assets.mjs"] },

@@ -48,6 +48,7 @@
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { isMainModule } from "./lib/is-main.mjs";
 
 const REPO = join(dirname(fileURLToPath(import.meta.url)), "..");
 const VECTORS = "native/shared/remediation-allow-vectors.json";
@@ -284,5 +285,5 @@ function main() {
 // Run only as an entrypoint, so another script can import `validateVectors` without
 // firing the gate as a side effect.
 const IS_MAIN =
-  process.argv[1] !== undefined && import.meta.url === new URL(`file://${resolve(process.argv[1])}`).href;
+  isMainModule(process.argv[1], import.meta.url);
 if (IS_MAIN) main();

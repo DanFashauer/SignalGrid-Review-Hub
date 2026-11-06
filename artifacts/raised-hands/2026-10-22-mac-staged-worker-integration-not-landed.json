@@ -7,7 +7,10 @@
   "need": "Mac lane: land the validated staged worker integration and show one real bounded build cycle, then flip the mac-build-tick row in docs/agent/scheduled-routines.json to active, or retire it, before 2026-10-29, when the routines gate turns an awaiting-activation row fatal. Take this hand, or clear it with what unblocked it.",
   "whoCanUnblock": "mac lane",
   "domain": "lane",
-  "status": "open",
+  "status": "resolved",
   "routedTo": null,
-  "where": "scripts/mac/build-tick.sh; docs/agent/scheduled-routines.json row mac-build-tick"
+  "where": "scripts/mac/build-tick.sh; docs/agent/scheduled-routines.json row mac-build-tick",
+  "resolvedAt": "2026-11-05T20:01:43.437Z",
+  "resolvedBy": "mac",
+  "resolution": "2026-11-05: docs/agent/scheduled-routines.json row mac-build-tick reads status active on mainline, the forward-build-cycle heartbeat is fresh (2026-11-05T18:11:36Z), and the launchd job com.signalgrid.build-tick exits 0. The routines gate is not fatal on this row. The real bounded build cycle the hand asked for is shown by local-brain builds d049fa7f (PR #1819, merged 802e84fc) and c8ee0dca (PR #1840)."
 }

@@ -58,6 +58,7 @@ import {
   validatePolicyRules,
   puckVerdict,
   type AttachState,
+  type TamperState,
   type PuckSituation,
   type Decision,
   type DecisionEvidence,
@@ -2794,8 +2795,10 @@ for (const [fromRow, fromSignal, want, why] of [
     sig("tamper_state", "none", { observedAt: ILLEGIBLE_AT }),
   ]);
   check(
-    "f-a: an affirmative-GOOD value with an unorderable stamp is downgraded — tamper_state 'none' reads 'unknown', not 'none', and the decision does not reach allow",
-    goodIllegible.evidence.tamperState === "unknown" && goodIllegible.outcome !== "allow",
+    // DR-065: the floor is now "unreadable" (an EMITTED reading that cannot vouch),
+    // not the silence value "unknown" — the stricter of the two, and it steps up.
+    "f-a: an affirmative-GOOD value with an unorderable stamp is downgraded — tamper_state 'none' reads 'unreadable' (DR-065), not 'none', and the decision does not reach allow",
+    goodIllegible.evidence.tamperState === "unreadable" && goodIllegible.outcome !== "allow",
     `tamperState=${goodIllegible.evidence.tamperState} outcome=${goodIllegible.outcome}`,
   );
   check(
@@ -2912,8 +2915,8 @@ for (const [fromRow, fromSignal, want, why] of [
     sig("tamper_state", "none", { id: "sig_f1_peer_h2", observedAt: ILLEGIBLE_AT }),
   ]);
   check(
-    "f-1: two illegible readings that both say 'none' still cannot vouch — tamperState reads 'unknown' and the decision does not reach allow",
-    allGoodPeers.evidence.tamperState === "unknown" && allGoodPeers.outcome !== "allow",
+    "f-1: two illegible readings that both say 'none' still cannot vouch — tamperState reads 'unreadable' (DR-065) and the decision does not reach allow",
+    allGoodPeers.evidence.tamperState === "unreadable" && allGoodPeers.outcome !== "allow",
     `tamperState=${allGoodPeers.evidence.tamperState} outcome=${allGoodPeers.outcome}`,
   );
 
@@ -3611,6 +3614,118 @@ const monotonicityTable: string[] = [];
     );
   }
 
+  // ── DR-065 (PROPOSED): an EMITTED-but-unreadable dock-family reading steps up ──
+  //
+  // Owner decision 2026-11-03 on raised hand 2026-09-25-policy-ts-v1-stays-silent-
+  // on-an-emitted-present- (option a). Before DR-065 every dock-family reader folded
+  // an out-of-domain value to the SILENCE value "unknown", no v1 rule matched it, and
+  // a fresh `tamper_state: "garbled"` ALLOWED while the identical shape on attach_state
+  // stepped up. These pins fail on that code and hold the split: silence stays
+  // "unknown" and quiet; an emitted reading nothing can be read from is "unreadable"
+  // and steps up with DOCK_EVIDENCE_UNREADABLE — and an affirmative accusation in a
+  // same-instant twin still beats it.
+  {
+    const DOCK_FAMILY: [keyof DecisionEvidence, SignalCategory, string, string][] = [
+      // field, category, an accusing member, the rule id that steps it up
+      ["custodyState", "custody_state", "exception", "custody-unreadable"],
+      ["dockChargeState", "charge_state", "critical", "charge-unreadable"],
+      ["batteryHealth", "battery_health", "failing", "battery-health-unreadable"],
+      ["tamperState", "tamper_state", "confirmed", "tamper-unreadable"],
+      ["dockState", "dock_state", "faulted", "dock-unreadable"],
+      ["badgeBinding", "badge_binding", "forced", "badge-unreadable"],
+    ];
+    const at = (signals: NormalizedSignal[], rules = SHARED_DEVICE_RULES_V1) => {
+      const evidence = buildEvidence(identity, device, workflow, [...healthy, ...signals]);
+      return { evidence, evaluation: evaluatePolicy({ ...monoV1, rules }, evidence) };
+    };
+    // A custom rule set an owner could activate: v1 with every DR-065 row removed.
+    // The backstop (deriveCriticalSignalsPresent) must still keep it from allowing.
+    const withoutDr065 = SHARED_DEVICE_RULES_V1.filter((r) => !r.id.endsWith("-unreadable"));
+    check(
+      "22 DR-065 v1 carries exactly six *-unreadable rows, all step_up DOCK_EVIDENCE_UNREADABLE",
+      SHARED_DEVICE_RULES_V1.length - withoutDr065.length === 6 &&
+        SHARED_DEVICE_RULES_V1.filter((r) => r.id.endsWith("-unreadable")).every(
+          (r) => r.outcome === "step_up" && r.reasonCode === "DOCK_EVIDENCE_UNREADABLE",
+        ),
+    );
+    const silent = at([]);
+    for (const [field, category, accusing, ruleId] of DOCK_FAMILY) {
+      const garbled = at([sig(category, "garbled-out-of-domain")]);
+      check(
+        `22 DR-065 emitted out-of-domain ${category} → ${String(field)}='unreadable' → step_up DOCK_EVIDENCE_UNREADABLE via ${ruleId} (got ${String(garbled.evidence[field])}, ${garbled.evaluation.outcome} [${garbled.evaluation.reasonCodes.join(",")}])`,
+        garbled.evidence[field] === "unreadable" &&
+          garbled.evaluation.outcome === "step_up" &&
+          garbled.evaluation.reasonCodes.includes("DOCK_EVIDENCE_UNREADABLE") &&
+          garbled.evaluation.matchedRules.some((m) => m.ruleId === ruleId),
+      );
+      const nonString = at([sig(category, 7)]);
+      check(
+        `22 DR-065 emitted non-string ${category} → step_up, never allow (got ${String(nonString.evidence[field])}, ${nonString.evaluation.outcome})`,
+        nonString.evidence[field] === "unreadable" && nonString.evaluation.outcome === "step_up",
+      );
+      const wireUnknown = at([sig(category, "unknown")]);
+      check(
+        `22 DR-065 an emitted literal "unknown" ${category} is not a member and is not silence → step_up (got ${wireUnknown.evaluation.outcome})`,
+        wireUnknown.evidence[field] === "unreadable" && wireUnknown.evaluation.outcome === "step_up",
+      );
+      check(
+        `22 DR-065 SILENCE: no ${category} at all → ${String(field)}='unknown' and allow TRUST_ESTABLISHED (day-one-quiet unchanged; got ${String(silent.evidence[field])}, ${silent.evaluation.outcome})`,
+        silent.evidence[field] === "unknown" &&
+          silent.evaluation.outcome === "allow" &&
+          silent.evaluation.reasonCodes.includes("TRUST_ESTABLISHED"),
+      );
+      for (const [label, pair] of [
+        ["accusation first", [sig(category, accusing, { id: `sig_dr065_${category}_a` }), sig(category, "garbled", { id: `sig_dr065_${category}_b` })]],
+        ["garbled first", [sig(category, "garbled", { id: `sig_dr065_${category}_b` }), sig(category, accusing, { id: `sig_dr065_${category}_a` })]],
+      ] as const) {
+        const tied = at([...pair]);
+        check(
+          `22 DR-065 tied same-instant ${category} ${accusing}+garbled (${label}) → the accusation stands, not the step-up floor (got ${String(tied.evidence[field])})`,
+          tied.evidence[field] === accusing,
+        );
+      }
+      const backstop = at([sig(category, "garbled-out-of-domain")], withoutDr065);
+      check(
+        `22 DR-065 BACKSTOP: with every *-unreadable rule removed, an unreadable ${category} still does not allow (criticalSignalsPresent=${String(backstop.evidence.criticalSignalsPresent)}, got ${backstop.evaluation.outcome})`,
+        backstop.evidence.criticalSignalsPresent === false && backstop.evaluation.outcome !== "allow",
+      );
+      const strict = at([sig(category, "garbled-out-of-domain")], SHARED_DEVICE_RULES_V2);
+      check(
+        `22 DR-065 the v2 strict draft inherits the step-up (got ${strict.evaluation.outcome})`,
+        strict.evaluation.outcome !== "allow",
+      );
+    }
+    // The hand's own reproduction, end to end through the dock connector: a dock
+    // record whose tamper reading is outside its domain, runDockSync → buildEvidence
+    // → evaluatePolicy. Before DR-065 this ALLOWED.
+    const clk = fixedClock("2026-07-13T15:00:00.000Z");
+    const seeded = seedDemoStore(clk);
+    const store = seeded.store;
+    const tenantId = seeded.tenants.northwind;
+    const conn = store.listConnectors(tenantId).find((c) => c.kind === "dockbridge-custody");
+    const rec = conn ? seeded.dockRecords[conn.id]?.find((r) => r.deviceRef === "ipad-ward-01") : undefined;
+    const dev = store.findDeviceByRef(tenantId, "ipad-ward-01");
+    const idn = store.findIdentityByRef(tenantId, "nurse.compliant");
+    const wf = store.findWorkflowByKey(tenantId, "clinical-session");
+    let e2e: { tamper: string; outcome: string; codes: string[] } | undefined;
+    if (conn && rec && dev && idn && wf) {
+      runDockSync(store, clk, conn, [{ ...rec, tamperState: "garbled" as unknown as TamperState }]);
+      const evidence = buildEvidence(idn, dev, wf, [
+        ...store.listSignalsForSubject(tenantId, "identity", idn.id),
+        ...store.listSignalsForSubject(tenantId, "device", dev.id),
+      ]);
+      const evaluation = evaluatePolicy(monoV1, evidence);
+      e2e = { tamper: evidence.tamperState, outcome: evaluation.outcome, codes: evaluation.reasonCodes };
+    }
+    check(
+      `22 DR-065 e2e (the hand's reproduction): a dock record with an out-of-domain tamper_state → runDockSync→buildEvidence→evaluatePolicy → step_up DOCK_EVIDENCE_UNREADABLE (got ${e2e?.tamper}, ${e2e?.outcome} [${e2e?.codes.join(",")}])`,
+      e2e !== undefined &&
+        e2e.tamper === "unreadable" &&
+        e2e.outcome === "step_up" &&
+        e2e.codes.includes("DOCK_EVIDENCE_UNREADABLE"),
+    );
+  }
+
   // Scope for the VERDICT dimension is derived the same way, through the REAL
   // evaluator: any field whose substitution can change the outcome is in scope.
   // This is what pulled eleven rule-carrying families in that a backstop-only
@@ -3677,7 +3792,16 @@ const monotonicityTable: string[] = [];
   // meaning invisibly. The derived side of this comparison is the fact; the
   // declared side is the expectation, and changing the ladder means changing it
   // here, deliberately, in the same commit.
+  // DR-065 widened the ladder by the six dock-family fields: an EMITTED-but-
+  // unreadable dock-family reading is not evidence, so the backstop holds for a
+  // custom rule set that carries no `*-unreadable` rule.
   const BACKSTOP_FIELDS: (keyof DecisionEvidence)[] = [
+    "badgeBinding",
+    "batteryHealth",
+    "custodyState",
+    "dockChargeState",
+    "dockState",
+    "tamperState",
     "deviceCompliance",
     "deviceEncrypted",
     "deviceManaged",
@@ -3687,7 +3811,7 @@ const monotonicityTable: string[] = [];
     "postureFreshness",
   ].sort() as (keyof DecisionEvidence)[];
   check(
-    `22 backstop scope is PINNED: exactly ${BACKSTOP_FIELDS.length} fields can change deriveCriticalSignalsPresent, and they are the seven the ladder names`,
+    `22 backstop scope is PINNED: exactly ${BACKSTOP_FIELDS.length} fields can change deriveCriticalSignalsPresent, and they are the ones the ladder names`,
     JSON.stringify(feedingFields) === JSON.stringify(BACKSTOP_FIELDS),
     `derived=[${feedingFields.join(", ")}] declared=[${BACKSTOP_FIELDS.join(", ")}]`,
   );

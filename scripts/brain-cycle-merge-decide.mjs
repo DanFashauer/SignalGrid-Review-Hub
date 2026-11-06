@@ -28,6 +28,7 @@
 // A model may BLOCK or ESCALATE; it can never approve into a merge.
 
 import { pathToFileURL } from "node:url";
+import { isMainModule } from "./lib/is-main.mjs";
 
 /** A conjunct is satisfied only by this exact token. Everything else — including
  *  "skipped", "unavailable", "inconclusive", undefined — fails it. */
@@ -221,7 +222,7 @@ function validate() {
   console.log("Run with --self-test to exercise every conjunct in both directions (preflight + CI do).");
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (isMainModule(process.argv[1], import.meta.url)) {
   if (process.argv.includes("--self-test")) selfTest();
   else validate();
 }

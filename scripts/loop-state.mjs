@@ -1693,7 +1693,10 @@ function detachedHeadWork(cwd, hubShaMap) {
   for (const e of wl.list) {
     if (e.bare || (self && realOrSame(e.path) === self)) continue;
     if (e.ref.startsWith("refs/heads/")) continue;
-    const base = { where: e.path, ...(e.ref ? { symref: e.ref } : {}), ...(e.prunable ? { prunable: true } : {}), agent: e.path.includes("/.claude/worktrees/") };
+    // A lane-deliver worktree (mkdtemp "sg-lane-deliver-*", scripts/lane-deliver.mjs) is the same shape as an agent checkout: a live
+    // delivery commits there, pushes, and removes it. Three times on 2026-11-06 this gate failed on one mid-flight while the
+    // delivery waited for the host lock; reported, never fatal, like an agent worktree — a stale one stays visible in the warn row.
+    const base = { where: e.path, ...(e.ref ? { symref: e.ref } : {}), ...(e.prunable ? { prunable: true } : {}), agent: e.path.includes("/.claude/worktrees/") || /\/sg-lane-deliver-[^/]+$/.test(e.path) };
     if (!e.sha || /^0+$/.test(e.sha)) { out.linked.push({ ...base, head: null, count: null, unreadable: e.ref ? `${e.ref} does not resolve to a commit` : "HEAD does not resolve to a commit" }); continue; }
     if (!byHead.has(e.sha)) {
       const v = gitRun(cwd, ["rev-parse", "--verify", "-q", `${e.sha}^{commit}`]);
@@ -1717,7 +1720,7 @@ function detachedHeadRows(found) {
   const gatedL = found.linked.filter((f) => !f.agent), agentL = found.linked.filter((f) => f.agent);
   const list = (fs) => `${fs.slice(0, 5).map(describeHead).join("; ")}${fs.length > 5 ? `; +${fs.length - 5} more` : ""}`;
   if (gatedL.length) rows.push({ state: "fail", what: "Linked worktree HEAD work not on the Review Hub", detail: list(gatedL), gated: true });
-  if (agentL.length) rows.push({ state: "warn", what: "Agent-worktree HEADs carrying commits", detail: `${list(agentL)} — reported, never fatal: they belong to a live agent's isolated checkout`, gated: false });
+  if (agentL.length) rows.push({ state: "warn", what: "Agent-worktree HEADs carrying commits", detail: `${list(agentL)} — reported, never fatal: they belong to a live agent's isolated checkout or a lane-deliver worktree mid-delivery`, gated: false });
   return rows;
 }
 // "a, b — <remedy>; c — <remedy>": the branches grouped by the remedy each needs, so one cause reads one way everywhere.
@@ -4554,7 +4557,7 @@ exit 1
     // The sibling module and the ledger section 4b needs, so a whole-script fixture REACHES the coverage row: that module starts git by name, and a fixture holding only loop-state.mjs could not see it (round 31).
     const giveCoverage = (fx) => {
       mkdirSync(join(fx.w, "scripts", "lib"), { recursive: true }); mkdirSync(join(fx.w, "docs", "agent"), { recursive: true }); mkdirSync(join(fx.w, "lib", "a"), { recursive: true });
-      for (const f of ["scripts/check-surface-review-coverage.mjs", "scripts/lib/scratch-git.mjs", "docs/agent/SURFACE_REVIEW_COVERAGE.json"]) writeFileSync(join(fx.w, f), readFileSync(join(repo, f)));
+      for (const f of ["scripts/check-surface-review-coverage.mjs", "scripts/lib/scratch-git.mjs", "scripts/lib/is-main.mjs", "docs/agent/SURFACE_REVIEW_COVERAGE.json"]) writeFileSync(join(fx.w, f), readFileSync(join(repo, f)));
       writeFileSync(join(fx.w, "pnpm-workspace.yaml"), "packages:\n  - \"lib/*\"\n"); writeFileSync(join(fx.w, "lib", "a", "package.json"), "{\"name\":\"@w/a\",\"version\":\"1.0.0\"}\n"); writeFileSync(join(fx.w, "lib", "a", "index.ts"), "export const a = 1;\n");
       fx.f("add", "-A", "scripts", "lib", "docs", "pnpm-workspace.yaml"); // (the module reads the TRACKED files: one workspace package is enough for a real 'N of M surfaces read' row)
     };

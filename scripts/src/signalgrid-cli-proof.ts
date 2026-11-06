@@ -396,6 +396,13 @@ async function main(): Promise<void> {
     check("a session path that reaches the repository through a symlink is refused (exit 2)",
       viaLink.code === 2 && /outside the tree/.test(viaLink.stderr) && !existsSync(join(repoRoot, "signalgrid-session.json")));
 
+    // An in-tree directory whose NAME starts with ".." (`..session`) is inside the repository:
+    // a bare startsWith("..") on the relative path took it for an escape (review thread T74).
+    const dotName = await cli(["explain", "--json"], { ...env, SIGNALGRID_CLI_SESSION: join(repoRoot, "..session", "state.json") });
+    const dotNameErr = (parse(dotName.stdout)?.["error"] as Record<string, unknown> | undefined)?.["code"];
+    check("a session path in an in-tree directory named ..session is refused as session_in_tree (exit 2)",
+      dotName.code === 2 && dotNameErr === "session_in_tree" && !existsSync(join(repoRoot, "..session")), `exit ${dotName.code} code ${String(dotNameErr)}`);
+
     // ── review round 2 on PR #1321 ──
     // A bad session must refuse BEFORE decide sends anything: exit 2 means nothing was sent.
     const lockedSession = join(sessionDir, "locked.json");

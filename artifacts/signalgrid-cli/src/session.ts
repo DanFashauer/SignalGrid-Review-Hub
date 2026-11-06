@@ -16,7 +16,7 @@
  * so a reader never sees half a session.
  */
 import { accessSync, closeSync, constants, existsSync, fstatSync, lstatSync, openSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeSync } from "node:fs";
-import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { CliError, EXIT, safeId, type Config } from "./client.js";
 
@@ -53,7 +53,10 @@ export function sessionPath(env: NodeJS.ProcessEnv): string | null {
   if (root) {
     // Compare REAL paths: a symlink outside the tree that points into it must not pass.
     const rel = relative(realpathSync(root), real);
-    if (rel === "" || (!rel.startsWith("..") && !isAbsolute(rel))) {
+    // "Outside" is exactly `..`, `..<sep>…`, or another root; a directory merely NAMED `..x`
+    // (`..session`) is inside (review thread T74), so a bare startsWith("..") is not enough.
+    const outside = rel === ".." || rel.startsWith(".." + sep) || isAbsolute(rel);
+    if (rel === "" || !outside) {
       throw new CliError(
         "session_in_tree",
         `SIGNALGRID_CLI_SESSION (${path}) is inside the repository; a session file must live outside the tree.`,

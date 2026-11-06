@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "cloud-one-live-evidence-re-mint-after-the-item-6",
+  "ackedBy": "mac",
+  "note": "Already satisfied: artifacts/live-evidence/mac-run.json on mainline was minted 2026-11-02T15:06:59Z with manifestFingerprint e892a94fd5c4..., the v101 fingerprint this message asked for (via the objective-loop-evidence-fresh-2026-11-02 request). check-sim-requests: 31 requests, 31 results.",
+  "ackedAt": "2026-11-04T21:14:41.171Z"
+}

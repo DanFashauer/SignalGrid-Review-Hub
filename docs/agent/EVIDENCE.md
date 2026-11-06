@@ -5118,3 +5118,35 @@ a9789f25e Merge pull request #1230 from DanFashauer/claude/build-live-panel-unkn
 ```
 
 Verdict: twelve of the standing order's item-6 `claude/*` PRs are on `SignalGrid_Alpha`, each on a head whose gating check was green and whose local half is quoted; the rest of item 6 is the brain's to build (FIX-NEEDED verdicts posted on each) or the owner's to decide (the hold list above).
+
+## 2026-11-06 — #1840 landed under DR-037: the second local-brain-built change
+
+**What.** PR #1840 "brain/job-c8ee0dca1f6a4db3" is the second change built by the local brain (job c8ee0dca; #1819 was the first). Docs only: a "Publishing a reviewed local build" section in `docs/agent/HANDS_FREE_LOOP.md` and the lane message `artifacts/lane-messages/mac-pr1840-final-head-review-land.json`. Mac-authored; the owner marked it ready for review at 2026-11-06 00:27Z; the Mac asked the cloud to land it in mail `mac-1840-is-ready-for-review-owner-marked-it-00-`.
+
+**Landed.** By the cloud lane under DR-037 on the exact head `c63574d646991adb4b994e95cbab528dc0970d97`; merge commit on SignalGrid_Alpha `8603934326f1e65d694491ab09d11e29537c4c36` (2026-11-06, about 01:57Z).
+
+**Conditions on that head.**
+- Gating check "Typecheck, build, and proof scaffold": success. CI at merge time: 13 success, 3 skipped, 1 queued non-required.
+- Local `node scripts/preflight.mjs` printed "Preflight PASSED — everything it runs is green."
+- Local `pnpm run verify:breadth` printed "Breadth lane PASSED — 58 breadth proofs green".
+- 0 unresolved review threads. Codex code review completed on `c63574d6` with no findings.
+
+**Earlier heads.** Three independent Claude reviews on 706c23fe: fail-closed and code CLEAN; security 2 MEDIUM. The security finding (the doc told the operator to inspect a dry-run diff the dry run never prints) was fixed by the cloud as b7c94ef7 (docs only). The branch was then refreshed from mainline twice by GitHub update-branch merges (b7a23bf4, c63574d6) because the strict up-to-date ruleset refused a behind merge; preflight and breadth were re-run locally on each of those heads and passed. Records: PR comment 6668219081 (review record) and the PR body.
+
+**Not done.** Codex-system reviews and the third-party Ponytail methods the Mac's mail asked for were not run by the cloud; both are named as limitations on the PR. No new readiness figure, evidence mint or owner attestation is asserted.
+
+Command, in a checkout with `origin/SignalGrid_Alpha` fetched:
+```sh
+git log -1 --format='%H %s' 8603934326f1e65d694491ab09d11e29537c4c36 | cut -c1-120
+git log -1 --format=%P 8603934326f1e65d694491ab09d11e29537c4c36
+git merge-base --is-ancestor 8603934326f1e65d694491ab09d11e29537c4c36 origin/SignalGrid_Alpha && echo ancestor
+```
+Output, verbatim:
+```
+8603934326f1e65d694491ab09d11e29537c4c36 Merge pull request #1840 from DanFashauer/brain/job-c8ee0dca1f6a4db3
+d69357219f53ce6e3db3e1cd6f94e68595d86ecf c63574d646991adb4b994e95cbab528dc0970d97
+ancestor
+```
+The second parent of the merge is the exact head `c63574d6` the conditions above were measured on.
+
+Verdict: #1840 is on `SignalGrid_Alpha` at 8603934326f1e65d694491ab09d11e29537c4c36, merged from the exact head c63574d646991adb4b994e95cbab528dc0970d97 whose gating check, local preflight and breadth were green; the cloud did not run Codex-system reviews or the Ponytail methods.

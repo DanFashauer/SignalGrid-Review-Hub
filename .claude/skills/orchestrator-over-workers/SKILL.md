@@ -222,7 +222,10 @@ conclusion, and runs no stage at all. Every other stage is dispatched:
   worktree, branch, tag, klass, title, trailers, sessionUrl, preBrief?, bodyNotes? }` —
   `repo`, `scratch`, `worktree`, `branch`, `tag`, `klass`, `title`, `trailers` and
   `sessionUrl` are ALL required (the script throws on a missing one, and validates
-  `tag`/`repo`/`scratch`/`worktree`/`branch` for shape before using them); `trailers`
+  `tag`/`repo`/`scratch`/`worktree`/`branch` for shape before using them); `klass` is
+  only the caller's GUESS at the owner-decision class — the Merge stage runs
+  `scripts/check-owner-gated-surfaces.mjs --classify-branch` over the actual diff and
+  `resolveKlass()` lets that DERIVED class win, never the caller's; `trailers`
   and `sessionUrl` are the caller's own attribution — the workflow has no session
   baked in, so a call that omits them is not a shorter invocation, it is one that
   throws before Pre even starts. It merges Alpha, regenerates on a clean index, runs

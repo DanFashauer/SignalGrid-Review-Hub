@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-11-06T00:12:10.968Z",
-  "result": "quiet: no cloud wave (DR-064). #1840 (second brain-built change) qualified at b7c94ef7 and still a draft - the classifier refuses ready_for_review to both lanes, so it waits on the owner's tap. Landed since last fire: #1858, #1859; Mac mail #1855 landed. In flight H/S/O = 0/0/0. sub-brains: signalgrid-mcp #17 fdc50f61 unchanged. Owner queue: #1840 ready-tap; #1133 (re-running after Mac refresh), #1190 green; #1265, #1337, #1792, #1463, #1338, #1321, #1314."
+  "firedAt": "2026-11-06T02:10:58.102Z",
+  "result": "acted: landed #1840 (second brain-built change, job c8ee0dca) under DR-037 on exact head c63574d6 -> mainline 86039343; acked the Mac's final-head mail. No cloud wave (DR-064). In flight H/S/O = 0/1/0 (a Sonnet worker writing the #1840 landing record into EVIDENCE/LOOP as a docs PR). sub-brains: signalgrid-mcp #17 fdc50f61 unchanged. Owner queue: #1698 HIGH finding is the owner's design call; #1133, #1190 green; #1265, #1337, #1792, #1463, #1338, #1321, #1314. Held mail PRs landing serially: #1862, #1865, this one, #1864."
 }

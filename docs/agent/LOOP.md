@@ -2344,3 +2344,114 @@ something alongside a life.
 Everything else in this repository is finished enough. If a month passes and
 both are still zero, the problem is not the product, the doctrine, the gates or
 the plan - and no amount of work in any tool will fix it.
+
+
+## Mac transport guard — source correction L46
+
+The shared record store also contains a persistent identity-pinned tick guard. Only the separate explicit store initializer creates it. Normal ticks open that file read-only and retain FD8 while the existing Perl/Fcntl primitive serializes linked checkouts; they never unlink the shared guard or reap a PID file.
+
+An existing legacy tick.lock, missing/corrupt ownership, or an unfinished OPEN slot refuses work even if the kernel guard is available. OPEN is committed and read back before work. Exact original ownership and immutable finalization records precede CLOSED. Signals observed before normal finalization retain OPEN. CLOSED is lease finalization, not an independently observed parent terminal, task acceptance, provider quiet, canonical delivery or authority to retry an old attempt; those remain separately evidenced.
+
+L46 has actual84 portable delivery controls and12 independent Mac subprocess controls, all zero-fail/skip. These are source checks, not native coding or installed operation. Full current-head validation, fresh source reviews, protected landing, preservation audit and separate activation remain required; restoration needs a fresh natural canonical heartbeat.
+
+
+## Mac transport test contract — L47
+
+Linked-checkout heartbeat tests now execute the production RECORD_DIR startup assignment; a planted node_modules regression fails both related controls. The staged checker executes the actual descriptor-finalization Bash function, including host-release order, exact token/root/entry-status arguments, nonzero work status and interrupted OPEN retention. Delivery84/84 and staged267/267 pass. The earlier full264/265 result remains FAILED, not replaced by isolated checks. Runtime guard bytes are unchanged. New exact-head full/breadth, complete source reviews, protected landing, preservation audit and separate activation remain owed; no fresh canonical Mac heartbeat is claimed.
+
+
+## Mac transport producer and receipt boundary — L48
+
+The new transport refuses receipt-less Mac mutations before Git, including old Bash loaded before canonical JS advances. Existing submission evidence always selects original readback, even when its parent status is1/2; no rejected push is retried through another topic. A true prepublication refusal without a receipt remains a different observation, while unknown or damaged evidence holds.
+
+Pending readback binds the original receipt/head, PR age and checks. Behind, failed or one-hour-pending PRs may raise one distinct Cloud hand through the actual producing checkout after rechecking the original FD8/token/store. Unknown or partial notification evidence remains readback-only. Source45/45, independent guard12/12 and delivery96/96 pass, zero failures/errors/skips. These checks do not activate source or prove the complete local coding/delivery loop; new-head full/breadth, protected source reviews/CI/landing and a separate preservation audit/activation remain owed.
+
+
+## Original-evidence non-vacuity — L49
+
+The preservation fixture requires its five original records before snapshotting. Actual2-record and4-record negative cases refuse; complete5 succeeds. Current3 filesystem controls,96 delivery checks and16 unchanged walker self-tests pass. Runtime and previous assertions are unchanged. The01fc full failure remains FAILED and its breadth unstarted; a new exact-head full/breadth must precede protected publication and separate activation.
+
+
+## Fixture snapshot file binding — L50
+
+Regular fixture bytes now come from the exact opened descriptor whose identity was checked before and after reading. Symlink/regular path swaps refuse wrong bytes; original descriptor reads and close-on-error behavior are covered. Frozen5/5 and delivery96/96 pass, zero failures/errors/skips, with runtime and prior assertions unchanged. This is test correctness hardening, not native delivery or a security-boundary certification. The changed head requires new full/breadth, CodeQL/currentCI, protected reviews/landing and separate activation.
+
+
+## Original push evidence and refusal repair — L51
+
+The producer captures raw Git output and a source-bound terminal before parsing. A known failed push alone does not prove no publication: GET-only readback also requires the exact original topic to be absent. Foreign, incomplete, signaled, failed-GET or ambiguous evidence holds without replay. Historical producer bytes are checked against their committed Git blob.
+
+The actual tick owner may create one distinct Cloud repair hand using the original attempt's stable notification identity. Changing diagnostic timing or cause never creates a second hand; failed/unknown notifications stay consumed. Unknown legacy locks remain held. Frozen31/31 and unchanged delivery96/96 pass under real network denial, zero failures/errors/skips. This source correction remains subject to new full/breadth, complete own-system reviews, current CI/findings, protected landing and separate preservation/activation before natural canonical delivery proof.
+
+
+## Source-bound delivery repair and pending readback — L52
+
+Current operator source retains producer repair DATA without granting execution. Only the real FD8 owner may publish one separate generic uncertainty notice, with the original stable identity; failed/unknown hands stay consumed. A bounded round-robin drain handles at most one publication per tick without claiming the remainder is quiet. Pending GET observations are journaled before parsing and paced120 minutes only for the current owner. Ordinary and resolved-hand readback remain fresh.
+
+Focused qualification is160 passes across unchanged production-source cohorts plus35 passes in corrected strict-refusal31/full-heartbeat4 cohorts; all zero failures/skips. The earlier191 cohort remains FAILED27/4 in its refusal portion, preserved without reclassification. Original31 assertions remain exact; the new4 cases exercise the real generic HOLD and count all operations. This is source evidence across separate cohorts, not a new full-head, native, CI, landing or activation result. Startup OPEN/legacy histories and unqualified Git descendant recovery remain held. No natural canonical heartbeat restoration is claimed.
+
+
+## Current repair handoff fixture - L53
+
+The staged worker test now expects the deliberate Cloud repair recipient and public script location. The same267 assertions run; privacy/redaction, private-log preservation and protected submission checks remain. Focused267/267 passes; full feef264/267 is still failed and breadth unstarted. This is an operator test-contract correction with production bytes unchanged, not an accepted native checkpoint, full-head gate, delivery, activation or fresh natural heartbeat.
+
+
+## L54 - Local unpublished operator source checkpoint
+
+Independent operator source checkpoint at 2026-11-01T09:08:10.520264+00:00.
+
+Ordinary integration merged inspected protected ancestor 1691751207779b1a97af0a906c88bc3ff6d0ad57 into 2f64a655fb92a77661aabbe819664ec8076ad93d as intermediate merge 39acc9396483820120eb451cd12407165700e090. Observed live 3d2829778952625cc79d13c369769c989f38cbc0 is newer unreviewed source; only the vetted ancestor was merged. Fresh current-main source inspection still precedes final validation and delivery.
+
+Preflight source stayed byte-identical at SHA256 a41a3859eacdf884e5b9774ed001c5b889ab1464940cf0c7a62414500766ce87 with 977 newline-counted lines; only its COMPANY_BUILD_PLAN inventory number changed from 970 to 977. This documentation step changes no runtime or tests. Prior failed full runs remain failed. Own generators, fresh full/breadth, formal same-head dual-system reviews, current CI/findings, protected landing, installation, activation and natural canonical Mac heartbeat remain pending. Other-lane approved deliveries receive no local native coding or accepted-checkpoint credit.
+
+Next: inspect any newer canonical delta, run owned generators and qualify the exact final head. The local-first program remains incomplete.
+
+
+## L55 — Local source and derived-view follow-through
+
+Independent operator source integration at 2026-11-01T09:27:29.304184+00:00. Protected ancestor 3d2829778952625cc79d13c369769c989f38cbc0 was merged into 5181405c1d4046a3f96199070872a6fcc3413035 as d0427b5bea88cb31d4a33f87d63aeb6e23155770. Later observed main 5886f1e62441bbc272207dc541c9b89407d3e78a remains unreviewed; it was not fetched or merged here and still blocks final current-main delivery. Approved PR1440 was carried by the other lane, not the local native executor. The existing977-line preflight/doc figure and earlierL54 remain intact. Two pinned local sync-manifest/surface-coverage generators are selected in this source phase; no test/full/breadth, formal review, CI, publication, installation or activation is selected. All prior failed/unknown attempts remain unchanged.
+
+Next: qualify the actual final owned source and inspect any later canonical delta before protected delivery. The overall local-first program remains incomplete.
+
+
+## L56 — Exact-source claim evidence follow-through
+
+Independent operator source checkpoint at 2026-11-01T09:58:11.141618+00:00. Inspected protected ancestor 5886f1e62441bbc272207dc541c9b89407d3e78a was merged into d003f7e7911c0178db4a58306566f2c9f4a8895a as 1a83a9bb056bf58cef874cd5e14c119c72e265b9. Only this fixed target was fetched/merged; any newer main still needs source inspection before final delivery. Approved1556 is an other-lane delivery, not local native coding. Preflight remains byte-identical977/doc977 and earlierL54/L55 stay intact. The original D003 full FAILED at a stale README claim-evidence line reference; its breadth never started. The normal claim writer/renderer reanchor only that evidence token after the two pinned derived-view generators; full/breadth/currentCI/reviews/protected landing/activation are still pending.
+
+Next: qualify the newly committed source with a genuinely new full/breadth operation; preserve every earlier failed result. The local-first program remains incomplete.
+
+
+## L57 — Synthetic redaction fixture representation
+
+The retained215cc full stopped at publication-boundary because two source lines in a malformed-payload negative fixture carried a literal synthetic credential-shaped marker. No actual credential or public source push was involved.
+
+Two fixture lines now use the existing safety-check runtime-concatenation convention. A closed literal check preserved every input and forbidden value; all18 repair cases and the unchanged publication-boundary gate passed with actual network denial. Production and publication-policy bytes remained unchanged.
+
+New source qualification and protected delivery remain pending.
+
+
+## L58 — Disposable Git fixture isolation
+
+The retaineded390 full stopped at the unchanged scratch-repository hygiene gate: three new repair fixtures used a bespoke Git launcher instead of the shared helper.
+
+Each fixture now imports and calls scratchGit for its disposable local Git operations. All original assertion lines and cases are preserved; the current18 repair,12 caller and9 bounded-drain cases and unchanged hygiene gate passed with real network denial. Production and gate source bytes remained unchanged.
+
+New exact-head qualification and protected delivery remain pending.
+
+
+## L59 — Actual regression control bindings
+
+The retained88d821 full stopped at the unchanged gate-registration self-test: seven new checks did not name their existing execution controls on a code line.
+
+Only imported local runner names and their bound call identifiers changed. All arguments, targets,177 assertion lines and99 cases remain exact; the current99 controls and unchanged159-case gate self-test passed with real network denial. Registration remains the documented control-only visibility floor, not new self-test coverage. Production, Python targets, gate source and thresholds stayed unchanged.
+
+New exact-head qualification and protected delivery remain pending.
+
+
+## L60 — Shared Git environment policy
+
+The retained4a4158e full stopped at the unchanged walker self-test. Its proximity heuristic classified three duplicated Git-environment-key arrays beside readdirSync as filesystem roots.
+
+The fixtures now use the existing scratchGitEnv function instead of duplicating its16-key policy. Final fixture environment values, executable lookup PATH,177 assertions and all39 cases are preserved. Actual39 controls,16 walker self-tests, the regular walker and scratch-hygiene gates and closed environment-equivalence vectors passed under real network denial. No copy walk, floor, threshold, waiver, PENDING entry or idle-empty rule changed.
+
+New exact-head qualification and protected delivery remain pending.

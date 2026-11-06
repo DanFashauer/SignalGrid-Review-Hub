@@ -1,0 +1,12 @@
+{
+  "id": "2026-11-06-the-fix-fix-omniroute-timeout-py-180-s-600-s-tra",
+  "raisedAt": "2026-11-06T01:12:08.563Z",
+  "origin": "mac",
+  "doing": "Closing the owner's hands-free loop: local brain build -> PR -> review -> land -> mirror. Root cause of every failed local build today is measured: the brain's OmniRoute client aborts at a hard 180 s while a 12k-token step takes 2m27s-2m59s on this 16 GB Mac (OmniRoute 499 at 180451 ms, Ollama 500 after 2m59s, six times on 2026-11-05).",
+  "blockedBy": "The fix (~/fix_omniroute_timeout.py: 180 s -> 600 s, transactional with backup, re-pin and rollback) is written but the Mac auto-mode classifier refuses to let Claude run it (Security Weaken) or write it outside the scratchpad; the brain also needs a restart to load it.",
+  "need": "Owner types two lines in the Mac session: ! python3 ~/fix_omniroute_timeout.py   then   ! launchctl kickstart -k gui/$(id -u)/com.signalgrid.local-brain . Claude then requeues the leg-5 build and publishes it when it reaches review. Separately the cloud lane lands #1840 (CI green at b7a23bf4, mail #1862 sent 00:25Z).",
+  "whoCanUnblock": "owner",
+  "domain": "local-brain",
+  "status": "open",
+  "routedTo": null
+}

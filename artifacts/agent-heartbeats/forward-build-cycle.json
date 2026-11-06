@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-11-05T22:11:38.512Z",
-  "result": "quiet: no cloud wave (DR-064). #1840 (second brain-built change) qualified at b7c94ef7 - gating success, preflight PASSED, breadth PASSED (58), 0 threads, security finding fixed - blocked only on draft->ready, which the classifier refuses to both lanes (owner tap). Landed since last fire: #1856, #1857. In flight H/S/O = 0/0/0. sub-brains: signalgrid-mcp #17 fdc50f61 unchanged. Owner queue: #1840 ready-tap; #1133, #1190 green; #1265, #1337, #1792, #1463, #1338, #1321, #1314."
+  "firedAt": "2026-11-06T00:12:10.968Z",
+  "result": "quiet: no cloud wave (DR-064). #1840 (second brain-built change) qualified at b7c94ef7 and still a draft - the classifier refuses ready_for_review to both lanes, so it waits on the owner's tap. Landed since last fire: #1858, #1859; Mac mail #1855 landed. In flight H/S/O = 0/0/0. sub-brains: signalgrid-mcp #17 fdc50f61 unchanged. Owner queue: #1840 ready-tap; #1133 (re-running after Mac refresh), #1190 green; #1265, #1337, #1792, #1463, #1338, #1321, #1314."
 }

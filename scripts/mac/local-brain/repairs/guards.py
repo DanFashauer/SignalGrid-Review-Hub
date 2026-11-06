@@ -6,7 +6,7 @@ day a brain install dropped a guard, a repair was written outside the tree, the 
 classifier refused to run it, and a hand asked the owner to type two lines. This file is
 the repair, in the tree, reviewed before it can run.
 
-The guards (each measured on a real build before it was written; four as of 2026-11-06 18:27Z):
+The guards (each measured on a real build before it was written; five as of 2026-11-06 23:20Z):
   call_cap_600     signalgrid_brain.py: the OmniRoute / direct-Ollama request ceiling is
                    600 s, not 180 s. A 12k-token step on this 16 GB Mac takes 2m27s-2m59s;
                    at 180 s the client aborted every one (OmniRoute 499, Ollama 500).
@@ -22,10 +22,13 @@ The guards (each measured on a real build before it was written; four as of 2026
                    old_text == content four times; each was accepted as progress, cleared the
                    refusal counter so reedit_schema never fired, and the job budget expired at
                    step 9 with the correct edit sitting unverified in the worktree.
-Not here yet: a read-loop guard (a third identical read of an unchanged path not
-selectable) — JSON-schema enums narrow the action, not the path, and Codex's own test
-requires `read` to stay offered while a never-read dependency exists. That one is the
-brain's to build inside its runtime.
+  reread_schema    signalgrid_agent_runtime.py: once every required source has been read and
+                   any one path has been read three times, `read` leaves the action schema until
+                   an accepted edit clears the read counts. The runtime's own cooldown excluded
+                   read for ONE proposal and then offered it again: build 6e021d2f read the same
+                   unchanged test file eight times in a row (steps 5-12) and hit the action limit
+                   with its correct function edit unverified. Codex's tests still hold: read stays
+                   while a never-read dependency exists (pending_sources) and after two repeats.
 
 The brain's private home is never named in this source: SIGNALGRID_BRAIN_HOME, else the
 one-line dotfile ~/.signalgrid-brain-home, else refuse.
@@ -110,6 +113,22 @@ GUARDS = {
              "\\g<i># attempted mutation, not a real one; accepting it cleared the refusal counter (build 2fd0db8d x4).\n"
              "\\g<i>if content == previous:\n"
              "\\g<i>    raise AgentBlocked(\"Replacement changes nothing: the file already holds that content\")\n"),
+        ],
+    },
+    "reread_schema": {
+        "file": RUNTIME,
+        "present": re.compile(r'and any\(c >= 3 for c in build_read_counts\.values\(\)\)\):\n[^\n]*\n[^\n]*\n[^\n]*\n\s+schema = \{\*\*ACTION_SCHEMA, "properties": \{\*\*ACTION_SCHEMA\["properties"\],\n\s+"action": \{"type": "string", "enum": \[n for n in ACTION_SCHEMA\["properties"\]\["action"\]\["enum"\] if n != "read"\]\}\}\}'),
+        "order": ("Guard reread_schema", "if intake_read_pending:"),
+        "patch": [
+            (re.compile(r'^(?P<i>[ \t]+)if intake_read_pending:\n', re.M),
+             "\\g<i>if (job[\"kind\"] == \"build\" and not tdd and not private_document and not pending_sources\n"
+             "\\g<i>        and any(c >= 3 for c in build_read_counts.values())):\n"
+             "\\g<i>    # Guard reread_schema (scripts/mac/local-brain/repairs/guards.py): the one-proposal cooldown let the\n"
+             "\\g<i>    # 9B resume re-reading (build 6e021d2f, 8x). With every required source read, a third identical\n"
+             "\\g<i>    # read of one path removes read until an accepted edit clears the counts; edit/check/finish remain.\n"
+             "\\g<i>    schema = {**ACTION_SCHEMA, \"properties\": {**ACTION_SCHEMA[\"properties\"],\n"
+             "\\g<i>        \"action\": {\"type\": \"string\", \"enum\": [n for n in ACTION_SCHEMA[\"properties\"][\"action\"][\"enum\"] if n != \"read\"]}}}\n"
+             "\\g<i>if intake_read_pending:\n"),
         ],
     },
 }
@@ -310,6 +329,9 @@ def self_test():
         moved = runtime_txt.replace("if content == previous:\n", "", 1).replace("target.write_text(content)\n",
                 "target.write_text(content)\nif content == previous:\n", 1)
         ok("(7c) --check refuses the guard's text in the wrong place", not placed(moved, GUARDS["noop_edit_refused"]))
+        ok("(7d) the re-read guard sits before the mandatory intake read, which still overrides it",
+           runtime_txt.index("Guard reread_schema") < runtime_txt.index("if intake_read_pending:")
+           and 'if n != "read"]' in runtime_txt and "not pending_sources" in runtime_txt)
         snap = {n: sha(home / n) for n in (RUNTIME, BRAIN, HANDOFF, OPCFG)}
         ok("(8) a second --apply is a no-op", apply(home, "again", run_tests=False, say=quiet) is None and snap == {n: sha(home / n) for n in snap})
         # A brain whose anchor changed shape is refused and left untouched, not half-edited.

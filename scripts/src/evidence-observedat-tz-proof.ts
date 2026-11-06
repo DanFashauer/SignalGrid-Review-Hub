@@ -30,6 +30,8 @@ import {
   type SignalCategory,
   type Workflow,
   verifyRemediation,
+  puckVerdict,
+  type PuckSituation,
 } from "@workspace/signalgrid-core";
 
 const SELF = fileURLToPath(import.meta.url);
@@ -185,6 +187,42 @@ function verifyFor(observedAt: string): string {
   ).state;
 }
 
+/**
+ * Remediation verification with TWO reads (request 08:00Z, as-of 09:00Z): `accusingAt` still carries the code,
+ * a zoned read at 08:20Z has it cleared. A UTC host reading an offset-less 08:10:00 under Date.parse said
+ * not_cleared; an accusing read that cannot be placed must never let the later clearing read decide instead.
+ */
+function verifyTwoReadsFor(accusingAt: string): string {
+  return verifyRemediation(
+    {
+      id: "rem_tz2", tenantId: "tenant_northwind", decisionId: "dec_tz2", kind: "request_device_remediation",
+      targetType: "device", targetRef: "ipad-tz", reasonCode: "DEVICE_NONCOMPLIANT", status: "approved_simulated",
+      approvalRequired: true, simulatedOnly: true, requestedAt: "2026-07-13T08:00:00Z", approvedAt: "2026-07-13T08:01:00Z", note: "",
+    },
+    [
+      { targetRef: "ipad-tz", reasonCodes: ["DEVICE_NONCOMPLIANT"], observedAt: accusingAt },
+      { targetRef: "ipad-tz", reasonCodes: [], observedAt: "2026-07-13T08:20:00Z" },
+    ],
+    "2026-07-13T09:00:00Z",
+  ).state;
+}
+
+/** Puck 4's matrix row for one attach record on an otherwise fully trusted session; 120 s bound. */
+function puckFor(wireState: string, forced: string, observedAt: string, reference: string): string {
+  const reading = normalizeAttachRecord(
+    { credentialRef: "puck-tz", deviceRef: "ipad-tz", receiverRef: "rx-tz", wireState, forced: forced === "forced", observedAt },
+    reference,
+    120,
+  );
+  const situation: PuckSituation = {
+    attach: reading.state, forced: reading.forced, release: "not_applicable", returned: "not_applicable",
+    identityConfirmed: true, postureCompliant: true, credentialStanding: "valid", readStrength: "strong",
+    enrolledStrength: "strong", higherRiskAction: false, presenceRadioLost: false, inactive: false, redockPendingReevaluation: false,
+  };
+  const row = puckVerdict(situation);
+  return `${reading.state}|${row.verdict}|${row.reasonCode}`;
+}
+
 /** fixedClock on one stamp: the instant it pins, or THROWS. */
 function clockFor(iso: string): string {
   try { return fixedClock(iso).now().toISOString(); } catch { return "THROWS"; }
@@ -204,6 +242,9 @@ if (process.argv[2] === "--worker") {
     : mode === "attach" ? attachFor(a!)
     : mode === "verify" ? verifyFor(a!)
     : mode === "clock" ? clockFor(a!)
+    : mode === "verify2" ? verifyTwoReadsFor(a!)
+    : mode === "puck" ? puckFor(a!, b!, c!, "2026-07-13T08:00:30Z")
+    : mode === "puckref" ? puckFor(a!, b!, "2026-07-13T08:00:00Z", c!)
     : "BAD-MODE";
   console.log(`VERDICT ${out}`);
   process.exit(0);
@@ -476,6 +517,46 @@ for (const stamp of ["2026-03-02T08:00:00+00", "2026-03-02", "2024-02-29T08:00:0
   check("fixedClock: an offset-less stamp is refused in every zone (never a host-local pinned instant)", offsetlessClock.every((v) => v === "THROWS"), offsetlessClock.join(","));
   const zonedClock = ZONES.map((z) => inZone(z, "clock", "2026-07-13T08:00:00Z"));
   check("fixedClock: a Z stamp pins that instant in every zone (control)", zonedClock.every((v) => v === "2026-07-13T08:00:00.000Z"), zonedClock.join(","));
+}
+
+// FAIL-CLOSED, NOT ONLY ZONE-INDEPENDENT. The checks above prove an offset-less stamp gets the same answer in every
+// zone. These prove that answer is never MILDER than the one a UTC host gave the same input under Date.parse
+// (golden rule 2: an unreadable signal raises, never lowers). Each failed on head e8dfb15d before its fix.
+{
+  // Remediation: an accusing read whose instant cannot be read cannot be placed before the request, so it may be the
+  // FIRST read in the window. Dropping it let a later clearing read decide: a UTC host under Date.parse said
+  // not_cleared (the offset-less 08:10 read came first); the strict parser alone said cleared in every zone.
+  const accusing = ZONES.map((z) => inZone(z, "verify2", "2026-07-13T08:10:00"));
+  check("remediation: an accusing read with an offset-less instant blocks a later clearing read, not_cleared in every zone", accusing.every((v) => v === "not_cleared"), accusing.join(","));
+  const garbled = ZONES.map((z) => inZone(z, "verify2", "not-a-date"));
+  check("remediation: an accusing read with a garbled instant also blocks clearing, in every zone", garbled.every((v) => v === "not_cleared"), garbled.join(","));
+  const placedBefore = ZONES.map((z) => inZone(z, "verify2", "2026-07-13T07:50:00Z"));
+  check("remediation: an accusing read PLACED before the request is outside the window, so the clearing read decides (control)", placedBefore.every((v) => v === "cleared"), placedBefore.join(","));
+
+  // Attach: a removal is an accusation. A UTC host under Date.parse read an offset-less 08:00:00 as 30 s old and
+  // graded a forced removal deny CUSTODY_TORN; the strict parser alone dropped it to unknown, step_up CUSTODY_UNKNOWN.
+  const torn = ZONES.map((z) => inZone(z, "puck", "removed", "forced", "2026-07-13T08:00:00"));
+  check("attach: a forced removal with an offset-less instant stays deny CUSTODY_TORN in every zone (never unknown/step_up)", torn.every((v) => v === "removed|deny|CUSTODY_TORN"), torn.join(","));
+  const lifted = ZONES.map((z) => inZone(z, "puck", "removed", "unforced", "2026-07-13T08:00:00"));
+  check("attach: an unforced removal with an offset-less instant stays restrict CUSTODY_REMOVED in every zone", lifted.every((v) => v === "removed|restrict|CUSTODY_REMOVED"), lifted.join(","));
+  const tornRef = ZONES.map((z) => inZone(z, "puckref", "removed", "forced", "2026-07-13T08:00:30"));
+  check("attach: a forced removal judged against an offset-less REFERENCE stays deny CUSTODY_TORN in every zone", tornRef.every((v) => v === "removed|deny|CUSTODY_TORN"), tornRef.join(","));
+
+  // The general rule over every wire state: the same report with an unreadable time is never milder than with a
+  // readable, timely one. `attached` is not an accusation, so its unreadable form RAISES (allow -> step_up).
+  const RANK: Record<string, number> = { allow: 0, step_up: 1, restrict: 2, deny: 3 };
+  const severity = (v: string): number => RANK[v.split("|")[1] ?? ""] ?? -1;
+  for (const [wire, forced] of [["removed", "forced"], ["removed", "unforced"], ["attached", "unforced"], ["unseated?", "unforced"]] as const) {
+    const timely = inZone("UTC", "puck", wire, forced, "2026-07-13T08:00:00Z");
+    for (const unreadable of ["2026-07-13T08:00:00", "garbled"]) {
+      const got = ZONES.map((z) => inZone(z, "puck", wire, forced, unreadable));
+      check(
+        `attach: ${wire}/${forced} with an unreadable instant (${unreadable}) is never milder than the timely reading (${timely}), in every zone`,
+        severity(timely) >= 0 && got.every((v) => severity(v) >= severity(timely)),
+        got.join(","),
+      );
+    }
+  }
 }
 
 console.log(`\nsummary=${failures.length === 0 ? "pass" : "FAIL"} (${passed}/${passed + failures.length})`);

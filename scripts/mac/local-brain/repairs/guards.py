@@ -6,7 +6,7 @@ day a brain install dropped a guard, a repair was written outside the tree, the 
 classifier refused to run it, and a hand asked the owner to type two lines. This file is
 the repair, in the tree, reviewed before it can run.
 
-The guards (each measured on a real build before it was written; five as of 2026-11-07 00:45Z):
+The guards (each measured on a real build before it was written; six as of 2026-11-07 00:55Z):
   call_cap_600     signalgrid_brain.py: the OmniRoute / direct-Ollama request ceiling is
                    600 s, not 180 s. A 12k-token step on this 16 GB Mac takes 2m27s-2m59s;
                    at 180 s the client aborted every one (OmniRoute 499, Ollama 500).
@@ -33,6 +33,13 @@ The guards (each measured on a real build before it was written; five as of 2026
                    test_build_read_cooldown_is_one_proposal_then_new_and_changed_source_reads_resume
                    (a NEW or CHANGED source must stay readable); this shape leaves new and changed
                    reads alone and the brain's 168 tests pass.
+  node_test_ts     signalgrid_agent_runtime.py: the node-test check accepts a .test.ts file. The
+                   autonomous-tier apps (signalgrid-mobile-pwa, -app, -desktop) test with
+                   `node --test src/lib/*.test.ts` and Node 24 runs them natively; build 1c454ec0
+                   wrote a correct function change AND its regression test in six steps, then was
+                   refused three times on `check node-test:…signal-tone.test.ts` ("Choose an exact
+                   tracked or newly created Node test file") and ended as no-progress with 5/5
+                   tests passing in its worktree. The prompt text names the new suffix too.
 
 The brain's private home is never named in this source: SIGNALGRID_BRAIN_HOME, else the
 one-line dotfile ~/.signalgrid-brain-home, else refuse.
@@ -142,6 +149,15 @@ GUARDS = {
              "\\g<i>    # read is a refusal, counted like any other; new or changed bytes are a different key and stay readable.\n"
              "\\g<i>    raise AgentBlocked(\"Identical unchanged source already read three times; choose edit, check or finish\")\n"
              "\\g<i>\\g<line>\n"),
+        ],
+    },
+    "node_test_ts": {
+        "file": RUNTIME,
+        "present": re.compile(r'if not safe_path\(path\) or not path\.endswith\(\(".test.mjs", ".test.js", ".test.ts"\)\):'),
+        "patch": [
+            (re.compile(r'if not safe_path\(path\) or not path\.endswith\(\(".test.mjs", ".test.js"\)\):'),
+             'if not safe_path(path) or not path.endswith((".test.mjs", ".test.js", ".test.ts")):  # Guard node_test_ts: Node 24 runs .test.ts natively'),
+            (re.compile(r'node-test:<path\.test\.mjs>'), lambda m: "node-test:<path.test.mjs|.test.ts>"),
         ],
     },
 }
@@ -299,7 +315,14 @@ UNREPAIRED_RUNTIME = (
     "                            if previous.count(action[\"old_text\"]) != 1:\n"
     "                                raise AgentBlocked(\"Replacement fragment must occur exactly once\")\n"
     "                            content = previous.replace(action[\"old_text\"], action[\"content\"], 1)\n"
-    "                        target.write_text(content)\n")
+    "                        target.write_text(content)\n"
+    "    def _check(self, name, worktree, repo, cancelled):\n"
+    "        if name.startswith(\"node-test:\"):\n"
+    "            path = name[len(\"node-test:\"):]\n"
+    "            if not safe_path(path) or not path.endswith((\".test.mjs\", \".test.js\")):\n"
+    "                raise AgentBlocked(\"Choose an exact tracked or newly created Node test file\")\n"
+    "            raise AgentBlocked(\"Available checks: diff-check, node-test:<path.test.mjs>, node-syntax:<path.mjs>. Full gates run separately.\")\n"
+    "        system = (\"check with query=diff-check or node-test:<path.test.mjs> or node-syntax:<path.mjs>, or finish\")\n")
 
 
 def self_test():
@@ -361,6 +384,9 @@ def self_test():
         exec("\n".join(line.strip() for line in block.splitlines() if line.strip()), ns)
         ok("(7f) from the full schema, reread removes only read",
            ns["schema"]["properties"]["action"]["enum"] == ["search", "edit", "check", "delegate", "finish"])
+        ok("(7g) node-test accepts .test.ts and both prompt mentions name the suffix",
+           '(".test.mjs", ".test.js", ".test.ts")' in runtime_txt and runtime_txt.count("node-test:<path.test.mjs|.test.ts>") == 2
+           and "node-test:<path.test.mjs>" not in runtime_txt)
         snap = {n: sha(home / n) for n in (RUNTIME, BRAIN, HANDOFF, OPCFG)}
         ok("(8) a second --apply is a no-op", apply(home, "again", run_tests=False, say=quiet) is None and snap == {n: sha(home / n) for n in snap})
         # A brain whose anchor changed shape is refused and left untouched, not half-edited.

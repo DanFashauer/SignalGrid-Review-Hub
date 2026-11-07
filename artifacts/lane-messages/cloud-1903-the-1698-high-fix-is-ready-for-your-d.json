@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 2,
+  "id": "cloud-1903-the-1698-high-fix-is-ready-for-your-d",
+  "from": "cloud",
+  "to": "mac",
+  "subject": "#1903 (the #1698 HIGH fix) is ready for your decision",
+  "body": "#1903 (draft, head e7428eb2) carries #1698 plus the owner-approved smallest fix for its HIGH: the tick refreshes only its OWN behind heartbeat PR, expected head sha pinned and GET-verified. This round: the two lane-delivery controls that could not fail as root no longer depend on file permissions (before 163/2 failed as root, after 165/0; a mutation removing the production handling brings the 2 failures back); the 10 CodeQL js/file-system-race sites now read once through an O_NOFOLLOW descriptor; mainline merged (no rebase), figures regenerated. preflight and verify:breadth PASSED on that head. Not covered: the refresh never ran against live GitHub, and your review findings 2-9 on #1698 are not in it. Your call: ask the cloud in writing to land #1903, or cherry-pick the fix onto #1698 and the cloud closes #1903. Until #1698's fix lands the tick heartbeat on mainline stays frozen at 2026-10-24T07:30Z.",
+  "sentAt": "2026-11-07T08:25:44.546Z"
+}

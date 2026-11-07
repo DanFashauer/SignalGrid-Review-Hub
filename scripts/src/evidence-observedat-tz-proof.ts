@@ -34,6 +34,12 @@ import {
   type PuckSituation,
 } from "@workspace/signalgrid-core";
 
+import { ageMs, deriveFreshness } from "@workspace/integrations/utils/freshness";
+import { fromDevicePosture } from "@workspace/posture-composition";
+import { evaluateNetwork } from "@workspace/integrations/network-nac";
+import { evaluateReachability } from "@workspace/integrations/carrier";
+import { evaluateLocation } from "@workspace/integrations/location-services";
+
 const SELF = fileURLToPath(import.meta.url);
 
 const identity: Identity = {
@@ -252,6 +258,60 @@ function clockFor(iso: string): string {
   }
 }
 
+/** The shared connector freshness helper on one sighting, reference 13:00Z, 7-day bound. */
+function sharedFreshnessFor(seenAt: string): string {
+  const now = parseInt("1783947600000", 10); // 2026-07-13T13:00:00Z, as epoch ms so no parse is involved
+  const age = ageMs(seenAt, now);
+  return `${deriveFreshness(seenAt, now, 7 * 24 * 3600 * 1000)}|${age === null ? "null" : "age"}`;
+}
+
+/** Graph device posture composed with a healthy record whose last sighting is `lastSeenAt`; read at `observedAt`. */
+function devicePostureFor(lastSeenAt: string, observedAt: string): string {
+  const out = fromDevicePosture({
+    sourceSystem: "microsoft-graph", correlationId: "c_tz", observedAt, subjectId: "u_tz",
+    identityStatus: "enabled", userRisk: "none", deviceId: "d_tz", deviceComplianceState: "compliant",
+    deviceManagementState: "managed", deviceRegistrationState: "registered", deviceLastSeenAt: lastSeenAt,
+  });
+  return `${out.action}|${out.reason}`;
+}
+
+/**
+ * One connector family's verdict for an otherwise-trusted signal whose sighting is `stamp` ("-" = absent), judged at
+ * 13:00Z with a 30-minute bound. NAC: authenticated + compliant, no segment policy. Carrier: provisioned, online,
+ * not roaming, backchannel present. Location: inside the geofence.
+ */
+function familyFor(family: string, stamp: string, nowEpochMs = "1783947600000"): string {
+  const now = parseInt(nowEpochMs, 10); // default 2026-07-13T13:00:00Z, as epoch ms so no parse is involved
+  const seen = stamp === "-" ? null : stamp;
+  const bound = { staleAfterMs: 30 * 60 * 1000 };
+  if (family === "nac" || family === "nacmgmt") {
+    // Review F2 (2026-11-07): judged under a segment policy, so a stamp's age can never mask a restricted segment.
+    // `nac` is on the expected segment; `nacmgmt` sits on the restricted management segment.
+    const r = evaluateNetwork({
+      sourceSystem: "network-nac", correlationId: "c_tz", observedAt: "2026-07-13T13:00:00Z", deviceId: "d_tz",
+      authState: "authenticated", segment: family === "nac" ? "corp" : "mgmt", accessLocation: null, nacCompliant: true, lastAuthAt: seen, freshness: "unknown",
+    }, now, { ...bound, segmentPolicy: { expected: ["corp"], restricted: ["mgmt"] } });
+    return `${r.recommendedAction}|${r.reasonCode}`;
+  }
+  if (family === "carrier") {
+    const r = evaluateReachability({
+      sourceSystem: "carrier", correlationId: "c_tz", observedAt: "2026-07-13T13:00:00Z", deviceId: "d_tz",
+      cellularReachability: "online", smsReachable: true, lastSeenAt: seen, freshness: "unknown", roaming: false,
+      provisioning: "active", cellularBackchannel: "present",
+    } as Parameters<typeof evaluateReachability>[0], now, bound);
+    return `${r.recommendedAction}|${r.reasonCode}`;
+  }
+  if (family === "location") {
+    const r = evaluateLocation({
+      sourceSystem: "location-services", correlationId: "c_tz", observedAt: "2026-07-13T13:00:00Z", deviceId: "d_tz",
+      geofenceState: "inside", geofenceId: "g_tz", source: "gps", accuracyMeters: 10, capturedAt: seen,
+      freshness: "unknown", hasPreciseCoordinates: false,
+    } as Parameters<typeof evaluateLocation>[0], now, bound);
+    return `${r.recommendedAction}|${r.reasonCode}`;
+  }
+  return "BAD-FAMILY";
+}
+
 /**
  * OWNER DECISION (a), 2026-11-06: KEEP BOTH. Two different accusations about one subject at the same instant (or
  * one whose stamp cannot be read) both reach the policy. A TENANT policy that ranks the members differently from
@@ -350,6 +410,10 @@ if (process.argv[2] === "--worker") {
     : mode === "verify2" ? verifyTwoReadsFor(a!)
     : mode === "puck" ? puckFor(a!, b!, c!, "2026-07-13T08:00:30Z")
     : mode === "puckref" ? puckFor(a!, b!, "2026-07-13T08:00:00Z", c!)
+    : mode === "sharedfresh" ? sharedFreshnessFor(a!)
+    : mode === "devposture" ? devicePostureFor(a!, b!)
+    : mode === "family" ? familyFor(a!, b!)
+    : mode === "familydate" ? familyFor(a!, "2026-07-13", "1783901400000") // judged at 2026-07-13T00:10:00Z
     : mode === "puckdate" ? puckFor(a!, b!, "2026-07-13", "2026-07-13T00:00:30Z")
     : mode === "verifydate" ? verifyDateFor(a!)
     : "BAD-MODE";
@@ -677,6 +741,68 @@ for (const stamp of ["2026-03-02T08:00:00+00", "2026-03-02T00:00:00Z", "2024-02-
   }
 }
 
+// The CONNECTOR side reads instants through one shared helper (lib/integrations/src/utils/freshness.ts) and the
+// Graph device-posture adapter. They must read an offset-less stamp the same way the core does: as no instant.
+{
+  const offsetless = ZONES.map((z) => inZone(z, "sharedfresh", "2026-07-13T12:30:00"));
+  check("integrations deriveFreshness/ageMs: an offset-less sighting is stale (present but unreadable) with no age, in every zone", offsetless.every((v) => v === "stale|null"), offsetless.join(","));
+  const zoned = ZONES.map((z) => inZone(z, "sharedfresh", "2026-07-13T14:30:00+02:00"));
+  check("integrations deriveFreshness/ageMs: a zoned sighting 30 min old is fresh, in every zone (control)", zoned.every((v) => v === "fresh|age"), zoned.join(","));
+  const lastSeen = ZONES.map((z) => inZone(z, "devposture", "2026-07-13T12:30:00", "2026-07-13T13:00:00Z"));
+  check("device posture: an offset-less deviceLastSeenAt is DEVICE_POSTURE_STALE (same step_up rung as unknown), in every zone", lastSeen.every((v) => v === "step_up|DEVICE_POSTURE_STALE"), lastSeen.join(","));
+  const readAt = ZONES.map((z) => inZone(z, "devposture", "2026-07-13T12:30:00Z", "2026-07-13T13:00:00"));
+  check("device posture: an offset-less read instant cannot vouch, identically in every zone and never COMPLIANT_MANAGED", new Set(readAt).size === 1 && !readAt[0]!.includes("COMPLIANT_MANAGED"), readAt.join(","));
+  const control = ZONES.map((z) => inZone(z, "devposture", "2026-07-13T12:30:00Z", "2026-07-13T13:00:00Z"));
+  check("device posture: zoned stamps compose to COMPLIANT_MANAGED, in every zone (control)", control.every((v) => v === "none|COMPLIANT_MANAGED"), control.join(","));
+}
+
+// FAIL-CLOSED ON THE CONNECTOR SIDE. NAC, carrier and location rank `stale` ABOVE `unknown` (stale -> step_up/locate,
+// unknown -> monitor; deliberate, and the owner's to change). So an offset-less sighting that a UTC host read as stale
+// under Date.parse must not become `unknown` and drop to monitor: a PRESENT but unreadable stamp derives `stale`, and
+// `unknown` stays reserved for an ABSENT one. Each check below that names a stale outcome failed on head 4cca56a5.
+{
+  const STALE_ON_UTC = "2026-07-13T12:00:00"; // a UTC host read this as 60 min old against a 30 min bound
+  const expectStale: Record<string, string> = {
+    nac: "step_up|STALE_NETWORK_STATE",
+    nacmgmt: "restrict|SEGMENT_RESTRICTED",
+    carrier: "locate|STALE_LAST_SEEN",
+    location: "locate|STALE_LOCATION_FIX",
+  };
+  const expectAbsent: Record<string, string> = {
+    nac: "monitor|AUTHENTICATED_POSTURE_UNVERIFIED",
+    nacmgmt: "restrict|SEGMENT_RESTRICTED",
+    carrier: "monitor|LAST_SEEN_UNVERIFIED",
+    location: "monitor|UNVERIFIED_LOCATION_FRESHNESS",
+  };
+  // Ranked within each family's own action set; the shared table is safe because no family mixes the tied rungs.
+  const RANK: Record<string, number> = { none: 0, monitor: 1, locate: 2, step_up: 2, alert: 3, restrict: 3, escalate: 4 };
+  const rank = (v: string): number => RANK[v.split("|")[0] ?? ""] ?? -1;
+  for (const family of ["nac", "nacmgmt", "carrier", "location"]) {
+    const utcTwin = inZone("UTC", "family", family, `${STALE_ON_UTC}Z`);
+    check(`${family}: the Z twin of the stale-on-UTC stamp is ${expectStale[family]} (what a UTC host gave under Date.parse)`, utcTwin === expectStale[family], utcTwin);
+    const got = ZONES.map((z) => inZone(z, "family", family, STALE_ON_UTC));
+    check(`${family}: an offset-less sighting a UTC host read as stale stays ${expectStale[family]} in every zone (never unknown/monitor)`, got.every((v) => v === expectStale[family]), got.join(","));
+    const absent = ZONES.map((z) => inZone(z, "family", family, "-"));
+    check(`${family}: an ABSENT sighting is still unknown, ${expectAbsent[family]}, in every zone (control)`, absent.every((v) => v === expectAbsent[family]), absent.join(","));
+    // The general rule: for an offset-less stamp anywhere (fresh, stale or future on a UTC host) and a garbled one,
+    // no zone answers more mildly than a UTC host did under Date.parse (the Z twin; a garbled stamp was NaN there).
+    for (const [label, stamp, twin] of [
+      ["fresh-on-UTC", "2026-07-13T12:59:00", "2026-07-13T12:59:00Z"],
+      ["stale-on-UTC", STALE_ON_UTC, `${STALE_ON_UTC}Z`],
+      ["future-on-UTC", "2026-07-13T13:30:00", "2026-07-13T13:30:00Z"],
+      ["garbled", "garbled", "-"],
+    ] as const) {
+      const before = inZone("UTC", "family", family, twin);
+      const after = ZONES.map((z) => inZone(z, "family", family, stamp));
+      check(
+        `${family}: a ${label} unreadable stamp is never milder than a UTC host's Date.parse answer (${before}), in every zone`,
+        rank(before) >= 0 && after.every((v) => rank(v) >= rank(before)),
+        after.join(","),
+      );
+    }
+  }
+}
+
 // OWNER DECISION (b), 2026-11-06, in the attach, remediation and test-clock readers: a date-only stamp names a
 // day, not an instant. It may not vouch (an `attached` dated "2026-07-13" was 30 s old at 00:00:30Z and allowed),
 // may not clear a restriction (it fell inside a 23:30Z-01:00Z window and cleared), and may not pin a clock. An
@@ -755,6 +881,21 @@ for (const stamp of ["2026-03-02T08:00:00+00", "2026-03-02T00:00:00Z", "2024-02-
         );
       }
     }
+  }
+}
+
+// OWNER DECISION (b), 2026-11-06, on the connector side: a date-only sighting names a day, not an instant. It is
+// PRESENT but unreadable, so it grades `stale` (never `fresh`, never the milder `unknown`) and has no age. Judged
+// ten minutes after midnight, a "2026-07-13" read as exact midnight was 10 minutes old and fresh.
+{
+  const shared = ZONES.map((z) => inZone(z, "sharedfresh", "2026-07-13"));
+  check("date-only: integrations deriveFreshness/ageMs grade a '2026-07-13' sighting stale with no age, in every zone", shared.every((v) => v === "stale|null"), shared.join(","));
+  const posture = ZONES.map((z) => inZone(z, "devposture", "2026-07-13", "2026-07-13T13:00:00Z"));
+  check("date-only: a Graph deviceLastSeenAt of '2026-07-13' is DEVICE_POSTURE_STALE, in every zone", posture.every((v) => v === "step_up|DEVICE_POSTURE_STALE"), posture.join(","));
+  const expectStale: Record<string, string> = { nac: "step_up|STALE_NETWORK_STATE", nacmgmt: "restrict|SEGMENT_RESTRICTED", carrier: "locate|STALE_LAST_SEEN", location: "locate|STALE_LOCATION_FIX" };
+  for (const family of ["nac", "nacmgmt", "carrier", "location"]) {
+    const got = ZONES.map((z) => inZone(z, "familydate", family));
+    check(`date-only: ${family} with a '2026-07-13' sighting judged at 00:10Z is ${expectStale[family]} (never the fresh grant), in every zone`, got.every((v) => v === expectStale[family]), got.join(","));
   }
 }
 

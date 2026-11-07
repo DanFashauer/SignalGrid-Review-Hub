@@ -1,4 +1,4 @@
-import { deriveFreshness } from "@workspace/integrations/utils/freshness";
+import { deriveFreshness, parseSightingInstant } from "@workspace/integrations/utils/freshness";
 import type { ReachabilityVerdict } from "@workspace/integrations/carrier";
 import type { LocationVerdict } from "@workspace/integrations/location-services";
 import type { VulnVerdict } from "@workspace/integrations/vuln-scan";
@@ -618,7 +618,7 @@ export function fromDevicePosture(s: GraphPostureSignal): ComposableSignal {
   // for the same reason as every other unconfirmed input above — an unread freshness is
   // not bad news, but it is not the good news a grant needs either.
   {
-    const seen = deriveFreshness(s.deviceLastSeenAt, Date.parse(s.observedAt), DEVICE_POSTURE_STALE_AFTER_MS);
+    const seen = deriveFreshness(s.deviceLastSeenAt, parseSightingInstant(s.observedAt), DEVICE_POSTURE_STALE_AFTER_MS);
     if (seen === "stale") candidates.push({ action: "step_up", reason: "DEVICE_POSTURE_STALE" });
     if (seen === "unknown") candidates.push({ action: "step_up", reason: "DEVICE_LAST_SEEN_UNKNOWN" });
   }

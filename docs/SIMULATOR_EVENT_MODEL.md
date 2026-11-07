@@ -16,6 +16,10 @@ Each simulator event contains:
 - summary
 - attributes
 
+### SignalGridSignal field types
+
+The `severity` field is one of: `info`, `low`, `medium`, `high`, or `critical`. The `attributes` field is a flat string-keyed record (`Record<string, string | number | boolean | null>`). Attribute values are primitive types only (string, number, boolean, or null); nested objects or arrays are not included in this TypeScript fixture-contract type. These are the existing TypeScript fixture-contract types defined in [`lib/signalgrid-simulator/src/types.ts`](../lib/signalgrid-simulator/src/types.ts), not a claim that incoming runtime data is validated.
+
 ## Event types
 
 - identity.authenticated

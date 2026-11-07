@@ -257,7 +257,8 @@ export type BadgeBindingState =
   | "removed"
   | "forced"
   | "absent"
-  | "unknown";
+  | "unknown"
+  | "unreadable";
 
 // Physical-custody / DockBridge hardware states (vendor-neutral).
 export type CustodyState =
@@ -266,27 +267,31 @@ export type CustodyState =
   | "overdue"
   | "exception"
   | "maintenance"
-  | "unknown";
+  | "unknown"
+  | "unreadable";
 export type ChargeState =
   | "charging"
   | "charged"
   | "low"
   | "critical"
   | "not_present"
-  | "unknown";
+  | "unknown"
+  | "unreadable";
 export type TamperState =
   | "none"
   | "suspected"
   | "confirmed"
   | "sensor_unavailable"
-  | "unknown";
+  | "unknown"
+  | "unreadable";
 export type DockState =
   | "occupied"
   | "empty"
   | "reserved"
   | "faulted"
   | "offline"
-  | "unknown";
+  | "unknown"
+  | "unreadable";
 /**
  * DR-043 credential fields on the LIVE evidence path. The vocabularies are
  * attach.ts's own (`AttachState`, `CredentialStrength`) — one vocabulary shared
@@ -324,7 +329,18 @@ export type CredentialStrengthEvidence = CredentialStrength | "not_applicable";
  * a grant requires positive confirmation of every input — it is an honest gap,
  * not a safe default, and calling it "fail-safe" would have hidden that.
  */
-export type BatteryHealthState = "healthy" | "degraded" | "failing" | "unknown";
+/**
+ * DR-065 (PROPOSED). The six dock-family evidence unions (BadgeBindingState,
+ * CustodyState, ChargeState, TamperState, DockState and this one) carry
+ * TWO non-answers, and they are different answers:
+ *  - `"unknown"`    — SILENCE: no reading of that category arrived at all. This is
+ *                     day-one-quiet: a tenant without dock hardware is not stepped up.
+ *  - `"unreadable"` — an EMITTED reading was present but nothing in it could be read
+ *                     (a value outside the family's domain, or only a good value whose
+ *                     clock stamp cannot be ordered). It steps up, exactly as an
+ *                     emitted unknown attach / credential reading does under DR-043.
+ */
+export type BatteryHealthState = "healthy" | "degraded" | "failing" | "unknown" | "unreadable";
 
 /** Every normalized signal category the core evaluates.
  *
@@ -569,6 +585,37 @@ export interface DecisionEvidence {
   credentialReadMethod: CredentialStrengthEvidence;
   /** True only when every critical input is present and not degraded. */
   criticalSignalsPresent: boolean;
+  /**
+   * OWNER DECISION (a), 2026-11-06 — KEEP BOTH. When one family carries two or more
+   * DIFFERENT accusations the core cannot order (the same instant, or a stamp it
+   * cannot read), the field above holds the one the SHIPPED rules rank worst, and
+   * this lists every accusing member that was read, sorted. `evaluatePolicy` runs the
+   * active policy once per combination and keeps the most restrictive outcome, so a
+   * tenant policy that ranks the members differently still sees the milder one.
+   * ABSENT whenever there is no such ambiguity, so every unambiguous snapshot's
+   * digest body is byte-identical to before; present, it is inside the digest.
+   */
+  retainedAccusations?: RetainedAccusations;
+}
+
+/** Owner decision (a): every accusing member a family read, when the core could not order them. */
+export interface RetainedAccusations {
+  deviceCompliance?: readonly ComplianceState[];
+  postureFreshness?: readonly Freshness[];
+  custodyState?: readonly CustodyState[];
+  dockChargeState?: readonly ChargeState[];
+  batteryHealth?: readonly BatteryHealthState[];
+  tamperState?: readonly TamperState[];
+  dockState?: readonly DockState[];
+  baselineCompliance?: readonly BaselineState[];
+  benchmarkSelection?: readonly BenchmarkSelectionState[];
+  shiftContext?: readonly ShiftContextState[];
+  badgeBinding?: readonly BadgeBindingState[];
+  managementHealthState?: readonly ManagementHealthState[];
+  localAuthorityState?: readonly LocalAuthorityGrantState[];
+  attachState?: readonly AttachEvidence[];
+  enrollmentStrength?: readonly CredentialStrengthEvidence[];
+  credentialReadMethod?: readonly CredentialStrengthEvidence[];
 }
 
 export interface MatchedRule {

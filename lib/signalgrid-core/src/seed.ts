@@ -490,6 +490,7 @@ function seedPolicyTests(
     { name: "SmartDock faulted → restrict", evidence: { ...base, dockState: "faulted" }, expectedOutcome: "restrict", expectedReasonCode: "DOCK_FAULTED" },
     { name: "SmartDock offline → step-up", evidence: { ...base, dockState: "offline" }, expectedOutcome: "step_up", expectedReasonCode: "DOCK_OFFLINE" },
     { name: "dock state unknown → still allow (no fabricated block)", evidence: { ...base, dockState: "unknown" }, expectedOutcome: "allow", expectedReasonCode: "TRUST_ESTABLISHED" },
+    { name: "tamper reading emitted but unreadable → step-up, never a grant (DR-065; silence stays the quiet 'unknown' above)", evidence: { ...base, tamperState: "unreadable" }, expectedOutcome: "step_up", expectedReasonCode: "DOCK_EVIDENCE_UNREADABLE" },
     { name: "credential removed from its receiver → restrict (DR-043; the key is out of the ignition)", evidence: { ...base, attachState: "removed" }, expectedOutcome: "restrict", expectedReasonCode: "CUSTODY_REMOVED" },
     { name: "attach reading present but unreadable → step-up, never a grant (DR-043; deliberately stricter than badge/dock unknown above)", evidence: { ...base, attachState: "unknown" }, expectedOutcome: "step_up", expectedReasonCode: "CUSTODY_UNKNOWN" },
     { name: "no attach reading at all → still allow (not_applicable: a tenant with no pucks is not stepped up)", evidence: { ...base, attachState: "not_applicable" }, expectedOutcome: "allow", expectedReasonCode: "TRUST_ESTABLISHED" },

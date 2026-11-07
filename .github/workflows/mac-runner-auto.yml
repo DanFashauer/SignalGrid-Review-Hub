@@ -36,6 +36,10 @@ on:
     paths-ignore:
       - "artifacts/lane-messages/**"
       - "artifacts/agent-heartbeats/**"
+      # A raised or cleared hand is a lane record like a heartbeat: on 2026-11-06 the hand
+      # deliveries alone queued the one Mac runner for hours (each run is ~70 min) and the
+      # host lock they hold is the same one the local brain waits on between its steps.
+      - "artifacts/raised-hands/**"
       - "docs/agent/SURFACE_REVIEW_COVERAGE.md"
       - "docs/agent/LOOP.md"
   schedule:

@@ -10,7 +10,20 @@ import { dirname, join, resolve, sep } from 'node:path';
 import { tmpdir } from 'node:os';
 import control from 'node:test';
 import { fileURLToPath } from 'node:url';
+import { closeSync, constants, fstatSync, openSync } from 'node:fs';
 import { scratchGit, scratchGitEnv } from './lib/scratch-git.mjs';
+// One-operation reads (no stat/exists-then-read on the same path): O_NOFOLLOW open, fstat and read the SAME descriptor.
+// null only for ENOENT/ENOTDIR; every other error is thrown, so an unreadable file is never taken for a missing one.
+const readRegular=p=>{const fd=openSync(p,constants.O_RDONLY|constants.O_NOFOLLOW|constants.O_NONBLOCK);try{return {s:fstatSync(fd),raw:readFileSync(fd)}}finally{closeSync(fd)}};
+const readIfPresent=p=>{try{return readRegular(p).raw}catch(e){if(e&&(e.code==='ENOENT'||e.code==='ENOTDIR'))return null;throw e}};
+const jsonLines=p=>{const b=readIfPresent(p);return b===null?[]:b.toString('utf8').trim().split('\n').filter(Boolean)};
+{ // present-but-unreadable fails closed for EVERY uid (a directory where a file is required); only a missing path is null
+  const probe=mkdtempSync(join(tmpdir(),'sg-read-probe-'));
+  assert.equal(readIfPresent(join(probe,'absent')),null,'a missing path reads as absent');
+  assert.throws(()=>readIfPresent(probe),'a present-but-unreadable path must throw, never read as absent');
+  assert.throws(()=>jsonLines(probe),'jsonLines must not turn an unreadable path into an empty log');
+  rmSync(probe,{recursive:true,force:false});
+}
 
 const SOURCE = process.argv[2] ? resolve(process.argv[2]) : fileURLToPath(new URL('../', import.meta.url));
 assert.ok(SOURCE, 'explicit disposable-source root argument required');
@@ -26,8 +39,8 @@ function put(p,b) { mkdirSync(dirname(p),{recursive:true}); writeFileSync(p,b,{f
 function rawFiles(prefix) {
  const d=dirname(prefix),name=prefix.slice(d.length+1),out={};
  for(const n of readdirSync(d).filter(n=>n===name||n.startsWith(name+'.')||name.startsWith('.sg-heartbeat-')&&/^\.sg-last-heartbeat-(attempt|result)$/.test(n)).sort()) {
-  const p=join(d,n),s=lstatSync(p);assert.ok(s.isFile()&&!s.isSymbolicLink(),'original evidence must remain regular');
-  out[n]={raw:readFileSync(p).toString('hex'),ino:s.ino,dev:s.dev,mode:s.mode,nlink:s.nlink};
+  const p=join(d,n),{s,raw}=readRegular(p);assert.ok(s.isFile(),'original evidence must remain regular');
+  out[n]={raw:raw.toString('hex'),ino:s.ino,dev:s.dev,mode:s.mode,nlink:s.nlink};
  }
  return out;
 }
@@ -76,7 +89,7 @@ function fixture() {
  const store=initialized.stdout.trim();assert.ok(store.startsWith(root+sep+'.git'+sep),'fixture init must stay in disposable common Git directory');
  const f={parent,root,bin,env,head,store,guardBlock,cliLog,gitLog,git,storeModule,transport};
  f.cli=(a,{checkout=root,extra={}}={})=>spawnSync(process.execPath,[join(checkout,MODULE),...a],{cwd:checkout,env:{...env,...extra},encoding:'utf8'});
- f.calls=()=>existsSync(cliLog)?readFileSync(cliLog,'utf8').trim().split('\n').filter(Boolean).map(JSON.parse):[];
+ f.calls=()=>jsonLines(cliLog).map(JSON.parse);
  f.clean=()=>rmSync(parent,{recursive:true,force:true});return f;
 }
 function original(f,producer,{exit=3,legacy=false,secret='',receipt=true}={}) {
@@ -114,8 +127,8 @@ function request(f,o,checkout=f.root,extra={}) {
  assert.equal(r.status,0,'request must preserve bounded DATA: '+r.stderr+r.stdout);assert.equal(r.signal,null);
  const lines=r.stdout.trim().split('\n');assert.equal(lines.length,1,'request stdout is exactly one absolute DATA path');
  const p=lines[0];assert.ok(p.startsWith(f.store+sep),'request lives only in exact shared store');
- const s=lstatSync(p);assert.ok(s.isFile()&&!s.isSymbolicLink()&&s.nlink===1);assert.equal(s.mode&0o777,0o600);
- const raw=readFileSync(p),data=JSON.parse(raw);assert.equal(data.version,1);assert.equal(data.kind,'lane-delivery-repair-request');
+ const {s,raw}=readRegular(p);assert.ok(s.isFile()&&s.nlink===1);assert.equal(s.mode&0o777,0o600);
+ const data=JSON.parse(raw);assert.equal(data.version,1);assert.equal(data.kind,'lane-delivery-repair-request');
  assert.equal(data.producer,o.producer);assert.equal(data.original_attempt.prefix,o.prefix);assert.match(data.original_attempt.intent_sha256,/^[a-f0-9]{64}$/);
  assert.ok(typeof data.id==='string'&&data.id.length>0);assert.equal(data.readback_only,true);
  assert.ok(['SOURCE_BOUND','UNVERIFIED'].includes(data.provenance));assert.ok(Array.isArray(data.evidence)&&data.evidence.length>0);

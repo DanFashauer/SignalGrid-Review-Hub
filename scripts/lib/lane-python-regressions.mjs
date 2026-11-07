@@ -78,9 +78,12 @@ export function runPythonRegressions({ label, script, expectedTests }) {
       original_child_status: actual.status, original_child_signal: actual.signal, fixture_only: true });
     // Retain every fixture on failure. Only an accepted normal original exit
     // allows this wrapper to remove its own exact unique temporary directory.
-    const named = lstatSync(artifacts), owner = lstatSync(ownerPath);
+    const named = lstatSync(artifacts);
+    // The owner file is read once through boundedOutput (O_NOFOLLOW open + fstat + read of one descriptor); any failure means "not the same owner".
+    let sameOwner = false;
+    try { sameOwner = boundedOutput(ownerPath).equals(ownerBytes); } catch { sameOwner = false; }
     if (!named.isDirectory() || !owned(named) || named.dev !== directory.dev || named.ino !== directory.ino ||
-        !owner.isFile() || owner.nlink !== 1 || !owned(owner) || !readFileSync(ownerPath).equals(ownerBytes)) {
+        !sameOwner) {
       throw Error("Fixture ownership changed; preserve evidence");
     }
     rmSync(artifacts, { recursive: true, force: false });

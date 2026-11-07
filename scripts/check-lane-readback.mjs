@@ -74,9 +74,12 @@ try {
 
   // Only a verified normal successful original child permits removal of this
   // wrapper's own disposable fixtures. Failure/interruption artifacts remain.
-  const named = lstatSync(artifacts), owner = lstatSync(ownerPath);
+  const named = lstatSync(artifacts);
+    // The owner file is read once through boundedOutput (O_NOFOLLOW open + fstat + read of one descriptor); any failure means "not the same owner".
+    let sameOwner = false;
+    try { sameOwner = boundedOutput(ownerPath).equals(ownerBytes); } catch { sameOwner = false; }
   if (!named.isDirectory() || !owned(named) || named.dev !== directory.dev || named.ino !== directory.ino ||
-      !owner.isFile() || owner.nlink !== 1 || !owned(owner) || !readFileSync(ownerPath).equals(ownerBytes)) {
+      !sameOwner) {
     throw Error("Fixture ownership changed; preserve evidence rather than cleaning another directory");
   }
   rmSync(artifacts, { recursive: true, force: false });

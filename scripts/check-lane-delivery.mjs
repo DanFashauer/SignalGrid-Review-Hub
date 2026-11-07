@@ -25,6 +25,16 @@ function fixture({ lane = "mac", reject = false, loseResponse = false, failBefor
   const env = { PATH: `${bin}:${dirname(process.execPath)}:${dirname(GIT)}:/usr/bin:/bin`, HOME: process.env.HOME,
     TMPDIR: root, LANG: "C", GIT_CONFIG_NOSYSTEM: "1", GIT_CONFIG_GLOBAL: "/dev/null",
     GIT_TERMINAL_PROMPT: "0", SIGNALGRID_LANE: lane };
+  if (denyCleanup) {
+    // The owned-worktree cleanup fails the same way for every uid (root included): the
+    // fs.rmSync the CLI calls is made to throw EACCES for its own sg-lane-deliver-* worktree.
+    // Nothing is skipped or uid-detected; production code still runs its real exit hook.
+    const deny=join(root,"deny-cleanup.cjs");
+    writeFileSync(deny,`const fs=require("node:fs"),rm=fs.rmSync;
+fs.rmSync=function(p,...v){if(typeof p==="string"&&/^sg-lane-deliver-/.test(require("node:path").basename(p))){const e=Error("EACCES: permission denied, rmdir '"+p+"'");e.code="EACCES";throw e}return Reflect.apply(rm,this,[p,...v])};
+require("node:module").syncBuiltinESMExports();\n`);
+    env.NODE_OPTIONS=`--require=${deny}`;
+  }
   if (fixedClock) {
     const clock=join(root,"fixed-clock.mjs");
     writeFileSync(clock,`const Original=Date;globalThis.Date=class extends Original{constructor(...a){super(...(a.length?a:["2026-10-31T00:00:00Z"]))}static now(){return Original.parse("2026-10-31T00:00:00Z")}};`);
@@ -73,7 +83,7 @@ function fixture({ lane = "mac", reject = false, loseResponse = false, failBefor
  const head=spawnSync(${JSON.stringify(GIT)},['--git-dir',${JSON.stringify(remote)},'rev-parse','refs/heads/'+a[2]],{encoding:'utf8'}).stdout.trim();
  console.log(JSON.stringify({number:7,state:${JSON.stringify(readbackState)},baseRefName:${JSON.stringify(BASE)},headRefName:a[2],headRefOid:/^[a-f0-9]{40}$/.test(head)?head:null,mergeCommit:m?{oid:m}:null,autoMergeRequest:${readbackState === "OPEN" ? "{}" : "null"},createdAt:new Date(Date.now()-60000).toISOString(),mergeStateStatus:'CLEAN',statusCheckRollup:[{__typename:'CheckRun',name:'fixture-ci',status:'COMPLETED',conclusion:'SUCCESS'}],...${JSON.stringify(readbackObservation ?? {})}}));
 }
-else if(a[0]==='auth'&&a[1]==='status'){${ghAuthFails ? "process.exit(1)" : "process.exit(0)"}}\nelse if(a[0]==='pr'&&a[1]==='create'){${ghCreateFails ? "console.error('fixture creation response lost or unauthenticated');process.exit(1)" : "console.log('https://github.com/fixture/route/pull/7')"}}\nelse if(a[0]==='pr'&&a[1]==='merge'&&a.includes('--auto')){${ghAutoFails ? "console.error('fixture auto-merge response lost');process.exit(1)" : `${denyCleanup ? `chmodSync(${JSON.stringify(root)},0o500);` : ""}console.log('fixture auto-merge request')`}}\nelse process.exit(2);\n`);
+else if(a[0]==='auth'&&a[1]==='status'){${ghAuthFails ? "process.exit(1)" : "process.exit(0)"}}\nelse if(a[0]==='pr'&&a[1]==='create'){${ghCreateFails ? "console.error('fixture creation response lost or unauthenticated');process.exit(1)" : "console.log('https://github.com/fixture/route/pull/7')"}}\nelse if(a[0]==='pr'&&a[1]==='merge'&&a.includes('--auto')){${ghAutoFails ? "console.error('fixture auto-merge response lost');process.exit(1)" : `console.log('fixture auto-merge request')`}}\nelse process.exit(2);\n`);
   chmodSync(gh, 0o755);
   const records = (p) => { try { return readFileSync(p, "utf8").trim().split("\n").filter(Boolean).map(JSON.parse); } catch (error) { if (error.code === "ENOENT") return []; throw error; } };
   let runNumber = 0;
@@ -449,7 +459,7 @@ control("a refreshed merge with changed original payload is refused",{},f=>{
  const before=f.pushes().length,r=f.readback(receipt);assert.equal(r.status,3);assert.match(r.stderr,/canonical blob differs/);assert.doesNotMatch(r.stdout,/canonical merge verified/);assert.equal(f.pushes().length,before);
 });
 control("actual cleanup permission failure after accepted publication stays readback-only",{denyCleanup:true},f=>{
- const r=f.run();chmodSync(f.root,0o700);
+ const r=f.run();
  assert.equal(f.pushes().length,1);assert.equal(f.ghCalls().filter(a=>a[0]==="pr"&&a[1]==="create").length,1);assert.equal(f.ghCalls().filter(a=>a[0]==="pr"&&a[1]==="merge").length,1);
  assert.equal(r.status,3,"an unexpected error after accepted mutation must never be exit1 prepublication refusal: "+r.stderr);assert.match(r.stderr,/readback only/i);
 });
@@ -765,8 +775,11 @@ function leaseContext(f){
   fs.writeSync(4,JSON.stringify({event:mode==='owner'?'BEFORE_OWNER':'BEFORE_SLOT',path:p})+'\\n');
   const c=Buffer.alloc(1);while(true){if(!fs.readSync(0,c,0,1,null))throw Error('fixture acquisition gate closed');if(c[0]===10)break;}
  }
- fs.openSync=function(...v){const f=v[1],w=typeof f==='number'?Boolean(f&(fs.constants.O_WRONLY|fs.constants.O_RDWR|fs.constants.O_CREAT)):/[wa+]/.test(String(f));if(w)gate(v[0]);return Reflect.apply(open,this,v)};
- fs.writeFileSync=function(...v){gate(v[0]);return Reflect.apply(write,this,v)};
+ const denied=process.env.TICK_TEST_DENY_STORE;
+ function deny(p){if(typeof p==='string'&&p.startsWith(store)&&denied&&fs.existsSync(denied)){const e=Error("EACCES: permission denied, '"+p+"'");e.code='EACCES';throw e}}
+ for(const n of ['renameSync','unlinkSync','linkSync','mkdirSync','appendFileSync','copyFileSync','symlinkSync']){const o=fs[n];fs[n]=function(...v){deny(v[0]);if(n==='renameSync'||n==='linkSync'||n==='copyFileSync')deny(v[1]);return Reflect.apply(o,this,v)}}
+ fs.openSync=function(...v){const f=v[1],w=typeof f==='number'?Boolean(f&(fs.constants.O_WRONLY|fs.constants.O_RDWR|fs.constants.O_CREAT)):/[wa+]/.test(String(f));if(w){gate(v[0]);deny(v[0])}return Reflect.apply(open,this,v)};
+ fs.writeFileSync=function(...v){gate(v[0]);deny(v[0]);return Reflect.apply(write,this,v)};
  require('node:module').syncBuiltinESMExports();\n`);
  const children=[];
  function start(label,{checkout=f.root,gate='',pre='',detached=false,dry=1,tz=null,pathPrefix=''}={}){
@@ -774,7 +787,7 @@ function leaseContext(f){
   const script=`set -u\nDRY=${dry}\nREPO_ROOT="$FIXTURE_CHECKOUT"\nRECORD_DIR="$TICK_TEST_STORE"\nsay(){ printf '%s\\n' "$1"; }\n${source.slice(a,b)}\n${pre}\nprintf '{"event":"ENTER"}\\n' >&4\nread -r release\nexit 0\n`;
   const env={PATH:pathPrefix+dirname(process.execPath)+':/usr/bin:/bin',HOME:f.parent,TMPDIR:temp,...(tz?{TZ:tz}:{}),
    GIT_CONFIG_NOSYSTEM:'1',GIT_CONFIG_GLOBAL:'/dev/null',FIXTURE_CHECKOUT:checkout,
-   TICK_TEST_STORE:store,TICK_TEST_GATE_MODE:gate,TICK_TEST_GATE_USED:join(f.parent,label+'-gate-used'),
+   TICK_TEST_STORE:store,TICK_TEST_GATE_MODE:gate,TICK_TEST_GATE_USED:join(f.parent,label+'-gate-used'),TICK_TEST_DENY_STORE:join(f.parent,'deny-store'),
    NODE_OPTIONS:'--require='+preload};
   // Match the real launchd entry and the independent subprocess acceptance:
   // Bash reads a file, so command substitution retains the original shell PPID.
@@ -942,7 +955,8 @@ await leaseControl('an OPEN slot whose original shell is still alive stays held'
 });
 await leaseControl('failed immutable owner publication is recovered as ABANDONED by the next tick',async(f,c)=>{
  const a=c.start('owner-failure-A',{gate:'owner'});assert.equal((await a.next()).event,'BEFORE_OWNER');assert.equal(c.state(),'OPEN');
- chmodSync(c.store,0o500);a.resume();assert.equal((await a.next()).event,'CLOSED');await a.closed;chmodSync(c.store,0o700);
+ // Every write/rename/unlink under the store now fails with EACCES for ANY uid (root included), via the fixture's own fs seam.
+ writeFileSync(join(f.parent,'deny-store'),'');a.resume();assert.equal((await a.next()).event,'CLOSED');await a.closed;rmSync(join(f.parent,'deny-store'));
  assert.equal(c.state(),'OPEN');const token=JSON.parse(readFileSync(c.slot,'utf8')).token;c.kernelAvailable();
  await recovers(c,c.start('owner-failure-B'),token);
 });

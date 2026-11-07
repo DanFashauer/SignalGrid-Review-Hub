@@ -24,6 +24,11 @@ if [ "$(printf '%s' "$input" | jq -r '.stop_hook_active' 2>/dev/null)" = "true" 
 cd "${CLAUDE_PROJECT_DIR:-.}" || exit 0
 git rev-parse --is-inside-work-tree >/dev/null 2>&1 || exit 0
 
+# Fetch before the gate judges. loop:state turns its squash-landed exemptions OFF whenever the
+# Hub's mainline tip is not in this clone, and then every old local branch reads as unpushed work.
+# Another lane merging during a session made that false red fire four times on 2026-11-06. A
+# failed fetch is not hidden: the gate still reports the stale ref itself (fail-closed stays).
+git fetch -q --prune origin >/dev/null 2>&1 || true
 GATE_CMD="pnpm run loop:state"
 if ! $GATE_CMD >/tmp/sg_gate.log 2>&1; then
   FAILING=$(grep -E '✗|FAIL' /tmp/sg_gate.log | sed 's/\x1b\[[0-9;]*m//g' | head -3 | tr -s ' ' | tr '\n' ';')

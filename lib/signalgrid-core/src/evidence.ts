@@ -741,6 +741,40 @@ function worseFreshness(a: Freshness, b: Freshness): Freshness {
 }
 
 /**
+ * The freshness of a held signal AS THE DECISION PATH WOULD READ IT at `nowIso`
+ * (DR-059). Only the posture reading is aged at the decision instant
+ * (`readFreshness`), so only `posture_freshness` is aged here — by
+ * `postureReadingFreshness`, the SAME per-reading fold `readFreshness` applies to
+ * its ordered and tied readings. It reads the field `readFreshness` reads (the
+ * VALUE, not the `freshness` stamp) and folds with the same worst-wins, so a later
+ * change to that fold moves the gauge and the verdict together instead of
+ * silently splitting them. Every other category returns its stamp unchanged (a
+ * value outside the union stays the literal string, as `signalFreshnessInventory`
+ * has always reported it). Pure: the instant is passed in, never read.
+ */
+export function agedSignalFreshness(signal: NormalizedSignal, nowIso: string): string {
+  if (signal.category !== "posture_freshness") {
+    return String(signal.freshness as string);
+  }
+  return postureReadingFreshness(signal, nowIso);
+}
+
+/**
+ * ONE posture reading's freshness at the decision instant: worst-wins between what
+ * the reading states in its VALUE (a posture reading carries its freshness there,
+ * not in the `freshness` field; an out-of-union value is "unknown" by
+ * `asFreshness`) and the reading's own age at `nowIso` (DR-059; a stamp the clock
+ * cannot place, unparseable or in the future, is "unknown", which only tightens).
+ * With no instant the age term is "fresh", the identity of the fold. One fold, two
+ * readers: `readFreshness` (the verdict) and `agedSignalFreshness` (/metrics).
+ */
+function postureReadingFreshness(signal: NormalizedSignal, nowIso?: string): Freshness {
+  const aged: Freshness =
+    nowIso === undefined ? "fresh" : classifyFreshness(signal.observedAt, nowIso, FRESH_WINDOW_HOURS, STALE_WINDOW_HOURS);
+  return worseFreshness(asFreshness(signal.value), aged);
+}
+
+/**
  * A freshness value the union does not contain resolves to "unknown" — the
  * RAISING answer — never to itself (2026-09-02, verdict-core finding V8a).
  *
@@ -871,17 +905,14 @@ function readFreshness(latestByCategory: LatestByCategory, nowIso?: string): Fre
   if (!reading) {
     return "missing";
   }
-  // DR-059: the age of the reading itself, at the decision instant. A stamp the
-  // clock cannot place (unparseable, or in the future) classifies as "unknown",
-  // which only tightens.
-  const aged = (signal: NormalizedSignal): Freshness =>
-    nowIso === undefined ? "fresh" : classifyFreshness(signal.observedAt, nowIso, FRESH_WINDOW_HOURS, STALE_WINDOW_HOURS);
-  // The posture reading states its freshness in its VALUE, not in the `freshness`
-  // field, but the out-of-union rule is the same one `asFreshness` applies.
-  let ordered = reading.ordered ? worseFreshness(asFreshness(reading.ordered.value), aged(reading.ordered)) : undefined;
+  // DR-059: each reading is its stated value worst-wins its own age at the decision
+  // instant — `postureReadingFreshness`, the one fold `agedSignalFreshness` (the
+  // /metrics stale-evidence gauge) also calls, so the verdict and the gauge cannot
+  // split when the fold changes.
+  let ordered = reading.ordered ? postureReadingFreshness(reading.ordered, nowIso) : undefined;
   // A same-instant twin folds worst-wins with no floor (eighth-round finding).
   for (const signal of reading.tied) {
-    ordered = worseFreshness(ordered ?? "fresh", worseFreshness(asFreshness(signal.value), aged(signal)));
+    ordered = worseFreshness(ordered ?? "fresh", postureReadingFreshness(signal, nowIso));
   }
   if (reading.illegible.length === 0) {
     return ordered ?? "unknown";

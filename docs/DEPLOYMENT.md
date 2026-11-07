@@ -47,7 +47,7 @@ in-memory (the fixture-safe default used by the public build and CI).
 | `LOG_LEVEL` | pino log level. | `info` |
 | `CORS_ALLOWED_ORIGINS` | Comma-separated browser origins allowed to call `/v1`. | none (deny all cross-origin) |
 | `SIGNALGRID_ENROLLMENT_SECRET` | Set ⇒ `/v1/step-up/enroll/*` additionally requires the `x-enrollment-authorization` header to carry this value (out-of-band enrollment authorization — required for any real deployment, since a demo core publishes operator/owner tokens via `/v1/keys`). | unset (self-service demo, labeled via `demoNote`) |
-| `OIDC_ISSUER` | Enterprise IdP issuer. Set ⇒ OIDC/JWT bearer auth on for `/v1`. | unset (demo keys) |
+| `OIDC_ISSUER` | Enterprise IdP issuer. Set ⇒ OIDC/JWT bearer auth on for `/v1`. Unset or blank counts as OFF only when every other `OIDC_*` variable in this table is also unset or blank; a blank issuer beside any non-blank `OIDC_*` value ⇒ the server refuses to boot, naming the variables that are set (owner decision 2026-11-06). | unset (demo keys) |
 | `OIDC_AUDIENCE` | Expected token audience (the API's app/client id). | unset |
 | `OIDC_JWKS_URI` | IdP JWKS endpoint (discovery `jwks_uri`). | unset |
 | `OIDC_TENANT_CLAIM` / `OIDC_ROLE_CLAIM` | Claims carrying the IdP tenant / role. | `tid` / `roles` |
@@ -118,8 +118,10 @@ accepts a real **OIDC JWT** bearer: the token's **RS256 signature** is verified
 against the IdP's JWKS and its **issuer / audience / expiry** are enforced, then
 the verified claims are mapped (`OIDC_TENANT_MAP` / `OIDC_ROLE_MAP`) to a
 tenant-scoped principal. `alg:none` and HMAC (`HS*`) tokens are rejected outright
-(algorithm-confusion defense). With the OIDC vars unset — the default — the API
-keeps using the public-safe demo bearer keys and nothing here runs. Wiring it to a
+(algorithm-confusion defense). With every OIDC var unset or blank — the default — the API
+keeps using the public-safe demo bearer keys and nothing here runs; a blank
+`OIDC_ISSUER` beside any other non-blank OIDC var is a misconfiguration and the
+server refuses to boot rather than fall back to demo keys. Wiring it to a
 real Entra/Okta/Auth0 tenant is a one-time configuration step, no code change.
 
 ## Read-only Microsoft Graph connector — gated, and WIRED

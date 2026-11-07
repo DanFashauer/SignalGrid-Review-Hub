@@ -248,8 +248,9 @@ try {
 
 // 4 — A BROKEN OIDC CONFIG MUST REFUSE TO BOOT, NOT FALL BACK TO DEMO KEYS.
 //
-// `loadEnterpriseAuthConfig` returns `invalid` ONLY when OIDC_ISSUER is set (an
-// unset issuer is `disabled`, the untouched demo default), so `invalid` always
+// `loadEnterpriseAuthConfig` returns `invalid` ONLY when some OIDC variable is
+// non-blank (every OIDC_* unset or blank is `disabled`, the untouched demo
+// default), so `invalid` always
 // means an operator reached for enterprise auth and got part of it wrong. That
 // used to log at WARN and return null, which under the DEFAULT profile accepts
 // the published `sgk_demo_*` bearers and lets `/v1/keys` hand them to anonymous
@@ -257,12 +258,20 @@ try {
 // rule 2 forbids, while `/readyz` still reported ready because its auth-config
 // check is gated on `!demoSurfacesEnabled()`.
 //
-// Both shapes below are asserted because they fail for different reasons and an
-// earlier reading of this code assumed only the first existed: a MISSING
-// audience/JWKS, and a COMPLETE config whose tenant map is empty `{}` — every
-// variable set, nothing that can ever match.
-for (const [label, extraEnv] of [
+// The first two shapes below are asserted because they fail for different
+// reasons and an earlier reading of this code assumed only the first existed: a
+// MISSING audience/JWKS, and a COMPLETE config whose tenant map is empty `{}` —
+// every variable set, nothing that can ever match. The third is the owner's
+// 2026-11-06 decision ("Refuse to start"): a whitespace-only OIDC_ISSUER beside
+// a set audience + JWKS used to resolve to `disabled` and so served demo keys;
+// it is now `invalid` like any other half-configured OIDC.
+for (const [label, extraEnv, mustName] of [
   ["missing audience and JWKS URI", { OIDC_ISSUER: ISSUER }],
+  [
+    "whitespace-only issuer beside audience + JWKS",
+    { OIDC_ISSUER: " \t ", OIDC_AUDIENCE: AUDIENCE, OIDC_JWKS_URI: `${ISSUER}/jwks` },
+    ["OIDC_AUDIENCE", "OIDC_JWKS_URI"],
+  ],
   [
     "complete config with an EMPTY tenant map",
     {
@@ -280,12 +289,17 @@ for (const [label, extraEnv] of [
   const env = { ...process.env, PORT: String(brokenPort), LOG_LEVEL: "silent" };
   // Start from a clean slate so a variable set in the ambient environment cannot
   // accidentally COMPLETE the config this case needs to be broken.
-  for (const k of ["OIDC_ISSUER", "OIDC_AUDIENCE", "OIDC_JWKS_URI", "OIDC_TENANT_MAP", "OIDC_ROLE_MAP"]) {
+  for (const k of [
+    "OIDC_ISSUER", "OIDC_AUDIENCE", "OIDC_JWKS_URI", "OIDC_TENANT_MAP", "OIDC_ROLE_MAP",
+    "OIDC_TENANT_CLAIM", "OIDC_ROLE_CLAIM", "OIDC_SUBJECT_CLAIM", "OIDC_CLOCK_TOLERANCE_SEC",
+  ]) {
     delete env[k];
   }
   Object.assign(env, extraEnv);
 
-  const broken = spawn("node", [serverEntry], { env, stdio: ["ignore", "ignore", "ignore"] });
+  const broken = spawn("node", [serverEntry], { env, stdio: ["ignore", "ignore", "pipe"] });
+  let stderr = "";
+  broken.stderr.on("data", (chunk) => { stderr += chunk; });
 
   // Wait for the process to exit, but DO NOT kill it on timeout yet — the probe
   // below has to run while it is still alive, or it can only ever observe a dead
@@ -328,6 +342,15 @@ for (const [label, extraEnv] of [
     served === null,
     `/v1/keys answered ${served}: ${servedBody}`,
   );
+  if (mustName) {
+    // The operator has to be told WHICH settings made it a misconfiguration —
+    // by name only: a value can be a tenant-identifying audience or URL.
+    check(
+      `a broken OIDC config (${label}) names ${mustName.join(" + ")} in the refusal, without their values`,
+      mustName.every((name) => stderr.includes(name)) && !stderr.includes(AUDIENCE) && !stderr.includes(`${ISSUER}/jwks`),
+      stderr.slice(0, 400),
+    );
+  }
 }
 
 console.log(`\nOIDC middleware test: ${passed}/${passed + failed} assertions passed`);

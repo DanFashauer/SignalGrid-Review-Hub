@@ -114,7 +114,7 @@ router.get("/readyz", async (req: Request, res: Response) => {
       notReady(
         auth.status === "invalid"
           ? `enterprise auth configuration is invalid (${auth.reason}) — no caller can authenticate.`
-          : "gateway profile with no enterprise auth configured (OIDC_ISSUER unset) — no caller can authenticate; set the OIDC variables from docs/DEPLOYMENT.md.",
+          : "gateway profile with no enterprise auth configured (every OIDC_* variable unset or blank) — no caller can authenticate; set the OIDC variables from docs/DEPLOYMENT.md.",
       );
       return;
     }

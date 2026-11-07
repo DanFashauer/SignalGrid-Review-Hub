@@ -358,10 +358,43 @@ function postureTenantFor(shape: string): string {
   return `${r.outcome}|${r.reasonCodes.join("+")}`;
 }
 
+/**
+ * The six Codex P1 repros of 2026-11-07, as `<outcome>|<reasons>`. Each was LOOSER than the pre-strict reader on a
+ * UTC host; the expected answer is that reader's (and it is reached in every zone).
+ */
+function codexFor(which: string): string {
+  const allowManaged = { id: "allow", description: "a", match: [{ field: "deviceManaged", equals: true }], outcome: "allow" as const, reasonCode: "TENANT_ALLOW", severity: "low" as const };
+  const pv = (rules: unknown) => ({ id: "pv_codex", tenantId: "tenant_northwind", policyId: "pol_codex", version: 1, status: "active" as const, rules, createdAt: BASE, digest: "test" }) as unknown as Parameters<typeof evaluatePolicy>[0];
+  const base = (drop: SignalCategory[] = []) => [sig("s_c", "device_compliance", "compliant", BASE), ...healthy()].filter((x) => !drop.includes(x.category));
+  let signals: NormalizedSignal[] = [];
+  let rules: unknown = SHARED_DEVICE_RULES_V1;
+  let now: string | undefined;
+  const pairs = (families: (readonly [SignalCategory, ...string[]])[]) => families.flatMap(([c, ...vs]) => vs.map((v, i) => sig(`s_${c}_${i}`, c, v, "2026-07-13T12:00:00.000Z")));
+  if (which === "a") signals = [sig("s_1", "charge_state", "low", "2026-07-13T07:00:00Z"), sig("s_2", "charge_state", "bogus", "2026-07-13T08:00:00"), ...base()];
+  if (which === "b") {
+    signals = [...pairs([["tamper_state", "suspected", "confirmed"], ["badge_binding", "removed", "forced"], ["custody_state", "overdue", "maintenance"], ["charge_state", "low", "critical"], ["battery_health", "degraded", "failing"], ["dock_state", "offline", "faulted"], ["security_baseline", "partial", "drifted"], ["device_management_health", "degraded", "broken"], ["posture_freshness", "stale", "expired"]]), ...base(["posture_freshness"])];
+    rules = [{ id: "d", description: "d", match: [{ field: "tamperState", in: ["suspected"] }, { field: "badgeState", in: ["removed"] }], outcome: "deny", reasonCode: "TENANT_DENY", severity: "high" }, allowManaged];
+  }
+  if (which === "c") {
+    signals = [sig("s_1", "enrollment_strength", "strong", "2026-07-13T07:00:00Z"), sig("s_2", "enrollment_strength", "legacy_125khz", "2026-07-13T08:00:00"), ...base()];
+    rules = [{ id: "d", description: "d", match: [{ field: "enrollmentStrength", in: ["legacy_125khz"] }], outcome: "deny", reasonCode: "TENANT_DENY", severity: "high" }, allowManaged];
+  }
+  if (which === "d") { signals = [sig("s_1", "posture_freshness", "fresh", BASE), sig("s_2", "posture_freshness", "fresh", "2026-07-13T14:00:00"), ...base(["posture_freshness"])]; now = BASE; }
+  if (which === "e-charge") signals = [sig("s_1", "charge_state", "garbled", BASE), sig("s_2", "charge_state", "low", "2026-07-13"), ...base()];
+  if (which === "e-battery") signals = [sig("s_1", "battery_health", "garbled", BASE), sig("s_2", "battery_health", "degraded", "2026-07-13"), ...base()];
+  if (which === "f") {
+    signals = [...pairs([["custody_state", "overdue", "maintenance", "exception"], ["charge_state", "low", "critical", "not_present"], ["battery_health", "degraded", "failing"], ["tamper_state", "suspected", "confirmed", "sensor_unavailable"], ["dock_state", "offline", "faulted"], ["security_baseline", "partial", "drifted", "not_assessed"]]), ...base()];
+    rules = [{ id: "d", description: "d", match: [{ field: "batteryHealth", in: ["degraded"] }, { field: "tamperState", in: ["suspected"] }], outcome: "deny", reasonCode: "TENANT_DENY", severity: "high" }, allowManaged];
+  }
+  const r = evaluatePolicy(pv(rules), buildEvidence(identity, device, workflow, signals, now));
+  return `${r.outcome}|${r.reasonCodes.join("+")}`;
+}
+
 if (process.argv[2] === "--worker") {
   const [mode, a, b, c] = process.argv.slice(3);
   const out =
-    mode === "ptenant" ? postureTenantFor(a!)
+    mode === "codex" ? codexFor(a!)
+    : mode === "ptenant" ? postureTenantFor(a!)
     : mode === "tenant" ? tenantFor(a as SignalCategory, b!, c!, process.argv[7]!, process.argv[8]!)
     : mode === "verdict" ? verdictFor(a!, b)
     : mode === "accuse" ? accusationFor(a as "tamper_state" | "badge_binding", b!, c!, process.argv[7]!)
@@ -810,13 +843,24 @@ for (const stamp of ["2026-03-02T08:00:00+00", "2026-03-02T00:00:00Z", "2024-02-
       rules: [{ id: "managed-allow", description: "managed", match: [{ field: "deviceManaged", equals: true }], outcome: "allow" as const, reasonCode: "MANAGED_ALLOW", severity: "low" as const }],
     } as unknown as Parameters<typeof evaluatePolicy>[0];
     check("keep both: unambiguous evidence carries no retainedAccusations key", !("retainedAccusations" in ev));
+    // Above the world cap (here 4*4*3*3*4*4*3*4 = 27648 combinations) the policy bounds the strictest combination:
+    // it never allows, and a rule that needs TWO families' values together is still found (Codex P1s (b), (f)).
     const many = { ...ev, retainedAccusations: {
       custodyState: ["overdue", "exception", "maintenance"], dockChargeState: ["low", "critical", "not_present"],
       batteryHealth: ["degraded", "failing"], dockState: ["offline", "faulted"], baselineCompliance: ["partial", "drifted", "not_assessed"],
+      tamperState: ["suspected", "confirmed", "sensor_unavailable"], badgeBinding: ["removed", "forced"],
+      managementHealthState: ["degraded", "broken", "unknown"],
     } } as unknown as typeof ev;
     const truncated = evaluatePolicy(allowAll, many);
     check("keep both: past the world cap the policy never allows (step_up ALLOW_SUPPRESSED_DEGRADED_EVIDENCE)",
       truncated.outcome === "step_up" && truncated.reasonCodes.includes("ALLOW_SUPPRESSED_DEGRADED_EVIDENCE"), `${truncated.outcome}|${truncated.reasonCodes.join("+")}`);
+    const pairDeny = { ...allowAll, id: "pv_pair", rules: [
+      { id: "pair-deny", description: "two families together", match: [{ field: "tamperState", in: ["suspected"] }, { field: "badgeState", in: ["removed"] }], outcome: "deny" as const, reasonCode: "TENANT_PAIR_DENY", severity: "high" as const },
+      ...(allowAll as unknown as { rules: unknown[] }).rules,
+    ] } as unknown as Parameters<typeof evaluatePolicy>[0];
+    const bounded = evaluatePolicy(pairDeny, many);
+    check("keep both: past the world cap a rule needing two families' retained values still denies (never a sampled step_up)",
+      bounded.outcome === "deny" && bounded.reasonCodes.includes("TENANT_PAIR_DENY"), `${bounded.outcome}|${bounded.reasonCodes.join("+")}`);
     // From a NON-allow baseline (a confirmed tamper denies under the shipped rules), so "never loosens" can fail:
     // a malformed list must not move deny anywhere, whether it is a bare string or an array naming the GOOD member.
     const accused = buildEvidence(identity, device, workflow, [sig("s_t", "tamper_state", "confirmed", BASE), sig("s_c", "device_compliance", "compliant", BASE), ...healthy()]);
@@ -860,6 +904,21 @@ for (const stamp of ["2026-03-02T08:00:00+00", "2026-03-02T00:00:00Z", "2024-02-
 for (const shape of ["garbled", "offsetless", "future"]) {
   const r = ZONES.map((z) => inZone(z, "ptenant", shape));
   check(`keep both: a sole posture 'expired' with a ${shape} stamp still reaches a tenant policy that denies expired -> deny TENANT_EXPIRED_DENY, in every zone`, r.every((v) => v.startsWith("deny|") && v.includes("TENANT_EXPIRED_DENY")), r.join(","));
+}
+
+// The six Codex P1s of 2026-11-07: each answered LOOSER than the pre-strict reader on a UTC host. The expected
+// answer is that reader's, in every zone.
+for (const [which, expect, label] of [
+  ["a", "step_up|DOCK_EVIDENCE_UNREADABLE", "an out-of-domain offset-less charge reading keeps the unreadable floor beside an older 'low'"],
+  ["b", "deny|TENANT_DENY+TENANT_ALLOW", "nine families x 2 above the world cap: a rule needing suspected AND removed still denies"],
+  ["c", "deny|TENANT_DENY+TENANT_ALLOW", "an offset-less legacy enrollment (a shipped-good value) still reaches a tenant policy that denies it"],
+  ["d", "restrict|POSTURE_MISSING", "an offset-less future 'fresh' posture keeps its unknown-age floor beside an orderable 'fresh'"],
+  ["e-charge", "step_up|DOCK_EVIDENCE_UNREADABLE", "a date-only 'low' cannot outrank a malformed current charge value"],
+  ["e-battery", "step_up|DOCK_EVIDENCE_UNREADABLE", "a date-only 'degraded' cannot outrank a malformed current battery value"],
+  ["f", "deny|TENANT_DENY+TENANT_ALLOW", "six families at one instant: a rule needing degraded AND suspected still denies"],
+] as const) {
+  const r = ZONES.map((z) => inZone(z, "codex", which));
+  check(`never milder than the pre-strict reader (Codex ${which}): ${label} -> ${expect}, in every zone`, r.every((v) => v === expect), r.join(","));
 }
 
 console.log(`\nsummary=${failures.length === 0 ? "pass" : "FAIL"} (${passed}/${passed + failures.length})`);

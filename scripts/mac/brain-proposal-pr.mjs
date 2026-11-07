@@ -69,12 +69,17 @@ const refuse = (m) => { throw new Refusal(m); };
 /** Every git call goes through here; the self-test injects -c overrides via GIT_EXTRA. */
 let GIT_EXTRA = [];
 function gitEnv(extra = {}) {
-  const env = { ...process.env };
-  // Neither a worker nor the invoking shell selects Git's config, helper
-  // programs, transport command or executable search path. Keep the account's
-  // ordinary configuration and existing SSH agent; no global settings change.
-  for (const key of Object.keys(env)) if (key.startsWith("GIT_")) delete env[key];
-  for (const key of ["SSH_ASKPASS", "SSH_ASKPASS_REQUIRE", "NODE_OPTIONS", "NODE_PATH"]) delete env[key];
+  // Pass data and ordinary account credentials, not the caller's executable
+  // startup/configuration channels (shell functions, Bash/Node preloads, package
+  // manager overrides, dynamic-loader controls, Git helpers or proxy routing).
+  // The existing account SSH agent/key and GitHub credentials remain available;
+  // this changes only these child processes, never global configuration.
+  const env = {};
+  for (const key of ["SSH_AUTH_SOCK", "SSH_AGENT_PID", "GH_TOKEN", "GITHUB_TOKEN", "LANG", "LC_ALL", "LC_CTYPE", "LC_MESSAGES", "TZ", "TMPDIR", "TMP", "TEMP", "__CF_USER_TEXT_ENCODING", "SYSTEMROOT", "WINDIR"]) {
+    const value = process.env[key];
+    if (typeof value === "string" && !/^\(\)\s*\{/.test(value)) env[key] = value;
+  }
+  if (SELF_TEST_SCANNER && process.env.SYNTHETIC_CONFIG_MARKER) env.SYNTHETIC_CONFIG_MARKER = process.env.SYNTHETIC_CONFIG_MARKER;
   const home = SELF_TEST_SCANNER?.gitHome ?? ACCOUNT_HOME;
   return { ...env, HOME: home, USERPROFILE: home, XDG_CONFIG_HOME: join(home, ".config"),
     PATH: SELF_TEST_SCANNER?.toolPath ?? TOOL_PATH, ...extra,
@@ -479,7 +484,9 @@ function ordinaryHooks(wt, repo) {
   requireHookDependencies();
   if (SELF_TEST_SCANNER) return []; // Only the unexported synthetic fixture sets this.
   rejectExecutableLocalConfig(repo);
-  for (const args of [["remote", "get-url", "origin"], ["remote", "get-url", "--push", "origin"]]) {
+  // --all includes inherited pushurls and the fallback URL list. Requiring one
+  // exact destination also avoids publishing the same attempt multiple times.
+  for (const args of [["remote", "get-url", "--all", "origin"], ["remote", "get-url", "--push", "--all", "origin"]]) {
     if (gitOk(repo, args).trim() !== "git@github.com:DanFashauer/SignalGrid-Review-Hub.git") refuse("publication remote is not the existing canonical SSH repository");
   }
   const hook = gitOk(wt, ["config", "--get", "core.hooksPath"]).trim();
@@ -1042,6 +1049,74 @@ process.exit(finding ? 2 : 0);
     catch (e) { missingHookRefused = e instanceof Refusal; }
     finally { scannerFixture.toolPath = normalTools; }
     check("(security) missing mandatory pnpm refuses instead of accepting a skipped hook", missingHookRefused);
+
+    // Actual Bash command resolution against the unchanged approved hook. The
+    // hook's fixed log is owned fixture side effect, preserved and restored.
+    const bashBin = join(root, "bash-hook-tools"), bashMarker = join(root, "bash-startup-ran"), pnpmMarker = join(root, "mandatory-pnpm-ran");
+    mkdirSync(bashBin);
+    writeFileSync(join(bashBin, "pnpm"), `#!${process.execPath}\nrequire("node:fs").writeFileSync(${JSON.stringify(pnpmMarker)}, "checked"); process.exit(7);\n`, { mode: 0o500 });
+    const startup = join(root, "bash-startup.sh"), quote = (s) => "'" + s.replaceAll("'", "'\\''") + "'";
+    writeFileSync(startup, `printf executed > ${quote(bashMarker)}\npnpm() { return 0; }\n`, { mode: 0o400 });
+    const hookLog = "/tmp/sg-prepush.log";
+    let oldLog = null;
+    if (existsSync(hookLog)) {
+      const fd = openSync(hookLog, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+      try {
+        const st = fstatSync(fd);
+        if (!st.isFile() || st.uid !== process.getuid() || st.nlink !== 1) throw new Error("Unsafe existing synthetic hook log");
+        oldLog = { bytes: readFileSync(fd), mode: st.mode & 0o777 };
+      } finally { closeSync(fd); }
+    }
+    const shellKeys = ["BASH_ENV", "ENV", "BASH_FUNC_pnpm%%"], priorShell = Object.fromEntries(shellKeys.map(k => [k, process.env[k]]));
+    const hookProbe = () => spawnSync("/bin/bash", [join(canonical, ".githooks/pre-push")], { cwd: canonical, env: gitEnv(), encoding: "utf8", timeout: 30000 });
+    try {
+      for (const k of shellKeys) delete process.env[k];
+      scannerFixture.toolPath = bashBin + ":" + TOOL_PATH;
+      requireHookDependencies();
+      const control = hookProbe();
+      if (control.status !== 1 || !existsSync(pnpmMarker)) throw new Error("Approved-hook positive fixture did not run mandatory pnpm");
+      rmSync(pnpmMarker);
+      process.env.BASH_ENV = startup;
+      const poisoned = hookProbe();
+      check("(security) approved Bash hook ignores caller startup and runs mandatory pnpm", poisoned.status === 1 && !existsSync(bashMarker) && existsSync(pnpmMarker));
+      delete process.env.BASH_ENV;
+      rmSync(pnpmMarker, { force: true });
+      process.env["BASH_FUNC_pnpm%%"] = "() { return 0; }";
+      process.env.ENV = startup;
+      const imported = hookProbe(), sent = gitEnv();
+      check("(security) imported shell functions cannot replace the approved hook tool", imported.status === 1 && existsSync(pnpmMarker) && !Object.keys(sent).some(k => k.startsWith("BASH_FUNC_")) && !sent.ENV);
+    } finally {
+      scannerFixture.toolPath = normalTools;
+      for (const k of shellKeys) if (priorShell[k] === undefined) delete process.env[k]; else process.env[k] = priorShell[k];
+      const st = lstatSync(hookLog);
+      if (!st.isFile() || st.uid !== process.getuid() || st.nlink !== 1) throw new Error("Synthetic hook log changed custody");
+      if (oldLog) {
+        const fd = openSync(hookLog, constants.O_WRONLY | constants.O_TRUNC | constants.O_NOFOLLOW);
+        try { writeFileSync(fd, oldLog.bytes); fchmodSync(fd, oldLog.mode); fsyncSync(fd); } finally { closeSync(fd); }
+      } else rmSync(hookLog);
+    }
+
+    // Exercise the production hook/remote validation, including effective
+    // inherited URL values; no transport or global configuration is changed.
+    const savedFixture = SELF_TEST_SCANNER, savedExtra = GIT_EXTRA;
+    try {
+      SELF_TEST_SCANNER = null; GIT_EXTRA = [];
+      ordinaryHooks(canonical, canonical); // Valid canonical positive control.
+      const refusedOrigin = () => {
+        try { ordinaryHooks(canonical, canonical); return false; }
+        catch (e) { if (!(e instanceof Refusal)) throw e; return true; }
+      };
+      scratchGitOk(canonical, ["config", "--add", "remote.origin.pushurl", "git@github.com:DanFashauer/SignalGrid-Review-Hub.git"]);
+      scratchGitOk(canonical, ["config", "--add", "remote.origin.pushurl", "ssh://synthetic.invalid/other/project.git"]);
+      check("(security) every configured push URL must be canonical", refusedOrigin());
+      scratchGitOk(canonical, ["config", "--unset-all", "remote.origin.pushurl"]);
+      scratchGitOk(canonical, ["config", "--add", "remote.origin.url", "ssh://synthetic.invalid/other/project.git"]);
+      check("(security) fallback push URL inventory cannot hide a second destination", refusedOrigin());
+      scratchGitOk(canonical, ["config", "--unset-all", "remote.origin.url"]);
+      scratchGitOk(canonical, ["config", "remote.origin.url", "git@github.com:DanFashauer/SignalGrid-Review-Hub.git"]);
+      GIT_EXTRA = ["-c", "remote.origin.pushurl=git@github.com:DanFashauer/SignalGrid-Review-Hub.git", "-c", "remote.origin.pushurl=ssh://synthetic.invalid/other/project.git"];
+      check("(security) inherited effective push URLs cannot add a foreign destination", refusedOrigin());
+    } finally { SELF_TEST_SCANNER = savedFixture; GIT_EXTRA = savedExtra; }
 
     // (1) dry run of a clean docs job
     const r1 = await run({ job: "jdocs", db, repo, log: quiet });

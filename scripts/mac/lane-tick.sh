@@ -545,10 +545,13 @@ def trusted_client(name):
     raise Refusal()
 
 def client_env():
-    env = dict(os.environ)
-    for key in list(env):
-        if key.startswith('GIT_') or key.startswith('GH_') and key != 'GH_TOKEN' or key in ('SSH_ASKPASS', 'SSH_ASKPASS_REQUIRE', 'NODE_OPTIONS', 'NODE_PATH'):
-            del env[key]
+    # Preserve normal account credentials and locale/temp data, never caller
+    # executable startup channels, imported functions or client configuration.
+    allowed = ('SSH_AUTH_SOCK', 'SSH_AGENT_PID', 'GH_TOKEN', 'GITHUB_TOKEN',
+               'LANG', 'LC_ALL', 'LC_CTYPE', 'LC_MESSAGES', 'TZ', 'TMPDIR', 'TMP', 'TEMP',
+               '__CF_USER_TEXT_ENCODING', 'SYSTEMROOT', 'WINDIR')
+    env = {key: os.environ[key] for key in allowed
+           if key in os.environ and not re.match(r'^\(\)\s*\{', os.environ[key])}
     home = account_home()
     env.update(HOME=str(home), USERPROFILE=str(home), XDG_CONFIG_HOME=str(home / '.config'),
                PATH='/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin',
@@ -693,6 +696,11 @@ def git(*args):
     need(origin == ['git@github.com:' + REPO + '.git'])
     env = client_env()
     env['GIT_ALLOW_PROTOCOL'] = 'ssh'
+    for options in (['--all'], ['--push', '--all']):
+        effective = subprocess.run(prefix + ['remote', 'get-url'] + options + ['origin'],
+                                   env=env, stdin=subprocess.DEVNULL, capture_output=True, timeout=30)
+        need(effective.returncode == 0 and len(effective.stdout) <= 1048576)
+        need(effective.stdout.decode('utf-8', errors='strict').splitlines() == ['git@github.com:' + REPO + '.git'])
     return subprocess.run(prefix + list(args), env=env, stdin=subprocess.DEVNULL, capture_output=True, timeout=30)
 
 def gh(endpoint):

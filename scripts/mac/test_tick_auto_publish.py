@@ -33,6 +33,9 @@ from pathlib import Path
 a = sys.argv[1:]
 root = Path(os.environ["SG_TEST_ROOT"])
 cfg = json.loads((root/"fixture.json").read_text())
+with (root/"client-context.jsonl").open("a") as f:
+    keys=["GIT_SSH_COMMAND","BASH_ENV","ENV","SHELLOPTS","BASHOPTS"]+[k for k in os.environ if k.startswith("BASH_FUNC_")]
+    f.write(json.dumps({"client":"node","argv":a,"env":{k:os.environ.get(k) for k in keys}})+"\n")
 if "--list-review" in a:
     counter=root/"listing-count"
     count=int(counter.read_text())+1 if counter.exists() else 1
@@ -93,7 +96,8 @@ cfg=json.loads((r/"fixture.json").read_text())
 a=sys.argv[1:]
 with (r/"get-calls.jsonl").open("a") as f: f.write(json.dumps(a)+"\n")
 with (r/"client-context.jsonl").open("a") as f:
-    f.write(json.dumps({"client":"gh","argv":a,"env":{k:os.environ.get(k) for k in ["GIT_SSH_COMMAND","GH_HOST","GH_REPO","GH_CONFIG_DIR"]}})+"\n")
+    keys=["GIT_SSH_COMMAND","GH_HOST","GH_REPO","GH_CONFIG_DIR","BASH_ENV","ENV","SHELLOPTS","BASHOPTS"]+[k for k in os.environ if k.startswith("BASH_FUNC_")]
+    f.write(json.dumps({"client":"gh","argv":a,"env":{k:os.environ.get(k) for k in keys}})+"\n")
 with (r/"host-events").open("a") as f: f.write("metadata\n")
 if a[:3]==["api","--hostname","github.com"]: a=["api"]+a[3:]
 if len(a)!=4 or a[:3]!=["api","--method","GET"]:
@@ -145,7 +149,12 @@ r=Path(os.environ["SG_TEST_ROOT"])
 with (r/"git-calls.log").open("a") as f: f.write(repr(sys.argv[1:])+"\n")
 with (r/"client-context.jsonl").open("a") as f:
     import json
-    f.write(json.dumps({"client":"git","argv":sys.argv[1:],"env":{k:os.environ.get(k) for k in ["GIT_SSH_COMMAND","GIT_CONFIG_GLOBAL","HOME"]}})+"\n")
+    keys=["GIT_SSH_COMMAND","GIT_CONFIG_GLOBAL","HOME","BASH_ENV","ENV","SHELLOPTS","BASHOPTS"]+[k for k in os.environ if k.startswith("BASH_FUNC_")]
+    f.write(json.dumps({"client":"git","argv":sys.argv[1:],"env":{k:os.environ.get(k) for k in keys}})+"\n")
+import json,subprocess
+cfg=json.loads((r/"fixture.json").read_text())
+if cfg.get("probe_shell_startup"):
+    subprocess.run(["/bin/bash","-c","exit 0"],check=True)
 a=sys.argv[1:]
 if any(x in a for x in ["push","fetch","commit","checkout","worktree","add","reset","clean"]):
     print("fixture refuses unexpected Git mutation",file=sys.stderr);sys.exit(98)
@@ -156,6 +165,10 @@ if "config" in a:
         print("remote.origin.url\ngit@github.com:DanFashauer/SignalGrid-Review-Hub.git\0"+("core.sshcommand\nsynthetic-worker-command\0" if cfg.get("unsafe_local_config") else ""),end="")
     elif "remote.origin.url" in a: print("git@github.com:DanFashauer/SignalGrid-Review-Hub.git")
     else: sys.exit(98)
+elif "remote" in a and "get-url" in a:
+    print("git@github.com:DanFashauer/SignalGrid-Review-Hub.git")
+    if cfg.get("extra_effective_pushurl") and "--push" in a:
+        print("ssh://synthetic.invalid/other/project.git")
 elif "ls-remote" in a:
     import json
     cfg=json.loads((r/"fixture.json").read_text())
@@ -253,6 +266,9 @@ sg_host_verify_release() { printf 'release\\n' >> "$SG_TEST_ROOT/host-events"; S
         # Only the extracted test copy substitutes account/tool transport seams.
         # Production has no environment override for these trusted functions.
         wrapper=wrapper.replace("try:\n    need(MODE in", "if 'trusted_client' in globals():\n    trusted_client = lambda name: str(Path(os.environ['SG_TEST_ROOT'])/'bin'/name)\n    account_home = lambda: Path(os.environ['SG_TEST_TRUSTED_HOME'])\ntry:\n    need(MODE in")
+        # Inject into the extracted Python only, after its parent Bash started.
+        # Otherwise BASH_ENV would poison the fixture launcher, not this boundary.
+        wrapper=wrapper.replace("    account_home = lambda: Path(os.environ['SG_TEST_TRUSTED_HOME'])", "    account_home = lambda: Path(os.environ['SG_TEST_TRUSTED_HOME'])\n    os.environ.update(json.loads((Path(os.environ['SG_TEST_ROOT'])/'fixture.json').read_text()).get('client_shell_env',{}))\n    _fixture_client_env = client_env\n    def client_env():\n        env = _fixture_client_env()\n        env.update(SG_TEST_ROOT=os.environ['SG_TEST_ROOT'], SIGNALGRID_BRAIN_PUBLICATION_STATE=os.environ['SIGNALGRID_BRAIN_PUBLICATION_STATE'])\n        return env")
         # Scale only the isolated test copy's publication timeout. No production
         # environment flag or model/queue cap is changed or introduced.
         if self.cfg.get("hang_publish"):
@@ -493,6 +509,30 @@ sg_host_verify_release() { printf 'release\\n' >> "$SG_TEST_ROOT/host-events"; S
         self.cfg["unsafe_local_config"]=True
         self.run_step()
         self.assertEqual(self.calls(),[])
+        self.assertEqual(self.jsonlines("get-calls.jsonl"),[])
+
+    def test_shell_startup_and_function_imports_do_not_reach_clients(self):
+        self.cfg["client_shell_env"]={"BASH_ENV":"synthetic-startup","ENV":"synthetic-startup",
+                                      "SHELLOPTS":"xtrace","BASHOPTS":"extdebug","BASH_FUNC_pnpm%%":"() { return 0; }"}
+        self.run_step()
+        contexts=self.jsonlines("client-context.jsonl")
+        self.assertEqual({x["client"] for x in contexts},{"node","git","gh"})
+        for row in contexts:
+            self.assertFalse(any(v for k,v in row["env"].items() if k in ("BASH_ENV","ENV","SHELLOPTS","BASHOPTS") or k.startswith("BASH_FUNC_")),row)
+
+    def test_client_environment_prevents_actual_bash_startup_execution(self):
+        marker=self.root/"startup-executed";startup=self.root/"startup.sh"
+        startup.write_text("printf executed > '"+str(marker).replace("'","'\\''")+"'\n")
+        self.cfg["client_shell_env"]={"BASH_ENV":str(startup)}
+        self.cfg["probe_shell_startup"]=True
+        self.run_step()
+        self.assertFalse(marker.exists(),"the actual preflight client executed caller Bash startup")
+        self.assertEqual(len(self.calls()),1)
+
+    def test_effective_inherited_push_url_refuses_before_publication(self):
+        self.cfg["extra_effective_pushurl"]=True
+        self.run_step()
+        self.assertEqual(self.calls(),[],"an inherited second push URL must not receive an artifact")
         self.assertEqual(self.jsonlines("get-calls.jsonl"),[])
 
 if __name__=="__main__":

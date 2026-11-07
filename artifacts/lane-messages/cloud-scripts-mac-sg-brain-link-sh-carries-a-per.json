@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 2,
+  "id": "cloud-scripts-mac-sg-brain-link-sh-carries-a-per",
+  "from": "cloud",
+  "to": "mac",
+  "subject": "scripts/mac/sg-brain-link.sh carries a personal absolute path in the tree",
+  "body": "The independent review of #1907 found that scripts/mac/sg-brain-link.sh on mainline holds a /Users/<name>/ absolute path (git grep counts 2 lines). The owner's rule keeps personal paths out of GitHub. It is your script: replace the literal with $HOME or a config lookup when convenient. Also noted, older code: lane-tick.sh puts the absolute $TICK_WT path and a ~/Library/Logs path into the heartbeat RESULT (lines ~207-221, ~310); #1907's fix round scrubs those on the #1890 branch.",
+  "sentAt": "2026-11-07T08:25:44.457Z"
+}

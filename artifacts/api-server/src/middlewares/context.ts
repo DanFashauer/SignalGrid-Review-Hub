@@ -91,11 +91,14 @@ function initEnterpriseAuth(): EnterpriseAuthenticator | null {
     return createEnterpriseAuthenticator(result.config, defaultJwksFetch);
   }
   if (result.status === "invalid") {
-    // REFUSE TO BOOT. `invalid` is only ever returned when OIDC_ISSUER IS SET
-    // (an unset issuer is `disabled`, the untouched demo/fixture default), so it
-    // means exactly one thing: an operator reached for enterprise authentication
-    // and got some part of it wrong — a missing audience or JWKS URI, an
-    // unparseable or empty tenant/role map, a role value that is not a role.
+    // REFUSE TO BOOT. `invalid` is only ever returned when SOME OIDC variable is
+    // non-blank (every OIDC_* unset or blank is `disabled`, the untouched
+    // demo/fixture default), so it means exactly one thing: an operator reached
+    // for enterprise authentication and got some part of it wrong — a missing
+    // audience or JWKS URI, an unparseable or empty tenant/role map, a role value
+    // that is not a role, or (owner decision 2026-11-06) a blank or
+    // whitespace-only OIDC_ISSUER beside other OIDC settings. The reason names
+    // variables, never their values.
     //
     // The previous behaviour logged this at WARN and returned null, which under
     // the DEFAULT profile falls through to the demo-key branch below: the
@@ -112,12 +115,12 @@ function initEnterpriseAuth(): EnterpriseAuthenticator | null {
     // (app.ts), SIGNALGRID_MAX_DECISIONS_PER_TENANT (lib/core.ts), and an
     // unrecognised SIGNALGRID_PRODUCT_PROFILE (lib/profile.ts) — "a configuration
     // error on a security knob is answered by not serving, never by serving less
-    // safely". Unset OIDC_ISSUER to serve the demo surface deliberately.
+    // safely". Unset EVERY OIDC_* variable to serve the demo surface deliberately.
     throw new Error(
       `Enterprise OIDC is configured but invalid: ${result.reason} ` +
         "Refusing to start rather than silently accepting demo bearer tokens on a deployment " +
         "whose operator believes OIDC is enforcing. Fix the OIDC_* variables (docs/DEPLOYMENT.md), " +
-        "or unset OIDC_ISSUER to serve the demo credential surface deliberately.",
+        "or unset every OIDC_* variable to serve the demo credential surface deliberately.",
     );
   }
   return null;

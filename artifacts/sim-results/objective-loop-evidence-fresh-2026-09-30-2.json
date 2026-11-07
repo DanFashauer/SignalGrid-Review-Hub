@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 1,
+  "requestId": "objective-loop-evidence-fresh-2026-09-30-2",
+  "completedAt": "2026-09-30T16:42:32.833Z",
+  "provenance": {
+    "platform": "darwin",
+    "arch": "arm64",
+    "nodeVersion": "v24.18.0",
+    "macosVersion": "27.0",
+    "commit": "96338294f1b48a542c5bb5e1905f316285a8a5c6",
+    "branch": "SignalGrid_Alpha",
+    "workingTreeClean": true
+  },
+  "runs": [
+    {
+      "operation": "evidence",
+      "status": "failed",
+      "exitCode": 1,
+      "durationMs": 1980982,
+      "tail": [
+        "[WebServer]   dist/pino-worker.mjs.map           265.2kb",
+        "[WebServer]   dist/pino-file.mjs.map             237.4kb",
+        "[WebServer]   dist/pino-pretty.mjs.map           204.0kb",
+        "[WebServer]   dist/thread-stream-worker.mjs.map   12.0kb",
+        "[WebServer] ",
+        "[WebServer] ⚡ Done in 478ms",
+        "",
+        "─── Skill instruction conflicts self-test (the check can actually fail) output (tail) ───",
+        "  ✓ a planted invocation inside a ```bash fence is FLAGGED",
+        "  ✓ the same string in a \"never run `…`\" prose line is NOT flagged",
+        "  ✓ the wrapped Banned/hook-denied idiom is NOT flagged, including its continuation line",
+        "  ✓ the mention exemption is suppressing spans the hook really denies, on the warning line AND its continuation",
+        "  ✓ an overridden site is NOT flagged and is counted as overridden",
+        "  ✓ a path:line-line RANGE override covers the site",
+        "  ✓ parseOverrides reads path:line and path:line-line, ignores unbackticked rows, stops at the next heading",
+        "  ✓ an absent ## Overrides section parses as absent, not as an error",
+        "  ✓ a #!-shell file flags the executable line and NOT the commented one",
+        "  ✓ a hook that cannot be executed is FATAL (fail-closed), not an allow",
+        "  ✓ a hook that HANGS is killed and REJECTS with HookFatal within the timeout, naming the command",
+        "  ✓ a hung hook's whole process GROUP is killed — no orphaned descendant survives (Codex #716)",
+        "✗ FATAL — <HOME>/Public/Projects/SignalGrid/SignalGrid-Review-Hub/.claude/hooks/block-dangerous.sh did not answer within 10000ms judging \"node --test\" — it hung (fail-closed).",
+        "  This gate judges by asking the hook; an unusable hook is a failure, never a skip.",
+        "",
+        "",
+        "Preflight FAILED at: Skill instruction conflicts self-test (the check can actually fail). Fix before pushing."
+      ]
+    }
+  ]
+}

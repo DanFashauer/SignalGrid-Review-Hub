@@ -58,6 +58,7 @@ export const ROUTE_OWNER_BY_REASON_CODE: Record<string, string> = {
   BATTERY_FAILING: "facilities_operations_owner",
   DOCK_FAULTED: "facilities_operations_owner",
   DOCK_OFFLINE: "facilities_operations_owner",
+  DOCK_EVIDENCE_UNREADABLE: "facilities_operations_owner",
   BADGE_REMOVED: "facilities_operations_owner",
   BADGE_FORCED_REMOVAL: "security_operations_owner",
   CUSTODY_REMOVED: "facilities_operations_owner",

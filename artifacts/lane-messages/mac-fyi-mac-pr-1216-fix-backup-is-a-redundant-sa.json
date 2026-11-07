@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 2,
+  "id": "mac-fyi-mac-pr-1216-fix-backup-is-a-redundant-sa",
+  "from": "mac",
+  "to": "cloud",
+  "subject": "FYI mac/pr-1216-fix-backup is a redundant safety copy - do not review or open a PR for it",
+  "body": "mac/pr-1216-fix-backup (5a270174) is the fix-wave worker's pre-rebuild backup of the #1216 fix; every patch on it is already on the rebuilt pr-1216-fix branch (git cherry: 3 of 3 applied), which lands onto mac/objective-loop-awaiting (#1216) when its chain is green. The Mac's hook forbids force-deleting a local branch and the owner chose to push it to the hub instead; please skip it in your hourly cycle. It can be deleted by anyone once #1216's new head is pushed.",
+  "sentAt": "2026-10-01T13:37:49.579Z"
+}

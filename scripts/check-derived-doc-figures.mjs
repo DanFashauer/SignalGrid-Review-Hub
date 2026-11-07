@@ -68,6 +68,7 @@ import { execSync } from "node:child_process";
 import { collectionRequestFiles, registeredRoutePairCount } from "./check-api-collection.mjs";
 import { connectorEndpoints } from "./check-graph-permission-boundary.mjs";
 import { wireTruthFigures } from "./check-wire-truth-ledger.mjs";
+import { isMainModule } from "./lib/is-main.mjs";
 
 /** The connector tree the redirect census walks. */
 const INTEGRATIONS = "lib/integrations/src/integrations";
@@ -233,6 +234,28 @@ export function simOperationCount(root = ROOT) {
 }
 
 /**
+ * Entries of `SIGNAL_CATEGORIES` in the decision core, parsed from the source between
+ * the array's opening line and its `] as const;` close (this gate is .mjs, the core is
+ * .ts). `docs/PRODUCT_DATA_MODEL.md` restated the list by hand and fell behind twice —
+ * 13 against 17, then 17 against 20 after DR-043 (plan row 92) — so the doc now names
+ * the array and states only the count, and this row holds the count.
+ */
+const CORE_TYPES = "lib/signalgrid-core/src/types.ts";
+export function signalCategoryCount(root = ROOT) {
+  const src = read(CORE_TYPES, root);
+  const start = src.indexOf("export const SIGNAL_CATEGORIES = [");
+  const end = src.indexOf("] as const;", start);
+  if (start < 0 || end < 0) return 0;
+  return countArrayEntries(src.slice(start, end));
+}
+
+/** Pure: quoted entries, one per line, tolerating a digit in the name and a trailing
+ *  same-line `//` comment — a stricter pattern silently skipped both (review of #1234). */
+export function countArrayEntries(body) {
+  return [...body.matchAll(/^\s*"[a-z0-9_]+",?\s*(?:\/\/.*)?$/gm)].length;
+}
+
+/**
  * Distinct `METHOD /path` pairs the mounted routers register — the api-collection gate's
  * OWN parser, imported for the same reason the `.bru` walk is: the collection README
  * publishes this number, and a second parser for "a registered route" would be a second
@@ -365,6 +388,13 @@ export const FIGURES = [
     from: "directories under lib/integrations/src/integrations whose resolve.ts imports createEmitterResolver",
   },
 
+  {
+    id: "signal-categories-data-model",
+    doc: "docs/PRODUCT_DATA_MODEL.md",
+    re: /One of the \*\*(\d+)\*\* values of `SIGNAL_CATEGORIES`/,
+    derive: signalCategoryCount,
+    from: `quoted entries of the SIGNAL_CATEGORIES array in ${CORE_TYPES}`,
+  },
   {
     id: "bru-requests-index",
     doc: "docs/INDEX.md",
@@ -713,22 +743,24 @@ export const SWEEP_EXEMPT = [
   {
     doc: "docs/agent/LOOP.md",
     near: /proofs 148(?! proof)/,
-    count: 1,
+    count: 0,
     reason:
       "a dated record of review round seven: the number of ASSERTIONS in two proof modules before and after " +
       "that round (148 -> 154), not the number of proof:* scripts. It collided with the derived figure while " +
       "that figure was 148, and collides again now the live count is 154 (PR #929 added proof:app-protection, " +
-      "2026-09-25): the '154' is the assertion total after the round — count 1. Rewriting it would falsify the " +
-      "history it records; when the derived figure moves off 154 this drops back to 0 and the count must follow.",
+      "2026-09-25): the '154' is the assertion total after the round. Rewriting it would falsify the " +
+      "history it records. The derived figure moved off 154 to 155 (proof:webauthn-revocation, 2026-09-30), so " +
+      "it absorbs nothing again — count 0, kept as a trip-wire should the figure return to 148 or 154.",
   },
   {
     doc: "docs/agent/ORG_SELF_EVALUATION_2026-09-12.md",
     near: /154 `-- self-skipping proofs/,
-    count: 1,
+    count: 0,
     reason:
       "a LINE NUMBER in a dated evaluation (validate-sim-macos.sh:154, the line that prints the self-skipping " +
       "proofs), not a count of proof:* scripts. It collides with the derived figure only while that figure is 154 " +
-      "(PR #929, 2026-09-25); rewriting a cited line number would break the citation. Drops to 0 when the figure moves.",
+      "(PR #929, 2026-09-25); rewriting a cited line number would break the citation. The figure moved to 155 " +
+      "(proof:webauthn-revocation, 2026-09-30) — count 0, kept as a trip-wire should it return to 154.",
   },
   {
     doc: "docs/BUILD_BACKLOG.md",
@@ -1205,6 +1237,10 @@ function selfTest() {
   ]);
   checks.push(["every row declares exactly one capture group", FIGURES.every((r) => new RegExp(`${r.re.source}|`).exec("").length - 1 === 1)]);
   checks.push(["every row names where its truth comes from", FIGURES.every((r) => typeof r.from === "string" && r.from.length > 12)]);
+  checks.push([
+    "the SIGNAL_CATEGORIES parse counts an entry with a digit or a trailing // comment",
+    countArrayEntries('[\n  "a_one",\n  // a comment line is not an entry\n  "zz_new", // note\n  "v2_state"\n') === 3,
+  ]);
   checks.push(["the table is not empty and the ids are unique", FIGURES.length >= 3 && new Set(FIGURES.map((r) => r.id)).size === FIGURES.length]);
 
   // Floors on the live tree: every deriver must find something, and every document must
@@ -1463,7 +1499,7 @@ function selfTest() {
 }
 
 // Exact-entry guard: importing this module must never gate as a side effect.
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (isMainModule(process.argv[1], import.meta.url)) {
   if (process.argv.includes("--self-test")) process.exit(selfTest());
   const results = auditAll();
   const sweep = sweepAll();

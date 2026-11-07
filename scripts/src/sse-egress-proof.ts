@@ -103,6 +103,35 @@ check("a hostile report whose key enumeration THROWS (Proxy ownKeys trap) is mal
   const hostile = new Proxy({}, { ownKeys() { throw new Error("trap"); } });
   return normalizeSseEgressReport("d", hostile as SseEgressReportRaw).reportIntegrity === "malformed";
 })());
+
+// The brace-less guards the mutation sweep could not reach until this family joined it
+// (`oneLine: true`, 2026-09-30). Each check below fails with its guard removed.
+check("a NON-STRING client_state assertion (a number) is malformed and unknown — never a thrown read", (() => {
+  try {
+    const n = norm(report(5));
+    return n.reportIntegrity === "malformed" && n.clientState === "unknown";
+  } catch {
+    return false;
+  }
+})());
+// A key the report only INHERITS is not one it asserts — value reads are own-only, so an
+// inherited `service_observing_traffic` would be silently dropped. The key scan walks the
+// chain precisely so that such a report is malformed rather than a clean read with a hole.
+check("a report that INHERITS a recognized key (on its prototype) is malformed, never a clean read", (() => {
+  const inherited = Object.assign(Object.create({ service_observing_traffic: true }) as object, { client_state: "tunneled", bridge_reachable: true });
+  const control = norm({ client_state: "tunneled", service_observing_traffic: true, bridge_reachable: true });
+  return control.reportIntegrity === "clean" && norm(inherited as SseEgressReportRaw).reportIntegrity === "malformed";
+})());
+// The prototype walk is BOUNDED: a chain past MAX_PROTOTYPE_DEPTH (64) is refused rather
+// than walked — an unbounded walk is a hang on a hostile Proxy whose getPrototypeOf never
+// ends. The control shows the same shape under the bound reads clean, so the refusal is
+// the bound's and nothing else's.
+const chainedReport = (levels: number): SseEgressReportRaw => {
+  let proto: object = Object.create(null) as object;
+  for (let i = 0; i < levels; i += 1) proto = Object.create(proto) as object;
+  return Object.assign(Object.create(proto) as object, { client_state: "tunneled", service_observing_traffic: true, bridge_reachable: true }) as SseEgressReportRaw;
+};
+check("a report whose (empty) prototype chain runs past the 64-level bound is malformed; the same shape under it is clean", norm(chainedReport(8)).reportIntegrity === "clean" && norm(chainedReport(70)).reportIntegrity === "malformed");
 check("an absent report body is CLEAN and all-unknown — absence is not corruption, and it still cannot grant", (() => {
   const n = norm({});
   return n.reportIntegrity === "clean" && n.clientState === "unknown" && evaluateSseEgress(n, MANDATED).egressProtected === false;

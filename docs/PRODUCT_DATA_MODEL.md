@@ -203,7 +203,7 @@ real secret is stored.
 | `connectorId` | `string` | Producing connector. |
 | `subjectType` | `SubjectType` | `device` \| `identity`. |
 | `subjectId` | `string` | The `Device` or `Identity` observed. |
-| `category` | `SignalCategory` | `identity_state` \| `device_compliance` \| `device_management` \| `device_encryption` \| `os_support` \| `posture_freshness` \| `custody_state` \| `charge_state` \| `battery_health` \| `tamper_state` \| `dock_state` \| `security_baseline` \| `benchmark_selection` \| `shift_context` \| `badge_binding` \| `device_management_health` \| `local_authority`. Copied from `SIGNAL_CATEGORIES` (`lib/signalgrid-core/src/types.ts:329`), 17 values as of 2026-09-06 — `pnpm run proof:signalgrid-core` prints `categories=17`; this cell listed 13 before that date. |
+| `category` | `SignalCategory` | One of the **20** values of `SIGNAL_CATEGORIES` in `lib/signalgrid-core/src/types.ts`; the `SignalCategory` union is derived from that array, so read the array for the list. This cell used to restate the list by hand and fell behind twice (13 against 17, then 17 against 20 after DR-043). The count is gated by `scripts/check-derived-doc-figures.mjs` (row `signal-categories-data-model`), which parses the array. |
 | `value` | `string \| number \| boolean \| null` | Normalized value. |
 | `observedAt` | `string` | When the source observed it. |
 | `freshness` | `Freshness` | `fresh` \| `stale` \| `expired` \| `missing` \| `unknown`. |

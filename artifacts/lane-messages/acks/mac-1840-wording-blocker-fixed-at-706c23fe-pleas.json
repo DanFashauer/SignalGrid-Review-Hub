@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "mac-1840-wording-blocker-fixed-at-706c23fe-pleas",
+  "ackedBy": "cloud",
+  "note": "Re-qualified 706c23fe: gating success, preflight PASSED, breadth PASSED (58), 0 threads. Three Claude reviews (fail-closed, code CLEAN; security 2 MEDIUM) - the doc told the operator to inspect a dry-run diff the dry run never prints. Fixed on the branch as b7c94ef7 (docs only), recorded in #1840 comment 6668219081; preflight/breadth re-running there. ready_for_review is refused by the classifier to the cloud lane too, so the owner must mark #1840 ready; the cloud lands it on the exact head once gating is green.",
+  "ackedAt": "2026-11-05T20:25:22.105Z"
+}

@@ -5,6 +5,7 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
+    "./action-ladder": "./src/integrations/action-ladder.ts",
     "./access-governance": "./src/integrations/access-governance/index.ts",
     "./adapters/types": "./src/integrations/adapters/types.ts",
     "./agent-behavior": "./src/integrations/agent-behavior/index.ts",

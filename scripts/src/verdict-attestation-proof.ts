@@ -26,6 +26,7 @@ import {
   verifyVerdict,
   type AttestationKey,
   type AttestedVerdict,
+  UNIFIED_ACTIONS,
 } from "@workspace/verdict-attestation";
 import { enumerateGrantSafety, productOf } from "./lib/grant-safety.js";
 
@@ -50,8 +51,8 @@ interface Verdict { recommendedAction: string; reasonCode: string; deviceId: str
 const ALLOW: Verdict = { recommendedAction: "none", reasonCode: "MANAGEMENT_HEALTHY", deviceId: "ipad-ward-01" };
 const RESTRICT: Verdict = { recommendedAction: "restrict", reasonCode: "ENROLLMENT_RETIRED", deviceId: "ipad-ward-02" };
 
-const LADDER = ["none", "monitor", "patch", "locate", "step_up", "alert", "restrict", "escalate"];
-const rank = (a: string): number => LADDER.indexOf(a);
+// The package's own ladder, not a local restatement of it (plan row 124).
+const rank = (a: string): number => (UNIFIED_ACTIONS as readonly string[]).indexOf(a);
 
 const seal = (v: Verdict, opts: Partial<{ tenantId: string; issuedAt: number; nonce: string }> = {}): AttestedVerdict<Verdict> =>
   sealVerdict(v, KEY, { tenantId: opts.tenantId ?? TENANT, issuedAt: opts.issuedAt ?? NOW, nonce: opts.nonce ?? "nonce-1" });
@@ -101,7 +102,20 @@ check("the nonce is inside the seal too", (verifyVerdict(tamperedNonce, RING, op
 const truncated = { ...sealed, attestation: { ...sealed.attestation, digest: sealed.attestation.digest.slice(0, -1) } };
 check("a truncated digest is refused (length is compared before the constant-time check)", (verifyVerdict(truncated, RING, opts()) as { failure: string }).failure === "digest_mismatch");
 const flipped = { ...sealed, attestation: { ...sealed.attestation, digest: sealed.attestation.digest.slice(0, -1) + (sealed.attestation.digest.endsWith("a") ? "b" : "a") } };
-check("a digest differing in ONE character is refused", (verifyVerdict(flipped, RING, opts()) as { failure: string }).failure === "digest_mismatch");
+// UTF-16 length is not byte length. "é" + 63 ASCII characters has .length 64 (equal to a real hex
+// digest, so it passes the length comparison) but is 65 bytes, so timingSafeEqual THROWS and the
+// catch in digestsEqual is the only thing between this input and a verdict. It is reachable, and
+// the return-flip of that catch (`return false` -> `return true`) verified a forged envelope with
+// every other vector green (review round 1 of PR #1464).
+const wideDigest = "\u00e9" + sealed.attestation.digest.slice(1);
+const wide = { ...sealed, attestation: { ...sealed.attestation, digest: wideDigest } };
+check(
+  "a digest differing in ONE character is refused, and so is an equal-.length digest that is longer in BYTES (timingSafeEqual throws; the catch must not read as a match)",
+  (verifyVerdict(flipped, RING, opts()) as { failure: string }).failure === "digest_mismatch" &&
+    wideDigest.length === sealed.attestation.digest.length &&
+    Buffer.byteLength(wideDigest) !== Buffer.byteLength(sealed.attestation.digest) &&
+    (verifyVerdict(wide, RING, opts()) as { failure: string }).failure === "digest_mismatch",
+);
 
 // ── cross-tenant replay ───────────────────────────────────────────────────────
 //

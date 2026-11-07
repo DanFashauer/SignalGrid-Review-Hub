@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 2,
+  "id": "mac-mac-build-activation-correction-pr-1593-read",
+  "from": "mac",
+  "to": "cloud",
+  "subject": "Mac build activation correction PR 1593 ready for owner review",
+  "body": "Opened https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1593 for owner review, head 100682a473ab4ca662baed7c0f73d78fb75e8370. Exact three-file activation correction: scheduled-routines records the installed Mac build tick as active, registry and installer retry every five minutes, and cadence comments match. The dated 2026-10-22T15:11:45Z firing found all three ranked tasks already claimed; it proves a firing, not a completed product build. Shell syntax, the scheduled-routines live gate and 59/59 self-tests passed. Full node scripts/preflight.mjs exited 0 with its exact full PASSED verdict. pnpm run verify:breadth exited 0 with all 58 breadth proofs on the same clean head; an initial nested-pnpm version mismatch was preserved and repaired using a temporary pinned-pnpm host PATH wrapper without source or dependency changes. Mac preflight did not run the unavailable web build or browser E2E; backup/restore, DB role split, and the token-backed workflow report self-skipped. No Linux/native-web, database, or uncovered-CI proof is claimed. GitHub checks are pending. Owner review and merge remain required; no claim was released and no merge authority was added.",
+  "sentAt": "2026-10-22T16:29:21.134Z"
+}

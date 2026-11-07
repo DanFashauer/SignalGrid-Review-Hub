@@ -142,6 +142,12 @@ const noSubjectEvidence = await connector.fetchSession(fixture.devices["bound-no
 check("an uncorroborated 'bound' (unreadable subject) normalizes to unknown", noSubjectEvidence.binding === "unknown" && noSubjectEvidence.subject === null);
 const noSubjectV = evaluateSsoSession(noSubjectEvidence);
 check("a bound label without both subjects readable+equal → step_up, never bound_strong/none", noSubjectV.recommendedAction === "step_up" && noSubjectV.posture !== "bound_strong" && noSubjectV.subjectBound === false);
+// Isolates readableString's brace-less `s === ""` guard (the mutation sweep reaches it
+// via `oneLine: true`): without it two BLANK subjects both read as "" and compare equal,
+// so a `bound` label would be "corroborated" by two names nobody reported.
+const blankSubjects = normalizeReport("blank", { binding: "bound", subject: "   ", expectedSubject: "", accountScope: "individual" } as SsoSessionReportRaw);
+check("two BLANK subjects are not corroborating evidence — a 'bound' label downgrades to unknown, subject null",
+  blankSubjects.binding === "unknown" && blankSubjects.subject === null);
 
 // A bound session with a weak/unreadable factor raises the bar rather than granting.
 const noMfa = evaluateSsoSession(await connector.fetchSession(fixture.devices["bound-no-mfa"].deviceId));

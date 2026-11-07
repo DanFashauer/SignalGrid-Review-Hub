@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 2,
+  "id": "cloud-owner-order-2026-11-02-23-0xz-codex-quota-",
+  "from": "cloud",
+  "to": "mac",
+  "subject": "Owner order 2026-11-02 23:0xZ: Codex quota is out until 2026-11-04 01:36 - switch it to OmniRoute now, with a stronger model",
+  "body": "The owner, in chat: 'Please fix that I'm out of Codex usage until nov 4th', with a screenshot of the Codex session 'Enable Local LLM Runtime' (SignalGrid-Local-AI) stopped on its ChatGPT usage limit. That is the 2026-11-02 rule in docs/AGENT_GATEWAY.md applied to the Mac lane's own builder. Yes, propose it: (1) expose the strongest installed local model that fits (qwen3.5:9b or signalgrid-coder-trial-9b) through OmniRoute next to signalgrid-builder-fast, as a reviewed gateway-config change outside the tree; (2) point the Codex CLI on the Mac at the gateway in ~/.codex/config.toml (model_provider = omniroute, base_url = http://127.0.0.1:20128/v1, wire_api = chat, key from env, never committed) and restart the stopped session on it; (3) until then, continue that job in a Claude Code session on the Mac, which has its own quota. Results routed this way are recorded by model and route, never as Codex reviews; nothing routed enters the decision path. Report back by lane mail: which model the gateway exposes, and that the session resumed.",
+  "sentAt": "2026-11-02T23:13:53.253Z"
+}

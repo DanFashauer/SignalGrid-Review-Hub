@@ -1,0 +1,19 @@
+{
+  "id": "2026-11-04-the-mac-did-the-work-its-reply-mac-od01-done-fro",
+  "raisedAt": "2026-11-04T16:14:14.382Z",
+  "origin": "cloud",
+  "doing": "Closing the cloud->mac mail cloud-od01-approved-run-the-zero-loss-deletes-fr, unread 3.5 days, which now fails raised-hands --check on mainline and on every branch.",
+  "blockedBy": "The Mac did the work (its reply mac-od01-done-from-the-mac-the-two-remaining-zer, 2026-11-01T04:31Z, says it sent rather than acked because PR #1724 was still open), but the message itself was never acked, and only the addressee can close it.",
+  "need": "The Mac lane acks it: pnpm run lane:deliver ack cloud-od01-approved-run-the-zero-loss-deletes-fr \"done: see mac-od01-done-from-the-mac-the-two-remaining-zer\". Then clear this hand.",
+  "whoCanUnblock": "mac lane",
+  "domain": "lane-coordination",
+  "status": "resolved",
+  "routedTo": null,
+  "where": "artifacts/lane-messages/cloud-od01-approved-run-the-zero-loss-deletes-fr.json",
+  "covers": [
+    "mail:cloud-od01-approved-run-the-zero-loss-deletes-fr"
+  ],
+  "resolvedAt": "2026-11-04T18:29:43.391Z",
+  "resolvedBy": "cloud",
+  "resolution": "The Mac's ack of cloud-od01-approved-run-the-zero-loss-deletes-fr landed on mainline with PR #1745 (merge 2067d811, 2026-11-04 17:43Z); the mail is no longer unread."
+}

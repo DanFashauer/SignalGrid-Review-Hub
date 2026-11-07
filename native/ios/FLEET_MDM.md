@@ -203,6 +203,73 @@ not a substitute for it.
    https://github.com/apple/device-management/blob/release/mdm/commands/device.erase.yaml,
    both re-read 2026-09-24.
 
+## The tradeoff: Fleet against Jamf or Intune
+
+Fleet is the chosen MDM for the proof stack (DR-012 in `docs/DECISION_RECORDS.md`:
+Fleet-first, with Intune when a prospect brings a tenant). DR-012 records the
+*order*; this section records the *tradeoff* behind it, so the choice reads as a
+decision and not an assumption (plan row 167 in `docs/COMPANY_BUILD_PLAN.md`).
+
+**What Fleet buys.** Openness and infrastructure-as-code.
+- The source is public and self-hostable. Most of the repository is MIT; the
+  `ee/` directory is under Fleet's own licence
+  (https://github.com/fleetdm/fleet/blob/main/LICENSE). So "MIT" at the top of
+  this page is true of the core, not of every feature.
+- Configuration lives in Git as YAML and is applied with `fleetctl`
+  (`fleet/teams/signalgrid-shared-devices.yml`, `docs/IAC_GITOPS.md`).
+- osquery gives a live, queryable posture read, which is the signal SignalGrid
+  needs. The read path has been run against a real Fleet in private validation
+  (`docs/FLEET_LIVE_INTEGRATION.md`); the CI evidence is the fixture proof.
+- It costs nothing to stand up a lab, which suits the lean-IT first market DR-012 names.
+
+**What Fleet gives up.** Managed depth.
+- Teams, and so the host-transfer endpoint, are Fleet Premium; open-source Fleet
+  answers `422` (`docs/FLEET_LIVE_INTEGRATION.md`, "Boundary found"). A Premium
+  trial answered `200` on 2026-09-06 ("Cloud-lane run, 2026-09-06" in the same
+  file), so managed depth in Fleet is a paid tier, not an open one. SignalGrid
+  exposes no transfer call on either tier; the connector never actuates by design.
+- The fleet connector does not yet speak Declarative Device Management; the DDM
+  declarations above are delivered by "the MDM's declarative channel", not by
+  anything in this tree.
+- Jamf is the repo's own named "Apple-depth" path: ABM/ADE, DDM, Managed Device
+  Attestation, Platform SSO and Self Service (`docs/INTEGRATION_CATALOG.md`,
+  "Jamf / Apple-specific posture connector path"). Jamf Pro manages Apple
+  devices only (https://www.jamf.com/products/jamf-pro/).
+- Intune's device compliance feeds Microsoft Entra Conditional Access
+  directly, which needs an Entra ID P1 or P2 licence
+  (https://learn.microsoft.com/intune/device-security/conditional-access-integration/overview).
+  An estate already on Microsoft 365 gets that gate without a second vendor.
+
+**When Jamf or Intune is the conservative choice.**
+- **Jamf** — an Apple-heavy shared-device estate (for example ward iPads) that
+  wants the deepest Apple workflow and an admin team that works in a console,
+  not in Git.
+- **Intune** — any estate that already runs Entra and Microsoft 365, or has
+  Windows as well as Apple devices, where compliance-to-access is the need.
+- **Either** — when the buyer already owns one. Intune and Jamf can coexist
+  in one estate (`docs/company/ICP_EVIDENCE.md`), and SignalGrid reads the one
+  that is there; it never replaces it (`docs/ECOSYSTEM_POSITIONING.md`).
+
+**Why Fleet still, for now.** SignalGrid reads evidence and does not own the
+device. The `DeviceManagementEvidence` contract is the boundary (DR-013), so the
+MDM is a source, not a dependency. Fleet is the one that is open, free to run
+and scriptable, which is what a proof needs. The Graph/Intune adapter already
+exists (`lib/integrations/src/integrations/graph/posture-connector.ts`) and
+awaits a real tenant. A read-only Jamf Pro normalizer also exists
+(`lib/integrations/src/integrations/uem/jamf.ts`, covered by `proof:uem`), but
+the repository ships no live UEM transport (`lib/integrations/src/integrations/uem/index.ts`)
+and no Jamf tenant has been read.
+
+**What does not change with the MDM.** Whichever one is used, the kiosk (ASAM),
+the app allow-list and the non-removable install need a **supervised** device
+enrolled through Apple Business Manager, with APNs. The shell cannot kiosk
+itself, and none of this can be shown in the Simulator. Choosing Jamf or
+Intune changes the console, not this.
+
+**Known drift.** `docs/INTEGRATION_CATALOG.md` still ranks "Intune/Entra first;
+Jamf Apple-depth second", which predates DR-012's Fleet-first order. This
+section does not settle that; DR-012 is the record.
+
 ## Partnership note
 Fleet manages + observes the device (open source, osquery, GitOps); SignalGrid
 adds the trust/Assist conditional-access gate on top. Clean ecosystem split — a

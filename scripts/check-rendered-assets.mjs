@@ -56,6 +56,7 @@
  */
 
 import { execFileSync } from 'node:child_process';
+import { scratchGitOk, scrubProcessGitEnv } from './lib/scratch-git.mjs';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -68,6 +69,7 @@ import {
   sha256,
   trackedFiles,
 } from './render-preview-assets.mjs';
+import { isMainModule } from './lib/is-main.mjs';
 
 /**
  * Floor on the derivation, not a scope list. The tree currently derives exactly
@@ -282,12 +284,13 @@ function makeFixture(name, { manifestMutator, extraPng = false, sourceSuffix = '
   if (manifestMutator) manifestMutator(manifest, { dir, srcRel, pngRel });
   fs.writeFileSync(path.join(assets, 'renders.json'), JSON.stringify(manifest, null, 2) + '\n');
 
-  execFileSync('git', ['-C', dir, 'init', '-q']);
-  execFileSync('git', ['-C', dir, 'add', '-A']);
+  scratchGitOk(dir, ['init', '-q']);
+  scratchGitOk(dir, ['add', '-A']);
   return { dir, srcRel, pngRel };
 }
 
 function selfTest() {
+  scrubProcessGitEnv(); // inherited GIT_DIR/GIT_WORK_TREE/GIT_INDEX_FILE would aim the gate's own plain-git calls at the real repo
   const manifestRel = 'docs/preview/assets/renders.json';
   const cases = [];
   const record = (label, expectFail, result, mustMention) => {
@@ -422,7 +425,7 @@ function main(argv) {
 }
 
 const invokedDirectly =
-  process.argv[1] && pathToFileURL(path.resolve(process.argv[1])).href === import.meta.url;
+  isMainModule(process.argv[1], import.meta.url);
 if (invokedDirectly) {
   try {
     process.exit(main(process.argv.slice(2)));

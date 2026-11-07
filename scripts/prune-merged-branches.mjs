@@ -411,8 +411,16 @@ for (const b of branches) {
   const merged = prs.filter((p) => p.merged_at);
   if (merged.length > 0) {
     const newest = merged.sort((a, b2) => (a.merged_at < b2.merged_at ? 1 : -1))[0];
-    doomed.push({ name, sha, why: `PR #${newest.number} merged ${newest.merged_at}` });
-    continue;
+    // A merged PR covers the branch only up to the head it merged. If the branch tip is
+    // any merged PR's head, every commit on it landed. Otherwise commits were added
+    // after the merge (a later closed PR, or no PR at all): on 2026-11-07 the first
+    // apply run deleted seven such branches (mac/native-ledger-2026-09-02 among them)
+    // and they had to be restored by hand. Fall through to the containment check, which
+    // releases the branch only when mainline already holds its tip.
+    if (merged.some((p) => p.head?.sha === sha)) {
+      doomed.push({ name, sha, why: `PR #${newest.number} merged ${newest.merged_at}` });
+      continue;
+    }
   }
 
   // SECOND SUFFICIENT CONDITION: CONTAINMENT. A branch can be fully absorbed into
@@ -450,7 +458,9 @@ for (const b of branches) {
   const unmerged =
     prs.length === 0
       ? `no pull request, and ${cmp.ahead_by} commit(s) exist ONLY here (${cmp.status}) — this is unmerged work`
-      : `PR(s) closed WITHOUT merging, and ${cmp.ahead_by} commit(s) exist ONLY here (${cmp.status})`;
+      : merged.length > 0
+        ? `commits added after its merged PR, and ${cmp.ahead_by} commit(s) exist ONLY here (${cmp.status})`
+        : `PR(s) closed WITHOUT merging, and ${cmp.ahead_by} commit(s) exist ONLY here (${cmp.status})`;
 
   if (FORCE.has(name)) {
     forced.push({ name, sha, unique: cmp.ahead_by, note: unmerged });

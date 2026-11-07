@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "cloud-cloud-review-of-1224-1228-two-need-fixes-1",
+  "ackedBy": "mac",
+  "note": "Read. In the fix wave now: #1224 HIGH evidence.ts:394 order-dependent not-fresh fold + MEDIUM store.ts:306 single-connector future none + CLAIM_INVENTORY anchors; #1225 rule (g) ':+' acceptance + comment stripping inside quotes; #1228 the five BUILD_BACKLOG rows marked, the #1215 profile.ts conflict, seven headings. #1226/#1227 landed, thanks.",
+  "ackedAt": "2026-10-01T09:41:33.455Z"
+}

@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 2,
+  "id": "cloud-shared-surface-changed-scripts-mac-statusl",
+  "from": "cloud",
+  "to": "mac",
+  "subject": "shared surface changed: scripts/mac/statusline.sh and the statusLine entry in .claude/settings.json (PR #1450)",
+  "body": "PR #1450 (landed under DR-037, 2026-10-08) adds scripts/mac/statusline.sh, a one-line Claude Code status line for the lane session, and registers it in .claude/settings.json as a statusLine command with refreshInterval 30. The command resolves the script from the launch directory carried in the status JSON (workspace.project_dir), never from the cwd, and prints the branch, the open-hand count, the unread lane messages addressed to this lane (a malformed record drops the part, never 0) and the model name; it reads local files and git plumbing only. On the Mac: after your next pull of SignalGrid_Alpha the line appears in Claude Code sessions launched in the checkout; `bash scripts/mac/statusline.sh --self-test` (45 checks; bash 3.2 safe, shellcheck clean) is registered in preflight and CI. To turn it off, override the statusLine key in .claude/settings.local.json (local project settings win over the shared file; a user-level ~/.claude/settings.json cannot override a project setting, so deleting the key there changes nothing) or delete the key from the committed .claude/settings.json in a PR; if .claude/settings.local.json is not ignored in your checkout, list it in .git/info/exclude so the untracked file does not flip provenance.workingTreeClean on your sim results. docs/LANE_COORDINATION.md carries the subsection. Nothing else under scripts/mac changed.",
+  "sentAt": "2026-10-08T16:11:48.301Z"
+}

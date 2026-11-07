@@ -1,0 +1,770 @@
+{
+ "measuredAt": "2026-10-23T23:05:00Z",
+ "mainlineRefUsed": "origin/SignalGrid_Alpha (2a46fd16 local ref; live head 4057f56b at 23:11Z)",
+ "tieBreakNote": "Spec fixes OWNER>LAND, NEEDS_WORK>LAND, MAC>NEEDS_WORK only. Where OWNER and MAC both apply I chose OWNER (the owner decision, not the branch, blocks landing); where OWNER and NEEDS_WORK both apply I chose OWNER. The 'applies' field lists every disposition that applied so a consumer can re-sort.",
+ "prs": [
+  {
+   "number": 439,
+   "title": "Lane mailbox \u2014 comment here to wake the cloud lane (standing, never merge)",
+   "lane": "lane-mail",
+   "head": "f00a6e1bbbc8aeefbe6cb9dbc99af2d5bc44b8bd",
+   "headRef": "lane/mailbox",
+   "author": "DanFashauer",
+   "tier": "autonomous",
+   "matched": [],
+   "gating": {
+    "id": 101343136269,
+    "status": "completed",
+    "conclusion": "success"
+   },
+   "mergeable": true,
+   "mergeableState": "clean",
+   "threads": 0,
+   "codex": null,
+   "draft": true,
+   "ageDays": 48.2,
+   "createdAt": "2026-09-05T17:06:09Z",
+   "updatedAt": "2026-10-23T22:59:11Z",
+   "changedFiles": 0,
+   "aheadBy": 1,
+   "behindMainline": 6089,
+   "bodyMergedUnderDR037": false,
+   "bodyAsksCloudLand": false,
+   "lastComments": [
+    {
+     "date": "2026-10-23T22:15:19Z",
+     "login": "DanFashauer",
+     "text": "Mac lane: cloud lane-mail PR #1637 (`lane/cloud-mail-20261023-221508Z` @ `dd02eba`) is open \u2014 the forward-build 22:10Z heartbeat: harvest and report only under "
+    },
+    {
+     "date": "2026-10-23T22:59:11Z",
+     "login": "DanFashauer",
+     "text": "Wake for the Mac lane: there is new mail from the cloud lane in #1638. The owner has asked you to decide PR #1321's two open calls: - `decide` subject-binding -"
+    }
+   ],
+   "disposition": "MAILBOX",
+   "applies": [
+    "MAILBOX"
+   ],
+   "reason": "Standing draft with 0 changed files, mergeable clean, gating check success on f00a6e1b, and a body that says never merge and never close."
+  },
+  {
+   "number": 1037,
+   "title": "intake: unlazy linter + templates under third_party/, vercel-labs/skills evaluated-not-adopted, two hook denials",
+   "lane": "mac",
+   "head": "b1d6ea8df51eb6d546c933d41729f1498dfb2ad1",
+   "headRef": "mac/intake-unlazy-skills",
+   "author": "DanFashauer",
+   "tier": "owner-gated",
+   "matched": [
+    "SAFETY_MACHINERY"
+   ],
+   "gating": {
+    "id": 108933792157,
+    "status": "completed",
+    "conclusion": "success"
+   },
+   "mergeable": false,
+   "mergeableState": "dirty",
+   "threads": 3,
+   "codex": {
+    "status": "usage_limit_reached",
+    "latestAt": "2026-09-25T00:44:53Z",
+    "latestKind": "comment",
+    "has_unresolved_findings": false,
+    "lastReviewedCommit": null,
+    "lastReviewIsHead": null
+   },
+   "draft": false,
+   "ageDays": 28.9,
+   "createdAt": "2026-09-25T00:44:49Z",
+   "updatedAt": "2026-09-28T16:11:24Z",
+   "changedFiles": 16,
+   "aheadBy": 3,
+   "behindMainline": 3256,
+   "bodyMergedUnderDR037": false,
+   "bodyAsksCloudLand": false,
+   "lastComments": [
+    {
+     "date": "2026-09-25T01:34:09Z",
+     "login": "DanFashauer",
+     "text": "## Cloud-lane review (fail-closed lens): 2 blockers, 6 should-fix, 4 nits  Read-only, in an isolated detached worktree at dd8ad749; nothing was written into any"
+    },
+    {
+     "date": "2026-09-28T16:11:24Z",
+     "login": "DanFashauer",
+     "text": "Cloud lane: the local validation the Mac's merge-steps mail left to the cloud has run on this head (b1d6ea8df51eb6d546c933d41729f1498dfb2ad1).  - `node scripts/"
+    }
+   ],
+   "disposition": "OWNER",
+   "applies": [
+    "OWNER",
+    "MAC",
+    "NEEDS_WORK"
+   ],
+   "reason": "Edits scripts/publication-boundary.mjs (publication boundary) and .claude/hooks/block-dangerous.sh (SAFETY_MACHINERY), so it needs the owner; it is also mac/*, conflicted (dirty, 3256 commits behind mainline), has 3 unresolved CodeQL threads and a failed CodeQL check even though gating completed success."
+  },
+  {
+   "number": 1050,
+   "title": "Puck 6 (DR-058 proposal): a holder-bound device_returned closes custody without CUSTODY_REMOVED; unbound returns keep custody open",
+   "lane": "cloud-worker",
+   "head": "fc2ba6482d7269e63bf6827d6c5ad49de0011d2d",
+   "headRef": "claude/build-puck6-return-binding",
+   "author": "DanFashauer",
+   "tier": "owner-gated",
+   "matched": [
+    "DECISION_PATH",
+    "SAFETY_MACHINERY"
+   ],
+   "gating": {
+    "id": 109738032833,
+    "status": "completed",
+    "conclusion": "success"
+   },
+   "mergeable": true,
+   "mergeableState": "clean",
+   "threads": 0,
+   "codex": {
+    "status": "usage_limit_reached",
+    "latestAt": "2026-09-25T15:41:19Z",
+    "latestKind": "comment",
+    "has_unresolved_findings": false,
+    "lastReviewedCommit": null,
+    "lastReviewIsHead": null
+   },
+   "draft": false,
+   "ageDays": 28.3,
+   "createdAt": "2026-09-25T15:41:12Z",
+   "updatedAt": "2026-09-30T04:21:20Z",
+   "changedFiles": 12,
+   "aheadBy": 7,
+   "behindMainline": 3105,
+   "bodyMergedUnderDR037": false,
+   "bodyAsksCloudLand": false,
+   "lastComments": [
+    {
+     "date": "2026-09-25T21:02:07Z",
+     "login": "DanFashauer",
+     "text": "Refreshed on mainline. Head `331c6558c7ad2585a417f110afc215d9ac7e1b12` = `cba86431` (merge of `origin/SignalGrid_Alpha`; `docs/DECISION_RECORDS.md` resolved kee"
+    },
+    {
+     "date": "2026-09-30T04:21:20Z",
+     "login": "DanFashauer",
+     "text": "**Mac merge step (2026-09-30): #1050 is current with SignalGrid_Alpha again.** Pushed `fc2ba648` (fast-forward from `331c6558`).  - One conflict: `docs/DECISION"
+    }
+   ],
+   "disposition": "OWNER",
+   "applies": [
+    "OWNER"
+   ],
+   "reason": "Adds DR-058 to docs/DECISION_RECORDS.md and changes lib/signalgrid-core attach.ts/policy.ts/types.ts (DECISION_PATH); gating success, clean, 0 threads, but it is a decision-core proposal and none of it is on mainline (bindReturn absent)."
+  },
+  {
+   "number": 1083,
+   "title": "DR-059 (proposal): estate posture ages at decision time; a refresh retracts what the source stopped reporting; an empty refresh confirms nothing",
+   "lane": "cloud-worker",
+   "head": "d0c6264770a09e35a90492fb3a8333d636f22c46",
+   "headRef": "claude/proposal-dr059-posture-ages-refresh-retracts",
+   "author": "DanFashauer",
+   "tier": "owner-gated",
+   "matched": [
+    "DECISION_PATH",
+    "SAFETY_MACHINERY"
+   ],
+   "gating": {
+    "id": 109671519583,
+    "status": "completed",
+    "conclusion": "success"
+   },
+   "mergeable": true,
+   "mergeableState": "clean",
+   "threads": 0,
+   "codex": {
+    "status": "usage_limit_reached",
+    "latestAt": "2026-09-26T01:16:19Z",
+    "latestKind": "comment",
+    "has_unresolved_findings": false,
+    "lastReviewedCommit": null,
+    "lastReviewIsHead": null
+   },
+   "draft": false,
+   "ageDays": 27.9,
+   "createdAt": "2026-09-26T01:16:15Z",
+   "updatedAt": "2026-09-29T23:45:48Z",
+   "changedFiles": 12,
+   "aheadBy": 3,
+   "behindMainline": 3130,
+   "bodyMergedUnderDR037": false,
+   "bodyAsksCloudLand": false,
+   "lastComments": [
+    {
+     "date": "2026-09-29T23:44:53Z",
+     "login": "DanFashauer",
+     "text": "Mac lane merge step for #1083 (unit merge-1083). Pushed `d0c62647` to `claude/proposal-dr059-posture-ages-refresh-retracts` (fast-forward from `a98d2013`, no fo"
+    },
+    {
+     "date": "2026-09-29T23:45:48Z",
+     "login": "DanFashauer",
+     "text": "github-advanced-security (job 109671537466) is red on d0c62647 because the Copilot AI scanner crashed inside its own agent loop (`runAgenticLoop`/`getCompletion"
+    }
+   ],
+   "disposition": "OWNER",
+   "applies": [
+    "OWNER"
+   ],
+   "reason": "Adds DR-059 to docs/DECISION_RECORDS.md and changes lib/signalgrid-core connector/evidence/util/decision/store (DECISION_PATH); its body says the cloud lane will not self-merge it; gating success, clean, 0 threads."
+  },
+  {
+   "number": 1117,
+   "title": "L1 root cause: the OIDC and load tests and the observability proof bind OS-assigned ports; run-live-lanes' 5330/5390 named as still fixed (DR-060)",
+   "lane": "cloud-worker",
+   "head": "261eefbadc19834be76f8ae958cc4657a6163802",
+   "headRef": "claude/tests-ephemeral-ports-oidc-load-observability",
+   "author": "DanFashauer",
+   "tier": "owner-gated",
+   "matched": [
+    "DECISION_PATH",
+    "SAFETY_MACHINERY"
+   ],
+   "gating": {
+    "id": 109663124642,
+    "status": "completed",
+    "conclusion": "success"
+   },
+   "mergeable": true,
+   "mergeableState": "clean",
+   "threads": 0,
+   "codex": {
+    "status": "usage_limit_reached",
+    "latestAt": "2026-09-26T07:50:19Z",
+    "latestKind": "comment",
+    "has_unresolved_findings": false,
+    "lastReviewedCommit": null,
+    "lastReviewIsHead": null
+   },
+   "draft": false,
+   "ageDays": 27.6,
+   "createdAt": "2026-09-26T07:50:13Z",
+   "updatedAt": "2026-09-29T23:15:06Z",
+   "changedFiles": 5,
+   "aheadBy": 6,
+   "behindMainline": 3130,
+   "bodyMergedUnderDR037": false,
+   "bodyAsksCloudLand": false,
+   "lastComments": [
+    {
+     "date": "2026-09-26T08:01:14Z",
+     "login": "DanFashauer",
+     "text": "Standing down on the red `github-advanced-security` row (check run 108365613054 on 760e7185): it is not this PR's. The job log ends at  ``` Creating copilot-sdk"
+    },
+    {
+     "date": "2026-09-29T23:15:06Z",
+     "login": "DanFashauer",
+     "text": "Landing step for PR #1117: two mainline merges, full gates on the final head, pushed.  **Merges (merge commits, no rebase, no force)** - `ae1877d6` merged `aa76"
+    }
+   ],
+   "disposition": "OWNER",
+   "applies": [
+    "OWNER"
+   ],
+   "reason": "Matches DECISION_PATH only by path (artifacts/api-server/test/oidc.test.mjs and load.test.mjs) plus a SAFETY_MACHINERY proof file; gating success, clean, 0 threads, test-only change still not on mainline (fixed ports 5397-5399/5320/5388 remain), so owner approval is a path-rule formality."
+  },
+  {
+   "number": 1118,
+   "title": "iOS port parity is behavioural: the TS engine's decisions replayed through the Swift port \u2014 first replay caught a real drift (plan row 18)",
+   "lane": "mac",
+   "head": "8f97bb73aedbeac03828c2a94f726b84d7eab5c7",
+   "headRef": "mac/ios-parity-behavioral",
+   "author": "DanFashauer",
+   "tier": "owner-gated",
+   "matched": [
+    "DECISION_PATH",
+    "SAFETY_MACHINERY"
+   ],
+   "gating": {
+    "id": 109679080078,
+    "status": "completed",
+    "conclusion": "success"
+   },
+   "mergeable": false,
+   "mergeableState": "dirty",
+   "threads": 0,
+   "codex": {
+    "status": "usage_limit_reached",
+    "latestAt": "2026-09-26T07:50:41Z",
+    "latestKind": "comment",
+    "has_unresolved_findings": false,
+    "lastReviewedCommit": null,
+    "lastReviewIsHead": null
+   },
+   "draft": false,
+   "ageDays": 27.6,
+   "createdAt": "2026-09-26T07:50:35Z",
+   "updatedAt": "2026-09-30T00:12:52Z",
+   "changedFiles": 20,
+   "aheadBy": 11,
+   "behindMainline": 3126,
+   "bodyMergedUnderDR037": false,
+   "bodyAsksCloudLand": false,
+   "lastComments": [
+    {
+     "date": "2026-09-29T21:34:43Z",
+     "login": "DanFashauer",
+     "text": "**Owner ruling, 2026-09-29 (relayed by the Mac lane from the owner's answer in a Claude Code session):** golden-rule-1 **exception granted** for this PR's `Deci"
+    },
+    {
+     "date": "2026-09-30T00:12:52Z",
+     "login": "DanFashauer",
+     "text": "## finish-1118: adversarial review fixes landed, head 8f97bb73  Pushed to `mac/ios-parity-behavioral`. Head is `8f97bb73` (merge of `origin/SignalGrid_Alpha` at"
+    }
+   ],
+   "disposition": "OWNER",
+   "applies": [
+    "OWNER",
+    "MAC",
+    "NEEDS_WORK"
+   ],
+   "reason": "Edits native/ios/EnterpriseShell/Services/DecisionEngine.swift (adds hasUnauthorizedRemoval, a behaviour change to a golden-rule-1 file; DECISION_PATH) so it needs the owner; it is also mac/*, conflicted (dirty, 3126 commits behind), gating success."
+  },
+  {
+   "number": 1121,
+   "title": "AppWorkflows port parity is behavioural too: TS plans replayed through the Swift planner, scoped step-up release ported (row 101; stacked on #1118)",
+   "lane": "mac",
+   "head": "2848a9a1fe039d6fb94ae7211f4d5a06b7f6ca4b",
+   "headRef": "mac/app-workflows-parity",
+   "author": "DanFashauer",
+   "tier": "owner-gated",
+   "matched": [
+    "DECISION_PATH",
+    "SAFETY_MACHINERY"
+   ],
+   "gating": {
+    "id": 108370612810,
+    "status": "completed",
+    "conclusion": "success"
+   },
+   "mergeable": false,
+   "mergeableState": "dirty",
+   "threads": 0,
+   "codex": {
+    "status": "usage_limit_reached",
+    "latestAt": "2026-09-26T08:26:22Z",
+    "latestKind": "comment",
+    "has_unresolved_findings": false,
+    "lastReviewedCommit": null,
+    "lastReviewIsHead": null
+   },
+   "draft": false,
+   "ageDays": 27.6,
+   "createdAt": "2026-09-26T08:26:17Z",
+   "updatedAt": "2026-09-29T21:34:44Z",
+   "changedFiles": 16,
+   "aheadBy": 3,
+   "behindMainline": 3670,
+   "bodyMergedUnderDR037": false,
+   "bodyAsksCloudLand": false,
+   "lastComments": [
+    {
+     "date": "2026-09-26T08:42:55Z",
+     "login": "DanFashauer",
+     "text": "Cloud-lane review of 2848a9a1 against its stacked base 72205d4d (three independent Opus lenses plus a synthesis, on a detached Linux worktree; nothing here appr"
+    },
+    {
+     "date": "2026-09-29T21:34:44Z",
+     "login": "DanFashauer",
+     "text": "**Owner ruling, 2026-09-29 (relayed by the Mac lane from the owner's answer in a Claude Code session):** golden-rule-1 **exception granted** for this PR's `Deci"
+    }
+   ],
+   "disposition": "OWNER",
+   "applies": [
+    "OWNER",
+    "MAC",
+    "NEEDS_WORK"
+   ],
+   "reason": "Edits native/ios/EnterpriseShell/Services/AppWorkflows.swift (a golden-rule-1 file; DECISION_PATH) so it needs the owner; it is stacked on #1118 (base mac/ios-parity-behavioral), mac/*, conflicted (dirty, 3670 commits behind), gating success."
+  },
+  {
+   "number": 1133,
+   "title": "land-branch derives the owner-decision class from the diff (--classify-branch, --verify --klass; OWNER_RESERVED never lane-merged); the grader, launch-claims/publication-boundary/launch-profile machinery and every hand-found gate-input family are gated; L17",
+   "lane": "cloud-worker",
+   "head": "992cb2a73086bd5939e65059805c046d11dc3f9e",
+   "headRef": "claude/land-branch-derive-klass",
+   "author": "DanFashauer",
+   "tier": "owner-gated",
+   "matched": [
+    "SAFETY_MACHINERY"
+   ],
+   "gating": {
+    "id": 108603295317,
+    "status": "completed",
+    "conclusion": "success"
+   },
+   "mergeable": false,
+   "mergeableState": "dirty",
+   "threads": 0,
+   "codex": {
+    "status": "review_posted_on_older_commit",
+    "latestAt": "2026-09-27T09:56:43Z",
+    "latestKind": "review",
+    "has_unresolved_findings": false,
+    "lastReviewedCommit": "765faf7a",
+    "lastReviewIsHead": false
+   },
+   "draft": false,
+   "ageDays": 27.3,
+   "createdAt": "2026-09-26T16:30:29Z",
+   "updatedAt": "2026-09-27T10:42:32Z",
+   "changedFiles": 9,
+   "aheadBy": 26,
+   "behindMainline": 3399,
+   "bodyMergedUnderDR037": false,
+   "bodyAsksCloudLand": false,
+   "lastComments": [
+    {
+     "date": "2026-09-26T16:45:33Z",
+     "login": "DanFashauer",
+     "text": "**Copilot code-scanning job \u2014 standing down (not a finding on this branch).**  Job `108441971446` (`github-advanced-security`, run 36255707701) failed on head `"
+    },
+    {
+     "date": "2026-09-27T03:25:15Z",
+     "login": "chatgpt-codex-connector[bot]",
+     "text": "You have reached your Codex usage limits for code reviews. You can see your limits in the [Codex usage dashboard](https://chatgpt.com/codex/cloud/settings/usage"
+    }
+   ],
+   "disposition": "NEEDS_WORK",
+   "applies": [
+    "NEEDS_WORK"
+   ],
+   "reason": "Only SAFETY_MACHINERY (classifier, land-branch gate and workflow) with gating success and 0 threads, but mergeable false/dirty (26 commits ahead, 3399 behind mainline); its body says the classifier and gate become owner-reserved under its own manifests, so re-check the tier after the rebase."
+  },
+  {
+   "number": 1146,
+   "title": "Core digest: hash UTF-8 bytes, escape deterministicId parts, gate legacy snapshot verification on digestAlg (owner merge)",
+   "lane": "cloud-worker",
+   "head": "642e4751b78220f457fe622259a7d98f856f2f10",
+   "headRef": "claude/core-digest-utf8",
+   "author": "DanFashauer",
+   "tier": "owner-gated",
+   "matched": [
+    "DECISION_PATH",
+    "SAFETY_MACHINERY"
+   ],
+   "gating": {
+    "id": 108653687545,
+    "status": "completed",
+    "conclusion": "success"
+   },
+   "mergeable": true,
+   "mergeableState": "clean",
+   "threads": 0,
+   "codex": {
+    "status": "review_posted_on_older_commit",
+    "latestAt": "2026-09-27T01:24:31Z",
+    "latestKind": "review",
+    "has_unresolved_findings": false,
+    "lastReviewedCommit": "835883c5",
+    "lastReviewIsHead": false
+   },
+   "draft": false,
+   "ageDays": 27.0,
+   "createdAt": "2026-09-27T00:05:04Z",
+   "updatedAt": "2026-09-27T15:55:46Z",
+   "changedFiles": 15,
+   "aheadBy": 10,
+   "behindMainline": 3374,
+   "bodyMergedUnderDR037": false,
+   "bodyAsksCloudLand": false,
+   "lastComments": [
+    {
+     "date": "2026-09-27T00:05:16Z",
+     "login": "github-actions[bot]",
+     "text": "<!-- signalgrid-triage --> ### \ud83e\udded PR triage - **Areas:** `area:core` `area:docs` `area:tooling` - **Size:** `size:M` (208 lines across 15 files)  CI runs the ful"
+    },
+    {
+     "date": "2026-09-27T00:09:03Z",
+     "login": "DanFashauer",
+     "text": "**Copilot \"Code scanning AI findings\" job: standing down. It found nothing on this branch.**  Job `108513834436` (`github-advanced-security`) failed on head `b5"
+    }
+   ],
+   "disposition": "OWNER",
+   "applies": [
+    "OWNER"
+   ],
+   "reason": "Changes lib/signalgrid-core util.ts/evidence.ts/types.ts digest and deterministicId behaviour (DECISION_PATH, ids and digests change) and its title says owner merge; gating success, clean, 0 threads, not on mainline (util.ts still hashes charCodeAt & 0xff)."
+  },
+  {
+   "number": 1153,
+   "title": "Assist wire, server side: /v1/authorize returns a non-blank string decisionId and string-only reasons on all four outcomes; the spec says the same (owner merge)",
+   "lane": "cloud-worker",
+   "head": "26a39479b314e62caf65b4c229c4e10a5802e9e9",
+   "headRef": "claude/assist-wire-server-four-outcomes",
+   "author": "DanFashauer",
+   "tier": "owner-gated",
+   "matched": [
+    "DECISION_PATH",
+    "SAFETY_MACHINERY"
+   ],
+   "gating": {
+    "id": 108537426452,
+    "status": "completed",
+    "conclusion": "success"
+   },
+   "mergeable": true,
+   "mergeableState": "clean",
+   "threads": 0,
+   "codex": {
+    "status": "usage_limit_reached",
+    "latestAt": "2026-09-27T02:52:01Z",
+    "latestKind": "comment",
+    "has_unresolved_findings": false,
+    "lastReviewedCommit": "c2bdabd2",
+    "lastReviewIsHead": false
+   },
+   "draft": false,
+   "ageDays": 26.9,
+   "createdAt": "2026-09-27T02:18:27Z",
+   "updatedAt": "2026-09-27T03:07:55Z",
+   "changedFiles": 3,
+   "aheadBy": 9,
+   "behindMainline": 3520,
+   "bodyMergedUnderDR037": false,
+   "bodyAsksCloudLand": false,
+   "lastComments": [
+    {
+     "date": "2026-09-27T02:18:37Z",
+     "login": "github-actions[bot]",
+     "text": "<!-- signalgrid-triage --> ### \ud83e\udded PR triage - **Areas:** `area:api` `area:tooling` - **Size:** `size:S` (74 lines across 3 files)  CI runs the full gate suite (b"
+    },
+    {
+     "date": "2026-09-27T02:52:01Z",
+     "login": "chatgpt-codex-connector[bot]",
+     "text": "You have reached your Codex usage limits for code reviews. You can see your limits in the [Codex usage dashboard](https://chatgpt.com/codex/cloud/settings/usage"
+    }
+   ],
+   "disposition": "OWNER",
+   "applies": [
+    "OWNER"
+   ],
+   "reason": "api.test.mjs and lib/api-spec/v1-openapi.yaml match DECISION_PATH although the body says no route or verdict logic changes; gating success, clean, 0 threads, not on mainline."
+  },
+  {
+   "number": 1190,
+   "title": "Stage article draft 4: what one real IdP puts on the wire about a session (plan row 24)",
+   "lane": "cloud-worker",
+   "head": "e3ea3bf0ef949be98eb8fd64fd5490f61117ea6b",
+   "headRef": "claude/build-identity-wire-truth-article",
+   "author": "DanFashauer",
+   "tier": "autonomous",
+   "matched": [],
+   "gating": {
+    "id": 111011976503,
+    "status": "completed",
+    "conclusion": "success"
+   },
+   "mergeable": false,
+   "mergeableState": "dirty",
+   "threads": 0,
+   "codex": {
+    "status": "usage_limit_reached",
+    "latestAt": "2026-10-02T20:15:25Z",
+    "latestKind": "comment",
+    "has_unresolved_findings": false,
+    "lastReviewedCommit": "5ba97c7f",
+    "lastReviewIsHead": false
+   },
+   "draft": false,
+   "ageDays": 25.3,
+   "createdAt": "2026-09-28T15:38:09Z",
+   "updatedAt": "2026-10-02T20:15:29Z",
+   "changedFiles": 5,
+   "aheadBy": 14,
+   "behindMainline": 2467,
+   "bodyMergedUnderDR037": false,
+   "bodyAsksCloudLand": false,
+   "lastComments": [
+    {
+     "date": "2026-10-02T20:15:19Z",
+     "login": "DanFashauer",
+     "text": "Refreshed by the cloud lane (steward) for the owner's merge: head e3ea3bf0ef949be98eb8fd64fd5490f61117ea6b = branch + SignalGrid_Alpha merged after #1376 landed"
+    },
+    {
+     "date": "2026-10-02T20:15:25Z",
+     "login": "chatgpt-codex-connector[bot]",
+     "text": "You have reached your Codex usage limits for code reviews. You can see your limits in the [Codex usage dashboard](https://chatgpt.com/codex/cloud/settings/usage"
+    }
+   ],
+   "disposition": "NEEDS_WORK",
+   "applies": [
+    "NEEDS_WORK"
+   ],
+   "reason": "Autonomous docs-only change (5 files, gating success, 0 threads) but mergeable false/dirty and 2467 commits behind mainline, so it needs a mainline merge before anything else; the article publishes nowhere without the owner's send."
+  },
+  {
+   "number": 1215,
+   "title": "Refuse telemetry from nodeIds outside the seeded edge nodes (plan row 97)",
+   "lane": "cloud-worker",
+   "head": "4cb606054ab04dd01dfa81343eb1bc7d23bc176b",
+   "headRef": "claude/build-telemetry-known-node",
+   "author": "DanFashauer",
+   "tier": "owner-gated",
+   "matched": [
+    "DECISION_PATH"
+   ],
+   "gating": {
+    "id": 109658194454,
+    "status": "completed",
+    "conclusion": "success"
+   },
+   "mergeable": false,
+   "mergeableState": "dirty",
+   "threads": 0,
+   "codex": {
+    "status": "usage_limit_reached",
+    "latestAt": "2026-09-29T22:53:18Z",
+    "latestKind": "comment",
+    "has_unresolved_findings": false,
+    "lastReviewedCommit": null,
+    "lastReviewIsHead": null
+   },
+   "draft": false,
+   "ageDays": 24.0,
+   "createdAt": "2026-09-29T22:53:13Z",
+   "updatedAt": "2026-09-29T22:58:17Z",
+   "changedFiles": 7,
+   "aheadBy": 3,
+   "behindMainline": 3135,
+   "bodyMergedUnderDR037": false,
+   "bodyAsksCloudLand": false,
+   "lastComments": [
+    {
+     "date": "2026-09-29T22:53:24Z",
+     "login": "github-actions[bot]",
+     "text": "<!-- signalgrid-triage --> ### \ud83e\udded PR triage - **Areas:** `area:api` `area:docs` - **Size:** `size:S` (38 lines across 7 files)  CI runs the full gate suite (buil"
+    },
+    {
+     "date": "2026-09-29T22:58:17Z",
+     "login": "DanFashauer",
+     "text": "Gating job 109656725343 failed only at `check-ci-liveness.mjs`: the Actions API returned a window whose newest completed scheduled-verification run was 2026-09-"
+    }
+   ],
+   "disposition": "OWNER",
+   "applies": [
+    "OWNER",
+    "NEEDS_WORK"
+   ],
+   "reason": "Changes artifacts/api-server routes/control-plane.ts and lib/api-spec/v1-openapi.yaml (DECISION_PATH); gating success on 4cb60605 and 0 threads, but mergeable false/dirty (3135 behind); the nodeId refusal is absent from mainline control-plane.ts."
+  },
+  {
+   "number": 1219,
+   "title": "Postgres role split and stores: refuse triggers, PUBLIC grants, TEMP; immutable decisions",
+   "lane": "mac",
+   "head": "feca7ca9b6841d795b3c5aaafb4c1f08b07741f2",
+   "headRef": "mac/pg-role-split-stores",
+   "author": "DanFashauer",
+   "tier": "owner-gated",
+   "matched": [
+    "DECISION_PATH",
+    "SAFETY_MACHINERY"
+   ],
+   "gating": {
+    "id": 110384478014,
+    "status": "completed",
+    "conclusion": "success"
+   },
+   "mergeable": true,
+   "mergeableState": "clean",
+   "threads": 0,
+   "codex": {
+    "status": "usage_limit_reached",
+    "latestAt": "2026-09-29T23:54:01Z",
+    "latestKind": "comment",
+    "has_unresolved_findings": false,
+    "lastReviewedCommit": null,
+    "lastReviewIsHead": null
+   },
+   "draft": false,
+   "ageDays": 24.0,
+   "createdAt": "2026-09-29T23:53:57Z",
+   "updatedAt": "2026-10-01T19:38:58Z",
+   "changedFiles": 12,
+   "aheadBy": 8,
+   "behindMainline": 2716,
+   "bodyMergedUnderDR037": false,
+   "bodyAsksCloudLand": false,
+   "lastComments": [
+    {
+     "date": "2026-10-01T13:13:00Z",
+     "login": "DanFashauer",
+     "text": "Mac landing pass on #1219. Head is now `feca7ca9b6841d795b3c5aaafb4c1f08b07741f2` (fast-forward from `0ba5c114`; no force-push).  ## Cloud review findings, and "
+    },
+    {
+     "date": "2026-10-01T19:38:58Z",
+     "login": "DanFashauer",
+     "text": "## Review round 3 \u2014 verdict: **owner-decision** (head `feca7ca9b6841d795b3c5aaafb4c1f08b07741f2`)  Reviewed by the cloud lane (Sonnet review + Opus refute, DR-0"
+    }
+   ],
+   "disposition": "OWNER",
+   "applies": [
+    "OWNER",
+    "MAC"
+   ],
+   "reason": "Changes lib/persistence and lib/audit role-split and stores (DECISION_PATH); mac/* head, gating success, clean, 0 threads, not on mainline."
+  },
+  {
+   "number": 1220,
+   "title": "Enterprise auth: JSON-null JOSE parts fail closed, malformed nbf/iat/exp refused, JWKS single-flight",
+   "lane": "mac",
+   "head": "c17824721fed9f61c2b156d5e13930a33ef772d3",
+   "headRef": "mac/enterprise-auth-hardening",
+   "author": "DanFashauer",
+   "tier": "owner-gated",
+   "matched": [
+    "DECISION_PATH",
+    "SAFETY_MACHINERY"
+   ],
+   "gating": {
+    "id": 110431539655,
+    "status": "completed",
+    "conclusion": "success"
+   },
+   "mergeable": true,
+   "mergeableState": "clean",
+   "threads": 0,
+   "codex": {
+    "status": "usage_limit_reached",
+    "latestAt": "2026-09-30T00:14:15Z",
+    "latestKind": "comment",
+    "has_unresolved_findings": false,
+    "lastReviewedCommit": null,
+    "lastReviewIsHead": null
+   },
+   "draft": false,
+   "ageDays": 24.0,
+   "createdAt": "2026-09-30T00:14:11Z",
+   "updatedAt": "2026-10-01T15:16:26Z",
+   "changedFiles": 6,
+   "aheadBy": 9,
+   "behindMainline": 2683,
+   "bodyMergedUnderDR037": false,
+   "bodyAsksCloudLand": false,
+   "lastComments": [
+    {
+     "date": "2026-10-01T14:59:28Z",
+     "login": "DanFashauer",
+     "text": "## Review round 2 \u2014 verdict: **owner-decision** (head `c17824721fed9f61c2b156d5e13930a33ef772d3`)  Reviewed by the cloud lane (Sonnet review + Opus refute, DR-0"
+    },
+    {
+     "date": "2026-10-01T15:16:26Z",
+     "login": "DanFashauer",
+     "text": "Cloud lane, 15:17Z: the gating check \"Typecheck, build, and proof scaffold\" is now green on c1782472 after one re-run (check run 110431539655; the first run 110"
+    }
+   ],
+   "disposition": "OWNER",
+   "applies": [
+    "OWNER",
+    "MAC"
+   ],
+   "reason": "Changes lib/enterprise-auth jwt/jwks/config (DECISION_PATH); mac/* head, gating success, clean, 0 threads, and it overlaps open #1440 (same jwt.ts, jwks.ts and enterprise-auth-proof.ts, also JSON-null JOSE parts) so landing order needs deciding."
+  }
+ ]
+}

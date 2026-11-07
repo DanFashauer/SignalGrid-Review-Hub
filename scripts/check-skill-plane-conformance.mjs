@@ -51,6 +51,7 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, 
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { isMainModule } from "./lib/is-main.mjs";
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const SKILLS_DIR = ".claude/skills";
@@ -258,6 +259,8 @@ function selfTest() {
     [`${AGENTS_DIR}/noname.md`, "---\ndescription: d\nmodel: sonnet\n---\nbody"],
     [`${AGENTS_DIR}/nomodel.md`, "---\nname: nomodel\ndescription: d\n---\nbody"],
     [`${AGENTS_DIR}/fable.md`, "---\nname: fable\ndescription: d\nmodel: fable\n---\nbody"],
+    // DR-047's own headline failure: a spawn that inherits the coordinator's model.
+    [`${AGENTS_DIR}/inherits.md`, "---\nname: inherits\ndescription: d\nmodel: inherit\n---\nbody"],
   ]);
   const commands = new Map([
     [`${COMMANDS_DIR}/good-cmd.md`, "---\ndescription: does a thing\nargument-hint: [x]\n---\nbody"],
@@ -281,7 +284,7 @@ function selfTest() {
   ]);
   const fio = {
     listSkills: () => ["good", "nodesc", "mismatch", "nofm"],
-    listAgents: () => ["good.md", "noname.md", "nomodel.md", "fable.md"],
+    listAgents: () => ["good.md", "noname.md", "nomodel.md", "fable.md", "inherits.md"],
     listCommands: () => [...commands.keys()].map((k) => k.slice(COMMANDS_DIR.length + 1)),
     read: (rel) => {
       if (skills.has(rel)) return skills.get(rel);
@@ -302,6 +305,7 @@ function selfTest() {
   checks.push(["an agent missing `name` is RED", has("noname.md") && has("no non-empty `name`")]);
   checks.push(["an agent missing `model` is RED (DR-047)", has("nomodel.md") && has("has no `model`")]);
   checks.push(["an agent naming a non-engineering tier is RED (DR-047)", has("fable.md") && has("is not one of")]);
+  checks.push(["an agent that INHERITS (`model: inherit`) is RED (DR-047) — the failure the record was written after", has("inherits.md") && r.problems.some((p) => p.includes("inherits.md") && p.includes("model: inherit"))]);
   checks.push(["a well-formed command raises no problem", !r.problems.some((p) => p.includes("good-cmd.md"))]);
   checks.push(["a command missing `description` is RED", r.problems.some((p) => p.includes("nodesc-cmd.md") && p.includes("no non-empty `description`"))]);
   checks.push(["a command with an empty `description` is RED", r.problems.some((p) => p.includes("blank-cmd.md") && p.includes("no non-empty `description`"))]);
@@ -314,7 +318,7 @@ function selfTest() {
   checks.push(["a block-scalar description starting with `#` is present (a block body is text)", !r.problems.some((p) => p.includes("hash-in-block-cmd.md"))]);
   checks.push(["a namespaced command (ns/x.md) is walked and RED without a description", r.problems.some((p) => p.includes("ns/nested-cmd.md"))]);
   // The counts the floors are checked against are the walked counts, not a guess.
-  checks.push(["the audit reports how many it actually walked", r.skills === 4 && r.agents === 4 && r.commands === 18]);
+  checks.push(["the audit reports how many it actually walked", r.skills === 4 && r.agents === 5 && r.commands === 18]);
 
   // The REAL disk walker, not the injected one: plant a namespaced agent and command
   // in a temp tree and read it back through diskIoAt. The injected fixture above
@@ -346,7 +350,7 @@ function selfTest() {
   return failed.length === 0 ? 0 : 1;
 }
 
-const runAsCli = process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+const runAsCli = isMainModule(process.argv[1], import.meta.url);
 if (runAsCli && process.argv.includes("--self-test")) process.exit(selfTest());
 
 if (runAsCli) {

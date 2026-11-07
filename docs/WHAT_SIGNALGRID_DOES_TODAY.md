@@ -28,15 +28,15 @@ test today:
 | Posture freshness | fresh / stale / expired / missing / unknown |
 | Device owner type | corporate / personal / shared / unknown |
 | Workflow risk tier | low / standard / elevated / critical |
-| Custody state (DockBridge) | checked_in / checked_out / overdue / exception / maintenance / unknown |
-| Charge state (DockBridge) | charging / charged / low / critical / not_present / unknown |
-| Battery health (DockBridge) | healthy / degraded / failing / unknown — can this battery still hold a shift |
-| Tamper state (DockBridge) | none / suspected / confirmed / sensor_unavailable / unknown |
-| Dock state (DockBridge / SmartDock) | occupied / empty / reserved / faulted / offline / unknown — a faulted or offline dock can't vouch for custody |
+| Custody state (DockBridge) | checked_in / checked_out / overdue / exception / maintenance / unknown / unreadable |
+| Charge state (DockBridge) | charging / charged / low / critical / not_present / unknown / unreadable |
+| Battery health (DockBridge) | healthy / degraded / failing / unknown / unreadable — can this battery still hold a shift |
+| Tamper state (DockBridge) | none / suspected / confirmed / sensor_unavailable / unknown / unreadable — unknown is silence (no reading, quiet); unreadable is an emitted reading nothing could be read from, which steps up (DR-065, proposed) |
+| Dock state (DockBridge / SmartDock) | occupied / empty / reserved / faulted / offline / unknown / unreadable — a faulted or offline dock can't vouch for custody |
 | Security baseline (CIS) | aligned / partial / drifted / not_assessed / unknown |
 | Benchmark selection | confirmed / misfit / unverified — is the device measured against the benchmark profile its role expects |
 | Shift context (WFM) | confirmed / misfit / unverified — does the labor plane's summary match the worker acting on this device |
-| Badge binding (reader case) | present / removed / forced / absent / unknown — who is bound to the shared device right now |
+| Badge binding (reader case) | present / removed / forced / absent / unknown / unreadable — who is bound to the shared device right now |
 | Management health | healthy / degraded / broken / unknown — is the management plane itself vouching for the device right now |
 | Local authority | verified / withheld / unverified — may this shared device act on its own authority (offline lease live, clock trusted) |
 | Attach state (DR-043) | attached / removed / unknown / not_applicable — is the credential still seated in its receiver; a present-but-unreadable reading steps up, silence is not_applicable |
@@ -199,7 +199,7 @@ dimensions above.
 
 ## How to verify
 
-- `pnpm run proof:signalgrid-core` — 597 assertions over the real core: outcomes,
+- `pnpm run proof:signalgrid-core` — 718 assertions over the real core: outcomes,
   fail-closed, tenant isolation, RBAC, tamper-evidence, determinism, the
   security-baseline dimension, the badge-binding (reader case) dimension, the
   dock/SmartDock hardware-state dimension, and untrusted-input hardening.

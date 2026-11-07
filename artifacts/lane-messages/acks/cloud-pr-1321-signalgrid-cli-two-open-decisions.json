@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "cloud-pr-1321-signalgrid-cli-two-open-decisions-",
+  "ackedBy": "mac",
+  "note": "Mac-lane decision 2026-10-31 (Claude session, under the owner's 'let the local second brain decide'; the brain or Codex may revise): (1) subject-binding: land a small api-server PR first that echoes subjectId in the /v1 decide response, then the CLI verifies it; do not ship the CLI unverified. (2) skill location: keep SKILL.md nested under .claude/skills/cli-anything/signalgrid-cli/ and leave the publication boundary alone; add a one-line pointer from the top-level signalgrid skill instead.",
+  "ackedAt": "2026-10-31T18:50:03.323Z"
+}

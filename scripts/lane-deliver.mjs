@@ -9,7 +9,7 @@
 //                                               #   (a raised hand — artifacts/raised-hands/, scripts/raise-hand.mjs, DR-054)
 //
 //   The commit carries the mail directories and, when a message file was added,
-//   the regenerated docs/agent/SURFACE_REVIEW_COVERAGE.md (its file count moved).
+//   the regenerated docs/agent/SURFACE_REVIEW_COVERAGE.md when it changed (it prints no file counts, so mail alone never moves it).
 //   flags: --dry-run        build and gate the commit, push nothing, keep nothing
 //          --via-pr         push a lane/<lane>-mail-<stamp> branch even on the Mac
 //          --trailer "K: v" append a commit trailer (repeatable)
@@ -231,6 +231,8 @@ let pushedSha = null;
   const gates = [["scripts/check-lane-messages.mjs", "lane messages"]];
   if (touchesHeartbeat) gates.push(["scripts/check-scheduled-routines.mjs", "scheduled routines"]);
   if (touchesHands) gates.push(["scripts/raised-hands.mjs", "raised hands", ["--coherence"]]);
+  // The schema gate preflight and CI run: a hand it would reject must not reach mainline from here.
+  if (touchesHands) gates.push(["scripts/check-raised-hands.mjs", "raised-hands schema"]);
   for (const [script, label, extra = []] of gates) {
     if (!existsSync(join(wt, script))) {
       // A check that did not run is not a check that passed. This used to
@@ -253,8 +255,8 @@ let pushedSha = null;
   // trees, so a NEW message file changed artifacts/lane-messages' count, staled
   // docs/agent/SURFACE_REVIEW_COVERAGE.md and failed the mail PR (#445 did exactly
   // that) — and, worse, every regenerated page then conflicted every open product PR
-  // (2026-09-12). Since then the generator declares the mailbox trees (MAILBOX_TREES)
-  // and withholds their counts, so a delivery normally leaves the page byte-identical.
+  // (2026-09-12). Since then the generator prints no file count for any surface, so a
+  // delivery leaves the page byte-identical and it regenerates only when read state moves.
   // The regeneration STAYS: it is idempotent when nothing moved, and it still catches a
   // page that is stale for any other reason. Run it AFTER the mail is staged (the
   // derivation reads the tracked set), with mainline's own generator, and let that one
@@ -274,7 +276,7 @@ let pushedSha = null;
     mustGit(["add", "--", COVERAGE_PAGE], wt, "staging the coverage page");
     allowed.push(COVERAGE_PAGE);
     const pageChanged = mustGit(["diff", "--cached", "--name-only", "--", COVERAGE_PAGE], wt, "checking the coverage page").trim() !== "";
-    console.log(`  coverage    ${COVERAGE_PAGE} ${pageChanged ? "regenerated (the file count moved)" : "unchanged"}`);
+    console.log(`  coverage    ${COVERAGE_PAGE} ${pageChanged ? "regenerated (read state moved)" : "unchanged"}`);
   }
   const staged = mustGit(["diff", "--cached", "--name-only"], wt, "listing the stage").split("\n").filter(Boolean);
   if (staged.length === 0) die("nothing to deliver — the operations produced no change against mainline", 1);

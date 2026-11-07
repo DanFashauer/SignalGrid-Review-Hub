@@ -162,12 +162,18 @@ jobs:
     # projecting ~48 min on one runner. That still fit inside 75, so the lane
     # was not broken — it was on a trajectory, and the fix for a trajectory is
     # not a bigger number that needs raising again the next time someone
-    # registers a file. `--shard=i/N` splits TARGETS balanced by MUTATION COUNT,
-    # not by target count: one family can outweigh ten others, and the slowest
-    # shard sets the wall clock. `check-mutation-sharding.mjs` (per-push) proves
-    # the split is a PARTITION — a sharder that dropped a target would report
-    # success over work it never did, which is the failure this whole lane
-    # exists to catch, reintroduced at the scheduling layer.
+    # registers a file. `--shard=i/N` splits TARGETS balanced by REGISTERED
+    # COST (mutations x each target's `runSeconds`), not by target count and
+    # not by mutation count: one proof costs ~45x the others per mutation, and
+    # the slowest shard sets the wall clock. Balanced by count, shard 3 hit this
+    # bound on six of seven runs from 2026-10-09 (hung=0, one slow proof, 49
+    # mutations at 31-46s each); a target heavier than one unit is now cut into
+    # slices that different runners take. `check-mutation-sharding.mjs`
+    # (per-push) proves the split is a PARTITION of the MUTATIONS — a sharder
+    # that dropped a target or a slice would report success over work it never
+    # did, which is the failure this whole lane exists to catch, reintroduced
+    # at the scheduling layer — and that no shard's registered load nears the
+    # `timeout-minutes` below.
     name: Daily mutation sweep (every guard must be falsifiable)
     runs-on: ubuntu-latest
     timeout-minutes: 40

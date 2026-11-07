@@ -61,11 +61,10 @@ stay owner-gated (`check-owner-gated-surfaces.mjs`); a merge that touches one
 of those must say so in the PR body as "merged under DR-037" with the check-run
 id.
 
-DR-037 also carries ABSOLUTE exclusions the lane may NEVER self-merge, green CI
-or not: the launch profile, the launch-claims gate, and the publication boundary
-(these live under `scripts/**` but are owner-reserved regardless of green CI),
-and any surface `check-owner-gated-surfaces.mjs` classifies SAFETY_MACHINERY or
-OWNER_RESERVED. Those always escalate to the owner. A "green + DR-037 note" does
-NOT make those surfaces self-mergeable — the note documents an owner-approved
-merge of an owner-gated surface, it never substitutes for the owner's decision on
-one of these exclusions.
+DR-037's recorded exception permits the cloud lane to land SAFETY_MACHINERY
+only after all five conditions above, with the required note and check-run id.
+It does not cover OWNER_RESERVED or DECISION_PATH, or the named exclusions:
+the launch profile, launch-claims gate and publication boundary. Those remain
+owner decisions. Read the current classifier and DR-037 itself before a
+landing; this handoff is not a separate grant of authority. A worker never
+lands its own branch, and changing its provider does not change these rules.

@@ -47,6 +47,7 @@ import {
 } from "@workspace/integrations/device-management-health";
 import { composeDeviceRisk, fromDeviceManagementHealth } from "@workspace/posture-composition";
 import { enumerateGrantSafety, productOf } from "./lib/grant-safety.js";
+import { domains, rawDomains } from "./lib/dmh-domains.js";
 import { checkDefaultTransport, checkLiveGateIsolated } from "./lib/live-gate.js";
 
 interface Expected {
@@ -388,16 +389,6 @@ const channelsContradictory = (agent: unknown, remediation: unknown): boolean =>
   (agent === "not_applicable" || agent === "never") &&
   (remediation === "healthy" || remediation === "issues_detected" || remediation === "failed");
 
-const domains = {
-  mdmCheckInFreshness: ["fresh", "stale", "never", "unknown"],
-  agentCheckInFreshness: ["fresh", "stale", "never", "not_applicable", "unknown"],
-  remediationHealth: ["healthy", "issues_detected", "failed", "not_applicable", "unknown"],
-  policyDrift: ["on_baseline", "drifted", "unknown"],
-  complianceCoverage: ["covered", "uncovered", "unknown"],
-  enrollmentState: ["enrolled", "failed", "retired", "unknown"],
-  managementReachable: [true, false, null],
-  reportIntegrity: ["clean", "malformed"],
-};
 const enumRes = enumerateGrantSafety({
   domains,
   build: (c) =>
@@ -420,14 +411,14 @@ const enumRes = enumerateGrantSafety({
 });
 check(
   `exhaustive (normalized): over all ${enumRes.combos} normalized states, action 'none' requires ALL SEVEN positively confirmed — including BOTH delivery channels — and a clean report (mismatches=${enumRes.mismatches}${enumRes.firstMismatch ? ", first=" + enumRes.firstMismatch : ""})`,
-  enumRes.mismatches === 0 && enumRes.combos === productOf(domains) && enumRes.combos === 21600,
+  enumRes.mismatches === 0 && enumRes.combos === productOf(domains) && enumRes.combos === 86400,
 );
 check("exhaustive (normalized): some clean states DO grant (the enumeration is not vacuous)", enumRes.noneCount > 0);
 // Exactly three: a device with a live agent channel and remediations healthy, the same
 // with no remediation assigned, and a platform with no agent channel at all. Pinning the
 // count is what makes a fourth route into the grant a test failure rather than a silent
 // widening.
-check("exhaustive (normalized): exactly THREE channel shapes grant — live-agent+healthy, live-agent+unassigned, agent-less", enumRes.noneCount === 3);
+check("exhaustive (normalized): exactly THREE channel shapes grant — live-agent+healthy, live-agent+unassigned, agent-less — each at every rootCauseEvidence value (rootCauseEvidence never narrows or widens a grant)", enumRes.noneCount === 3 * domains.rootCauseEvidence.length);
 
 // Pass 2 quantifies over the RAW WIRE space, and unlike pass 1 it carries the MALFORMED
 // values a real bridge emits — a junk enum spelling, a string-quoted boolean, a number,
@@ -441,21 +432,6 @@ check("exhaustive (normalized): exactly THREE channel shapes grant — live-agen
 // `__alias` is a build-time toggle, not a wire field: when set it adds a snake_case key
 // to the raw report. Without it the unrecognized-key branch of the integrity check
 // would be load-bearing and structurally unreachable by this enumeration.
-const rawDomains = {
-  // Every enum field carries the same six wire CLASSES: the allowed spellings, an
-  // omitted key, a JSON null, and a junk value. The two new fields were originally
-  // asymmetric — `agentCheckInFreshness` omitted `null` and `remediationHealth` omitted
-  // the literal `"unknown"` — while `PARSEABLE_RAW` below listed both, so the
-  // parse-fidelity pass advertised coverage of two cells it never produced.
-  mdmCheckInFreshness: ["fresh", "stale", "never", "unknown", undefined, null, "very_old"],
-  agentCheckInFreshness: ["fresh", "stale", "never", "not_applicable", "unknown", undefined, null, 7],
-  remediationHealth: ["healthy", "issues_detected", "failed", "not_applicable", "unknown", undefined, null, "green"],
-  policyDrift: ["on_baseline", "drifted", "unknown", undefined, null, ["drifted"]],
-  complianceCoverage: ["covered", "uncovered", "unknown", undefined, null, {}],
-  enrollmentState: ["enrolled", "failed", "retired", "unknown", undefined, null, "pending_enrollment"],
-  managementReachable: [true, false, null, undefined, "true", 1],
-  __alias: ["absent", "present"],
-};
 // Pass 2 also carries a free rider. The harness calls `evaluate` once per combination,
 // so wrapping it audits the ENTIRE raw space at zero extra cost — which is what finding
 // #2 needed: grant-ness cannot see a claim being cited from a disbelieved report,
@@ -468,6 +444,12 @@ let citedWhileContradictory = 0;
 let driftedGeneric = 0;
 let unreachableHeadline = 0;
 let explicitUnreachable = 0;
+// Two COUNTERFACTUALS the docs quote about guards/orderings that no longer exist. They were
+// typed once and went stale by 7x when the raw space grew. They are counted here, asserted
+// below against an independent closed form, and the doc sentences that quote them are
+// checked against these counts (the figure guard cannot: "counterfactual" exempts them).
+let counterfactualUnknownShrink = 0;
+let raisedLastHeadline = 0;
 const evaluateAndAudit = (n: NormalizedDeviceManagementHealth): ReturnType<typeof evaluateDeviceManagementHealth> => {
   const v = evaluateDeviceManagementHealth(n);
   if (channelsContradictory(n.agentCheckInFreshness, n.remediationHealth)) {
@@ -483,8 +465,28 @@ const evaluateAndAudit = (n: NormalizedDeviceManagementHealth): ReturnType<typeo
   if (n.policyDrift === "drifted" && v.reasonCode === "MANAGEMENT_STATE_UNKNOWN") driftedGeneric += 1;
   if (v.reasonCode === "MANAGEMENT_UNREACHABLE") unreachableHeadline += 1;
   if (n.managementReachable === false) explicitUnreachable += 1;
+  // Had MANAGEMENT_UNREACHABLE been raised LAST, alongside the `null` case (its original
+  // ordering), it would headline only where nothing else is wrong: a report whose
+  // reachability is not an explicit true (false, or null/absent) and which grants once the
+  // plane is reported reachable. Measured against a patched copy of the evaluator with the
+  // explicit-false block moved late, this is the figure the docs quote (9 on the pre-rootCause
+  // space; the same method gives 54 here).
+  if (n.managementReachable !== true && evaluateDeviceManagementHealth({ ...n, managementReachable: true }).recommendedAction === "none") {
+    raisedLastHeadline += 1;
+  }
+  // The removed consistency guard demoted on_baseline/covered to unknown for a never-checked-in
+  // device, and covered for a failed/retired enrollment: its removal shrinks unknownSignals here.
+  const neverIn = n.mdmCheckInFreshness === "never";
+  const unenrolled = n.enrollmentState === "failed" || n.enrollmentState === "retired";
+  if ((neverIn && (n.policyDrift === "on_baseline" || n.complianceCoverage === "covered")) || (unenrolled && n.complianceCoverage === "covered")) {
+    counterfactualUnknownShrink += 1;
+  }
   return v;
 };
+// rootCauseEvidence cannot influence grant-ness (both arms push `restrict`), but a junk
+// spelling makes the report MALFORMED and a malformed report must never grant — so the
+// independent spec below states its parseable wire values explicitly.
+const ROOT_CAUSE_WIRE: readonly unknown[] = [undefined, null, "available", "unavailable", "not_supported", "unknown"];
 const rawEnumRes = enumerateGrantSafety({
   domains: rawDomains,
   build: (c) => {
@@ -505,6 +507,7 @@ const rawEnumRes = enumerateGrantSafety({
   // guard that silently lost a condition would still fail here.
   positivelyClean: (c) =>
     c.__alias !== "present" &&
+    ROOT_CAUSE_WIRE.includes(c.rootCauseEvidence) &&
     c.mdmCheckInFreshness === "fresh" &&
     channelsConsistent(c.agentCheckInFreshness, c.remediationHealth) &&
     c.policyDrift === "on_baseline" &&
@@ -514,10 +517,48 @@ const rawEnumRes = enumerateGrantSafety({
 });
 check(
   `exhaustive (raw wire): over all ${rawEnumRes.combos} raw reports — including junk enum spellings, JSON nulls, string-quoted booleans, numbers, arrays, objects and an aliased extra key — normalizeReport + evaluate grant ONLY the seven-way confirmation (mismatches=${rawEnumRes.mismatches}${rawEnumRes.firstMismatch ? ", first=" + rawEnumRes.firstMismatch : ""})`,
-  rawEnumRes.mismatches === 0 && rawEnumRes.combos === productOf(rawDomains) && rawEnumRes.combos === 1354752,
+  rawEnumRes.mismatches === 0 && rawEnumRes.combos === productOf(rawDomains) && rawEnumRes.combos === 9483264,
 );
 check("exhaustive (raw wire): some raw reports DO grant (the enumeration is not vacuous)", rawEnumRes.noneCount > 0);
-check("exhaustive (raw wire): exactly THREE raw reports grant — one per consistent channel shape, and nothing else", rawEnumRes.noneCount === 3);
+check("exhaustive (raw wire): exactly THREE channel shapes grant — each once per parseable rootCauseEvidence wire spelling — and nothing else", rawEnumRes.noneCount === 3 * ROOT_CAUSE_WIRE.length);
+// The counterfactual counters, asserted three ways. (1) `raisedLastHeadline`: an independent
+// closed form — every report that grants with reachable=true has, for each cleanly-parsed
+// non-true spelling of the reachability key (false, null, omitted), exactly one sibling
+// report that differs only there, so the count is grants-per-true-spelling times the number
+// of those spellings. (2) `counterfactualUnknownShrink`: an independent closed form over the
+// four raw domains it depends on (the removed guard's two clauses), scaled by the product of
+// the sizes of every other raw domain — it does not use normalizeReport. (3) The doc
+// sentences that quote them carry these exact figures.
+const rawSize = (k: keyof typeof rawDomains): number => rawDomains[k].length;
+const othersProduct = (Object.keys(rawDomains) as (keyof typeof rawDomains)[])
+  .filter((k) => !["mdmCheckInFreshness", "policyDrift", "complianceCoverage", "enrollmentState"].includes(k))
+  .reduce((n, k) => n * rawSize(k), 1);
+let closedShrink = 0;
+for (const mdm of rawDomains.mdmCheckInFreshness) {
+  for (const drift of rawDomains.policyDrift) {
+    for (const cov of rawDomains.complianceCoverage) {
+      for (const enr of rawDomains.enrollmentState) {
+        if ((mdm === "never" && (drift === "on_baseline" || cov === "covered")) || ((enr === "failed" || enr === "retired") && cov === "covered")) {
+          closedShrink += 1;
+        }
+      }
+    }
+  }
+}
+closedShrink *= othersProduct;
+const reachTrueSpellings = rawDomains.managementReachable.filter((v) => v === true).length;
+const reachCleanNonTrueSpellings = rawDomains.managementReachable.filter((v) => v === false || v === null || v === undefined).length;
+const closedRaisedLast = (rawEnumRes.noneCount / reachTrueSpellings) * reachCleanNonTrueSpellings;
+check(
+  `counterfactuals: raised-last headline (${raisedLastHeadline}) equals its independent closed form (${closedRaisedLast}), and the removed-guard unknownSignals shrink (${counterfactualUnknownShrink}) equals its independent closed form (${closedShrink})`,
+  raisedLastHeadline === closedRaisedLast && counterfactualUnknownShrink === closedShrink,
+);
+const catalog = await readFile(resolve(dirname(fileURLToPath(import.meta.url)), "../../docs/INTEGRATION_CATALOG.md"), "utf8");
+const fmt = (n: number): string => n.toLocaleString("en-US");
+check(
+  "counterfactuals: docs/INTEGRATION_CATALOG.md quotes the live shrink figure and the live raised-last headline figure",
+  catalog.includes(`would shrink \`unknownSignals\` on ${fmt(counterfactualUnknownShrink)}`) && catalog.includes(`it headlined **${raisedLastHeadline}** of the raw reports`),
+);
 check(
   `exhaustive (raw wire): across all ${contradictoryCount} self-contradictory reports, NOT ONE cites the disbelieved remediation claim — no REMEDIATION_* reason code and no remediation critical finding (violations=${citedWhileContradictory})`,
   citedWhileContradictory === 0 && contradictoryCount > 0,
@@ -531,7 +572,7 @@ check(
 // enumeration stays at 0 mismatches and the condition is load-bearing but unproven.
 // Mutation testing found exactly that hole. This pass closes it by asserting the
 // integrity flag itself against an independent positive allowlist of wire values.
-const PARSEABLE_RAW: Record<string, readonly unknown[]> = {
+const PARSEABLE_RAW: Record<(typeof DEVICE_MANAGEMENT_HEALTH_REPORT_KEYS)[number], readonly unknown[]> = {
   mdmCheckInFreshness: [undefined, null, "fresh", "stale", "never", "unknown"],
   agentCheckInFreshness: [undefined, null, "fresh", "stale", "never", "not_applicable", "unknown"],
   remediationHealth: [undefined, null, "healthy", "issues_detected", "failed", "not_applicable", "unknown"],
@@ -539,6 +580,7 @@ const PARSEABLE_RAW: Record<string, readonly unknown[]> = {
   complianceCoverage: [undefined, null, "covered", "uncovered", "unknown"],
   enrollmentState: [undefined, null, "enrolled", "failed", "retired", "unknown"],
   managementReachable: [undefined, null, true, false],
+  rootCauseEvidence: ROOT_CAUSE_WIRE,
 };
 const integrityRes = enumerateGrantSafety({
   domains: rawDomains,
@@ -553,7 +595,7 @@ const integrityRes = enumerateGrantSafety({
   actionOf: (n) => (n.reportIntegrity === "clean" ? "none" : "malformed"),
   positivelyClean: (c) =>
     c.__alias !== "present" &&
-    Object.keys(PARSEABLE_RAW).every((k) => PARSEABLE_RAW[k].includes(c[k])),
+    (Object.keys(PARSEABLE_RAW) as (keyof typeof PARSEABLE_RAW)[]).every((k) => PARSEABLE_RAW[k].includes(c[k])),
 });
 check(
   `parse fidelity: over all ${integrityRes.combos} raw reports, reportIntegrity is 'clean' for EXACTLY the reports whose every field carries a parseable wire value and which carry no unrecognized key (mismatches=${integrityRes.mismatches}${integrityRes.firstMismatch ? ", first=" + integrityRes.firstMismatch : ""})`,
@@ -696,7 +738,7 @@ check("an unparseable rootCauseEvidence is MALFORMED, not silently read as avail
 
 // One machine-readable line, derived from the SAME variables the checks above asserted
 // on — not restated by hand, which is the mistake this feeds a guard against.
-console.log(`figures=normalized=${enumRes.combos},raw=${rawEnumRes.combos},grants=${rawEnumRes.noneCount},contradictory=${contradictoryCount},driftedGeneric=${driftedGeneric},unreachableHeadline=${unreachableHeadline},explicitUnreachable=${explicitUnreachable}`);
+console.log(`figures=normalized=${enumRes.combos},raw=${rawEnumRes.combos},grants=${rawEnumRes.noneCount},contradictory=${contradictoryCount},driftedGeneric=${driftedGeneric},unreachableHeadline=${unreachableHeadline},explicitUnreachable=${explicitUnreachable},counterfactualUnknownShrink=${counterfactualUnknownShrink},raisedLastHeadline=${raisedLastHeadline}`);
 
 // ── The live-call gate and the default transport, each condition ISOLATED ────
 //

@@ -22,7 +22,10 @@
 //      and then WRITES — decision, evidence snapshot, two audit-ledger appends, a
 //      metrics increment.
 //   3. The whole `/cp/v1` control plane is mounted with no auth, so its
-//      client-supplied `?tenant=` query parameter is the only scoping there is.
+//      client-supplied `?tenant=` query parameter is the only scoping there is —
+//      and `POST /cp/v1/telemetry` WRITES: it overwrites a seeded edge node's
+//      decision counts, so an anonymous caller can move another tenant's rollup
+//      (unknown node ids are refused 404, which bounds it to the fixture's nodes).
 //
 // The `/v1` isolation model underneath is sound — every route derives its tenant
 // from the verified bearer and a cross-tenant read returns the same 404 as a
@@ -205,6 +208,10 @@ const GA_MATCHERS = GA_ALLOWED_ROUTES.map((r) => ({ method: r.method, re: pathMa
  */
 export function routeServedByGateway(method: string, path: string): boolean {
   const clean = path.split("?")[0]!.replace(/\/+$/, "") || "/";
-  const verb = method.toUpperCase();
+  // HEAD is answered by Express from the GET handler, so it is served exactly where
+  // GET is — a load-balancer probe sending HEAD /api/healthz must not read 404 from a
+  // healthy instance. Only HEAD is folded; every other verb still matches literally.
+  const upper = method.toUpperCase();
+  const verb = upper === "HEAD" ? "GET" : upper;
   return GA_MATCHERS.some((m) => m.method === verb && m.re.test(clean));
 }

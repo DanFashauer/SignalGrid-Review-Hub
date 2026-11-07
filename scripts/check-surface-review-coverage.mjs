@@ -97,10 +97,12 @@
 // leaves the rest of the repository unopened.
 
 import { execFileSync } from "node:child_process";
+import { scratchGitOk, scrubProcessGitEnv } from "./lib/scratch-git.mjs";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { isMainModule } from "./lib/is-main.mjs";
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const LEDGER_REL = "docs/agent/SURFACE_REVIEW_COVERAGE.json";
@@ -735,14 +737,15 @@ export function renderPage(audit) {
   );
   L.push("");
   if (c) {
-    const mailbox = c.mailbox ?? 0;
+    // NO FILE COUNT is printed, for any surface (2026-11-04). Every PR that added one file moved this generated page, and
+    // every other open PR then conflicted on it (#1321, #1314, #1265, #1190 at once). The mailbox trees taught the same
+    // lesson in 2026-09; the rule now covers every tree. The assertion is unchanged: a file belonging to no surface fails the gate.
     L.push(
-      `Coverage of the tree is asserted, not assumed: **${c.total - c.outOfScope - mailbox - c.uncovered.length} of ` +
-        `${c.total - c.outOfScope - mailbox} in-scope tracked files** belong to a surface on this page ` +
-        `(${c.outOfScope} more are in declared out-of-scope trees). A file belonging to no surface fails the gate. ` +
-        `The mailbox trees (${[...MAILBOX_TREES.keys()].map((k) => `\`${k}\``).join(", ")}) are surfaces like any other and ` +
-        "every record in them is claimed, but their counts are not printed and are left out of the figures above: " +
-        "every lane delivery appends a record, and a page that moved on mail made every open pull request unmergeable.",
+      `Coverage of the tree is asserted, not assumed: **every in-scope tracked file belongs to a surface on this page** ` +
+        "(a file belonging to no surface fails the gate; the declared out-of-scope trees are listed below). " +
+        "File counts are not printed here, for any surface: a generated page that moves when a file is added makes every " +
+        "other open pull request unmergeable on it. `node scripts/check-surface-review-coverage.mjs` prints them. " +
+        `The mailbox trees (${[...MAILBOX_TREES.keys()].map((k) => `\`${k}\``).join(", ")}) are surfaces like any other.`,
     );
     L.push("");
   }
@@ -754,11 +757,11 @@ export function renderPage(audit) {
     "`node scripts/check-surface-review-coverage.mjs --write`.",
   );
   L.push("");
-  L.push("| Surface | Kind | Files | State | Reads | Last read | Reviewer | Record | Closed | Open |");
-  L.push("| --- | --- | ---: | --- | ---: | --- | --- | --- | ---: | ---: |");
+  L.push("| Surface | Kind | State | Reads | Last read | Reviewer | Record | Closed | Open |");
+  L.push("| --- | --- | --- | ---: | --- | --- | --- | ---: | ---: |");
   for (const r of audit.table) {
     L.push(
-      `| \`${r.id}\` | ${r.kind} | ${MAILBOX_TREES.has(r.id) ? "mailbox" : r.files} | ${r.state === "READ" ? "read" : r.state === "PARTIAL" ? "**partial**" : "**NOT READ**"} | ` +
+      `| \`${r.id}\` | ${r.kind} | ${r.state === "READ" ? "read" : r.state === "PARTIAL" ? "**partial**" : "**NOT READ**"} | ` +
         `${r.count} | ${r.last ?? "—"} | ${r.reviewer || "—"} | ${r.record || "—"} | ${r.closed} | ${r.open} |`,
     );
   }
@@ -873,12 +876,13 @@ function makeTempRepo() {
   // per-key F2 check (a key matching zero tracked files is fatal) rather than tripping it.
   w("third_party/vendor/thing.js", "// vendored\n");
   w("attached_assets/raw/pasted.txt", "raw\n");
-  execFileSync("git", ["init", "-q"], { cwd: root });
-  execFileSync("git", ["add", "-A"], { cwd: root });
+  scratchGitOk(root, ["init", "-q"]);
+  scratchGitOk(root, ["add", "-A"]);
   return root;
 }
 
 function selfTest() {
+  scrubProcessGitEnv(); // inherited GIT_DIR/GIT_WORK_TREE/GIT_INDEX_FILE would aim the gate's own plain-git calls at the real repo
   const controls = [];
   const check = (name, fn) => {
     let ok = false;
@@ -954,10 +958,16 @@ function selfTest() {
     if (cover.uncovered.length !== 0 || cover.mailbox !== baseCover.mailbox + 2) return false;
     return renderPage(auditSurfaceCoverage(base, ledger, { cover })) === before;
   });
-  check("…and one more file under a NON-mailbox surface DOES change the page (the identity test is not vacuous)", () => {
+  check("one more file under an ordinary (non-mailbox) surface ALSO leaves the page BYTE-IDENTICAL (2026-11-04: no file counts at all)", () => {
     const before = renderPage(auditReal(ledger));
     const cover = coverTracked(base, [...tracked, "lib/integrations/self-test-planted.ts"]);
-    return cover.uncovered.length === 0 && renderPage(auditSurfaceCoverage(base, ledger, { cover })) !== before;
+    return cover.uncovered.length === 0 && renderPage(auditSurfaceCoverage(base, ledger, { cover })) === before;
+  });
+  check("…and a read-state change DOES change the page (the identity tests are not vacuous)", () => {
+    const before = renderPage(auditReal(ledger));
+    const audit = auditReal(ledger);
+    const flipped = { ...audit, table: audit.table.map((r, i) => (i === 0 ? { ...r, count: r.count + 1 } : r)) };
+    return renderPage(flipped) !== before;
   });
 
   // ── plants on a REAL but THROWAWAY git tree ────────────────────────────────
@@ -982,7 +992,7 @@ function selfTest() {
     mkdirSync(join(temp, "lib/planted"), { recursive: true });
     writeFileSync(join(temp, "lib/planted/package.json"), '{"name":"planted"}\n');
     writeFileSync(join(temp, "lib/planted/index.ts"), "export const z = 1;\n");
-    execFileSync("git", ["add", "-A"], { cwd: temp });
+    scratchGitOk(temp, ["add", "-A"]);
     const pTracked = listTracked(temp);
     const pSurfaces = deriveSurfaces(temp, pTracked);
     const pCover = coverTracked(pSurfaces, pTracked);
@@ -1004,7 +1014,7 @@ function selfTest() {
 
     // PLANT 2 — the surface is gone, the row is not.
     rmSync(join(temp, "lib/planted"), { recursive: true, force: true });
-    execFileSync("git", ["add", "-A"], { cwd: temp });
+    scratchGitOk(temp, ["add", "-A"]);
     const dTracked = listTracked(temp);
     const dSurfaces = deriveSurfaces(temp, dTracked);
     check("a row whose directory has been DELETED is FATAL", () => {
@@ -1031,7 +1041,7 @@ function selfTest() {
     // the fatal arm runs end to end: the injected checks above pin the decision, this
     // one pins that the decision is reached from real `git log` / `git rev-parse` output.
     const commitHere = (subject) =>
-      execFileSync("git", ["-c", "user.email=selftest@local", "-c", "user.name=selftest", "commit", "-q", "--allow-empty", "-m", subject], { cwd: temp });
+      scratchGitOk(temp, ["commit", "-q", "--allow-empty", "-m", subject]);
     commitHere("core: something (#4242)");
     commitHere("Merge pull request #4243 from someone/branch");
     check("the REAL probe finds BOTH subject forms GitHub writes — squash \"(#N)\" and merge-commit \"Merge pull request #N\" — and finds neither for an absent number", () => {
@@ -1320,7 +1330,7 @@ function main({ write }) {
 // Importable: `scripts/loop-state.mjs` reuses the derivation for its one-line row, and a
 // module that ran its own gate on import would turn that reuse into a second full run
 // with a second exit code. Same guard `check-review-coverage.mjs` uses, for the same reason.
-const runAsCli = process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+const runAsCli = isMainModule(process.argv[1], import.meta.url);
 if (runAsCli) {
   const argv = process.argv.slice(2);
   if (argv.includes("--self-test")) selfTest();

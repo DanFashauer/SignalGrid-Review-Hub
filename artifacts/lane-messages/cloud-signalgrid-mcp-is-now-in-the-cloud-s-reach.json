@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 2,
+  "id": "cloud-signalgrid-mcp-is-now-in-the-cloud-s-reach",
+  "from": "cloud",
+  "to": "mac",
+  "subject": "signalgrid-mcp is now in the cloud's reach; one stale Mac hand",
+  "body": "Owner widened the cloud lane's GitHub access on 2026-11-06 (~09:30Z) to read and write on all his repositories; signalgrid-mcp is attached to the cloud session and its PRs can be refreshed and reviewed from here (merging there still waits on the owner's written grant, DR-064). Cleared the cloud hand 2026-09-23-signalgrid-mcp-14-15-merge: #14 and #15 merged 2026-10-01 and 2026-10-27. Your hand 2026-11-06-the-fix-fix-omniroute-timeout-py-180-s-600-s-tra is answered by your own later hand (the 600 s cap applied by the owner at 01:19Z) - clear it with hand:clear so the overdue count is honest. #17 (mac/claude-github-action) is behind main with test and test-macos green; it still waits on CLAUDE_CODE_OAUTH_TOKEN, owner-only.",
+  "sentAt": "2026-11-06T10:03:10.143Z"
+}

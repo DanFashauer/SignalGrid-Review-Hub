@@ -1,0 +1,130 @@
+{
+  "measuredAt": "2026-10-23T23:05:00Z",
+  "repository": "DanFashauer/SignalGrid-Review-Hub",
+  "mainline": "SignalGrid_Alpha",
+  "mainlineHead": "2a46fd16fdc61c144c3f42e4bcc3b5389ae94f07",
+  "total": 6,
+  "byClass": {
+    "standing-page": 1,
+    "mac": 2,
+    "cloud": 1,
+    "owner": 2
+  },
+  "byDisposition": {
+    "KEEP": 1,
+    "MAC": 2,
+    "CLOUD": 1,
+    "OWNER": 2
+  },
+  "source": "gh api issues?state=open&per_page=100 page 1 returned 85 items (79 pull requests skipped, 6 issues); page had fewer than 100 so pagination ended. Open PR count via pulls endpoint also 79.",
+  "issues": [
+    {
+      "number": 1597,
+      "title": "Raised hands \u2014 what is stuck",
+      "labels": [
+        "raised-hands"
+      ],
+      "created_at": "2026-10-22T16:54:21Z",
+      "updated_at": "2026-10-23T23:02:26Z",
+      "comments": 133,
+      "author": "github-actions[bot]",
+      "lastComment": {
+        "date": "2026-10-23T23:02:26Z",
+        "author": "github-actions[bot]",
+        "first160": "New since last hour (2):\n\n- **15.5d** PAST LIMIT PR #1390 conflicted, untouched 15.5d: ci: shell lint uses the runner's shellcheck and waits for the apt lock (b"
+      },
+      "bodyFirst300": "# Raised hands \u2014 80 open\n\nOldest first. Anything marked OVERDUE or PAST LIMIT has waited too long.\n\n## Needs you (Dan) \u2014 55\n- **30.1d** OVERDUE landing PR #1005 (DR-043 attach rules on the live /v1 gate) \u2014 blocked by: the gitleaks secret scan flags the enum value legacy_125khz as a key; the session'",
+      "class": "standing-page",
+      "disposition": "KEEP",
+      "evidence": "Label raised-hands, bot-authored, title starts 'Raised hands'. Last updated 2026-10-23T23:02:26Z, i.e. refreshed ~3 min before measuredAt. Body says '80 open': 55 need Dan, 11 need the cloud lane, 14 need the Mac lane. It replaced #1068 (closed 2026-10-22T19:09:44Z) after 9 duplicates were consolidated.",
+      "proposedAction": "Never close. This is the owner's single stuck-list. Closing the 80 hands it lists is a separate job, done by clearing each hand (pnpm run hand:clear) when its blocker is cleared."
+    },
+    {
+      "number": 1546,
+      "title": "Mac-local AI operations brain: budgeted Claude/Codex escalation and GitHub handoff",
+      "labels": [],
+      "created_at": "2026-10-16T16:00:27Z",
+      "updated_at": "2026-10-20T16:56:33Z",
+      "comments": 1,
+      "author": "DanFashauer",
+      "lastComment": {
+        "date": "2026-10-20T16:56:33Z",
+        "author": "DanFashauer",
+        "first160": "## Owner directive \u2014 consolidate local-first engineering + clean mainline (2026-10-20)\n\n**Immediate outcome required:** Operate SignalGrid as a Mac-hosted codin"
+      },
+      "bodyFirst300": "## Owner direction reaffirmed \u2014 local-first company brain (2026-10-19)\n\n**Owner instruction:** The on-Mac LLM is the PRIMARY ongoing company-development brain and default BUILD worker. It should actually advance SignalGrid, not merely generate explanations, dashboards or monitoring reports. It shoul",
+      "class": "mac",
+      "disposition": "MAC",
+      "evidence": "Owner directive (updated 2026-10-20) for a local-first Mac AI operations brain; body says 'Keep one issue for this cross-cutting integration'. Mainline (origin/SignalGrid_Alpha 2a46fd1) carries only the primitives so far: scripts/mac/local-brain/{job-state,task-selector,proof-policy}.mjs plus 3 tests, last touched 2026-10-21 (commit 'Reject malformed verification evidence when restoring or completing local jobs'). I saw no unattended local runner, no distinct launchd label for a brain coordinator, and no escalation fixture in scripts/mac/ (build-tick.sh, lane-tick.sh and sg-stack.sh are the only Mac runners). Its own acceptance (local tool-use test/edit/test on a real repo task, local->escalation->handback fixture, one verified draft PR) is not evidenced on mainline.",
+      "proposedAction": "KEEP OPEN as the single tracking issue for the local-brain work; the Mac lane owns it. Do not close on the strength of the primitives landing. The 2026-10-20 directive inside it is also the written authority for this cleanup run (stop heartbeat-only PR churn first, archive before deleting branches, preserve #439, mainline stays SignalGrid_Alpha)."
+    },
+    {
+      "number": 1165,
+      "title": "Scheduled verification failing",
+      "labels": [
+        "scheduled-verification"
+      ],
+      "created_at": "2026-09-27T13:06:16Z",
+      "updated_at": "2026-10-23T12:41:24Z",
+      "comments": 32,
+      "author": "github-actions[bot]",
+      "lastComment": {
+        "date": "2026-10-23T12:41:23Z",
+        "author": "github-actions[bot]",
+        "first160": "The DAILY IMAGE VULNERABILITY GATE failed on `fd6ed7f` \u2014 a CRITICAL vulnerability with a fix available is in the api image.\n\n- Run: https://github.com/DanFashau"
+      },
+      "bodyFirst300": "The hourly raised-hands job has stalled: issue #1068 was last updated 4.8h ago (bound 3h). The owner's stuck list is not current. Check .github/workflows/raised-hands.yml runs (a disabled schedule is re-enabled from the Actions tab).",
+      "class": "cloud",
+      "disposition": "CLOUD",
+      "evidence": "Bot-opened by .github/workflows/scheduled-verification.yml (label scheduled-verification; it comments instead of opening a second issue). 32 bot comments. The DAILY IMAGE VULNERABILITY GATE has failed on every daily comment from 2026-10-06 through the latest on 2026-10-23T12:41:23Z (run 39954968059 on fd6ed7f; failing job 120418413378, failing step 'Gate on critical vulnerabilities with a fix available'; conclusion failure): a CRITICAL vulnerability with a fix available is in the api image. The 'gate suite failed' comments are intermittent (last 2026-10-21T13:18Z). The body's own text, 'raised-hands job stalled: issue #1068', is stale: #1068 closed 2026-10-22T19:09:44Z, and the last stall comment about it is 2026-10-14. I could not read the job log through the API, so the CVE id is unknown. Open PRs: none of the 79 has a title naming a vulnerability/image fix; only Dependabot bumps (#1562 35-update group, #1379 actions group) could carry one, unverified.",
+      "proposedAction": "NOT a done-candidate: a real gate has been red 18 days. Cloud lane: read the job's grype output in the Actions UI, bump the affected base layer or dependency in the api image, land under DR-037. Close only when the next scheduled run is green (the workflow reopens a new issue on the next failure, so closing early just recreates it). Edit the stale #1068 sentence away or ignore it."
+    },
+    {
+      "number": 338,
+      "title": "LAB 001 - decide on a real signal (Step 1: live macOS posture)",
+      "labels": [],
+      "created_at": "2026-08-28T00:50:43Z",
+      "updated_at": "2026-08-28T00:50:43Z",
+      "comments": 0,
+      "author": "DanFashauer",
+      "lastComment": null,
+      "bodyFirst300": "**The first time SignalGrid decides on a real signal instead of a fixture.**\n\nFull spec: `docs/lab/LAB_001.md` (PR #337). Doctrine: `docs/PURPOSE.md` v2 (DR-020).\n\nHardware: MacBook Air M4 + iPhone. **Nothing to purchase.**\n\n## Order of work\n\n### Step 1 - real macOS posture (do this first)\n\nPoint th",
+      "class": "mac",
+      "disposition": "MAC",
+      "evidence": "Not done. The Mac did land a sim-result for LAB_001 Step 1 (artifacts/sim-results/2026-08-31-lab001-step1-real-posture.json, passed, completedAt 2026-09-02T16:51:33Z, workingTreeClean true), but that run is the verify:all evidence op (signalgrid-mcp pytest 99 passed, 22 tools, preflight and breadth PASS), not the issue's ask. The ask is a SIGNALGRID_MACOS_POSTURE=live connector flag that makes a Decision Envelope carry source: signalgrid-mcp. On mainline, git grep finds SIGNALGRID_MACOS_POSTURE only in docs/lab/LAB_001.md (where it is marked 'proposed-env', 'no file in this repository reads either yet'); SIGNALGRID_MCP_CMD appears only in scripts/check-env-doc-readers.mjs; 'source: signalgrid-mcp' appears in no file; no code for Steps 2-5 (ntfy, HA call_service: no hits outside docs/artifacts). The issue's stated blocker (PRs #336 and #337) merged 2026-08-28, so the blocker is cleared. 0 comments since creation 2026-08-28.",
+      "proposedAction": "KEEP OPEN, Mac lane. Next move is the flag plus a live-posture reader in lib/integrations/src/integrations/macos-posture (mac-lane work; an unreadable probe must raise assurance, verified by forcing one). Outside docs/agent/ORG_SELF_EVALUATION_2026-09-12.md (which flagged it as an unread channel), my grep of docs/scripts found no doc citing #338; give it a backlog row or a hand so a lane sees it."
+    },
+    {
+      "number": 141,
+      "title": "Product 100 launch program \u2014 freeze breadth, prove one live wedge, and ship a paid pilot",
+      "labels": [],
+      "created_at": "2026-07-28T23:43:50Z",
+      "updated_at": "2026-07-28T23:43:50Z",
+      "comments": 0,
+      "author": "DanFashauer",
+      "lastComment": null,
+      "bodyFirst300": "## Purpose\n\nThis is the canonical launch-readiness issue for turning SignalGrid from an unusually strong public-safe engineering proof into a successfully launched product and company.\n\nIt is grounded in a scan of all current public repositories owned by the founder:\n\n- `DanFashauer/SignalGrid-Revie",
+      "class": "owner",
+      "disposition": "OWNER",
+      "evidence": "Owner-written (2026-07-28) 'Product 100 launch program' with a P0/P1 checklist and a launch scorecard (commercial readiness 58/100, customer validation 15/100) that is three months old; CLAUDE.md now says readiness is derived by scripts/check-readiness-figure.mjs, never typed. 0 comments. Its P0 items include owner-only cross-repo actions (merge DanFashauer/DEV PR #110 and archive DEV, merge signalgrid-mcp PR #9, archive/privatize VaultLens, counsel on MIT vs private core). git grep -i 'product 100' over docs (excluding docs/inspiration) on mainline returns nothing; only the inspiration catalogs cite #141, so no doc points a reader at it as the live plan.",
+      "proposedAction": "Cannot be closed by a lane. Owner decides its fate; until answered it stays open.",
+      "ownerDecision": "Is #141 still the live launch plan (then re-score it from check-readiness-figure and tick the done P0 items), or retire it in favor of docs/COMPANY_BUILD_PLAN.md and close it?"
+    },
+    {
+      "number": 136,
+      "title": "Define portable work context and adaptive Grid Intelligence vision",
+      "labels": [],
+      "created_at": "2026-07-27T01:19:07Z",
+      "updated_at": "2026-07-27T01:19:07Z",
+      "comments": 0,
+      "author": "DanFashauer",
+      "lastComment": null,
+      "bodyFirst300": "## Founder vision\n\n> \u201cThis product and solution is the glue that will make everything in an industry seamless and effortless with just their badge and/or face/finger to identify the physical person. Then whatever device they\u2019re using, it will give them the same experience and access to what is criti",
+      "class": "owner",
+      "disposition": "OWNER",
+      "evidence": "Owner-written founder vision (2026-07-27), 0 comments. Six mainline docs name it 'Canonical source' or 'Vision anchor' by number (ADAPTIVE_PROPOSALS, HANDOFF_SIMULATION, LIVE_SYNC_LOOP, PORTABLE_WORK_CONTEXT, SELF_AUDIT, VISION_PERSON_FIRST_GRID), and docs/BRANCHES.md cites it as a 'governing artifact'. But CLAUDE.md names docs/PURPOSE.md (DR-020, 2026-08-28) canonical, which postdates this issue, so the two sources of truth overlap. #141 asks for #136's acceptance boxes to be ticked; not done.",
+      "proposedAction": "Do not close without the owner: closing leaves six docs pointing at a closed 'canonical' issue.",
+      "ownerDecision": "Keep #136 open as the standing vision anchor (recommended, label it standing), or copy its text into a docs file, repoint the six docs, and close it?"
+    }
+  ]
+}

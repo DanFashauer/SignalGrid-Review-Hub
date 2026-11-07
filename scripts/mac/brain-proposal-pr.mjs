@@ -30,7 +30,7 @@
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync, chmodSync, fchmodSync, mkdirSync, lstatSync, readdirSync, openSync, closeSync, fstatSync, fsyncSync, constants, realpathSync } from "node:fs";
 import { createHash } from "node:crypto";
-import { tmpdir, homedir } from "node:os";
+import { tmpdir, userInfo } from "node:os";
 import { dirname, join, resolve, isAbsolute, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { isBuiltin } from "node:module";
@@ -40,7 +40,9 @@ import { isMainModule } from "../lib/is-main.mjs";
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const BASE = "SignalGrid_Alpha";
-const DEFAULT_DB = join(homedir(), "SignalGrid-Local-AI", "brain-state", "autonomy.sqlite3");
+// Control authority follows the OS account, never a worker-supplied HOME.
+const ACCOUNT_HOME = userInfo().homedir;
+const DEFAULT_DB = join(ACCOUNT_HOME, "SignalGrid-Local-AI", "brain-state", "autonomy.sqlite3");
 const DENY = [/^AGENTS\.md$/, /^CLAUDE\.md$/, /^docs\/DECISION_RECORDS\.md$/, /^\.github\//, /^docs\/PURPOSE\.md$/, /^artifacts\/agent-heartbeats\//];
 const PRIVATE = /[/\\](?:users|home)[/\\]|[a-z]:[/\\]users[/\\]|(?:\$\{?home\}?|%userprofile%|~)[/\\]|library[/\\]mobile\s+documents|icloud~md~obsidian|SignalGrid-Local-AI|brain-state|brain-worktrees|[/\\]private[/\\]|[/\\]var[/\\]folders[/\\]/i;
 const PRIVATE_MARKUP = /\.obsidian(?:[/\\]|$)|\[\[[^\]\[\r\n]{1,240}\]\]|%%/i;
@@ -48,7 +50,8 @@ const PRIVATE_DIRECTORY = /^(?:\.obsidian|\.trash|vaults?|private-notes)$/i;
 const EXECUTION_CONTROL = /^(?:\.git(?:attributes|modules|config)?|\.npmrc|\.pnpmfile\.(?:cjs|mjs|js)|package\.json|pnpm-workspace\.ya?ml|pnpm-lock\.yaml|package-lock\.json|npm-shrinkwrap\.json|\.yarnrc(?:\.yml)?|yarn\.lock|\.pnp\.(?:cjs|loader\.mjs))$/i;
 const NEW_PUBLIC_DIRECTORY = /^(?:docs|src|web|apps|packages|tests?|public|assets)\//;
 const ORDINARY_PRE_PUSH_SHA = "ab88ceee48a25a9eb79f072e9315093336ab3ccc810e0fbbe2e49690fa5d8b59";
-const SCANNER_MANIFEST = join(homedir(), "SignalGrid-Local-AI", "brain-state", "auto-publish-review", "scanner.json");
+const SCANNER_MANIFEST = join(ACCOUNT_HOME, "SignalGrid-Local-AI", "brain-state", "auto-publish-review", "scanner.json");
+const PRIVACY_CLEARANCES = join(dirname(SCANNER_MANIFEST), "clearances");
 const SCANNER_SHA = "af9afd0ae3a0ff6d7f08c4ec4e28686b7e4de6962fe1eadecc497d15cdf731e2";
 const CONFIG_SHA = "7d0c4be43036be1e9834c920c415afabaa9998c18e12b8a7bf5c35a6f7532e85";
 const SCAN_CONTROL = /^(?:\.git|\.gitleaksignore|\.gitleaks\.(?:toml|ya?ml|json))$/i;
@@ -80,7 +83,7 @@ function gitOk(dir, args, env) {
 
 async function readJob(db, id) {
   if (!existsSync(db)) refuse(`brain DB not found: ${db}`);
-  const sql = "SELECT id, kind, status, repo, worktree, title, result, created_at, updated_at, cancel_requested FROM autonomy_jobs WHERE id = ?";
+  const sql = "SELECT * FROM autonomy_jobs WHERE id = ?";
   if (isBuiltin("node:sqlite")) {
     const { DatabaseSync } = await import("node:sqlite");
     const d = new DatabaseSync(db, { readOnly: true });
@@ -117,11 +120,18 @@ export async function listReview(db = DEFAULT_DB, { notBefore } = {}) {
   }
   // Manual listing is read-only and retains its unbounded historical view.
   if (cutoff === null) return rows.map((row) => String(row.id));
-  return rows.filter((row) => {
-    if (!/^[A-Za-z0-9_-]+$/.test(row.id ?? "") || row.cancel_requested !== 0) return false;
-    try { const created = timestamp(row.created_at), updated = timestamp(row.updated_at); return created >= cutoff && updated >= created; }
-    catch (e) { if (e instanceof Refusal) return false; throw e; }
-  }).map((row) => String(row.id));
+  const eligible = [];
+  for (const row of rows) {
+    if (!/^[A-Za-z0-9_-]+$/.test(row.id ?? "") || row.cancel_requested !== 0) continue;
+    try {
+      const created = timestamp(row.created_at), updated = timestamp(row.updated_at);
+      if (created < cutoff || updated < created) continue;
+      const job = await readJob(db, row.id), clearance = readPrivacyClearance(row.id);
+      if (!job || clearance.value.request?.job_sha256 !== valueDigest(job) || clearance.value.request?.publisher_sha256 !== publisherDigest()) continue;
+      eligible.push(String(row.id));
+    } catch (e) { if (!(e instanceof Refusal)) throw e; }
+  }
+  return eligible;
 }
 
 const decode = (s) => { try { const v = JSON.parse(s); return typeof v === "string" ? v : s; } catch { return s ?? ""; } };
@@ -194,6 +204,14 @@ function privacyText(text) {
 }
 
 const digest = (data) => createHash("sha256").update(data).digest("hex");
+const ordered = (value) => {
+  if (Array.isArray(value)) return value.map(ordered);
+  if (value !== null && typeof value === "object") return Object.fromEntries(Object.keys(value).sort().map((key) => [key, ordered(value[key])]));
+  if (value === null || ["string", "boolean"].includes(typeof value) || typeof value === "number" && Number.isFinite(value)) return value;
+  refuse("publication privacy identity is not complete JSON data");
+};
+const valueDigest = (value) => digest(Buffer.from(JSON.stringify(ordered(value))));
+const publisherDigest = () => digest(readFileSync(fileURLToPath(import.meta.url)));
 const full40 = (value) => /^[0-9a-f]{40}$/.test(value);
 const sameFields = (a, b) => ["path", "sha256", "mode", "uid"].every((key) => a?.[key] === b?.[key]);
 const PRIVATE_SCANNER_CASES = {
@@ -219,7 +237,7 @@ function qualifyScanner(a) {
   if (a.length !== 9 || a[0] !== "--qualify-scanner" || keys.some((k, i) => a[1 + i * 2] !== k)) refuse("invalid scanner qualification arguments");
   const source = a[2], output = a[4], fd = Number(a[6]);
   if (!Number.isInteger(fd) || fd < 3 || Number(a[8]) !== process.ppid) refuse("qualification requires its original parent descriptor");
-  const host = join(homedir(), "Library/Caches/signalgrid/host-verification.lock");
+  const host = join(ACCOUNT_HOME, "Library/Caches/signalgrid/host-verification.lock");
   const inherited = fstatSync(fd), named = lstatSync(host);
   if (!inherited.isFile() || named.isSymbolicLink() || inherited.dev !== named.dev || inherited.ino !== named.ino || inherited.uid !== process.getuid() || inherited.nlink !== 1 || (inherited.mode & 0o777) !== 0o644) refuse("qualification host descriptor identity changed");
   closeSync(fd);
@@ -258,17 +276,20 @@ function qualifyScanner(a) {
     const result = original(name, ["dir", "--redact=100", "--exit-code=2", "--no-banner", "--no-color", "--ignore-gitleaks-allow", "--config", policy.path, "--gitleaks-ignore-path", ignore.path, "--report-format=json", "--report-path", report, root]);
     if (result.returncode !== REQUIRED_SCANNER_CASES[name]) refuse("scanner qualification case failed: " + name);
     let findings = [];
-    if (existsSync(report)) {
-      const handle = openSync(report, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+    let handle;
+    try { handle = openSync(report, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK); }
+    catch (e) { if (e.code !== "ENOENT" || result.returncode !== 1) refuse("qualification report is unavailable"); }
+    if (handle !== undefined) {
       try {
         const st = fstatSync(handle);
         if (!st.isFile() || st.uid !== process.getuid() || st.nlink !== 1) refuse("qualification report is not regular owned bytes");
         fchmodSync(handle, 0o400); fsyncSync(handle);
-        const data = readFileSync(handle);
+        const before = fstatSync(handle), data = readFileSync(handle), after = fstatSync(handle), named = lstatSync(report);
+        if ([after, named].some((s) => ["dev", "ino", "size", "mtimeMs", "ctimeMs", "mode", "uid", "nlink"].some((k) => s[k] !== before[k]))) refuse("qualification report changed while reading");
         if (data.includes(Buffer.from(token))) refuse("qualification report exposed its synthetic token");
         findings = JSON.parse(data.toString()) ?? [];
       } finally { closeSync(handle); }
-    } else if (result.returncode !== 1) refuse("qualification report is missing");
+    }
     if (!Array.isArray(findings) || (result.returncode === 2 ? !findings.length : findings.length)) refuse("qualification findings disagree with exit status");
     result.credential_finding_count = findings.length;
     cases.push({ name, returncode: result.returncode, result_ref: json(join(output, "results", name + ".json"), result) });
@@ -298,22 +319,74 @@ function qualifyScanner(a) {
   console.log(JSON.stringify({ qualified: true, cases: cases.length, version: "8.24.3" }));
 }
 
-function privateBytes(path, wantedMode) {
+function privateBytes(path, wantedMode, maxBytes = Infinity) {
   if (!isAbsolute(path ?? "") || resolve(path) !== path || path === REPO || path.startsWith(REPO + sep)) refuse("scanner custody path is not private and absolute");
   let part = sep;
-  for (const component of path.split(sep).filter(Boolean)) {
+  for (const component of dirname(path).split(sep).filter(Boolean)) {
     part = join(part, component);
     if (lstatSync(part).isSymbolicLink()) refuse("scanner custody contains a symlink");
   }
-  const first = lstatSync(path);
-  if (!first.isFile() || first.nlink !== 1 || first.uid !== process.getuid() || (first.mode & 0o777) !== wantedMode) refuse("scanner custody is not a frozen owner file");
   const fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
   const shape = (st) => [st.dev, st.ino, st.size, st.mtimeMs, st.ctimeMs, st.mode, st.uid, st.nlink].join(":");
   try {
-    const opened = fstatSync(fd), data = readFileSync(fd), final = fstatSync(fd), last = lstatSync(path);
-    if (![opened, final, last].every((st) => shape(st) === shape(first))) refuse("scanner custody changed while reading");
+    const opened = fstatSync(fd);
+    if (!opened.isFile() || opened.nlink !== 1 || opened.uid !== process.getuid() || (opened.mode & 0o777) !== wantedMode || opened.size > maxBytes) refuse("scanner custody is not a frozen owner file");
+    const data = readFileSync(fd), final = fstatSync(fd), last = lstatSync(path);
+    if (![final, last].every((st) => shape(st) === shape(opened))) refuse("scanner custody changed while reading");
     return data;
   } finally { closeSync(fd); }
+}
+
+// This is privileged controller state, not a knowledge note or a worker claim.
+// Only a source/privacy reviewer with existing owner/role authority may issue a
+// frozen receipt after reviewing the exact inputs and artifact. Neither this
+// publisher nor the tick creates, repairs or upgrades a clearance.
+function readPrivacyClearance(job) {
+  if (!/^[A-Za-z0-9_-]+$/.test(job ?? "")) refuse("privacy clearance job identity is invalid");
+  const root = SELF_TEST_SCANNER?.privacyRoot ?? PRIVACY_CLEARANCES;
+  try {
+    const directory = lstatSync(root);
+    if (!isAbsolute(root) || resolve(root) !== root || root === REPO || root.startsWith(REPO + sep) || realpathSync(root) !== root ||
+        !directory.isDirectory() || directory.uid !== process.getuid() || (directory.mode & 0o777) !== 0o700) refuse("privacy clearance directory is not private controller state");
+    const path = join(root, job + ".json"), bytes = privateBytes(path, 0o400, 1 << 20);
+    const value = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
+    if (value?.format !== "signalgrid-publication-privacy-clearance/v1" || value.job !== job ||
+        value.request?.format !== "signalgrid-publication-privacy-request/v1" || value.request.job !== job ||
+        !/^[0-9a-f]{64}$/.test(value.request.job_sha256 ?? "") || !/^[0-9a-f]{64}$/.test(value.request.publisher_sha256 ?? "") ||
+        !full40(value.request.head) || !full40(value.request.tree) || !full40(value.request.replay_base) ||
+        timestamp(value.expires_at) <= Date.now()) refuse("artifact-specific privacy clearance is invalid or expired");
+    for (const [name, decision] of [["source_review", "public_only"], ["artifact_review", "public_safe"]]) {
+      const review = value[name], ref = review?.evidence_ref;
+      if (review?.decision !== decision || !["codex", "claude", "owner"].includes(review.system) || !ref ||
+          typeof ref.path !== "string" || !ref.path.startsWith(root + sep) || ref.path === path ||
+          ref.mode !== 0o400 || ref.uid !== process.getuid() || !/^[0-9a-f]{64}$/.test(ref.sha256 ?? "")) refuse("source and artifact privacy reviews are required");
+      if (digest(privateBytes(ref.path, 0o400, 1 << 20)) !== ref.sha256) refuse("privacy review evidence changed");
+    }
+    const end = lstatSync(root);
+    if (["dev", "ino", "uid", "mode"].some((key) => end[key] !== directory[key])) refuse("privacy clearance directory changed");
+    return { value, path, sha256: digest(bytes) };
+  } catch (e) {
+    if (e instanceof Refusal) throw e;
+    refuse("artifact-specific source/privacy clearance is unavailable");
+  }
+}
+
+function makePrivacyRequest(job, workerHead, patch, replayBase, artifact) {
+  if (!full40(workerHead)) refuse("privacy request requires the original full worker head");
+  // Include complete public metadata, author headers and the PR body as well as
+  // files. Publication reuses this prepared commit; it never substitutes newly
+  // generated metadata after privacy review.
+  const exports = artifact.exports.map(({ source, sha256, bytes }) => ({ source, sha256, bytes: bytes.length }))
+    .sort((a, b) => a.source < b.source ? -1 : a.source > b.source ? 1 : 0);
+  return { format: "signalgrid-publication-privacy-request/v1", job: job.id,
+    job_sha256: valueDigest(job), publisher_sha256: publisherDigest(), worker_head: workerHead,
+    patch_sha256: digest(Buffer.from(patch)), replay_base: replayBase, head: artifact.head, tree: artifact.tree, exports };
+}
+
+function requirePrivacyClearance(request) {
+  const clearance = readPrivacyClearance(request.job);
+  if (valueDigest(clearance.value.request) !== valueDigest(request)) refuse("privacy clearance does not match the exact job, sources, publisher and artifact");
+  return clearance;
 }
 
 function scannerRef(ref, expectedSha, mode) {
@@ -537,6 +610,7 @@ export async function run({ job, db = DEFAULT_DB, repo = REPO, publish = false, 
   if (PRIVATE.test(privacyText(result))) refuse("job result names a private path");
 
   const { patch, files } = worktreePatch(j.worktree);
+  const workerHead = sourceGitBytes(j.worktree, ["rev-parse", "HEAD"]).toString("utf8").trim();
   if (!patch.trim() || files.length === 0) refuse(`job ${job}: the worktree diff is empty`);
   const bad = [];
   for (const f of files) {
@@ -557,6 +631,13 @@ export async function run({ job, db = DEFAULT_DB, repo = REPO, publish = false, 
     if (remote) { log(`${branch} already exists on origin — nothing pushed (idempotent)`); return { branch, files, pushed: false }; }
   }
 
+  const selectedPrivacy = publish ? readPrivacyClearance(job) : null;
+  if (selectedPrivacy) {
+    const wanted = selectedPrivacy.value.request;
+    if (wanted.job_sha256 !== valueDigest(j) || wanted.publisher_sha256 !== publisherDigest() ||
+        wanted.worker_head !== workerHead || wanted.patch_sha256 !== digest(Buffer.from(patch))) refuse("privacy clearance does not match the current job and source patch");
+  }
+
   gitOk(repo, ["fetch", "-q", "origin", BASE]);
   const scratch = mkdtempSync(join(tmpdir(), "brain-pr-"));
   const wt = join(scratch, "wt");
@@ -570,7 +651,20 @@ export async function run({ job, db = DEFAULT_DB, repo = REPO, publish = false, 
     const unmerged = git(wt, ["diff", "--name-only", "--diff-filter=U"]).out.trim();
     if (!ap.ok || unmerged) refuse(`job ${job}: the patch does not apply cleanly to origin/${BASE}\n${ap.err.trim()}${unmerged ? `\nunmerged: ${unmerged}` : ""}`);
     const prTitle = `brain: ${title.slice(0, 80)} (job ${job})`;
-    gitOk(wt, [...ordinaryHooks(wt, repo), "commit", "-q", "-m", `${prTitle}\n\nLocal-brain build job ${job}, published by the Mac lane on the owner's order.`]);
+    if (selectedPrivacy) {
+      const approved = selectedPrivacy.value.request, proposedTree = gitOk(wt, ["write-tree"]).trim();
+      if (approved.replay_base !== replayBase || approved.tree !== proposedTree) refuse("privacy clearance does not match the current replay base and tree");
+      const raw = gitBytes(wt, ["cat-file", "commit", approved.head]);
+      const oid = createHash("sha1").update(Buffer.from(`commit ${raw.length}\0`)).update(raw).digest("hex");
+      const headers = raw.toString("utf8").split("\n\n", 1)[0].split("\n");
+      if (oid !== approved.head || headers.filter((s) => s.startsWith("parent ")).join("") !== `parent ${replayBase}` ||
+          headers.filter((s) => s.startsWith("tree ")).join("") !== `tree ${proposedTree}`) refuse("prepared privacy-reviewed commit is unavailable or has changed");
+      // This is only the owned disposable replay worktree. Reuse the exact
+      // reviewed object so author/time/body bytes cannot change after approval.
+      gitOk(wt, ["reset", "--hard", approved.head]);
+    } else {
+      gitOk(wt, [...ordinaryHooks(wt, repo), "commit", "-q", "-m", `${prTitle}\n\nLocal-brain build job ${job}, published by the Mac lane on the owner's order.`]);
+    }
     const publishedHead = gitOk(wt, ["rev-parse", "HEAD"]).trim();
     const publishedTree = gitOk(wt, ["rev-parse", "HEAD^{tree}"]).trim();
     const body = [
@@ -582,16 +676,24 @@ export async function run({ job, db = DEFAULT_DB, repo = REPO, publish = false, 
       "## Validation", "",
       "This publisher did not run full validation or independently verify worker completion claims. Worker-result text is not exported as evidence.", "",
       "Full applicable local validation, current-head required CI and independent Codex and Claude reviews remain required. Cloud lane: inspect this exact head and land only under the current owner requirements and DR-037, or return findings on this PR.", "",
-      "## Public-safety note", "", "The route refused any file classified OWNER_RESERVED, DECISION_PATH or SAFETY_MACHINERY, and governance/heartbeat deny-list paths. Those path guards and credential screening do not replace source and privacy review of the artifact and public metadata.", "",
+      "## Public-safety note", "", "The route refused any file classified OWNER_RESERVED, DECISION_PATH or SAFETY_MACHINERY, and governance/heartbeat deny-list paths. A separate frozen source/privacy clearance bound to this exact job, publisher and artifact is required before push. Credential screening is not that clearance; private review evidence is not exported.", "",
       "## Remaining risks", "", "Successful replay and publication do not establish task completeness, passing gates, review acceptance or landing clearance. Findings and final-head validation remain to be resolved.", "",
     ].join("\n");
     const artifact = committedExport(wt, replayBase, files, prTitle, body);
     if (artifact.head !== publishedHead || artifact.tree !== publishedTree) refuse("committed publication identity changed before screening");
     scanPublication(artifact);
+    const privacyRequest = makePrivacyRequest(j, workerHead, patch, replayBase, artifact);
+    const privacy = publish ? requirePrivacyClearance(privacyRequest) : null;
+    if (privacy && privacy.sha256 !== selectedPrivacy.sha256) refuse("privacy clearance changed during replay");
     if (gitOk(wt, ["rev-parse", "HEAD"]).trim() !== artifact.head || gitOk(wt, ["rev-parse", "HEAD^{tree}"]).trim() !== artifact.tree) refuse("committed publication identity changed after screening");
     if (JSON.stringify(await readJob(db, job)) !== originalJobProjection) refuse(`job ${job} changed before publication; original attempt is readback-only`);
-    if (!publish) { log(`dry run: would push ${branch} and open "${prTitle}" against ${BASE}`); return { branch, files, pushed: false, replayBase, publishedHead, publishedTree }; }
+    if (!publish) {
+      log(`dry run: privacy review is still required before pushing ${branch}`);
+      log("SIGNALGRID_PUBLICATION_PRIVACY_REQUEST " + JSON.stringify(privacyRequest));
+      return { branch, files, pushed: false, replayBase, publishedHead, publishedTree, privacyRequest };
+    }
 
+    if (requirePrivacyClearance(privacyRequest).sha256 !== privacy.sha256) refuse("privacy clearance changed before push");
     gitOk(wt, [...ordinaryHooks(wt, repo), "push", "-q", "origin", `${publishedHead}:refs/heads/${branch}`]);
     const actualRemote = gitOk(repo, ["ls-remote", "origin", `refs/heads/${branch}`]).trim().split(/\s+/);
     if (actualRemote.length !== 2 || actualRemote[0] !== publishedHead || actualRemote[1] !== `refs/heads/${branch}`) refuse("pushed branch identity is unknown; exact readback required, no replay");
@@ -679,6 +781,22 @@ process.exit(finding ? 2 : 0);
       },
     };
     SELF_TEST_SCANNER = scannerFixture;
+    const privacyRoot = join(realpathSync(root), "privacy-clearances");
+    mkdirSync(privacyRoot, { mode: 0o700 });
+    scannerFixture.privacyRoot = privacyRoot;
+    const grantFixturePrivacy = (id, request, changes = {}, directory = privacyRoot) => {
+      if (!request) return; // The pre-fix run must fail assertions, not fixture setup.
+      const evidencePath = join(directory, id + ".review.txt");
+      const evidence = Buffer.from("Synthetic trusted-controller fixture: source and artifact privacy review.\n");
+      writeFileSync(evidencePath, evidence, { mode: 0o400 });
+      const ref = { path: evidencePath, sha256: digest(evidence), mode: 0o400, uid: process.getuid() };
+      writeFileSync(join(directory, id + ".json"), JSON.stringify({
+        format: "signalgrid-publication-privacy-clearance/v1", job: id, request,
+        source_review: { decision: "public_only", system: "codex", evidence_ref: ref },
+        artifact_review: { decision: "public_safe", system: "codex", evidence_ref: ref },
+        expires_at: new Date(Date.now() + 3600000).toISOString(), ...changes,
+      }), { mode: 0o400 });
+    };
     // Cloud findings: every private representation crosses the production text
     // boundary, and package/Git control files never enter this publishing route.
     const privateForms = [
@@ -738,6 +856,9 @@ process.exit(finding ? 2 : 0);
     const wConflict = brain("w-conflict", (w) => writeFileSync(join(w, "docs/x.md"), "one\nBRAIN\nthree\n"));
     const wConfig = brain("w-package-control", (w) => writeFileSync(join(w, ".pnpmfile.cjs"),
       'require("node:fs").writeFileSync(process.env.SYNTHETIC_CONFIG_MARKER,"executed");\n'));
+    const wUnreviewed = brain("w-unreviewed", (w) => writeFileSync(join(w, "docs/notes.md"), "Synthetic unreviewed narrative, with no credential or private path.\n"));
+    const wPrivateSource = brain("w-private-source", (w) => writeFileSync(join(w, "docs/notes.md"), "Synthetic private-source narrative, with no credential or private path.\n"));
+    const wStalePrivacy = brain("w-stale-privacy", (w) => writeFileSync(join(w, "docs/notes.md"), "Public fixture before review.\n"));
 
     for (const key of ["core.fsmonitor", "diff.probe.textconv", "filter.probe.clean"]) {
       const marker = join(root, "config-marker-" + key.replaceAll(".", "-"));
@@ -756,7 +877,7 @@ process.exit(finding ? 2 : 0);
 
     const unverifiedFinish = "SYNTHETIC_UNVERIFIED_TEST_GATE_LINK_FINISH: all checks and reviews passed; link was added.";
     const fixtureResult = (id) => JSON.stringify(id === "jdocs" ? unverifiedFinish : `result ${id}`);
-    const createdAt = (id) => id === "jreverse" ? "2026-11-06T17:10:00Z" : ["jdocs", "jcancel", "bad/id"].includes(id) ? "2026-11-06T16:41:00Z" : "2026-11-05T01:00:00Z";
+    const createdAt = (id) => id === "jreverse" ? "2026-11-06T17:10:00Z" : ["jdocs", "junreviewed", "jcancel", "bad/id"].includes(id) ? "2026-11-06T16:41:00Z" : "2026-11-05T01:00:00Z";
     const db = join(root, "autonomy.sqlite3");
     const rows = [
       ["jdocs", "build", "review", wDocs], ["jagents", "build", "review", wAgents], ["jgate", "build", "review", wGate],
@@ -770,6 +891,10 @@ process.exit(finding ? 2 : 0);
       ["jlate", "build", "review", wDocs],
       ["jreverse", "build", "review", wDocs],
       ["jcancel", "build", "review", wDocs], ["bad/id", "build", "review", wDocs],
+      ["junreviewed", "build", "review", wUnreviewed],
+      ["jprivateorigin", "build", "review", wPrivateSource],
+      ["jstaleprivacy", "build", "review", wStalePrivacy],
+      ["jmetadata", "build", "review", wDocs],
     ];
     if (isBuiltin("node:sqlite")) {
       const { DatabaseSync } = await import("node:sqlite");
@@ -777,10 +902,16 @@ process.exit(finding ? 2 : 0);
       d.exec("CREATE TABLE autonomy_jobs (id TEXT, kind TEXT, status TEXT, repo TEXT, worktree TEXT, title TEXT, result TEXT, updated_at TEXT, created_at TEXT, cancel_requested INTEGER DEFAULT 0)");
       const ins = d.prepare("INSERT INTO autonomy_jobs VALUES (?, ?, ?, 'SignalGrid-Review-Hub', ?, ?, ?, '2026-11-06T17:00:00Z', ?, ?)");
       for (const [id, k, s, w] of rows) ins.run(id, k, s, w, `title ${id}`, fixtureResult(id), createdAt(id), id === "jcancel" ? 1 : 0);
+      d.exec("ALTER TABLE autonomy_jobs ADD COLUMN source_ids TEXT DEFAULT '[]'; ALTER TABLE autonomy_jobs ADD COLUMN cloud_allowed INTEGER DEFAULT 0; ALTER TABLE autonomy_jobs ADD COLUMN evidence TEXT DEFAULT '{}';");
+      d.prepare("UPDATE autonomy_jobs SET evidence=? WHERE id='jdocs'").run(JSON.stringify({ private_context: true, sources: [] }));
+      d.prepare("UPDATE autonomy_jobs SET evidence=? WHERE id='jprivateorigin'").run(JSON.stringify({ private_context: true, sources: ["synthetic-private-vault-source"], privacy_clearance: { approved: true } }));
       d.close();
     } else {
       const sql = ["CREATE TABLE autonomy_jobs (id TEXT, kind TEXT, status TEXT, repo TEXT, worktree TEXT, title TEXT, result TEXT, updated_at TEXT, created_at TEXT, cancel_requested INTEGER DEFAULT 0);",
-        ...rows.map(([id, k, s, w]) => `INSERT INTO autonomy_jobs VALUES ('${id}','${k}','${s}','SignalGrid-Review-Hub','${w}','title ${id}','${fixtureResult(id)}','2026-11-06T17:00:00Z','${createdAt(id)}',${id === 'jcancel' ? 1 : 0});`)].join("\n");
+        ...rows.map(([id, k, s, w]) => `INSERT INTO autonomy_jobs VALUES ('${id}','${k}','${s}','SignalGrid-Review-Hub','${w}','title ${id}','${fixtureResult(id)}','2026-11-06T17:00:00Z','${createdAt(id)}',${id === 'jcancel' ? 1 : 0});`),
+        "ALTER TABLE autonomy_jobs ADD COLUMN source_ids TEXT DEFAULT '[]'; ALTER TABLE autonomy_jobs ADD COLUMN cloud_allowed INTEGER DEFAULT 0; ALTER TABLE autonomy_jobs ADD COLUMN evidence TEXT DEFAULT '{}';",
+        `UPDATE autonomy_jobs SET evidence='${JSON.stringify({ private_context: true, sources: [] })}' WHERE id='jdocs';`,
+        `UPDATE autonomy_jobs SET evidence='${JSON.stringify({ private_context: true, sources: ["synthetic-private-vault-source"], privacy_clearance: { approved: true } })}' WHERE id='jprivateorigin';`].join("\n");
       const r = spawnSync("/usr/bin/sqlite3", [db], { input: sql, encoding: "utf8" });
       if (r.status !== 0) throw new Error(`sqlite3 fixture failed: ${r.stderr}`);
     }
@@ -796,6 +927,18 @@ process.exit(finding ? 2 : 0);
 
     // (1) dry run of a clean docs job
     const r1 = await run({ job: "jdocs", db, repo, log: quiet });
+    check("(privacy) dry run returns a nonauthorizing request bound to actual public bytes", r1.privacyRequest?.format === "signalgrid-publication-privacy-request/v1" &&
+      r1.privacyRequest.tree === r1.publishedTree && r1.privacyRequest.exports?.some((e) => e.source === "files/docs/new.md" && e.sha256 === digest(Buffer.from("new\n"))) &&
+      !Object.hasOwn(r1.privacyRequest, "approved"));
+    check("(privacy) review includes the exact commit, author headers and complete PR body", r1.privacyRequest?.head === r1.publishedHead &&
+      ["metadata/title.txt", "metadata/body.md", "metadata/commit.txt", "metadata/paths.json"].every((name) => r1.privacyRequest?.exports?.some((item) => item.source === name && /^[0-9a-f]{64}$/.test(item.sha256))));
+    grantFixturePrivacy("jdocs", r1.privacyRequest);
+    const forgedHome = join(realpathSync(root), "forged-home"), forgedClearances = join(forgedHome, "SignalGrid-Local-AI", "brain-state", "auto-publish-review", "clearances");
+    mkdirSync(forgedClearances, { recursive: true, mode: 0o700 });
+    grantFixturePrivacy("jdocs", r1.privacyRequest, {}, forgedClearances);
+    const forged = spawnSync(process.execPath, [fileURLToPath(import.meta.url), "--list-review", "--not-before", "2026-11-06T16:40:00Z", "--db", db],
+      { encoding: "utf8", env: { ...process.env, HOME: forgedHome, USERPROFILE: forgedHome }, timeout: 30000 });
+    check("(privacy) a caller-controlled HOME cannot install trusted clearances", forged.status === 0 && forged.stdout.trim() === "");
     check("(1) dry run names brain/job-jdocs with docs/x.md", r1.branch === "brain/job-jdocs" && r1.files.includes("docs/x.md") && r1.files.includes("docs/new.md") && !r1.pushed);
     check("(1) brain worktree untouched (edits still uncommitted, nothing staged)", scratchGitOk(wDocs, ["status", "--porcelain"]).split("\n").map((l) => l.trim()).sort().join("|") === "?? docs/new.md|M docs/x.md" && scratchGitOk(wDocs, ["diff", "--cached", "--name-only"]) === "");
     check("(1) dry run left no remote branch", scratchGitOk(repo, ["ls-remote", "origin", "refs/heads/brain/job-jdocs"]) === "");
@@ -899,6 +1042,7 @@ console.log("https://example.invalid/pr/1");
     delete process.env.SYNTHETIC_CONFIG_MARKER;
     const calls = ghCalls();
     check("(6) fresh publish pushed brain/job-jdocs", r6.pushed && scratchGitOk(repo, ["ls-remote", "origin", "refs/heads/brain/job-jdocs"]).split(/\s+/)[0] === r6.publishedHead);
+    check("(privacy) reviewed local-only public fixture publishes the exact reviewed object", r6.pushed && r6.publishedHead === r1.publishedHead);
     check("(6) gh called once with --base SignalGrid_Alpha", calls.length === 1 && calls[0].includes(`--base ${BASE}`) && calls[0].includes("--head brain/job-jdocs"));
     const publishedBody = readFileSync(ghBody, "utf8");
     const publishedCommit = scratchGitOk(origin, ["show", "-s", "--format=%B", "refs/heads/brain/job-jdocs"]);
@@ -906,6 +1050,27 @@ console.log("https://example.invalid/pr/1");
     check("(auto) no invented Claude attribution", !/Generated with.*Claude Code|claude[.]com[/]claude-code/i.test(publishedBody) && !/^Co-Authored-By: Claude /mi.test(publishedCommit));
     const r6b = await run({ job: "jdocs", db, repo, publish: true, log: quiet });
     check("(6) existing remote branch: exit clean, nothing pushed, gh not called again", !r6b.pushed && ghCalls().length === 1);
+    for (const id of ["junreviewed", "jprivateorigin"]) {
+      let blocked = false;
+      try { await run({ job: id, db, repo, publish: true, log: quiet }); }
+      catch (e) { blocked = e instanceof Refusal; }
+      check(`(privacy) ${id} cannot publish without an external exact-artifact clearance`, blocked && scratchGitOk(repo, ["ls-remote", "origin", `refs/heads/brain/job-${id}`]) === "");
+    }
+    const stale = await run({ job: "jstaleprivacy", db, repo, log: quiet });
+    grantFixturePrivacy("jstaleprivacy", stale.privacyRequest);
+    writeFileSync(join(wStalePrivacy, "docs/notes.md"), "Different synthetic narrative after privacy review.\n");
+    let staleBlocked = false;
+    try { await run({ job: "jstaleprivacy", db, repo, publish: true, log: quiet }); }
+    catch (e) { staleBlocked = e instanceof Refusal; }
+    check("(privacy) changed artifact invalidates prior privacy clearance before push", staleBlocked && scratchGitOk(repo, ["ls-remote", "origin", "refs/heads/brain/job-jstaleprivacy"]) === "");
+    const metadata = await run({ job: "jmetadata", db, repo, log: quiet });
+    const wrongBody = metadata.privacyRequest ? JSON.parse(JSON.stringify(metadata.privacyRequest)) : undefined;
+    if (wrongBody) wrongBody.exports = wrongBody.exports.map((item) => item.source === "metadata/body.md" ? { ...item, sha256: "0".repeat(64) } : item);
+    grantFixturePrivacy("jmetadata", wrongBody);
+    let metadataBlocked = false;
+    try { await run({ job: "jmetadata", db, repo, publish: true, log: quiet }); }
+    catch (e) { metadataBlocked = e instanceof Refusal; }
+    check("(privacy) mismatched public metadata clearance refuses before push", metadataBlocked && scratchGitOk(repo, ["ls-remote", "origin", "refs/heads/brain/job-jmetadata"]) === "");
     check("(*) no scratch worktrees left registered", scratchGitOk(repo, ["worktree", "list"]).split("\n").length === 1);
     check("(auto) real export crossed synthetic external scanner boundary", scannerFixture.calls >= 4);
   } finally { SELF_TEST_SCANNER = null; rmSync(root, { recursive: true, force: true }); }

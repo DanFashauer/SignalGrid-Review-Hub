@@ -509,6 +509,27 @@ export function simulateResolution(
       const { retainedAccusations: _resolved, ...rest } = projected;
       projected = Object.keys(remaining).length === 0 ? rest : { ...rest, retainedAccusations: remaining as DecisionEvidence["retainedAccusations"] };
     }
+    // The same for the pre-strict readings (round 5): the fix sets the family in every reading, so a reading keeps
+    // only the fields the fix does not set, and inherits the projected value for the rest.
+    const readings = projected.preStrictReadings as unknown;
+    if (readings !== undefined) {
+      const fixed = Object.keys(descriptor.transform);
+      const record = readings !== null && typeof readings === "object" ? (readings as Record<string, unknown>) : {};
+      const bounded = record["bounded"] === true;
+      const worlds = (Array.isArray(record["worlds"]) ? (record["worlds"] as unknown[]) : [])
+        .filter((world): world is Record<string, unknown> => world !== null && typeof world === "object" && !Array.isArray(world))
+        .map((world) => {
+          const remaining = { ...world };
+          for (const key of fixed) delete remaining[key];
+          return remaining;
+        })
+        .filter((world) => Object.keys(world).length > 0);
+      const { preStrictReadings: _resolved, ...rest } = projected;
+      projected =
+        worlds.length === 0 && !bounded
+          ? rest
+          : { ...rest, preStrictReadings: (bounded ? { worlds, bounded: true } : { worlds }) as DecisionEvidence["preStrictReadings"] };
+    }
     if (!applied.includes(code)) {
       applied.push(code);
     }

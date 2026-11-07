@@ -21,9 +21,13 @@ import {
   evaluatePolicy,
   fixedClock,
   normalizeAttachRecord,
+  PRE_STRICT_HOST_OFFSETS_MINUTES,
+  preStrictEvidenceWith,
+  preStrictStamp,
   runDockSync,
   seedDemoStore,
   SHARED_DEVICE_RULES_V1,
+  validatePolicyRules,
   type Device,
   type Identity,
   type NormalizedSignal,
@@ -326,14 +330,137 @@ function codexFor(which: string): string {
     signals = [...pairs([["custody_state", "overdue", "maintenance", "exception"], ["charge_state", "low", "critical", "not_present"], ["battery_health", "degraded", "failing"], ["tamper_state", "suspected", "confirmed", "sensor_unavailable"], ["dock_state", "offline", "faulted"], ["security_baseline", "partial", "drifted", "not_assessed"]]), ...base()];
     rules = [{ id: "d", description: "d", match: [{ field: "batteryHealth", in: ["degraded"] }, { field: "tamperState", in: ["suspected"] }], outcome: "deny", reasonCode: "TENANT_DENY", severity: "high" }, allowManaged];
   }
+  // Round 5 (2026-11-07). g/h: RFC 2822 text Date.parse read, the strict reader cannot, beside an orderable
+  // "fresh"; i/j: a validated tenant policy that matches criticalSignalsPresent=true, which mainline's complete
+  // evidence reaches and a backstop pinned to the base's failed one never did.
+  if (which === "g") { signals = [sig("s_1", "posture_freshness", "fresh", BASE), sig("s_2", "posture_freshness", "fresh", "Tue, 14 Jul 2026 13:00:00 GMT"), ...base(["posture_freshness"])]; now = BASE; }
+  if (which === "h") { signals = [sig("s_1", "posture_freshness", "fresh", BASE), sig("s_2", "posture_freshness", "fresh", "Mon, 13 Jul 2026 14:00:00 GMT"), ...base(["posture_freshness"])]; now = BASE; }
+  if (which === "i") {
+    signals = [sig("s_t", "tamper_state", "confirmed", BASE), sig("s_1", "charge_state", "bogus", "2026-07-13T07:00:00Z"), sig("s_2", "charge_state", "charged", "2026-07-13T08:00:00"), ...base()];
+    rules = validatePolicyRules([{ id: "d", description: "confirmed tamper on complete evidence", match: [{ field: "tamperState", in: ["confirmed"] }, { field: "criticalSignalsPresent", equals: true }], outcome: "deny", reasonCode: "TENANT_DENY", severity: "high" }, allowManaged]);
+  }
+  if (which === "j") {
+    signals = [sig("s_1", "device_compliance", "malformed", "2026-07-13T07:00:00Z"), sig("s_2", "device_compliance", "compliant", "2026-07-13T08:00:00"), ...base(["device_compliance"])];
+    rules = validatePolicyRules([{ id: "d", description: "complete evidence denies", match: [{ field: "criticalSignalsPresent", equals: true }], outcome: "deny", reasonCode: "TENANT_DENY", severity: "high" }, allowManaged]);
+  }
   const r = evaluatePolicy(pv(rules), buildEvidence(identity, device, workflow, signals, now));
   return `${r.outcome}|${r.reasonCodes.join("+")}`;
+}
+
+/**
+ * THE CLASS (round 5): a seeded differential, run in THIS process's zone. Each trial builds random multi-family
+ * evidence over stamp shapes the strict and pre-strict readers disagree on (offset-less, date-only, impossible
+ * dates, RFC 2822 / RFC 1123 text zoned and zone-less, other Date.parse text, garbage, ±HH) and malformed values
+ * beside valid ones, and a random tenant policy that `validatePolicyRules` accepts (deny rules on
+ * criticalSignalsPresent=true, tamper, compliance, posture and every other field), or the shipped rules. The
+ * reference is the pre-strict reader on THIS host: `preStrictEvidenceWith(..., Date.parse)`, mainline's folds and
+ * mainline's reader. Prints how many verdicts came out MILDER than the reference (owner decision (c)'s ±HH stamps
+ * excepted) and a fingerprint of every verdict, which must be the same in every zone.
+ */
+function classFor(seedText: string, trialsText: string): string {
+  let seed = Number(seedText) >>> 0;
+  const rnd = (): number => { seed = (seed + 0x6d2b79f5) >>> 0; let t = seed; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+  const pick = <T,>(xs: readonly T[]): T => xs[Math.floor(rnd() * xs.length)]!;
+  const FAMILIES: readonly (readonly [SignalCategory, readonly NormalizedSignal["value"][]])[] = [
+    ["device_compliance", ["compliant", "non_compliant"]], ["custody_state", ["checked_in", "overdue", "maintenance"]],
+    ["charge_state", ["charged", "low", "critical"]], ["battery_health", ["healthy", "degraded", "failing"]],
+    ["tamper_state", ["none", "suspected", "confirmed"]], ["dock_state", ["occupied", "offline", "faulted"]],
+    ["security_baseline", ["aligned", "partial", "drifted"]], ["badge_binding", ["present", "removed", "forced"]],
+    ["device_management_health", ["healthy", "degraded", "broken"]], ["enrollment_strength", ["strong", "legacy_125khz"]],
+    ["posture_freshness", ["fresh", "stale", "expired", "missing", "unknown"]], ["device_management", [true, false]],
+    ["device_encryption", [true, false]], ["os_support", [true, false]], ["identity_state", [true, false]],
+  ];
+  const PLUS_HH = ["2026-07-13T09:00:00+00", "2026-07-13T10:00:00-07"];
+  const STAMPS = [
+    "2026-07-13T07:00:00Z", "2026-07-13T08:00:00Z", "2026-07-13T12:59:00Z", "2026-07-12T01:00:00Z", "2026-07-14T09:00:00Z", "2026-07-13T09:00:00+02:00",
+    "2026-07-13T08:00:00", "2026-07-13T14:00:00", "2026-07-12T20:00:00", "2026-07-13 09:00:00", "2026-07-13", "2026-07-14", "2026-02-30T08:00:00Z",
+    "Tue, 14 Jul 2026 13:00:00 GMT", "Mon, 13 Jul 2026 14:00:00 GMT", "Mon, 13 Jul 2026 12:00:00 GMT", "Fri, 10 Jul 2026 08:00:00 GMT",
+    "Mon, 13 Jul 2026 21:00:00 +0900", "Mon, 13 Jul 2026 08:00:00 EST", "Jul 13 2026 08:00:00", "7/13/2026 14:00", "13 Jul 2026 08:00 +9",
+    "Mon, 13 Jul 2026 08:00-07", "garbled", "", ...PLUS_HH,
+  ];
+  const FIELDS: Record<string, readonly string[]> = {
+    deviceCompliance: ["compliant", "non_compliant", "unknown"], postureFreshness: ["fresh", "stale", "expired", "missing", "unknown"],
+    custodyState: ["checked_in", "overdue", "maintenance", "unknown", "unreadable"], chargeState: ["charged", "low", "critical", "unknown", "unreadable"],
+    batteryHealth: ["healthy", "degraded", "failing", "unknown", "unreadable"], tamperState: ["none", "suspected", "confirmed", "unknown", "unreadable"],
+    dockState: ["occupied", "offline", "faulted", "unknown", "unreadable"], baselineState: ["aligned", "partial", "drifted", "unknown"],
+    badgeState: ["present", "removed", "forced", "unknown", "unreadable"], managementHealthState: ["healthy", "degraded", "broken", "unknown"],
+    enrollmentStrength: ["strong", "legacy_125khz", "unknown", "not_applicable"],
+  };
+  const RANK: Record<string, number> = { allow: 0, step_up: 1, restrict: 2, deny: 3 };
+  const trials = Number(trialsText);
+  let milder = 0;
+  let fingerprint = 0x811c9dc5;
+  let example = "";
+  for (let trial = 0; trial < trials; trial++) {
+    const signals: NormalizedSignal[] = [];
+    const touched = new Set<string>();
+    for (let f = 1 + Math.floor(rnd() * 4); f > 0; f--) {
+      const [category, members] = pick(FAMILIES);
+      touched.add(category);
+      for (let r = 1 + Math.floor(rnd() * 3); r > 0; r--) {
+        signals.push(sig(`s${signals.length}`, category, rnd() < 0.15 ? pick(["bogus", 42, ""]) as NormalizedSignal["value"] : pick(members), pick(STAMPS)));
+      }
+    }
+    for (const x of [sig("s_c", "device_compliance", "compliant", "2026-07-13T12:30:00Z"), ...healthy()]) if (!touched.has(x.category)) signals.push(x);
+    const now = pick([BASE, BASE, undefined, "2026-07-13T13:00:00"]);
+    const rules = rnd() < 0.2 ? SHARED_DEVICE_RULES_V1 : validatePolicyRules([
+      ...Array.from({ length: 1 + Math.floor(rnd() * 4) }, (_, i) => ({
+        id: `r${i}`, description: "tenant rule", outcome: pick(["allow", "step_up", "restrict", "deny", "deny"]), reasonCode: `TENANT_R${i}`, severity: "high",
+        match: Array.from({ length: 1 + Math.floor(rnd() * 2) }, () => {
+          const roll = rnd();
+          if (roll < 0.3) return { field: "criticalSignalsPresent", equals: rnd() < 0.7 };
+          if (roll < 0.45) return { field: pick(["identityEnabled", "deviceManaged", "deviceEncrypted", "osSupported"]), equals: pick([true, false, "unknown"]) };
+          const field = pick(Object.keys(FIELDS));
+          const pool = FIELDS[field]!;
+          const values = pool.filter(() => rnd() < 0.35);
+          return { field, in: values.length > 0 ? values : [pick(pool)] };
+        }),
+      })),
+      { id: "managed", description: "managed allow", match: [{ field: "deviceManaged", equals: true }], outcome: "allow", reasonCode: "TENANT_ALLOW", severity: "low" },
+    ]);
+    const pv = { id: "pv_class", tenantId: "tenant_northwind", policyId: "pol_class", version: 1, status: "active" as const, rules, createdAt: BASE, digest: "test" } as unknown as Parameters<typeof evaluatePolicy>[0];
+    const head = evaluatePolicy(pv, buildEvidence(identity, device, workflow, signals, now)).outcome;
+    const reference = evaluatePolicy(pv, preStrictEvidenceWith(identity, device, workflow, signals, now, (iso) => Date.parse(iso))).outcome;
+    for (const ch of head) fingerprint = Math.imul(fingerprint ^ ch.charCodeAt(0), 0x01000193) >>> 0;
+    if (RANK[head]! < RANK[reference]! && !signals.some((x) => PLUS_HH.includes(x.observedAt))) {
+      milder++;
+      if (example === "") example = ` first=trial${trial}:${reference}->${head}`;
+    }
+  }
+  return `milder=${milder} fingerprint=${fingerprint.toString(16)}${example}`;
+}
+
+/**
+ * The pre-strict stamp classifier against the real `Date.parse` of THIS process's zone, over a generated corpus of
+ * date text: prints the classification of every accepted stamp, and how many disagree with this zone's
+ * `Date.parse` (a `fixed` stamp at another instant, a `floating` one off the modelled offsets).
+ */
+function classifyFor(): string {
+  const dates = ["2026-07-13", "2026-7-13", "2026/07/13", "07/13/2026", "13 Jul 2026", "Jul 13 2026", "July 13, 2026", "Mon, 13 Jul 2026", "Monday, July 13, 2026", "2026-07", "13-Jul-2026", "2026-02-30", "+002026-07-13", "2026-03-08", "2026-03-29", "Nov 1 2026", "1 Jan 1970"];
+  const times = ["", "T08:00:00", "T08:00", "T08:00:00.123", " 08:00:00", " 08:00", " 8:00 PM", "t08:00:00", " 24:00:00", "T02:30:00", " 01:30", " 12:00 AM"];
+  const zones = ["", " GMT", " UTC", " UT", "Z", "z", "+0900", "-0700", "+09:00", "+05", "-07", " +0900", " GMT+0900", " EST", " PDT", " (JST)", " GMT+0900 (Japan Standard Time)", " +9", " UTC+1", " garbage"];
+  const out: string[] = [];
+  let bad = 0;
+  for (const d of dates) for (const t of times) for (const z of zones) {
+    const text = `${d}${t}${z}`;
+    const parsed = Date.parse(text);
+    if (Number.isNaN(parsed)) continue;
+    const stamp = preStrictStamp(text);
+    out.push(`${text}=${stamp.kind}:${stamp.kind === "fixed" ? stamp.at : stamp.kind === "floating" ? stamp.wall : ""}`);
+    if (stamp.kind === "fixed" && stamp.at !== parsed) bad++;
+    if (stamp.kind === "floating" && !PRE_STRICT_HOST_OFFSETS_MINUTES.includes((stamp.wall - parsed) / 60_000)) bad++;
+  }
+  let fingerprint = 0x811c9dc5;
+  for (const ch of out.join("\n")) fingerprint = Math.imul(fingerprint ^ ch.charCodeAt(0), 0x01000193) >>> 0;
+  return `accepted=${out.length} disagree=${bad} fingerprint=${fingerprint.toString(16)}`;
 }
 
 if (process.argv[2] === "--worker") {
   const [mode, a, b, c] = process.argv.slice(3);
   const out =
     mode === "codex" ? codexFor(a!)
+    : mode === "class" ? classFor(a!, b!)
+    : mode === "classify" ? classifyFor()
     : mode === "ptenant" ? postureTenantFor(a!)
     : mode === "tenant" ? tenantFor(a as SignalCategory, b!, c!, process.argv[7]!, process.argv[8]!)
     : mode === "verdict" ? verdictFor(a!, b)
@@ -778,6 +905,35 @@ for (const [which, expect, label] of [
 ] as const) {
   const r = ZONES.map((z) => inZone(z, "codex", which));
   check(`never milder than the pre-strict reader (Codex ${which}): ${label} -> ${expect}, in every zone`, r.every((v) => v === expect), r.join(","));
+}
+
+// Round 5 (2026-11-07), the four Codex P1s on #1792 b2a6f876 and #1809 888888ae: each answered LOOSER than the
+// pre-strict reader. g/h: RFC 2822 text the strict reader rejects lost its unknown age; i/j: a validated tenant
+// rule on criticalSignalsPresent=true never matched because every alternate world's backstop was pinned false.
+for (const [which, expectPrefix, expectCode, label] of [
+  ["g", "restrict|", "POSTURE_MISSING", "an RFC 2822 future 'fresh' posture (Tue, 14 Jul 2026 13:00:00 GMT) keeps its unknown age beside an orderable 'fresh'"],
+  ["h", "restrict|", "POSTURE_MISSING", "an RFC 2822 future 'fresh' posture (Mon, 13 Jul 2026 14:00:00 GMT) keeps its unknown age beside an orderable 'fresh'"],
+  ["i", "deny|", "TENANT_DENY", "a tenant rule on tamperState=confirmed AND criticalSignalsPresent=true still sees the complete-evidence reading"],
+  ["j", "deny|", "TENANT_DENY", "a tenant rule on criticalSignalsPresent=true still sees the complete-evidence reading"],
+] as const) {
+  const r = ZONES.map((z) => inZone(z, "codex", which));
+  check(`never milder than the pre-strict reader (Codex round 5 ${which}): ${label} -> ${expectPrefix.slice(0, -1)} ${expectCode}, in every zone`, r.every((v) => v.startsWith(expectPrefix) && v.split("|")[1]!.split("+").includes(expectCode)), r.join(","));
+}
+
+// THE CLASS, held: never MILDER than the pre-strict reader on the evaluating host, for any input the generator
+// makes, under five zones (the verdict must also be the SAME in every zone: the pre-strict answer is folded in for
+// every modelled host, not just this one). An assertion that fails: on #1792 b2a6f876 this printed milder>0.
+{
+  const CLASS_ZONES = ["UTC", "Asia/Tokyo", "America/Los_Angeles", "Asia/Kolkata", "Pacific/Kiritimati"];
+  const runs = CLASS_ZONES.map((z) => [z, inZone(z, "class", "20261107", "2000")] as const);
+  console.log(runs.map(([z, v]) => `${z}: ${v}`).join("\n"));
+  check("the class: no verdict is milder than the pre-strict reader's on the evaluating host, in five zones (2000 seeded trials each, validated tenant policies)",
+    runs.every(([, v]) => v.startsWith("milder=0 ")), runs.map(([z, v]) => `${z}=${v}`).join(" "));
+  check("the class: the verdicts are identical in every zone (one fingerprint)",
+    new Set(runs.map(([, v]) => /fingerprint=(\w+)/.exec(v)?.[1] ?? v)).size === 1, runs.map(([z, v]) => `${z}=${v}`).join(" "));
+  const classified = [...CLASS_ZONES, "Australia/Lord_Howe", "America/St_Johns", "Asia/Kathmandu", "Europe/London", "Etc/GMT+12"].map((z) => [z, inZone(z, "classify")] as const);
+  check("pre-strict stamps: every stamp Date.parse accepts is classified the same in ten zones, and none disagrees with that zone's Date.parse",
+    classified.every(([, v]) => / disagree=0 /.test(v)) && new Set(classified.map(([, v]) => v)).size === 1, classified.map(([z, v]) => `${z}=${v}`).join(" "));
 }
 
 console.log(`\nsummary=${failures.length === 0 ? "pass" : "FAIL"} (${passed}/${passed + failures.length})`);

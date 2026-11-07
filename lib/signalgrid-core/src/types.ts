@@ -597,6 +597,21 @@ export interface DecisionEvidence {
    * digest body is byte-identical to before; present, it is inside the digest.
    */
   retainedAccusations?: RetainedAccusations;
+  /**
+   * ROUND 5 (2026-11-07). The evidence as the PRE-STRICT reader (`Date.parse`, mainline's) read the same signals,
+   * once per modelled host offset, each kept as the fields where it DIFFERS from the strict evidence above (the
+   * backstop is recomputed on each, never carried). `evaluatePolicy` judges every one with the active policy and
+   * keeps the most restrictive outcome, so the verdict is never milder than the pre-strict reader's. `bounded` is
+   * set when a stamp's pre-strict reading could not be placed: the policy then bounds the outcome. ABSENT whenever
+   * the two readers agree, so every such snapshot's digest body is byte-identical to before.
+   */
+  preStrictReadings?: PreStrictReadings;
+}
+
+/** Round 5: the pre-strict readings of one evidence set (see `DecisionEvidence.preStrictReadings`). */
+export interface PreStrictReadings {
+  readonly worlds: readonly Partial<Omit<DecisionEvidence, "criticalSignalsPresent" | "retainedAccusations" | "preStrictReadings">>[];
+  readonly bounded?: true;
 }
 
 /** Owner decision (a): every accusing member a family read, when the core could not order them. */

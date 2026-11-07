@@ -229,6 +229,38 @@ export const isRefName = (s) =>
   }
 }
 
+// `protected: true` on the branches list is not "deletion is blocked". GitHub sets it for a
+// branch that ANY active ruleset targets — and this repository's Default ruleset targets
+// ~ALL with a single copilot_code_review rule, so every branch read as protected and the
+// 2026-11-07 apply runs deleted nothing (13 merged mac/* branches kept for "branch
+// protection"). Deletion is blocked only by classic protection or a `deletion` rule.
+// Unknown stays kept: a read that failed, or a rule list that was not an array.
+function deletionBlock(listedProtected, classicEnabled, ruleTypes) {
+  if (listedProtected === false) return null;
+  if (listedProtected !== true) return "protection state not reported — unknown is kept";
+  if (classicEnabled !== false) return classicEnabled === true ? "classic branch protection" : "classic protection state unreadable — unknown is kept";
+  if (!Array.isArray(ruleTypes)) return "ruleset state unreadable — unknown is kept";
+  if (ruleTypes.includes("deletion")) return "a ruleset forbids deleting it";
+  return null;
+}
+{
+  const cases = [
+    [deletionBlock(false, undefined, undefined), null],
+    [deletionBlock(undefined, false, []), "protection state not reported — unknown is kept"],
+    [deletionBlock(true, false, ["copilot_code_review"]), null], // the Default ruleset alone
+    [deletionBlock(true, false, ["deletion", "non_fast_forward"]), "a ruleset forbids deleting it"], // mainline
+    [deletionBlock(true, true, []), "classic branch protection"],
+    [deletionBlock(true, undefined, ["copilot_code_review"]), "classic protection state unreadable — unknown is kept"],
+    [deletionBlock(true, false, undefined), "ruleset state unreadable — unknown is kept"],
+  ];
+  const bad = cases.filter(([got, want]) => got !== want);
+  if (bad.length > 0) {
+    console.error("✗ deletion-protection self-test FAILED — refusing to judge protection.\n");
+    for (const [got, want] of bad) console.error(`    got ${JSON.stringify(got)} want ${JSON.stringify(want)}`);
+    process.exit(1);
+  }
+}
+
 // The recovery record must survive appendSummary intact. appendSummary runs every
 // element through `oneLine` (collapses newlines), so the restore commands must reach
 // it as ONE ELEMENT PER BRANCH — a single joined multi-line element would flatten to
@@ -333,11 +365,23 @@ for (const b of branches) {
   // CLAUDE.md ("never derive a policy default from the ABSENCE of managed
   // configuration"). GitHub always sends the field, so this is latent, not live.
   if (b.protected !== false) {
-    kept.push({
-      name,
-      reason: b.protected === true ? "branch protection" : "protection state not reported — unknown is kept",
-    });
-    continue;
+    let classicEnabled, ruleTypes;
+    if (b.protected === true) {
+      const ref = encodeRefPath(name);
+      try {
+        const detail = await api(`/repos/${OWNER}/${REPO}/branches/${ref}`);
+        classicEnabled = typeof detail?.protection?.enabled === "boolean" ? detail.protection.enabled : undefined;
+      } catch { classicEnabled = undefined; }
+      try {
+        const rules = await api(`/repos/${OWNER}/${REPO}/rules/branches/${ref}`);
+        ruleTypes = Array.isArray(rules) ? rules.map((r) => r?.type) : undefined;
+      } catch { ruleTypes = undefined; }
+    }
+    const block = deletionBlock(b.protected, classicEnabled, ruleTypes);
+    if (block) {
+      kept.push({ name, reason: block });
+      continue;
+    }
   }
   // Likewise a branch whose tip sha the API did not report: it cannot be restored,
   // so it is not a deletion candidate.

@@ -229,6 +229,38 @@ export const isRefName = (s) =>
   }
 }
 
+// `protected: true` on the branches list is not "deletion is blocked". GitHub sets it for a
+// branch that ANY active ruleset targets — and this repository's Default ruleset targets
+// ~ALL with a single copilot_code_review rule, so every branch read as protected and the
+// 2026-11-07 apply runs deleted nothing (13 merged mac/* branches kept for "branch
+// protection"). Deletion is blocked only by classic protection or a `deletion` rule.
+// Unknown stays kept: a read that failed, or a rule list that was not an array.
+function deletionBlock(listedProtected, classicEnabled, ruleTypes) {
+  if (listedProtected === false) return null;
+  if (listedProtected !== true) return "protection state not reported — unknown is kept";
+  if (classicEnabled !== false) return classicEnabled === true ? "classic branch protection" : "classic protection state unreadable — unknown is kept";
+  if (!Array.isArray(ruleTypes)) return "ruleset state unreadable — unknown is kept";
+  if (ruleTypes.includes("deletion")) return "a ruleset forbids deleting it";
+  return null;
+}
+{
+  const cases = [
+    [deletionBlock(false, undefined, undefined), null],
+    [deletionBlock(undefined, false, []), "protection state not reported — unknown is kept"],
+    [deletionBlock(true, false, ["copilot_code_review"]), null], // the Default ruleset alone
+    [deletionBlock(true, false, ["deletion", "non_fast_forward"]), "a ruleset forbids deleting it"], // mainline
+    [deletionBlock(true, true, []), "classic branch protection"],
+    [deletionBlock(true, undefined, ["copilot_code_review"]), "classic protection state unreadable — unknown is kept"],
+    [deletionBlock(true, false, undefined), "ruleset state unreadable — unknown is kept"],
+  ];
+  const bad = cases.filter(([got, want]) => got !== want);
+  if (bad.length > 0) {
+    console.error("✗ deletion-protection self-test FAILED — refusing to judge protection.\n");
+    for (const [got, want] of bad) console.error(`    got ${JSON.stringify(got)} want ${JSON.stringify(want)}`);
+    process.exit(1);
+  }
+}
+
 // The recovery record must survive appendSummary intact. appendSummary runs every
 // element through `oneLine` (collapses newlines), so the restore commands must reach
 // it as ONE ELEMENT PER BRANCH — a single joined multi-line element would flatten to
@@ -333,11 +365,25 @@ for (const b of branches) {
   // CLAUDE.md ("never derive a policy default from the ABSENCE of managed
   // configuration"). GitHub always sends the field, so this is latent, not live.
   if (b.protected !== false) {
-    kept.push({
-      name,
-      reason: b.protected === true ? "branch protection" : "protection state not reported — unknown is kept",
-    });
-    continue;
+    let classicEnabled, ruleTypes;
+    if (b.protected === true) {
+      const ref = encodeRefPath(name);
+      try {
+        const detail = await api(`/repos/${OWNER}/${REPO}/branches/${ref}`);
+        classicEnabled = typeof detail?.protection?.enabled === "boolean" ? detail.protection.enabled : undefined;
+      } catch { classicEnabled = undefined; }
+      try {
+        // Every page: the endpoint defaults to 30 rules per page, and a `deletion` rule on page 2
+        // must still keep the branch (Codex review of #1916, P2).
+        const rules = await paginate(`/repos/${OWNER}/${REPO}/rules/branches/${ref}`);
+        ruleTypes = Array.isArray(rules) ? rules.map((r) => r?.type) : undefined;
+      } catch { ruleTypes = undefined; }
+    }
+    const block = deletionBlock(b.protected, classicEnabled, ruleTypes);
+    if (block) {
+      kept.push({ name, reason: block });
+      continue;
+    }
   }
   // Likewise a branch whose tip sha the API did not report: it cannot be restored,
   // so it is not a deletion candidate.
@@ -365,8 +411,16 @@ for (const b of branches) {
   const merged = prs.filter((p) => p.merged_at);
   if (merged.length > 0) {
     const newest = merged.sort((a, b2) => (a.merged_at < b2.merged_at ? 1 : -1))[0];
-    doomed.push({ name, sha, why: `PR #${newest.number} merged ${newest.merged_at}` });
-    continue;
+    // A merged PR covers the branch only up to the head it merged. If the branch tip is
+    // any merged PR's head, every commit on it landed. Otherwise commits were added
+    // after the merge (a later closed PR, or no PR at all): on 2026-11-07 the first
+    // apply run deleted seven such branches (mac/native-ledger-2026-09-02 among them)
+    // and they had to be restored by hand. Fall through to the containment check, which
+    // releases the branch only when mainline already holds its tip.
+    if (merged.some((p) => p.head?.sha === sha)) {
+      doomed.push({ name, sha, why: `PR #${newest.number} merged ${newest.merged_at}` });
+      continue;
+    }
   }
 
   // SECOND SUFFICIENT CONDITION: CONTAINMENT. A branch can be fully absorbed into
@@ -404,7 +458,9 @@ for (const b of branches) {
   const unmerged =
     prs.length === 0
       ? `no pull request, and ${cmp.ahead_by} commit(s) exist ONLY here (${cmp.status}) — this is unmerged work`
-      : `PR(s) closed WITHOUT merging, and ${cmp.ahead_by} commit(s) exist ONLY here (${cmp.status})`;
+      : merged.length > 0
+        ? `commits added after its merged PR, and ${cmp.ahead_by} commit(s) exist ONLY here (${cmp.status})`
+        : `PR(s) closed WITHOUT merging, and ${cmp.ahead_by} commit(s) exist ONLY here (${cmp.status})`;
 
   if (FORCE.has(name)) {
     forced.push({ name, sha, unique: cmp.ahead_by, note: unmerged });

@@ -19,6 +19,7 @@ import {
 import {
   createEnterpriseAuthenticator,
   createJwksCache,
+  verifyJwtRs256,
   type EnterpriseAuthConfig,
   type JwksFetch,
   type Jwks,
@@ -229,6 +230,72 @@ if (!accepted.ok) {
   check("cross-tenant read of the OIDC identity's decision is denied", denied);
 }
 
+// ── NULL / NON-OBJECT SEGMENTS REFUSE, NEVER THROW ───────────────────────────
+//
+// A segment that is valid base64url JSON but not an object (`null`, a number, an
+// array) used to reach `header.alg` / `key.kty` unguarded and throw a TypeError
+// out of `verifyJwtRs256` — an unauthenticated HTTP 500 instead of the refusal the
+// file's contract names. Each case below must come back `{ ok: false }`.
+function refuses(name: string, run: () => ReturnType<typeof verifyJwtRs256>): void {
+  let threw: unknown;
+  let result: ReturnType<typeof verifyJwtRs256> | undefined;
+  try {
+    result = run();
+  } catch (err) {
+    threw = err;
+  }
+  check(
+    `${name}: refuses with { ok: false }, never throws${threw ? ` (threw ${String(threw)})` : ""}`,
+    threw === undefined && result !== undefined && result.ok === false,
+  );
+}
+const verifyOpts = { jwks, issuer: ISSUER, audience: AUDIENCE, nowMs: NOW_MS };
+const validPayloadSeg = b64url(JSON.stringify(validParts().payload));
+
+refuses("null JOSE header (bnVsbA)", () => verifyJwtRs256(`${b64url("null")}.${validPayloadSeg}.x`, verifyOpts));
+for (const [label, literal] of [["number", "42"], ["string", '"RS256"'], ["array", "[]"]] as const) {
+  refuses(`${label} JOSE header`, () => verifyJwtRs256(`${b64url(literal)}.${validPayloadSeg}.x`, verifyOpts));
+}
+refuses("JWKS holding only a null element", () =>
+  verifyJwtRs256(validToken, { ...verifyOpts, jwks: { keys: [null] as unknown as JwkKey[] } }),
+);
+refuses("validly signed token whose payload decodes to null", () => {
+  const headerSeg = b64url(JSON.stringify(validParts().header));
+  const signingInput = `${headerSeg}.${b64url("null")}`;
+  const sig = cryptoSign("RSA-SHA256", Buffer.from(signingInput, "ascii"), privateKey);
+  return verifyJwtRs256(`${signingInput}.${b64url(sig)}`, verifyOpts);
+});
+// A header that IS an object but carries an object-valued `alg`/`kid` with a hostile
+// `toString` used to throw when the refusal message stringified it (String()/template).
+for (const [label, header] of [
+  ["object-valued alg", { alg: { toString: 1 }, kid: KID }],
+  ["object-valued kid", { alg: "RS256", kid: { toString: 1 } }],
+  ["array-valued kid", { alg: "RS256", kid: [KID] }],
+  ["numeric alg", { alg: 256, kid: KID }],
+] as const) {
+  const tok = `${b64url(JSON.stringify(header))}.${validPayloadSeg}.x`;
+  refuses(`${label} JOSE header`, () => verifyJwtRs256(tok, verifyOpts));
+  let viaAuth = "threw";
+  try {
+    const out = await authenticator.authenticate(tok, NOW_MS);
+    viaAuth = out.ok ? "accepted" : "refused";
+  } catch {
+    viaAuth = "threw";
+  }
+  check(`${label} JOSE header: the authenticator refuses and never throws`, viaAuth === "refused");
+}
+
+{
+  let acceptedDespiteNull = false;
+  try {
+    acceptedDespiteNull =
+      verifyJwtRs256(validToken, { ...verifyOpts, jwks: { keys: [null, ...jwks.keys] as unknown as JwkKey[] } }).ok === true;
+  } catch {
+    // a throw is a failed check, reported below, never an aborted run
+  }
+  check("a null JWKS element does not hide a good key (valid token still accepted)", acceptedDespiteNull);
+}
+
 // ── JWKS ROTATION SURVIVAL ───────────────────────────────────────────────────
 //
 // The suite above proves an unknown kid is REJECTED, which is right for a forged
@@ -280,6 +347,126 @@ if (!accepted.ok) {
 
   await cache.get(T + 2_000 + 61_000, "still-unknown");
   check("after the cooldown lapses, exactly ONE more refetch is allowed", fetches === beforeForged + 1);
+}
+
+// ── A BLANK OIDC_ISSUER IS "OFF" ONLY WHEN EVERY OIDC SETTING IS BLANK ───────
+// Owner decision 2026-11-06 ("Refuse to start"): a blank or whitespace-only
+// OIDC_ISSUER while ANY other OIDC variable the loader reads is non-blank is a
+// misconfiguration, so loadEnterpriseAuthConfig returns `invalid` and the
+// api-server refuses to boot (middlewares/context.ts). Before that decision the
+// blank issuer short-circuited to `disabled`, which under the default
+// review-demo profile accepted the published demo bearers and let /v1/keys hand
+// them to anonymous callers — an ambiguous setting loosening the answer, which
+// golden rule 2 forbids. Fully blank (unset, '' or whitespace everywhere — what
+// docker-compose.prod.yml's `${OIDC_*:-}` pass-through injects when the host
+// sets nothing) still means OIDC off.
+{
+  const { loadEnterpriseAuthConfig } = await import("@workspace/enterprise-auth");
+  const load = (env: Record<string, string | undefined>) => loadEnterpriseAuthConfig(env);
+  const status = (env: Record<string, string | undefined>) => load(env).status;
+  const rest = { OIDC_AUDIENCE: AUDIENCE, OIDC_JWKS_URI: "https://idp.example/jwks" };
+  // Every OIDC variable loadEnterpriseAuthConfig reads besides the issuer, each
+  // with a value that is valid on its own.
+  const COMPANIONS: Record<string, string> = {
+    OIDC_AUDIENCE: AUDIENCE,
+    OIDC_JWKS_URI: "https://idp.example/jwks",
+    OIDC_TENANT_MAP: JSON.stringify({ contoso: "tenant_northwind" }),
+    OIDC_ROLE_MAP: JSON.stringify({ "sg-operator": "operator" }),
+    OIDC_TENANT_CLAIM: "tid",
+    OIDC_ROLE_CLAIM: "roles",
+    OIDC_SUBJECT_CLAIM: "sub",
+    OIDC_CLOCK_TOLERANCE_SEC: "60",
+  };
+  const every = (v: string) => Object.fromEntries(Object.keys(COMPANIONS).map((k) => [k, v]));
+
+  check("config: OIDC_ISSUER unset (and nothing else) resolves to disabled", status({}) === "disabled");
+  check("config: OIDC_ISSUER='' (and nothing else) resolves to disabled", status({ OIDC_ISSUER: "" }) === "disabled");
+  check("config: OIDC_ISSUER='   ' (and nothing else) resolves to disabled", status({ OIDC_ISSUER: "   " }) === "disabled");
+  check(
+    "config: every OIDC variable present but '' (the compose pass-through) resolves to disabled",
+    status({ OIDC_ISSUER: "", ...every("") }) === "disabled",
+  );
+  check(
+    "config: every OIDC variable whitespace-only resolves to disabled",
+    status({ OIDC_ISSUER: "  ", ...every(" \t ") }) === "disabled",
+  );
+  check(
+    "config: whitespace-only OIDC_ISSUER with audience + JWKS set is INVALID (refuse to boot), not disabled",
+    status({ OIDC_ISSUER: " \t\n ", ...rest }) === "invalid",
+  );
+  {
+    const r = load({ OIDC_ISSUER: "   ", ...rest });
+    check(
+      "config: the blank-issuer refusal names the variables that are set, never their values",
+      r.status === "invalid" &&
+        r.reason.includes("OIDC_AUDIENCE") &&
+        r.reason.includes("OIDC_JWKS_URI") &&
+        !r.reason.includes(AUDIENCE) &&
+        !r.reason.includes(rest.OIDC_JWKS_URI),
+    );
+  }
+  for (const [name, value] of Object.entries(COMPANIONS)) {
+    for (const issuer of [undefined, "", "   "]) {
+      const shown = issuer === undefined ? "unset" : `'${issuer}'`;
+      const r = load({ ...(issuer === undefined ? {} : { OIDC_ISSUER: issuer }), [name]: value });
+      check(
+        `config: OIDC_ISSUER ${shown} with only ${name} set is invalid and names ${name}`,
+        r.status === "invalid" && r.reason.includes(name),
+      );
+    }
+  }
+  // A present-but-whitespace audience or JWKS beside a VALID issuer was already
+  // invalid; pinned so the blank-issuer change cannot loosen that half.
+  check(
+    "config: a valid OIDC_ISSUER with a whitespace-only OIDC_AUDIENCE is invalid",
+    status({ OIDC_ISSUER: ISSUER, ...COMPANIONS, OIDC_AUDIENCE: "   " }) === "invalid",
+  );
+  check(
+    "config: a valid OIDC_ISSUER with a whitespace-only OIDC_JWKS_URI is invalid",
+    status({ OIDC_ISSUER: ISSUER, ...COMPANIONS, OIDC_JWKS_URI: " \t " }) === "invalid",
+  );
+  check(
+    "config: a complete OIDC configuration (every companion set) is enabled",
+    status({ OIDC_ISSUER: ISSUER, ...COMPANIONS }) === "enabled",
+  );
+  check(
+    "config: a non-blank OIDC_ISSUER missing audience/JWKS is invalid, not disabled",
+    status({ OIDC_ISSUER: ISSUER }) === "invalid",
+  );
+  check(
+    "config: a non-blank OIDC_ISSUER with audience but no JWKS is invalid, not disabled",
+    status({ OIDC_ISSUER: ISSUER, OIDC_AUDIENCE: AUDIENCE }) === "invalid",
+  );
+  check(
+    "config: a non-blank OIDC_ISSUER with JWKS but no audience is invalid, not disabled",
+    status({ OIDC_ISSUER: ISSUER, OIDC_JWKS_URI: rest.OIDC_JWKS_URI }) === "invalid",
+  );
+  check(
+    "config: a non-blank OIDC_ISSUER with audience + JWKS but no tenant/role maps is invalid",
+    status({ OIDC_ISSUER: ISSUER, ...rest }) === "invalid",
+  );
+}
+
+// ── JWKS CACHE: a null element on the fresh-hit path refuses, never throws ────
+{
+  const nullKeyFetch: JwksFetch = async () => ({
+    ok: true,
+    status: 200,
+    json: async () => ({ keys: [null, ...jwks.keys] }),
+  });
+  const nullCache = createJwksCache("https://idp.example/keys", nullKeyFetch);
+  let cacheThrew: unknown;
+  try {
+    await nullCache.get(NOW_MS, KID);
+    await nullCache.get(NOW_MS + 1_000, KID);
+    await nullCache.get(NOW_MS + 2_000, "kid-that-is-absent");
+  } catch (err) {
+    cacheThrew = err;
+  }
+  check(
+    `JWKS cache with a null element serves and misses without throwing${cacheThrew ? ` (threw ${String(cacheThrew)})` : ""}`,
+    cacheThrew === undefined,
+  );
 }
 
 function check(name: string, condition: boolean): void {

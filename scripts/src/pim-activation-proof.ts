@@ -79,6 +79,18 @@ const aliased = normalizeActivationRequest("al", { ...CONFIRMED, ticket_state: "
 check("an unrecognized key means the envelope was not understood", aliased.requestIntegrity === "malformed" && evaluatePimActivation(aliased).outcome !== "AutoApproved");
 const protoAlias = normalizeActivationRequest("pa", Object.assign(Object.create({ ticket_state: "valid" }), CONFIRMED) as PimActivationRequestRaw);
 check("an unrecognized key INHERITED from the prototype is caught too", protoAlias.requestIntegrity === "malformed");
+// The prototype scan's brace-less guards, each ISOLATED (the mutation sweep reaches them
+// via `oneLine: true`; each check fails when its guard alone is set to `if (false)`).
+// A RECOGNIZED key inherited from the prototype is read by nobody — value reads are
+// own-only — so the scan must count it, not wave it through because the spelling is known.
+const { ticketState: _ticketHoisted, ...confirmedSansTicket } = CONFIRMED;
+check("a RECOGNIZED key inherited from the prototype is an unrecognized envelope → malformed",
+  normalizeActivationRequest("rk", Object.assign(Object.create({ ticketState: "valid" }), confirmedSansTicket) as PimActivationRequestRaw).requestIntegrity === "malformed");
+// Every level EMPTY, so only the depth bound (not a key on some level) can refuse it.
+let pimDeepEmpty: object = {};
+for (let i = 0; i < 100; i += 1) pimDeepEmpty = Object.create(pimDeepEmpty);
+check("a request behind a 100-deep EMPTY prototype chain is malformed — the walk is bounded, not trusted",
+  normalizeActivationRequest("deep", Object.assign(Object.create(pimDeepEmpty), CONFIRMED) as PimActivationRequestRaw).requestIntegrity === "malformed");
 const hidden = new Proxy({ ...CONFIRMED }, { ownKeys: () => [], getOwnPropertyDescriptor: () => undefined }) as PimActivationRequestRaw;
 check("a Proxy hiding its own descriptors reads as ABSENT and cannot AutoApprove", evaluatePimActivation(normalizeActivationRequest("px", hidden)).outcome !== "AutoApproved");
 const throwing = new Proxy({ ...CONFIRMED }, { ownKeys: () => { throw new Error("hostile"); } }) as PimActivationRequestRaw;

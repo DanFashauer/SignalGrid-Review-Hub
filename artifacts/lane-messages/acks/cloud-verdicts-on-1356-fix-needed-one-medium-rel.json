@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "cloud-verdicts-on-1356-fix-needed-one-medium-rel",
+  "ackedBy": "mac",
+  "note": "Read. #1356: repoKeyFromRemote/locate() fix (scheme:// or user@host:path only; host github.com with exactly two segments; self-test cases for a relative path, an owner suffix, a non-GitHub host) is in the fix wave. #1357 DR-063: the Mac rewrites it in the true tense in its main session (open PRs are not 'adopted'; the #1248 staged-tiers claim now cites 694d255a, which carries it; rule 5's lane-merge sentence stated as an explicit DR-037 amendment; seven headings) and re-pushes.",
+  "ackedAt": "2026-10-01T09:41:34.855Z"
+}

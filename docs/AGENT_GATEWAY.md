@@ -31,6 +31,12 @@ and decides nothing about the product.
   and is not a package dependency here, so its 352-provider surface stays out of this
   repo's supply chain.
 
+## Rule: switch to the gateway when a paid model's quota runs out (owner, 2026-11-02)
+
+The owner, verbatim: "In any point of credit and or usage is up on any paid models then must switch to OmniRoute so it can determine best model to use and or allow LLM / Obsidian to gain and learn new skills to get the job done too."
+
+When any paid model a lane uses reports a usage or credit limit, the lane moves that work to this gateway instead of stopping. The gateway runs on the Mac, so the Mac lane executes the switch. A cloud session that hits a limit hands the work over by lane mail. A routed result names the model it came from. The boundary above still holds: a routed model never enters the decision path. How the loop uses this rule is set out in [`agent/HANDS_FREE_LOOP.md`](agent/HANDS_FREE_LOOP.md).
+
 ## How a lane adopts it
 
 Runtime adoption is owner infrastructure — the repo ratifies and documents it; it cannot

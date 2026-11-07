@@ -257,7 +257,8 @@ export type BadgeBindingState =
   | "removed"
   | "forced"
   | "absent"
-  | "unknown";
+  | "unknown"
+  | "unreadable";
 
 // Physical-custody / DockBridge hardware states (vendor-neutral).
 export type CustodyState =
@@ -266,27 +267,31 @@ export type CustodyState =
   | "overdue"
   | "exception"
   | "maintenance"
-  | "unknown";
+  | "unknown"
+  | "unreadable";
 export type ChargeState =
   | "charging"
   | "charged"
   | "low"
   | "critical"
   | "not_present"
-  | "unknown";
+  | "unknown"
+  | "unreadable";
 export type TamperState =
   | "none"
   | "suspected"
   | "confirmed"
   | "sensor_unavailable"
-  | "unknown";
+  | "unknown"
+  | "unreadable";
 export type DockState =
   | "occupied"
   | "empty"
   | "reserved"
   | "faulted"
   | "offline"
-  | "unknown";
+  | "unknown"
+  | "unreadable";
 /**
  * DR-043 credential fields on the LIVE evidence path. The vocabularies are
  * attach.ts's own (`AttachState`, `CredentialStrength`) — one vocabulary shared
@@ -324,7 +329,18 @@ export type CredentialStrengthEvidence = CredentialStrength | "not_applicable";
  * a grant requires positive confirmation of every input — it is an honest gap,
  * not a safe default, and calling it "fail-safe" would have hidden that.
  */
-export type BatteryHealthState = "healthy" | "degraded" | "failing" | "unknown";
+/**
+ * DR-065 (PROPOSED). The six dock-family evidence unions (BadgeBindingState,
+ * CustodyState, ChargeState, TamperState, DockState and this one) carry
+ * TWO non-answers, and they are different answers:
+ *  - `"unknown"`    — SILENCE: no reading of that category arrived at all. This is
+ *                     day-one-quiet: a tenant without dock hardware is not stepped up.
+ *  - `"unreadable"` — an EMITTED reading was present but nothing in it could be read
+ *                     (a value outside the family's domain, or only a good value whose
+ *                     clock stamp cannot be ordered). It steps up, exactly as an
+ *                     emitted unknown attach / credential reading does under DR-043.
+ */
+export type BatteryHealthState = "healthy" | "degraded" | "failing" | "unknown" | "unreadable";
 
 /** Every normalized signal category the core evaluates.
  *
@@ -604,6 +620,10 @@ export interface EvidenceSnapshot {
    * a different value means something in the core decision path changed.
    */
   coreNormalizationVersion?: number;
+  /** Which digest function minted `digest`. ABSENT = a row minted before the WTF-8 fix
+   *  (legacy low-byte FNV); verified with that function, never re-stamped. Any other
+   *  value verifies false. Inside the digest body, so stripping it is itself tampering. */
+  digestAlg?: "fnv1a64-wtf8";
   /** Deterministic content digest making the snapshot tamper-evident. */
   digest: string;
 }
@@ -889,11 +909,13 @@ export interface WebhookDelivery {
  * downstream could tell. The union is derived from this array instead, so the
  * compile-time and run-time answers cannot disagree.
  *
- * The first seven are the original ledger plus the step_up answer (#869). The last eight are the session-puck
- * lifecycle (DR-043): a credential presented, a dock seated, an identity proven, a
- * posture read, a session opened, the dock broken, the session suspended, the
- * credential revoked. Each is what the system KNEW at that instant, recorded once and
- * never rewritten — the chain digest is over the canonical body, as it already was.
+ * The first seven are the original ledger plus the step_up answer (#869). The last nine are the session-puck
+ * lifecycle (DR-043, Puck 6): a credential presented, a dock seated, an identity proven, a
+ * posture read, a session opened, the dock broken, the device RETURNED by its holder
+ * (Puck 6 — a planned return is not a removal, so it is not recorded as one), the session
+ * suspended, the credential revoked. Each is what the system KNEW at that instant,
+ * recorded once and never rewritten — the chain digest is over the canonical body, as it
+ * already was.
  */
 export const AUDIT_EVENT_TYPES = [
   "decision.evaluated",
@@ -909,6 +931,7 @@ export const AUDIT_EVENT_TYPES = [
   "posture.observed",
   "session.opened",
   "dock.removed",
+  "dock.returned",
   "session.suspended",
   "credential.revoked",
 ] as const;
@@ -916,7 +939,7 @@ export const AUDIT_EVENT_TYPES = [
 export type AuditEventType = (typeof AUDIT_EVENT_TYPES)[number];
 
 /**
- * The eight puck-lifecycle members. They carry a stricter admission rule than the
+ * The nine puck-lifecycle members. They carry a stricter admission rule than the
  * original seven (see `appendAudit`): each must name the decision it evidences, because
  * a lifecycle event with no decision behind it is a log line, not a ledger entry.
  */
@@ -927,6 +950,7 @@ export const PUCK_LIFECYCLE_EVENT_TYPES = [
   "posture.observed",
   "session.opened",
   "dock.removed",
+  "dock.returned",
   "session.suspended",
   "credential.revoked",
 ] as const;

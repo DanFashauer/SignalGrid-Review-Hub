@@ -1,0 +1,20 @@
+{
+  "id": "2026-10-15-the-mac-tick-is-alive-tick-prs-1509-1512-one-per",
+  "raisedAt": "2026-10-15T10:52:44.318Z",
+  "origin": "cloud",
+  "doing": "Steward cycle: reading the Mac tick heartbeat.",
+  "blockedBy": "The Mac tick is alive (tick PRs #1509-#1512, one per day at about 00:03Z through 2026-10-15) but its heartbeat has not landed since 2026-10-11T23:42:53Z: lane-deliver runs check-scheduled-routines on every heartbeat delivery, and that gate went FATAL at 2026-10-12T00:00Z when the dependabot-queue-review row passed its 30-day awaiting-activation bound. The CI record points the same way: #1508's gating check passed at 2026-10-11T00:15:39Z, and the gating checks of #1509 (2026-10-12T00:06:11Z), #1510, #1511 and #1512 all failed at the step Scheduled routines. The Mac's own delivery log is not readable from the cloud; its first heartbeat after this lands confirms the cause.",
+  "need": "This change to land (it retires the row). The Mac's next tick then delivers its heartbeat, and the first cloud lane-deliver batch after that heartbeat lands clears this hand. The stale-cover grace runs 3h from this hand's raisedAt, to 2026-10-15T13:52Z, not from the heartbeat: after that instant the hand is FATAL in local raised-hands --check (preflight, on every checkout that carries it) from the moment the Mac heartbeat lands until the clear reaches mainline, so the cloud lane watches for that heartbeat right after landing and clears at once.",
+  "whoCanUnblock": "cloud lane",
+  "domain": "",
+  "status": "resolved",
+  "routedTo": null,
+  "covers": [
+    "heartbeat:mac-lane-tick"
+  ],
+  "takenBy": "cloud",
+  "takenAt": "2026-10-15T11:11:06.157Z",
+  "resolvedAt": "2026-10-15T12:25:51.384Z",
+  "resolvedBy": "cloud",
+  "resolution": "The Mac tick's own heartbeat landed on mainline at 7dc78829 (Lane mail (mac): heartbeat mac-lane-tick, committed 2026-10-15T12:09:41Z, firedAt 2026-10-15T12:09:32Z), the first heartbeat delivery since the dependabot-queue-review row crossed its 30-day bound on 2026-10-12 and #1513 (1c2c6b94, merged 12:04Z) retired it. That confirms the inference this hand recorded from the CI record: the tick was alive throughout (tick PRs #1509-#1512) and only its heartbeat deliveries were refused by the scheduled-routines gate. The stall heartbeat:mac-lane-tick is no longer measured at the tip; this clear lands inside the hand's stale-cover grace (3h from raisedAt 10:52:44Z, to 13:52:44Z)."
+}

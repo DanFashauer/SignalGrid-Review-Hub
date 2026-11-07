@@ -1,6 +1,7 @@
 import { test, expect, type Locator, type Page } from "@playwright/test";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { guardEgress } from "./egress-guard";
 
 /**
  * docs/evidence-coverage.html — the standalone, self-contained Evidence Coverage page.
@@ -25,17 +26,11 @@ import { fileURLToPath } from "node:url";
 const here = path.dirname(fileURLToPath(import.meta.url));
 const PAGE_URL = `file://${path.resolve(here, "../../../docs/evidence-coverage.html")}`;
 
-/** Every non-file request the page attempted. Must stay empty — see the first test. */
-let offPageRequests: string[] = [];
+// Only the file itself passes; every other request — localhost included — is off-page
+// and fails the test (the shared guard's afterEach; see the first test below).
+guardEgress(test, [], { serves: "file" });
 
 test.beforeEach(async ({ page }) => {
-  offPageRequests = [];
-  await page.route("**/*", (route) => {
-    const url = route.request().url();
-    if (url.startsWith("file://")) return route.continue();
-    offPageRequests.push(url);
-    return route.abort();
-  });
   await page.goto(PAGE_URL, { waitUntil: "domcontentloaded" });
 });
 
@@ -53,12 +48,13 @@ function statCard(page: Page, testId: string): Locator {
 }
 
 test("the page reaches nothing outside itself", async ({ page }) => {
-  // The route handler above aborts off-page requests, and the first version of this file
+  // The route handler aborts off-page requests, and the first version of this file
   // stopped there — which meant a page that grew a webfont, a logo or an analytics beacon
   // would be silently neutered by the test and ship green to a public marketing domain.
-  // Aborting is the setup; this assertion is the test.
-  await page.waitForTimeout(250);
-  expect(offPageRequests).toEqual([]);
+  // Aborting is the setup; the assertion is the test. It now lives in
+  // `egress-guard.ts` and runs after EVERY test here and in each spec that serves a page
+  // (plan row 147); this test keeps the load-only case named on its own.
+  await expect(page).toHaveURL(/^file:/);
 });
 
 test("the standalone page renders the real model, not an empty shell", async ({ page }) => {

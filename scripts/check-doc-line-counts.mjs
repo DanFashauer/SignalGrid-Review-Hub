@@ -1,6 +1,6 @@
-// Doc line-count figures — `lib/x/src/y.ts (245)` must still be 245 lines.
+// Doc line-count figures — `lib/x/src/y.ts (245)` must still be about 245 lines (within ±5%, at least 25).
 //
-//   node scripts/check-doc-line-counts.mjs               # gate: every figure matches wc -l
+//   node scripts/check-doc-line-counts.mjs               # gate: every figure is within its band of wc -l
 //   node scripts/check-doc-line-counts.mjs --self-test   # a planted drift must fail; a clean tree must pass
 //
 // WHY THIS EXISTS. docs/COMPANY_BUILD_PLAN.md's tier lists cite files with their
@@ -23,12 +23,21 @@
 // N is `wc -l`: the number of newline characters. That is what every figure in
 // the tree was measured with, and it is the number the next person will measure
 // with too.
+//
+// A SIZE SIGNAL, HELD WITHIN A BAND (2026-11-04). The figure must lie within
+// max(MIN_SLACK lines, SLACK_RATIO of the real count) of `wc -l`. Exact equality made
+// every PR that touched a cited file (scripts/preflight.mjs, routes/v1.ts) edit
+// docs/COMPANY_BUILD_PLAN.md too, and every other open PR then conflicted on that
+// line. The band still fails every drift this gate was written for: 340 stated for 750,
+// 923 stated for 1,023 (both pinned in the self-test). The doc says the same thing
+// where the figures are listed.
 
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { execFileSync } from "node:child_process";
+import { scratchGitOk, scrubProcessGitEnv } from "./lib/scratch-git.mjs";
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -42,6 +51,14 @@ const FIGURE =
 const EXEMPT = new Map([
   ["docs/agent/EVIDENCE.md", "a dated ledger: a figure there records the line count at the read it describes, and re-measuring it would rewrite the record"],
 ]);
+
+const SLACK_RATIO = 0.05;
+const MIN_SLACK = 25;
+/** Pure: is a stated line count close enough to the real one to stand as the size signal it is? */
+export function withinBand(stated, actual) {
+  if (actual <= 0 || stated <= 0) return false; // fail closed: an emptied or absent file never passes against a small stated figure
+  return Math.abs(stated - actual) <= Math.max(MIN_SLACK, Math.round(actual * SLACK_RATIO));
+}
 
 const HIT_FLOOR = 20; // the real tree carries ~29; fewer means the matcher stopped matching, not that the docs got honest
 
@@ -83,7 +100,7 @@ function audit(root, docs, exempt) {
       continue;
     }
     if (f.actual === null) problems.push(`${f.doc}:${f.line} cites ${f.path} (${f.stated}) but the file does not exist`);
-    else if (f.actual !== f.stated) problems.push(`${f.doc}:${f.line} states ${f.path} (${f.stated}), but the file is ${f.actual} lines — update the sentence`);
+    else if (!withinBand(f.stated, f.actual)) problems.push(`${f.doc}:${f.line} states ${f.path} (${f.stated}), but the file is ${f.actual} lines (outside the ±${Math.max(MIN_SLACK, Math.round(f.actual * SLACK_RATIO))}-line band) — update the sentence`);
   }
   for (const [doc, n] of exemptHits) {
     if (n === 0) problems.push(`exemption for ${doc} matches no figure any more — remove it (a stale exemption is a hole)`);
@@ -92,24 +109,28 @@ function audit(root, docs, exempt) {
 }
 
 function selfTest() {
+  scrubProcessGitEnv(); // inherited GIT_DIR/GIT_WORK_TREE/GIT_INDEX_FILE would aim the gate's own plain-git calls at the real repo
   const checks = [];
   const temp = mkdtempSync(join(tmpdir(), "sg-doc-line-counts-"));
   try {
-    execFileSync("git", ["-C", temp, "init", "-q"]);
+    scratchGitOk(temp, ["init", "-q"]);
     mkdirSync(join(temp, "lib/planted/src"), { recursive: true });
     mkdirSync(join(temp, "docs/agent"), { recursive: true });
     writeFileSync(join(temp, "lib/planted/src/index.ts"), "a\nb\nc\n"); // 3 lines
     writeFileSync(join(temp, "docs/PLAN.md"), "1. lib/planted/src/index.ts (3) — right.\n");
     writeFileSync(join(temp, "docs/agent/EVIDENCE.md"), "read `lib/planted/src/index.ts (99)` on a past day\n");
-    execFileSync("git", ["-C", temp, "add", "-A"]);
+    scratchGitOk(temp, ["add", "-A"]);
     const docs = ["docs/PLAN.md", "docs/agent/EVIDENCE.md"];
 
     const clean = audit(temp, docs, EXEMPT);
     checks.push(["a correct figure passes", clean.problems.length === 0 && clean.figures.length === 2]);
 
-    writeFileSync(join(temp, "docs/PLAN.md"), "1. lib/planted/src/index.ts (4) — drifted.\n");
+    writeFileSync(join(temp, "docs/PLAN.md"), "1. lib/planted/src/index.ts (40) — drifted.\n");
     const drift = audit(temp, docs, EXEMPT);
-    checks.push(["a drifted figure FAILS and names the real count", drift.problems.length === 1 && /is 3 lines/.test(drift.problems[0])]);
+    checks.push(["a figure outside the band FAILS and names the real count", drift.problems.length === 1 && /is 3 lines/.test(drift.problems[0])]);
+    writeFileSync(join(temp, "docs/PLAN.md"), "1. lib/planted/src/index.ts (4) — one line off.\n");
+    checks.push(["a figure inside the band passes (a one-line edit to a cited file needs no doc edit)", audit(temp, docs, EXEMPT).problems.length === 0]);
+    checks.push(["the band: the drifts this gate was written for still FAIL (340 for 750, 923 for 1023); small drifts pass (972 for 990, 80 for 100)", !withinBand(340, 750) && !withinBand(923, 1023) && withinBand(972, 990) && withinBand(80, 100) && !withinBand(80, 106) && withinBand(1050, 1100) && !withinBand(1040, 1100) && !withinBand(0, 25) && !withinBand(25, 0)]);
 
     writeFileSync(join(temp, "docs/PLAN.md"), "1. `lib/planted/src/index.ts` (3) in backticks.\n");
     checks.push(["a backticked path is matched", audit(temp, docs, EXEMPT).figures.some((f) => f.doc === "docs/PLAN.md" && f.stated === 3)]);
@@ -158,4 +179,4 @@ if (problems.length > 0) {
   console.error("\nDoc line-count gate FAILED — a line count measured once and quoted forever is a figure that lies.");
   process.exit(1);
 }
-console.log("Doc line-count gate passed — every `path (N)` figure matches the file it names.");
+console.log("Doc line-count gate passed — every `path (N)` figure is within its band of the file it names.");

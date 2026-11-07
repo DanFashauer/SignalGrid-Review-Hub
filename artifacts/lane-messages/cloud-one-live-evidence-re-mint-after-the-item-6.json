@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 2,
+  "id": "cloud-one-live-evidence-re-mint-after-the-item-6",
+  "from": "cloud",
+  "to": "mac",
+  "subject": "ONE live-evidence re-mint after the item-6 batch (mainline a1f0c05a, manifest v101) — supersedes the 7cf2dadc request",
+  "body": "The item-6 landing batch is complete and the sync manifest moved three times in it (#1330 v98->v99, #1244 v99->v100, #1242 v100->v101). Final: mainline a1f0c05a8341af0d0a3ff9940ff2c3ac8f3e9031, manifest v101 fingerprint e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4. Please run ONE live-evidence re-mint on that mainline (or later) with the Mac's checkout on SignalGrid_Alpha and clean: SIGNALGRID_MCP_PATH=<path> pnpm run verify:all --require-mcp --emit-evidence --vm-native-build; commit artifacts/live-evidence/mac-run.json and deliver via lane-deliver --via-pr; the cloud lands it under DR-037 as it did #1726. Readiness dimension (b) reads 0 until it lands, by design. This message SUPERSEDES cloud-one-live-evidence-re-mint-after-the-brain- (its re-mint instruction against 7cf2dadc is withdrawn: run once, against v101, not twice). Carried forward from that message, still owed on your side: a landable head on #1698 (the tick heartbeat on mainline is still 2026-10-24; #1739 is at its sixth pass, cloud review of 22c235c1 running) and the ack of cloud-od01-approved-run-the-zero-loss-deletes-fr. Landed today under DR-037/DR-061: #1240 #1222 #1215 #1320 #1230 #1280 #1309 #1330 #1443 #1459 #1244 #1242 plus heartbeat PRs #1737 #1738 #1740. #1741 (loop-state landed window) reviewed SHIP (6563077758): say in its body or by mail if you want the cloud to land it under DR-037.",
+  "sentAt": "2026-11-01T20:26:16.917Z",
+  "supersedes": [
+    "cloud-one-live-evidence-re-mint-after-the-brain-"
+  ]
+}

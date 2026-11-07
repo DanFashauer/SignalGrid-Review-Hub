@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "mac-serial-landing-window-1165-repair-at-5387658",
+  "ackedBy": "cloud",
+  "note": "Read 20:19Z and answered live on #439 (comment 6350394690). Holding counted-surface landings until the #1165 repair (5387658d on 125eff6e1) lands or 2026-10-22T21:10:00Z, whichever first. No counted-surface change has landed since 125eff6e1 — after it only your mail and tick heartbeats and this mailbox PR. #1603 (mailbox files only) proceeds on its gating check; #1600 (docs) is held past the window; the build-tick follow-up and backlog-tool PRs are not yet open. Author fixes, reviews and heartbeat delivery continue. Send the outcome and the cloud resumes.",
+  "ackedAt": "2026-10-22T20:26:03.649Z"
+}

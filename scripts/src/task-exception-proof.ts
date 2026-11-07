@@ -320,6 +320,11 @@ const endlessProto = (): object => new Proxy({}, { getPrototypeOf: () => endless
 check("a Proxy with an endless prototype chain terminates and fails closed", normalizeReport("ep", endlessProto() as TaskExceptionReportRaw).reportIntegrity === "malformed");
 check("a null report body is malformed, not an untyped TypeError", normalizeReport("nb", null as unknown as TaskExceptionReportRaw).reportIntegrity === "malformed");
 check("an ARRAY report is malformed, never a grant", normalizeReport("arr", [] as unknown as TaskExceptionReportRaw).reportIntegrity === "malformed");
+// Isolates the read's `!plain` bail-out: an array carrying OWN recognized fields is
+// malformed either way, but without the bail-out its values would be read and reported
+// as the task's state. A non-plain report asserts nothing, so every field stays unknown.
+const arrayWithFields = normalizeReport("arrf", Object.assign([], { ...CLEAN_WIRE, exceptionKind: "assignment_mismatch", sourceExceptionCode: "E1" }) as unknown as TaskExceptionReportRaw);
+check("an ARRAY carrying own report fields has none of them READ — every field stays unknown/null", arrayWithFields.reportIntegrity === "malformed" && arrayWithFields.exceptionKind === "unknown" && arrayWithFields.taskState === "unknown" && arrayWithFields.taskSystemReachable === null && arrayWithFields.sourceExceptionCode === null);
 const notAnObject = normalizeReport("s", "ERR: wms timeout" as unknown as TaskExceptionReportRaw);
 check("a non-object report is malformed, not a thrown TypeError", notAnObject.reportIntegrity === "malformed" && evaluateTaskException(notAnObject).recommendedAction !== "none");
 const hidden = new Proxy({ ...CLEAN_WIRE, exception_kind: "assignment_mismatch" }, { ownKeys: () => [], getOwnPropertyDescriptor: () => undefined }) as TaskExceptionReportRaw;

@@ -86,6 +86,7 @@ const IN_FIELDS: Record<string, ReadonlySet<string>> = {
     "exception",
     "maintenance",
     "unknown",
+    "unreadable",
   ]),
   chargeState: new Set([
     "charging",
@@ -94,14 +95,16 @@ const IN_FIELDS: Record<string, ReadonlySet<string>> = {
     "critical",
     "not_present",
     "unknown",
+    "unreadable",
   ]),
-  batteryHealth: new Set(["healthy", "degraded", "failing", "unknown"]),
+  batteryHealth: new Set(["healthy", "degraded", "failing", "unknown", "unreadable"]),
   tamperState: new Set([
     "none",
     "suspected",
     "confirmed",
     "sensor_unavailable",
     "unknown",
+    "unreadable",
   ]),
   dockState: new Set([
     "occupied",
@@ -110,6 +113,7 @@ const IN_FIELDS: Record<string, ReadonlySet<string>> = {
     "faulted",
     "offline",
     "unknown",
+    "unreadable",
   ]),
   baselineState: new Set([
     "aligned",
@@ -134,6 +138,7 @@ const IN_FIELDS: Record<string, ReadonlySet<string>> = {
     "forced",
     "absent",
     "unknown",
+    "unreadable",
   ]),
   managementHealthState: new Set([
     "healthy",
@@ -637,6 +642,70 @@ export const SHARED_DEVICE_RULES_V1: PolicyRuleSpec[] = [
     reasonCode: "BADGE_REMOVED",
     severity: "high",
   },
+  // ── DR-065 (PROPOSED): an EMITTED dock-family reading that cannot be read ──
+  // Owner decision 2026-11-03 (raised hand 2026-09-25-policy-ts-v1-stays-silent-
+  // on-an-emitted-present-, option a). Day-one-quiet covers SILENCE: a family no
+  // connector emits reads "unknown" and matches nothing here, so a tenant without
+  // dock hardware is not stepped up. A reading that WAS emitted but is outside its
+  // domain (or is only a good value whose clock stamp cannot be ordered) reads
+  // "unreadable" and steps up — the same treatment `attach-unknown` and
+  // `credential-read-unknown` give the DR-043 fields. Step-up, not restrict: the
+  // reading accuses nothing, it only fails to vouch. One reason code across the
+  // six families; the matched rule id names which family spoke unreadably.
+  {
+    id: "custody-unreadable",
+    description:
+      "A custody state reading was emitted but could not be read, so nothing it says can vouch for the shared device. That raises the bar and never grants.",
+    match: [{ field: "custodyState", in: ["unreadable"] }],
+    outcome: "step_up",
+    reasonCode: "DOCK_EVIDENCE_UNREADABLE",
+    severity: "medium",
+  },
+  {
+    id: "charge-unreadable",
+    description:
+      "A charge state reading was emitted but could not be read, so nothing it says can vouch for the shared device. That raises the bar and never grants.",
+    match: [{ field: "chargeState", in: ["unreadable"] }],
+    outcome: "step_up",
+    reasonCode: "DOCK_EVIDENCE_UNREADABLE",
+    severity: "medium",
+  },
+  {
+    id: "battery-health-unreadable",
+    description:
+      "A battery health reading was emitted but could not be read, so nothing it says can vouch for the shared device. That raises the bar and never grants.",
+    match: [{ field: "batteryHealth", in: ["unreadable"] }],
+    outcome: "step_up",
+    reasonCode: "DOCK_EVIDENCE_UNREADABLE",
+    severity: "medium",
+  },
+  {
+    id: "tamper-unreadable",
+    description:
+      "A tamper state reading was emitted but could not be read, so nothing it says can vouch for the shared device. That raises the bar and never grants.",
+    match: [{ field: "tamperState", in: ["unreadable"] }],
+    outcome: "step_up",
+    reasonCode: "DOCK_EVIDENCE_UNREADABLE",
+    severity: "medium",
+  },
+  {
+    id: "dock-unreadable",
+    description:
+      "A dock state reading was emitted but could not be read, so nothing it says can vouch for the shared device. That raises the bar and never grants.",
+    match: [{ field: "dockState", in: ["unreadable"] }],
+    outcome: "step_up",
+    reasonCode: "DOCK_EVIDENCE_UNREADABLE",
+    severity: "medium",
+  },
+  {
+    id: "badge-unreadable",
+    description:
+      "A badge binding reading was emitted but could not be read, so nothing it says can vouch for the shared device. That raises the bar and never grants.",
+    match: [{ field: "badgeState", in: ["unreadable"] }],
+    outcome: "step_up",
+    reasonCode: "DOCK_EVIDENCE_UNREADABLE",
+    severity: "medium",
+  },
   {
     id: "baseline-drifted",
     description:
@@ -716,6 +785,12 @@ export const SHARED_DEVICE_RULES_V1: PolicyRuleSpec[] = [
     reasonCode: "CREDENTIAL_DOWNGRADE",
     severity: "critical",
   },
+  // Resolution note (Puck 6): this live row has NO resolution descriptor, so every
+  // `removed` it matches escalates — including a planned end-of-shift return, which the
+  // live evidence cannot yet tell from a walk-away. `puckVerdict` (attach.ts) already
+  // grades a holder-bound return as CUSTODY_RETURNED (closed, nothing to escalate); the
+  // live gate gains the same distinction only when a release/return evidence field
+  // exists for it to match on. Until then this row is deliberately the stricter reading.
   {
     id: "attach-removed",
     description:

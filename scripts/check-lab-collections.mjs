@@ -27,11 +27,12 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { isMainModule } from "./lib/is-main.mjs";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const ROOT = "artifacts/lab-collections";
 
-const REQUEST_BLOCK = /(get|post|put|delete|patch)\s*\{[^}]*url:\s*(\S+)/;
+export const REQUEST_BLOCK = /(get|post|put|delete|patch)\s*\{[^}]*url:\s*(\S+)/;
 /** Auth bootstraps are the ONLY writes the README allows. */
 const AUTH_BOOTSTRAP = /(login|token|session|auth)/i;
 
@@ -141,7 +142,7 @@ function selfTest() {
   return failed.length === 0 ? 0 : 1;
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (isMainModule(process.argv[1], import.meta.url)) {
   if (process.argv.includes("--self-test")) process.exit(selfTest());
   const root = join(repoRoot, ROOT);
   if (!existsSync(root)) {

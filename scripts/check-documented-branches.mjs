@@ -284,6 +284,26 @@ export function violationsIn(file, body, pruned) {
     });
 }
 
+/**
+ * Scan each doc. ENOENT is a legitimate skip (a file deleted since `git ls-files`);
+ * any other read error is a present-but-unreadable doc, which must FAIL — not be
+ * scanned as clean. Template: check-override-parity.mjs.
+ */
+function scanDocs(docs, root, set) {
+  const problems = [];
+  const unreadable = [];
+  let mentioning = 0;
+  for (const f of docs) {
+    let body;
+    try { body = readFileSync(resolve(root, f), "utf8"); }
+    catch (e) { if (e.code !== "ENOENT") unreadable.push(`${f}: ${e.message}`); continue; }
+    if (!/`(dev|alpha|beta|prod)`/i.test(body)) continue;
+    mentioning += 1;
+    problems.push(...violationsIn(f, body, set));
+  }
+  return { problems, mentioning, unreadable };
+}
+
 const pruned = prunedTierBranches();
 
 if (process.argv.includes("--list")) {
@@ -342,6 +362,14 @@ if (process.argv.includes("--self-test")) {
     ["a bottom-of-page confession buys nothing", violationsIn("st.md",
       `The \`dev\` branch is the default.\n${"filler\n".repeat(60)}\n> ⛔ SUPERSEDED — do not execute\n`, set).length > 0],
     ["the prune list parsed to the four tiers", Array.isArray(pruned) && pruned.length === 4],
+    // A doc that is present but unreadable must fail the scan, not read as clean. A
+    // DIRECTORY gives a real EISDIR with no chmod; a missing path gives a real ENOENT.
+    ["a present-but-unreadable doc (EISDIR) is reported, naming the path", (() => {
+      const u = scanDocs(["docs"], repo, set).unreadable;
+      return u.length === 1 && u[0].startsWith("docs: ");
+    })()],
+    ["a missing doc (ENOENT) is skipped, not reported",
+      scanDocs(["docs/__no_such_doc__.md"], repo, set).unreadable.length === 0],
   ];
   let ok = true;
   for (const [what, pass] of checks) {
@@ -378,14 +406,11 @@ if (docs.length < 100) {
   process.exit(1);
 }
 
-let problems = [];
-let mentioning = 0;
-for (const f of docs) {
-  let body;
-  try { body = readFileSync(resolve(repo, f), "utf8"); } catch { continue; }
-  if (!/`(dev|alpha|beta|prod)`/i.test(body)) continue;
-  mentioning += 1;
-  problems = problems.concat(violationsIn(f, body, pruned));
+const { problems, mentioning, unreadable } = scanDocs(docs, repo, pruned);
+if (unreadable.length) {
+  console.error(`✗ ${unreadable.length} doc(s) present but unreadable — NOT scanned, and a doc never read is not a doc found clean:\n`);
+  for (const u of unreadable) console.error(`    ${u}`);
+  process.exit(1);
 }
 
 console.log(

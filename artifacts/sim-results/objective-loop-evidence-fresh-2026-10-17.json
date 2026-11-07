@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 1,
+  "requestId": "objective-loop-evidence-fresh-2026-10-17",
+  "completedAt": "2026-10-17T17:28:38.505Z",
+  "provenance": {
+    "platform": "darwin",
+    "arch": "arm64",
+    "nodeVersion": "v24.18.0",
+    "macosVersion": "27.0.1",
+    "commit": "8e5acd09844f4b54cc045858c3fa15444fbfbcbc",
+    "branch": "SignalGrid_Alpha",
+    "workingTreeClean": true
+  },
+  "runs": [
+    {
+      "operation": "evidence",
+      "status": "failed",
+      "exitCode": 1,
+      "durationMs": 2787529,
+      "tail": [
+        "[WebServer]   dist/pino-pretty.mjs               114.7kb",
+        "[WebServer]   dist/thread-stream-worker.mjs        7.4kb",
+        "[WebServer]   dist/index.mjs.map                   4.5mb",
+        "[WebServer]   dist/pino-worker.mjs.map           265.2kb",
+        "[WebServer]   dist/pino-file.mjs.map             237.4kb",
+        "[WebServer]   dist/pino-pretty.mjs.map           204.0kb",
+        "[WebServer]   dist/thread-stream-worker.mjs.map   12.0kb",
+        "[WebServer] ",
+        "[WebServer] ⚡ Done in 338ms",
+        "",
+        "─── Raised hands self-test (the gate can actually fail) output (tail) ───",
+        "<URL>",
+        "    const g2 = (...a) => { const r = scratchGit(e2e, a); if (r.status !== 0) throw new Error(`git ${a.join(\" \")}: ${r.stderr}`); return r.stdout.trim(); };",
+        "                                                                                   ^",
+        "",
+        "Error: git add -A: ",
+        "    at g2 (<URL>",
+        "    at commit (<URL>",
+        "    at selfTest (<URL>",
+        "    at async <URL>",
+        "",
+        "Node.js v24.18.0",
+        "",
+        "",
+        "Preflight FAILED at: Raised hands self-test (the gate can actually fail). Fix before pushing."
+      ]
+    }
+  ]
+}

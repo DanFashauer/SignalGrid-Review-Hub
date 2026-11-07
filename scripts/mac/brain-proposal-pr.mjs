@@ -758,7 +758,7 @@ export async function run({ job, db = DEFAULT_DB, repo = REPO, publish = false, 
 
 async function selfTest() {
   scrubProcessGitEnv();
-  const root = mkdtempSync(join(tmpdir(), "brain-pr-st-"));
+  const root = realpathSync(mkdtempSync(join(tmpdir(), "brain-pr-st-")));
   const emptyCfg = join(root, "gitconfig");
   writeFileSync(emptyCfg, "");
   process.env.GIT_CONFIG_GLOBAL = emptyCfg;

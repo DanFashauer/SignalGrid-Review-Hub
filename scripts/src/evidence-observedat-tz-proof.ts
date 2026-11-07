@@ -272,8 +272,8 @@ function devicePostureFor(lastSeenAt: string, observedAt: string): string {
  * 13:00Z with a 30-minute bound. NAC: authenticated + compliant, no segment policy. Carrier: provisioned, online,
  * not roaming, backchannel present. Location: inside the geofence.
  */
-function familyFor(family: string, stamp: string): string {
-  const now = parseInt("1783947600000", 10); // 2026-07-13T13:00:00Z, as epoch ms so no parse is involved
+function familyFor(family: string, stamp: string, nowEpochMs = "1783947600000"): string {
+  const now = parseInt(nowEpochMs, 10); // default 2026-07-13T13:00:00Z, as epoch ms so no parse is involved
   const seen = stamp === "-" ? null : stamp;
   const bound = { staleAfterMs: 30 * 60 * 1000 };
   if (family === "nac") {
@@ -350,6 +350,7 @@ if (process.argv[2] === "--worker") {
     : mode === "sharedfresh" ? sharedFreshnessFor(a!)
     : mode === "devposture" ? devicePostureFor(a!, b!)
     : mode === "family" ? familyFor(a!, b!)
+    : mode === "familydate" ? familyFor(a!, "2026-07-13", "1783901400000") // judged at 2026-07-13T00:10:00Z
     : mode === "puckdate" ? puckFor(a!, b!, "2026-07-13", "2026-07-13T00:00:30Z")
     : mode === "verifydate" ? verifyDateFor(a!)
     : "BAD-MODE";
@@ -798,6 +799,21 @@ for (const stamp of ["2026-03-02T08:00:00+00", "2026-03-02T00:00:00Z", "2024-02-
         );
       }
     }
+  }
+}
+
+// OWNER DECISION (b), 2026-11-06, on the connector side: a date-only sighting names a day, not an instant. It is
+// PRESENT but unreadable, so it grades `stale` (never `fresh`, never the milder `unknown`) and has no age. Judged
+// ten minutes after midnight, a "2026-07-13" read as exact midnight was 10 minutes old and fresh.
+{
+  const shared = ZONES.map((z) => inZone(z, "sharedfresh", "2026-07-13"));
+  check("date-only: integrations deriveFreshness/ageMs grade a '2026-07-13' sighting stale with no age, in every zone", shared.every((v) => v === "stale|null"), shared.join(","));
+  const posture = ZONES.map((z) => inZone(z, "devposture", "2026-07-13", "2026-07-13T13:00:00Z"));
+  check("date-only: a Graph deviceLastSeenAt of '2026-07-13' is DEVICE_POSTURE_STALE, in every zone", posture.every((v) => v === "step_up|DEVICE_POSTURE_STALE"), posture.join(","));
+  const expectStale: Record<string, string> = { nac: "step_up|STALE_NETWORK_STATE", carrier: "locate|STALE_LAST_SEEN", location: "locate|STALE_LOCATION_FIX" };
+  for (const family of ["nac", "carrier", "location"]) {
+    const got = ZONES.map((z) => inZone(z, "familydate", family));
+    check(`date-only: ${family} with a '2026-07-13' sighting judged at 00:10Z is ${expectStale[family]} (never the fresh grant), in every zone`, got.every((v) => v === expectStale[family]), got.join(","));
   }
 }
 

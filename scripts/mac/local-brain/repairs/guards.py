@@ -6,7 +6,7 @@ day a brain install dropped a guard, a repair was written outside the tree, the 
 classifier refused to run it, and a hand asked the owner to type two lines. This file is
 the repair, in the tree, reviewed before it can run.
 
-The guards (each measured on a real build before it was written; five as of 2026-11-06 23:20Z):
+The guards (each measured on a real build before it was written; five as of 2026-11-07 00:45Z):
   call_cap_600     signalgrid_brain.py: the OmniRoute / direct-Ollama request ceiling is
                    600 s, not 180 s. A 12k-token step on this 16 GB Mac takes 2m27s-2m59s;
                    at 180 s the client aborted every one (OmniRoute 499, Ollama 500).
@@ -22,13 +22,17 @@ The guards (each measured on a real build before it was written; five as of 2026
                    old_text == content four times; each was accepted as progress, cleared the
                    refusal counter so reedit_schema never fired, and the job budget expired at
                    step 9 with the correct edit sitting unverified in the worktree.
-  reread_schema    signalgrid_agent_runtime.py: once every required source has been read and
-                   any one path has been read three times, `read` leaves the action schema until
-                   an accepted edit clears the read counts. The runtime's own cooldown excluded
-                   read for ONE proposal and then offered it again: build 6e021d2f read the same
-                   unchanged test file eight times in a row (steps 5-12) and hit the action limit
-                   with its correct function edit unverified. Codex's tests still hold: read stays
-                   while a never-read dependency exists (pending_sources) and after two repeats.
+  reread_refused   signalgrid_agent_runtime.py: a FOURTH read of the same unchanged bytes is
+                   refused at the tool ("Identical unchanged source already read three times"),
+                   and while that refusal stands `read` leaves the schema (narrowed in scope, so
+                   reedit_schema's cut is never widened) until an accepted edit clears the
+                   refusal counts. The runtime's own cooldown excluded read for ONE proposal and
+                   then offered it again: build 6e021d2f read the same unchanged test file eight
+                   times in a row (steps 5-12) and hit the action limit with its correct function
+                   edit unverified. A persistent schema exclusion alone failed Codex's test
+                   test_build_read_cooldown_is_one_proposal_then_new_and_changed_source_reads_resume
+                   (a NEW or CHANGED source must stay readable); this shape leaves new and changed
+                   reads alone and the brain's 168 tests pass.
 
 The brain's private home is never named in this source: SIGNALGRID_BRAIN_HOME, else the
 one-line dotfile ~/.signalgrid-brain-home, else refuse.
@@ -115,22 +119,29 @@ GUARDS = {
              "\\g<i>    raise AgentBlocked(\"Replacement changes nothing: the file already holds that content\")\n"),
         ],
     },
-    "reread_schema": {
+    "reread_refused": {
         "file": RUNTIME,
-        "present": re.compile(r'and any\(c >= 3 for c in build_read_counts\.values\(\)\)\):\n[^\n]*\n[^\n]*\n[^\n]*\n[^\n]*\n\s+_offered = schema\["properties"\]\["action"\]\.get\("enum", ACTION_SCHEMA\["properties"\]\["action"\]\["enum"\]\)\n\s+schema = \{\*\*schema, "properties": \{\*\*schema\["properties"\],\n\s+"action": \{\*\*schema\["properties"\]\["action"\], "enum": \[n for n in _offered if n != "read"\]\}\}\}'),
-        "order": ("Guard reread_schema", "if intake_read_pending:"),
+        # The schema half sits ~300 lines ABOVE the tool half in the runtime; the lookahead binds both.
+        "present": re.compile(r'(?=[\s\S]*raise AgentBlocked\("Identical unchanged source already read three times; choose edit, check or finish"\))[\s\S]*?"already read three times" in k\[3\] for k in build_refusal_counts\)\):\n[^\n]*\n[^\n]*\n\s+_offered = schema\["properties"\]\["action"\]\.get\("enum", ACTION_SCHEMA\["properties"\]\["action"\]\["enum"\]\)\n\s+schema = \{\*\*schema, "properties": \{\*\*schema\["properties"\],\n\s+"action": \{\*\*schema\["properties"\]\["action"\], "enum": \[n for n in _offered if n != "read"\]\}\}\}'),
+        "order": ("Guard reread_refused (schema)", "if intake_read_pending:", "Guard reread_refused (tool)", 'if selected_intake is None or not action["path"].startswith("intake-source/"):'),
         "patch": [
             (re.compile(r'^(?P<i>[ \t]+)if intake_read_pending:\n', re.M),
-             "\\g<i>if (job[\"kind\"] == \"build\" and not tdd and not private_document and not pending_sources\n"
-             "\\g<i>        and any(c >= 3 for c in build_read_counts.values())):\n"
-             "\\g<i>    # Guard reread_schema (scripts/mac/local-brain/repairs/guards.py): the one-proposal cooldown let the\n"
-             "\\g<i>    # 9B resume re-reading (build 6e021d2f, 8x). With every required source read, a third identical\n"
-             "\\g<i>    # read of one path removes read until an accepted edit clears the counts. It narrows the schema\n"
-             "\\g<i>    # already in scope, so an enum reedit_schema has cut to check/finish is never widened again.\n"
+             "\\g<i>if (job[\"kind\"] == \"build\" and not tdd and not private_document\n"
+             "\\g<i>        and any(k[0] == \"read\" and \"already read three times\" in k[3] for k in build_refusal_counts)):\n"
+             "\\g<i>    # Guard reread_refused (schema) (scripts/mac/local-brain/repairs/guards.py): after the tool refused a\n"
+             "\\g<i>    # fourth identical read, read leaves the enum already in scope until an accepted edit clears refusals.\n"
              "\\g<i>    _offered = schema[\"properties\"][\"action\"].get(\"enum\", ACTION_SCHEMA[\"properties\"][\"action\"][\"enum\"])\n"
              "\\g<i>    schema = {**schema, \"properties\": {**schema[\"properties\"],\n"
              "\\g<i>        \"action\": {**schema[\"properties\"][\"action\"], \"enum\": [n for n in _offered if n != \"read\"]}}}\n"
              "\\g<i>if intake_read_pending:\n"),
+            (re.compile(r'^(?P<i>[ \t]+)(?P<line>if selected_intake is None or not action\["path"\]\.startswith\("intake-source/"\):)\n', re.M),
+             "\\g<i>if (job[\"kind\"] in {\"goal\", \"build\"} and build_read_counts.get(\n"
+             "\\g<i>        (action[\"path\"], hashlib.sha256(text.encode()).hexdigest()), 0) >= 3):\n"
+             "\\g<i>    # Guard reread_refused (tool) (scripts/mac/local-brain/repairs/guards.py): the one-proposal cooldown\n"
+             "\\g<i>    # let the 9B re-read the same unchanged file eight times (build 6e021d2f). The fourth identical\n"
+             "\\g<i>    # read is a refusal, counted like any other; new or changed bytes are a different key and stay readable.\n"
+             "\\g<i>    raise AgentBlocked(\"Identical unchanged source already read three times; choose edit, check or finish\")\n"
+             "\\g<i>\\g<line>\n"),
         ],
     },
 }
@@ -281,6 +292,8 @@ UNREPAIRED_RUNTIME = (
     "                        instruction += \"\\nRECOVER FROM THE ACTUAL TOOL RESULT: do not replay the refused replacement. Read the current needed worktree source.\"\n"
     "                if intake_read_pending:\n"
     "                    pass\n"
+    "                        if selected_intake is None or not action[\"path\"].startswith(\"intake-source/\"):\n"
+    "                            held_text = None\n"
     "                        if action[\"old_text\"]:\n"
     "                            previous = target.read_bytes().decode(\"utf-8\", errors=\"strict\")\n"
     "                            if previous.count(action[\"old_text\"]) != 1:\n"
@@ -331,9 +344,10 @@ def self_test():
         moved = runtime_txt.replace("if content == previous:\n", "", 1).replace("target.write_text(content)\n",
                 "target.write_text(content)\nif content == previous:\n", 1)
         ok("(7c) --check refuses the guard's text in the wrong place", not placed(moved, GUARDS["noop_edit_refused"]))
-        ok("(7d) the re-read guard sits before the mandatory intake read, which still overrides it",
-           runtime_txt.index("Guard reread_schema") < runtime_txt.index("if intake_read_pending:")
-           and 'if n != "read"]' in runtime_txt and "not pending_sources" in runtime_txt)
+        ok("(7d) the re-read schema guard sits before the mandatory intake read, which still overrides it; the tool guard sits before the read is retained",
+           runtime_txt.index("Guard reread_refused (schema)") < runtime_txt.index("if intake_read_pending:")
+           < runtime_txt.index("Guard reread_refused (tool)") < runtime_txt.index('if selected_intake is None or not action["path"]')
+           and 'if n != "read"]' in runtime_txt and "already read three times" in runtime_txt)
         # Cloud review of cf5db3f99 (MEDIUM): rebuilding from ACTION_SCHEMA put `edit` back after reedit_schema had
         # narrowed to check/finish. The guard must filter the enum already in scope. Executed, not just grepped:
         # with reedit's narrowing applied first, the reread block must leave check/finish, never widen.
@@ -341,7 +355,7 @@ def self_test():
         ns = {"ACTION_SCHEMA": {"properties": {"action": {"type": "string", "enum": ["read", "search", "edit", "check", "delegate", "finish"]}}}}
         ns["schema"] = {**ns["ACTION_SCHEMA"], "properties": {**ns["ACTION_SCHEMA"]["properties"], "action": {"type": "string", "enum": ["check", "finish"]}}}
         exec("\n".join(line.strip() for line in block.splitlines() if line.strip()), ns)
-        ok("(7e) after reedit narrowed to check/finish, reread leaves check/finish (it never re-offers edit)",
+        ok("(7e) after reedit narrowed to check/finish, the reread schema guard leaves check/finish (it never re-offers edit)",
            ns["schema"]["properties"]["action"]["enum"] == ["check", "finish"])
         ns["schema"] = ns["ACTION_SCHEMA"]
         exec("\n".join(line.strip() for line in block.splitlines() if line.strip()), ns)

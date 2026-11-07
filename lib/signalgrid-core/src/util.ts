@@ -165,10 +165,9 @@ export function parseObservedInstant(observedAt: string): number {
   const m = ZONED_STAMP.exec(observedAt);
   if (!m) return Number.NaN;
   const [, y, mo, d, hh, mi, ss, frac, z, sign, oh, om] = m;
-  // A date-only stamp names a day, not an instant: illegible (owner decision (b), 2026-11-06).
+  // A date-only stamp names a day, not an instant: illegible (owner decision (b), 2026-11-06). A date-time with
+  // no zone never gets here: ZONED_STAMP requires `Z` or an offset after a time, so `exec` already failed.
   if (hh === undefined) return Number.NaN;
-  // A date-time needs a zone. A time with no zone is the host-local case.
-  if (z === undefined && oh === undefined) return Number.NaN;
   // `Date.parse` rolls impossible values over ("2026-02-30" is March 2, "24:00" is the next day), so a reading
   // carrying one would be ordered as a different instant than the one it states. Require every field to
   // round-trip through the calendar; otherwise it names no instant and is illegible.

@@ -223,6 +223,22 @@ function puckFor(wireState: string, forced: string, observedAt: string, referenc
   return `${reading.state}|${row.verdict}|${row.reasonCode}`;
 }
 
+/**
+ * Owner decision (b): remediation with one CLEARING read stamped `observedAt`; request 2026-07-12T23:30Z, as-of
+ * 2026-07-13T01:00Z. A date-only "2026-07-13" read as exact midnight fell inside that window and cleared.
+ */
+function verifyDateFor(observedAt: string): string {
+  return verifyRemediation(
+    {
+      id: "rem_tz3", tenantId: "tenant_northwind", decisionId: "dec_tz3", kind: "request_device_remediation",
+      targetType: "device", targetRef: "ipad-tz", reasonCode: "DEVICE_NONCOMPLIANT", status: "approved_simulated",
+      approvalRequired: true, simulatedOnly: true, requestedAt: "2026-07-12T23:30:00Z", approvedAt: "2026-07-12T23:31:00Z", note: "",
+    },
+    [{ targetRef: "ipad-tz", reasonCodes: [], observedAt }],
+    "2026-07-13T01:00:00Z",
+  ).state;
+}
+
 /** fixedClock on one stamp: the instant it pins, or THROWS. */
 function clockFor(iso: string): string {
   try { return fixedClock(iso).now().toISOString(); } catch { return "THROWS"; }
@@ -273,6 +289,8 @@ if (process.argv[2] === "--worker") {
     : mode === "verify2" ? verifyTwoReadsFor(a!)
     : mode === "puck" ? puckFor(a!, b!, c!, "2026-07-13T08:00:30Z")
     : mode === "puckref" ? puckFor(a!, b!, "2026-07-13T08:00:00Z", c!)
+    : mode === "puckdate" ? puckFor(a!, b!, "2026-07-13", "2026-07-13T00:00:30Z")
+    : mode === "verifydate" ? verifyDateFor(a!)
     : "BAD-MODE";
   console.log(`VERDICT ${out}`);
   process.exit(0);
@@ -596,6 +614,23 @@ for (const stamp of ["2026-03-02T08:00:00+00", "2026-03-02T00:00:00Z", "2024-02-
       );
     }
   }
+}
+
+// OWNER DECISION (b), 2026-11-06, in the attach, remediation and test-clock readers: a date-only stamp names a
+// day, not an instant. It may not vouch (an `attached` dated "2026-07-13" was 30 s old at 00:00:30Z and allowed),
+// may not clear a restriction (it fell inside a 23:30Z-01:00Z window and cleared), and may not pin a clock. An
+// accusation dated that way still stands (a forced removal stays deny).
+{
+  const seated = ZONES.map((z) => inZone(z, "puckdate", "attached", "unforced"));
+  check("date-only: an attach record dated '2026-07-13' cannot vouch, unknown/step_up in every zone (never attached/allow)", seated.every((v) => v === "unknown|step_up|CUSTODY_UNKNOWN"), seated.join(","));
+  const torn = ZONES.map((z) => inZone(z, "puckdate", "removed", "forced"));
+  check("date-only: a forced removal dated '2026-07-13' still denies CUSTODY_TORN in every zone", torn.every((v) => v === "removed|deny|CUSTODY_TORN"), torn.join(","));
+  const cleared = ZONES.map((z) => inZone(z, "verifydate", "2026-07-13"));
+  check("date-only: a clearing read dated '2026-07-13' cannot clear, unobserved in every zone (the restriction holds)", cleared.every((v) => v === "unobserved"), cleared.join(","));
+  const control = ZONES.map((z) => inZone(z, "verifydate", "2026-07-13T00:00:00Z"));
+  check("date-only control: the same read at an exact 00:00:00Z clears, in every zone", control.every((v) => v === "cleared"), control.join(","));
+  const clock = ZONES.map((z) => inZone(z, "clock", "2026-07-13"));
+  check("date-only: fixedClock refuses '2026-07-13' in every zone (never a pinned midnight)", clock.every((v) => v === "THROWS"), clock.join(","));
 }
 
 // OWNER DECISION (a), 2026-11-06: KEEP BOTH accusations until the policy runs (the Codex P1 on #1442/#1792,

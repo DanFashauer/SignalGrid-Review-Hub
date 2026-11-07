@@ -33,7 +33,7 @@
 // NOT a gate. --publish needs network and an authenticated gh (run sandbox-off).
 
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync, chmodSync, mkdirSync, readdirSync, statSync, realpathSync, symlinkSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync, chmodSync, mkdirSync, readdirSync, realpathSync, symlinkSync, openSync, fstatSync, closeSync, constants } from "node:fs";
 import { tmpdir, homedir } from "node:os";
 import { delimiter, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -351,48 +351,73 @@ function h53(str) {
   return 4294967296 * (2097151 & h2) + (h1 >>> 0);
 }
 
-/** The vault/knowledge directories on this machine. Throws Refusal on a configured-but-broken source. */
-export function vaultDirs(env = process.env, home = homedir()) {
-  const explicit = String(env.SIGNALGRID_VAULT_DIRS ?? "").split(delimiter).map((s) => s.trim()).filter(Boolean);
-  if (explicit.length) {
-    for (const d of explicit) if (!existsSync(d)) refuse("a directory named in SIGNALGRID_VAULT_DIRS does not exist");
-    return explicit;
-  }
-  const found = [];
-  for (const reg of [join(home, "Library", "Application Support", "obsidian", "obsidian.json"), join(home, ".config", "obsidian", "obsidian.json")]) {
-    if (!existsSync(reg)) continue;
-    let doc;
-    try { doc = JSON.parse(readFileSync(reg, "utf8")); } catch { refuse("the Obsidian vault registry exists but cannot be read; refusing rather than guessing"); }
-    for (const v of Object.values(doc?.vaults ?? {})) if (v && typeof v.path === "string" && existsSync(v.path)) found.push(v.path);
-  }
-  const corpus = join(home, "Library", "Mobile Documents", "com~apple~CloudDocs", "Documents", "SignalGrid");
-  if (existsSync(corpus)) found.push(corpus);
-  return [...new Set(found)];
+const MISSING = (e) => e && (e.code === "ENOENT" || e.code === "ENOTDIR");
+
+/** Read once, act on the bytes read: null when the file is absent, throw on anything else. No
+ *  exists-then-read window (CodeQL js/file-system-race); the same shape as readIfPresent in loop-state.mjs. */
+function readIfPresent(path) {
+  try { return readFileSync(path, "utf8"); } catch (e) { if (MISSING(e)) return null; throw e; }
 }
 
-function buildIndex(dirs) {
+/** The vault/knowledge directories configured on this machine, as {path, explicit}. Existence is NOT
+ *  checked here (a check followed by a separate use is a race); buildIndex opens each and treats a
+ *  missing OPTIONAL one as absent and a missing EXPLICIT one as a refusal. Throws Refusal on a
+ *  configured-but-broken registry. */
+export function vaultDirs(env = process.env, home = homedir()) {
+  const explicit = String(env.SIGNALGRID_VAULT_DIRS ?? "").split(delimiter).map((s) => s.trim()).filter(Boolean);
+  if (explicit.length) return explicit.map((path) => ({ path, explicit: true }));
+  const found = [];
+  for (const reg of [join(home, "Library", "Application Support", "obsidian", "obsidian.json"), join(home, ".config", "obsidian", "obsidian.json")]) {
+    let raw;
+    try { raw = readIfPresent(reg); } catch { refuse("the Obsidian vault registry exists but cannot be read; refusing rather than guessing"); }
+    if (raw === null) continue;
+    let doc;
+    try { doc = JSON.parse(raw); } catch { refuse("the Obsidian vault registry exists but cannot be read; refusing rather than guessing"); }
+    for (const v of Object.values(doc?.vaults ?? {})) if (v && typeof v.path === "string") found.push(v.path);
+  }
+  found.push(join(home, "Library", "Mobile Documents", "com~apple~CloudDocs", "Documents", "SignalGrid"));
+  return [...new Set(found)].map((path) => ({ path, explicit: false }));
+}
+
+/** Index the text files under the directories. Every file is opened ONCE and fstat/read go through that
+ *  descriptor, so what is classified is what is read. O_NONBLOCK keeps a FIFO from hanging the open. */
+function buildIndex(entries) {
   const lines = new Set(), shingles = new Set(), seen = new Set();
-  let bytes = 0;
-  const walk = (dir) => {
+  let bytes = 0, walked = 0;
+  const walk = (dir, top) => {
     const real = realpathSync(dir);
     if (seen.has(real)) return;
     seen.add(real);
-    for (const ent of readdirSync(dir, { withFileTypes: true })) {
+    for (const ent of top ?? readdirSync(dir, { withFileTypes: true })) {
       if (ent.name === ".git" || ent.name === "node_modules") continue;
       const p = join(dir, ent.name);
-      const st = statSync(p); // follows symlinks; a dangling link throws and the caller refuses
-      if (st.isDirectory()) { walk(p); continue; }
-      if (!st.isFile() || !VAULT_EXT.test(ent.name)) continue;
-      bytes += st.size;
-      if (bytes > MAX_VAULT_BYTES) throw new Error("vault too large to index");
-      const text = readFileSync(p, "utf8");
+      const fd = openSync(p, constants.O_RDONLY | constants.O_NONBLOCK); // follows symlinks; a dangling link throws and the caller refuses
+      let text = null;
+      try {
+        const st = fstatSync(fd);
+        if (st.isFile() && VAULT_EXT.test(ent.name)) {
+          bytes += st.size;
+          if (bytes > MAX_VAULT_BYTES) throw new Error("vault too large to index");
+          text = readFileSync(fd, "utf8");
+        } else if (!st.isDirectory()) continue;
+      } finally { closeSync(fd); }
+      if (text === null) { walk(p, undefined); continue; }
       for (const l of text.split("\n")) { const n = normLine(l); if (n.length >= MIN_LINE_CHARS) lines.add(h53(n)); }
       const w = wordsOf(text);
       for (let i = 0; i + SHINGLE_WORDS <= w.length; i++) { const s = w.slice(i, i + SHINGLE_WORDS).join(" "); if (s.length >= MIN_SHINGLE_CHARS) shingles.add(h53(s)); }
     }
   };
-  for (const d of dirs) walk(d);
-  return { lines, shingles };
+  for (const { path, explicit } of entries) {
+    let top;
+    try { top = readdirSync(path, { withFileTypes: true }); } catch (e) {
+      if (!MISSING(e)) throw e;
+      if (explicit) refuse("a directory named in SIGNALGRID_VAULT_DIRS does not exist");
+      continue; // an optional source (registry entry, brain-link corpus) that is not on this machine
+    }
+    walk(path, top);
+    walked++;
+  }
+  return { lines, shingles, walked };
 }
 
 /** Build the provenance checker once. `required` (publish): an unresolvable vault is a refusal; a dry
@@ -400,13 +425,12 @@ function buildIndex(dirs) {
 export function provenanceChecker({ required, log, env = process.env }) {
   let idx;
   try {
-    const dirs = vaultDirs(env);
-    if (!dirs.length) {
+    idx = buildIndex(vaultDirs(env));
+    if (idx.walked === 0) {
       if (required) refuse("provenance check cannot run: no vault or knowledge directory could be resolved on this machine (set SIGNALGRID_VAULT_DIRS); nothing is published unchecked");
       log("provenance check skipped (dry run): no vault directory resolved");
       return () => [];
     }
-    idx = buildIndex(dirs);
   } catch (e) {
     if (e instanceof Refusal) throw e;
     refuse("provenance check could not read the vault or knowledge directory; nothing is published unchecked");
@@ -448,11 +472,11 @@ function gitleaksScan(wt, files, log, required) {
   const dir = mkdtempSync(join(tmpdir(), "brain-gl-"));
   try {
     for (const f of files) {
-      const src = join(wt, f);
-      if (!existsSync(src)) continue;
+      let bytes;
+      try { bytes = readFileSync(join(wt, f)); } catch (e) { if (MISSING(e)) continue; throw e; } // deleted file: nothing to scan
       const dst = join(dir, f);
       mkdirSync(dirname(dst), { recursive: true });
-      writeFileSync(dst, readFileSync(src));
+      writeFileSync(dst, bytes);
     }
     const cfg = join(REPO, ".gitleaks.toml");
     const r = spawnSync(gitleaksBin(), ["detect", "--no-git", "--no-banner", "--redact", "--exit-code", "1", "--source", dir, ...(existsSync(cfg) ? ["--config", cfg] : [])], { encoding: "utf8", timeout: toMs() });
@@ -862,6 +886,14 @@ async function selfTest() {
     symlinkSync(join(root, "gone.md"), join(badVault, "dangling.md"));
     process.env.SIGNALGRID_VAULT_DIRS = badVault;
     await refused("(14) an unreadable (dangling) vault entry refuses, even on a dry run", { job: "jclean", db, repo }, "could not read the vault");
+    // read-once indexing (CodeQL js/file-system-race): a FIFO named like a note is classified from the opened descriptor and skipped, not read
+    const fifoVault = join(root, "fifo-vault");
+    mkdirSync(fifoVault);
+    writeFileSync(join(fifoVault, "n.md"), "x\n");
+    spawnSync("mkfifo", [join(fifoVault, "pipe.md")]);
+    process.env.SIGNALGRID_VAULT_DIRS = fifoVault;
+    const tFifo = Date.now();
+    check("(14) a FIFO in the vault is skipped, not read and not hung on", (await run({ job: "jclean", db, repo, log: quiet })).files.join() === "docs/clean.md" && Date.now() - tFifo < 10000);
     process.env.SIGNALGRID_VAULT_DIRS = vault;
     // (15) M1: no stderr / absolute path in any refusal
     for (const [name, args] of [["unreadable worktree", { job: "jnotgit", publish: true }], ["worktree whose .git file names a personal path", { job: "jgitdir", publish: true }]]) {

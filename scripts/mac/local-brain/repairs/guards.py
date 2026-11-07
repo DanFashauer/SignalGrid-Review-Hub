@@ -110,10 +110,16 @@ GUARDS = {
     },
     "reedit_schema": {
         "file": RUNTIME,
-        "present": re.compile(r'allowed = \["check", "finish"\] if any\(c >= 2 for c in build_read_counts\.values\(\)\) else \["read", "check", "finish"\]'),
+        # The schema update must FOLLOW the allowed assignment (Codex review of #1892, P2): an `allowed = ...`
+        # whose `schema = ...` was lost still offers edit, so that partial state reads MISSING and is repaired.
+        "present": re.compile(r'allowed = \["check", "finish"\] if any\(c >= 2 for c in build_read_counts\.values\(\)\) else \["read", "check", "finish"\]\n'
+                              r'[ \t]+schema = \{\*\*ACTION_SCHEMA, "properties": \{\*\*ACTION_SCHEMA\["properties"\],\n'
+                              r'[ \t]+"action": \{"type": "string", "enum": allowed\}\}\}'),
         "order": ("RECOVER FROM THE ACTUAL TOOL RESULT", 'allowed = ["check", "finish"]'),
         "patch": [
-            (re.compile(r'^(?P<i>[ \t]+)(?P<line>instruction \+= "\\nRECOVER FROM THE ACTUAL TOOL RESULT: [^\n]*)\n', re.M),
+            # Skipped when the guard's `if` already follows (a partial install); the anchor below repairs that.
+            (re.compile(r'^(?P<i>[ \t]+)(?P<line>instruction \+= "\\nRECOVER FROM THE ACTUAL TOOL RESULT: [^\n]*)\n'
+                        r'(?!(?:[ \t]*#[^\n]*\n)*[ \t]*if any\(k\[0\] == "edit")', re.M),
              "\\g<i>\\g<line>\n"
              "\\g<i># Guard reedit_schema (scripts/mac/local-brain/repairs/guards.py): the recovery text alone does not stop\n"
              "\\g<i># the 9B from replaying a refused edit; once the SAME refusal repeats the schema drops edit, keeps one\n"
@@ -122,6 +128,11 @@ GUARDS = {
              "\\g<i>    allowed = [\"check\", \"finish\"] if any(c >= 2 for c in build_read_counts.values()) else [\"read\", \"check\", \"finish\"]\n"
              "\\g<i>    schema = {**ACTION_SCHEMA, \"properties\": {**ACTION_SCHEMA[\"properties\"],\n"
              "\\g<i>        \"action\": {\"type\": \"string\", \"enum\": allowed}}}\n"),
+            (re.compile(r'^(?P<i>[ \t]+)(?P<line>allowed = \["check", "finish"\] if any\(c >= 2 for c in build_read_counts\.values\(\)\) else \["read", "check", "finish"\])\n'
+                        r'(?![ \t]*schema = \{\*\*ACTION_SCHEMA)', re.M),
+             "\\g<i>\\g<line>\n"
+             "\\g<i>schema = {**ACTION_SCHEMA, \"properties\": {**ACTION_SCHEMA[\"properties\"],\n"
+             "\\g<i>    \"action\": {\"type\": \"string\", \"enum\": allowed}}}\n"),
         ],
     },
     "noop_edit_refused": {
@@ -395,6 +406,13 @@ def self_test():
         moved = runtime_txt.replace("if content == previous:\n", "", 1).replace("target.write_text(content)\n",
                 "target.write_text(content)\nif content == previous:\n", 1)
         ok("(7c) --check refuses the guard's text in the wrong place", not placed(moved, GUARDS["noop_edit_refused"]))
+        # Codex review of #1892 (P2): `allowed = ...` kept, `schema = ...` lost still offers edit.
+        g = GUARDS["reedit_schema"]
+        no_schema = re.sub(r'\n[ \t]+schema = \{\*\*ACTION_SCHEMA[^\n]*\n[^\n]*"enum": allowed\}\}\}', "", runtime_txt, count=1)
+        ok("(7e) a schema guard whose schema update was lost reads MISSING", no_schema != runtime_txt and not present(no_schema, g))
+        fixed = patch_text(no_schema, g)
+        ok("(7f) patch_text restores the lost schema update once, after the kept assignment",
+           present(fixed, g) and placed(fixed, g) and fixed.count('"enum": allowed') == runtime_txt.count('"enum": allowed'))
         ok("(7d) the re-read tool guard sits before the read is retained, and nothing of it touches the action schema",
            runtime_txt.index("Guard reread_refused (tool)") < runtime_txt.index('if selected_intake is None or not action["path"]')
            and "already read three times" in runtime_txt and "Guard reread_refused (schema)" not in runtime_txt

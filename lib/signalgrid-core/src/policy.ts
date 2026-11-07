@@ -1,4 +1,5 @@
 import { canonicalJson, digest } from "./util";
+import { evidenceWorlds } from "./evidence";
 import {
   CoreError,
   type DecisionOutcome,
@@ -292,8 +293,49 @@ export function validatePolicyRules(input: unknown): PolicyRuleSpec[] {
  *  3. Fail-closed: if critical evidence is missing/degraded, `allow` can never
  *     be the outcome — it is suppressed in favour of step-up or higher.
  *  4. If no rule fires, the default is step-up (never a silent allow).
+ *  5. KEEP BOTH (owner decision (a), 2026-11-06): when the evidence retains more than
+ *     one accusation for a family (`retainedAccusations`), the policy is evaluated
+ *     on every combination and the most restrictive outcome stands. When no other
+ *     combination is stricter than the evidence as built, that evaluation is returned
+ *     unchanged (same reasons); otherwise the reason codes and matched rules are those
+ *     of every combination that reached the stricter outcome. Evidence with no retained
+ *     accusations takes the single-world path, byte-identical to before.
  */
 export function evaluatePolicy(
+  version: PolicyVersion,
+  evidence: DecisionEvidence,
+): PolicyEvaluation {
+  const { worlds, truncated } = evidenceWorlds(evidence);
+  if (worlds.length === 1 && !truncated) {
+    return evaluateWorld(version, worlds[0] as DecisionEvidence);
+  }
+  const evaluations = worlds.map((world) => evaluateWorld(version, world));
+  let outcome = mostRestrictive(evaluations.map((e) => e.outcome));
+  // The evidence as built is the first world. When no other combination is stricter, ITS evaluation is the
+  // answer, reasons and all, exactly as before: a retained accusation changes the result only when the active
+  // policy treats it more harshly than the member the shipped tiers chose.
+  const base = evaluations[0] as PolicyEvaluation;
+  if (!truncated && outcome === base.outcome) {
+    return base;
+  }
+  // Every code here was already emitted by a single-world evaluation, so the merge adds no code of its own.
+  const reaching = evaluations.filter((e) => e.outcome === outcome);
+  const reasonCodes: string[] = [...new Set(reaching.flatMap((e) => e.reasonCodes))];
+  const matchedRules: MatchedRule[] = [];
+  for (const e of reaching) {
+    for (const rule of e.matchedRules) if (!matchedRules.some((m) => m.ruleId === rule.ruleId)) matchedRules.push(rule);
+  }
+  // Too many combinations to enumerate: the one-family-at-a-time worlds were judged, but a combination nobody
+  // evaluated could be the one a rule denies, so this never allows.
+  if (truncated && outcome === "allow") {
+    outcome = "step_up";
+    reasonCodes.push("ALLOW_SUPPRESSED_DEGRADED_EVIDENCE");
+  }
+  return { outcome, reasonCodes, matchedRules, explanation: explain(outcome, reasonCodes) };
+}
+
+/** One single-valued evidence world against the policy: the original evaluator, unchanged. */
+function evaluateWorld(
   version: PolicyVersion,
   evidence: DecisionEvidence,
 ): PolicyEvaluation {

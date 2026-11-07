@@ -20,6 +20,7 @@ import type {
   ManagementHealthState,
   NormalizedSignal,
   PolicyVersion,
+  RetainedAccusations,
   TamperState,
   Workflow,
 } from "./types";
@@ -99,9 +100,131 @@ export function buildEvidence(
     credentialReadMethod: readPresentOrNotApplicable(latestByCategory, "credential_read_method", EVIDENCE_VALUE_DOMAINS.readMethod),
   };
 
-  return {
+  const evidence: DecisionEvidence = {
     ...partial,
     criticalSignalsPresent: deriveCriticalSignalsPresent(partial),
+  };
+  // Owner decision (a), 2026-11-06: keep every accusation the core could not order. Added only when there is
+  // one, so an unambiguous snapshot is byte-identical to before.
+  const retained = retainAccusations(latestByCategory, evidence, nowIso);
+  return retained === undefined ? evidence : { ...evidence, retainedAccusations: retained };
+}
+
+/** The enum families whose readers fold a reading worst-wins, as [evidence field, category, domain key]. */
+const RETAINED_ENUM_FAMILIES = [
+  ["deviceCompliance", "device_compliance", "compliance"],
+  ["custodyState", "custody_state", "custody"],
+  ["dockChargeState", "charge_state", "charge"],
+  ["batteryHealth", "battery_health", "batteryHealth"],
+  ["tamperState", "tamper_state", "tamper"],
+  ["dockState", "dock_state", "dock"],
+  ["baselineCompliance", "security_baseline", "baseline"],
+  ["benchmarkSelection", "benchmark_selection", "benchmarkSelection"],
+  ["shiftContext", "shift_context", "shiftContext"],
+  ["badgeBinding", "badge_binding", "badge"],
+  ["managementHealthState", "device_management_health", "managementHealth"],
+  ["localAuthorityState", "local_authority", "localAuthority"],
+  ["attachState", "attach_state", "attach"],
+  ["enrollmentStrength", "enrollment_strength", "enrollment"],
+  ["credentialReadMethod", "credential_read_method", "readMethod"],
+] as const satisfies readonly (readonly [keyof RetainedAccusations, NormalizedSignal["category"], keyof typeof EVIDENCE_VALUE_DOMAINS])[];
+
+/**
+ * OWNER DECISION (a), 2026-11-06 — KEEP BOTH (the Codex P1 on #1442/#1792 at the `worse` tiers).
+ *
+ * `resolveWorst` must pick ONE value per family, and it picks the member the SHIPPED rules rank worst. Two
+ * DIFFERENT accusations that nothing can order (they share an instant, or one's stamp cannot be read) used to
+ * reach the policy as that one value only, so a tenant policy that ranks the members differently (denies
+ * `suspected` and has no rule for `confirmed`; denies `maintenance` where the first arrival was `overdue`) never
+ * saw the accusation it cares about. This lists every accusing member the reader folded, for each family that
+ * had more than one, and `evaluatePolicy` (via `evidenceWorlds`) lets the active policy judge each of them.
+ *
+ * Only readings the reader actually folds count: the latest orderable one, its same-instant twins, and every
+ * illegible one. An OLDER orderable reading is superseded by time, as before, and is not retained.
+ */
+function retainAccusations(
+  latestByCategory: LatestByCategory,
+  evidence: DecisionEvidence,
+  nowIso: string | undefined,
+): RetainedAccusations | undefined {
+  const out: Record<string, readonly unknown[]> = {};
+  for (const [field, category, domainKey] of RETAINED_ENUM_FAMILIES) {
+    const reading = latestByCategory.get(category);
+    if (!reading) continue;
+    const domain = EVIDENCE_VALUE_DOMAINS[domainKey] as { readonly members: readonly unknown[]; readonly good: readonly unknown[] };
+    const folded = [reading.ordered, ...reading.tied, ...reading.illegible].filter((x): x is NormalizedSignal => x !== undefined);
+    const accusing = new Set<string>();
+    for (const signal of folded) {
+      if (typeof signal.value === "string" && domain.members.includes(signal.value) && !domain.good.includes(signal.value)) {
+        accusing.add(signal.value);
+      }
+    }
+    if (accusing.size < 2) continue;
+    accusing.add(String(evidence[field]));
+    out[field] = [...accusing].sort();
+  }
+  // Posture freshness, on the same values `readFreshness` folds (an orderable reading is also aged against the
+  // decision instant; an illegible one counts as it states).
+  const posture = latestByCategory.get("posture_freshness");
+  if (posture) {
+    const aged = (signal: NormalizedSignal): Freshness =>
+      nowIso === undefined ? "fresh" : classifyFreshness(signal.observedAt, nowIso, FRESH_WINDOW_HOURS, STALE_WINDOW_HOURS);
+    const values = new Set<Freshness>();
+    for (const signal of [posture.ordered, ...posture.tied].filter((x): x is NormalizedSignal => x !== undefined)) {
+      values.add(worsePosture(asFreshness(signal.value), aged(signal)));
+    }
+    for (const signal of posture.illegible) values.add(asFreshness(signal.value));
+    values.delete("fresh");
+    if (values.size >= 2) {
+      values.add(evidence.postureFreshness);
+      out.postureFreshness = [...values].sort();
+    }
+  }
+  return Object.keys(out).length === 0 ? undefined : (out as RetainedAccusations);
+}
+
+/** Above this many combinations the worlds are not enumerated (see `evidenceWorlds`). */
+export const MAX_EVIDENCE_WORLDS = 256;
+
+/**
+ * Every combination of the retained accusations (owner decision (a)), the evidence as built FIRST. Each world is
+ * a single-valued `DecisionEvidence` the policy matcher already understands; `criticalSignalsPresent` in a world
+ * is the base value AND the backstop recomputed on that world, so a world can only be harsher. A malformed
+ * `retainedAccusations` (a durable row, a JSON body) can only ADD worlds, and the policy keeps the most
+ * restrictive outcome, so it can never loosen the base answer. Past `MAX_EVIDENCE_WORLDS` combinations the
+ * full product is not enumerated: the base plus one-family-at-a-time worlds are returned with `truncated`, and
+ * `evaluatePolicy` then refuses to allow.
+ */
+export function evidenceWorlds(evidence: DecisionEvidence): { worlds: DecisionEvidence[]; truncated: boolean } {
+  const retained = evidence.retainedAccusations;
+  if (retained === undefined || retained === null || typeof retained !== "object") {
+    return { worlds: [evidence], truncated: false };
+  }
+  const { retainedAccusations: _dropped, ...base } = evidence;
+  const axes: [string, unknown[]][] = [];
+  for (const key of Object.keys(retained).sort()) {
+    const values = (retained as Record<string, unknown>)[key];
+    if (!Array.isArray(values)) continue;
+    const alternates = values.filter((v) => v !== (base as Record<string, unknown>)[key]);
+    if (alternates.length > 0) axes.push([key, alternates]);
+  }
+  const size = axes.reduce((n, [, alts]) => n * (alts.length + 1), 1);
+  const truncated = size > MAX_EVIDENCE_WORLDS;
+  let worlds: Record<string, unknown>[] = [base];
+  if (truncated) {
+    for (const [key, alts] of axes) for (const v of alts) worlds.push({ ...base, [key]: v });
+  } else {
+    for (const [key, alts] of axes) {
+      worlds = worlds.flatMap((w) => [w, ...alts.map((v) => ({ ...w, [key]: v }))]);
+    }
+  }
+  return {
+    worlds: worlds.map((w, i) =>
+      i === 0
+        ? (w as unknown as DecisionEvidence)
+        : ({ ...w, criticalSignalsPresent: base.criticalSignalsPresent && deriveCriticalSignalsPresent(w as unknown as DecisionEvidence) } as unknown as DecisionEvidence),
+    ),
+    truncated,
   };
 }
 

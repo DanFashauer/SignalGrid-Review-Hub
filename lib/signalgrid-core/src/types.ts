@@ -587,9 +587,10 @@ export interface DecisionEvidence {
   criticalSignalsPresent: boolean;
   /**
    * OWNER DECISION (a), 2026-11-06 — KEEP BOTH. When one family carries two or more
-   * DIFFERENT accusations the core cannot order (the same instant, or a stamp it
-   * cannot read), the field above holds the one the SHIPPED rules rank worst, and
-   * this lists every accusing member that was read, sorted. `evaluatePolicy` runs the
+   * DIFFERENT values the core cannot order (the same instant, or a stamp it cannot
+   * read), the field above holds the one the SHIPPED rules rank worst, and this lists
+   * every value the reader could have answered (good values and the family's
+   * unreadable floor included, since the 2026-11-07 reviews), sorted. `evaluatePolicy` runs the
    * active policy once per combination and keeps the most restrictive outcome, so a
    * tenant policy that ranks the members differently still sees the milder one.
    * ABSENT whenever there is no such ambiguity, so every unambiguous snapshot's
@@ -600,6 +601,10 @@ export interface DecisionEvidence {
 
 /** Owner decision (a): every accusing member a family read, when the core could not order them. */
 export interface RetainedAccusations {
+  identityEnabled?: readonly (boolean | "unknown")[];
+  deviceManaged?: readonly (boolean | "unknown")[];
+  deviceEncrypted?: readonly (boolean | "unknown")[];
+  osSupported?: readonly (boolean | "unknown")[];
   deviceCompliance?: readonly ComplianceState[];
   postureFreshness?: readonly Freshness[];
   custodyState?: readonly CustodyState[];

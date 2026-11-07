@@ -15,7 +15,7 @@ import shutil
 import subprocess
 import tempfile
 import unittest
-import time
+import signal
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
@@ -40,6 +40,9 @@ if "--list-review" in a:
     counter=root/"listing-count"
     count=int(counter.read_text())+1 if counter.exists() else 1
     counter.write_text(str(count))
+    if cfg.get("slow_first_listing") and count == 1:
+        import time
+        time.sleep(2)
     if cfg.get("list_error"):
         print("PRIVATE_SYNTHETIC /Users/fixture/private-db", file=sys.stderr)
         sys.exit(42)
@@ -448,13 +451,19 @@ sg_host_verify_release() { printf 'release\\n' >> "$SG_TEST_ROOT/host-events"; S
 
     def test_own_timed_out_publication_is_consumed_and_host_released(self):
         self.cfg["hang_publish"]=True
-        start=time.monotonic()
+        self.cfg["slow_first_listing"]=True
         out,_=self.run_step()
-        elapsed=time.monotonic()-start
         terminal=json.loads((self.state/"attempts/freshA/terminal.json").read_text())
+        started=json.loads((self.state/"attempts/freshA/started.json").read_text())
         self.assertTrue(terminal.get("timed_out"))
         self.assertFalse(terminal["normal_exit"])
-        self.assertLess(elapsed,1.8)
+        # Selection time is outside the publication child's deadline. Check that
+        # the actual owned child was terminated and reaped, even after slow setup.
+        self.assertEqual(terminal["pid"],started["pid"])
+        self.assertIn(terminal["returncode"],(-signal.SIGTERM,-signal.SIGKILL))
+        self.assertTrue(terminal["original_wait_completed"])
+        self.assertIsNone(terminal["started_receipt_error"])
+        self.assertEqual(terminal["interruptions"],[])
         self.assertIn("release",(self.root/"host-events").read_text())
         self.assertNotIn("verified publication",out.split("__RESULT__")[-1])
         self.run_step()

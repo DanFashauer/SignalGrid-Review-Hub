@@ -163,22 +163,23 @@ function retainAccusations(
     accusing.add(String(evidence[field]));
     out[field] = [...accusing].sort();
   }
-  // Posture freshness, on the same values `readFreshness` folds (an orderable reading is also aged against the
-  // decision instant; an illegible one counts as it states).
+  // Posture freshness. Every value the fold saw is kept SEPARATELY: each reading's STATED value, an orderable
+  // reading's AGED value against the decision instant, and the answer the fold gave. Folding stated and aged
+  // first, or counting only readings, lost the accusation in the commonest case (review F1, 2026-11-07): ONE
+  // reading stated `expired` whose stamp is garbled, offset-less or future resolves to `unknown`, and a tenant
+  // policy that denies `expired` never saw it (mainline denied; this branch stepped up). `fresh` never accuses.
   const posture = latestByCategory.get("posture_freshness");
   if (posture) {
     const aged = (signal: NormalizedSignal): Freshness =>
       nowIso === undefined ? "fresh" : classifyFreshness(signal.observedAt, nowIso, FRESH_WINDOW_HOURS, STALE_WINDOW_HOURS);
-    const values = new Set<Freshness>();
+    const values = new Set<Freshness>([evidence.postureFreshness]);
     for (const signal of [posture.ordered, ...posture.tied].filter((x): x is NormalizedSignal => x !== undefined)) {
-      values.add(worsePosture(asFreshness(signal.value), aged(signal)));
+      values.add(asFreshness(signal.value));
+      values.add(aged(signal));
     }
     for (const signal of posture.illegible) values.add(asFreshness(signal.value));
     values.delete("fresh");
-    if (values.size >= 2) {
-      values.add(evidence.postureFreshness);
-      out.postureFreshness = [...values].sort();
-    }
+    if (values.size >= 2) out.postureFreshness = [...values].sort();
   }
   return Object.keys(out).length === 0 ? undefined : (out as RetainedAccusations);
 }

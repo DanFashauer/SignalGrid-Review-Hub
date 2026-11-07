@@ -4,6 +4,7 @@
 //
 //   node scripts/mac/brain-proposal-pr.mjs --job <id> [--db <sqlite>]           # dry run (default)
 //   node scripts/mac/brain-proposal-pr.mjs --job <id> --publish                  # push brain/job-<id> + open PR
+//   node scripts/mac/brain-proposal-pr.mjs --list-review [--db <sqlite>]         # ids of publishable review builds
 //   node scripts/mac/brain-proposal-pr.mjs --self-test
 //
 // The local brain (~/SignalGrid-Local-AI, not a git repo) runs build jobs in isolated worktrees
@@ -68,6 +69,21 @@ async function readJob(db, id) {
   const r = spawnSync("/usr/bin/sqlite3", ["-readonly", "-json", `file:${db}?mode=ro`, sql.replace("?", `'${id}'`)], { encoding: "utf8" });
   if (r.status !== 0) refuse(`sqlite3 could not read ${db}: ${r.stderr.trim()}`);
   return JSON.parse(r.stdout || "[]")[0] ?? null;
+}
+
+/** Ids the Mac tick may publish: the publishable shape run() checks first, read-only, oldest first.
+ *  (2026-11-06: #1885 sat at status=review until a person ran this script; lane-tick.sh step d3.) */
+export async function listReview(db = DEFAULT_DB) {
+  if (!existsSync(db)) refuse(`brain DB not found: ${db}`);
+  const sql = "SELECT id FROM autonomy_jobs WHERE kind = 'build' AND status = 'review' AND repo = 'SignalGrid-Review-Hub' AND worktree IS NOT NULL ORDER BY updated_at, id";
+  if (isBuiltin("node:sqlite")) {
+    const { DatabaseSync } = await import("node:sqlite");
+    const d = new DatabaseSync(db, { readOnly: true });
+    try { return d.prepare(sql).all().map((r) => String(r.id)); } finally { d.close(); }
+  }
+  const r = spawnSync("/usr/bin/sqlite3", ["-readonly", "-json", `file:${db}?mode=ro`, sql], { encoding: "utf8" });
+  if (r.status !== 0) refuse(`sqlite3 could not read ${db}: ${r.stderr.trim()}`);
+  return JSON.parse(r.stdout || "[]").map((row) => String(row.id));
 }
 
 const decode = (s) => { try { const v = JSON.parse(s); return typeof v === "string" ? v : s; } catch { return s ?? ""; } };
@@ -233,6 +249,8 @@ async function selfTest() {
     await refused("(4) empty diff refused", { job: "jempty", db, repo }, "empty");
     await refused("(5) non-applying patch refused", { job: "jconflict", db, repo }, "does not apply");
     await refused("(*) unknown job refused", { job: "nope", db, repo }, "not found");
+    const listed = await listReview(db);
+    check("(*) --list-review names every review build with a worktree and no queued job", listed.includes("jdocs") && listed.includes("jagents") && listed.includes("jempty") && !listed.includes("jqueued"));
     // (6) publish with a stubbed gh
     const bin = join(root, "bin"), ghLog = join(root, "gh.log");
     mkdirSync(bin);
@@ -257,6 +275,7 @@ if (isMainModule(process.argv[1], import.meta.url)) {
   const opt = (n) => { const i = a.indexOf(n); return i >= 0 ? a[i + 1] : undefined; };
   try {
     if (a.includes("--self-test")) await selfTest();
+    else if (a.includes("--list-review")) { for (const id of await listReview(opt("--db") ?? DEFAULT_DB)) console.log(id); }
     else await run({ job: opt("--job"), db: opt("--db") ?? DEFAULT_DB, publish: a.includes("--publish") });
   } catch (e) {
     console.error(e instanceof Refusal ? `REFUSED: ${e.message}` : `ERROR: ${e.message}`);

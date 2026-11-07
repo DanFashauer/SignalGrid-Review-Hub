@@ -484,6 +484,36 @@ else
   say "estate queue not run: scripts/mac/estate-queue.mjs or gh missing"
 fi
 
+# ── d3. publish local-brain builds that reached review ───────────────────────
+# A build the brain finished sits at status=review until someone runs the publisher
+# (#1885 waited hours for a person on 2026-11-06). Each tick asks the publisher for the
+# review builds (read-only DB query) and publishes at most PUBLISH_MAX of them. A job is
+# tried ONCE: the stamp records the outcome (pushed, already on origin, or refused) so a
+# refused one (AGENTS.md, a gate) does not re-run every five minutes; delete the stamp
+# to retry. The publisher is idempotent on an existing branch. No auto-merge: Codex and
+# Claude review on the PR and the lane lands it under DR-037.
+PUBLISH_MAX="${SIGNALGRID_PUBLISH_MAX:-1}"
+if [ -f scripts/mac/brain-proposal-pr.mjs ] && command -v gh >/dev/null 2>&1; then
+  _pub_n=0
+  for _job in $(node scripts/mac/brain-proposal-pr.mjs --list-review 2>/dev/null); do
+    _stamp="node_modules/.sg-brain-published-$_job"
+    [ -f "$_stamp" ] && continue
+    if [ "$DRY" = "1" ]; then say "dry-run: would publish brain job $_job"; continue; fi
+    if [ "$_pub_n" -ge "$PUBLISH_MAX" ]; then say "brain job $_job waits: $PUBLISH_MAX publish(es) per tick"; continue; fi
+    _pub_n=$((_pub_n + 1))
+    mkdir -p node_modules 2>/dev/null || true
+    _pub="$(node scripts/mac/brain-proposal-pr.mjs --job "$_job" --publish 2>&1)"
+    _pub_rc=$?
+    printf '%s\n' "$_pub" | while IFS= read -r _l; do say "  $_l"; done
+    printf 'exit=%s %s\n' "$_pub_rc" "$(printf '%s\n' "$_pub" | tail -1)" > "$_stamp" 2>/dev/null || say "WARN could not write $_stamp; job $_job will be retried next tick"
+    if [ "$_pub_rc" = "0" ]; then
+      RESULT="$RESULT; published brain job $_job"
+    else
+      RESULT="$RESULT; brain job $_job not published (exit $_pub_rc): $(printf '%s\n' "$_pub" | tail -1)"
+    fi
+  done
+fi
+
 # ── e. heartbeat, always ─────────────────────────────────────────────────────
 heartbeat
 exit 0

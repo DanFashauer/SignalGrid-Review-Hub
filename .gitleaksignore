@@ -31,3 +31,11 @@ d868557e00dae17f64f558389c5779e7b1ae7bb4:lib/signalgrid-core/src/seed.ts:generic
 # "mainlineShaAtRun" at head, so no new occurrence exists; this pins the one
 # historical finding only. Reviewed 2026-10-24.
 438f4e3f87ca3fab84cdb68bdb5abe15cb110d3c:docs/agent/estate-20261023/prs-triage-2.json:generic-api-key:6
+
+# not a secret: a SYNTHETIC test fixture in the content-scan self-test of
+# scripts/mac/brain-proposal-pr.mjs (commit cbf15384, PR #1907), a made-up
+# 32-character hex string used to prove the scanner refuses a key-named
+# assignment. It is built at run time from parts since 9e6407b72, so no
+# occurrence remains at head; this pins the one historical finding only.
+# Reviewed 2026-11-07.
+cbf153841d8ac27b7b10813f0aa7aab22dac4de1:scripts/mac/brain-proposal-pr.mjs:generic-api-key:822

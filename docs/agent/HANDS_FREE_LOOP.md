@@ -51,40 +51,62 @@ The owner, verbatim: "In any point of credit and or usage is up on any paid mode
 
 ## Publishing a reviewed local build
 
-Use the [publisher source](../../scripts/mac/brain-proposal-pr.mjs) for one
-`kind=build`/`status=review` job in SignalGrid-Review-Hub. The script checks
-that the job's worktree exists and that its diff is nonempty. That the
-worktree is owned and the diff is public-safe are the caller's preconditions.
-
-Replace `<id>` with the reviewed job's ID.
+The Mac tick (`scripts/mac/lane-tick.sh`, step d3) publishes a local-brain
+`kind=build`/`status=review` job unattended, at most `SIGNALGRID_PUBLISH_MAX`
+(default 1) per tick, through the [publisher](../../scripts/mac/brain-proposal-pr.mjs).
+No person reviews the diff first, so the publisher scans it itself, on the
+exact commit it is about to push, and refuses (exit 1, nothing pushed) on any
+hit or any scanner error. A person can run the same thing by hand:
 
 ```bash
-node scripts/mac/brain-proposal-pr.mjs --job <id>
-node scripts/mac/brain-proposal-pr.mjs --job <id> --publish
+node scripts/mac/brain-proposal-pr.mjs --job <id>             # dry run: same scan, no push
+node scripts/mac/brain-proposal-pr.mjs --job <id> --publish   # push brain/job-<id> + open the PR
 ```
 
-The default dry run still fetches and prepares a scratch commit, but it prints
-only the job title, the file list and the classification; it does not show the
-diff or the job result, and it removes its scratch worktree. Before
-`--publish`, review the job worktree yourself (`git -C <worktree> diff HEAD`
-plus every untracked, non-ignored file, binaries included) and the job's title
-and result: the title becomes the PR title and the result is quoted verbatim
-in the PR body. Publishing pushes `brain/job-<id>` to the public origin and
-opens a PR before any secret-safety review, and a secret that reaches origin
-is compromised: rotate it and ask the owner before any branch deletion.
+What runs before any push:
 
-The CLI refuses owner-reserved, safety-machinery, decision and governance
-paths, paths outside the repository, and a job whose title or result matches
-its private-path pattern (Mac home paths and the brain's directory names, a
-narrow denylist, not a scan); it does not scan the diff for private paths, and
-it does not certify arbitrary text as secret-free, run full preflight/breadth,
-perform independent reviews, or merge. Secret-safety review, full
-preflight/breadth and independent reviews remain separate requirements before
-Cloud DR-037 landing.
+- Only the files the job's record names are read into the patch (a change-set
+  column if the brain has one, otherwise the backticked repo paths in the job's
+  result). A named untracked file must not be a dotfile, top-level, or in a
+  directory with no tracked file. Install, hook and attribute files
+  (`package.json`, `.npmrc`, `.pnpmfile.cjs`, `.gitattributes`, `.githooks/`) and
+  owner-reserved, safety, decision and governance paths are refused.
+- Every git call runs with hooks and fsmonitor off; a brain worktree whose local
+  git config can run a program (filters, textconv, fsmonitor, includes) is refused.
+- Marker rules on every added line, every new file, the file names and the
+  commit message: personal and Mac paths, Obsidian shapes (`.obsidian`,
+  `.trash`, wikilinks, front matter, `%%comments%%`), iCloud paths, secret and
+  provider-token shapes, secret assignments, e-mail outside an allowlist.
+- A vault provenance check: the added lines (40+ characters), 8-word runs and
+  note titles are compared with the owner's vault and knowledge files, located
+  from the Mac's own configuration (`SIGNALGRID_VAULT_DIRS`, Obsidian's vault
+  registry, the brain-link corpus). `--publish` refuses if no vault can be
+  found or read, or if the vault holds `.icloud` placeholders or documents the
+  index cannot read (PDF, Office, iWork).
+- gitleaks over the changed files; `--publish` refuses if it is not installed.
+- Exactly one commit on the freshly fetched base, with a fixed message
+  `brain: job <id>`. The job's own title and result text are never put in the
+  commit, the PR title or the PR body.
 
-With `--publish`, an existing branch means no push or PR creation. Read back an
-uncertain publish; never retry it. If the push succeeded but PR creation
-failed, a rerun does nothing: open the PR by hand with
+What reaches the heartbeat: the tick keeps only the publisher's last line, a
+fixed `SUMMARY` (rule ids and counts), through an allow-filter. Scan findings
+name files by index (`file#N`). The `files (N)` log line and path refusals still
+print file names to the local tick log, never to the heartbeat; the job's title
+is not logged at all (the job id only).
+
+What this does NOT catch, stated plainly: a **paraphrase or summary** of a
+private note (the check matches copied text, not meaning); text **encoded**
+(base64, hex), split across pieces or written with look-alike characters;
+private text kept anywhere the Mac's configuration does not name. It narrows
+the hole; it does not prove absence. The CLI also does not run full
+preflight/breadth, perform independent reviews, or merge: those remain separate
+requirements before Cloud DR-037 landing, and a secret that reaches origin is
+compromised (rotate it and ask the owner before any branch deletion).
+
+An existing `brain/job-<id>` branch means no push or PR creation. A job is
+tried once (the tick's stamp under `node_modules`); delete the stamp to retry.
+Read back an uncertain publish; never retry it blindly. If the push succeeded
+but PR creation failed, a rerun does nothing: open the PR by hand with
 `gh pr create --base SignalGrid_Alpha --head brain/job-<id>`.
 
 ## Never

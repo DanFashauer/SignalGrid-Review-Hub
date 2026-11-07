@@ -4,7 +4,7 @@ import { buildEstateStore, type EstateSpec } from "./estate";
 import { runDockSync, type DockCustodyRecord } from "./dock";
 import { runShiftSync, type ShiftContextRecord } from "./shift";
 import { evaluateDecision } from "./decision";
-import { verifySnapshot } from "./evidence";
+import { agedSignalFreshness, verifySnapshot } from "./evidence";
 import { verifyAuditChain, type ChainVerification } from "./audit";
 import { appendAudit } from "./audit";
 import { computeMetrics } from "./metrics";
@@ -443,6 +443,27 @@ export class SignalGridCore {
    */
   signalInventory(): ReturnType<MemoryStore["signalInventory"]> {
     return this.store.signalInventory();
+  }
+
+  /**
+   * How many connectors this process holds, per kind and status. No token, for
+   * the same reason `signalInventory()` takes none — a fact about the PROCESS,
+   * not a tenant — and no id, ref, subject or tenant. This is what /metrics
+   * derives connector health FROM, so the gauge reports held state rather than a
+   * counter incremented beside a route.
+   */
+  connectorInventory(): ReturnType<MemoryStore["connectorInventory"]> {
+    return this.store.connectorInventory();
+  }
+
+  /** How many signals this process holds, per freshness value. Same rule as
+   *  `signalInventory()`: no token, no id, ref, subject or tenant. */
+  signalFreshnessInventory(): ReturnType<MemoryStore["signalFreshnessInventory"]> {
+    // Posture readings are aged at THIS core's clock, the instant its decisions
+    // are made at (DR-059): wall time in a deployment, the fixed clock in the
+    // demo. The clock is the one handed to the constructor; nothing new is read.
+    const nowIso = this.clock.now().toISOString();
+    return this.store.signalFreshnessInventory((signal) => agedSignalFreshness(signal, nowIso));
   }
 
   listSyncRuns(token: string, connectorId: string): ConnectorSyncRun[] {

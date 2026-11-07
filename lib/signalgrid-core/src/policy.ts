@@ -1,4 +1,5 @@
 import { canonicalJson, digest } from "./util";
+import { evidenceWorlds } from "./evidence";
 import {
   CoreError,
   type DecisionOutcome,
@@ -292,8 +293,76 @@ export function validatePolicyRules(input: unknown): PolicyRuleSpec[] {
  *  3. Fail-closed: if critical evidence is missing/degraded, `allow` can never
  *     be the outcome — it is suppressed in favour of step-up or higher.
  *  4. If no rule fires, the default is step-up (never a silent allow).
+ *  5. KEEP BOTH (owner decision (a), 2026-11-06): when the evidence retains more than
+ *     one accusation for a family (`retainedAccusations`), the policy is evaluated
+ *     on every combination and the most restrictive outcome stands. When no other
+ *     combination is stricter than the evidence as built, that evaluation is returned
+ *     unchanged (same reasons); otherwise the reason codes and matched rules are those
+ *     of every combination that reached the stricter outcome. Evidence with no retained
+ *     accusations takes the single-world path, byte-identical to before.
  */
 export function evaluatePolicy(
+  version: PolicyVersion,
+  evidence: DecisionEvidence,
+): PolicyEvaluation {
+  const { worlds, truncated } = evidenceWorlds(evidence);
+  if (worlds.length === 1 && !truncated) {
+    return evaluateWorld(version, worlds[0] as DecisionEvidence);
+  }
+  if (truncated) {
+    return boundAcrossWorlds(version, worlds);
+  }
+  const evaluations = worlds.map((world) => evaluateWorld(version, world));
+  const outcome = mostRestrictive(evaluations.map((e) => e.outcome));
+  // The evidence as built is the first world. When no other combination is stricter, ITS evaluation is the
+  // answer, reasons and all, exactly as before: a retained accusation changes the result only when the active
+  // policy treats it more harshly than the member the shipped tiers chose.
+  const base = evaluations[0] as PolicyEvaluation;
+  if (!truncated && outcome === base.outcome) {
+    return base;
+  }
+  // Every code here was already emitted by a single-world evaluation, so the merge adds no code of its own.
+  const reaching = evaluations.filter((e) => e.outcome === outcome);
+  const reasonCodes: string[] = [...new Set(reaching.flatMap((e) => e.reasonCodes))];
+  const matchedRules: MatchedRule[] = [];
+  for (const e of reaching) {
+    for (const rule of e.matchedRules) if (!matchedRules.some((m) => m.ruleId === rule.ruleId)) matchedRules.push(rule);
+  }
+  return { outcome, reasonCodes, matchedRules, explanation: explain(outcome, reasonCodes) };
+}
+
+/**
+ * Too many combinations to enumerate (`evidenceWorlds` truncated): bound the strictest one instead of sampling.
+ * A rule counts when EACH of its conditions holds in some world; every condition reads a single field and the
+ * worlds include every value each field can take (and the failed backstop), so any rule that matches in any
+ * combination counts. The answer is the most restrictive counted rule, never below step_up (the default and the
+ * backstop are at most step_up in any combination). It can be stricter than the true strictest combination; it
+ * is never milder (Codex P1s (b) and (f), 2026-11-07).
+ */
+function boundAcrossWorlds(version: PolicyVersion, worlds: DecisionEvidence[]): PolicyEvaluation {
+  const matchedRules: MatchedRule[] = [];
+  for (const rule of version.rules) {
+    if (!Array.isArray(rule.match) || rule.match.length === 0) continue;
+    if (rule.match.every((condition) => worlds.some((world) => matches(condition, world)))) {
+      matchedRules.push({ ruleId: rule.id, reasonCode: rule.reasonCode, outcome: rule.outcome, severity: rule.severity });
+    }
+  }
+  const counted = matchedRules.map((rule) => rule.outcome);
+  let outcome: DecisionOutcome = counted.length === 0 ? "step_up" : mostRestrictive(counted);
+  const reaching = matchedRules.filter((rule) => rule.outcome === outcome);
+  const reasonCodes: string[] = [...new Set(reaching.map((rule) => rule.reasonCode))];
+  if (OUTCOME_RANK[outcome] < OUTCOME_RANK.step_up) {
+    outcome = "step_up";
+    reasonCodes.push("ALLOW_SUPPRESSED_DEGRADED_EVIDENCE");
+  }
+  if (counted.length === 0) {
+    reasonCodes.push("NO_RULE_MATCHED_DEFAULT_STEP_UP");
+  }
+  return { outcome, reasonCodes, matchedRules: matchedRules.filter((rule) => rule.outcome === outcome), explanation: explain(outcome, reasonCodes) };
+}
+
+/** One single-valued evidence world against the policy: the original evaluator, unchanged. */
+function evaluateWorld(
   version: PolicyVersion,
   evidence: DecisionEvidence,
 ): PolicyEvaluation {

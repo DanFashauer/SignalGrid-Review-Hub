@@ -204,22 +204,22 @@ use_tick_worktree() {
   why="$1"
   if [ ! -e "$TICK_WT/.git" ]; then
     if ! git worktree add -q --detach "$TICK_WT" origin/SignalGrid_Alpha >/dev/null 2>&1; then
-      RESULT="skipped: $why; and the tick worktree could not be created at $TICK_WT"
-      say "$RESULT"
+      RESULT="skipped: $why; and the tick worktree could not be created"
+      say "$RESULT (path: $TICK_WT)"
       heartbeat
       exit 0
     fi
     say "created the tick worktree at $TICK_WT (detached at origin/SignalGrid_Alpha)"
   fi
   if ! cd "$TICK_WT"; then
-    RESULT="skipped: $why; and the tick worktree at $TICK_WT cannot be entered"
-    say "$RESULT"
+    RESULT="skipped: $why; and the tick worktree cannot be entered"
+    say "$RESULT (path: $TICK_WT)"
     heartbeat
     exit 0
   fi
   if [ -n "$(git status --porcelain)" ]; then
-    RESULT="skipped: $why; and the tick worktree at $TICK_WT is dirty too (a person's work; not touching it)"
-    say "$RESULT"
+    RESULT="skipped: $why; and the tick worktree is dirty too (a person's work; not touching it)"
+    say "$RESULT (path: $TICK_WT)"
     heartbeat
     exit 0
   fi
@@ -307,7 +307,7 @@ if [ -z "$LOCK_SHA" ] || [ ! -f "$INSTALL_STAMP" ] || [ "$(cat "$INSTALL_STAMP" 
     printf '%s' "$LOCK_SHA" > "$INSTALL_STAMP"
     say "pnpm install --frozen-lockfile (lockfile moved)"
   else
-    RESULT="failed: pnpm install --frozen-lockfile (see ~/Library/Logs/signalgrid-lane-tick.log)"
+    RESULT="failed: pnpm install --frozen-lockfile (see the tick log)"
     say "$RESULT"
     heartbeat
     exit 1
@@ -493,13 +493,16 @@ fi
 # to retry. The publisher is idempotent on an existing branch. No auto-merge: Codex and
 # Claude review on the PR and the lane lands it under DR-037.
 PUBLISH_MAX="${SIGNALGRID_PUBLISH_MAX:-1}"
+case "$PUBLISH_MAX" in
+  ''|*[!0-9]*) say "WARN SIGNALGRID_PUBLISH_MAX is not a non-negative integer; using 1"; PUBLISH_MAX=1 ;;
+esac
 # The publisher's last line becomes the heartbeat RESULT, which is delivered to origin. It is
 # repo-relative rule text by construction (rule id + file:line), but a tool error could still carry a
-# scratch or home path, so it goes through a strict allow-filter first: only [A-Za-z0-9 :#._/-], 160
+# scratch or home path, so it goes through a strict allow-filter first: only [A-Za-z0-9 :#._/=,-], 160
 # chars, and anything that still looks like an absolute or personal path is replaced outright.
 # (Mirrors redact() in brain-proposal-pr.mjs. No arrays, no mapfile: bash 3.2.)
 safe_line() {
-  _sl="$(printf '%s' "$1" | tr -cd 'A-Za-z0-9 :#._/-' | cut -c1-160)"
+  _sl="$(printf '%s' "$1" | tr -cd 'A-Za-z0-9 :#._/=,-' | cut -c1-160)"
   case "$_sl" in
     /*|*" /"*|*/Users/*|*/home/*|*/var/*|*/private/*|*/tmp/*|*/Volumes/*|*/Library/*|*brain-state*|*SignalGrid-Local-AI*|*brain-worktrees*)
       _sl="(detail withheld; see the tick log)" ;;
@@ -508,24 +511,44 @@ safe_line() {
 }
 if [ -f scripts/mac/brain-proposal-pr.mjs ] && command -v gh >/dev/null 2>&1; then
   _pub_n=0
-  for _job in $(node scripts/mac/brain-proposal-pr.mjs --list-review 2>/dev/null); do
+  _ids="$(node scripts/mac/brain-proposal-pr.mjs --list-review 2>/dev/null </dev/null)"
+  _ids_rc=$?
+  if [ "$_ids_rc" != "0" ]; then
+    say "brain publish list unavailable (exit $_ids_rc); the publisher refused to read the brain DB"
+    RESULT="$RESULT; brain publish list unavailable (exit $_ids_rc)"
+    _ids=""
+  fi
+  # Here-document, not a pipe: a pipe would run the loop in a subshell and lose _pub_n and RESULT.
+  # Ids are read line by line (no word splitting, no globbing) and re-validated here as well.
+  while IFS= read -r _job; do
+    case "$_job" in
+      ''|*[!A-Za-z0-9_-]*) continue ;;
+    esac
     _stamp="node_modules/.sg-brain-published-$_job"
     [ -f "$_stamp" ] && continue
     if [ "$DRY" = "1" ]; then say "dry-run: would publish brain job $_job"; continue; fi
     if [ "$_pub_n" -ge "$PUBLISH_MAX" ]; then say "brain job $_job waits: $PUBLISH_MAX publish(es) per tick"; continue; fi
     _pub_n=$((_pub_n + 1))
     mkdir -p node_modules 2>/dev/null || true
-    _pub="$(node scripts/mac/brain-proposal-pr.mjs --job "$_job" --publish 2>&1)"
+    _pub="$(node scripts/mac/brain-proposal-pr.mjs --job "$_job" --publish 2>&1 </dev/null)"
     _pub_rc=$?
     printf '%s\n' "$_pub" | while IFS= read -r _l; do say "  $_l"; done
-    _pub_last="$(safe_line "$(printf '%s\n' "$_pub" | tail -1)")"
+    # Only the publisher's fixed SUMMARY line (rule ids and counts) may reach RESULT; any other last
+    # line (a finding, an error, a path) stays in the local tick log.
+    _pub_tail="$(printf '%s\n' "$_pub" | tail -1)"
+    case "$_pub_tail" in
+      "SUMMARY "*) _pub_last="$(safe_line "$_pub_tail")" ;;
+      *) _pub_last="(no summary; see the tick log)" ;;
+    esac
     printf 'exit=%s %s\n' "$_pub_rc" "$_pub_last" > "$_stamp" 2>/dev/null || say "WARN could not write $_stamp; job $_job will be retried next tick"
     if [ "$_pub_rc" = "0" ]; then
       RESULT="$RESULT; published brain job $_job"
     else
       RESULT="$RESULT; brain job $_job not published (exit $_pub_rc): $_pub_last"
     fi
-  done
+  done <<EOF
+$_ids
+EOF
 fi
 
 # ── e. heartbeat, always ─────────────────────────────────────────────────────

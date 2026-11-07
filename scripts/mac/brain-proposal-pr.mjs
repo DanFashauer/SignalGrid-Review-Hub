@@ -54,13 +54,21 @@ const TRAILER = "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>";
 
 class Refusal extends Error {}
 const refuse = (m) => { throw new Refusal(m); };
+/** Refuse with scan findings. Each finding is "<file#N>:<line> <rule-id>"; the exception also carries the
+ *  distinct rule ids and the count, which is all the tick's last line (and so the heartbeat) ever shows. */
+function blocked(prefix, hits) {
+  const e = new Refusal(`${prefix} (${hits.length} finding(s); text withheld on purpose):\n${hits.slice(0, 20).map((h) => `  ${h}`).join("\n")}`);
+  e.count = hits.length;
+  e.rules = [...new Set(hits.map((h) => h.split(" ").pop()).map((t) => (/^[a-z][a-z0-9_-]*$/.test(t) ? t : "other")))];
+  throw e;
+}
 
 /** Every git call goes through here; the self-test injects -c overrides via GIT_EXTRA. */
 let GIT_EXTRA = [];
 // Worker-controlled config and hooks must never run code around the scan: no fsmonitor program, no
 // hooks (the repo's .githooks/pre-push runs `pnpm install`, which would load a worker-authored
 // .pnpmfile.cjs / .npmrc from the scratch worktree AFTER the scan), no pager. -c outranks every config file.
-const HARDEN = ["-c", "core.fsmonitor=false", "-c", "core.hooksPath=/dev/null", "-c", "core.pager=cat"];
+const HARDEN = ["-c", "core.fsmonitor=false", "-c", "core.hooksPath=/dev/null", "-c", "core.pager=cat", "-c", "core.quotePath=false"];
 /** Timeout for every external scanner / network helper; a timeout is a refusal, never a pass. */
 const toMs = () => Number(process.env.SIGNALGRID_SCAN_TIMEOUT_MS) || 120000;
 function git(dir, args, env) {
@@ -107,6 +115,9 @@ async function readJob(db, id) {
   return JSON.parse(r.stdout || "[]")[0] ?? null;
 }
 
+/** A job id that is safe to put on a command line, in a file name and in a log: nothing else is ever listed. */
+const IDRE = (id) => /^[A-Za-z0-9_-]+$/.test(id);
+
 /** Ids the Mac tick may publish: the publishable shape run() checks first, read-only, oldest first.
  *  (2026-11-06: #1885 sat at status=review until a person ran this script; lane-tick.sh step d3.) */
 export async function listReview(db = DEFAULT_DB) {
@@ -115,11 +126,11 @@ export async function listReview(db = DEFAULT_DB) {
   if (isBuiltin("node:sqlite")) {
     const { DatabaseSync } = await import("node:sqlite");
     const d = new DatabaseSync(db, { readOnly: true });
-    try { return d.prepare(sql).all().map((r) => String(r.id)); } finally { d.close(); }
+    try { return d.prepare(sql).all().map((r) => String(r.id)).filter(IDRE); } finally { d.close(); }
   }
   const r = spawnSync("/usr/bin/sqlite3", ["-readonly", "-json", `file:${db}?mode=ro`, sql], { encoding: "utf8", timeout: 30000 });
   if (r.status !== 0) refuse("sqlite3 could not read the brain DB");
-  return JSON.parse(r.stdout || "[]").map((row) => String(row.id));
+  return JSON.parse(r.stdout || "[]").map((row) => String(row.id)).filter(IDRE);
 }
 
 const decode = (s) => { try { const v = JSON.parse(s); return typeof v === "string" ? v : s; } catch { return s ?? ""; } };
@@ -138,7 +149,7 @@ export function changeSetOf(job, result) {
     for (const f of list) { const t = String(f).trim(); if (safeRel(t)) out.add(t); }
     return out;
   }
-  for (const m of String(result).matchAll(/`([A-Za-z0-9_@.][A-Za-z0-9_@./-]*)`/g)) if (safeRel(m[1])) out.add(m[1]);
+  for (const m of String(result).matchAll(/`([\p{L}\p{N}_@.][\p{L}\p{N}_@./ -]*)`/gu)) if (safeRel(m[1])) out.add(m[1]);
   return out;
 }
 
@@ -264,7 +275,13 @@ const SCAN_RULES = [
  *  percent-escapes decoded. Defeats a zero-width character inside a path and `%2F`-encoded paths; it does not defeat homoglyphs or base64. */
 function normalForm(line) {
   let s = String(line).normalize("NFKC").replace(/\p{Cf}/gu, "");
-  if (/%[0-9a-fA-F]{2}/.test(s)) { try { s = decodeURIComponent(s); } catch { /* keep the partly-decoded text out; raw is scanned anyway */ } }
+  // Decode every run of %XX on its own (one bad escape elsewhere on the line must not disable decoding),
+  // and repeat so %252F -> %2F -> / is followed to the end.
+  for (let i = 0; i < 3 && /%[0-9a-fA-F]{2}/.test(s); i++) {
+    s = s.replace(/(?:%[0-9a-fA-F]{2})+/g, (run) => {
+      try { return decodeURIComponent(run); } catch { return run.replace(/%([0-9a-fA-F]{2})/g, (_m, h) => String.fromCharCode(parseInt(h, 16))); }
+    });
+  }
   return s;
 }
 
@@ -295,16 +312,16 @@ export function scanProse(label, text) {
  *  header-level findings (binary, symlink). A line in a hunk that starts with "+" is added, whatever
  *  it says ("+++ x" inside a hunk is an added "++ x"). */
 function* diffAdded(patch, headerHits) {
-  let file = "", inHunk = false, lineNo = 0;
+  let file = "", ref = "file#0", n = 0, inHunk = false, lineNo = 0;
   for (const l of patch.split("\n")) {
-    if (l.startsWith("diff --git ")) { inHunk = false; file = l.slice(l.lastIndexOf(" b/") + 3); yield { file, header: l }; continue; }
+    if (l.startsWith("diff --git ")) { inHunk = false; file = l.slice(l.lastIndexOf(" b/") + 3); ref = `file#${++n}`; yield { file, ref, header: l }; continue; }
     if (!inHunk) {
       if (l.startsWith("@@")) { inHunk = true; lineNo = Number((/\+(\d+)/.exec(l) ?? [0, 0])[1]) - 1; continue; }
-      if (l === "GIT binary patch" || l.startsWith("Binary files ")) headerHits.push(`${file}: binary file refused`);
-      if (l.startsWith("new file mode 120000") || l.startsWith("new mode 120000")) headerHits.push(`${file}: symlink refused`);
+      if (l === "GIT binary patch" || l.startsWith("Binary files ")) headerHits.push(`${ref}: binary file refused`);
+      if (l.startsWith("new file mode 120000") || l.startsWith("new mode 120000")) headerHits.push(`${ref}: symlink refused`);
       continue;
     }
-    if (l.startsWith("+")) { lineNo++; yield { file, lineNo, text: l.slice(1) }; } else if (l.startsWith(" ")) lineNo++;
+    if (l.startsWith("+")) { lineNo++; yield { file, ref, lineNo, text: l.slice(1) }; } else if (l.startsWith(" ")) lineNo++;
   }
 }
 
@@ -314,15 +331,15 @@ export function scanPatch(patch) {
   if (patch.includes("\0")) out.push("patch: NUL byte (binary content)");
   const fm = new Map(); // new markdown file -> front-matter state
   for (const e of diffAdded(patch, out)) {
-    if (e.header !== undefined) { for (const id of scanLine(e.header, e.file)) out.push(`${e.file}: path ${id}`); continue; }
-    for (const id of scanLine(e.text, e.file)) out.push(`${e.file}:${e.lineNo} ${id}`);
+    if (e.header !== undefined) { for (const id of scanLine(e.header, e.file)) out.push(`${e.ref}: path ${id}`); continue; }
+    for (const id of scanLine(e.text, e.file)) out.push(`${e.ref}:${e.lineNo} ${id}`);
     // Obsidian front matter: a markdown file that OPENS with a --- block holding key: lines.
     if (/\.(?:md|markdown|mdx)$/i.test(e.file)) {
       const st = fm.get(e.file);
       if (e.lineNo === 1) fm.set(e.file, e.text.trim() === "---" ? "open" : "none");
       else if (st === "open") {
         if (e.text.trim() === "---") fm.set(e.file, "closed");
-        else if (/^[A-Za-z_-]+\s*:/.test(e.text)) { out.push(`${e.file}:${e.lineNo} obsidian-frontmatter`); fm.set(e.file, "closed"); }
+        else if (/^[A-Za-z_-]+\s*:/.test(e.text)) { out.push(`${e.ref}:${e.lineNo} obsidian-frontmatter`); fm.set(e.file, "closed"); }
       }
     }
   }
@@ -337,8 +354,11 @@ export function scanPatch(patch) {
 // source), else Obsidian's own vault registry, else the sg-brain-link knowledge corpus under $HOME.
 // For --publish, no resolvable directory, or any unreadable entry, is a refusal. Output is rule id +
 // file:line only: never the matched text and never the vault path.
+// Documents the text index cannot read. Their presence in a configured vault means the provenance check
+// cannot cover that vault, so --publish refuses (rule vault-unindexable). Images/media are not text notes.
+const UNINDEXABLE = /\.(?:icloud|pdf|docx?|pages|key|numbers|xlsx?|pptx?|odt|ods|odp|epub)$/i;
 const VAULT_EXT = /\.(?:md|markdown|txt|org|canvas|json|csv|tsv|html?|ya?ml|rtf|xml|tex|log)$/i;
-const SHINGLE_WORDS = 8, MIN_LINE_CHARS = 40, MIN_SHINGLE_CHARS = 30, MAX_VAULT_BYTES = 512 * 1024 * 1024;
+const MIN_TITLE_CHARS = 12, SHINGLE_WORDS = 8, MIN_LINE_CHARS = 40, MIN_SHINGLE_CHARS = 30, MAX_VAULT_BYTES = 512 * 1024 * 1024;
 const norm = (s) => s.toLowerCase().normalize("NFKC");
 const wordsOf = (s) => norm(s).match(/[\p{L}\p{N}]+/gu) ?? [];
 const normLine = (s) => norm(s).replace(/\s+/g, " ").trim();
@@ -382,8 +402,13 @@ export function vaultDirs(env = process.env, home = homedir()) {
 /** Index the text files under the directories. Every file is opened ONCE and fstat/read go through that
  *  descriptor, so what is classified is what is read. O_NONBLOCK keeps a FIFO from hanging the open. */
 function buildIndex(entries) {
-  const lines = new Set(), shingles = new Set(), seen = new Set();
-  let bytes = 0, walked = 0;
+  const lines = new Set(), shingles = new Set(), seen = new Set(), titles = new Set();
+  let bytes = 0, walked = 0, unindexable = 0;
+  // A note's title (its file name, minus extension and any .icloud placeholder dressing) is private too.
+  const addTitle = (name) => {
+    const t = wordsOf(name.replace(/^\./, "").replace(/\.icloud$/i, "").replace(/\.[A-Za-z0-9]{1,6}$/, "")).join(" ");
+    if (t.length >= MIN_TITLE_CHARS) titles.add(t);
+  };
   const walk = (dir, top) => {
     const real = realpathSync(dir);
     if (seen.has(real)) return;
@@ -395,6 +420,8 @@ function buildIndex(entries) {
       let text = null;
       try {
         const st = fstatSync(fd);
+        if (st.isFile()) addTitle(ent.name);
+        if (st.isFile() && UNINDEXABLE.test(ent.name)) unindexable++;
         if (st.isFile() && VAULT_EXT.test(ent.name)) {
           bytes += st.size;
           if (bytes > MAX_VAULT_BYTES) throw new Error("vault too large to index");
@@ -417,7 +444,7 @@ function buildIndex(entries) {
     walk(path, top);
     walked++;
   }
-  return { lines, shingles, walked };
+  return { lines, shingles, titles, walked, unindexable };
 }
 
 /** Build the provenance checker once. `required` (publish): an unresolvable vault is a refusal; a dry
@@ -431,25 +458,31 @@ export function provenanceChecker({ required, log, env = process.env }) {
       log("provenance check skipped (dry run): no vault directory resolved");
       return () => [];
     }
+    if (idx.unindexable > 0) {
+      if (required) refuse(`provenance check cannot cover this vault: ${idx.unindexable} .icloud placeholder(s) or un-indexable document(s) (PDF, Office, iWork) are present; refusing --publish (vault-unindexable)`);
+      log(`provenance check (dry run): ${idx.unindexable} un-indexable document(s) in the vault are NOT covered; --publish would refuse`);
+    }
   } catch (e) {
     if (e instanceof Refusal) throw e;
     refuse("provenance check could not read the vault or knowledge directory; nothing is published unchecked");
   }
   return (patch) => {
     const out = [], perFile = new Map();
+    const hasTitle = (text) => { const w = wordsOf(text).join(" "); for (const t of idx.titles) if (w.includes(t)) return true; return false; };
     for (const e of diffAdded(patch, [])) {
-      if (e.header !== undefined) continue;
+      if (e.header !== undefined) { if (hasTitle(e.file)) out.push(`${e.ref}: path provenance-title`); continue; }
       const n = normLine(e.text);
-      if (n.length >= MIN_LINE_CHARS && idx.lines.has(h53(n))) out.push(`${e.file}:${e.lineNo} provenance-line`);
-      const arr = perFile.get(e.file) ?? [];
+      if (n.length >= MIN_LINE_CHARS && idx.lines.has(h53(n))) out.push(`${e.ref}:${e.lineNo} provenance-line`);
+      if (hasTitle(e.text)) out.push(`${e.ref}:${e.lineNo} provenance-title`);
+      const arr = perFile.get(e.ref) ?? [];
       for (const w of wordsOf(e.text)) arr.push([w, e.lineNo]);
-      perFile.set(e.file, arr);
+      perFile.set(e.ref, arr);
     }
-    for (const [file, arr] of perFile) {
+    for (const [ref, arr] of perFile) {
       const done = new Set();
       for (let i = 0; i + SHINGLE_WORDS <= arr.length; i++) {
-        const s = arr.slice(i, i + SHINGLE_WORDS).map((x) => x[0]).join(" ");
-        if (s.length >= MIN_SHINGLE_CHARS && idx.shingles.has(h53(s)) && !done.has(arr[i][1])) { done.add(arr[i][1]); out.push(`${file}:${arr[i][1]} provenance-shingle`); }
+        const sh = arr.slice(i, i + SHINGLE_WORDS).map((x) => x[0]).join(" ");
+        if (sh.length >= MIN_SHINGLE_CHARS && idx.shingles.has(h53(sh)) && !done.has(arr[i][1])) { done.add(arr[i][1]); out.push(`${ref}:${arr[i][1]} provenance-shingle`); }
       }
     }
     return out;
@@ -497,7 +530,10 @@ function scanOutgoing(wt, log, { scanner = scanPatch, extra = () => [], publish 
     const patch = gitOk(wt, ["diff", ...NOFILTER, "--binary", "--no-color", "--no-renames", "HEAD^", "HEAD"]);
     const nums = gitOk(wt, ["diff", ...NOFILTER, "--numstat", "--no-renames", "HEAD^", "HEAD"]);
     if (!patch.trim()) throw new Error("outgoing patch is empty");
-    hits = [...scanner(patch), ...extra(patch), ...scanProse("commit-message", gitOk(wt, ["log", "-1", "--format=%B"]))];
+    const message = gitOk(wt, ["log", "-1", "--format=%B"]);
+    // The message goes to origin too: run the same provenance check on it, as a one-file patch.
+    const msgPatch = `diff --git a/commit-message b/commit-message\nnew file mode 100644\n--- /dev/null\n+++ b/commit-message\n@@ -0,0 +1,1 @@\n${message.split("\n").map((l) => `+${l}`).join("\n")}\n`;
+    hits = [...scanner(patch), ...extra(patch), ...extra(msgPatch), ...scanProse("commit-message", message)];
     for (const row of nums.split("\n")) if (/^-\t-\t/.test(row)) hits.push(`${row.split("\t")[2]}: binary file refused`);
     const names = gitOk(wt, ["diff", ...NOFILTER, "--name-only", "-z", "--no-renames", "HEAD^", "HEAD"]).split("\0").filter(Boolean);
     hits.push(...gitleaksScan(wt, names, log, publish));
@@ -505,7 +541,7 @@ function scanOutgoing(wt, log, { scanner = scanPatch, extra = () => [], publish 
     if (e instanceof Refusal) throw e;
     refuse(`content scan could not complete (${redact(String(e.message).split("\n")[0])}); nothing is published unscanned`);
   }
-  if (hits.length) refuse(`content scan blocked publication (${hits.length} finding(s); text withheld on purpose):\n${hits.slice(0, 20).map((h) => `  ${h}`).join("\n")}`);
+  if (hits.length) blocked("content scan blocked publication", hits);
 }
 
 export async function run({ job, db = DEFAULT_DB, repo = REPO, publish = false, log = console.log, scanner, hooks = {} }) {
@@ -535,7 +571,7 @@ export async function run({ job, db = DEFAULT_DB, repo = REPO, publish = false, 
   if (leftOut) log(`${leftOut} changed file(s) in the worktree are not in the job's recorded change set and were left out`);
   if (!patch.trim() || files.length === 0) refuse(`job ${job}: the recorded change set matches an empty worktree diff`);
   const early = [...scanPatch(patch), ...provenance(patch)];
-  if (early.length) refuse(`job ${job}: content scan blocked publication (${early.length} finding(s); text withheld on purpose):\n${early.slice(0, 20).map((h) => `  ${h}`).join("\n")}`);
+  if (early.length) blocked(`job ${job}: content scan blocked publication`, early);
   const bad = [];
   for (const f of files) {
     if (EXEC_SURFACE.test(f)) bad.push(`${f} (install/hook/attribute surface: runs code on the next install or git operation)`);
@@ -566,7 +602,9 @@ export async function run({ job, db = DEFAULT_DB, repo = REPO, publish = false, 
     const ap = git(wt, ["apply", "--3way", "--index", pf]);
     const unmerged = git(wt, ["diff", "--name-only", "--diff-filter=U"]).out.trim();
     if (!ap.ok || unmerged) refuse(`job ${job}: the patch does not apply cleanly to origin/${BASE}${unmerged ? `\nunmerged file(s): ${unmerged.split("\n").length}` : ""}`);
-    const prTitle = `brain: ${title.slice(0, 80)} (job ${job})`;
+    // Fixed title and template: the job's own title and result are model output written next to private
+    // notes and are NOT provenance-checkable as prose, so none of it is published. Review the diff.
+    const prTitle = `brain: job ${job}`;
     gitOk(wt, ["commit", "-q", "-m", `${prTitle}\n\nLocal-brain build job ${job}, published by the Mac lane on the owner's order.\n\n${TRAILER}`]);
     if (hooks.afterCommit) hooks.afterCommit(wt); // self-test only: lets a test add a second commit
     // What is pushed must be EXACTLY one commit on the base this run fetched, nothing else on the branch.
@@ -578,12 +616,11 @@ export async function run({ job, db = DEFAULT_DB, repo = REPO, publish = false, 
     gitOk(wt, ["push", "-q", "origin", `HEAD:refs/heads/${branch}`]);
     const body = [
       "## Summary", "",
-      `Local-brain build job \`${job}\` — "${title}". Published by the Mac lane on the owner's order (2026-11-02). It skips Codex's contained-checkpoint acceptance step: review on this PR is the acceptance.`, "",
-      "## What changed", "", ...files.map((f) => `- \`${f}\``), "",
-      "## Validation", "", "The job's own result, verbatim:", "", ...result.split("\n").map((l) => `> ${l}`), "",
-      "Codex and Claude review on this PR; the lane lands it under DR-037.", "",
-      "## Public-safety note", "", "The diff was refused if any file classified OWNER_RESERVED, DECISION_PATH or SAFETY_MACHINERY, or touched governance text (AGENTS.md, CLAUDE.md, decision records, PURPOSE, .github). No private path or brain state is included here beyond the job id and title.", "",
-      "## Remaining risks", "", "The brain built on an older base; the patch was 3-way replayed onto the current base and has not run preflight here. CI on this PR is the first full run.", "",
+      `Local-brain build job \`${job}\`, published by the Mac lane on the owner's order (2026-11-02). The job's own title and result text are deliberately not quoted here: they are model output written near private notes. Review the diff. It skips Codex's contained-checkpoint acceptance step: review on this PR is the acceptance.`, "",
+      "## What changed", "", ...files.map((f, i) => `- file ${i + 1} of ${files.length}: \`${f}\``), "",
+      "## Validation", "", "The job's result text is not quoted. The commit was scanned before the push: marker rules (private paths, Obsidian shapes, secrets, e-mail), vault provenance (line, 8-word shingle and note-title matches against the owner's vault) and gitleaks. Codex and Claude review on this PR; the lane lands it under DR-037.", "",
+      "## Public-safety note", "", "Refused if any file classified OWNER_RESERVED, DECISION_PATH or SAFETY_MACHINERY, touched governance text (AGENTS.md, CLAUDE.md, decision records, PURPOSE, .github) or an install/hook/attribute file (package.json, .npmrc, .pnpmfile.cjs, .gitattributes, ...). No private path, brain state or job text is included here beyond the job id.", "",
+      "## Remaining risks", "", "The scan cannot see a paraphrase of a private note or an encoded string. The brain built on an older base; the patch was 3-way replayed onto the current base and has not run preflight here. CI on this PR is the first full run.", "",
       "🤖 Generated with [Claude Code](https://claude.com/claude-code)", "",
     ].join("\n");
     const bf = join(scratch, "body.md");
@@ -646,6 +683,7 @@ async function selfTest() {
     const vault = join(root, "vault");
     mkdirSync(vault);
     writeFileSync(join(vault, "note.md"), "# private\nDan's private reflections on the board meeting and the hiring decision last quarter.\nthe quick brown fox jumps over the lazy dog near the riverbank at dawn every single day\nshort line\n");
+    writeFileSync(join(vault, "Quarterly board reorganisation notes.md"), "unrelated body text\n");
     process.env.SIGNALGRID_VAULT_DIRS = vault;
     const bin = join(root, "bin"), ghLog = join(root, "gh.log"), glRc = join(root, "gl.rc");
     mkdirSync(bin);
@@ -726,6 +764,10 @@ async function selfTest() {
     const wAttr = brain("w-attr", (w) => writeFileSync(join(w, ".gitattributes"), "*.md diff=evil\n"));
     const wHook = brain("w-hook", (w) => writeFileSync(join(w, "docs/hook.md"), "fine\n"));
     const wGh = brain("w-gh", (w) => writeFileSync(join(w, "docs/gh.md"), "fine\n"));
+    const wHide = brain("w-hide", (w) => writeFileSync(join(w, "docs/hide.md"), "A clean added line.\n"));
+    const wTitle1 = brain("w-title1", (w) => writeFileSync(join(w, "docs/t1.md"), "Please see Quarterly board reorganisation notes for the plan.\n"));
+    const wTitle2 = brain("w-title2", (w) => writeFileSync(join(w, "docs/quarterly-board-reorganisation-notes.md"), "Clean.\n"));
+    const wUni = brain("w-uni", (w) => writeFileSync(join(w, "docs/r\u00e9union.md"), "---\ntags: [x]\n---\nbody\n"));
     const wTrash = brain("w-trash", (w) => writeFileSync(join(w, "docs/trash.md"), J("see .tra", "sh/old.md\n")));
 
     const db = join(root, "autonomy.sqlite3");
@@ -748,17 +790,21 @@ async function selfTest() {
       ["jpkg", "build", "review", wPkg, "Edited `package.json`."], ["jattr", "build", "review", wAttr, "Edited `.gitattributes`."],
       ["jhook", "build", "review", wHook, "Added `docs/hook.md`."], ["jgh", "build", "review", wGh, "Added `docs/gh.md`."],
       ["jtrash", "build", "review", wTrash, "Added `docs/trash.md`."],
+      ["jhide", "build", "review", wHide, "Added `docs/hide.md`. RESULT-MARK sentence from the worker.", "SECRET-TITLE-MARK words"],
+      ["jtitle1", "build", "review", wTitle1, "Added `docs/t1.md`."], ["jtitle2", "build", "review", wTitle2, "Added `docs/quarterly-board-reorganisation-notes.md`."],
+      ["juni", "build", "review", wUni, "Added `docs/r\u00e9union.md`."],
+      ["j bad;id", "build", "review", wClean, "Added `docs/clean.md`."],
     ];
     if (isBuiltin("node:sqlite")) {
       const { DatabaseSync } = await import("node:sqlite");
       const d = new DatabaseSync(db);
       d.exec("CREATE TABLE autonomy_jobs (id TEXT, kind TEXT, status TEXT, repo TEXT, worktree TEXT, title TEXT, result TEXT, updated_at TEXT)");
       const ins = d.prepare("INSERT INTO autonomy_jobs VALUES (?, ?, ?, 'SignalGrid-Review-Hub', ?, ?, ?, '2026-11-02')");
-      for (const [id, k, s, w, res] of rows) ins.run(id, k, s, w, `title ${id}`, JSON.stringify(res));
+      for (const [id, k, s, w, res, ttl] of rows) ins.run(id, k, s, w, ttl ?? `title ${id}`, JSON.stringify(res));
       d.close();
     } else {
       const sql = ["CREATE TABLE autonomy_jobs (id TEXT, kind TEXT, status TEXT, repo TEXT, worktree TEXT, title TEXT, result TEXT, updated_at TEXT);",
-        ...rows.map(([id, k, s, w, res]) => `INSERT INTO autonomy_jobs VALUES ('${id}','${k}','${s}','SignalGrid-Review-Hub','${w}','title ${id}','${res}','2026-11-02');`)].join("\n");
+        ...rows.map(([id, k, s, w, res, ttl]) => `INSERT INTO autonomy_jobs VALUES ('${id}','${k}','${s}','SignalGrid-Review-Hub','${w}','${ttl ?? `title ${id}`}','${res}','2026-11-02');`)].join("\n");
       const r = spawnSync("/usr/bin/sqlite3", [db], { input: sql, encoding: "utf8" });
       if (r.status !== 0) throw new Error(`sqlite3 fixture failed: ${r.stderr}`);
     }
@@ -787,7 +833,7 @@ async function selfTest() {
     const listed = await listReview(db);
     check("(*) --list-review names every review build with a worktree and no queued job", listed.includes("jdocs") && listed.includes("jagents") && listed.includes("jempty") && !listed.includes("jqueued"));
     // (6) publish with a stubbed gh
-    writeFileSync(join(bin, "gh"), `#!/bin/sh\nprintf '%s\\n' "$*" >> '${ghLog}'\n[ -e '${join(root, "gh.slow")}' ] && sleep 5\necho https://example.invalid/pr/1\n`);
+    writeFileSync(join(bin, "gh"), `#!/bin/sh\nprintf '%s\\n' "$*" >> '${ghLog}'\n[ -e '${join(root, "gh.slow")}' ] && sleep 5\nprev=''; for a; do [ "$prev" = --body-file ] && cp "$a" '${join(root, "gh.body")}'; prev="$a"; done\necho https://example.invalid/pr/1\n`);
     chmodSync(join(bin, "gh"), 0o755);
     process.env.PATH = `${bin}:${process.env.PATH}`;
     const ghCalls = () => (existsSync(ghLog) ? readFileSync(ghLog, "utf8").trim().split("\n").filter(Boolean) : []);
@@ -947,7 +993,52 @@ async function selfTest() {
       [J("Library/Mobile Doc", "uments/iCloud~md~obsid", "ian/Documents/Vault/a.md"), "$HOME/Library/Caches/x", J("%2fus", "ers%2fx%2f"), J("C:/Us", "ers/x"), J("file:///Us", "ers/x/a.md"), J("obsid", "ian://open?vault=Private")].every((l) => scanLine(l, "x.md").length > 0));
     check("(21) a .trash/ path component is refused in text and in a file path", scanLine(J("see .tra", "sh/old.md"), "x.md").includes("obsidian-trash") && scanPatch(`diff --git a/.trash/a.md b/.trash/a.md\nnew file mode 100644\n--- /dev/null\n+++ b/.trash/a.md\n@@ -0,0 +1 @@\n+fine\n`).length > 0);
     await refused("(21) end to end: a note that mentions a .trash/ path is refused", { job: "jtrash", db, repo, publish: true }, "obsidian-trash");
-    check("(21) nothing leaked: only jstray and jhook were pushed",  remoteBranches() === before + 3 && /jstray|jhook/.test(scratchGitOk(repo, ["ls-remote", "--heads", "origin", "refs/heads/brain/*"])));
+    check("(21) nothing leaked: only jstray, jhook and jgh were pushed", remoteBranches() === before + 3 && /jstray|jhook/.test(scratchGitOk(repo, ["ls-remote", "--heads", "origin", "refs/heads/brain/*"])));
+    // (22) review H1: no worker text (title/result) reaches the commit, PR title or PR body
+    const r22 = await run({ job: "jhide", db, repo, publish: true, log: quiet });
+    scratchGitOk(repo, ["fetch", "-q", "origin", "brain/job-jhide"]);
+    const subj = scratchGitOk(repo, ["log", "-1", "--format=%B", "FETCH_HEAD"]);
+    const ghLast = ghCalls().pop() ?? "";
+    const ghBody = existsSync(join(root, "gh.body")) ? readFileSync(join(root, "gh.body"), "utf8") : "";
+    check("(22) commit message is the fixed 'brain: job <id>' and carries no job text", r22.pushed && subj.startsWith("brain: job jhide\n") && !/SECRET-TITLE-MARK|RESULT-MARK/.test(subj));
+    check("(22) PR title is fixed and the PR body quotes neither title nor result", ghLast.includes("--title brain: job jhide ") && ghBody.length > 0 && !/SECRET-TITLE-MARK|RESULT-MARK/.test(ghLast + ghBody));
+    // (23) review M1: findings name files by index; the LAST line of the CLI is a fixed SUMMARY
+    const cli = (job) => spawnSync(process.execPath, [fileURLToPath(import.meta.url), "--job", job, "--db", db], { encoding: "utf8", env: { ...process.env } });
+    const c1 = cli("jscan-docsc1md"), c1Lines = c1.stderr.trim().split("\n");
+    check("(23) a findings refusal: file#N in the findings, no file name, last line is 'SUMMARY refused findings=N rules=...'", /file#1:1 private-path/.test(c1.stderr) && !/docs\/c1/.test(c1.stderr) && /^SUMMARY refused findings=\d+ rules=[a-z0-9_,-]+$/.test(c1Lines[c1Lines.length - 1]) && c1.status === 1);
+    const c2 = cli("jqueued"), c2Lines = c2.stderr.trim().split("\n");
+    check("(23) any other refusal ends in a fixed SUMMARY line too", c2Lines[c2Lines.length - 1] === "SUMMARY refused (see the tick log)");
+    const c3 = cli("jgate"), c3Lines = c3.stderr.trim().split("\n");
+    check("(23) a path refusal (which prints file names above) still ends in the fixed SUMMARY line", /check-x/.test(c3.stderr) && c3Lines[c3Lines.length - 1] === "SUMMARY refused (see the tick log)");
+    // lane-tick.sh: the safe_line filter and the d3 last-line rule, run in bash
+    const tick = readFileSync(join(REPO, "scripts/mac/lane-tick.sh"), "utf8");
+    const fnText = /^safe_line\(\) \{[\s\S]*?^\}/m.exec(tick)?.[0] ?? "";
+    const sh = (line) => spawnSync("bash", ["-c", `${fnText}\nsafe_line "$1"`, "x", line], { encoding: "utf8" }).stdout;
+    check("(23) lane-tick safe_line withholds absolute/personal paths and keeps a SUMMARY line", fnText !== "" && sh(J("failed in /Us", "ers/dan/x")) === "(detail withheld; see the tick log)" && sh("SUMMARY refused findings=2 rules=email,private-path") === "SUMMARY refused findings=2 rules=email,private-path");
+    check("(23) lane-tick d3 keeps tick paths and Library/Logs out of RESULT, validates ids, caps PUBLISH_MAX",
+      !/RESULT="[^"]*\$TICK_WT/.test(tick) && !/RESULT="[^"]*~\/Library/.test(tick) && /\*\[!0-9\]\*\) .*PUBLISH_MAX=1/.test(tick) && /read -r _job/.test(tick) && /"SUMMARY "\*\)/.test(tick));
+    // (24) review M2: a vault the index cannot fully read refuses --publish; note titles are private too
+    const v3 = join(root, "vault-pdf");
+    mkdirSync(v3);
+    writeFileSync(join(v3, "n.md"), "x\n");
+    writeFileSync(join(v3, "Scan.pdf"), "%PDF-1.4\n");
+    process.env.SIGNALGRID_VAULT_DIRS = v3;
+    await refused("(24) a PDF in the vault refuses --publish (vault-unindexable)", { job: "jclean", db, repo, publish: true }, "vault-unindexable");
+    check("(24) ... and a dry run continues", (await run({ job: "jclean", db, repo, log: quiet })).files.join() === "docs/clean.md");
+    const v4 = join(root, "vault-icloud");
+    mkdirSync(v4);
+    writeFileSync(join(v4, "n.md"), "x\n");
+    writeFileSync(join(v4, ".Placeholder note.md.icloud"), "bplist");
+    process.env.SIGNALGRID_VAULT_DIRS = v4;
+    await refused("(24) an .icloud placeholder in the vault refuses --publish", { job: "jclean", db, repo, publish: true }, "vault-unindexable");
+    process.env.SIGNALGRID_VAULT_DIRS = vault;
+    await refused("(24) added text naming a vault note title is refused", { job: "jtitle1", db, repo, publish: true }, "provenance-title");
+    await refused("(24) a new file named like a vault note title is refused", { job: "jtitle2", db, repo, publish: true }, "provenance-title");
+    // (25) low items
+    await refused("(25) a non-ASCII .md name still hits the front-matter rule (core.quotePath=false)", { job: "juni", db, repo, publish: true }, "obsidian-frontmatter");
+    check("(25) every %XX run decodes on its own: a bad escape elsewhere, and %252F, no longer disable decoding",
+      scanLine(J("%2FUs", "ers%2Fdan %ZZ"), "x.md").includes("private-path") && scanLine(J("%252FUs", "ers%252Fdan"), "x.md").includes("private-path"));
+    check("(25) --list-review lists only ids safe for a command line", !(await listReview(db)).includes("j bad;id") && (await listReview(db)).includes("jclean"));
     check("(*) no scratch worktrees left registered", scratchGitOk(repo, ["worktree", "list"]).split("\n").length === 1);
   } finally { rmSync(root, { recursive: true, force: true }); }
   if (pass !== total) { console.error(`self-test FAILED (${pass}/${total})`); process.exit(1); }
@@ -960,9 +1051,14 @@ if (isMainModule(process.argv[1], import.meta.url)) {
   try {
     if (a.includes("--self-test")) await selfTest();
     else if (a.includes("--list-review")) { for (const id of await listReview(opt("--db") ?? DEFAULT_DB)) console.log(id); }
-    else await run({ job: opt("--job"), db: opt("--db") ?? DEFAULT_DB, publish: a.includes("--publish") });
+    else {
+      const r = await run({ job: opt("--job"), db: opt("--db") ?? DEFAULT_DB, publish: a.includes("--publish") });
+      // The LAST line is the only one the tick lets near a heartbeat: fixed words, nothing from the job.
+      console.log(`SUMMARY ${r.pushed ? "published" : "ok"}`);
+    }
   } catch (e) {
     console.error(redact(e instanceof Refusal ? `REFUSED: ${e.message}` : `ERROR: ${e.message}`));
+    console.error(`SUMMARY ${e instanceof Refusal ? (e.rules ? `refused findings=${e.count} rules=${e.rules.slice(0, 8).join(",")}` : "refused (see the tick log)") : "error (see the tick log)"}`);
     process.exit(1);
   }
 }

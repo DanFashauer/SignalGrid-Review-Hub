@@ -1828,6 +1828,26 @@
     "pkg:npm/lightningcss-linux-x64-gnu@1.33.0": {
       "licence": "MPL-2.0",
       "basis": "installed manifest read on linux-x64 (where the workspace overrides DO install this binary), recorded 2026-08-21 after the Mac lane reported darwin regeneration dropped it — the linux twin of the win32 handling above, so generation is platform-independent"
+    },
+    "pkg:npm/%40rolldown/binding-win32-arm64-msvc@1.2.16": {
+      "licence": "MIT",
+      "basis": "registry.npmjs.org manifest for @rolldown/binding-win32-arm64-msvc@1.2.16 (platform binary not installed under the workspace overrides; npm view license -> MIT), recorded 2026-11-07 for the minor/patch group lift (PR #1908)"
+    },
+    "pkg:npm/%40rolldown/binding-win32-x64-msvc@1.2.16": {
+      "licence": "MIT",
+      "basis": "registry.npmjs.org manifest for @rolldown/binding-win32-x64-msvc@1.2.16 (platform binary not installed under the workspace overrides; npm view license -> MIT), recorded 2026-11-07 for the minor/patch group lift (PR #1908)"
+    },
+    "pkg:npm/%40tailwindcss/oxide-win32-arm64-msvc@4.3.4": {
+      "licence": "MIT",
+      "basis": "registry.npmjs.org manifest for @tailwindcss/oxide-win32-arm64-msvc@4.3.4 (platform binary not installed under the workspace overrides; npm view license -> MIT), recorded 2026-11-07 for the minor/patch group lift (PR #1908)"
+    },
+    "pkg:npm/%40tailwindcss/oxide-win32-x64-msvc@4.3.4": {
+      "licence": "MIT",
+      "basis": "registry.npmjs.org manifest for @tailwindcss/oxide-win32-x64-msvc@4.3.4 (platform binary not installed under the workspace overrides; npm view license -> MIT), recorded 2026-11-07 for the minor/patch group lift (PR #1908)"
+    },
+    "pkg:npm/%40rolldown/binding-linux-x64-gnu@1.2.16": {
+      "licence": "MIT",
+      "basis": "installed manifest read on linux-x64 (npm view license -> MIT), recorded 2026-11-07 for PR #1908 - linux twin so darwin regeneration is platform-independent"
     }
   }
 }

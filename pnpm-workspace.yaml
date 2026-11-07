@@ -106,6 +106,7 @@ overrides:
   # Vite 8 bundles via Rolldown; mirror the rollup policy below EXACTLY:
   # linux-x64-gnu kept for CI/deploy, win32 bindings kept because the desktop
   # shell's windows-latest CI builds with vite, everything else stripped.
+  "rolldown>@rolldown/binding-android-arm-eabi": "-"
   "rolldown>@rolldown/binding-android-arm64": "-"
   "rolldown>@rolldown/binding-darwin-arm64": "-"
   "rolldown>@rolldown/binding-darwin-x64": "-"

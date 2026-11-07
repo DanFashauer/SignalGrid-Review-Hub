@@ -35,7 +35,7 @@ findable from documentation; both took a wire capture. Committed at
 
 ## Why now / why us
 
-- **Proof-first, in public**: 155 proof gates (the figure `docs/STATUS.md`
+- **Proof-first, in public**: 156 proof gates (the figure `docs/STATUS.md`
   publishes; this page's own copy is held to the `proof:*` keys in
   `package.json` by `scripts/check-derived-doc-figures.mjs`, row
   `proof-scripts-investor`, so it cannot drift silently), fail-closed

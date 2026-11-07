@@ -161,9 +161,24 @@ export function deriveCriticalSignalsPresent(
     // would step up every tenant without dock hardware.
     dockEvidenceFreshness !== "stale" &&
     dockEvidenceFreshness !== "expired" &&
-    dockEvidenceFreshness !== "unknown"
+    dockEvidenceFreshness !== "unknown" &&
+    // DR-065: a dock-family reading that was EMITTED but could not be read is not
+    // evidence either, so the backstop holds for a custom rule set that carries no
+    // `*-unreadable` rule. Silence ("unknown") is deliberately not listed — the same
+    // deployment-shape reasoning as "missing" above.
+    !DOCK_FAMILY_FIELDS.some((field) => evidence[field] === "unreadable")
   );
 }
+
+/** DR-065: the six dock-family evidence fields that can read `"unreadable"`. */
+export const DOCK_FAMILY_FIELDS = [
+  "custodyState",
+  "dockChargeState",
+  "batteryHealth",
+  "tamperState",
+  "dockState",
+  "badgeBinding",
+] as const satisfies readonly (keyof DecisionEvidence)[];
 
 /**
  * The EXACT set of fields the snapshot digest covers, in one place.
@@ -687,7 +702,9 @@ export const EVIDENCE_VALUE_MEMBERS: readonly (string | boolean)[] = (() => {
     if (!seen.includes(member)) seen.push(member);
   }
   // The silence defaults no SIGNAL can express but every FIELD can.
-  for (const silence of ["unknown", "unverified"]) {
+  // DR-065: "unreadable" is the dock-family field value for an emitted reading
+  // nothing could be read from — likewise not a member any signal expresses.
+  for (const silence of ["unknown", "unverified", "unreadable"]) {
     if (!seen.includes(silence)) seen.push(silence);
   }
   return seen;
@@ -780,7 +797,7 @@ function asFreshness(value: unknown): Freshness {
 }
 
 function readCustody(latestByCategory: LatestByCategory): CustodyState {
-  return readEnum(latestByCategory, "custody_state", EVIDENCE_VALUE_DOMAINS.custody) ?? "unknown";
+  return readDockFamily(latestByCategory, "custody_state", EVIDENCE_VALUE_DOMAINS.custody);
 }
 
 function readBaseline(latestByCategory: LatestByCategory): BaselineState {
@@ -796,7 +813,7 @@ function readShiftContext(latestByCategory: LatestByCategory): ShiftContextState
 }
 
 function readBadge(latestByCategory: LatestByCategory): BadgeBindingState {
-  return readEnum(latestByCategory, "badge_binding", EVIDENCE_VALUE_DOMAINS.badge) ?? "unknown";
+  return readDockFamily(latestByCategory, "badge_binding", EVIDENCE_VALUE_DOMAINS.badge);
 }
 
 function readManagementHealth(latestByCategory: LatestByCategory): ManagementHealthState {
@@ -808,19 +825,38 @@ function readLocalAuthority(latestByCategory: LatestByCategory): LocalAuthorityG
 }
 
 function readCharge(latestByCategory: LatestByCategory): ChargeState {
-  return readEnum(latestByCategory, "charge_state", EVIDENCE_VALUE_DOMAINS.charge) ?? "unknown";
+  return readDockFamily(latestByCategory, "charge_state", EVIDENCE_VALUE_DOMAINS.charge);
 }
 
 function readBatteryHealth(latestByCategory: LatestByCategory): BatteryHealthState {
-  return readEnum(latestByCategory, "battery_health", EVIDENCE_VALUE_DOMAINS.batteryHealth) ?? "unknown";
+  return readDockFamily(latestByCategory, "battery_health", EVIDENCE_VALUE_DOMAINS.batteryHealth);
 }
 
 function readTamper(latestByCategory: LatestByCategory): TamperState {
-  return readEnum(latestByCategory, "tamper_state", EVIDENCE_VALUE_DOMAINS.tamper) ?? "unknown";
+  return readDockFamily(latestByCategory, "tamper_state", EVIDENCE_VALUE_DOMAINS.tamper);
 }
 
 function readDock(latestByCategory: LatestByCategory): DockState {
-  return readEnum(latestByCategory, "dock_state", EVIDENCE_VALUE_DOMAINS.dock) ?? "unknown";
+  return readDockFamily(latestByCategory, "dock_state", EVIDENCE_VALUE_DOMAINS.dock);
+}
+
+/**
+ * DR-065 (PROPOSED) dock-family reader. `readEnum` answers `undefined` for BOTH "no
+ * reading" and "a reading is present but out-of-domain / only a floored good value".
+ * Before DR-065 the six dock-family readers folded both to `"unknown"`, which no v1
+ * rule matches — so a fresh `tamper_state: "garbled"` (or a badge binding the reader
+ * could not parse) ALLOWED, while the identical shape on the DR-043 credential
+ * fields stepped up. Silence stays `"unknown"` (day-one-quiet: a tenant with no dock
+ * hardware is not stepped up); an EMITTED reading nothing could be read from is
+ * `"unreadable"`, which the v1 `*-unreadable` rules step up. Same `.has()` split as
+ * `readPresentOrNotApplicable` below, keeping the families' existing silence value.
+ */
+function readDockFamily<T extends string>(
+  latestByCategory: LatestByCategory,
+  category: (typeof DOCK_CATEGORIES)[number],
+  domain: { readonly members: readonly T[]; readonly good: readonly T[] },
+): T | "unknown" | "unreadable" {
+  return readEnum(latestByCategory, category, domain) ?? (latestByCategory.has(category) ? "unreadable" : "unknown");
 }
 
 /**

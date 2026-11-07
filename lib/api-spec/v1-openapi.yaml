@@ -1447,6 +1447,7 @@ components:
             - CUSTODY_UNKNOWN
             - DEVICE_NONCOMPLIANT
             - DEVICE_UNMANAGED
+            - DOCK_EVIDENCE_UNREADABLE
             - DOCK_FAULTED
             - DOCK_OFFLINE
             - ENCRYPTION_REQUIRED_FOR_WORKFLOW

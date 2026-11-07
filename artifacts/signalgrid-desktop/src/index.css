@@ -121,3 +121,18 @@
 .text-status-step-up { color: hsl(var(--decision-review)); }
 .text-status-restrict { color: hsl(var(--decision-deny)); }
 .text-status-deny { color: hsl(var(--decision-deny)); }
+
+/* Honour the OS reduced-motion setting across CSS-driven motion (Tailwind
+   animate-* utilities, transitions, smooth scrolling) — plan row 76, the same
+   block signalgrid-web carries. scripts/check-web-a11y-basics.mjs fails a web
+   tree whose stylesheet drops it. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

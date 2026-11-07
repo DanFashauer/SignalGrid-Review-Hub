@@ -473,15 +473,37 @@ function main() {
     .sort();
   // Declared side of the comparison. Identical to `BACKSTOP_FIELDS` in
   // signalgrid-core-proof.ts §22; changing the ladder means changing both, deliberately.
+  // DR-065 (PROPOSED) widened the ladder by the six dock-family fields.
   const DECLARED_AXES: Array<keyof DecisionEvidence> = [
+    "badgeBinding",
+    "batteryHealth",
+    "custodyState",
     "deviceCompliance",
     "deviceEncrypted",
     "deviceManaged",
+    "dockChargeState",
     "dockEvidenceFreshness",
+    "dockState",
     "identityEnabled",
     "osSupported",
     "postureFreshness",
+    "tamperState",
   ];
+  // THE DEGRADATION IS PER AXIS NOW, and the reason is doctrine, not decoration. For
+  // the six dock-family axes, "unknown" is SILENCE — no dock channel at all — which
+  // day-one-quiet deliberately leaves at allow (see the custody section above). Their
+  // gap is an EMITTED reading nothing could be read from, "unreadable" (DR-065), and
+  // that is the value the backstop rejects. Every other axis degrades to "unknown".
+  const DOCK_FAMILY_AXES = new Set<keyof DecisionEvidence>([
+    "badgeBinding",
+    "batteryHealth",
+    "custodyState",
+    "dockChargeState",
+    "dockState",
+    "tamperState",
+  ]);
+  const degradedValue = (axis: keyof DecisionEvidence): string =>
+    DOCK_FAMILY_AXES.has(axis) ? "unreadable" : "unknown";
   check(
     `the swept axes are DERIVED from the shipped backstop and match the ${DECLARED_AXES.length} fields the ladder names`,
     JSON.stringify(axes) === JSON.stringify(DECLARED_AXES),
@@ -496,11 +518,9 @@ function main() {
     axes.forEach((axis, i) => {
       if (mask & (1 << i)) {
         anyUnknown = true;
-        // Every axis takes the same degradation. This was written as a ternary with
-        // two identical arms, which is the tell that the list once carried a
-        // non-uniform member; it does not now, and if one is added it needs a real
-        // arm rather than a decorative one.
-        (override as Record<string, unknown>)[axis] = "unknown";
+        // Per-axis degradation (DR-065): the dock-family axes take "unreadable",
+        // every other axis "unknown" — see `degradedValue` above.
+        (override as Record<string, unknown>)[axis] = degradedValue(axis);
       }
     });
     const r = decide(healthyEvidence(override));
@@ -529,7 +549,7 @@ function main() {
   // axis were inert, because 126 of the 127 gap-states degrade something else too.
   {
     const inert = axes.filter(
-      (axis) => decide(healthyEvidence({ [axis]: "unknown" } as Partial<DecisionEvidence>)).outcome === "allow",
+      (axis) => decide(healthyEvidence({ [axis]: degradedValue(axis) } as Partial<DecisionEvidence>)).outcome === "allow",
     );
     check(
       "every derived axis, degraded ALONE, removes allow — no axis is carried by its neighbours",

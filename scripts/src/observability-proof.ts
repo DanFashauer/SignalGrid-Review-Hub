@@ -258,7 +258,7 @@ const coreSrcDir = resolve(repoRoot, "lib/signalgrid-core/src");
 type Row = Record<string, unknown>;
 type StoreLike = {
   connectorInventory(): Array<{ kind: string; status: string; count: number }>;
-  signalFreshnessInventory(): Array<{ freshness: string; count: number }>;
+  signalFreshnessInventory(age?: (signal: Row) => string): Array<{ freshness: string; count: number }>;
   putConnector(c: Row): void;
   putSignal(s: Row): void;
   connectors: Map<string, Row>;
@@ -310,6 +310,58 @@ const STORE_MUTANTS: Array<{ name: string; from: string; to: string }> = [
   },
 ];
 
+// ── The aging contract, run against ANY agedSignalFreshness ───────────────────
+//
+// Until 2026-11-06 the evidence mutant below was only checked to "still read
+// fresh": nothing ran against it, so the pair could never show a kill. The
+// contract is now one function that takes the aging function as an argument, so
+// the real one and each mutant face the identical cases, and a mutant must turn
+// it red.
+type AgeFn = (signal: unknown, nowIso: string) => string;
+const DAY_MS = 24 * 3600 * 1000;
+
+/** Returns the names of the aging cases that FAILED for `age` over `store`. */
+function agingCases(age: AgeFn, store: StoreLike, demoNow: Date): string[] {
+  const failed: string[] = [];
+  const want = (name: string, ok: boolean) => { if (!ok) failed.push(name); };
+  const countsAt = (instant: Date) => {
+    const iso = instant.toISOString();
+    const inv = store.signalFreshnessInventory((signal) => age(signal, iso));
+    return (f: string) => inv.find((r) => r.freshness === f)?.count ?? 0;
+  };
+  const now = countsAt(demoNow);
+  const later = countsAt(new Date(demoNow.getTime() + 40 * DAY_MS));
+  const posture = [...store.signals.values()].filter((x) => x.category === "posture_freshness");
+  const postureFresh = posture.filter((x) => x.value === "fresh" && x.freshness === "fresh").length;
+  want("the store holds fresh posture readings to age", postureFresh > 0);
+  want("40 days later the posture readings no longer read fresh; other categories keep their stamp",
+    later("fresh") === now("fresh") - postureFresh &&
+      later("stale") + later("expired") > now("stale") + now("expired"));
+  // readFreshness reads a posture reading's VALUE, not its `freshness` stamp. The
+  // two agree only because connector.ts writes both from one variable, so a gauge
+  // reading the other field would agree on every seeded row and split on the first
+  // row where they differ. Both directions are pinned: the gauge reports what the
+  // verdict reads.
+  const probe = posture.find((x) => x.value === "fresh");
+  const atNow = demoNow.toISOString();
+  want("a posture reading whose value says stale and stamp says fresh reads stale, as readFreshness reads it",
+    Boolean(probe) && age({ ...probe, value: "stale", freshness: "fresh" }, atNow) === "stale");
+  want("a posture reading whose value says fresh and stamp says stale reads fresh, as readFreshness reads it",
+    Boolean(probe) && age({ ...probe, value: "fresh", freshness: "stale" }, atNow) === "fresh");
+  return failed;
+}
+
+/** Each must turn `agingCases` red. Both rewrite the one line agedSignalFreshness
+ *  returns from; the second restores the pre-2026-11-06 body (the stamp, aged). */
+const AGING_TARGET = "  return postureReadingFreshness(signal, nowIso);\n}";
+const EVIDENCE_MUTANTS: Array<{ name: string; to: string }> = [
+  { name: "ignore the reading's age", to: "  return postureReadingFreshness(signal);\n}" },
+  {
+    name: "read the freshness stamp, not the value readFreshness reads",
+    to: '  return worseFreshness(asFreshness(signal.freshness), postureReadingFreshness({ ...signal, value: "fresh" }, nowIso));\n}',
+  },
+];
+
 async function coreInventoryProof(m: MetricsModule): Promise<void> {
   const coreMod = (await import(coreEntry)) as { SignalGridCore: { demo(): unknown } };
   const core = coreMod.SignalGridCore.demo() as { store: StoreLike } & Parameters<MetricsModule["refreshInventoryGauges"]>[0];
@@ -350,24 +402,28 @@ async function coreInventoryProof(m: MetricsModule): Promise<void> {
   clockedCore.clock = { now: () => demoNow };
   m.refreshInventoryGauges(core);
 
+  // The aging contract against the real agedSignalFreshness (control), then
+  // against each evidence.ts mutant, which must turn the same contract red.
+  const real = (await import(pathToFileURL(join(coreSrcDir, "evidence.ts")).href)) as { agedSignalFreshness: AgeFn };
+  const realAging = agingCases(real.agedSignalFreshness, store, demoNow);
+  check("aging contract: the real agedSignalFreshness satisfies it" +
+    (realAging.length ? ` (failed: ${realAging.join("; ")})` : ""), realAging.length === 0);
   const evidenceSource = readFileSync(resolve(coreSrcDir, "evidence.ts"), "utf8");
-  const agingFrom = "return worseFreshness(\n    asFreshness(signal.freshness),\n    classifyFreshness(signal.observedAt, nowIso, FRESH_WINDOW_HOURS, STALE_WINDOW_HOURS),\n  );";
-  const agingHits = evidenceSource.split(agingFrom).length - 1;
-  check('evidence mutant "ignore the reading\'s age": its target text is present exactly once', agingHits === 1);
+  const agingHits = evidenceSource.split(AGING_TARGET).length - 1;
+  check("evidence mutants: their target text is present exactly once", agingHits === 1);
   if (agingHits === 1) {
     const evDir = mkdtempSync(join(tmpdir(), "sg-evidence-mutant-"));
     try {
-      const file = join(evDir, "evidence-mutant.ts");
-      writeFileSync(file, evidenceSource
-        .replace(agingFrom, "return asFreshness(signal.freshness);")
-        .replace(/from "\.\/([a-z-]+)"/g, (_all, mod: string) => `from ${JSON.stringify(pathToFileURL(join(coreSrcDir, `${mod}.ts`)).href)}`));
-      const mutant = (await import(pathToFileURL(file).href)) as { agedSignalFreshness(s: unknown, nowIso: string): string };
-      const probe = [...store.signals.values()].find((x) => x.category === "posture_freshness" && x.freshness === "fresh");
-      const later = new Date(demoNow.getTime() + 40 * 24 * 3600 * 1000).toISOString();
-      const real = (await import(pathToFileURL(join(coreSrcDir, "evidence.ts")).href)) as { agedSignalFreshness(s: unknown, nowIso: string): string };
-      check("evidence mutant control: the real function ages the probe reading", Boolean(probe) && real.agedSignalFreshness(probe, later) !== "fresh");
-      check('evidence mutant "ignore the reading\'s age": the mutant still reads it fresh (the aging check above is what catches it)',
-        Boolean(probe) && mutant.agedSignalFreshness(probe, later) === "fresh");
+      for (const [i, mutant] of EVIDENCE_MUTANTS.entries()) {
+        const file = join(evDir, `evidence-mutant-${i}.ts`);
+        writeFileSync(file, evidenceSource
+          .replace(AGING_TARGET, mutant.to)
+          .replace(/from "\.\/([a-z-]+)"/g, (_all, mod: string) => `from ${JSON.stringify(pathToFileURL(join(coreSrcDir, `${mod}.ts`)).href)}`));
+        const loaded = (await import(pathToFileURL(file).href)) as { agedSignalFreshness: AgeFn };
+        const red = agingCases(loaded.agedSignalFreshness, store, demoNow);
+        console.log(`  evidence mutant "${mutant.name}": ${red.length} case(s) red${red.length ? ` (${red.join("; ")})` : ""}`);
+        check(`evidence mutant "${mutant.name}": turns the aging contract red`, red.length > 0);
+      }
     } finally {
       rmSync(evDir, { recursive: true, force: true });
     }

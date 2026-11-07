@@ -20,6 +20,8 @@ import {
   getCredentialsForUser,
   getStepUpSession,
   advanceCredentialCounter,
+  confirmCredentialEnrolled,
+  CredentialRevokedError,
 } from './store';
 import {
   extractCredentialPublicKey,
@@ -328,7 +330,25 @@ export async function verifyRegistration(
 
   // Save credential. A credential id already enrolled for this user is NOT
   // replaced (no silent key swap) — and that is reported, not folded into success.
-  const { stored } = await addCredential(userId, credential);
+  // A credential this identity REVOKED (its id or its key) is refused outright: without that, a
+  // ceremony minted before the revocation (`excludeCredentials: []`) and completed
+  // after it brought the revoked credential back (PR #1240 review, plan row 82).
+  let stored: boolean;
+  try {
+    ({ stored } = await addCredential(userId, credential));
+  } catch (err) {
+    if (!(err instanceof CredentialRevokedError)) throw err;
+    await appendAuditRecord(
+      'security.webauthn.registration.refused',
+      { type: 'user', id: userId },
+      { meta: { credentialId: credential.id, reason: 'credential_revoked' }, tenantId: tenant }
+    );
+    return {
+      success: false,
+      error: 'Credential was revoked for this identity; enrol a new credential',
+      timestamp,
+    };
+  }
 
   // Audit
   await appendAuditRecord(
@@ -593,6 +613,21 @@ export async function verifyAuthentication(
         timestamp,
       };
     }
+  }
+
+  // Re-read the credential under the per-user lock before release (PR #1240 review,
+  // plan row 82). `credential` was read before the signature check, and the only later
+  // store touch above runs when the counter INCREASES — never for an always-zero-counter
+  // authenticator, i.e. every platform passkey. A revocation committed since the early
+  // read therefore released the step-up anyway. This is the release's linearisation
+  // point: revoked before it → refused; revoked after it → after the release.
+  if (!(await confirmCredentialEnrolled(userId, credential.id, credential.publicKey))) {
+    await appendAuditRecord(
+      'security.webauthn.step_up.failure',
+      { type: 'user', id: userId },
+      { meta: { credentialId: credential.id, reason: 'credential_revoked' }, tenantId: tenant }
+    );
+    return { success: false, error: 'Credential was revoked before the step-up was released', timestamp };
   }
 
   // Audit

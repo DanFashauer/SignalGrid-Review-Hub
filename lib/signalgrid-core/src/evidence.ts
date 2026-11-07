@@ -161,9 +161,24 @@ export function deriveCriticalSignalsPresent(
     // would step up every tenant without dock hardware.
     dockEvidenceFreshness !== "stale" &&
     dockEvidenceFreshness !== "expired" &&
-    dockEvidenceFreshness !== "unknown"
+    dockEvidenceFreshness !== "unknown" &&
+    // DR-065: a dock-family reading that was EMITTED but could not be read is not
+    // evidence either, so the backstop holds for a custom rule set that carries no
+    // `*-unreadable` rule. Silence ("unknown") is deliberately not listed — the same
+    // deployment-shape reasoning as "missing" above.
+    !DOCK_FAMILY_FIELDS.some((field) => evidence[field] === "unreadable")
   );
 }
+
+/** DR-065: the six dock-family evidence fields that can read `"unreadable"`. */
+export const DOCK_FAMILY_FIELDS = [
+  "custodyState",
+  "dockChargeState",
+  "batteryHealth",
+  "tamperState",
+  "dockState",
+  "badgeBinding",
+] as const satisfies readonly (keyof DecisionEvidence)[];
 
 /**
  * The EXACT set of fields the snapshot digest covers, in one place.
@@ -669,7 +684,9 @@ export const EVIDENCE_VALUE_MEMBERS: readonly (string | boolean)[] = (() => {
     if (!seen.includes(member)) seen.push(member);
   }
   // The silence defaults no SIGNAL can express but every FIELD can.
-  for (const silence of ["unknown", "unverified"]) {
+  // DR-065: "unreadable" is the dock-family field value for an emitted reading
+  // nothing could be read from — likewise not a member any signal expresses.
+  for (const silence of ["unknown", "unverified", "unreadable"]) {
     if (!seen.includes(silence)) seen.push(silence);
   }
   return seen;
@@ -726,20 +743,35 @@ function worseFreshness(a: Freshness, b: Freshness): Freshness {
 /**
  * The freshness of a held signal AS THE DECISION PATH WOULD READ IT at `nowIso`
  * (DR-059). Only the posture reading is aged at the decision instant
- * (`readFreshness`), so only `posture_freshness` is aged here: worst-wins
- * between the stamp and the reading's own age, with the same windows. Every
- * other category returns its stamp unchanged (a value outside the union stays
- * the literal string, as `signalFreshnessInventory` has always reported it).
- * Pure: the instant is passed in, never read.
+ * (`readFreshness`), so only `posture_freshness` is aged here — by
+ * `postureReadingFreshness`, the SAME per-reading fold `readFreshness` applies to
+ * its ordered and tied readings. It reads the field `readFreshness` reads (the
+ * VALUE, not the `freshness` stamp) and folds with the same worst-wins, so a later
+ * change to that fold moves the gauge and the verdict together instead of
+ * silently splitting them. Every other category returns its stamp unchanged (a
+ * value outside the union stays the literal string, as `signalFreshnessInventory`
+ * has always reported it). Pure: the instant is passed in, never read.
  */
 export function agedSignalFreshness(signal: NormalizedSignal, nowIso: string): string {
   if (signal.category !== "posture_freshness") {
     return String(signal.freshness as string);
   }
-  return worseFreshness(
-    asFreshness(signal.freshness),
-    classifyFreshness(signal.observedAt, nowIso, FRESH_WINDOW_HOURS, STALE_WINDOW_HOURS),
-  );
+  return postureReadingFreshness(signal, nowIso);
+}
+
+/**
+ * ONE posture reading's freshness at the decision instant: worst-wins between what
+ * the reading states in its VALUE (a posture reading carries its freshness there,
+ * not in the `freshness` field; an out-of-union value is "unknown" by
+ * `asFreshness`) and the reading's own age at `nowIso` (DR-059; a stamp the clock
+ * cannot place, unparseable or in the future, is "unknown", which only tightens).
+ * With no instant the age term is "fresh", the identity of the fold. One fold, two
+ * readers: `readFreshness` (the verdict) and `agedSignalFreshness` (/metrics).
+ */
+function postureReadingFreshness(signal: NormalizedSignal, nowIso?: string): Freshness {
+  const aged: Freshness =
+    nowIso === undefined ? "fresh" : classifyFreshness(signal.observedAt, nowIso, FRESH_WINDOW_HOURS, STALE_WINDOW_HOURS);
+  return worseFreshness(asFreshness(signal.value), aged);
 }
 
 /**
@@ -763,7 +795,7 @@ function asFreshness(value: unknown): Freshness {
 }
 
 function readCustody(latestByCategory: LatestByCategory): CustodyState {
-  return readEnum(latestByCategory, "custody_state", EVIDENCE_VALUE_DOMAINS.custody) ?? "unknown";
+  return readDockFamily(latestByCategory, "custody_state", EVIDENCE_VALUE_DOMAINS.custody);
 }
 
 function readBaseline(latestByCategory: LatestByCategory): BaselineState {
@@ -779,7 +811,7 @@ function readShiftContext(latestByCategory: LatestByCategory): ShiftContextState
 }
 
 function readBadge(latestByCategory: LatestByCategory): BadgeBindingState {
-  return readEnum(latestByCategory, "badge_binding", EVIDENCE_VALUE_DOMAINS.badge) ?? "unknown";
+  return readDockFamily(latestByCategory, "badge_binding", EVIDENCE_VALUE_DOMAINS.badge);
 }
 
 function readManagementHealth(latestByCategory: LatestByCategory): ManagementHealthState {
@@ -791,19 +823,38 @@ function readLocalAuthority(latestByCategory: LatestByCategory): LocalAuthorityG
 }
 
 function readCharge(latestByCategory: LatestByCategory): ChargeState {
-  return readEnum(latestByCategory, "charge_state", EVIDENCE_VALUE_DOMAINS.charge) ?? "unknown";
+  return readDockFamily(latestByCategory, "charge_state", EVIDENCE_VALUE_DOMAINS.charge);
 }
 
 function readBatteryHealth(latestByCategory: LatestByCategory): BatteryHealthState {
-  return readEnum(latestByCategory, "battery_health", EVIDENCE_VALUE_DOMAINS.batteryHealth) ?? "unknown";
+  return readDockFamily(latestByCategory, "battery_health", EVIDENCE_VALUE_DOMAINS.batteryHealth);
 }
 
 function readTamper(latestByCategory: LatestByCategory): TamperState {
-  return readEnum(latestByCategory, "tamper_state", EVIDENCE_VALUE_DOMAINS.tamper) ?? "unknown";
+  return readDockFamily(latestByCategory, "tamper_state", EVIDENCE_VALUE_DOMAINS.tamper);
 }
 
 function readDock(latestByCategory: LatestByCategory): DockState {
-  return readEnum(latestByCategory, "dock_state", EVIDENCE_VALUE_DOMAINS.dock) ?? "unknown";
+  return readDockFamily(latestByCategory, "dock_state", EVIDENCE_VALUE_DOMAINS.dock);
+}
+
+/**
+ * DR-065 (PROPOSED) dock-family reader. `readEnum` answers `undefined` for BOTH "no
+ * reading" and "a reading is present but out-of-domain / only a floored good value".
+ * Before DR-065 the six dock-family readers folded both to `"unknown"`, which no v1
+ * rule matches — so a fresh `tamper_state: "garbled"` (or a badge binding the reader
+ * could not parse) ALLOWED, while the identical shape on the DR-043 credential
+ * fields stepped up. Silence stays `"unknown"` (day-one-quiet: a tenant with no dock
+ * hardware is not stepped up); an EMITTED reading nothing could be read from is
+ * `"unreadable"`, which the v1 `*-unreadable` rules step up. Same `.has()` split as
+ * `readPresentOrNotApplicable` below, keeping the families' existing silence value.
+ */
+function readDockFamily<T extends string>(
+  latestByCategory: LatestByCategory,
+  category: (typeof DOCK_CATEGORIES)[number],
+  domain: { readonly members: readonly T[]; readonly good: readonly T[] },
+): T | "unknown" | "unreadable" {
+  return readEnum(latestByCategory, category, domain) ?? (latestByCategory.has(category) ? "unreadable" : "unknown");
 }
 
 /**
@@ -854,17 +905,14 @@ function readFreshness(latestByCategory: LatestByCategory, nowIso?: string): Fre
   if (!reading) {
     return "missing";
   }
-  // DR-059: the age of the reading itself, at the decision instant. A stamp the
-  // clock cannot place (unparseable, or in the future) classifies as "unknown",
-  // which only tightens.
-  const aged = (signal: NormalizedSignal): Freshness =>
-    nowIso === undefined ? "fresh" : classifyFreshness(signal.observedAt, nowIso, FRESH_WINDOW_HOURS, STALE_WINDOW_HOURS);
-  // The posture reading states its freshness in its VALUE, not in the `freshness`
-  // field, but the out-of-union rule is the same one `asFreshness` applies.
-  let ordered = reading.ordered ? worseFreshness(asFreshness(reading.ordered.value), aged(reading.ordered)) : undefined;
+  // DR-059: each reading is its stated value worst-wins its own age at the decision
+  // instant — `postureReadingFreshness`, the one fold `agedSignalFreshness` (the
+  // /metrics stale-evidence gauge) also calls, so the verdict and the gauge cannot
+  // split when the fold changes.
+  let ordered = reading.ordered ? postureReadingFreshness(reading.ordered, nowIso) : undefined;
   // A same-instant twin folds worst-wins with no floor (eighth-round finding).
   for (const signal of reading.tied) {
-    ordered = worseFreshness(ordered ?? "fresh", worseFreshness(asFreshness(signal.value), aged(signal)));
+    ordered = worseFreshness(ordered ?? "fresh", postureReadingFreshness(signal, nowIso));
   }
   if (reading.illegible.length === 0) {
     return ordered ?? "unknown";

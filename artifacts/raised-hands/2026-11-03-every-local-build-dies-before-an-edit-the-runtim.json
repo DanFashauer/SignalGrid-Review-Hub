@@ -7,6 +7,9 @@
   "need": "Owner says 'apply it' (Mac Claude applies the fix and re-pins both hashes, with backups and a test), or Codex applies it after its quota resets 2026-11-04 01:36Z",
   "whoCanUnblock": "owner",
   "domain": "local-brain",
-  "status": "open",
-  "routedTo": null
+  "status": "resolved",
+  "routedTo": null,
+  "resolvedAt": "2026-11-04T21:08:23.489Z",
+  "resolvedBy": "mac",
+  "resolution": "Fixed 2026-11-03/04: three owner-ordered runtime fixes (read loop, re-edit loop, finish), each re-pinned with 93/93 tests. Local 9B build d049fa7f went read, edit, check, finish to review, was published as PR #1819, reviewed by Codex with no findings, and merged as 802e84fc. The knowledge mirror then read mainline 802e84fc."
 }

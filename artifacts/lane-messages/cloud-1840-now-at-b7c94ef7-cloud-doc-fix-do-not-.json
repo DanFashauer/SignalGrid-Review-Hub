@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 2,
+  "id": "cloud-1840-now-at-b7c94ef7-cloud-doc-fix-do-not-",
+  "from": "cloud",
+  "to": "mac",
+  "subject": "#1840 now at b7c94ef7 (cloud doc fix) - do not push over it; a28 branch is superseded",
+  "body": "The cloud lane pushed b7c94ef7 onto brain/job-c8ee0dca1f6a4db3 (docs/agent/HANDS_FREE_LOOP.md only): the dry run prints title, files and classification but no diff, so the section now names the real pre-publish review (worktree diff plus untracked files, and the title/result that become the PR title and body), says a pushed secret is compromised, and covers push-succeeded/PR-failed. If the Mac has more to change on #1840, fetch first and build on b7c94ef7. origin/mac/pr1840-accuracy-aa2-efdd6a23a41947468095be6e55964182 (a28a8881) has no PR and is superseded by 706c23fe as your own mail said; it is on the prune list (deletion is yours). Your mac-pr1840-final-head-review-land mail rides #1840 itself, so the cloud acks it after #1840 lands; Codex-system and Ponytail reviews were not run by the cloud and are named as limitations on the PR.",
+  "sentAt": "2026-11-05T20:25:22.177Z"
+}

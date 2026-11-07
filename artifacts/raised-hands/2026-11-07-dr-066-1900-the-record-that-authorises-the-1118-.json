@@ -1,0 +1,13 @@
+{
+  "id": "2026-11-07-dr-066-1900-the-record-that-authorises-the-1118-",
+  "raisedAt": "2026-11-07T22:34:08.562Z",
+  "origin": "cloud",
+  "doing": "Landing the #1118 re-port and #1121 (AppWorkflows parity) once the owner record exists",
+  "blockedBy": "DR-066 (#1900, the record that authorises the #1118 re-port with the owner-chosen custody wrapper) is not merged; decision records are owner-merged. #1121 still has the unanswered question whether its AppWorkflows.swift re-port needs an owner decision (golden rule 1) or the 2026-09-18 backlog note (not owner-gated) stands.",
+  "need": "Owner: (1) read and merge #1900 (DR-066), or say what to change; (2) one line on #1121: owner-gated, or not. Then the lanes build the wrapper and re-land #1118 on current mainline.",
+  "whoCanUnblock": "owner",
+  "domain": "",
+  "status": "open",
+  "routedTo": null,
+  "where": "PRs #1900, #1121"
+}

@@ -6,6 +6,7 @@
 //   node scripts/mac/brain-proposal-pr.mjs --job <id> --publish                  # push brain/job-<id> + open PR
 //   node scripts/mac/brain-proposal-pr.mjs --list-review [--not-before <ISO>] [--db <sqlite>]
 //   node scripts/mac/brain-proposal-pr.mjs --self-test
+//   node scripts/mac/brain-proposal-pr.mjs --qualify-scanner --binary <private-binary> --output <new-private-dir> --host-fd <inherited-fd> --parent-pid <parent>
 //
 // The local brain (~/SignalGrid-Local-AI, not a git repo) runs build jobs in isolated worktrees
 // and leaves its edits UNCOMMITTED there, on an old base. This route reads the job from the
@@ -27,7 +28,7 @@
 // --publish uses ordinary Git hooks/network and the existing authenticated gh.
 
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync, chmodSync, mkdirSync, lstatSync, readdirSync, openSync, closeSync, fstatSync, constants } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync, chmodSync, fchmodSync, mkdirSync, lstatSync, readdirSync, openSync, closeSync, fstatSync, fsyncSync, constants, realpathSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { tmpdir, homedir } from "node:os";
 import { dirname, join, resolve, isAbsolute, sep } from "node:path";
@@ -41,10 +42,15 @@ const REPO = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const BASE = "SignalGrid_Alpha";
 const DEFAULT_DB = join(homedir(), "SignalGrid-Local-AI", "brain-state", "autonomy.sqlite3");
 const DENY = [/^AGENTS\.md$/, /^CLAUDE\.md$/, /^docs\/DECISION_RECORDS\.md$/, /^\.github\//, /^docs\/PURPOSE\.md$/, /^artifacts\/agent-heartbeats\//];
-const PRIVATE = /\/Users\/|~\/|SignalGrid-Local-AI|brain-state|brain-worktrees|\/private\/|\/var\/folders\//;
+const PRIVATE = /[/\\](?:users|home)[/\\]|[a-z]:[/\\]users[/\\]|(?:\$\{?home\}?|%userprofile%|~)[/\\]|library[/\\]mobile\s+documents|icloud~md~obsidian|SignalGrid-Local-AI|brain-state|brain-worktrees|[/\\]private[/\\]|[/\\]var[/\\]folders[/\\]/i;
+const PRIVATE_MARKUP = /\.obsidian(?:[/\\]|$)|\[\[[^\]\[\r\n]{1,240}\]\]|%%/i;
+const PRIVATE_DIRECTORY = /^(?:\.obsidian|\.trash|vaults?|private-notes)$/i;
+const EXECUTION_CONTROL = /^(?:\.git(?:attributes|modules|config)?|\.npmrc|\.pnpmfile\.(?:cjs|mjs|js)|package\.json|pnpm-workspace\.ya?ml|pnpm-lock\.yaml|package-lock\.json|npm-shrinkwrap\.json|\.yarnrc(?:\.yml)?|yarn\.lock|\.pnp\.(?:cjs|loader\.mjs))$/i;
+const NEW_PUBLIC_DIRECTORY = /^(?:docs|src|web|apps|packages|tests?|public|assets)\//;
+const ORDINARY_PRE_PUSH_SHA = "ab88ceee48a25a9eb79f072e9315093336ab3ccc810e0fbbe2e49690fa5d8b59";
 const SCANNER_MANIFEST = join(homedir(), "SignalGrid-Local-AI", "brain-state", "auto-publish-review", "scanner.json");
 const SCANNER_SHA = "af9afd0ae3a0ff6d7f08c4ec4e28686b7e4de6962fe1eadecc497d15cdf731e2";
-const CONFIG_SHA = "d28d9f4a0bf821edce9fe2668502b7f1286ae236cf905f0427dbe64a350abf83";
+const CONFIG_SHA = "7d0c4be43036be1e9834c920c415afabaa9998c18e12b8a7bf5c35a6f7532e85";
 const SCAN_CONTROL = /^(?:\.git|\.gitleaksignore|\.gitleaks\.(?:toml|ya?ml|json))$/i;
 const AWS_KEY = /\b(?:AKIA|ASIA)[A-Z0-9]{16}\b/;
 const MAX_SCAN_FILE = 1 << 20, MAX_SCAN_TOTAL = 16 << 20;
@@ -57,8 +63,13 @@ const refuse = (m) => { throw new Refusal(m); };
 
 /** Every git call goes through here; the self-test injects -c overrides via GIT_EXTRA. */
 let GIT_EXTRA = [];
+function gitEnv(extra = {}) {
+  const env = { ...process.env };
+  scrubProcessGitEnv(env);
+  return { ...env, ...extra };
+}
 function git(dir, args, env) {
-  const r = spawnSync("git", ["-C", dir, ...GIT_EXTRA, ...args], { encoding: "utf8", env: { ...process.env, ...env }, timeout: 120000, maxBuffer: 64 << 20 });
+  const r = spawnSync("git", ["-C", dir, ...GIT_EXTRA, "-c", "core.fsmonitor=false", ...args], { encoding: "utf8", env: gitEnv(env), timeout: 120000, killSignal: "SIGKILL", maxBuffer: 64 << 20 });
   return { ok: !r.error && r.status === 0, out: r.stdout ?? "", err: (r.stderr ?? "") + (r.error ? r.error.message : "") };
 }
 function gitOk(dir, args, env) {
@@ -119,18 +130,173 @@ const decode = (s) => { try { const v = JSON.parse(s); return typeof v === "stri
 function worktreePatch(wt) {
   const tmp = mkdtempSync(join(tmpdir(), "brain-idx-"));
   const env = { GIT_INDEX_FILE: join(tmp, "index") };
+  const text = (bytes) => {
+    try { return new TextDecoder("utf-8", { fatal: true }).decode(bytes); }
+    catch { refuse("worker Git data is not complete UTF-8"); }
+  };
   try {
-    gitOk(wt, ["read-tree", "HEAD"], env);
-    gitOk(wt, ["add", "-N", "--", "."], env);
-    const patch = gitOk(wt, ["diff", "--binary", "--no-color", "--no-ext-diff", "--no-renames", "HEAD"], env);
-    const files = gitPaths(wt, ["diff", "--no-renames", "--name-only", "-z", "HEAD"], env);
+    rejectExecutableLocalConfig(wt);
+    sourceGitBytes(wt, ["read-tree", "HEAD"], env);
+    const rawUntracked = text(sourceGitBytes(wt, ["ls-files", "--others", "--exclude-standard", "-z"], env));
+    if (rawUntracked && !rawUntracked.endsWith("\0")) refuse("worker path inventory is incomplete");
+    const untracked = rawUntracked.split("\0").filter(Boolean);
+    if (untracked.some((file) => !safePath(file))) refuse("unsafe publication path in new files");
+    const governed = classifyDiff(untracked);
+    if (governed.matched.length) refuse("new publication path is owner-gated: " + governed.matched.map((m) => m.category).join(", "));
+    if (untracked.some((file) => !NEW_PUBLIC_DIRECTORY.test(file))) refuse("unsafe publication path in new files");
+    sourceGitBytes(wt, ["add", "-N", "--", "."], env);
+    const patch = text(sourceGitBytes(wt, ["diff", "--binary", "--no-color", "--no-ext-diff", "--no-textconv", "--no-renames", "HEAD"], env));
+    const names = sourceGitBytes(wt, ["diff", "--no-ext-diff", "--no-textconv", "--no-renames", "--name-only", "-z", "HEAD"], env);
+    const nameText = text(names);
+    if (nameText && !nameText.endsWith("\0")) refuse("worker path inventory is incomplete");
+    const files = nameText.split("\0").filter(Boolean);
     return { patch, files };
   } finally { rmSync(tmp, { recursive: true, force: true }); }
+}
+
+// A worker checkout is data. Read operations must never run its fsmonitor,
+// filters, text conversion or hooks, or import its included configuration.
+function sourceGitBytes(dir, args, extra = {}) {
+  const env = gitEnv({ GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_NOSYSTEM: "1", ...extra });
+  const r = spawnSync("git", ["--no-replace-objects", "-C", dir, ...GIT_EXTRA, "-c", "core.fsmonitor=false", "-c", "core.hooksPath=/dev/null", ...args],
+    { env, timeout: 120000, killSignal: "SIGKILL", maxBuffer: 64 << 20 });
+  if (r.error || r.status !== 0 || r.signal) refuse("cannot safely read complete worker Git data");
+  return r.stdout;
+}
+
+function rejectExecutableLocalConfig(dir) {
+  const raw = sourceGitBytes(dir, ["config", "--local", "--no-includes", "--null", "--list"]);
+  const rows = raw.toString("utf8").split("\0").filter(Boolean);
+  for (const row of rows) {
+    const key = row.split("\n", 1)[0];
+    if (/^(?:filter\.|diff\..*\.(?:command|textconv)$|include(?:if)?\.|core\.(?:fsmonitor|sshcommand|gitproxy)$|extensions\.worktreeconfig$)/i.test(key)) refuse("worker Git execution configuration is refused");
+  }
+}
+
+function privacyText(text) {
+  let value = text.normalize("NFKC").replace(/[\u200b-\u200f\u2060\ufeff]/g, "");
+  const point = (value) => {
+    if (!Number.isInteger(value) || value < 0 || value > 0x10ffff) refuse("publication text has an invalid encoded code point");
+    return String.fromCodePoint(value);
+  };
+  for (let i = 0; i < 4; i++) {
+    const next = value.replace(/%([0-9a-f]{2})/gi, (_, n) => String.fromCharCode(parseInt(n, 16)))
+      .replace(/\\(?:u\{([0-9a-f]{1,6})\}|u([0-9a-f]{4})|x([0-9a-f]{2}))/gi, (_, a, b, c) => point(parseInt(a ?? b ?? c, 16)))
+      .replace(/&#(?:x([0-9a-f]+)|(\d+));/gi, (_, hex, dec) => point(parseInt(hex ?? dec, hex ? 16 : 10)))
+      .replace(/&amp;/gi, "&")
+      .replace(/&(?:sol|bsol);/gi, (s) => s.toLowerCase() === "&sol;" ? "/" : "\\")
+      .normalize("NFKC").replace(/[\u200b-\u200f\u2060\ufeff]/g, "");
+    if (next === value) break;
+    value = next;
+  }
+  if (/%(?:[0-9a-f]{2}|u[0-9a-f]{4})|\\(?:u(?:[0-9a-f]{4}|\{[0-9a-f]{1,6}\})|x[0-9a-f]{2})|&(?:amp|sol|bsol|#(?:x[0-9a-f]+|\d+));/i.test(value)) refuse("publication text exceeds supported encoding bounds");
+  return value;
 }
 
 const digest = (data) => createHash("sha256").update(data).digest("hex");
 const full40 = (value) => /^[0-9a-f]{40}$/.test(value);
 const sameFields = (a, b) => ["path", "sha256", "mode", "uid"].every((key) => a?.[key] === b?.[key]);
+const PRIVATE_SCANNER_CASES = {
+  "private-mobile-documents": "Library/Mobile Documents/com~apple~CloudDocs/note.md",
+  "private-icloud": "iCloud~md~obsidian/vault/note.md",
+  "private-home-variable": "$HOME/vault/note.md", "private-braced-home": "${HOME}/vault/note.md",
+  "private-users": "/users/fixture/vault/note.md", "private-home": "/home/fixture/vault/note.md",
+  "private-windows": "C:\\Users\\fixture\\vault\\note.md",
+  "private-percent": "%2FUsers%2Ffixture%2Fvault%2Fnote.md",
+  "private-double-percent": "%252FUsers%252Ffixture%252Fvault%252Fnote.md",
+  "private-json": String.raw`\u002fUsers\u002ffixture\u002fvault\u002fnote.md`,
+  "private-html": "&#47;Users&#47;fixture&#47;vault&#47;note.md",
+  "private-obsidian": ".obsidian/workspace.json", "private-wikilink": "[[Private meeting note]]",
+  "private-comment": "%% private meeting note %%",
+};
+const REQUIRED_SCANNER_CASES = { clean: 0, credential: 2, "credential-with-demo": 2, "credential-with-inline-allow": 2, "raw-svg-default-path-exclusion": 0, "opaque-svg-credential": 2, "model-local-overrides-not-imported": 2, "malformed-fixed-config": 1,
+  ...Object.fromEntries(Object.keys(PRIVATE_SCANNER_CASES).map((name) => [name, 2])) };
+
+/** Offline setup, under an already admitted parent. No job, publication,
+ * manifest installation or retry. Failed/unknown output stays consumed. */
+function qualifyScanner(a) {
+  const keys = ["--binary", "--output", "--host-fd", "--parent-pid"];
+  if (a.length !== 9 || a[0] !== "--qualify-scanner" || keys.some((k, i) => a[1 + i * 2] !== k)) refuse("invalid scanner qualification arguments");
+  const source = a[2], output = a[4], fd = Number(a[6]);
+  if (!Number.isInteger(fd) || fd < 3 || Number(a[8]) !== process.ppid) refuse("qualification requires its original parent descriptor");
+  const host = join(homedir(), "Library/Caches/signalgrid/host-verification.lock");
+  const inherited = fstatSync(fd), named = lstatSync(host);
+  if (!inherited.isFile() || named.isSymbolicLink() || inherited.dev !== named.dev || inherited.ino !== named.ino || inherited.uid !== process.getuid() || inherited.nlink !== 1 || (inherited.mode & 0o777) !== 0o644) refuse("qualification host descriptor identity changed");
+  closeSync(fd);
+  let closed = false; try { fstatSync(fd); } catch (e) { closed = e.code === "EBADF"; }
+  if (!closed) refuse("qualification inherited descriptor did not close");
+  if (!isAbsolute(output) || resolve(output) !== output || output === REPO || output.startsWith(REPO + sep) || realpathSync(dirname(output)) !== dirname(output)) refuse("qualification output must be a new private physical path");
+  const binaryBytes = privateBytes(source, 0o500), configBytes = readFileSync(join(REPO, "scripts/mac/publication-gitleaks.toml"));
+  if (digest(binaryBytes) !== SCANNER_SHA || digest(configBytes) !== CONFIG_SHA) refuse("qualification binary or fixed policy source changed");
+  mkdirSync(output, { mode: 0o700 }); // Exclusive: never reuse an old attempt.
+  const refs = [];
+  const save = (path, value, mode = 0o400) => {
+    const bytes = Buffer.isBuffer(value) ? value : Buffer.from(value);
+    const handle = openSync(path, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, mode);
+    try { writeFileSync(handle, bytes); fsyncSync(handle); } finally { closeSync(handle); }
+    const st = lstatSync(path), ref = { path, sha256: digest(bytes), bytes: bytes.length, mode: st.mode & 0o777, uid: st.uid };
+    scannerRef(ref, null, mode); refs.push(ref); return ref;
+  };
+  const json = (path, value) => save(path, JSON.stringify(value, null, 2) + "\n");
+  for (const name of ["results", "exports", "reports", "raws", "model-cwd"]) mkdirSync(join(output, name), { mode: 0o700 });
+  const binary = save(join(output, "gitleaks"), binaryBytes, 0o500), config = save(join(output, "publication.toml"), configBytes), ignore = save(join(output, "empty.ignore"), "");
+  const badConfig = save(join(output, "malformed.toml"), "[extend\nuseDefault = true\n"), cwd = join(output, "model-cwd");
+  const token = "ghp_" + "1234567890abcdefghijklmnopqrstuvwxyz";
+  const original = (name, args) => {
+    const r = spawnSync(binary.path, args, { cwd, env: { LANG: "C", LC_ALL: "C", TZ: "UTC" }, timeout: 30000, killSignal: "SIGKILL", maxBuffer: 1 << 20 });
+    const out = r.stdout ?? Buffer.alloc(0), err = r.stderr ?? Buffer.alloc(0);
+    const stdout = save(join(output, "raws", name + ".stdout"), out), stderr = save(join(output, "raws", name + ".stderr"), err);
+    if (r.error || r.signal || r.status === null || /partial scan completed/i.test(out.toString() + err.toString()) || Buffer.concat([out, err]).includes(Buffer.from(token))) refuse("qualification child did not finish normally with redacted output");
+    return { name, returncode: r.status, normal_exit: true, original_wait_completed: true, interruptions: [], raw_secret_redaction_verified: true, stdout_ref: stdout, stderr_ref: stderr };
+  };
+  const version = original("version", ["--version"]);
+  if (version.returncode !== 0 || scannerRef(version.stdout_ref, null, 0o400).toString().trim() !== "gitleaks version 8.24.3" || scannerRef(version.stderr_ref, null, 0o400).length) refuse("qualification actual version differs");
+  const versionRef = json(join(output, "results/version.json"), version), cases = [];
+  const scan = (name, contents, filename = "entry-000000", policy = config) => {
+    const root = join(output, "exports", name); mkdirSync(root, { mode: 0o700 });
+    const input = save(join(root, filename), contents), report = join(output, "reports", name + ".json");
+    const result = original(name, ["dir", "--redact=100", "--exit-code=2", "--no-banner", "--no-color", "--ignore-gitleaks-allow", "--config", policy.path, "--gitleaks-ignore-path", ignore.path, "--report-format=json", "--report-path", report, root]);
+    if (result.returncode !== REQUIRED_SCANNER_CASES[name]) refuse("scanner qualification case failed: " + name);
+    let findings = [];
+    if (existsSync(report)) {
+      const handle = openSync(report, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+      try {
+        const st = fstatSync(handle);
+        if (!st.isFile() || st.uid !== process.getuid() || st.nlink !== 1) refuse("qualification report is not regular owned bytes");
+        fchmodSync(handle, 0o400); fsyncSync(handle);
+        const data = readFileSync(handle);
+        if (data.includes(Buffer.from(token))) refuse("qualification report exposed its synthetic token");
+        findings = JSON.parse(data.toString()) ?? [];
+      } finally { closeSync(handle); }
+    } else if (result.returncode !== 1) refuse("qualification report is missing");
+    if (!Array.isArray(findings) || (result.returncode === 2 ? !findings.length : findings.length)) refuse("qualification findings disagree with exit status");
+    result.credential_finding_count = findings.length;
+    cases.push({ name, returncode: result.returncode, result_ref: json(join(output, "results", name + ".json"), result) });
+    return input;
+  };
+  scan("clean", "Public fixture documentation only.\n");
+  scan("credential", "synthetic credential " + token + "\n");
+  scan("credential-with-demo", "sgk_demo_safe synthetic credential " + token + "\n");
+  scan("credential-with-inline-allow", "synthetic credential " + token + " # gitleaks:allow\n");
+  const svg = '<svg data-synthetic-credential="' + token + '"></svg>\n';
+  const rawSvg = scan("raw-svg-default-path-exclusion", svg, "drawing.svg"), opaqueSvg = scan("opaque-svg-credential", svg);
+  const mapping = json(join(output, "mapping.json"), [{ name: "entry-000000", source: "files/drawing.svg", sha256: opaqueSvg.sha256 }]);
+  save(join(cwd, ".gitleaks.toml"), '[extend]\nuseDefault = false\n[[rules]]\nid="never-match"\ndescription="Synthetic local override must not load"\nregex="a^"\n[allowlist]\nregexes=[".*"]\n');
+  save(join(cwd, ".gitleaksignore"), "*\n");
+  scan("model-local-overrides-not-imported", "synthetic credential " + token + "\n");
+  scan("malformed-fixed-config", "Public fixture.\n", "entry-000000", badConfig);
+  for (const [name, contents] of Object.entries(PRIVATE_SCANNER_CASES)) scan(name, contents + "\n");
+  for (const ref of refs) scannerRef(ref, null, ref.mode);
+  if (!privateBytes(source, 0o500).equals(binaryBytes) || !readFileSync(join(REPO, "scripts/mac/publication-gitleaks.toml")).equals(configBytes)) refuse("qualification inputs changed");
+  json(join(output, "qualification.json"), { format: "signalgrid-gitleaks-qualification-result/v3", qualified: true, version: "8.24.3", at: new Date().toISOString(),
+    private_executable_ref: binary, strict_config_ref: config, empty_ignore_ref: ignore, version_result_ref: versionRef,
+    opaque_export_naming: "entry-[0-9]{6}", source_extension_skip_and_opaque_detection_verified: rawSvg.sha256 === opaqueSvg.sha256,
+    source_extension_control: { raw_named_case: "raw-svg-default-path-exclusion", opaque_case: "opaque-svg-credential", identical_bytes: true, raw_source_ref: rawSvg, opaque_export_ref: opaqueSvg, private_mapping_ref: mapping },
+    cases, original_waits_complete: true, raws_fsynced: true, interruptions: [] });
+  json(join(output, "child-closure.json"), { selected_child_completed: true, exit_code: 0, preservation_verified: true, own_inherited_descriptor_positive_closed: closed, interruptions: [] });
+  const dir = openSync(output, constants.O_RDONLY); try { fsyncSync(dir); } finally { closeSync(dir); }
+  console.log(JSON.stringify({ qualified: true, cases: cases.length, version: "8.24.3" }));
+}
 
 function privateBytes(path, wantedMode) {
   if (!isAbsolute(path ?? "") || resolve(path) !== path || path === REPO || path.startsWith(REPO + sep)) refuse("scanner custody path is not private and absolute");
@@ -141,7 +307,7 @@ function privateBytes(path, wantedMode) {
   }
   const first = lstatSync(path);
   if (!first.isFile() || first.nlink !== 1 || first.uid !== process.getuid() || (first.mode & 0o777) !== wantedMode) refuse("scanner custody is not a frozen owner file");
-  const fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW);
+  const fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
   const shape = (st) => [st.dev, st.ino, st.size, st.mtimeMs, st.ctimeMs, st.mode, st.uid, st.nlink].join(":");
   try {
     const opened = fstatSync(fd), data = readFileSync(fd), final = fstatSync(fd), last = lstatSync(path);
@@ -170,8 +336,8 @@ function scannerConfiguration() {
     qualified = JSON.parse(scannerRef(qualification, null, 0o400));
     closed = JSON.parse(scannerRef(closure, null, 0o400));
   } catch (e) { if (e instanceof Refusal) throw e; refuse("publication scanner qualification is invalid"); }
-  if (qualified.format !== "signalgrid-gitleaks-qualification-result/v2" || qualified.qualified !== true || qualified.version !== "8.24.3" || qualified.opaque_export_naming !== "entry-[0-9]{6}" || qualified.source_extension_skip_and_opaque_detection_verified !== true || !sameFields(qualified.private_executable_ref, binary) || !sameFields(qualified.strict_config_ref, config) || !Array.isArray(qualified.interruptions) || qualified.interruptions.length) refuse("publication scanner was not qualified for these bytes and opaque exports");
-  const requiredCases = { clean: 0, credential: 2, "credential-with-demo": 2, "credential-with-inline-allow": 2, "raw-svg-default-path-exclusion": 0, "opaque-svg-credential": 2, "model-local-overrides-not-imported": 2, "malformed-fixed-config": 1 };
+  if (qualified.format !== "signalgrid-gitleaks-qualification-result/v3" || qualified.qualified !== true || qualified.version !== "8.24.3" || qualified.opaque_export_naming !== "entry-[0-9]{6}" || qualified.source_extension_skip_and_opaque_detection_verified !== true || !sameFields(qualified.private_executable_ref, binary) || !sameFields(qualified.strict_config_ref, config) || !Array.isArray(qualified.interruptions) || qualified.interruptions.length) refuse("publication scanner was not qualified for these bytes and opaque exports");
+  const requiredCases = REQUIRED_SCANNER_CASES;
   if (!Array.isArray(qualified.cases) || qualified.cases.length !== Object.keys(requiredCases).length || qualified.original_waits_complete !== true || qualified.raws_fsynced !== true) refuse("publication scanner qualification controls are incomplete");
   for (const [name, code] of Object.entries(requiredCases)) {
     const records = qualified.cases.filter((item) => item.name === name);
@@ -198,7 +364,37 @@ function scannerConfiguration() {
 }
 
 function safePath(file) {
-  return typeof file === "string" && file.length > 0 && !file.startsWith("/") && !/[\x00-\x1f\x7f\\]/.test(file) && !file.split("/").some((p) => p === ".." || p === "." || SCAN_CONTROL.test(p)) && !PRIVATE.test(file);
+  if (typeof file !== "string" || !file.length) return false;
+  return [file, privacyText(file)].every((name) => !name.startsWith("/") && !/[\x00-\x1f\x7f\\]/.test(name) && !name.split("/").some((p) => p === "" || p === ".." || p === "." || SCAN_CONTROL.test(p) || PRIVATE_DIRECTORY.test(p) || EXECUTION_CONTROL.test(p)) && !PRIVATE.test(name) && !PRIVATE_MARKUP.test(name));
+}
+
+function ordinaryHooks(wt, repo) {
+  if (SELF_TEST_SCANNER) return []; // Only the unexported synthetic fixture sets this.
+  rejectExecutableLocalConfig(repo);
+  for (const args of [["remote", "get-url", "origin"], ["remote", "get-url", "--push", "origin"]]) {
+    if (gitOk(repo, args).trim() !== "git@github.com:DanFashauer/SignalGrid-Review-Hub.git") refuse("publication remote is not the existing canonical SSH repository");
+  }
+  const hook = gitOk(wt, ["config", "--get", "core.hooksPath"]).trim();
+  const common = gitOk(repo, ["rev-parse", "--path-format=absolute", "--git-common-dir"]).trim();
+  const path = isAbsolute(hook) ? resolve(hook) : resolve(wt, hook);
+  const allowed = [resolve(wt, ".githooks"), resolve(repo, ".githooks"), resolve(dirname(common), ".githooks")];
+  if (!allowed.includes(path) || realpathSync(path) !== path || JSON.stringify(readdirSync(path).sort()) !== '["pre-push"]') refuse("ordinary publication hooks are not the approved source");
+  const fd = openSync(join(path, "pre-push"), constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+  try {
+    const before = fstatSync(fd), bytes = readFileSync(fd), after = fstatSync(fd), named = lstatSync(join(path, "pre-push"));
+    if (!before.isFile() || before.uid !== process.getuid() || before.nlink !== 1 || !(before.mode & 0o111) || (before.mode & 0o022) || digest(bytes) !== ORDINARY_PRE_PUSH_SHA ||
+        [after, named].some((st) => ["dev", "ino", "size", "mtimeMs", "ctimeMs", "mode", "uid", "nlink"].some((k) => st[k] !== before[k]))) refuse("ordinary pre-push hook source changed");
+  } finally { closeSync(fd); }
+  // Select the approved ordinary hook explicitly; worker Git config cannot
+  // redirect the commit or push. This hook still runs, including its lock gate.
+  return ["-c", `core.hooksPath=${path}`];
+}
+
+function refuseActiveFilters(wt, files) {
+  for (const file of files) {
+    const value = gitBytes(wt, ["check-attr", "-z", "filter", "--", file]).toString("utf8").split("\0");
+    if (value.length !== 4 || value[0] !== file || value[1] !== "filter" || !["unspecified", "unset"].includes(value[2])) refuse("publication cannot execute a file filter");
+  }
 }
 
 function checkPublicText(data) {
@@ -206,12 +402,13 @@ function checkPublicText(data) {
   let text;
   try { text = new TextDecoder("utf-8", { fatal: true }).decode(data); }
   catch { refuse("publication export is not complete UTF-8 text"); }
-  if (PRIVATE.test(text) || AWS_KEY.test(text) || /-----BEGIN (?:[A-Z ]+ )?PRIVATE KEY-----/.test(text)) refuse("publication export contains private material or credential-shaped text");
+  const normalized = privacyText(text);
+  if (PRIVATE.test(normalized) || PRIVATE_MARKUP.test(normalized) || AWS_KEY.test(normalized) || /-----BEGIN (?:[A-Z ]+ )?PRIVATE KEY-----/.test(normalized)) refuse("publication export contains private material or credential-shaped text");
   return text;
 }
 
 function gitBytes(dir, args, env) {
-  const result = spawnSync("git", ["--no-replace-objects", "-C", dir, ...GIT_EXTRA, ...args], { env: { ...process.env, ...env }, maxBuffer: MAX_SCAN_TOTAL + (1 << 20), timeout: 120000 });
+  const result = spawnSync("git", ["--no-replace-objects", "-C", dir, ...GIT_EXTRA, "-c", "core.fsmonitor=false", ...args], { env: gitEnv(env), maxBuffer: MAX_SCAN_TOTAL + (1 << 20), timeout: 120000, killSignal: "SIGKILL" });
   if (result.error || result.status !== 0) refuse("cannot read complete committed publication bytes");
   return result.stdout;
 }
@@ -266,7 +463,7 @@ function committedExport(wt, replayBase, wantedFiles, title, body) {
 
 function scanPublication(artifact) {
   const scanner = SELF_TEST_SCANNER ? SELF_TEST_SCANNER.configuration() : scannerConfiguration();
-  const root = mkdtempSync(join(tmpdir(), "brain-publication-scan-"));
+  const root = realpathSync(mkdtempSync(join(tmpdir(), "brain-publication-scan-")));
   chmodSync(root, 0o700);
   const source = join(root, "export");
   mkdirSync(source, { mode: 0o700 });
@@ -293,7 +490,7 @@ function scanPublication(artifact) {
           if (st.isDirectory()) { if ((st.mode & 0o777) !== 0o700) refuse("publication scan directory is not private"); walk(path, relative + "/"); }
           else {
             if (!st.isFile() || st.nlink !== 1 || (st.mode & 0o777) !== 0o400) refuse("publication scan export is not immutable regular bytes");
-            found.push([relative, digest(readFileSync(path))]);
+            found.push([relative, digest(privateBytes(path, 0o400))]);
           }
         }
       };
@@ -304,17 +501,19 @@ function scanPublication(artifact) {
     inventory();
     const report = join(root, "report.json");
     const argv = ["dir", "--redact=100", "--exit-code=2", "--no-banner", "--no-color", "--ignore-gitleaks-allow", "--config", scanner.config.path, "--gitleaks-ignore-path", scanner.ignore.path, "--report-format=json", "--report-path", report, source];
-    const options = { cwd: root, env: { LANG: "C", LC_ALL: "C", TZ: "UTC" }, encoding: "utf8", maxBuffer: 1 << 20 };
+    const options = { cwd: root, env: { LANG: "C", LC_ALL: "C", TZ: "UTC" }, encoding: "utf8", maxBuffer: 1 << 20, timeout: 30000, killSignal: "SIGKILL" };
     const result = SELF_TEST_SCANNER ? SELF_TEST_SCANNER.invoke(scanner.binary.path, argv, options) : spawnSync(scanner.binary.path, argv, options);
     if (result.error || result.status !== 0 || result.signal || /partial scan completed/i.test((result.stdout ?? "") + (result.stderr ?? ""))) refuse("publication credential screening refused or did not complete");
     let empty = false;
     try {
-      const st = lstatSync(report);
-      if (st.isFile() && st.nlink === 1 && st.uid === process.getuid()) {
-        chmodSync(report, 0o400);
-        const value = JSON.parse(readFileSync(report, "utf8"));
+      const fd = openSync(report, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+      try {
+        const st = fstatSync(fd);
+        if (!st.isFile() || st.nlink !== 1 || st.uid !== process.getuid()) refuse("scanner report is not owned regular bytes");
+        fchmodSync(fd, 0o400);
+        const value = JSON.parse(readFileSync(fd, "utf8"));
         empty = value === null || (Array.isArray(value) && value.length === 0);
-      }
+      } finally { closeSync(fd); }
     } catch { /* absent, malformed and unsafe reports fail closed */ }
     if (!empty) refuse("publication credential screening report is missing or nonempty");
     inventory();
@@ -333,7 +532,9 @@ export async function run({ job, db = DEFAULT_DB, repo = REPO, publish = false, 
   if (!j.worktree || !existsSync(j.worktree)) refuse(`job ${job} has no worktree on disk`);
   const title = String(j.title ?? "").trim();
   const result = decode(j.result).trim();
-  if (PRIVATE.test(title) || PRIVATE.test(result)) refuse(`job ${job} title/result names a private path; it would land in a public PR body`);
+  checkPublicText(Buffer.from(job));
+  checkPublicText(Buffer.from(title));
+  if (PRIVATE.test(privacyText(result))) refuse("job result names a private path");
 
   const { patch, files } = worktreePatch(j.worktree);
   if (!patch.trim() || files.length === 0) refuse(`job ${job}: the worktree diff is empty`);
@@ -350,6 +551,7 @@ export async function run({ job, db = DEFAULT_DB, repo = REPO, publish = false, 
   if (bad.length) refuse(`job ${job} touches paths this route never publishes:\n${bad.map((b) => `  ${b}`).join("\n")}`);
 
   const branch = `brain/job-${job}`;
+  ordinaryHooks(repo, repo);
   if (publish) {
     const remote = gitOk(repo, ["ls-remote", "origin", `refs/heads/${branch}`]).trim();
     if (remote) { log(`${branch} already exists on origin — nothing pushed (idempotent)`); return { branch, files, pushed: false }; }
@@ -361,13 +563,14 @@ export async function run({ job, db = DEFAULT_DB, repo = REPO, publish = false, 
   gitOk(repo, ["worktree", "add", "-q", "--detach", wt, "FETCH_HEAD"]);
   try {
     const replayBase = gitOk(wt, ["rev-parse", "HEAD"]).trim();
+    refuseActiveFilters(wt, files);
     const pf = join(scratch, "job.patch");
     writeFileSync(pf, patch);
     const ap = git(wt, ["apply", "--3way", "--index", pf]);
     const unmerged = git(wt, ["diff", "--name-only", "--diff-filter=U"]).out.trim();
     if (!ap.ok || unmerged) refuse(`job ${job}: the patch does not apply cleanly to origin/${BASE}\n${ap.err.trim()}${unmerged ? `\nunmerged: ${unmerged}` : ""}`);
     const prTitle = `brain: ${title.slice(0, 80)} (job ${job})`;
-    gitOk(wt, ["commit", "-q", "-m", `${prTitle}\n\nLocal-brain build job ${job}, published by the Mac lane on the owner's order.`]);
+    gitOk(wt, [...ordinaryHooks(wt, repo), "commit", "-q", "-m", `${prTitle}\n\nLocal-brain build job ${job}, published by the Mac lane on the owner's order.`]);
     const publishedHead = gitOk(wt, ["rev-parse", "HEAD"]).trim();
     const publishedTree = gitOk(wt, ["rev-parse", "HEAD^{tree}"]).trim();
     const body = [
@@ -389,12 +592,12 @@ export async function run({ job, db = DEFAULT_DB, repo = REPO, publish = false, 
     if (JSON.stringify(await readJob(db, job)) !== originalJobProjection) refuse(`job ${job} changed before publication; original attempt is readback-only`);
     if (!publish) { log(`dry run: would push ${branch} and open "${prTitle}" against ${BASE}`); return { branch, files, pushed: false, replayBase, publishedHead, publishedTree }; }
 
-    gitOk(wt, ["push", "-q", "origin", `${publishedHead}:refs/heads/${branch}`]);
+    gitOk(wt, [...ordinaryHooks(wt, repo), "push", "-q", "origin", `${publishedHead}:refs/heads/${branch}`]);
     const actualRemote = gitOk(repo, ["ls-remote", "origin", `refs/heads/${branch}`]).trim().split(/\s+/);
     if (actualRemote.length !== 2 || actualRemote[0] !== publishedHead || actualRemote[1] !== `refs/heads/${branch}`) refuse("pushed branch identity is unknown; exact readback required, no replay");
     const bf = join(scratch, "body.md");
     writeFileSync(bf, body);
-    const gh = spawnSync("gh", ["pr", "create", "--base", BASE, "--head", branch, "--title", prTitle, "--body-file", bf], { cwd: repo, encoding: "utf8" });
+    const gh = spawnSync("gh", ["pr", "create", "--base", BASE, "--head", branch, "--title", prTitle, "--body-file", bf], { cwd: repo, encoding: "utf8", env: gitEnv(), timeout: 120000, killSignal: "SIGKILL", maxBuffer: 1 << 20 });
     if (gh.status !== 0) throw new Error(`pushed ${branch}, but gh pr create failed: ${(gh.stderr || gh.error?.message || "").trim()}`);
     const prUrl = gh.stdout.trim();
     if (!/^https:\/\/[^\s]+$/.test(prUrl) || PRIVATE.test(prUrl)) refuse("created PR URL is unknown; exact readback required, no replay");
@@ -428,7 +631,8 @@ async function selfTest() {
     // with the real export/argv/config transport. Upstream compatibility has its
     // own actual pinned-binary qualification; this never claims that proof.
     const scannerBin = join(root, "synthetic-scanner"), scannerCfg = join(root, "strict.toml"), scannerIgnore = join(root, "empty.ignore");
-    const strictConfig = "# Fixed local unattended-screening source; no repository line allowlists.\n[extend]\nuseDefault = true\n";
+    const strictConfig = readFileSync(join(REPO, "scripts/mac/publication-gitleaks.toml"), "utf8");
+    if (digest(Buffer.from(strictConfig)) !== CONFIG_SHA) refuse("fixed publication scanner policy source changed");
     writeFileSync(scannerCfg, strictConfig, { mode: 0o400 });
     writeFileSync(scannerIgnore, "", { mode: 0o400 });
     writeFileSync(scannerBin, `#!${process.execPath}\n` + String.raw`
@@ -436,7 +640,7 @@ const fs = require("node:fs"), path = require("node:path"), crypto = require("no
 const a = process.argv.slice(2), expected = ["dir", "--redact=100", "--exit-code=2", "--no-banner", "--no-color", "--ignore-gitleaks-allow", "--config", null, "--gitleaks-ignore-path", null, "--report-format=json", "--report-path", null, null];
 const fail = (reason = "fixture contract") => { console.error("SYNTHETIC_SCANNER_REFUSAL: " + reason); process.exit(1); };
 if (a.length !== expected.length || expected.some((v,i) => v !== null && a[i] !== v)) fail();
-if (crypto.createHash("sha256").update(fs.readFileSync(a[7])).digest("hex") !== "d28d9f4a0bf821edce9fe2668502b7f1286ae236cf905f0427dbe64a350abf83" || fs.readFileSync(a[9]).length || fs.realpathSync(a[13]) !== fs.realpathSync(path.join(process.cwd(), "export"))) fail("config, ignore or physical export path");
+if (crypto.createHash("sha256").update(fs.readFileSync(a[7])).digest("hex") !== "7d0c4be43036be1e9834c920c415afabaa9998c18e12b8a7bf5c35a6f7532e85" || fs.readFileSync(a[9]).length || fs.realpathSync(a[13]) !== fs.realpathSync(path.join(process.cwd(), "export"))) fail("config, ignore or physical export path");
 if (Object.keys(process.env).some(k => !["LANG", "LC_ALL", "TZ"].includes(k) && !(process.platform === "darwin" && k === "__CF_USER_TEXT_ENCODING"))) fail("environment keys: " + Object.keys(process.env).sort().join(","));
 let finding = false, seen = [];
 function walk(dir, prefix = "") {
@@ -475,6 +679,34 @@ process.exit(finding ? 2 : 0);
       },
     };
     SELF_TEST_SCANNER = scannerFixture;
+    // Cloud findings: every private representation crosses the production text
+    // boundary, and package/Git control files never enter this publishing route.
+    const privateForms = [
+      "Library/Mobile Documents/iCloud~md~obsidian/fixture.md",
+      "$HOME/Library/fixture.md", "${HOME}/Library/fixture.md",
+      "/users/fixture/note.md", "/home/fixture/note.md", "C:\\Users\\fixture\\note.md",
+      "%2FUsers%2Ffixture%2Fnote.md", "%252fUsers%252ffixture",
+      String.raw`\u002fUsers\u002ffixture`, "&#x2f;Users&#x2f;fixture",
+      ".obsidian/workspace.json", "---\ntags: [private]\n---\n[[Private note]]",
+      "Public prose %% retained vault comment %%", "~/Library/fixture.md",
+    ];
+    let deeplyEncodedHome = "/Users/fixture/vault/note.md";
+    for (let i = 0; i < 5; i++) deeplyEncodedHome = [...Buffer.from(deeplyEncodedHome)].map((b) => "%" + b.toString(16).padStart(2, "0")).join("");
+    privateForms.push(deeplyEncodedHome, "&amp;sol;Users&amp;sol;fixture&amp;sol;note.md", "%u002fUsers%u002ffixture%u002fnote.md");
+    privateForms.push(String.raw`/Us\u200bers/fixture/note.md`, String.raw`\u002f\uff35sers\u002ffixture`);
+    for (let i = 0; i < privateForms.length; i++) {
+      let blocked = false;
+      try { checkPublicText(Buffer.from(privateForms[i])); }
+      catch (e) { blocked = e instanceof Refusal; }
+      check(`(security) private content class ${i} refused`, blocked);
+    }
+    for (const file of [".obsidian/workspace.json", "docs/.trash/note.md", "docs/vault/Daily.md",
+      ".pnpmfile.cjs", ".npmrc", "packages/a/package.json", ".gitattributes", ".gitmodules",
+      "pnpm-workspace.yaml", "pnpm-lock.yaml", "docs/.npmrc"]) {
+      check(`(security) worker control/private path refused: ${file}`, !safePath(file));
+    }
+    check("(security) ordinary public text remains accepted", checkPublicText(Buffer.from("A public API returns a scalar value.\n")) === "A public API returns a scalar value.\n");
+    check("(security) shallow public encoding remains accepted", checkPublicText(Buffer.from("Public spacing%2520and &amp; operators.\n")) === "Public spacing%2520and &amp; operators.\n");
     const origin = join(root, "origin.git"), repo = join(root, "repo"), seed = join(root, "seed");
     scratchGitOk(root, ["init", "-q", "--bare", origin]);
     scratchGitOk(root, ["init", "-q", "-b", BASE, seed]);
@@ -495,15 +727,32 @@ process.exit(finding ? 2 : 0);
     const wDocs = brain("w-docs", (w) => { writeFileSync(join(w, "docs/x.md"), "one\nTWO\nthree\n"); writeFileSync(join(w, "docs/new.md"), "new\n"); });
     const wAgents = brain("w-agents", (w) => writeFileSync(join(w, "AGENTS.md"), "changed\n"));
     const wGate = brain("w-gate", (w) => { mkdirSync(join(w, "scripts"), { recursive: true }); writeFileSync(join(w, "scripts/check-x.mjs"), "gate\n"); });
-    const wSecret = brain("w-secret", (w) => writeFileSync(join(w, "notes.md"), "synthetic access key " + ["AKIA", "IOSFODNN7EXAMPLE"].join("") + "\n"));
-    const wPrivate = brain("w-private", (w) => writeFileSync(join(w, "notes.md"), "private input /Users/fixture/private-vault/note.md\n"));
+    const wSecret = brain("w-secret", (w) => writeFileSync(join(w, "docs/notes.md"), "synthetic access key " + ["AKIA", "IOSFODNN7EXAMPLE"].join("") + "\n"));
+    const wPrivate = brain("w-private", (w) => writeFileSync(join(w, "docs/notes.md"), "private input /Users/fixture/private-vault/note.md\n"));
     const syntheticGithub = ["ghp", ["9X4vM2kQ7sD5fJ8wR1", "bY6nA3eL0tC9pH4uZ2"].join("")].join("_");
-    const wMixed = brain("w-mixed", (w) => writeFileSync(join(w, "notes.md"), `sgk_demo_safe synthetic credential ${syntheticGithub}\n`));
-    const wSvg = brain("w-svg", (w) => writeFileSync(join(w, "drawing.svg"), `<svg xmlns="http://www.w3.org/2000/svg"><!-- synthetic ${syntheticGithub} --></svg>\n`));
+    const wMixed = brain("w-mixed", (w) => writeFileSync(join(w, "docs/notes.md"), `sgk_demo_safe synthetic credential ${syntheticGithub}\n`));
+    const wSvg = brain("w-svg", (w) => writeFileSync(join(w, "docs/drawing.svg"), `<svg xmlns="http://www.w3.org/2000/svg"><!-- synthetic ${syntheticGithub} --></svg>\n`));
     const wHistory = brain("w-history", (w) => writeFileSync(join(w, "docs/history.md"), "Public final history fixture.\n"));
     const wHeader = brain("w-header", (w) => writeFileSync(join(w, "docs/header.md"), "Public header fixture.\n"));
     const wEmpty = brain("w-empty", () => {});
     const wConflict = brain("w-conflict", (w) => writeFileSync(join(w, "docs/x.md"), "one\nBRAIN\nthree\n"));
+    const wConfig = brain("w-package-control", (w) => writeFileSync(join(w, ".pnpmfile.cjs"),
+      'require("node:fs").writeFileSync(process.env.SYNTHETIC_CONFIG_MARKER,"executed");\n'));
+
+    for (const key of ["core.fsmonitor", "diff.probe.textconv", "filter.probe.clean"]) {
+      const marker = join(root, "config-marker-" + key.replaceAll(".", "-"));
+      const executable = marker + ".cjs";
+      writeFileSync(executable, `#!${process.execPath}\nrequire("node:fs").writeFileSync(${JSON.stringify(marker)}, "executed");\n`);
+      chmodSync(executable, 0o500);
+      const dirty = brain("w-config-" + key, (w) => {
+        writeFileSync(join(w, "docs/x.md"), "changed public content\n");
+        writeFileSync(join(w, ".gitattributes"), "docs/x.md diff=probe filter=probe\n");
+        scratchGitOk(w, ["config", "--local", key, executable]);
+      });
+      let blocked = false;
+      try { worktreePatch(dirty); } catch (e) { blocked = e instanceof Refusal; }
+      check(`(security) ${key} refused before worker executable runs`, blocked && !existsSync(marker));
+    }
 
     const unverifiedFinish = "SYNTHETIC_UNVERIFIED_TEST_GATE_LINK_FINISH: all checks and reviews passed; link was added.";
     const fixtureResult = (id) => JSON.stringify(id === "jdocs" ? unverifiedFinish : `result ${id}`);
@@ -513,6 +762,7 @@ process.exit(finding ? 2 : 0);
       ["jdocs", "build", "review", wDocs], ["jagents", "build", "review", wAgents], ["jgate", "build", "review", wGate],
       ["jqueued", "build", "queued", wDocs], ["jempty", "build", "review", wEmpty],
       ["jconflict", "build", "review", wConflict],
+      ["jconfig", "build", "review", wConfig],
       ["jsecret", "build", "review", wSecret], ["jprivate", "build", "review", wPrivate],
       ["jmixed", "build", "review", wMixed],
       ["jsvg", "build", "review", wSvg], ["jhistory", "build", "review", wHistory],
@@ -629,7 +879,24 @@ console.log("https://example.invalid/pr/1");
     chmodSync(join(bin, "gh"), 0o755);
     process.env.PATH = `${bin}:${process.env.PATH}`;
     const ghCalls = () => (existsSync(ghLog) ? readFileSync(ghLog, "utf8").trim().split("\n").filter(Boolean) : []);
+    // Exercise an ordinary pre-push hook against the bare fixture remote. Like
+    // the repository's pnpm hook, it can load a root package-manager control.
+    const publishHooks = join(root, "ordinary-publish-hooks");
+    const hookMarker = join(root, "ordinary-hook-ran"), configMarker = join(root, "worker-config-ran");
+    mkdirSync(publishHooks);
+    writeFileSync(join(publishHooks, "pre-push"), `#!${process.execPath}\n` +
+      `const fs=require("node:fs"); fs.appendFileSync(${JSON.stringify(hookMarker)},"hook\\n"); if(fs.existsSync(".pnpmfile.cjs")) require(process.cwd()+"/.pnpmfile.cjs");\n`);
+    chmodSync(join(publishHooks, "pre-push"), 0o500);
+    const fixtureHookGit = GIT_EXTRA;
+    GIT_EXTRA = [...GIT_EXTRA, "-c", `core.hooksPath=${publishHooks}`];
+    process.env.SYNTHETIC_CONFIG_MARKER = configMarker;
+    await refused("(security) worker package configuration refused before ordinary hook", { job: "jconfig", db, repo, publish: true }, "unsafe publication path");
+    check("(security) worker configuration never executed", !existsSync(configMarker));
+    check("(security) refused package configuration has no remote branch", scratchGitOk(repo, ["ls-remote", "origin", "refs/heads/brain/job-jconfig"]) === "");
     const r6 = await run({ job: "jdocs", db, repo, publish: true, log: quiet });
+    check("(security) legitimate public publish retained ordinary pre-push hook", existsSync(hookMarker));
+    GIT_EXTRA = fixtureHookGit;
+    delete process.env.SYNTHETIC_CONFIG_MARKER;
     const calls = ghCalls();
     check("(6) fresh publish pushed brain/job-jdocs", r6.pushed && scratchGitOk(repo, ["ls-remote", "origin", "refs/heads/brain/job-jdocs"]).split(/\s+/)[0] === r6.publishedHead);
     check("(6) gh called once with --base SignalGrid_Alpha", calls.length === 1 && calls[0].includes(`--base ${BASE}`) && calls[0].includes("--head brain/job-jdocs"));
@@ -650,7 +917,8 @@ if (isMainModule(process.argv[1], import.meta.url)) {
   const a = process.argv.slice(2);
   const opt = (n) => { const i = a.indexOf(n); return i >= 0 ? a[i + 1] : undefined; };
   try {
-    if (a.includes("--self-test")) await selfTest();
+    if (a.includes("--qualify-scanner")) qualifyScanner(a);
+    else if (a.includes("--self-test")) await selfTest();
     else if (a.includes("--list-review")) {
       if (a.includes("--not-before") && !opt("--not-before")) refuse("--not-before requires a timezone-bearing timestamp");
       for (const id of await listReview(opt("--db") ?? DEFAULT_DB, { notBefore: opt("--not-before") })) console.log(id);

@@ -1,0 +1,19 @@
+# Fixed publication policy. Repository/model configuration and line allowlists
+# are never imported. The publisher also checks normalized representations.
+[extend]
+useDefault = true
+
+[[rules]]
+id = "publication-private-host-path"
+description = "Private home, vault, iCloud or local control path"
+regex = '''(?i)(?:[/\\](?:users|home)[/\\]|[a-z]:[/\\]users[/\\]|(?:\$\{?home\}?|%userprofile%|~)[/\\]|library[/\\]mobile[ \t]+documents|icloud~md~obsidian|signalgrid-local-ai|brain-state|brain-worktrees|[/\\]private[/\\]|[/\\]var[/\\]folders[/\\])'''
+
+[[rules]]
+id = "publication-encoded-private-path"
+description = "Encoded private home path"
+regex = '''(?i)(?:%(?:25)*(?:2f|5c)(?:users|home)%(?:25)*(?:2f|5c)|\\u002f(?:users|home)\\u002f|&#(?:x0*2f|0*47);(?:users|home)&#(?:x0*2f|0*47);)'''
+
+[[rules]]
+id = "publication-vault-markup"
+description = "Obsidian metadata, wikilink or private comment signature"
+regex = '''(?i)(?:\.obsidian[/\\]|\[\[[^\]\[\r\n]{1,240}\]\]|%%)'''

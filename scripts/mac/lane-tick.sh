@@ -512,6 +512,9 @@ OID_RE = re.compile(r'[0-9a-f]{40}')
 PUBLISHER = Path('scripts/mac/brain-proposal-pr.mjs')
 TICK_SOURCE = Path(RAW_TICK).resolve(strict=True)
 SIGNALS = []
+PUBLICATION_TIMEOUT_SEC = 600
+DEPENDENCIES = ('scripts/check-owner-gated-surfaces.mjs', 'scripts/lib/is-main.mjs',
+                'scripts/lib/scratch-git.mjs', '.githooks/pre-push')
 
 class Refusal(Exception):
     pass
@@ -594,6 +597,10 @@ def read_json(path):
     need(isinstance(value, dict))
     return value, ref
 
+def dependency_refs():
+    source_repo = PUBLISHER.resolve(strict=True).parents[2]
+    return {name: read_file(source_repo / name, private=False)[1] for name in DEPENDENCIES}
+
 def activation():
     state = canonical_directory(RAW_STATE)
     cwd = Path.cwd().resolve()
@@ -612,6 +619,7 @@ def activation():
     _, tick_ref = read_file(TICK_SOURCE, private=False)
     need(active.get('publisher_sha256') == source_ref['sha256']
          and active.get('tick_sha256') == tick_ref['sha256'])
+    need(active.get('dependency_sha256') == {name: ref['sha256'] for name, ref in dependency_refs().items()})
     return state, active, ref, source_ref, tick_ref
 
 def custody(state, active_ref):
@@ -632,10 +640,10 @@ def custody(state, active_ref):
     return mirror, attempts
 
 def git(*args):
-    return subprocess.run(['git', *args], stdin=subprocess.DEVNULL, capture_output=True)
+    return subprocess.run(['git', '-c', 'core.fsmonitor=false', *args], stdin=subprocess.DEVNULL, capture_output=True, timeout=30)
 
 def gh(endpoint):
-    return subprocess.run(['gh', 'api', '--method', 'GET', endpoint], stdin=subprocess.DEVNULL, capture_output=True)
+    return subprocess.run(['gh', 'api', '--method', 'GET', endpoint], stdin=subprocess.DEVNULL, capture_output=True, timeout=30)
 
 def remote_branch(job):
     branch = 'brain/job-' + job
@@ -668,6 +676,7 @@ def job_intent(state, job, active_ref):
 def run_original(attempt, intent):
     need(read_file(PUBLISHER.resolve(strict=True), private=False)[1] == intent['publisher_ref'])
     need(read_file(TICK_SOURCE, private=False)[1] == intent['tick_ref'])
+    need(dependency_refs() == intent['dependency_refs'])
     argv = ['node', 'scripts/mac/brain-proposal-pr.mjs', '--job', JOB, '--publish']
     write_new(attempt / 'execution-intent.json', {'job_id': JOB, 'at': utc(), 'argv': argv,
               'intent_sha256': read_file(attempt / 'intent.json')[1]['sha256'], 'retry_forbidden': True})
@@ -676,7 +685,7 @@ def run_original(attempt, intent):
     err_fd = os.open(stderr, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
     handlers = {s: signal.signal(s, lambda n, _f: SIGNALS.append({'signal': n, 'at': utc()}))
                 for s in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP)}
-    child, code, receipt_error = None, None, None
+    child, code, receipt_error, timed_out = None, None, None, False
     try:
         sync_dir(attempt)
         child = subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=out_fd, stderr=err_fd,
@@ -686,7 +695,19 @@ def run_original(attempt, intent):
         except Exception as exc:
             receipt_error = type(exc).__name__
         finally:
-            code = child.wait()
+            try:
+                code = child.wait(timeout=PUBLICATION_TIMEOUT_SEC)
+            except subprocess.TimeoutExpired:
+                timed_out = True
+                # start_new_session created this exact owned process group. The
+                # live, unreaped child reserves its pid while it is terminated.
+                try: os.killpg(child.pid, signal.SIGTERM)
+                except ProcessLookupError: pass
+                try: code = child.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    try: os.killpg(child.pid, signal.SIGKILL)
+                    except ProcessLookupError: pass
+                    code = child.wait()
     finally:
         for fd in (out_fd, err_fd):
             os.fchmod(fd, 0o400)
@@ -697,7 +718,8 @@ def run_original(attempt, intent):
             signal.signal(signum, handler)
         write_new(attempt / 'terminal.json', {'job_id': JOB, 'at': utc(),
                   'pid': child.pid if child is not None else None, 'returncode': code,
-                  'normal_exit': isinstance(code, int) and code >= 0,
+                  'normal_exit': not timed_out and isinstance(code, int) and code >= 0,
+                  'timed_out': timed_out,
                   'original_wait_completed': child is not None and code is not None,
                   'started_receipt_error': receipt_error, 'interruptions': SIGNALS,
                   'stdout_ref': read_file(stdout)[1], 'stderr_ref': read_file(stderr)[1],
@@ -778,6 +800,7 @@ def verify_publication(attempt, intent):
              and branch.get('object', {}).get('type') == 'commit' and branch.get('object', {}).get('sha') == head)
         need(read_file(PUBLISHER.resolve(strict=True), private=False)[1] == intent['publisher_ref'])
         need(read_file(TICK_SOURCE, private=False)[1] == intent['tick_ref'])
+        need(dependency_refs() == intent['dependency_refs'])
         outcome = 'verified-publication'
     except Exception:
         url = None
@@ -793,7 +816,7 @@ try:
     if MODE == 'inspect':
         need(re.fullmatch(r'[1-3]', CAP) is not None)
         result = subprocess.run(['node', 'scripts/mac/brain-proposal-pr.mjs', '--list-review',
-                                 '--not-before', active['not_before']], stdin=subprocess.DEVNULL, capture_output=True)
+                                 '--not-before', active['not_before']], stdin=subprocess.DEVNULL, capture_output=True, timeout=30)
         need(result.returncode == 0 and len(result.stdout) <= 128000)
         jobs = result.stdout.decode('utf-8', errors='strict').splitlines()
         need(len(jobs) <= 1000 and len(jobs) == len(set(jobs)) and all(JOB_RE.fullmatch(job) for job in jobs))
@@ -804,8 +827,12 @@ try:
         need(JOB_RE.fullmatch(JOB) is not None)
         if MODE == 'preflight':
             if (mirror / (JOB + '.json')).exists() or (attempts / JOB).exists():
-                job_intent(state, JOB, active_ref)
-                print('CONSUMED')
+                try:
+                    job_intent(state, JOB, active_ref)
+                except (OSError, Refusal, ValueError, TypeError):
+                    print('CUSTODY_INCOMPLETE_READBACK_ONLY')
+                else:
+                    print('CONSUMED')
             else:
                 head, _ = remote_branch(JOB)
                 values, _ = prs(JOB)
@@ -819,6 +846,7 @@ try:
             intent = {'format': 'signalgrid-brain-publication-intent/v1', 'job_id': JOB, 'at': utc(),
                       'activation_id': active['activation_id'], 'not_before': active['not_before'],
                       'activation_ref': active_ref, 'publisher_ref': source_ref, 'tick_ref': tick_ref,
+                      'dependency_refs': dependency_refs(),
                       'argv': ['node', 'scripts/mac/brain-proposal-pr.mjs', '--job', JOB, '--publish'],
                       'branch': 'brain/job-' + JOB, 'base': BASE, 'repo': REPO,
                       'preflight': 'exact remote branch and exact head/base PR lookup absent',
@@ -853,11 +881,12 @@ if [ -f scripts/mac/brain-proposal-pr.mjs ] && command -v gh >/dev/null 2>&1 && 
         _pub_preflight="$(brain_publication_step preflight "$_job" 2>/dev/null)"
         case "$_pub_preflight" in
           CONSUMED) continue ;;
-          EXISTS_READBACK_ONLY) RESULT="$RESULT; brain publication $_job requires readback only"; continue ;;
+          CUSTODY_INCOMPLETE_READBACK_ONLY) RESULT="$RESULT; brain publication custody incomplete; manual recovery required"; break ;;
+          EXISTS_READBACK_ONLY) RESULT="$RESULT; brain publication requires readback only"; continue ;;
           ABSENT) : ;;
           *) RESULT="$RESULT; brain publication unavailable"; break ;;
         esac
-        if [ "$DRY" = "1" ]; then say "dry-run: would publish eligible brain job $_job"; continue; fi
+        if [ "$DRY" = "1" ]; then say "dry-run: would publish an eligible brain job"; continue; fi
         if ! declare -F sg_host_verify_acquire >/dev/null || ! sg_host_verify_acquire "$HOME/Library/Caches/signalgrid/host-verification.lock"; then
           RESULT="$RESULT; brain publication deferred: host busy or unavailable"
           break
@@ -875,8 +904,8 @@ if [ -f scripts/mac/brain-proposal-pr.mjs ] && command -v gh >/dev/null 2>&1 && 
         _pub_readback="$(brain_publication_step finish "$_job" 2>/dev/null)"
         case "$_pub_readback" in
           VERIFIED\ https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/[0-9]*)
-            RESULT="$RESULT; verified publication for brain job $_job: ${_pub_readback#VERIFIED }" ;;
-          *) RESULT="$RESULT; brain publication $_job attempted once; readback required" ;;
+            RESULT="$RESULT; verified brain publication: ${_pub_readback#VERIFIED }" ;;
+          *) RESULT="$RESULT; brain publication attempted once; readback required" ;;
         esac
       done
       ;;

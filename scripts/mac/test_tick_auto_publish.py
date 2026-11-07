@@ -15,6 +15,7 @@ import shutil
 import subprocess
 import tempfile
 import unittest
+import time
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
@@ -64,6 +65,9 @@ with (root/"seen-intents.jsonl").open("a") as f:
 if cfg.get("publish_error"):
     print("PRIVATE_SYNTHETIC /var/folders/fixture/brain-pr-x/private.md",file=sys.stderr)
     sys.exit(1)
+if cfg.get("hang_publish"):
+    import time
+    time.sleep(2)
 if cfg.get("branch_only"):
     print("brain/job-"+job+" already exists on origin — nothing pushed (idempotent)")
 else:
@@ -171,6 +175,8 @@ class TickAutoPublishRegression(unittest.TestCase):
                          "activation_id":"synthetic-autopublish-test"}
         self.activation["publisher_sha256"]=hashlib.sha256((REPO/"scripts/mac/brain-proposal-pr.mjs").read_bytes()).hexdigest()
         self.activation["tick_sha256"]=hashlib.sha256((REPO/"scripts/mac/lane-tick.sh").read_bytes()).hexdigest()
+        self.activation["dependency_sha256"]={p:hashlib.sha256((REPO/p).read_bytes()).hexdigest() for p in (
+            "scripts/check-owner-gated-surfaces.mjs", "scripts/lib/is-main.mjs", "scripts/lib/scratch-git.mjs", ".githooks/pre-push")}
         self.write_activation()
         self.bootstrap_custody()
         self.cfg={"jobs":["freshA"]}
@@ -227,6 +233,10 @@ sg_host_verify_acquire() {
 sg_host_verify_release() { printf 'release\\n' >> "$SG_TEST_ROOT/host-events"; SG_VERIFY_LOCK_HELD=0; }
 """
         wrapper += source[a:b] + '\nprintf "__RESULT__%s\\n" "$RESULT"\n'
+        # Scale only the isolated test copy's publication timeout. No production
+        # environment flag or model/queue cap is changed or introduced.
+        if self.cfg.get("hang_publish"):
+            wrapper=wrapper.replace("PUBLICATION_TIMEOUT_SEC = 600", "PUBLICATION_TIMEOUT_SEC = 0.25")
         env={**os.environ,"HOME":str(self.home),"PATH":str(self.bin)+os.pathsep+os.environ["PATH"],
              "SG_TEST_ROOT":str(self.root),"SG_TEST_HOST_BUSY":"1" if self.host_busy else "0",
              "SIGNALGRID_PUBLISH_MAX":self.cap,"SIGNALGRID_BRAIN_PUBLICATION_STATE":str(self.state)}
@@ -319,7 +329,7 @@ sg_host_verify_release() { printf 'release\\n' >> "$SG_TEST_ROOT/host-events"; S
         self.assertEqual(len(self.calls()),1)
     def test_exact_public_facts_and_tree_readback_can_verify_publication(self):
         out,_=self.run_step()
-        self.assertIn("verified publication for brain job freshA",out.split("__RESULT__")[-1])
+        self.assertIn("verified brain publication:",out.split("__RESULT__")[-1])
         endpoints=[c[-1] for c in self.jsonlines("get-calls.jsonl")]
         self.assertTrue(any("/files?" in x for x in endpoints))
         self.assertTrue(any("/git/commits/" in x for x in endpoints))
@@ -382,6 +392,48 @@ sg_host_verify_release() { printf 'release\\n' >> "$SG_TEST_ROOT/host-events"; S
         self.assertTrue((self.root/"tampered").exists())
         self.assertNotIn("verified publication",out.split("__RESULT__")[-1])
         self.assertEqual(len(self.calls()),1)
+
+    def test_imported_source_pins_are_required(self):
+        self.activation.pop("dependency_sha256")
+        self.write_activation()
+        self.anchor.unlink(); self.mirror.rmdir(); (self.state/"attempts").rmdir()
+        self.bootstrap_custody()
+        self.run_step()
+        self.assertEqual(self.calls(),[])
+
+    def test_imported_source_pin_drift_is_refused(self):
+        self.activation["dependency_sha256"]["scripts/check-owner-gated-surfaces.mjs"]="0"*64
+        self.write_activation()
+        self.anchor.unlink(); self.mirror.rmdir(); (self.state/"attempts").rmdir()
+        self.bootstrap_custody()
+        self.run_step()
+        self.assertEqual(self.calls(),[])
+
+    def test_own_timed_out_publication_is_consumed_and_host_released(self):
+        self.cfg["hang_publish"]=True
+        start=time.monotonic()
+        out,_=self.run_step()
+        elapsed=time.monotonic()-start
+        terminal=json.loads((self.state/"attempts/freshA/terminal.json").read_text())
+        self.assertTrue(terminal.get("timed_out"))
+        self.assertFalse(terminal["normal_exit"])
+        self.assertLess(elapsed,1.8)
+        self.assertIn("release",(self.root/"host-events").read_text())
+        self.assertNotIn("verified publication",out.split("__RESULT__")[-1])
+        self.run_step()
+        self.assertEqual(len(self.calls()),1)
+
+    def test_job_identifier_does_not_reach_public_heartbeat(self):
+        self.cfg["jobs"]=["private_brain-state_marker"]
+        out,_=self.run_step()
+        self.assertNotIn("private_brain-state_marker",out.split("__RESULT__")[-1])
+
+    def test_partial_claim_is_material_and_never_recreated(self):
+        (self.state/"attempts/freshA").mkdir(mode=0o700)
+        out,_=self.run_step()
+        self.assertEqual(self.calls(),[])
+        self.assertIn("custody incomplete",out.split("__RESULT__")[-1])
+        self.assertFalse((self.state/"attempts/freshA/intent.json").exists())
 
 if __name__=="__main__":
     unittest.main()

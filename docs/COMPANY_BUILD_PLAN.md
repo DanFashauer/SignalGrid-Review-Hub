@@ -1932,6 +1932,21 @@ earlier — that is the loop working, not a reason to soften the record.
     prints `third-party vendor host in 4 DEMO-ONLY web file(s)` and then four
     lines, one per (file, host) pair on those same two files, so its "4" counts
     hits, not files: two files, four hits.
+    FIX PROPOSED 2026-09-30 (branch claude/build-self-host-fonts-review-desktop,
+    owner merges — classifyDiff: OWNER_RESERVED, signalgrid-review is
+    buyer-facing): the two remaining trees (the PWA landed under row 108)
+    now self-host. `artifacts/signalgrid-review/index.html` and
+    `artifacts/signalgrid-desktop/index.html` lose their three vendor-font link
+    tags; `artifacts/signalgrid-review/src/main.tsx` and
+    `artifacts/signalgrid-desktop/src/main.tsx` import the same seven
+    `@fontsource` faces as `artifacts/signalgrid-app/src/main.tsx`, added as
+    devDependencies in each tree's `package.json` (lockfile regenerated). Both
+    trees join `SELF_HOSTED_DEMO_TREES` in `scripts/review-invariants.mjs`, so a
+    returning vendor host now FAILS the gate instead of being reported.
+    Falsified: re-adding one link tag to either `index.html` makes
+    `node scripts/review-invariants.mjs` exit 1; with the tree removed from the
+    list the same edit is only reported and exits 0. Each vite build bundles 43
+    `.woff2` files and `dist/` holds no vendor host.
 
 71. **Five of eight security reference tests cannot fail against broken code.**
     — FIXED 2026-09-02 by porting and deleting; see the disposition at the foot
@@ -4841,7 +4856,7 @@ Decision core (the verdict mechanism):
 2. lib/signalgrid-core/src/decision.ts (216) — where allow/step_up/restrict/deny is actually computed.
 3. lib/signalgrid-core/src/policy.ts (994) — policy resolution feeding the verdict; the largest logic file in the core.
 4. lib/signalgrid-core/src/resolution.ts (576) — signal-to-assurance resolution; the file where 'unknown raises assurance, never lowers it' must hold.
-5. lib/signalgrid-core/src/evidence.ts (1114) — mints the WHY behind /v1/decisions/{id}/evidence; the product's entire claim is that its answers are explainable.
+5. lib/signalgrid-core/src/evidence.ts (1351) — mints the WHY behind /v1/decisions/{id}/evidence; the product's entire claim is that its answers are explainable.
 6. lib/signalgrid-core/src/store.ts (589) — in-memory store semantics behind every tenant-scoped read; a cross-tenant leak would live here.
 7. lib/signalgrid-simulator/src/decisionEngine.ts (363) — parity source the iOS port is byte-faithful to; a defect here ships on two platforms at once.
 8. lib/posture-composition/src/compose.ts (80) — composes signal kinds into posture; tiny, but every launch signal passes through it.

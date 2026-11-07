@@ -89,8 +89,10 @@ What runs before any push:
   commit, the PR title or the PR body.
 
 What reaches the heartbeat: the tick keeps only the publisher's last line, a
-fixed `SUMMARY` (rule ids and counts), through an allow-filter. Findings in the
-tick log name files by index (`file#N`), never by name.
+fixed `SUMMARY` (rule ids and counts), through an allow-filter. Scan findings
+name files by index (`file#N`). The `files (N)` log line and path refusals still
+print file names to the local tick log, never to the heartbeat; the job's title
+is not logged at all (the job id only).
 
 What this does NOT catch, stated plainly: a **paraphrase or summary** of a
 private note (the check matches copied text, not meaning); text **encoded**

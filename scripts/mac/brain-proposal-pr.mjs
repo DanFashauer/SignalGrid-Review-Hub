@@ -311,10 +311,12 @@ export function scanProse(label, text) {
 /** Walk a unified diff and yield every ADDED line with its file and new-side line number, plus
  *  header-level findings (binary, symlink). A line in a hunk that starts with "+" is added, whatever
  *  it says ("+++ x" inside a hunk is an added "++ x"). */
-function* diffAdded(patch, headerHits) {
+function* diffAdded(patch, headerHits, names) {
   let file = "", ref = "file#0", n = 0, inHunk = false, lineNo = 0;
   for (const l of patch.split("\n")) {
-    if (l.startsWith("diff --git ")) { inHunk = false; file = l.slice(l.lastIndexOf(" b/") + 3); ref = `file#${++n}`; yield { file, ref, header: l }; continue; }
+    if (l.startsWith("diff --git ")) { inHunk = false; ref = `file#${++n}`;
+      // git quotes names holding " or \ in the header; the NUL-split name list is exact, so prefer it
+      file = names?.[n - 1] ?? l.slice(l.lastIndexOf(" b/") + 3); yield { file, ref, header: l }; continue; }
     if (!inHunk) {
       if (l.startsWith("@@")) { inHunk = true; lineNo = Number((/\+(\d+)/.exec(l) ?? [0, 0])[1]) - 1; continue; }
       if (l === "GIT binary patch" || l.startsWith("Binary files ")) headerHits.push(`${ref}: binary file refused`);
@@ -326,11 +328,11 @@ function* diffAdded(patch, headerHits) {
 }
 
 /** Scan a unified diff (git diff --binary output). Added lines and file names only; binaries refused. */
-export function scanPatch(patch) {
+export function scanPatch(patch, names) {
   const out = [];
   if (patch.includes("\0")) out.push("patch: NUL byte (binary content)");
   const fm = new Map(); // new markdown file -> front-matter state
-  for (const e of diffAdded(patch, out)) {
+  for (const e of diffAdded(patch, out, names)) {
     if (e.header !== undefined) { for (const id of scanLine(e.header, e.file)) out.push(`${e.ref}: path ${id}`); continue; }
     for (const id of scanLine(e.text, e.file)) out.push(`${e.ref}:${e.lineNo} ${id}`);
     // Obsidian front matter: a markdown file that OPENS with a --- block holding key: lines.
@@ -466,10 +468,10 @@ export function provenanceChecker({ required, log, env = process.env }) {
     if (e instanceof Refusal) throw e;
     refuse("provenance check could not read the vault or knowledge directory; nothing is published unchecked");
   }
-  return (patch) => {
+  return (patch, names) => {
     const out = [], perFile = new Map();
     const hasTitle = (text) => { const w = wordsOf(text).join(" "); for (const t of idx.titles) if (w.includes(t)) return true; return false; };
-    for (const e of diffAdded(patch, [])) {
+    for (const e of diffAdded(patch, [], names)) {
       if (e.header !== undefined) { if (hasTitle(e.file)) out.push(`${e.ref}: path provenance-title`); continue; }
       const n = normLine(e.text);
       if (n.length >= MIN_LINE_CHARS && idx.lines.has(h53(n))) out.push(`${e.ref}:${e.lineNo} provenance-line`);
@@ -530,12 +532,12 @@ function scanOutgoing(wt, log, { scanner = scanPatch, extra = () => [], publish 
     const patch = gitOk(wt, ["diff", ...NOFILTER, "--binary", "--no-color", "--no-renames", "HEAD^", "HEAD"]);
     const nums = gitOk(wt, ["diff", ...NOFILTER, "--numstat", "--no-renames", "HEAD^", "HEAD"]);
     if (!patch.trim()) throw new Error("outgoing patch is empty");
+    const names = gitOk(wt, ["diff", ...NOFILTER, "--name-only", "-z", "--no-renames", "HEAD^", "HEAD"]).split("\0").filter(Boolean);
     const message = gitOk(wt, ["log", "-1", "--format=%B"]);
     // The message goes to origin too: run the same provenance check on it, as a one-file patch.
     const msgPatch = `diff --git a/commit-message b/commit-message\nnew file mode 100644\n--- /dev/null\n+++ b/commit-message\n@@ -0,0 +1,1 @@\n${message.split("\n").map((l) => `+${l}`).join("\n")}\n`;
-    hits = [...scanner(patch), ...extra(patch), ...extra(msgPatch), ...scanProse("commit-message", message)];
+    hits = [...scanner(patch, names), ...extra(patch, names), ...extra(msgPatch), ...scanProse("commit-message", message)];
     for (const row of nums.split("\n")) if (/^-\t-\t/.test(row)) hits.push(`${row.split("\t")[2]}: binary file refused`);
-    const names = gitOk(wt, ["diff", ...NOFILTER, "--name-only", "-z", "--no-renames", "HEAD^", "HEAD"]).split("\0").filter(Boolean);
     hits.push(...gitleaksScan(wt, names, log, publish));
   } catch (e) {
     if (e instanceof Refusal) throw e;
@@ -570,7 +572,7 @@ export async function run({ job, db = DEFAULT_DB, repo = REPO, publish = false, 
   }
   if (leftOut) log(`${leftOut} changed file(s) in the worktree are not in the job's recorded change set and were left out`);
   if (!patch.trim() || files.length === 0) refuse(`job ${job}: the recorded change set matches an empty worktree diff`);
-  const early = [...scanPatch(patch), ...provenance(patch)];
+  const early = [...scanPatch(patch, files), ...provenance(patch, files)];
   if (early.length) blocked(`job ${job}: content scan blocked publication`, early);
   const bad = [];
   for (const f of files) {
@@ -580,7 +582,7 @@ export async function run({ job, db = DEFAULT_DB, repo = REPO, publish = false, 
   }
   const cls = classifyDiff(files);
   for (const m of cls.matched) bad.push(`${m.file} (${m.category}: ${m.rule})`);
-  log(`job ${job}: ${title}`);
+  log(`job ${job}`);
   log(`files (${files.length}):\n${files.map((f) => `  ${f}`).join("\n")}`);
   log(`classification: ${cls.tier}${cls.matched.map((m) => `\n  ${m.category} ${m.file} — ${m.rule}`).join("")}`);
   if (bad.length) refuse(`job ${job} touches paths this route never publishes:\n${bad.map((b) => `  ${b}`).join("\n")}`);
@@ -765,6 +767,7 @@ async function selfTest() {
     const wHook = brain("w-hook", (w) => writeFileSync(join(w, "docs/hook.md"), "fine\n"));
     const wGh = brain("w-gh", (w) => writeFileSync(join(w, "docs/gh.md"), "fine\n"));
     const wHide = brain("w-hide", (w) => writeFileSync(join(w, "docs/hide.md"), "A clean added line.\n"));
+    const wHide2 = brain("w-hide2", (w) => writeFileSync(join(w, "docs/hide2.md"), "A clean added line.\n"));
     const wTitle1 = brain("w-title1", (w) => writeFileSync(join(w, "docs/t1.md"), "Please see Quarterly board reorganisation notes for the plan.\n"));
     const wTitle2 = brain("w-title2", (w) => writeFileSync(join(w, "docs/quarterly-board-reorganisation-notes.md"), "Clean.\n"));
     const wUni = brain("w-uni", (w) => writeFileSync(join(w, "docs/r\u00e9union.md"), "---\ntags: [x]\n---\nbody\n"));
@@ -791,6 +794,7 @@ async function selfTest() {
       ["jhook", "build", "review", wHook, "Added `docs/hook.md`."], ["jgh", "build", "review", wGh, "Added `docs/gh.md`."],
       ["jtrash", "build", "review", wTrash, "Added `docs/trash.md`."],
       ["jhide", "build", "review", wHide, "Added `docs/hide.md`. RESULT-MARK sentence from the worker.", "SECRET-TITLE-MARK words"],
+      ["jhide2", "build", "review", wHide2, "Added `docs/hide2.md`.", "SECRET-TITLE-MARK words"],
       ["jtitle1", "build", "review", wTitle1, "Added `docs/t1.md`."], ["jtitle2", "build", "review", wTitle2, "Added `docs/quarterly-board-reorganisation-notes.md`."],
       ["juni", "build", "review", wUni, "Added `docs/r\u00e9union.md`."],
       ["j bad;id", "build", "review", wClean, "Added `docs/clean.md`."],
@@ -1039,6 +1043,21 @@ async function selfTest() {
     check("(25) every %XX run decodes on its own: a bad escape elsewhere, and %252F, no longer disable decoding",
       scanLine(J("%2FUs", "ers%2Fdan %ZZ"), "x.md").includes("private-path") && scanLine(J("%252FUs", "ers%252Fdan"), "x.md").includes("private-path"));
     check("(25) --list-review lists only ids safe for a command line", !(await listReview(db)).includes("j bad;id") && (await listReview(db)).includes("jclean"));
+    // (26) a file name holding " is quoted by git in the diff header; the scan must still see the real name
+    if (isBuiltin("node:sqlite")) {
+      const wQuote = brain("w-quote", (w) => writeFileSync(join(w, 'docs/a"b.md'), "---\ntags: [x]\n---\nbody\n"));
+      const db2 = join(root, "autonomy2.sqlite3");
+      const { DatabaseSync } = await import("node:sqlite");
+      const d2 = new DatabaseSync(db2);
+      d2.exec("CREATE TABLE autonomy_jobs (id TEXT, kind TEXT, status TEXT, repo TEXT, worktree TEXT, title TEXT, result TEXT, updated_at TEXT, changed_files TEXT)");
+      d2.prepare("INSERT INTO autonomy_jobs VALUES ('jquote','build','review','SignalGrid-Review-Hub',?,'t',?, 'x', ?)").run(wQuote, JSON.stringify("done"), JSON.stringify(['docs/a"b.md']));
+      d2.close();
+      await refused("(26) a front-matter note whose file name holds a double quote is refused (names from git diff --name-only -z)", { job: "jquote", db: db2, repo }, "obsidian-frontmatter");
+    } else check("(26) skipped: node:sqlite unavailable", true);
+    // the job title stays out of the local log as well
+    const logged = [];
+    await run({ job: "jhide2", db, repo, log: (l) => logged.push(l) }).catch(() => {});
+    check("(26) the log carries the job id, never the job title", logged.some((l) => l === "job jhide2") && !logged.some((l) => l.includes("SECRET-TITLE-MARK")));
     check("(*) no scratch worktrees left registered", scratchGitOk(repo, ["worktree", "list"]).split("\n").length === 1);
   } finally { rmSync(root, { recursive: true, force: true }); }
   if (pass !== total) { console.error(`self-test FAILED (${pass}/${total})`); process.exit(1); }

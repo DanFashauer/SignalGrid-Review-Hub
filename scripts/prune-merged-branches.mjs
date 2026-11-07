@@ -373,7 +373,9 @@ for (const b of branches) {
         classicEnabled = typeof detail?.protection?.enabled === "boolean" ? detail.protection.enabled : undefined;
       } catch { classicEnabled = undefined; }
       try {
-        const rules = await api(`/repos/${OWNER}/${REPO}/rules/branches/${ref}`);
+        // Every page: the endpoint defaults to 30 rules per page, and a `deletion` rule on page 2
+        // must still keep the branch (Codex review of #1916, P2).
+        const rules = await paginate(`/repos/${OWNER}/${REPO}/rules/branches/${ref}`);
         ruleTypes = Array.isArray(rules) ? rules.map((r) => r?.type) : undefined;
       } catch { ruleTypes = undefined; }
     }

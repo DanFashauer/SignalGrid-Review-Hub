@@ -491,11 +491,12 @@ fi
 PUBLISH_MAX="${SIGNALGRID_PUBLISH_MAX:-1}"
 _pub_state="${SIGNALGRID_BRAIN_PUBLICATION_STATE:-$HOME/.local/state/signalgrid/brain-publications}"
 brain_publication_step() {
-  python3 - "$1" "$_pub_state" "${2:-}" "$PUBLISH_MAX" "${REPO_ROOT:-.}/scripts/mac/lane-tick.sh" <<'PY_BRAIN_PUBLICATION'
+  /usr/bin/python3 -I - "$1" "$_pub_state" "${2:-}" "$PUBLISH_MAX" "${REPO_ROOT:-.}/scripts/mac/lane-tick.sh" <<'PY_BRAIN_PUBLICATION'
 import datetime as dt
 import hashlib
 import json
 import os
+import pwd
 from pathlib import Path
 import re
 import signal
@@ -522,6 +523,39 @@ class Refusal(Exception):
 def need(ok):
     if not ok:
         raise Refusal()
+
+def account_home():
+    return Path(pwd.getpwuid(UID).pw_dir)
+
+def trusted_client(name):
+    paths = {
+        'git': ('/Applications/Xcode.app/Contents/Developer/usr/bin/git',) if sys.platform == 'darwin' else ('/usr/bin/git',),
+        'node': ('/usr/local/bin/node', '/opt/homebrew/bin/node', '/usr/bin/node'),
+        'gh': ('/opt/homebrew/bin/gh', '/usr/local/bin/gh', '/usr/bin/gh'),
+    }
+    for value in paths[name]:
+        candidate = Path(value)
+        if not candidate.exists():
+            continue
+        path = candidate.resolve(strict=True)
+        st = path.lstat()
+        need(stat.S_ISREG(st.st_mode) and st.st_uid in (0, UID) and st.st_nlink == 1
+             and stat.S_IMODE(st.st_mode) & 0o111 and not stat.S_IMODE(st.st_mode) & 0o022)
+        return str(path)
+    raise Refusal()
+
+def client_env():
+    env = dict(os.environ)
+    for key in list(env):
+        if key.startswith('GIT_') or key.startswith('GH_') and key != 'GH_TOKEN' or key in ('SSH_ASKPASS', 'SSH_ASKPASS_REQUIRE', 'NODE_OPTIONS', 'NODE_PATH'):
+            del env[key]
+    home = account_home()
+    env.update(HOME=str(home), USERPROFILE=str(home), XDG_CONFIG_HOME=str(home / '.config'),
+               PATH='/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin',
+               GIT_NO_LAZY_FETCH='1', GIT_TERMINAL_PROMPT='0', SSH_ASKPASS_REQUIRE='never',
+               GH_HOST='github.com', GH_REPO='github.com/' + REPO,
+               GH_CONFIG_DIR=str(home / '.config/gh'), GH_PROMPT_DISABLED='1')
+    return env
 
 def utc():
     return dt.datetime.now(dt.timezone.utc).isoformat()
@@ -625,7 +659,7 @@ def activation():
 def custody(state, active_ref):
     # Root's explicit activation prepares these private identities. The tick
     # never initializes, repairs, overwrites or recreates control/custody files.
-    parent = canonical_directory(Path.home() / '.local/state/signalgrid', private=False)
+    parent = canonical_directory(account_home() / '.local/state/signalgrid', private=False)
     need(not parent.is_relative_to(Path.cwd().resolve())
          and not parent.is_relative_to(PUBLISHER.resolve(strict=True).parents[2])
          and 'node_modules' not in parent.parts and '.git' not in parent.parts)
@@ -640,10 +674,40 @@ def custody(state, active_ref):
     return mirror, attempts
 
 def git(*args):
-    return subprocess.run(['git', '-c', 'core.fsmonitor=false', *args], stdin=subprocess.DEVNULL, capture_output=True, timeout=30)
+    binary = trusted_client('git')
+    prefix = [binary, '--no-replace-objects', '-c', 'core.fsmonitor=false', '-c', 'core.hooksPath=/dev/null']
+    config_env = client_env()
+    config_env.update(GIT_CONFIG_GLOBAL='/dev/null', GIT_CONFIG_NOSYSTEM='1', GIT_ALLOW_PROTOCOL='')
+    result = subprocess.run(prefix + ['config', '--null', '--local', '--no-includes', '--list'],
+                            env=config_env, stdin=subprocess.DEVNULL, capture_output=True, timeout=30)
+    need(result.returncode == 0 and len(result.stdout) <= 1048576)
+    rows = result.stdout.decode('utf-8', errors='strict').split('\0')
+    origin = []
+    for row in filter(None, rows):
+        key, _, value = row.partition('\n')
+        need(not re.search(r'^(?:filter\.|diff\..*\.(?:command|textconv)$|include(?:if)?\.|credential\.|protocol\.|url\..*\.(?:insteadof|pushinsteadof)$|remote\..*\.(?:promisor|partialclonefilter|uploadpack|receivepack|vcs)$|core\.(?:fsmonitor|sshcommand|gitproxy|askpass|alternaterefscommand)$|extensions\.(?:worktreeconfig|partialclone)$)', key, re.I))
+        if key.lower() == 'remote.origin.url':
+            origin.append(value)
+        if key.lower() == 'remote.origin.pushurl':
+            need(value == 'git@github.com:' + REPO + '.git')
+    need(origin == ['git@github.com:' + REPO + '.git'])
+    env = client_env()
+    env['GIT_ALLOW_PROTOCOL'] = 'ssh'
+    return subprocess.run(prefix + list(args), env=env, stdin=subprocess.DEVNULL, capture_output=True, timeout=30)
 
 def gh(endpoint):
-    return subprocess.run(['gh', 'api', '--method', 'GET', endpoint], stdin=subprocess.DEVNULL, capture_output=True, timeout=30)
+    need(endpoint.startswith('repos/' + REPO + '/'))
+    return subprocess.run([trusted_client('gh'), 'api', '--hostname', 'github.com', '--method', 'GET', endpoint],
+                          env=client_env(), stdin=subprocess.DEVNULL, capture_output=True, timeout=30)
+
+def review_jobs(active):
+    result = subprocess.run([trusted_client('node'), 'scripts/mac/brain-proposal-pr.mjs', '--list-review',
+                             '--not-before', active['not_before']], env=client_env(),
+                            stdin=subprocess.DEVNULL, capture_output=True, timeout=30)
+    need(result.returncode == 0 and len(result.stdout) <= 128000)
+    jobs = result.stdout.decode('utf-8', errors='strict').splitlines()
+    need(len(jobs) <= 1000 and len(jobs) == len(set(jobs)) and all(JOB_RE.fullmatch(job) for job in jobs))
+    return jobs
 
 def remote_branch(job):
     branch = 'brain/job-' + job
@@ -677,7 +741,7 @@ def run_original(attempt, intent):
     need(read_file(PUBLISHER.resolve(strict=True), private=False)[1] == intent['publisher_ref'])
     need(read_file(TICK_SOURCE, private=False)[1] == intent['tick_ref'])
     need(dependency_refs() == intent['dependency_refs'])
-    argv = ['node', 'scripts/mac/brain-proposal-pr.mjs', '--job', JOB, '--publish']
+    argv = [trusted_client('node'), 'scripts/mac/brain-proposal-pr.mjs', '--job', JOB, '--publish']
     write_new(attempt / 'execution-intent.json', {'job_id': JOB, 'at': utc(), 'argv': argv,
               'intent_sha256': read_file(attempt / 'intent.json')[1]['sha256'], 'retry_forbidden': True})
     stdout, stderr = attempt / 'stdout.raw', attempt / 'stderr.raw'
@@ -688,7 +752,7 @@ def run_original(attempt, intent):
     child, code, receipt_error, timed_out = None, None, None, False
     try:
         sync_dir(attempt)
-        child = subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=out_fd, stderr=err_fd,
+        child = subprocess.Popen(argv, env=client_env(), stdin=subprocess.DEVNULL, stdout=out_fd, stderr=err_fd,
                                  close_fds=True, start_new_session=True)
         try:
             write_new(attempt / 'started.json', {'job_id': JOB, 'pid': child.pid, 'at': utc(), 'argv': argv})
@@ -815,11 +879,7 @@ try:
     mirror, attempts = custody(state, active_ref)
     if MODE == 'inspect':
         need(re.fullmatch(r'[1-3]', CAP) is not None)
-        result = subprocess.run(['node', 'scripts/mac/brain-proposal-pr.mjs', '--list-review',
-                                 '--not-before', active['not_before']], stdin=subprocess.DEVNULL, capture_output=True, timeout=30)
-        need(result.returncode == 0 and len(result.stdout) <= 128000)
-        jobs = result.stdout.decode('utf-8', errors='strict').splitlines()
-        need(len(jobs) <= 1000 and len(jobs) == len(set(jobs)) and all(JOB_RE.fullmatch(job) for job in jobs))
+        jobs = review_jobs(active)
         print('ACTIVE')
         for job in jobs:
             print(job)
@@ -834,10 +894,15 @@ try:
                 else:
                     print('CONSUMED')
             else:
+                # Listing validates the current worker head and patch against
+                # the external clearance again, immediately before any remote
+                # inspection. A stale initial selection grants no authority.
+                need(JOB in review_jobs(active))
                 head, _ = remote_branch(JOB)
                 values, _ = prs(JOB)
                 print('EXISTS_READBACK_ONLY' if head is not None or values else 'ABSENT')
         elif MODE == 'claim':
+            need(JOB in review_jobs(active))
             need(not (mirror / (JOB + '.json')).exists() and not (attempts / JOB).exists())
             attempt = attempts / JOB
             attempt.mkdir(mode=0o700)
@@ -847,7 +912,7 @@ try:
                       'activation_id': active['activation_id'], 'not_before': active['not_before'],
                       'activation_ref': active_ref, 'publisher_ref': source_ref, 'tick_ref': tick_ref,
                       'dependency_refs': dependency_refs(),
-                      'argv': ['node', 'scripts/mac/brain-proposal-pr.mjs', '--job', JOB, '--publish'],
+                      'argv': [trusted_client('node'), 'scripts/mac/brain-proposal-pr.mjs', '--job', JOB, '--publish'],
                       'branch': 'brain/job-' + JOB, 'base': BASE, 'repo': REPO,
                       'preflight': 'exact remote branch and exact head/base PR lookup absent',
                       'normal_host_admission_owned_by_parent': True, 'retry_forbidden': True}

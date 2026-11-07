@@ -74,11 +74,31 @@ function gitEnv(extra = {}) {
   // programs, transport command or executable search path. Keep the account's
   // ordinary configuration and existing SSH agent; no global settings change.
   for (const key of Object.keys(env)) if (key.startsWith("GIT_")) delete env[key];
-  for (const key of ["SSH_ASKPASS", "SSH_ASKPASS_REQUIRE"]) delete env[key];
+  for (const key of ["SSH_ASKPASS", "SSH_ASKPASS_REQUIRE", "NODE_OPTIONS", "NODE_PATH"]) delete env[key];
   const home = SELF_TEST_SCANNER?.gitHome ?? ACCOUNT_HOME;
   return { ...env, HOME: home, USERPROFILE: home, XDG_CONFIG_HOME: join(home, ".config"),
     PATH: SELF_TEST_SCANNER?.toolPath ?? TOOL_PATH, ...extra,
     SSH_ASKPASS_REQUIRE: "never", GIT_TERMINAL_PROMPT: "0", GIT_NO_LAZY_FETCH: "1" };
+}
+function ghEnv() {
+  const env = gitEnv();
+  for (const key of Object.keys(env)) if (key.startsWith("GH_") && key !== "GH_TOKEN") delete env[key];
+  return { ...env, GH_HOST: "github.com", GH_REPO: "github.com/DanFashauer/SignalGrid-Review-Hub",
+    GH_CONFIG_DIR: join(env.HOME, ".config", "gh"), GH_PROMPT_DISABLED: "1" };
+}
+function requireHookDependencies() {
+  // The approved hook exits zero when pnpm is missing. Presence of the hook
+  // therefore proves nothing unless its required tool is actually resolvable
+  // in the same trusted PATH that Git and the hook will receive.
+  for (const directory of gitEnv().PATH.split(":")) {
+    if (!isAbsolute(directory)) refuse("publication tool path is not absolute");
+    const candidate = join(directory, "pnpm");
+    if (!existsSync(candidate)) continue;
+    const path = realpathSync(candidate), st = lstatSync(path);
+    if (!st.isFile() || ![0, process.getuid()].includes(st.uid) || st.nlink !== 1 || !(st.mode & 0o111) || (st.mode & 0o022)) refuse("mandatory pnpm hook dependency is not a trusted executable");
+    return;
+  }
+  refuse("mandatory pnpm hook dependency is unavailable in the trusted PATH; publication refused");
 }
 function git(dir, args, env) {
   const r = spawnSync(GIT_BINARY, ["-C", dir, ...GIT_EXTRA, "-c", "core.fsmonitor=false", ...args], { encoding: "utf8", env: gitEnv(env), timeout: 120000, killSignal: "SIGKILL", maxBuffer: 64 << 20 });
@@ -137,6 +157,11 @@ export async function listReview(db = DEFAULT_DB, { notBefore } = {}) {
       if (created < cutoff || updated < created) continue;
       const job = await readJob(db, row.id), clearance = readPrivacyClearance(row.id);
       if (!job || clearance.value.request?.job_sha256 !== valueDigest(job) || clearance.value.request?.publisher_sha256 !== publisherDigest()) continue;
+      if (!job.worktree || !existsSync(job.worktree)) continue;
+      const { patch } = worktreePatch(job.worktree);
+      const head = sourceGitBytes(job.worktree, ["rev-parse", "HEAD"]).toString("utf8").trim();
+      if (!full40(head) || clearance.value.request.worker_head !== head || clearance.value.request.patch_sha256 !== digest(Buffer.from(patch))) continue;
+      requireHookDependencies();
       eligible.push(String(row.id));
     } catch (e) { if (!(e instanceof Refusal)) throw e; }
   }
@@ -451,6 +476,7 @@ function safePath(file) {
 }
 
 function ordinaryHooks(wt, repo) {
+  requireHookDependencies();
   if (SELF_TEST_SCANNER) return []; // Only the unexported synthetic fixture sets this.
   rejectExecutableLocalConfig(repo);
   for (const args of [["remote", "get-url", "origin"], ["remote", "get-url", "--push", "origin"]]) {
@@ -709,10 +735,10 @@ export async function run({ job, db = DEFAULT_DB, repo = REPO, publish = false, 
     if (actualRemote.length !== 2 || actualRemote[0] !== publishedHead || actualRemote[1] !== `refs/heads/${branch}`) refuse("pushed branch identity is unknown; exact readback required, no replay");
     const bf = join(scratch, "body.md");
     writeFileSync(bf, body);
-    const gh = spawnSync("gh", ["pr", "create", "--base", BASE, "--head", branch, "--title", prTitle, "--body-file", bf], { cwd: repo, encoding: "utf8", env: gitEnv(), timeout: 120000, killSignal: "SIGKILL", maxBuffer: 1 << 20 });
+    const gh = spawnSync("gh", ["pr", "create", "--repo", "github.com/DanFashauer/SignalGrid-Review-Hub", "--base", BASE, "--head", branch, "--title", prTitle, "--body-file", bf], { cwd: repo, encoding: "utf8", env: ghEnv(), timeout: 120000, killSignal: "SIGKILL", maxBuffer: 1 << 20 });
     if (gh.status !== 0) throw new Error(`pushed ${branch}, but gh pr create failed: ${(gh.stderr || gh.error?.message || "").trim()}`);
     const prUrl = gh.stdout.trim();
-    if (!/^https:\/\/[^\s]+$/.test(prUrl) || PRIVATE.test(prUrl)) refuse("created PR URL is unknown; exact readback required, no replay");
+    if (!/^https:\/\/github\.com\/DanFashauer\/SignalGrid-Review-Hub\/pull\/[1-9][0-9]*$/.test(prUrl)) refuse("created PR URL is outside the canonical repository; exact readback required, no replay");
     const facts = { format: "signalgrid-publication-facts/v1", job, branch, base: BASE, replayBase, publishedHead, publishedTree, files: artifact.files, pushed: true, prUrl };
     log(prUrl);
     log(FACTS_MARKER + JSON.stringify(facts));
@@ -795,6 +821,10 @@ process.exit(finding ? 2 : 0);
     mkdirSync(trustedGitHome, { mode: 0o700 });
     writeFileSync(join(trustedGitHome, ".gitconfig"), "", { mode: 0o400 });
     scannerFixture.gitHome = trustedGitHome;
+    const trustedHookBin = join(realpathSync(root), "trusted-hook-bin");
+    mkdirSync(trustedHookBin, { mode: 0o700 });
+    writeFileSync(join(trustedHookBin, "pnpm"), `#!${process.execPath}\nprocess.exit(0);\n`, { mode: 0o500 });
+    scannerFixture.toolPath = trustedHookBin + ":" + TOOL_PATH;
     const privacyRoot = join(realpathSync(root), "privacy-clearances");
     mkdirSync(privacyRoot, { mode: 0o700 });
     scannerFixture.privacyRoot = privacyRoot;
@@ -935,7 +965,7 @@ process.exit(finding ? 2 : 0);
 
     const unverifiedFinish = "SYNTHETIC_UNVERIFIED_TEST_GATE_LINK_FINISH: all checks and reviews passed; link was added.";
     const fixtureResult = (id) => JSON.stringify(id === "jdocs" ? unverifiedFinish : `result ${id}`);
-    const createdAt = (id) => id === "jreverse" ? "2026-11-06T17:10:00Z" : ["jdocs", "junreviewed", "jcancel", "bad/id"].includes(id) ? "2026-11-06T16:41:00Z" : "2026-11-05T01:00:00Z";
+    const createdAt = (id) => id === "jreverse" ? "2026-11-06T17:10:00Z" : ["jdocs", "junreviewed", "jcancel", "bad/id", "jstaleprivacy"].includes(id) ? "2026-11-06T16:41:00Z" : "2026-11-05T01:00:00Z";
     const db = join(root, "autonomy.sqlite3");
     const rows = [
       ["jdocs", "build", "review", wDocs], ["jagents", "build", "review", wAgents], ["jgate", "build", "review", wGate],
@@ -954,6 +984,7 @@ process.exit(finding ? 2 : 0);
       ["jstaleprivacy", "build", "review", wStalePrivacy],
       ["jmetadata", "build", "review", wDocs],
       ["jcallerhome", "build", "review", wDocs],
+      ["jforeignurl", "build", "review", wDocs],
     ];
     if (isBuiltin("node:sqlite")) {
       const { DatabaseSync } = await import("node:sqlite");
@@ -1002,6 +1033,15 @@ process.exit(finding ? 2 : 0);
       "synthetic-import-probe-not-a-module", fileURLToPath(import.meta.url), db, canonical], { env: sshEnv, encoding: "utf8", timeout: 30000 });
     if (sshProbe.status !== 0 || existsSync(sshMarker)) console.error("Synthetic SSH boundary: " + JSON.stringify({ status: sshProbe.status, marker_executed: existsSync(sshMarker), import_refused: sshProbe.stdout.trim() === "BOUNDARY_REFUSED", timed_out: !!sshProbe.error }));
     check("(security) production publish refuses before caller HOME can execute SSH", sshProbe.status === 0 && sshProbe.stdout.trim() === "BOUNDARY_REFUSED" && !existsSync(sshMarker));
+
+    const missingTools = join(root, "missing-hook-tools");
+    mkdirSync(missingTools);
+    const normalTools = scannerFixture.toolPath;
+    let missingHookRefused = false;
+    try { scannerFixture.toolPath = missingTools; ordinaryHooks(repo, repo); }
+    catch (e) { missingHookRefused = e instanceof Refusal; }
+    finally { scannerFixture.toolPath = normalTools; }
+    check("(security) missing mandatory pnpm refuses instead of accepting a skipped hook", missingHookRefused);
 
     // (1) dry run of a clean docs job
     const r1 = await run({ job: "jdocs", db, repo, log: quiet });
@@ -1086,20 +1126,22 @@ fs.unlinkSync("synthetic-history-secret.txt"); git("add","-u","--","synthetic-hi
     const listed = await listReview(db);
     check("(*) --list-review names every review build with a worktree and no queued job", listed.includes("jdocs") && listed.includes("jagents") && listed.includes("jempty") && !listed.includes("jqueued"));
     // (6) publish with a stubbed gh
-    const bin = join(root, "bin"), ghLog = join(root, "gh.log"), ghBody = join(root, "actual-gh-body.md");
+    const bin = join(root, "bin"), ghLog = join(root, "gh.log"), ghBody = join(root, "actual-gh-body.md"), ghContext = join(root, "gh-context.json"), ghReply = join(root, "gh-reply.txt");
     mkdirSync(bin);
+    writeFileSync(ghReply, "https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/999999\n");
     writeFileSync(join(bin, "gh"), `#!${process.execPath}
 const fs = require("node:fs");
 const args = process.argv.slice(2);
 fs.appendFileSync(${JSON.stringify(ghLog)}, args.join(" ") + "\\n");
+fs.writeFileSync(${JSON.stringify(ghContext)}, JSON.stringify(Object.fromEntries(["GH_HOST","GH_REPO","GH_CONFIG_DIR"].map(k=>[k,process.env[k]??null]))));
 const at = args.indexOf("--body-file");
 if (at < 0 || !args[at + 1]) process.exit(2);
 fs.copyFileSync(args[at + 1], ${JSON.stringify(ghBody)});
-console.log("https://example.invalid/pr/1");
+console.log(fs.readFileSync(${JSON.stringify(ghReply)},"utf8").trim());
 `);
     chmodSync(join(bin, "gh"), 0o755);
     process.env.PATH = `${bin}:${process.env.PATH}`;
-    scannerFixture.toolPath = process.env.PATH; // Explicit trusted fixture executable, never a production override.
+    scannerFixture.toolPath = bin + ":" + trustedHookBin + ":" + TOOL_PATH; // Fixture only; production has no override.
     const ghCalls = () => (existsSync(ghLog) ? readFileSync(ghLog, "utf8").trim().split("\n").filter(Boolean) : []);
     // Exercise an ordinary pre-push hook against the bare fixture remote. Like
     // the repository's pnpm hook, it can load a root package-manager control.
@@ -1115,7 +1157,16 @@ console.log("https://example.invalid/pr/1");
     await refused("(security) worker package configuration refused before ordinary hook", { job: "jconfig", db, repo, publish: true }, "unsafe publication path");
     check("(security) worker configuration never executed", !existsSync(configMarker));
     check("(security) refused package configuration has no remote branch", scratchGitOk(repo, ["ls-remote", "origin", "refs/heads/brain/job-jconfig"]) === "");
-    const r6 = await run({ job: "jdocs", db, repo, publish: true, log: quiet });
+    const routedKeys = ["GH_HOST", "GH_REPO", "GH_CONFIG_DIR"], priorRouting = Object.fromEntries(routedKeys.map(k=>[k,process.env[k]]));
+    let r6;
+    try {
+      process.env.GH_HOST = "synthetic-enterprise.invalid";
+      process.env.GH_REPO = "synthetic-enterprise.invalid/other/project";
+      process.env.GH_CONFIG_DIR = join(root, "caller-gh-config");
+      r6 = await run({ job: "jdocs", db, repo, publish: true, log: quiet });
+    } finally { for (const key of routedKeys) if (priorRouting[key] === undefined) delete process.env[key]; else process.env[key] = priorRouting[key]; }
+    const routed = JSON.parse(readFileSync(ghContext, "utf8"));
+    check("(security) gh create is bound to the canonical repository and trusted configuration", ghCalls()[0]?.includes("--repo github.com/DanFashauer/SignalGrid-Review-Hub") && routed.GH_HOST === "github.com" && routed.GH_REPO === "github.com/DanFashauer/SignalGrid-Review-Hub" && routed.GH_CONFIG_DIR === join(trustedGitHome, ".config", "gh"));
     check("(security) legitimate public publish retained ordinary pre-push hook", existsSync(hookMarker));
     GIT_EXTRA = fixtureHookGit;
     delete process.env.SYNTHETIC_CONFIG_MARKER;
@@ -1142,6 +1193,7 @@ console.log("https://example.invalid/pr/1");
     try { await run({ job: "jstaleprivacy", db, repo, publish: true, log: quiet }); }
     catch (e) { staleBlocked = e instanceof Refusal; }
     check("(privacy) changed artifact invalidates prior privacy clearance before push", staleBlocked && scratchGitOk(repo, ["ls-remote", "origin", "refs/heads/brain/job-jstaleprivacy"]) === "");
+    check("(privacy) automatic selection checks current worker patch before remote preflight", !(await listReview(db, { notBefore: "2026-11-06T16:40:00Z" })).includes("jstaleprivacy"));
     const metadata = await run({ job: "jmetadata", db, repo, log: quiet });
     const wrongBody = metadata.privacyRequest ? JSON.parse(JSON.stringify(metadata.privacyRequest)) : undefined;
     if (wrongBody) wrongBody.exports = wrongBody.exports.map((item) => item.source === "metadata/body.md" ? { ...item, sha256: "0".repeat(64) } : item);
@@ -1150,6 +1202,13 @@ console.log("https://example.invalid/pr/1");
     try { await run({ job: "jmetadata", db, repo, publish: true, log: quiet }); }
     catch (e) { metadataBlocked = e instanceof Refusal; }
     check("(privacy) mismatched public metadata clearance refuses before push", metadataBlocked && scratchGitOk(repo, ["ls-remote", "origin", "refs/heads/brain/job-jmetadata"]) === "");
+    const foreign = await run({ job: "jforeignurl", db, repo, log: quiet });
+    grantFixturePrivacy("jforeignurl", foreign.privacyRequest);
+    writeFileSync(ghReply, "https://synthetic-enterprise.invalid/other/project/pull/1\n");
+    let foreignRefused = false;
+    try { await run({ job: "jforeignurl", db, repo, publish: true, log: quiet }); }
+    catch (e) { foreignRefused = e instanceof Refusal; }
+    check("(security) a returned PR URL outside the canonical repository is refused", foreignRefused);
     check("(*) no scratch worktrees left registered", scratchGitOk(repo, ["worktree", "list"]).split("\n").length === 1);
     check("(auto) real export crossed synthetic external scanner boundary", scannerFixture.calls >= 4);
   } finally { SELF_TEST_SCANNER = null; rmSync(root, { recursive: true, force: true }); }

@@ -34,10 +34,13 @@ a = sys.argv[1:]
 root = Path(os.environ["SG_TEST_ROOT"])
 cfg = json.loads((root/"fixture.json").read_text())
 if "--list-review" in a:
+    counter=root/"listing-count"
+    count=int(counter.read_text())+1 if counter.exists() else 1
+    counter.write_text(str(count))
     if cfg.get("list_error"):
         print("PRIVATE_SYNTHETIC /Users/fixture/private-db", file=sys.stderr)
         sys.exit(42)
-    print("\n".join(cfg.get("jobs", ["freshA"])))
+    print("\n".join([] if cfg.get("stale_on_preflight") and count>1 else cfg.get("jobs", ["freshA"])))
     sys.exit(0)
 if "--job" not in a or "--publish" not in a:
     print("Fixture refuses an unrecognized node action", file=sys.stderr)
@@ -89,7 +92,10 @@ r=Path(os.environ["SG_TEST_ROOT"])
 cfg=json.loads((r/"fixture.json").read_text())
 a=sys.argv[1:]
 with (r/"get-calls.jsonl").open("a") as f: f.write(json.dumps(a)+"\n")
+with (r/"client-context.jsonl").open("a") as f:
+    f.write(json.dumps({"client":"gh","argv":a,"env":{k:os.environ.get(k) for k in ["GIT_SSH_COMMAND","GH_HOST","GH_REPO","GH_CONFIG_DIR"]}})+"\n")
 with (r/"host-events").open("a") as f: f.write("metadata\n")
+if a[:3]==["api","--hostname","github.com"]: a=["api"]+a[3:]
 if len(a)!=4 or a[:3]!=["api","--method","GET"]:
     print("fixture refuses mutating/unknown GitHub action",file=sys.stderr); sys.exit(98)
 endpoint=a[3]
@@ -137,10 +143,20 @@ import os,sys
 from pathlib import Path
 r=Path(os.environ["SG_TEST_ROOT"])
 with (r/"git-calls.log").open("a") as f: f.write(repr(sys.argv[1:])+"\n")
+with (r/"client-context.jsonl").open("a") as f:
+    import json
+    f.write(json.dumps({"client":"git","argv":sys.argv[1:],"env":{k:os.environ.get(k) for k in ["GIT_SSH_COMMAND","GIT_CONFIG_GLOBAL","HOME"]}})+"\n")
 a=sys.argv[1:]
 if any(x in a for x in ["push","fetch","commit","checkout","worktree","add","reset","clean"]):
     print("fixture refuses unexpected Git mutation",file=sys.stderr);sys.exit(98)
-if "ls-remote" in a:
+if "config" in a:
+    import json
+    cfg=json.loads((r/"fixture.json").read_text())
+    if "--list" in a:
+        print("remote.origin.url\ngit@github.com:DanFashauer/SignalGrid-Review-Hub.git\0"+("core.sshcommand\nsynthetic-worker-command\0" if cfg.get("unsafe_local_config") else ""),end="")
+    elif "remote.origin.url" in a: print("git@github.com:DanFashauer/SignalGrid-Review-Hub.git")
+    else: sys.exit(98)
+elif "ls-remote" in a:
     import json
     cfg=json.loads((r/"fixture.json").read_text())
     ref=a[-1]
@@ -182,6 +198,7 @@ class TickAutoPublishRegression(unittest.TestCase):
         self.cfg={"jobs":["freshA"]}
         self.cap="1"
         self.host_busy=False
+        self.extra_env={}
     def tearDown(self):
         self.tmp.cleanup()
     def write_activation(self):
@@ -233,13 +250,17 @@ sg_host_verify_acquire() {
 sg_host_verify_release() { printf 'release\\n' >> "$SG_TEST_ROOT/host-events"; SG_VERIFY_LOCK_HELD=0; }
 """
         wrapper += source[a:b] + '\nprintf "__RESULT__%s\\n" "$RESULT"\n'
+        # Only the extracted test copy substitutes account/tool transport seams.
+        # Production has no environment override for these trusted functions.
+        wrapper=wrapper.replace("try:\n    need(MODE in", "if 'trusted_client' in globals():\n    trusted_client = lambda name: str(Path(os.environ['SG_TEST_ROOT'])/'bin'/name)\n    account_home = lambda: Path(os.environ['SG_TEST_TRUSTED_HOME'])\ntry:\n    need(MODE in")
         # Scale only the isolated test copy's publication timeout. No production
         # environment flag or model/queue cap is changed or introduced.
         if self.cfg.get("hang_publish"):
             wrapper=wrapper.replace("PUBLICATION_TIMEOUT_SEC = 600", "PUBLICATION_TIMEOUT_SEC = 0.25")
         env={**os.environ,"HOME":str(self.home),"PATH":str(self.bin)+os.pathsep+os.environ["PATH"],
-             "SG_TEST_ROOT":str(self.root),"SG_TEST_HOST_BUSY":"1" if self.host_busy else "0",
+             "SG_TEST_ROOT":str(self.root),"SG_TEST_TRUSTED_HOME":str(self.home),"SG_TEST_HOST_BUSY":"1" if self.host_busy else "0",
              "SIGNALGRID_PUBLISH_MAX":self.cap,"SIGNALGRID_BRAIN_PUBLICATION_STATE":str(self.state)}
+        env.update(self.extra_env)
         p=subprocess.run(["/bin/bash","-c",wrapper],cwd=self.work,env=env,capture_output=True,text=True,timeout=20)
         self.assertEqual(p.returncode,0,p.stderr)
         return p.stdout,p.stderr
@@ -434,6 +455,45 @@ sg_host_verify_release() { printf 'release\\n' >> "$SG_TEST_ROOT/host-events"; S
         self.assertEqual(self.calls(),[])
         self.assertIn("custody incomplete",out.split("__RESULT__")[-1])
         self.assertFalse((self.state/"attempts/freshA/intent.json").exists())
+
+    def test_stale_source_refuses_before_any_remote_metadata(self):
+        self.cfg["stale_on_preflight"]=True
+        self.run_step()
+        self.assertEqual(self.calls(),[],"a no-longer-eligible source must not start publication")
+        self.assertEqual(self.jsonlines("get-calls.jsonl"),[],"no GitHub query before current clearance")
+        self.assertFalse((self.root/"git-calls.log").exists(),"no Git query before current clearance")
+
+    def test_caller_git_and_gh_routing_does_not_cross_client_boundary(self):
+        self.extra_env={"GIT_SSH_COMMAND":"synthetic-attacker-command","GIT_CONFIG_GLOBAL":"synthetic-attacker-config",
+                        "GH_HOST":"synthetic.invalid","GH_REPO":"synthetic.invalid/other/project","GH_CONFIG_DIR":"synthetic-attacker-gh"}
+        out,_=self.run_step()
+        self.assertIn("verified brain publication",out)
+        contexts=self.jsonlines("client-context.jsonl")
+        self.assertTrue(contexts)
+        for row in contexts:
+            self.assertIsNone(row["env"].get("GIT_SSH_COMMAND"),row)
+            if row["client"]=="gh":
+                self.assertEqual(row["env"]["GH_HOST"],"github.com")
+                self.assertEqual(row["env"]["GH_REPO"],"github.com/DanFashauer/SignalGrid-Review-Hub")
+                self.assertEqual(row["env"]["GH_CONFIG_DIR"],str(self.home/".config/gh"))
+                self.assertEqual(row["argv"][:3],["api","--hostname","github.com"])
+
+    def test_caller_path_cannot_replace_publication_git(self):
+        poisoned=self.root/"poisoned-bin";poisoned.mkdir()
+        marker=self.root/"caller-git-executed"
+        binary=poisoned/"git"
+        binary.write_text("#!/usr/bin/env python3\nfrom pathlib import Path\nPath("+repr(str(marker))+").write_text('executed')\nraise SystemExit(1)\n")
+        binary.chmod(0o700)
+        self.extra_env["PATH"]=str(poisoned)+os.pathsep+str(self.bin)+os.pathsep+os.environ["PATH"]
+        self.run_step()
+        self.assertFalse(marker.exists(),"the caller-selected executable actually ran")
+        self.assertEqual(len(self.calls()),1,"the trusted fixture transport remains usable")
+
+    def test_local_git_execution_config_refuses_before_publication(self):
+        self.cfg["unsafe_local_config"]=True
+        self.run_step()
+        self.assertEqual(self.calls(),[])
+        self.assertEqual(self.jsonlines("get-calls.jsonl"),[])
 
 if __name__=="__main__":
     unittest.main()

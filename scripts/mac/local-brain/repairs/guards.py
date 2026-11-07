@@ -84,9 +84,13 @@ GUARDS = {
         "present": (re.compile(r"cap = 600 if timeout is None else min\(600, timeout\)"),
                     re.compile(r"not 0 < cap <= 600:"),
                     re.compile(r"remaining = 600 if deadline is None else min\(600, deadline - time\.monotonic\(\)\)")),
+        # Three independent anchors (Codex review of 49520c3c9, P2): a partial install with the assignment
+        # already at 600 and the validator still at 180 must be repairable, so no anchor ties two sites together.
         "patch": [
-            (re.compile(r"cap = (\d+) if timeout is None else min\(\1, timeout\)\n(\s+)if not isinstance\(cap, \(int, float\)\) or isinstance\(cap, bool\) or not 0 < cap <= \1:"),
-             "cap = 600 if timeout is None else min(600, timeout)\n\\2if not isinstance(cap, (int, float)) or isinstance(cap, bool) or not 0 < cap <= 600:"),
+            (re.compile(r"cap = (\d+) if timeout is None else min\(\1, timeout\)"),
+             "cap = 600 if timeout is None else min(600, timeout)"),
+            (re.compile(r"if not isinstance\(cap, \(int, float\)\) or isinstance\(cap, bool\) or not 0 < cap <= (\d+):"),
+             "if not isinstance(cap, (int, float)) or isinstance(cap, bool) or not 0 < cap <= 600:"),
             (re.compile(r"remaining = (\d+) if deadline is None else min\(\1, deadline - time\.monotonic\(\)\)"),
              "remaining = 600 if deadline is None else min(600, deadline - time.monotonic())"),
         ],
@@ -368,6 +372,10 @@ def self_test():
            not present(partial_brain, GUARDS["call_cap_600"]))
         ok("(1c) a partially repaired runtime (job budget raised, strict review not) is still MISSING",
            not present(partial_runtime, GUARDS["job_budget_1800"]))
+        # Codex review of 49520c3c9 (P2): detecting a partial install is not enough; it must be REPAIRABLE.
+        ok("(1d) patch_text repairs the partially repaired brain and runtime to every site",
+           present(patch_text(partial_brain, GUARDS["call_cap_600"]), GUARDS["call_cap_600"])
+           and present(patch_text(partial_runtime, GUARDS["job_budget_1800"]), GUARDS["job_budget_1800"]))
         original_scope_mode = scope.stat().st_mode & 0o777
         rec = apply(home, "self-test", run_tests=False, say=quiet)
         ok("(2) --apply restored every guard", rec is not None and sorted(rec["restored"]) == sorted(GUARDS))

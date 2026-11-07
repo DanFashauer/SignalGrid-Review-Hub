@@ -141,6 +141,8 @@ export default function AccessSupport() {
             <div key={s.id} className="bg-card border border-border rounded-xl overflow-hidden">
               <button
                 onClick={() => setOpenId(open ? null : s.id)}
+                aria-label={`Scenario: ${s.device}, ${s.outcome}, ${s.worker} · ${s.workflow}`}
+                aria-expanded={open}
                 className="w-full flex items-center justify-between p-4 text-left active:scale-[0.99] transition-transform"
               >
                 <div className="min-w-0">

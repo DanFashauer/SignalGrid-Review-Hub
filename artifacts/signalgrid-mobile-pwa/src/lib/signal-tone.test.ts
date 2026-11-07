@@ -32,6 +32,15 @@ test("the unknown tone is visibly unknown, never the old neutral grey", () => {
   assert.doesNotMatch(UNKNOWN_SIGNAL_TONE, /\b(?:text|bg|border)-(?:zinc|slate|gray|neutral|stone)-/);
 });
 
+test("a non-string type renders as unknown instead of throwing", () => {
+  for (const v of [undefined, null, 7, {}]) {
+    const b = signalBadge(v);
+    assert.equal(b.known, false, String(v));
+    assert.equal(b.tone, UNKNOWN_SIGNAL_TONE, String(v));
+    assert.equal(b.label, "unknown", String(v));
+  }
+});
+
 test("labels replace every hyphen, not just the first", () => {
   assert.equal(signalBadge("operational-signals").label, "operational signals");
 });

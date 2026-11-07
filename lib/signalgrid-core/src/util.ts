@@ -182,6 +182,112 @@ export function parseObservedInstant(observedAt: string): number {
 }
 
 /**
+ * THE PRE-STRICT READING, made deterministic (round 5 of the #1792/#1809 review, 2026-11-07).
+ *
+ * Before `parseObservedInstant` the core read every stamp with `Date.parse`. That reader is what mainline still
+ * runs, and the owner's rule for this change is that no verdict may come out MILDER than it. Earlier rounds kept
+ * a narrower re-implementation of it (offset-less and date-only stamps read as UTC) and Codex found the stamps it
+ * missed, one shape at a time: RFC 2822 text such as "Tue, 14 Jul 2026 13:00:00 GMT" parsed under `Date.parse`,
+ * was rejected by the strict reader AND by the re-implementation, and its "unknown" age was lost. So this does not
+ * re-implement the old reader: it CALLS it, and only decides how much of its answer depends on the host's zone.
+ *
+ *   fixed      `Date.parse` names one instant on every host: ECMA-262's own format with a zone, its date-only
+ *              forms (which ECMA-262 reads as UTC), and legacy text that ends in a clock time and an explicit zone
+ *              ("…13:00:00 GMT", "…+0900", "…GMT+0900 (Japan Standard Time)"). A stamp `Date.parse` rejects is
+ *              fixed at the STRICT reading: owner decision (c), 2026-11-06 (an exact ±HH stamp mainline could not
+ *              parse is read correctly now), and NaN when neither reader can place it.
+ *   floating   `Date.parse` reads it as HOST-LOCAL wall time: ECMA-262's format with no zone, and legacy text built
+ *              only from digits, separators, month and weekday names and AM/PM. Its instant on a host at UTC
+ *              offset `o` is `wall - o`; `wall` is `Date.parse` of the same text with an explicit UTC zone appended,
+ *              so it does not depend on this process's zone either.
+ *   ambiguous  everything else `Date.parse` accepts (legacy text with a zone word this file does not recognise,
+ *              a stray sign, an unknown word). The core does not guess where those land; `buildEvidence` gives the
+ *              families that carry one every value they could read and the policy bounds the answer instead.
+ *
+ * Measured, not assumed: `proof:evidence-observedat-tz` runs every classified shape of a generated corpus in child
+ * processes under ten zones (UTC, Asia/Tokyo, America/Los_Angeles, Asia/Kolkata, Pacific/Kiritimati, Etc/GMT+12,
+ * Australia/Lord_Howe, America/St_Johns, Asia/Kathmandu, Europe/London) and fails if a `fixed` stamp moves with the
+ * zone or a `floating` one is not `wall` minus that zone's offset.
+ */
+export type PreStrictStamp =
+  | { readonly kind: "fixed"; readonly at: number }
+  | { readonly kind: "floating"; readonly wall: number }
+  | { readonly kind: "ambiguous" };
+
+const ES_FIXED = /^(?:\d{4}|[+-]\d{6})(?:-\d{2}(?:-\d{2})?)?(?:[Tt]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:[Zz]|[+-]\d{2}:?\d{2}))?$/;
+const ES_LOCAL = /^(?:\d{4}|[+-]\d{6})(?:-\d{2}(?:-\d{2})?)?[Tt]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?$/;
+const LEGACY_ZONED = /\d:\d{2}(?::\d{2}(?:\.\d+)?)?\s*(?:(?:GMT|UTC|UT|Z|[ECMP][SD]T)(?:[+-]\d{2}:?\d{2})?|[+-]\d{2}:?\d{2})(?:\s*\([^()]*\))?$/i;
+const LEGACY_LOCAL_CHARS = /^[0-9A-Za-z ,./:-]+$/;
+const LEGACY_LOCAL_WORDS = new Set([
+  "jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec",
+  "january", "february", "march", "april", "june", "july", "august", "september", "october", "november", "december",
+  "mon", "tue", "wed", "thu", "fri", "sat", "sun",
+  "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday",
+  "am", "pm",
+]);
+
+function isLegacyLocal(observedAt: string): boolean {
+  if (!LEGACY_LOCAL_CHARS.test(observedAt)) return false;
+  // A sign after the date part is an offset to `Date.parse` ("08:00-07"), so it is not host-local text.
+  if (/[\s:].*-/.test(observedAt)) return false;
+  for (const word of observedAt.toLowerCase().match(/[a-z]+/g) ?? []) {
+    if (!LEGACY_LOCAL_WORDS.has(word)) return false;
+  }
+  return true;
+}
+
+/**
+ * How the pre-strict reader (`Date.parse`) placed this stamp, independent of this process's zone, and whether the
+ * strict reader places it at the same instant (`agrees`: both readers name the same instant, or neither names one).
+ * A pure function of the text, so it is memoised (bounded: cleared when full; no clock, no host zone).
+ */
+export function preStrictReading(observedAt: string): { readonly stamp: PreStrictStamp; readonly agrees: boolean } {
+  const hit = PRE_STRICT_MEMO.get(observedAt);
+  if (hit !== undefined) return hit;
+  const stamp = classifyPreStrict(observedAt);
+  const reading = { stamp, agrees: stamp.kind === "fixed" && Object.is(stamp.at, parseObservedInstant(observedAt)) };
+  if (PRE_STRICT_MEMO.size >= 4096) PRE_STRICT_MEMO.clear();
+  PRE_STRICT_MEMO.set(observedAt, reading);
+  return reading;
+}
+const PRE_STRICT_MEMO = new Map<string, { readonly stamp: PreStrictStamp; readonly agrees: boolean }>();
+
+/** How the pre-strict reader (`Date.parse`) placed this stamp, independent of this process's zone. */
+export function preStrictStamp(observedAt: string): PreStrictStamp {
+  return preStrictReading(observedAt).stamp;
+}
+
+function classifyPreStrict(observedAt: string): PreStrictStamp {
+  const legacy = Date.parse(observedAt);
+  if (Number.isNaN(legacy)) return { kind: "fixed", at: parseObservedInstant(observedAt) };
+  if (ES_FIXED.test(observedAt) || LEGACY_ZONED.test(observedAt)) return { kind: "fixed", at: legacy };
+  const wall = ES_LOCAL.test(observedAt)
+    ? Date.parse(`${observedAt}Z`)
+    : isLegacyLocal(observedAt)
+      ? Date.parse(`${observedAt} GMT`)
+      : Number.NaN;
+  // Before 1973 some zones still ran at offsets off the quarter-hour grid below (local mean time, Liberia's
+  // −0:44:30 until 1972), so an older host-local stamp is not placed on the grid either.
+  return Number.isNaN(wall) || wall < FLOATING_FROM ? { kind: "ambiguous" } : { kind: "floating", wall };
+}
+
+/** 1973-01-01T00:00:00Z: from here every zone in the tz database sits on the quarter-hour grid. */
+const FLOATING_FROM = 94_694_400_000;
+
+/**
+ * Every whole-quarter-hour UTC offset a host can run at, −12:00 to +14:00, in minutes east of UTC. A floating
+ * stamp is placed once per offset; every zone in use today sits on this grid.
+ */
+export const PRE_STRICT_HOST_OFFSETS_MINUTES: readonly number[] = Array.from({ length: (14 * 60 + 12 * 60) / 15 + 1 }, (_, i) => -12 * 60 + i * 15);
+
+/** The instant the pre-strict reader gave this stamp on a host at `offsetMinutes` east of UTC (NaN: none, or ambiguous). */
+export function preStrictInstantAt(stamp: PreStrictStamp, offsetMinutes: number): number {
+  if (stamp.kind === "fixed") return stamp.at;
+  if (stamp.kind === "floating") return stamp.wall - offsetMinutes * 60_000;
+  return Number.NaN;
+}
+
+/**
  * Classify posture freshness from an observation time relative to the
  * evaluation clock. Fail-safe: unpariseable or future timestamps are "unknown",
  * never "fresh".
@@ -191,14 +297,17 @@ export function classifyFreshness(
   nowIso: string,
   freshWindowHours: number,
   staleWindowHours: number,
+  // The reader that places both stamps. The strict one by default; `buildEvidence` passes the PRE-STRICT reading
+  // for one modelled host (`preStrictInstantAt`) when it re-derives the answer the pre-strict reader gave.
+  instantOf: (iso: string) => number = parseObservedInstant,
 ): Freshness {
   if (!observedAtIso) {
     return "missing";
   }
   // An offset-less stamp is an unknown instant (parseObservedInstant), so it is "unknown" here too: reading it
   // host-local made the same dock feed fresh in one zone and stale in another.
-  const observedMs = parseObservedInstant(observedAtIso);
-  const nowMs = parseObservedInstant(nowIso);
+  const observedMs = instantOf(observedAtIso);
+  const nowMs = instantOf(nowIso);
   // freshness: local-by-design — same rule, but this package cannot import @workspace/integrations without a new workspace dependency and a lockfile regeneration; folded copy pending that change — signalgrid-core is the BASE package with zero dependencies; the shared helper would have to move here, not be imported (tolerance 0, future reads `unknown`)
   if (Number.isNaN(observedMs) || Number.isNaN(nowMs) || observedMs > nowMs) {
     return "unknown";

@@ -501,6 +501,14 @@ export function simulateResolution(
       continue;
     }
     projected = { ...projected, ...descriptor.transform };
+    // A simulated fix resolves the WHOLE family it sets, so the accusations retained for that family (owner
+    // decision (a)) are resolved with it; left in place they would re-accuse the projected evidence.
+    if (projected.retainedAccusations !== undefined) {
+      const remaining = { ...projected.retainedAccusations } as Record<string, unknown>;
+      for (const key of Object.keys(descriptor.transform)) delete remaining[key];
+      const { retainedAccusations: _resolved, ...rest } = projected;
+      projected = Object.keys(remaining).length === 0 ? rest : { ...rest, retainedAccusations: remaining as DecisionEvidence["retainedAccusations"] };
+    }
     if (!applied.includes(code)) {
       applied.push(code);
     }

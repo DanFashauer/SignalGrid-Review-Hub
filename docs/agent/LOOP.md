@@ -83,7 +83,14 @@ PREVIOUS LANDING: 2026-10-21 — #1577 24eff86a940099e0725d474d1d5520bfbc71d368 
 EARLIER LANDING: 2026-10-21 — #1576 b0a4568855ca2d2378698ba23e5ff867a7c6650b (2026-10-21T21:33:03Z), from exact head 418221363eea5dc66ff3eda7c21484247d03cfb9; required check 119486613085 completed success at 21:30:31Z; Mac check 119486610742 completed success at 21:25:12Z.
               Local preflight passed with two native web steps explicitly unavailable on the Mac; a separate clean-head Linux build and browser E2E passed 53/53; breadth 58/58; staged helper 243/243; local-brain primitives 41/41. Primary independent source reviews completed per the PR body; optional GitHub Codex review was still running at landing and at the 21:47Z read, with no completed verdict claimed. See the 2026-10-21 EVIDENCE entry. This records the worker integration, not a new readiness figure or owner attestation.
 HISTORICAL SNAPSHOT: the following October 16 LAST TOUCHED block, including its readiness and pending-re-mint statements, records that earlier window. The fresh October 21 receipt is CURRENT EVIDENCE above; no current readiness value is inferred from either entry.
-LAST TOUCHED: 2026-11-01 (cloud lane, 20:00Z) - TWELVE ITEM-6 CLAUDE/* PRs LANDED (#1240 #1222 #1215 #1320 #1230 #1280 #1309 #1330 #1443
+LAST TOUCHED: 2026-11-04 (cloud lane, 18:30Z) - #1442 REDONE AS #1792; HOST-TIMEZONE FIX EXTENDED IN TWO STACKED PRs. #1792
+              (claude/redo-1442-groupLatest-utc @ faa7d945, supersedes #1442, which is left open) makes groupLatest, classifyFreshness and
+              the accusation/posture folds read observedAt by stated instant; #1809 (@ e8dfb15d) does the same for attach, remediation
+              verification and fixedClock; #1811 (@ 4cca56a5) for the shared integrations freshness helper and Graph device posture.
+              proof:evidence-observedat-tz 56/56; all three owner-gated (DECISION_PATH), merge in order #1792 -> #1809 -> #1811. Open owner
+              calls on #1792: shipped-rule accusation tiers vs keep-all-until-policy; date-only stamps; future stamps (row 2646). #1807
+              (lane mail) raised the hand for the unacked OD01 mail; the Mac must ack it. lib/location host-local parses stay open.
+PREVIOUSLY:   2026-11-01 (cloud lane, 20:00Z) - TWELVE ITEM-6 CLAUDE/* PRs LANDED (#1240 #1222 #1215 #1320 #1230 #1280 #1309 #1330 #1443
               #1459 #1244 #1242; last merge a1f0c05a8341af0d0a3ff9940ff2c3ac8f3e9031) under the 2026-11-01 standing order; the rest of item 6
               is the brain's (FIX-NEEDED verdicts posted on #1463, #1586, #1585; #1442/#1398 redo on fresh branches) or the owner's
               (hold list: #1337, #1338, #1307, #1314, #1321, #1190, #1133, row-91 hand). Mac PRs #1739 (self-recovery for #1698, five

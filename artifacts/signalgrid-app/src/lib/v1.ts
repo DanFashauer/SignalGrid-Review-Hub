@@ -9,6 +9,7 @@
  * The demo operator token is a public-safe fixture surfaced by `GET /api/v1/keys`
  * (see DEMO_KEYS in the api-server); it is not a real credential.
  */
+import { normalizeChain, type ChainVerdict } from "./auditChain";
 
 const DEMO_OPERATOR_TOKEN = "sgk_demo_northwind_operator";
 
@@ -188,8 +189,8 @@ export async function getEvidenceV1(id: string): Promise<{ evidence: V1EvidenceS
 // widening the operator role — RBAC demonstrated, not weakened.
 const DEMO_AUDITOR_TOKEN = "sgk_demo_northwind_auditor";
 
-export async function getAuditV1(): Promise<{ events: V1AuditEvent[]; chain: V1ChainVerification }> {
-  return v1<{ events: V1AuditEvent[]; chain: V1ChainVerification }>(`/api/v1/audit`, { method: "GET" }, DEMO_AUDITOR_TOKEN);
+export async function getAuditV1(): Promise<{ events: V1AuditEvent[]; chain: ChainVerdict }> {
+  const r = await v1<{ events: V1AuditEvent[]; chain: unknown }>(`/api/v1/audit`, { method: "GET" }, DEMO_AUDITOR_TOKEN); return { ...r, chain: normalizeChain(r.chain) };
 }
 
 export async function getContextV1(): Promise<{ assurance: V1Assurance }> {

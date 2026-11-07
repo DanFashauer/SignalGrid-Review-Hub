@@ -228,10 +228,38 @@ function clockFor(iso: string): string {
   try { return fixedClock(iso).now().toISOString(); } catch { return "THROWS"; }
 }
 
+/**
+ * OWNER DECISION (a), 2026-11-06: KEEP BOTH. Two different accusations about one subject at the same instant (or
+ * one whose stamp cannot be read) both reach the policy. A TENANT policy that ranks the members differently from
+ * the shipped rules (it denies the MILDER one and has no rule for the stronger) must still see the milder one.
+ * `shape`: "tie" = both at 12:00Z; "illegible" = the milder one has an offset-less stamp, the stronger is at 12:00Z.
+ * Returns `<outcome>|<reasonCodes>` under the tenant policy, then `<outcome>` under the shipped rules.
+ */
+function tenantFor(category: SignalCategory, milder: string, stronger: string, shape: string, order: string): string {
+  const field = category === "tamper_state" ? "tamperState" : category === "custody_state" ? "custodyState" : "badgeState";
+  const milderAt = shape === "illegible" ? "2026-07-13T12:00:00" : "2026-07-13T12:00:00.000Z";
+  const a = sig("s_milder", category, milder, milderAt);
+  const b = sig("s_stronger", category, stronger, "2026-07-13T12:00:00.000Z");
+  const signals = [...(order === "milder-first" ? [a, b] : [b, a]), sig("s_c", "device_compliance", "compliant", BASE), ...healthy()];
+  const ev = buildEvidence(identity, device, workflow, signals);
+  const tenant = {
+    id: "pv_tenant", tenantId: "tenant_northwind", policyId: "pol_tenant", version: 7, status: "active" as const,
+    createdAt: BASE, digest: "test",
+    rules: [
+      { id: "tenant-milder-deny", description: "this tenant denies the milder member", match: [{ field, in: [milder] }], outcome: "deny" as const, reasonCode: "TENANT_MILDER_DENY", severity: "high" as const },
+      { id: "tenant-managed-allow", description: "managed and compliant", match: [{ field: "deviceManaged", equals: true }, { field: "deviceCompliance", in: ["compliant"] }], outcome: "allow" as const, reasonCode: "TENANT_MANAGED_ALLOW", severity: "low" as const },
+    ],
+  } as unknown as Parameters<typeof evaluatePolicy>[0];
+  const shipped = { ...tenant, id: "pv_shipped", rules: SHARED_DEVICE_RULES_V1 } as Parameters<typeof evaluatePolicy>[0];
+  const t = evaluatePolicy(tenant, ev);
+  return `${t.outcome}|${t.reasonCodes.join("+")}|shipped=${evaluatePolicy(shipped, ev).outcome}`;
+}
+
 if (process.argv[2] === "--worker") {
   const [mode, a, b, c] = process.argv.slice(3);
   const out =
-    mode === "verdict" ? verdictFor(a!, b)
+    mode === "tenant" ? tenantFor(a as SignalCategory, b!, c!, process.argv[7]!, process.argv[8]!)
+    : mode === "verdict" ? verdictFor(a!, b)
     : mode === "accuse" ? accusationFor(a as "tamper_state" | "badge_binding", b!, c!, process.argv[7]!)
     : mode === "matrix" ? matrixFor(a!)
     : mode === "tie" ? tieFor(a as SignalCategory, b!, c!, process.argv[7]!)
@@ -297,14 +325,24 @@ check(
   explicitOff.join(","),
 );
 
-// Date-only is UTC by spec. 2026-07-13 = 00:00Z is LATER than a 2026-07-12T23:00Z accusation; read as host-local
-// midnight, Asia/Tokyo gives 2026-07-12T15:00Z, which is EARLIER, and the verdict flips.
+// OWNER DECISION (b), 2026-11-06: a date-only stamp is UNREADABLE. "2026-07-13" names a day, not an instant, so
+// it can neither vouch nor be ordered. It used to read as exact UTC midnight: a date-only "compliant" outranked a
+// 23:00Z accusation the day before and allowed, and (the refute on #1792) a date-only "non_compliant" lost to a
+// 07:30Z vouch the same day and allowed too.
 const dateOnly = ZONES.map((z) => inZone(z, "verdict", "2026-07-13", "2026-07-12T23:00:00Z"));
 check(
-  "date-only observedAt: parsed as UTC midnight (later than 23:00Z the day before), identically in every zone",
-  new Set(dateOnly).size === 1 && dateOnly[0]!.endsWith("|compliant"),
+  "date-only vouch is illegible: it cannot outrank a 23:00Z accusation the day before (never allow), identically in every zone",
+  new Set(dateOnly).size === 1 && dateOnly[0]!.endsWith("|non_compliant") && !dateOnly[0]!.startsWith("allow"),
   dateOnly.join(","),
 );
+const dateOnlyAccuse = ZONES.map((z) => inZone(z, "verdict", "2026-07-13T07:30:00Z", "2026-07-13"));
+check(
+  "date-only accusation is illegible but still accuses: a 07:30Z vouch the same day cannot erase it (never allow), identically in every zone",
+  new Set(dateOnlyAccuse).size === 1 && dateOnlyAccuse[0]!.endsWith("|non_compliant") && !dateOnlyAccuse[0]!.startsWith("allow"),
+  dateOnlyAccuse.join(","),
+);
+const dateOnlyFresh = ZONES.map((z) => inZone(z, "freshness", "2026-07-13"));
+check("classifyFreshness: a date-only stamp is 'unknown' (cannot vouch for freshness), in every zone", dateOnlyFresh.every((v) => v === "unknown"), dateOnlyFresh.join(","));
 
 // An offset-less NEWER accusation must still beat an OLDER one of lower severity, in every zone. Two accusing
 // values tie at the coarse severity level, so without a per-family order the older parseable one would stand.
@@ -409,8 +447,9 @@ for (const stamp of [
     r.join(","),
   );
 }
-// Control: the valid neighbours of those stamps still order by instant (2026-03-02 is a real, later date).
-for (const stamp of ["2026-03-02T08:00:00+00", "2026-03-02", "2024-02-29T08:00:00Z"]) {
+// Control: the valid neighbours of those stamps still order by instant (2026-03-02 is a real, later date). The
+// date-only "2026-03-02" left this list on 2026-11-06: owner decision (b) makes a date-only stamp illegible.
+for (const stamp of ["2026-03-02T08:00:00+00", "2026-03-02T00:00:00Z", "2024-02-29T08:00:00Z"]) {
   const accused = stamp.startsWith("2024") ? "2024-02-28T00:00:00Z" : "2026-03-01T00:00:00Z";
   const r = ZONES.map((z) => inZone(z, "verdict", stamp, accused));
   check(
@@ -555,6 +594,53 @@ for (const stamp of ["2026-03-02T08:00:00+00", "2026-03-02", "2024-02-29T08:00:0
         severity(timely) >= 0 && got.every((v) => severity(v) >= severity(timely)),
         got.join(","),
       );
+    }
+  }
+}
+
+// OWNER DECISION (a), 2026-11-06: KEEP BOTH accusations until the policy runs (the Codex P1 on #1442/#1792,
+// evidence.ts ~622). A tenant policy that denies the MILDER member and has no rule for the stronger one must
+// still deny, in either arrival order, whether the two tie on the instant or the milder one's stamp is
+// unreadable. The shipped rules must keep their own answer (the stronger member's).
+{
+  const CASES: ReadonlyArray<readonly [SignalCategory, string, string, string]> = [
+    // cross-tier: the shipped rules deny confirmed, restrict suspected; this tenant denies suspected only
+    ["tamper_state", "suspected", "confirmed", "deny"],
+    // cross-tier: the shipped rules deny forced, restrict removed; this tenant denies removed only
+    ["badge_binding", "removed", "forced", "deny"],
+    // same tier (the first arrival stood): this tenant denies maintenance, the shipped rules restrict both
+    ["custody_state", "maintenance", "overdue", "restrict"],
+  ];
+  // The bounds of the world enumeration, in-process (no zone involved). Unambiguous evidence carries no retained
+  // list (its snapshot is byte-identical to before); too many combinations never allow; a malformed list cannot
+  // loosen the base answer.
+  {
+    const ev = buildEvidence(identity, device, workflow, [sig("s_c", "device_compliance", "compliant", BASE), ...healthy()]);
+    const allowAll = {
+      id: "pv_allow", tenantId: "tenant_northwind", policyId: "pol_allow", version: 1, status: "active" as const, createdAt: BASE, digest: "test",
+      rules: [{ id: "managed-allow", description: "managed", match: [{ field: "deviceManaged", equals: true }], outcome: "allow" as const, reasonCode: "MANAGED_ALLOW", severity: "low" as const }],
+    } as unknown as Parameters<typeof evaluatePolicy>[0];
+    check("keep both: unambiguous evidence carries no retainedAccusations key", !("retainedAccusations" in ev));
+    const many = { ...ev, retainedAccusations: {
+      custodyState: ["overdue", "exception", "maintenance"], dockChargeState: ["low", "critical", "not_present"],
+      batteryHealth: ["degraded", "failing"], dockState: ["offline", "faulted"], baselineCompliance: ["partial", "drifted", "not_assessed"],
+    } } as unknown as typeof ev;
+    const truncated = evaluatePolicy(allowAll, many);
+    check("keep both: past the world cap the policy never allows (step_up ALLOW_SUPPRESSED_DEGRADED_EVIDENCE)",
+      truncated.outcome === "step_up" && truncated.reasonCodes.includes("ALLOW_SUPPRESSED_DEGRADED_EVIDENCE"), `${truncated.outcome}|${truncated.reasonCodes.join("+")}`);
+    const malformed = evaluatePolicy(allowAll, { ...ev, retainedAccusations: { tamperState: "confirmed" } } as unknown as typeof ev);
+    check("keep both: a malformed retained list is ignored, never loosening the base answer", malformed.outcome === evaluatePolicy(allowAll, ev).outcome, malformed.outcome);
+  }
+  for (const [category, milder, stronger, shippedOutcome] of CASES) {
+    for (const shape of ["tie", "illegible"]) {
+      for (const order of ["milder-first", "stronger-first"]) {
+        const r = ZONES.map((z) => inZone(z, "tenant", category, milder, stronger, shape, order));
+        check(
+          `keep both: ${category} ${milder}+${stronger} (${shape}, ${order}) reaches a tenant policy that denies '${milder}' -> deny TENANT_MILDER_DENY, shipped rules still ${shippedOutcome}, in every zone`,
+          r.every((v) => v.startsWith("deny|") && v.includes("TENANT_MILDER_DENY") && v.endsWith(`|shipped=${shippedOutcome}`)),
+          r.join(","),
+        );
+      }
     }
   }
 }

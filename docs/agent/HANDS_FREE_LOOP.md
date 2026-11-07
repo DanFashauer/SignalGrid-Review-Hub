@@ -17,7 +17,7 @@ It can only say that this repository holds no code for them.
 
 | # | Leg | Carried by | Owner | Runs today? | Evidence (2026-11-02) |
 | --- | --- | --- | --- | --- | --- |
-| 1 | GitHub → Obsidian | Not in this repo | Mac | **Not visible.** No tracked script reads or writes a vault. | `git grep -i obsidian -- scripts` returns only two comments: the gitignore rule for `.obsidian/` and the privacy line in `work-queue.mjs`. |
+| 1 | GitHub → Obsidian | Not in this repo | Mac | **Runs on the Mac.** A launchd job (com.signalgrid.knowledge-mirror) mirrors the registers every 15 minutes; its script is outside this repo by design. | `git grep -i obsidian -- scripts` returns only two comments: the gitignore rule for `.obsidian/` and the privacy line in `work-queue.mjs`. |
 | 2 | Obsidian → Mac local LLM (pick work) | `scripts/mac/local-brain/task-selector.mjs`, a pure function | Mac | **Selector only.** Nothing in the repo feeds it tasks or runs it. | Its only callers are its two test files and their preflight steps. |
 | 3 | Mac LLM → GitHub (claim, build, PR) | `scripts/work-queue.mjs` (claims), `scripts/mac/estate-queue.mjs` (refresh and close), `scripts/mac/lane-tick.sh` (runs it hourly) | Mac | **Partly.** The estate queue runs. The claim queue has never been used. | `git ls-remote origin 'refs/queue/*'` printed nothing: zero claims on the Hub. `work-queue.mjs list` shows every task `free`. |
 | 3a | Mac tick heartbeat → mainline | `lane-tick.sh`, which calls `lane-deliver heartbeat --no-wake` with a direct push | Mac | **Broken since 2026-10-24 07:30Z.** | The last heartbeat commit is `824328071` at 2026-10-24T03:30:41-04:00. The ruleset 25774497 rule `pull_request` now refuses direct pushes to mainline. The tick sends that failure to `/dev/null`, so the only trace is a WARN in its private log. The fix rides #1698: a heartbeat delivered by a protected PR. |
@@ -48,6 +48,44 @@ The owner, verbatim: "In any point of credit and or usage is up on any paid mode
 - Leg 4 has already hit this. On 2026-11-02 at 15:31Z, Codex's review of #1265 at `cc8cf974` ended with "You have reached your Codex usage limits for code reviews." Under this rule, the Mac runs that review through an OmniRoute-routed model and records which model and which head it read. Codex's own review resumes when its quota resets.
 - A review routed through OmniRoute is recorded as what it is: the model and the route, never as a Codex review. The work-queue rule that `merged` needs both reviews is unchanged.
 - The local LLM and the Obsidian brain may learn new skills to finish a job. A new skill lands as a reviewed PR like any other change, and vault content never enters the tree (rule 8).
+
+## Publishing a reviewed local build
+
+Use the [publisher source](../../scripts/mac/brain-proposal-pr.mjs) for one
+`kind=build`/`status=review` job in SignalGrid-Review-Hub. The script checks
+that the job's worktree exists and that its diff is nonempty. That the
+worktree is owned and the diff is public-safe are the caller's preconditions.
+
+Replace `<id>` with the reviewed job's ID.
+
+```bash
+node scripts/mac/brain-proposal-pr.mjs --job <id>
+node scripts/mac/brain-proposal-pr.mjs --job <id> --publish
+```
+
+The default dry run still fetches and prepares a scratch commit, but it prints
+only the job title, the file list and the classification; it does not show the
+diff or the job result, and it removes its scratch worktree. Before
+`--publish`, review the job worktree yourself (`git -C <worktree> diff HEAD`
+plus every untracked, non-ignored file, binaries included) and the job's title
+and result: the title becomes the PR title and the result is quoted verbatim
+in the PR body. Publishing pushes `brain/job-<id>` to the public origin and
+opens a PR before any secret-safety review, and a secret that reaches origin
+is compromised: rotate it and ask the owner before any branch deletion.
+
+The CLI refuses owner-reserved, safety-machinery, decision and governance
+paths, paths outside the repository, and a job whose title or result matches
+its private-path pattern (Mac home paths and the brain's directory names, a
+narrow denylist, not a scan); it does not scan the diff for private paths, and
+it does not certify arbitrary text as secret-free, run full preflight/breadth,
+perform independent reviews, or merge. Secret-safety review, full
+preflight/breadth and independent reviews remain separate requirements before
+Cloud DR-037 landing.
+
+With `--publish`, an existing branch means no push or PR creation. Read back an
+uncertain publish; never retry it. If the push succeeded but PR creation
+failed, a rerun does nothing: open the PR by hand with
+`gh pr create --base SignalGrid_Alpha --head brain/job-<id>`.
 
 ## Never
 

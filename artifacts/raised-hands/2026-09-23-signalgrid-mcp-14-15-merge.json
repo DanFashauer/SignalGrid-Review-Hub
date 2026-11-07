@@ -7,7 +7,10 @@
   "need": "the owner reviews and merges signalgrid-mcp #14 and #15",
   "whoCanUnblock": "owner",
   "domain": "lane",
-  "status": "open",
+  "status": "resolved",
   "routedTo": null,
-  "where": "DanFashauer/signalgrid-mcp #14, #15"
+  "where": "DanFashauer/signalgrid-mcp #14, #15",
+  "resolvedAt": "2026-11-06T10:03:10.065Z",
+  "resolvedBy": "cloud",
+  "resolution": "Both PRs are merged on signalgrid-mcp main: #14 merged 2026-10-01T04:36:23Z as 343339c4 (the MCP commit the 2026-10-21 live evidence already records as clean) and #15 merged 2026-10-27T02:43:30Z as e77b865b, both by the owner. Read from the GitHub API on 2026-11-06 after the owner widened this lane's GitHub access to read and write on all repositories; the hand's blocker (no repository access) is also gone - signalgrid-mcp is attached to the cloud session."
 }

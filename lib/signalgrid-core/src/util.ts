@@ -149,8 +149,12 @@ export function constantTimeEquals(a: string, b: string): boolean {
  *
  * Accepted, because each NAMES AN EXACT INSTANT: a date-time with a `T`, `t` or
  * space separator (RFC 3339 allows the space; Postgres timestamptz text uses it)
- * and a zone of `Z`, or `+HH:MM`, `+HHMM` (ISO 8601 basic) or `+HH`; and a
- * date-only form (UTC by spec). Every calendar and clock field must be a real
+ * and a zone of `Z`, or `+HH:MM`, `+HHMM` (ISO 8601 basic) or `+HH`. A DATE-ONLY
+ * stamp ("2026-07-13") is NaN: it names a day, not an instant (owner decision (b),
+ * 2026-11-06), so it cannot vouch for freshness, cannot be ordered against a
+ * timed reading, and cannot clear a restriction. `Date.parse` reads it as exact
+ * UTC midnight, which let a date-only "compliant" outrank a 23:00Z accusation the
+ * day before. Every calendar and clock field must be a real
  * value: `Date.parse` rolls "2026-02-30" over to March 2 and "24:00" to the next
  * day, so an impossible stamp is NaN instead of a different instant. The stamp
  * is rebuilt as the one ECMA-262 date-time format
@@ -163,9 +167,10 @@ export function parseObservedInstant(observedAt: string): number {
   const m = ZONED_STAMP.exec(observedAt);
   if (!m) return Number.NaN;
   const [, y, mo, d, hh, mi, ss, frac, z, sign, oh, om] = m;
-  const hasTime = hh !== undefined;
-  // A date-time needs a zone; a bare date is UTC by spec. A time with no zone is the host-local case.
-  if (hasTime && z === undefined && oh === undefined) return Number.NaN;
+  // A date-only stamp names a day, not an instant: illegible (owner decision (b), 2026-11-06).
+  if (hh === undefined) return Number.NaN;
+  // A date-time needs a zone. A time with no zone is the host-local case.
+  if (z === undefined && oh === undefined) return Number.NaN;
   // `Date.parse` rolls impossible values over ("2026-02-30" is March 2, "24:00" is the next day), so a reading
   // carrying one would be ordered as a different instant than the one it states. Require every field to
   // round-trip through the calendar; otherwise it names no instant and is illegible.
@@ -173,9 +178,8 @@ export function parseObservedInstant(observedAt: string): number {
   if (cal.getUTCFullYear() !== Number(y) || cal.getUTCMonth() !== Number(mo) - 1 || cal.getUTCDate() !== Number(d)) {
     return Number.NaN;
   }
-  if (hasTime && (Number(hh) > 23 || Number(mi) > 59 || (ss !== undefined && Number(ss) > 59))) return Number.NaN;
+  if (Number(hh) > 23 || Number(mi) > 59 || (ss !== undefined && Number(ss) > 59)) return Number.NaN;
   if (oh !== undefined && (Number(oh) > 23 || (om !== undefined && Number(om) > 59))) return Number.NaN;
-  if (!hasTime) return Date.parse(`${y}-${mo}-${d}`);
   const zone = z !== undefined ? "Z" : `${sign}${oh}:${om ?? "00"}`;
   return Date.parse(`${y}-${mo}-${d}T${hh}:${mi}${ss !== undefined ? `:${ss}${frac ?? ""}` : ""}${zone}`);
 }

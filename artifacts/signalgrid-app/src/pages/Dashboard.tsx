@@ -14,6 +14,8 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import { OutcomeBadge, IntegrationStatusBadge, SignalStatusBadge } from "@/components/StatusBadge";
 import { LiveDecisionPanel } from "@/components/LiveDecisionPanel";
+import { LiveRegion } from "@/components/LiveRegion";
+import { usePrefersReducedMotion } from "@/hooks/use-reduced-motion";
 import { formatTimeAgo, formatDate } from "@/lib/format";
 
 // Integration-health buckets, derived from the wire enum (lib/api-zod's generated
@@ -35,11 +37,12 @@ const HEALTH_STATUSES = Object.values(IntegrationHealthStatus);
 const bucketOf = (status: string) => HEALTH_BUCKET[status as IntegrationHealthStatus] ?? HEALTH_BUCKET.disconnected;
 
 export function Dashboard() {
+  const reduceMotion = usePrefersReducedMotion();
   const { data: metrics, isLoading: isLoadingMetrics } = useGetDashboardMetrics({ window: "24h" });
   const { data: seriesData, isError: seriesError } = useGetDecisionSeries({ window: "24h", granularity: "hour" });
   // The recent-decisions card reads the REAL /v1 ledger; the charts above it
   // remain labelled fixture telemetry until their own /v1 series exists.
-  const { data: v1Decisions } = useQuery({ queryKey: ["v1-decisions"], queryFn: listDecisionsV1, refetchInterval: 15_000 });
+  const { data: v1Decisions, error: v1DecisionsError } = useQuery({ queryKey: ["v1-decisions"], queryFn: listDecisionsV1, refetchInterval: 15_000 });
   const { data: integrationsData, isError: integrationsError } = useListIntegrations();
   const { data: signalsData, isLoading: isLoadingSignals, error: signalsError } = useListLatestSignals({ limit: 10 });
   // Screen 2's summary embed (wireframe screen 1's named gap): launch-family
@@ -51,6 +54,14 @@ export function Dashboard() {
 
   return (
     <div className="p-8 max-w-7xl mx-auto space-y-8">
+      <LiveRegion
+        message={
+          v1Decisions?.[0]
+            ? `Most recent decision: ${v1Decisions[0].outcome.replace("_", " ")} for ${v1Decisions[0].workflowId}, record ${v1Decisions[0].id.slice(-6)} at ${new Date(v1Decisions[0].createdAt).toLocaleTimeString()}.`
+            : ""
+        }
+        alert={v1DecisionsError ? "Decision ledger could not be read." : ""}
+      />
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Overview</h1>
         <p className="text-muted-foreground mt-1 font-mono text-sm">24H SYSTEM TELEMETRY (FIXTURE)</p>
@@ -96,13 +107,13 @@ export function Dashboard() {
                   contentStyle={{ backgroundColor: 'hsl(var(--popover))', borderColor: 'hsl(var(--border))', color: 'hsl(var(--popover-foreground))' }}
                   labelFormatter={(t) => new Date(t).toLocaleString()}
                 />
-                <Area type="monotone" dataKey="allow" stroke="hsl(var(--decision-allow))" fillOpacity={1} fill="url(#colorAllow)" stackId="1" />
-                <Area type="monotone" dataKey="stepUp" stroke="hsl(var(--decision-review))" fillOpacity={0.5} fill="hsl(var(--decision-review))" stackId="1" />
-                <Area type="monotone" dataKey="restrict" stroke="hsl(var(--decision-deny))" strokeDasharray="4 2" fillOpacity={0.3} fill="hsl(var(--decision-deny))" stackId="1" />
+                <Area isAnimationActive={!reduceMotion} type="monotone" dataKey="allow" stroke="hsl(var(--decision-allow))" fillOpacity={1} fill="url(#colorAllow)" stackId="1" />
+                <Area isAnimationActive={!reduceMotion} type="monotone" dataKey="stepUp" stroke="hsl(var(--decision-review))" fillOpacity={0.5} fill="hsl(var(--decision-review))" stackId="1" />
+                <Area isAnimationActive={!reduceMotion} type="monotone" dataKey="restrict" stroke="hsl(var(--decision-deny))" strokeDasharray="4 2" fillOpacity={0.3} fill="hsl(var(--decision-deny))" stackId="1" />
                 {/* Legend added 2026-08-25: this chart had none, so colour was the SOLE channel
                     distinguishing four verdicts — and restrict/deny share the ratified deny
                     tone, distinguished by a dash rather than an invented fourth colour. */}
-                <Area type="monotone" dataKey="deny" stroke="hsl(var(--decision-deny))" fillOpacity={1} fill="url(#colorDeny)" stackId="1" />
+                <Area isAnimationActive={!reduceMotion} type="monotone" dataKey="deny" stroke="hsl(var(--decision-deny))" fillOpacity={1} fill="url(#colorDeny)" stackId="1" />
                 <Legend />
               </AreaChart>
             </ResponsiveContainer>

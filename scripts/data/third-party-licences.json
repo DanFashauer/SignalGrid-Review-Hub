@@ -1848,6 +1848,14 @@
     "pkg:npm/%40rolldown/binding-linux-x64-gnu@1.2.16": {
       "licence": "MIT",
       "basis": "installed manifest read on linux-x64 (npm view license -> MIT), recorded 2026-11-07 for PR #1908 - linux twin so darwin regeneration is platform-independent"
+    },
+    "pkg:npm/%40tailwindcss/oxide-linux-x64-gnu@4.3.4": {
+      "licence": "MIT",
+      "basis": "registry.npmjs.org manifest for @tailwindcss/oxide-linux-x64-gnu@4.3.4 (installed on linux-x64 but not on darwin; npm view license -> MIT), recorded 2026-11-07 so Linux and macOS SBOM regeneration agree (PR #1908)"
+    },
+    "pkg:npm/%40tailwindcss/oxide-wasm32-wasi@4.3.4": {
+      "licence": "MIT",
+      "basis": "registry.npmjs.org manifest for @tailwindcss/oxide-wasm32-wasi@4.3.4 (installed on linux-x64 but not on darwin; npm view license -> MIT), recorded 2026-11-07 so Linux and macOS SBOM regeneration agree (PR #1908)"
     }
   }
 }

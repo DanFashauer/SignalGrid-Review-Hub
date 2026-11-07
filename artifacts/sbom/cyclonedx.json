@@ -11731,6 +11731,12 @@
             "id": "MIT"
           }
         }
+      ],
+      "properties": [
+        {
+          "name": "signalgrid:licence-basis",
+          "value": "registry.npmjs.org manifest for @tailwindcss/oxide-linux-x64-gnu@4.3.4 (installed on linux-x64 but not on darwin; npm view license -> MIT), recorded 2026-11-07 so Linux and macOS SBOM regeneration agree (PR #1908)"
+        }
       ]
     },
     {
@@ -11744,6 +11750,12 @@
           "license": {
             "id": "MIT"
           }
+        }
+      ],
+      "properties": [
+        {
+          "name": "signalgrid:licence-basis",
+          "value": "registry.npmjs.org manifest for @tailwindcss/oxide-wasm32-wasi@4.3.4 (installed on linux-x64 but not on darwin; npm view license -> MIT), recorded 2026-11-07 so Linux and macOS SBOM regeneration agree (PR #1908)"
         }
       ]
     },

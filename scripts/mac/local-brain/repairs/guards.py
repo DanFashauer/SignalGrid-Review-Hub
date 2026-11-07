@@ -117,7 +117,7 @@ GUARDS = {
     },
     "reread_schema": {
         "file": RUNTIME,
-        "present": re.compile(r'and any\(c >= 3 for c in build_read_counts\.values\(\)\)\):\n[^\n]*\n[^\n]*\n[^\n]*\n\s+schema = \{\*\*ACTION_SCHEMA, "properties": \{\*\*ACTION_SCHEMA\["properties"\],\n\s+"action": \{"type": "string", "enum": \[n for n in ACTION_SCHEMA\["properties"\]\["action"\]\["enum"\] if n != "read"\]\}\}\}'),
+        "present": re.compile(r'and any\(c >= 3 for c in build_read_counts\.values\(\)\)\):\n[^\n]*\n[^\n]*\n[^\n]*\n[^\n]*\n\s+_offered = schema\["properties"\]\["action"\]\.get\("enum", ACTION_SCHEMA\["properties"\]\["action"\]\["enum"\]\)\n\s+schema = \{\*\*schema, "properties": \{\*\*schema\["properties"\],\n\s+"action": \{\*\*schema\["properties"\]\["action"\], "enum": \[n for n in _offered if n != "read"\]\}\}\}'),
         "order": ("Guard reread_schema", "if intake_read_pending:"),
         "patch": [
             (re.compile(r'^(?P<i>[ \t]+)if intake_read_pending:\n', re.M),
@@ -125,9 +125,11 @@ GUARDS = {
              "\\g<i>        and any(c >= 3 for c in build_read_counts.values())):\n"
              "\\g<i>    # Guard reread_schema (scripts/mac/local-brain/repairs/guards.py): the one-proposal cooldown let the\n"
              "\\g<i>    # 9B resume re-reading (build 6e021d2f, 8x). With every required source read, a third identical\n"
-             "\\g<i>    # read of one path removes read until an accepted edit clears the counts; edit/check/finish remain.\n"
-             "\\g<i>    schema = {**ACTION_SCHEMA, \"properties\": {**ACTION_SCHEMA[\"properties\"],\n"
-             "\\g<i>        \"action\": {\"type\": \"string\", \"enum\": [n for n in ACTION_SCHEMA[\"properties\"][\"action\"][\"enum\"] if n != \"read\"]}}}\n"
+             "\\g<i>    # read of one path removes read until an accepted edit clears the counts. It narrows the schema\n"
+             "\\g<i>    # already in scope, so an enum reedit_schema has cut to check/finish is never widened again.\n"
+             "\\g<i>    _offered = schema[\"properties\"][\"action\"].get(\"enum\", ACTION_SCHEMA[\"properties\"][\"action\"][\"enum\"])\n"
+             "\\g<i>    schema = {**schema, \"properties\": {**schema[\"properties\"],\n"
+             "\\g<i>        \"action\": {**schema[\"properties\"][\"action\"], \"enum\": [n for n in _offered if n != \"read\"]}}}\n"
              "\\g<i>if intake_read_pending:\n"),
         ],
     },
@@ -332,6 +334,19 @@ def self_test():
         ok("(7d) the re-read guard sits before the mandatory intake read, which still overrides it",
            runtime_txt.index("Guard reread_schema") < runtime_txt.index("if intake_read_pending:")
            and 'if n != "read"]' in runtime_txt and "not pending_sources" in runtime_txt)
+        # Cloud review of cf5db3f99 (MEDIUM): rebuilding from ACTION_SCHEMA put `edit` back after reedit_schema had
+        # narrowed to check/finish. The guard must filter the enum already in scope. Executed, not just grepped:
+        # with reedit's narrowing applied first, the reread block must leave check/finish, never widen.
+        block = runtime_txt[runtime_txt.index("_offered = schema"):runtime_txt.index("if intake_read_pending:")]
+        ns = {"ACTION_SCHEMA": {"properties": {"action": {"type": "string", "enum": ["read", "search", "edit", "check", "delegate", "finish"]}}}}
+        ns["schema"] = {**ns["ACTION_SCHEMA"], "properties": {**ns["ACTION_SCHEMA"]["properties"], "action": {"type": "string", "enum": ["check", "finish"]}}}
+        exec("\n".join(line.strip() for line in block.splitlines() if line.strip()), ns)
+        ok("(7e) after reedit narrowed to check/finish, reread leaves check/finish (it never re-offers edit)",
+           ns["schema"]["properties"]["action"]["enum"] == ["check", "finish"])
+        ns["schema"] = ns["ACTION_SCHEMA"]
+        exec("\n".join(line.strip() for line in block.splitlines() if line.strip()), ns)
+        ok("(7f) from the full schema, reread removes only read",
+           ns["schema"]["properties"]["action"]["enum"] == ["search", "edit", "check", "delegate", "finish"])
         snap = {n: sha(home / n) for n in (RUNTIME, BRAIN, HANDOFF, OPCFG)}
         ok("(8) a second --apply is a no-op", apply(home, "again", run_tests=False, say=quiet) is None and snap == {n: sha(home / n) for n in snap})
         # A brain whose anchor changed shape is refused and left untouched, not half-edited.

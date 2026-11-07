@@ -24,15 +24,16 @@ The guards (each measured on a real build before it was written; six as of 2026-
                    step 9 with the correct edit sitting unverified in the worktree.
   reread_refused   signalgrid_agent_runtime.py: a FOURTH read of the same unchanged bytes is
                    refused at the tool ("Identical unchanged source already read three times"),
-                   and while that refusal stands `read` leaves the schema (narrowed in scope, so
-                   reedit_schema's cut is never widened) until an accepted edit clears the
-                   refusal counts. The runtime's own cooldown excluded read for ONE proposal and
-                   then offered it again: build 6e021d2f read the same unchanged test file eight
-                   times in a row (steps 5-12) and hit the action limit with its correct function
-                   edit unverified. A persistent schema exclusion alone failed Codex's test
+                   counted like any refusal, so the third identical one ends the job as
+                   no-progress instead of spending the action budget. The runtime's own cooldown
+                   excluded read for ONE proposal and then offered it again: build 6e021d2f read
+                   the same unchanged test file eight times in a row (steps 5-12) and hit the
+                   action limit with its correct function edit unverified. Nothing touches the
+                   schema: a persistent schema exclusion failed Codex's test
                    test_build_read_cooldown_is_one_proposal_then_new_and_changed_source_reads_resume
-                   (a NEW or CHANGED source must stay readable); this shape leaves new and changed
-                   reads alone and the brain's 168 tests pass.
+                   and, per the cloud's review of 463dae8d2, would also stop a worker reading a
+                   DIFFERENT needed source after the refusal. New, changed and different reads
+                   stay possible; the brain's own suite passes with this guard applied.
   node_test_ts     signalgrid_agent_runtime.py: the node-test check accepts a .test.ts file. The
                    autonomous-tier apps (signalgrid-mobile-pwa, -app, -desktop) test with
                    `node --test src/lib/*.test.ts` and Node 24 runs them natively; build 1c454ec0
@@ -128,19 +129,9 @@ GUARDS = {
     },
     "reread_refused": {
         "file": RUNTIME,
-        # The schema half sits ~300 lines ABOVE the tool half in the runtime; the lookahead binds both.
-        "present": re.compile(r'(?=[\s\S]*raise AgentBlocked\("Identical unchanged source already read three times; choose edit, check or finish"\))[\s\S]*?"already read three times" in k\[3\] for k in build_refusal_counts\)\):\n[^\n]*\n[^\n]*\n\s+_offered = schema\["properties"\]\["action"\]\.get\("enum", ACTION_SCHEMA\["properties"\]\["action"\]\["enum"\]\)\n\s+schema = \{\*\*schema, "properties": \{\*\*schema\["properties"\],\n\s+"action": \{\*\*schema\["properties"\]\["action"\], "enum": \[n for n in _offered if n != "read"\]\}\}\}'),
-        "order": ("Guard reread_refused (schema)", "if intake_read_pending:", "Guard reread_refused (tool)", 'if selected_intake is None or not action["path"].startswith("intake-source/"):'),
+        "present": re.compile(r'raise AgentBlocked\("Identical unchanged source already read three times; choose edit, check or finish"\)'),
+        "order": ("Guard reread_refused (tool)", 'if selected_intake is None or not action["path"].startswith("intake-source/"):'),
         "patch": [
-            (re.compile(r'^(?P<i>[ \t]+)if intake_read_pending:\n', re.M),
-             "\\g<i>if (job[\"kind\"] == \"build\" and not tdd and not private_document\n"
-             "\\g<i>        and any(k[0] == \"read\" and \"already read three times\" in k[3] for k in build_refusal_counts)):\n"
-             "\\g<i>    # Guard reread_refused (schema) (scripts/mac/local-brain/repairs/guards.py): after the tool refused a\n"
-             "\\g<i>    # fourth identical read, read leaves the enum already in scope until an accepted edit clears refusals.\n"
-             "\\g<i>    _offered = schema[\"properties\"][\"action\"].get(\"enum\", ACTION_SCHEMA[\"properties\"][\"action\"][\"enum\"])\n"
-             "\\g<i>    schema = {**schema, \"properties\": {**schema[\"properties\"],\n"
-             "\\g<i>        \"action\": {**schema[\"properties\"][\"action\"], \"enum\": [n for n in _offered if n != \"read\"]}}}\n"
-             "\\g<i>if intake_read_pending:\n"),
             (re.compile(r'^(?P<i>[ \t]+)(?P<line>if selected_intake is None or not action\["path"\]\.startswith\("intake-source/"\):)\n', re.M),
              "\\g<i>if (job[\"kind\"] in {\"goal\", \"build\"} and build_read_counts.get(\n"
              "\\g<i>        (action[\"path\"], hashlib.sha256(text.encode()).hexdigest()), 0) >= 3):\n"
@@ -256,9 +247,16 @@ def apply(home, instruction, run_tests=True, say=print):
             rs[fname] = new
         scope["human_instruction"] = f"{instruction} Guards restored: {', '.join(missing)} (scripts/mac/local-brain/repairs/guards.py, {stamp}). Prior instruction: " + scope["human_instruction"]
         sdir = Path(ref["path"]).parent.parent / f"guards-{stamp}"
-        sdir.mkdir()
+        sdir.mkdir(mode=0o700)
         spath = sdir / "accounting-scope.json"
-        spath.write_text(json.dumps(scope, indent=2, sort_keys=True) + "\n")
+        # Cloud review of 463dae8d2 (P2): the accounting service accepts only owner-only regular bytes, and a
+        # scope written with the process umask is 0644. Create it private, verify, then re-pin; prior scopes
+        # and their modes are untouched.
+        with os.fdopen(os.open(spath, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600), "w") as fh:
+            fh.write(json.dumps(scope, indent=2, sort_keys=True) + "\n")
+        os.chmod(spath, 0o600)
+        if (os.stat(spath).st_mode & 0o777) != 0o600 or not spath.is_file() or spath.is_symlink():
+            raise SystemExit("REFUSED: the new accounting scope is not an owner-only regular file")
         cfg["accounting_scope_ref"] = {"path": str(spath), "sha256": sha(spath)}
         cfg["approved_accounting_scope_sha256"] = sha(spath)
         files[3].write_text(json.dumps(cfg, indent=2) + "\n")
@@ -367,23 +365,15 @@ def self_test():
         moved = runtime_txt.replace("if content == previous:\n", "", 1).replace("target.write_text(content)\n",
                 "target.write_text(content)\nif content == previous:\n", 1)
         ok("(7c) --check refuses the guard's text in the wrong place", not placed(moved, GUARDS["noop_edit_refused"]))
-        ok("(7d) the re-read schema guard sits before the mandatory intake read, which still overrides it; the tool guard sits before the read is retained",
-           runtime_txt.index("Guard reread_refused (schema)") < runtime_txt.index("if intake_read_pending:")
-           < runtime_txt.index("Guard reread_refused (tool)") < runtime_txt.index('if selected_intake is None or not action["path"]')
-           and 'if n != "read"]' in runtime_txt and "already read three times" in runtime_txt)
-        # Cloud review of cf5db3f99 (MEDIUM): rebuilding from ACTION_SCHEMA put `edit` back after reedit_schema had
-        # narrowed to check/finish. The guard must filter the enum already in scope. Executed, not just grepped:
-        # with reedit's narrowing applied first, the reread block must leave check/finish, never widen.
-        block = runtime_txt[runtime_txt.index("_offered = schema"):runtime_txt.index("if intake_read_pending:")]
-        ns = {"ACTION_SCHEMA": {"properties": {"action": {"type": "string", "enum": ["read", "search", "edit", "check", "delegate", "finish"]}}}}
-        ns["schema"] = {**ns["ACTION_SCHEMA"], "properties": {**ns["ACTION_SCHEMA"]["properties"], "action": {"type": "string", "enum": ["check", "finish"]}}}
-        exec("\n".join(line.strip() for line in block.splitlines() if line.strip()), ns)
-        ok("(7e) after reedit narrowed to check/finish, the reread schema guard leaves check/finish (it never re-offers edit)",
-           ns["schema"]["properties"]["action"]["enum"] == ["check", "finish"])
-        ns["schema"] = ns["ACTION_SCHEMA"]
-        exec("\n".join(line.strip() for line in block.splitlines() if line.strip()), ns)
-        ok("(7f) from the full schema, reread removes only read",
-           ns["schema"]["properties"]["action"]["enum"] == ["search", "edit", "check", "delegate", "finish"])
+        ok("(7d) the re-read tool guard sits before the read is retained, and nothing of it touches the action schema",
+           runtime_txt.index("Guard reread_refused (tool)") < runtime_txt.index('if selected_intake is None or not action["path"]')
+           and "already read three times" in runtime_txt and "Guard reread_refused (schema)" not in runtime_txt
+           and runtime_txt.count('if n != "read"]') == 0)
+        # Cloud review of 463dae8d2 (P2): the new scope must be an owner-only regular file; the service refuses 0644.
+        new_scope = Path(cfg["accounting_scope_ref"]["path"])
+        ok("(7e) the generated accounting scope is 0600 in a 0700 directory and the prior scope's mode is untouched",
+           (new_scope.stat().st_mode & 0o777) == 0o600 and (new_scope.parent.stat().st_mode & 0o777) == 0o700
+           and (scope.stat().st_mode & 0o777) == (0o644 if os.name != "nt" else scope.stat().st_mode & 0o777))
         ok("(7g) node-test accepts .test.ts and both prompt mentions name the suffix",
            '(".test.mjs", ".test.js", ".test.ts")' in runtime_txt and runtime_txt.count("node-test:<path.test.mjs|.test.ts>") == 2
            and "node-test:<path.test.mjs>" not in runtime_txt)

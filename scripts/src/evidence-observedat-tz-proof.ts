@@ -271,10 +271,30 @@ function tenantFor(category: SignalCategory, milder: string, stronger: string, s
   return `${t.outcome}|${t.reasonCodes.join("+")}|shipped=${evaluatePolicy(shipped, ev).outcome}`;
 }
 
+/**
+ * Review F1 (2026-11-07): ONE posture reading stated `expired` whose stamp cannot be read or is future-dated. The
+ * fold answers `unknown`, but a tenant policy that denies `expired` must still see it. `shape` picks the stamp.
+ */
+function postureTenantFor(shape: string): string {
+  const at = shape === "garbled" ? "garbled" : shape === "offsetless" ? "2026-07-13T09:00:00" : "2026-07-14T09:00:00Z";
+  const signals = [sig("s_p", "posture_freshness", "expired", at), sig("s_c", "device_compliance", "compliant", BASE), ...healthy().filter((x) => x.category !== "posture_freshness")];
+  const ev = buildEvidence(identity, device, workflow, signals, shape === "future" ? BASE : undefined);
+  const tenant = {
+    id: "pv_exp", tenantId: "tenant_northwind", policyId: "pol_exp", version: 1, status: "active" as const, createdAt: BASE, digest: "test",
+    rules: [
+      { id: "tenant-expired-deny", description: "expired posture denies", match: [{ field: "postureFreshness", in: ["expired"] }], outcome: "deny" as const, reasonCode: "TENANT_EXPIRED_DENY", severity: "high" as const },
+      { id: "tenant-managed-allow", description: "managed", match: [{ field: "deviceManaged", equals: true }], outcome: "allow" as const, reasonCode: "TENANT_MANAGED_ALLOW", severity: "low" as const },
+    ],
+  } as unknown as Parameters<typeof evaluatePolicy>[0];
+  const r = evaluatePolicy(tenant, ev);
+  return `${r.outcome}|${r.reasonCodes.join("+")}`;
+}
+
 if (process.argv[2] === "--worker") {
   const [mode, a, b, c] = process.argv.slice(3);
   const out =
-    mode === "tenant" ? tenantFor(a as SignalCategory, b!, c!, process.argv[7]!, process.argv[8]!)
+    mode === "ptenant" ? postureTenantFor(a!)
+    : mode === "tenant" ? tenantFor(a as SignalCategory, b!, c!, process.argv[7]!, process.argv[8]!)
     : mode === "verdict" ? verdictFor(a!, b)
     : mode === "accuse" ? accusationFor(a as "tamper_state" | "badge_binding", b!, c!, process.argv[7]!)
     : mode === "matrix" ? matrixFor(a!)
@@ -663,8 +683,14 @@ for (const stamp of ["2026-03-02T08:00:00+00", "2026-03-02T00:00:00Z", "2024-02-
     const truncated = evaluatePolicy(allowAll, many);
     check("keep both: past the world cap the policy never allows (step_up ALLOW_SUPPRESSED_DEGRADED_EVIDENCE)",
       truncated.outcome === "step_up" && truncated.reasonCodes.includes("ALLOW_SUPPRESSED_DEGRADED_EVIDENCE"), `${truncated.outcome}|${truncated.reasonCodes.join("+")}`);
-    const malformed = evaluatePolicy(allowAll, { ...ev, retainedAccusations: { tamperState: "confirmed" } } as unknown as typeof ev);
-    check("keep both: a malformed retained list is ignored, never loosening the base answer", malformed.outcome === evaluatePolicy(allowAll, ev).outcome, malformed.outcome);
+    // From a NON-allow baseline (a confirmed tamper denies under the shipped rules), so "never loosens" can fail:
+    // a malformed list must not move deny anywhere, whether it is a bare string or an array naming the GOOD member.
+    const accused = buildEvidence(identity, device, workflow, [sig("s_t", "tamper_state", "confirmed", BASE), sig("s_c", "device_compliance", "compliant", BASE), ...healthy()]);
+    const shippedPv = { ...allowAll, id: "pv_shipped_m", rules: SHARED_DEVICE_RULES_V1 } as Parameters<typeof evaluatePolicy>[0];
+    const baseline = evaluatePolicy(shippedPv, accused).outcome;
+    const asString = evaluatePolicy(shippedPv, { ...accused, retainedAccusations: { tamperState: "none" } } as unknown as typeof accused).outcome;
+    const asGood = evaluatePolicy(shippedPv, { ...accused, retainedAccusations: { tamperState: ["none"] } } as unknown as typeof accused).outcome;
+    check("keep both: a malformed retained list never loosens a non-allow baseline (deny stays deny)", baseline === "deny" && asString === "deny" && asGood === "deny", `${baseline}|${asString}|${asGood}`);
   }
   for (const [category, milder, stronger, shippedOutcome] of CASES) {
     for (const shape of ["tie", "illegible"]) {
@@ -678,6 +704,13 @@ for (const stamp of ["2026-03-02T08:00:00+00", "2026-03-02T00:00:00Z", "2024-02-
       }
     }
   }
+}
+
+// Review F1 (2026-11-07): a SOLE posture reading stated `expired` with a garbled, offset-less or future stamp folds to
+// `unknown`. Keep-both must still hand `expired` to a tenant policy that denies it (mainline denied).
+for (const shape of ["garbled", "offsetless", "future"]) {
+  const r = ZONES.map((z) => inZone(z, "ptenant", shape));
+  check(`keep both: a sole posture 'expired' with a ${shape} stamp still reaches a tenant policy that denies expired -> deny TENANT_EXPIRED_DENY, in every zone`, r.every((v) => v.startsWith("deny|") && v.includes("TENANT_EXPIRED_DENY")), r.join(","));
 }
 
 console.log(`\nsummary=${failures.length === 0 ? "pass" : "FAIL"} (${passed}/${passed + failures.length})`);

@@ -239,9 +239,17 @@ function verifyDateFor(observedAt: string): string {
   ).state;
 }
 
-/** fixedClock on one stamp: the instant it pins, or THROWS. */
+/**
+ * fixedClock on one stamp: the instant it pins, or THROWS when it refuses with ITS OWN zoned-timestamp error. Any
+ * other exception is reported verbatim, so a crash elsewhere cannot pass as the refusal (review LOW, 2026-11-07).
+ */
 function clockFor(iso: string): string {
-  try { return fixedClock(iso).now().toISOString(); } catch { return "THROWS"; }
+  try {
+    return fixedClock(iso).now().toISOString();
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    return message === `fixedClock requires a zoned ISO timestamp (Z or ±HH:MM), got: ${iso}` ? "THROWS" : `OTHER-ERROR: ${message}`;
+  }
 }
 
 /**

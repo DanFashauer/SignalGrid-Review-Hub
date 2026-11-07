@@ -493,6 +493,19 @@ fi
 # to retry. The publisher is idempotent on an existing branch. No auto-merge: Codex and
 # Claude review on the PR and the lane lands it under DR-037.
 PUBLISH_MAX="${SIGNALGRID_PUBLISH_MAX:-1}"
+# The publisher's last line becomes the heartbeat RESULT, which is delivered to origin. It is
+# repo-relative rule text by construction (rule id + file:line), but a tool error could still carry a
+# scratch or home path, so it goes through a strict allow-filter first: only [A-Za-z0-9 :#._/-], 160
+# chars, and anything that still looks like an absolute or personal path is replaced outright.
+# (Mirrors redact() in brain-proposal-pr.mjs. No arrays, no mapfile: bash 3.2.)
+safe_line() {
+  _sl="$(printf '%s' "$1" | tr -cd 'A-Za-z0-9 :#._/-' | cut -c1-160)"
+  case "$_sl" in
+    /*|*" /"*|*/Users/*|*/home/*|*/var/*|*/private/*|*/tmp/*|*/Volumes/*|*/Library/*|*brain-state*|*SignalGrid-Local-AI*|*brain-worktrees*)
+      _sl="(detail withheld; see the tick log)" ;;
+  esac
+  printf '%s' "$_sl"
+}
 if [ -f scripts/mac/brain-proposal-pr.mjs ] && command -v gh >/dev/null 2>&1; then
   _pub_n=0
   for _job in $(node scripts/mac/brain-proposal-pr.mjs --list-review 2>/dev/null); do
@@ -505,11 +518,12 @@ if [ -f scripts/mac/brain-proposal-pr.mjs ] && command -v gh >/dev/null 2>&1; th
     _pub="$(node scripts/mac/brain-proposal-pr.mjs --job "$_job" --publish 2>&1)"
     _pub_rc=$?
     printf '%s\n' "$_pub" | while IFS= read -r _l; do say "  $_l"; done
-    printf 'exit=%s %s\n' "$_pub_rc" "$(printf '%s\n' "$_pub" | tail -1)" > "$_stamp" 2>/dev/null || say "WARN could not write $_stamp; job $_job will be retried next tick"
+    _pub_last="$(safe_line "$(printf '%s\n' "$_pub" | tail -1)")"
+    printf 'exit=%s %s\n' "$_pub_rc" "$_pub_last" > "$_stamp" 2>/dev/null || say "WARN could not write $_stamp; job $_job will be retried next tick"
     if [ "$_pub_rc" = "0" ]; then
       RESULT="$RESULT; published brain job $_job"
     else
-      RESULT="$RESULT; brain job $_job not published (exit $_pub_rc): $(printf '%s\n' "$_pub" | tail -1)"
+      RESULT="$RESULT; brain job $_job not published (exit $_pub_rc): $_pub_last"
     fi
   done
 fi

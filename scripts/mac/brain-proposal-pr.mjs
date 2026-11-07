@@ -819,7 +819,7 @@ async function selfTest() {
     const AWSV = J("wJalrXUtnFEMI/K7MDENG/bP", "xRfiCYEXAMPLEKEY");
     check("(12) AWS_SECRET_ACCESS_KEY=... refused", hit(J("AWS_SECRET_", "ACCESS_KEY=", AWSV), "secret-assignment", "x.env"));
     check("(12) DB_PASSWORD=... refused", hit(J("DB_PASS", "WORD=Sup3rS3cretValue12345"), "secret-assignment"));
-    check("(12) OPENAI_API_KEY=<32 hex> refused", hit(J("OPENAI_API", "_KEY=0123456789abcdef0123456789abcdef"), "secret-assignment"));
+    check("(12) OPENAI_API_KEY=<32 hex> refused", hit(J("OPENAI_API", "_KEY=", "0123456789abcdef".repeat(2)), "secret-assignment"));
     check("(12) client_secret: \"...\" refused", hit(J("client_", "secret: \"abcd1234efgh\""), "secret-assignment"));
     check("(12) JSON \"aws_secret_access_key\": \"...\" refused", hit(J("\"aws_secret_", "access_key\": \"", AWSV, "\""), "secret-assignment", "x.json"));
     check("(12) short quoted password (11 chars) refused", hit(J("pass", "word = \"Tr0ub4dor&3\""), "secret-assignment"));

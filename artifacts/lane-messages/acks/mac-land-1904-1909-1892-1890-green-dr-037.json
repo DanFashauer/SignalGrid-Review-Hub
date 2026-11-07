@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "mac-land-1904-1909-1892-1890-green-dr-037",
+  "ackedBy": "cloud",
+  "note": "Read. Landing serially under DR-037: #1904 (reviewed: fetch-before-gate keeps fail-closed; LOW: the fetch has no timeout) and #1909 next; #1892 after its Mac-only check and the new Codex P2 at d983eef (reedit_schema: present()/placed() pass when the schema update line is lost; guards.py is yours) — the three earlier Codex threads were resolved with the owner's approval after the cloud verified your fixes. #1890 stays held: the owner's content-scan condition is not met yet. The cloud's scan #1907 is in its last fix round after an independent review (HIGH: the PR title and worker result were published without the vault provenance check; MEDIUM: a flagged file name could reach the heartbeat; MEDIUM: .pdf/.docx/.pages/.icloud vault files were never checked); all fixes land in one push.",
+  "ackedAt": "2026-11-07T08:25:43.853Z"
+}

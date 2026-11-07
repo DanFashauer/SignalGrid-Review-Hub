@@ -284,11 +284,13 @@ function familyFor(family: string, stamp: string, nowEpochMs = "1783947600000"):
   const now = parseInt(nowEpochMs, 10); // default 2026-07-13T13:00:00Z, as epoch ms so no parse is involved
   const seen = stamp === "-" ? null : stamp;
   const bound = { staleAfterMs: 30 * 60 * 1000 };
-  if (family === "nac") {
+  if (family === "nac" || family === "nacmgmt") {
+    // Review F2 (2026-11-07): judged under a segment policy, so a stamp's age can never mask a restricted segment.
+    // `nac` is on the expected segment; `nacmgmt` sits on the restricted management segment.
     const r = evaluateNetwork({
       sourceSystem: "network-nac", correlationId: "c_tz", observedAt: "2026-07-13T13:00:00Z", deviceId: "d_tz",
-      authState: "authenticated", segment: "corp", accessLocation: null, nacCompliant: true, lastAuthAt: seen, freshness: "unknown",
-    }, now, bound);
+      authState: "authenticated", segment: family === "nac" ? "corp" : "mgmt", accessLocation: null, nacCompliant: true, lastAuthAt: seen, freshness: "unknown",
+    }, now, { ...bound, segmentPolicy: { expected: ["corp"], restricted: ["mgmt"] } });
     return `${r.recommendedAction}|${r.reasonCode}`;
   }
   if (family === "carrier") {
@@ -729,18 +731,20 @@ for (const stamp of ["2026-03-02T08:00:00+00", "2026-03-02T00:00:00Z", "2024-02-
   const STALE_ON_UTC = "2026-07-13T12:00:00"; // a UTC host read this as 60 min old against a 30 min bound
   const expectStale: Record<string, string> = {
     nac: "step_up|STALE_NETWORK_STATE",
+    nacmgmt: "restrict|SEGMENT_RESTRICTED",
     carrier: "locate|STALE_LAST_SEEN",
     location: "locate|STALE_LOCATION_FIX",
   };
   const expectAbsent: Record<string, string> = {
     nac: "monitor|AUTHENTICATED_POSTURE_UNVERIFIED",
+    nacmgmt: "restrict|SEGMENT_RESTRICTED",
     carrier: "monitor|LAST_SEEN_UNVERIFIED",
     location: "monitor|UNVERIFIED_LOCATION_FRESHNESS",
   };
   // Ranked within each family's own action set; the shared table is safe because no family mixes the tied rungs.
   const RANK: Record<string, number> = { none: 0, monitor: 1, locate: 2, step_up: 2, alert: 3, restrict: 3, escalate: 4 };
   const rank = (v: string): number => RANK[v.split("|")[0] ?? ""] ?? -1;
-  for (const family of ["nac", "carrier", "location"]) {
+  for (const family of ["nac", "nacmgmt", "carrier", "location"]) {
     const utcTwin = inZone("UTC", "family", family, `${STALE_ON_UTC}Z`);
     check(`${family}: the Z twin of the stale-on-UTC stamp is ${expectStale[family]} (what a UTC host gave under Date.parse)`, utcTwin === expectStale[family], utcTwin);
     const got = ZONES.map((z) => inZone(z, "family", family, STALE_ON_UTC));
@@ -844,8 +848,8 @@ for (const stamp of ["2026-03-02T08:00:00+00", "2026-03-02T00:00:00Z", "2024-02-
   check("date-only: integrations deriveFreshness/ageMs grade a '2026-07-13' sighting stale with no age, in every zone", shared.every((v) => v === "stale|null"), shared.join(","));
   const posture = ZONES.map((z) => inZone(z, "devposture", "2026-07-13", "2026-07-13T13:00:00Z"));
   check("date-only: a Graph deviceLastSeenAt of '2026-07-13' is DEVICE_POSTURE_STALE, in every zone", posture.every((v) => v === "step_up|DEVICE_POSTURE_STALE"), posture.join(","));
-  const expectStale: Record<string, string> = { nac: "step_up|STALE_NETWORK_STATE", carrier: "locate|STALE_LAST_SEEN", location: "locate|STALE_LOCATION_FIX" };
-  for (const family of ["nac", "carrier", "location"]) {
+  const expectStale: Record<string, string> = { nac: "step_up|STALE_NETWORK_STATE", nacmgmt: "restrict|SEGMENT_RESTRICTED", carrier: "locate|STALE_LAST_SEEN", location: "locate|STALE_LOCATION_FIX" };
+  for (const family of ["nac", "nacmgmt", "carrier", "location"]) {
     const got = ZONES.map((z) => inZone(z, "familydate", family));
     check(`date-only: ${family} with a '2026-07-13' sighting judged at 00:10Z is ${expectStale[family]} (never the fresh grant), in every zone`, got.every((v) => v === expectStale[family]), got.join(","));
   }

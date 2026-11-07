@@ -101,7 +101,7 @@ export default function SignalArchitectureSection() {
               <h3 className="text-base font-bold text-foreground">{active.name}</h3>
             </div>
             <button
-              onClick={() => setActiveSignal(null)}
+              onClick={() => setActiveSignal(null)} aria-label="Close signal details"
               className="text-muted-foreground hover:text-foreground text-sm shrink-0"
             >
               ×

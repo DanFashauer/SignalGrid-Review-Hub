@@ -79,7 +79,11 @@ def brain_home():
 GUARDS = {
     "call_cap_600": {
         "file": BRAIN,
-        "present": re.compile(r"cap = 600 if timeout is None else min\(600, timeout\)"),
+        # Every site, not one: a partial install (cap raised, validator or deadline still 180) read as
+        # present until Codex's review of febf185db (P2).
+        "present": (re.compile(r"cap = 600 if timeout is None else min\(600, timeout\)"),
+                    re.compile(r"not 0 < cap <= 600:"),
+                    re.compile(r"remaining = 600 if deadline is None else min\(600, deadline - time\.monotonic\(\)\)")),
         "patch": [
             (re.compile(r"cap = (\d+) if timeout is None else min\(\1, timeout\)\n(\s+)if not isinstance\(cap, \(int, float\)\) or isinstance\(cap, bool\) or not 0 < cap <= \1:"),
              "cap = 600 if timeout is None else min(600, timeout)\n\\2if not isinstance(cap, (int, float)) or isinstance(cap, bool) or not 0 < cap <= 600:"),
@@ -89,7 +93,9 @@ GUARDS = {
     },
     "job_budget_1800": {
         "file": RUNTIME,
-        "present": re.compile(r"time\.monotonic\(\) - job_started > 1800|job_deadline = job_started \+ 1800"),
+        "present": (re.compile(r"time\.monotonic\(\) - job_started > 1800|job_deadline = job_started \+ 1800"),
+                    re.compile(r"remaining = 1800 - \(time\.monotonic\(\) - started\)"),
+                    re.compile(r"if time\.monotonic\(\) - started >= 1800:")),
         "patch": [
             (re.compile(r"remaining = (\d+) - \(time\.monotonic\(\) - started\)"), "remaining = 1800 - (time.monotonic() - started)"),
             (re.compile(r"if time\.monotonic\(\) - started >= (\d+):"), "if time.monotonic() - started >= 1800:"),
@@ -157,6 +163,12 @@ GUARDS = {
 def sha(p): return hashlib.sha256(Path(p).read_bytes()).hexdigest()
 
 
+def present(text, g):
+    # `present` is one regex or a tuple of them; every one must match (every timeout site, not the first).
+    rxs = g["present"] if isinstance(g["present"], tuple) else (g["present"],)
+    return all(rx.search(text) for rx in rxs)
+
+
 def placed(text, g):
     # `present` alone would accept the guard's text anywhere (a dead branch, after the write);
     # `order` names the lines that must appear in this sequence, each exactly once.
@@ -168,7 +180,7 @@ def check(home, say=print):
     missing = []
     for name, g in GUARDS.items():
         text = (home / g["file"]).read_text()
-        ok = bool(g["present"].search(text)) and placed(text, g)
+        ok = present(text, g) and placed(text, g)
         say(f"{'present' if ok else 'MISSING'}  {name}  ({g['file']})")
         if not ok:
             missing.append(name)
@@ -226,7 +238,7 @@ def apply(home, instruction, run_tests=True, say=print):
             g = GUARDS[name]
             p = home / g["file"]
             p.write_text(patch_text(p.read_text(), g))
-            if not (g["present"].search(p.read_text()) and placed(p.read_text(), g)):
+            if not (present(p.read_text(), g) and placed(p.read_text(), g)):
                 raise SystemExit(f"REFUSED: {name} still missing or misplaced after its patch")
         new_rt = sha(files[0])
         if new_rt != old_rt:
@@ -347,6 +359,16 @@ def self_test():
                 print(f"FAIL: {name}")
 
         ok("(1) every guard reported MISSING on the stripped brain", sorted(check(home, quiet)) == sorted(GUARDS))
+        # Codex review of febf185db (P2): a partial install must still read MISSING — raise only the cap
+        # assignment (validator and deadline still 180) and only the outer job budget (strict review still 900).
+        partial_brain = (home / BRAIN).read_text().replace("cap = 180 if timeout is None else min(180, timeout)",
+                                                           "cap = 600 if timeout is None else min(600, timeout)", 1)
+        partial_runtime = (home / RUNTIME).read_text().replace("job_started > 900", "job_started > 1800", 1)
+        ok("(1b) a partially repaired brain (cap raised, validator and deadline not) is still MISSING",
+           not present(partial_brain, GUARDS["call_cap_600"]))
+        ok("(1c) a partially repaired runtime (job budget raised, strict review not) is still MISSING",
+           not present(partial_runtime, GUARDS["job_budget_1800"]))
+        original_scope_mode = scope.stat().st_mode & 0o777
         rec = apply(home, "self-test", run_tests=False, say=quiet)
         ok("(2) --apply restored every guard", rec is not None and sorted(rec["restored"]) == sorted(GUARDS))
         ok("(3) --check passes afterwards", check(home, quiet) == [])
@@ -371,9 +393,11 @@ def self_test():
            and runtime_txt.count('if n != "read"]') == 0)
         # Cloud review of 463dae8d2 (P2): the new scope must be an owner-only regular file; the service refuses 0644.
         new_scope = Path(cfg["accounting_scope_ref"]["path"])
+        # Codex review of febf185db (P2): the prior scope keeps whatever mode it had (0600 under umask 077), so
+        # compare against the mode captured before the repair, never against an assumed 0644.
         ok("(7e) the generated accounting scope is 0600 in a 0700 directory and the prior scope's mode is untouched",
            (new_scope.stat().st_mode & 0o777) == 0o600 and (new_scope.parent.stat().st_mode & 0o777) == 0o700
-           and (scope.stat().st_mode & 0o777) == (0o644 if os.name != "nt" else scope.stat().st_mode & 0o777))
+           and (scope.stat().st_mode & 0o777) == original_scope_mode)
         ok("(7g) node-test accepts .test.ts and both prompt mentions name the suffix",
            '(".test.mjs", ".test.js", ".test.ts")' in runtime_txt and runtime_txt.count("node-test:<path.test.mjs|.test.ts>") == 2
            and "node-test:<path.test.mjs>" not in runtime_txt)

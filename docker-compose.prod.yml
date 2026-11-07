@@ -44,8 +44,11 @@ services:
       SIGNALGRID_PRODUCT_PROFILE: ${SIGNALGRID_PRODUCT_PROFILE:-shared-device-gateway}
       # The gateway profile accepts only verified enterprise credentials, so a
       # usable gateway stack NEEDS these passed through — without them every
-      # caller is 401 and the API is a fence around nothing. Empty stays unset
-      # server-side (the reader trims and treats blank as unconfigured).
+      # caller is 401 and the API is a fence around nothing. The reader trims
+      # every value, and ALL of them blank (what `:-` injects when the host
+      # sets none) means OIDC is off. A blank OIDC_ISSUER beside any other
+      # non-blank OIDC_* value is a misconfiguration: the server refuses to
+      # boot and names the variables that are set (owner decision 2026-11-06).
       OIDC_ISSUER: ${OIDC_ISSUER:-}
       OIDC_AUDIENCE: ${OIDC_AUDIENCE:-}
       OIDC_JWKS_URI: ${OIDC_JWKS_URI:-}

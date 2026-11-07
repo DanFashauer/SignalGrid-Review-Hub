@@ -33,11 +33,11 @@ packages:
   - scripts
 
 catalog:
-  '@tailwindcss/vite': ^4.3.3
-  '@tanstack/react-query': ^5.101.4
+  '@tailwindcss/vite': ^4.3.4
+  '@tanstack/react-query': ^5.105.3
   '@types/node': ^25.3.3
-  '@types/react': ^19.2.18
-  '@types/react-dom': ^19.2.4
+  '@types/react': ^19.3.0
+  '@types/react-dom': ^19.3.0
   '@vitejs/plugin-react': ^5.0.4
   class-variance-authority: ^0.7.1
   clsx: ^2.1.1
@@ -45,14 +45,14 @@ catalog:
   framer-motion: ^12.23.24
   lucide-react: ^0.545.0
   # Must be this exact version because expo requires it
-  react: 19.2.8
+  react: 19.3.1
   # Must be this exact version because expo requires it
-  react-dom: 19.2.8
-  tailwind-merge: ^3.6.0
-  tailwindcss: ^4.3.3
-  tsx: ^4.23.12
-  vite: ^8.2.0
-  wouter: ^3.10.0
+  react-dom: 19.3.1
+  tailwind-merge: ^3.7.0
+  tailwindcss: ^4.3.4
+  tsx: ^4.23.15
+  vite: ^8.3.5
+  wouter: ^3.13.0
   zod: ^3.25.76
 
 autoInstallPeers: false
@@ -106,6 +106,7 @@ overrides:
   # Vite 8 bundles via Rolldown; mirror the rollup policy below EXACTLY:
   # linux-x64-gnu kept for CI/deploy, win32 bindings kept because the desktop
   # shell's windows-latest CI builds with vite, everything else stripped.
+  "rolldown>@rolldown/binding-android-arm-eabi": "-"
   "rolldown>@rolldown/binding-android-arm64": "-"
   "rolldown>@rolldown/binding-darwin-arm64": "-"
   "rolldown>@rolldown/binding-darwin-x64": "-"

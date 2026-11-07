@@ -328,6 +328,8 @@ const STEPS = [
   { name: "PWA fixture labels (control-plane data on the PWA says it is a fixture)", cmd: ["node", "scripts/check-pwa-fixture-labels.mjs"] },
   { name: "PWA fixture labels self-test (the gate can actually fail)", cmd: ["node", "scripts/check-pwa-fixture-labels.mjs", "--self-test"] },
   { name: "Decision palette (one palette, every tree, AA everywhere)", cmd: ["node", "scripts/check-decision-palette.mjs"] },
+  { name: "Web a11y basics self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-web-a11y-basics.mjs", "--self-test"] },
+  { name: "Web a11y basics (live regions on polling views, labelled icon buttons, reduced motion)", cmd: ["node", "scripts/check-web-a11y-basics.mjs"] },
   { name: "Reason codes self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-reason-codes.mjs", "--self-test"] },
   { name: "Reason codes (the engine's vocabulary is the catalog's and the contract's)", cmd: ["node", "scripts/check-reason-codes.mjs"] },
   { name: "Retention claims self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-retention-claims.mjs", "--self-test"] },
@@ -352,6 +354,7 @@ const STEPS = [
   { name: "Sim-script self-check (a queued Mac operation must name a script that runs)", cmd: ["node", "scripts/check-sim-scripts-selfcheck.mjs"] },
   { name: "Sim-request runner self-test (a result awaiting landing on a tick branch is never re-run; refused/unreadable stays pending)", cmd: ["node", "scripts/mac/run-requests.mjs", "--self-test"] },
   { name: "Brain proposal-PR route self-test (review build only; governance, decision-path and non-applying patches refused; publish idempotent)", cmd: ["node", "scripts/mac/brain-proposal-pr.mjs", "--self-test"] },
+  { name: "Local-brain guard repairs self-test (stripped synthetic brain: --check fails, --apply restores and re-pins, drift refused; needs python3, FAILS without it)", cmd: ["python3", "scripts/mac/local-brain/repairs/guards.py", "--self-test"] },
   { name: "Lane status line self-test (open hands and unread mail counted from a fixture tree; an unreadable part is left out, never zeroed)", cmd: ["bash", "scripts/mac/statusline.sh", "--self-test"] },
   { name: "Swift serious violations self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-swift-serious.mjs", "--self-test"] },
   { name: "Swift serious violations (the error-severity swiftlint rules, without a Swift toolchain)", cmd: ["node", "scripts/check-swift-serious.mjs"] },
@@ -665,6 +668,7 @@ const STEPS = [
   { name: "Proof: enterprise-auth (OIDC/JWT)", cmd: ["pnpm", "run", "proof:enterprise-auth"] },
   { name: "Proof: fixture-idp (the deploy-stack smoke's token source)", cmd: ["pnpm", "run", "test:fixture-idp"] },
   { name: "Proof: webauthn-verify", cmd: ["pnpm", "run", "proof:webauthn-verify"] },
+  { name: "Proof: webauthn-revocation (a revoked credential stays revoked; re-read before release)", cmd: ["pnpm", "run", "proof:webauthn-revocation"] },
   // Absorbed from the base lane. It SELF-SKIPS when DATABASE_URL is unset, which is
   // exactly why it belongs here rather than on the CI-only exempt list: preflight
   // stays deterministic and needs no Postgres, and an operator who HAS a database

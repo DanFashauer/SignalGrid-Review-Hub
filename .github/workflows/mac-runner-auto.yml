@@ -36,6 +36,10 @@ on:
     paths-ignore:
       - "artifacts/lane-messages/**"
       - "artifacts/agent-heartbeats/**"
+      # A raised or cleared hand is a lane record like a heartbeat: on 2026-11-06 the hand
+      # deliveries alone queued the one Mac runner for hours (each run is ~70 min) and the
+      # host lock they hold is the same one the local brain waits on between its steps.
+      - "artifacts/raised-hands/**"
       - "docs/agent/SURFACE_REVIEW_COVERAGE.md"
       - "docs/agent/LOOP.md"
   schedule:
@@ -83,7 +87,16 @@ jobs:
         # Pin the published helper, not the PR worktree. Normal local ticks stay nonblocking.
         env:
           GITHUB_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
         run: |
+          # ONE RUNNER, MANY QUEUED JOBS. A job queued for a PR that has since merged or closed
+          # still held the single Mac runner for ~25 minutes (on 2026-11-07 the queue held #1909
+          # and #1265, both merged, ahead of three open PRs). Read the PR's state when the job
+          # STARTS and skip the chain if it is closed; an unreadable state runs it (fail-closed).
+          pr_state=$(gh api "repos/$REPO/pulls/$PR_NUMBER" --jq .state 2>/dev/null) || pr_state=unknown
+          if [ "$pr_state" = closed ]; then echo "PR #$PR_NUMBER is closed; the Mac verification is skipped."; exit 0; fi
           bash scripts/mac/ci-host-verification.sh 24eff86a940099e0725d474d1d5520bfbc71d368 39600 2400 <<'CI_CHAIN'
           set -u
           code=0

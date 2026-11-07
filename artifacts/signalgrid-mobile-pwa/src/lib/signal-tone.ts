@@ -25,7 +25,10 @@ export const SIGNAL_BADGE_TONE: Record<SignalType, string> = {
 /** Tone for a type outside the enum: dashed and amber, distinct from every known type. */
 export const UNKNOWN_SIGNAL_TONE = "text-amber-300 bg-amber-400/10 border-amber-400/60 border-dashed";
 
-export function signalBadge(type: string): { tone: string; label: string; known: boolean } {
+export function signalBadge(type: unknown): { tone: string; label: string; known: boolean } {
+  // The API client casts the response rather than parsing it, so a non-string type can
+  // arrive; it renders AS unknown instead of throwing and blanking the Signals page.
+  if (typeof type !== "string") return { tone: UNKNOWN_SIGNAL_TONE, label: "unknown", known: false };
   if (Object.hasOwn(SIGNAL_BADGE_TONE, type)) {
     return { tone: SIGNAL_BADGE_TONE[type as SignalType], label: type.replaceAll("-", " "), known: true };
   }

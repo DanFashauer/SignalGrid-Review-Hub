@@ -328,6 +328,8 @@ const STEPS = [
   { name: "PWA fixture labels (control-plane data on the PWA says it is a fixture)", cmd: ["node", "scripts/check-pwa-fixture-labels.mjs"] },
   { name: "PWA fixture labels self-test (the gate can actually fail)", cmd: ["node", "scripts/check-pwa-fixture-labels.mjs", "--self-test"] },
   { name: "Decision palette (one palette, every tree, AA everywhere)", cmd: ["node", "scripts/check-decision-palette.mjs"] },
+  { name: "Web a11y basics self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-web-a11y-basics.mjs", "--self-test"] },
+  { name: "Web a11y basics (live regions on polling views, labelled icon buttons, reduced motion)", cmd: ["node", "scripts/check-web-a11y-basics.mjs"] },
   { name: "Reason codes self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-reason-codes.mjs", "--self-test"] },
   { name: "Reason codes (the engine's vocabulary is the catalog's and the contract's)", cmd: ["node", "scripts/check-reason-codes.mjs"] },
   { name: "Retention claims self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-retention-claims.mjs", "--self-test"] },
@@ -665,6 +667,7 @@ const STEPS = [
   { name: "Proof: enterprise-auth (OIDC/JWT)", cmd: ["pnpm", "run", "proof:enterprise-auth"] },
   { name: "Proof: fixture-idp (the deploy-stack smoke's token source)", cmd: ["pnpm", "run", "test:fixture-idp"] },
   { name: "Proof: webauthn-verify", cmd: ["pnpm", "run", "proof:webauthn-verify"] },
+  { name: "Proof: webauthn-revocation (a revoked credential stays revoked; re-read before release)", cmd: ["pnpm", "run", "proof:webauthn-revocation"] },
   // Absorbed from the base lane. It SELF-SKIPS when DATABASE_URL is unset, which is
   // exactly why it belongs here rather than on the CI-only exempt list: preflight
   // stays deterministic and needs no Postgres, and an operator who HAS a database

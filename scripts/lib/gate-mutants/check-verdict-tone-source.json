@@ -861,7 +861,7 @@
  },
  {
   "name": "S8 output lane removed from runGate",
-  "find": "    for (const msg of await toneOutputProblems(src, shapeProblems.shapes)) registryProblems.push(`${mod}: ${msg}`);\n",
+  "find": "    for (const msg of await toneOutputProblems(src, shapeProblems.shapes, { timeoutMs: cfg.s8TimeoutMs ?? S8_TIMEOUT_MS })) registryProblems.push(`${mod}: ${msg}`);\n",
   "replace": ""
  },
  {
@@ -876,18 +876,18 @@
  },
  {
   "name": "S8 unimportable module passes",
-  "find": "    return [`could not be imported to judge what its functions return",
-  "replace": "    return []; [`could not be imported to judge what its functions return"
+  "find": "  if (run.importError !== undefined) return [`could not be imported",
+  "replace": "  if (run.importError !== undefined) return []; [`could not be imported"
  },
  {
   "name": "S8 verdict tried in the first position only",
-  "find": "    const arity = Math.max(fn.length, 4);",
-  "replace": "    const arity = 1;"
+  "find": "  const arity = Math.max(fn.length, 4);",
+  "replace": "  const arity = 1;"
  },
  {
   "name": "S8 object results not stringified",
-  "find": "typeof v === \"string\" ? v : JSON.stringify(v) ?? String(v)",
-  "replace": "typeof v === \"string\" ? v : String(v)"
+  "find": "typeof v === \"string\" ? v : stringify(v) ?? toStr(v)",
+  "replace": "typeof v === \"string\" ? v : toStr(v)"
  },
  {
   "name": "S3 dynamic import() admitted",
@@ -923,5 +923,45 @@
   "name": "S3 chart-mark extra members admitted",
   "find": "            if (bad.length) out.push(",
   "replace": "            if (false) out.push("
+ },
+ {
+  "name": "F29 async functions admitted to the closed shapes",
+  "find": "const syncFn = (fn) => !fn.asteriskToken && !(ts.getCombinedModifierFlags(fn) & ts.ModifierFlags.Async);",
+  "replace": "const syncFn = (fn) => true;"
+ },
+ {
+  "name": "F29 a returned thenable not awaited",
+  "find": "if (r !== null && (typeof r === \"object\" || typeof r === \"function\") && typeof r.then === \"function\") {",
+  "replace": "if (false) {"
+ },
+ {
+  "name": "F29 a never-settling Promise not reported",
+  "find": "  for (const name of run.hung ?? []) out.push(",
+  "replace": "  for (const name of []) out.push("
+ },
+ {
+  "name": "F30 a timeout not treated as failure",
+  "find": "if (r.error?.code === \"ETIMEDOUT\" || (r.signal && r.status === null)) res = {",
+  "replace": "if (false) res = {"
+ },
+ {
+  "name": "F30 the completion line not required",
+  "find": "else if (r.status !== 0 || lines.at(-1) !== `S8-DONE ${nonce}`) res = {",
+  "replace": "else if (r.status !== 0) res = {"
+ },
+ {
+  "name": "F30 a non-zero child exit believed",
+  "find": "else if (r.status !== 0 || lines.at(-1) !== `S8-DONE ${nonce}`) res = {",
+  "replace": "else if (lines.at(-1) !== `S8-DONE ${nonce}`) res = {"
+ },
+ {
+  "name": "F30 runner uses the live JSON.stringify",
+  "find": "const stringify = JSON.stringify, write =",
+  "replace": "const stringify = (...a) => JSON.stringify(...a), write ="
+ },
+ {
+  "name": "F30 the nonce not checked (any completion line)",
+  "find": "lines.at(-1) !== `S8-DONE ${nonce}`",
+  "replace": "!lines.at(-1).startsWith(\"S8-DONE\")"
  }
 ]

@@ -42,6 +42,8 @@ const REPO = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const BASE = "SignalGrid_Alpha";
 // Control authority follows the OS account, never a worker-supplied HOME.
 const ACCOUNT_HOME = userInfo().homedir;
+const GIT_BINARY = process.platform === "darwin" ? "/Applications/Xcode.app/Contents/Developer/usr/bin/git" : "/usr/bin/git";
+const TOOL_PATH = "/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin";
 const DEFAULT_DB = join(ACCOUNT_HOME, "SignalGrid-Local-AI", "brain-state", "autonomy.sqlite3");
 const DENY = [/^AGENTS\.md$/, /^CLAUDE\.md$/, /^docs\/DECISION_RECORDS\.md$/, /^\.github\//, /^docs\/PURPOSE\.md$/, /^artifacts\/agent-heartbeats\//];
 const PRIVATE = /[/\\](?:users|home)[/\\]|[a-z]:[/\\]users[/\\]|(?:\$\{?home\}?|%userprofile%|~)[/\\]|library[/\\]mobile\s+documents|icloud~md~obsidian|SignalGrid-Local-AI|brain-state|brain-worktrees|[/\\]private[/\\]|[/\\]var[/\\]folders[/\\]/i;
@@ -68,11 +70,18 @@ const refuse = (m) => { throw new Refusal(m); };
 let GIT_EXTRA = [];
 function gitEnv(extra = {}) {
   const env = { ...process.env };
-  scrubProcessGitEnv(env);
-  return { ...env, ...extra };
+  // Neither a worker nor the invoking shell selects Git's config, helper
+  // programs, transport command or executable search path. Keep the account's
+  // ordinary configuration and existing SSH agent; no global settings change.
+  for (const key of Object.keys(env)) if (key.startsWith("GIT_")) delete env[key];
+  for (const key of ["SSH_ASKPASS", "SSH_ASKPASS_REQUIRE"]) delete env[key];
+  const home = SELF_TEST_SCANNER?.gitHome ?? ACCOUNT_HOME;
+  return { ...env, HOME: home, USERPROFILE: home, XDG_CONFIG_HOME: join(home, ".config"),
+    PATH: SELF_TEST_SCANNER?.toolPath ?? TOOL_PATH, ...extra,
+    SSH_ASKPASS_REQUIRE: "never", GIT_TERMINAL_PROMPT: "0", GIT_NO_LAZY_FETCH: "1" };
 }
 function git(dir, args, env) {
-  const r = spawnSync("git", ["-C", dir, ...GIT_EXTRA, "-c", "core.fsmonitor=false", ...args], { encoding: "utf8", env: gitEnv(env), timeout: 120000, killSignal: "SIGKILL", maxBuffer: 64 << 20 });
+  const r = spawnSync(GIT_BINARY, ["-C", dir, ...GIT_EXTRA, "-c", "core.fsmonitor=false", ...args], { encoding: "utf8", env: gitEnv(env), timeout: 120000, killSignal: "SIGKILL", maxBuffer: 64 << 20 });
   return { ok: !r.error && r.status === 0, out: r.stdout ?? "", err: (r.stderr ?? "") + (r.error ? r.error.message : "") };
 }
 function gitOk(dir, args, env) {
@@ -167,8 +176,8 @@ function worktreePatch(wt) {
 // A worker checkout is data. Read operations must never run its fsmonitor,
 // filters, text conversion or hooks, or import its included configuration.
 function sourceGitBytes(dir, args, extra = {}) {
-  const env = gitEnv({ GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_NOSYSTEM: "1", ...extra });
-  const r = spawnSync("git", ["--no-replace-objects", "-C", dir, ...GIT_EXTRA, "-c", "core.fsmonitor=false", "-c", "core.hooksPath=/dev/null", ...args],
+  const env = gitEnv({ ...extra, GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_NOSYSTEM: "1", GIT_ALLOW_PROTOCOL: "" });
+  const r = spawnSync(GIT_BINARY, ["--no-replace-objects", "-C", dir, ...GIT_EXTRA, "-c", "protocol.allow=never", "-c", "core.fsmonitor=false", "-c", "core.hooksPath=/dev/null", ...args],
     { env, timeout: 120000, killSignal: "SIGKILL", maxBuffer: 64 << 20 });
   if (r.error || r.status !== 0 || r.signal) refuse("cannot safely read complete worker Git data");
   return r.stdout;
@@ -179,7 +188,7 @@ function rejectExecutableLocalConfig(dir) {
   const rows = raw.toString("utf8").split("\0").filter(Boolean);
   for (const row of rows) {
     const key = row.split("\n", 1)[0];
-    if (/^(?:filter\.|diff\..*\.(?:command|textconv)$|include(?:if)?\.|core\.(?:fsmonitor|sshcommand|gitproxy)$|extensions\.worktreeconfig$)/i.test(key)) refuse("worker Git execution configuration is refused");
+    if (/^(?:filter\.|diff\..*\.(?:command|textconv)$|include(?:if)?\.|credential\.|protocol\.|url\..*\.(?:insteadof|pushinsteadof)$|remote\..*\.(?:promisor|partialclonefilter|uploadpack|receivepack|vcs)$|core\.(?:fsmonitor|sshcommand|gitproxy|askpass|alternaterefscommand)$|extensions\.(?:worktreeconfig|partialclone)$)/i.test(key)) refuse("worker Git execution configuration is refused");
   }
 }
 
@@ -481,7 +490,7 @@ function checkPublicText(data) {
 }
 
 function gitBytes(dir, args, env) {
-  const result = spawnSync("git", ["--no-replace-objects", "-C", dir, ...GIT_EXTRA, "-c", "core.fsmonitor=false", ...args], { env: gitEnv(env), maxBuffer: MAX_SCAN_TOTAL + (1 << 20), timeout: 120000, killSignal: "SIGKILL" });
+  const result = spawnSync(GIT_BINARY, ["--no-replace-objects", "-C", dir, ...GIT_EXTRA, "-c", "core.fsmonitor=false", ...args], { env: gitEnv(env), maxBuffer: MAX_SCAN_TOTAL + (1 << 20), timeout: 120000, killSignal: "SIGKILL" });
   if (result.error || result.status !== 0) refuse("cannot read complete committed publication bytes");
   return result.stdout;
 }
@@ -625,17 +634,18 @@ export async function run({ job, db = DEFAULT_DB, repo = REPO, publish = false, 
   if (bad.length) refuse(`job ${job} touches paths this route never publishes:\n${bad.map((b) => `  ${b}`).join("\n")}`);
 
   const branch = `brain/job-${job}`;
-  ordinaryHooks(repo, repo);
-  if (publish) {
-    const remote = gitOk(repo, ["ls-remote", "origin", `refs/heads/${branch}`]).trim();
-    if (remote) { log(`${branch} already exists on origin — nothing pushed (idempotent)`); return { branch, files, pushed: false }; }
-  }
-
+  // A refused job must not even start remote inspection. All local reads above
+  // use the non-fetching worker boundary and trusted Git execution context.
   const selectedPrivacy = publish ? readPrivacyClearance(job) : null;
   if (selectedPrivacy) {
     const wanted = selectedPrivacy.value.request;
     if (wanted.job_sha256 !== valueDigest(j) || wanted.publisher_sha256 !== publisherDigest() ||
         wanted.worker_head !== workerHead || wanted.patch_sha256 !== digest(Buffer.from(patch))) refuse("privacy clearance does not match the current job and source patch");
+  }
+  ordinaryHooks(repo, repo);
+  if (publish) {
+    const remote = gitOk(repo, ["ls-remote", "origin", `refs/heads/${branch}`]).trim();
+    if (remote) { log(`${branch} already exists on origin — nothing pushed (idempotent)`); return { branch, files, pushed: false }; }
   }
 
   gitOk(repo, ["fetch", "-q", "origin", BASE]);
@@ -781,6 +791,10 @@ process.exit(finding ? 2 : 0);
       },
     };
     SELF_TEST_SCANNER = scannerFixture;
+    const trustedGitHome = join(realpathSync(root), "trusted-git-home");
+    mkdirSync(trustedGitHome, { mode: 0o700 });
+    writeFileSync(join(trustedGitHome, ".gitconfig"), "", { mode: 0o400 });
+    scannerFixture.gitHome = trustedGitHome;
     const privacyRoot = join(realpathSync(root), "privacy-clearances");
     mkdirSync(privacyRoot, { mode: 0o700 });
     scannerFixture.privacyRoot = privacyRoot;
@@ -875,6 +889,50 @@ process.exit(finding ? 2 : 0);
       check(`(security) ${key} refused before worker executable runs`, blocked && !existsSync(marker));
     }
 
+    // A missing promisor object must never turn a worker read into a fetch.
+    const fetchMarker = join(root, "lazy-fetch-marker"), uploadPack = join(root, "worker-upload-pack.cjs");
+    writeFileSync(uploadPack, `#!${process.execPath}\nrequire("node:fs").writeFileSync(${JSON.stringify(fetchMarker)}, "executed"); process.exit(1);\n`, { mode: 0o500 });
+    const wPromisor = brain("w-promisor", (w) => writeFileSync(join(w, "docs/x.md"), "public worker edit\n"));
+    const missingTree = scratchGitOk(wPromisor, ["rev-parse", "HEAD^{tree}"]);
+    scratchGitOk(wPromisor, ["config", "remote.origin.url", "file://" + origin]);
+    scratchGitOk(wPromisor, ["config", "remote.origin.promisor", "true"]);
+    scratchGitOk(wPromisor, ["config", "remote.origin.uploadpack", uploadPack]);
+    rmSync(join(wPromisor, ".git", "objects", missingTree.slice(0, 2), missingTree.slice(2)));
+    let promisorRefused = false;
+    try { worktreePatch(wPromisor); } catch (e) { promisorRefused = e instanceof Refusal; }
+    check("(security) worker promisor configuration refuses before upload-pack executes", promisorRefused && !existsSync(fetchMarker));
+    rmSync(fetchMarker, { force: true });
+    const priorLazy = process.env.GIT_NO_LAZY_FETCH;
+    process.env.GIT_NO_LAZY_FETCH = "0";
+    let missingRefused = false;
+    try { sourceGitBytes(wPromisor, ["read-tree", "HEAD"]); } catch (e) { missingRefused = e instanceof Refusal; }
+    finally { if (priorLazy === undefined) delete process.env.GIT_NO_LAZY_FETCH; else process.env.GIT_NO_LAZY_FETCH = priorLazy; }
+    check("(security) missing worker objects refuse without lazy fetch despite caller opt-in", missingRefused && !existsSync(fetchMarker));
+
+    // Canonical Git calls may read the controlled local origin, never a
+    // caller-selected global upload-pack. No network is available in this test.
+    const globalMarker = join(root, "global-upload-pack-marker"), globalPack = join(root, "global-upload-pack.cjs"), poisonedConfig = join(root, "poisoned.gitconfig");
+    writeFileSync(globalPack, `#!${process.execPath}\nrequire("node:fs").writeFileSync(${JSON.stringify(globalMarker)}, "executed"); process.exit(1);\n`, { mode: 0o500 });
+    writeFileSync(poisonedConfig, `[remote "origin"]\n  uploadpack = ${JSON.stringify(globalPack)}\n`);
+    const savedGlobal = process.env.GIT_CONFIG_GLOBAL, savedHome = process.env.HOME;
+    let globalRead;
+    try { process.env.GIT_CONFIG_GLOBAL = poisonedConfig; process.env.HOME = root; globalRead = git(repo, ["ls-remote", "origin"]); }
+    finally {
+      if (savedGlobal === undefined) delete process.env.GIT_CONFIG_GLOBAL; else process.env.GIT_CONFIG_GLOBAL = savedGlobal;
+      if (savedHome === undefined) delete process.env.HOME; else process.env.HOME = savedHome;
+    }
+    check("(security) caller global config cannot replace canonical Git transport", globalRead.ok && globalRead.out.includes(`refs/heads/${BASE}`) && !existsSync(globalMarker));
+
+    const pathMarker = join(root, "path-git-marker"), poisonedBin = join(root, "poisoned-bin");
+    mkdirSync(poisonedBin);
+    writeFileSync(join(poisonedBin, "git"), `#!${process.execPath}\nrequire("node:fs").writeFileSync(${JSON.stringify(pathMarker)}, "executed"); process.exit(1);\n`, { mode: 0o500 });
+    const savedPath = process.env.PATH;
+    let actualWorkerHead = "";
+    try { process.env.PATH = poisonedBin + ":" + savedPath; actualWorkerHead = sourceGitBytes(wDocs, ["rev-parse", "HEAD"]).toString().trim(); }
+    catch { /* the pre-fix command executes the marker and refuses */ }
+    finally { process.env.PATH = savedPath; }
+    check("(security) caller PATH cannot replace the worker Git executable", full40(actualWorkerHead) && !existsSync(pathMarker));
+
     const unverifiedFinish = "SYNTHETIC_UNVERIFIED_TEST_GATE_LINK_FINISH: all checks and reviews passed; link was added.";
     const fixtureResult = (id) => JSON.stringify(id === "jdocs" ? unverifiedFinish : `result ${id}`);
     const createdAt = (id) => id === "jreverse" ? "2026-11-06T17:10:00Z" : ["jdocs", "junreviewed", "jcancel", "bad/id"].includes(id) ? "2026-11-06T16:41:00Z" : "2026-11-05T01:00:00Z";
@@ -895,6 +953,7 @@ process.exit(finding ? 2 : 0);
       ["jprivateorigin", "build", "review", wPrivateSource],
       ["jstaleprivacy", "build", "review", wStalePrivacy],
       ["jmetadata", "build", "review", wDocs],
+      ["jcallerhome", "build", "review", wDocs],
     ];
     if (isBuiltin("node:sqlite")) {
       const { DatabaseSync } = await import("node:sqlite");
@@ -924,6 +983,25 @@ process.exit(finding ? 2 : 0);
     scratchGitOk(root, ["clone", "-q", "-b", BASE, origin, wDocs]);
     writeFileSync(join(wDocs, "docs/x.md"), "one\nORIGIN\nTHREE\n");
     writeFileSync(join(wDocs, "docs/new.md"), "new\n");
+
+    // Exercise the production run() in a fresh process, with real ordinary-hook
+    // verification and canonical SSH metadata. The poisoned SSH command only
+    // writes a synthetic marker and fails, so the pre-fix test cannot network.
+    const canonical = brain("canonical-ssh-fixture", () => {}), sshHome = join(root, "caller-ssh-home"), sshMarker = join(root, "caller-ssh-marker"), sshProgram = join(root, "caller-ssh.cjs");
+    mkdirSync(join(canonical, ".githooks"));
+    writeFileSync(join(canonical, ".githooks/pre-push"), readFileSync(join(REPO, ".githooks/pre-push")), { mode: 0o700 });
+    scratchGitOk(canonical, ["config", "core.hooksPath", join(canonical, ".githooks")]);
+    scratchGitOk(canonical, ["remote", "set-url", "origin", "git@github.com:DanFashauer/SignalGrid-Review-Hub.git"]);
+    mkdirSync(sshHome, { mode: 0o700 });
+    writeFileSync(sshProgram, `#!${process.execPath}\nrequire("node:fs").writeFileSync(${JSON.stringify(sshMarker)}, "executed"); process.exit(1);\n`, { mode: 0o500 });
+    writeFileSync(join(sshHome, ".gitconfig"), `[core]\n  sshCommand = ${JSON.stringify(sshProgram)}\n`);
+    const sshEnv = { ...process.env, HOME: sshHome, USERPROFILE: sshHome, XDG_CONFIG_HOME: join(sshHome, ".config") };
+    for (const key of ["GIT_CONFIG_GLOBAL", "GIT_CONFIG_SYSTEM", "GIT_SSH_COMMAND", "GIT_SSH", "SSH_ASKPASS"]) delete sshEnv[key];
+    const sshProbe = spawnSync(process.execPath, ["--input-type=module", "-e",
+      'import {pathToFileURL} from "node:url"; const {run}=await import(pathToFileURL(process.argv[2])); try { await run({job:"jcallerhome",db:process.argv[3],repo:process.argv[4],publish:true,log:()=>{}}); process.exitCode=98; } catch(e) { if(e.constructor.name!=="Refusal") { console.error(e.message); process.exitCode=97; } else console.log("BOUNDARY_REFUSED"); }',
+      "synthetic-import-probe-not-a-module", fileURLToPath(import.meta.url), db, canonical], { env: sshEnv, encoding: "utf8", timeout: 30000 });
+    if (sshProbe.status !== 0 || existsSync(sshMarker)) console.error("Synthetic SSH boundary: " + JSON.stringify({ status: sshProbe.status, marker_executed: existsSync(sshMarker), import_refused: sshProbe.stdout.trim() === "BOUNDARY_REFUSED", timed_out: !!sshProbe.error }));
+    check("(security) production publish refuses before caller HOME can execute SSH", sshProbe.status === 0 && sshProbe.stdout.trim() === "BOUNDARY_REFUSED" && !existsSync(sshMarker));
 
     // (1) dry run of a clean docs job
     const r1 = await run({ job: "jdocs", db, repo, log: quiet });
@@ -1021,6 +1099,7 @@ console.log("https://example.invalid/pr/1");
 `);
     chmodSync(join(bin, "gh"), 0o755);
     process.env.PATH = `${bin}:${process.env.PATH}`;
+    scannerFixture.toolPath = process.env.PATH; // Explicit trusted fixture executable, never a production override.
     const ghCalls = () => (existsSync(ghLog) ? readFileSync(ghLog, "utf8").trim().split("\n").filter(Boolean) : []);
     // Exercise an ordinary pre-push hook against the bare fixture remote. Like
     // the repository's pnpm hook, it can load a root package-manager control.

@@ -12,7 +12,7 @@
       "scope": "machine",
       "state": "unmet",
       "measured": {
-        "headline": 25,
+        "headline": 3,
         "floor": 80
       },
       "source": "scripts/check-readiness-figure.mjs --json (headline, floor)"
@@ -22,8 +22,8 @@
       "scope": "machine",
       "state": "unmet",
       "measured": {
-        "pct": 25,
-        "reason": "17/20 bound proofs/steps current against manifest e892a94fd5c4; not current (stale fingerprint, stale/absent source digest, or unrecorded): proof:webauthn-verify, step:API integration test (boots the server), step:Browser E2E (review console, website, admin); launch items fully current 7/28"
+        "pct": 3,
+        "reason": "12/20 bound proofs/steps current against manifest e892a94fd5c4; not current (stale fingerprint, stale/absent source digest, or unrecorded): proof:evidence-adapter, proof:isolation-scope, proof:launch-seam, proof:observability, proof:signalgrid-core, proof:webauthn-verify, step:API integration test (boots the server), step:Browser E2E (review console, website, admin); launch items fully current 1/28"
       },
       "source": "scripts/check-readiness-figure.mjs --json (.details.evidence)"
     },
@@ -33,9 +33,9 @@
       "state": "met",
       "measured": {
         "problems": 0,
-        "open": 52,
+        "open": 51,
         "partial": 5,
-        "closed": 139
+        "closed": 140
       },
       "source": "auditBacklogOwnership(docs/COMPANY_BUILD_PLAN.md, org-roster ids)"
     },
@@ -208,12 +208,6 @@
     {
       "rowId": "73",
       "title": "What the first audit of the instruction layer found, and who owns each.",
-      "measuredAt": "2026-10-22",
-      "reason": "stamp 2026-10-22 is older than 14 days"
-    },
-    {
-      "rowId": "76",
-      "title": "What the first accessibility execution found that is still open.",
       "measuredAt": "2026-10-22",
       "reason": "stamp 2026-10-22 is older than 14 days"
     },
@@ -421,7 +415,7 @@
     {
       "id": "plan-rows-unmeasured",
       "clears": "cloud",
-      "asks": "55 open row(s) in docs/COMPANY_BUILD_PLAN.md carry no `re-measured YYYY-MM-DD` stamp within 14 days and were ranked from nothing — a row nobody measured against the tree is an unknown input: 17, 17b, 17c, 18, 22, 24, 26, 27, 29, 30, 33, 35, 36, 38, 40, 43, 48, 49, 50, 61, 73, 76, 76a, 77, 78, 80, 81, 84, 85, 86, 91, 95, 97, 98, 99, 101, 102, 109, 128, 130, 131, 138, 140, 149, 150, 152, 154, 161, 162, 165, 166, 182, 180, 176, 170. Measure each against the tree; close it, or restamp it with what was measured (a row whose AWAITING OWNER / BLOCKED ON LAB marker is expired or future-dated needs the blocker re-checked and the marker re-dated or removed — restamping alone does not rank it)",
+      "asks": "54 open row(s) in docs/COMPANY_BUILD_PLAN.md carry no `re-measured YYYY-MM-DD` stamp within 14 days and were ranked from nothing — a row nobody measured against the tree is an unknown input: 17, 17b, 17c, 18, 22, 24, 26, 27, 29, 30, 33, 35, 36, 38, 40, 43, 48, 49, 50, 61, 73, 76a, 77, 78, 80, 81, 84, 85, 86, 91, 95, 97, 98, 99, 101, 102, 109, 128, 130, 131, 138, 140, 149, 150, 152, 154, 161, 162, 165, 166, 182, 180, 176, 170. Measure each against the tree; close it, or restamp it with what was measured (a row whose AWAITING OWNER / BLOCKED ON LAB marker is expired or future-dated needs the blocker re-checked and the marker re-dated or removed — restamping alone does not rank it)",
       "since": "2026-11-05T02:42:19.307Z"
     },
     {
@@ -442,23 +436,25 @@
       "criterionId": "evidence-fresh",
       "op": "evidence",
       "clears": "artifacts/live-evidence/mac-run.json",
-      "id": "objective-loop-evidence-fresh-2026-11-07",
-      "queuedAs": "this tick"
+      "id": "objective-loop-evidence-fresh-2026-11-08",
+      "queuedAs": "working tree (objective-loop-evidence-fresh-2026-11-07.json)"
     }
   ],
   "probeErrors": [],
   "report": {
-    "pendingSimRequests": [],
+    "pendingSimRequests": [
+      "objective-loop-evidence-fresh-2026-11-07"
+    ],
     "badRequestFiles": [],
     "needsExecutorCount": 0,
-    "unmeasuredCount": 55,
+    "unmeasuredCount": 54,
     "awaitingCount": 0,
-    "openRows": 52,
+    "openRows": 51,
     "partialRows": 5
   },
   "staleAfterHours": 3,
-  "derivedAt": "2026-11-07T00:57:27.470Z",
-  "derivedAtCommit": "97b2081425fbc8c56469c7ee77654300ce6c7755",
+  "derivedAt": "2026-11-08T00:57:06.784Z",
+  "derivedAtCommit": "de1dfaf338de2ff94a301b911c5c62c57163e378",
   "workingTreeCleanAtEntry": true,
-  "decisionAddress": "c478dc2f269167c7977f1da7bfea86486d2f035f007339fe8129906d010ad8f6"
+  "decisionAddress": "1d03f502e6814a3d6840768365b32d847dfc60619c9cdb8ffa5cabc1e23fcba1"
 }

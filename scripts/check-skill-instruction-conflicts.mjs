@@ -701,15 +701,17 @@ async function selfTest() {
   const realPaths = trackedSkillFiles();
   const realFiles = realPaths.map((p) => ({ path: p, text: readFileSync(resolve(repo, p), "utf8") }));
   const realCands = realFiles.flatMap((f) => extractCandidates(f.text)).filter((c) => !c.mention);
-  const realVerdict = await judgeAll(hookPath, realCands.map((c) => c.command));
-  const before = collect(realFiles, realVerdict, []).findings.length;
   const victim = realFiles.find((f) => f.path.endsWith("/SKILL.md"));
   const plantedFiles = realFiles.map((f) =>
     f === victim ? { path: f.path, text: `${f.text}\n\`\`\`bash\n${BAD}\n\`\`\`\n` } : f,
   );
   const plantedCands = plantedFiles.flatMap((f) => extractCandidates(f.text)).filter((c) => !c.mention);
-  const plantedVerdict = await judgeAll(hookPath, plantedCands.map((c) => c.command));
-  const after = collect(plantedFiles, plantedVerdict, []).findings.length;
+  // Judge each unique command once for both document sets. The independent
+  // before/after collection and assertions still run; answers are never cached
+  // across gate invocations or different hooks.
+  const realAndPlantedVerdict = await judgeAll(hookPath, [...realCands, ...plantedCands].map((c) => c.command));
+  const before = collect(realFiles, realAndPlantedVerdict, []).findings.length;
+  const after = collect(plantedFiles, realAndPlantedVerdict, []).findings.length;
   check(
     `planting one denied step into a real skill adds exactly one finding (${before} → ${after})`,
     after === before + 1,

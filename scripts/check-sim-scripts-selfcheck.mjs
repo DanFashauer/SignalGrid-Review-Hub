@@ -478,7 +478,8 @@ export function bash32Problems(text, label) {
 // Keyed by basename; a name that no longer exists is a stale exemption.
 export const DARWIN_EXEMPT = new Map([["free-test-port.sh", "preflight's 'Reap orphaned api-servers' step runs it on Linux CI"],
   ["statusline.sh", "preflight and review-hub-ci run its --self-test on a Linux runner (it reads fixtures only)"],
-  ["host-verification-lock.sh", "a sourced library of functions; a guard's exit would kill the sourcing shell, and its only callers (ci-host-verification.sh, lane-tick.sh, build-tick.sh) are themselves Darwin-guarded"]]);
+  ["host-verification-lock.sh", "a sourced library of functions; a guard's exit would kill the sourcing shell, and its callers lane-tick.sh and build-tick.sh are themselves Darwin-guarded"],
+  ["ci-host-verification.sh", "build-tick-stages.mjs --self-test runs it directly against scratch repositories on the Linux validation job and in preflight; on CI it is only invoked by the self-hosted macOS runner's workflow step"]]);
 
 /**
  * Rule (h). The guard is a non-comment line naming `uname -s` and `Darwin` with an `exit`

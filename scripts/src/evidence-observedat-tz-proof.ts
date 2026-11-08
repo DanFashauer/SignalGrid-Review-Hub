@@ -20,6 +20,7 @@ import {
   EVIDENCE_VALUE_DOMAINS,
   evaluatePolicy,
   fixedClock,
+  normalizeAttachRecord,
   PRE_STRICT_FLOATING_FROM,
   PRE_STRICT_HOST_OFFSETS_MINUTES,
   PRE_STRICT_LARGE_STEPS_UNTIL,
@@ -35,6 +36,9 @@ import {
   type NormalizedSignal,
   type SignalCategory,
   type Workflow,
+  verifyRemediation,
+  puckVerdict,
+  type PuckSituation,
 } from "@workspace/signalgrid-core";
 
 const SELF = fileURLToPath(import.meta.url);
@@ -166,6 +170,93 @@ function postureTieFor(first: string, second: string): string {
 /** The freshness classifier with an offset-less EVALUATION clock: the clock names no instant either. */
 function freshnessAtOffsetlessNow(observedAt: string): string {
   return classifyFreshness(observedAt, "2026-07-13T13:00:00", 1, 24);
+}
+
+/** The attach normalizer on one stamp: 3600 s bound, reference 13:00Z. */
+function attachFor(observedAt: string): string {
+  return normalizeAttachRecord(
+    { credentialRef: "puck-tz", deviceRef: "ipad-tz", receiverRef: "rx-tz", wireState: "attached", observedAt },
+    "2026-07-13T13:00:00Z",
+    3600,
+  ).state;
+}
+
+/** Remediation verification with one evidence read stamped `observedAt`; request 11:30Z, as-of 13:00Z. */
+function verifyFor(observedAt: string): string {
+  return verifyRemediation(
+    {
+      id: "rem_tz", tenantId: "tenant_northwind", decisionId: "dec_tz", kind: "request_device_remediation",
+      targetType: "device", targetRef: "ipad-tz", reasonCode: "DEVICE_NONCOMPLIANT", status: "approved_simulated",
+      approvalRequired: true, simulatedOnly: true, requestedAt: "2026-07-13T11:30:00Z", approvedAt: "2026-07-13T11:31:00Z", note: "",
+    },
+    [{ targetRef: "ipad-tz", reasonCodes: [], observedAt }],
+    "2026-07-13T13:00:00Z",
+  ).state;
+}
+
+/**
+ * Remediation verification with TWO reads (request 08:00Z, as-of 09:00Z): `accusingAt` still carries the code,
+ * a zoned read at 08:20Z has it cleared. A UTC host reading an offset-less 08:10:00 under Date.parse said
+ * not_cleared; an accusing read that cannot be placed must never let the later clearing read decide instead.
+ */
+function verifyTwoReadsFor(accusingAt: string): string {
+  return verifyRemediation(
+    {
+      id: "rem_tz2", tenantId: "tenant_northwind", decisionId: "dec_tz2", kind: "request_device_remediation",
+      targetType: "device", targetRef: "ipad-tz", reasonCode: "DEVICE_NONCOMPLIANT", status: "approved_simulated",
+      approvalRequired: true, simulatedOnly: true, requestedAt: "2026-07-13T08:00:00Z", approvedAt: "2026-07-13T08:01:00Z", note: "",
+    },
+    [
+      { targetRef: "ipad-tz", reasonCodes: ["DEVICE_NONCOMPLIANT"], observedAt: accusingAt },
+      { targetRef: "ipad-tz", reasonCodes: [], observedAt: "2026-07-13T08:20:00Z" },
+    ],
+    "2026-07-13T09:00:00Z",
+  ).state;
+}
+
+/** Puck 4's matrix row for one attach record on an otherwise fully trusted session; 120 s bound. */
+function puckFor(wireState: string, forced: string, observedAt: string, reference: string): string {
+  const reading = normalizeAttachRecord(
+    { credentialRef: "puck-tz", deviceRef: "ipad-tz", receiverRef: "rx-tz", wireState, forced: forced === "forced", observedAt },
+    reference,
+    120,
+  );
+  const situation: PuckSituation = {
+    attach: reading.state, forced: reading.forced, release: "not_applicable", returned: "not_applicable",
+    identityConfirmed: true, postureCompliant: true, credentialStanding: "valid", readStrength: "strong",
+    enrolledStrength: "strong", higherRiskAction: false, presenceRadioLost: false, inactive: false, redockPendingReevaluation: false,
+  };
+  const row = puckVerdict(situation);
+  return `${reading.state}|${row.verdict}|${row.reasonCode}`;
+}
+
+/**
+ * Owner decision (b): remediation with one CLEARING read stamped `observedAt`; request 2026-07-12T23:30Z, as-of
+ * 2026-07-13T01:00Z. A date-only "2026-07-13" read as exact midnight fell inside that window and cleared.
+ */
+function verifyDateFor(observedAt: string): string {
+  return verifyRemediation(
+    {
+      id: "rem_tz3", tenantId: "tenant_northwind", decisionId: "dec_tz3", kind: "request_device_remediation",
+      targetType: "device", targetRef: "ipad-tz", reasonCode: "DEVICE_NONCOMPLIANT", status: "approved_simulated",
+      approvalRequired: true, simulatedOnly: true, requestedAt: "2026-07-12T23:30:00Z", approvedAt: "2026-07-12T23:31:00Z", note: "",
+    },
+    [{ targetRef: "ipad-tz", reasonCodes: [], observedAt }],
+    "2026-07-13T01:00:00Z",
+  ).state;
+}
+
+/**
+ * fixedClock on one stamp: the instant it pins, or THROWS when it refuses with ITS OWN zoned-timestamp error. Any
+ * other exception is reported verbatim, so a crash elsewhere cannot pass as the refusal (review LOW, 2026-11-07).
+ */
+function clockFor(iso: string): string {
+  try {
+    return fixedClock(iso).now().toISOString();
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    return message === `fixedClock requires a zoned ISO timestamp (Z or ±HH:MM), got: ${iso}` ? "THROWS" : `OTHER-ERROR: ${message}`;
+  }
 }
 
 /**
@@ -552,6 +643,14 @@ if (process.argv[2] === "--worker") {
     : mode === "dock" ? dockFreshnessFor(a!)
     : mode === "ptie" ? postureTieFor(a!, b!)
     : mode === "freshnow" ? freshnessAtOffsetlessNow(a!)
+    : mode === "attach" ? attachFor(a!)
+    : mode === "verify" ? verifyFor(a!)
+    : mode === "clock" ? clockFor(a!)
+    : mode === "verify2" ? verifyTwoReadsFor(a!)
+    : mode === "puck" ? puckFor(a!, b!, c!, "2026-07-13T08:00:30Z")
+    : mode === "puckref" ? puckFor(a!, b!, "2026-07-13T08:00:00Z", c!)
+    : mode === "puckdate" ? puckFor(a!, b!, "2026-07-13", "2026-07-13T00:00:30Z")
+    : mode === "verifydate" ? verifyDateFor(a!)
     : "BAD-MODE";
   console.log(`VERDICT ${out}`);
   process.exit(0);
@@ -817,6 +916,81 @@ for (const stamp of ["2026-03-02T08:00:00+00", "2026-03-02T00:00:00Z", "2024-02-
 {
   const r = ZONES.map((z) => inZone(z, "freshnow", "2026-07-13T12:30:00Z"));
   check("classifyFreshness: an offset-less evaluation clock is 'unknown' in every zone", r.every((v) => v === "unknown"), r.join(","));
+}
+
+// The other core readers of an instant use the same strict parser. An offset-less stamp names no instant, so the
+// answer must not move with the host zone, and it must be the fail-closed one: attach `unknown`, remediation
+// `unobserved` (the restriction holds), and a test clock that refuses to pin a zone-dependent instant.
+{
+  const offsetlessAttach = ZONES.map((z) => inZone(z, "attach", "2026-07-13T12:30:00"));
+  check("attach: an offset-less observation is 'unknown' in every zone (never host-local attached)", offsetlessAttach.every((v) => v === "unknown"), offsetlessAttach.join(","));
+  const zonedAttach = ZONES.map((z) => inZone(z, "attach", "2026-07-13T14:30:00+02:00"));
+  check("attach: a zoned observation 30 min before the reference is 'attached' in every zone (control)", zonedAttach.every((v) => v === "attached"), zonedAttach.join(","));
+  const offsetlessVerify = ZONES.map((z) => inZone(z, "verify", "2026-07-13T12:00:00"));
+  check("remediation: an offset-less evidence read is not admissible, 'unobserved' in every zone (never host-local cleared)", offsetlessVerify.every((v) => v === "unobserved"), offsetlessVerify.join(","));
+  const zonedVerify = ZONES.map((z) => inZone(z, "verify", "2026-07-13T08:00:00-04:00"));
+  check("remediation: a zoned read inside the window clears, in every zone (control)", zonedVerify.every((v) => v === "cleared"), zonedVerify.join(","));
+  const offsetlessClock = ZONES.map((z) => inZone(z, "clock", "2026-07-13T08:00:00"));
+  check("fixedClock: an offset-less stamp is refused in every zone (never a host-local pinned instant)", offsetlessClock.every((v) => v === "THROWS"), offsetlessClock.join(","));
+  const zonedClock = ZONES.map((z) => inZone(z, "clock", "2026-07-13T08:00:00Z"));
+  check("fixedClock: a Z stamp pins that instant in every zone (control)", zonedClock.every((v) => v === "2026-07-13T08:00:00.000Z"), zonedClock.join(","));
+}
+
+// FAIL-CLOSED, NOT ONLY ZONE-INDEPENDENT. The checks above prove an offset-less stamp gets the same answer in every
+// zone. These prove that answer is never MILDER than the one a UTC host gave the same input under Date.parse
+// (golden rule 2: an unreadable signal raises, never lowers). Each failed on head e8dfb15d before its fix.
+{
+  // Remediation: an accusing read whose instant cannot be read cannot be placed before the request, so it may be the
+  // FIRST read in the window. Dropping it let a later clearing read decide: a UTC host under Date.parse said
+  // not_cleared (the offset-less 08:10 read came first); the strict parser alone said cleared in every zone.
+  const accusing = ZONES.map((z) => inZone(z, "verify2", "2026-07-13T08:10:00"));
+  check("remediation: an accusing read with an offset-less instant blocks a later clearing read, not_cleared in every zone", accusing.every((v) => v === "not_cleared"), accusing.join(","));
+  const garbled = ZONES.map((z) => inZone(z, "verify2", "not-a-date"));
+  check("remediation: an accusing read with a garbled instant also blocks clearing, in every zone", garbled.every((v) => v === "not_cleared"), garbled.join(","));
+  const placedBefore = ZONES.map((z) => inZone(z, "verify2", "2026-07-13T07:50:00Z"));
+  check("remediation: an accusing read PLACED before the request is outside the window, so the clearing read decides (control)", placedBefore.every((v) => v === "cleared"), placedBefore.join(","));
+
+  // Attach: a removal is an accusation. A UTC host under Date.parse read an offset-less 08:00:00 as 30 s old and
+  // graded a forced removal deny CUSTODY_TORN; the strict parser alone dropped it to unknown, step_up CUSTODY_UNKNOWN.
+  const torn = ZONES.map((z) => inZone(z, "puck", "removed", "forced", "2026-07-13T08:00:00"));
+  check("attach: a forced removal with an offset-less instant stays deny CUSTODY_TORN in every zone (never unknown/step_up)", torn.every((v) => v === "removed|deny|CUSTODY_TORN"), torn.join(","));
+  const lifted = ZONES.map((z) => inZone(z, "puck", "removed", "unforced", "2026-07-13T08:00:00"));
+  check("attach: an unforced removal with an offset-less instant stays restrict CUSTODY_REMOVED in every zone", lifted.every((v) => v === "removed|restrict|CUSTODY_REMOVED"), lifted.join(","));
+  const tornRef = ZONES.map((z) => inZone(z, "puckref", "removed", "forced", "2026-07-13T08:00:30"));
+  check("attach: a forced removal judged against an offset-less REFERENCE stays deny CUSTODY_TORN in every zone", tornRef.every((v) => v === "removed|deny|CUSTODY_TORN"), tornRef.join(","));
+
+  // The general rule over every wire state: the same report with an unreadable time is never milder than with a
+  // readable, timely one. `attached` is not an accusation, so its unreadable form RAISES (allow -> step_up).
+  const RANK: Record<string, number> = { allow: 0, step_up: 1, restrict: 2, deny: 3 };
+  const severity = (v: string): number => RANK[v.split("|")[1] ?? ""] ?? -1;
+  for (const [wire, forced] of [["removed", "forced"], ["removed", "unforced"], ["attached", "unforced"], ["unseated?", "unforced"]] as const) {
+    const timely = inZone("UTC", "puck", wire, forced, "2026-07-13T08:00:00Z");
+    for (const unreadable of ["2026-07-13T08:00:00", "garbled"]) {
+      const got = ZONES.map((z) => inZone(z, "puck", wire, forced, unreadable));
+      check(
+        `attach: ${wire}/${forced} with an unreadable instant (${unreadable}) is never milder than the timely reading (${timely}), in every zone`,
+        severity(timely) >= 0 && got.every((v) => severity(v) >= severity(timely)),
+        got.join(","),
+      );
+    }
+  }
+}
+
+// OWNER DECISION (b), 2026-11-06, in the attach, remediation and test-clock readers: a date-only stamp names a
+// day, not an instant. It may not vouch (an `attached` dated "2026-07-13" was 30 s old at 00:00:30Z and allowed),
+// may not clear a restriction (it fell inside a 23:30Z-01:00Z window and cleared), and may not pin a clock. An
+// accusation dated that way still stands (a forced removal stays deny).
+{
+  const seated = ZONES.map((z) => inZone(z, "puckdate", "attached", "unforced"));
+  check("date-only: an attach record dated '2026-07-13' cannot vouch, unknown/step_up in every zone (never attached/allow)", seated.every((v) => v === "unknown|step_up|CUSTODY_UNKNOWN"), seated.join(","));
+  const torn = ZONES.map((z) => inZone(z, "puckdate", "removed", "forced"));
+  check("date-only: a forced removal dated '2026-07-13' still denies CUSTODY_TORN in every zone", torn.every((v) => v === "removed|deny|CUSTODY_TORN"), torn.join(","));
+  const cleared = ZONES.map((z) => inZone(z, "verifydate", "2026-07-13"));
+  check("date-only: a clearing read dated '2026-07-13' cannot clear, unobserved in every zone (the restriction holds)", cleared.every((v) => v === "unobserved"), cleared.join(","));
+  const control = ZONES.map((z) => inZone(z, "verifydate", "2026-07-13T00:00:00Z"));
+  check("date-only control: the same read at an exact 00:00:00Z clears, in every zone", control.every((v) => v === "cleared"), control.join(","));
+  const clock = ZONES.map((z) => inZone(z, "clock", "2026-07-13"));
+  check("date-only: fixedClock refuses '2026-07-13' in every zone (never a pinned midnight)", clock.every((v) => v === "THROWS"), clock.join(","));
 }
 
 // OWNER DECISION (a), 2026-11-06: KEEP BOTH accusations until the policy runs (the Codex P1 on #1442/#1792,

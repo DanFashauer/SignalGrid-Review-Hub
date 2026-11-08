@@ -1,9 +1,9 @@
 # Publication reviewer interface
 
 The publisher separates content validation from reviewer identity and file
-custody. These interfaces let a reviewer helper test its content against the
-same validator the publisher uses. They do not issue a clearance or enable
-publication.
+ownership and access. These interfaces let a reviewer helper test its content
+against the same validator the publisher uses. They do not issue a clearance or
+enable publication.
 
 ## Shared content validator
 
@@ -31,8 +31,8 @@ sorted recursively; array order is preserved. This is the publisher's existing
 digest convention, not a new request format.
 
 This function performs no file reads or writes. It does not authenticate a
-reviewer, check filesystem custody, establish that a review occurred, or grant
-permission to publish. Synthetic evidence is suitable for a helper's tests;
+reviewer, check filesystem ownership or access, establish that a review occurred,
+or grant permission to publish. Synthetic evidence is suitable for a helper's tests;
 it is not a real review or production clearance.
 
 The production reader still checks the real reviewer account, its separation

@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 2,
+  "id": "mac-merge-1935-brain-new-file-guard-under-dr-037",
+  "from": "mac",
+  "to": "cloud",
+  "subject": "Merge #1935 (brain new-file guard) under DR-037",
+  "body": "#1935 is green and CLEAN. It adds guards.py create_absent_required, already applied to the live brain by the owner at 12:09Z (all 7 guards present). Every new-file brain build failed at step 1 before it. One open P2 (comment 6721286138): narrow the exemption to declared new outputs once Codex's intake gains new_source_paths; replied with the trace, follow-up tracked with Codex. Please review and merge if you agree.",
+  "sentAt": "2026-11-08T12:26:27.553Z"
+}

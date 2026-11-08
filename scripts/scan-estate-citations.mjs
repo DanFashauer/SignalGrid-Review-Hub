@@ -32,7 +32,7 @@
 // stays DECLARED, not discovered: there is no directory walk and no override variable.
 // "Beside this checkout" from a linked worktree is `.claude/worktrees/`, so run it from the
 // main checkout.
-import { existsSync } from "node:fs";
+import { existsSync, realpathSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { basename, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -99,6 +99,22 @@ function gitOriginUrl(dir) {
   }
 }
 
+// True only when `dir` IS the top of a git working tree. A plain subdirectory of some other
+// checkout inherits that checkout's origin, so the origin check alone would accept an empty
+// child folder and report it CLEAN while the real repository goes unscanned (Codex review of
+// #1939, P2). Unreadable or mismatched fails closed.
+function isCheckoutRoot(dir) {
+  try {
+    const top = execFileSync("git", ["-C", dir, "rev-parse", "--show-toplevel"], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim();
+    return realpathSync(top) === realpathSync(dir);
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Pure (disk and git are injected): where to scan an estate entry, as `{ path }`, or
  * `{ reason }` when it must be reported NOT SCANNED.
@@ -110,7 +126,7 @@ function gitOriginUrl(dir) {
  * directory, and repoKeyFromRemote reads it as a bare name), another host, a deeper path,
  * or an owner that merely ends in ours.
  */
-export function locate(entry, { exists = existsSync, originUrl = gitOriginUrl, owner = OWNER } = {}) {
+export function locate(entry, { exists = existsSync, originUrl = gitOriginUrl, owner = OWNER, isRoot = isCheckoutRoot } = {}) {
   if (exists(entry.path)) return { path: entry.path };
   const expected = expectedName(entry);
   const want = `${owner}/${expected}`;
@@ -128,6 +144,7 @@ export function locate(entry, { exists = existsSync, originUrl = gitOriginUrl, o
           : `${got.key} (on ${got.host}, ${got.depth} path segments)`;
     return { reason: `${sib}: origin names ${named}, not github.com/${want}` };
   }
+  if (!isRoot(sib)) return { reason: `${sib}: not the top of a git checkout (a subfolder inherits its parent's origin)` };
   return { path: sib };
 }
 
@@ -179,7 +196,7 @@ function selfTest() {
   // case that is wrong in the parser is wrong here. `owner: "acme"` is injected so the cases
   // do not lean on the declared OWNER, except the one that proves the default is wired.
   const url = (u) => () => u;
-  const opts = (exists, originUrl) => ({ exists, originUrl, owner: "acme" });
+  const opts = (exists, originUrl) => ({ exists, originUrl, owner: "acme", isRoot: () => true });
   const reads = (u) => locate(entry, opts(only(sib), url(u)));
 
   const a = locate(entry, opts(only(entry.path), throwsIfCalled));
@@ -192,7 +209,8 @@ function selfTest() {
   const e = locate(entry, opts(only(sib), () => undefined));
   const devSib = resolve(SELF_ROOT, "..", "DEV");
   const f = locate(dev, opts(only(devSib), url("https://github.com/acme/DEV")));
-  const g = locate(entry, { exists: only(sib), originUrl: url(`https://github.com/${OWNER}/Demo`) });
+  const g = locate(entry, { exists: only(sib), originUrl: url(`https://github.com/${OWNER}/Demo`), isRoot: () => true });
+  const sub = locate(entry, { ...opts(only(sib), url("https://github.com/acme/Demo")), isRoot: () => false });
   // Origins that must NEVER prove identity. Each is a way an origin can SPELL acme/Demo while
   // naming something else: git resolves a bare `acme/Demo` as a local directory (so the relative
   // forms are paths, not hosted names), an owner that merely ENDS in ours is another owner, and
@@ -270,6 +288,7 @@ function selfTest() {
     ],
     ["(v) sibling present with no origin → NOT SCANNED, never scanned on faith", !e.path && e.reason.includes("origin names nothing")],
     ["(ii) …with no owner injected, the declared OWNER is the one required", g.path === sib],
+    ["(ii-b) a subfolder whose parent checkout has the right origin is NOT SCANNED, never clean", !sub.path && /not the top of a git checkout/.test(sub.reason ?? "")],
     [
       "(ix) dev is declared with its real folder name DEV and as archived, with the premise dated in its note",
       dev?.sibling === "DEV" && dev.archived === true && /archived: true.*2026-10-01/.test(dev.note) && f.path === devSib,

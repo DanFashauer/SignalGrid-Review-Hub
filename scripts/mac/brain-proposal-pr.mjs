@@ -402,7 +402,27 @@ function privateBytes(path, wantedMode, maxBytes = Infinity, ownerUid = process.
 // publisher-owned 0700; the reviewer owns clearances/ (0711) and its read-only
 // files (0444). The private parent keeps evidence inaccessible to other users.
 // Account/ACL provisioning and actual reviewer qualification are separate work.
-function requireReviewerReadOnly(path) {
+// On Darwin, remove ACLs with chmod -N on clearances/ and every receipt/evidence
+// file, then verify ls -led. The private parent's reviewer search ACL is separate.
+function requireReviewerReadOnly(path, fixture = false) {
+  if (process.platform === "darwin") {
+    // W_OK misses writesecurity: an ACL may allow a later write grant. Darwin
+    // can display @ instead of + when extended attributes and an ACL coexist,
+    // so inspect both the mode and the complete -e ACL output.
+    const acl = spawnSync("/bin/ls", ["-lde", path], {
+      env: { PATH: TOOL_PATH, LANG: "C", LC_ALL: "C" },
+      encoding: "utf8", timeout: 5000, maxBuffer: 65536,
+    });
+    const lines = (acl.stdout ?? "").trimEnd().split("\n");
+    const mode = lines[0]?.split(/\s+/, 1)[0] ?? "";
+    if (acl.error || acl.signal || acl.status !== 0 || (acl.stderr ?? "").trim() ||
+        lines.length !== 1 || !/^[d-][rwxstST-]{9}@?$/.test(mode)) {
+      refuse("reviewer custody ACL is present or unavailable");
+    }
+  }
+  // Only the existing internal synthetic principal fixture skips W_OK. Real
+  // Darwin ACL checks still run in that fixture; production never relaxes it.
+  if (fixture) return;
   try { accessSync(path, constants.W_OK); }
   catch (e) {
     if (e.code === "EACCES" || e.code === "EPERM") return;
@@ -429,9 +449,9 @@ function readPrivacyClearance(job) {
     const parent = lstatSync(dirname(root)), mode = fixture ? 0o400 : 0o444;
     if (!parent.isDirectory() || parent.uid !== process.getuid() || (parent.mode & 0o777) !== 0o700 ||
         (directory.mode & 0o777) !== (fixture ? 0o700 : 0o711)) refuse("privacy clearance directory custody is invalid");
-    if (!fixture) requireReviewerReadOnly(root);
+    requireReviewerReadOnly(root, fixture);
     const path = join(root, job + ".json");
-    if (!fixture) requireReviewerReadOnly(path);
+    requireReviewerReadOnly(path, fixture);
     const bytes = privateBytes(path, mode, 1 << 20, directory.uid);
     const value = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
     if (value?.format !== "signalgrid-publication-privacy-clearance/v2" || value.job !== job ||
@@ -449,7 +469,7 @@ function readPrivacyClearance(job) {
       if (review?.decision !== decision || !["codex", "claude", "owner"].includes(review.system) || !ref ||
           typeof ref.path !== "string" || !ref.path.startsWith(root + sep) || ref.path === path ||
           ref.mode !== mode || ref.uid !== directory.uid || !/^[0-9a-f]{64}$/.test(ref.sha256 ?? "")) refuse("source and artifact privacy reviews are required");
-      if (!fixture) requireReviewerReadOnly(ref.path);
+      requireReviewerReadOnly(ref.path, fixture);
       const evidence = privateBytes(ref.path, mode, 1 << 20, directory.uid);
       if (digest(evidence) !== ref.sha256) refuse("privacy review evidence changed");
       const reviewed = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(evidence));
@@ -461,7 +481,7 @@ function readPrivacyClearance(job) {
     }
     const end = lstatSync(root);
     if (["dev", "ino", "uid", "mode"].some((key) => end[key] !== directory[key])) refuse("privacy clearance directory changed");
-    if (!fixture) requireReviewerReadOnly(root);
+    requireReviewerReadOnly(root, fixture);
     return { value, path, sha256: digest(bytes) };
   } catch (e) {
     if (e instanceof Refusal) throw e;
@@ -950,6 +970,37 @@ process.exit(finding ? 2 : 0);
         value.artifact_review.evidence_ref = { path: unreviewed, sha256: digest(unreviewedBytes), uid: process.getuid(), mode: 0o400 };
       });
       check("(privacy) hashed text alone is not a structured artifact review", probeRefused("unreviewed-text"));
+      // Real Darwin ACLs on disposable synthetic custody. An ACL that grants
+      // writesecurity must not survive as a valid privacy-review boundary.
+      if (process.platform === "darwin") {
+        const aclEnv = { PATH: TOOL_PATH, LANG: "C", LC_ALL: "C" };
+        for (const kind of ["directory", "receipt", "source_review", "artifact_review"]) {
+          const id = "acl-" + kind;
+          grantFixturePrivacy(id, probeRequest(id), {}, privacyProbeRoot);
+          const receiptPath = join(privacyProbeRoot, id + ".json");
+          const value = JSON.parse(readFileSync(receiptPath, "utf8"));
+          const target = kind === "directory" ? privacyProbeRoot : kind === "receipt" ? receiptPath : value[kind].evidence_ref.path;
+          const before = spawnSync("/bin/ls", ["-lde", target], { encoding: "utf8", env: aclEnv });
+          if (before.status !== 0 || before.stdout.trimEnd().split("\n").length !== 1 || before.stdout.split(/\s+/, 1)[0].includes("+")) throw new Error("Darwin ACL fixture did not start without ACLs");
+          const grant = spawnSync("/bin/chmod", ["+a", "user:" + userInfo().username + " allow writesecurity", target], { encoding: "utf8", env: aclEnv });
+          if (grant.status !== 0) throw new Error("Darwin writesecurity fixture could not be created");
+          try {
+            const listed = spawnSync("/bin/ls", ["-lde", target], { encoding: "utf8", env: aclEnv });
+            const aclLines = listed.stdout.trimEnd().split("\n"), aclMode = listed.stdout.split(/\s+/, 1)[0];
+            const actualACL = listed.status === 0 && listed.stdout.includes("writesecurity") &&
+              (aclMode.includes("+") || aclLines.length > 1);
+            if (!actualACL) throw new Error("Darwin ACL fixture was not observed: " +
+              JSON.stringify({ status: listed.status, mode: aclMode, lines: aclLines.length, writesecurity: listed.stdout.includes("writesecurity") }));
+            console.error("ACL_FIXTURE_OBSERVED " + JSON.stringify({ kind, mode: aclMode, lines: aclLines.length, writesecurity: true }));
+            check("(privacy/Darwin) " + kind + " writesecurity ACL is refused", probeRefused(id));
+          } finally {
+            const remove = spawnSync("/bin/chmod", ["-N", target], { encoding: "utf8", env: aclEnv });
+            if (remove.status !== 0) throw new Error("Own Darwin ACL fixture was not removed normally");
+          }
+        }
+      } else {
+        console.log("SKIP: four real Darwin custody ACL probes require macOS; not verified on this platform.");
+      }
     } finally { scannerFixture.privacyRoot = savedPrivacyRoot; scannerFixture.privacyReviewerFixture = true; }
 
     // Cloud findings: every private representation crosses the production text

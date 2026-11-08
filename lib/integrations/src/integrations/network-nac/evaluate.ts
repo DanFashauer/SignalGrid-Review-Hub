@@ -61,6 +61,20 @@ export function evaluateNetwork(
 
   // 4. Authenticated + compliant — but a stale auth is not proof of current state.
   if (signal.authState === "authenticated") {
+    // A device on a RESTRICTED segment is contained whatever the age of its auth. This check used to come only
+    // after the stale return below, so a device that reached the management VLAN with a stale, garbled or
+    // offset-less `lastAuthAt` stepped up instead of being restricted: the weaker answer won because the auth's
+    // age was looked at first (review F2, 2026-11-07). Same condition as the restricted branch further down.
+    const containment = options.segmentPolicy;
+    if (
+      containment &&
+      containment.expected.length > 0 &&
+      signal.segment !== null &&
+      !includesSegment(containment.expected, signal.segment) &&
+      includesSegment(containment.restricted ?? [], signal.segment)
+    ) {
+      return v("on_unexpected_segment", "SEGMENT_RESTRICTED", "restrict", loc);
+    }
     if (freshness === "stale") {
       return v("network_unknown", "STALE_NETWORK_STATE", "step_up", loc);
     }

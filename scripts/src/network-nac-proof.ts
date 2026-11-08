@@ -314,13 +314,15 @@ check("far-future makes the trusted device stale → step_up", evaluateNetwork(b
   check("NEGATIVE CONTROL: declaring unreported compliance clean is CAUGHT (mismatches > 0)",
     wrongPredicate.mismatches > 0 && typeof wrongPredicate.firstMismatch === "string");
 
-  // The unparseable-date sentinel behaves exactly like unreported — pinned so a
-  // future NaN path cannot quietly become fresh.
-  check("an unparseable lastAuthAt grades identically to an unreported one, on every axis combination",
+  // The unparseable-date sentinel behaves exactly like a STALE auth — pinned so a
+  // future NaN path cannot quietly become fresh, nor fall below stale to the milder
+  // unreported grading (deriveFreshness reserves `unknown` for an ABSENT stamp; a
+  // present but unreadable one cannot show the auth recent).
+  check("an unparseable lastAuthAt grades identically to a stale one, on every axis combination",
     ["authenticated", "unauthenticated", "quarantined", "unknown"].every((a) =>
       COMPLIANT.every((nc) => SEGMENT.every((seg) => {
         const va = evaluateNetwork(buildSignal({ authState: a, nacCompliant: nc, lastAuthAt: "not-a-date", segment: seg }), NOW, { segmentPolicy: POLICY });
-        const vb = evaluateNetwork(buildSignal({ authState: a, nacCompliant: nc, lastAuthAt: null, segment: seg }), NOW, { segmentPolicy: POLICY });
+        const vb = evaluateNetwork(buildSignal({ authState: a, nacCompliant: nc, lastAuthAt: STALE_ISO, segment: seg }), NOW, { segmentPolicy: POLICY });
         return va.reasonCode === vb.reasonCode && va.recommendedAction === vb.recommendedAction;
       }))));
 }

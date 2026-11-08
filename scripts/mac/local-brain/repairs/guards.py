@@ -163,6 +163,17 @@ GUARDS = {
              "\\g<i>\\g<line>\n"),
         ],
     },
+    "create_absent_required": {
+        "file": RUNTIME,
+        "present": re.compile(r'required_paths = \[p for p in requirements\.get\("required_source_paths", \[\]\) if self\.git\(repo, "ls-tree", "--name-only", sha, "--", p\)\]'),
+        "patch": [
+            (re.compile(r'^(?P<i>[ \t]+)required_paths = list\(requirements\.get\("required_source_paths", \[\]\)\)\n', re.M),
+             "\\g<i># Guard create_absent_required (scripts/mac/local-brain/repairs/guards.py): a path the task must CREATE\n"
+             "\\g<i># is absent from the pinned tree; requiring it made _required_read refuse every new-file build at step 1\n"
+             "\\g<i># (2026-11-08: 46138b9a, 692719ec, 9ef30316). An absent path stays readable as SOURCE ABSENT and creatable.\n"
+             "\\g<i>required_paths = [p for p in requirements.get(\"required_source_paths\", []) if self.git(repo, \"ls-tree\", \"--name-only\", sha, \"--\", p)]\n"),
+        ],
+    },
     "node_test_ts": {
         "file": RUNTIME,
         "present": re.compile(r'if not safe_path\(path\) or not path\.endswith\(\(".test.mjs", ".test.js", ".test.ts"\)\):'),
@@ -347,7 +358,8 @@ UNREPAIRED_RUNTIME = (
     "            if not safe_path(path) or not path.endswith((\".test.mjs\", \".test.js\")):\n"
     "                raise AgentBlocked(\"Choose an exact tracked or newly created Node test file\")\n"
     "            raise AgentBlocked(\"Available checks: diff-check, node-test:<path.test.mjs>, node-syntax:<path.mjs>. Full gates run separately.\")\n"
-    "        system = (\"check with query=diff-check or node-test:<path.test.mjs> or node-syntax:<path.mjs>, or finish\")\n")
+    "        system = (\"check with query=diff-check or node-test:<path.test.mjs> or node-syntax:<path.mjs>, or finish\")\n"
+    "        required_paths = list(requirements.get(\"required_source_paths\", []))\n")
 
 
 def self_test():
@@ -427,6 +439,9 @@ def self_test():
         ok("(7g) node-test accepts .test.ts and both prompt mentions name the suffix",
            '(".test.mjs", ".test.js", ".test.ts")' in runtime_txt and runtime_txt.count("node-test:<path.test.mjs|.test.ts>") == 2
            and "node-test:<path.test.mjs>" not in runtime_txt)
+        ok("(7h) required sources are filtered to paths present in the pinned tree, so a file to create is not required",
+           'if self.git(repo, "ls-tree", "--name-only", sha, "--", p)]' in runtime_txt
+           and 'required_paths = list(requirements.get("required_source_paths", []))' not in runtime_txt)
         snap = {n: sha(home / n) for n in (RUNTIME, BRAIN, HANDOFF, OPCFG)}
         ok("(8) a second --apply is a no-op", apply(home, "again", run_tests=False, say=quiet) is None and snap == {n: sha(home / n) for n in snap})
         # A brain whose anchor changed shape is refused and left untouched, not half-edited.

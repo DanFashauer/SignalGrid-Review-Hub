@@ -334,9 +334,12 @@ function readBack(file, identity) {
 /** Write the two review evidence files and the v2 clearance. Every check, including the
  * publisher's validator on the exact bytes, runs before the first file is created. A refusal
  * after that (an existing name, or the post-write readback) removes only the files this call
- * created, matched by device and inode. */
+ * created, matched by device and inode.
+ * `afterCreate` exists for the self-test only (the CLI never passes it): it is called with the
+ * created paths after the files exist and BEFORE every post-write check, so a test can plant an
+ * ACL there and prove those checks refuse. It cannot skip or relax any check. */
 export function writeClearance({ request, metadata, review, clearances, now, ttlMinutes = 30, identity, repo = null,
-  platform = process.platform, runLs = darwinLs }) {
+  platform = process.platform, runLs = darwinLs, afterCreate = null }) {
   if (identity === null || typeof identity !== "object" || !Number.isSafeInteger(identity.uid) || identity.uid < 0 || typeof identity.isRoot !== "boolean") refuse("reviewer identity is unknown");
   if (identity.isRoot) refuse("refusing to run as root: a clearance is written by the separate, unprivileged reviewer account");
   checkPrepared(request, metadata, { now });
@@ -375,6 +378,7 @@ export function writeClearance({ request, metadata, review, clearances, now, ttl
     created.push(exclusiveCreate(clearances, paths.clearance, clearanceBytes));
     const directory = openSync(clearances, constants.O_RDONLY);
     try { fsyncSync(directory); } finally { closeSync(directory); }
+    if (afterCreate !== null) afterCreate(created.map((file) => file.path));
     const [sourceBytes, artifactBytes, finalClearance] = created.map((file) => readBack(file, identity));
     for (const file of created) aclFree(file.path, `written file ${file.path}`, host);
     const end = lstatSync(clearances);
@@ -660,15 +664,72 @@ function selfTest() {
     const twice = cli(["--check", "--prepared", join(root, "doubled.log")]);
     check("(cli) two request lines are refused rather than one chosen", twice.status === 1 && twice.stderr.includes("refusing to choose"));
 
-    // --- real Darwin ACLs, where they exist
+    // --- collision at the final clearance name: platform-neutral, so it runs everywhere.
+    // Only this attempt's two evidence files are removed; the existing file and an unrelated
+    // file are left byte-for-byte as they were.
+    const collision = (label, host) => {
+      const cdir = clearanceDir(), existing = Buffer.from("pre-existing clearance bytes\n"), unrelated = Buffer.from("unrelated\n");
+      writeFileSync(join(cdir, "jfix.json"), existing, { flag: "wx", mode: 0o444 });
+      writeFileSync(join(cdir, "other.json"), unrelated, { flag: "wx", mode: 0o444 });
+      check(label, refusedWith(() => writeClearance({ ...fixture(), review: review(), clearances: cdir, now: NOW, ttlMinutes: 30, identity, ...host }), "refusing to overwrite") &&
+        JSON.stringify(readdirSync(cdir).sort()) === JSON.stringify(["jfix.json", "other.json"]) &&
+        readFileSync(join(cdir, "jfix.json")).equals(existing) && readFileSync(join(cdir, "other.json")).equals(unrelated));
+    };
+    collision("(refuse) a collision at the final <job>.json removes only this attempt's two evidence files", linux);
+
+    // --- real Darwin ACLs, read by the DEFAULT ls -lde reader (no injected runLs), on synthetic
+    // temporary fixtures only. ACLs are applied and removed with chmod +a / chmod -N exactly as the
+    // publisher's own Darwin self-test does.
     if (process.platform === "darwin") {
+      const aclEnv = { PATH: TOOL_PATH, LANG: "C", LC_ALL: "C" };
+      const plant = (target) => {
+        const grant = spawnSync("/bin/chmod", ["+a", "user:" + userInfo().username + " allow writesecurity", target], { encoding: "utf8", env: aclEnv });
+        if (grant.status !== 0) throw new Error("Darwin writesecurity fixture could not be created: " + grant.stderr);
+        const listed = spawnSync("/bin/ls", ["-lde", target], { encoding: "utf8", env: aclEnv });
+        const lines = listed.stdout.trimEnd().split("\n"), mode = listed.stdout.split(/\s+/, 1)[0];
+        if (!(listed.status === 0 && listed.stdout.includes("writesecurity") && (mode.includes("+") || lines.length > 1))) throw new Error("Darwin ACL fixture was not observed on " + target);
+      };
+      const unplant = (target) => {
+        try { lstatSync(target); } catch { return; }
+        const removed = spawnSync("/bin/chmod", ["-N", target], { encoding: "utf8", env: aclEnv });
+        if (removed.status !== 0) throw new Error("own Darwin ACL fixture was not removed: " + removed.stderr);
+      };
+      const writeDefault = (cdir, afterCreate = null) => writeClearance({ ...fixture(), review: review(), clearances: cdir, now: NOW, ttlMinutes: 30, identity, afterCreate });
+      const withUnrelated = (cdir) => { writeFileSync(join(cdir, "other.json"), "unrelated\n", { flag: "wx", mode: 0o444 }); return cdir; };
+      const onlyUnrelated = (cdir) => JSON.stringify(readdirSync(cdir)) === JSON.stringify(["other.json"]);
+
+      const positive = clearanceDir();
+      const listedDir = darwinLs(positive);
+      if (listedDir.status !== 0 || listedDir.stdout.trimEnd().split("\n").length !== 1) throw new Error("Darwin positive fixture did not start ACL-free");
+      writeDefault(positive);
+      check("(Darwin, default ls -lde) a write to a real ACL-free reviewer-owned 0711 clearances/ succeeds; all three files are 0444, single-link, owned by the uid",
+        JSON.stringify(readdirSync(positive).sort()) === JSON.stringify(["jfix.artifact_review.json", "jfix.json", "jfix.source_review.json"]) &&
+        readdirSync(positive).every((name) => { const st = lstatSync(join(positive, name)); return st.isFile() && st.nlink === 1 && st.uid === uid && (st.mode & 0o777) === 0o444; }));
+
+      const fileAcl = withUnrelated(clearanceDir());
+      let planted = null;
+      try {
+        check("(refuse/Darwin, default ls -lde) an ACL on a written file is refused after writing, and only this run's files are removed",
+          refusedWith(() => writeDefault(fileAcl, (paths) => { planted = paths[2]; plant(planted); }), "has an ACL") && planted !== null && onlyUnrelated(fileAcl));
+      } finally { if (planted !== null) unplant(planted); }
+
+      const dirAcl = withUnrelated(clearanceDir());
+      let dirPlanted = false;
+      try {
+        check("(refuse/Darwin, default ls -lde) an ACL appearing on clearances/ during readback is refused, and only this run's files are removed",
+          refusedWith(() => writeDefault(dirAcl, () => { plant(dirAcl); dirPlanted = true; }), "the clearances directory has an ACL") && dirPlanted && onlyUnrelated(dirAcl));
+      } finally { unplant(dirAcl); }
+
+      collision("(refuse/Darwin, default ls -lde) a collision at the final <job>.json removes only this attempt's two evidence files", {});
+
       const aclDir = clearanceDir();
-      const grant = spawnSync("/bin/chmod", ["+a", `user:${userInfo().username} allow writesecurity`, aclDir], { encoding: "utf8" });
-      if (grant.status !== 0) throw new Error("Darwin ACL fixture could not be created: " + grant.stderr);
-      try { check("(refuse/Darwin) a real writesecurity ACL on clearances/", refusedWith(() => write({ dir: aclDir, host: { platform: "darwin", runLs: darwinLs } }), "has an ACL") && readdirSync(aclDir).length === 0); }
-      finally { spawnSync("/bin/chmod", ["-N", aclDir]); }
+      plant(aclDir);
+      try { check("(refuse/Darwin, default ls -lde) a real writesecurity ACL on clearances/ before writing", refusedWith(() => writeDefault(aclDir), "has an ACL") && readdirSync(aclDir).length === 0); }
+      finally { unplant(aclDir); }
     } else {
-      console.log("NOT VERIFIED on this platform: a real Darwin ACL on clearances/ (needs macOS); the ls -lde guard is exercised here with injected listings.");
+      console.log(`SKIPPED on ${process.platform} (not run, not counted as passed): the five real-ACL Darwin cases need macOS's chmod +a and ls -lde ` +
+        "(positive write with the default reader; post-write file ACL; directory ACL during readback; final-name collision under the default reader; " +
+        "pre-write directory ACL). Here the ACL guard runs only against injected ls -lde listings.");
     }
   } finally { rmSync(root, { recursive: true, force: true }); }
   if (pass !== total) { console.error(`self-test FAILED (${pass}/${total})`); process.exit(1); }

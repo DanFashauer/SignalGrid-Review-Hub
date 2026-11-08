@@ -268,19 +268,57 @@ function classifyPreStrict(observedAt: string): PreStrictStamp {
     : isLegacyLocal(observedAt)
       ? Date.parse(`${observedAt} GMT`)
       : Number.NaN;
-  // Before 1973 some zones still ran at offsets off the quarter-hour grid below (local mean time, Liberia's
-  // −0:44:30 until 1972), so an older host-local stamp is not placed on the grid either.
-  return Number.isNaN(wall) || wall < FLOATING_FROM ? { kind: "ambiguous" } : { kind: "floating", wall };
+  // Before October 1979 some zones still ran at offsets off the quarter-hour grid below (Pacific/Kiritimati at
+  // −10:40 until 1979-10, Liberia's −0:44:30 until 1972), so an older host-local stamp is not placed on the grid.
+  return Number.isNaN(wall) || wall < PRE_STRICT_FLOATING_FROM ? { kind: "ambiguous" } : { kind: "floating", wall };
 }
 
-/** 1973-01-01T00:00:00Z: from here every zone in the tz database sits on the quarter-hour grid. */
-const FLOATING_FROM = 94_694_400_000;
+/**
+ * 1979-10-03T00:00 wall time: every wall time from here is read at an instant (at most 14 hours earlier) when every
+ * zone in the tz database sat on the quarter-hour grid (round 6, 2026-11-08: round 5 said 1973, but
+ * Pacific/Kiritimati ran at −10:40 until 1979-10-01T10:40Z, measured against the runtime's own zone data by
+ * `proof:evidence-observedat-tz`).
+ */
+export const PRE_STRICT_FLOATING_FROM = Date.UTC(1979, 9, 3);
 
 /**
- * Every whole-quarter-hour UTC offset a host can run at, −12:00 to +14:00, in minutes east of UTC. A floating
- * stamp is placed once per offset; every zone in use today sits on this grid.
+ * Every whole-quarter-hour UTC offset a host can run at, −12:00 to +14:00, in minutes east of UTC. Every zone in
+ * use since `PRE_STRICT_FLOATING_FROM` sits on this grid.
  */
 export const PRE_STRICT_HOST_OFFSETS_MINUTES: readonly number[] = Array.from({ length: (14 * 60 + 12 * 60) / 15 + 1 }, (_, i) => -12 * 60 + i * 15);
+
+/**
+ * ROUND 6 (2026-11-08): A HOST'S OFFSET IS NOT ONE NUMBER PER DECISION. `Date.parse` reads each floating stamp at
+ * the offset the host's zone had at THAT wall time, so two stamps of one decision can be read at different offsets
+ * (Codex P1 on #1809: under America/New_York, 01:30 on 2026-03-08 is read at −05:00 and 03:30 at −04:00). The
+ * pre-strict readings therefore place the floating stamps of one category (and the posture stamps with an
+ * offset-less clock) at a base offset `a` before some point in wall order and `a + step` from it on, for every
+ * base offset and every step this returns. That is exact for every zone because, measured against the runtime's
+ * own zone data by `proof:evidence-observedat-tz`, since `PRE_STRICT_FLOATING_FROM`:
+ *   (1) every zone's offset is a whole quarter hour in [−12:00, +14:00];
+ *   (2) two transitions of one zone are at least 156 hours apart (the shortest: 167 hours, Brazil, October 2000).
+ *       The stamps that can change a reading span at most 26 hours of wall time (competing stamps), or 124 hours
+ *       with the clock (an age past 98 hours is expired, and a stamp 26 hours after the clock is in the future, on
+ *       every host), so at most 150 hours of instants: they straddle at most one transition, and the offset is a
+ *       single step in wall order whatever the engine does with a skipped or repeated wall time (it picks a side);
+ *   (3) after `PRE_STRICT_LARGE_STEPS_UNTIL` no transition moves an offset by more than 3 hours (the last larger
+ *       ones: Pacific/Apia and Pacific/Fakaofo crossing the date line, 2011-12-31). Stamps before it may step by
+ *       anything that keeps both offsets on the grid.
+ */
+export const PRE_STRICT_LARGE_STEPS_UNTIL = Date.UTC(2012, 0, 8);
+
+/** The largest step, in minutes, a zone's offset has made since `PRE_STRICT_LARGE_STEPS_UNTIL` (Antarctica/Casey: 3h). */
+export const PRE_STRICT_SMALL_STEP_MINUTES = 180;
+
+const quarterSteps = (limit: number): readonly number[] =>
+  Array.from({ length: (2 * limit) / 15 + 1 }, (_, i) => -limit + i * 15).filter((step) => step !== 0);
+const SMALL_STEPS = quarterSteps(PRE_STRICT_SMALL_STEP_MINUTES);
+const ANY_STEPS = quarterSteps(26 * 60);
+
+/** Every step (minutes, never 0) a host's offset can make between stamps whose earliest wall time is `earliestWall`. */
+export function preStrictOffsetSteps(earliestWall: number): readonly number[] {
+  return earliestWall >= PRE_STRICT_LARGE_STEPS_UNTIL ? SMALL_STEPS : ANY_STEPS;
+}
 
 /** The instant the pre-strict reader gave this stamp on a host at `offsetMinutes` east of UTC (NaN: none, or ambiguous). */
 export function preStrictInstantAt(stamp: PreStrictStamp, offsetMinutes: number): number {

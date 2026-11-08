@@ -9,6 +9,7 @@ import {
   parseObservedInstant,
   PRE_STRICT_HOST_OFFSETS_MINUTES,
   preStrictInstantAt,
+  preStrictOffsetSteps,
   preStrictReading,
   preStrictStamp,
   STALE_WINDOW_HOURS,
@@ -293,13 +294,19 @@ function preStrictAges(observedAt: string, nowIso: string | undefined): Freshnes
  * the verdict is never milder than the pre-strict reader's on ANY modelled host, whatever the policy tests,
  * `criticalSignalsPresent` and `dockEvidenceFreshness` included (each reading carries its own, recomputed).
  *
- * Deterministic: `Date.parse` reads offset-less and zone-less text in the HOST's zone, so a `floating` stamp is
- * placed once per whole-quarter-hour offset from −12:00 to +14:00 (`PRE_STRICT_HOST_OFFSETS_MINUTES`), every
- * floating stamp and the evaluation clock at the same offset, and every distinct reading is kept: the answer is the
- * most restrictive across hosts, not this host's. A stamp `Date.parse` accepts in a shape the core cannot place
- * (`ambiguous`) is not guessed at: every family carrying one gets every value it could read, and the policy BOUNDS
- * the outcome (`bounded`). Not modelled: a host whose offset changes between two stamps of one decision (a
- * daylight-saving switch between them); each modelled host keeps one offset for the whole decision.
+ * Deterministic: `Date.parse` reads offset-less and zone-less text in the HOST's zone, at the offset that zone had
+ * at that wall time, so the readings are taken for every host instead of this one (`preStrictCategoryReadings`):
+ * each category's floating stamps are placed at a base offset on the whole-quarter-hour grid from −12:00 to +14:00
+ * (`PRE_STRICT_HOST_OFFSETS_MINUTES`) up to some point in wall order and one zone step away from it after
+ * (round 6, 2026-11-08: a daylight-saving switch or a zone change between two stamps of one decision; Codex P1 on
+ * #1809, `preStrictOffsetSteps` says why that is every host). The posture category is placed together with an
+ * offset-less evaluation clock. Every combination of the categories' readings is read (the categories are placed
+ * independently, which can only add readings), and every distinct reading is kept: the answer is the most
+ * restrictive across hosts, not this host's. Past `PRE_STRICT_PRODUCT_CAP` combinations, or `PRE_STRICT_UNIT_CAP`
+ * floating stamps in one category, the readings are BOUNDED instead (each category's readings one at a time, every
+ * dock-wide freshness; the policy then lets a rule count when each of its conditions holds in some reading). A
+ * stamp `Date.parse` accepts in a shape the core cannot place (`ambiguous`) is not guessed at: every family
+ * carrying one gets every value it could read, and the policy BOUNDS the outcome (`bounded`).
  *
  * Owner decision (c) stands: an exact ±HH stamp `Date.parse` rejects is read here as the strict reader reads it.
  * Kept only when it differs from the strict evidence, and computed only when a stamp is read differently by the
@@ -330,26 +337,73 @@ function readPreStrict(
   if (nowIso !== undefined && consider(nowIso) === "ambiguous") ambiguous.add("posture_freshness");
   if (!disputed && !retained) return undefined;
 
-  const seen = new Set<string>([canonicalJson(evidence)]);
+  const seen = new Set<string>([JSON.stringify(evidence)]);
   const worlds: Partial<PreStrictReadingFields>[] = [];
   const keep = (world: Partial<PreStrictReadingFields>): void => {
     if (Object.keys(world).length > 0) worlds.push(world);
   };
-  // Hosts that GROUP the signals alike and age the posture readings alike read the same evidence, so each
-  // distinct grouping is read once (the offsets only move comparisons; most hosts share a grouping).
-  const index = new Map<NormalizedSignal, number>(signals.map((signal, i) => [signal, i]));
-  const groupings = new Set<string>();
-  for (const offset of floating ? PRE_STRICT_HOST_OFFSETS_MINUTES : [0]) {
-    const instantOf = (iso: string): number => preStrictInstantAt(stampOf(iso), offset);
-    const grouping = groupLatest(signals, instantOf);
-    const shape = groupingShape(grouping, index, nowIso, instantOf);
-    if (groupings.has(shape)) continue;
-    groupings.add(shape);
+  const read = (grouping: LatestByCategory): void => {
     const reading = readEvidence(grouping, identityEnabledFromRow, device, workflow, nowIso);
-    const key = canonicalJson(reading);
-    if (seen.has(key)) continue;
+    // `readEvidence` builds every reading with one key order, so its JSON is a key (the snapshot never sees it).
+    const key = JSON.stringify(reading);
+    if (seen.has(key)) return;
     seen.add(key);
     keep(differingFields(reading, evidence));
+  };
+  const atZero = (iso: string): number => preStrictInstantAt(stampOf(iso), 0);
+  let bounded = false;
+  if (!floating) {
+    // No stamp depends on the host: one grouping.
+    read(groupLatest(signals, atZero));
+  } else {
+    // Round 6: every reading each category can have on SOME host (`preStrictCategoryReadings`), combined.
+    const { readings, overCap } = preStrictCategoryReadings(signals, nowIso);
+    for (const category of overCap) ambiguous.add(category);
+    const categories = [...readings.keys()];
+    const assemble = (pick: (category: NormalizedSignal["category"]) => PreStrictCategoryReading): LatestByCategory => {
+      const grouping: LatestByCategory = new Map();
+      let instantOf: (iso: string) => number = atZero;
+      for (const category of categories) {
+        const option = pick(category);
+        grouping.set(category, option.reading);
+        if (option.instantOf !== undefined) instantOf = option.instantOf;
+      }
+      grouping.preStrict = { instantOf };
+      return grouping;
+    };
+    let combinations = 1;
+    for (const options of readings.values()) combinations = Math.min(combinations * options.length, PRE_STRICT_PRODUCT_CAP + 1);
+    if (combinations <= PRE_STRICT_PRODUCT_CAP) {
+      const choice = new Map<NormalizedSignal["category"], number>(categories.map((category) => [category, 0]));
+      for (;;) {
+        read(assemble((category) => readings.get(category)![choice.get(category)!]!));
+        // Next combination (odometer over the categories, in first-seen order).
+        let moved = false;
+        for (const category of categories) {
+          const next = choice.get(category)! + 1;
+          if (next < readings.get(category)!.length) {
+            choice.set(category, next);
+            moved = true;
+            break;
+          }
+          choice.set(category, 0);
+        }
+        if (!moved) break;
+      }
+    } else {
+      // Too many combinations to read one by one: each category's readings one at a time over the first reading
+      // of every other category, and every dock-wide freshness (the one field read from several categories; the
+      // backstop is flipped by `evidenceWorlds`). The policy bounds the outcome over them.
+      bounded = true;
+      for (const varied of categories) {
+        for (const option of readings.get(varied)!) {
+          read(assemble((category) => (category === varied ? option : readings.get(category)![0]!)));
+        }
+      }
+      for (const value of FRESHNESS_VALUES) {
+        if (value !== evidence.dockEvidenceFreshness) keep({ dockEvidenceFreshness: value });
+      }
+    }
   }
   if (ambiguous.size > 0) {
     // Every value each family carrying an ambiguous stamp could read, one field at a time; the policy bounds the
@@ -377,30 +431,173 @@ function readPreStrict(
     }
     return { worlds, bounded: true };
   }
+  if (bounded) return { worlds, bounded: true };
   return worlds.length === 0 ? undefined : { worlds };
 }
 
+/** Above this many floating stamps in one category's competing set, its readings are bounded, not enumerated. */
+export const PRE_STRICT_UNIT_CAP = 6;
+/** Above this many combinations of the categories' pre-strict readings, the readings are bounded, not enumerated. */
+export const PRE_STRICT_PRODUCT_CAP = 1024;
+/** Above this many (reading x placement) steps for one category, its readings are bounded, not enumerated. */
+export const PRE_STRICT_WORK_CAP = 2_000_000;
+/** Two floating stamps further apart than this never compete: no pair of host offsets reorders them. */
+const COMPETE_WINDOW_MS = 26 * 60 * 60_000;
+
+/** One category's reading on some host, and (posture only) how that host placed the stamps it ages. */
+interface PreStrictCategoryReading {
+  readonly reading: CategoryReading;
+  readonly instantOf?: (observedAt: string) => number;
+}
+
 /**
- * Everything a reading depends on that the host offset can move: which reading of each category is latest, which
- * tie it, and the age of each posture reading. The illegible readings cannot move (their stamps are NaN on every
- * host), so two offsets with the same shape read the same evidence.
+ * ROUND 6 (2026-11-08) — EVERY READING EACH CATEGORY CAN HAVE ON SOME HOST, offsets varying stamp by stamp.
+ *
+ * Round 5 placed every floating stamp of a decision at ONE host offset. A real zone gives different offsets to
+ * different wall times: Codex's repro on #1809 (America/New_York, 2026-03-08) read `01:30` at −05:00 and `03:30`
+ * at −04:00, which selected the fresh reading in BOTH dock categories, a combination no single offset produced, and
+ * a tenant rule on `criticalSignalsPresent=true` denied there while round 5 stepped up.
+ *
+ * A category's reading depends only on which of its stamps is latest (and ties it) and, for posture, how old those
+ * are at the clock. So per category: its COMPETING floating stamps (within 26 hours of its latest floating wall
+ * time; an older one is behind the latest on every host, whatever the two offsets) are placed at base offset `a`
+ * up to a point in wall order and at `a + step` from there on, for every base offset on the grid, every point, and
+ * every step `preStrictOffsetSteps` allows (that is every host, `util.ts` says why). Posture's competing stamps are
+ * placed together with an offset-less evaluation clock, since their ages compare the two. Identical text is one
+ * stamp (one wall time, one offset). The categories are placed independently of each other, which can only ADD
+ * readings: whatever one host does to all of them at once is one choice per category.
+ *
+ * Bounded: a category with more than `PRE_STRICT_UNIT_CAP` competing floating stamps is not enumerated
+ * (`overCap`); the caller gives that family every value it could read, as for an ambiguous stamp, and bounds.
  */
-function groupingShape(
-  grouping: LatestByCategory,
-  index: Map<NormalizedSignal, number>,
+function preStrictCategoryReadings(
+  signals: NormalizedSignal[],
   nowIso: string | undefined,
-  instantOf: (observedAt: string) => number,
-): string {
-  const parts: string[] = [];
-  for (const [category, reading] of grouping) {
-    const members = [reading.ordered, ...reading.tied].filter((x): x is NormalizedSignal => x !== undefined);
-    const ages =
-      category === "posture_freshness" && nowIso !== undefined
-        ? members.map((signal) => classifyFreshness(signal.observedAt, nowIso, FRESH_WINDOW_HOURS, STALE_WINDOW_HOURS, instantOf))
-        : [];
-    parts.push(`${category}:${members.map((signal) => index.get(signal)).join(",")}:${ages.join(",")}`);
+): { readings: Map<NormalizedSignal["category"], PreStrictCategoryReading[]>; overCap: Set<NormalizedSignal["category"]> } {
+  const stampOf = preStrictStamp;
+  const byCategory = new Map<NormalizedSignal["category"], NormalizedSignal[]>();
+  for (const signal of signals) {
+    const list = byCategory.get(signal.category);
+    if (list) list.push(signal);
+    else byCategory.set(signal.category, [signal]);
   }
-  return parts.join("|");
+  const clock = nowIso === undefined ? undefined : stampOf(nowIso);
+  const lowest = PRE_STRICT_HOST_OFFSETS_MINUTES[0]!;
+  const highest = PRE_STRICT_HOST_OFFSETS_MINUTES[PRE_STRICT_HOST_OFFSETS_MINUTES.length - 1]!;
+  const readings = new Map<NormalizedSignal["category"], PreStrictCategoryReading[]>();
+  const overCap = new Set<NormalizedSignal["category"]>();
+  for (const [category, members] of byCategory) {
+    const posture = category === "posture_freshness" && nowIso !== undefined;
+    // Each member's stamp, once: a floating wall time (moves with the host), or a fixed instant (NaN: illegible).
+    const count = members.length;
+    const wall = new Array<number>(count);
+    const fixedAt = new Array<number>(count);
+    let latestWall = -Infinity;
+    for (let i = 0; i < count; i++) {
+      const stamp = stampOf(members[i]!.observedAt);
+      wall[i] = stamp.kind === "floating" ? stamp.wall : Number.NaN;
+      fixedAt[i] = stamp.kind === "floating" ? Number.NaN : preStrictInstantAt(stamp, 0);
+      if (stamp.kind === "floating") latestWall = Math.max(latestWall, stamp.wall);
+    }
+    // The competing floating stamps (one entry per text), and the clock with posture when it floats too.
+    const unitWalls = new Map<string, number>();
+    for (let i = 0; i < count; i++) {
+      if (!Number.isNaN(wall[i]!) && wall[i]! >= latestWall - COMPETE_WINDOW_MS) unitWalls.set(members[i]!.observedAt, wall[i]!);
+    }
+    const clockFloats = posture && clock?.kind === "floating";
+    if (clockFloats) unitWalls.set(nowIso!, (clock as { readonly wall: number }).wall);
+    const unit = [...unitWalls].sort(([a, wa], [b, wb]) => (wa !== wb ? wa - wb : a < b ? -1 : a > b ? 1 : 0));
+    const position = new Map<string, number>(unit.map(([text], i) => [text, i]));
+    // A floating stamp outside the competing set never leads, at any offset: it is placed at the base offset.
+    const at = members.map((signal) => position.get(signal.observedAt) ?? -1);
+    const clockAt = clockFloats ? position.get(nowIso!)! : -1;
+    const clockWall = clock?.kind === "floating" ? clock.wall : Number.NaN;
+    const clockFixedAt = clock === undefined || clock.kind === "floating" ? Number.NaN : preStrictInstantAt(clock, 0);
+    // Only these can lead on some host: the latest fixed reading(s), and the competing floating ones (every other
+    // fixed reading is behind the latest one everywhere; every other floating one is behind the latest floating one).
+    let latestFixed = -Infinity;
+    for (let i = 0; i < count; i++) if (fixedAt[i]! > latestFixed) latestFixed = fixedAt[i]!;
+    const candidates: number[] = [];
+    for (let i = 0; i < count; i++) if (at[i]! >= 0 || fixedAt[i] === latestFixed) candidates.push(i);
+    const steps = unit.length === 0 ? [] : preStrictOffsetSteps(unit[0]![1]);
+    const placementCount = PRE_STRICT_HOST_OFFSETS_MINUTES.length * (1 + Math.max(0, unit.length - 1) * steps.length);
+    if (unit.length > PRE_STRICT_UNIT_CAP || candidates.length * placementCount > PRE_STRICT_WORK_CAP) overCap.add(category);
+
+    const options: PreStrictCategoryReading[] = [];
+    const placements = new Set<number | string>();
+    const contents = new Set<string>();
+    const AGES: readonly Freshness[] = ["fresh", "stale", "expired", "unknown"];
+    const tiedAt: number[] = [];
+    // Hot loop (up to ~20k placements for one category): no closures, a numeric placement key.
+    const place = (base: number, split: number, step: number): void => {
+      let lead = -1;
+      let leadAt = -Infinity;
+      tiedAt.length = 0;
+      for (const i of candidates) {
+        const t = Number.isNaN(wall[i]!) ? fixedAt[i]! : wall[i]! - (at[i]! >= split ? base + step : base) * 60_000;
+        if (lead < 0 || t > leadAt) {
+          lead = i;
+          leadAt = t;
+          tiedAt.length = 0;
+        } else if (t === leadAt) tiedAt.push(i);
+      }
+      // Posture: the selected readings share one instant, so one age at the clock (placed with them when it
+      // floats). The same arithmetic as `classifyFreshness`.
+      let age = 0;
+      let clockInstant = Number.NaN;
+      if (posture && lead >= 0) {
+        clockInstant = clockFloats ? clockWall - (clockAt >= split ? base + step : base) * 60_000 : clockFixedAt;
+        const hours = (clockInstant - leadAt) / (1000 * 60 * 60);
+        age = Number.isNaN(clockInstant) || leadAt > clockInstant ? 3 : hours <= FRESH_WINDOW_HOURS ? 0 : hours <= STALE_WINDOW_HOURS ? 1 : 2;
+      }
+      let placement: number | string;
+      if (count <= 24) {
+        let mask = lead < 0 ? 0 : 2 ** lead;
+        for (const i of tiedAt) mask += 2 ** i;
+        placement = mask * 4 + age;
+      } else placement = `${lead},${tiedAt.join(",")}:${age}`;
+      if (placements.has(placement)) return;
+      placements.add(placement);
+      // Two placements that select readings with the same values, labels and age read the same (the readers look
+      // at nothing else), so only the first is kept.
+      const selected = lead < 0 ? [] : [lead, ...tiedAt];
+      const content = `${selected.map((i) => `${typeof members[i]!.value}:${JSON.stringify(members[i]!.value)}|${String(members[i]!.freshness)}`).join(";")}:${posture ? AGES[age] : ""}`;
+      if (contents.has(content)) return;
+      contents.add(content);
+      const reading: CategoryReading = {
+        ...(lead < 0 ? {} : { ordered: members[lead]! }),
+        tied: tiedAt.map((i) => members[i]!),
+        illegible: members.filter((_, i) => Number.isNaN(wall[i]!) && Number.isNaN(fixedAt[i]!)),
+      };
+      if (!posture) {
+        options.push({ reading });
+        return;
+      }
+      const fixedClock = clockInstant;
+      const placed = (iso: string): number => {
+        if (iso === nowIso) return fixedClock;
+        const stamp = stampOf(iso);
+        if (stamp.kind !== "floating") return preStrictInstantAt(stamp, 0);
+        const p = position.get(iso);
+        return stamp.wall - (p !== undefined && p >= split ? base + step : base) * 60_000;
+      };
+      options.push({ reading, instantOf: placed });
+    };
+    // Offset 0 first: the reading the bounded fallback holds the other categories at.
+    place(0, 0, 0);
+    if (unit.length > 0 && !overCap.has(category)) {
+      for (const base of PRE_STRICT_HOST_OFFSETS_MINUTES) {
+        place(base, 0, 0);
+        for (let split = 1; split < unit.length; split++) {
+          for (const step of steps) {
+            if (base + step >= lowest && base + step <= highest) place(base, split, step);
+          }
+        }
+      }
+    }
+    readings.set(category, options);
+  }
+  return { readings, overCap };
 }
 
 /** The evidence fields a pre-strict reading may carry (the backstop is recomputed from them, never carried). */

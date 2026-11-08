@@ -20,7 +20,10 @@ import {
   EVIDENCE_VALUE_DOMAINS,
   evaluatePolicy,
   fixedClock,
+  PRE_STRICT_FLOATING_FROM,
   PRE_STRICT_HOST_OFFSETS_MINUTES,
+  PRE_STRICT_LARGE_STEPS_UNTIL,
+  PRE_STRICT_SMALL_STEP_MINUTES,
   preStrictEvidenceWith,
   preStrictStamp,
   runDockSync,
@@ -252,8 +255,165 @@ function codexFor(which: string): string {
     signals = [sig("s_1", "device_compliance", "malformed", "2026-07-13T07:00:00Z"), sig("s_2", "device_compliance", "compliant", "2026-07-13T08:00:00"), ...base(["device_compliance"])];
     rules = validatePolicyRules([{ id: "d", description: "complete evidence denies", match: [{ field: "criticalSignalsPresent", equals: true }], outcome: "deny", reasonCode: "TENANT_DENY", severity: "high" }, allowManaged]);
   }
+  // Round 6 (2026-11-08), Codex P1 on #1809 (thread 4504013403): a daylight-saving switch BETWEEN two floating
+  // stamps of one decision. Under America/New_York mainline reads 01:30 at -05:00 (06:30Z, after the stale 06:15Z
+  // charge reading) and 03:30 at -04:00 (07:30Z, before the fresh 08:00Z battery reading), so both dock categories
+  // select their FRESH reading and the evidence is complete; no single offset does that, and round 5 stepped up.
+  if (which === "k") {
+    const at = (id: string, category: SignalCategory, value: NormalizedSignal["value"], observedAt: string, freshness: NormalizedSignal["freshness"]): NormalizedSignal => ({ ...sig(id, category, value, observedAt), freshness });
+    const T = "2026-03-08T08:30:00Z";
+    signals = [
+      sig("s_m", "device_management", true, T), sig("s_e", "device_encryption", true, T), sig("s_o", "os_support", true, T),
+      sig("s_c", "device_compliance", "compliant", T), sig("s_p", "posture_freshness", "fresh", T),
+      at("s_c1", "charge_state", "charged", "2026-03-08T06:15:00Z", "stale"), at("s_c2", "charge_state", "charged", "2026-03-08T01:30:00", "fresh"),
+      at("s_b1", "battery_health", "healthy", "2026-03-08T08:00:00Z", "fresh"), at("s_b2", "battery_health", "healthy", "2026-03-08T03:30:00", "stale"),
+    ];
+    now = "2026-03-08T09:00:00Z";
+    rules = validatePolicyRules([{ id: "d", description: "complete evidence denies", match: [{ field: "criticalSignalsPresent", equals: true }], outcome: "deny", reasonCode: "TENANT_DENY", severity: "high" }, allowManaged]);
+  }
   const r = evaluatePolicy(pv(rules), buildEvidence(identity, device, workflow, signals, now));
   return `${r.outcome}|${r.reasonCodes.join("+")}`;
+}
+
+/**
+ * THE CLASS ACROSS A DAYLIGHT-SAVING SWITCH (round 6): the same differential as `classFor`, over stamps around the
+ * real 2026 transitions of America/New_York (03-08, 11-01), Europe/London (03-29, 10-25) and Australia/Lord_Howe
+ * (04-05, 10-04, a 30-minute step): offset-less quarter-hour wall times across each switch, zoned stamps within two
+ * hours of where that zone puts such a wall, per-reading freshness labels (the dock-wide freshness folds them), a
+ * clock after the zoned stamps (or offset-less, or absent), and validated tenant policies with a deny on
+ * criticalSignalsPresent=true. The reference is `Date.parse` on THIS host, which steps its offset between stamps.
+ */
+function dstClassFor(seedText: string, trialsText: string): string {
+  let seed = Number(seedText) >>> 0;
+  const rnd = (): number => { seed = (seed + 0x6d2b79f5) >>> 0; let t = seed; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+  const pick = <T,>(xs: readonly T[]): T => xs[Math.floor(rnd() * xs.length)]!;
+  const p2 = (x: number): string => String(x).padStart(2, "0");
+  // [date, first wall hour, last wall hour, offset before, offset after (minutes), wall minute the new offset starts]
+  const SWITCHES: readonly (readonly [string, number, number, number, number, number])[] = [
+    ["2026-03-08", 0, 5, -300, -240, 180], ["2026-11-01", 0, 4, -240, -300, 120],
+    ["2026-03-29", 0, 3, 0, 60, 120], ["2026-10-25", 0, 3, 60, 0, 120],
+    ["2026-04-05", 1, 3, 660, 630, 120], ["2026-10-04", 1, 3, 630, 660, 150],
+  ];
+  const DOCK: readonly (readonly [SignalCategory, readonly NormalizedSignal["value"][]])[] = [
+    ["custody_state", ["checked_in", "overdue", "maintenance"]], ["charge_state", ["charged", "low", "critical"]],
+    ["battery_health", ["healthy", "degraded", "failing"]], ["tamper_state", ["none", "suspected", "confirmed"]],
+    ["dock_state", ["occupied", "offline", "faulted"]], ["badge_binding", ["present", "removed", "forced"]], ["attach_state", ["attached", "removed"]],
+  ];
+  const OTHER: readonly (readonly [SignalCategory, readonly NormalizedSignal["value"][]])[] = [
+    ["device_compliance", ["compliant", "non_compliant"]], ["posture_freshness", ["fresh", "stale", "unknown"]], ["security_baseline", ["aligned", "drifted"]],
+    ["device_management", [true, false]], ["device_encryption", [true, false]], ["os_support", [true, false]], ["identity_state", [true, false]],
+  ];
+  const FIELDS: Record<string, readonly string[]> = {
+    deviceCompliance: ["compliant", "non_compliant", "unknown"], postureFreshness: ["fresh", "stale", "expired", "missing", "unknown"],
+    chargeState: ["charged", "low", "unknown", "unreadable"], batteryHealth: ["healthy", "degraded", "unknown", "unreadable"],
+    tamperState: ["none", "suspected", "confirmed", "unknown", "unreadable"], dockState: ["occupied", "offline", "unknown", "unreadable"],
+    badgeState: ["present", "removed", "forced", "unknown", "unreadable"], attachState: ["attached", "removed", "unknown"],
+  };
+  const RANK: Record<string, number> = { allow: 0, step_up: 1, restrict: 2, deny: 3 };
+  let milder = 0;
+  let fingerprint = 0x811c9dc5;
+  let example = "";
+  for (let trial = 0; trial < Number(trialsText); trial++) {
+    const [date, h0, h1, before, after, switchAt] = pick(SWITCHES);
+    const pickWall = (): readonly [number, number] => [h0 + Math.floor(rnd() * (h1 - h0 + 1)), 15 * Math.floor(rnd() * 4)];
+    const wall = (): string => { const [h, m] = pickWall(); return `${date}T${p2(h)}:${p2(m)}:00`; };
+    const zoned = (): string => {
+      const [h, m] = pickWall();
+      const t = Date.parse(`${date}T${p2(h)}:${p2(m)}:00Z`) - (h * 60 + m >= switchAt ? after : before) * 60_000 + (Math.floor(rnd() * 17) - 8) * 900_000;
+      return new Date(t).toISOString().replace(".000Z", "Z");
+    };
+    const signals: NormalizedSignal[] = [];
+    const touched = new Set<string>();
+    for (let f = 1 + Math.floor(rnd() * 4); f > 0; f--) {
+      const [category, members] = rnd() < 0.7 ? pick(DOCK) : pick(OTHER);
+      touched.add(category);
+      for (let r = 2 + Math.floor(rnd() * 2); r > 0; r--) {
+        const value = rnd() < 0.05 ? "bogus" : rnd() < 0.7 ? members[0]! : pick(members);
+        signals.push({ ...sig(`s${signals.length}`, category, value, rnd() < 0.5 ? wall() : zoned()), freshness: pick(["fresh", "stale"] as const) });
+      }
+    }
+    for (const [category, value] of [["device_management", true], ["device_encryption", true], ["os_support", true], ["device_compliance", "compliant"], ["posture_freshness", "fresh"]] as const) {
+      if (!touched.has(category)) signals.push(sig(`s${signals.length}`, category, value, zoned()));
+    }
+    const latest = Math.max(...signals.map((x) => (x.observedAt.endsWith("Z") ? Date.parse(x.observedAt) : -Infinity)));
+    const later = new Date(Math.floor((latest + (1 + rnd() * 3) * 3_600_000) / 900_000) * 900_000).toISOString().replace(".000Z", "Z");
+    const now = pick([later, later, later, wall(), undefined]);
+    const id = { ...identity, state: rnd() < 0.8 ? ("enabled" as const) : pick(["disabled", "unknown_state"] as const) } as Identity;
+    const raw: unknown[] = [];
+    if (rnd() < 0.5) raw.push({ id: "critical", description: "complete evidence denies", match: [{ field: "criticalSignalsPresent", equals: true }], outcome: "deny", reasonCode: "TENANT_CRIT", severity: "high" });
+    for (let i = Math.floor(rnd() * 3); i > 0; i--) {
+      const field = pick(Object.keys(FIELDS));
+      const values = FIELDS[field]!.filter(() => rnd() < 0.35);
+      raw.push({ id: `r${i}`, description: "tenant rule", match: [{ field, in: values.length > 0 ? values : [pick(FIELDS[field]!)] }, ...(rnd() < 0.5 ? [{ field: "criticalSignalsPresent", equals: rnd() < 0.6 }] : [])], outcome: pick(["step_up", "restrict", "deny"]), reasonCode: `TENANT_R${i}`, severity: "high" });
+    }
+    raw.push({ id: "managed", description: "managed allow", match: [{ field: "deviceManaged", equals: true }], outcome: "allow", reasonCode: "TENANT_ALLOW", severity: "low" });
+    const rules = rnd() < 0.15 ? SHARED_DEVICE_RULES_V1 : validatePolicyRules(raw);
+    const pv = { id: "pv_dst", tenantId: "tenant_northwind", policyId: "pol_dst", version: 1, status: "active" as const, rules, createdAt: BASE, digest: "test" } as unknown as Parameters<typeof evaluatePolicy>[0];
+    const head = evaluatePolicy(pv, buildEvidence(id, device, workflow, signals, now)).outcome;
+    const reference = evaluatePolicy(pv, preStrictEvidenceWith(id, device, workflow, signals, now, (iso) => Date.parse(iso))).outcome;
+    for (const ch of head) fingerprint = Math.imul(fingerprint ^ ch.charCodeAt(0), 0x01000193) >>> 0;
+    if (RANK[head]! < RANK[reference]!) {
+      milder++;
+      if (example === "") example = ` first=trial${trial}:${reference}->${head}`;
+    }
+  }
+  return `milder=${milder} fingerprint=${fingerprint.toString(16)}${example}`;
+}
+
+/**
+ * The three facts about real zones that make round 6's offset model every host (`preStrictOffsetSteps` in util.ts),
+ * measured against THIS runtime's own zone data (Intl), every zone it ships, from `PRE_STRICT_FLOATING_FROM` to 2040:
+ * (1) every offset is a whole quarter hour in [-12:00, +14:00]; (2) two transitions of one zone are at least 156
+ * hours apart; (3) after `PRE_STRICT_LARGE_STEPS_UNTIL` no transition steps by more than
+ * `PRE_STRICT_SMALL_STEP_MINUTES`. Offsets are sampled every 72 hours and each change is located to the minute,
+ * so a period between two transitions shorter than 72 hours would be missed (none is known; the shortest found is
+ * 167 hours). A newer runtime whose zone data breaks a fact fails this proof, and the constants must move.
+ */
+function zoneFacts(): string {
+  const zones = Intl.supportedValuesOf("timeZone");
+  const lowest = PRE_STRICT_HOST_OFFSETS_MINUTES[0]!;
+  const highest = PRE_STRICT_HOST_OFFSETS_MINUTES[PRE_STRICT_HOST_OFFSETS_MINUTES.length - 1]!;
+  const from = PRE_STRICT_FLOATING_FROM - 14 * 3_600_000;
+  const to = Date.UTC(2040, 0, 1);
+  const SAMPLE = 72 * 3_600_000;
+  const problems: string[] = [];
+  let transitions = 0;
+  let shortest = Infinity;
+  let largestRecent = 0;
+  for (const zone of zones) {
+    const format = new Intl.DateTimeFormat("en-US", { timeZone: zone, timeZoneName: "longOffset" });
+    const offsetAt = (t: number): number => {
+      const text = format.formatToParts(new Date(t)).find((part) => part.type === "timeZoneName")!.value;
+      const m = /^GMT(?:([+-])(\d{2}):(\d{2})(?::(\d{2}))?)?$/.exec(text);
+      if (!m) return Number.NaN;
+      if (m[1] === undefined) return 0;
+      return (m[1] === "-" ? -1 : 1) * (Number(m[2]) * 60 + Number(m[3]) + Number(m[4] ?? 0) / 60);
+    };
+    let previous = offsetAt(from);
+    let previousAt = from;
+    let lastTransition = -Infinity;
+    const onGrid = (offset: number): boolean => Number.isInteger(offset / 15) && offset >= lowest && offset <= highest;
+    if (!onGrid(previous)) problems.push(`${zone}: ${previous}min at the start`);
+    for (let t = from + SAMPLE; t <= to; t += SAMPLE) {
+      const offset = offsetAt(t);
+      if (offset === previous) { previousAt = t; continue; }
+      // Locate the change to the minute.
+      let lo = previousAt, hi = t;
+      while (hi - lo > 60_000) { const mid = lo + Math.floor((hi - lo) / 120_000) * 60_000; if (offsetAt(mid) === previous) lo = mid; else hi = mid; }
+      transitions++;
+      if (!onGrid(offset)) problems.push(`${zone}: ${offset}min at ${new Date(hi).toISOString()}`);
+      if (hi - lastTransition < shortest) shortest = hi - lastTransition;
+      if (hi - lastTransition < 156 * 3_600_000) problems.push(`${zone}: transitions ${((hi - lastTransition) / 3_600_000).toFixed(1)}h apart at ${new Date(hi).toISOString()}`);
+      if (hi >= PRE_STRICT_LARGE_STEPS_UNTIL) {
+        largestRecent = Math.max(largestRecent, Math.abs(offset - previous));
+        if (Math.abs(offset - previous) > PRE_STRICT_SMALL_STEP_MINUTES) problems.push(`${zone}: a ${offset - previous}min step at ${new Date(hi).toISOString()}`);
+      }
+      lastTransition = hi;
+      previous = offset;
+      previousAt = t;
+    }
+  }
+  return `zones=${zones.length} transitions=${transitions} shortestGapDays=${(shortest / 86_400_000).toFixed(2)} largestStepSince2012=${largestRecent}min problems=${problems.length}${problems.length > 0 ? ` ${problems.slice(0, 5).join("; ")}` : ""}`;
 }
 
 /**
@@ -369,6 +529,8 @@ if (process.argv[2] === "--worker") {
   const out =
     mode === "codex" ? codexFor(a!)
     : mode === "class" ? classFor(a!, b!)
+    : mode === "dstclass" ? dstClassFor(a!, b!)
+    : mode === "zonefacts" ? zoneFacts()
     : mode === "classify" ? classifyFor()
     : mode === "ptenant" ? postureTenantFor(a!)
     : mode === "tenant" ? tenantFor(a as SignalCategory, b!, c!, process.argv[7]!, process.argv[8]!)
@@ -760,6 +922,27 @@ for (const [which, expectPrefix, expectCode, label] of [
   const classified = [...CLASS_ZONES, "Australia/Lord_Howe", "America/St_Johns", "Asia/Kathmandu", "Europe/London", "Etc/GMT+12"].map((z) => [z, inZone(z, "classify")] as const);
   check("pre-strict stamps: every stamp Date.parse accepts is classified the same in ten zones, and none disagrees with that zone's Date.parse",
     classified.every(([, v]) => / disagree=0 /.test(v)) && new Set(classified.map(([, v]) => v)).size === 1, classified.map(([z, v]) => `${z}=${v}`).join(" "));
+}
+
+// Round 6 (2026-11-08), Codex P1 on #1809 (thread 4504013403): a daylight-saving switch between two floating stamps
+// of one decision. Mainline denies under America/New_York (its offset steps from -05:00 to -04:00 between 01:30 and
+// 03:30); the answer is that deny in every zone, because every host's stepped reading is folded in.
+{
+  const DST_ZONES = ["America/New_York", "UTC", "Asia/Tokyo", "Australia/Lord_Howe", "Europe/London"];
+  const r = DST_ZONES.map((z) => inZone(z, "codex", "k"));
+  check("never milder than the pre-strict reader (Codex round 6 k): a DST switch between the floating charge (01:30) and battery (03:30) stamps -> deny TENANT_DENY, in every zone",
+    r.every((v) => v.startsWith("deny|") && v.split("|")[1]!.split("+").includes("TENANT_DENY")), DST_ZONES.map((z, i) => `${z}=${r[i]}`).join(" "));
+  // THE CLASS across real switches: the evaluating host steps its offset between stamps.
+  const runs = DST_ZONES.map((z) => [z, inZone(z, "dstclass", "20261108", "600")] as const);
+  console.log(runs.map(([z, v]) => `${z}: ${v}`).join("\n"));
+  check("the class across a daylight-saving switch: no verdict is milder than the pre-strict reader's on the evaluating host (US, EU and Lord Howe 2026 switches, five zones, 600 seeded trials each)",
+    runs.every(([, v]) => v.startsWith("milder=0 ")), runs.map(([z, v]) => `${z}=${v}`).join(" "));
+  check("the class across a daylight-saving switch: the verdicts are identical in every zone (one fingerprint)",
+    new Set(runs.map(([, v]) => /fingerprint=(\w+)/.exec(v)?.[1] ?? v)).size === 1, runs.map(([z, v]) => `${z}=${v}`).join(" "));
+  const facts = inZone("UTC", "zonefacts");
+  console.log(`zone data: ${facts}`);
+  check("the offset model is every host: from 1979-10-03 every zone the runtime ships sits on the quarter-hour grid in [-12:00, +14:00], steps at most 3h after 2012-01-08, and never has two transitions within 156 hours",
+    / problems=0$/.test(facts), facts);
 }
 
 console.log(`\nsummary=${failures.length === 0 ? "pass" : "FAIL"} (${passed}/${passed + failures.length})`);

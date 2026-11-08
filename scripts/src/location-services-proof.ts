@@ -115,10 +115,15 @@ const mkSignal = (geofenceState: string, capturedAt: string | null): NormalizedL
 // #12: an inside-geofence fix with NO capture time (or an unparseable one) used
 // to skip the stale guard — only provably-stale fixes were caught — and mint the
 // on_premises/none grant. A membership of unverifiable currency is not "inside".
-for (const [label, at] of [["a null capturedAt", null], ["an unparseable capturedAt", "not-a-date"]] as const) {
-  const w = evaluateLocation(mkSignal("inside", at), NOW_ENUM);
-  check(`inside + ${label} → monitor/UNVERIFIED_LOCATION_FRESHNESS, never on_premises (wedge #12)`,
+{
+  const w = evaluateLocation(mkSignal("inside", null), NOW_ENUM);
+  check("inside + a null capturedAt → monitor/UNVERIFIED_LOCATION_FRESHNESS, never on_premises (wedge #12)",
     w.recommendedAction === "monitor" && w.reasonCode === "UNVERIFIED_LOCATION_FRESHNESS" && w.locatable === false);
+  // A PRESENT but unreadable capture time is graded stale, not unknown (deriveFreshness): it cannot show the fix
+  // current, and in this family stale is the stronger call. It once read monitor here, below a provably-stale fix.
+  const g = evaluateLocation(mkSignal("inside", "not-a-date"), NOW_ENUM);
+  check("inside + an unparseable capturedAt → locate/STALE_LOCATION_FIX, never on_premises and never milder than stale (wedge #12)",
+    g.recommendedAction === "locate" && g.reasonCode === "STALE_LOCATION_FIX");
 }
 
 // #13: a capture time claimed from the FUTURE (beyond clock-skew tolerance) is a

@@ -484,6 +484,510 @@ else
   say "estate queue not run: scripts/mac/estate-queue.mjs or gh missing"
 fi
 
+# ── d3. publish local-brain builds that reached review ───────────────────────
+# Explicit activation, custody and original attempts live outside Git/node_modules.
+# Missing/corrupt/lost custody stops; a failed or unknown attempt is consumed.
+# Metadata runs without the heavy host. Each new CLI has its own ordinary admission.
+PUBLISH_MAX="${SIGNALGRID_PUBLISH_MAX:-1}"
+_pub_state="${SIGNALGRID_BRAIN_PUBLICATION_STATE:-$HOME/.local/state/signalgrid/brain-publications}"
+brain_publication_step() {
+  /usr/bin/python3 -I - "$1" "$_pub_state" "${2:-}" "$PUBLISH_MAX" "${REPO_ROOT:-.}/scripts/mac/lane-tick.sh" <<'PY_BRAIN_PUBLICATION'
+import datetime as dt
+import hashlib
+import json
+import os
+import pwd
+from pathlib import Path
+import re
+import signal
+import stat
+import subprocess
+import sys
+
+MODE, RAW_STATE, JOB, CAP, RAW_TICK = sys.argv[1:]
+UID = os.getuid()
+REPO = 'DanFashauer/SignalGrid-Review-Hub'
+BASE = 'SignalGrid_Alpha'
+JOB_RE = re.compile(r'[A-Za-z0-9][A-Za-z0-9_-]{0,127}')
+OID_RE = re.compile(r'[0-9a-f]{40}')
+PUBLISHER = Path('scripts/mac/brain-proposal-pr.mjs')
+TICK_SOURCE = Path(RAW_TICK).resolve(strict=True)
+SIGNALS = []
+PUBLICATION_TIMEOUT_SEC = 600
+DEPENDENCIES = ('scripts/check-owner-gated-surfaces.mjs', 'scripts/lib/is-main.mjs',
+                'scripts/lib/scratch-git.mjs', '.githooks/pre-push')
+
+class Refusal(Exception):
+    pass
+
+def need(ok):
+    if not ok:
+        raise Refusal()
+
+def account_home():
+    return Path(pwd.getpwuid(UID).pw_dir)
+
+def trusted_client(name):
+    paths = {
+        'git': ('/Applications/Xcode.app/Contents/Developer/usr/bin/git',) if sys.platform == 'darwin' else ('/usr/bin/git',),
+        'node': ('/usr/local/bin/node', '/opt/homebrew/bin/node', '/usr/bin/node'),
+        'gh': ('/opt/homebrew/bin/gh', '/usr/local/bin/gh', '/usr/bin/gh'),
+    }
+    for value in paths[name]:
+        candidate = Path(value)
+        if not candidate.exists():
+            continue
+        path = candidate.resolve(strict=True)
+        st = path.lstat()
+        need(stat.S_ISREG(st.st_mode) and st.st_uid in (0, UID) and st.st_nlink == 1
+             and stat.S_IMODE(st.st_mode) & 0o111 and not stat.S_IMODE(st.st_mode) & 0o022)
+        return str(path)
+    raise Refusal()
+
+def client_env():
+    # Preserve normal account credentials and locale/temp data, never caller
+    # executable startup channels, imported functions or client configuration.
+    allowed = ('SSH_AUTH_SOCK', 'SSH_AGENT_PID', 'GH_TOKEN', 'GITHUB_TOKEN',
+               'LANG', 'LC_ALL', 'LC_CTYPE', 'LC_MESSAGES', 'TZ', 'TMPDIR', 'TMP', 'TEMP',
+               '__CF_USER_TEXT_ENCODING', 'SYSTEMROOT', 'WINDIR')
+    env = {key: os.environ[key] for key in allowed
+           if key in os.environ and not re.match(r'^\(\)\s*\{', os.environ[key])}
+    home = account_home()
+    env.update(HOME=str(home), USERPROFILE=str(home), XDG_CONFIG_HOME=str(home / '.config'),
+               PATH='/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin',
+               GIT_NO_LAZY_FETCH='1', GIT_TERMINAL_PROMPT='0', SSH_ASKPASS_REQUIRE='never',
+               GH_HOST='github.com', GH_REPO='github.com/' + REPO,
+               GH_CONFIG_DIR=str(home / '.config/gh'), GH_PROMPT_DISABLED='1')
+    return env
+
+def utc():
+    return dt.datetime.now(dt.timezone.utc).isoformat()
+
+def directory(path, private=True):
+    st = path.lstat()
+    need(stat.S_ISDIR(st.st_mode) and not path.is_symlink() and st.st_uid == UID)
+    need(stat.S_IMODE(st.st_mode) == 0o700 if private else not (stat.S_IMODE(st.st_mode) & 0o022))
+    return st
+
+def canonical_directory(raw, private=True):
+    raw = Path(raw)
+    need(raw.is_absolute() and '..' not in raw.parts)
+    # Only stock macOS system aliases, never a private-state symlink.
+    for part in (raw, *raw.parents):
+        if part.is_symlink():
+            need(str(part) in ('/var', '/tmp') and str(part.resolve()) in ('/private/var', '/private/tmp'))
+    path = raw.resolve(strict=True)
+    directory(path, private=private)
+    return path
+
+def read_file(path, private=True):
+    before = path.lstat()
+    need(stat.S_ISREG(before.st_mode) and before.st_nlink == 1 and before.st_uid == UID)
+    if private:
+        need(stat.S_IMODE(before.st_mode) in (0o400, 0o600))
+    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+    try:
+        opened = os.fstat(fd)
+        need((before.st_dev, before.st_ino) == (opened.st_dev, opened.st_ino))
+        chunks = []
+        while True:
+            block = os.read(fd, 1024 * 1024)
+            if not block:
+                break
+            chunks.append(block)
+        after = os.fstat(fd)
+    finally:
+        os.close(fd)
+    end = path.lstat()
+    key = lambda s: (s.st_dev, s.st_ino, s.st_size, s.st_mtime_ns, s.st_ctime_ns,
+                     stat.S_IMODE(s.st_mode), s.st_uid, s.st_nlink)
+    need(key(before) == key(opened) == key(after) == key(end))
+    data = b''.join(chunks)
+    return data, {'path': str(path), 'sha256': hashlib.sha256(data).hexdigest(),
+                  'mode': stat.S_IMODE(end.st_mode), 'uid': end.st_uid,
+                  'bytes': len(data), 'dev': end.st_dev, 'ino': end.st_ino}
+
+def sync_dir(path):
+    fd = os.open(path, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+
+def write_new(path, value):
+    data = (json.dumps(value, sort_keys=True, indent=2) + '\n').encode()
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+    try:
+        with os.fdopen(fd, 'wb', closefd=False) as stream:
+            stream.write(data)
+            stream.flush()
+            os.fchmod(fd, 0o400)
+            os.fsync(fd)
+    finally:
+        os.close(fd)
+    sync_dir(path.parent)
+    return read_file(path)[1]
+
+def read_json(path):
+    data, ref = read_file(path)
+    value = json.loads(data)
+    need(isinstance(value, dict))
+    return value, ref
+
+def dependency_refs():
+    source_repo = PUBLISHER.resolve(strict=True).parents[2]
+    return {name: read_file(source_repo / name, private=False)[1] for name in DEPENDENCIES}
+
+def activation():
+    state = canonical_directory(RAW_STATE)
+    cwd = Path.cwd().resolve()
+    source_repo = PUBLISHER.resolve(strict=True).parents[2]
+    need(not state.is_relative_to(cwd) and not state.is_relative_to(source_repo)
+         and 'node_modules' not in state.parts and '.git' not in state.parts)
+    active, ref = read_json(state / 'activation.json')
+    need(active.get('format') == 'signalgrid-brain-publication-activation/v1'
+         and active.get('enabled') is True)
+    need(isinstance(active.get('activation_id'), str) and JOB_RE.fullmatch(active['activation_id']))
+    cutover = active.get('not_before')
+    need(isinstance(cutover, str) and re.fullmatch(r'\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d{1,6})?(?:Z|\+00:00)', cutover))
+    parsed = dt.datetime.fromisoformat(cutover.replace('Z', '+00:00'))
+    need(parsed.tzinfo is not None and parsed <= dt.datetime.now(dt.timezone.utc))
+    _, source_ref = read_file(PUBLISHER.resolve(strict=True), private=False)
+    _, tick_ref = read_file(TICK_SOURCE, private=False)
+    need(active.get('publisher_sha256') == source_ref['sha256']
+         and active.get('tick_sha256') == tick_ref['sha256'])
+    need(active.get('dependency_sha256') == {name: ref['sha256'] for name, ref in dependency_refs().items()})
+    return state, active, ref, source_ref, tick_ref
+
+def custody(state, active_ref):
+    # Root's explicit activation prepares these private identities. The tick
+    # never initializes, repairs, overwrites or recreates control/custody files.
+    parent = canonical_directory(account_home() / '.local/state/signalgrid', private=False)
+    need(not parent.is_relative_to(Path.cwd().resolve())
+         and not parent.is_relative_to(PUBLISHER.resolve(strict=True).parents[2])
+         and 'node_modules' not in parent.parts and '.git' not in parent.parts)
+    mirror = parent / 'brain-publication-custody'
+    attempts = state / 'attempts'
+    anchor, _ = read_json(parent / 'brain-publication-custody.json')
+    need(anchor.get('format') == 'signalgrid-brain-publication-custody/v1'
+         and anchor.get('activation_sha256') == active_ref['sha256'])
+    for name, path in (('state', state), ('mirror', mirror), ('attempts', attempts)):
+        st = directory(path)
+        need(anchor.get(name) == {'path': str(path), 'dev': st.st_dev, 'ino': st.st_ino})
+    return mirror, attempts
+
+def git(*args):
+    binary = trusted_client('git')
+    prefix = [binary, '--no-replace-objects', '-c', 'core.fsmonitor=false', '-c', 'core.hooksPath=/dev/null']
+    config_env = client_env()
+    config_env.update(GIT_CONFIG_GLOBAL='/dev/null', GIT_CONFIG_NOSYSTEM='1', GIT_ALLOW_PROTOCOL='')
+    result = subprocess.run(prefix + ['config', '--null', '--local', '--no-includes', '--list'],
+                            env=config_env, stdin=subprocess.DEVNULL, capture_output=True, timeout=30)
+    need(result.returncode == 0 and len(result.stdout) <= 1048576)
+    rows = result.stdout.decode('utf-8', errors='strict').split('\0')
+    origin = []
+    for row in filter(None, rows):
+        key, _, value = row.partition('\n')
+        need(not re.search(r'^(?:filter\.|diff\..*\.(?:command|textconv)$|include(?:if)?\.|credential\.|protocol\.|url\..*\.(?:insteadof|pushinsteadof)$|remote\..*\.(?:promisor|partialclonefilter|uploadpack|receivepack|vcs)$|core\.(?:fsmonitor|sshcommand|gitproxy|askpass|alternaterefscommand)$|extensions\.(?:worktreeconfig|partialclone)$)', key, re.I))
+        if key.lower() == 'remote.origin.url':
+            origin.append(value)
+        if key.lower() == 'remote.origin.pushurl':
+            need(value == 'git@github.com:' + REPO + '.git')
+    need(origin == ['git@github.com:' + REPO + '.git'])
+    env = client_env()
+    env['GIT_ALLOW_PROTOCOL'] = 'ssh'
+    for options in (['--all'], ['--push', '--all']):
+        effective = subprocess.run(prefix + ['remote', 'get-url'] + options + ['origin'],
+                                   env=env, stdin=subprocess.DEVNULL, capture_output=True, timeout=30)
+        need(effective.returncode == 0 and len(effective.stdout) <= 1048576)
+        need(effective.stdout.decode('utf-8', errors='strict').splitlines() == ['git@github.com:' + REPO + '.git'])
+    return subprocess.run(prefix + list(args), env=env, stdin=subprocess.DEVNULL, capture_output=True, timeout=30)
+
+def gh(endpoint):
+    need(endpoint.startswith('repos/' + REPO + '/'))
+    return subprocess.run([trusted_client('gh'), 'api', '--hostname', 'github.com', '--method', 'GET', endpoint],
+                          env=client_env(), stdin=subprocess.DEVNULL, capture_output=True, timeout=30)
+
+def review_jobs(active):
+    result = subprocess.run([trusted_client('node'), 'scripts/mac/brain-proposal-pr.mjs', '--list-review',
+                             '--not-before', active['not_before']], env=client_env(),
+                            stdin=subprocess.DEVNULL, capture_output=True, timeout=30)
+    need(result.returncode == 0 and len(result.stdout) <= 128000)
+    jobs = result.stdout.decode('utf-8', errors='strict').splitlines()
+    need(len(jobs) <= 1000 and len(jobs) == len(set(jobs)) and all(JOB_RE.fullmatch(job) for job in jobs))
+    return jobs
+
+def remote_branch(job):
+    branch = 'brain/job-' + job
+    result = git('ls-remote', 'origin', 'refs/heads/' + branch)
+    need(result.returncode == 0)
+    lines = result.stdout.decode('utf-8', errors='strict').splitlines()
+    need(len(lines) <= 1)
+    if lines:
+        fields = lines[0].split()
+        need(len(fields) == 2 and OID_RE.fullmatch(fields[0]) and fields[1] == 'refs/heads/' + branch)
+        return fields[0], result
+    return None, result
+
+def prs(job):
+    result = gh('repos/' + REPO + '/pulls?state=all&head=DanFashauer:brain/job-' + job + '&base=' + BASE + '&per_page=100')
+    need(result.returncode == 0)
+    value = json.loads(result.stdout)
+    need(isinstance(value, list) and len(value) < 100)
+    return value, result
+
+def job_intent(state, job, active_ref):
+    mirror, attempts = custody(state, active_ref)
+    directory(attempts / job)
+    item, _ = read_json(mirror / (job + '.json'))
+    intent, _ = read_json(attempts / job / 'intent.json')
+    need(item == intent and intent.get('job_id') == job
+         and intent.get('activation_ref', {}).get('sha256') == active_ref['sha256'])
+    return attempts / job, intent
+
+def run_original(attempt, intent):
+    need(read_file(PUBLISHER.resolve(strict=True), private=False)[1] == intent['publisher_ref'])
+    need(read_file(TICK_SOURCE, private=False)[1] == intent['tick_ref'])
+    need(dependency_refs() == intent['dependency_refs'])
+    argv = [trusted_client('node'), 'scripts/mac/brain-proposal-pr.mjs', '--job', JOB, '--publish']
+    write_new(attempt / 'execution-intent.json', {'job_id': JOB, 'at': utc(), 'argv': argv,
+              'intent_sha256': read_file(attempt / 'intent.json')[1]['sha256'], 'retry_forbidden': True})
+    stdout, stderr = attempt / 'stdout.raw', attempt / 'stderr.raw'
+    out_fd = os.open(stdout, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+    err_fd = os.open(stderr, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+    handlers = {s: signal.signal(s, lambda n, _f: SIGNALS.append({'signal': n, 'at': utc()}))
+                for s in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP)}
+    child, code, receipt_error, timed_out = None, None, None, False
+    try:
+        sync_dir(attempt)
+        child = subprocess.Popen(argv, env=client_env(), stdin=subprocess.DEVNULL, stdout=out_fd, stderr=err_fd,
+                                 close_fds=True, start_new_session=True)
+        try:
+            write_new(attempt / 'started.json', {'job_id': JOB, 'pid': child.pid, 'at': utc(), 'argv': argv})
+        except Exception as exc:
+            receipt_error = type(exc).__name__
+        finally:
+            try:
+                code = child.wait(timeout=PUBLICATION_TIMEOUT_SEC)
+            except subprocess.TimeoutExpired:
+                timed_out = True
+                # start_new_session created this exact owned process group. The
+                # live, unreaped child reserves its pid while it is terminated.
+                try: os.killpg(child.pid, signal.SIGTERM)
+                except ProcessLookupError: pass
+                try: code = child.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    try: os.killpg(child.pid, signal.SIGKILL)
+                    except ProcessLookupError: pass
+                    code = child.wait()
+    finally:
+        for fd in (out_fd, err_fd):
+            os.fchmod(fd, 0o400)
+            os.fsync(fd)
+            os.close(fd)
+        sync_dir(attempt)
+        for signum, handler in handlers.items():
+            signal.signal(signum, handler)
+        write_new(attempt / 'terminal.json', {'job_id': JOB, 'at': utc(),
+                  'pid': child.pid if child is not None else None, 'returncode': code,
+                  'normal_exit': not timed_out and isinstance(code, int) and code >= 0,
+                  'timed_out': timed_out,
+                  'original_wait_completed': child is not None and code is not None,
+                  'started_receipt_error': receipt_error, 'interruptions': SIGNALS,
+                  'stdout_ref': read_file(stdout)[1], 'stderr_ref': read_file(stderr)[1],
+                  'retry_forbidden': True})
+
+def get_json(endpoint, observations):
+    result = gh(endpoint)
+    observations.append({'endpoint': endpoint, 'returncode': result.returncode,
+                         'stdout': result.stdout.decode('utf-8', errors='replace'),
+                         'stderr': result.stderr.decode('utf-8', errors='replace')})
+    need(result.returncode == 0)
+    return json.loads(result.stdout)
+
+def verify_publication(attempt, intent):
+    terminal, _ = read_json(attempt / 'terminal.json')
+    observations, outcome, url = [], 'unknown-readback-only', None
+    try:
+        head, remote = remote_branch(JOB)
+        observations.append({'command': 'git ls-remote exact deterministic branch',
+                             'returncode': remote.returncode,
+                             'stdout': remote.stdout.decode('utf-8', errors='replace'),
+                             'stderr': remote.stderr.decode('utf-8', errors='replace')})
+        values, pr_result = prs(JOB)
+        observations.append({'command': 'gh GET exact deterministic head/base PR list',
+                             'returncode': pr_result.returncode,
+                             'stdout': pr_result.stdout.decode('utf-8', errors='replace'),
+                             'stderr': pr_result.stderr.decode('utf-8', errors='replace')})
+        need(terminal.get('normal_exit') is True and terminal.get('returncode') == 0
+             and terminal.get('original_wait_completed') is True and not terminal.get('interruptions')
+             and terminal.get('started_receipt_error') is None)
+        stdout_bytes, stdout_ref = read_file(attempt / 'stdout.raw')
+        _, stderr_ref = read_file(attempt / 'stderr.raw')
+        need(stdout_ref == terminal.get('stdout_ref') and stderr_ref == terminal.get('stderr_ref'))
+        lines = stdout_bytes.decode('utf-8', errors='strict').splitlines()
+        marker = 'SIGNALGRID_PUBLICATION_FACTS '
+        facts = [json.loads(line[len(marker):]) for line in lines if line.startswith(marker)]
+        need(len(facts) == 1)
+        fact = facts[0]
+        need(isinstance(fact, dict) and fact.get('format') == 'signalgrid-publication-facts/v1'
+             and fact.get('job') == JOB and fact.get('branch') == 'brain/job-' + JOB
+             and fact.get('base') == BASE and fact.get('pushed') is True)
+        for key in ('replayBase', 'publishedHead', 'publishedTree'):
+            need(isinstance(fact.get(key), str) and OID_RE.fullmatch(fact[key]))
+        need(head == fact['publishedHead'])
+        expected = fact.get('files')
+        need(isinstance(expected, list) and 0 < len(expected) <= 1000
+             and all(isinstance(p, str) and p and not p.startswith('/') and '..' not in Path(p).parts for p in expected)
+             and len(expected) == len(set(expected)))
+        need(len(values) == 1 and isinstance(values[0], dict))
+        number = values[0].get('number')
+        need(isinstance(number, int) and not isinstance(number, bool) and number > 0)
+        url = 'https://github.com/' + REPO + '/pull/' + str(number)
+        need(fact.get('prUrl') == url)
+        pr = get_json('repos/' + REPO + '/pulls/' + str(number), observations)
+        need(isinstance(pr, dict) and pr.get('number') == number and pr.get('html_url') == url
+             and pr.get('state') == 'open' and pr.get('merged') is False
+             and pr.get('head', {}).get('ref') == fact['branch'] and pr.get('head', {}).get('sha') == head
+             and pr.get('base', {}).get('ref') == BASE
+             and pr.get('head', {}).get('repo', {}).get('full_name') == REPO
+             and pr.get('base', {}).get('repo', {}).get('full_name') == REPO)
+        files = []
+        for page in range(1, 12):
+            current = get_json('repos/' + REPO + '/pulls/' + str(number) + '/files?per_page=100&page=' + str(page), observations)
+            need(isinstance(current, list) and len(current) <= 100)
+            files.extend(current)
+            if len(current) < 100:
+                break
+        else:
+            raise Refusal()
+        need(all(isinstance(f, dict) and isinstance(f.get('filename'), str) for f in files)
+             and len(files) == len(expected) and sorted(f['filename'] for f in files) == sorted(expected))
+        commit = get_json('repos/' + REPO + '/git/commits/' + head, observations)
+        need(isinstance(commit, dict) and commit.get('sha') == head
+             and commit.get('tree', {}).get('sha') == fact['publishedTree']
+             and [p.get('sha') for p in commit.get('parents', [])] == [fact['replayBase']])
+        branch = get_json('repos/' + REPO + '/git/ref/heads/' + fact['branch'], observations)
+        need(isinstance(branch, dict) and branch.get('ref') == 'refs/heads/' + fact['branch']
+             and branch.get('object', {}).get('type') == 'commit' and branch.get('object', {}).get('sha') == head)
+        need(read_file(PUBLISHER.resolve(strict=True), private=False)[1] == intent['publisher_ref'])
+        need(read_file(TICK_SOURCE, private=False)[1] == intent['tick_ref'])
+        need(dependency_refs() == intent['dependency_refs'])
+        outcome = 'verified-publication'
+    except Exception:
+        url = None
+    write_new(attempt / 'readback.json', {'job_id': JOB, 'at': utc(), 'outcome': outcome,
+              'public_url': url, 'observations': observations, 'no_cli_replay': True,
+              'not_review_approval_or_landing': True})
+    return outcome, url
+
+try:
+    need(MODE in ('inspect', 'preflight', 'claim', 'run', 'finish'))
+    state, active, active_ref, source_ref, tick_ref = activation()
+    mirror, attempts = custody(state, active_ref)
+    if MODE == 'inspect':
+        need(re.fullmatch(r'[1-3]', CAP) is not None)
+        jobs = review_jobs(active)
+        print('ACTIVE')
+        for job in jobs:
+            print(job)
+    else:
+        need(JOB_RE.fullmatch(JOB) is not None)
+        if MODE == 'preflight':
+            if (mirror / (JOB + '.json')).exists() or (attempts / JOB).exists():
+                try:
+                    job_intent(state, JOB, active_ref)
+                except (OSError, Refusal, ValueError, TypeError):
+                    print('CUSTODY_INCOMPLETE_READBACK_ONLY')
+                else:
+                    print('CONSUMED')
+            else:
+                # Listing validates the current worker head and patch against
+                # the external clearance again, immediately before any remote
+                # inspection. A stale initial selection grants no authority.
+                need(JOB in review_jobs(active))
+                head, _ = remote_branch(JOB)
+                values, _ = prs(JOB)
+                print('EXISTS_READBACK_ONLY' if head is not None or values else 'ABSENT')
+        elif MODE == 'claim':
+            need(JOB in review_jobs(active))
+            need(not (mirror / (JOB + '.json')).exists() and not (attempts / JOB).exists())
+            attempt = attempts / JOB
+            attempt.mkdir(mode=0o700)
+            directory(attempt)
+            sync_dir(attempts)
+            intent = {'format': 'signalgrid-brain-publication-intent/v1', 'job_id': JOB, 'at': utc(),
+                      'activation_id': active['activation_id'], 'not_before': active['not_before'],
+                      'activation_ref': active_ref, 'publisher_ref': source_ref, 'tick_ref': tick_ref,
+                      'dependency_refs': dependency_refs(),
+                      'argv': [trusted_client('node'), 'scripts/mac/brain-proposal-pr.mjs', '--job', JOB, '--publish'],
+                      'branch': 'brain/job-' + JOB, 'base': BASE, 'repo': REPO,
+                      'preflight': 'exact remote branch and exact head/base PR lookup absent',
+                      'normal_host_admission_owned_by_parent': True, 'retry_forbidden': True}
+            write_new(mirror / (JOB + '.json'), intent)
+            write_new(attempt / 'intent.json', intent)
+            print('CLAIMED')
+        elif MODE == 'run':
+            attempt, intent = job_intent(state, JOB, active_ref)
+            run_original(attempt, intent)
+            print('CHILD_DONE')
+        else:
+            attempt, intent = job_intent(state, JOB, active_ref)
+            outcome, url = verify_publication(attempt, intent)
+            print('VERIFIED ' + url if outcome == 'verified-publication' else 'UNVERIFIED_READBACK_ONLY')
+except Exception:
+    # Never expose private paths, raw errors or unaccepted worker text in RESULT.
+    print('UNAVAILABLE')
+PY_BRAIN_PUBLICATION
+}
+
+# Do not borrow the earlier sim/objective reservation for publication metadata.
+if [ "${SG_VERIFY_LOCK_HELD:-0}" = "1" ]; then sg_host_verify_release; fi
+if [ -f scripts/mac/brain-proposal-pr.mjs ] && command -v gh >/dev/null 2>&1 && command -v python3 >/dev/null 2>&1; then
+  _pub_selection="$(brain_publication_step inspect 2>/dev/null)"
+  case "$_pub_selection" in
+    ACTIVE|ACTIVE$'\n'*)
+      _pub_jobs="$(printf '%s\n' "$_pub_selection" | tail -n +2)"
+      _pub_n=0
+      for _job in $_pub_jobs; do
+        [ "$_pub_n" -lt "$PUBLISH_MAX" ] || break
+        _pub_preflight="$(brain_publication_step preflight "$_job" 2>/dev/null)"
+        case "$_pub_preflight" in
+          CONSUMED) continue ;;
+          CUSTODY_INCOMPLETE_READBACK_ONLY) RESULT="$RESULT; brain publication custody incomplete; manual recovery required"; break ;;
+          EXISTS_READBACK_ONLY) RESULT="$RESULT; brain publication requires readback only"; continue ;;
+          ABSENT) : ;;
+          *) RESULT="$RESULT; brain publication unavailable"; break ;;
+        esac
+        if [ "$DRY" = "1" ]; then say "dry-run: would publish an eligible brain job"; continue; fi
+        if ! declare -F sg_host_verify_acquire >/dev/null || ! sg_host_verify_acquire "$HOME/Library/Caches/signalgrid/host-verification.lock"; then
+          RESULT="$RESULT; brain publication deferred: host busy or unavailable"
+          break
+        fi
+        _pub_claim="$(brain_publication_step claim "$_job" 2>/dev/null)"
+        if [ "$_pub_claim" != "CLAIMED" ]; then
+          sg_host_verify_release
+          RESULT="$RESULT; brain publication unavailable"
+          break
+        fi
+        _pub_n=$((_pub_n + 1))
+        _pub_child="$(brain_publication_step run "$_job" 2>/dev/null)"
+        # Original wait ends before release, readback, heartbeat or another job.
+        sg_host_verify_release
+        _pub_readback="$(brain_publication_step finish "$_job" 2>/dev/null)"
+        case "$_pub_readback" in
+          VERIFIED\ https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/[0-9]*)
+            RESULT="$RESULT; verified brain publication: ${_pub_readback#VERIFIED }" ;;
+          *) RESULT="$RESULT; brain publication attempted once; readback required" ;;
+        esac
+      done
+      ;;
+    *) RESULT="$RESULT; brain publication disabled or unavailable" ;;
+  esac
+else
+  RESULT="$RESULT; brain publication unavailable"
+fi
+
 # ── e. heartbeat, always ─────────────────────────────────────────────────────
 heartbeat
 exit 0

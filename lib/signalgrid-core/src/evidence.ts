@@ -502,7 +502,7 @@ function preStrictCategoryReadings(
     // The competing floating stamps (one entry per text), and the clock with posture when it floats too.
     const unitWalls = new Map<string, number>();
     for (let i = 0; i < count; i++) {
-      if (!Number.isNaN(wall[i]!) && wall[i]! >= latestWall - COMPETE_WINDOW_MS) unitWalls.set(members[i]!.observedAt, wall[i]!);
+      if (Number.isFinite(wall[i]!) && wall[i]! >= latestWall - COMPETE_WINDOW_MS) unitWalls.set(members[i]!.observedAt, wall[i]!);
     }
     const clockFloats = posture && clock?.kind === "floating";
     if (clockFloats) unitWalls.set(nowIso!, (clock as { readonly wall: number }).wall);

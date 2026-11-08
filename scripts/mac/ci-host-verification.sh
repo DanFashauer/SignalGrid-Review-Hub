@@ -3,6 +3,7 @@
 # The workflow pins the trusted helper commit; stdin is the complete verification chain.
 # Local ticks retain their nonblocking policy. Never unlink the shared lock file.
 set -u
+if [ "$(uname -s)" != "Darwin" ]; then echo "ci-host-verification.sh: macOS only" >&2; exit 1; fi
 if [ "$#" != 3 ] || ! printf '%s\n' "$1" | grep -Eq '^[0-9a-f]{40}$'; then
   echo 'ci-host-verification: expected helper SHA, admission seconds and work seconds' >&2
   exit 2

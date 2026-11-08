@@ -203,6 +203,8 @@ Everything below is the full catalog, deepest first.
 
 ## Review workflow
 
+- [Publication reviewer interface](PUBLICATION_REVIEWER_INTERFACE.md): the publisher's shared content-only validator and exact prepared title/body bytes, with the independent reviewer custody and object-retention requirements kept separate from content tests.
+
 - [Bruno API testing](BRUNO_API_TESTING.md): the contract plane's operator manual — collection layout, the two-directional coverage gate (`scripts/check-api-collection.mjs`), running against the fixture-mode server, negative tests as refusals on schedule, and the no-credentials rule.
 - [SIGNALGRID_OPERATING_METHOD.md](SIGNALGRID_OPERATING_METHOD.md) — the handbook: how SignalGrid is run (buckets, DRIs, wireframe-first, AI accountability ladder)
 - [LAUNCH_CONSOLE_WIREFRAMES.md](LAUNCH_CONSOLE_WIREFRAMES.md) — wireframe-first spec for the six launch screens (layout, states, API data, build order)

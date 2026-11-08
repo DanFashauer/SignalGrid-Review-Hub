@@ -155,9 +155,9 @@ jobs:
       - name: Install pinned syft + grype (sha256-verified)
         run: |
           set -euo pipefail
-          curl -sSL -o syft.tgz https://github.com/anchore/syft/releases/download/v1.44.0/syft_1.44.0_linux_amd64.tar.gz
+          curl --fail --retry 3 --retry-all-errors --retry-delay 2 --connect-timeout 15 --max-time 120 -sSL -o syft.tgz https://github.com/anchore/syft/releases/download/v1.44.0/syft_1.44.0_linux_amd64.tar.gz
           echo "0e91737aee2b5baf1d255b959630194a302335d848ff97bb07921eb6205b5f5a  syft.tgz" | sha256sum -c -
-          curl -sSL -o grype.tgz https://github.com/anchore/grype/releases/download/v0.112.0/grype_0.112.0_linux_amd64.tar.gz
+          curl --fail --retry 3 --retry-all-errors --retry-delay 2 --connect-timeout 15 --max-time 120 -sSL -o grype.tgz https://github.com/anchore/grype/releases/download/v0.112.0/grype_0.112.0_linux_amd64.tar.gz
           echo "acb14a030010fe9bdb9594b4ae108d9d14ef2f926d936aa0916dc62c89c058ea  grype.tgz" | sha256sum -c -
           mkdir -p "$HOME/bin"
           tar -xzf syft.tgz -C "$HOME/bin" syft

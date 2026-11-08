@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-11-08T08:13:11.286Z",
-  "result": "05:24Z-07:24Z quiet on mac/* branches and lane mail; the Mac coordinated #1911 and #1932 through #439 comments. Keepalive held during #1911's catch-up/CI window at the Mac's request; #1911 merged 5dadb305. Tick ran 2026-11-08T00:57Z; tick heartbeat file on mainline still 2026-10-24T07:30Z (Mac witness-delivery hand open). Live evidence 2026-11-05 07:04Z; one re-mint ask outstanding (#1930). Owner not escalated."
+  "firedAt": "2026-11-08T18:12:16.248Z",
+  "result": "15:24Z-18:10Z: one new Mac branch, mac/reland-scan-estate-sibling-locator, already open as #1939 (Mac auto-merge route). #1935 closed by the Mac in favour of Root's native new_source_paths repair. No mail addressed to the cloud is unread. Keepalive (last 15:42Z). Tick heartbeat file on mainline still 2026-10-24T07:30Z (Mac witness-delivery hand open). Live evidence 2026-11-05 07:04Z; one re-mint ask outstanding (#1930). Owner not escalated."
 }

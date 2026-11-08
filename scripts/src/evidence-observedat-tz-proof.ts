@@ -369,10 +369,12 @@ function codexFor(which: string): string {
 /**
  * THE CLASS ACROSS A DAYLIGHT-SAVING SWITCH (round 6): the same differential as `classFor`, over stamps around the
  * real 2026 transitions of America/New_York (03-08, 11-01), Europe/London (03-29, 10-25) and Australia/Lord_Howe
- * (04-05, 10-04, a 30-minute step): offset-less quarter-hour wall times across each switch, zoned stamps within two
- * hours of where that zone puts such a wall, per-reading freshness labels (the dock-wide freshness folds them), a
+ * (04-05, 10-04, a 30-minute step): in several categories an offset-less quarter-hour wall time across the switch
+ * beside a zoned stamp within an hour of where that zone puts it, per-reading freshness labels (the dock-wide
+ * freshness folds them), a
  * clock after the zoned stamps (or offset-less, or absent), and validated tenant policies with a deny on
  * criticalSignalsPresent=true. The reference is `Date.parse` on THIS host, which steps its offset between stamps.
+ * It bites: on round 5's core (one offset per decision) it prints milder=1 (New York), 2 (London), 1 (Lord Howe).
  */
 function dstClassFor(seedText: string, trialsText: string): string {
   let seed = Number(seedText) >>> 0;
@@ -408,19 +410,27 @@ function dstClassFor(seedText: string, trialsText: string): string {
     const [date, h0, h1, before, after, switchAt] = pick(SWITCHES);
     const pickWall = (): readonly [number, number] => [h0 + Math.floor(rnd() * (h1 - h0 + 1)), 15 * Math.floor(rnd() * 4)];
     const wall = (): string => { const [h, m] = pickWall(); return `${date}T${p2(h)}:${p2(m)}:00`; };
-    const zoned = (): string => {
-      const [h, m] = pickWall();
-      const t = Date.parse(`${date}T${p2(h)}:${p2(m)}:00Z`) - (h * 60 + m >= switchAt ? after : before) * 60_000 + (Math.floor(rnd() * 17) - 8) * 900_000;
+    // A zoned stamp near where the zone puts a wall time (within two hours, on the quarter hour).
+    const near = ([h, m]: readonly [number, number], spread: number): string => {
+      const t = Date.parse(`${date}T${p2(h)}:${p2(m)}:00Z`) - (h * 60 + m >= switchAt ? after : before) * 60_000 + (Math.floor(rnd() * (2 * spread + 1)) - spread) * 900_000;
       return new Date(t).toISOString().replace(".000Z", "Z");
     };
+    const zoned = (): string => near(pickWall(), 8);
     const signals: NormalizedSignal[] = [];
     const touched = new Set<string>();
-    for (let f = 1 + Math.floor(rnd() * 4); f > 0; f--) {
-      const [category, members] = rnd() < 0.7 ? pick(DOCK) : pick(OTHER);
+    // Codex's shape, generalised: several categories, each with an offset-less reading beside a zoned one (and
+    // sometimes a third of either kind), mostly good values, freshness labels at random.
+    for (let f = 2 + Math.floor(rnd() * 3); f > 0; f--) {
+      const [category, members] = rnd() < 0.8 ? pick(DOCK) : pick(OTHER);
+      if (touched.has(category)) continue;
       touched.add(category);
-      for (let r = 2 + Math.floor(rnd() * 2); r > 0; r--) {
-        const value = rnd() < 0.05 ? "bogus" : rnd() < 0.7 ? members[0]! : pick(members);
-        signals.push({ ...sig(`s${signals.length}`, category, value, rnd() < 0.5 ? wall() : zoned()), freshness: pick(["fresh", "stale"] as const) });
+      // The zoned reading sits within an hour of where the zone puts the offset-less one: whether the offset-less
+      // one is latest then turns on which side of the switch its wall time falls.
+      const at = pickWall();
+      const stamps = [`${date}T${p2(at[0])}:${p2(at[1])}:00`, near(at, 4), ...(rnd() < 0.3 ? [rnd() < 0.5 ? wall() : zoned()] : [])];
+      for (const stamp of stamps) {
+        const value = rnd() < 0.04 ? "bogus" : rnd() < 0.85 ? members[0]! : pick(members);
+        signals.push({ ...sig(`s${signals.length}`, category, value, stamp), freshness: pick(["fresh", "stale"] as const) });
       }
     }
     for (const [category, value] of [["device_management", true], ["device_encryption", true], ["os_support", true], ["device_compliance", "compliant"], ["posture_freshness", "fresh"]] as const) {
@@ -429,16 +439,16 @@ function dstClassFor(seedText: string, trialsText: string): string {
     const latest = Math.max(...signals.map((x) => (x.observedAt.endsWith("Z") ? Date.parse(x.observedAt) : -Infinity)));
     const later = new Date(Math.floor((latest + (1 + rnd() * 3) * 3_600_000) / 900_000) * 900_000).toISOString().replace(".000Z", "Z");
     const now = pick([later, later, later, wall(), undefined]);
-    const id = { ...identity, state: rnd() < 0.8 ? ("enabled" as const) : pick(["disabled", "unknown_state"] as const) } as Identity;
+    const id = { ...identity, state: rnd() < 0.9 ? ("enabled" as const) : pick(["disabled", "unknown_state"] as const) } as Identity;
     const raw: unknown[] = [];
-    if (rnd() < 0.5) raw.push({ id: "critical", description: "complete evidence denies", match: [{ field: "criticalSignalsPresent", equals: true }], outcome: "deny", reasonCode: "TENANT_CRIT", severity: "high" });
+    if (rnd() < 0.7) raw.push({ id: "critical", description: "complete evidence denies", match: [{ field: "criticalSignalsPresent", equals: true }], outcome: "deny", reasonCode: "TENANT_CRIT", severity: "high" });
     for (let i = Math.floor(rnd() * 3); i > 0; i--) {
       const field = pick(Object.keys(FIELDS));
       const values = FIELDS[field]!.filter(() => rnd() < 0.35);
       raw.push({ id: `r${i}`, description: "tenant rule", match: [{ field, in: values.length > 0 ? values : [pick(FIELDS[field]!)] }, ...(rnd() < 0.5 ? [{ field: "criticalSignalsPresent", equals: rnd() < 0.6 }] : [])], outcome: pick(["step_up", "restrict", "deny"]), reasonCode: `TENANT_R${i}`, severity: "high" });
     }
     raw.push({ id: "managed", description: "managed allow", match: [{ field: "deviceManaged", equals: true }], outcome: "allow", reasonCode: "TENANT_ALLOW", severity: "low" });
-    const rules = rnd() < 0.15 ? SHARED_DEVICE_RULES_V1 : validatePolicyRules(raw);
+    const rules = rnd() < 0.1 ? SHARED_DEVICE_RULES_V1 : validatePolicyRules(raw);
     const pv = { id: "pv_dst", tenantId: "tenant_northwind", policyId: "pol_dst", version: 1, status: "active" as const, rules, createdAt: BASE, digest: "test" } as unknown as Parameters<typeof evaluatePolicy>[0];
     const head = evaluatePolicy(pv, buildEvidence(id, device, workflow, signals, now)).outcome;
     const reference = evaluatePolicy(pv, preStrictEvidenceWith(id, device, workflow, signals, now, (iso) => Date.parse(iso))).outcome;
@@ -1107,9 +1117,9 @@ for (const [which, expectPrefix, expectCode, label] of [
   check("never milder than the pre-strict reader (Codex round 6 k): a DST switch between the floating charge (01:30) and battery (03:30) stamps -> deny TENANT_DENY, in every zone",
     r.every((v) => v.startsWith("deny|") && v.split("|")[1]!.split("+").includes("TENANT_DENY")), DST_ZONES.map((z, i) => `${z}=${r[i]}`).join(" "));
   // THE CLASS across real switches: the evaluating host steps its offset between stamps.
-  const runs = DST_ZONES.map((z) => [z, inZone(z, "dstclass", "20261108", "600")] as const);
+  const runs = DST_ZONES.map((z) => [z, inZone(z, "dstclass", "20261108", "4000")] as const);
   console.log(runs.map(([z, v]) => `${z}: ${v}`).join("\n"));
-  check("the class across a daylight-saving switch: no verdict is milder than the pre-strict reader's on the evaluating host (US, EU and Lord Howe 2026 switches, five zones, 600 seeded trials each)",
+  check("the class across a daylight-saving switch: no verdict is milder than the pre-strict reader's on the evaluating host (US, EU and Lord Howe 2026 switches, five zones, 4000 seeded trials each)",
     runs.every(([, v]) => v.startsWith("milder=0 ")), runs.map(([z, v]) => `${z}=${v}`).join(" "));
   check("the class across a daylight-saving switch: the verdicts are identical in every zone (one fingerprint)",
     new Set(runs.map(([, v]) => /fingerprint=(\w+)/.exec(v)?.[1] ?? v)).size === 1, runs.map(([z, v]) => `${z}=${v}`).join(" "));

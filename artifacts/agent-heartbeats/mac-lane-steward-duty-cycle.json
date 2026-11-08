@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-11-08T18:12:16.248Z",
-  "result": "15:24Z-18:10Z: one new Mac branch, mac/reland-scan-estate-sibling-locator, already open as #1939 (Mac auto-merge route). #1935 closed by the Mac in favour of Root's native new_source_paths repair. No mail addressed to the cloud is unread. Keepalive (last 15:42Z). Tick heartbeat file on mainline still 2026-10-24T07:30Z (Mac witness-delivery hand open). Live evidence 2026-11-05 07:04Z; one re-mint ask outstanding (#1930). Owner not escalated."
+  "firedAt": "2026-11-08T22:10:59.182Z",
+  "result": "18:24Z-22:10Z: #1939 (mac/reland-scan-estate-sibling-locator) merged as db6fb390 through the Mac's route; no other new mac/* branch; no mail addressed to the cloud unread. Keepalive (last 18:12Z), held 20:10Z-22:10Z for the owner-merge window. Tick heartbeat file on mainline still 2026-10-24T07:30Z (Mac witness-delivery hand open). Live evidence 2026-11-05 07:04Z; one re-mint ask outstanding (#1930). Owner not escalated."
 }

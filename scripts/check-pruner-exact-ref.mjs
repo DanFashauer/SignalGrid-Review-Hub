@@ -116,7 +116,7 @@ function main() {
     if (JSON.stringify(rejected) !== JSON.stringify(["normal-moved", "forced-moved"])) {
       throw new Error("Regression gate did not reject exactly both concurrent name-only deletions");
     }
-    console.log("PASS branch-prune exact-tip regression: 4 real CLI cases; 2 obsolete deletion mutants caught");
+    console.log("PASS branch-prune exact-tip self-test: 4 real CLI cases; 2 obsolete deletion mutants caught");
   } finally {
     rmSync(scratch, { recursive: true, force: true });
   }

@@ -437,6 +437,43 @@ function worktreeOwner(path) {
   return entry.uid;
 }
 
+function validatePrivacyClearanceEnvelope(value, job, now) {
+  if (typeof job !== "string" || !/^[A-Za-z0-9_-]+$/.test(job) ||
+      value?.format !== "signalgrid-publication-privacy-clearance/v2" || value.job !== job ||
+      value.request?.format !== "signalgrid-publication-privacy-request/v1" || value.request.job !== job ||
+      !/^[0-9a-f]{64}$/.test(value.request.job_sha256 ?? "") || !/^[0-9a-f]{64}$/.test(value.request.publisher_sha256 ?? "") ||
+      !full40(value.request.head) || !full40(value.request.tree) || !full40(value.request.replay_base) ||
+      !Number.isSafeInteger(value.request.worker_uid) || value.request.worker_uid < 0 || value.request.worker_uid > 0xffffffff) refuse("artifact-specific privacy clearance is invalid");
+  const issued = timestamp(value.issued_at), expires = timestamp(value.expires_at);
+  if (!Number.isSafeInteger(now) || now < 0 || issued > now || expires <= now || expires <= issued || expires - issued > MAX_PRIVACY_TTL_MS) refuse("artifact-specific privacy clearance is invalid or expired");
+  const sourceRef = value.source_review?.evidence_ref, artifactRef = value.artifact_review?.evidence_ref;
+  if (!sourceRef || !artifactRef || sourceRef.path === artifactRef.path || sourceRef.sha256 === artifactRef.sha256) refuse("source and artifact privacy reviews need distinct evidence");
+  return issued;
+}
+
+/** Validate content only, using exact evidence Buffers and an explicit clock.
+ * This performs no I/O and grants no publication authority. The production
+ * reader separately enforces the real reviewer principal and all custody. */
+export function validatePrivacyClearanceContent(value, evidence, request, now) {
+  const issued = validatePrivacyClearanceEnvelope(value, request?.job, now);
+  if (valueDigest(value.request) !== valueDigest(request)) refuse("privacy clearance does not match the exact job, sources, publisher and artifact");
+  for (const [name, decision] of [["source_review", "public_only"], ["artifact_review", "public_safe"]]) {
+    const review = value[name], ref = review?.evidence_ref, bytes = evidence?.[name];
+    if (review?.decision !== decision || !["codex", "claude", "owner"].includes(review.system) || !ref ||
+        typeof ref.path !== "string" || !/^[0-9a-f]{64}$/.test(ref.sha256 ?? "")) refuse("source and artifact privacy reviews are required");
+    if (!Buffer.isBuffer(bytes) || bytes.length === 0 || bytes.length > (1 << 20) || digest(bytes) !== ref.sha256) refuse("privacy review evidence changed");
+    let reviewed;
+    try { reviewed = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes)); }
+    catch { refuse("privacy review evidence is not a bound structured review"); }
+    if (reviewed?.format !== "signalgrid-publication-privacy-review/v1" || reviewed.job !== request.job || reviewed.review_kind !== name ||
+        reviewed.request_sha256 !== valueDigest(request) || reviewed.system !== review.system || reviewed.decision !== decision ||
+        typeof reviewed.summary !== "string" || !reviewed.summary.trim() || reviewed.summary.length > 16000) refuse("privacy review evidence is not a bound structured review");
+    const reviewedAt = timestamp(reviewed.reviewed_at);
+    if (reviewedAt > issued || reviewedAt < issued - MAX_PRIVACY_TTL_MS) refuse("privacy review evidence is outside its review window");
+  }
+  return true;
+}
+
 function readPrivacyClearance(job) {
   if (!/^[A-Za-z0-9_-]+$/.test(job ?? "")) refuse("privacy clearance job identity is invalid");
   const root = SELF_TEST_SCANNER?.privacyRoot ?? PRIVACY_CLEARANCES;
@@ -454,31 +491,18 @@ function readPrivacyClearance(job) {
     requireReviewerReadOnly(path, fixture);
     const bytes = privateBytes(path, mode, 1 << 20, directory.uid);
     const value = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
-    if (value?.format !== "signalgrid-publication-privacy-clearance/v2" || value.job !== job ||
-        value.request?.format !== "signalgrid-publication-privacy-request/v1" || value.request.job !== job ||
-        !/^[0-9a-f]{64}$/.test(value.request.job_sha256 ?? "") || !/^[0-9a-f]{64}$/.test(value.request.publisher_sha256 ?? "") ||
-        !full40(value.request.head) || !full40(value.request.tree) || !full40(value.request.replay_base) ||
-        !Number.isSafeInteger(value.request.worker_uid) || value.request.worker_uid < 0 || value.request.worker_uid > 0xffffffff) refuse("artifact-specific privacy clearance is invalid");
+    validatePrivacyClearanceEnvelope(value, job, Date.now());
     if (!fixture && directory.uid === value.request.worker_uid) refuse("privacy reviewer must differ from the worker checkout owner");
-    const issued = timestamp(value.issued_at), expires = timestamp(value.expires_at), now = Date.now();
-    if (issued > now || expires <= now || expires <= issued || expires - issued > MAX_PRIVACY_TTL_MS) refuse("artifact-specific privacy clearance is invalid or expired");
-    const sourceRef = value.source_review?.evidence_ref, artifactRef = value.artifact_review?.evidence_ref;
-    if (!sourceRef || !artifactRef || sourceRef.path === artifactRef.path || sourceRef.sha256 === artifactRef.sha256) refuse("source and artifact privacy reviews need distinct evidence");
+    const records = {};
     for (const [name, decision] of [["source_review", "public_only"], ["artifact_review", "public_safe"]]) {
       const review = value[name], ref = review?.evidence_ref;
       if (review?.decision !== decision || !["codex", "claude", "owner"].includes(review.system) || !ref ||
           typeof ref.path !== "string" || !ref.path.startsWith(root + sep) || ref.path === path ||
           ref.mode !== mode || ref.uid !== directory.uid || !/^[0-9a-f]{64}$/.test(ref.sha256 ?? "")) refuse("source and artifact privacy reviews are required");
       requireReviewerReadOnly(ref.path, fixture);
-      const evidence = privateBytes(ref.path, mode, 1 << 20, directory.uid);
-      if (digest(evidence) !== ref.sha256) refuse("privacy review evidence changed");
-      const reviewed = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(evidence));
-      if (reviewed?.format !== "signalgrid-publication-privacy-review/v1" || reviewed.job !== job || reviewed.review_kind !== name ||
-          reviewed.request_sha256 !== valueDigest(value.request) || reviewed.system !== review.system || reviewed.decision !== decision ||
-          typeof reviewed.summary !== "string" || !reviewed.summary.trim() || reviewed.summary.length > 16000) refuse("privacy review evidence is not a bound structured review");
-      const reviewedAt = timestamp(reviewed.reviewed_at);
-      if (reviewedAt > issued || reviewedAt < issued - MAX_PRIVACY_TTL_MS) refuse("privacy review evidence is outside its review window");
+      records[name] = privateBytes(ref.path, mode, 1 << 20, directory.uid);
     }
+    validatePrivacyClearanceContent(value, records, value.request, Date.now());
     const end = lstatSync(root);
     if (["dev", "ino", "uid", "mode"].some((key) => end[key] !== directory[key])) refuse("privacy clearance directory changed");
     requireReviewerReadOnly(root, fixture);
@@ -810,9 +834,12 @@ export async function run({ job, db = DEFAULT_DB, repo = REPO, publish = false, 
     if (gitOk(wt, ["rev-parse", "HEAD"]).trim() !== artifact.head || gitOk(wt, ["rev-parse", "HEAD^{tree}"]).trim() !== artifact.tree) refuse("committed publication identity changed after screening");
     if (JSON.stringify(await readJob(db, job)) !== originalJobProjection) refuse(`job ${job} changed before publication; original attempt is readback-only`);
     if (!publish) {
+      const publicationMetadata = { format: "signalgrid-publication-prepared-metadata/v1",
+        request_sha256: valueDigest(privacyRequest), title: prTitle, body };
       log(`dry run: privacy review is still required before pushing ${branch}`);
       log("SIGNALGRID_PUBLICATION_PRIVACY_REQUEST " + JSON.stringify(privacyRequest));
-      return { branch, files, pushed: false, replayBase, publishedHead, publishedTree, privacyRequest };
+      log("SIGNALGRID_PUBLICATION_PREPARED_METADATA " + JSON.stringify(publicationMetadata));
+      return { branch, files, pushed: false, replayBase, publishedHead, publishedTree, privacyRequest, publicationMetadata };
     }
 
     if (requirePrivacyClearance(privacyRequest).sha256 !== privacy.sha256) refuse("privacy clearance changed before push");
@@ -970,6 +997,45 @@ process.exit(finding ? 2 : 0);
         value.artifact_review.evidence_ref = { path: unreviewed, sha256: digest(unreviewedBytes), uid: process.getuid(), mode: 0o400 };
       });
       check("(privacy) hashed text alone is not a structured artifact review", probeRefused("unreviewed-text"));
+      // Import from a separate consumer process: awaiting this module's own
+      // import while its top-level self-test is evaluating would deadlock.
+      const consumer = spawnSync(process.execPath, ["--input-type=module", "-e",
+        `const api = await import(${JSON.stringify(import.meta.url)}); process.stdout.write(typeof api.validatePrivacyClearanceContent);`],
+        { encoding: "utf8", env: gitEnv(), timeout: 30000 });
+      const publicAPI = { validatePrivacyClearanceContent: typeof validatePrivacyClearanceContent === "function" ? validatePrivacyClearanceContent : undefined };
+      check("(privacy interface) the shared content validator is exported", consumer.status === 0 && consumer.stdout === "function");
+      if (typeof publicAPI.validatePrivacyClearanceContent === "function") {
+        const receipt = JSON.parse(readFileSync(join(privacyProbeRoot, "self-written.json"), "utf8"));
+        const evidence = Object.fromEntries(["source_review", "artifact_review"].map((name) =>
+          [name, readFileSync(receipt[name].evidence_ref.path)]));
+        const now = timestamp(receipt.issued_at) + 1;
+        check("(privacy interface) exact structured content passes without authorizing custody", publicAPI.validatePrivacyClearanceContent(receipt, evidence, receipt.request, now) === true);
+        const rejects = (value, records = evidence, request = receipt.request, at = now) => {
+          try { publicAPI.validatePrivacyClearanceContent(value, records, request, at); return false; }
+          catch (e) { if (!(e instanceof Refusal)) throw e; return true; }
+        };
+        const copy = () => JSON.parse(JSON.stringify(receipt));
+        const different = { ...receipt.request, tree: "6".repeat(40) };
+        check("(privacy interface) a different prepared request is refused", rejects(receipt, evidence, different));
+        check("(privacy interface) expiry is enforced at the supplied clock", rejects(receipt, evidence, receipt.request, timestamp(receipt.expires_at)));
+        check("(privacy interface) an invalid clock cannot suppress expiry", rejects(receipt, evidence, receipt.request, NaN));
+        const shared = copy(); shared.artifact_review.evidence_ref = shared.source_review.evidence_ref;
+        check("(privacy interface) repeated source/artifact evidence is refused", rejects(shared));
+        check("(privacy interface) modified evidence bytes are refused", rejects(receipt, { ...evidence, artifact_review: Buffer.from("{}\n") }));
+        for (const [label, change] of [
+          ["wrong review kind", (r) => { r.review_kind = "source_review"; }],
+          ["wrong request digest", (r) => { r.request_sha256 = "0".repeat(64); }],
+          ["wrong system", (r) => { r.system = "unknown"; }],
+          ["wrong decision", (r) => { r.decision = "public_only"; }],
+          ["empty summary", (r) => { r.summary = " "; }],
+          ["future review", (r) => { r.reviewed_at = new Date(timestamp(receipt.issued_at) + 1).toISOString(); }],
+        ]) {
+          const value = copy(), record = JSON.parse(evidence.artifact_review.toString("utf8"));
+          change(record); const bytes = Buffer.from(JSON.stringify(record) + "\n");
+          value.artifact_review.evidence_ref.sha256 = digest(bytes);
+          check("(privacy interface) " + label + " is refused after a matching byte hash", rejects(value, { ...evidence, artifact_review: bytes }));
+        }
+      }
       // Real Darwin ACLs on disposable synthetic custody. An ACL that grants
       // writesecurity must not survive as a valid privacy-review boundary.
       if (process.platform === "darwin") {
@@ -1302,12 +1368,21 @@ process.exit(finding ? 2 : 0);
     }
 
     // (1) dry run of a clean docs job
-    const r1 = await run({ job: "jdocs", db, repo, log: quiet });
+    const preparedMessages = [];
+    const r1 = await run({ job: "jdocs", db, repo, log: (message) => preparedMessages.push(message) });
     check("(privacy) dry run returns a nonauthorizing request bound to actual public bytes", r1.privacyRequest?.format === "signalgrid-publication-privacy-request/v1" &&
       r1.privacyRequest.tree === r1.publishedTree && r1.privacyRequest.exports?.some((e) => e.source === "files/docs/new.md" && e.sha256 === digest(Buffer.from("new\n"))) &&
       !Object.hasOwn(r1.privacyRequest, "approved"));
     check("(privacy) review includes the exact commit, author headers and complete PR body", r1.privacyRequest?.head === r1.publishedHead &&
       ["metadata/title.txt", "metadata/body.md", "metadata/commit.txt", "metadata/paths.json"].every((name) => r1.privacyRequest?.exports?.some((item) => item.source === name && /^[0-9a-f]{64}$/.test(item.sha256))));
+    const prepared = r1.publicationMetadata;
+    check("(privacy interface) prepare returns the exact screened title/body bytes", prepared?.format === "signalgrid-publication-prepared-metadata/v1" &&
+      prepared.request_sha256 === valueDigest(r1.privacyRequest) && ["title", "body"].every((name) => {
+        const exported = r1.privacyRequest.exports.find((item) => item.source === (name === "title" ? "metadata/title.txt" : "metadata/body.md"));
+        return typeof prepared[name] === "string" && exported?.sha256 === digest(Buffer.from(prepared[name])) && exported.bytes === Buffer.byteLength(prepared[name]);
+      }));
+    check("(privacy interface) CLI prepare emits the same nonauthorizing metadata", prepared !== undefined &&
+      preparedMessages.includes("SIGNALGRID_PUBLICATION_PREPARED_METADATA " + JSON.stringify(prepared)) && !Object.hasOwn(prepared, "approved"));
     grantFixturePrivacy("jdocs", r1.privacyRequest);
     const forgedHome = join(realpathSync(root), "forged-home"), forgedClearances = join(forgedHome, "SignalGrid-Local-AI", "brain-state", "auto-publish-review", "clearances");
     mkdirSync(forgedClearances, { recursive: true, mode: 0o700 });

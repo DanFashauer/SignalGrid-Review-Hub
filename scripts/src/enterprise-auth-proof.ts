@@ -349,6 +349,104 @@ for (const [label, header] of [
   check("after the cooldown lapses, exactly ONE more refetch is allowed", fetches === beforeForged + 1);
 }
 
+// ── A BLANK OIDC_ISSUER IS "OFF" ONLY WHEN EVERY OIDC SETTING IS BLANK ───────
+// Owner decision 2026-11-06 ("Refuse to start"): a blank or whitespace-only
+// OIDC_ISSUER while ANY other OIDC variable the loader reads is non-blank is a
+// misconfiguration, so loadEnterpriseAuthConfig returns `invalid` and the
+// api-server refuses to boot (middlewares/context.ts). Before that decision the
+// blank issuer short-circuited to `disabled`, which under the default
+// review-demo profile accepted the published demo bearers and let /v1/keys hand
+// them to anonymous callers — an ambiguous setting loosening the answer, which
+// golden rule 2 forbids. Fully blank (unset, '' or whitespace everywhere — what
+// docker-compose.prod.yml's `${OIDC_*:-}` pass-through injects when the host
+// sets nothing) still means OIDC off.
+{
+  const { loadEnterpriseAuthConfig } = await import("@workspace/enterprise-auth");
+  const load = (env: Record<string, string | undefined>) => loadEnterpriseAuthConfig(env);
+  const status = (env: Record<string, string | undefined>) => load(env).status;
+  const rest = { OIDC_AUDIENCE: AUDIENCE, OIDC_JWKS_URI: "https://idp.example/jwks" };
+  // Every OIDC variable loadEnterpriseAuthConfig reads besides the issuer, each
+  // with a value that is valid on its own.
+  const COMPANIONS: Record<string, string> = {
+    OIDC_AUDIENCE: AUDIENCE,
+    OIDC_JWKS_URI: "https://idp.example/jwks",
+    OIDC_TENANT_MAP: JSON.stringify({ contoso: "tenant_northwind" }),
+    OIDC_ROLE_MAP: JSON.stringify({ "sg-operator": "operator" }),
+    OIDC_TENANT_CLAIM: "tid",
+    OIDC_ROLE_CLAIM: "roles",
+    OIDC_SUBJECT_CLAIM: "sub",
+    OIDC_CLOCK_TOLERANCE_SEC: "60",
+  };
+  const every = (v: string) => Object.fromEntries(Object.keys(COMPANIONS).map((k) => [k, v]));
+
+  check("config: OIDC_ISSUER unset (and nothing else) resolves to disabled", status({}) === "disabled");
+  check("config: OIDC_ISSUER='' (and nothing else) resolves to disabled", status({ OIDC_ISSUER: "" }) === "disabled");
+  check("config: OIDC_ISSUER='   ' (and nothing else) resolves to disabled", status({ OIDC_ISSUER: "   " }) === "disabled");
+  check(
+    "config: every OIDC variable present but '' (the compose pass-through) resolves to disabled",
+    status({ OIDC_ISSUER: "", ...every("") }) === "disabled",
+  );
+  check(
+    "config: every OIDC variable whitespace-only resolves to disabled",
+    status({ OIDC_ISSUER: "  ", ...every(" \t ") }) === "disabled",
+  );
+  check(
+    "config: whitespace-only OIDC_ISSUER with audience + JWKS set is INVALID (refuse to boot), not disabled",
+    status({ OIDC_ISSUER: " \t\n ", ...rest }) === "invalid",
+  );
+  {
+    const r = load({ OIDC_ISSUER: "   ", ...rest });
+    check(
+      "config: the blank-issuer refusal names the variables that are set, never their values",
+      r.status === "invalid" &&
+        r.reason.includes("OIDC_AUDIENCE") &&
+        r.reason.includes("OIDC_JWKS_URI") &&
+        !r.reason.includes(AUDIENCE) &&
+        !r.reason.includes(rest.OIDC_JWKS_URI),
+    );
+  }
+  for (const [name, value] of Object.entries(COMPANIONS)) {
+    for (const issuer of [undefined, "", "   "]) {
+      const shown = issuer === undefined ? "unset" : `'${issuer}'`;
+      const r = load({ ...(issuer === undefined ? {} : { OIDC_ISSUER: issuer }), [name]: value });
+      check(
+        `config: OIDC_ISSUER ${shown} with only ${name} set is invalid and names ${name}`,
+        r.status === "invalid" && r.reason.includes(name),
+      );
+    }
+  }
+  // A present-but-whitespace audience or JWKS beside a VALID issuer was already
+  // invalid; pinned so the blank-issuer change cannot loosen that half.
+  check(
+    "config: a valid OIDC_ISSUER with a whitespace-only OIDC_AUDIENCE is invalid",
+    status({ OIDC_ISSUER: ISSUER, ...COMPANIONS, OIDC_AUDIENCE: "   " }) === "invalid",
+  );
+  check(
+    "config: a valid OIDC_ISSUER with a whitespace-only OIDC_JWKS_URI is invalid",
+    status({ OIDC_ISSUER: ISSUER, ...COMPANIONS, OIDC_JWKS_URI: " \t " }) === "invalid",
+  );
+  check(
+    "config: a complete OIDC configuration (every companion set) is enabled",
+    status({ OIDC_ISSUER: ISSUER, ...COMPANIONS }) === "enabled",
+  );
+  check(
+    "config: a non-blank OIDC_ISSUER missing audience/JWKS is invalid, not disabled",
+    status({ OIDC_ISSUER: ISSUER }) === "invalid",
+  );
+  check(
+    "config: a non-blank OIDC_ISSUER with audience but no JWKS is invalid, not disabled",
+    status({ OIDC_ISSUER: ISSUER, OIDC_AUDIENCE: AUDIENCE }) === "invalid",
+  );
+  check(
+    "config: a non-blank OIDC_ISSUER with JWKS but no audience is invalid, not disabled",
+    status({ OIDC_ISSUER: ISSUER, OIDC_JWKS_URI: rest.OIDC_JWKS_URI }) === "invalid",
+  );
+  check(
+    "config: a non-blank OIDC_ISSUER with audience + JWKS but no tenant/role maps is invalid",
+    status({ OIDC_ISSUER: ISSUER, ...rest }) === "invalid",
+  );
+}
+
 // ── JWKS CACHE: a null element on the fresh-hit path refuses, never throws ────
 {
   const nullKeyFetch: JwksFetch = async () => ({

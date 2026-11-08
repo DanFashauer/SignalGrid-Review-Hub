@@ -1,5 +1,20 @@
 import { CORE_NORMALIZATION_VERSION } from "./core-normalization-version";
-import { DIGEST_ALG, canonicalJson, classifyFreshness, deterministicId, digest, FRESH_WINDOW_HOURS, STALE_WINDOW_HOURS } from "./util";
+import {
+  DIGEST_ALG,
+  canonicalJson,
+  classifyFreshness,
+  deterministicId,
+  digest,
+  FRESH_WINDOW_HOURS,
+  parseObservedInstant,
+  PRE_STRICT_HOST_OFFSETS_MINUTES,
+  preStrictInstantAt,
+  preStrictOffsetSteps,
+  preStrictReading,
+  preStrictStamp,
+  STALE_WINDOW_HOURS,
+  type PreStrictStamp,
+} from "./util";
 import { OWNER_TYPES, RISK_TIERS } from "./types";
 import type {
   BadgeBindingState,
@@ -20,6 +35,8 @@ import type {
   ManagementHealthState,
   NormalizedSignal,
   PolicyVersion,
+  PreStrictReadings,
+  RetainedAccusations,
   TamperState,
   Workflow,
 } from "./types";
@@ -50,6 +67,55 @@ export function buildEvidence(
   // STRING, which two timestamp shapes broke in the fail-open direction — see
   // `groupLatest` for both, measured.
   const latestByCategory = groupLatest(signals);
+  const identityEnabledFromRow = identityRowState(identity);
+  const evidence = readEvidence(latestByCategory, identityEnabledFromRow, device, workflow, nowIso);
+  // Owner decision (a), 2026-11-06: keep every accusation the core could not order. Added only when there is
+  // one, so an unambiguous snapshot is byte-identical to before.
+  const retained = retainAccusations(latestByCategory, evidence, nowIso, identityEnabledFromRow);
+  // Round 5 (2026-11-07): the answer the PRE-STRICT reader gave, kept beside the strict one so the policy can never
+  // come out milder than it (see `readPreStrict`). Added only when it can differ, so an unambiguous snapshot is
+  // byte-identical to before.
+  const preStrict = readPreStrict(signals, identityEnabledFromRow, device, workflow, nowIso, evidence, retained !== undefined);
+  return {
+    ...evidence,
+    ...(retained === undefined ? {} : { retainedAccusations: retained }),
+    ...(preStrict === undefined ? {} : { preStrictReadings: preStrict }),
+  };
+}
+
+/** What the resolved identity row says about the account, before the `identity_state` signal is folded in. */
+function identityRowState(identity: Identity): boolean | "unknown" {
+  return identity.state === "enabled" ? true : identity.state === "disabled" ? false : "unknown";
+}
+
+/**
+ * The evidence the pre-strict reader produces when `instantOf` places every stamp: the grouping and the folds
+ * `readPreStrict` uses for one modelled host. Exported for `proof:evidence-observedat-tz`, which passes the host's
+ * OWN `Date.parse` (mainline's reader) in child processes under several zones and requires every verdict to be at
+ * least as strict as the one this produces there.
+ */
+export function preStrictEvidenceWith(
+  identity: Identity,
+  device: Device,
+  workflow: Workflow,
+  signals: NormalizedSignal[],
+  nowIso: string | undefined,
+  instantOf: (observedAt: string) => number,
+): DecisionEvidence {
+  return readEvidence(groupLatest(signals, instantOf), identityRowState(identity), device, workflow, nowIso);
+}
+
+/**
+ * Every evidence field, read from one grouping of the signals. `buildEvidence` runs it once with the strict reader
+ * and `readPreStrict` once per modelled host with the pre-strict one; the grouping says which (`preStrict`).
+ */
+function readEvidence(
+  latestByCategory: LatestByCategory,
+  identityEnabledFromRow: boolean | "unknown",
+  device: Device,
+  workflow: Workflow,
+  nowIso: string | undefined,
+): DecisionEvidence {
   const compliance = readCompliance(latestByCategory);
   const managed = readBoolean(latestByCategory, "device_management");
   const encrypted = readBoolean(latestByCategory, "device_encryption");
@@ -62,12 +128,6 @@ export function buildEvidence(
   // never read — so a connector reporting a DISABLED account still produced
   // `identityEnabled: true` and an allow, while the evidence snapshot recorded
   // the signal as an input to a decision it had not influenced.
-  const identityEnabledFromRow: boolean | "unknown" =
-    identity.state === "enabled"
-      ? true
-      : identity.state === "disabled"
-        ? false
-        : "unknown";
   const identityEnabled = foldIdentityEnabled(
     identityEnabledFromRow,
     readBoolean(latestByCategory, "identity_state"),
@@ -103,6 +163,548 @@ export function buildEvidence(
     ...partial,
     criticalSignalsPresent: deriveCriticalSignalsPresent(partial),
   };
+}
+
+/**
+ * The families whose readers fold readings worst-wins, as [evidence field, category, domain key, FLOOR]. The floor is
+ * what the reader answers when the category is PRESENT but nothing in it could be read (an out-of-domain value, or
+ * only a good value that may not vouch): DR-065's "unreadable" for the dock family, DR-043's "unknown" for the
+ * credential readers, and each family's own silence word otherwise.
+ */
+const RETAINED_ENUM_FAMILIES = [
+  ["deviceCompliance", "device_compliance", "compliance", "unknown"],
+  ["custodyState", "custody_state", "custody", "unreadable"],
+  ["dockChargeState", "charge_state", "charge", "unreadable"],
+  ["batteryHealth", "battery_health", "batteryHealth", "unreadable"],
+  ["tamperState", "tamper_state", "tamper", "unreadable"],
+  ["dockState", "dock_state", "dock", "unreadable"],
+  ["baselineCompliance", "security_baseline", "baseline", "unknown"],
+  ["benchmarkSelection", "benchmark_selection", "benchmarkSelection", "unverified"],
+  ["shiftContext", "shift_context", "shiftContext", "unverified"],
+  ["badgeBinding", "badge_binding", "badge", "unreadable"],
+  ["managementHealthState", "device_management_health", "managementHealth", "unknown"],
+  ["localAuthorityState", "local_authority", "localAuthority", "unverified"],
+  ["attachState", "attach_state", "attach", "unknown"],
+  ["enrollmentStrength", "enrollment_strength", "enrollment", "unknown"],
+  ["credentialReadMethod", "credential_read_method", "readMethod", "unknown"],
+  ["deviceManaged", "device_management", "boolean", "unknown"],
+  ["deviceEncrypted", "device_encryption", "boolean", "unknown"],
+  ["osSupported", "os_support", "boolean", "unknown"],
+] as const satisfies readonly (readonly [keyof RetainedAccusations, NormalizedSignal["category"], keyof typeof EVIDENCE_VALUE_DOMAINS, string])[];
+
+/**
+ * OWNER DECISION (a), 2026-11-06 — KEEP BOTH (the Codex P1 on #1442/#1792 at the `worse` tiers), widened after the
+ * independent and Codex reviews of 2026-11-07 so that NO value the pre-strict reader could have answered is lost.
+ *
+ * `resolveWorst` picks ONE value per family: the member the SHIPPED rules rank worst. This lists, per family, EVERY
+ * value the reader saw among the readings it folds (the latest orderable one, its same-instant twins, and every
+ * illegible one): each reading's stated value, GOOD values included (a tenant may punish what the shipped rules
+ * call good, e.g. a legacy enrollment), and the family's FLOOR whenever a folded value is out of domain or a
+ * reading is illegible (an illegible good value may not vouch, and the floor is what that leaves). Posture
+ * freshness also keeps each orderable reading's aged value and, for an illegible reading, the age the pre-strict
+ * reading gave it (an offset-less or date-only stamp read as UTC; future-dated ages to "unknown").
+ *
+ * Why this is never milder than the pre-strict reader on a UTC host: that reader's answer for a family is the value
+ * of a reading it folded (its latest, a twin, or one it could not parse) or the family's floor, and every such
+ * reading is folded here: its latest is this reader's latest orderable reading, a twin of it, or a reading this
+ * reader cannot order. The one exception is the owner's decision (c): an exact `±HH` stamp it could not parse is
+ * now ordered. `evaluatePolicy` judges every combination (or a bound above them) and keeps the strictest, so the
+ * old combination is always covered. A family is listed only when it has two or more distinct values.
+ */
+function retainAccusations(
+  latestByCategory: LatestByCategory,
+  evidence: DecisionEvidence,
+  nowIso: string | undefined,
+  identityRow: boolean | "unknown",
+): RetainedAccusations | undefined {
+  const out: Record<string, readonly unknown[]> = {};
+  for (const [field, category, domainKey, floor] of RETAINED_ENUM_FAMILIES) {
+    const reading = latestByCategory.get(category);
+    if (!reading) continue;
+    const domain = EVIDENCE_VALUE_DOMAINS[domainKey] as { readonly members: readonly unknown[]; readonly good: readonly unknown[] };
+    const values = new Set<unknown>([evidence[field]]);
+    for (const signal of [reading.ordered, ...reading.tied].filter((x): x is NormalizedSignal => x !== undefined)) {
+      values.add(domain.members.includes(signal.value) ? signal.value : floor);
+    }
+    for (const signal of reading.illegible) {
+      if (domain.members.includes(signal.value)) values.add(signal.value);
+      values.add(floor);
+    }
+    if (values.size >= 2) out[field] = sortValues([...values]);
+  }
+  // The identity flag folds the account row with the identity_state signal: its alternatives are the row folded
+  // with each value that signal family could answer.
+  const identityReading = latestByCategory.get("identity_state");
+  if (identityReading) {
+    const values = new Set<unknown>([evidence.identityEnabled]);
+    const folded = [identityReading.ordered, ...identityReading.tied, ...identityReading.illegible].filter((x): x is NormalizedSignal => x !== undefined);
+    for (const signal of folded) values.add(foldIdentityEnabled(identityRow, typeof signal.value === "boolean" ? signal.value : "unknown"));
+    if (identityReading.illegible.length > 0) values.add(foldIdentityEnabled(identityRow, "unknown"));
+    if (values.size >= 2) out.identityEnabled = sortValues([...values]);
+  }
+  // Posture freshness: each reading's STATED value; an orderable reading's AGED value; an illegible reading's age as
+  // the pre-strict reading gave it, when it could (review F1 and Codex (d), 2026-11-07).
+  const posture = latestByCategory.get("posture_freshness");
+  if (posture) {
+    const ageAt = (observedAtIso: string): Freshness =>
+      nowIso === undefined ? "fresh" : classifyFreshness(observedAtIso, nowIso, FRESH_WINDOW_HOURS, STALE_WINDOW_HOURS);
+    const values = new Set<Freshness>([evidence.postureFreshness]);
+    for (const signal of [posture.ordered, ...posture.tied].filter((x): x is NormalizedSignal => x !== undefined)) {
+      values.add(asFreshness(signal.value));
+      values.add(ageAt(signal.observedAt));
+    }
+    for (const signal of posture.illegible) {
+      // Its stated value, and every age the PRE-STRICT reader gave it on any modelled host, when that reader could
+      // place it at all (round 5: the reader itself, not a re-implementation of it; `preStrictStamp`). A stamp
+      // nothing could ever place keeps only its stated value, as before.
+      values.add(asFreshness(signal.value));
+      for (const age of preStrictAges(signal.observedAt, nowIso)) values.add(age);
+    }
+    if (values.size >= 2) out.postureFreshness = sortValues([...values]) as Freshness[];
+  }
+  return Object.keys(out).length === 0 ? undefined : (out as RetainedAccusations);
+}
+
+/** Every age the pre-strict reader gave a stamp, over the modelled hosts; none when it could not place the stamp. */
+function preStrictAges(observedAt: string, nowIso: string | undefined): Freshness[] {
+  const stampOf = preStrictStamp;
+  const stamp = stampOf(observedAt);
+  if (stamp.kind === "fixed" && Number.isNaN(stamp.at)) return [];
+  if (nowIso === undefined) return ["fresh"];
+  // A stamp the core does not place (`ambiguous`) could have been any age.
+  if (stamp.kind === "ambiguous") return ["fresh", "stale", "expired", "unknown"];
+  const offsets = stamp.kind === "floating" || stampOf(nowIso).kind === "floating" ? PRE_STRICT_HOST_OFFSETS_MINUTES : [0];
+  const ages = new Set<Freshness>();
+  for (const offset of offsets) {
+    ages.add(classifyFreshness(observedAt, nowIso, FRESH_WINDOW_HOURS, STALE_WINDOW_HOURS, (iso) => preStrictInstantAt(stampOf(iso), offset)));
+  }
+  return [...ages];
+}
+
+/**
+ * ROUND 5 (2026-11-07) — NEVER MILDER THAN THE PRE-STRICT READER, BY CONSTRUCTION.
+ *
+ * Four review rounds found inputs where the strict reader's verdict came out milder than mainline's, each one a
+ * shape the previous fix had not listed: an offset-less stamp, a date-only one, an impossible calendar value, then
+ * RFC 2822 text (whose `unknown` age vanished) and a recomputed backstop the retained worlds pinned to false. So
+ * instead of predicting what the old reader would have said, this RUNS it: the signals are grouped again with the
+ * pre-strict instant of every stamp (`Date.parse`, which is what mainline calls) and read with mainline's own folds
+ * (no accusation tiers, the age ladder for posture), and the result is kept beside the strict evidence.
+ * `evaluatePolicy` judges every kept reading with the active policy and returns the most restrictive outcome, so
+ * the verdict is never milder than the pre-strict reader's on ANY modelled host, whatever the policy tests,
+ * `criticalSignalsPresent` and `dockEvidenceFreshness` included (each reading carries its own, recomputed).
+ *
+ * Deterministic: `Date.parse` reads offset-less and zone-less text in the HOST's zone, at the offset that zone had
+ * at that wall time, so the readings are taken for every host instead of this one (`preStrictCategoryReadings`):
+ * each category's floating stamps are placed at a base offset on the whole-quarter-hour grid from −12:00 to +14:00
+ * (`PRE_STRICT_HOST_OFFSETS_MINUTES`) up to some point in wall order and one zone step away from it after
+ * (round 6, 2026-11-08: a daylight-saving switch or a zone change between two stamps of one decision; Codex P1 on
+ * #1809, `preStrictOffsetSteps` says why that is every host). The posture category is placed together with an
+ * offset-less evaluation clock. Every combination of the categories' readings is read (the categories are placed
+ * independently, which can only add readings), and every distinct reading is kept: the answer is the most
+ * restrictive across hosts, not this host's. Past `PRE_STRICT_PRODUCT_CAP` combinations, or `PRE_STRICT_UNIT_CAP`
+ * floating stamps in one category, the readings are BOUNDED instead (each category's readings one at a time, every
+ * dock-wide freshness; the policy then lets a rule count when each of its conditions holds in some reading). A
+ * stamp `Date.parse` accepts in a shape the core cannot place (`ambiguous`) is not guessed at: every family
+ * carrying one gets every value it could read, and the policy BOUNDS the outcome (`bounded`).
+ *
+ * Owner decision (c) stands: an exact ±HH stamp `Date.parse` rejects is read here as the strict reader reads it.
+ * Kept only when it differs from the strict evidence, and computed only when a stamp is read differently by the
+ * two readers or a family retained more than one value; otherwise the readers agree and nothing is added.
+ */
+function readPreStrict(
+  signals: NormalizedSignal[],
+  identityEnabledFromRow: boolean | "unknown",
+  device: Device,
+  workflow: Workflow,
+  nowIso: string | undefined,
+  evidence: DecisionEvidence,
+  retained: boolean,
+): PreStrictReadings | undefined {
+  const stampOf = preStrictStamp;
+  let disputed = false;
+  let floating = false;
+  const ambiguous = new Set<string>();
+  const consider = (iso: string): PreStrictStamp["kind"] => {
+    const { stamp, agrees } = preStrictReading(iso);
+    if (stamp.kind === "floating") floating = true;
+    if (!agrees) disputed = true;
+    return stamp.kind;
+  };
+  for (const signal of signals) {
+    if (consider(signal.observedAt) === "ambiguous") ambiguous.add(signal.category);
+  }
+  if (nowIso !== undefined && consider(nowIso) === "ambiguous") ambiguous.add("posture_freshness");
+  if (!disputed && !retained) return undefined;
+
+  const seen = new Set<string>([JSON.stringify(evidence)]);
+  const worlds: Partial<PreStrictReadingFields>[] = [];
+  const keep = (world: Partial<PreStrictReadingFields>): void => {
+    if (Object.keys(world).length > 0) worlds.push(world);
+  };
+  const read = (grouping: LatestByCategory): void => {
+    const reading = readEvidence(grouping, identityEnabledFromRow, device, workflow, nowIso);
+    // `readEvidence` builds every reading with one key order, so its JSON is a key (the snapshot never sees it).
+    const key = JSON.stringify(reading);
+    if (seen.has(key)) return;
+    seen.add(key);
+    keep(differingFields(reading, evidence));
+  };
+  const atZero = (iso: string): number => preStrictInstantAt(stampOf(iso), 0);
+  let bounded = false;
+  if (!floating) {
+    // No stamp depends on the host: one grouping.
+    read(groupLatest(signals, atZero));
+  } else {
+    // Round 6: every reading each category can have on SOME host (`preStrictCategoryReadings`), combined.
+    const { readings, overCap } = preStrictCategoryReadings(signals, nowIso);
+    for (const category of overCap) ambiguous.add(category);
+    const categories = [...readings.keys()];
+    const assemble = (pick: (category: NormalizedSignal["category"]) => PreStrictCategoryReading): LatestByCategory => {
+      const grouping: LatestByCategory = new Map();
+      let instantOf: (iso: string) => number = atZero;
+      for (const category of categories) {
+        const option = pick(category);
+        grouping.set(category, option.reading);
+        if (option.instantOf !== undefined) instantOf = option.instantOf;
+      }
+      grouping.preStrict = { instantOf };
+      return grouping;
+    };
+    let combinations = 1;
+    for (const options of readings.values()) combinations = Math.min(combinations * options.length, PRE_STRICT_PRODUCT_CAP + 1);
+    if (combinations <= PRE_STRICT_PRODUCT_CAP) {
+      const choice = new Map<NormalizedSignal["category"], number>(categories.map((category) => [category, 0]));
+      for (;;) {
+        read(assemble((category) => readings.get(category)![choice.get(category)!]!));
+        // Next combination (odometer over the categories, in first-seen order).
+        let moved = false;
+        for (const category of categories) {
+          const next = choice.get(category)! + 1;
+          if (next < readings.get(category)!.length) {
+            choice.set(category, next);
+            moved = true;
+            break;
+          }
+          choice.set(category, 0);
+        }
+        if (!moved) break;
+      }
+    } else {
+      // Too many combinations to read one by one: each category's readings one at a time over the first reading
+      // of every other category, and every dock-wide freshness (the one field read from several categories; the
+      // backstop is flipped by `evidenceWorlds`). The policy bounds the outcome over them.
+      bounded = true;
+      for (const varied of categories) {
+        for (const option of readings.get(varied)!) {
+          read(assemble((category) => (category === varied ? option : readings.get(category)![0]!)));
+        }
+      }
+      for (const value of FRESHNESS_VALUES) {
+        if (value !== evidence.dockEvidenceFreshness) keep({ dockEvidenceFreshness: value });
+      }
+    }
+  }
+  if (ambiguous.size > 0) {
+    // Every value each family carrying an ambiguous stamp could read, one field at a time; the policy bounds the
+    // outcome over them (a rule counts when each of its conditions holds in some reading).
+    for (const [field, category, domainKey, floor] of RETAINED_ENUM_FAMILIES) {
+      if (!ambiguous.has(category)) continue;
+      const domain = EVIDENCE_VALUE_DOMAINS[domainKey] as { readonly members: readonly unknown[] };
+      const values = new Set<unknown>([floor]);
+      for (const signal of signals) {
+        if (signal.category === category && domain.members.includes(signal.value)) values.add(signal.value);
+      }
+      for (const value of values) if (value !== evidence[field]) keep({ [field]: value } as Partial<PreStrictReadingFields>);
+    }
+    if (ambiguous.has("identity_state")) {
+      for (const value of [true, false, "unknown"] as const) {
+        const folded = foldIdentityEnabled(identityEnabledFromRow, value);
+        if (folded !== evidence.identityEnabled) keep({ identityEnabled: folded });
+      }
+    }
+    for (const value of FRESHNESS_VALUES) {
+      if (ambiguous.has("posture_freshness") && value !== evidence.postureFreshness) keep({ postureFreshness: value });
+      if (DOCK_CATEGORIES.some((category) => ambiguous.has(category)) && value !== evidence.dockEvidenceFreshness) {
+        keep({ dockEvidenceFreshness: value });
+      }
+    }
+    return { worlds, bounded: true };
+  }
+  if (bounded) return { worlds, bounded: true };
+  return worlds.length === 0 ? undefined : { worlds };
+}
+
+/** Above this many floating stamps in one category's competing set, its readings are bounded, not enumerated. */
+export const PRE_STRICT_UNIT_CAP = 6;
+/** Above this many combinations of the categories' pre-strict readings, the readings are bounded, not enumerated. */
+export const PRE_STRICT_PRODUCT_CAP = 1024;
+/** Above this many (reading x placement) steps for one category, its readings are bounded, not enumerated. */
+export const PRE_STRICT_WORK_CAP = 2_000_000;
+/** Two floating stamps further apart than this never compete: no pair of host offsets reorders them. */
+const COMPETE_WINDOW_MS = 26 * 60 * 60_000;
+
+/** One category's reading on some host, and (posture only) how that host placed the stamps it ages. */
+interface PreStrictCategoryReading {
+  readonly reading: CategoryReading;
+  readonly instantOf?: (observedAt: string) => number;
+}
+
+/**
+ * ROUND 6 (2026-11-08) — EVERY READING EACH CATEGORY CAN HAVE ON SOME HOST, offsets varying stamp by stamp.
+ *
+ * Round 5 placed every floating stamp of a decision at ONE host offset. A real zone gives different offsets to
+ * different wall times: Codex's repro on #1809 (America/New_York, 2026-03-08) read `01:30` at −05:00 and `03:30`
+ * at −04:00, which selected the fresh reading in BOTH dock categories, a combination no single offset produced, and
+ * a tenant rule on `criticalSignalsPresent=true` denied there while round 5 stepped up.
+ *
+ * A category's reading depends only on which of its stamps is latest (and ties it) and, for posture, how old those
+ * are at the clock. So per category: its COMPETING floating stamps (within 26 hours of its latest floating wall
+ * time; an older one is behind the latest on every host, whatever the two offsets) are placed at base offset `a`
+ * up to a point in wall order and at `a + step` from there on, for every base offset on the grid, every point, and
+ * every step `preStrictOffsetSteps` allows (that is every host, `util.ts` says why). Posture's competing stamps are
+ * placed together with an offset-less evaluation clock, since their ages compare the two. Identical text is one
+ * stamp (one wall time, one offset). The categories are placed independently of each other, which can only ADD
+ * readings: whatever one host does to all of them at once is one choice per category.
+ *
+ * Bounded: a category with more than `PRE_STRICT_UNIT_CAP` competing floating stamps is not enumerated
+ * (`overCap`); the caller gives that family every value it could read, as for an ambiguous stamp, and bounds.
+ */
+function preStrictCategoryReadings(
+  signals: NormalizedSignal[],
+  nowIso: string | undefined,
+): { readings: Map<NormalizedSignal["category"], PreStrictCategoryReading[]>; overCap: Set<NormalizedSignal["category"]> } {
+  const stampOf = preStrictStamp;
+  const byCategory = new Map<NormalizedSignal["category"], NormalizedSignal[]>();
+  for (const signal of signals) {
+    const list = byCategory.get(signal.category);
+    if (list) list.push(signal);
+    else byCategory.set(signal.category, [signal]);
+  }
+  const clock = nowIso === undefined ? undefined : stampOf(nowIso);
+  const lowest = PRE_STRICT_HOST_OFFSETS_MINUTES[0]!;
+  const highest = PRE_STRICT_HOST_OFFSETS_MINUTES[PRE_STRICT_HOST_OFFSETS_MINUTES.length - 1]!;
+  const readings = new Map<NormalizedSignal["category"], PreStrictCategoryReading[]>();
+  const overCap = new Set<NormalizedSignal["category"]>();
+  for (const [category, members] of byCategory) {
+    const posture = category === "posture_freshness" && nowIso !== undefined;
+    // Each member's stamp, once: a floating wall time (moves with the host), or a fixed instant (NaN: illegible).
+    const count = members.length;
+    const wall = new Array<number>(count);
+    const fixedAt = new Array<number>(count);
+    let latestWall = -Infinity;
+    for (let i = 0; i < count; i++) {
+      const stamp = stampOf(members[i]!.observedAt);
+      wall[i] = stamp.kind === "floating" ? stamp.wall : Number.NaN;
+      fixedAt[i] = stamp.kind === "floating" ? Number.NaN : preStrictInstantAt(stamp, 0);
+      if (stamp.kind === "floating") latestWall = Math.max(latestWall, stamp.wall);
+    }
+    // The competing floating stamps (one entry per text), and the clock with posture when it floats too.
+    const unitWalls = new Map<string, number>();
+    for (let i = 0; i < count; i++) {
+      if (Number.isFinite(wall[i]!) && wall[i]! >= latestWall - COMPETE_WINDOW_MS) unitWalls.set(members[i]!.observedAt, wall[i]!);
+    }
+    const clockFloats = posture && clock?.kind === "floating";
+    if (clockFloats) unitWalls.set(nowIso!, (clock as { readonly wall: number }).wall);
+    const unit = [...unitWalls].sort(([a, wa], [b, wb]) => (wa !== wb ? wa - wb : a < b ? -1 : a > b ? 1 : 0));
+    const position = new Map<string, number>(unit.map(([text], i) => [text, i]));
+    // A floating stamp outside the competing set never leads, at any offset: it is placed at the base offset.
+    const at = members.map((signal) => position.get(signal.observedAt) ?? -1);
+    const clockAt = clockFloats ? position.get(nowIso!)! : -1;
+    const clockWall = clock?.kind === "floating" ? clock.wall : Number.NaN;
+    const clockFixedAt = clock === undefined || clock.kind === "floating" ? Number.NaN : preStrictInstantAt(clock, 0);
+    // Only these can lead on some host: the latest fixed reading(s), and the competing floating ones (every other
+    // fixed reading is behind the latest one everywhere; every other floating one is behind the latest floating one).
+    let latestFixed = -Infinity;
+    for (let i = 0; i < count; i++) if (fixedAt[i]! > latestFixed) latestFixed = fixedAt[i]!;
+    const candidates: number[] = [];
+    for (let i = 0; i < count; i++) if (at[i]! >= 0 || fixedAt[i] === latestFixed) candidates.push(i);
+    const steps = unit.length === 0 ? [] : preStrictOffsetSteps(unit[0]![1]);
+    const placementCount = PRE_STRICT_HOST_OFFSETS_MINUTES.length * (1 + Math.max(0, unit.length - 1) * steps.length);
+    if (unit.length > PRE_STRICT_UNIT_CAP || candidates.length * placementCount > PRE_STRICT_WORK_CAP) overCap.add(category);
+
+    const options: PreStrictCategoryReading[] = [];
+    const placements = new Set<number | string>();
+    const contents = new Set<string>();
+    const AGES: readonly Freshness[] = ["fresh", "stale", "expired", "unknown"];
+    const tiedAt: number[] = [];
+    // Hot loop (up to ~20k placements for one category): no closures, a numeric placement key.
+    const place = (base: number, split: number, step: number): void => {
+      let lead = -1;
+      let leadAt = -Infinity;
+      tiedAt.length = 0;
+      for (const i of candidates) {
+        const t = Number.isNaN(wall[i]!) ? fixedAt[i]! : wall[i]! - (at[i]! >= split ? base + step : base) * 60_000;
+        if (lead < 0 || t > leadAt) {
+          lead = i;
+          leadAt = t;
+          tiedAt.length = 0;
+        } else if (t === leadAt) tiedAt.push(i);
+      }
+      // Posture: the selected readings share one instant, so one age at the clock (placed with them when it
+      // floats). The same arithmetic as `classifyFreshness`.
+      let age = 0;
+      let clockInstant = Number.NaN;
+      if (posture && lead >= 0) {
+        clockInstant = clockFloats ? clockWall - (clockAt >= split ? base + step : base) * 60_000 : clockFixedAt;
+        const hours = (clockInstant - leadAt) / (1000 * 60 * 60);
+        age = Number.isNaN(clockInstant) || leadAt > clockInstant ? 3 : hours <= FRESH_WINDOW_HOURS ? 0 : hours <= STALE_WINDOW_HOURS ? 1 : 2;
+      }
+      let placement: number | string;
+      if (count <= 24) {
+        let mask = lead < 0 ? 0 : 2 ** lead;
+        for (const i of tiedAt) mask += 2 ** i;
+        placement = mask * 4 + age;
+      } else placement = `${lead},${tiedAt.join(",")}:${age}`;
+      if (placements.has(placement)) return;
+      placements.add(placement);
+      // Two placements that select readings with the same values, labels and age read the same (the readers look
+      // at nothing else), so only the first is kept.
+      const selected = lead < 0 ? [] : [lead, ...tiedAt];
+      const content = `${selected.map((i) => `${typeof members[i]!.value}:${JSON.stringify(members[i]!.value)}|${String(members[i]!.freshness)}`).join(";")}:${posture ? AGES[age] : ""}`;
+      if (contents.has(content)) return;
+      contents.add(content);
+      const reading: CategoryReading = {
+        ...(lead < 0 ? {} : { ordered: members[lead]! }),
+        tied: tiedAt.map((i) => members[i]!),
+        illegible: members.filter((_, i) => Number.isNaN(wall[i]!) && Number.isNaN(fixedAt[i]!)),
+      };
+      if (!posture) {
+        options.push({ reading });
+        return;
+      }
+      const fixedClock = clockInstant;
+      const placed = (iso: string): number => {
+        if (iso === nowIso) return fixedClock;
+        const stamp = stampOf(iso);
+        if (stamp.kind !== "floating") return preStrictInstantAt(stamp, 0);
+        const p = position.get(iso);
+        return stamp.wall - (p !== undefined && p >= split ? base + step : base) * 60_000;
+      };
+      options.push({ reading, instantOf: placed });
+    };
+    // Offset 0 first: the reading the bounded fallback holds the other categories at.
+    place(0, 0, 0);
+    if (unit.length > 0 && !overCap.has(category)) {
+      for (const base of PRE_STRICT_HOST_OFFSETS_MINUTES) {
+        place(base, 0, 0);
+        for (let split = 1; split < unit.length; split++) {
+          for (const step of steps) {
+            if (base + step >= lowest && base + step <= highest) place(base, split, step);
+          }
+        }
+      }
+    }
+    readings.set(category, options);
+  }
+  return { readings, overCap };
+}
+
+/** The evidence fields a pre-strict reading may carry (the backstop is recomputed from them, never carried). */
+type PreStrictReadingFields = Omit<DecisionEvidence, "criticalSignalsPresent" | "retainedAccusations" | "preStrictReadings">;
+
+/** The fields of `reading` that differ from `evidence` (both single-valued; the backstop is left out). */
+function differingFields(reading: DecisionEvidence, evidence: DecisionEvidence): Partial<PreStrictReadingFields> {
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(reading)) {
+    if (key === "criticalSignalsPresent") continue;
+    if (value !== (evidence as unknown as Record<string, unknown>)[key]) out[key] = value;
+  }
+  return out as Partial<PreStrictReadingFields>;
+}
+
+/** Deterministic order for a retained list: booleans before strings, then by code point (never by locale). */
+function sortValues(values: unknown[]): unknown[] {
+  const key = (v: unknown): string => `${typeof v}:${String(v)}`;
+  return values.sort((a, b) => (key(a) < key(b) ? -1 : key(a) > key(b) ? 1 : 0));
+}
+
+/** Above this many combinations the worlds are not enumerated one by one (see `evidenceWorlds`). */
+export const MAX_EVIDENCE_WORLDS = 4096;
+
+/**
+ * Every combination of the retained values (owner decision (a)), the evidence as built FIRST, then every kept
+ * PRE-STRICT reading (round 5, `readPreStrict`). Each world is a single-valued `DecisionEvidence` the policy matcher
+ * already understands, and each carries its OWN backstop, recomputed on that world: a tenant rule can match
+ * `criticalSignalsPresent: true` as well as false, so pinning an alternate world's backstop to the base's failed
+ * one (as rounds 2-4 did) hid a world the pre-strict reader produced (Codex P1, 2026-11-07). That pinned world is
+ * still kept beside it wherever the two differ, so no world an earlier round judged is dropped. A malformed
+ * `retainedAccusations` or `preStrictReadings` (a durable row, a JSON body) can only ADD worlds, and the policy
+ * keeps the most restrictive outcome, so it can never loosen the base answer.
+ *
+ * Past `MAX_EVIDENCE_WORLDS` combinations the product is NOT enumerated (`truncated`), and neither is a reading
+ * set marked `bounded`. The worlds returned are then the base, one world per (family, value) with only that family
+ * changed, every pre-strict reading, and the base with its backstop flipped. `evaluatePolicy` bounds the strictest
+ * combination instead of taking the strictest of those worlds: a rule counts when each of its conditions holds in
+ * SOME world, and the floor is step_up. Every condition reads one field, so a rule that matches in any combination
+ * is counted; the bound is never milder than any combination, including the pre-strict one.
+ */
+export function evidenceWorlds(evidence: DecisionEvidence): { worlds: DecisionEvidence[]; truncated: boolean } {
+  const retainedRaw = evidence.retainedAccusations;
+  const retained = retainedRaw !== null && typeof retainedRaw === "object" ? retainedRaw : undefined;
+  const preStrict = preStrictWorldsOf(evidence.preStrictReadings);
+  if (retained === undefined && preStrict === undefined) {
+    return { worlds: [evidence], truncated: false };
+  }
+  const { retainedAccusations: _dropped, preStrictReadings: _readings, ...base } = evidence;
+  const axes: [string, unknown[]][] = [];
+  for (const key of Object.keys(retained ?? {}).sort()) {
+    const values = (retained as Record<string, unknown>)[key];
+    if (!Array.isArray(values)) continue;
+    const alternates = values.filter((v) => v !== (base as Record<string, unknown>)[key]);
+    if (alternates.length > 0) axes.push([key, alternates]);
+  }
+  let size = 1;
+  for (const [, alts] of axes) {
+    size *= alts.length + 1;
+    if (size > MAX_EVIDENCE_WORLDS) break;
+  }
+  const truncated = size > MAX_EVIDENCE_WORLDS;
+  let worlds: Record<string, unknown>[] = [base];
+  if (truncated) {
+    for (const [key, alts] of axes) for (const v of alts) worlds.push({ ...base, [key]: v });
+  } else {
+    for (const [key, alts] of axes) {
+      worlds = worlds.flatMap((w) => [w, ...alts.map((v) => ({ ...w, [key]: v }))]);
+    }
+  }
+  const judged: DecisionEvidence[] = [base as DecisionEvidence];
+  for (const world of worlds.slice(1)) {
+    const own = deriveCriticalSignalsPresent(world as unknown as DecisionEvidence);
+    judged.push({ ...world, criticalSignalsPresent: own } as unknown as DecisionEvidence);
+    if (own && !base.criticalSignalsPresent) judged.push({ ...world, criticalSignalsPresent: false } as unknown as DecisionEvidence);
+  }
+  for (const fields of preStrict?.worlds ?? []) {
+    const world = { ...base, ...fields } as DecisionEvidence;
+    judged.push({ ...world, criticalSignalsPresent: deriveCriticalSignalsPresent(world) });
+  }
+  const bounded = truncated || preStrict?.bounded === true;
+  // In a combination the backstop can differ from every single-family world's; the bound must see both values.
+  if (bounded) judged.push({ ...(base as DecisionEvidence), criticalSignalsPresent: !base.criticalSignalsPresent });
+  return { worlds: judged, truncated: bounded };
+}
+
+/**
+ * The kept pre-strict readings, read defensively: they may come from a durable row or a JSON body. An entry that
+ * is not a plain object is ignored, and a backstop or nested list inside one is dropped (the backstop is always
+ * recomputed), so a malformed value can only add worlds the policy judges, never change the base.
+ */
+function preStrictWorldsOf(value: unknown): { worlds: Record<string, unknown>[]; bounded: boolean } | undefined {
+  if (value === null || typeof value !== "object") return undefined;
+  const record = value as Record<string, unknown>;
+  const list = Array.isArray(record["worlds"]) ? (record["worlds"] as unknown[]) : [];
+  const worlds: Record<string, unknown>[] = [];
+  for (const entry of list) {
+    if (entry === null || typeof entry !== "object" || Array.isArray(entry)) continue;
+    const fields: Record<string, unknown> = {};
+    for (const [key, field] of Object.entries(entry as Record<string, unknown>)) {
+      if (key === "criticalSignalsPresent" || key === "retainedAccusations" || key === "preStrictReadings") continue;
+      fields[key] = field;
+    }
+    worlds.push(fields);
+  }
+  const bounded = record["bounded"] === true;
+  return worlds.length === 0 && !bounded ? undefined : { worlds, bounded };
 }
 
 /**
@@ -318,7 +920,14 @@ interface CategoryReading {
   illegible: NormalizedSignal[];
 }
 
-type LatestByCategory = Map<NormalizedSignal["category"], CategoryReading>;
+type LatestByCategory = Map<NormalizedSignal["category"], CategoryReading> & {
+  /**
+   * Set on a PRE-STRICT grouping only (round 5, `readPreStrict`): the reader that placed its stamps. The readers
+   * then fold as mainline's did (no accusation tiers in `readEnum`, the age ladder in `readFreshness`) and age a
+   * posture reading with this reader, so the reading is the one mainline produced on that modelled host.
+   */
+  preStrict?: { readonly instantOf: (observedAt: string) => number };
+};
 
 /**
  * One pass over the signals, keeping the latest (max observedAt) entry per
@@ -362,8 +971,11 @@ type LatestByCategory = Map<NormalizedSignal["category"], CategoryReading>;
  * directions. See `resolveWorst` for the value rule and `readDockEvidenceFreshness`
  * for the freshness one; they are the same rule applied to two kinds of member.
  */
-function groupLatest(signals: NormalizedSignal[]): LatestByCategory {
+function groupLatest(signals: NormalizedSignal[], preStrictInstant?: (observedAt: string) => number): LatestByCategory {
   const map: LatestByCategory = new Map();
+  // A PRE-STRICT grouping (`readPreStrict`) places every stamp where `Date.parse` placed it for one modelled host,
+  // and the readers then fold exactly as mainline's did.
+  if (preStrictInstant !== undefined) map.preStrict = { instantOf: preStrictInstant };
   const at = new Map<NormalizedSignal["category"], number>();
   for (const signal of signals) {
     let reading = map.get(signal.category);
@@ -371,7 +983,7 @@ function groupLatest(signals: NormalizedSignal[]): LatestByCategory {
       reading = { tied: [], illegible: [] };
       map.set(signal.category, reading);
     }
-    const observed = Date.parse(signal.observedAt);
+    const observed = (preStrictInstant ?? parseObservedInstant)(signal.observedAt);
     if (Number.isNaN(observed)) {
       // Present, but unorderable. Kept ALONGSIDE any parseable sibling rather
       // than instead of it — and ALONGSIDE its illegible peers, all of them.
@@ -428,15 +1040,25 @@ function groupLatest(signals: NormalizedSignal[]): LatestByCategory {
 function severityOf<T extends string | boolean>(
   value: T | undefined,
   good: readonly T[],
+  worse: readonly (readonly T[])[] = [],
 ): number {
   if (value === undefined) return 1;
-  return good.includes(value) ? 0 : 2;
+  if (good.includes(value)) return 0;
+  // A family may name its accusing members in TIERS, least to most severe. Members of one tier are treated
+  // alike by the shipped rules, so they TIE (the first arrival stands, as before): collapsing them to the
+  // later-listed member would discard a distinction a tenant's own active policy may draw. A member in a
+  // higher tier outranks every member of a lower tier and of an unlisted accusation, so two DIFFERENT
+  // accusations (an older "suspected" against a later "confirmed" whose stamp cannot be ordered) resolve to
+  // the worse one whatever order they arrived in, instead of tying at 2 and letting the ordered one stand.
+  const tier = worse.findIndex((members) => members.includes(value));
+  return tier < 0 ? 2 : 2 + (tier + 1) / 10;
 }
 
 function resolveWorst<T extends string | boolean>(
   reading: CategoryReading | undefined,
   parse: (value: NormalizedSignal["value"]) => T | undefined,
   good: readonly T[],
+  worse: readonly (readonly T[])[] = [],
 ): T | undefined {
   if (!reading) {
     return undefined;
@@ -447,7 +1069,7 @@ function resolveWorst<T extends string | boolean>(
   // stands (eighth-round finding — array order used to pick the winner).
   for (const signal of reading.tied) {
     const candidate = parse(signal.value);
-    if (severityOf(candidate, good) > severityOf(ordered, good)) {
+    if (severityOf(candidate, good, worse) > severityOf(ordered, good, worse)) {
       ordered = candidate;
     }
   }
@@ -462,7 +1084,7 @@ function resolveWorst<T extends string | boolean>(
   let worst = ordered;
   for (const signal of reading.illegible) {
     const candidate = parse(signal.value);
-    if (severityOf(candidate, good) > severityOf(worst, good)) {
+    if (severityOf(candidate, good, worse) > severityOf(worst, good, worse)) {
       worst = candidate;
     }
   }
@@ -637,16 +1259,24 @@ export const EVIDENCE_VALUE_DOMAINS = {
   compliance: { members: COMPLIANCE_STATES, good: ["compliant"] },
   boolean: { members: BOOLEAN_MEMBERS, good: [true] },
   freshness: { members: FRESHNESS_VALUES, good: ["fresh"] },
-  custody: { members: CUSTODY_STATES, good: ["checked_in", "checked_out"] },
-  charge: { members: CHARGE_STATES, good: ["charging", "charged"] },
-  batteryHealth: { members: BATTERY_HEALTH_STATES, good: ["healthy"] },
-  tamper: { members: TAMPER_STATES, good: ["none"] },
-  dock: { members: DOCK_STATES, good: ["occupied", "empty", "reserved"] },
-  baseline: { members: BASELINE_STATES, good: ["aligned"] },
+  // Every family below lists ALL its accusing members in TIERS, least to most severe by the outcome of the
+  // shipped rule that matches them. Members the rules treat alike share a tier and TIE (the first arrival
+  // stands); only members the rules separate are ordered. `proof:evidence-observedat-tz` derives each outcome
+  // from SHARED_DEVICE_RULES_V1 and fails if a tier mixes outcomes, tiers do not strictly rise, or an accusing
+  // member is missing. The orders follow the SHIPPED rules, not a tenant's active policy.
+  custody: { members: CUSTODY_STATES, good: ["checked_in", "checked_out"], worse: [["overdue", "exception", "maintenance"]] },
+  charge: { members: CHARGE_STATES, good: ["charging", "charged"], worse: [["low", "not_present"], ["critical"]] },
+  batteryHealth: { members: BATTERY_HEALTH_STATES, good: ["healthy"], worse: [["degraded"], ["failing"]] },
+  // `worse` orders the accusing members the shipped rule set separates by outcome: a confirmed tamper
+  // denies (TAMPER_CONFIRMED) and a suspected one restricts (TAMPER_SUSPECTED).
+  tamper: { members: TAMPER_STATES, good: ["none"], worse: [["sensor_unavailable"], ["suspected"], ["confirmed"]] },
+  dock: { members: DOCK_STATES, good: ["occupied", "empty", "reserved"], worse: [["offline"], ["faulted"]] },
+  baseline: { members: BASELINE_STATES, good: ["aligned"], worse: [["partial", "not_assessed"], ["drifted"]] },
   benchmarkSelection: { members: BENCHMARK_SELECTION_STATES, good: ["confirmed"] },
   shiftContext: { members: SHIFT_CONTEXT_STATES, good: ["confirmed"] },
-  badge: { members: BADGE_STATES, good: ["present"] },
-  managementHealth: { members: MANAGEMENT_HEALTH_STATES, good: ["healthy"] },
+  // A forced badge removal denies (BADGE_FORCED_REMOVAL) and a plain removal restricts (BADGE_REMOVED).
+  badge: { members: BADGE_STATES, good: ["present"], worse: [["absent"], ["removed"], ["forced"]] },
+  managementHealth: { members: MANAGEMENT_HEALTH_STATES, good: ["healthy"], worse: [["degraded"], ["broken"]] },
   localAuthority: { members: LOCAL_AUTHORITY_STATES, good: ["verified"] },
   attach: { members: ATTACH_READABLE, good: ["attached"] },
   // ENROLLMENT IS INVERTED ON PURPOSE, and it is the DR-043 fix over PR #753. The
@@ -735,6 +1365,24 @@ function readDockEvidenceFreshness(latestByCategory: LatestByCategory): Freshnes
   return worst ?? "missing";
 }
 
+/**
+ * Worst-wins for the POSTURE freshness reading, ordered by what the shipped rules DO with each value, not by
+ * age: `missing` and `unknown` restrict (POSTURE_MISSING) while `stale` and `expired` only step up
+ * (POSTURE_STALE). The age ladder above puts stale above unknown, so an older parseable `stale` outranked a
+ * newer `unknown` whose stamp could not be ordered and a restrict became a step-up. The dock-wide freshness
+ * keeps the age ladder: nothing shipped rules on it per value.
+ */
+const POSTURE_SEVERITY: Record<Freshness, number> = {
+  fresh: 0,
+  stale: 1,
+  expired: 2,
+  missing: 3,
+  unknown: 4,
+};
+function worsePosture(a: Freshness, b: Freshness): Freshness {
+  return POSTURE_SEVERITY[a] >= POSTURE_SEVERITY[b] ? a : b;
+}
+
 /** Worst-wins between two freshness values, by the severity map above. */
 function worseFreshness(a: Freshness, b: Freshness): Freshness {
   return FRESHNESS_SEVERITY[a] >= FRESHNESS_SEVERITY[b] ? a : b;
@@ -768,10 +1416,18 @@ export function agedSignalFreshness(signal: NormalizedSignal, nowIso: string): s
  * With no instant the age term is "fresh", the identity of the fold. One fold, two
  * readers: `readFreshness` (the verdict) and `agedSignalFreshness` (/metrics).
  */
-function postureReadingFreshness(signal: NormalizedSignal, nowIso?: string): Freshness {
+function postureReadingFreshness(
+  signal: NormalizedSignal,
+  nowIso?: string,
+  // The reader that places the stamps and the fold, as `readFreshness` uses them: the strict reader and the
+  // rule-aligned posture order by default (the verdict's strict reading, and so the gauge); a pre-strict reading
+  // passes its own reader and mainline's age ladder.
+  instantOf: (observedAt: string) => number = parseObservedInstant,
+  worse: (a: Freshness, b: Freshness) => Freshness = worsePosture,
+): Freshness {
   const aged: Freshness =
-    nowIso === undefined ? "fresh" : classifyFreshness(signal.observedAt, nowIso, FRESH_WINDOW_HOURS, STALE_WINDOW_HOURS);
-  return worseFreshness(asFreshness(signal.value), aged);
+    nowIso === undefined ? "fresh" : classifyFreshness(signal.observedAt, nowIso, FRESH_WINDOW_HOURS, STALE_WINDOW_HOURS, instantOf);
+  return worse(asFreshness(signal.value), aged);
 }
 
 /**
@@ -875,7 +1531,7 @@ function readPresentOrNotApplicable<T extends string>(
 function readEnum<T extends string>(
   latestByCategory: LatestByCategory,
   category: NormalizedSignal["category"],
-  domain: { readonly members: readonly T[]; readonly good: readonly T[] },
+  domain: { readonly members: readonly T[]; readonly good: readonly T[]; readonly worse?: readonly (readonly T[])[] },
 ): T | undefined {
   return resolveWorst(
     latestByCategory.get(category),
@@ -884,6 +1540,8 @@ function readEnum<T extends string>(
         ? (value as T)
         : undefined,
     domain.good,
+    // The accusation tiers are this change's; the pre-strict reading folds without them, as mainline does.
+    latestByCategory.preStrict === undefined ? domain.worse : [],
   );
 }
 
@@ -893,12 +1551,12 @@ function readEnum<T extends string>(
  * `observedAt` nothing can order is present-but-illegible; an orderable answer is
  * whatever it says.
  *
- * The illegible case resolves WORST-WINS against the value rule in
- * `resolveWorst`, on the freshness severity ladder rather than the three-level
- * one: a sole illegible reading is floored at "unknown", so an illegible "fresh"
- * reads "unknown" (it may not vouch) while an illegible "stale" or "expired"
- * stays what it says (it may still accuse). Mixed with a parseable sibling, the
- * parseable one is the answer unless the illegible one is worse.
+ * The illegible case resolves WORST-WINS on the rule-aligned POSTURE_SEVERITY
+ * order (missing/unknown restrict, above stale/expired, which step up): a sole
+ * illegible reading is floored at "unknown", so an illegible "fresh", "stale" or
+ * "expired" reads "unknown" (it may not vouch, and "unknown" is the harsher
+ * shipped outcome). Mixed with a parseable sibling, the parseable one is the
+ * answer unless the illegible one is worse on that order.
  */
 function readFreshness(latestByCategory: LatestByCategory, nowIso?: string): Freshness {
   const reading = latestByCategory.get("posture_freshness");
@@ -908,11 +1566,15 @@ function readFreshness(latestByCategory: LatestByCategory, nowIso?: string): Fre
   // DR-059: each reading is its stated value worst-wins its own age at the decision
   // instant — `postureReadingFreshness`, the one fold `agedSignalFreshness` (the
   // /metrics stale-evidence gauge) also calls, so the verdict and the gauge cannot
-  // split when the fold changes.
-  let ordered = reading.ordered ? postureReadingFreshness(reading.ordered, nowIso) : undefined;
+  // split when the fold changes. The strict reading ages with the strict reader and
+  // folds on the rule-aligned order; a PRE-STRICT reading (`readPreStrict`) ages with
+  // the reader that placed its stamps and folds on mainline's age ladder.
+  const instantOf = latestByCategory.preStrict?.instantOf ?? parseObservedInstant;
+  const worse = latestByCategory.preStrict === undefined ? worsePosture : worseFreshness;
+  let ordered = reading.ordered ? postureReadingFreshness(reading.ordered, nowIso, instantOf, worse) : undefined;
   // A same-instant twin folds worst-wins with no floor (eighth-round finding).
   for (const signal of reading.tied) {
-    ordered = worseFreshness(ordered ?? "fresh", postureReadingFreshness(signal, nowIso));
+    ordered = worse(ordered ?? "fresh", postureReadingFreshness(signal, nowIso, instantOf, worse));
   }
   if (reading.illegible.length === 0) {
     return ordered ?? "unknown";
@@ -920,7 +1582,7 @@ function readFreshness(latestByCategory: LatestByCategory, nowIso?: string): Fre
   // Worst-wins across ALL the illegible peers, not just the first (finding F-1).
   let worst = ordered ?? "unknown";
   for (const signal of reading.illegible) {
-    worst = worseFreshness(worst, asFreshness(signal.value));
+    worst = worse(worst, asFreshness(signal.value));
   }
   return worst;
 }

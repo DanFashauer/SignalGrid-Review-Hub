@@ -36,8 +36,8 @@ export function evaluateLocation(
   }
 
   // Freshness UNKNOWN (wedge #12, caught by the shift-1 sweep): the fix carries
-  // no capture time, an unparseable one, or one claimed from the FUTURE (wedge
-  // #13 — a contradiction, folded to unknown in deriveFreshness). The geofence
+  // no capture time, or one claimed from the FUTURE (wedge
+  // #13 — a contradiction, folded to unknown in deriveFreshness; a present but unreadable one grades stale, above). The geofence
   // membership may be years old, so "inside" is not a reading we are entitled
   // to. This used to fall straight through to the inside/none grant — only
   // provably-STALE fixes were caught. Graded `monitor` (a blind spot to

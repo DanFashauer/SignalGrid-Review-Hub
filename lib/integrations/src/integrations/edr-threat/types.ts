@@ -121,7 +121,7 @@ export interface ThreatVerdict {
    * How current the endpoint's own sighting (`lastSeen`) is, against the reference
    * instant the caller posed. `"ungraded"` means no instant was posed, so the question
    * was never asked — deliberately distinct from `"unknown"`, which means it WAS asked
-   * and the sighting could not answer it (absent, unparseable, or dated in the future).
+   * and the sighting could not answer it (absent, or dated in the future; a present but unreadable sighting grades `stale`).
    * Both `stale` and `unknown` raise the verdict; `"ungraded"` does not, and instead
    * stops the verdict from silently reading as "seen recently".
    */

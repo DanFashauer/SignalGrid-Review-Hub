@@ -78,7 +78,9 @@ uses them without issuing a clearance.
 
 ## Automatic private preparation
 
-The tick can prepare a fresh completed build for independent privacy review.
+The preparation code is implemented; activation and operational qualification
+remain pending. After setup, the tick can prepare a fresh completed build for
+independent privacy review.
 Preparation uses the ordinary publisher without `--publish`; it does not push,
 open a PR, call a model or write reviewer evidence.
 
@@ -94,16 +96,16 @@ current artifact-bound clearance. The ordinary prepare operation still checks
 the actual job, source paths, patch, replay, hooks and credential scan. A listed
 job has no publication permission.
 
-### Activation and custody
+### Activation and file ownership
 
 Preparation is off unless the existing source-pinned publication activation
 explicitly contains `privacy_preparation_enabled: true`.
 Setup must also create and anchor these private directories before the tick:
 
 - `<state>/preparations`: preparation attempts.
-- `<publication-custody-mirror>/preparations`: independent mirrored attempt records.
+- `<publication-attempt-mirror>/preparations`: independent mirrored attempt records.
 
-The existing custody anchor records their canonical path, device and inode
+The existing file-ownership anchor records their canonical path, device and inode
 under `preparations` and `preparation_mirror`.
 The tick never creates or repairs these control roots, activation or the anchor.
 Changing publisher, tick or dependency source requires explicit requalification
@@ -111,9 +113,9 @@ and activation with the new source identities.
 
 Cleared jobs get their publication opportunity first. Preparation uses only the
 remaining per-tick CLI budget and takes its own ordinary host reservation.
-A busy host leaves the job unconsumed. Once a preparation is claimed, failed,
-interrupted, unknown or missing-custody attempts are readback only. The tick
-does not retry the CLI or recreate an expired or lost request.
+A busy host leaves the job unconsumed. Once a preparation is claimed, failures,
+interruptions, unknown outcomes or missing ownership records require readback.
+The tick does not retry the CLI or recreate an expired or lost request.
 
 ### Private review handoff
 

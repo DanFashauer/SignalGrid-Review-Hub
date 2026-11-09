@@ -72,5 +72,76 @@ those exact objects and retain them for the review window. Do not prune pending
 objects. Object access, retention and independent account provisioning require
 separate setup evidence; neither a content test nor a prepared hash proves them.
 
-This interface change creates no accounts, ACL grants, real review receipts,
-installation or activation, and does not change the tick.
+These content interfaces create no accounts, ACL grants, real review receipts,
+installation or activation. The separately activated preparation step below
+uses them without issuing a clearance.
+
+## Automatic private preparation
+
+The tick can prepare a fresh completed build for independent privacy review.
+Preparation uses the ordinary publisher without `--publish`; it does not push,
+open a PR, call a model or write reviewer evidence.
+
+The read-only selection is:
+
+```bash
+node scripts/mac/brain-proposal-pr.mjs --list-prepare --not-before <timezone-bearing-cutover>
+```
+
+It lists uncancelled review builds created at or after the explicit cutover,
+excluding rows whose update predates creation and jobs that already have a
+current artifact-bound clearance. The ordinary prepare operation still checks
+the actual job, source paths, patch, replay, hooks and credential scan. A listed
+job has no publication permission.
+
+### Activation and custody
+
+Preparation is off unless the existing source-pinned publication activation
+explicitly contains `privacy_preparation_enabled: true`.
+Setup must also create and anchor these private directories before the tick:
+
+- `<state>/preparations`: preparation attempts.
+- `<publication-custody-mirror>/preparations`: independent mirrored attempt records.
+
+The existing custody anchor records their canonical path, device and inode
+under `preparations` and `preparation_mirror`.
+The tick never creates or repairs these control roots, activation or the anchor.
+Changing publisher, tick or dependency source requires explicit requalification
+and activation with the new source identities.
+
+Cleared jobs get their publication opportunity first. Preparation uses only the
+remaining per-tick CLI budget and takes its own ordinary host reservation.
+A busy host leaves the job unconsumed. Once a preparation is claimed, failed,
+interrupted, unknown or missing-custody attempts are readback only. The tick
+does not retry the CLI or recreate an expired or lost request.
+
+### Private review handoff
+
+A normally completed prepare emits exactly one request marker and one
+prepared-metadata marker. The tick verifies their formats, complete typed
+request, publisher identity, request digest, metadata hashes, original output
+and terminal receipts before writing:
+
+```text
+<state>/preparations/<job>/request.json
+```
+
+This read-only `signalgrid-brain-privacy-handoff/v1` file contains the original
+request, exact screened title/body, request SHA-256 and references to the
+original intent and raw stdout. Its `privacy_clearance` and
+`public_egress_allowed` fields are both false. It contains no source or
+artifact review decision.
+
+A qualified reviewer can consume the referenced original stdout through the
+reviewer helper's `--prepared` interface. The reviewer must independently
+establish the source provenance and inspect the exact artifact before issuing
+the separate source and artifact decisions. Keep the raw handoff local; it is
+not permission to send private job context, vault material or unaccepted worker
+text to a cloud reviewer. Reviewer identity, object access, native review
+admission and actual decision production require their own setup and evidence.
+
+A prepared request is not a clearance. The publisher still checks a real
+independent reviewer account, immutable evidence, current job/source/publisher
+binding and the exact prepared artifact before push. Publication still leaves
+all applicable validation, current CI, source reviews and protected landing
+requirements in place.

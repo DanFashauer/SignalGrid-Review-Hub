@@ -5,6 +5,7 @@
 //   node scripts/mac/brain-proposal-pr.mjs --job <id> [--db <sqlite>]           # dry run (default)
 //   node scripts/mac/brain-proposal-pr.mjs --job <id> --publish                  # push brain/job-<id> + open PR
 //   node scripts/mac/brain-proposal-pr.mjs --list-review [--not-before <ISO>] [--db <sqlite>]
+//   node scripts/mac/brain-proposal-pr.mjs --list-prepare --not-before <ISO> [--db <sqlite>] # private requests only
 //   node scripts/mac/brain-proposal-pr.mjs --self-test
 //   node scripts/mac/brain-proposal-pr.mjs --qualify-scanner --binary <private-binary> --output <new-private-dir> --host-fd <inherited-fd> --parent-pid <parent>
 //
@@ -173,6 +174,25 @@ export async function listReview(db = DEFAULT_DB, { notBefore } = {}) {
     } catch (e) { if (!(e instanceof Refusal)) throw e; }
   }
   return eligible;
+}
+
+/** Private preparation is a separate read-only selection, never publication eligibility.
+ * A fresh cutover is mandatory; actual dry-run validation still judges the source. */
+export async function listPreparation(db = DEFAULT_DB, { notBefore } = {}) {
+  if (notBefore === undefined) refuse("--list-prepare requires an explicit --not-before cutover");
+  const cutoff = timestamp(notBefore);
+  const cleared = new Set(await listReview(db, { notBefore }));
+  const pending = [];
+  for (const id of await listReview(db)) {
+    if (!/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/.test(id) || cleared.has(id)) continue;
+    const job = await readJob(db, id);
+    if (!job || job.cancel_requested !== 0 || !job.worktree || !existsSync(job.worktree)) continue;
+    try {
+      const created = timestamp(job.created_at), updated = timestamp(job.updated_at);
+      if (created >= cutoff && updated >= created) pending.push(id);
+    } catch (e) { if (!(e instanceof Refusal)) throw e; }
+  }
+  return pending;
 }
 
 const decode = (s) => { try { const v = JSON.parse(s); return typeof v === "string" ? v : s; } catch { return s ?? ""; } };
@@ -1456,6 +1476,17 @@ fs.unlinkSync("synthetic-history-secret.txt"); git("add","-u","--","synthetic-hi
       try { await listReview(db, { notBefore: value }); check(`(auto) invalid timezone-bearing cutover refused: ${value}`, false); }
       catch (e) { check(`(auto) invalid timezone-bearing cutover refused: ${value}`, e instanceof Refusal); }
     }
+    const toPrepare = typeof listPreparation === "function" ? await listPreparation(db, { notBefore: "2026-11-06T16:40:00Z" }) : null;
+    check("(prepare) fresh uncleared jobs are selectable without inventing a clearance",
+      Array.isArray(toPrepare) && toPrepare.includes("junreviewed") && toPrepare.includes("jstaleprivacy") && !toPrepare.includes("jdocs"));
+    check("(prepare) cancelled, old, reversed-time and unsafe ids are excluded",
+      Array.isArray(toPrepare) && !["jcancel", "jagents", "jreverse", "bad/id", "jqueued"].some((id) => toPrepare.includes(id)));
+    let absentCutoffRefused = false;
+    try { if (typeof listPreparation === "function") await listPreparation(db); } catch (e) { absentCutoffRefused = e instanceof Refusal; }
+    check("(prepare) an explicit fresh timezone-bearing cutover is mandatory", absentCutoffRefused);
+    const prepareCLI = spawnSync(process.execPath, [fileURLToPath(import.meta.url), "--list-prepare", "--not-before", "2026-11-06T16:40:00Z", "--db", db], { encoding: "utf8" });
+    check("(prepare) CLI lists fresh requests without running publication",
+      prepareCLI.status === 0 && prepareCLI.stdout.split("\n").includes("junreviewed") && !prepareCLI.stdout.includes("jcancel"));
     const listed = await listReview(db);
     check("(*) --list-review names every review build with a worktree and no queued job", listed.includes("jdocs") && listed.includes("jagents") && listed.includes("jempty") && !listed.includes("jqueued"));
     // (6) publish with a stubbed gh
@@ -1555,11 +1586,16 @@ if (isMainModule(process.argv[1], import.meta.url)) {
   try {
     if (a.includes("--qualify-scanner")) qualifyScanner(a);
     else if (a.includes("--self-test")) await selfTest();
+    else if (a.includes("--list-prepare")) {
+      if (a.includes("--publish") || a.includes("--list-review") || a.includes("--job")) refuse("--list-prepare is a separate read-only action");
+      if (!opt("--not-before") || opt("--not-before").startsWith("--")) refuse("--list-prepare requires an explicit --not-before cutover");
+      for (const id of await listPreparation(opt("--db") ?? DEFAULT_DB, { notBefore: opt("--not-before") })) console.log(id);
+    }
     else if (a.includes("--list-review")) {
       if (a.includes("--not-before") && !opt("--not-before")) refuse("--not-before requires a timezone-bearing timestamp");
       for (const id of await listReview(opt("--db") ?? DEFAULT_DB, { notBefore: opt("--not-before") })) console.log(id);
     }
-    else if (a.includes("--not-before")) refuse("--not-before applies only to the read-only --list-review action");
+    else if (a.includes("--not-before")) refuse("--not-before applies only to the read-only listing actions");
     else await run({ job: opt("--job"), db: opt("--db") ?? DEFAULT_DB, publish: a.includes("--publish") });
   } catch (e) {
     console.error(e instanceof Refusal ? `REFUSED: ${e.message}` : `ERROR: ${e.message}`);

@@ -21,8 +21,7 @@
 // a worktree; an empty diff; a changed path that classifyDiff calls OWNER_RESERVED or
 // DECISION_PATH; a path in DENY (governance text classifyDiff calls autonomous — AGENTS.md was
 // checked on 2026-11-02 and is); a path outside the repo or under artifacts/agent-heartbeats/; a
-// patch that does not apply cleanly; a title/result naming a private path (it goes in a public
-// PR body); and SAFETY_MACHINERY (scripts/**, workflows, fixtures) too — a local-brain build
+// patch that does not apply cleanly; a title/result naming a private path; and SAFETY_MACHINERY (scripts/**, workflows, fixtures) too — a local-brain build
 // never changes the gates that judge it through this route.
 //
 // Publication screening is separate from full final-head validation and landing.
@@ -816,7 +815,9 @@ export async function run({ job, db = DEFAULT_DB, repo = REPO, publish = false, 
     const ap = git(wt, ["apply", "--3way", "--index", pf]);
     const unmerged = git(wt, ["diff", "--name-only", "--diff-filter=U"]).out.trim();
     if (!ap.ok || unmerged) refuse(`job ${job}: the patch does not apply cleanly to origin/${BASE}\n${ap.err.trim()}${unmerged ? `\nunmerged: ${unmerged}` : ""}`);
-    const prTitle = `brain: ${title.slice(0, 80)} (job ${job})`;
+    // The stored task title is unclassified local input. Export only screened
+    // artifact inventory and route facts, including in the commit subject.
+    const prTitle = `brain: update ${files.length} file${files.length === 1 ? "" : "s"} (job ${job})`;
     if (selectedPrivacy) {
       const approved = selectedPrivacy.value.request, proposedTree = gitOk(wt, ["write-tree"]).trim();
       if (approved.replay_base !== replayBase || approved.tree !== proposedTree) refuse("privacy clearance does not match the current replay base and tree");
@@ -835,7 +836,7 @@ export async function run({ job, db = DEFAULT_DB, repo = REPO, publish = false, 
     const publishedTree = gitOk(wt, ["rev-parse", "HEAD^{tree}"]).trim();
     const body = [
       "## Summary", "",
-      `Local-brain build job \`${job}\` — "${title}".`, "",
+      `Local-brain build job \`${job}\`.`, "",
       `The patch was replayed with \`git apply --3way --index\` onto \`${replayBase}\` from \`origin/${BASE}\`.`,
       `Published branch: \`${branch}\` at \`${publishedHead}\` (tree \`${publishedTree}\`).`, "",
       "## What changed", "", ...files.map((f) => `- \`${f}\``), "",
@@ -1237,6 +1238,7 @@ process.exit(finding ? 2 : 0);
 
     const unverifiedFinish = "SYNTHETIC_UNVERIFIED_TEST_GATE_LINK_FINISH: all checks and reviews passed; link was added.";
     const fixtureResult = (id) => JSON.stringify(id === "jdocs" ? unverifiedFinish : `result ${id}`);
+    const fixtureTitle = (id) => id === "jmetadata" ? "UNCLASSIFIED_JOB_TITLE_CANARY" : `title ${id}`;
     const createdAt = (id) => id === "jreverse" ? "2026-11-06T17:10:00Z" : ["jdocs", "junreviewed", "jcancel", "bad/id", "jstaleprivacy"].includes(id) ? "2026-11-06T16:41:00Z" : "2026-11-05T01:00:00Z";
     const db = join(root, "autonomy.sqlite3");
     const wDeletion = join(root, "w-deletion");
@@ -1265,14 +1267,14 @@ process.exit(finding ? 2 : 0);
       const d = new DatabaseSync(db);
       d.exec("CREATE TABLE autonomy_jobs (id TEXT, kind TEXT, status TEXT, repo TEXT, worktree TEXT, title TEXT, result TEXT, updated_at TEXT, created_at TEXT, cancel_requested INTEGER DEFAULT 0)");
       const ins = d.prepare("INSERT INTO autonomy_jobs VALUES (?, ?, ?, 'SignalGrid-Review-Hub', ?, ?, ?, '2026-11-06T17:00:00Z', ?, ?)");
-      for (const [id, k, s, w] of rows) ins.run(id, k, s, w, `title ${id}`, fixtureResult(id), createdAt(id), id === "jcancel" ? 1 : 0);
+      for (const [id, k, s, w] of rows) ins.run(id, k, s, w, fixtureTitle(id), fixtureResult(id), createdAt(id), id === "jcancel" ? 1 : 0);
       d.exec("ALTER TABLE autonomy_jobs ADD COLUMN source_ids TEXT DEFAULT '[]'; ALTER TABLE autonomy_jobs ADD COLUMN cloud_allowed INTEGER DEFAULT 0; ALTER TABLE autonomy_jobs ADD COLUMN evidence TEXT DEFAULT '{}';");
       d.prepare("UPDATE autonomy_jobs SET evidence=? WHERE id='jdocs'").run(JSON.stringify({ private_context: true, sources: [] }));
       d.prepare("UPDATE autonomy_jobs SET evidence=? WHERE id='jprivateorigin'").run(JSON.stringify({ private_context: true, sources: ["synthetic-private-vault-source"], privacy_clearance: { approved: true } }));
       d.close();
     } else {
       const sql = ["CREATE TABLE autonomy_jobs (id TEXT, kind TEXT, status TEXT, repo TEXT, worktree TEXT, title TEXT, result TEXT, updated_at TEXT, created_at TEXT, cancel_requested INTEGER DEFAULT 0);",
-        ...rows.map(([id, k, s, w]) => `INSERT INTO autonomy_jobs VALUES ('${id}','${k}','${s}','SignalGrid-Review-Hub','${w}','title ${id}','${fixtureResult(id)}','2026-11-06T17:00:00Z','${createdAt(id)}',${id === 'jcancel' ? 1 : 0});`),
+        ...rows.map(([id, k, s, w]) => `INSERT INTO autonomy_jobs VALUES ('${id}','${k}','${s}','SignalGrid-Review-Hub','${w}','${fixtureTitle(id)}','${fixtureResult(id)}','2026-11-06T17:00:00Z','${createdAt(id)}',${id === 'jcancel' ? 1 : 0});`),
         "ALTER TABLE autonomy_jobs ADD COLUMN source_ids TEXT DEFAULT '[]'; ALTER TABLE autonomy_jobs ADD COLUMN cloud_allowed INTEGER DEFAULT 0; ALTER TABLE autonomy_jobs ADD COLUMN evidence TEXT DEFAULT '{}';",
         `UPDATE autonomy_jobs SET evidence='${JSON.stringify({ private_context: true, sources: [] })}' WHERE id='jdocs';`,
         `UPDATE autonomy_jobs SET evidence='${JSON.stringify({ private_context: true, sources: ["synthetic-private-vault-source"], privacy_clearance: { approved: true } })}' WHERE id='jprivateorigin';`].join("\n");
@@ -1580,6 +1582,11 @@ console.log(fs.readFileSync(${JSON.stringify(ghReply)},"utf8").trim());
     check("(privacy) changed artifact invalidates prior privacy clearance before push", staleBlocked && scratchGitOk(repo, ["ls-remote", "origin", "refs/heads/brain/job-jstaleprivacy"]) === "");
     check("(privacy) automatic selection checks current worker patch before remote preflight", !(await listReview(db, { notBefore: "2026-11-06T16:40:00Z" })).includes("jstaleprivacy"));
     const metadata = await run({ job: "jmetadata", db, repo, log: quiet });
+    const actualMetadataText = [metadata.publicationMetadata.title, metadata.publicationMetadata.body,
+      scratchGitOk(repo, ["show", "-s", "--format=%B", metadata.publishedHead])].join("\n");
+    check("(privacy) unclassified task title stays out of public title, body and commit",
+      (await readJob(db, "jmetadata")).title === "UNCLASSIFIED_JOB_TITLE_CANARY" &&
+      !actualMetadataText.includes("UNCLASSIFIED_JOB_TITLE_CANARY"));
     const wrongBody = metadata.privacyRequest ? JSON.parse(JSON.stringify(metadata.privacyRequest)) : undefined;
     if (wrongBody) wrongBody.exports = wrongBody.exports.map((item) => item.source === "metadata/body.md" ? { ...item, sha256: "0".repeat(64) } : item);
     grantFixturePrivacy("jmetadata", wrongBody);

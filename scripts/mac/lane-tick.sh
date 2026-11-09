@@ -788,7 +788,7 @@ def prepared_request(attempt, intent):
     need(isinstance(metadata, dict) and set(metadata) == {'format', 'request_sha256', 'title', 'body'}
          and metadata['format'] == 'signalgrid-publication-prepared-metadata/v1')
     exports = request['exports']
-    need(isinstance(exports, list) and 3 <= len(exports) <= 1000)
+    need(isinstance(exports, list) and 5 <= len(exports) <= 1000)
     names, total = {}, 0
     for row in exports:
         need(isinstance(row, dict) and set(row) == {'source', 'sha256', 'bytes'})
@@ -796,12 +796,19 @@ def prepared_request(attempt, intent):
         need(isinstance(name, str) and name not in names and not name.startswith('/')
              and not any(part in ('', '.', '..') for part in name.split('/'))
              and not any(ord(c) < 32 for c in name) and '\\' not in name
-             and (name in ('metadata/title.txt', 'metadata/body.md', 'metadata/commit.txt') or name.startswith('files/')))
+             and (name in ('metadata/title.txt', 'metadata/body.md', 'metadata/commit.txt', 'metadata/paths.json')
+                  or name.startswith('files/')
+                  or (name.startswith('deleted/') and name.endswith('.txt') and len(name) > len('deleted/.txt'))))
         need(type(row['bytes']) is int and 0 <= row['bytes'] <= 1048576
              and isinstance(row['sha256'], str) and re.fullmatch(r'[0-9a-f]{64}', row['sha256']))
+        if name.startswith('deleted/'):
+            marker = ('Deleted public path: ' + name[len('deleted/'):-len('.txt')] + '\n').encode('utf-8')
+            need(row['bytes'] == len(marker) and row['sha256'] == hashlib.sha256(marker).hexdigest())
         names[name] = row
         total += row['bytes']
-    need(total <= 16 * 1048576 and 'metadata/commit.txt' in names)
+    # Keep the inventory aligned with committedExport(), including deletion-only changes.
+    need(total <= 16 * 1048576 and all(source in names for source in
+         ('metadata/title.txt', 'metadata/body.md', 'metadata/commit.txt', 'metadata/paths.json')))
     for label, source in (('title', 'metadata/title.txt'), ('body', 'metadata/body.md')):
         need(isinstance(metadata[label], str) and source in names)
         encoded = metadata[label].encode('utf-8', errors='strict')

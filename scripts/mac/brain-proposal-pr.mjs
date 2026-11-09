@@ -930,7 +930,7 @@ function walk(dir, prefix = "") {
 }
 walk(a[13]);
 const mapping = JSON.parse(fs.readFileSync(path.join(process.cwd(), "mapping.json"), "utf8"));
-if (!Array.isArray(mapping) || mapping.length !== seen.length || !mapping.every(m => /^entry-[0-9]{6}$/.test(m.name) && seen.includes(m.name)) || !["metadata/title.txt", "metadata/body.md", "metadata/commit.txt", "metadata/paths.json"].every(p => mapping.some(m => m.source === p)) || !mapping.some(m => m.source.startsWith("files/"))) fail();
+if (!Array.isArray(mapping) || mapping.length !== seen.length || !mapping.every(m => /^entry-[0-9]{6}$/.test(m.name) && seen.includes(m.name)) || !["metadata/title.txt", "metadata/body.md", "metadata/commit.txt", "metadata/paths.json"].every(p => mapping.some(m => m.source === p)) || !mapping.some(m => m.source.startsWith("files/") || m.source.startsWith("deleted/"))) fail();
 fs.writeFileSync(a[12], JSON.stringify(finding ? [{RuleID:"github-pat", Fingerprint:"synthetic:notes.md:1"}] : []), {flag:"wx",mode:384});
 process.exit(finding ? 2 : 0);
 `);
@@ -1239,7 +1239,9 @@ process.exit(finding ? 2 : 0);
     const fixtureResult = (id) => JSON.stringify(id === "jdocs" ? unverifiedFinish : `result ${id}`);
     const createdAt = (id) => id === "jreverse" ? "2026-11-06T17:10:00Z" : ["jdocs", "junreviewed", "jcancel", "bad/id", "jstaleprivacy"].includes(id) ? "2026-11-06T16:41:00Z" : "2026-11-05T01:00:00Z";
     const db = join(root, "autonomy.sqlite3");
+    const wDeletion = join(root, "w-deletion");
     const rows = [
+      ["jdeletion", "build", "review", wDeletion],
       ["jdocs", "build", "review", wDocs], ["jagents", "build", "review", wAgents], ["jgate", "build", "review", wGate],
       ["jqueued", "build", "queued", wDocs], ["jempty", "build", "review", wEmpty],
       ["jconflict", "build", "review", wConflict],
@@ -1286,6 +1288,9 @@ process.exit(finding ? 2 : 0);
     scratchGitOk(root, ["clone", "-q", "-b", BASE, origin, wDocs]);
     writeFileSync(join(wDocs, "docs/x.md"), "one\nORIGIN\nTHREE\n");
     writeFileSync(join(wDocs, "docs/new.md"), "new\n");
+
+    scratchGitOk(root, ["clone", "-q", "-b", BASE, origin, wDeletion]);
+    rmSync(join(wDeletion, "docs/x.md"));
 
     // Exercise the production run() in a fresh process, with real ordinary-hook
     // verification and canonical SSH metadata. The poisoned SSH command only
@@ -1403,6 +1408,22 @@ process.exit(finding ? 2 : 0);
       }));
     check("(privacy interface) CLI prepare emits the same nonauthorizing metadata", prepared !== undefined &&
       preparedMessages.includes("SIGNALGRID_PUBLICATION_PREPARED_METADATA " + JSON.stringify(prepared)) && !Object.hasOwn(prepared, "approved"));
+    // The actual producer's complete export inventory must cross the tick's
+    // actual validator. A hand-written metadata-only mock missed this contract.
+    const checkTickHandoff = (messages, request, label) => {
+      const result = spawnSync("python3", ["-I", join(REPO, "scripts/mac/test_prepared_request_from_publisher.py")], {
+        input: JSON.stringify({ messages, request }), encoding: "utf8", timeout: 30000,
+      });
+      check(label, result.status === 0 && result.stdout.includes('"fixture_handoff_ok": true') &&
+        result.stdout.includes('"privacy_clearance": false') && result.stdout.includes('"public_egress_allowed": false'));
+      if (result.status !== 0) console.error(result.stdout.trim(), result.stderr.trim());
+    };
+    checkTickHandoff(preparedMessages, r1.privacyRequest,
+      "(prepare interface) actual publisher add/edit exports are accepted by the actual tick validator");
+    const deletionMessages = [];
+    const deletion = await run({ job: "jdeletion", db, repo, log: (message) => deletionMessages.push(message) });
+    checkTickHandoff(deletionMessages, deletion.privacyRequest,
+      "(prepare interface) actual publisher deletion exports are accepted by the actual tick validator");
     grantFixturePrivacy("jdocs", r1.privacyRequest);
     const forgedHome = join(realpathSync(root), "forged-home"), forgedClearances = join(forgedHome, "SignalGrid-Local-AI", "brain-state", "auto-publish-review", "clearances");
     mkdirSync(forgedClearances, { recursive: true, mode: 0o700 });

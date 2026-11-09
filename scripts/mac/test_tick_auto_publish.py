@@ -70,7 +70,20 @@ if "--job" in a and "--publish" not in a:
         "worker_head":"1"*40,"worker_uid":os.getuid(),"patch_sha256":"b"*64,
         "replay_base":"3"*40,"head":"4"*40,"tree":"2"*40,
         "exports":[export("metadata/title.txt",title),export("metadata/body.md",body),
-                   export("metadata/commit.txt","Synthetic commit")]}
+                   export("metadata/commit.txt","Synthetic commit"),
+                   export("metadata/paths.json",json.dumps(["docs/x.md"],separators=(",",":"))),
+                   export("deleted/docs/x.md.txt","Deleted public path: docs/x.md\n") if cfg.get("prepare_deletion")
+                   else export("files/docs/x.md","Synthetic public file\n")]}
+    if cfg.get("prepare_missing_paths"):
+        request["exports"]=[row for row in request["exports"] if row["source"]!="metadata/paths.json"]
+    if cfg.get("prepare_unknown_export"):
+        request["exports"].append(export("metadata/unknown.txt","Unknown"))
+    if cfg.get("prepare_metadata_only"):
+        request["exports"]=[row for row in request["exports"] if row["source"].startswith("metadata/")]
+    if cfg.get("prepare_bad_deletion"):
+        request["exports"]=[export(row["source"],"Wrong deletion marker") if row["source"].startswith("deleted/") else row
+                            for row in request["exports"]]
+    request["exports"].sort(key=lambda row:row["source"])
     request_sha=hashlib.sha256(json.dumps(request,sort_keys=True,separators=(",",":"),ensure_ascii=False).encode()).hexdigest()
     metadata={"format":"signalgrid-publication-prepared-metadata/v1","request_sha256":request_sha,"title":title,"body":body}
     if cfg.get("prepare_bad_digest"): metadata["request_sha256"]="0"*64
@@ -280,6 +293,46 @@ class TickAutoPublishRegression(unittest.TestCase):
         events=(self.root/"host-events").read_text().splitlines()
         self.assertEqual(events.count("acquire"),1)
         self.assertEqual(events.count("release"),1)
+
+    def test_preparation_accepts_deleted_path_inventory(self):
+        self.enable_preparation()
+        self.cfg["prepare_deletion"]=True
+        out,err=self.run_step()
+        handoff=self.state/"preparations/freshA/request.json"
+        self.assertTrue(handoff.exists(),out+err)
+        sources={row["source"] for row in json.loads(handoff.read_text())["request"]["exports"]}
+        self.assertIn("deleted/docs/x.md.txt",sources)
+        self.assertIn("metadata/paths.json",sources)
+        self.assertEqual(self.calls(),[])
+
+    def test_preparation_missing_paths_inventory_never_creates_review_handoff(self):
+        self.enable_preparation()
+        self.cfg["prepare_missing_paths"]=True
+        self.run_step()
+        self.assertEqual(len(self.jsonlines("prepare-calls.jsonl")),1)
+        self.assertFalse((self.state/"preparations/freshA/request.json").exists())
+
+    def test_preparation_unknown_metadata_never_creates_review_handoff(self):
+        self.enable_preparation()
+        self.cfg["prepare_unknown_export"]=True
+        self.run_step()
+        self.assertEqual(len(self.jsonlines("prepare-calls.jsonl")),1)
+        self.assertFalse((self.state/"preparations/freshA/request.json").exists())
+
+    def test_preparation_metadata_without_changed_path_never_creates_review_handoff(self):
+        self.enable_preparation()
+        self.cfg["prepare_metadata_only"]=True
+        self.run_step()
+        self.assertEqual(len(self.jsonlines("prepare-calls.jsonl")),1)
+        self.assertFalse((self.state/"preparations/freshA/request.json").exists())
+
+    def test_preparation_changed_deletion_marker_never_creates_review_handoff(self):
+        self.enable_preparation()
+        self.cfg["prepare_deletion"]=True
+        self.cfg["prepare_bad_deletion"]=True
+        self.run_step()
+        self.assertEqual(len(self.jsonlines("prepare-calls.jsonl")),1)
+        self.assertFalse((self.state/"preparations/freshA/request.json").exists())
 
     def test_preparation_runs_only_once_while_review_is_pending(self):
         self.enable_preparation()

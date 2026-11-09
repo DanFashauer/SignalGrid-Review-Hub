@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-11-08T22:10:59.182Z",
-  "result": "18:24Z-22:10Z: #1939 (mac/reland-scan-estate-sibling-locator) merged as db6fb390 through the Mac's route; no other new mac/* branch; no mail addressed to the cloud unread. Keepalive (last 18:12Z), held 20:10Z-22:10Z for the owner-merge window. Tick heartbeat file on mainline still 2026-10-24T07:30Z (Mac witness-delivery hand open). Live evidence 2026-11-05 07:04Z; one re-mint ask outstanding (#1930). Owner not escalated."
+  "firedAt": "2026-11-09T00:15:55.561Z",
+  "result": "22:24Z-00:15Z: one new Mac branch, mac/reland-sim-scripts-bash32-darwin, already open as #1944 (Mac auto-merge route); no mail addressed to the cloud unread; the cloud took two Root asks on #439 (estate-queue liveness, landed #1945; #1940 Darwin coverage, pushed). Keepalive (last 22:11Z). Tick heartbeat file on mainline still 2026-10-24T07:30Z (Mac witness-delivery hand open). Live evidence 2026-11-05 07:04Z; one re-mint ask outstanding (#1930). Owner not escalated."
 }

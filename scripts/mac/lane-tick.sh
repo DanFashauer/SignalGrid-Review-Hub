@@ -762,7 +762,8 @@ def prepared_request(attempt, intent):
     terminal, _ = read_json(attempt / 'terminal.json')
     need(terminal.get('returncode') == 0 and terminal.get('normal_exit') is True
          and terminal.get('timed_out') is False and not terminal.get('interruptions')
-         and terminal.get('receipt_error') is None)
+         and terminal.get('original_wait_completed') is True
+         and 'started_receipt_error' in terminal and terminal['started_receipt_error'] is None)
     raw, raw_ref = read_file(attempt / 'stdout.raw')
     _, err_ref = read_file(attempt / 'stderr.raw')
     need(len(raw) <= 1048576 and raw_ref == terminal.get('stdout_ref') and err_ref == terminal.get('stderr_ref'))

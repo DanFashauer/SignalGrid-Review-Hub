@@ -294,6 +294,44 @@ class TickAutoPublishRegression(unittest.TestCase):
         self.assertEqual(events.count("acquire"),1)
         self.assertEqual(events.count("release"),1)
 
+
+    def test_preparation_failed_started_receipt_never_creates_review_handoff(self):
+        self.enable_preparation()
+        self.cfg["fail_started_receipt"] = True
+        out, err = self.run_step()
+        terminal = json.loads((self.state/"preparations/freshA/terminal.json").read_text())
+        self.assertEqual(terminal["started_receipt_error"], "OSError")
+        self.assertEqual(terminal["returncode"], 0)
+        self.assertTrue(terminal["normal_exit"])
+        self.assertTrue(terminal["original_wait_completed"])
+        self.assertFalse((self.state/"preparations/freshA/started.json").exists())
+        self.assertFalse((self.state/"preparations/freshA/request.json").exists(), out + err)
+        self.run_step()
+        self.assertEqual(len(self.jsonlines("prepare-calls.jsonl")), 1)
+        self.assertEqual(self.calls(), [])
+        events = (self.root/"host-events").read_text().splitlines()
+        self.assertEqual(events.count("acquire"), events.count("release"))
+
+    def test_preparation_missing_started_receipt_result_never_creates_review_handoff(self):
+        self.enable_preparation()
+        self.cfg["remove_started_receipt_result"] = True
+        out, err = self.run_step()
+        terminal = json.loads((self.state/"preparations/freshA/terminal.json").read_text())
+        self.assertNotIn("started_receipt_error", terminal)
+        self.assertEqual(terminal["returncode"], 0)
+        self.assertTrue(terminal["original_wait_completed"])
+        self.assertFalse((self.state/"preparations/freshA/request.json").exists(), out + err)
+
+    def test_preparation_incomplete_original_wait_never_creates_review_handoff(self):
+        self.enable_preparation()
+        self.cfg["incomplete_preparation_wait"] = True
+        out, err = self.run_step()
+        terminal = json.loads((self.state/"preparations/freshA/terminal.json").read_text())
+        self.assertIsNone(terminal["started_receipt_error"])
+        self.assertEqual(terminal["returncode"], 0)
+        self.assertFalse(terminal["original_wait_completed"])
+        self.assertFalse((self.state/"preparations/freshA/request.json").exists(), out + err)
+
     def test_preparation_accepts_deleted_path_inventory(self):
         self.enable_preparation()
         self.cfg["prepare_deletion"]=True
@@ -452,6 +490,32 @@ sg_host_verify_release() { printf 'release\\n' >> "$SG_TEST_ROOT/host-events"; S
         # Inject into the extracted Python only, after its parent Bash started.
         # Otherwise BASH_ENV would poison the fixture launcher, not this boundary.
         wrapper=wrapper.replace("    account_home = lambda: Path(os.environ['SG_TEST_TRUSTED_HOME'])", "    account_home = lambda: Path(os.environ['SG_TEST_TRUSTED_HOME'])\n    os.environ.update(json.loads((Path(os.environ['SG_TEST_ROOT'])/'fixture.json').read_text()).get('client_shell_env',{}))\n    _fixture_client_env = client_env\n    def client_env():\n        env = _fixture_client_env()\n        env.update(SG_TEST_ROOT=os.environ['SG_TEST_ROOT'], SIGNALGRID_BRAIN_PUBLICATION_STATE=os.environ['SIGNALGRID_BRAIN_PUBLICATION_STATE'])\n        return env")
+        # Faults affect only this extracted fixture. Exercise the real producer's
+        # receipt-error path and the real consumer's persisted-terminal checks.
+        if self.cfg.get("fail_started_receipt"):
+            wrapper = wrapper.replace("try:\n    need(MODE in",
+                "_fixture_write_new = write_new\n"
+                "def write_new(path, value):\n"
+                "    if path.name == 'started.json':\n"
+                "        raise OSError('synthetic start receipt failure')\n"
+                "    return _fixture_write_new(path, value)\n"
+                "try:\n    need(MODE in")
+        if self.cfg.get("remove_started_receipt_result") or self.cfg.get("incomplete_preparation_wait"):
+            wrapper = wrapper.replace("try:\n    need(MODE in",
+                "_fixture_prepared_request = prepared_request\n"
+                "def prepared_request(attempt, intent):\n"
+                "    path = attempt / 'terminal.json'\n"
+                "    terminal = json.loads(path.read_text())\n"
+                "    config = json.loads((Path(os.environ['SG_TEST_ROOT'])/'fixture.json').read_text())\n"
+                "    if config.get('remove_started_receipt_result'):\n"
+                "        terminal.pop('started_receipt_error')\n"
+                "    if config.get('incomplete_preparation_wait'):\n"
+                "        terminal['original_wait_completed'] = False\n"
+                "    path.chmod(0o600)\n"
+                "    path.write_text(json.dumps(terminal))\n"
+                "    path.chmod(0o400)\n"
+                "    return _fixture_prepared_request(attempt, intent)\n"
+                "try:\n    need(MODE in")
         # Scale only the isolated test copy's publication timeout. No production
         # environment flag or model/queue cap is changed or introduced.
         if self.cfg.get("hang_publish"):

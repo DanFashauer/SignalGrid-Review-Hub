@@ -65,7 +65,8 @@ def main():
                   "dependency_refs": namespace["dependency_refs"]()}
         save_json("intent.json", intent)
         save_json("terminal.json", {"returncode": 0, "normal_exit": True,
-                  "timed_out": False, "interruptions": [], "receipt_error": None,
+                  "timed_out": False, "interruptions": [], "original_wait_completed": True,
+                  "started_receipt_error": None,
                   "stdout_ref": stdout_ref, "stderr_ref": stderr_ref})
         print(json.dumps({"fixture_loader_ok": True,
                           "actual_export_sources": [row["source"] for row in value["request"]["exports"]]}), flush=True)

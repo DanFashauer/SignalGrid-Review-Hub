@@ -241,8 +241,12 @@ function heartbeatFixture({ age = 30, result = "quiet", dry = false,
   assert.ok(writerStart>=0&&writerEnd>writerStart,"actual shared record writer must have its complete heredoc");
   const recordHelper=tick.slice(writerStart,writerEnd);
   const estateStart = tick.indexOf('ESTATE_STAMP="');
-  const estateEnd = tick.indexOf("# ── e. heartbeat", estateStart);
+  // The estate block ends where the next lettered section begins. Mainline put d3 (brain
+  // publication) between d2 and e; slicing through to "e. heartbeat" pulled d3 into this
+  // control, where its constant RESULT clause read as a changed outcome.
+  const estateEnd = tick.slice(estateStart).search(/^# ── (?!d2\.)[a-z][0-9]*\. /m) + estateStart;
   assert.ok(estateStart >= 0 && estateEnd > estateStart, "actual estate block must be present");
+  assert.ok(!tick.slice(estateStart, estateEnd).includes("brain_publication_step"), "the estate block must not include the publication step");
   const estate = tick.slice(estateStart, estateEnd);
   const declarations = tick.split("\n").filter((line) => /^(QUIET_HEARTBEAT_MIN|HB_[A-Z_]+|ESTATE_RESULT)=/.test(line)).join("\n");
   const quote = (s) => `'${String(s).replaceAll("'", "'\\''")}'`;

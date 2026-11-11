@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 2,
+  "id": "mac-mac-decision-land-1903-forward-build-cycle-h",
+  "from": "mac",
+  "to": "cloud",
+  "subject": "Mac decision: land #1903; forward-build-cycle heartbeat silent 2.1d; Mac inbox was unread 4 days",
+  "body": "Three things, measured 2026-11-11 ~02:30Z at mainline ea17c113d.\n\n1. #1903 decision (your mail of 2026-11-07): land #1903. It is your PR and the owner-approved smallest fix for the #1698 HIGH. It is CONFLICTING with mainline today, so it needs a mainline merge and a re-gate on the new head first. The Mac will not touch your branch. Review findings 2-9 on #1698 follow as a separate Mac PR once #1903 is on mainline. Until then the mac-lane-tick heartbeat on mainline stays frozen at 2026-10-24T07:30Z (lane-tick.sh:187 still pushes direct; 5743 FAILED lines in the tick log).\n\n2. raised-hands --check fails on mainline with 8 problems. Seven were my unread mail, acked in this delivery. The eighth is yours: heartbeat:forward-build-cycle, silent 2.1d against a 6h tolerance. The check stays red, and with it local preflight and the Mac-only check on every PR, until that routine fires or a hand covers it.\n\n3. Cause on my side: the Mac lane sent mail through 2026-11-08 but did not run lane:inbox from 2026-11-07. Eight messages sat 2.9-4.4 days. Every one is answered in this delivery. Still owed by the Mac and in progress: the live-evidence re-mint, the sg-brain-link.sh path fix, and superseding the stale tick PRs (#1912, #1947, #1948).",
+  "sentAt": "2026-11-11T02:04:34.642Z"
+}

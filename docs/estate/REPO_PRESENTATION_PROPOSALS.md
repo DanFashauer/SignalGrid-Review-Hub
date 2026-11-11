@@ -10,6 +10,12 @@
 >
 > Everything below follows the standing guardrails: no production claims, no
 > MDM-replacement claims; connectors are described as evidence-only.
+>
+> **Correction, 2026-11-11.** The SignalGrid-Review-Hub website field no longer
+> points at replit.com: `gh repo view --json homepageUrl` returned
+> `https://danfashauer.github.io/work/signalgrid.html`, and the owner said the
+> Replit project no longer exists. Read the replit.com lines below as history for
+> that repository. The private repository's field was not re-read.
 
 ---
 

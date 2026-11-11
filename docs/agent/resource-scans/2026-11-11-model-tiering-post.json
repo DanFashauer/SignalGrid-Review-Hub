@@ -1,0 +1,135 @@
+{
+ "$comment": "Stage outputs of the intake rule (tool-evaluation-by-use §5b) for one owner-shared post. A: one self-scan acting as the resource (opus). B: three read-only confirmers (sonnet). C: the coordinating session's decision. Model output throughout: quoted by the intake row, never a fixture or a figure. The resource is a post with no source repository, so it was READ, not run; §4 and §5 do not apply. Measurements about the Mac's private local runtime and hardware were taken and are deliberately not recorded in this public tree.",
+ "date": "2026-11-11",
+ "resources": [
+  {
+   "name": "\"Claude Code GOD MODE\" model-tiering post, with a second part adapting it to other vendors' models",
+   "upstream": "none named; pasted text",
+   "author": "not named",
+   "licence": "none stated; nothing copied",
+   "form": "post (read, not run)",
+   "pin": "none possible: no repository"
+  }
+ ],
+ "proposals": [
+  {
+   "what": "Use the strongest tier for planning, research and review and a cheaper tier for mechanical implementation; keep context small with auto-compaction.",
+   "alreadyHere": "DR-047 rule 2 already routes bulk mechanical work, implementation and judgment to three tiers and rule 1 forbids an inherited tier. Measured: 15 files in .claude/agents, 8 opus, 6 sonnet, 1 haiku, 0 without a model line; scripts/check-skill-plane-conformance.mjs fails an agent with no model line or one outside the three tiers. Both workflow scripts name a tier on every spawn: land-branch.js 9 of 9 (6 haiku, 3 sonnet), review-wave.js 2 of 2 (sonnet review, opus refute).",
+   "trials": [
+    "The post's own two price points give a ratio of 40.0 on input and 40.0 on output; its '1/40th' figure is that per-token ratio, reached only if no tokens stay on the top tier, which its own design does not do.",
+    "No price table exists in the tree, so the prices and the 1/40 figure are unverifiable here and are not recorded as facts.",
+    "No auto-compaction setting or utilization measurement was found; the '40-60%' figure is unverifiable here.",
+    "The model names in the post's second part do not match what is configured on the Mac's private local runtime."
+   ],
+   "model": "opus",
+   "tasks": [
+    {
+     "id": "T1",
+     "title": "One hardening finding about the Mac's private local runtime",
+     "evidence": "measured on the Mac; not recorded in this tree",
+     "change": "handed to that runtime's owner outside the repository",
+     "owner": "the runtime's owning lane",
+     "risk": "none to this tree"
+    },
+    {
+     "id": "T2",
+     "title": "Add the resource-intake row for this post",
+     "evidence": "no row matched the post's title or its 1/40 figure in docs/agent/RESOURCE_INTAKE.md",
+     "change": "append one row recording each claim's status",
+     "owner": "agent-platform-engineer",
+     "risk": "low; the row must not quote a price as fact"
+    },
+    {
+     "id": "T3",
+     "title": "Ratchet: fail any workflow spawn that names no tier",
+     "evidence": "check-skill-plane-conformance.mjs walks .claude/agents only; 11 of 11 workflow spawns are tiered today",
+     "change": "extend the gate to scan .claude/workflows/*.js",
+     "owner": "devex-tooling-engineer",
+     "risk": "a regular-expression parse of JavaScript option objects is fragile; .claude/workflows is an owner-gated surface"
+    }
+   ]
+  }
+ ],
+ "confirms": [
+  {
+   "perspective": "agent-plane",
+   "model": "sonnet",
+   "votes": [
+    {
+     "id": "T1",
+     "verdict": "amend",
+     "reason": "The facts reproduce, but DR-047's tiers govern hosted sessions; DECISION_RECORDS says only rule 7 binds the local runtime, so this is hardening, not a doctrine violation."
+    },
+    {
+     "id": "T2",
+     "verdict": "confirm",
+     "reason": "No row exists; quote the measured 8/6/1 over 15 agents, not the 13 that DR-047's own text names."
+    },
+    {
+     "id": "T3",
+     "verdict": "amend",
+     "reason": "The 2026-09 intake row left the workflow-spawn half as operating doctrine on purpose; this is an optional ratchet over two files, not a defect."
+    }
+   ],
+   "missing": "none measured"
+  },
+  {
+   "perspective": "local-runtime-and-hardware",
+   "model": "sonnet",
+   "votes": [
+    {
+     "id": "T1",
+     "verdict": "amend",
+     "reason": "Reproduces; keeps private material local and adds no load; belongs to the runtime's owning lane."
+    },
+    {
+     "id": "T2",
+     "verdict": "confirm",
+     "reason": "A docs row with no effect on the runtime."
+    },
+    {
+     "id": "T3",
+     "verdict": "confirm",
+     "reason": "Hub-side static scan; no runtime effect."
+    }
+   ],
+   "missing": "none measured"
+  },
+  {
+   "perspective": "fail-closed-and-claims",
+   "model": "sonnet",
+   "votes": [
+    {
+     "id": "T1",
+     "verdict": "amend",
+     "reason": "The proposal wrongly called it a rule-1 violation; rule 1 does not bind the local runtime."
+    },
+    {
+     "id": "T2",
+     "verdict": "confirm",
+     "reason": "The 40.0 and 40.0 ratios reproduce; keep prices and 1/40 marked as the post's claims."
+    },
+    {
+     "id": "T3",
+     "verdict": "amend",
+     "reason": "Purely a ratchet; the proposal's first count of the land-branch spawns was internally inconsistent, the real split is 6 haiku and 3 sonnet."
+    }
+   ],
+   "missing": "none measured"
+  }
+ ],
+ "decision": {
+  "T1": {
+   "outcome": "filed",
+   "where": "handed to the local runtime's owning lane outside the repository; nothing of it is in the tree"
+  },
+  "T2": {
+   "outcome": "landed",
+   "where": "docs/agent/RESOURCE_INTAKE.md (2026-11-11 row)"
+  },
+  "T3": {
+   "outcome": "rejected",
+   "where": "left as operating doctrine as the earlier intake row chose; 11 of 11 spawns are tiered and a fragile parser over two files buys nothing today"
+  }
+ }
+}

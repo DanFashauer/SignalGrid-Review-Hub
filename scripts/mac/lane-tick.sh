@@ -587,10 +587,21 @@ JS
   # A due/changed observation checks the original submission before any new one.
   # Unchanged ticks do not fetch and write duplicate observations every five minutes.
   if [ -n "$_hb_submission" ]; then
-    if _hb_readback="$(node scripts/lane-deliver.mjs readback "$_hb_submission" --pending-cadence "${TICK_OWNER_TOKEN:-}" "$$" 2>&1)"; then
+    # No redirection inside $(...): the owner check needs this helper to be a direct child
+    # of the tick shell ("$$"). A `2>&1` inside the substitution makes Bash keep a subshell
+    # as the helper's parent, and every due readback then failed the owner check, held the
+    # heartbeat and never sent another. stderr is captured around the call, as tick-acquire does.
+    _hb_readback_err="$(mktemp "${TMPDIR:-/tmp}/sg-hb-readback.XXXXXX" 2>/dev/null)" || _hb_readback_err=""
+    if [ -n "$_hb_readback_err" ]; then exec 9>&2 2>"$_hb_readback_err"; fi
+    _hb_readback="$(node scripts/lane-deliver.mjs readback "$_hb_submission" --pending-cadence "${TICK_OWNER_TOKEN:-}" "$$")"
+    _hb_readback_exit=$?
+    if [ -n "$_hb_readback_err" ]; then
+      exec 2>&9 9>&-
+      _hb_readback="$_hb_readback$(cat "$_hb_readback_err" 2>/dev/null)"; rm -f "$_hb_readback_err"
+    fi
+    if [ "$_hb_readback_exit" = "0" ]; then
       say "$_hb_readback"
     else
-      _hb_readback_exit=$?
       if [ "$_hb_readback_exit" = "6" ]; then
         say "$_hb_readback"; return 0
       fi

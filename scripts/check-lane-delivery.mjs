@@ -471,6 +471,26 @@ control("successful unchanged ticks defer remote readback until a due observatio
  const r=f.runTick("heartbeat\nSTAMP=20261030T010500Z\nRESULT=quiet\nheartbeat\nSTAMP=20261030T011000Z\nRESULT='changed fixture'\nheartbeat");
  assert.equal(r.status,0,r.stderr);assert.equal(f.deliveries().length,2);assert.equal(f.readbacks().length,1,"only the changed/due observation needs canonical readback");
 });
+// The owner check (lane-attempt-store ownedGuard) requires process.ppid === the tick shell's "$$".
+// Bash keeps a subshell as the helper's parent when a redirection sits inside $(...), so any
+// helper that is handed "$$" must be called with no redirection inside its substitution.
+{
+  const name='no tick helper that is handed "$$" runs under a redirection inside $(...)';
+  try {
+    const tick=readFileSync(join(ROOT,"scripts/mac/lane-tick.sh"),"utf8");
+    const offenders=(src)=>src.split("\n").map((line,i)=>[i+1,line]).filter(([,line])=>!/^\s*#/.test(line)&&/\$\(\s*node\b[^\n]*"\$\$"[^\n]*[0-9]?>[&>]?[^\n]*\)"/.test(line)).map(([n])=>n);
+    assert.deepEqual(offenders(tick),[],"lane-tick.sh lines with a redirection inside an owner-checked substitution");
+    assert.deepEqual(offenders('  if x="$(node a.mjs readback "$s" "$$" 2>&1)"; then'),[1],"the matcher must catch the original defect");
+    assert.deepEqual(offenders('  x="$(node a.mjs readback "$s" "$$")"'),[],"the matcher must accept the direct-child form");
+    const probe=spawnSync("/bin/bash",["-c",'a="$("$N" -e "console.log(process.ppid)")"; b="$("$N" -e "console.log(process.ppid)" 2>&1)"; echo "$$ $a $b"'],{encoding:"utf8",env:{N:process.execPath,PATH:"/usr/bin:/bin"}});
+    const [shell,direct,redirected]=probe.stdout.trim().split(" ");
+    assert.equal(direct,shell,"a plain substitution keeps the helper a direct child of the shell");
+    // Reported, not asserted: whether a redirected substitution re-parents the helper varies by
+    // Bash version; the tick must be correct either way, which the static rule above enforces.
+    if (redirected === shell) console.log("note: this Bash keeps a redirected substitution's helper as a direct child");
+    passed++; console.log(`PASS ${name}`);
+  } catch (e) { failed++; console.error(`FAIL ${name}: ${e.message}`); }
+}
 control("volatile successful estate counts do not defeat the two-hour keepalive",{tick:true,age:30},f=>{
  const r=f.runTick("ESTATE_OUTPUT='estate: 1 open; considered 1'\nrun_estate\nheartbeat\ntouch -t 202001010000 node_modules/.sg-estate-last\nSTAMP=20261030T020000Z\nRESULT=quiet\nESTATE_OUTPUT='estate: 2 open; considered 2'\nrun_estate\nheartbeat");
  assert.equal(r.status,0,r.stderr);assert.equal(f.deliveries().length,0);assert.match(r.stdout,/estate: 1 open/);assert.match(r.stdout,/estate: 2 open/);assert.equal(existsSync(join(f.root,"node_modules/.sg-estate-result")),false);
@@ -586,7 +606,9 @@ check('a paused initializer resuming never removes a replacement owner\'s lock',
  // Another tick took the lock over meanwhile (created first, so its inode differs from the paused owner's).
  const replacement=JSON.stringify({pid:process.pid,start:'replacement owner'})+'\n';writeFileSync(lock+'.new',replacement);rmSync(lock);renameSync(lock+'.new',lock);
  writeFileSync(gate,'go');
- const status=spawnSync('/bin/sh',['-c','while kill -0 '+child.pid+' 2>/dev/null; do sleep 0.1; done']);assert.equal(status.status,0);
+ // Bounded, and a zombie counts as exited: where PID 1 does not reap orphans the finished
+ // initializer stays a zombie, `kill -0` keeps succeeding, and an unbounded poll never returns.
+ const status=spawnSync('/bin/sh',['-c','i=0; while kill -0 '+child.pid+' 2>/dev/null; do case "$(ps -o stat= -p '+child.pid+' 2>/dev/null)" in Z*) exit 0;; esac; i=$((i+1)); [ "$i" -gt 300 ] && exit 9; sleep 0.1; done']);assert.equal(status.status,0,'the resumed initializer exits within 30s');
  assert.equal(readFileSync(lock,'utf8'),replacement,'the resumed initializer leaves the replacement lock alone');
 });
 // raise-hold runs only from a shell that holds the tick guard (FD8, kernel-locked), as the real tick does.

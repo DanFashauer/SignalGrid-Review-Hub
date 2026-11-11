@@ -106,6 +106,13 @@ jobs:
           if [ "$pr_state" = closed ]; then echo "PR #$PR_NUMBER is closed; the Mac verification is skipped."; exit 0; fi
           bash scripts/mac/ci-host-verification.sh 24eff86a940099e0725d474d1d5520bfbc71d368 60 2400 <<'CI_CHAIN'
           set -u
+          # This is a fresh hosted image, not the previously provisioned Mac.
+          # Keep shell lint mandatory and fail before verification if unavailable.
+          if ! command -v shellcheck >/dev/null 2>&1; then
+            HOMEBREW_NO_AUTO_UPDATE=1 brew install shellcheck || exit $?
+          fi
+          command -v shellcheck >/dev/null 2>&1 || { echo "shellcheck is required" >&2; exit 1; }
+          shellcheck --version || exit $?
           code=0
           install_code=0
           pnpm install --frozen-lockfile || install_code=$?

@@ -1802,7 +1802,8 @@ exit "$code"`, env);
     chmodSync(join(repo, "validate-sim-macos.sh"), 0o755);
     const workflowChain = (file) => readFileSync(join(HERE, "../../.github/workflows", file), "utf8")
       .split("<<'CI_CHAIN'\n")[1].split("\n          CI_CHAIN")[0].replace(/^ {10}/gm, "");
-    const stubTools = `pnpm() {
+    const stubTools = `shellcheck() { return "$SG_CI_SHELLCHECK_EXIT"; }
+pnpm() {
   printf 'pnpm:%s\\n' "$*" >> "$SG_CI_EVENTS"
   case "$*" in 'install --frozen-lockfile') return "$SG_CI_INSTALL_EXIT";; 'run proof:sim-requests') return "$SG_CI_PROOF_EXIT";; 'run verify:all --require-mcp') return "$SG_CI_JOINT_EXIT";; esac
 }
@@ -1819,8 +1820,11 @@ git() {
 `;
     const workflowRun = (file, extra) => {
       writeFileSync(events, "");
-      return run(stubTools + workflowChain(file), 2, 4, base, { SG_CI_LANE: "both", SG_CI_INSTALL_EXIT: "0", SG_CI_PROOF_EXIT: "0", SG_CI_PREFLIGHT_EXIT: "0", SG_CI_HARNESS_EXIT: "0", SG_CI_MCP_EXIT: "0", SG_CI_JOINT_EXIT: "0", ...extra });
+      return run(stubTools + workflowChain(file), 2, 4, base, { SG_CI_LANE: "both", SG_CI_SHELLCHECK_EXIT: "0", SG_CI_INSTALL_EXIT: "0", SG_CI_PROOF_EXIT: "0", SG_CI_PREFLIGHT_EXIT: "0", SG_CI_HARNESS_EXIT: "0", SG_CI_MCP_EXIT: "0", SG_CI_JOINT_EXIT: "0", ...extra });
     };
+    const lintPrerequisite = workflowRun("mac-runner-auto.yml", { SG_CI_SHELLCHECK_EXIT: "8" });
+    ok("CI unavailable shell lint prerequisite fails before install and still tears down", lintPrerequisite.status === 8
+      && readFileSync(events, "utf8") === "teardown\n", `${lintPrerequisite.status} ${lintPrerequisite.stderr}`);
     const pr = workflowRun("mac-runner-auto.yml", { SG_CI_PROOF_EXIT: "7" });
     ok("CI actual PR body still runs preflight after a failed provenance proof and retains failure", pr.status === 7
       && readFileSync(events, "utf8") === "pnpm:install --frozen-lockfile\nteardown\npnpm:run proof:sim-requests\npreflight\nteardown\n", `${pr.status} ${pr.stderr}`);

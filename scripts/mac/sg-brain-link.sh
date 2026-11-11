@@ -22,6 +22,8 @@
 # =============================================================================
 set -uo pipefail
 
+if [ "$(uname -s)" != "Darwin" ]; then echo "sg-brain-link.sh: macOS only" >&2; exit 1; fi
+
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 KNOWLEDGE="$HOME/Library/Mobile Documents/com~apple~CloudDocs/Documents/SignalGrid"
 REF="$REPO/reference"

@@ -28,7 +28,7 @@
 // --publish uses ordinary Git hooks/network and the existing authenticated gh.
 
 import { spawnSync } from "node:child_process";
-import { accessSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync, chmodSync, fchmodSync, mkdirSync, lstatSync, readdirSync, openSync, closeSync, fstatSync, fsyncSync, constants, realpathSync } from "node:fs";
+import { accessSync, existsSync, mkdtempSync, readFileSync, readSync, rmSync, writeFileSync, chmodSync, fchmodSync, mkdirSync, lstatSync, readdirSync, openSync, closeSync, fstatSync, fsyncSync, constants, realpathSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { tmpdir, userInfo } from "node:os";
 import { dirname, join, resolve, isAbsolute, sep } from "node:path";
@@ -493,7 +493,203 @@ export function validatePrivacyClearanceContent(value, evidence, request, now) {
   return true;
 }
 
+// Versioned trusted-controller reader. It retains the independent-UID v2 route
+// when no explicit contained-controller selection exists. Contained code/checks
+// cannot reach this private state; arbitrary unsandboxed owner processes remain
+// in the trusted computing base. This is not equivalent OS-user isolation.
+export const readContainedClearance = (() => {
+// Explicit trusted-controller protocol. This does not claim independent OS-user custody.
+
+const MODE = 'contained_controller_v1';
+const WRAPPER = '\n\nReturn only the requested JSON review. Do not use tools.\n\n';
+const sha = raw => createHash('sha256').update(raw).digest('hex');
+const canonical = x => Array.isArray(x) ? x.map(canonical) : x && typeof x === 'object'
+  ? Object.fromEntries(Object.keys(x).sort().map(k => [k, canonical(x[k])])) : x;
+const digest = x => sha(JSON.stringify(canonical(x)));
+const equal = (a,b) => digest(a) === digest(b);
+const need = (ok, message) => { if (!ok) throw new Error(message); };
+const hex = x => typeof x === 'string' && /^[0-9a-f]{64}$/.test(x);
+const direct = p => {
+  need(isAbsolute(p) && resolve(p) === p && realpathSync(p) === p, 'Indirect contained controller path');
+  for (let q=p;;q=dirname(q)) { need(!lstatSync(q).isSymbolicLink(),'Indirect contained controller ancestor');if(q===dirname(q))break; }
+};
+function noACL(path) {
+  if (process.platform !== 'darwin') return;
+  const r=spawnSync('/bin/ls',['-lde',path],{env:{PATH:'/usr/bin:/bin',LANG:'C',LC_ALL:'C'},encoding:'utf8',timeout:5000,maxBuffer:65536});
+  const lines=(r.stdout??'').trimEnd().split('\n');
+  need(!r.error&&!r.signal&&r.status===0&&!(r.stderr??'').trim()&&lines.length===1&&/^[d-][rwxstST-]{9}@?$/.test(lines[0].split(/\s+/,1)[0]),
+       'Contained controller ACL is present or unavailable');
+}
+function directory(path) {
+  direct(path);const s=lstatSync(path);need(s.isDirectory()&&s.uid===process.getuid()&&(s.mode&0o777)===0o700,'Private contained directory required');noACL(path);return s;
+}
+function file(path,{mode,uid=process.getuid(),maximum=4*1024*1024}={}) {
+  direct(path);noACL(path);
+  const fd=openSync(path,constants.O_RDONLY|constants.O_NOFOLLOW|constants.O_NONBLOCK);
+  const shape=s=>[s.dev,s.ino,s.size,s.mtimeMs,s.ctimeMs,s.uid,s.mode,s.nlink].join(':');
+  try {
+    const s=fstatSync(fd);
+    need(s.isFile()&&s.nlink===1&&s.uid===uid&&s.size<=maximum&&!(s.mode&0o022)&&
+         (mode===undefined||(s.mode&0o777)===mode),'Contained file custody differs');
+    const raw=readFileSync(fd);
+    need(raw.length===s.size&&shape(s)===shape(fstatSync(fd))&&shape(s)===shape(lstatSync(path)),'Contained file changed while reading');
+    return {raw,stat:s,sha256:sha(raw)};
+  } finally {closeSync(fd);}
+}
+function json(path,mode=0o600) {const value=file(path,{mode});return {...value,value:JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(value.raw))};}
+function selected(ref) {
+  need(ref&&typeof ref.path==='string'&&hex(ref.sha256)&&[0,process.getuid()].includes(ref.uid),'Selected contained source reference required');
+  direct(ref.path);noACL(ref.path);
+  const fd=openSync(ref.path,constants.O_RDONLY|constants.O_NOFOLLOW|constants.O_NONBLOCK);
+  const shape=s=>[s.dev,s.ino,s.size,s.mtimeMs,s.ctimeMs,s.uid,s.mode,s.nlink].join(':');
+  try {
+    const s=fstatSync(fd),exact=Number.isSafeInteger(ref.bytes)&&ref.bytes===s.size;
+    const sizeOK=s.size<=100*1024*1024||((s.mode&0o111)!==0&&exact&&s.size<=256*1024*1024);
+    need(s.isFile()&&s.nlink===1&&s.uid===ref.uid&&(s.mode&0o777)===ref.mode&&!(s.mode&0o022)&&
+         sizeOK&&(ref.bytes===undefined||exact),'Selected contained source custody differs');
+    const hash=createHash('sha256'),buffer=Buffer.alloc(1024*1024);let total=0,n;
+    while((n=readSync(fd,buffer,0,Math.min(buffer.length,s.size-total+1),null))>0) {
+      total+=n;need(total<=s.size,'Selected contained source grew');hash.update(buffer.subarray(0,n));
+    }
+    need(total===s.size&&shape(s)===shape(fstatSync(fd))&&shape(s)===shape(lstatSync(ref.path)),
+         'Selected contained source changed while hashing');
+    const actual={stat:s,sha256:hash.digest('hex')};
+    need(actual.sha256===ref.sha256,'Selected contained source changed');return actual;
+  } finally {closeSync(fd);}
+}
+function referenced(ref,path,mode) {
+  need(ref?.path===path&&ref.mode===mode&&ref.uid===process.getuid()&&hex(ref.sha256),'Bound private review reference required');
+  const actual=file(path,{mode});need(actual.sha256===ref.sha256,'Private review bytes changed');
+  for (const [key,value] of [['bytes',actual.stat.size],['dev',actual.stat.dev],['ino',actual.stat.ino]])
+    need(ref[key]===value,'Private review identity changed');
+  return actual.raw;
+}
+
+function readContainedClearance(job,{root,publisherRef,validateContent,verifySource,now=Date.now()}) {
+  need(typeof job==='string'&&/^[A-Za-z0-9_-]{1,64}$/.test(job)&&typeof validateContent==='function'&&typeof verifySource==='function',
+       'Contained reader needs exact job, content validator and current source check');
+  need(root.endsWith(sep+'brain-state'+sep+'contained-publication'),'Contained controller namespace differs');directory(root);
+  const base=dirname(dirname(root)),home=dirname(base),profilePath=join(root,'controller.json');
+  const profileFile=json(profilePath,0o400),profile=profileFile.value;
+  need(profile.format==='signalgrid-contained-publication-controller/v1'&&profile.execution_mode===MODE&&profile.enabled===true&&
+       profile.owner_uid===process.getuid()&&profile.profile_path===profilePath&&
+       profile.attempts_root===join(root,'attempts')&&profile.clearances_root===join(root,'clearances')&&hex(profile.account_sha256),
+       'Explicit current trusted-controller profile required');
+  const cutover=Date.parse(profile.not_before);need(Number.isFinite(cutover)&&cutover<=now,'Current contained cutover required');
+  directory(profile.attempts_root);directory(profile.clearances_root);
+  const host=profile.host,hostPath=join(home,'Library/Caches/signalgrid/host-verification.lock');
+  need(host?.path===hostPath,'Canonical host path differs');
+  const hs=file(hostPath,{mode:0o644}).stat;
+  need(host.dev===hs.dev&&host.ino===hs.ino&&host.uid===hs.uid&&host.nlink===1&&host.mode===0o644,'Canonical host identity differs');
+  need(Array.isArray(profile.source_refs)&&profile.source_refs.length<=100,'Selected contained runtime sources required');
+  const names=new Set();
+  for(const ref of profile.source_refs){need(!names.has(ref.path),'Repeated controller source');selected(ref);names.add(ref.path);}
+  for(const p of [profile.cli,publisherRef.path,...['signalgrid_contained_publication.py','signalgrid_providers.py',
+                 'signalgrid_publication_review.py','signalgrid_agent_runtime.py','signalgrid_brain.py'].map(n=>join(base,n))])
+    need(names.has(p),'Incomplete controller/runtime/publisher source selection');
+  need(equal(profile.publisher_ref,publisherRef),'Current publisher is not selected');selected(publisherRef);
+  const path=join(profile.clearances_root,job+'.json'),clearance=json(path,0o400),packet=clearance.value;
+  need(packet.format==='signalgrid-contained-publication-clearance/v1'&&packet.execution_mode===MODE&&
+       packet.profile_ref?.path===profilePath&&packet.profile_ref.uid===process.getuid()&&packet.profile_ref.mode===0o400&&
+       packet.profile_ref.sha256===profileFile.sha256,'Current contained receipt/profile binding differs');
+  const content=packet.content,request=content?.request,requestSHA=digest(request);
+  need(content?.job===job&&request?.job===job&&request.worker_uid===process.getuid()&&request.publisher_sha256===publisherRef.sha256&&
+       Date.parse(content.issued_at)>=cutover,'Contained receipt belongs to another source, worker or cutover');
+  const attempt=join(profile.attempts_root,job);directory(attempt);
+  const outcome=json(join(attempt,'outcome.json')).value;
+  need(outcome.state==='contained-review-written'&&outcome.job===job&&outcome.request_sha256===requestSHA&&
+       outcome.execution_mode===MODE&&outcome.retry_forbidden===true&&outcome.public_egress_allowed===false,
+       'Original contained attempt did not finish');
+  referenced(outcome.clearance_ref,path,0o400);
+  const evidence={},tickets=new Set(),inputs=[];
+  for(const [kind,decision]of [['source_review','public_only'],['artifact_review','public_safe']]) {
+    const stage=join(attempt,kind),native=join(stage,'native'),execution=join(native,'execution');
+    for(const dir of[stage,native,execution])directory(dir);
+    const entry=content[kind];need(entry?.system==='codex'&&entry.decision===decision,'Genuine clearing Codex stage required');
+    evidence[kind]=referenced(entry.evidence_ref,join(stage,'qualified-review.json'),0o400);
+    const record=JSON.parse(evidence[kind]);
+    const admission=packet.admissions?.[kind],storedAdmission=json(join(stage,'dispatch.json')).value;
+    need(admission&&equal(admission,storedAdmission)&&admission.execution_mode===MODE&&admission.phase==='dispatched'&&
+         admission.job===job&&admission.job_sha256===request.job_sha256&&admission.request_sha256===requestSHA&&admission.review_kind===kind&&
+         admission.worker_uid===process.getuid()&&admission.account_sha256===profile.account_sha256&&hex(admission.prompt_sha256)&&
+         hex(admission.ticket_id)&&!tickets.has(admission.ticket_id)&&admission.usage?.provider==='codex'&&
+         admission.usage.transport==='subscription_cli'&&admission.usage.attempted===true&&admission.usage.credit_usage_allowed===false,
+         'Original shared-budget Native admission differs');
+    tickets.add(admission.ticket_id);
+    const response=json(join(native,'response.json')),value=response.value,meta=packet.native_responses?.[kind];
+    need(meta?.response_sha256===response.sha256&&meta.protocol==='subscription_exec_no_user_config'&&meta.normal_original_wait_closed===true&&
+         ['input_tokens','output_tokens'].every(k=>Number.isSafeInteger(meta.tokens?.[k])&&meta.tokens[k]>0)&&
+         value.format==='signalgrid-native-publication-review/v1'&&value.job===job&&value.request_sha256===requestSHA&&value.review_kind===kind&&
+         value.decision===decision&&value.summary===record.summary,'Actual structured Native response differs');
+    const invocation=json(join(execution,'invocation.json')).value,terminal=json(join(execution,'terminal.json')).value;
+    const stdin=file(join(execution,'stdin.raw'),{mode:0o600}),stdout=file(join(execution,'stdout.raw'),{mode:0o600}),stderr=file(join(execution,'stderr.raw'),{mode:0o600});
+    need(terminal.returncode===0&&Number.isSafeInteger(terminal.pid)&&terminal.pid>0&&terminal.normal_original_wait_closed===true&&
+         terminal.child_wait_closed===true&&terminal.timed_out===false&&terminal.error_type===null&&
+         terminal.stdout_sha256===stdout.sha256&&terminal.stderr_sha256===stderr.sha256&&
+         invocation.once_only===true&&invocation.stdin_sha256===stdin.sha256&&admission.prompt_sha256===stdin.sha256&&
+         equal(invocation.inherited_host,{device:host.dev,inode:host.ino}), 'Actual Native execution is incomplete or changed');
+    const argv=invocation.argv;
+    need(Array.isArray(argv)&&realpathSync(argv[0])===realpathSync(profile.cli)&&argv[1]==='exec','Selected Native executable differs');
+    for(const flag of ['--ignore-user-config','--ignore-rules','--ephemeral','project_doc_max_bytes=0','include_environment_context=false',
+      'skills.bundled.enabled=false','skills.include_instructions=false','cloud.skills.enabled=false','notify=[]',
+      'tools.update_plan.enabled=false','tools.experimental_request_user_input.enabled=false'])need(argv.includes(flag),'Ambient Native capability was not disabled');
+    need(argv.some((x,i)=>x==='--sandbox'&&argv[i+1]==='read-only'),'Read-only Native sandbox required');
+    for(const flag of ['stable_environment_tools','shell_tool','unified_exec','plugins','hooks','apps','memories','multi_agent'])
+      need(argv.some((x,i)=>x==='--disable'&&argv[i+1]===flag),'Native tool capability was not disabled');
+    const events=new TextDecoder('utf-8',{fatal:true}).decode(stdout.raw).trimEnd().split('\n').map(x=>JSON.parse(x));
+    const messages=events.filter(e=>e.type==='item.completed'&&e.item?.type==='agent_message'),ends=events.filter(e=>e.type==='turn.completed');
+    need(messages.length===1&&ends.length===1&&equal(JSON.parse(messages[0].item.text),value)&&
+         ['input_tokens','output_tokens'].every(k=>ends[0].usage?.[k]===meta.tokens[k])&&
+         events.every(e=>['thread.started','turn.started','item.started','item.completed','turn.completed'].includes(e.type)&&
+           (!['item.started','item.completed'].includes(e.type)||['agent_message','reasoning'].includes(e.item?.type))),
+         'Native transcript did not produce the reviewed result without tools');
+    const prompt=new TextDecoder('utf-8',{fatal:true}).decode(stdin.raw),index=prompt.indexOf(WRAPPER);
+    need(index>=0&&prompt.indexOf(WRAPPER,index+WRAPPER.length)===-1,'Native input framing differs');
+    const data=JSON.parse(prompt.slice(index+WRAPPER.length));
+    need(data.job===job&&data.request_sha256===requestSHA&&data.review_kind===kind&&data.source?.kind==='cloud_shareable_note'&&
+         sha(data.source.body)===data.source.body_sha256&&data.artifact?.head===request.head&&data.artifact.tree===request.tree&&
+         data.artifact.replay_base===request.replay_base&&Array.isArray(data.artifact.exports)&&data.artifact.exports.length===request.exports.length,
+         'Native source/artifact input is incomplete or unrelated');
+    for(let i=0;i<request.exports.length;i++){
+      const e=data.artifact.exports[i],wanted=request.exports[i];
+      need(typeof e?.text==='string'&&equal({source:e.source,bytes:e.bytes,sha256:e.sha256},wanted)&&
+           Buffer.byteLength(e.text)===e.bytes&&sha(e.text)===e.sha256,'Native omitted or altered an export');
+    }
+    inputs.push({source:data.source,artifact:data.artifact});
+  }
+  need(equal(inputs[0],inputs[1]),'Native stages reviewed different frozen data');
+  validateContent(content,evidence,request,now);
+  const current=verifySource(job,requestSHA);
+  need(current?.format==='signalgrid-contained-source-check/v1'&&current.current===true&&current.job===job&&current.request_sha256===requestSHA,
+       'Current durable source permission did not qualify');
+  need(file(profilePath,{mode:0o400}).sha256===profileFile.sha256&&file(path,{mode:0o400}).sha256===clearance.sha256,
+       'Controller selection or clearance changed during read');
+  return {value:content,path,sha256:clearance.sha256,execution_mode:MODE,profile_ref:packet.profile_ref};
+}
+return readContainedClearance;
+})();
+
+function verifyCurrentContainedSource(job, requestSHA) {
+  const url = 'http://127.0.0.1:8765/api/brain/publication-review-source?id=' + encodeURIComponent(job) + '&request_sha256=' + requestSHA;
+  const r = spawnSync('/usr/bin/curl', ['--disable', '--silent', '--show-error', '--fail',
+    '--noproxy', '*', '--proto', '=http', '--max-redirs', '0', '--connect-timeout', '2', '--max-time', '5', '--url', url],
+    { env: { PATH: '/usr/bin:/bin', LANG: 'C', LC_ALL: 'C' }, encoding: 'utf8', timeout: 6000, maxBuffer: 65536 });
+  if (r.error || r.signal || r.status !== 0 || (r.stderr ?? '').trim()) refuse('current contained source check is unavailable');
+  return JSON.parse(r.stdout);
+}
+
 function readPrivacyClearance(job) {
+  const controllerRoot = join(ACCOUNT_HOME, 'SignalGrid-Local-AI', 'brain-state', 'contained-publication');
+  if (existsSync(join(controllerRoot, 'controller.json'))) {
+    try {
+      const self = realpathSync(fileURLToPath(import.meta.url)), st = lstatSync(self);
+      const publisherRef = { path: self, sha256: publisherDigest(), mode: st.mode & 0o777, uid: st.uid,
+        bytes: st.size, dev: st.dev, ino: st.ino };
+      return readContainedClearance(job, { root: controllerRoot, publisherRef,
+        validateContent: validatePrivacyClearanceContent, verifySource: verifyCurrentContainedSource });
+    } catch { refuse('contained source/privacy clearance is unavailable or unqualified'); }
+  }
+
   if (!/^[A-Za-z0-9_-]+$/.test(job ?? "")) refuse("privacy clearance job identity is invalid");
   const root = SELF_TEST_SCANNER?.privacyRoot ?? PRIVACY_CLEARANCES;
   try {
@@ -883,6 +1079,141 @@ export async function run({ job, db = DEFAULT_DB, repo = REPO, publish = false, 
   }
 }
 
+async function selfTestContainedReader(check) {
+  const fs = await import('node:fs');
+  const assert = (await import('node:assert/strict')).default;
+  const reader = readContainedClearance;
+const sha = raw => createHash('sha256').update(raw).digest('hex');
+const canonical = x => Array.isArray(x) ? x.map(canonical) : x && typeof x === 'object'
+  ? Object.fromEntries(Object.keys(x).sort().map(k => [k, canonical(x[k])])) : x;
+const digest = x => sha(JSON.stringify(canonical(x)));
+const WRAPPER = '\n\nReturn only the requested JSON review. Do not use tools.\n\n';
+
+function fixture() {
+  assert.equal(typeof reader, 'function', 'No contained publication reader exists');
+  const home = fs.realpathSync(fs.mkdtempSync(join(tmpdir(), 'contained-reader-')));
+  const base = join(home, 'SignalGrid-Local-AI');
+  const root = join(base, 'brain-state', 'contained-publication');
+  const job = 'freshSynthetic';
+  const attempt = join(root, 'attempts', job);
+  const clearances = join(root, 'clearances');
+  for (const p of [base, join(base, 'brain-state'), root, join(root, 'attempts'), attempt, clearances]) fs.mkdirSync(p, { mode: 0o700 });
+  const write = (path, value, mode = 0o400) => {
+    if (fs.existsSync(path)) fs.chmodSync(path, 0o600);
+    fs.writeFileSync(path, Buffer.isBuffer(value) ? value : typeof value === 'string' ? value : JSON.stringify(canonical(value)) + '\n', { mode });
+    fs.chmodSync(path, mode);
+    const s = fs.statSync(path);
+    return { path, sha256: sha(fs.readFileSync(path)), mode, uid: s.uid, bytes: s.size, dev: s.dev, ino: s.ino };
+  };
+  const refs = [];
+  for (const name of ['signalgrid_contained_publication.py', 'signalgrid_providers.py',
+                      'signalgrid_publication_review.py', 'signalgrid_agent_runtime.py', 'signalgrid_brain.py']) refs.push(write(join(base, name), '# selected synthetic source'));
+  const cliRef = write(join(home, 'codex'), 'synthetic selected CLI; never executed', 0o500);
+  const publisherRef = write(join(home, 'publisher.mjs'), '// synthetic selected publisher');
+  refs.push(cliRef, publisherRef);
+  const hostPath = join(home, 'Library', 'Caches', 'signalgrid', 'host-verification.lock');
+  fs.mkdirSync(join(home, 'Library', 'Caches', 'signalgrid'), { recursive: true, mode: 0o700 });
+  write(hostPath, '', 0o644); const hs = fs.statSync(hostPath);
+  const now = Date.now();
+  const profile = { format: 'signalgrid-contained-publication-controller/v1', execution_mode: 'contained_controller_v1',
+    enabled: true, owner_uid: process.getuid(), profile_path: join(root, 'controller.json'),
+    attempts_root: join(root, 'attempts'), clearances_root: clearances, cli: cliRef.path,
+    account_sha256: 'a'.repeat(64), not_before: new Date(now - 10000).toISOString(), source_refs: refs,
+    publisher_ref: publisherRef, host: { path: hostPath, dev: hs.dev, ino: hs.ino, uid: hs.uid, nlink: 1, mode: 0o644 } };
+  const profileRef = write(profile.profile_path, profile);
+  const exports = [['metadata/title.txt', 'Synthetic public title'], ['metadata/body.md', 'Synthetic body'],
+    ['metadata/commit.txt', 'Synthetic commit'], ['metadata/paths.json', '["src/example.js"]'],
+    ['files/src/example.js', 'export const n=2;\n']].map(([source, text]) => ({source, text, bytes: Buffer.byteLength(text), sha256: sha(text)}));
+  const request = { format: 'signalgrid-publication-privacy-request/v1', job, job_sha256: '1'.repeat(64),
+    publisher_sha256: publisherRef.sha256, worker_head: '2'.repeat(40), worker_uid: process.getuid(), patch_sha256: '3'.repeat(64),
+    head: '4'.repeat(40), tree: '5'.repeat(40), replay_base: '6'.repeat(40),
+    exports: exports.map(({text, ...x}) => x) };
+  const content = { format: 'signalgrid-publication-privacy-clearance/v2', job, request,
+    issued_at: new Date(now).toISOString(), expires_at: new Date(now + 3600000).toISOString() };
+  const packet = { format: 'signalgrid-contained-publication-clearance/v1', execution_mode: 'contained_controller_v1',
+    profile_ref: profileRef, content, admissions: {}, native_responses: {} };
+  const source = { kind: 'cloud_shareable_note', note_id: 'synthetic-note', title: 'Synthetic title',
+    body: 'Change the synthetic public fixture.', body_sha256: sha('Change the synthetic public fixture.') };
+  for (const [kind, decision] of [['source_review','public_only'], ['artifact_review','public_safe']]) {
+    const stage = join(attempt, kind), native = join(stage, 'native'), execution = join(native, 'execution');
+    for (const dir of [stage,native,execution]) fs.mkdirSync(dir,{mode:0o700});
+    const value = { format:'signalgrid-native-publication-review/v1',job,request_sha256:digest(request),
+      review_kind:kind,decision,summary:'Read the complete synthetic source and every export.' };
+    const responseRef = write(join(native,'response.json'),value,0o600);
+    const record = { format:'signalgrid-publication-privacy-review/v1',job,request_sha256:digest(request),
+      review_kind:kind,system:'codex',decision,summary:value.summary,reviewed_at:new Date(now-1).toISOString() };
+    content[kind] = {system:'codex',decision,evidence_ref:write(join(stage,'qualified-review.json'),record)};
+    const data = {review_kind:kind,job,request_sha256:digest(request),source,
+      artifact:{head:request.head,tree:request.tree,replay_base:request.replay_base,exports}};
+    const prompt = 'Synthetic fixed privacy instructions'+WRAPPER+JSON.stringify(canonical(data));
+    const inputRef = write(join(execution,'stdin.raw'),prompt,0o600);
+    const stdout = [JSON.stringify({type:'item.completed',item:{id:'message1',type:'agent_message',text:JSON.stringify(value)}}),
+      JSON.stringify({type:'turn.completed',usage:{input_tokens:30,output_tokens:8}})].join('\n')+'\n';
+    const stdoutRef=write(join(execution,'stdout.raw'),stdout,0o600), stderrRef=write(join(execution,'stderr.raw'),'',0o600);
+    const argv=[cliRef.path,'exec','--ignore-user-config','--ignore-rules','--ephemeral','--sandbox','read-only',
+      '-c','project_doc_max_bytes=0','-c','include_environment_context=false','-c','skills.bundled.enabled=false',
+      '-c','skills.include_instructions=false','-c','cloud.skills.enabled=false','-c','notify=[]',
+      '-c','tools.update_plan.enabled=false','-c','tools.experimental_request_user_input.enabled=false',
+      '--disable','stable_environment_tools','--disable','shell_tool','--disable','unified_exec',
+      '--disable','plugins','--disable','hooks','--disable','apps','--disable','memories','--disable','multi_agent'];
+    write(join(execution,'invocation.json'),{argv,once_only:true,stdin_sha256:inputRef.sha256,
+      inherited_host:{device:hs.dev,inode:hs.ino}},0o600);
+    write(join(execution,'terminal.json'),{pid:12345,returncode:0,normal_original_wait_closed:true,child_wait_closed:true,
+      timed_out:false,error_type:null,stdout_sha256:stdoutRef.sha256,stderr_sha256:stderrRef.sha256},0o600);
+    packet.admissions[kind]={job,job_sha256:request.job_sha256,request_sha256:digest(request),review_kind:kind,
+      worker_uid:process.getuid(),account_sha256:profile.account_sha256,prompt_sha256:sha(prompt),
+      execution_mode:'contained_controller_v1',ticket_id:(kind==='source_review'?'b':'c').repeat(64),phase:'dispatched',
+      usage:{provider:'codex',transport:'subscription_cli',attempted:true,credit_usage_allowed:false}};
+    write(join(stage,'dispatch.json'),packet.admissions[kind],0o600);
+    packet.native_responses[kind]={response_sha256:responseRef.sha256,tokens:{input_tokens:30,output_tokens:8},
+      normal_original_wait_closed:true,protocol:'subscription_exec_no_user_config'};
+  }
+  const path=join(clearances,job+'.json');
+  function save() {
+    const ref=write(path,packet);
+    write(join(attempt,'outcome.json'),{state:'contained-review-written',job,request_sha256:digest(request),
+      clearance_ref:ref,execution_mode:'contained_controller_v1',retry_forbidden:true,public_egress_allowed:false},0o600);
+  }
+  save();
+  const options={root,publisherRef,validateContent:validatePrivacyClearanceContent,now,
+    verifySource:()=>({format:'signalgrid-contained-source-check/v1',job,request_sha256:digest(request),current:true})};
+  return {home,root,job,packet,profile,request,options,write,save,path,attempt,
+    read:()=>reader(job,options),cleanup:()=>fs.rmSync(home,{recursive:true,force:true})};
+}
+
+function checkCase(name, run) { const f=fixture(); try { run(f); check('(contained) '+name, true); } catch { check('(contained) '+name, false); } finally { f.cleanup(); } }
+checkCase('complete contained producer evidence crosses the real content validator',f=>assert.deepEqual(f.read().value.request,f.request));
+function actualToolRef(path) {
+  path=fs.realpathSync(path);const s=fs.statSync(path),hash=createHash('sha256');
+  const fd=fs.openSync(path,'r'),buffer=Buffer.alloc(1024*1024);
+  try {for(let n;(n=fs.readSync(fd,buffer,0,buffer.length,null))>0;)hash.update(buffer.subarray(0,n));}
+  finally {fs.closeSync(fd);}
+  return {path,sha256:hash.digest('hex'),mode:s.mode&0o777,uid:s.uid,bytes:s.size};
+}
+function selectTool(f,ref) {
+  f.profile.source_refs.push(ref);f.packet.profile_ref=f.write(f.profile.profile_path,f.profile);f.save();
+}
+checkCase('the actual pinned Node executable qualifies without a whole-binary buffer',f=>{
+  selectTool(f,actualToolRef(process.execPath));assert.deepEqual(f.read().value.request,f.request);
+});
+checkCase('a selected executable with the wrong exact size is refused',f=>{
+  const ref=actualToolRef(process.execPath);selectTool(f,{...ref,bytes:ref.bytes-1});assert.throws(f.read);
+});
+checkCase('a selected executable with a changed hash is refused',f=>{
+  selectTool(f,{...actualToolRef(process.execPath),sha256:'0'.repeat(64)});assert.throws(f.read);
+});
+checkCase('a worker-supplied v2 file is never treated as a contained receipt',f=>{f.write(f.path,f.packet.content);assert.throws(f.read);});
+checkCase('a stale controller profile cannot grant publication',f=>{f.profile.enabled=false;f.write(f.profile.profile_path,f.profile);assert.throws(f.read);});
+checkCase('changed selected controller code is refused',f=>{f.write(f.profile.source_refs[0].path,'changed');assert.throws(f.read);});
+checkCase('a failed or missing final controller outcome is readback only',f=>{f.write(join(f.attempt,'outcome.json'),{state:'held'},0o600);assert.throws(f.read);});
+checkCase('a clearing file cannot replace a Native rejection',f=>{f.write(join(f.attempt,'source_review/native/response.json'),{decision:'reject'},0o600);assert.throws(f.read);});
+checkCase('changed actual Native input cannot keep an old admission',f=>{f.write(join(f.attempt,'source_review/native/execution/stdin.raw'),'different',0o600);assert.throws(f.read);});
+checkCase('current source permission is required immediately before publication',f=>{f.options.verifySource=()=>({current:false});assert.throws(f.read);});
+checkCase('a symlinked clearance is refused',f=>{const target=join(f.root,'saved.json');fs.renameSync(f.path,target);fs.symlinkSync(target,f.path);assert.throws(f.read);});
+checkCase('unknown or unclosed Native terminal evidence is refused',f=>{f.write(join(f.attempt,'artifact_review/native/execution/terminal.json'),{returncode:0,normal_original_wait_closed:false},0o600);assert.throws(f.read);});
+
+}
+
 async function selfTest() {
   scrubProcessGitEnv();
   const root = realpathSync(mkdtempSync(join(tmpdir(), "brain-pr-st-")));
@@ -899,6 +1230,7 @@ async function selfTest() {
     catch (e) { check(`${name}: ${e.message.split("\n")[0]}`, e instanceof Refusal && e.message.includes(needle)); }
   };
   try {
+    await selfTestContainedReader(check);
     // Portable boundary fixture only: it runs a separate synthetic executable,
     // with the real export/argv/config transport. Upstream compatibility has its
     // own actual pinned-binary qualification; this never claims that proof.

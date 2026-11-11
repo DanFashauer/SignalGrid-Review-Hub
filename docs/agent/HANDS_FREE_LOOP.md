@@ -76,8 +76,14 @@ is compromised: rotate it and ask the owner before any branch deletion.
 The CLI refuses owner-reserved, safety-machinery, decision and governance
 paths, paths outside the repository, and a job whose title or result matches
 its private-path pattern (Mac home paths and the brain's directory names, a
-narrow denylist, not a scan); it does not scan the diff for private paths, and
-it does not certify arbitrary text as secret-free, run full preflight/breadth,
+narrow denylist, not a scan). Since 2026-11-11 it also applies a source rule
+(the job and every ancestor must be labelled as built from no private context
+and no retrieved knowledge), screens every exported byte for private paths and
+note markup, and runs a pinned credential scan that must first detect a
+synthetic credential. These are same-user, deterministic checks against
+accidental leaks: they do not stop a worker that mislabels its own job, and
+private prose that matches no pattern is stopped only by the source rule. The
+CLI does not certify arbitrary text as secret-free, run full preflight/breadth,
 perform independent reviews, or merge. Secret-safety review, full
 preflight/breadth and independent reviews remain separate requirements before
 Cloud DR-037 landing.

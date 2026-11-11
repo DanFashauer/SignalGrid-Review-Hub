@@ -17,6 +17,8 @@
 //   - its head sha equals the head the tick recorded (the receipt's head, or the
 //     head this script itself verified after an earlier refresh);
 //   - mergeable_state is exactly "behind" and auto-merge is still requested.
+//   - every check run on that head has completed (a running check is left to finish:
+//     exit 20, no update); an unreadable or partial check list is NOT TOUCHED.
 // After the PUT it GETs again and claims a refresh only if the head moved.
 //
 // Exit: 0 refreshed and verified | 20 nothing to do (open and not behind, or
@@ -100,6 +102,17 @@ if (pr.mergeable_state !== "behind") {
   notTouched(`PR ${number} mergeable_state is ${JSON.stringify(pr.mergeable_state)}, not "behind"`);
 }
 if (!pr.auto_merge) notTouched(`PR ${number} no longer has auto-merge requested; not the tick's delivery path`);
+
+// Wait while checks run on the head: an update replaces the head, and the CI workflow
+// cancels the run on the head it replaces. With mainline moving, refreshing every tick
+// would cancel validation over and over and spend all MAX_REFRESHES before one run
+// finished. An unread or partial check list is not "nothing is running": not touched.
+const runs = getJson(["api", `repos/${slug}/commits/${pinned}/check-runs?per_page=100`], `checks on ${pinned.slice(0, 12)}`);
+if (!Array.isArray(runs.check_runs) || !Number.isSafeInteger(runs.total_count) || runs.total_count > runs.check_runs.length) {
+  notTouched(`check list for ${pinned.slice(0, 12)} is incomplete (${Array.isArray(runs.check_runs) ? runs.check_runs.length : "no"} of ${JSON.stringify(runs.total_count)} runs read)`);
+}
+const running = runs.check_runs.filter(c => c?.status !== "completed").map(c => String(c?.name ?? "unnamed"));
+if (running.length) out(20, `PR ${number} is behind, but ${running.length} check(s) still run on ${pinned.slice(0, 12)} (${running.slice(0, 3).join(", ")}${running.length > 3 ? ", ..." : ""}); waiting, no update`);
 
 // Record the intent BEFORE the mutation: a crash between PUT and verification
 // leaves it, and every later run then refuses rather than guess.

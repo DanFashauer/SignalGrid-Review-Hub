@@ -38,6 +38,9 @@ else if (/pulls\\/\\d+$/.test(path)) {
   const pr = JSON.parse(JSON.stringify(s.pr));
   if (fs.existsSync(stF) && s.afterHead) pr.head.sha = s.afterHead;
   console.log(JSON.stringify(pr));
+} else if (/commits\\/[a-f0-9]{40}\\/check-runs/.test(path)) {
+  fail("checks");
+  console.log(JSON.stringify(s.checks || { total_count: 1, check_runs: [{ name: "gate", status: "completed", conclusion: "success" }] }));
 } else { process.stderr.write("unexpected " + a.join(" ")); process.exit(9); }
 `);
 chmodSync(join(bin, "gh"), 0o755);
@@ -117,6 +120,24 @@ for (const k of ["user", "list", "pr"]) {
   ok(r2.code === 20 && r2.puts.length === 0, "not behind (clean): nothing to do, no PUT");
   const r3 = scenario({ fail: ["put"] }).run();
   ok(r3.code === 21 && r3.puts.length === 1 && !/refreshed/.test(r3.out), "update-branch refused: reported, no refresh claimed");
+}
+
+console.log("lane-heartbeat-refresh: checks still running on the head are left to finish");
+{
+  let r = scenario({ checks: { total_count: 2, check_runs: [{ name: "gate", status: "in_progress", conclusion: null }, { name: "lint", status: "completed", conclusion: "success" }] } }).run();
+  ok(r.code === 20 && r.puts.length === 0 && /still run/.test(r.out), "a running check: exit 20, no update-branch", `${r.code} ${r.out}`);
+  r = scenario({ checks: { total_count: 1, check_runs: [{ name: "gate", status: "queued", conclusion: null }] } }).run();
+  ok(r.code === 20 && r.puts.length === 0, "a queued check: exit 20, no update-branch", `${r.code}`);
+  r = scenario({ checks: { total_count: 1, check_runs: [{ name: "gate", status: "completed", conclusion: "failure" }] } }).run();
+  ok(r.code === 0 && r.puts.length === 1, "every check completed (even failed): the behind PR is refreshed", `${r.code} ${r.out}`);
+  r = scenario({ checks: { total_count: 0, check_runs: [] } }).run();
+  ok(r.code === 0 && r.puts.length === 1, "no check runs at all: the behind PR is refreshed", `${r.code}`);
+  r = scenario({ checks: { total_count: 130, check_runs: [{ name: "gate", status: "completed", conclusion: "success" }] } }).run();
+  ok(r.code === 21 && r.puts.length === 0, "a partial check list (more runs than read): not touched", `${r.code}`);
+  r = scenario({ checks: { nope: true } }).run();
+  ok(r.code === 21 && r.puts.length === 0, "a check list with no runs array: not touched", `${r.code}`);
+  r = scenario({ fail: ["checks"] }).run();
+  ok(r.code === 21 && r.puts.length === 0, "GET error (checks): not touched", `${r.code}`);
 }
 
 console.log("lane-heartbeat-refresh: an unchanged head after the update is reported, not claimed");

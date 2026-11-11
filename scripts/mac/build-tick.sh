@@ -237,7 +237,7 @@ raise_hand() {
       }
       // A resolved hand whose cause recurs is raised again under a new id.
       hand.id = retryOf && retryOf.reraise ? "build-" + episode + "-again-" + retryOf.n : (retryOf && retryOf.handId) || "build-" + episode;
-      fs.writeFileSync(attempt + ".attempt.json", JSON.stringify({ at: stamp, state: "attempted; pending exact readback", receipt: attempt + ".submission.json", handId: hand.id, ...(retryOf ? { retryOf } : {}) }), { flag: "wx", mode: 0o600, flush: true });
+      fs.writeFileSync(attempt + ".attempt.json", JSON.stringify({ at: stamp, state: "attempted; pending exact readback", receipt: attempt + ".submission.json", handId: hand.id, ...(retryOf ? { retryOf } : {}) }) + "\n", { flag: "wx", mode: 0o600, flush: true });
       fs.writeFileSync(f, JSON.stringify([hand]));
       process.stdout.write(attempt);' \
       "$_ops" "$1" "${RUN_LOG:-launchd log ~/Library/Logs/signalgrid-build-tick.log}" "$_hand_records" "$STAMP" "$REPO_ROOT" 2>/dev/null)"; then

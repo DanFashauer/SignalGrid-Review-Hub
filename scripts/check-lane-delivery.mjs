@@ -493,6 +493,21 @@ control("successful unchanged ticks defer remote readback until a due observatio
     passed++; console.log(`PASS ${name}`);
   } catch (e) { failed++; console.error(`FAIL ${name}: ${e.message}`); }
 }
+// lane-repair's parseOwned accepts an intent only in the canonical form JSON.stringify(value)+"\n".
+// A producer that writes it without the newline has every one of its deliveries read back as
+// "original-intent-unverified". Check the build tick's actual writer, and the reader's rule.
+{
+  const name='the build tick writes its hand intent in the repair reader\'s canonical form';
+  try {
+    const build=readFileSync(join(ROOT,"scripts/mac/build-tick.sh"),"utf8");
+    const writes=build.split("\n").filter((line)=>/writeFileSync\(attempt \+ "\.attempt\.json"/.test(line));
+    assert.equal(writes.length,1,"exactly one intent writer in build-tick.sh");
+    assert.match(writes[0],/JSON\.stringify\(\{.*\}\) \+ "\\n", \{ flag: "wx"/,"the intent is JSON.stringify(...) + \"\\n\"");
+    const repair=readFileSync(join(ROOT,"scripts/lib/lane-repair.mjs"),"utf8");
+    assert.match(repair,/const encoded = value => Buffer\.from\(JSON\.stringify\(value\) \+ '\\n'\);/,"the reader's canonical form is JSON.stringify(value)+newline");
+    passed++; console.log(`PASS ${name}`);
+  } catch (e) { failed++; console.error(`FAIL ${name}: ${e.message}`); }
+}
 control("volatile successful estate counts do not defeat the two-hour keepalive",{tick:true,age:30},f=>{
  const r=f.runTick("ESTATE_OUTPUT='estate: 1 open; considered 1'\nrun_estate\nheartbeat\ntouch -t 202001010000 node_modules/.sg-estate-last\nSTAMP=20261030T020000Z\nRESULT=quiet\nESTATE_OUTPUT='estate: 2 open; considered 2'\nrun_estate\nheartbeat");
  assert.equal(r.status,0,r.stderr);assert.equal(f.deliveries().length,0);assert.match(r.stdout,/estate: 1 open/);assert.match(r.stdout,/estate: 2 open/);assert.equal(existsSync(join(f.root,"node_modules/.sg-estate-result")),false);

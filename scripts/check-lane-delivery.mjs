@@ -472,22 +472,24 @@ control("successful unchanged ticks defer remote readback until a due observatio
  assert.equal(r.status,0,r.stderr);assert.equal(f.deliveries().length,2);assert.equal(f.readbacks().length,1,"only the changed/due observation needs canonical readback");
 });
 // The owner check (lane-attempt-store ownedGuard) requires process.ppid === the tick shell's "$$".
-// Bash keeps a subshell as the helper's parent when a redirection sits inside $(...), so any
-// helper that is handed "$$" must be called with no redirection inside its substitution.
+// Stock /bin/bash 3.2 (what launchd runs on the Mac) forks a subshell for every $(...), so a
+// helper inside a substitution is never a direct child there; Bash 5.1+ hides this with an exec
+// shortcut, which is how the defect passed on Linux. Any helper handed "$$" must therefore run
+// as an ordinary command, with its output redirected to a file.
 {
-  const name='no tick helper that is handed "$$" runs under a redirection inside $(...)';
+  const name='no tick helper that is handed "$$" runs inside a command substitution';
   try {
     const tick=readFileSync(join(ROOT,"scripts/mac/lane-tick.sh"),"utf8");
-    const offenders=(src)=>src.split("\n").map((line,i)=>[i+1,line]).filter(([,line])=>!/^\s*#/.test(line)&&/\$\(\s*node\b[^\n]*"\$\$"[^\n]*[0-9]?>[&>]?[^\n]*\)"/.test(line)).map(([n])=>n);
-    assert.deepEqual(offenders(tick),[],"lane-tick.sh lines with a redirection inside an owner-checked substitution");
-    assert.deepEqual(offenders('  if x="$(node a.mjs readback "$s" "$$" 2>&1)"; then'),[1],"the matcher must catch the original defect");
-    assert.deepEqual(offenders('  x="$(node a.mjs readback "$s" "$$")"'),[],"the matcher must accept the direct-child form");
-    const probe=spawnSync("/bin/bash",["-c",'a="$("$N" -e "console.log(process.ppid)")"; b="$("$N" -e "console.log(process.ppid)" 2>&1)"; echo "$$ $a $b"'],{encoding:"utf8",env:{N:process.execPath,PATH:"/usr/bin:/bin"}});
-    const [shell,direct,redirected]=probe.stdout.trim().split(" ");
-    assert.equal(direct,shell,"a plain substitution keeps the helper a direct child of the shell");
-    // Reported, not asserted: whether a redirected substitution re-parents the helper varies by
-    // Bash version; the tick must be correct either way, which the static rule above enforces.
-    if (redirected === shell) console.log("note: this Bash keeps a redirected substitution's helper as a direct child");
+    const offenders=(src)=>src.split("\n").map((line,i)=>[i+1,line]).filter(([,line])=>!/^\s*#/.test(line)&&/\$\(\s*node\b[^\n]*"\$\$"/.test(line)).map(([n])=>n);
+    assert.deepEqual(offenders(tick),[],"lane-tick.sh lines that run an owner-checked helper inside $(...)");
+    assert.deepEqual(offenders('  if x="$(node a.mjs readback "$s" "$$" 2>&1)"; then'),[1],"the matcher must catch the redirected form");
+    assert.deepEqual(offenders('x="$(node "$H" tick-acquire "$R" "$$" ${g:+"$g"})"'),[1],"the matcher must catch the plain form bash 3.2 also breaks");
+    assert.deepEqual(offenders('  node a.mjs readback "$s" "$$" >"$f" 2>&1'),[],"the matcher must accept the direct-child form");
+    const probe=spawnSync("/bin/bash",["-c",'f="$(mktemp)"; "$N" -e "console.log(process.ppid)" >"$f" 2>&1; a="$(cat "$f")"; rm -f "$f"; b="$("$N" -e "console.log(process.ppid)")"; echo "$$ $a $b $BASH_VERSION"'],{encoding:"utf8",env:{N:process.execPath,PATH:"/usr/bin:/bin"}});
+    const [shell,direct,substituted,version]=probe.stdout.trim().split(" ");
+    assert.equal(direct,shell,"a helper run as an ordinary command is a direct child of the shell (bash "+version+")");
+    // Reported, not asserted: the substitution result depends on the Bash version.
+    console.log(`note: /bin/bash ${version}: a helper inside $(...) ${substituted===shell?"IS":"is NOT"} a direct child`);
     passed++; console.log(`PASS ${name}`);
   } catch (e) { failed++; console.error(`FAIL ${name}: ${e.message}`); }
 }

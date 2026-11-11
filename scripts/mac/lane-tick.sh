@@ -104,12 +104,18 @@ _tick_start="$(LC_ALL=C TZ=UTC0 ps -o lstart= -p $$ | sed 's/^ *//; s/ *$//')"
 _tick_err="$(mktemp "${TMPDIR:-/tmp}/sg-tick-acquire.XXXXXX" 2>/dev/null)" || {
   say "RAISED HAND: cannot create a temp file under ${TMPDIR:-/tmp}; the tick cannot record why ownership would hold; no work started"
   exec 8<&-; exit 1; }
-# Redirect the shell's own stderr around the call: a redirection inside $(...) would
-# cost bash its exec shortcut, and the helper must stay a direct child of this shell.
-if [ -n "$_tick_err" ]; then exec 9>&2 2>"$_tick_err"; fi
-_tick_acquired="$(node "$TICK_LOCK_HELPER" tick-acquire "$TICK_LOCK_ROOT" "$$" ${_tick_pgid:+"$_tick_pgid"} ${_tick_pgid:+${_tick_start:+"$_tick_start"}})"
+# The helper must be a DIRECT child of this shell: the store checks process.ppid against
+# "$$". No command substitution, then. Bash 5.1+ execs a lone command inside $(...) in
+# place, but the launchd tick runs stock /bin/bash 3.2, which always forks a subshell
+# there; measured on the Mac runner 2026-11-11, a plain $(node ...) had a different
+# parent. So the helper runs as an ordinary command with its output sent to files.
+_tick_out="$(mktemp "${TMPDIR:-/tmp}/sg-tick-acquire-out.XXXXXX" 2>/dev/null)" || {
+  rm -f "$_tick_err"
+  say "RAISED HAND: cannot create a temp file under ${TMPDIR:-/tmp}; the tick cannot read its ownership answer; no work started"
+  exec 8<&-; exit 1; }
+node "$TICK_LOCK_HELPER" tick-acquire "$TICK_LOCK_ROOT" "$$" ${_tick_pgid:+"$_tick_pgid"} ${_tick_pgid:+${_tick_start:+"$_tick_start"}} >"$_tick_out" 2>"$_tick_err"
 _tick_acquire_status=$?
-if [ -n "$_tick_err" ]; then exec 2>&9 9>&-; fi
+_tick_acquired="$(cat "$_tick_out" 2>/dev/null)"; rm -f "$_tick_out"
 _tick_acquire_msg=""
 if [ -n "$_tick_err" ]; then _tick_acquire_msg="$(cat "$_tick_err" 2>/dev/null)"; rm -f "$_tick_err"; fi
 if [ -n "$_tick_acquire_msg" ]; then printf '%s\n' "$_tick_acquire_msg" >&2; fi
@@ -130,16 +136,15 @@ if [ "$_tick_acquire_status" != "0" ]; then
   case "$_tick_acquire_msg" in
     *holding*)
       if [ "${DRY:-0}" = "1" ]; then say "dry-run: would raise a hand: tick recovery holding; $_tick_acquire_msg"
-      # No redirection inside $(...): the helper must stay a direct child of this shell.
       else
-        # Its stderr (a thrown reason) is captured by redirecting the shell around the
-        # call, as for tick-acquire: a redirection inside $(...) would break custody.
-        _tick_hold_err="$(mktemp "${TMPDIR:-/tmp}/sg-tick-hold.XXXXXX" 2>/dev/null)" || _tick_hold_err=""
-        if [ -n "$_tick_hold_err" ]; then exec 9>&2 2>"$_tick_hold_err"; fi
-        _tick_hold_out="$(node "$TICK_LOCK_HELPER" raise-hold "$TICK_LOCK_ROOT" "$$" "$_tick_acquire_msg")"
-        if [ -n "$_tick_hold_err" ]; then
-          exec 2>&9 9>&-
-          _tick_hold_out="$_tick_hold_out$(cat "$_tick_hold_err" 2>/dev/null)"; rm -f "$_tick_hold_err"
+        # A direct child, as for tick-acquire: no command substitution around the helper.
+        # Its stdout and stderr (a thrown reason) go to one file, read back afterwards.
+        _tick_hold_file="$(mktemp "${TMPDIR:-/tmp}/sg-tick-hold.XXXXXX" 2>/dev/null)" || _tick_hold_file=""
+        if [ -n "$_tick_hold_file" ]; then
+          node "$TICK_LOCK_HELPER" raise-hold "$TICK_LOCK_ROOT" "$$" "$_tick_acquire_msg" >"$_tick_hold_file" 2>&1
+          _tick_hold_out="$(cat "$_tick_hold_file" 2>/dev/null)"; rm -f "$_tick_hold_file"
+        else
+          _tick_hold_out="no temp file under ${TMPDIR:-/tmp}; the hold hand was not raised"
         fi
         say "RAISED HAND: tick recovery holding; $_tick_hold_out"
       fi ;;
@@ -587,17 +592,17 @@ JS
   # A due/changed observation checks the original submission before any new one.
   # Unchanged ticks do not fetch and write duplicate observations every five minutes.
   if [ -n "$_hb_submission" ]; then
-    # No redirection inside $(...): the owner check needs this helper to be a direct child
-    # of the tick shell ("$$"). A `2>&1` inside the substitution makes Bash keep a subshell
-    # as the helper's parent, and every due readback then failed the owner check, held the
-    # heartbeat and never sent another. stderr is captured around the call, as tick-acquire does.
-    _hb_readback_err="$(mktemp "${TMPDIR:-/tmp}/sg-hb-readback.XXXXXX" 2>/dev/null)" || _hb_readback_err=""
-    if [ -n "$_hb_readback_err" ]; then exec 9>&2 2>"$_hb_readback_err"; fi
-    _hb_readback="$(node scripts/lane-deliver.mjs readback "$_hb_submission" --pending-cadence "${TICK_OWNER_TOKEN:-}" "$$")"
-    _hb_readback_exit=$?
-    if [ -n "$_hb_readback_err" ]; then
-      exec 2>&9 9>&-
-      _hb_readback="$_hb_readback$(cat "$_hb_readback_err" 2>/dev/null)"; rm -f "$_hb_readback_err"
+    # A direct child, as for tick-acquire: the owner check compares process.ppid with "$$",
+    # and stock bash 3.2 forks a subshell for every $(...). With the helper inside a
+    # substitution every due readback failed that check, the tick held, and no later
+    # heartbeat was sent. Output goes to a file and is read back.
+    _hb_readback_file="$(mktemp "${TMPDIR:-/tmp}/sg-hb-readback.XXXXXX" 2>/dev/null)" || _hb_readback_file=""
+    if [ -n "$_hb_readback_file" ]; then
+      node scripts/lane-deliver.mjs readback "$_hb_submission" --pending-cadence "${TICK_OWNER_TOKEN:-}" "$$" >"$_hb_readback_file" 2>&1
+      _hb_readback_exit=$?
+      _hb_readback="$(cat "$_hb_readback_file" 2>/dev/null)"; rm -f "$_hb_readback_file"
+    else
+      _hb_readback="no temp file under ${TMPDIR:-/tmp}; readback not run"; _hb_readback_exit=1
     fi
     if [ "$_hb_readback_exit" = "0" ]; then
       say "$_hb_readback"

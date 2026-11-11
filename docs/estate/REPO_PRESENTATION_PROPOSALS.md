@@ -10,12 +10,7 @@
 >
 > Everything below follows the standing guardrails: no production claims, no
 > MDM-replacement claims; connectors are described as evidence-only.
->
-> **Correction, 2026-11-11.** The SignalGrid-Review-Hub website field no longer
-> points at replit.com: `gh repo view --json homepageUrl` returned
-> `https://danfashauer.github.io/work/signalgrid.html`, and the owner said the
-> Replit project no longer exists. Read the replit.com lines below as history for
-> that repository. The private repository's field was not re-read.
+
 
 ---
 
@@ -27,6 +22,10 @@
   (replaces the replit.com link; goes live once the Pages deployment-branch
   setting clears — open item 2 in the estate report. Until then it renders the
   README, which is still better than Replit.)
+  Read on 2026-11-11 with `gh repo view --json homepageUrl`: the field now holds
+  `https://danfashauer.github.io/work/signalgrid.html`, not a replit.com address,
+  and the owner said that day that the Replit project is gone. The private
+  repository's field was not re-read.
 - **Topics:** `device-trust` `zero-trust` `shared-devices` `frontline`
   `mdm` `typescript` `deterministic-testing`
 

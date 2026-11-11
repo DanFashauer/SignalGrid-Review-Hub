@@ -7,23 +7,24 @@
 # rejected on purpose: the 5-minute tick commits heartbeats all day (103 lane-mail
 # commits vs 56 real ones in the 24h measured), so pushes are not a signal.
 #
-# WHAT EACH JOB UNIQUELY PROVES (things GitHub-hosted CI structurally cannot):
+# WHAT EACH JOB PROVES:
 #   pr-mac-checks  · proof:sim-requests on a FULL clone — a sim result whose provenance
 #                    commit never reached origin is fatal here and TOLERATED on CI's
-#                    depth-1 clone (check-sim-requests.mjs says so); the runner's first
+#                    depth-1 clone (check-sim-requests.mjs says so); the original runner's first
 #                    job caught exactly one (0a40d1b4).
 #                  · preflight on macOS — the gates must behave the same on the platform
 #                    the Mac lane runs; Apple git's grep -E once turned 19 false failures
-#                    (10deac53). Medium weight, a few minutes, acceptable in daytime.
+#                    (10deac53). Run these public-source checks on a standard hosted
+#                    ARM64 Mac so PRs do not reserve the local brain's only host.
 #   nightly        · lane=both: the full harness incl. the darwin web build, then preflight.
 #                  · lane=mcp:  the signalgrid-mcp sibling on real macOS, both halves
 #                    against the shared posture-report contract. Read-only; no evidence
 #                    is minted (a runner-minted evidence file is its own decision record).
 #
-# SECURITY. Self-hosted runner + pull_request: GitHub runs this automatically only for
-# PRs from branches of THIS repository (both lanes push to origin); a PR from a fork
-# needs a maintainer's approval first (GitHub's default for outside collaborators).
-# Never loosen that setting: an approved fork PR executes on the owner's Mac.
+# SECURITY. PR checks use a fresh GitHub-hosted Mac and public repository material.
+# The hardware/MCP nightly jobs retain the existing self-hosted runner. Do not
+# loosen GitHub's approval setting for outside collaborators. Standard hosted
+# runners are free for this public repository; this selects no larger paid runner.
 #
 # NOT an agent lane: it writes nothing and merges nothing, so it is not declared in
 # docs/agent/scheduled-routines.json (that registry is for always-on agent lanes with
@@ -51,10 +52,10 @@ jobs:
   pr-mac-checks:
     if: github.event_name == 'pull_request'
     name: PR — Mac-only checks (full-clone provenance, preflight on macOS)
-    runs-on: [self-hosted, macOS, ARM64, signalgrid-mac]
-    # 660m admission (local chain ceiling 645m + 15m), 40m work, 20m setup/upload margin.
-    # Self-hosted job limit is 5 days; the owning step uses internal caps, no step timeout.
-    timeout-minutes: 720
+    runs-on: macos-15
+    # A fresh hosted VM has no local-brain admission queue. Preserve the 40m
+    # complete-work bound and allow 20m for setup, teardown and log upload.
+    timeout-minutes: 60
     concurrency:
       group: mac-pr-${{ github.event.pull_request.number }}
       cancel-in-progress: true
@@ -62,6 +63,12 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
+
+      - name: Setup project pnpm
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6; same pin as the main CI
+        with:
+          version: 10.28.1
+          run_install: false
 
       # PIN THE RUNTIME. This is the only lane that ran on whatever node happened to
       # be on the machine's PATH; every other lane in this repository pins 22 through
@@ -97,7 +104,7 @@ jobs:
           # STARTS and skip the chain if it is closed; an unreadable state runs it (fail-closed).
           pr_state=$(gh api "repos/$REPO/pulls/$PR_NUMBER" --jq .state 2>/dev/null) || pr_state=unknown
           if [ "$pr_state" = closed ]; then echo "PR #$PR_NUMBER is closed; the Mac verification is skipped."; exit 0; fi
-          bash scripts/mac/ci-host-verification.sh 24eff86a940099e0725d474d1d5520bfbc71d368 39600 2400 <<'CI_CHAIN'
+          bash scripts/mac/ci-host-verification.sh 24eff86a940099e0725d474d1d5520bfbc71d368 60 2400 <<'CI_CHAIN'
           set -u
           code=0
           install_code=0

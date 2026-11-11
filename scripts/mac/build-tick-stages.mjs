@@ -1834,10 +1834,10 @@ git() {
     ok("CI actual MCP body still runs joint verification after a failed sibling check", mcp.status === 7
       && /mcp-verify\npnpm:run verify:all --require-mcp\nteardown\n$/.test(readFileSync(events, "utf8")), `${mcp.status} ${mcp.stderr}`);
     const pin = "24eff86a940099e0725d474d1d5520bfbc71d368";
-    for (const [file, total, work] of [["mac-runner-auto.yml", 720, 2400], ["mac-runner-harness.yml", 780, 5400]]) {
+    for (const [file, total, admission, work] of [["mac-runner-auto.yml", 60, 60, 2400], ["mac-runner-harness.yml", 780, 39600, 5400]]) {
       const workflow = readFileSync(join(HERE, "../../.github/workflows", file), "utf8");
       const owns = (text) => new RegExp(`^    timeout-minutes: ${total}$`, "m").test(text)
-        && text.includes(`bash scripts/mac/ci-host-verification.sh ${pin} 39600 ${work} <<'CI_CHAIN'`)
+        && text.includes(`bash scripts/mac/ci-host-verification.sh ${pin} ${admission} ${work} <<'CI_CHAIN'`)
         && !/^ {8}timeout-minutes:/m.test(text) && (text.match(/^ {8}run:/gm) ?? []).length === 1
         && text.includes("          pnpm install --frozen-lockfile") && text.includes("          bash scripts/mac/free-test-port.sh || exit $?")
         && text.includes("        if: always()") && text.includes("uses: actions/upload-artifact@");

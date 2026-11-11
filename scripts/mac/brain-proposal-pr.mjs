@@ -1099,11 +1099,15 @@ function fixture() {
   const clearances = join(root, 'clearances');
   for (const p of [base, join(base, 'brain-state'), root, join(root, 'attempts'), attempt, clearances]) fs.mkdirSync(p, { mode: 0o700 });
   const write = (path, value, mode = 0o400) => {
-    if (fs.existsSync(path)) fs.chmodSync(path, 0o600);
-    fs.writeFileSync(path, Buffer.isBuffer(value) ? value : typeof value === 'string' ? value : JSON.stringify(canonical(value)) + '\n', { mode });
-    fs.chmodSync(path, mode);
-    const s = fs.statSync(path);
-    return { path, sha256: sha(fs.readFileSync(path)), mode, uid: s.uid, bytes: s.size, dev: s.dev, ino: s.ino };
+    const data = Buffer.isBuffer(value) ? value : Buffer.from(typeof value === 'string' ? value : JSON.stringify(canonical(value)) + '\n');
+    // Replace only a fixture entry; create exclusively and use its descriptor throughout.
+    try { fs.unlinkSync(path); } catch (e) { if (e.code !== 'ENOENT') throw e; }
+    const fd = fs.openSync(path, fs.constants.O_RDWR | fs.constants.O_CREAT | fs.constants.O_EXCL | fs.constants.O_NOFOLLOW, 0o600);
+    try {
+      fs.writeFileSync(fd, data); fs.fchmodSync(fd, mode);
+      const s = fs.fstatSync(fd);
+      return { path, sha256: sha(data), mode, uid: s.uid, bytes: s.size, dev: s.dev, ino: s.ino };
+    } finally { fs.closeSync(fd); }
   };
   const refs = [];
   for (const name of ['signalgrid_contained_publication.py', 'signalgrid_providers.py',
@@ -1184,11 +1188,15 @@ function fixture() {
 function checkCase(name, run) { const f=fixture(); try { run(f); check('(contained) '+name, true); } catch { check('(contained) '+name, false); } finally { f.cleanup(); } }
 checkCase('complete contained producer evidence crosses the real content validator',f=>assert.deepEqual(f.read().value.request,f.request));
 function actualToolRef(path) {
-  path=fs.realpathSync(path);const s=fs.statSync(path),hash=createHash('sha256');
-  const fd=fs.openSync(path,'r'),buffer=Buffer.alloc(1024*1024);
-  try {for(let n;(n=fs.readSync(fd,buffer,0,buffer.length,null))>0;)hash.update(buffer.subarray(0,n));}
-  finally {fs.closeSync(fd);}
-  return {path,sha256:hash.digest('hex'),mode:s.mode&0o777,uid:s.uid,bytes:s.size};
+  path=fs.realpathSync(path);
+  const fd=fs.openSync(path,fs.constants.O_RDONLY|fs.constants.O_NOFOLLOW);
+  try {
+    const s=fs.fstatSync(fd),hash=createHash('sha256'),buffer=Buffer.alloc(1024*1024);
+    for(let n;(n=fs.readSync(fd,buffer,0,buffer.length,null))>0;)hash.update(buffer.subarray(0,n));
+    const end=fs.fstatSync(fd);
+    for(const key of ['dev','ino','size','mtimeMs','ctimeMs','mode','uid','nlink']) assert.equal(end[key],s[key]);
+    return {path,sha256:hash.digest('hex'),mode:s.mode&0o777,uid:s.uid,bytes:s.size};
+  } finally {fs.closeSync(fd);}
 }
 function selectTool(f,ref) {
   f.profile.source_refs.push(ref);f.packet.profile_ref=f.write(f.profile.profile_path,f.profile);f.save();

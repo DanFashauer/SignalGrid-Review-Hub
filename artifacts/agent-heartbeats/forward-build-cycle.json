@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-11-09T00:15:55.561Z",
-  "result": "22:10Z and 00:10Z fires (11-08/09). Landed under DR-037: #1945 (estate queue no longer refreshes a behind PR while any check on its head is still running, the Mac-only check included; Root's ask after #1932 and #1937 lost green Mac runs to refreshes) as f17cbf2b. #1940 (reviewer helper, stacked on #1937) gained real-Darwin ACL cases at f21312b4 after the Mac's review; the Mac's independent fixture passed 54/54 + 4/4 on 62d858af. No wave dispatched (credit-saving). In flight H/S/O = 0/0/0. sub-brains: signalgrid-mcp #17 unchanged (OAuth token, owner-only). Owner queue: merge #1937 (then #1940 lands), #1932, #1900; one line on #1121; the OAuth token."
+  "firedAt": "2026-11-11T03:15:31.817Z",
+  "result": "02:10Z fire: acted. #1903 (owner-approved fix for the #1698 HIGH: the tick refreshes its own behind heartbeat PR) refreshed onto mainline on the Mac's written decision and pushed as 654f6e51; local preflight and breadth green; lands under DR-037 when CI is green. No wave dispatched (credit-saving). In flight H/S/O = 0/0/0. sub-brains: signalgrid-mcp #17 unchanged (OAuth token, owner-only). Owner queue unchanged: #1937 (blocked: phase-pr-evidence failed, one open thread, Codex's), #1932, #1944, #1900, tick PRs #1947 to #1949; one line on #1121; the OAuth token."
 }

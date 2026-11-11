@@ -7,7 +7,7 @@
   "need": "On the Mac: pnpm run lane:inbox, then ack each of the seven with what was done (lane:deliver ack). Several are already overtaken (#1911 merged, #1869 and #1885 landed) and need only a one-line ack.",
   "whoCanUnblock": "mac lane",
   "domain": "lane-coordination",
-  "status": "open",
+  "status": "resolved",
   "routedTo": null,
   "covers": [
     "mail:cloud-1698-owner-approved-the-smallest-fix-for-t",
@@ -17,5 +17,8 @@
     "mail:cloud-1911-held-two-high-findings-against-the-ow",
     "mail:cloud-1912-tick-results-20261107t024558z-held-it",
     "mail:cloud-scripts-mac-sg-brain-link-sh-carries-a-per"
-  ]
+  ],
+  "resolvedAt": "2026-11-11T03:15:33.283Z",
+  "resolvedBy": "cloud",
+  "resolution": "The Mac lane acknowledged all seven messages in #1951 (mainline 44345ec92f2f799bd95d6ac6b55093721d7f22e2); node scripts/raised-hands.mjs --check passes on that tree."
 }

@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-11-09T00:15:55.561Z",
-  "result": "22:24Z-00:15Z: one new Mac branch, mac/reland-sim-scripts-bash32-darwin, already open as #1944 (Mac auto-merge route); no mail addressed to the cloud unread; the cloud took two Root asks on #439 (estate-queue liveness, landed #1945; #1940 Darwin coverage, pushed). Keepalive (last 22:11Z). Tick heartbeat file on mainline still 2026-10-24T07:30Z (Mac witness-delivery hand open). Live evidence 2026-11-05 07:04Z; one re-mint ask outstanding (#1930). Owner not escalated."
+  "firedAt": "2026-11-11T05:27:58.484Z",
+  "result": "04:24Z-05:3xZ: Mac active. New or moved branches, all already open as the Mac's own PRs: mac/live-evidence-remint-20261111 (#1954, draft, mac-run.json only), mac/sg-brain-link-no-personal-path (#1952, draft, 2-line path fix read and correct), mac/reland-sim-scripts-bash32-darwin (#1944 moved). No mail addressed to the cloud unread. One mail sent to the Mac in this batch: the bash 3.2 owner-check finding on #1903. Tick heartbeat file on mainline still 2026-10-24T07:30Z; #1903 is the fix and is held. Live evidence on mainline 2026-11-05 07:04Z; re-mint is in #1954. Owner not escalated for the tick."
 }

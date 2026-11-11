@@ -68,7 +68,8 @@
 // rides the tick PR; DR-037 decides), and not the decision core (lib/*, /v1, native ports untouched).
 import { createHash } from "node:crypto";
 import { execFileSync, spawnSync } from "node:child_process";
-import { existsSync, readFileSync, readdirSync, writeFileSync, mkdirSync } from "node:fs";
+import { deliveryRecordDirectory, retryHead, setAsideRefusedAttempt } from "./lib/lane-attempt-store.mjs";
+import { existsSync, lstatSync, readFileSync, readdirSync, writeFileSync, mkdirSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { auditBacklogOwnership, parseRows, rosterIds, statusText } from "./check-backlog-ownership.mjs";
@@ -87,13 +88,15 @@ const ROUTINES_REL = "docs/agent/scheduled-routines.json";
 const REQ_DIR_REL = "artifacts/sim-requests";
 const RES_DIR_REL = "artifacts/sim-results";
 const EVIDENCE_REL = "artifacts/live-evidence/mac-run.json";
-/** The tick's liveness record, delivered straight to mainline by lane-deliver at least every ~25 min:
+/** The tick's liveness record, submitted through a protected mail PR on a changed
+ *  outcome or a two-hour keepalive (canonical freshness depends on that PR merging):
  *  the FRESHNESS WITNESS every reader bounds on (the state itself is rewritten only on a decision). */
 const HEARTBEAT_REL = "artifacts/agent-heartbeats/mac-lane-tick.json";
-/** What this machine last DELIVERED (decision address + mailed escalation ids). Lives under the
+/** What this machine last SUBMITTED (decision address + pending escalation ids). Lives under the
  *  gitignored node_modules/ like the tick's own heartbeat stamps, so it survives the tick returning
  *  its worktree to origin/SignalGrid_Alpha — the tracked state file does not. The tick's failure arm
- *  removes it, so a delivery that never reached origin is re-delivered on the next tick. */
+ *  may remove it to re-derive state. Independent immutable escalation attempts survive that removal;
+ *  neither this stamp nor an exit 0 is proof of canonical delivery. */
 const STAMP_REL = "node_modules/.sg-objective-loop-last.json";
 
 // ── Declared in CODE, on purpose (scripts/** is SAFETY_MACHINERY) ────────────────────────
@@ -392,8 +395,9 @@ export function finalize(evaluation, ranked) {
 /**
  * How a READER must treat a committed state. The state file is rewritten only when the DECISION
  * changes (quiet by design), so its own instant cannot say whether the Mac is still deriving it.
- * The FRESHNESS WITNESS is the tick's heartbeat — delivered to mainline at least every ~25 min while
- * the tick runs, and carrying the loop's verdict in its result string since DR-056. A state is
+ * The FRESHNESS WITNESS is the tick's canonical heartbeat — submitted on changed outcomes or a
+ * two-hour keepalive, subject to its protected PR landing. Its result string carries the loop's
+ * verdict since DR-056. A state is
  * current only when that witness is within the state's bound AND names the same verdict; anything
  * else (no heartbeat, a stale one, one naming a different verdict, an unparseable instant) reads
  * `unknown` — never the recorded verdict. Pure.
@@ -580,7 +584,7 @@ function emit(state, { write, deliver }) {
   // machine already pushed on an unmerged tick branch): the tick returns its worktree to mainline
   // after every push, so the tracked copy alone would re-cut a branch every five minutes.
   const changed = prior?.decisionAddress !== state.decisionAddress && stamp?.decisionAddress !== state.decisionAddress;
-  const delivered = new Set([...(prior?.escalations ?? []).map((e) => e.id), ...(stamp?.deliveredEscalations ?? [])]);
+  const submitted = new Set([...(prior?.escalations ?? []).map((e) => e.id), ...(stamp?.submittedEscalations ?? stamp?.deliveredEscalations ?? [])]);
   const lines = [];
   const wrote = [];
   if (write && changed) {
@@ -607,18 +611,81 @@ function emit(state, { write, deliver }) {
     if (state.queue.some((q) => q.queuedAs) && changed) writeFileSync(join(ROOT, STATE_REL), JSON.stringify(state, null, 2) + "\n");
   }
   if (deliver) {
+    const queueRepair = attempt => {
+      // This producer records DATA only. The actual lane-tick FD8 consumer owns
+      // any different uncertainty notice; the original escalation stays consumed.
+      const status = spawnSync(process.execPath, [join(ROOT, "scripts/lib/lane-repair.mjs"),
+        "repair-status", ROOT, "objective", attempt], { cwd: ROOT, encoding: "utf8" });
+      if (!status.error && !status.signal && status.status === 2) {
+        lines.push("Original escalation parent and source-bound push completed normally; no uncertainty repair DATA needed. Canonical landing remains unverified");
+        return false;
+      }
+      const repair = spawnSync(process.execPath, [join(ROOT, "scripts/lib/lane-repair.mjs"),
+        "request", ROOT, "objective", attempt], { cwd: ROOT, encoding: "utf8" });
+      if (repair.error || repair.signal || repair.status !== 0) {
+        lines.push("RAISED HAND: escalation repair DATA request is unconfirmed; original remains READBACK ONLY");
+      } else lines.push("Escalation repair DATA recorded; original delivery remains unverified");
+      return true;
+    };
     for (const e of state.escalations) {
-      if (delivered.has(e.id)) continue;
-      const r = spawnSync(process.execPath, [join(ROOT, "scripts/lane-deliver.mjs"), "send", `objective-loop: ${e.id} — needs ${e.clears}`, `${e.asks}\n\n(Raised by scripts/objective-loop.mjs on the Mac tick, DR-056. Verdict ${state.verdict}; state ${STATE_REL} @ ${state.derivedAtCommit ?? "?"}. Sent once, on the first tick this escalation appeared; it stays in the state file until cleared.)`], { cwd: ROOT, encoding: "utf8" });
-      lines.push(r.status === 0 ? `mailed new escalation ${e.id}` : `WARN could not mail escalation ${e.id} (lane-deliver exit ${r.status})`);
-      if (r.status === 0) delivered.add(e.id);
+      let attempt;
+      try {
+        const records = deliveryRecordDirectory(ROOT);
+        // A refused original stays in place; follow its retry chain to the current attempt.
+        const rootName = "objective-" + createHash("sha256").update(e.id).digest("hex");
+        let name = retryHead(records, rootName);
+        attempt = join(records, name);
+        // A tracked/stamp id is not proof of a known child terminal or landing.
+        // Inspect the preserved attempt even when older state calls it submitted.
+        let hasEvidence = readdirSync(records).some(file => file.startsWith(name + "."));
+        let prior = null;
+        try { prior = JSON.parse(readFileSync(attempt + ".terminal.json", "utf8")); } catch { /* unknown stays held below */ }
+        let retryOf = null;
+        // A marker-backed successor with no evidence is a retry that never started
+        // (interrupted after its marker): start it now, whatever the tracked state says.
+        if (name !== rootName && !hasEvidence) { retryOf = { successor: name, resumed: true, stamp: state.derivedAt }; submitted.delete(e.id); }
+        // Exit 1/2 is retried only when a readback proves nothing was published
+        // (shared rule; deterministic successor prefix, no clock or randomness here).
+        const retry = hasEvidence && prior && !prior.signal && !prior.error && (prior.status === 1 || prior.status === 2) ?
+          setAsideRefusedAttempt(ROOT, records, name, prior.status, "derive") : null;
+        if (retry?.successor) {
+          retryOf = { ...retry, stamp: state.derivedAt }; name = retry.successor; attempt = join(records, name);
+          hasEvidence = false; submitted.delete(e.id);
+        }
+        if (submitted.has(e.id) || hasEvidence) {
+          if (queueRepair(attempt)) lines.push(`RAISED HAND: escalation ${e.id} original attempt retained; READBACK ONLY`);
+          continue;
+        }
+        writeFileSync(attempt + ".attempt.json", JSON.stringify({ at: state.derivedAt, escalation: e.id,
+          state: "attempted; pending exact readback", receipt: attempt + ".submission.json", ...(retryOf ? { retryOf } : {}) }) + "\n", { flag: "wx", mode: 0o600, flush: true });
+      } catch {
+        if (attempt) queueRepair(attempt);
+        lines.push(`RAISED HAND: escalation ${e.id} already attempted or its intent cannot be preserved; READBACK ONLY (${attempt ? attempt + ".submission.json" : "shared record store unavailable"})`);
+        continue;
+      }
+      const r = spawnSync(process.execPath, [join(ROOT, "scripts/lane-deliver.mjs"), "send", `objective-loop: ${e.id} — needs ${e.clears}`, `${e.asks}\n\n(Raised by scripts/objective-loop.mjs on the Mac tick, DR-056. Verdict ${state.verdict}; state ${STATE_REL} @ ${state.derivedAtCommit ?? "?"}. Sent once, on the first tick this escalation appeared; it stays in the state file until cleared.)`, "--receipt", attempt + ".submission.json"], { cwd: ROOT, encoding: "utf8" });
+      // Sync the actual independent parent terminal before requesting repair DATA.
+      let terminalRecorded = false;
+      try {
+        writeFileSync(attempt + ".terminal.json", JSON.stringify({ status: r.status, signal: r.signal ?? null,
+          error: r.error?.message ?? null, stdout: r.stdout ?? "", stderr: r.stderr ?? "" }) + "\n", { flag: "wx", mode: 0o600, flush: true });
+        terminalRecorded = true;
+      } catch { lines.push(`RAISED HAND: escalation ${e.id} terminal recording failed; READBACK ONLY`); }
+      const accepted = terminalRecorded && !r.error && !r.signal && r.status === 0;
+      // Only a proven prepublication refusal (no receipt) skips repair DATA; it is retried next tick.
+      let receiptAbsent = false;
+      try { lstatSync(attempt + ".submission.json"); } catch (error) { receiptAbsent = error.code === "ENOENT"; }
+      const refused = !r.error && !r.signal && (r.status === 1 || r.status === 2) && receiptAbsent;
+      if (terminalRecorded && !accepted && !refused) queueRepair(attempt);
+      lines.push(accepted ? `escalation ${e.id} submitted for protected PR merge` : `WARN escalation ${e.id} submission unconfirmed (lane-deliver exit ${r.status}); read back its original attempt`);
+      if (accepted) submitted.add(e.id);
     }
   }
   if (write) {
     try {
       mkdirSync(dirname(join(ROOT, STAMP_REL)), { recursive: true });
-      writeFileSync(join(ROOT, STAMP_REL), JSON.stringify({ decisionAddress: state.decisionAddress, deliveredEscalations: [...delivered], at: state.derivedAt }) + "\n");
-    } catch (e) { lines.push(`WARN could not write the delivery stamp ${STAMP_REL} (${e.message.split("\n")[0]}) — the next tick may re-deliver`); }
+      writeFileSync(join(ROOT, STAMP_REL), JSON.stringify({ decisionAddress: state.decisionAddress, submittedEscalations: [...submitted], at: state.derivedAt }) + "\n");
+    } catch (e) { lines.push(`WARN could not write the delivery stamp ${STAMP_REL} (${e.message.split("\n")[0]}) — independent attempt records keep consumed escalations held`); }
   }
   const met = state.criteria.filter((c) => c.state === "met").length;
   lines.unshift(`objective-loop: ${state.verdict} — ${met}/${state.criteria.length} criteria met; next: ${state.tasks[0]?.title ?? "none"}; escalations: ${state.escalations.map((e) => e.id).join(", ") || "none"}; ${write ? (changed ? "state written" : "quiet (decision unchanged)") : "dry run"}`);

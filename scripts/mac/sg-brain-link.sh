@@ -22,6 +22,8 @@
 # =============================================================================
 set -uo pipefail
 
+if [ "$(uname -s)" != "Darwin" ]; then echo "sg-brain-link.sh: macOS only" >&2; exit 1; fi
+
 REPO="/Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub"
 KNOWLEDGE="$HOME/Library/Mobile Documents/com~apple~CloudDocs/Documents/SignalGrid"
 REF="$REPO/reference"

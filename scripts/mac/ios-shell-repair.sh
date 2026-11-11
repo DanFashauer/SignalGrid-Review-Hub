@@ -79,6 +79,10 @@ if [ "${1:-}" = "--self-check" ]; then
   summary_exit; exit $?
 fi
 
+# After the --self-check branch on purpose: check-sim-scripts-selfcheck.mjs runs that
+# branch on the Linux CI runner (rule c), and a guard ahead of it would exit 1 there.
+if [ "$(uname -s)" != "Darwin" ]; then echo "ios-shell-repair.sh: macOS only" >&2; exit 1; fi
+
 OUT="artifacts/sim-results/ios-shell-repair-$STAMP"
 # EVERY redirect uses the absolute form: the build steps run inside a
 # `(cd native/ios && …)` subshell, where a relative $OUT points nowhere.

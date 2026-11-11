@@ -252,11 +252,14 @@ check("a stale sighting degrades a reachable device to STALE_LAST_SEEN", future.
   // Wedge #15 pinned directly: an online, non-roaming device whose sighting
   // timestamp is missing or unparseable is DEGRADED, never confidently
   // reachable — and a provably-stale sighting keeps the stronger locate.
-  for (const [label, at] of [["a missing lastSeenAt", null], ["an unparseable lastSeenAt", "not-a-date"]] as const) {
-    const w = evaluateReachability(build({ cellularBackchannel: "present", provisioning: "active", cellularReachability: "online", smsReachable: true, roaming: false, lastSeenAt: at }), NOW_ENUM);
-    check(`online + ${label} → degraded/LAST_SEEN_UNVERIFIED/monitor, never 'reachable' (wedge #15)`,
-      w.posture === "degraded" && w.reasonCode === "LAST_SEEN_UNVERIFIED" && w.recommendedAction === "monitor");
-  }
+  const missingSeen = evaluateReachability(build({ cellularBackchannel: "present", provisioning: "active", cellularReachability: "online", smsReachable: true, roaming: false, lastSeenAt: null }), NOW_ENUM);
+  check("online + a missing lastSeenAt → degraded/LAST_SEEN_UNVERIFIED/monitor, never 'reachable' (wedge #15)",
+    missingSeen.posture === "degraded" && missingSeen.reasonCode === "LAST_SEEN_UNVERIFIED" && missingSeen.recommendedAction === "monitor");
+  // A PRESENT but unreadable stamp is graded stale, not unknown (deriveFreshness): it cannot show the sighting
+  // recent, and in this family stale is the stronger call. It once read monitor here, below a provably-stale one.
+  const garbledSeen = evaluateReachability(build({ cellularBackchannel: "present", provisioning: "active", cellularReachability: "online", smsReachable: true, roaming: false, lastSeenAt: "not-a-date" }), NOW_ENUM);
+  check("online + an unparseable lastSeenAt → degraded/STALE_LAST_SEEN/locate, never 'reachable' and never milder than stale (wedge #15)",
+    garbledSeen.posture === "degraded" && garbledSeen.reasonCode === "STALE_LAST_SEEN" && garbledSeen.recommendedAction === "locate");
   const futureSeen = evaluateReachability(build({ cellularBackchannel: "present", provisioning: "active", cellularReachability: "online", smsReachable: true, roaming: false, lastSeenAt: "2026-07-20T14:00:00Z" }), NOW_ENUM);
   check("online + a future-dated lastSeenAt (a contradiction) → degraded/LAST_SEEN_UNVERIFIED, never the freshest reading (wedge #15)",
     futureSeen.posture === "degraded" && futureSeen.reasonCode === "LAST_SEEN_UNVERIFIED");

@@ -179,7 +179,7 @@ export function evaluateThreatPosture(
   if (lastSeenFreshness === "stale" || lastSeenFreshness === "unknown") {
     // A report we cannot date is a report we cannot rely on, and BOTH unreadable
     // members raise: `stale` means the agent stopped checking in, `unknown` means the
-    // sighting was absent, unparseable, or dated in the future. Neither is evidence of
+    // sighting was absent or dated in the future (a present but unreadable one is `stale`). Neither is evidence of
     // a healthy endpoint, and golden rule 2 forbids resolving either downward. Graded
     // at the same rung as PROTECTION_DEGRADED — the protection may well be fine, we
     // simply cannot say it is CURRENT — so a real active threat still outranks it.

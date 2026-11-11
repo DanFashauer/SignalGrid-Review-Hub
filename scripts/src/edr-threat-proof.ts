@@ -351,8 +351,11 @@ check("signature age: ...while a finite non-negative age is preserved, 0 include
 
   for (const [label, seen] of [["absent", undefined], ["unparseable", "not-a-date"], ["future-dated", "2030-01-01T00:00:00.000Z"]] as const) {
     const v = evaluateThreatPosture(healthy(seen), { nowMs: NOW });
-    check(`last seen: an ${label} sighting RAISES (unknown never resolves downward)`,
-      v.recommendedAction === "step_up" && v.reasonCode === "ENDPOINT_NOT_RECENTLY_SEEN" && v.lastSeenFreshness === "unknown");
+    // A PRESENT but unreadable stamp grades `stale` (deriveFreshness reserves `unknown` for an absent one); both
+    // members raise to the same rung here, so the verdict is identical either way.
+    const expectFreshness = label === "unparseable" ? "stale" : "unknown";
+    check(`last seen: an ${label} sighting RAISES (${expectFreshness}; never resolves downward)`,
+      v.recommendedAction === "step_up" && v.reasonCode === "ENDPOINT_NOT_RECENTLY_SEEN" && v.lastSeenFreshness === expectFreshness);
   }
 
   const ungraded = evaluateThreatPosture(healthy("2019-01-01T00:00:00.000Z"));

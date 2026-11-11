@@ -118,6 +118,10 @@ const STEPS = [
   // DERIVED from artifacts/mcp-server/src/index.ts, never hand-typed.
   { name: "MCP roster self-test (a drifted tool count, a ghost grant and an ungranted mcp__ call must fail)", cmd: ["node", "scripts/check-mcp-roster.mjs", "--self-test"] },
   { name: "MCP roster (per-lane and per-skill grants; signalgrid-mcp tool count derived from the server source)", cmd: ["node", "scripts/check-mcp-roster.mjs"] },
+  // `pnpm run scan:estate` itself stays out of preflight and CI (CI has one checkout); only
+  // its locator and tally are proved here, with disk and git injected, so the proof is the
+  // same on a Mac with siblings and on a runner with none.
+  { name: "Estate scan self-test (an unreachable or misidentified sibling must read NOT SCANNED; only an archived repo's breaks are report-only)", cmd: ["node", "scripts/scan-estate-citations.mjs", "--self-test"] },
   // Row 17's live-check ledger: every live check, its dimensions and the code it verified;
   // the coverage counts are derived here, and check-derived-doc-figures holds the plan to them.
   { name: "Wire-truth ledger self-test (an unknown dimension, an undeclared bound symbol and an uncited live record must fail)", cmd: ["node", "scripts/check-wire-truth-ledger.mjs", "--self-test"] },
@@ -354,6 +358,7 @@ const STEPS = [
   { name: "Sim-script self-check (a queued Mac operation must name a script that runs)", cmd: ["node", "scripts/check-sim-scripts-selfcheck.mjs"] },
   { name: "Sim-request runner self-test (a result awaiting landing on a tick branch is never re-run; refused/unreadable stays pending)", cmd: ["node", "scripts/mac/run-requests.mjs", "--self-test"] },
   { name: "Brain proposal-PR route self-test (review build only; governance, decision-path and non-applying patches refused; publish idempotent)", cmd: ["node", "scripts/mac/brain-proposal-pr.mjs", "--self-test"] },
+  { name: "Local-brain guard repairs self-test (stripped synthetic brain: --check fails, --apply restores and re-pins, drift refused; needs python3, FAILS without it)", cmd: ["python3", "scripts/mac/local-brain/repairs/guards.py", "--self-test"] },
   { name: "Lane status line self-test (open hands and unread mail counted from a fixture tree; an unreadable part is left out, never zeroed)", cmd: ["bash", "scripts/mac/statusline.sh", "--self-test"] },
   { name: "Swift serious violations self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-swift-serious.mjs", "--self-test"] },
   { name: "Swift serious violations (the error-severity swiftlint rules, without a Swift toolchain)", cmd: ["node", "scripts/check-swift-serious.mjs"] },
@@ -631,6 +636,7 @@ const STEPS = [
   { name: "Objective loop self-test (every clause driven from the failing side)", cmd: ["node", "scripts/objective-loop.mjs", "--self-test"] },
   { name: "Proof: operating-method (the handbook is a gate — buckets, ladder, dispositions, links, roles)", cmd: ["pnpm", "run", "proof:operating-method"] },
   { name: "Proof: evidence-coverage (what can this estate actually answer)", cmd: ["pnpm", "run", "proof:evidence-coverage"] },
+  { name: "Proof: evidence observedAt ordering is host-timezone independent (TZ=UTC, New_York, Tokyo as child processes)", cmd: ["pnpm", "run", "proof:evidence-observedat-tz"] },
   { name: "Proof: device-resolver (read-only at the injection boundary)", cmd: ["pnpm", "run", "proof:device-resolver"] },
   { name: "Proof: config-scope (connector config keyed per tenant, never normalized)", cmd: ["pnpm", "run", "proof:config-scope"] },
   { name: "Proof: unsafe-claim (a disclaimer is not a claim)", cmd: ["pnpm", "run", "proof:unsafe-claim"] },

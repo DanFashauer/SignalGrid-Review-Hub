@@ -661,6 +661,28 @@ if (notSelfChecking.length > NOT_SELF_CHECKING_CEILING) {
   });
 }
 
+// The tick publication regression is part of this existing mandatory gate.
+// Its target is file-derived and every external service remains a fixture.
+const publicationHarness = join(MAC_DIR, "test_tick_auto_publish.py");
+const publicationTests = spawnSync("python3", ["-B", publicationHarness], {
+  cwd: repo,
+  env: { ...process.env, PYTHONDONTWRITEBYTECODE: "1", SIGNALGRID_AUTOPUBLISH_TEST_REPO: repo },
+  encoding: "utf8", timeout: 120000, maxBuffer: 8 << 20,
+});
+const publicationRaw = (publicationTests.stdout ?? "") + (publicationTests.stderr ?? "");
+const publicationCount = [...publicationRaw.matchAll(/^Ran (\d+) tests? in [0-9.]+s$/gm)];
+const publicationPassed = !publicationTests.error && publicationTests.status === 0 &&
+  publicationTests.signal === null && publicationCount.length === 1 &&
+  Number(publicationCount[0][1]) > 0 && /\nOK\s*$/.test(publicationRaw) &&
+  !/\b(?:skipped|expected failures|unexpected successes)\b/i.test(publicationRaw);
+if (!publicationPassed) {
+  problems.push({ label: "tick publication", rule: "behavior",
+    detail: "The Python tick suite must run normally with positive test count and zero errors, skips or expected failures. " +
+      (publicationTests.error?.message ?? publicationRaw).slice(-4000) });
+} else {
+  console.log(`  TICK PUBLICATION: ${publicationCount[0][1]} behavioral tests passed; service boundaries stayed in fixtures.`);
+}
+
 // Rule (f)'s REPORTED half, stated so nobody reads "0 problems" as "every grep in
 // these scripts was verified". An unanchored pattern is a claim this gate cannot
 // check, and saying so is the whole difference between GATED and REPORTED.

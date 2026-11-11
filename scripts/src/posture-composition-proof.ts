@@ -152,8 +152,13 @@ check("...and the reason names the staleness rather than a state that was in fac
   fromDevicePosture(posture({ deviceLastSeenAt: "2019-01-01T00:00:00Z" })).reason === "DEVICE_POSTURE_STALE");
 check("a posture record with NO last-seen at all must not grant → step_up (absent is not recent)",
   fromDevicePosture(posture({ deviceLastSeenAt: null })).action === "step_up");
-check("...and an unparseable one grades the same way, under its own reason",
-  fromDevicePosture(posture({ deviceLastSeenAt: "not-a-date" })).reason === "DEVICE_LAST_SEEN_UNKNOWN");
+check("...and the absent one is named as unknown, not as stale",
+  fromDevicePosture(posture({ deviceLastSeenAt: null })).reason === "DEVICE_LAST_SEEN_UNKNOWN");
+// A PRESENT but unreadable last-seen cannot show the record current: deriveFreshness grades it stale (the raising
+// member; `unknown` is reserved for an absent stamp). Same step_up rung as unknown in this adapter.
+check("...and an unparseable one grades the same way, as stale (present but unreadable)",
+  fromDevicePosture(posture({ deviceLastSeenAt: "not-a-date" })).action === "step_up" &&
+  fromDevicePosture(posture({ deviceLastSeenAt: "not-a-date" })).reason === "DEVICE_POSTURE_STALE");
 check("a last-seen dated AFTER the read is a contradiction, not the freshest possible sighting → step_up",
   fromDevicePosture(posture({ deviceLastSeenAt: "2030-01-01T00:00:00Z" })).action === "step_up");
 check("a staleness concern never DENIES — it forecloses the grant, it does not restrict",

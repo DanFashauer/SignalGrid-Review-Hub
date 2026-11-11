@@ -585,6 +585,57 @@ export interface DecisionEvidence {
   credentialReadMethod: CredentialStrengthEvidence;
   /** True only when every critical input is present and not degraded. */
   criticalSignalsPresent: boolean;
+  /**
+   * OWNER DECISION (a), 2026-11-06 — KEEP BOTH. When one family carries two or more
+   * DIFFERENT values the core cannot order (the same instant, or a stamp it cannot
+   * read), the field above holds the one the SHIPPED rules rank worst, and this lists
+   * every value the reader could have answered (good values and the family's
+   * unreadable floor included, since the 2026-11-07 reviews), sorted. `evaluatePolicy` runs the
+   * active policy once per combination and keeps the most restrictive outcome, so a
+   * tenant policy that ranks the members differently still sees the milder one.
+   * ABSENT whenever there is no such ambiguity, so every unambiguous snapshot's
+   * digest body is byte-identical to before; present, it is inside the digest.
+   */
+  retainedAccusations?: RetainedAccusations;
+  /**
+   * ROUND 5 (2026-11-07). The evidence as the PRE-STRICT reader (`Date.parse`, mainline's) read the same signals,
+   * once per modelled host offset, each kept as the fields where it DIFFERS from the strict evidence above (the
+   * backstop is recomputed on each, never carried). `evaluatePolicy` judges every one with the active policy and
+   * keeps the most restrictive outcome, so the verdict is never milder than the pre-strict reader's. `bounded` is
+   * set when a stamp's pre-strict reading could not be placed: the policy then bounds the outcome. ABSENT whenever
+   * the two readers agree, so every such snapshot's digest body is byte-identical to before.
+   */
+  preStrictReadings?: PreStrictReadings;
+}
+
+/** Round 5: the pre-strict readings of one evidence set (see `DecisionEvidence.preStrictReadings`). */
+export interface PreStrictReadings {
+  readonly worlds: readonly Partial<Omit<DecisionEvidence, "criticalSignalsPresent" | "retainedAccusations" | "preStrictReadings">>[];
+  readonly bounded?: true;
+}
+
+/** Owner decision (a): every accusing member a family read, when the core could not order them. */
+export interface RetainedAccusations {
+  identityEnabled?: readonly (boolean | "unknown")[];
+  deviceManaged?: readonly (boolean | "unknown")[];
+  deviceEncrypted?: readonly (boolean | "unknown")[];
+  osSupported?: readonly (boolean | "unknown")[];
+  deviceCompliance?: readonly ComplianceState[];
+  postureFreshness?: readonly Freshness[];
+  custodyState?: readonly CustodyState[];
+  dockChargeState?: readonly ChargeState[];
+  batteryHealth?: readonly BatteryHealthState[];
+  tamperState?: readonly TamperState[];
+  dockState?: readonly DockState[];
+  baselineCompliance?: readonly BaselineState[];
+  benchmarkSelection?: readonly BenchmarkSelectionState[];
+  shiftContext?: readonly ShiftContextState[];
+  badgeBinding?: readonly BadgeBindingState[];
+  managementHealthState?: readonly ManagementHealthState[];
+  localAuthorityState?: readonly LocalAuthorityGrantState[];
+  attachState?: readonly AttachEvidence[];
+  enrollmentStrength?: readonly CredentialStrengthEvidence[];
+  credentialReadMethod?: readonly CredentialStrengthEvidence[];
 }
 
 export interface MatchedRule {

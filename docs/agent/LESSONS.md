@@ -325,3 +325,228 @@ block; a stage run on the wrong tier is a lesson here.
 - **evidence:** Actual CI and pinned release behavior are linked in EVIDENCE. The specific original/fixed R6p1d assertion is RED/GREEN on a limited exact-source Git2.56 build. The installed-toolchain full self-test passes309applicable cases with6platform skips; the limited resource's8other failures stay explicit.
 - **landing:** pending — scripts/loop-state.mjs constructs its promised missing-ref scenario; production seam logic, the complete assertion and real remote branches are unchanged. Current-head source/CI/full-preflight gates still apply.
 - **status:** pending
+
+
+### L36 — A ruleset refusal is not a moved canonical branch
+- **date:** 2026-10-30
+- **lane:** mac
+- **incident:** The Mac delivery path pushed heartbeat/mail/ack commits directly to the protected canonical branch. Its generic rejected-push handler retried a policy refusal five times, while the scheduled tick still exited 0.
+- **evidence:** The actual canonical heartbeat readback remained 2026-10-24T07:30:38.430Z; active ruleset 25774497 requires a PR and strict checks with no bypass. Disposable-Git original-source regression is 5 pass / 2 fail; corrected source is 7 pass / 0 fail / 0 skip. These fixtures do not establish a real remote delivery. The first full preflight refused the new fixture until its Git setup used the existing scratchGit helper; no guard or PENDING debt row was relaxed.
+- **landing:** pending — both lanes publish a mail topic and use the existing protected PR route; refused pushes stop, and uncertain responses get exact remote readback without a resend. Full current-head validation/review/CI and canonical heartbeat restoration remain owed.
+- **status:** pending
+
+
+### L37 — A pending or uncertain mail attempt must survive the next tick
+- **date:** 2026-10-31
+- **lane:** mac
+- **incident:** Only exit 0 was remembered by objective mail; failed or unconfirmed children could create another topic each tick. The heartbeat held unknowns without recovery, and a failure assertion still checked obsolete success wording.
+- **evidence:** New frozen controls reproduced 12 failures on be1. Corrected source passes 37 controls with zero failures/skips; a separate actual Bash control reproduces old refusal pacing. Receipt-aware I/O fixed one fixture failure without weakening the estate-clearance assertion. Four deliberate false-success/ID mutants are rejected.
+- **landing:** pending — exact immutable submission readback, authentication before Mac push, unique topics and independent parent attempts; source-head qualification and canonical heartbeat proof belong to PR #1698.
+- **status:** pending
+
+
+### L38 — Preserve the caller prefix and existing private delivery log
+- **date:** 2026-10-31
+- **lane:** mac
+- **incident:** The new receipt option was placed before `batch`, breaking existing protocol consumers, while captured delivery output stopped being appended to the established private run log. Full preflight held at the staged worker (246/248 before the aborted tail).
+- **evidence:** The unchanged staged-worker assertions now pass 265/265; caller controls pass 37 with zero failures/skips, and objective-loop passes 136/136. The full 3c015fc failure remains a separate measurement.
+- **landing:** pending — preserve the original leading command arguments, append the receipt option and keep both private output records; final source-head qualification and canonical heartbeat proof remain in PR #1698.
+- **status:** pending
+
+
+### L39 — A readback must pin canonical and read real objects
+- **date:** 2026-10-31
+- **lane:** mac
+- **incident:** Readback could attest an unmerged topic after concurrent FETCH_HEAD replacement or a local Git replacement ref, despite the remote canonical branch remaining unchanged.
+- **evidence:** New controls were 0/2 before correction and 1/1 after only pinning canonical; complete correction passes 39 caller controls with zero failures/skips.
+- **landing:** pending — exact remote canonical SHA plus real-object ancestry/blob reads, leaving local metadata untouched; new-head qualification and actual heartbeat proof remain in PR #1698.
+- **status:** pending
+
+
+### L40 — JSON quoting is not shell escaping in a test harness
+- **date:** 2026-10-31
+- **lane:** mac
+- **incident:** CodeQL found an environment-derived executable/path embedded in a Bash fixture with JSON.stringify; the original fixture failed under a special-character path.
+- **evidence:** Actual original block0/1; corrected integrated suite40/40, with real plain/special-path one-attempt assertions and no command-substitution markers.
+- **landing:** pending — pass dynamic paths as environment values and reference quoted variables; current-head qualification and actual heartbeat proof remain in PR #1698.
+- **status:** pending
+
+
+### L41 — A late optional observation cannot undo an accepted submission
+- **date:** 2026-10-31
+- **lane:** mac
+- **incident:** Malformed or unreadable wake metadata threw after a PR and auto-merge request were accepted, falsely classifying the delivery as a prepublication failure.
+- **evidence:** Actual frozen CLI baseline 40/2; final 42/0 under network denial, asserting successful push/create/merge before the outcome boundary. No source assertion relaxed.
+- **landing:** pending — optional wake errors warn, retain pending submission semantics and never cause a resend; PR #1698 still requires current-head gates and natural heartbeat readback.
+- **status:** pending
+
+
+### L42 — A maintained PR head is not the original payload identity
+- **date:** 2026-10-31
+- **lane:** mac
+- **incident:** Exact PR-head equality permanently held a mail attempt after a lawful behind-branch refresh, even when the original commit and payload reached canonical.
+- **evidence:** Real Git refresh/merge and cleanup-permission counterexamples drove frozen48 from40/8 to48/0 under network denial; original-payload changes still refuse, unknown mutations never resend.
+- **landing:** pending — prove original ancestry and blobs, pace readbacks, and preserve independent fsynced records; PR #1698 still needs a canonical refresh, full current-head gates and natural heartbeat proof.
+- **status:** pending
+
+
+### L43 — Attempt ownership follows the machine, not a disposable checkout
+- **date:** 2026-10-31
+- **lane:** mac
+- **incident:** Cwd-relative dependency caches split one machine's pending heartbeat and escalation into separate chains when the tick switched to its linked worktree; clearing dependencies also erased the fence.
+- **evidence:** Frozen cross-checkout baseline0/4 became4/0. Current61/0 under actual Mac network denial covers shared paths, real distinct-TMPDIR locking, parent-terminal completeness, damaged-store refusal and inherited Git environment binding.
+- **landing:** pending — preserve all old receipts, separately initialize the shared store only after exact legacy-attempt inventory and qualified release gates; PR #1698 still requires all current-head reviews/CI and natural canonical heartbeat proof.
+- **status:** pending
+
+
+### L44 — A pinned reader includes its imports and remains a library
+- **date:** 2026-10-31
+- **lane:** mac
+- **incident:** Adding a store import to the objective module broke the build tick's standalone pinned reader, first through an incomplete file list and then a CLI guard that treated a node-e label as a filename.
+- **evidence:** Actual full failure and import RED retained; corrected current62 delivery controls pass under network denial, all265 staged checks pass in the supported process-inspection environment, with unchanged assertions. Unsupported sandbox CI-cleanup failures and exact own kernel-exit cleanup remain separate evidence.
+- **landing:** pending — copy the complete dependency closure from the same pinned Git tree and keep import free of CLI state initialization; PR #1698 still needs all current-head gates and natural canonical delivery proof.
+- **status:** pending
+
+
+### L45 — Notification clearance is a new episode, never a task retry
+- **date:** 2026-10-31
+- **lane:** mac
+- **incident:** A permanent per-cause fence correctly held unknown notifications but also suppressed a recurrence after the original hand was landed and resolved.
+- **evidence:** Frozen5/3 RED became8/0; current74/0 under actual network denial includes real Git original-merge/current-clearance binding, distinct successor IDs, wrong-ID refusal and no publication during readback. Existing staged265/265 assertions remain unchanged.
+- **landing:** pending — only an independent complete parent and exact canonical cleared-hand blob permit one different notification; no coding-task, grant or budget is renewed. PR #1698 still requires full current-head gates and natural canonical delivery proof.
+- **status:** pending
+
+
+### L46 — An available kernel guard is not permission to replay an unfinished tick
+- **date:** 2026-10-31
+- **lane:** mac
+- **incident:** A second linked-checkout tick could steal the directory between mkdir and PID publication; the original EXIT trap could then remove another holder. PID absence also erased unresolved ownership.
+- **evidence:** Independent disposable source acceptance first failed11 of12 cases, then passed12/12 with actual Mac network denial and positively awaited original children. The portable delivery checker passed84/84, zero skips, preserving all original assertion expressions. Its first77/7 result remains failed: command-string Bash fixture launches were corrected to actual script files matching production; the runtime parent-identity check was retained.
+- **landing:** pending — a separately initialized persistent FD8 guard and immutable ownership records fence the tick. Legacy locks and OPEN/corrupt slots stay held. CLOSED records authorized lease finalization, not an independent parent exit, accepted task, provider cleanup or retry grant. Full current-head qualification and protected landing precede separate activation and natural heartbeat proof.
+- **status:** pending
+
+
+### L47 — A fixture must execute the startup contract it claims to protect
+- **date:** 2026-10-31
+- **lane:** mac
+- **incident:** The linked-checkout heartbeat fixture recomputed RECORD_DIR, so a production regression back to dependency-cache state escaped. A separate staged check still demanded the removed PID-deleting trap and failed the new descriptor-guard source.
+- **evidence:** Actual startup mutation controls: the old fixture passed2/2 on the bad assignment; the corrected fixture failed2/2 on that same mutant and passed2/2 on actual source. Current network-denied delivery84/84 and supported staged267/267 pass. The original full264/265 failure and separate reproducing diagnostic remain failed; runtime guard and independent12 source acceptance bytes are unchanged.
+- **landing:** pending — execute the exact startup assignment and actual Bash finalization/status contract; keep the previous host-path/order checks and add interrupted/nonzero status controls. New exact-head full qualification, protected landing and audited separate activation still precede natural heartbeat proof.
+- **status:** pending
+
+
+### L48 — A publication receipt outranks an exit-code shortcut
+- **date:** 2026-10-31
+- **lane:** mac
+- **incident:** An old loaded Bash producer could acquire new publication JS without its new receipt contract. Separately, a refused push returned1 after persisting its receipt, while the tick treated every1/2 as prepublication. Pending PRs also lacked a bounded repair handoff.
+- **evidence:** Actual network-denied45/45 private,12/12 independent guard and96/96 portable controls, zero failures/errors/skips. The frozen receipt-boundary RED reproduced6 failures in12 cases using real disposable local Git. Original assertions and all failed histories are preserved.
+- **landing:** pending — require the new Mac caller contract before Git; honor any original receipt before classifying1/2; use GET-only pending diagnostics and at most one distinct, original-owner-bound Cloud hand. No replay of the original send or unknown notification. New-head full qualification and protected landing precede audited separate activation.
+- **status:** pending
+
+
+### L49 — Preservation snapshots must refuse missing original evidence
+- **date:** 2026-10-31
+- **lane:** mac
+- **incident:** A new preservation test enumerated original records without requiring its five expected records; the unchanged walker gate caught the missing floor during full preflight.
+- **evidence:** Frozen filesystem RED2/3 became GREEN3/3; delivery96/96 and unchanged walker16/16 pass. The01fc full489.746s failure remains failed. Runtime and previous assertions are byte-identical.
+- **landing:** pending — require at least five original evidence records before snapshotting; no gate or ceiling change. New full/breadth, protected landing and separate activation remain required.
+- **status:** pending
+
+
+### L50 — Snapshot a checked file through its opened object
+- **date:** 2026-10-31
+- **lane:** mac
+- **incident:** CodeQL identified the fixture snapshot's separate lstat/path-read operations. Controlled path replacement could make the snapshot associate original metadata with different bytes.
+- **evidence:** Real filesystem RED2/5 became GREEN5/5; delivery96/96 passes with prior assertions and runtime bytes preserved.
+- **landing:** pending — no-follow/nonblocking open, original/opened identity checks, descriptor read, post-read identity checks and guaranteed owned close. Preserve recursive fixture metadata; no scanner waiver or generic containment claim. New full/CI/CodeQL and protected reviews still apply.
+- **status:** pending
+
+
+### L51 — Bind refusal repair to the original push, not its error text alone
+- **date:** 2026-10-31
+- **lane:** mac
+- **incident:** A rejected push left no exact durable child terminal, so subsequent readback could not distinguish a known refusal from an unknown publication attempt or request bounded repair.
+- **evidence:** Frozen RED8/31 became GREEN31/31; unchanged delivery96/96 passes with zero failures/errors/skips. Raw Git bytes are retained before interpretation and independently bound to the original source, receipt, target and exact ref observation.
+- **landing:** pending — one stable, original-owner-bound repair hand only after a normal original refusal and exact topic absence. Failed/unknown hands remain consumed; no original resend, legacy reaping or gate waiver. New full/breadth, formal reviews/current CI and protected landing precede separate audited activation.
+- **status:** pending
+
+
+### L52 - Bind repair reporting to original evidence and the current owner
+- **date:** 2026-11-01
+- **lane:** mac
+- **incident:** Failed producer reporting and repeated pending reads could retain redundant work or treat unrelated repair evidence as permission to publish again.
+- **evidence:** Focused160 checks plus35 strict-refusal/full-heartbeat controls passed in separate source-bound cohorts, zero failures/skips. The earlier191 cohort remains failed in its27/4 refusal portion.
+- **landing:** pending - immutable repair DATA, one current-owner-bound notice, bounded round-robin drain and120-minute pending GET cadence; preserve original unknown/failed attempts. Full current-head checks, source reviews, protected landing and separate activation remain required.
+- **status:** pending
+
+
+### L53 - Test the current repair recipient and public location
+- **date:** 2026-11-01
+- **lane:** mac
+- **incident:** Full preflight on feef1add failed the staged Mac worker self-test264/267: three expectations still named the old Mac recipient or private-log location after the source deliberately routed repair to Cloud and identified its public script.
+- **evidence:** A focused diagnostic reproduced exactly those three failures. Updating only the expected recipient/location values and the fallback case name produced self-test267/267. All home/token redaction, four-field privacy, private-log preservation and submission assertions remain. The failed full run stays failed; breadth did not start.
+- **landing:** pending - fixture contract correction only; production routing and guards are unchanged. A new full current-head preflight/breadth, current CI/findings, complete source reviews and protected landing remain owed before separate initialization/activation or natural heartbeat proof.
+- **status:** pending
+
+
+### L54 - Bind intermediate source checkpoints and inventory figures to actual bytes
+- **date:** 2026-11-01
+- **lane:** mac
+- **incident:** The preflight inventory still described 970 lines while its exact source contains 977; earlier failed full runs remain failed.
+- **evidence:** Actual source SHA256 a41a3859eacdf884e5b9774ed001c5b889ab1464940cf0c7a62414500766ce87 contains 977 newline-counted lines. Inspected protected ancestor 1691751207779b1a97af0a906c88bc3ff6d0ad57 was ordinarily integrated from 2f64a655fb92a77661aabbe819664ec8076ad93d as intermediate merge 39acc9396483820120eb451cd12407165700e090. Observed live 3d2829778952625cc79d13c369769c989f38cbc0 is newer unreviewed source; only the vetted ancestor was merged.
+- **landing:** pending - only the measured 970-to-977 doc number and append-only records are checkpointed locally; generators, full/breadth, reviews, current CI, protected landing and activation remain owed.
+- **status:** pending
+
+
+### L55 — Separate vetted-source integration and derived views from final qualification
+- **date:** 2026-11-01
+- **lane:** mac
+- **incident:** Protected canonical source advanced again while the owned checkpoint preserved the earlier inspected ancestor and exact inventory correction.
+- **evidence:** Vetted JWT/JWKS source 3d2829778952625cc79d13c369769c989f38cbc0 was integrated as d0427b5bea88cb31d4a33f87d63aeb6e23155770; later observed 5886f1e62441bbc272207dc541c9b89407d3e78a is still explicitly unreviewed. Preflight source SHA256 a41a3859eacdf884e5b9774ed001c5b889ab1464940cf0c7a62414500766ce87 and its977-line figure remain unchanged.
+- **landing:** pending — ordinary local source/journal/generated checkpoint only; actual generator outcomes are separately retained, and full/breadth/reviews/currentCI/protected landing/activation remain owed.
+- **status:** pending
+
+
+### L56 — Reanchor exact evidence after source wiring without weakening the inventory
+- **date:** 2026-11-01
+- **lane:** mac
+- **incident:** The retained D003 full stopped because the README evidence still cited preflight591 although its literal target moved; breadth never started.
+- **evidence:** The sole normal writer derives the unique current literal after source integration/owned generators. Every other parsed inventory field and row stays identical; the ratchet remains byte-exact, with no ceiling, floor or window waiver. Vetted source 5886f1e62441bbc272207dc541c9b89407d3e78a is an other-lane delivery.
+- **landing:** pending — one local source/citation/generated checkpoint only; a new exact-head full/breadth, current CI, formal reviews, protected landing and separate activation remain owed.
+- **status:** pending
+
+
+### L57 — Preserve runtime redaction controls with explicit synthetic marker construction
+- **date:** 2026-11-01
+- **lane:** mac
+- **incident:** The retained215cc full stopped at publication-boundary because two source lines in a malformed-payload negative fixture carried a literal synthetic credential-shaped marker. No actual credential or public source push was involved.
+- **evidence:** Two fixture lines now use the existing safety-check runtime-concatenation convention. A closed literal check preserved every input and forbidden value; all18 repair cases and the unchanged publication-boundary gate passed with actual network denial. Production and publication-policy bytes remained unchanged.
+- **landing:** pending — local fixture/journal checkpoint only; original full failures remain failed, and a new exact-head full/breadth, current CI, formal reviews, protected landing and separate activation remain owed.
+- **status:** pending
+
+
+### L58 — Use the shared isolated Git launcher in disposable repair fixtures
+- **date:** 2026-11-01
+- **lane:** mac
+- **incident:** The retaineded390 full stopped at the unchanged scratch-repository hygiene gate: three new repair fixtures used a bespoke Git launcher instead of the shared helper.
+- **evidence:** Each fixture now imports and calls scratchGit for its disposable local Git operations. All original assertion lines and cases are preserved; the current18 repair,12 caller and9 bounded-drain cases and unchanged hygiene gate passed with real network denial. Production and gate source bytes remained unchanged.
+- **landing:** pending — local fixture/journal checkpoint only; original full failures remain failed, and new exact-head full/breadth, CI, formal reviews, protected landing and separate activation remain owed.
+- **status:** pending
+
+
+### L59 — Expose the actual regression runner bindings as controls
+- **date:** 2026-11-01
+- **lane:** mac
+- **incident:** The retained88d821 full stopped at the unchanged gate-registration self-test: seven new checks did not name their existing execution controls on a code line.
+- **evidence:** Only imported local runner names and their bound call identifiers changed. All arguments, targets,177 assertion lines and99 cases remain exact; the current99 controls and unchanged159-case gate self-test passed with real network denial. Registration remains the documented control-only visibility floor, not new self-test coverage. Production, Python targets, gate source and thresholds stayed unchanged.
+- **landing:** pending — local fixture/journal checkpoint only; every earlier full failure remains failed. New exact-head full/breadth, CI, formal reviews, protected landing and separate activation remain owed.
+- **status:** pending
+
+
+### L60 — Reuse the shared Git environment policy in repair fixtures
+- **date:** 2026-11-01
+- **lane:** mac
+- **incident:** The retained4a4158e full stopped at the unchanged walker self-test. Its proximity heuristic classified three duplicated Git-environment-key arrays beside readdirSync as filesystem roots.
+- **evidence:** The fixtures now use the existing scratchGitEnv function instead of duplicating its16-key policy. Final fixture environment values, executable lookup PATH,177 assertions and all39 cases are preserved. Actual39 controls,16 walker self-tests, the regular walker and scratch-hygiene gates and closed environment-equivalence vectors passed under real network denial. No copy walk, floor, threshold, waiver, PENDING entry or idle-empty rule changed.
+- **landing:** pending — local fixture/journal checkpoint only; earlier full failures remain failed. New exact-head full/breadth, CI, formal reviews, protected landing and separate activation remain owed.
+- **status:** pending

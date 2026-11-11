@@ -3,7 +3,7 @@
   "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
   "manifestVersion": 101,
   "platform": "darwin",
-  "mintedAt": "2026-11-05T07:04:05.143Z",
+  "mintedAt": "2026-11-11T03:41:29.530Z",
   "preflightCoverage": {
     "nativeBuildExcluded": true,
     "target": "darwin-arm64",
@@ -14,8 +14,8 @@
         "Browser E2E (review console, website, admin)",
         "Build (all packages)"
       ],
-      "treeSha": "b475b9fddaee64932f6de47fa11afd63fde60c85",
-      "ranAt": "2026-11-05T06:37:15.979Z",
+      "treeSha": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
+      "ranAt": "2026-11-11T03:18:29.818Z",
       "runner": {
         "kind": "apple-container",
         "arch": "amd64",
@@ -47,848 +47,860 @@
       "proof:absent-collection": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
-        "sourceDigest": "30745d70bf010b3d278039655c497cbf0f73592568f0553115663da703cf44f5"
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
+        "sourceDigest": "97e3618e3ffa7b86de2e939a7e3b67c9452427f300aa3337b2185a6c61f32ad1"
       },
       "proof:access-governance": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
-        "sourceDigest": "3207a4a569d874b0e1236d4d1944ba2015ec7efae07cd513f0b0f7aeea776120"
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
+        "sourceDigest": "e64a1ea61ca8539f77d5172ee8cfe86603926522cbdadea42c78b1663b530875"
       },
       "proof:adaptive-proposals": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
-        "sourceDigest": "e02e4c59c7db3a878ac3898b676d02c68f55e870661bf87e7a5ada5f0c0c9b6a"
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
+        "sourceDigest": "bea88a8dfeca60ad5d007571d5cd9d9c812f9b68ac8e555008dc3ef0196eebef"
       },
       "proof:affected-audience": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
-        "sourceDigest": "e96c303e7357f1ad6567054de461e9c8613ececbaee59678e720047d0cb9c9a3"
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
+        "sourceDigest": "f89c7c2750651fde24f3a81da06d78339769f06076b51208e291dbc4bf3e703d"
       },
       "proof:agent-behavior": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
-        "sourceDigest": "75fbf5570cc543306c5afcf3a56c6107b5adb58760d7bfc03882e18b931d58ba"
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
+        "sourceDigest": "393254151163ed447128a368b377ca36bc62f04020b94fb76b7a25c403f3c273"
       },
       "proof:agent-identity": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
-        "sourceDigest": "a256154b5a77856189ed9d7ffd09eee10b90f879028a468d2abf4743c2a8e48d"
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
+        "sourceDigest": "08da4feab945ec60c904ba76dce0a682204bc3d257a52b937413a855ba7b113f"
       },
       "proof:api-client-react": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
         "sourceDigest": "6879c6bd52be3f1ca9399f01611ed6b9e25ff57e090f0e6a68601cca2998072e"
       },
       "proof:api-contract": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
         "sourceDigest": "10e736a13b6c308e98b93b2709d8a7f2e424dcbfe64911c199a11b1cee002022"
       },
       "proof:app-protection": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
-        "sourceDigest": "9b20349791f5cfb33005f86889da3898d5c097950fd663e9f0d6257b2ca9bc02"
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
+        "sourceDigest": "b44bda7d944c628db5e35ba6fe5d450bc66c82fe1154b7ccff4f6244e17f3bbb"
       },
       "proof:app-resilience": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
         "sourceDigest": "e01b0d29219fdbf903cd36bf85dcd928ea5906d9ca63dba4633d5a70709df21c"
       },
       "proof:app-update": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
-        "sourceDigest": "37a21f1c37aac3bc8fa630911a34b3cbf53ea79f74965a692b8b9b776a0fb88d"
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
+        "sourceDigest": "38ac1022378f260f167b57ac83a6f81b94a42555c1e45a85dedf5a31a9499e55"
       },
       "proof:app-workflow-templates": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
         "sourceDigest": "d0f28176d9a75e0af710522a6e92cdb82ad6931157684c9a593c989fe3f2cd58"
       },
       "proof:app-workflows": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
-        "sourceDigest": "dfe7013e677fbd6a7d478091950f84c98c7f1b2d6c39ff913948731777589a07"
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
+        "sourceDigest": "6e8e362c8dd7373e4ca1eff03776f4da99cb5d0abc8fd38ad9ad47247b621fd7"
       },
       "proof:audit-ledger": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
-        "sourceDigest": "db8d9851ff8cbcaef9a7d7f06ec8deaa5a7a9cd500561cfb8427eaad0e630a5c"
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
+        "sourceDigest": "839179d0be3ff102272f8ce9cefea2146e339d19cdb4dcea906ed95cc6e9d931"
       },
       "proof:benchmark-selection": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
-        "sourceDigest": "eb4353da690bb581d3587f6ace301a2decd052e52566713de4375e8b139178da"
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
+        "sourceDigest": "2b2f9624350e466b169f289d7a38538ea2a5982810de9202c3b1369c71a7936a"
       },
       "proof:bootstrap-credential": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
-        "sourceDigest": "d1b18fe2cd46d609c3c72828df550d6fcd01103edd9ef32a4ce364c5525f7f65"
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
+        "sourceDigest": "1c26685002edfe7536582bb07ea262ea9b57bcf5fcd9b48b5716321f4fa95f89"
       },
       "proof:break-glass": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
         "sourceDigest": "1c992792938680b7205b046ff6f62988cb1923f4e6eddec9f391103b27af4496"
       },
       "proof:caep-events": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
         "sourceDigest": "fbb2b7f03891095d767cdb24e7b9595a38cbe8940f6ed74dafe638d1a088b1de"
       },
       "proof:carrier-reachability": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
-        "sourceDigest": "9bd5f2a879c1db0ddcd36935277d028a3395b23f1cbc13a58dd51ad7711baee1"
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
+        "sourceDigest": "92f13ed9704b91c7a26ae7fdafaf3a8359e27c878dd56cd350e2acb62abdde59"
       },
       "proof:challenge-capability": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
-        "sourceDigest": "306ec5c9e3fd64921ac0b3d61a1c8a6321f9eb7c757f44148f188b608e267660"
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
+        "sourceDigest": "0f3ca132f1e6567df64ffc67c1208abda47c28c95f36d0bebb6c7832dc70bd23"
       },
       "proof:change-draft": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
         "sourceDigest": "3a9f5e8e502e5503920060028cf0c73154a218f05c1f47dd2feeb4dfd0ad9ce4"
       },
       "proof:change-window": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
-        "sourceDigest": "9aceeff257fbf9c52531a1723064308a0dacdce531c3e96846fe3a045690fca7"
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
+        "sourceDigest": "755a2673a940fb74fb1562b4b9431a0530547bbfb1263622711efa1bd15ae578"
       },
       "proof:config-scope": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
-        "sourceDigest": "e0ba20440a0c3ce3cda6bb18456d52db41551daff40d9e413e09e0d42a3f31d6"
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
+        "sourceDigest": "c506f665e46b5fe996342dce5e23a01d253938a426dc8a6dc2f120cd6faa068d"
       },
       "proof:connector-emulator": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
         "sourceDigest": "fb315083eed107d3f3d9fc0dde3a22378474051f1a3948e78270a6a0b867306a"
       },
       "proof:control-plane": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
         "sourceDigest": "da966b1ae4f16f6e48dff6d3b92d8d5a63bafb515ad6cb56760c0fdc53a651d3"
       },
       "proof:credential-exposure": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
         "sourceDigest": "865f24d55244e60242eb2c37223052fd30dcffe0a116a053ae807ef4ac3906b6"
       },
       "proof:credential-rotation": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
         "sourceDigest": "8cf1d3c37e4fcc26594b2caec9c6d37daaf0b229e1e35b183d46120f90e43f06"
       },
       "proof:custody-beacon": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
         "sourceDigest": "6b340c67f2c6a9cea6231686478560bb6ff361c4dda2b4efb9f0bea64ef54388"
       },
       "proof:data-lifecycle": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
-        "sourceDigest": "cbe8e45044327b1dd3a1800c9ec08bde64ed81766d3e2e1cc7f3083e7d10b87f"
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
+        "sourceDigest": "6a69a1fb7bf26dd15a95c0d549deee865964e71278bbc20f7f034b5c93f03319"
       },
       "proof:data-protection": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
         "sourceDigest": "6da9579b558131c2d2208539701113799a3a95e11cb8f7ab1dab30d690b2d967"
       },
       "proof:ddm-connector": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
         "sourceDigest": "23b9653868ddc8752291fdf2c6ecab2b0e50e24e9219642cf39f5cfbeca29df7"
       },
       "proof:decision-cascade": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
-        "sourceDigest": "5f9e64240edc6bf9e29937322453524f0d7b25a29b7bc65497f46cbe1dcd648e"
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
+        "sourceDigest": "95373198a13d83615f4e72c7725bf9da8099bde9dc7f836e9c63d8fb1f4642bd"
       },
       "proof:decision-continuity": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
-        "sourceDigest": "d11d727ab7546247f86be0b8c0644e6046703547515ec5b40746c159e06118f2"
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
+        "sourceDigest": "29fab4e006bbd940b33478a2e3eb93dccc22557b7aa73821e39d620fdb065e29"
       },
       "proof:decision-palette": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
         "sourceDigest": "6b904b684c09609a71d97f5d394af0e88f64086eeab086ca648fb1e8e8e0eac0"
       },
       "proof:device-attestation": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
-        "sourceDigest": "f23a407d89e247515112d2b7aa406a858cab1d32b62885e92361171fa40ed158"
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
+        "sourceDigest": "5430ffab015b02dccd58946f4e0aa457adb300bf9b7b4a2c0b8887068e9fade9"
       },
       "proof:device-management-health": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
-        "sourceDigest": "abc5479b2de3ca427a44a5c946902daf6d60b43e05f22c3f3d62514687e6aa15"
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
+        "sourceDigest": "d0775093447dcadf0374fb2f0769bf35b0bb156038a8f77f970272800fee11b1"
       },
       "proof:device-registry": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
-        "sourceDigest": "696819410bb0fa1e99ce1190de467ba96921e01c97693ca017b4527055f9aac0"
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
+        "sourceDigest": "7928541a03f7d2fb2fb99b0db09f12bf13e54a79b47221f1c854240e670dda10"
       },
       "proof:device-resolver": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
-        "sourceDigest": "205c44ab8a47ce5d7030d3db3f283e34e40b4c139996cd81151167247144aa44"
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
+        "sourceDigest": "cd850c3b542bd6e9721adae6fdf583104032974e6206fbd3b4f1a4775723023f"
       },
       "proof:dual-control": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
         "sourceDigest": "f7f8742d82d804514a2509ecc19818db997b134d14147d63d0d0da670304822d"
       },
       "proof:edge-sync": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
         "sourceDigest": "b57a606a8ce98380db29427f9c3a4b013fb222ac6ed0ee611aa2e12c2a971c7f"
       },
       "proof:edr-threat": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
-        "sourceDigest": "310fadc4501acb7b46d8ebff93dbb7d410629530094b9077661d695422814ed8"
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
+        "sourceDigest": "b9f3f9a78e22baac09ab766ad43830bacccd80ab9e80b7beceb20757c1f2fa8d"
       },
       "proof:emit-gate": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
         "sourceDigest": "456085b27e3c8db09c24be94067994fcacad14a8567f2d6dad7a4f9f4e15c61b"
       },
       "proof:emitter-discipline": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
         "sourceDigest": "46fcaaa8c14a535621b50d744565842f5023e282e9cd29bb266e08c8580b92d1"
       },
       "proof:enterprise-auth": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
-        "sourceDigest": "1dc905592d6bfb126673fc2265dee865036d7393bc568ff889cda29c80daf3a7"
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
+        "sourceDigest": "42526b8acd2ffd5dad7801f9d2106fb0ad2245008a7616287ed8ec2a7ca79403"
       },
       "proof:entitlement-binding": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
         "sourceDigest": "1a7eee997a25ac5fa600d6bb8820c11664d853a643ce5c893e917b18c4f22d56"
       },
       "proof:estate-core": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
-        "sourceDigest": "cb31ef42b528c247bb6a526118a7f2616faa4dcf492e955f2e9ca45cbc029f96"
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
+        "sourceDigest": "6122b3439b19ea4bf4f91efb37129e0b3a95996aba6fa4f95415b9ef982a6fa0"
       },
       "proof:estate-refresh": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
-        "sourceDigest": "b16000ae2dacfe160c8cc752da931cb259d69480872cf89248f2eea3669ce64b"
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
+        "sourceDigest": "5e3b76efff39d3cc07bdedf25830ec92da7a7127a89bebdfad7153440b8c9b29"
       },
       "proof:event-contract": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
         "sourceDigest": "fc3e98c36cb34aaab5f1c7f41e010a2cdfce70bd32541089694701849edbb5ed"
       },
       "proof:evidence-adapter": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
-        "sourceDigest": "6cb105b3894c6b80a04ffd15df4145b950b44c7966f5a977cd1203718737df8c"
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
+        "sourceDigest": "4e4e8ea10e9af2796e53263bfb29ec801110aec760f3264fee680baf189ed557"
       },
       "proof:evidence-coverage": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
-        "sourceDigest": "90cf891e65d676b19d06d3946eb0dc86350ca07c12473519978b68ea12b75d7f"
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
+        "sourceDigest": "5a47b88e6a1f7c4d7855b368b0a3bc84f99aeeb0f59167f9c52cfbfa73f3cb97"
+      },
+      "proof:evidence-observedat-tz": {
+        "status": "passed",
+        "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
+        "sourceDigest": "8be779ae90bfb8440e5d15e4dfeda6ed91fb3fb64d0bc72cb72c97d4309ca8db"
       },
       "proof:fabric-evals": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
-        "sourceDigest": "690e18d186428f5c0a8c7ed98511b5c6f89459a0867f74aeb0059c9c60aa4eeb"
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
+        "sourceDigest": "b1e2e54cce30ca29e1b47c196c2bec7814a7ed80a0bcbe326f419079016a116f"
       },
       "proof:fabric-scenario": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
-        "sourceDigest": "2be1086124c1f241e01f79c9bbc24dbf9f45091478117a3e80912761cbf9ad83"
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
+        "sourceDigest": "d98a82287af1dce97434085e5044a65f91daf56d0ec08c14208d43088f074c57"
       },
       "proof:facility-trust-graph": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
-        "sourceDigest": "a41cf4294798da42753c113062e9b674ad462a564e4b1d9eb0f68a259d27e605"
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
+        "sourceDigest": "387355582133e5449522a26d81c5ec1ddbde41d391837af49c0224624740a784"
       },
       "proof:factory-flows": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
         "sourceDigest": "380010a0b3d234f820d8d31abb1df50a70ed36130fc7cabacbec3552a4826305"
       },
       "proof:fleet-connector": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
         "sourceDigest": "3e54682fb238780be9c54fbcce21d72374f8ac72213173e00e7ccd772bc79de2"
       },
       "proof:flows": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
         "sourceDigest": "0f864a016d4309064ee223ce3b2eef6993275f8423f2e936604e5871c996d62f"
       },
       "proof:grant-safety": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
         "sourceDigest": "d16123780fedffe7ad058ef1ed773d731b5d6842054f2377f4f4ffd4b4f3b0a6"
       },
       "proof:graph-connector": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
         "sourceDigest": "9bba1b9cda2f385b1200fcb895d5176010cd3a9619be95644134520146120754"
       },
       "proof:graph-wire": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
         "sourceDigest": "621257eaef07f6a489e837d858bce0c316a23ccf4c9a305fa3a092ac60e8fa08"
       },
       "proof:grid-config": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
         "sourceDigest": "ef5acf7a975632c234deb6009db814348cd879478ed22ef43eebb8d86434bd2f"
       },
       "proof:grid-coverage": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
         "sourceDigest": "3e637ae04eee28d1b7d71122278f7d6d413ea50ee9a0c70b89677dd8267abd69"
       },
       "proof:grid-lifecycle": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
         "sourceDigest": "fafe009675bcf9a64cc2d03841694bbde07f02088346c01b7aa2c8f3bc39353d"
       },
       "proof:handoff-sim": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
-        "sourceDigest": "9e8a6b9cbcfb2696195053b21e7da21c168bb06898dc46f53c2f4c0af184d6ec"
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
+        "sourceDigest": "85cfc32201bce1777a612c49d7415fbcd1080e38d77ad1561e392c04e7b8701f"
       },
       "proof:iac": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
         "sourceDigest": "dd2bb88cdc1075356db3d31136260e511c78a93eda0983cfac25a92fab4e0f00"
       },
       "proof:identity-risk": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
         "sourceDigest": "2ab65349f66fe286973cb592ad1ec0952b291ab36495e2ee7dbcfbb8a149d50d"
       },
       "proof:incident-playbook": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
-        "sourceDigest": "8ff3011bbe1a1981fd6a0d2447fb8d56927faa06b0b60f01e8f47b4f17d41059"
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
+        "sourceDigest": "06bbc0922a2361ae2b408f3ea2fd05cb8707c983ee64c8d35daea2ea1e9e7cfe"
       },
       "proof:intune-entra-posture": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
         "sourceDigest": "abb69e6565de6fd93c898c660305e898079644cf12d8c509f5267f245b502dd6"
       },
       "proof:isolation-scope": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
-        "sourceDigest": "ee84167d58c0627b8f11a03b681d0f7b97f14e64545fbee0ac0be2d40b5fa6ec"
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
+        "sourceDigest": "b9dccb7ff5d68512b4c5d16843d214f5143a721ae4e70eca7e76f343bdefaf31"
       },
       "proof:itom-itsm-bridge": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
-        "sourceDigest": "911c9c7d3c2fee584e0ebad8f5012a3234f3b230b2fc0bb46baf7b18e59e3aec"
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
+        "sourceDigest": "76ab8bce48e2cd9cbbda4d5ec1797e3f99443066550276d4827be96e97f5e15f"
       },
       "proof:itsm-credential-crypto": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
         "sourceDigest": "8f916daa9802d567a106167ce553b3dce47b13bea073fe0cd230b2e45b6e253c"
       },
       "proof:itsm-dispatch": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
         "sourceDigest": "c8d8a73a42725ea90e4e799918838ad7e8caf1403b8e91add8b48ca642c1bf50"
       },
       "proof:itsm-template": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
         "sourceDigest": "5951c070c525074ca7d4ce3e071855ea10e0b876e8f244f2d9a1f5f86f90ef44"
       },
       "proof:kpi-kri-kci": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
-        "sourceDigest": "d2dceb3777804a3441308b5e3fdbcf9e7af3fed959e4ca63c5857d591bfa8f30"
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
+        "sourceDigest": "9be65961f9255d4c5e1e3b73cdfd2beac3fd004e376588ba39137b537a469d74"
       },
       "proof:lane-messages": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
         "sourceDigest": "92d8321114d707930cd3a77c22a095cfe945d56e32c22a568213b210fafd203c"
       },
       "proof:launch-profile": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
         "sourceDigest": "2e15b97076c1ca838d79b19bf72fd7ee06a75c11ada90479f6a19435e189868b"
       },
       "proof:launch-seam": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
-        "sourceDigest": "75b180efe872b9113c55bb3077a972c70daf1c13dbdcded93f7e50025da89b68"
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
+        "sourceDigest": "245305d557a4bf4404af67a076904d7678690a57783a0a97a959cedbdc05f8d0"
       },
       "proof:link-usability": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
-        "sourceDigest": "09bc6ad4dd7e04b5ac7d1d14a710ef8acb1d3ec6492344560c30f19506dd258a"
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
+        "sourceDigest": "c30c8ec9840d7a66fdd9d51db25c00cef772e405e885a9f9326486a88a917df0"
       },
       "proof:live-idp": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
-        "sourceDigest": "9b0c0ad269eeb252d9493435810f019cc39192e548031639ae0e590587f4e802"
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
+        "sourceDigest": "ea47682aba9435b9e2bd75d0471215ac97a66585f7899e4e5d5964281e8f1f98"
       },
       "proof:local-authority": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
         "sourceDigest": "4a02736e462bf9dd7bd98e5f423463d0251516cc3cdf5628fe5f47ee81e8ca78"
       },
       "proof:location-services": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
-        "sourceDigest": "52d948c11434e9cd1c85893d9be2fba1cc0dc399530cc37894a6197abb611040"
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
+        "sourceDigest": "5ab45dd5ed6805cc61bd99087a76e77ff892e587ea444b2d983df566146ce07b"
       },
       "proof:macos-apple-schema": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
         "sourceDigest": "a488711431201c600c74db5349c7b0c44485c10f00977929c85a9204062c2d09"
       },
       "proof:macos-posture": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
-        "sourceDigest": "c505c3e8d92bb5ed2e3b21a4b2b2678cf0f833566911d3684a00bd81dadc5343"
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
+        "sourceDigest": "737258483458d16bd0bc822b5aab1cdd972f687162541bc9209b71ed427c7c2b"
       },
       "proof:mcp-answer-discipline": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
         "sourceDigest": "f4a2281aaed554685b0997c21fe53faec97e26fe3f3c615f7b1cd696d82eeb14"
       },
       "proof:mcp-server": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
         "sourceDigest": "9a60be016c60ff75da00570b816245ee910e9a74df8013e1254343959d2a1d92"
       },
       "proof:mdm-profile": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
         "sourceDigest": "64a573aa45ef5605a47fd273d15c62879caf49f97a3b934ae5de82c655832d44"
       },
       "proof:microsoft-graph-sandbox": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
         "sourceDigest": "1c0097c5b735024dccd37b4234ffcb710d2cc675605ad91e447d673adacbe460"
       },
       "proof:mobile-app-catalog": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
         "sourceDigest": "93d50f0725ea4da57d2f4c6a29122d6efea49c34c67a41374ff53d088bbbc2a4"
       },
       "proof:municipal-resilience": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
-        "sourceDigest": "5993baf6109e219960803cc10215df67aa8a2099e8a7126749e4554fe4030e4b"
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
+        "sourceDigest": "0932811fa6793e6f2cc9dbeae8300c2bcf561ac7532cc6ac5dd8006514d88717"
       },
       "proof:nac": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
         "sourceDigest": "9f73c4000682147149c3fc2ff691e368e143882aedac18a929ed9868fb368ddd"
       },
       "proof:network-nac": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
-        "sourceDigest": "a59e063c7e8036ca6678fbfba5595e1358875bb5f176f9fd9f924a193e0e6bb8"
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
+        "sourceDigest": "66b9685a4ea26d603f1948efae7b69b6c4494789021994d5185bd1d8eea2e934"
       },
       "proof:oauth-consent": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
-        "sourceDigest": "6b1d7521bf9f411b9b10109adfc3579e213267e01f47edab613b5e643e0abeca"
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
+        "sourceDigest": "8ba7ac299696be9d24f9b39e30c3f71d99ca694df451e6a0794266beffe184ec"
       },
       "proof:observability": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
-        "sourceDigest": "2ec3564a457f7567f35297e727bd454601de85c6cf4d2473b4c8e2303bc5d452"
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
+        "sourceDigest": "4d36466691d15cef90d6e022d0519b730ae2f9e10797b9a1751accec8db02c39"
       },
       "proof:observability-integrity": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
         "sourceDigest": "4aa6ff5ab7f199b58b57f49b6ff08fc2e814a3d0fe0299cc501ade2134694bdf"
       },
       "proof:operating-method": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
         "sourceDigest": "05fbd632efd1689b42b3ead85767c4304bf84642b80329df46884372b0660622"
       },
       "proof:orchestration": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
         "sourceDigest": "2f7aff0750770995cc80e64bb92d2098d7dd27f9f712f60ee0c4012ab121095b"
       },
       "proof:ot-posture": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
-        "sourceDigest": "cfcf8a4d465734fc113e6dc0baf9003057c04299eaa4854d1d061f78eafe30d8"
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
+        "sourceDigest": "56a72b50f9e52428bfc05c955391a50a6644edeae76dd68af0b37c51cd5d3adb"
       },
       "proof:pacs-access": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
-        "sourceDigest": "80880563a23411f06fd97cec0d81de2b5112f1e56fa2952ae4a467c7d05fab61"
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
+        "sourceDigest": "470f462d523f15667e8f51075fb0975b531cc83400e1a703fef815ec487a4623"
       },
       "proof:passkey-assurance": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
         "sourceDigest": "ce9be4b290fa29a225d73c066d84b267d229a6ec8c3bab55ec6067b7fe315194"
       },
       "proof:peripheral-control": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
         "sourceDigest": "0e9761a3cb4c77ae4fefc46648d9df7309d365a327ae8b9b295a96f8d94f3a8a"
       },
       "proof:pim-activation": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
-        "sourceDigest": "39c909a821d9d5d8141b8d8c63a1d01557637b8abb6a03f68989dd9d3656257f"
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
+        "sourceDigest": "1678749a07e8d7d26411a5722da3c597f1d0beec5614dc3bb76ec11de129b079"
       },
       "proof:platform-sso": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
-        "sourceDigest": "0687924ca640bba725caa795d98d88be5c5a3714301535a569cd717e0640d5b0"
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
+        "sourceDigest": "1210f289ccce060b95401dc39caffd8c2dce232fc1111cef4b18698098e82693"
       },
       "proof:policy-binding": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
-        "sourceDigest": "5d75b11fd282c3749ff65307828ebe4eb16277c940579276fba821bae3ca8d46"
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
+        "sourceDigest": "d14cb94c815af866f295273ba1e3e5cb320a659ecc6000c03922edc45935bc17"
       },
       "proof:posture-allow": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
         "sourceDigest": "d6bf786a2dd3b82a19a39ce7b5826cc33adec186f7e0e68e7c0086f971dfbf81"
       },
       "proof:posture-composition": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
-        "sourceDigest": "8fa815af6375af028d6501d327119b97ebf38c07337773fe0d87886e11617fbd"
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
+        "sourceDigest": "29789180249f2c2d05f9b0719e977ff4b373ca24630e40c5d7e8ca53895c2130"
       },
       "proof:provisioning": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
         "sourceDigest": "9d1b3228613fe239553d56cd0c0d28f66404673c855679d462555a045d21c451"
       },
       "proof:provisioning-order": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
         "sourceDigest": "9c40052a18ce21edc7c11bb246eb67854414c5a42c2aa33964e8b3f9c7a54507"
       },
       "proof:provisioning-teardown": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
         "sourceDigest": "7d4c9e8c8c61cbf3a4a8d0a43ccc99d802d42722432532f8bb8206ea4e34e0a2"
       },
       "proof:recommendations": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
         "sourceDigest": "3445806de8d8ac5b574fb6983c4a63bbe31bd99fca9fafb804961f6fa61595df"
       },
       "proof:reliability": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
         "sourceDigest": "4164f6432c5a3bc4b231ce8f3f047ce0001983535c68b75e69bd52835d4f3d8f"
       },
       "proof:remediation-allow": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
         "sourceDigest": "0940390dbd47312d029b380f9065fcb619db715970c5966a9f66bf9cd6fe322a"
       },
       "proof:remediation-verification": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
-        "sourceDigest": "a7aa732d903f92b6dc2eb103f0a5df4eb52869c1230a922af5acf6a6bfa23be4"
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
+        "sourceDigest": "25553b0bb83a6fc75cc561823c98368b72aa982892fc0f0778117c817b6476cf"
       },
       "proof:response-accountability": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
         "sourceDigest": "c369c8a637d122d60c32753c831ec177524e94ba7b2b14e7ca0f4fc8c7fc22e2"
       },
       "proof:room-sim": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
-        "sourceDigest": "cbb3269cb843ad8bc9ffcf38472e4eaa11a502e88d2bb977c5446720039a5493"
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
+        "sourceDigest": "c7fd540667ce34f5985951838b2de1b9ed26e8cc0ed520ae422a91db3b7afc15"
       },
       "proof:rtls-custody": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
         "sourceDigest": "a40fa2e6b19012537f3730c531ee61ad7d52362f81ccbf8413432a65fdd4e0af"
       },
       "proof:secrets": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
         "sourceDigest": "543ea88010be2f9ddd46791f55267b918677b3a52044873b748f395c8ed6a884"
       },
       "proof:security-operations-evidence": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
-        "sourceDigest": "ff46889f4fd3777cab73df0378a2d69e1873898ca393f25d54d04f6345e4bfd6"
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
+        "sourceDigest": "efb25f9f29d7e4827873756a2de5729fdda113ba3609c227d713d0f9e5eca81e"
       },
       "proof:self-audit": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
         "sourceDigest": "7a87ea06a9f02e79f5c6c9135e463ad40dc352aede6851c0f77050573f4c5825"
       },
       "proof:service-lifecycle": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
-        "sourceDigest": "37d2c8c2641d1c2cb14622636cd3cd99626cacedf2e12afde947d7d27790d38e"
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
+        "sourceDigest": "8e6963e17839791c04a14bd1f660da16cf773e241cafac50432fbda343bc35a9"
       },
       "proof:session-readiness": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
-        "sourceDigest": "6bd7ecc3bc8c68f9f0a52346e5cd12205aa7242e492d50bb035f35960119643a"
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
+        "sourceDigest": "77b59a75457635ab968c0662d3a7a6ed3cca9893ec5996d7fbff4e97884e6a9d"
       },
       "proof:session-store": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
-        "sourceDigest": "1b6d3144638e4ec997944c7a8507246b0ca4c00654681e5b18c00fbb54befad9"
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
+        "sourceDigest": "6ef90799740372ed3fe0a799d9b596b2e53d42c580a06715b2f984d9f82d0d2a"
       },
       "proof:shift-context": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
-        "sourceDigest": "adc1a6717ff9b70e6f7e1946e27fb58bc33f19b317283083ba0d8facd71361e0"
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
+        "sourceDigest": "d13e8e857437326f55bf8d8a3e80690d5879eb310124e0cc7036335ab005a578"
       },
       "proof:signal-discovery": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
         "sourceDigest": "4a750804c27976b39f16cebea0e88c65f0c0af2148045197a153786de1ee0323"
       },
       "proof:signal-radar": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
         "sourceDigest": "8eb039294e6e5c4286c4f83f1e315e2ad66567720e229897911fc44025aa2364"
       },
       "proof:signalgrid-core": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
-        "sourceDigest": "47e6d9b580da4a778acf6b40a29e0f9d1529c7d06c11e79e4e25caedcafaa2e7"
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
+        "sourceDigest": "e760607245bce2c46474c9007f949c645e251950717b712058b74968a22d8865"
       },
       "proof:signalgrid-grid": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
         "sourceDigest": "b5ec4402824a8c73e64249ff7c93e74928da87867e4fc4680a05a60d495b6033"
       },
       "proof:signalgrid-simulator": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
         "sourceDigest": "ea0a205726a4d35cb451153d2df9babd7bae3220ca2755de037e324155077f17"
       },
       "proof:sim-requests": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
         "sourceDigest": "dfe307b50dc27b66fe3fbb811d081c1396108d0ec261f0d69f8bda6e82c2e528"
       },
       "proof:sse-egress": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
-        "sourceDigest": "bfd899b82a546dc698644ee2bf8293424e39c85e8f8af5791855bfacf4a1c1dc"
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
+        "sourceDigest": "308c8f2d87d54abbf06e0f464e7a6be591730d406ee86a31b73f5b4401663cad"
       },
       "proof:sso-session": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
-        "sourceDigest": "09e0e43fbc1ef976955808fe49baef5de407abff42bc71828e708e474069b30c"
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
+        "sourceDigest": "cf46fd24aa874bb387f22ddf663ef221074ce33b8456a84faa5629466d7e8509"
       },
       "proof:task-exception": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
-        "sourceDigest": "07b0142a45712efcbb662ac23f28195b5c7dc952c047e44d06c11430e7252d7d"
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
+        "sourceDigest": "2dbf2eb93367568644e22aeaaf167e04b544169b0979519c5b028cd065d81e17"
       },
       "proof:telemetry-posture-cache": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
         "sourceDigest": "a64514d2002f0f4538772f045466aa0cb5e3868814303d00268a5065aa18790c"
       },
       "proof:telemetry-up": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
-        "sourceDigest": "cddbb9e4ea7509900019e36d162ff09a59a1d1e53b90793b29d60902cf355aa5"
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
+        "sourceDigest": "5e163759b1abb706fc57acbcea430b772b161395cd3e110603d0f57f6eb33262"
       },
       "proof:token-binding": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
-        "sourceDigest": "ec3e217f3290754887706e70365a1875839ca1cc9971d4a32727b665d058b67f"
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
+        "sourceDigest": "60085490b349a43418fe97b56ee4255a7af1bc650cee5d2b6e4a791047a6eb43"
       },
       "proof:uem": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
         "sourceDigest": "5645e12b1d1f740f3375edac63d20d613e5c472dcd69f873b900126a2fd47f6e"
       },
       "proof:unsafe-claim": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
         "sourceDigest": "10ed7a17f82ef767ea232e247de8ba64d15d64c8841545c31ac218ce2a22357a"
       },
       "proof:verdict-attestation": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
         "sourceDigest": "0620b321b99975f080248b2581cef556de408815e0489850be05ffbe4a1f2092"
       },
       "proof:vuln-scan": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
         "sourceDigest": "e7a31840d3b6daff28a6576e7cd82d89d87a39472de681300f14236fe7232e4a"
+      },
+      "proof:webauthn-revocation": {
+        "status": "passed",
+        "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
+        "sourceDigest": "c09359b2586951101b80dd8b78e6e85a1bba1249f5228d5878d901289d795c35"
       },
       "proof:webauthn-verify": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
-        "sourceDigest": "d3a936056238a9c1d43d5a3d5fee75defeef4a7ed07a9e78e64bd21ef3f85bef"
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
+        "sourceDigest": "c898611e5643886e22fe8f8ac9beb6f4503777d2b6018b69ddf4bff86c62a857"
       },
       "proof:webhooks": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
-        "sourceDigest": "ce2146ef90b87e6f0dfe8f6263e9ebd3d3d7a10a9b0b6ad4ed3cdef6f7195a7a"
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
+        "sourceDigest": "e2a26148a994986984137bc1c134aef0c28d8b39ce1f540aef1eb0c409093b96"
       },
       "proof:work-context": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
-        "sourceDigest": "59bd25a86cd5c4b3f08f2d5be0fcd229006407d1cc0409b1dbe70caf4efe5201"
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
+        "sourceDigest": "f8f309156615348150c538c1a77bb59b34da1825c854f2d39ad4fd1662581e8f"
       },
       "proof:zero-trust-principles": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "reviewHubCommit": "b475b9fddaee64932f6de47fa11afd63fde60c85",
-        "sourceDigest": "6e18708a515a1f95c2cc6b25d9fbe15baa08ed2429ac5c16eab51985f26e146f"
+        "reviewHubCommit": "44345ec92f2f799bd95d6ac6b55093721d7f22e2",
+        "sourceDigest": "339eb7493e4b346fbedad53e60342a3af20b1b661c2dcac8fe64b79f9618fcc5"
       }
     },
     "notRecorded": [
@@ -1012,6 +1024,11 @@
         "sourceDigest": null
       },
       "MCP roster (per-lane and per-skill grants; signalgrid-mcp tool count derived from the server source)": {
+        "status": "passed",
+        "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
+        "sourceDigest": null
+      },
+      "Estate scan self-test (an unreachable or misidentified sibling must read NOT SCANNED; only an archived repo's breaks are report-only)": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
         "sourceDigest": null
@@ -1146,7 +1163,7 @@
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
         "sourceDigest": null
       },
-      "Doc line counts (every `path (N)` figure matches the file it names)": {
+      "Doc line counts (every `path (N)` figure is within max(25 lines, 5%) of the file it names)": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
         "sourceDigest": null
@@ -1621,6 +1638,16 @@
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
         "sourceDigest": null
       },
+      "Web a11y basics self-test (the gate must be able to fail)": {
+        "status": "passed",
+        "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
+        "sourceDigest": null
+      },
+      "Web a11y basics (live regions on polling views, labelled icon buttons, reduced motion)": {
+        "status": "passed",
+        "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
+        "sourceDigest": null
+      },
       "Reason codes self-test (the gate must be able to fail)": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
@@ -1737,6 +1764,11 @@
         "sourceDigest": null
       },
       "Brain proposal-PR route self-test (review build only; governance, decision-path and non-applying patches refused; publish idempotent)": {
+        "status": "passed",
+        "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
+        "sourceDigest": null
+      },
+      "Local-brain guard repairs self-test (stripped synthetic brain: --check fails, --apply restores and re-pins, drift refused; needs python3, FAILS without it)": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
         "sourceDigest": null
@@ -2235,7 +2267,7 @@
       "Browser E2E (review console, website, admin)": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "sourceDigest": "d4900619a5364f1bdcb46619a1d2814a10d35768af4a72c30e72eef90909fc16",
+        "sourceDigest": "028b7a75a8936015f4336ff982316a3f52bc0aaa81284a29964418f8d7d77883",
         "attestedBy": "native-build-attestation/v1 (Linux VM on this tree)"
       },
       "Proof: signalgrid-simulator": {
@@ -2598,6 +2630,11 @@
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
         "sourceDigest": null
       },
+      "Proof: evidence observedAt ordering is host-timezone independent (TZ=UTC, New_York, Tokyo as child processes)": {
+        "status": "passed",
+        "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
+        "sourceDigest": null
+      },
       "Proof: device-resolver (read-only at the injection boundary)": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
@@ -2721,7 +2758,7 @@
       "API integration test (boots the server)": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
-        "sourceDigest": "d9c938fee3203aed175f181ad665c1cb4f9ac30279997f2efa55e6cbf1ab6101"
+        "sourceDigest": "6f2c63ae1c9e614e1e4fb335d6aa6d723b0ecab0c40a576c4719653909280f94"
       },
       "Console + PWA unit tests (policyTests, facilityGraphLayout, outcomeTone, signal-tone)": {
         "status": "passed",
@@ -2779,6 +2816,11 @@
         "sourceDigest": null
       },
       "Proof: webauthn-verify": {
+        "status": "passed",
+        "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
+        "sourceDigest": null
+      },
+      "Proof: webauthn-revocation (a revoked credential stays revoked; re-read before release)": {
         "status": "passed",
         "manifestFingerprint": "e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4",
         "sourceDigest": null

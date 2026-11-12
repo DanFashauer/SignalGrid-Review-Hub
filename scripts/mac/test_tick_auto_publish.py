@@ -36,7 +36,10 @@ cfg = json.loads((root/"fixture.json").read_text())
 with (root/"client-context.jsonl").open("a") as f:
     keys=["GIT_SSH_COMMAND","BASH_ENV","ENV","SHELLOPTS","BASHOPTS"]+[k for k in os.environ if k.startswith("BASH_FUNC_")]
     f.write(json.dumps({"client":"node","argv":a,"env":{k:os.environ.get(k) for k in keys}})+"\n")
-if "--list-review" in a:
+if "--list-review" in a or "--list-prepare" in a:
+    if "--list-prepare" in a:
+        print("\n".join(cfg.get("prepare_jobs", [])))
+        sys.exit(0)
     counter=root/"listing-count"
     count=int(counter.read_text())+1 if counter.exists() else 1
     counter.write_text(str(count))
@@ -47,6 +50,47 @@ if "--list-review" in a:
         print("PRIVATE_SYNTHETIC /Users/fixture/private-db", file=sys.stderr)
         sys.exit(42)
     print("\n".join([] if cfg.get("stale_on_preflight") and count>1 else cfg.get("jobs", ["freshA"])))
+    sys.exit(0)
+if "--job" in a and "--publish" not in a:
+    import hashlib
+    job=a[a.index("--job")+1]
+    with (root/"prepare-calls.jsonl").open("a") as f:
+        f.write(json.dumps({"job":job,"argv":a})+"\n")
+    if cfg.get("prepare_error"):
+        print("PRIVATE_SYNTHETIC /Users/fixture/private-source",file=sys.stderr)
+        sys.exit(1)
+    title="Synthetic privacy preparation"
+    body="Synthetic exact screened public metadata."
+    def export(source,text):
+        b=text.encode()
+        return {"source":source,"bytes":len(b),"sha256":hashlib.sha256(b).hexdigest()}
+    publisher=Path("scripts/mac/brain-proposal-pr.mjs").resolve()
+    request={"format":"signalgrid-publication-privacy-request/v1","job":job,
+        "job_sha256":"a"*64,"publisher_sha256":hashlib.sha256(publisher.read_bytes()).hexdigest(),
+        "worker_head":"1"*40,"worker_uid":os.getuid(),"patch_sha256":"b"*64,
+        "replay_base":"3"*40,"head":"4"*40,"tree":"2"*40,
+        "exports":[export("metadata/title.txt",title),export("metadata/body.md",body),
+                   export("metadata/commit.txt","Synthetic commit"),
+                   export("metadata/paths.json",json.dumps(["docs/x.md"],separators=(",",":"))),
+                   export("deleted/docs/x.md.txt","Deleted public path: docs/x.md\n") if cfg.get("prepare_deletion")
+                   else export("files/docs/x.md","Synthetic public file\n")]}
+    if cfg.get("prepare_missing_paths"):
+        request["exports"]=[row for row in request["exports"] if row["source"]!="metadata/paths.json"]
+    if cfg.get("prepare_unknown_export"):
+        request["exports"].append(export("metadata/unknown.txt","Unknown"))
+    if cfg.get("prepare_metadata_only"):
+        request["exports"]=[row for row in request["exports"] if row["source"].startswith("metadata/")]
+    if cfg.get("prepare_bad_deletion"):
+        request["exports"]=[export(row["source"],"Wrong deletion marker") if row["source"].startswith("deleted/") else row
+                            for row in request["exports"]]
+    request["exports"].sort(key=lambda row:row["source"])
+    request_sha=hashlib.sha256(json.dumps(request,sort_keys=True,separators=(",",":"),ensure_ascii=False).encode()).hexdigest()
+    metadata={"format":"signalgrid-publication-prepared-metadata/v1","request_sha256":request_sha,"title":title,"body":body}
+    if cfg.get("prepare_bad_digest"): metadata["request_sha256"]="0"*64
+    print("SIGNALGRID_PUBLICATION_PRIVACY_REQUEST "+json.dumps(request))
+    if cfg.get("prepare_duplicate"): print("SIGNALGRID_PUBLICATION_PRIVACY_REQUEST "+json.dumps(request))
+    if not cfg.get("prepare_missing_metadata"):
+        print("SIGNALGRID_PUBLICATION_PREPARED_METADATA "+json.dumps(metadata))
     sys.exit(0)
 if "--job" not in a or "--publish" not in a:
     print("Fixture refuses an unrecognized node action", file=sys.stderr)
@@ -215,6 +259,180 @@ class TickAutoPublishRegression(unittest.TestCase):
         self.cap="1"
         self.host_busy=False
         self.extra_env={}
+
+    def enable_preparation(self):
+        self.activation["privacy_preparation_enabled"]=True
+        self.write_activation()
+        anchor=json.loads(self.anchor.read_text())
+        self.anchor.chmod(0o600)  # Only this disposable setup file, before resealing the fixture.
+        anchor["activation_sha256"]=hashlib.sha256((self.state/"activation.json").read_bytes()).hexdigest()
+        for name,path in (("preparations",self.state/"preparations"),("preparation_mirror",self.mirror/"preparations")):
+            path.mkdir(mode=0o700)
+            s=path.stat()
+            anchor[name]={"path":str(path.resolve()),"dev":s.st_dev,"ino":s.st_ino}
+        self.anchor.write_text(json.dumps(anchor,sort_keys=True)+"\n")
+        self.anchor.chmod(0o400)
+        self.cfg={"jobs":[],"prepare_jobs":["freshA"]}
+
+    def test_preparation_makes_private_bound_handoff_without_publication(self):
+        self.enable_preparation()
+        out,err=self.run_step()
+        handoff=self.state/"preparations/freshA/request.json"
+        self.assertTrue(handoff.exists(),out+err)
+        value=json.loads(handoff.read_text())
+        self.assertEqual(value["format"],"signalgrid-brain-privacy-handoff/v1")
+        self.assertEqual(value["request"]["job"],"freshA")
+        self.assertEqual(value["metadata"]["request_sha256"],value["request_sha256"])
+        self.assertEqual(handoff.stat().st_mode & 0o777,0o400)
+        self.assertNotIn("source_review",value)
+        self.assertNotIn("artifact_review",value)
+        self.assertNotIn("approved",value)
+        self.assertEqual(len(self.jsonlines("prepare-calls.jsonl")),1)
+        self.assertEqual(self.calls(),[])
+        self.assertNotIn("PRIVATE_SYNTHETIC",out+err)
+        events=(self.root/"host-events").read_text().splitlines()
+        self.assertEqual(events.count("acquire"),1)
+        self.assertEqual(events.count("release"),1)
+
+
+    def test_preparation_failed_started_receipt_never_creates_review_handoff(self):
+        self.enable_preparation()
+        self.cfg["fail_started_receipt"] = True
+        out, err = self.run_step()
+        terminal = json.loads((self.state/"preparations/freshA/terminal.json").read_text())
+        self.assertEqual(terminal["started_receipt_error"], "OSError")
+        self.assertEqual(terminal["returncode"], 0)
+        self.assertTrue(terminal["normal_exit"])
+        self.assertTrue(terminal["original_wait_completed"])
+        self.assertFalse((self.state/"preparations/freshA/started.json").exists())
+        self.assertFalse((self.state/"preparations/freshA/request.json").exists(), out + err)
+        self.run_step()
+        self.assertEqual(len(self.jsonlines("prepare-calls.jsonl")), 1)
+        self.assertEqual(self.calls(), [])
+        events = (self.root/"host-events").read_text().splitlines()
+        self.assertEqual(events.count("acquire"), events.count("release"))
+
+    def test_preparation_missing_started_receipt_result_never_creates_review_handoff(self):
+        self.enable_preparation()
+        self.cfg["remove_started_receipt_result"] = True
+        out, err = self.run_step()
+        terminal = json.loads((self.state/"preparations/freshA/terminal.json").read_text())
+        self.assertNotIn("started_receipt_error", terminal)
+        self.assertEqual(terminal["returncode"], 0)
+        self.assertTrue(terminal["original_wait_completed"])
+        self.assertFalse((self.state/"preparations/freshA/request.json").exists(), out + err)
+
+    def test_preparation_incomplete_original_wait_never_creates_review_handoff(self):
+        self.enable_preparation()
+        self.cfg["incomplete_preparation_wait"] = True
+        out, err = self.run_step()
+        terminal = json.loads((self.state/"preparations/freshA/terminal.json").read_text())
+        self.assertIsNone(terminal["started_receipt_error"])
+        self.assertEqual(terminal["returncode"], 0)
+        self.assertFalse(terminal["original_wait_completed"])
+        self.assertFalse((self.state/"preparations/freshA/request.json").exists(), out + err)
+
+    def test_preparation_accepts_deleted_path_inventory(self):
+        self.enable_preparation()
+        self.cfg["prepare_deletion"]=True
+        out,err=self.run_step()
+        handoff=self.state/"preparations/freshA/request.json"
+        self.assertTrue(handoff.exists(),out+err)
+        sources={row["source"] for row in json.loads(handoff.read_text())["request"]["exports"]}
+        self.assertIn("deleted/docs/x.md.txt",sources)
+        self.assertIn("metadata/paths.json",sources)
+        self.assertEqual(self.calls(),[])
+
+    def test_preparation_missing_paths_inventory_never_creates_review_handoff(self):
+        self.enable_preparation()
+        self.cfg["prepare_missing_paths"]=True
+        self.run_step()
+        self.assertEqual(len(self.jsonlines("prepare-calls.jsonl")),1)
+        self.assertFalse((self.state/"preparations/freshA/request.json").exists())
+
+    def test_preparation_unknown_metadata_never_creates_review_handoff(self):
+        self.enable_preparation()
+        self.cfg["prepare_unknown_export"]=True
+        self.run_step()
+        self.assertEqual(len(self.jsonlines("prepare-calls.jsonl")),1)
+        self.assertFalse((self.state/"preparations/freshA/request.json").exists())
+
+    def test_preparation_metadata_without_changed_path_never_creates_review_handoff(self):
+        self.enable_preparation()
+        self.cfg["prepare_metadata_only"]=True
+        self.run_step()
+        self.assertEqual(len(self.jsonlines("prepare-calls.jsonl")),1)
+        self.assertFalse((self.state/"preparations/freshA/request.json").exists())
+
+    def test_preparation_changed_deletion_marker_never_creates_review_handoff(self):
+        self.enable_preparation()
+        self.cfg["prepare_deletion"]=True
+        self.cfg["prepare_bad_deletion"]=True
+        self.run_step()
+        self.assertEqual(len(self.jsonlines("prepare-calls.jsonl")),1)
+        self.assertFalse((self.state/"preparations/freshA/request.json").exists())
+
+    def test_preparation_runs_only_once_while_review_is_pending(self):
+        self.enable_preparation()
+        self.run_step();self.run_step()
+        self.assertEqual(len(self.jsonlines("prepare-calls.jsonl")),1)
+        self.assertEqual(self.calls(),[])
+
+    def test_preparation_requires_explicit_activation(self):
+        self.cfg={"jobs":[],"prepare_jobs":["freshA"]}
+        self.run_step()
+        self.assertEqual(self.jsonlines("prepare-calls.jsonl"),[])
+        self.assertFalse((self.state/"preparations").exists())
+
+    def test_preparation_defers_busy_host_without_consuming_job(self):
+        self.enable_preparation()
+        self.host_busy=True
+        self.run_step()
+        self.assertEqual(self.jsonlines("prepare-calls.jsonl"),[])
+        self.assertFalse((self.state/"preparations/freshA").exists())
+
+    def test_failed_preparation_is_consumed_and_private_errors_stay_private(self):
+        self.enable_preparation()
+        self.cfg["prepare_error"]=True
+        out,err=self.run_step()
+        self.run_step()
+        self.assertEqual(len(self.jsonlines("prepare-calls.jsonl")),1)
+        self.assertFalse((self.state/"preparations/freshA/request.json").exists())
+        self.assertNotIn("PRIVATE_SYNTHETIC",out+err)
+        terminal=json.loads((self.state/"preparations/freshA/terminal.json").read_text())
+        self.assertEqual(terminal["returncode"],1)
+
+    def test_preparation_bad_digest_never_creates_review_handoff(self):
+        self.enable_preparation()
+        self.cfg["prepare_bad_digest"]=True
+        self.run_step()
+        self.assertEqual(len(self.jsonlines("prepare-calls.jsonl")),1)
+        self.assertFalse((self.state/"preparations/freshA/request.json").exists())
+
+    def test_preparation_duplicate_marker_never_creates_review_handoff(self):
+        self.enable_preparation()
+        self.cfg["prepare_duplicate"]=True
+        self.run_step()
+        self.assertEqual(len(self.jsonlines("prepare-calls.jsonl")),1)
+        self.assertFalse((self.state/"preparations/freshA/request.json").exists())
+
+    def test_preparation_missing_metadata_never_creates_review_handoff(self):
+        self.enable_preparation()
+        self.cfg["prepare_missing_metadata"]=True
+        self.run_step()
+        self.assertEqual(len(self.jsonlines("prepare-calls.jsonl")),1)
+        self.assertFalse((self.state/"preparations/freshA/request.json").exists())
+
+    def test_preparation_lost_mirror_is_not_recreated_or_replayed(self):
+        self.enable_preparation()
+        self.run_step()
+        mirror=self.mirror/"preparations/freshA.json"
+        self.assertTrue(mirror.exists())
+        mirror.unlink()
+        self.run_step()
+        self.assertEqual(len(self.jsonlines("prepare-calls.jsonl")),1)
+        self.assertFalse(mirror.exists())
+
     def tearDown(self):
         self.tmp.cleanup()
     def write_activation(self):
@@ -272,6 +490,32 @@ sg_host_verify_release() { printf 'release\\n' >> "$SG_TEST_ROOT/host-events"; S
         # Inject into the extracted Python only, after its parent Bash started.
         # Otherwise BASH_ENV would poison the fixture launcher, not this boundary.
         wrapper=wrapper.replace("    account_home = lambda: Path(os.environ['SG_TEST_TRUSTED_HOME'])", "    account_home = lambda: Path(os.environ['SG_TEST_TRUSTED_HOME'])\n    os.environ.update(json.loads((Path(os.environ['SG_TEST_ROOT'])/'fixture.json').read_text()).get('client_shell_env',{}))\n    _fixture_client_env = client_env\n    def client_env():\n        env = _fixture_client_env()\n        env.update(SG_TEST_ROOT=os.environ['SG_TEST_ROOT'], SIGNALGRID_BRAIN_PUBLICATION_STATE=os.environ['SIGNALGRID_BRAIN_PUBLICATION_STATE'])\n        return env")
+        # Faults affect only this extracted fixture. Exercise the real producer's
+        # receipt-error path and the real consumer's persisted-terminal checks.
+        if self.cfg.get("fail_started_receipt"):
+            wrapper = wrapper.replace("try:\n    need(MODE in",
+                "_fixture_write_new = write_new\n"
+                "def write_new(path, value):\n"
+                "    if path.name == 'started.json':\n"
+                "        raise OSError('synthetic start receipt failure')\n"
+                "    return _fixture_write_new(path, value)\n"
+                "try:\n    need(MODE in")
+        if self.cfg.get("remove_started_receipt_result") or self.cfg.get("incomplete_preparation_wait"):
+            wrapper = wrapper.replace("try:\n    need(MODE in",
+                "_fixture_prepared_request = prepared_request\n"
+                "def prepared_request(attempt, intent):\n"
+                "    path = attempt / 'terminal.json'\n"
+                "    terminal = json.loads(path.read_text())\n"
+                "    config = json.loads((Path(os.environ['SG_TEST_ROOT'])/'fixture.json').read_text())\n"
+                "    if config.get('remove_started_receipt_result'):\n"
+                "        terminal.pop('started_receipt_error')\n"
+                "    if config.get('incomplete_preparation_wait'):\n"
+                "        terminal['original_wait_completed'] = False\n"
+                "    path.chmod(0o600)\n"
+                "    path.write_text(json.dumps(terminal))\n"
+                "    path.chmod(0o400)\n"
+                "    return _fixture_prepared_request(attempt, intent)\n"
+                "try:\n    need(MODE in")
         # Scale only the isolated test copy's publication timeout. No production
         # environment flag or model/queue cap is changed or introduced.
         if self.cfg.get("hang_publish"):

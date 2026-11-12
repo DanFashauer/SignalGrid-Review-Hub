@@ -1802,7 +1802,8 @@ exit "$code"`, env);
     chmodSync(join(repo, "validate-sim-macos.sh"), 0o755);
     const workflowChain = (file) => readFileSync(join(HERE, "../../.github/workflows", file), "utf8")
       .split("<<'CI_CHAIN'\n")[1].split("\n          CI_CHAIN")[0].replace(/^ {10}/gm, "");
-    const stubTools = `pnpm() {
+    const stubTools = `shellcheck() { return "$SG_CI_SHELLCHECK_EXIT"; }
+pnpm() {
   printf 'pnpm:%s\\n' "$*" >> "$SG_CI_EVENTS"
   case "$*" in 'install --frozen-lockfile') return "$SG_CI_INSTALL_EXIT";; 'run proof:sim-requests') return "$SG_CI_PROOF_EXIT";; 'run verify:all --require-mcp') return "$SG_CI_JOINT_EXIT";; esac
 }
@@ -1819,8 +1820,11 @@ git() {
 `;
     const workflowRun = (file, extra) => {
       writeFileSync(events, "");
-      return run(stubTools + workflowChain(file), 2, 4, base, { SG_CI_LANE: "both", SG_CI_INSTALL_EXIT: "0", SG_CI_PROOF_EXIT: "0", SG_CI_PREFLIGHT_EXIT: "0", SG_CI_HARNESS_EXIT: "0", SG_CI_MCP_EXIT: "0", SG_CI_JOINT_EXIT: "0", ...extra });
+      return run(stubTools + workflowChain(file), 2, 4, base, { SG_CI_LANE: "both", SG_CI_SHELLCHECK_EXIT: "0", SG_CI_INSTALL_EXIT: "0", SG_CI_PROOF_EXIT: "0", SG_CI_PREFLIGHT_EXIT: "0", SG_CI_HARNESS_EXIT: "0", SG_CI_MCP_EXIT: "0", SG_CI_JOINT_EXIT: "0", ...extra });
     };
+    const lintPrerequisite = workflowRun("mac-runner-auto.yml", { SG_CI_SHELLCHECK_EXIT: "8" });
+    ok("CI unavailable shell lint prerequisite fails before install and still tears down", lintPrerequisite.status === 8
+      && readFileSync(events, "utf8") === "teardown\n", `${lintPrerequisite.status} ${lintPrerequisite.stderr}`);
     const pr = workflowRun("mac-runner-auto.yml", { SG_CI_PROOF_EXIT: "7" });
     ok("CI actual PR body still runs preflight after a failed provenance proof and retains failure", pr.status === 7
       && readFileSync(events, "utf8") === "pnpm:install --frozen-lockfile\nteardown\npnpm:run proof:sim-requests\npreflight\nteardown\n", `${pr.status} ${pr.stderr}`);
@@ -1834,10 +1838,10 @@ git() {
     ok("CI actual MCP body still runs joint verification after a failed sibling check", mcp.status === 7
       && /mcp-verify\npnpm:run verify:all --require-mcp\nteardown\n$/.test(readFileSync(events, "utf8")), `${mcp.status} ${mcp.stderr}`);
     const pin = "24eff86a940099e0725d474d1d5520bfbc71d368";
-    for (const [file, total, work] of [["mac-runner-auto.yml", 720, 2400], ["mac-runner-harness.yml", 780, 5400]]) {
+    for (const [file, total, admission, work] of [["mac-runner-auto.yml", 60, 60, 2400], ["mac-runner-harness.yml", 780, 39600, 5400]]) {
       const workflow = readFileSync(join(HERE, "../../.github/workflows", file), "utf8");
       const owns = (text) => new RegExp(`^    timeout-minutes: ${total}$`, "m").test(text)
-        && text.includes(`bash scripts/mac/ci-host-verification.sh ${pin} 39600 ${work} <<'CI_CHAIN'`)
+        && text.includes(`bash scripts/mac/ci-host-verification.sh ${pin} ${admission} ${work} <<'CI_CHAIN'`)
         && !/^ {8}timeout-minutes:/m.test(text) && (text.match(/^ {8}run:/gm) ?? []).length === 1
         && text.includes("          pnpm install --frozen-lockfile") && text.includes("          bash scripts/mac/free-test-port.sh || exit $?")
         && text.includes("        if: always()") && text.includes("uses: actions/upload-artifact@");

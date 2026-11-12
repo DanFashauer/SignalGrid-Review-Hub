@@ -16,7 +16,7 @@ let passed = 0;
 let failed = 0;
 
 function fixture({ lane = "mac", reject = false, loseResponse = false, failBeforePush = false, gateFails = false,
-  readbackCanonicalRace = false, fixedClock = false, readbackState = "MERGED", readbackObservation = null, denyCleanup = false, ghAuthFails = false, ghCreateFails = false, ghAutoFails = false, wakeMailbox = false, hand = false, tick = false, omitReceipt = false, ...tickOptions } = {}) {
+  firstHeartbeat = null, readbackCanonicalRace = false, fixedClock = false, readbackState = "MERGED", readbackObservation = null, denyCleanup = false, ghAuthFails = false, ghCreateFails = false, ghAutoFails = false, wakeMailbox = false, hand = false, tick = false, omitReceipt = false, ...tickOptions } = {}) {
   if (tick) return heartbeatFixture(tickOptions);
   const root = mkdtempSync(join(tmpdir(), "sg-delivery-test-"));
   const repo = join(root, "repo"), remote = join(root, "remote.git"), bin = join(root, "bin");
@@ -58,6 +58,39 @@ require("node:module").syncBuiltinESMExports();\n`);
   file(join(repo, "docs/agent/SURFACE_REVIEW_COVERAGE.md"), "fixture\n");
   file(join(repo, "docs/agent/scheduled-routines.json"), JSON.stringify({ routines: [{ id: "mac-lane-tick", heartbeatPath: "artifacts/agent-heartbeats/mac-lane-tick.json" }] }));
   file(join(repo, "artifacts/agent-heartbeats/mac-lane-tick.json"), JSON.stringify({ firedAt: "2026-10-24T07:30:38Z", result: "old fixture" }));
+  if (firstHeartbeat) {
+    // These cases use the unchanged real scheduled-routines gate, not its
+    // transport-only stub. No account trigger, real fire or GitHub call exists.
+    file(join(repo, "scripts/check-scheduled-routines.mjs"), readFileSync(join(ROOT, "scripts/check-scheduled-routines.mjs")));
+    file(join(repo, "scripts/lib/is-main.mjs"), readFileSync(join(ROOT, "scripts/lib/is-main.mjs")));
+    const today = new Date().toISOString().slice(0, 10);
+    const row = { id: "mac-lane-tick", trigger: "trig_synthetic_first_heartbeat", cron: "0 1 * * *",
+      authorizedBy: "Synthetic fixture owner", authorizedOn: today, authorizationEvidence: "Explicit synthetic test authorization; no live routine.",
+      writeScope: "Only this disposable fixture heartbeat.", escalationBoundary: "Refuse malformed fixture evidence.",
+      heartbeatPath: "artifacts/agent-heartbeats/mac-lane-tick.json", cadenceToleranceHours: 50,
+      status: "awaiting-activation", awaitingSince: today,
+      awaitingReason: "The synthetic routine has not yet delivered its first fixture heartbeat." };
+    const other = { ...row, id: "other-awaiting", heartbeatPath: "artifacts/agent-heartbeats/other-awaiting.json" };
+    if (["active", "linked-target", "linked-parent"].includes(firstHeartbeat)) { delete row.status; delete row.awaitingSince; delete row.awaitingReason; }
+    if (firstHeartbeat === "unsafe-target") row.heartbeatPath = "../escape.json";
+    if (firstHeartbeat === "expired") row.awaitingSince = "2020-01-01";
+    if (firstHeartbeat === "future") row.awaitingSince = "2999-01-01";
+    if (firstHeartbeat === "invalid-reason") row.awaitingReason = "";
+    if (firstHeartbeat === "missing-authorization") row.authorizedBy = "";
+    if (firstHeartbeat === "retired") Object.assign(row, { status: "retired", retiredAt: "2020-01-01T00:00Z",
+      retiredBy: "Synthetic fixture owner", retiredReason: "This synthetic routine was deliberately stopped and must not reactivate." });
+    file(join(repo, "docs/agent/scheduled-routines.json"), JSON.stringify({ transcribedFrom: "Synthetic scheduler fixture, not a real scheduler observation", routines: [row, other] }, null, 1) + "\n");
+    if (firstHeartbeat !== "existing") rmSync(join(repo, row.heartbeatPath), {force:true});
+    if (firstHeartbeat === "missing-gate") rmSync(join(repo, "scripts/check-scheduled-routines.mjs"));
+    if (["linked-target", "linked-parent"].includes(firstHeartbeat)) {
+      const outside = join(root, "outside-heartbeats"); mkdirSync(outside);
+      file(join(outside, "mac-lane-tick.json"), "outside fixture must remain unchanged\n");
+      if (firstHeartbeat === "linked-parent") {
+        rmSync(join(repo, "artifacts/agent-heartbeats"), {recursive:true});
+        symlinkSync(outside, join(repo, "artifacts/agent-heartbeats"));
+      } else symlinkSync(join(outside, "mac-lane-tick.json"), join(repo, row.heartbeatPath));
+    }
+  }
   if(wakeMailbox==="malformed")file(join(repo,"docs/agent/lane-mailbox.json"),"{");
   if(wakeMailbox==="directory")file(join(repo,"docs/agent/lane-mailbox.json/.keep"),"fixture\n");
   if (hand) {
@@ -142,6 +175,51 @@ function control(name, options, verify) {
   try { f = fixture(options); verify(f); passed++; console.log(`PASS ${name}`); }
   catch (e) { failed++; console.error(`FAIL ${name}: ${e.message}`); }
   finally { if (f) rmSync(f.root, { recursive: true, force: true }); }
+}
+
+control("first-heartbeat delivery clears only its own waiting fields in the same gated topic", { lane: "cloud", firstHeartbeat: "awaiting" }, (f) => {
+  const before = JSON.parse(readFileSync(join(f.repo, "docs/agent/scheduled-routines.json"), "utf8"));
+  const r = f.run(); assert.equal(r.status, 0, r.stderr + r.stdout);
+  assert.match(r.stdout, /scheduled routines: passed/);
+  assert.equal(f.pushes().length, 1);
+  const topic = f.pushes()[0].at(-1).slice("HEAD:".length), remote = join(f.root, "remote.git");
+  const after = JSON.parse(f.git(["show", `${topic}:docs/agent/scheduled-routines.json`], remote));
+  const expected = structuredClone(before);
+  for (const key of ["status", "awaitingReason", "awaitingSince"]) delete expected.routines[0][key];
+  assert.deepEqual(after, expected, "authorization, trigger, dates, scope and every other row must remain exact");
+  const changed = f.git(["diff", "--name-only", `${f.base}..${topic}`], remote).split("\n").sort();
+  assert.deepEqual(changed, ["artifacts/agent-heartbeats/mac-lane-tick.json", "docs/agent/scheduled-routines.json"]);
+  assert.equal(JSON.parse(f.git(["show", `${topic}:artifacts/agent-heartbeats/mac-lane-tick.json`], remote)).result, "acted: fixture");
+});
+control("an active routine's first heartbeat leaves the registry unchanged", { lane: "cloud", firstHeartbeat: "active" }, (f) => {
+  const r = f.run(); assert.equal(r.status, 0, r.stderr + r.stdout);
+  const topic = f.pushes()[0].at(-1).slice("HEAD:".length);
+  assert.deepEqual(f.git(["diff", "--name-only", `${f.base}..${topic}`], join(f.root, "remote.git")).split("\n"), ["artifacts/agent-heartbeats/mac-lane-tick.json"]);
+});
+for (const shape of ["existing", "expired", "future", "invalid-reason", "missing-authorization", "retired"]) {
+  control(`first-heartbeat activation refuses ${shape} state without a push or PR`, { lane: "cloud", firstHeartbeat: shape }, (f) => {
+    const r = f.run(); assert.notEqual(r.status, 0, r.stderr + r.stdout);
+    assert.equal(f.pushes().length, 0); assert.equal(f.ghCalls().length, 0);
+    assert.equal(f.refs().length, 1);
+  });
+}
+
+
+control("first-heartbeat activation requires its real gate even with --allow-ungated", { lane:"cloud", firstHeartbeat:"missing-gate" }, (f) => {
+  const r=f.run(["--allow-ungated"]); assert.notEqual(r.status,0,r.stderr+r.stdout);
+  assert.equal(f.pushes().length,0); assert.equal(f.ghCalls().length,0);
+});
+control("heartbeat refuses a declared path outside the artifact directory before writing", { lane:"cloud", firstHeartbeat:"unsafe-target" }, (f) => {
+  const r=f.run(); assert.notEqual(r.status,0,r.stderr+r.stdout);
+  assert.equal(existsSync(join(f.root,"escape.json")),false,"a failed gate must not follow an earlier write outside its worktree");
+  assert.equal(f.pushes().length,0); assert.equal(f.ghCalls().length,0);
+});
+for (const shape of ["linked-target","linked-parent"]) {
+  control(`active heartbeat refuses ${shape} before changing an external file`, {lane:"cloud",firstHeartbeat:shape}, (f) => {
+    const r=f.run(); assert.notEqual(r.status,0,r.stderr+r.stdout);
+    assert.equal(readFileSync(join(f.root,"outside-heartbeats/mac-lane-tick.json"),"utf8"),"outside fixture must remain unchanged\n");
+    assert.equal(f.pushes().length,0); assert.equal(f.ghCalls().length,0);
+  });
 }
 
 for (const lane of ["mac", "cloud"]) control(`${lane} delivery uses a PR topic without changing canonical`, { lane }, (f) => {

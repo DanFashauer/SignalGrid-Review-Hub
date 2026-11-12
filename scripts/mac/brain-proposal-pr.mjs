@@ -593,8 +593,9 @@ function readContainedClearance(job,{root,publisherRef,validateContent,verifySou
        packet.profile_ref?.path===profilePath&&packet.profile_ref.uid===process.getuid()&&packet.profile_ref.mode===0o400&&
        packet.profile_ref.sha256===profileFile.sha256,'Current contained receipt/profile binding differs');
   const content=packet.content,request=content?.request,requestSHA=digest(request);
+  const issuedAt=Date.parse(content?.issued_at);
   need(content?.job===job&&request?.job===job&&request.worker_uid===process.getuid()&&request.publisher_sha256===publisherRef.sha256&&
-       Date.parse(content.issued_at)>=cutover,'Contained receipt belongs to another source, worker or cutover');
+       Number.isFinite(issuedAt)&&issuedAt>=cutover,'Contained receipt belongs to another source, worker or cutover');
   const attempt=join(profile.attempts_root,job);directory(attempt);
   const outcome=json(join(attempt,'outcome.json')).value;
   need(outcome.state==='contained-review-written'&&outcome.job===job&&outcome.request_sha256===requestSHA&&
@@ -679,8 +680,8 @@ function verifyCurrentContainedSource(job, requestSHA) {
 }
 
 function readPrivacyClearance(job) {
-  const controllerRoot = join(ACCOUNT_HOME, 'SignalGrid-Local-AI', 'brain-state', 'contained-publication');
-  if (existsSync(join(controllerRoot, 'controller.json'))) {
+  const controllerRoot = SELF_TEST_SCANNER?.controllerRoot ?? join(ACCOUNT_HOME, 'SignalGrid-Local-AI', 'brain-state', 'contained-publication');
+  if (!SELF_TEST_SCANNER?.privacyRoot && existsSync(join(controllerRoot, 'controller.json'))) {
     try {
       const self = realpathSync(fileURLToPath(import.meta.url)), st = lstatSync(self);
       const publisherRef = { path: self, sha256: publisherDigest(), mode: st.mode & 0o777, uid: st.uid,
@@ -1187,6 +1188,9 @@ function fixture() {
 
 function checkCase(name, run) { const f=fixture(); try { run(f); check('(contained) '+name, true); } catch { check('(contained) '+name, false); } finally { f.cleanup(); } }
 checkCase('complete contained producer evidence crosses the real content validator',f=>assert.deepEqual(f.read().value.request,f.request));
+checkCase('an unparseable contained receipt issue time is refused',f=>{
+  f.packet.content.issued_at='not-a-time';f.save();assert.throws(f.read);
+});
 function actualToolRef(path) {
   path=fs.realpathSync(path);
   const fd=fs.openSync(path,fs.constants.O_RDONLY|fs.constants.O_NOFOLLOW);
@@ -1302,6 +1306,10 @@ process.exit(finding ? 2 : 0);
     const privacyRoot = join(realpathSync(root), "privacy-clearances");
     mkdirSync(privacyRoot, { mode: 0o700 });
     scannerFixture.privacyRoot = privacyRoot;
+    // Model an installed controller without touching the real account namespace.
+    scannerFixture.controllerRoot = join(realpathSync(root), "installed-controller-marker");
+    mkdirSync(scannerFixture.controllerRoot, { mode: 0o700 });
+    writeFileSync(join(scannerFixture.controllerRoot, "controller.json"), "{}\n", { flag: "wx", mode: 0o400 });
     const grantFixturePrivacy = (id, request, changes = {}, directory = privacyRoot) => {
       if (!request) return; // The pre-fix run must fail assertions, not fixture setup.
       const issued = Date.now();
@@ -1343,6 +1351,16 @@ process.exit(finding ? 2 : 0);
     };
     try {
       grantFixturePrivacy("self-written", probeRequest("self-written"), {}, privacyProbeRoot);
+      let selectedFixturePath = null;
+      try { selectedFixturePath = readPrivacyClearance("self-written").path; } catch { /* reported below */ }
+      check("(privacy) an installed controller cannot replace the explicit self-test root",
+        selectedFixturePath === join(privacyProbeRoot, "self-written.json"));
+      const explicitFixtureRoot = scannerFixture.privacyRoot;
+      try {
+        delete scannerFixture.privacyRoot;
+        check("(privacy) without an explicit fixture root the installed controller remains fail-closed",
+          probeRefused("self-written", "contained source/privacy clearance is unavailable"));
+      } finally { scannerFixture.privacyRoot = explicitFixtureRoot; }
       scannerFixture.privacyReviewerFixture = false;
       check("(privacy) publisher-account receipt is refused by the actual principal guard", probeRefused("self-written", "independent reviewer"));
       scannerFixture.privacyReviewerFixture = true;

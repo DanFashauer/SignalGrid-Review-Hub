@@ -5,6 +5,36 @@ ownership and access. These interfaces let a reviewer helper test its content
 against the same validator the publisher uses. They do not issue a clearance or
 enable publication.
 
+## Two clearance routes, and which statements apply to which
+
+The publisher reads a privacy clearance through one of two routes. Everything on
+this page that speaks of a "reviewer account", an "independent" reviewer, or
+directory and file ownership by another user describes the first route only.
+
+1. **Independent-user route (v2).** A clearance written by a separate macOS user,
+   read with the ownership, mode and ACL checks described below. Existing v2
+   receipts remain supported. This is the route the reader uses when no
+   contained-controller selection exists.
+2. **Contained-controller route (`contained_controller_v1`).** Used only when an
+   explicit, current controller selection exists under the owner's private
+   brain state. It needs no second account and implies no account setup. Its
+   trust boundary is different, and is stated here so it is not mistaken for
+   the first:
+   - It trusts the existing owner account and the controller running under it.
+     It restricts the worker that produced the build; it does not claim
+     independent operating-system custody. Arbitrary unsandboxed processes
+     running as the owner remain trusted.
+   - A receipt is accepted only when it is bound to the exact job, the current
+     publisher bytes, the selected runtime sources, the prepared artifact, the
+     recorded review admissions and their accounting, and the selection that
+     was current when it was written.
+   - The selection is a separate, qualified step. Its presence does not turn
+     publication on: the tick's own activation and file-ownership anchor are
+     still required.
+   - The shared content validator and the reviewer helper described below are
+     not a clearance for this route. A content-only pass grants nothing here
+     either.
+
 ## Shared content validator
 
 Import `validatePrivacyClearanceContent` from
@@ -35,11 +65,13 @@ reviewer, check filesystem ownership or access, establish that a review occurred
 or grant permission to publish. Synthetic evidence is suitable for a helper's tests;
 it is not a real review or production clearance.
 
-The production reader still checks the real reviewer account, its separation
-from both publisher and worker, directory and file ownership/modes, immutable
-private reads, Darwin ACLs and actual publisher write access. It then invokes
-this shared validator and compares the request with the actual job, publisher
-and prepared artifact. A successful content-only test cannot bypass that path.
+On the independent-user route, the production reader still checks the real
+reviewer account, its separation from both publisher and worker, directory and
+file ownership/modes, immutable private reads, Darwin ACLs and actual publisher
+write access. It then invokes this shared validator and compares the request
+with the actual job, publisher and prepared artifact. On the contained-controller
+route the reader applies that route's own bindings, listed above, and uses the
+same content validator. A successful content-only test cannot bypass either path.
 
 ## Exact prepared title and body
 
@@ -142,8 +174,11 @@ not permission to send private job context, vault material or unaccepted worker
 text to a cloud reviewer. Reviewer identity, object access, native review
 admission and actual decision production require their own setup and evidence.
 
-A prepared request is not a clearance. The publisher still checks a real
-independent reviewer account, immutable evidence, current job/source/publisher
-binding and the exact prepared artifact before push. Publication still leaves
+A prepared request is not a clearance. Before push the publisher still requires a
+clearance through one of the two routes above: on the independent-user route, a
+real independent reviewer account and its immutable evidence; on the
+contained-controller route, a current qualified selection and a receipt bound as
+described above. On both it checks the current job/source/publisher binding and
+the exact prepared artifact. Publication still leaves
 all applicable validation, current CI, source reviews and protected landing
 requirements in place.

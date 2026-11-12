@@ -10,6 +10,11 @@ import { fileURLToPath } from "node:url";
 import { scratchGit } from "./lib/scratch-git.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+// Apple's bash 3.2 sources ~/.bashrc when its stdin is a socket, and spawnSync's default stdin
+// pipe is one. A hosted macOS runner's ~/.bashrc prepends its own tool directories to PATH, so a
+// fixture's bin/git was skipped for the machine git and every stubbed readback read "unknown".
+// Every synchronous fixture shell therefore gets a /dev/null stdin; no fixture feeds stdin.
+const bashNoRc = (args, options) => spawnSync("/bin/bash", args, { stdio: ["ignore", "pipe", "pipe"], ...options });
 const BASE = "SignalGrid_Alpha";
 const GIT = spawnSync("/bin/sh", ["-c", "command -v git"], { encoding: "utf8" }).stdout.trim();
 let passed = 0;
@@ -108,7 +113,7 @@ else if(a[0]==='auth'&&a[1]==='status'){${ghAuthFails ? "process.exit(1)" : "pro
     const loadedHeartbeat = "heartbeat() {\n  append_unread_state\n  append_raised_hands_state\n  if [ \"$DRY\" = \"1\" ]; then say \"dry-run: would heartbeat: $RESULT\"; return 0; fi\n  # Throttle a result IDENTICAL to the last delivered one (\"quiet\" again, the same\n  # \"skipped: \u2026\" again, the same failure again) inside the window; anything that\n  # differs from what Alpha already carries delivers now. A tick that ACTED names\n  # what it did, so its result differs and always delivers. `find -mmin -N` and the\n  # `cat` comparison are BSD/bash-3.2 safe; a missing result file compares unequal.\n  LAST_RESULT=\"\"\n  [ -f \"$HB_LAST_RESULT\" ] && LAST_RESULT=\"$(cat \"$HB_LAST_RESULT\" 2>/dev/null)\"\n  if [ \"$RESULT\" = \"$LAST_RESULT\" ] && [ -f \"$HB_STAMP\" ] && [ -n \"$(find \"$HB_STAMP\" -mmin -\"$QUIET_HEARTBEAT_MIN\" 2>/dev/null)\" ]; then\n    say \"unchanged ($RESULT), last heartbeat <${QUIET_HEARTBEAT_MIN}m ago \u2014 tick ran, not re-pushing (avoids flooding Alpha)\"\n    return 0\n  fi\n  # --no-wake: the tick heartbeat is a STALENESS record, read from the heartbeat\n  # FILE by the cloud steward's hourly cycle \u2014 it never carries cloud-addressed\n  # mail (append_unread_state reports THIS lane's inbox, mac's), so it must not\n  # post the mailbox-PR comment that wakes the cloud lane. Real cloud mail travels\n  # on a separate `lane-deliver send` (no --no-wake), which still wakes at once;\n  # new mac/* branches are reviewed by the steward within the hour. This ends the\n  # every-tick quiet wake that flooded the cloud session (owner decision 2026-09-23).\n  if node scripts/lane-deliver.mjs heartbeat mac-lane-tick \"$RESULT\" --no-wake >/dev/null 2>&1; then\n    touch \"$HB_STAMP\" 2>/dev/null || true\n    printf '%s' \"$RESULT\" > \"$HB_LAST_RESULT\" 2>/dev/null || true\n    say \"heartbeat delivered: $RESULT\"\n  else\n    say \"WARN heartbeat delivery FAILED (push refused or offline): $RESULT\"\n  fi\n}\n";
     const script = `set -u\nDRY=0\nRESULT='new legacy producer observation'\nQUIET_HEARTBEAT_MIN=120\nHB_LAST_RESULT="$FIXTURE_ROOT/legacy-result"\nHB_STAMP="$FIXTURE_ROOT/legacy-stamp"\nsay(){ printf '%s\\n' "$1"; }\nappend_unread_state(){ :; }\nappend_raised_hands_state(){ :; }\n` + loadedHeartbeat + `\n"$FIXTURE_REAL_GIT" -c core.hooksPath=/dev/null checkout -q --detach "$FIXTURE_ADVANCED"\nheartbeat\n`;
     const file = join(root,"loaded-legacy-heartbeat.sh");writeFileSync(file,script,{flag:"wx",mode:0o600});
-    const result = spawnSync("/bin/bash",[file],{cwd:repo,env:{...env,FIXTURE_ROOT:root,FIXTURE_REAL_GIT:GIT,FIXTURE_ADVANCED:advanced},encoding:"utf8"});
+    const result = bashNoRc([file],{cwd:repo,env:{...env,FIXTURE_ROOT:root,FIXTURE_REAL_GIT:GIT,FIXTURE_ADVANCED:advanced},encoding:"utf8"});
     return {...result,expectedRefs,advanced,legacy};
   }, readback(path, extra = []) {
     return spawnSync(process.execPath,[join(repo,"scripts/lane-deliver.mjs"),"readback",path,...extra],{cwd:repo,env,encoding:"utf8",timeout:90000});
@@ -252,7 +257,7 @@ function heartbeatFixture({ age = 30, result = "quiet", dry = false,
   const quote = (s) => `'${String(s).replaceAll("'", "'\\''")}'`;
   return { root, runTick(body = "heartbeat") {
     const script = `set -u\nREPO_ROOT=${quote(root)}\nRECORD_DIR=${quote(cache)}\n${declarations}\nSTAMP=20261030T010000Z\nDRY=${dry ? 1 : 0}\nRESULT=${quote(result)}\nDELIVERY_RC=${deliveryCode}\nESTATE_RC=0\nESTATE_OUTPUT='estate: 0 open ()'\nsay(){ printf '%s\\n' "$1"; }\nappend_unread_state(){ :; }\nappend_raised_hands_state(){ :; }\ngh(){ return 0; }\nnode(){ if [ "$1" = scripts/lane-deliver.mjs ]; then if [ "$2" = readback ]; then printf 'readback\\n' >> "$FIXTURE_READBACK_LOG"; if [ "\${READBACK_RC:-$DELIVERY_RC}" = 0 ]; then printf 'canonical fixture merge verified\\n'; else printf 'original fixture PR still pending or unavailable\\n'; fi; return "\${READBACK_RC:-$DELIVERY_RC}"; fi; printf '%s\\n' "$*" >> ${quote(deliveries)}; for _arg in "$@"; do if [ "\${_want_receipt:-0}" = 1 ]; then printf '{"fixtureSubmission":true,"target":"lane/mac-mail-20261030-010000Z-0123456789ab","head":"cccccccccccccccccccccccccccccccccccccccc","blobs":[]}\\n' > "$_arg"; _want_receipt=0; fi; if [ "$_arg" = --receipt ]; then _want_receipt=1; fi; done; printf 'untrusted fixture output: exit_code=0\\n'; return "$DELIVERY_RC"; elif [ "$1" = scripts/mac/estate-queue.mjs ]; then printf '%s\\n' "$ESTATE_OUTPUT"; return "$ESTATE_RC"; else "$FIXTURE_NODE" "$@"; fi; }\n${recordHelper}\n${heartbeat}\nrun_estate(){\n${estate}\n}\n${body}\ntrue\n`;
-    return spawnSync("/bin/bash", ["-c", script], { cwd: root,
+    return bashNoRc(["-c", script], { cwd: root,
       env: { PATH: join(root, "bin") + ":/usr/bin:/bin", HOME: process.env.HOME, LANG: "C", FIXTURE_NODE:process.execPath, FIXTURE_READBACK_LOG:readbacks }, encoding: "utf8", timeout: 10000 });
   }, deliveries: () => linesOrNone(deliveries), readbacks: () => linesOrNone(readbacks) };
 }
@@ -380,7 +385,7 @@ for (const suffix of ["plain", "space 'single' \"double\" $(touch shell-path-mar
     assert.ok(start>=0&&end>start);
     const calls=join(root,'calls');
     const script=`set -u\nDRY=0\nCACHE="$FIXTURE_ROOT"\nREPO_ROOT="$FIXTURE_ROOT"\nSTAMP=20261031T000000Z\nRUN_LOG="$FIXTURE_RUN_LOG"\nsay(){ printf '%s\\n' "$1"; }\nnode(){ if [ "$1" = "$REPO_ROOT/scripts/lib/lane-attempt-store.mjs" ]; then printf '%s\\n' "$FIXTURE_ROOT"; elif [ "$1" = "$REPO_ROOT/scripts/lane-deliver.mjs" ]; then printf 'call\\n' >> "$FIXTURE_CALLS"; return 3; else "$FIXTURE_NODE" "$@"; fi; }\n${source.slice(start,end)}\nraise_hand 'fixture failure'\nraise_hand 'fixture failure'\nraise_hand 'fixture failure'\ntrue\n`;
-    const r=spawnSync('/bin/bash',['-c',script],{cwd:root,env:{PATH:'/usr/bin:/bin',HOME: process.env.HOME,FIXTURE_ROOT:root,FIXTURE_RUN_LOG:join(root,'run.log'),FIXTURE_CALLS:calls,FIXTURE_NODE:process.execPath},encoding:'utf8'});
+    const r=bashNoRc(['-c',script],{cwd:root,env:{PATH:'/usr/bin:/bin',HOME: process.env.HOME,FIXTURE_ROOT:root,FIXTURE_RUN_LOG:join(root,'run.log'),FIXTURE_CALLS:calls,FIXTURE_NODE:process.execPath},encoding:'utf8'});
     assert.equal(existsSync(join(root,'shell-path-marker')),false,'path command substitution must never execute');
     assert.equal(existsSync(join(root,'backtick-marker')),false,'path backticks must never execute');
     assert.equal(r.status,0,r.stderr);
@@ -485,7 +490,7 @@ control("successful unchanged ticks defer remote readback until a due observatio
     assert.deepEqual(offenders('  if x="$(node a.mjs readback "$s" "$$" 2>&1)"; then'),[1],"the matcher must catch the redirected form");
     assert.deepEqual(offenders('x="$(node "$H" tick-acquire "$R" "$$" ${g:+"$g"})"'),[1],"the matcher must catch the plain form bash 3.2 also breaks");
     assert.deepEqual(offenders('  node a.mjs readback "$s" "$$" >"$f" 2>&1'),[],"the matcher must accept the direct-child form");
-    const probe=spawnSync("/bin/bash",["-c",'f="$(mktemp)"; "$N" -e "console.log(process.ppid)" >"$f" 2>&1; a="$(cat "$f")"; rm -f "$f"; b="$("$N" -e "console.log(process.ppid)")"; echo "$$ $a $b $BASH_VERSION"'],{encoding:"utf8",env:{N:process.execPath,PATH:"/usr/bin:/bin"}});
+    const probe=bashNoRc(["-c",'f="$(mktemp)"; "$N" -e "console.log(process.ppid)" >"$f" 2>&1; a="$(cat "$f")"; rm -f "$f"; b="$("$N" -e "console.log(process.ppid)")"; echo "$$ $a $b $BASH_VERSION"'],{encoding:"utf8",env:{N:process.execPath,PATH:"/usr/bin:/bin"}});
     const [shell,direct,substituted,version]=probe.stdout.trim().split(" ");
     assert.equal(direct,shell,"a helper run as an ordinary command is a direct child of the shell (bash "+version+")");
     // Reported, not asserted: the substitution result depends on the Bash version.
@@ -524,7 +529,7 @@ control("a hardlinked heartbeat pointer cannot truncate its other inode name",{t
  const source=readFileSync(join(ROOT,"scripts/mac/lane-tick.sh"),"utf8"),start=source.indexOf('LOOP_VERDICT="not run"'),end=source.indexOf('# ── d. deliver results',start);
  try{
   assert.ok(start>=0&&end>start);const script=`set -u\nDRY=0\nsay(){ printf '%s\\n' "$1"; }\nnode(){ printf '%s\\n' 'objective-loop: fixture — summary' 'RAISED HAND: original delivery held' 'WARN fixture terminal recording failed'; return 0; }\n${source.slice(start,end)}\n`;
-  const r=spawnSync('/bin/bash',['-c',script],{encoding:'utf8',env:{PATH:'/usr/bin:/bin'}});assert.equal(r.status,0,r.stderr);assert.match(r.stdout,/RAISED HAND: original delivery held/);assert.match(r.stdout,/WARN fixture terminal recording failed/);
+  const r=bashNoRc(['-c',script],{encoding:'utf8',env:{PATH:'/usr/bin:/bin'}});assert.equal(r.status,0,r.stderr);assert.match(r.stdout,/RAISED HAND: original delivery held/);assert.match(r.stdout,/WARN fixture terminal recording failed/);
   passed++;console.log('PASS successful objective summary preserves its held-delivery warnings');
  }catch(e){failed++;console.error('FAIL successful objective warning visibility: '+e.message);}
 }
@@ -588,7 +593,7 @@ check('the live tick initializes a never-initialized record store instead of exi
 check('two concurrent initializations leave one valid store and both callers succeed',f=>{
  const module=join(f.root,'scripts/lib/lane-attempt-store.mjs');
  const directory=run(process.execPath,[module,'path',f.root],f.root).stdout.trim();rmSync(directory+'.json');rmSync(directory,{recursive:true});
- const both=spawnSync('/bin/bash',['-c',`"$NODE" "$M" ensure "$A" > "$P/one" 2>&1 & p1=$!; "$NODE" "$M" ensure "$B" > "$P/two" 2>&1 & p2=$!; wait $p1; one=$?; wait $p2; two=$?; echo "$one $two"`],
+ const both=bashNoRc(['-c',`"$NODE" "$M" ensure "$A" > "$P/one" 2>&1 & p1=$!; "$NODE" "$M" ensure "$B" > "$P/two" 2>&1 & p2=$!; wait $p1; one=$?; wait $p2; two=$?; echo "$one $two"`],
   {encoding:'utf8',env:{PATH:'/usr/bin:/bin:'+dirname(process.execPath),NODE:process.execPath,M:module,A:f.root,B:f.linked,P:f.parent,GIT_CONFIG_NOSYSTEM:'1',GIT_CONFIG_GLOBAL:'/dev/null'}});
  assert.equal(both.stdout.trim(),'0 0','both concurrent callers succeed: '+readFileSync(join(f.parent,'one'),'utf8')+readFileSync(join(f.parent,'two'),'utf8'));
  assert.equal(readFileSync(join(f.parent,'one'),'utf8').trim(),directory);assert.equal(readFileSync(join(f.parent,'two'),'utf8').trim(),directory);
@@ -691,7 +696,7 @@ check('two concurrent raise-holds publish exactly one hold hand (the second cann
  writeFileSync(join(bin,'git'),'#!/bin/sh\nif [ "$1" = ls-remote ]; then exit 0; fi\nexec '+GIT+' "$@"\n',{mode:0o755});
  const module=join(f.root,'scripts/lib/lane-attempt-store.mjs'),env={PATH:bin+':'+dirname(process.execPath)+':/usr/bin:/bin',NODE:process.execPath,M:module,R:f.root,MSG:message,OUT:join(f.parent,'a.out')};
  const one='G="$("$NODE" "$M" tick-guard "$R")" || exit 3; exec 8<"$G"; "$NODE" "$M" raise-hold "$R" "$$" "$MSG"; exit $?';
- const both=spawnSync('/bin/bash',['-c','bash -c \''+one+'\' > "$OUT" 2>&1 & a=$!; sleep 1.5; bash -c \''+one+'\'; wait $a'],{cwd:f.root,encoding:'utf8',env,timeout:30000});
+ const both=bashNoRc(['-c','bash -c \''+one+'\' > "$OUT" 2>&1 & a=$!; sleep 1.5; bash -c \''+one+'\'; wait $a'],{cwd:f.root,encoding:'utf8',env,timeout:30000});
  assert.equal(both.status,0,both.stderr);assert.match(both.stdout,/raise-hold refused: this caller does not hold the tick guard/);
  assert.equal(readFileSync(calls,'utf8').trim().split('\n').length,1,'exactly one publication');assert.match(readFileSync(join(f.parent,'a.out'),'utf8'),/written \(lane-deliver exit 0\)/);
 });
@@ -1107,7 +1112,7 @@ function handEpisodes(steps,{ledger=null}={}){
  const q=s=>"'"+s.replaceAll("'","'\\''")+"'";
  const actions=steps.map((step,i)=>`export DELIVERY_RC=${step.code??0} PHASE=${q(step.phase)} DELIVERY_EXISTS=${step.exists?1:''}\nSTAMP=202610${i<1?'30':'31'}T010000Z\n${step.missing?'rm -f "$RECORDS"/*.exit\n':''}raise_hand 'same source-backed fixture blocker'`).join('\n');
  const script=`set -u\nDRY=0\nCACHE="$CACHE_PATH"\nREPO_ROOT="$FIXTURE_ROOT"\nRUN_LOG="$FIXTURE_ROOT/run.log"\nsay(){ printf '%s\\n' "$1"; }\nnode(){ if [ "$1" = "$REPO_ROOT/scripts/lib/lane-attempt-store.mjs" ]; then printf '%s\\n' "$RECORDS"; else "$FIXTURE_NODE" "$@"; fi; }\n${source.slice(start,end)}\n${actions}\ntrue\n`;
- try {const r=spawnSync('/bin/bash',['-c',script],{cwd:root,env:{PATH:'/usr/bin:/bin',HOME: process.env.HOME,FIXTURE_ROOT:root,FIXTURE_NODE:process.execPath,CACHE_PATH:cache,RECORDS:records},encoding:'utf8',timeout:10000});assert.equal(r.status,0,r.stderr);const sent=readFileSync(calls,'utf8').trim().split('\n').map(JSON.parse);return {sent,stdout:r.stdout};}
+ try {const r=bashNoRc(['-c',script],{cwd:root,env:{PATH:'/usr/bin:/bin',HOME: process.env.HOME,FIXTURE_ROOT:root,FIXTURE_NODE:process.execPath,CACHE_PATH:cache,RECORDS:records},encoding:'utf8',timeout:10000});assert.equal(r.status,0,r.stderr);const sent=readFileSync(calls,'utf8').trim().split('\n').map(JSON.parse);return {sent,stdout:r.stdout};}
  finally{rmSync(root,{recursive:true,force:true});}
 }
 const cases=[
@@ -1235,7 +1240,7 @@ for(const item of [
   mkdirSync(join(root,'bin'));writeFileSync(join(root,'bin/git'),'#!/bin/sh\nif { true >&8; } 2>/dev/null; then echo HELD > "$FIXTURE_FD8"; else echo CLOSED > "$FIXTURE_FD8"; fi\nsh -c \'echo $$ > "$FIXTURE_CHILD_PID"; exec sleep 300\' </dev/null >/dev/null 2>&1 &\nwait\n',{mode:0o755});
   // The script holds the guard's kernel lock on FD8, as the real tick does.
   const script=`set -u\nexec 8<'${guard}'\nperl -MFcntl=:flock -e 'open(my $l,"<&=8") or exit 2; flock($l,LOCK_EX|LOCK_NB) or exit 3'\nsay(){ printf '%s\\n' "$1"; }\nheartbeat(){ printf 'HEARTBEAT %s\\n' "$RESULT"; }\n${tick.slice(a,b)}\necho NOT_REACHED\n`;
-  const began=Date.now(),r=spawnSync('/bin/bash',['-c',script],{cwd:root,encoding:'utf8',timeout:15000,env:{PATH:join(root,'bin')+':/usr/bin:/bin',SIGNALGRID_TICK_FETCH_TIMEOUT_SEC:'3',FIXTURE_CHILD_PID:childPid,FIXTURE_FD8:fd8}});
+  const began=Date.now(),r=bashNoRc(['-c',script],{cwd:root,encoding:'utf8',timeout:15000,env:{PATH:join(root,'bin')+':/usr/bin:/bin',SIGNALGRID_TICK_FETCH_TIMEOUT_SEC:'3',FIXTURE_CHILD_PID:childPid,FIXTURE_FD8:fd8}});
   assert.equal(r.status,0,'the tick must not hang on fetch: '+(r.error?.code??r.stderr));assert.match(r.stdout,/HEARTBEAT skipped: origin unreachable/);assert.ok(Date.now()-began<10000);
   const pid=pidWhenWritten(childPid);assert.ok(pid>0);let gone=false;
   for(let i=0;i<40&&!gone;i++){try{process.kill(pid,0);spawnSync('/bin/sleep',['0.1']);}catch(e){gone=e.code==='ESRCH';if(!gone)throw e;}}
@@ -1365,8 +1370,8 @@ for(const [mode,want] of [['absent',true],['present',false],['fail',false]]){
   const bin=join(root,'bin'),probe=join(root,'fd8'),receipt=join(root,'r.submission.json');mkdirSync(bin);
   writeFileSync(join(bin,'git'),'#!/bin/sh\nif [ "$1" = ls-remote ]; then if { true >&8; } 2>/dev/null; then echo HELD > "$FIXTURE_FD8"; else echo CLOSED > "$FIXTURE_FD8"; fi; fi\nif [ "$1" = merge-base ] || [ "$1" = rev-parse ]; then exit 1; fi\nexit 0\n',{mode:0o755});
   writeFileSync(receipt,JSON.stringify({version:1,target:'lane/mac-mail-20261101-010000Z-0123456789ab',head:'a'.repeat(40),blobs:[]})+'\n');
-  const r=spawnSync('/bin/bash',['-c','exec 8<"$RECEIPT"; "$NODE" "$M" refused-disposition "$ROOT" "$RECEIPT"; exit $?'],{cwd:root,encoding:'utf8',env:{PATH:bin+':/usr/bin:/bin',HOME:process.env.HOME,NODE:process.execPath,M:join(ROOT,'scripts/lib/lane-attempt-store.mjs'),ROOT:root,RECEIPT:receipt,FIXTURE_FD8:probe}});
-  assert.equal(r.status,0,r.stderr);assert.equal(r.stdout.trim(),'unpublished');assert.equal(readFileSync(probe,'utf8').trim(),'CLOSED');
+  const r=bashNoRc(['-c','exec 8<"$RECEIPT"; "$NODE" "$M" refused-disposition "$ROOT" "$RECEIPT"; exit $?'],{cwd:root,encoding:'utf8',env:{PATH:bin+':/usr/bin:/bin',HOME:process.env.HOME,NODE:process.execPath,M:join(ROOT,'scripts/lib/lane-attempt-store.mjs'),ROOT:root,RECEIPT:receipt,FIXTURE_FD8:probe}});
+  assert.equal(r.status,0,r.stderr);assert.ok(existsSync(probe),'the fixture git never ran: PATH was replaced before the readback (a shell startup file?); stderr: '+r.stderr);assert.equal(r.stdout.trim(),'unpublished','stderr: '+r.stderr);assert.equal(readFileSync(probe,'utf8').trim(),'CLOSED');
   passed++;console.log('PASS '+label);
  } catch(e){failed++;console.error('FAIL '+label+': '+e.message);}
  finally{rmSync(root,{recursive:true,force:true});}
@@ -1389,5 +1394,23 @@ for(const [mode,want] of [['absent',true],['present',false],['fail',false]]){
  finally{rmSync(root,{recursive:true,force:true});}
 }
 
+{
+ // A machine's shell startup file must not choose which git a fixture runs (hosted macOS did).
+ const label='a fixture shell ignores a ~/.bashrc that puts another git first on PATH';
+ const root=mkdtempSync(join(tmpdir(),'sg-bashrc-path-'));
+ try {
+  const bin=join(root,'bin'),other=join(root,'other');mkdirSync(bin);mkdirSync(other);
+  writeFileSync(join(bin,'git'),'#!/bin/sh\necho fixture\n',{mode:0o755});writeFileSync(join(other,'git'),'#!/bin/sh\necho machine\n',{mode:0o755});
+  writeFileSync(join(root,'.bashrc'),'export PATH="'+other+':$PATH"\n');
+  const env={PATH:bin+':/usr/bin:/bin',HOME:root};
+  const r=bashNoRc(['-c','git'],{cwd:root,encoding:'utf8',env});
+  assert.equal(r.status,0,r.stderr);assert.equal(r.stdout.trim(),'fixture');
+  // The control: the same shell on spawnSync's default socket stdin does read it (macOS bash only).
+  const bare=spawnSync('/bin/bash',['-c','git'],{cwd:root,encoding:'utf8',env});
+  if(process.platform==='darwin')assert.equal(bare.stdout.trim(),'machine','the defect this guards is gone: drop the helper or this control');
+  passed++;console.log('PASS '+label);
+ } catch(e){failed++;console.error('FAIL '+label+': '+e.message);}
+ finally{rmSync(root,{recursive:true,force:true});}
+}
 console.log(`lane-delivery regression: ${passed} passed, ${failed} failed, 0 skipped`);
 process.exitCode = failed ? 1 : 0;

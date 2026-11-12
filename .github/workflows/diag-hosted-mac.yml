@@ -1,0 +1,18 @@
+name: TEMP diag — hosted macOS readback (throwaway branch)
+on:
+  push:
+    branches: [diag/hosted-mac-readback-20261112]
+permissions:
+  contents: read
+jobs:
+  diag:
+    runs-on: macos-15
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node scripts/diag-readback.mjs

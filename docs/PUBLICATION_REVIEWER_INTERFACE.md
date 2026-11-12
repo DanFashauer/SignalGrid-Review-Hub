@@ -22,7 +22,7 @@ directory and file ownership by another user describes the first route only.
    the first:
    - It trusts the existing owner account and the controller running under it.
      It restricts the worker that produced the build; it does not claim
-     independent operating-system custody. Arbitrary unsandboxed processes
+     separation between operating-system users. Arbitrary unsandboxed processes
      running as the owner remain trusted.
    - A receipt is accepted only when it is bound to the exact job, the current
      publisher bytes, the selected runtime sources, the prepared artifact, the

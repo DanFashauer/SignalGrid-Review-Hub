@@ -139,28 +139,38 @@ function timestamp(value) {
   return Date.parse(value);
 }
 
-export async function listReview(db = DEFAULT_DB, { notBefore } = {}) {
-  const cutoff = notBefore === undefined ? null : timestamp(notBefore);
+/** One read-only read of the review-shaped build rows, oldest first. Both listings select from it. */
+async function reviewRows(db) {
   if (!existsSync(db)) refuse(`brain DB not found: ${db}`);
-  const sql = "SELECT id, created_at, updated_at, cancel_requested FROM autonomy_jobs WHERE kind = 'build' AND status = 'review' AND repo = 'SignalGrid-Review-Hub' AND worktree IS NOT NULL ORDER BY updated_at, id";
-  let rows;
+  const sql = "SELECT id, created_at, updated_at, cancel_requested, worktree FROM autonomy_jobs WHERE kind = 'build' AND status = 'review' AND repo = 'SignalGrid-Review-Hub' AND worktree IS NOT NULL ORDER BY updated_at, id";
   if (isBuiltin("node:sqlite")) {
     const { DatabaseSync } = await import("node:sqlite");
     const d = new DatabaseSync(db, { readOnly: true });
-    try { rows = d.prepare(sql).all(); } finally { d.close(); }
-  } else {
-    const r = spawnSync("/usr/bin/sqlite3", ["-readonly", "-json", `file:${db}?mode=ro`, sql], { encoding: "utf8" });
-    if (r.status !== 0) refuse(`sqlite3 could not read ${db}: ${r.stderr.trim()}`);
-    rows = JSON.parse(r.stdout || "[]");
+    try { return d.prepare(sql).all(); } finally { d.close(); }
   }
+  const r = spawnSync("/usr/bin/sqlite3", ["-readonly", "-json", `file:${db}?mode=ro`, sql], { encoding: "utf8" });
+  if (r.status !== 0) refuse(`sqlite3 could not read ${db}: ${r.stderr.trim()}`);
+  return JSON.parse(r.stdout || "[]");
+}
+
+/** Created at or after the cutover and never updated before it was created. A timestamp
+ *  that does not parse is not fresh; any other error is not swallowed. */
+function freshSince(row, cutoff) {
+  try {
+    const created = timestamp(row.created_at), updated = timestamp(row.updated_at);
+    return created >= cutoff && updated >= created;
+  } catch (e) { if (!(e instanceof Refusal)) throw e; return false; }
+}
+
+export async function listReview(db = DEFAULT_DB, { notBefore } = {}) {
+  const cutoff = notBefore === undefined ? null : timestamp(notBefore);
+  const rows = await reviewRows(db);
   // Manual listing is read-only and retains its unbounded historical view.
   if (cutoff === null) return rows.map((row) => String(row.id));
   const eligible = [];
   for (const row of rows) {
-    if (!/^[A-Za-z0-9_-]+$/.test(row.id ?? "") || row.cancel_requested !== 0) continue;
+    if (!/^[A-Za-z0-9_-]+$/.test(row.id ?? "") || row.cancel_requested !== 0 || !freshSince(row, cutoff)) continue;
     try {
-      const created = timestamp(row.created_at), updated = timestamp(row.updated_at);
-      if (created < cutoff || updated < created) continue;
       const job = await readJob(db, row.id), clearance = readPrivacyClearance(row.id);
       if (!job || clearance.value.request?.job_sha256 !== valueDigest(job) || clearance.value.request?.publisher_sha256 !== publisherDigest()) continue;
       if (!job.worktree || !existsSync(job.worktree)) continue;
@@ -182,14 +192,12 @@ export async function listPreparation(db = DEFAULT_DB, { notBefore } = {}) {
   const cutoff = timestamp(notBefore);
   const cleared = new Set(await listReview(db, { notBefore }));
   const pending = [];
-  for (const id of await listReview(db)) {
+  // One read of the same ordered rows the manual listing shows; no reopen per id.
+  for (const row of await reviewRows(db)) {
+    const id = String(row.id);
     if (!/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/.test(id) || cleared.has(id)) continue;
-    const job = await readJob(db, id);
-    if (!job || job.cancel_requested !== 0 || !job.worktree || !existsSync(job.worktree)) continue;
-    try {
-      const created = timestamp(job.created_at), updated = timestamp(job.updated_at);
-      if (created >= cutoff && updated >= created) pending.push(id);
-    } catch (e) { if (!(e instanceof Refusal)) throw e; }
+    if (row.cancel_requested !== 0 || !row.worktree || !existsSync(row.worktree)) continue;
+    if (freshSince(row, cutoff)) pending.push(id);
   }
   return pending;
 }
@@ -403,7 +411,7 @@ function privateBytes(path, wantedMode, maxBytes = Infinity, ownerUid = process.
     if (lstatSync(part).isSymbolicLink()) refuse("scanner custody contains a symlink");
   }
   const fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
-  const shape = (st) => [st.dev, st.ino, st.size, st.mtimeMs, st.ctimeMs, st.mode, st.uid, st.nlink].join(":");
+  const shape = fileShape;
   try {
     const opened = fstatSync(fd);
     if (!opened.isFile() || opened.nlink !== 1 || opened.uid !== ownerUid || (opened.mode & 0o777) !== wantedMode || opened.size > maxBytes) refuse("private custody is not a frozen owner file");
@@ -423,22 +431,25 @@ function privateBytes(path, wantedMode, maxBytes = Infinity, ownerUid = process.
 // Account/ACL provisioning and actual reviewer qualification are separate work.
 // On Darwin, remove ACLs with chmod -N on clearances/ and every receipt/evidence
 // file, then verify ls -led. The private parent's reviewer search ACL is separate.
+/** Darwin only: true when `path` provably carries no ACL. W_OK misses writesecurity: an
+ *  ACL may allow a later write grant. Darwin can display @ instead of + when extended
+ *  attributes and an ACL coexist, so both the mode and the complete -e output are read.
+ *  An unreadable or unparseable answer is false. Callers refuse in their own words. */
+function darwinAclAbsent(path) {
+  const acl = spawnSync("/bin/ls", ["-lde", path], {
+    env: { PATH: TOOL_PATH, LANG: "C", LC_ALL: "C" },
+    encoding: "utf8", timeout: 5000, maxBuffer: 65536,
+  });
+  const lines = (acl.stdout ?? "").trimEnd().split("\n");
+  const mode = lines[0]?.split(/\s+/, 1)[0] ?? "";
+  return !(acl.error || acl.signal || acl.status !== 0 || (acl.stderr ?? "").trim() ||
+    lines.length !== 1 || !/^[d-][rwxstST-]{9}@?$/.test(mode));
+}
+/** What must not change between open, read and the final no-follow stat of one file. */
+const fileShape = (st) => [st.dev, st.ino, st.size, st.mtimeMs, st.ctimeMs, st.mode, st.uid, st.nlink].join(":");
+
 function requireReviewerReadOnly(path, fixture = false) {
-  if (process.platform === "darwin") {
-    // W_OK misses writesecurity: an ACL may allow a later write grant. Darwin
-    // can display @ instead of + when extended attributes and an ACL coexist,
-    // so inspect both the mode and the complete -e ACL output.
-    const acl = spawnSync("/bin/ls", ["-lde", path], {
-      env: { PATH: TOOL_PATH, LANG: "C", LC_ALL: "C" },
-      encoding: "utf8", timeout: 5000, maxBuffer: 65536,
-    });
-    const lines = (acl.stdout ?? "").trimEnd().split("\n");
-    const mode = lines[0]?.split(/\s+/, 1)[0] ?? "";
-    if (acl.error || acl.signal || acl.status !== 0 || (acl.stderr ?? "").trim() ||
-        lines.length !== 1 || !/^[d-][rwxstST-]{9}@?$/.test(mode)) {
-      refuse("reviewer custody ACL is present or unavailable");
-    }
-  }
+  if (process.platform === "darwin" && !darwinAclAbsent(path)) refuse("reviewer custody ACL is present or unavailable");
   // Only the existing internal synthetic principal fixture skips W_OK. Real
   // Darwin ACL checks still run in that fixture; production never relaxes it.
   if (fixture) return;
@@ -513,10 +524,7 @@ const direct = p => {
 };
 function noACL(path) {
   if (process.platform !== 'darwin') return;
-  const r=spawnSync('/bin/ls',['-lde',path],{env:{PATH:'/usr/bin:/bin',LANG:'C',LC_ALL:'C'},encoding:'utf8',timeout:5000,maxBuffer:65536});
-  const lines=(r.stdout??'').trimEnd().split('\n');
-  need(!r.error&&!r.signal&&r.status===0&&!(r.stderr??'').trim()&&lines.length===1&&/^[d-][rwxstST-]{9}@?$/.test(lines[0].split(/\s+/,1)[0]),
-       'Contained controller ACL is present or unavailable');
+  need(darwinAclAbsent(path),'Contained controller ACL is present or unavailable');
 }
 function directory(path) {
   direct(path);const s=lstatSync(path);need(s.isDirectory()&&s.uid===process.getuid()&&(s.mode&0o777)===0o700,'Private contained directory required');noACL(path);return s;
@@ -524,7 +532,7 @@ function directory(path) {
 function file(path,{mode,uid=process.getuid(),maximum=4*1024*1024}={}) {
   direct(path);noACL(path);
   const fd=openSync(path,constants.O_RDONLY|constants.O_NOFOLLOW|constants.O_NONBLOCK);
-  const shape=s=>[s.dev,s.ino,s.size,s.mtimeMs,s.ctimeMs,s.uid,s.mode,s.nlink].join(':');
+  const shape=fileShape;
   try {
     const s=fstatSync(fd);
     need(s.isFile()&&s.nlink===1&&s.uid===uid&&s.size<=maximum&&!(s.mode&0o022)&&
@@ -539,7 +547,7 @@ function selected(ref) {
   need(ref&&typeof ref.path==='string'&&hex(ref.sha256)&&[0,process.getuid()].includes(ref.uid),'Selected contained source reference required');
   direct(ref.path);noACL(ref.path);
   const fd=openSync(ref.path,constants.O_RDONLY|constants.O_NOFOLLOW|constants.O_NONBLOCK);
-  const shape=s=>[s.dev,s.ino,s.size,s.mtimeMs,s.ctimeMs,s.uid,s.mode,s.nlink].join(':');
+  const shape=fileShape;
   try {
     const s=fstatSync(fd),exact=Number.isSafeInteger(ref.bytes)&&ref.bytes===s.size;
     const sizeOK=s.size<=100*1024*1024||((s.mode&0o111)!==0&&exact&&s.size<=256*1024*1024);

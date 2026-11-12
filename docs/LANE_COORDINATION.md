@@ -382,12 +382,31 @@ fixture tree; preflight and CI run it.
 
 ### Operating notes, 2026-10-23 (owner directive: the local second brain runs everything; the cloud and Codex inspect and approve)
 
+> **Placement amended 2026-11-11.** The quote and the notes below are kept as the record of that day. Where they say the Mac runs every test and the cloud builds and dispatches nothing, the newer routing in "Operating notes, 2026-11-11" below governs.
+
 Owner, 2026-10-23 about 23:00Z, verbatim: *"Need to offload and let the local agent run everything and escalate to you or codex when it's needed for final inspection and approval for repo everything else is offloaded locally using second brain period …"* — the full text is in the `docs/agent/LOOP.md` STATE block of that day. It widens the 03:30Z local-first directive recorded there.
 
 - **The Mac's local second brain is the primary executor.** It runs every build round, review round, test, app build and company-site task itself, with whatever local tooling it needs, and decides what to work on from the objective state and the owner's inputs. Its runtime lives outside this tree (the 2026-10-22 intake row); it writes to this tree only through the Mac lane's registered channels — lane mail, hands, heartbeats, `mac/*` branches and PRs.
 - **The cloud lane and Codex are final inspection and approval for the repository.** The cloud builds nothing and dispatches nothing of its own. It acts on an escalation from the brain through one of three channels: (1) a lane message addressed to cloud — a comment on the mailbox PR (`docs/agent/lane-mailbox.json`) wakes it at once; (2) a raised hand with `whoCanUnblock: "cloud lane"`; (3) a sentence in a PR body asking the cloud to land it. On an escalation it reviews the exact head and lands under DR-037's five conditions, or returns its findings on the PR. `@codex review` on a PR requests Codex.
 - **What the cloud keeps running**, because the registry and the raised-hands gate expect them: the hourly steward cycle (reads Mac mail and branches, lands lane-mail and tick PRs, escalates a silent Mac to the owner), the 2-hourly forward-build heartbeat as a report of the pool with no refill, and the daily hygiene sweep.
 - **What does not change:** DR-037's five landing conditions and its owner-only surfaces (launch profile, launch-claims gate, publication boundary, decision records, `OWNER_RESERVED`); DR-054, a stuck unit raises a hand on either machine; claim discipline; the second-revision loop above for mail, acks and heartbeats. Authority for the brain's own writes is a registry row in `docs/agent/scheduled-routines.json` citing the owner's words, which the brain proposes and the cloud inspects; until it lands, the brain's deliveries ride the registered Mac lane identity, as they do today.
+
+### Operating notes, 2026-11-11 (owner routing correction: split the load across the lanes when the Mac is slow)
+
+Owner, 2026-11-11, as quoted by the Root (Codex) lane in a comment on the mailbox PR (`docs/agent/lane-mailbox.json`) on 2026-11-12 at 02:44Z: *"If it's taking to long for things to process on the Mac then need to find a way to split to load between all 4 lanes. Github -> Second Brain -> Mac LLM -> Claude Local Cloud Session -> Codex Local Cloud Session -> Claude Code Cloud Session -> Codex Cloud Session -> GitHub"*. The cloud lane did not receive these words first-hand; it records them as relayed, and the owner reads this file.
+
+This amends the 2026-10-23 placement above in one respect: the Mac is no longer the only place work and tests run. The 2026-10-23 quote stays as written.
+
+- **One ledger, one writer.** The second brain is the one coordinator ledger. Each task, and each full head of a branch, has one writer at a time; a lane takes a task by claiming it through the registered channels (lane mail, a raised hand, a `mac/build-row-<id>-*` head) before it writes.
+- **What stays on the Mac:** the local LLM, the private Obsidian vault and control data, and every physical-device or supervised-hardware check. Private notes and control data never leave it.
+- **The local Claude and Codex clients on the Mac** do bounded host integration and the cloud-model calls their plans include.
+- **The hosted Claude and Codex lanes** take assigned public-source implementation, review, and the checks that are portable — the ones that need no device, no vault and no Mac-only tool. Assigned means a lane message, a raised hand or a PR-body sentence names the task; a hosted lane does not pick up work the ledger gave to another writer.
+- **GitHub-hosted Linux and macOS CI** runs the required portable validation on the PR.
+- **A model or provider being reachable is neither permission nor evidence.** A check counts when its command ran on the stated head and its output is quoted.
+- **What this does not add:** no new agent, trigger, account, paid capacity, approval vote, wider cap or department.
+- **What does not change:** DR-037's five landing conditions and DR-064; the owner-only surfaces; full required validation on the exact head; genuine independent review; serial landing on the expected head; no branch deletion and no force-push; DR-054, a lane that cannot run something says so and raises a hand instead of waiting on the Mac or reporting work that did not run.
+- **DR-064 is not edited by this note.** It still records the 2026-10-23 placement (the brain as primary executor, cloud and Codex as final inspection). `docs/DECISION_RECORDS.md` is the owner's to change; until he amends it, this note is the operating reading of his newer words and DR-064's landing rules stand as written.
+- **Not every remote attachment works yet.** The weekly dependabot routine's fresh sessions cannot reach this repository (the `dependabot-queue-review-weekly` row in `docs/agent/scheduled-routines.json` is `awaiting-activation`); that is a separate open blocker and this note does not claim it is fixed.
 
 ## Collision log
 

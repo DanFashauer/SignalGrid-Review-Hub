@@ -15,6 +15,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
+          ref: 4a3273ba507db9c4bf892707a991e5f70e063e67
           fetch-depth: 0
           persist-credentials: false
       - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86

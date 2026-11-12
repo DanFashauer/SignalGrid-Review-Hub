@@ -5467,3 +5467,24 @@ node scripts/preflight.mjs   -> Preflight PASSED — everything it runs is green
 pnpm run verify:breadth      -> Breadth lane PASSED — 58 breadth proofs green (deferred families, doctrine documents, and the DR-005 decision-palette design gate).
 ```
 Verdict: #1885 is on `SignalGrid_Alpha` at 7472bc2453238e256c51d6569ef7857ef7038e5b, merged from exact head c4fb739137df665c6c9d294480f29acaac498207 whose gating check, local preflight and breadth were green.
+
+## 2026-11-11 — #1903 landed under DR-037 on the owner's word: the tick heartbeat self-refresh (e39becae)
+
+**What.** #1903 "#1698 + the tick refreshes its own behind heartbeat PR (owner-approved fix for the HIGH finding)" (branch claude/1698-heartbeat-self-refresh) carries the Mac lane's #1698 delivery code and the cloud's smallest fix for the #1698 HIGH: `scripts/lane-heartbeat-refresh.mjs` refreshes the lane's own heartbeat PR only after reading the complete check list for its pinned head. It also moves three owner-checked tick helpers in `scripts/mac/lane-tick.sh` out of command substitutions, because stock macOS `/bin/bash` 3.2 forks a subshell there and the helper is then not a direct child of the tick. SAFETY_MACHINERY (`scripts/**`).
+
+**Authority.** The owner wrote "land #1903" on 2026-11-11, after being told the two open Codex P2 findings would go to the Mac lane's #1698 follow-up. The Mac lane asked for the landing in lane mail (2026-11-11, 08:41Z).
+
+**Landed.** Merged at 2026-11-11T21:44Z: exact head `e9fe7fd82ffd0c8af494e2aa63203fc4bc7ed4d1` → mainline `e39becaea0eac9fd0d5268f9f095b690325e9c95`. Gating check run 130787553535: success. Mac-only check run 130787553891: success. Unresolved review threads: 0. Record comment on the PR: 6807755396.
+
+Command: `node scripts/preflight.mjs` and `pnpm run verify:breadth`, run in a private worktree detached at `8f5bb00d43e63671179a321559e0ac814acc8d6a`. The landed head adds two commits on top of that one, both GitHub update-branch merges of mainline (`4445f6af`, `e9fe7fd8`); under the owner's 2026-11-07 ruling such a head needs CI only.
+Output, verbatim (command -> printed line):
+```
+node scripts/preflight.mjs   -> Preflight PASSED — everything it runs is green.
+pnpm run verify:breadth      -> Breadth lane PASSED — 58 breadth proofs green (deferred families, doctrine documents, and the DR-005 decision-palette design gate).
+git ls-remote origin SignalGrid_Alpha -> e39becaea0eac9fd0d5268f9f095b690325e9c95	refs/heads/SignalGrid_Alpha
+```
+Verdict: #1903 is on `SignalGrid_Alpha` at e39becaea0eac9fd0d5268f9f095b690325e9c95, merged from exact head e9fe7fd82ffd0c8af494e2aa63203fc4bc7ed4d1 whose gating check and Mac-only check were green; local preflight and breadth were green two GitHub mainline merges earlier.
+
+**Not fixed, and where it went.** Two Codex P2 findings were resolved on the PR as deferred, not fixed: the group-recovery control in `scripts/check-lane-delivery.mjs` can hold on a host whose PID 1 does not reap a killed fixture survivor; and `scripts/mac/build-tick.sh` can queue a second uncertainty hand for a build hand that was already submitted. Both were mailed to the Mac lane (message `cloud-1903-landed-e39becae-pull-before-the-next-`).
+
+**Not verified.** Whether the Mac's launchd tick now writes `artifacts/agent-heartbeats/mac-lane-tick.json`: at the landing, mainline still carried the 2026-10-24T07:30Z file. Only a tick on the Mac after it pulls can show that.

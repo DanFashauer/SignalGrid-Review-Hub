@@ -166,8 +166,10 @@ original intent and raw stdout. Its `privacy_clearance` and
 `public_egress_allowed` fields are both false. It contains no source or
 artifact review decision.
 
-A qualified reviewer can consume the referenced original stdout through the
-reviewer helper's `--prepared` interface. The reviewer must independently
+A qualified reviewer can consume the referenced original stdout through a
+reviewer helper's `--prepared` interface. That helper is qualified and kept
+separately; it is not shipped in this repository, which defines only the
+handoff it reads. The reviewer must independently
 establish the source provenance and inspect the exact artifact before issuing
 the separate source and artifact decisions. Keep the raw handoff local; it is
 not permission to send private job context, vault material or unaccepted worker

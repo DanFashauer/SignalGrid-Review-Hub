@@ -1193,10 +1193,20 @@ function fixture() {
 }
 
 function checkCase(name, run) { const f=fixture(); try { run(f); check('(contained) '+name, true); } catch { check('(contained) '+name, false); } finally { f.cleanup(); } }
+// A negative case first proves its own fresh fixture crosses the real reader, then mutates it:
+// a broken baseline would otherwise make every assert.throws pass for the wrong reason.
+// `expected` is the reader's exact refusal for that mutation, so one guard cannot stand in for another.
+function refusedCase(name, mutate, expected) {
+  checkCase(name, f => {
+    assert.deepEqual(f.read().value.request, f.request, 'the unmutated fixture must be accepted first');
+    mutate(f);
+    assert.throws(() => f.read(), e => { assert.match(String(e.message), expected); return true; });
+  });
+}
 checkCase('complete contained producer evidence crosses the real content validator',f=>assert.deepEqual(f.read().value.request,f.request));
-checkCase('an unparseable contained receipt issue time is refused',f=>{
-  f.packet.content.issued_at='not-a-time';f.save();assert.throws(f.read);
-});
+refusedCase('an unparseable contained receipt issue time is refused',f=>{
+  f.packet.content.issued_at='not-a-time';f.save();
+},/^Contained receipt belongs to another source, worker or cutover$/);
 function actualToolRef(path) {
   path=fs.realpathSync(path);
   const fd=fs.openSync(path,fs.constants.O_RDONLY|fs.constants.O_NOFOLLOW);
@@ -1222,26 +1232,27 @@ function privateToolRef(f) {
 checkCase('the actual pinned Node executable qualifies without a whole-binary buffer',f=>{
   selectTool(f,privateToolRef(f));assert.deepEqual(f.read().value.request,f.request);
 });
-checkCase('a selected executable with the wrong exact size is refused',f=>{
+refusedCase('a selected executable with the wrong exact size is refused',f=>{
   const ref=privateToolRef(f);selectTool(f,ref);assert.deepEqual(f.read().value.request,f.request);
-  f.profile.source_refs.pop();selectTool(f,{...ref,bytes:ref.bytes-1});assert.throws(f.read);
-});
-checkCase('a selected executable with a changed hash is refused',f=>{
+  f.profile.source_refs.pop();selectTool(f,{...ref,bytes:ref.bytes-1});
+},/^Selected contained source custody differs$/);
+refusedCase('a selected executable with a changed hash is refused',f=>{
   const ref=privateToolRef(f);selectTool(f,ref);assert.deepEqual(f.read().value.request,f.request);
-  f.profile.source_refs.pop();selectTool(f,{...ref,sha256:'0'.repeat(64)});assert.throws(f.read);
-});
-checkCase('a selected executable that group or others can write is refused',f=>{
-  const ref=privateToolRef(f);fs.chmodSync(ref.path,0o777);selectTool(f,{...ref,mode:0o777});assert.throws(f.read);
-});
-checkCase('a worker-supplied v2 file is never treated as a contained receipt',f=>{f.write(f.path,f.packet.content);assert.throws(f.read);});
-checkCase('a stale controller profile cannot grant publication',f=>{f.profile.enabled=false;f.write(f.profile.profile_path,f.profile);assert.throws(f.read);});
-checkCase('changed selected controller code is refused',f=>{f.write(f.profile.source_refs[0].path,'changed');assert.throws(f.read);});
-checkCase('a failed or missing final controller outcome is readback only',f=>{f.write(join(f.attempt,'outcome.json'),{state:'held'},0o600);assert.throws(f.read);});
-checkCase('a clearing file cannot replace a Native rejection',f=>{f.write(join(f.attempt,'source_review/native/response.json'),{decision:'reject'},0o600);assert.throws(f.read);});
-checkCase('changed actual Native input cannot keep an old admission',f=>{f.write(join(f.attempt,'source_review/native/execution/stdin.raw'),'different',0o600);assert.throws(f.read);});
-checkCase('current source permission is required immediately before publication',f=>{f.options.verifySource=()=>({current:false});assert.throws(f.read);});
-checkCase('a symlinked clearance is refused',f=>{const target=join(f.root,'saved.json');fs.renameSync(f.path,target);fs.symlinkSync(target,f.path);assert.throws(f.read);});
-checkCase('unknown or unclosed Native terminal evidence is refused',f=>{f.write(join(f.attempt,'artifact_review/native/execution/terminal.json'),{returncode:0,normal_original_wait_closed:false},0o600);assert.throws(f.read);});
+  f.profile.source_refs.pop();selectTool(f,{...ref,sha256:'0'.repeat(64)});
+},/^Selected contained source changed$/);
+refusedCase('a selected executable that group or others can write is refused',f=>{
+  const ref=privateToolRef(f);selectTool(f,ref);assert.deepEqual(f.read().value.request,f.request);
+  f.profile.source_refs.pop();fs.chmodSync(ref.path,0o777);selectTool(f,{...ref,mode:0o777});
+},/^Selected contained source custody differs$/);
+refusedCase('a worker-supplied v2 file is never treated as a contained receipt',f=>{f.write(f.path,f.packet.content)},/^Current contained receipt\/profile binding differs$/);
+refusedCase('a stale controller profile cannot grant publication',f=>{f.profile.enabled=false;f.write(f.profile.profile_path,f.profile)},/^Explicit current trusted\-controller profile required$/);
+refusedCase('changed selected controller code is refused',f=>{f.write(f.profile.source_refs[0].path,'changed')},/^Selected contained source custody differs$/);
+refusedCase('a failed or missing final controller outcome is readback only',f=>{f.write(join(f.attempt,'outcome.json'),{state:'held'},0o600)},/^Original contained attempt did not finish$/);
+refusedCase('a clearing file cannot replace a Native rejection',f=>{f.write(join(f.attempt,'source_review/native/response.json'),{decision:'reject'},0o600)},/^Actual structured Native response differs$/);
+refusedCase('changed actual Native input cannot keep an old admission',f=>{f.write(join(f.attempt,'source_review/native/execution/stdin.raw'),'different',0o600)},/^Actual Native execution is incomplete or changed$/);
+refusedCase('current source permission is required immediately before publication',f=>{f.options.verifySource=()=>({current:false})},/^Current durable source permission did not qualify$/);
+refusedCase('a symlinked clearance is refused',f=>{const target=join(f.root,'saved.json');fs.renameSync(f.path,target);fs.symlinkSync(target,f.path)},/^Indirect contained controller path$/);
+refusedCase('unknown or unclosed Native terminal evidence is refused',f=>{f.write(join(f.attempt,'artifact_review/native/execution/terminal.json'),{returncode:0,normal_original_wait_closed:false},0o600)},/^Actual Native execution is incomplete or changed$/);
 
 }
 

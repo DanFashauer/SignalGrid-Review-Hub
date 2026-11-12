@@ -5,18 +5,28 @@
 //
 //   node scripts/preflight.mjs          # full suite (what CI runs)
 //   node scripts/preflight.mjs --quick  # skip the heavy web/app builds
+//   node scripts/preflight.mjs --slice k/n --slice-record <file>   # ONE slice of the same list (a subset, never a verdict)
+//   node scripts/preflight.mjs --aggregate <dir> --slices n --jobs-result <ci result>   # judge n slice records as one run
+//   node scripts/preflight.mjs --slice-plan n                      # print who owns what, and stop
 //
 // Exits non-zero on the first failing gate and prints a compact report, so
 // "green preflight" means "CI will be green".
 import { spawnSync } from "node:child_process";
-import { resolve, dirname } from "node:path";
+import { readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { resolve, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { uncoveredLines } from "./lib/ci-jobs.mjs";
 import { nativeBuildExclusion } from "./lib/platform-native-build.mjs";
 import { classifyStep } from "./lib/preflight-verdict.mjs";
+import { aggregate, expectedSequence, parseSlice, planHash, planOf, roleOf, sliceRecord } from "./lib/preflight-slice.mjs";
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const quick = process.argv.includes("--quick");
+// SLICES (scripts/lib/preflight-slice.mjs). One hosted macOS runner cannot finish this list
+// inside the PR Mac check's work bound, so that check runs the SAME list as n slices on n
+// machines and one aggregate judges their union. Plain `node scripts/preflight.mjs` is unchanged.
+const argAfter = (flag) => { const i = process.argv.indexOf(flag); return i === -1 ? null : process.argv[i + 1] ?? ""; };
+const slice = process.argv.includes("--slice") ? parseSlice(argAfter("--slice")) : null;
 
 // Ordered gates — a complete mirror of the CI jobs that need NOTHING BUT NODE
 // (one honest exception: `proof:mobile-app-catalog` shells to python3, which is
@@ -526,7 +536,10 @@ const STEPS = [
   { name: "MCP surface self-test (coverage + resource parity must be able to fail)", cmd: ["node", "scripts/check-mcp-surface.mjs", "--self-test"] },
   { name: "MCP surface (chat connection must match the fabric)", cmd: ["node", "scripts/check-mcp-surface.mjs"] },
   { name: "Lib-build heal self-test (an orphaned tsbuildinfo with no dist must be flagged)", cmd: ["node", "scripts/ensure-lib-build.mjs", "--self-test"] },
-  { name: "Typecheck (all packages)", cmd: ["pnpm", "run", "typecheck"] },
+  // prerequisiteForLater: `typecheck:libs` builds the composite workspace libraries, and proofs
+  // further down import them. A slice that owns a later step and not this one runs it first as a
+  // PRELUDE (printed and recorded as such, never counted as that slice's pass).
+  { name: "Typecheck (all packages)", cmd: ["pnpm", "run", "typecheck"], prerequisiteForLater: true },
   // needsNativeBuild: rollup/esbuild/lightningcss/oxide platform binaries. The
   // workspace strips every triple but linux-x64, so on other platforms this step
   // is structurally absent rather than failing — see scripts/lib/platform-native-build.mjs.
@@ -821,6 +834,57 @@ if (nativeExclusion.excluded) {
   console.log(`ℹ native web build unavailable on ${nativeExclusion.target} — ${nativeExclusion.reason}\n`);
 }
 
+// The slice plan is the COMPLETE step list, every field (the `--list-steps` projection below is
+// a registration view and omits env, selfSkipsWithout and surface, so it is never the hash input).
+const slicePlan = slice || process.argv.includes("--aggregate") || process.argv.includes("--slice-plan") ? planOf(STEPS, repo) : null;
+const sliceRows = [];
+const gitHead = () => spawnSync("git", ["rev-parse", "HEAD"], { cwd: repo, encoding: "utf8" }).stdout.trim();
+// The CI run and attempt a slice or an aggregate belongs to ("<run id>.<attempt>"), null outside CI.
+const runAttempt = process.env.GITHUB_RUN_ID && process.env.GITHUB_RUN_ATTEMPT ? `${process.env.GITHUB_RUN_ID}.${process.env.GITHUB_RUN_ATTEMPT}` : null;
+if (slice && (quick || !argAfter("--slice-record"))) {
+  console.error("preflight: --slice needs --slice-record <file> and cannot be combined with --quick (a slice of a shortened list is not a slice of preflight).");
+  process.exit(2);
+}
+if (process.argv.includes("--slice-plan")) {
+  const count = parseSlice(`1/${argAfter("--slice-plan")}`).count;
+  const sequences = {};
+  for (let k = 1; k <= count; k += 1) sequences[k] = expectedSequence(slicePlan, { index: k, count });
+  await new Promise((done) => process.stdout.write(JSON.stringify({ plan: planHash(slicePlan), total: slicePlan.length, count, sequences }) + "\n", done));
+  process.exit(0);
+}
+if (process.argv.includes("--aggregate")) {
+  // The ONLY place a sliced run earns the verdict line. Every refusal is a problem line and exit 1.
+  const dir = argAfter("--aggregate");
+  const count = Number(argAfter("--slices"));
+  const jobResult = argAfter("--jobs-result");
+  let records = null;
+  try {
+    records = readdirSync(dir).filter((n) => /^preflight-slice-\d+\.json$/.test(n)).sort().map((n) => {
+      try { return JSON.parse(readFileSync(join(dir, n), "utf8")); } catch { return null; }
+    });
+  } catch { records = null; }
+  const verdict = aggregate({ records, plan: slicePlan, count, checkout: gitHead(), prHead: process.env.PREFLIGHT_PR_HEAD || null, attempt: runAttempt, jobResult: jobResult ?? "" });
+  console.log(`preflight aggregate: plan ${planHash(slicePlan).slice(0, 16)}… (${slicePlan.length} steps), ${count} slice(s), slice jobs: ${JSON.stringify(jobResult)}`);
+  if (!verdict.ok) {
+    for (const problem of verdict.problems) console.error(`  ✗ ${problem}`);
+    console.error(`\nPreflight FAILED at: the ${count}-slice aggregate (${verdict.problems.length} problem(s)). No slice set short of every step run exactly once is a pass.`);
+    process.exit(1);
+  }
+  const named = (status) => slicePlan.filter((_, index) => records.some((r) => r.steps.some((row) => row[0] === index && row[1] === "owned" && row[2] === status))).map((step) => step.name);
+  console.log(`  every one of the ${verdict.total} steps is accounted for exactly once across ${count} slices: ${Object.entries(verdict.counts).map(([k, v]) => `${v} ${k}`).join(", ")}`);
+  console.log(`\nPreflight PASSED — everything it runs is green (${count} slices, aggregated).`);
+  // The same caveats plain preflight prints WITH its verdict: a step that did not verify, did not
+  // run or could not run is named here, never folded into the green count.
+  for (const [status, label] of [["unverified", "exited 0 WITHOUT verifying what they check — nothing they check was verified by this run"], ["reported", "REPORTED a finding and exited 0 — report-only, not a clean result"], ["skipped-db", "SELF-SKIPPED — they exited 0 without running; nothing they prove was verified by this run"], ["unavailable", "did NOT run — unavailable on the slices' platform, not passed"]]) {
+    const names = named(status);
+    if (names.length > 0) { console.log(`\n  ${names.length} step(s) ${label}:`); for (const name of names) console.log(`    · ${name}`); }
+  }
+  console.log("\n  Each slice's own log carries the per-step lines and reasons. This aggregate ran no gate itself.");
+  console.log("\n  NOT covered by this harness (CI runs these; a green preflight says nothing about them):");
+  for (const j of uncoveredLines()) console.log(`    · ${j}`);
+  process.exit(0);
+}
+
 // `--list-steps` prints the list the loop below iterates, as one JSON line, and stops. The registration gate
 // (scripts/check-gate-self-tests-run.mjs) reads what is registered from HERE rather than parsing this file's source:
 // source can be written to look like a step without being one, the list the loop runs cannot. Keep this block
@@ -834,6 +898,16 @@ if (process.argv.includes("--list-steps")) {
 const results = [];
 let failed = null;
 for (const step of STEPS) {
+  const stepIndex = STEPS.indexOf(step);
+  const role = slice ? roleOf(stepIndex, slicePlan, slice) : "owned";
+  if (role === "other") continue;
+  if (role === "prelude" && step.needsNativeBuild && nativeExclusion.excluded) {
+    // A prerequisite this platform cannot run leaves later steps without what it sets up.
+    console.log(`▶ ${step.name} … FAILED (a prerequisite for this slice that this platform cannot run)`);
+    sliceRows.push([stepIndex, "prelude", "failed", 1]);
+    failed = step.name;
+    break;
+  }
   if (quick && step.heavy) { results.push({ name: step.name, status: "skipped" }); continue; }
   if (step.needsNativeBuild && nativeExclusion.excluded) {
     // NOT a pass. Recorded as absent, with the reason, and surfaced in the summary
@@ -860,6 +934,19 @@ for (const step of STEPS) {
     envSet: Boolean(step.selfSkipsWithout && process.env[step.selfSkipsWithout]),
     surface: step.surface,
   });
+  if (role === "prelude") {
+    // Run for what it sets up, judged strictly (only a clean ok), and never counted here.
+    if (c.verdict === "ok") {
+      console.log(`ok — PRELUDE for slice ${slice.index}/${slice.count} (owned and counted by an earlier slice)`);
+      sliceRows.push([stepIndex, "prelude", "ok", 0]);
+      continue;
+    }
+    console.log("FAILED");
+    console.error(`\n─── ${step.name} (prelude) output (tail) ───\n${combined.trimEnd().split("\n").slice(-25).join("\n")}\n`);
+    sliceRows.push([stepIndex, "prelude", "failed", r.status ?? 1]);
+    failed = step.name;
+    break;
+  }
   if (c.verdict === "skipped-env") {
     console.log(`SELF-SKIPPED (${step.selfSkipsWithout} unset — not run, not passed)`);
     results.push({ name: step.name, status: "skipped-db", env: step.selfSkipsWithout });
@@ -889,6 +976,7 @@ for (const step of STEPS) {
         `declared selfSkipsWithout: "${step.selfSkipsWithout}" (unset here) but exited 0 without printing SKIPPED.\n` +
         `Either the proof no longer self-skips — remove the marker — or it ran without the input it needs.\n`,
     );
+    sliceRows.push([stepIndex, "owned", "failed", 0]);
     failed = step.name;
     break;
   } else {
@@ -896,6 +984,7 @@ for (const step of STEPS) {
     // Surface the tail of the failing output so the cause is visible inline.
     const out = combined.trimEnd().split("\n").slice(-25).join("\n");
     console.error(`\n─── ${step.name} output (tail) ───\n${out}\n`);
+    sliceRows.push([stepIndex, "owned", "failed", r.status ?? 1]);
     failed = step.name;
     break;
   }
@@ -914,6 +1003,21 @@ for (const r of results) {
   console.log(`  ${mark} ${r.name}${note}`);
 }
 
+if (slice) {
+  // A SLICE IS A SUBSET. It writes its record and stops here: the verdict line below is never
+  // reached in slice mode, pass or fail. Only `--aggregate` may say the list passed.
+  const indexOf = new Map(slicePlan.map((entry) => [entry.name, entry.index]));
+  for (const r of results) sliceRows.push([indexOf.get(r.name), "owned", r.status, 0]);
+  sliceRows.sort((a, b) => a[0] - b[0]);
+  writeFileSync(argAfter("--slice-record"), JSON.stringify(sliceRecord({ slice, checkout: gitHead(), prHead: process.env.PREFLIGHT_PR_HEAD || null, attempt: runAttempt, plan: slicePlan, steps: sliceRows })) + "\n");
+  const owned = sliceRows.filter((row) => row[1] === "owned").length;
+  if (failed) {
+    console.error(`\nPreflight slice ${slice.index}/${slice.count} FAILED at: ${failed}.`);
+    process.exit(1);
+  }
+  console.log(`\nPreflight slice ${slice.index}/${slice.count} complete: ${owned} owned step(s) run, none failed. This is a SUBSET of the list — not a preflight verdict. The aggregate judges all ${slice.count} slices.`);
+  process.exit(0);
+}
 if (failed) {
   console.error(`\nPreflight FAILED at: ${failed}. Fix before pushing.`);
   process.exit(1);

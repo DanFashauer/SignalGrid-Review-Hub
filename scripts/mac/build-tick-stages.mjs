@@ -57,6 +57,9 @@ import { basename, delimiter, dirname, isAbsolute, join, relative, resolve, sep 
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { marks, parseRows, statusText } from "../check-backlog-ownership.mjs";
 import { scratchGit, scratchGitOk, scratchGitEnv, scrubProcessGitEnv } from "../lib/scratch-git.mjs";
+// Loaded for --self-test only: the helper itself must keep running from a checkout (or a scratch
+// copy) that carries nothing but its own small import closure.
+const SLICE = process.argv.includes("--self-test") ? await import("../lib/preflight-slice.mjs") : null;
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const SELF = fileURLToPath(import.meta.url);
@@ -1820,7 +1823,7 @@ git() {
 `;
     const workflowRun = (file, extra) => {
       writeFileSync(events, "");
-      return run(stubTools + workflowChain(file), 2, 4, base, { SG_CI_LANE: "both", SG_CI_SHELLCHECK_EXIT: "0", SG_CI_INSTALL_EXIT: "0", SG_CI_PROOF_EXIT: "0", SG_CI_PREFLIGHT_EXIT: "0", SG_CI_HARNESS_EXIT: "0", SG_CI_MCP_EXIT: "0", SG_CI_JOINT_EXIT: "0", ...extra });
+      return run(stubTools + workflowChain(file), 2, 4, base, { SG_CI_LANE: "both", PREFLIGHT_SLICE: "1", SG_CI_SHELLCHECK_EXIT: "0", SG_CI_INSTALL_EXIT: "0", SG_CI_PROOF_EXIT: "0", SG_CI_PREFLIGHT_EXIT: "0", SG_CI_HARNESS_EXIT: "0", SG_CI_MCP_EXIT: "0", SG_CI_JOINT_EXIT: "0", ...extra });
     };
     const lintPrerequisite = workflowRun("mac-runner-auto.yml", { SG_CI_SHELLCHECK_EXIT: "8" });
     ok("CI unavailable shell lint prerequisite fails before install and still tears down", lintPrerequisite.status === 8
@@ -1838,16 +1841,194 @@ git() {
     ok("CI actual MCP body still runs joint verification after a failed sibling check", mcp.status === 7
       && /mcp-verify\npnpm:run verify:all --require-mcp\nteardown\n$/.test(readFileSync(events, "utf8")), `${mcp.status} ${mcp.stderr}`);
     const pin = "24eff86a940099e0725d474d1d5520bfbc71d368";
-    for (const [file, total, admission, work] of [["mac-runner-auto.yml", 60, 60, 2400], ["mac-runner-harness.yml", 780, 39600, 5400]]) {
+    // runSteps: the PR workflow has the one owning heavy step (run by each slice) and the
+    // aggregate's step, which runs no gate; the nightly workflow still has exactly one.
+    for (const [file, total, admission, work, runSteps] of [["mac-runner-auto.yml", 60, 60, 2400, 2], ["mac-runner-harness.yml", 780, 39600, 5400, 1]]) {
       const workflow = readFileSync(join(HERE, "../../.github/workflows", file), "utf8");
       const owns = (text) => new RegExp(`^    timeout-minutes: ${total}$`, "m").test(text)
         && text.includes(`bash scripts/mac/ci-host-verification.sh ${pin} ${admission} ${work} <<'CI_CHAIN'`)
-        && !/^ {8}timeout-minutes:/m.test(text) && (text.match(/^ {8}run:/gm) ?? []).length === 1
+        && (text.match(/ci-host-verification\.sh /g) ?? []).length === 1
+        && !/^ {8}timeout-minutes:/m.test(text) && (text.match(/^ {8}run:/gm) ?? []).length === runSteps
         && text.includes("          pnpm install --frozen-lockfile") && text.includes("          bash scripts/mac/free-test-port.sh || exit $?")
         && text.includes("        if: always()") && text.includes("uses: actions/upload-artifact@");
       ok(`CI ${file} puts the complete heavy chain in one owning step with separate admission/work bounds`, owns(workflow)
         && !owns(workflow.replace("bash scripts/mac/ci-host-verification.sh", "bash unguarded.sh")));
     }
+  });
+
+  guard2(ok, "preflight slices: one list, four machines, one verdict", () => {
+    const node = process.execPath, preflight = join(HERE, "../preflight.mjs"), repoRoot = join(HERE, "../..");
+    const bare = { ...process.env }; delete bare.PREFLIGHT_PR_HEAD; delete bare.GITHUB_RUN_ID; delete bare.GITHUB_RUN_ATTEMPT;
+    const head = spawnSync("git", ["rev-parse", "HEAD"], { cwd: repoRoot, encoding: "utf8" }).stdout.trim();
+    const sha = (c) => c.repeat(40);
+
+    // ── the pure judgement, on a ten-step plan whose step 2 is a declared prerequisite
+    const steps = Array.from({ length: 10 }, (_, i) => ({ name: `step ${i}`, cmd: ["node", `gate-${i}.mjs`] }));
+    steps[2].prerequisiteForLater = true;
+    steps[4].env = { ROOT: "/checkout/a/x" }; steps[6].selfSkipsWithout = "DATABASE_URL"; steps[7].surface = /REPORTED, not fatal/; steps[8].needsNativeBuild = true;
+    const plan = SLICE.planOf(steps, "/checkout/a"), count = 4;
+    const full = (mutate = (r) => r) => [1, 2, 3, 4].map((k) => mutate(SLICE.sliceRecord({ slice: { index: k, count }, checkout: sha("a"), prHead: sha("b"), plan,
+      steps: SLICE.expectedSequence(plan, { index: k, count }).map(([index, role]) => [index, role, "ok", 0]) }), k)).filter(Boolean);
+    const judge = (records, extra = {}) => SLICE.aggregate({ records, plan, count, checkout: sha("a"), prHead: sha("b"), jobResult: "success", ...extra });
+    const refused = (name, records, needle, extra) => {
+      const v = judge(records, extra);
+      ok(`slices: ${name}`, v.ok === false && v.problems.some((p) => needle.test(p)), JSON.stringify(v.problems));
+    };
+    const clean = judge(full());
+    ok("slices: a complete set (every step once, prerequisite run first where owned later) is accepted", clean.ok && clean.ran === 10 && clean.counts.ok === 10, JSON.stringify(clean.problems));
+    ok("slices: ownership is contiguous, covers every step once, and a later slice gets the prerequisite as a prelude",
+      JSON.stringify([1, 2, 3, 4].map((k) => SLICE.expectedSequence(plan, { index: k, count }).map(([i, role]) => (role === "prelude" ? `p${i}` : i))))
+        === JSON.stringify([[0, 1, 2], ["p2", 3, 4], ["p2", 5, 6, 7], ["p2", 8, 9]]));
+    refused("an OMITTED gate is refused", full((r, k) => (k === 3 ? { ...r, steps: r.steps.filter((row) => row[0] !== 6) } : r)), /missing or out of order|was not run/);
+    refused("a DUPLICATED gate is refused", full((r, k) => (k === 2 ? { ...r, steps: [...r.steps, [0, "owned", "ok", 0]] } : r)), /does not own/);
+    refused("a gate run under another slice's ownership is refused", full((r, k) => (k === 2 ? { ...r, steps: r.steps.map((row) => (row[0] === 3 ? [1, "owned", "ok", 0] : row)) } : r)), /missing or out of order/);
+    refused("a swapped CHECKOUT is refused", full((r, k) => (k === 4 ? { ...r, checkout: sha("c") } : r)), /ran checkout/);
+    refused("a swapped PR HEAD is refused", full((r, k) => (k === 1 ? { ...r, prHead: sha("c") } : r)), /names PR head/);
+    refused("a swapped PLAN is refused", full((r, k) => (k === 2 ? { ...r, plan: sha("d") + sha("d").slice(0, 24) } : r)), /ran another plan/);
+    refused("PARTIAL output (a slice that stopped) is refused", full((r, k) => (k === 3 ? { ...r, steps: r.steps.slice(0, 2) } : r)), /was not run/);
+    refused("a MISSING slice is refused", full((r, k) => (k === 2 ? null : r)), /left no record/);
+    for (const result of ["failure", "cancelled", "skipped", ""]) refused(`slice jobs that ended ${JSON.stringify(result)} are refused even with complete records`, full(), /slice jobs ended/, { jobResult: result });
+    refused("a LOST SETUP DEPENDENCY (the prelude row absent) is refused", full((r, k) => (k === 3 ? { ...r, steps: r.steps.filter((row) => row[1] !== "prelude") } : r)), /missing or out of order/);
+    refused("a prerequisite that FAILED is refused", full((r, k) => (k === 4 ? { ...r, steps: r.steps.map((row) => (row[1] === "prelude" ? [row[0], "prelude", "failed", 2] : row)) } : r)), /prerequisite that did not pass/);
+    refused("a prerequisite recorded as a self-skip is refused (only a clean ok sets anything up)", full((r, k) => (k === 2 ? { ...r, steps: r.steps.map((row) => (row[1] === "prelude" ? [row[0], "prelude", "skipped-db", 0] : row)) } : r)), /prerequisite that did not pass/);
+    refused("a FAILED gate is refused", full((r, k) => (k === 1 ? { ...r, steps: r.steps.map((row) => (row[0] === 1 ? [1, "owned", "failed", 1] : row)) } : r)), /FAILED/);
+    refused("an unknown status is refused", full((r, k) => (k === 1 ? { ...r, steps: r.steps.map((row) => (row[0] === 0 ? [0, "owned", "fine", 0] : row)) } : r)), /unknown status/);
+    refused("an ok recorded with a non-zero exit is refused", full((r, k) => (k === 1 ? { ...r, steps: r.steps.map((row) => (row[0] === 0 ? [0, "owned", "ok", 3] : row)) } : r)), /recorded ok with exit 3/);
+    refused("the same slice recorded twice is refused", [...full(), full()[0]], /recorded twice/);
+    refused("a record of another format version is refused", full((r, k) => (k === 1 ? { ...r, v: 2 } : r)), /not a version-1 slice record/);
+    refused("a record from a different slice count is refused", full((r, k) => (k === 1 ? { ...r, count: 3 } : r)), /not one of 4/);
+    refused("no records at all is refused", null, /no slice records/);
+    const declared = { 6: "skipped-db", 7: "reported", 8: "unavailable" };
+    const nonpass = judge(full((r) => ({ ...r, steps: r.steps.map((row) => (row[1] === "owned" && declared[row[0]] ? [row[0], "owned", declared[row[0]], 0] : row)) })));
+    ok("slices: a DECLARED self-skip, report and platform-unavailable step each keep their own count, as in the plain run",
+      nonpass.ok && nonpass.counts["skipped-db"] === 1 && nonpass.counts.reported === 1 && nonpass.counts.unavailable === 1 && nonpass.counts.ok === 7, JSON.stringify(nonpass));
+    const unverified = judge(full((r) => ({ ...r, steps: r.steps.map((row) => (row[0] === 7 && row[1] === "owned" ? [7, "owned", "unverified", 0] : row)) })));
+    ok("slices: a step that declares a surface may be recorded unverified, and is counted as that", unverified.ok && unverified.counts.unverified === 1);
+    // No record can talk an ordinary gate out of running: every owned row of an unmarked step
+    // rewritten to a non-pass must lose the verdict, whichever non-pass it claims.
+    for (const status of ["skipped", "unavailable", "skipped-db", "reported", "unverified"]) {
+      refused(`every ordinary gate recorded ${status} is refused (the verdict cannot be earned by not running)`,
+        full((r) => ({ ...r, steps: r.steps.map((row) => (row[1] === "owned" && !declared[row[0]] ? [row[0], "owned", status, 0] : row)) })), status === "skipped" ? /recorded skipped, which this step does not declare/ : /which this step does not declare it can be/);
+      refused(`ONE ordinary gate recorded ${status} is refused`, full((r, k) => (k === 1 ? { ...r, steps: r.steps.map((row) => (row[0] === 1 ? [1, "owned", status, 0] : row)) } : r)), /which this step does not declare it can be/);
+    }
+    refused("a quick-mode skip is refused even on a heavy step (a slice never runs --quick)", (() => { const heavy = steps.map((x, i) => (i === 3 ? { ...x, heavy: true } : x)); const hp = SLICE.planOf(heavy, "/checkout/a");
+      return [1, 2, 3, 4].map((k) => SLICE.sliceRecord({ slice: { index: k, count }, checkout: sha("a"), prHead: sha("b"), plan: hp, steps: SLICE.expectedSequence(hp, { index: k, count }).map(([index, role]) => [index, role, index === 3 ? "skipped" : "ok", 0]) })); })(),
+      /ran another plan|does not declare it can be/);
+    refused("a self-skip on the wrong step is refused although another step declares one", full((r, k) => (k === 2 ? { ...r, steps: r.steps.map((row) => (row[0] === 4 ? [4, "owned", "skipped-db", 0] : row)) } : r)), /step 4 .* recorded skipped-db/);
+    // One run attempt, never a mix.
+    const attempted = (a) => full((r) => ({ ...r, attempt: a }));
+    ok("slices: records of the aggregate's own run attempt are accepted", judge(attempted("77.2"), { attempt: "77.2" }).ok);
+    refused("records of an EARLIER attempt are refused by a later attempt's aggregate", attempted("77.1"), /belongs to run attempt "77\.1", not "77\.2"/, { attempt: "77.2" });
+    refused("a MIXED set (one slice kept from an earlier attempt) is refused", full((r, k) => ({ ...r, attempt: k === 3 ? "77.1" : "77.2" })), /never combined/, { attempt: "77.2" });
+    refused("records that name an attempt are refused where the aggregate has none, and the reverse", attempted("77.2"), /never combined/);
+    refused("records with no attempt are refused by an aggregate that has one", full(), /never combined/, { attempt: "77.2" });
+
+    // ── the plan binds every execution and verdict field
+    const hashOf = (mutate) => { const copy = steps.map((s) => ({ ...s, env: s.env ? { ...s.env } : undefined })); for (const s of copy) if (s.env === undefined) delete s.env; mutate(copy); return SLICE.planHash(SLICE.planOf(copy, "/checkout/a")); };
+    const base = hashOf(() => {});
+    const moved = [
+      ["a renamed step", (c) => { c[1].name = "step one"; }], ["a changed argv", (c) => { c[1].cmd = ["node", "other.mjs"]; }],
+      ["a changed env value", (c) => { c[4].env.ROOT = "/checkout/a/y"; }], ["a new env key", (c) => { c[1].env = { X: "1" }; }],
+      ["a dropped self-skip marker", (c) => { delete c[6].selfSkipsWithout; }], ["a changed surface pattern", (c) => { c[7].surface = /REPORTED/; }],
+      ["a changed surface flag", (c) => { c[7].surface = /REPORTED, not fatal/i; }], ["a heavy flag", (c) => { c[3].heavy = true; }],
+      ["a native-build flag", (c) => { c[3].needsNativeBuild = true; }], ["a moved prerequisite marker", (c) => { delete c[2].prerequisiteForLater; c[3].prerequisiteForLater = true; }],
+      ["two steps swapped", (c) => { [c[0], c[1]] = [c[1], c[0]]; }], ["a removed step", (c) => { c.pop(); }],
+    ].filter(([, mutate]) => hashOf(mutate) === base).map(([name]) => name);
+    ok("slices: the plan hash moves with every field of every step (name, argv, env, self-skip, surface, flags, order, count)", moved.length === 0, `unchanged hash for: ${moved.join("; ")}`);
+    ok("slices: the plan is the same for two checkouts of one commit (the checkout path is not in it)",
+      SLICE.planHash(SLICE.planOf(steps.map((s) => (s.env ? { ...s, env: { ROOT: "/elsewhere/b/x" } } : s)), "/elsewhere/b")) === base);
+    const throws = (fn) => { try { fn(); return false; } catch { return true; } };
+    ok("slices: a step field the plan does not bind is refused, not dropped from the hash", throws(() => SLICE.planOf([{ name: "a", cmd: ["x"], retries: 3 }], "/r")));
+    ok("slices: a value the plan cannot bind is refused (non-string env, non-RegExp surface, duplicate name, empty argv)",
+      throws(() => SLICE.planOf([{ name: "a", cmd: ["x"], env: { N: 1 } }], "/r")) && throws(() => SLICE.planOf([{ name: "a", cmd: ["x"], surface: "REPORTED" }], "/r"))
+      && throws(() => SLICE.planOf([{ name: "a", cmd: ["x"] }, { name: "a", cmd: ["y"] }], "/r")) && throws(() => SLICE.planOf([{ name: "a", cmd: [] }], "/r")));
+    ok("slices: --slice refuses anything but k/n with 2..8 slices", ["0/4", "5/4", "1/1", "1/9", "2", "a/b", "", "1/4x"].every((t) => throws(() => SLICE.parseSlice(t)))
+      && SLICE.parseSlice("3/4").index === 3 && SLICE.parseSlice("3/4").count === 4);
+
+    // ── the REAL runner and the REAL registry, without running a gate
+    const listed = JSON.parse(spawnSync(node, [preflight, "--list-steps"], { cwd: repoRoot, encoding: "utf8", env: bare }).stdout.trim().split("\n").pop());
+    const planned = JSON.parse(spawnSync(node, [preflight, "--slice-plan", "4"], { cwd: repoRoot, encoding: "utf8", env: bare }).stdout.trim().split("\n").pop());
+    const owned = [1, 2, 3, 4].map((k) => planned.sequences[k].filter((row) => row[1] === "owned").map((row) => row[0]));
+    ok("slices: the real registry is partitioned exactly — every listed step owned by one slice, in order, none empty",
+      planned.total === listed.length && JSON.stringify(owned.flat()) === JSON.stringify(listed.map((_, i) => i)) && owned.every((o) => o.length > 0)
+      && Math.max(...owned.map((o) => o.length)) - Math.min(...owned.map((o) => o.length)) <= 1, `total ${planned.total} listed ${listed.length} sizes ${owned.map((o) => o.length)}`);
+    const typecheck = listed.findIndex((s) => s.name === "Typecheck (all packages)");
+    ok("slices: every slice that owns a step after Typecheck, and not Typecheck itself, runs it first as a prelude",
+      typecheck >= 0 && [1, 2, 3, 4].every((k) => {
+        const seq = planned.sequences[k], ownsIt = seq.some((row) => row[0] === typecheck && row[1] === "owned"), later = seq.some((row) => row[1] === "owned" && row[0] > typecheck);
+        const prelude = seq.findIndex((row) => row[0] === typecheck && row[1] === "prelude"), firstLater = seq.findIndex((row) => row[1] === "owned" && row[0] > typecheck);
+        return ownsIt || !later ? prelude === -1 : prelude !== -1 && prelude < firstLater;
+      }));
+    const dir = join(root, "slice-records"); mkdirSync(dir);
+    const writeAll = (mutate = (r) => r) => {
+      for (const n of readdirSync(dir)) rmSync(join(dir, n));
+      for (const k of [1, 2, 3, 4]) {
+        const record = mutate({ v: 1, slice: k, count: 4, checkout: head, prHead: null, plan: planned.plan, total: planned.total, steps: planned.sequences[k].map(([i, role]) => [i, role, "ok", 0]) }, k);
+        if (record) writeFileSync(join(dir, `preflight-slice-${k}.json`), JSON.stringify(record));
+      }
+    };
+    const aggregateRun = (jobs = "success", extraEnv = {}) => spawnSync(node, [preflight, "--aggregate", dir, "--slices", "4", "--jobs-result", jobs], { cwd: repoRoot, encoding: "utf8", env: { ...bare, ...extraEnv } });
+    const VERDICT = /Preflight PASSED/;
+    const never = (name, run) => ok(`slices: the real aggregate ${name}`, run.status === 1 && !VERDICT.test(run.stdout + run.stderr) && /Preflight FAILED at: the 4-slice aggregate/.test(run.stderr), `${run.status} ${run.stdout.slice(-300)} ${run.stderr.slice(-300)}`);
+    writeAll();
+    const good = aggregateRun();
+    ok("slices: the real aggregate accepts four complete records of the real plan and prints the one verdict", good.status === 0 && VERDICT.test(good.stdout) && good.stdout.includes(`${planned.total} steps`), `${good.status} ${good.stderr}`);
+    ok("slices: the aggregate verdict carries plain preflight's caveats — 'accounted for', and the derived NOT-covered list",
+      /steps is accounted for exactly once/.test(good.stdout) && !/was run exactly once/.test(good.stdout) && /NOT covered by this harness/.test(good.stdout)
+      && good.stdout.split("NOT covered by this harness")[1].split("\n").filter((l) => l.startsWith("    · ")).length > 0, good.stdout.slice(-400));
+    never("refuses records of another run attempt than its own", aggregateRun("success", { GITHUB_RUN_ID: "5", GITHUB_RUN_ATTEMPT: "2" }));
+    writeAll((r) => ({ ...r, steps: r.steps.map((row) => (row[1] === "owned" ? [row[0], "owned", "skipped", 0] : row)) }));
+    never("refuses the real plan with every gate recorded skipped", aggregateRun());
+    writeAll((r) => ({ ...r, steps: r.steps.map((row) => (row[1] === "owned" ? [row[0], "owned", "unavailable", 0] : row)) }));
+    never("refuses the real plan with every gate recorded unavailable", aggregateRun());
+    writeAll((r) => ({ ...r, attempt: "5.2" }));
+    const attemptGood = aggregateRun("success", { GITHUB_RUN_ID: "5", GITHUB_RUN_ATTEMPT: "2" });
+    ok("slices: the real aggregate accepts records of exactly its own run attempt", attemptGood.status === 0 && VERDICT.test(attemptGood.stdout), `${attemptGood.status} ${attemptGood.stderr}`);
+    never("refuses those same records in the next attempt", aggregateRun("success", { GITHUB_RUN_ID: "5", GITHUB_RUN_ATTEMPT: "3" }));
+    writeAll();
+    never("refuses slice jobs that were cancelled, with complete records on disk", aggregateRun("cancelled"));
+    never("refuses a missing --jobs-result value", spawnSync(node, [preflight, "--aggregate", dir, "--slices", "4"], { cwd: repoRoot, encoding: "utf8", env: bare }));
+    never("refuses a PR head the records do not name", aggregateRun("success", { PREFLIGHT_PR_HEAD: sha("e") }));
+    writeAll((r, k) => (k === 3 ? null : r));
+    never("refuses three records out of four (a subset never earns the verdict)", aggregateRun());
+    writeAll((r, k) => (k === 2 ? { ...r, steps: r.steps.slice(0, -1) } : r));
+    never("refuses a record one step short", aggregateRun());
+    writeAll((r, k) => (k === 4 ? { ...r, checkout: sha("f") } : r));
+    never("refuses a record made on another commit", aggregateRun());
+    writeAll(); writeFileSync(join(dir, "preflight-slice-2.json"), "{ not json");
+    never("refuses an unreadable record", aggregateRun());
+    for (const n of readdirSync(dir)) rmSync(join(dir, n));
+    never("refuses an empty directory", aggregateRun());
+    const slicedQuick = spawnSync(node, [preflight, "--slice", "1/4", "--slice-record", join(dir, "x.json"), "--quick"], { cwd: repoRoot, encoding: "utf8", env: bare });
+    const slicedBare = spawnSync(node, [preflight, "--slice", "1/4"], { cwd: repoRoot, encoding: "utf8", env: bare });
+    ok("slices: a slice refuses --quick and refuses to run without a record path, before any gate", slicedQuick.status === 2 && slicedBare.status === 2 && !existsSync(join(dir, "x.json")));
+
+    // ── the runner's source: a slice leaves before the verdict line, and the listing block is untouched
+    const source = readFileSync(preflight, "utf8");
+    const sliceExit = source.indexOf("if (slice) {\n  // A SLICE IS A SUBSET."), plainVerdict = source.indexOf("console.log(`\\nPreflight PASSED${quick");
+    const sliceBody = source.slice(sliceExit, source.indexOf("\n}\n", sliceExit));
+    ok("slices: in the runner, slice mode exits on both paths before the plain verdict line and never prints it",
+      sliceExit > 0 && plainVerdict > sliceExit && /process\.exit\(1\);[\s\S]*process\.exit\(0\);\s*$/.test(sliceBody) && !/Preflight PASSED/.test(sliceBody)
+      && (source.match(/Preflight PASSED/g) ?? []).length === 2);
+    ok("slices: the one `for (const step of STEPS)` loop and the --list-steps block are each still single",
+      (source.match(/for \(const step of STEPS\) \{/g) ?? []).length === 1 && (source.match(/"--list-steps"/g) ?? []).length === 1);
+
+    // ── the workflow: four slices of the one chain, and an aggregate that keeps the check's name
+    const workflow = readFileSync(join(HERE, "../../.github/workflows/mac-runner-auto.yml"), "utf8");
+    const jobOf = (id) => { const at = workflow.indexOf(`\n  ${id}:\n`); const next = workflow.slice(at + 1).search(/\n  [a-z][a-z-]*:\n/); return at < 0 ? "" : workflow.slice(at, next < 0 ? undefined : at + 1 + next); };
+    const slices = jobOf("pr-mac-slices"), agg = jobOf("pr-mac-checks");
+    ok("slices: the workflow runs slices 1..4 of 4 with the unchanged bounds, each in its own concurrency group",
+      /\n        slice: \[1, 2, 3, 4\]\n/.test(slices) && /\n      fail-fast: false\n/.test(slices) && slices.includes('--slice "$PREFLIGHT_SLICE/4" --slice-record "preflight-slice-$PREFLIGHT_SLICE.json"')
+      && slices.includes("PREFLIGHT_SLICE: ${{ matrix.slice }}") && slices.includes("PREFLIGHT_PR_HEAD: ${{ github.event.pull_request.head.sha }}")
+      && slices.includes("group: mac-pr-${{ github.event.pull_request.number }}-slice-${{ matrix.slice }}") && /\n    timeout-minutes: 60\n/.test(slices)
+      && slices.includes("pnpm run proof:sim-requests || code=$?") && !slices.includes("node scripts/preflight.mjs >")
+      && slices.includes("name: mac-pr-slice-record-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.slice }}")
+      && agg.includes("pattern: mac-pr-slice-record-${{ github.run_id }}-${{ github.run_attempt }}-*"));
+    ok("slices: the aggregate keeps the check's exact name, runs after any slice outcome, and passes the slice jobs' result in",
+      agg.includes("\n    name: PR — Mac-only checks (full-clone provenance, preflight on macOS)\n") && agg.includes("\n    if: always() && github.event_name == 'pull_request'\n")
+      && agg.includes("\n    needs: pr-mac-slices\n") && agg.includes("SLICE_JOBS_RESULT: ${{ needs.pr-mac-slices.result }}")
+      && agg.includes('node scripts/preflight.mjs --aggregate slices --slices 4 --jobs-result "$SLICE_JOBS_RESULT"') && agg.includes("PREFLIGHT_PR_HEAD: ${{ github.event.pull_request.head.sha }}")
+      && !agg.includes("ci-host-verification") && !/--slice /.test(agg) && (workflow.match(/name: PR — Mac-only checks/g) ?? []).length === 1);
   });
 
   guard2(ok, "shared host verification lock", () => {

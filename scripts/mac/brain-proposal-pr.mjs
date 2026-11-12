@@ -502,11 +502,9 @@ export const readContainedClearance = (() => {
 
 const MODE = 'contained_controller_v1';
 const WRAPPER = '\n\nReturn only the requested JSON review. Do not use tools.\n\n';
-const sha = raw => createHash('sha256').update(raw).digest('hex');
-const canonical = x => Array.isArray(x) ? x.map(canonical) : x && typeof x === 'object'
-  ? Object.fromEntries(Object.keys(x).sort().map(k => [k, canonical(x[k])])) : x;
-const digest = x => sha(JSON.stringify(canonical(x)));
-const equal = (a,b) => digest(a) === digest(b);
+// Raw-byte and ordered-JSON digests are the module's own digest() and valueDigest();
+// valueDigest() also refuses a value that is not complete JSON data.
+const equal = (a,b) => valueDigest(a) === valueDigest(b);
 const need = (ok, message) => { if (!ok) throw new Error(message); };
 const hex = x => typeof x === 'string' && /^[0-9a-f]{64}$/.test(x);
 const direct = p => {
@@ -533,7 +531,7 @@ function file(path,{mode,uid=process.getuid(),maximum=4*1024*1024}={}) {
          (mode===undefined||(s.mode&0o777)===mode),'Contained file custody differs');
     const raw=readFileSync(fd);
     need(raw.length===s.size&&shape(s)===shape(fstatSync(fd))&&shape(s)===shape(lstatSync(path)),'Contained file changed while reading');
-    return {raw,stat:s,sha256:sha(raw)};
+    return {raw,stat:s,sha256:digest(raw)};
   } finally {closeSync(fd);}
 }
 function json(path,mode=0o600) {const value=file(path,{mode});return {...value,value:JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(value.raw))};}
@@ -592,7 +590,7 @@ function readContainedClearance(job,{root,publisherRef,validateContent,verifySou
   need(packet.format==='signalgrid-contained-publication-clearance/v1'&&packet.execution_mode===MODE&&
        packet.profile_ref?.path===profilePath&&packet.profile_ref.uid===process.getuid()&&packet.profile_ref.mode===0o400&&
        packet.profile_ref.sha256===profileFile.sha256,'Current contained receipt/profile binding differs');
-  const content=packet.content,request=content?.request,requestSHA=digest(request);
+  const content=packet.content,request=content?.request,requestSHA=valueDigest(request);
   const issuedAt=Date.parse(content?.issued_at);
   need(content?.job===job&&request?.job===job&&request.worker_uid===process.getuid()&&request.publisher_sha256===publisherRef.sha256&&
        Number.isFinite(issuedAt)&&issuedAt>=cutover,'Contained receipt belongs to another source, worker or cutover');
@@ -648,13 +646,13 @@ function readContainedClearance(job,{root,publisherRef,validateContent,verifySou
     need(index>=0&&prompt.indexOf(WRAPPER,index+WRAPPER.length)===-1,'Native input framing differs');
     const data=JSON.parse(prompt.slice(index+WRAPPER.length));
     need(data.job===job&&data.request_sha256===requestSHA&&data.review_kind===kind&&data.source?.kind==='cloud_shareable_note'&&
-         sha(data.source.body)===data.source.body_sha256&&data.artifact?.head===request.head&&data.artifact.tree===request.tree&&
+         digest(data.source.body)===data.source.body_sha256&&data.artifact?.head===request.head&&data.artifact.tree===request.tree&&
          data.artifact.replay_base===request.replay_base&&Array.isArray(data.artifact.exports)&&data.artifact.exports.length===request.exports.length,
          'Native source/artifact input is incomplete or unrelated');
     for(let i=0;i<request.exports.length;i++){
       const e=data.artifact.exports[i],wanted=request.exports[i];
       need(typeof e?.text==='string'&&equal({source:e.source,bytes:e.bytes,sha256:e.sha256},wanted)&&
-           Buffer.byteLength(e.text)===e.bytes&&sha(e.text)===e.sha256,'Native omitted or altered an export');
+           Buffer.byteLength(e.text)===e.bytes&&digest(e.text)===e.sha256,'Native omitted or altered an export');
     }
     inputs.push({source:data.source,artifact:data.artifact});
   }

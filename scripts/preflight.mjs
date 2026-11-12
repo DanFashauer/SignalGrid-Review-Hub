@@ -358,6 +358,7 @@ const STEPS = [
   { name: "Sim-script self-check (a queued Mac operation must name a script that runs)", cmd: ["node", "scripts/check-sim-scripts-selfcheck.mjs"] },
   { name: "Sim-request runner self-test (a result awaiting landing on a tick branch is never re-run; refused/unreadable stays pending)", cmd: ["node", "scripts/mac/run-requests.mjs", "--self-test"] },
   { name: "Brain proposal-PR route self-test (review build only; governance, decision-path and non-applying patches refused; publish idempotent)", cmd: ["node", "scripts/mac/brain-proposal-pr.mjs", "--self-test"] },
+  { name: "Brain publication reviewer helper self-test (no default decision; root, worker-uid, custody, ACL, binding, TTL and overwrite refused; publisher validator accepts what it writes)", cmd: ["node", "scripts/mac/brain-publish-reviewer.mjs", "--self-test"] },
   { name: "Local-brain guard repairs self-test (stripped synthetic brain: --check fails, --apply restores and re-pins, drift refused; needs python3, FAILS without it)", cmd: ["python3", "scripts/mac/local-brain/repairs/guards.py", "--self-test"] },
   { name: "Lane status line self-test (open hands and unread mail counted from a fixture tree; an unreadable part is left out, never zeroed)", cmd: ["bash", "scripts/mac/statusline.sh", "--self-test"] },
   { name: "Swift serious violations self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-swift-serious.mjs", "--self-test"] },

@@ -204,6 +204,7 @@ Everything below is the full catalog, deepest first.
 ## Review workflow
 
 - [Publication reviewer interface](PUBLICATION_REVIEWER_INTERFACE.md): the publisher's shared content-only validator and exact prepared title/body bytes, with independent reviewer file ownership, access and object-retention requirements kept separate from content tests.
+- [Publication reviewer setup](PUBLICATION_REVIEWER_SETUP.md): how a separate reviewer account would check, read and clear a prepared publication with `scripts/mac/brain-publish-reviewer.mjs`, and the account, ACL, `clearances/` and object-retention setup it needs. It creates no accounts and activates nothing.
 
 - [Bruno API testing](BRUNO_API_TESTING.md): the contract plane's operator manual — collection layout, the two-directional coverage gate (`scripts/check-api-collection.mjs`), running against the fixture-mode server, negative tests as refusals on schedule, and the no-credentials rule.
 - [SIGNALGRID_OPERATING_METHOD.md](SIGNALGRID_OPERATING_METHOD.md) — the handbook: how SignalGrid is run (buckets, DRIs, wireframe-first, AI accountability ladder)

@@ -32,7 +32,7 @@ def main():
         raise ValueError("Exact fixture input required")
     source = TICK_SOURCE.read_text().split("<<'PY_BRAIN_PUBLICATION'\n", 1)[1].split("\nPY_BRAIN_PUBLICATION", 1)[0]
     tree = ast.parse(source)
-    names = {"Refusal", "need", "read_file", "read_json", "dependency_refs",
+    names = {"Refusal", "need", "read_file", "read_json", "dependency_refs", "need_source_pins",
              "strict_prepared_json", "prepared_request", "utc"}
     selected = [node for node in tree.body
                 if isinstance(node, (ast.FunctionDef, ast.ClassDef)) and node.name in names]

@@ -1106,6 +1106,12 @@ def dependency_refs():
     source_repo = PUBLISHER.resolve(strict=True).parents[2]
     return {name: read_file(source_repo / name, private=False)[1] for name in DEPENDENCIES}
 
+def need_source_pins(intent):
+    # The publisher, this tick and every declared dependency are still the bytes the intent recorded.
+    need(read_file(PUBLISHER.resolve(strict=True), private=False)[1] == intent['publisher_ref'])
+    need(read_file(TICK_SOURCE, private=False)[1] == intent['tick_ref'])
+    need(dependency_refs() == intent['dependency_refs'])
+
 def activation():
     state = canonical_directory(RAW_STATE)
     cwd = Path.cwd().resolve()
@@ -1176,14 +1182,19 @@ def gh(endpoint):
     return subprocess.run([trusted_client('gh'), 'api', '--hostname', 'github.com', '--method', 'GET', endpoint],
                           env=client_env(), stdin=subprocess.DEVNULL, capture_output=True, timeout=30)
 
-def review_jobs(active):
-    result = subprocess.run([trusted_client('node'), 'scripts/mac/brain-proposal-pr.mjs', '--list-review',
+def listed_jobs(active, flag):
+    # The publisher's two listings share one bounded read; the flag is never caller text.
+    need(flag in ('--list-review', '--list-prepare'))
+    result = subprocess.run([trusted_client('node'), 'scripts/mac/brain-proposal-pr.mjs', flag,
                              '--not-before', active['not_before']], env=client_env(),
                             stdin=subprocess.DEVNULL, capture_output=True, timeout=30)
     need(result.returncode == 0 and len(result.stdout) <= 128000)
     jobs = result.stdout.decode('utf-8', errors='strict').splitlines()
     need(len(jobs) <= 1000 and len(jobs) == len(set(jobs)) and all(JOB_RE.fullmatch(job) for job in jobs))
     return jobs
+
+def review_jobs(active):
+    return listed_jobs(active, '--list-review')
 
 
 def preparation_custody(state, active, active_ref):
@@ -1197,13 +1208,7 @@ def preparation_custody(state, active, active_ref):
     return paths['preparation_mirror'], paths['preparations']
 
 def preparation_jobs(active):
-    result = subprocess.run([trusted_client('node'), 'scripts/mac/brain-proposal-pr.mjs', '--list-prepare',
-                             '--not-before', active['not_before']], env=client_env(),
-                            stdin=subprocess.DEVNULL, capture_output=True, timeout=30)
-    need(result.returncode == 0 and len(result.stdout) <= 128000)
-    jobs = result.stdout.decode('utf-8', errors='strict').splitlines()
-    need(len(jobs) <= 1000 and len(jobs) == len(set(jobs)) and all(JOB_RE.fullmatch(job) for job in jobs))
-    return jobs
+    return listed_jobs(active, '--list-prepare')
 
 def preparation_intent(state, active, job, active_ref):
     mirror, preparations = preparation_custody(state, active, active_ref)
@@ -1235,9 +1240,7 @@ def prepared_request(attempt, intent):
     raw, raw_ref = read_file(attempt / 'stdout.raw')
     _, err_ref = read_file(attempt / 'stderr.raw')
     need(len(raw) <= 1048576 and raw_ref == terminal.get('stdout_ref') and err_ref == terminal.get('stderr_ref'))
-    need(read_file(PUBLISHER.resolve(strict=True), private=False)[1] == intent['publisher_ref']
-         and read_file(TICK_SOURCE, private=False)[1] == intent['tick_ref']
-         and dependency_refs() == intent['dependency_refs'])
+    need_source_pins(intent)
     lines = raw.decode('utf-8', errors='strict').splitlines()
     values = []
     for marker in ('SIGNALGRID_PUBLICATION_PRIVACY_REQUEST ', 'SIGNALGRID_PUBLICATION_PREPARED_METADATA '):
@@ -1386,9 +1389,7 @@ def job_intent(state, job, active_ref):
     return attempts / job, intent
 
 def run_original(attempt, intent, *, prepare=False):
-    need(read_file(PUBLISHER.resolve(strict=True), private=False)[1] == intent['publisher_ref'])
-    need(read_file(TICK_SOURCE, private=False)[1] == intent['tick_ref'])
-    need(dependency_refs() == intent['dependency_refs'])
+    need_source_pins(intent)
     argv = [trusted_client('node'), 'scripts/mac/brain-proposal-pr.mjs', '--job', JOB] + ([] if prepare else ['--publish'])
     need(intent.get('argv') == argv)
     write_new(attempt / 'execution-intent.json', {'job_id': JOB, 'at': utc(), 'argv': argv,
@@ -1511,9 +1512,7 @@ def verify_publication(attempt, intent):
         branch = get_json('repos/' + REPO + '/git/ref/heads/' + fact['branch'], observations)
         need(isinstance(branch, dict) and branch.get('ref') == 'refs/heads/' + fact['branch']
              and branch.get('object', {}).get('type') == 'commit' and branch.get('object', {}).get('sha') == head)
-        need(read_file(PUBLISHER.resolve(strict=True), private=False)[1] == intent['publisher_ref'])
-        need(read_file(TICK_SOURCE, private=False)[1] == intent['tick_ref'])
-        need(dependency_refs() == intent['dependency_refs'])
+        need_source_pins(intent)
         outcome = 'verified-publication'
     except Exception:
         url = None
@@ -1592,7 +1591,6 @@ if [ -f scripts/mac/brain-proposal-pr.mjs ] && command -v gh >/dev/null 2>&1 && 
   case "$_pub_selection" in
     ACTIVE|ACTIVE$'\n'*)
       _pub_jobs="$(printf '%s\n' "$_pub_selection" | tail -n +2)"
-      _pub_n=0
       for _job in $_pub_jobs; do
         [ "$_pub_n" -lt "$PUBLISH_MAX" ] || break
         _pub_preflight="$(brain_publication_step preflight "$_job" 2>/dev/null)"
@@ -1615,7 +1613,7 @@ if [ -f scripts/mac/brain-proposal-pr.mjs ] && command -v gh >/dev/null 2>&1 && 
           break
         fi
         _pub_n=$((_pub_n + 1))
-        _pub_child="$(brain_publication_step run "$_job" 2>/dev/null)"
+        brain_publication_step run "$_job" >/dev/null 2>&1
         # Original wait ends before release, readback, heartbeat or another job.
         sg_host_verify_release
         _pub_readback="$(brain_publication_step finish "$_job" 2>/dev/null)"
@@ -1660,7 +1658,7 @@ if [ -f scripts/mac/brain-proposal-pr.mjs ] && command -v gh >/dev/null 2>&1 && 
           break
         fi
         _pub_n=$((_pub_n + 1))
-        _prep_child="$(brain_publication_step prepare-run "$_job" 2>/dev/null)"
+        brain_publication_step prepare-run "$_job" >/dev/null 2>&1
         sg_host_verify_release
         _prep_readback="$(brain_publication_step prepare-finish "$_job" 2>/dev/null)"
         case "$_prep_readback" in

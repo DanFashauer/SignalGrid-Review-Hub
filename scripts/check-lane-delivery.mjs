@@ -13,7 +13,9 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 // Apple's bash 3.2 sources ~/.bashrc when its stdin is a socket, and spawnSync's default stdin
 // pipe is one. A hosted macOS runner's ~/.bashrc prepends its own tool directories to PATH, so a
 // fixture's bin/git was skipped for the machine git and every stubbed readback read "unknown".
-// Every synchronous fixture shell therefore gets a /dev/null stdin; no fixture feeds stdin.
+// A fixture shell started through bashNoRc therefore gets a /dev/null stdin; none of them feeds
+// stdin. That is the direct spawnSync("/bin/bash", …) sites only: the shared-record block further
+// down starts its shells through its own run() wrapper, on a default pipe, and is not covered here.
 const bashNoRc = (args, options) => spawnSync("/bin/bash", args, { stdio: ["ignore", "pipe", "pipe"], ...options });
 const BASE = "SignalGrid_Alpha";
 const GIT = spawnSync("/bin/sh", ["-c", "command -v git"], { encoding: "utf8" }).stdout.trim();

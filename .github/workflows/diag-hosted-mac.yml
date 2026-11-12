@@ -9,7 +9,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-15, macos-latest]
+        os: [macos-15]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 90
     steps:
@@ -26,6 +26,11 @@ jobs:
         with:
           node-version: 22
       - name: Timed PR chain (same commands as the PR Mac check, no deadline)
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: 1937
+          REPO: DanFashauer/SignalGrid-Review-Hub
         run: |
           sw_vers; sysctl -n hw.ncpu hw.memsize machdep.cpu.brand_string
           command -v shellcheck >/dev/null 2>&1 || HOMEBREW_NO_AUTO_UPDATE=1 brew install shellcheck
@@ -39,7 +44,7 @@ jobs:
           echo "preflight_seconds=$(( $(date +%s) - t1 )) exit=$rc"
           grep -E 'Preflight (PASSED|FAILED)|FAILED' preflight.raw | head -5 || true
           echo "== slowest gates (seconds, gate that ended at that offset)"
-          perl -ne 'BEGIN{$p=0} if(/^(\d+) (.*)/){ printf "%5d %s\n",$1-$p,substr($2,0,110); $p=$1 }' gates.timed | sort -rn | head -25
+          perl -ne 'BEGIN{$p=0} if(/^(\d+) (.*)/){ printf "%5d %s\n",$1-$p,substr($2,0,110); $p=$1 }' gates.timed | sort -rn | head -40
       - if: always()
         uses: actions/upload-artifact@v4
         with:

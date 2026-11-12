@@ -53,11 +53,9 @@ jobs:
     if: github.event_name == 'pull_request'
     name: PR — Mac-only checks (full-clone provenance, preflight on macOS)
     runs-on: macos-15
-    # A fresh hosted VM has no local-brain admission queue. The complete-work
-    # bound is 60m: the first three hosted macos-15 runs of this chain took 25m,
-    # 39m and more than the earlier 40m bound (run 43163039070 stopped at the
-    # deadline with no gate failed). Allow 20m more for setup, teardown and logs.
-    timeout-minutes: 80
+    # A fresh hosted VM has no local-brain admission queue. Preserve the 40m
+    # complete-work bound and allow 20m for setup, teardown and log upload.
+    timeout-minutes: 60
     concurrency:
       group: mac-pr-${{ github.event.pull_request.number }}
       cancel-in-progress: true
@@ -106,7 +104,7 @@ jobs:
           # STARTS and skip the chain if it is closed; an unreadable state runs it (fail-closed).
           pr_state=$(gh api "repos/$REPO/pulls/$PR_NUMBER" --jq .state 2>/dev/null) || pr_state=unknown
           if [ "$pr_state" = closed ]; then echo "PR #$PR_NUMBER is closed; the Mac verification is skipped."; exit 0; fi
-          bash scripts/mac/ci-host-verification.sh 24eff86a940099e0725d474d1d5520bfbc71d368 60 3600 <<'CI_CHAIN'
+          bash scripts/mac/ci-host-verification.sh 24eff86a940099e0725d474d1d5520bfbc71d368 60 2400 <<'CI_CHAIN'
           set -u
           # This is a fresh hosted image, not the previously provisioned Mac.
           # Keep shell lint mandatory and fail before verification if unavailable.

@@ -52,7 +52,9 @@ jobs:
   pr-mac-checks:
     if: github.event_name == 'pull_request'
     name: PR — Mac-only checks (full-clone provenance, preflight on macOS)
-    runs-on: macos-15
+    # The standard hosted image, the family the full hosted Mac suite passes on.
+    # On macos-15 this chain exceeded the 40m work bound (run 43163039070).
+    runs-on: macos-latest
     # A fresh hosted VM has no local-brain admission queue. Preserve the 40m
     # complete-work bound and allow 20m for setup, teardown and log upload.
     timeout-minutes: 60

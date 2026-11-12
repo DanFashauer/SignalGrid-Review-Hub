@@ -153,6 +153,9 @@
   },
   {
    "id": "dependabot-queue-review-weekly",
+   "status": "awaiting-activation",
+   "awaitingSince": "2026-11-03",
+   "awaitingReason": "The account trigger exists and fires, but its fresh sessions cannot reach this repository, so the routine has never done its work or written a heartbeat. Read on 2026-11-12 from the two fires that day (00:11Z and a re-fire): each stopped with \"this session has no GitHub API or push access\", gh returned 403 and git push was refused. Waiting since the authorization date because no fire before that could have worked either. It becomes active when the repository is attached to the routine with push access and one fire delivers the first heartbeat; nothing was faked to clear the gate.",
    "trigger": "trig_012Lh3q196QWZhJ7Fy79xrCc",
    "cron": "47 8 * * 1",
    "binding": "fresh session per fire (cloud lane)",

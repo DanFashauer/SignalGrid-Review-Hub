@@ -1205,14 +1205,27 @@ function actualToolRef(path) {
 function selectTool(f,ref) {
   f.profile.source_refs.push(ref);f.packet.profile_ref=f.write(f.profile.profile_path,f.profile);f.save();
 }
+// The runner's own Node need not meet the custody rule (a hosted Linux toolcache is group- and
+// world-writable; run 43145314578 failed the positive case there while both refusals passed for
+// the wrong reason). Qualify a private copy of the same real binary under custody this fixture owns.
+function privateToolRef(f) {
+  const path=resolve(dirname(f.profile.profile_path),'..','..','..','node-tool');
+  fs.copyFileSync(process.execPath,path,fs.constants.COPYFILE_EXCL);fs.chmodSync(path,0o500);
+  return actualToolRef(path);
+}
 checkCase('the actual pinned Node executable qualifies without a whole-binary buffer',f=>{
-  selectTool(f,actualToolRef(process.execPath));assert.deepEqual(f.read().value.request,f.request);
+  selectTool(f,privateToolRef(f));assert.deepEqual(f.read().value.request,f.request);
 });
 checkCase('a selected executable with the wrong exact size is refused',f=>{
-  const ref=actualToolRef(process.execPath);selectTool(f,{...ref,bytes:ref.bytes-1});assert.throws(f.read);
+  const ref=privateToolRef(f);selectTool(f,ref);assert.deepEqual(f.read().value.request,f.request);
+  f.profile.source_refs.pop();selectTool(f,{...ref,bytes:ref.bytes-1});assert.throws(f.read);
 });
 checkCase('a selected executable with a changed hash is refused',f=>{
-  selectTool(f,{...actualToolRef(process.execPath),sha256:'0'.repeat(64)});assert.throws(f.read);
+  const ref=privateToolRef(f);selectTool(f,ref);assert.deepEqual(f.read().value.request,f.request);
+  f.profile.source_refs.pop();selectTool(f,{...ref,sha256:'0'.repeat(64)});assert.throws(f.read);
+});
+checkCase('a selected executable that group or others can write is refused',f=>{
+  const ref=privateToolRef(f);fs.chmodSync(ref.path,0o777);selectTool(f,{...ref,mode:0o777});assert.throws(f.read);
 });
 checkCase('a worker-supplied v2 file is never treated as a contained receipt',f=>{f.write(f.path,f.packet.content);assert.throws(f.read);});
 checkCase('a stale controller profile cannot grant publication',f=>{f.profile.enabled=false;f.write(f.profile.profile_path,f.profile);assert.throws(f.read);});

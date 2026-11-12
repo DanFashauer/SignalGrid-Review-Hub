@@ -1,18 +1,48 @@
-name: TEMP diag — hosted macOS readback (throwaway branch)
+name: TEMP diag — hosted macOS preflight timing (throwaway branch)
 on:
   push:
     branches: [diag/hosted-mac-readback-20261112]
 permissions:
   contents: read
 jobs:
-  diag:
-    runs-on: macos-15
-    timeout-minutes: 5
+  timing:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v7
         with:
+          fetch-depth: 0
           persist-credentials: false
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86
+        with:
+          version: 10.28.1
+          run_install: false
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: node scripts/check-lane-delivery.mjs 2>&1 | grep -v "^PASS"
+      - name: Timed PR chain (same commands as the PR Mac check, no deadline)
+        run: |
+          sw_vers; sysctl -n hw.ncpu hw.memsize machdep.cpu.brand_string
+          command -v shellcheck >/dev/null 2>&1 || HOMEBREW_NO_AUTO_UPDATE=1 brew install shellcheck
+          t0=$(date +%s); pnpm install --frozen-lockfile >/dev/null 2>&1; echo "install_seconds=$(( $(date +%s) - t0 ))"
+          t1=$(date +%s); rc=0
+          node scripts/preflight.mjs > preflight.raw 2>&1 & pid=$!
+          # one timestamp per gate line as it appears
+          ( tail -n +1 -F preflight.raw 2>/dev/null | perl -ne 'BEGIN{$|=1;$t=time} print time-$t," ",$_ if /^▶|Preflight (PASSED|FAILED)/' > gates.timed ) & tp=$!
+          wait $pid || rc=$?
+          sleep 3; kill $tp 2>/dev/null || true
+          echo "preflight_seconds=$(( $(date +%s) - t1 )) exit=$rc"
+          grep -E 'Preflight (PASSED|FAILED)|FAILED' preflight.raw | head -5 || true
+          echo "== slowest gates (seconds, gate that ended at that offset)"
+          perl -ne 'BEGIN{$p=0} if(/^(\d+) (.*)/){ printf "%5d %s\n",$1-$p,substr($2,0,110); $p=$1 }' gates.timed | sort -rn | head -25
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: timing-${{ matrix.os }}
+          path: |
+            preflight.raw
+            gates.timed

@@ -114,7 +114,9 @@ export function expectedSequence(plan, slice) {
   return out;
 }
 
-/** What a slice hands the aggregate. `steps` is [[index, role, status, exit], …] in run order. */
+/** What a slice hands the aggregate. `steps` is [[index, role, status, exit], …] in REGISTRY order:
+ *  the runner sorts the rows by index before writing, so a record says what ran and how it
+ *  ended, not the order it ran in (the one loop walks the list in order). */
 export function sliceRecord({ slice, checkout, prHead, attempt, plan, steps }) {
   return { v: RECORD_VERSION, slice: slice.index, count: slice.count, checkout, prHead, attempt: attempt ?? null, plan: planHash(plan), total: plan.length, steps };
 }

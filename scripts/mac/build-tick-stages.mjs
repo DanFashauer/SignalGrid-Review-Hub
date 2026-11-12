@@ -1911,9 +1911,19 @@ git() {
         full((r) => ({ ...r, steps: r.steps.map((row) => (row[1] === "owned" && !declared[row[0]] ? [row[0], "owned", status, 0] : row)) })), status === "skipped" ? /recorded skipped, which this step does not declare/ : /which this step does not declare it can be/);
       refused(`ONE ordinary gate recorded ${status} is refused`, full((r, k) => (k === 1 ? { ...r, steps: r.steps.map((row) => (row[0] === 1 ? [1, "owned", status, 0] : row)) } : r)), /which this step does not declare it can be/);
     }
-    refused("a quick-mode skip is refused even on a heavy step (a slice never runs --quick)", (() => { const heavy = steps.map((x, i) => (i === 3 ? { ...x, heavy: true } : x)); const hp = SLICE.planOf(heavy, "/checkout/a");
-      return [1, 2, 3, 4].map((k) => SLICE.sliceRecord({ slice: { index: k, count }, checkout: sha("a"), prHead: sha("b"), plan: hp, steps: SLICE.expectedSequence(hp, { index: k, count }).map(([index, role]) => [index, role, index === 3 ? "skipped" : "ok", 0]) })); })(),
-      /ran another plan|does not declare it can be/);
+    // The SAME heavy plan on both sides, so the only thing judged is the skip: a complete all-ok
+    // set of that plan is accepted first, then one owned row becomes `skipped` and must be refused
+    // for that reason and no other (a plan mismatch would refuse it too, and prove nothing).
+    {
+      const hp = SLICE.planOf(steps.map((x, i) => (i === 3 ? { ...x, heavy: true } : x)), "/checkout/a");
+      const heavySet = (status) => [1, 2, 3, 4].map((k) => SLICE.sliceRecord({ slice: { index: k, count }, checkout: sha("a"), prHead: sha("b"), plan: hp,
+        steps: SLICE.expectedSequence(hp, { index: k, count }).map(([index, role]) => [index, role, index === 3 && role === "owned" ? status : "ok", 0]) }));
+      const heavyOk = judge(heavySet("ok"), { plan: hp });
+      ok("slices: a complete all-ok set of a plan with a heavy step is accepted (the baseline for the next control)", heavyOk.ok && heavyOk.ran === 10 && heavyOk.counts.ok === 10, JSON.stringify(heavyOk.problems));
+      const heavySkipped = judge(heavySet("skipped"), { plan: hp });
+      ok("slices: a quick-mode skip is refused even on a heavy step (a slice never runs --quick), judged against that same plan",
+        heavySkipped.ok === false && heavySkipped.problems.length === 1 && /step 3 \(step 3\) is recorded skipped, which this step does not declare it can be/.test(heavySkipped.problems[0]), JSON.stringify(heavySkipped.problems));
+    }
     refused("a self-skip on the wrong step is refused although another step declares one", full((r, k) => (k === 2 ? { ...r, steps: r.steps.map((row) => (row[0] === 4 ? [4, "owned", "skipped-db", 0] : row)) } : r)), /step 4 .* recorded skipped-db/);
     // One run attempt, never a mix.
     const attempted = (a) => full((r) => ({ ...r, attempt: a }));

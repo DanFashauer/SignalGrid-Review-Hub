@@ -1699,6 +1699,19 @@ printf 'busy=%s code=%s\\n' "$busy" "$code"`, env);
     const nothingQueued = run('printf "empty-body\\n" >> "$SG_CI_EVENTS"', 2, 4, base, { SG_CI_BRAIN_URL: brainUrl });
     ok("CI does not yield on a host-reserved reason with nothing queued", nothingQueued.status === 0 && !/yielding/.test(nothingQueued.stdout)
       && readFileSync(events, "utf8").endsWith("empty-body\nteardown\n"), `${nothingQueued.status} ${nothingQueued.stdout}`);
+    // The brain reports a two-second cooldown after a blocked or failed job with nothing queued yet,
+    // and queues the follow-up attempt right after it. A CI admission landing inside that cooldown
+    // must give the host up for the bounded budget too, or the follow-up waits a whole CI run.
+    writeFileSync(brain, JSON.stringify({ coordinator: { counts: { queued: 0 }, blocked_reason: "Brief cooldown after a blocked job" } }));
+    const coolStart = Date.now();
+    const cooling = run('printf "cooldown-body\\n" >> "$SG_CI_EVENTS"', 30, 4, base, { SG_CI_BRAIN_URL: brainUrl, SG_CI_BRAIN_YIELD_SECONDS: "2" });
+    const coolMs = Date.now() - coolStart;
+    ok("CI yields a free host during the brain's brief cooldown after a blocked or failed job, within the same bounded budget, then admits",
+      cooling.status === 0 && (cooling.stdout.match(/yielding the host to the queued local brain/g) ?? []).length === 1
+      && coolMs >= 2000 && coolMs <= 9000
+      && readFileSync(events, "utf8").endsWith("cooldown-body\nteardown\n"), `${cooling.status} ${coolMs}ms ${cooling.stdout} ${cooling.stderr}`);
+    ok("an admission after a cooldown yield still logs the probe's answer",
+      /brain probe at admission: cooling down: queued=0, reason=Brief cooldown after a blocked job/.test(cooling.stdout), cooling.stdout);
     // An HTTP error carrying a starved body must not yield (curl -f).
     // A constant server script: every value reaches it through process.env, none through code.
     const fixtureServer = 'const fs = require("fs"); const e = process.env; require("http").createServer((req, res) => { fs.writeFileSync(e.SG_FIXTURE_HITS_FILE, "hit"); res.writeHead(Number(e.SG_FIXTURE_STATUS)); res.end(e.SG_FIXTURE_BODY); }).listen(0, "127.0.0.1", function () { fs.writeFileSync(e.SG_FIXTURE_PORT_FILE, String(this.address().port)); });';

@@ -102,8 +102,13 @@ check("the gap is a meta-layer item", gapItems[0]?.layer === "meta");
 check("a covered dimension produces NO gap item",
   !checklist.some((i) => i.id === "coverage-gap-signalKinds"));
 check("checklist = declared items + the one gap", checklist.length === DECLARED.length + 1);
-check("checklist is sorted by id", checklist.map((i) => i.id).join("|") ===
-  [...checklist].map((i) => i.id).sort((a, b) => a.localeCompare(b)).join("|"));
+const codepointChecklist = deriveChecklist(
+  ["ä", "a", "z", "A"].map((id) => ({ ...DECLARED[0], id })), { dimensions: [] },
+);
+check("checklist is sorted by id", [checklist, codepointChecklist].every((items) =>
+  items.map((i) => i.id).join("|") === [...items].map((i) => i.id).sort().join("|")));
+check("checklist order uses codepoints for mixed-case and accented ids",
+  codepointChecklist.map((i) => i.id).join("|") === "A|a|z|ä");
 check("duplicate declared ids are refused", (() => {
   try { deriveChecklist([DECLARED[0], DECLARED[0]], INVENTORY); return false; } catch { return true; }
 })());

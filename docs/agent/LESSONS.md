@@ -550,3 +550,59 @@ block; a stage run on the wrong tier is a lesson here.
 - **evidence:** The fixtures now use the existing scratchGitEnv function instead of duplicating its16-key policy. Final fixture environment values, executable lookup PATH,177 assertions and all39 cases are preserved. Actual39 controls,16 walker self-tests, the regular walker and scratch-hygiene gates and closed environment-equivalence vectors passed under real network denial. No copy walk, floor, threshold, waiver, PENDING entry or idle-empty rule changed.
 - **landing:** pending — local fixture/journal checkpoint only; earlier full failures remain failed. New exact-head full/breadth, CI, formal reviews, protected landing and separate activation remain owed.
 - **status:** pending
+
+### L61 — Reconcile completed plan rows before ranking more work
+- **date:** 2026-11-13
+- **lane:** cloud
+- **incident:** A fresh objective derivation still ranked company-plan row 124 first even though its complete repair had merged in PR #1244 on November 1. Row 150 duplicated the same completed defect.
+- **evidence:** `scripts/objective-loop.mjs` read the stale OPEN statuses in `docs/COMPANY_BUILD_PLAN.md`; merge `9df420ddd07d8ee8f06b08f47d44257c982e1f5d` is an ancestor of the cloned source, and the shared action arrays, type aliases and derived-figure guard are present.
+- **landing:** pending — `docs/COMPANY_BUILD_PLAN.md` rows 124 and 150 now record verified completion; fresh derivation excludes both. Protected delivery remains pending.
+- **status:** pending
+
+### L62 — Browser policy failures are unverified tests, not product failures
+- **date:** 2026-11-13
+- **lane:** cloud
+- **incident:** The browser suite passed 47 tests but failed all six standalone Evidence Coverage page tests before loading the document.
+- **evidence:** Playwright reported `net::ERR_BLOCKED_BY_ADMINISTRATOR` for the local `docs/evidence-coverage.html` file in managed Chromium. The HTTP-served cases passed; no standalone-page assertion executed.
+- **landing:** recorded only — retain the six failed cases and their traces as environment-blocked evidence. Browser policy and the tests are unchanged; a permitted file-capable browser must run them before claiming full browser coverage.
+- **status:** landed
+
+### L63 — Use the repository-pinned package manager in worker commands
+- **date:** 2026-11-13
+- **lane:** cloud
+- **incident:** A worker invoked the environment's global pnpm 11 against dependencies installed with the repository's pnpm 10.28.1. Four proof commands refused an unattended modules-directory purge before assertions ran.
+- **evidence:** `ERR_PNPM_ABORTED_REMOVE_MODULES_DIR_NO_TTY`; direct installed proof entrypoints then passed agent-behavior, emitter-discipline, facility-trust-graph and verdict-attestation. Root validation uses Node 22 and pnpm 10.28.1 selected through npx.
+- **landing:** recorded only — select the versions in `package.json` for each shell and worker; do not approve dependency-directory replacement to recover a proof invocation.
+- **status:** landed
+
+### L64 — Regression filenames must also work on case-insensitive Macs
+- **date:** 2026-11-13
+- **lane:** cloud
+- **incident:** Independent source review caught a new sorting fixture that created both lowercase and uppercase forms of the same filename and directory, which collide on default macOS filesystems.
+- **evidence:** `scripts/src/mcp-server-proof.ts` initially used A and a. The fixture now uses Zulu, apple, zulu2 and äther, which have distinct case-insensitive names and still distinguish locale from codepoint order.
+- **landing:** pending — the MCP proof fixture is corrected before delivery; both ordering assertions remain required. Protected delivery remains pending.
+- **status:** pending
+
+### L65 — A zombie descendant is dead even while its PID remains present
+- **date:** 2026-11-13
+- **lane:** cloud
+- **incident:** Full preflight stopped at the staged Mac worker self-test, with 318 of 320 assertions passing. Both timeout cases returned the expected exit 142 but reported the killed grandchild as alive.
+- **evidence:** `scripts/mac/build-tick-stages.mjs` used `process.kill(pid, 0)` in the S-5 and S4 assertions. Process inspection showed both sleep descendants in state Z with PPID 1; the container had not reaped them. The same test file's newer CI descendant assertions already distinguish zombies from running processes with ps.
+- **landing:** pending — align the two older timeout assertions with process-state evidence, preserving failure on a live descendant and leaving production timeout behavior unchanged. Protected delivery remains pending.
+- **status:** pending
+
+### L66 — Update documented counts when adding proof assertions
+- **date:** 2026-11-13
+- **lane:** cloud
+- **incident:** The proof-count guard rejected the new MCP sorting coverage because the validation guide still documented 11 checks while the proof ran 13. The self-audit count had already been updated. The sync guard then required the generated manifest to carry the new proof counts too.
+- **evidence:** `scripts/check-proof-counts.mjs` reported `proof:mcp-server — docs say 11 checks, proof reports 13 (update: CI_AND_VALIDATION.md)`; `scripts/check-live-sync.mjs` refused unpublished manifest drift.
+- **landing:** pending — `docs/CI_AND_VALIDATION.md` now documents the MCP proof's 13 checks; `docs/SELF_AUDIT.md` documents 62. The generator republishes both in `artifacts/sync/live-sync-manifest.json` version 102. Historical evidence records retain their original measurements; no live evidence is minted. Protected delivery remains pending.
+- **status:** pending
+
+### L67 — Signal-handler fixtures need process-state evidence too
+- **date:** 2026-11-13
+- **lane:** cloud
+- **incident:** After the staged-worker repair, full preflight reached the entry-guard self-test and failed four signal-handler cases, passing 145 of 149 assertions.
+- **evidence:** The parent TERM, INT, HUP/QUIT and baseline-interruption cases in `scripts/check-entry-guards.mjs` used one kill-zero observer. Their terminated node children remained in state Z under container PID 1, the same observation error as L65.
+- **landing:** pending — correct only the fixture's child-liveness observation, preserving the exit, file-restoration, clean-tree, scratch-cleanup and child-termination assertions. Production mutation-runner behavior remains unchanged. Protected delivery remains pending.
+- **status:** pending

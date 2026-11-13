@@ -413,7 +413,7 @@ the tool description now says so, because an assistant reads it to decide how to
 the answer.
 
 **There are two MCP proofs and neither is redundant.** `pnpm run proof:mcp-server`
-(11 checks) came from the Mac lane on the same day — both lanes noticed the same hole
+(13 checks) came from the Mac lane on the same day — both lanes noticed the same hole
 independently, which is the second entry in `LANE_COORDINATION.md`'s collision log. It
 boots the PUBLISHED plugin path through the vendor's own SDK client and asserts the
 served surface equals the surface the live-sync manifest declares to external builders;

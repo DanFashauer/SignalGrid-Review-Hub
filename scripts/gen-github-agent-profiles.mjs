@@ -26,7 +26,7 @@
 //   - No `model`, no `mcp-servers`: either would grant something the roster never granted.
 //   - Only stable roster fields are rendered (id, title, charter, trigger, surface, executor),
 //     never `nextAction`/`nextActionDate`, which move weekly and would make every profile stale.
-import { closeSync, constants, existsSync, fstatSync, mkdirSync, mkdtempSync, openSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { closeSync, constants, existsSync, fstatSync, mkdirSync, mkdtempSync, openSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -190,6 +190,14 @@ export function profileSelfTestChecks() {
     const found = diffProfiles(exp, readActual(tmp));
     checks.push(["a plain .md profile in the folder is reported extra and tool-less, never skipped",
       found.includes(`extra ${OUT}/unrestricted.md (no roster role)`) && found.some((p) => /unrestricted\.md has no tools line/.test(p))]);
+    // A symbolic link is refused, not followed: linked.agent.md points at a VALID profile body, so
+    // following it would read a well-formed profile; refusing it reads empty and fails the tools check.
+    rmSync(join(tmp, "unrestricted.md"));
+    writeFileSync(join(tmp, "target-body.txt"), exp.get("r1.agent.md"));
+    symlinkSync(join(tmp, "target-body.txt"), join(tmp, "linked.agent.md"));
+    const linked = diffProfiles(exp, readActual(tmp));
+    checks.push(["a symbolic link in the folder is refused, never followed: it reads empty and fails the tools check",
+      linked.some((p) => /linked\.agent\.md has no tools line/.test(p))]);
   } finally { rmSync(tmp, { recursive: true, force: true }); }
   let threw = false; try { toolsFor("agent:x", ["Read", "WebFetch"]); } catch { threw = true; }
   checks.push(["a local tool with no GitHub alias refuses instead of guessing", threw]);

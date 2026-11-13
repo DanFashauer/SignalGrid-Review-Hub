@@ -989,9 +989,11 @@ PUBLISHER = Path('scripts/mac/brain-proposal-pr.mjs')
 TICK_SOURCE = Path(RAW_TICK).resolve(strict=True)
 SIGNALS = []
 PUBLICATION_TIMEOUT_SEC = 600
-HOST_HELPER = 'scripts/mac/host-verification-lock.sh'
+# A plain literal: the publisher's handoff fixture reads this one list with ast.literal_eval.
 DEPENDENCIES = ('scripts/check-owner-gated-surfaces.mjs', 'scripts/lib/is-main.mjs',
-                'scripts/lib/scratch-git.mjs', '.githooks/pre-push', HOST_HELPER)
+                'scripts/lib/scratch-git.mjs', '.githooks/pre-push',
+                'scripts/mac/host-verification-lock.sh')
+HOST_HELPER = DEPENDENCIES[-1]
 
 class Refusal(Exception):
     pass

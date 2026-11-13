@@ -1040,7 +1040,7 @@ sg_host_verify_acquire_bounded() {
         out,err=self.run_step()
         self.assertEqual(self.jobs_called("prepare-calls.jsonl"),["freshA","freshB"],out+err)
         self.assertEqual(self.custody_snapshot(*old),before,"The old request is neither rebound nor rewritten")
-        self.assertEqual(self.calls(),[],"An old prepared request authorizes no publication")
+        self.assertEqual(self.calls(),[],"This preparation-only fixture lists no review job, so it makes no publication call")
         self.assertEqual(json.loads((old[0]/"intent.json").read_text())["activation_ref"]["sha256"]==hashlib.sha256((self.state/"activation.json").read_bytes()).hexdigest(),False)
         self.assertNotIn("custody incomplete",self.result_line(out))
 

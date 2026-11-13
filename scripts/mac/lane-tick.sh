@@ -1171,6 +1171,9 @@ def need_inert_worktree_config(prefix, env):
     # from the repository's own configuration and ignores a command-line override of it, so none is
     # used: the file is inspected, then parsed outside any repository with includes disabled, and
     # must hold exactly the one inert application setting. Any other shape or content refuses.
+    # An absent file passes; an EMPTY file refuses. Scope: the canonical checkout only, whose
+    # administrative directory is a real .git directory under the working directory. A linked
+    # worktree (.git is a file) with the extension on refuses; that case is not generalized here.
     try:
         admin = Path.cwd().resolve() / '.git'
         directory(admin, private=False)

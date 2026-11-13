@@ -55,6 +55,7 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { isMainModule } from "./lib/is-main.mjs";
+import { profileProblems } from "./gen-github-agent-profiles.mjs";
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const ROSTER = "docs/agent/org-roster.json";
@@ -534,6 +535,10 @@ function runGate() {
       console.log("    · none — every nextAction was set within the last 7 days.");
     }
   }
+
+  // The roles as GitHub custom-agent profiles (.github/agents) are derived from this roster;
+  // a missing, stale or over-granting profile fails here (scripts/gen-github-agent-profiles.mjs).
+  problems.push(...profileProblems(repo));
 
   if (problems.length > 0) {
     console.error(`\nOrg roster check FAILED: ${problems.length} problem(s).`);

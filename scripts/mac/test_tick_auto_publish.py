@@ -209,8 +209,13 @@ if any(x in a for x in ["push","fetch","commit","checkout","worktree","add","res
 if "config" in a:
     import json
     cfg=json.loads((r/"fixture.json").read_text())
-    if "--list" in a:
-        print("remote.origin.url\ngit@github.com:DanFashauer/SignalGrid-Review-Hub.git\0"+("core.sshcommand\nsynthetic-worker-command\0" if cfg.get("unsafe_local_config") else ""),end="")
+    if "--file" in a:
+        # A physical-file parse is the one thing this fixture does not fake: real Git reads the real file.
+        if cfg.get("refuse_physical_config_parse") or not {"--no-includes","--null","--list"} <= set(a): sys.exit(98)
+        real=subprocess.run(["/usr/bin/git"]+a,env={"PATH":"/usr/bin:/bin","GIT_CONFIG_GLOBAL":"/dev/null","GIT_CONFIG_NOSYSTEM":"1","HOME":"/nonexistent"},stdin=subprocess.DEVNULL,capture_output=True)
+        sys.stdout.buffer.write(real.stdout); sys.exit(real.returncode)
+    elif "--list" in a:
+        print("remote.origin.url\ngit@github.com:DanFashauer/SignalGrid-Review-Hub.git\0"+("core.sshcommand\nsynthetic-worker-command\0" if cfg.get("unsafe_local_config") else "")+("extensions.worktreeconfig\ntrue\0" if cfg.get("worktree_config_extension") else ""),end="")
     elif "remote.origin.url" in a: print("git@github.com:DanFashauer/SignalGrid-Review-Hub.git")
     else: sys.exit(98)
 elif "remote" in a and "get-url" in a:
@@ -607,6 +612,104 @@ sg_host_verify_acquire_bounded() {
         self.assertEqual(intents[0]["dependency_refs"][HOST_HELPER]["sha256"],hashlib.sha256((REPO/HOST_HELPER).read_bytes()).hexdigest())
         self.assertEqual(len(intents[0]["dependency_refs"]),5)
 
+    # ── per-worktree configuration on the canonical checkout: the physical file is validated, never trusted ──
+    INERT_WORKTREE_CONFIG="[codex]\n\tlocalEnvironmentConfigPath = __none__\n"
+    def canonical_worktree_config(self,content=None,*,shape=None,extension=True):
+        """The fixture checkout as a real main worktree directory, with or without its own config.worktree."""
+        self.cfg["worktree_config_extension"]=extension
+        admin=self.work/".git"
+        if not admin.exists(): admin.mkdir(mode=0o700)
+        path=admin/"config.worktree"
+        if shape is not None: shape(path)
+        elif content is not None:
+            path.write_text(content); path.chmod(0o600)
+        return path
+    def git_argvs(self):
+        p=self.root/"git-calls.log"
+        return [eval(line) for line in p.read_text().splitlines()] if p.exists() else []
+    def physical_parses(self):
+        return [a for a in self.git_argvs() if "--file" in a]
+    def test_extension_enabled_checkout_without_a_per_worktree_file_still_publishes(self):
+        self.canonical_worktree_config()
+        out,_=self.run_step()
+        self.assertEqual(len(self.calls()),1,out)
+        self.assertEqual(self.physical_parses(),[],"No file, so nothing is parsed")
+    def test_extension_enabled_checkout_with_the_one_inert_application_key_publishes(self):
+        path=self.canonical_worktree_config(self.INERT_WORKTREE_CONFIG)
+        before=path.read_bytes()
+        out,_=self.run_step()
+        self.assertEqual(len(self.calls()),1,out)
+        self.assertEqual(path.read_bytes(),before,"The tick never edits the per-worktree file")
+        parses=self.physical_parses()
+        self.assertTrue(parses,"The physical file was actually parsed")
+        for argv in parses:
+            self.assertEqual(argv[argv.index("--file")+1],str(path.resolve()))
+            self.assertTrue({"--no-includes","--null","--list"} <= set(argv),"Parsed with includes disabled")
+    def test_extension_enabled_checkout_prepares_with_the_inert_key(self):
+        self.enable_preparation()
+        self.canonical_worktree_config(self.INERT_WORKTREE_CONFIG)
+        self.run_step()
+        self.assertEqual(len(self.jsonlines("prepare-calls.jsonl")),1)
+    def test_any_other_per_worktree_content_refuses_before_admission(self):
+        program="/usr/bin/false"
+        cases={"include":"[include]\n\tpath = /etc/hosts\n","conditional include":'[includeIf "gitdir:/"]\n\tpath = /etc/hosts\n',
+               "filter":'[filter "late"]\n\tclean = '+program+"\n","text conversion":'[diff "late"]\n\ttextconv = '+program+"\n",
+               "fsmonitor":"[core]\n\tfsmonitor = "+program+"\n","ssh command":"[core]\n\tsshCommand = "+program+"\n",
+               "hooks path":"[core]\n\thooksPath = /tmp\n","core.worktree":"[core]\n\tworktree = /tmp\n","core.bare":"[core]\n\tbare = true\n",
+               "partial clone extension":"[extensions]\n\tpartialClone = origin\n","credential helper":"[credential]\n\thelper = "+program+"\n",
+               "unknown key":"[user]\n\tname = Synthetic\n","other application key":"[codex]\n\tother = 1\n",
+               "inert key plus another":self.INERT_WORKTREE_CONFIG+"[user]\n\tname = Synthetic\n",
+               "other value":"[codex]\n\tlocalEnvironmentConfigPath = /etc/passwd\n","empty value":"[codex]\n\tlocalEnvironmentConfigPath =\n",
+               "inert key twice":self.INERT_WORKTREE_CONFIG*2,"unparseable":"[codex\n\tlocalEnvironmentConfigPath = __none__\n","empty file":""}
+        for label,content in cases.items():
+            with self.subTest(content=label):
+                for name in ("host-events","git-calls.log"):
+                    if (self.root/name).exists(): (self.root/name).unlink()
+                path=self.canonical_worktree_config(content)
+                out,_=self.run_step()
+                self.assertEqual(self.calls(),[]); self.assertEqual(self.state_files(),[],"Nothing claimed or consumed")
+                self.assertEqual(self.host_events(),[],"Refused before any host admission")
+                self.assertIn("brain publication",out)
+                path.unlink()
+    def test_unsafe_per_worktree_file_shapes_refuse(self):
+        target=self.root/"inert-target"; target.write_text(self.INERT_WORKTREE_CONFIG)
+        def symlink(p): p.symlink_to(target)
+        def directory(p): p.mkdir()
+        def unreadable(p): p.write_text(self.INERT_WORKTREE_CONFIG); p.chmod(0o000)
+        def group_writable(p): p.write_text(self.INERT_WORKTREE_CONFIG); p.chmod(0o660)
+        def hard_linked(p): p.write_text(self.INERT_WORKTREE_CONFIG); p.chmod(0o600); os.link(p,self.root/"second-link")
+        for shape in (symlink,directory,unreadable,group_writable,hard_linked):
+            with self.subTest(shape=shape.__name__):
+                if (self.root/"host-events").exists(): (self.root/"host-events").unlink()
+                path=self.canonical_worktree_config(shape=shape)
+                self.run_step()
+                self.assertEqual(self.calls(),[]); self.assertEqual(self.state_files(),[]); self.assertEqual(self.host_events(),[])
+                if path.is_dir() and not path.is_symlink(): path.rmdir()
+                else:
+                    if not path.is_symlink(): path.chmod(0o600)
+                    path.unlink()
+                if (self.root/"second-link").exists(): (self.root/"second-link").unlink()
+    def test_a_failed_physical_parse_refuses_instead_of_assuming_inert(self):
+        self.canonical_worktree_config(self.INERT_WORKTREE_CONFIG)
+        self.cfg["refuse_physical_config_parse"]=True
+        self.run_step()
+        self.assertEqual(self.calls(),[]); self.assertEqual(self.state_files(),[])
+    def test_other_dangerous_local_configuration_still_refuses_beside_an_inert_file(self):
+        self.canonical_worktree_config(self.INERT_WORKTREE_CONFIG)
+        self.cfg["unsafe_local_config"]=True
+        self.run_step()
+        self.assertEqual(self.calls(),[]); self.assertEqual(self.state_files(),[])
+    def test_without_the_extension_a_stray_per_worktree_file_is_not_read_and_publication_proceeds(self):
+        # Git itself ignores config.worktree when the extension is not set, so the tick does not parse it either.
+        self.canonical_worktree_config("[core]\n\tfsmonitor = /usr/bin/false\n",extension=False)
+        out,_=self.run_step()
+        self.assertEqual(len(self.calls()),1,out); self.assertEqual(self.physical_parses(),[])
+    def test_the_tick_never_relies_on_a_command_line_extension_override(self):
+        self.canonical_worktree_config(self.INERT_WORKTREE_CONFIG)
+        self.run_step()
+        flat=" ".join(" ".join(a) for a in self.git_argvs()).lower()
+        self.assertNotIn("extensions.worktreeconfig=",flat,"Git ignores that override; relying on it would be isolation in name only")
+
     def test_explicit_activation_is_required_and_never_self_created(self):
         (self.state/"activation.json").unlink()
         self.run_step()
@@ -867,6 +970,185 @@ sg_host_verify_acquire_bounded() {
         self.run_step()
         self.assertEqual(self.calls(),[],"an inherited second push URL must not receive an artifact")
         self.assertEqual(self.jsonlines("get-calls.jsonl"),[])
+
+    # ── a consumed claim from an earlier activation epoch: skipped as readback-only, never current ──
+    # After a real attempt, a source-only activation refresh leaves the old claim bound to the earlier
+    # activation bytes. It is not current authorization, and it is not damaged custody either: it must
+    # be passed over so later jobs can run. The refresh modelled here is the one that really happened:
+    # SAME activation identifier, SAME cutover, same account and custody directories; only the pinned
+    # tick source bytes, its digest in the activation, and therefore the activation digest change.
+    def refresh_epoch(self):
+        revised=self.root/"tick-revision"
+        (revised/"scripts/mac").mkdir(parents=True,exist_ok=True)
+        tick=revised/"scripts/mac/lane-tick.sh"
+        # A harmless trailing comment on the PINNED copy only; the executed d3 text is still this checkout's.
+        tick.write_bytes((REPO/"scripts/mac/lane-tick.sh").read_bytes()+b"# fixture-only harmless source revision\n")
+        self.extra_env={**self.extra_env,"REPO_ROOT":str(revised)}
+        identity=(self.activation["activation_id"],self.activation["not_before"])
+        before=hashlib.sha256((self.state/"activation.json").read_bytes()).hexdigest()
+        self.activation["tick_sha256"]=hashlib.sha256(tick.read_bytes()).hexdigest()
+        self.write_activation(); self.bootstrap_custody_again()
+        self.assertEqual((self.activation["activation_id"],self.activation["not_before"]),identity)
+        self.assertNotEqual(before,hashlib.sha256((self.state/"activation.json").read_bytes()).hexdigest())
+    def custody_snapshot(self,*paths):
+        found={}
+        for base in paths:
+            for q in ([base] if base.is_file() else sorted(base.rglob("*"))):
+                st=q.lstat()
+                found[str(q)]=(st.st_ino,st.st_mode,hashlib.sha256(q.read_bytes()).hexdigest() if q.is_file() else None)
+        self.assertTrue(found,"The old claim must exist before it can be compared")
+        return found
+    def jobs_called(self,name):
+        return [c["job"] for c in self.jsonlines(name)]
+    def rewrite_private_json(self,path,change):
+        # Only this disposable fixture's own custody file, to model damage; production never rewrites one.
+        value=json.loads(path.read_text()); change(value)
+        path.chmod(0o600); path.write_text(json.dumps(value)); path.chmod(0o400)
+    def result_line(self,out):
+        return out.split("__RESULT__")[-1]
+
+    def test_old_epoch_failed_preparation_is_skipped_and_a_fresh_job_prepares(self):
+        self.enable_preparation(); self.cfg["prepare_error"]=True
+        self.run_step()
+        old=(self.state/"preparations/freshA",self.mirror/"preparations/freshA.json")
+        before=self.custody_snapshot(*old)
+        self.refresh_epoch()
+        self.cfg={"jobs":[],"prepare_jobs":["freshA","freshB","freshC"]}
+        out,err=self.run_step()
+        self.assertEqual(self.jobs_called("prepare-calls.jsonl"),["freshA","freshB"],"One original call per old ID; the next fresh job proceeds")
+        self.assertTrue((self.state/"preparations/freshB/request.json").exists(),out+err)
+        self.assertFalse((self.state/"preparations/freshC").exists(),"The per-tick budget is unchanged")
+        self.assertEqual(self.custody_snapshot(*old),before,"Old bytes, modes and inodes are untouched")
+        self.assertNotIn("custody incomplete",self.result_line(out))
+        self.assertEqual(self.calls(),[])
+        fresh=json.loads((self.state/"preparations/freshB/intent.json").read_text())
+        self.assertEqual(fresh["activation_ref"]["sha256"],hashlib.sha256((self.state/"activation.json").read_bytes()).hexdigest())
+        self.assertEqual(fresh["tick_ref"]["sha256"],self.activation["tick_sha256"])
+        self.assertNotEqual(json.loads((old[0]/"intent.json").read_text())["tick_ref"]["sha256"],self.activation["tick_sha256"])
+        out,_=self.run_step()
+        self.assertEqual(self.jobs_called("prepare-calls.jsonl"),["freshA","freshB","freshC"],"A later tick still never replays the old ID")
+        self.assertEqual(self.custody_snapshot(*old),before)
+
+    def test_old_epoch_prepared_handoff_is_not_adopted_or_remade(self):
+        self.enable_preparation()
+        self.run_step()
+        old=(self.state/"preparations/freshA",self.mirror/"preparations/freshA.json")
+        self.assertTrue((old[0]/"request.json").exists())
+        before=self.custody_snapshot(*old)
+        self.refresh_epoch()
+        self.cfg={"jobs":[],"prepare_jobs":["freshA","freshB"]}
+        out,err=self.run_step()
+        self.assertEqual(self.jobs_called("prepare-calls.jsonl"),["freshA","freshB"],out+err)
+        self.assertEqual(self.custody_snapshot(*old),before,"The old request is neither rebound nor rewritten")
+        self.assertEqual(self.calls(),[],"An old prepared request authorizes no publication")
+        self.assertEqual(json.loads((old[0]/"intent.json").read_text())["activation_ref"]["sha256"]==hashlib.sha256((self.state/"activation.json").read_bytes()).hexdigest(),False)
+        self.assertNotIn("custody incomplete",self.result_line(out))
+
+    def test_old_epoch_failed_publication_is_skipped_and_a_fresh_job_publishes(self):
+        self.cfg["publish_error"]=True
+        self.run_step()
+        old=(self.state/"attempts/freshA",self.mirror/"freshA.json")
+        before=self.custody_snapshot(*old)
+        self.refresh_epoch()
+        self.cfg={"jobs":["freshA","freshB","freshC"]}
+        out,err=self.run_step()
+        self.assertEqual(self.jobs_called("calls.jsonl"),["freshA","freshB"],out+err)
+        self.assertFalse((self.state/"attempts/freshC").exists(),"The per-tick budget is unchanged")
+        self.assertEqual(self.custody_snapshot(*old),before)
+        self.assertNotIn("custody incomplete",self.result_line(out))
+        fresh=json.loads((self.state/"attempts/freshB/intent.json").read_text())
+        self.assertEqual(fresh["activation_ref"]["sha256"],hashlib.sha256((self.state/"activation.json").read_bytes()).hexdigest())
+
+    def test_old_epoch_publication_claim_blocks_a_new_preparation_of_the_same_job(self):
+        self.cfg["publish_error"]=True
+        self.run_step()
+        self.enable_preparation(); self.refresh_epoch()
+        self.cfg={"jobs":[],"prepare_jobs":["freshA","freshB"]}
+        self.run_step()
+        self.assertEqual(self.jobs_called("prepare-calls.jsonl"),["freshB"],"A job consumed by publication in any epoch is never prepared again")
+        self.assertFalse((self.state/"preparations/freshA").exists())
+
+    DAMAGED_OLD_CLAIMS=(
+        ("mirror lost", lambda t,d,m: m.unlink()),
+        ("mirror differs from the intent", lambda t,d,m: t.rewrite_private_json(m,lambda v: v.__setitem__("created_at","1999-01-01T00:00:00Z"))),
+        ("intent names another job", lambda t,d,m: [t.rewrite_private_json(q,lambda v: v.__setitem__("job_id","otherJob")) for q in (m,d/"intent.json")]),
+        ("activation reference absent", lambda t,d,m: [t.rewrite_private_json(q,lambda v: v.pop("activation_ref")) for q in (m,d/"intent.json")]),
+        ("activation reference is not a record", lambda t,d,m: [t.rewrite_private_json(q,lambda v: v.__setitem__("activation_ref","0"*64)) for q in (m,d/"intent.json")]),
+        ("activation digest malformed", lambda t,d,m: [t.rewrite_private_json(q,lambda v: v["activation_ref"].__setitem__("sha256","not-a-digest")) for q in (m,d/"intent.json")]),
+        ("intent missing", lambda t,d,m: (d/"intent.json").unlink()),
+    )
+    def test_damaged_old_epoch_preparation_claims_still_stop_the_loop(self):
+        cases=self.DAMAGED_OLD_CLAIMS+(("attempt directory replaced", lambda t,d,m: (shutil.copytree(d,d.with_name("copy")),shutil.rmtree(d),d.with_name("copy").rename(d))),)
+        for label,damage in cases:
+            with self.subTest(damage=label):
+                self.tearDown(); self.setUp()
+                self.enable_preparation(); self.cfg["prepare_error"]=True
+                self.run_step(); self.refresh_epoch()
+                damage(self,self.state/"preparations/freshA",self.mirror/"preparations/freshA.json")
+                self.cfg={"jobs":[],"prepare_jobs":["freshA","freshB"]}
+                out,_=self.run_step()
+                self.assertIn("custody incomplete",self.result_line(out))
+                self.assertEqual(self.jobs_called("prepare-calls.jsonl"),["freshA"],"Nothing is replayed and nothing later runs")
+                self.assertFalse((self.state/"preparations/freshB").exists())
+    def test_damaged_old_epoch_publication_claims_still_stop_the_loop(self):
+        for label,damage in self.DAMAGED_OLD_CLAIMS:
+            with self.subTest(damage=label):
+                self.tearDown(); self.setUp()
+                self.cfg["publish_error"]=True
+                self.run_step(); self.refresh_epoch()
+                damage(self,self.state/"attempts/freshA",self.mirror/"freshA.json")
+                self.cfg={"jobs":["freshA","freshB"]}
+                out,_=self.run_step()
+                self.assertIn("custody incomplete",self.result_line(out))
+                self.assertEqual(self.jobs_called("calls.jsonl"),["freshA"])
+                self.assertFalse((self.state/"attempts/freshB").exists())
+
+    # A publication claim must be a publication intent, and a damaged one is never passed over by
+    # the preparation side either: both preflights read the same consumed identity or report it.
+    FORMAT_DAMAGED_PUBLICATION_CLAIMS=(
+        ("publication format absent", lambda t,d,m: [t.rewrite_private_json(q,lambda v: v.pop("format")) for q in (m,d/"intent.json")]),
+        ("another record's format", lambda t,d,m: [t.rewrite_private_json(q,lambda v: v.__setitem__("format","signalgrid-brain-privacy-preparation-intent/v1")) for q in (m,d/"intent.json")]),
+    )
+    def test_old_epoch_publication_claim_without_the_publication_format_still_stops_the_loop(self):
+        for label,damage in self.FORMAT_DAMAGED_PUBLICATION_CLAIMS:
+            with self.subTest(damage=label):
+                self.tearDown(); self.setUp()
+                self.cfg["publish_error"]=True
+                self.run_step(); self.refresh_epoch()
+                self.assertEqual(json.loads((self.mirror/"freshA.json").read_text())["format"],"signalgrid-brain-publication-intent/v1")
+                damage(self,self.state/"attempts/freshA",self.mirror/"freshA.json")
+                self.cfg={"jobs":["freshA","freshB"]}
+                out,_=self.run_step()
+                self.assertIn("custody incomplete",self.result_line(out))
+                self.assertEqual(self.jobs_called("calls.jsonl"),["freshA"])
+                self.assertFalse((self.state/"attempts/freshB").exists())
+    def test_damaged_publication_claim_stops_preparation_of_later_jobs(self):
+        for label,damage in self.DAMAGED_OLD_CLAIMS+self.FORMAT_DAMAGED_PUBLICATION_CLAIMS:
+            with self.subTest(damage=label):
+                self.tearDown(); self.setUp()
+                self.cfg["publish_error"]=True
+                self.run_step()
+                self.enable_preparation(); self.refresh_epoch()
+                damage(self,self.state/"attempts/freshA",self.mirror/"freshA.json")
+                self.cfg={"jobs":[],"prepare_jobs":["freshA","freshB"]}
+                out,_=self.run_step()
+                self.assertIn("custody incomplete",self.result_line(out))
+                self.assertEqual(self.jobs_called("prepare-calls.jsonl"),[],"Nothing is prepared past damaged publication custody")
+                self.assertFalse((self.state/"preparations/freshA").exists())
+                self.assertFalse((self.state/"preparations/freshB").exists())
+
+    def test_old_epoch_claim_under_moved_custody_directories_is_not_skipped(self):
+        # A refresh that does not keep the same custody namespace is not the bounded case: nothing proceeds.
+        self.cfg["publish_error"]=True
+        self.run_step(); self.refresh_epoch()
+        anchor=json.loads(self.anchor.read_text()); self.anchor.chmod(0o600)
+        anchor["attempts"]["ino"]+=1
+        self.anchor.write_text(json.dumps(anchor,sort_keys=True)+"\n"); self.anchor.chmod(0o400)
+        self.cfg={"jobs":["freshA","freshB"]}
+        self.run_step()
+        self.assertEqual(self.jobs_called("calls.jsonl"),["freshA"])
+        self.assertFalse((self.state/"attempts/freshB").exists())
+
 
 class HostAdmissionHelperBehaviour(unittest.TestCase):
     """The REAL sourced helper against a disposable lock file: real flock, real holder process, no fixture stubs."""

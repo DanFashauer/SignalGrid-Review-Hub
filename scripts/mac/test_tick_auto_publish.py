@@ -1203,6 +1203,16 @@ class HostAdmissionHelperBehaviour(unittest.TestCase):
             with self.subTest(bound=bound):
                 out,elapsed,_=self.shell((self.ACQUIRE%bound)+'sg_host_verify_acquire "$2"; echo "$?"\n')
                 self.assertEqual(out,["2","0","0"],"Refused, nothing held, and the lock was still free"); self.assertLess(elapsed,3)
+    def test_a_leading_zero_bound_is_decimal_and_admits_once_the_holder_releases(self):
+        # "08" is a bound the argument check accepts. It must wait as eight seconds, decimal, and be
+        # admitted when the holder releases; it must never reach shell arithmetic as an octal error.
+        holder,marker=self.hold(0.6)
+        out,elapsed,p=self.shell(self.ACQUIRE%"08")
+        self.assertEqual(out,["0","1"],p.stderr); self.assertEqual(p.stderr,"")
+        self.assertGreater(elapsed,0.4); self.assertLess(elapsed,5)
+        self.assertEqual(holder.wait(timeout=10),0,"The other holder ended by itself")
+        self.assertTrue(Path(marker+".released-by-self").exists())
+        self.assertEqual(self.lock.stat().st_ino,self.inode)
     def test_zero_bound_is_the_existing_single_attempt(self):
         holder,_=self.hold(1.2)
         out,elapsed,_=self.shell(self.ACQUIRE%0)

@@ -147,7 +147,8 @@ export function profileProblems(root = repo) {
   catch (err) { return [`GitHub agent profiles cannot be derived: ${err.message}`]; }
 }
 
-function selfTest() {
+/** The behavioural refusal cases, as [name, ok] pairs, for this CLI and for the roster gate's self-test. */
+export function profileSelfTestChecks() {
   const checks = [];
   const role = (o) => ({ id: "r1", division: "engineering", title: "T", charter: "C", trigger: "X", executor: "lane", surface: ["a/**"], ...o });
   const exp = expectedProfiles({ roles: [role({}), role({ id: "r2", executor: "agent:reader" }), role({ id: "r3", executor: "agent:writer" })] },
@@ -170,6 +171,11 @@ function selfTest() {
   checks.push(["a local tool with no GitHub alias refuses instead of guessing", threw]);
   threw = false; try { expectedProfiles({ roles: [role({ executor: "agent:none" })] }, () => null); } catch { threw = true; }
   checks.push(["an agent role whose local definition has no tools line refuses", threw]);
+  return checks;
+}
+
+function selfTest() {
+  const checks = profileSelfTestChecks();
   const failed = checks.filter(([, ok]) => !ok);
   for (const [n, ok] of checks) console.log(`  ${ok ? "ok" : "FAIL"} — ${n}`);
   console.log(`self-test ${failed.length ? "FAILED" : "passed"} (${checks.length - failed.length}/${checks.length})`);

@@ -55,7 +55,7 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { isMainModule } from "./lib/is-main.mjs";
-import { profileProblems } from "./gen-github-agent-profiles.mjs";
+import { profileProblems, profileSelfTestChecks } from "./gen-github-agent-profiles.mjs";
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const ROSTER = "docs/agent/org-roster.json";
@@ -451,6 +451,9 @@ function selfTest() {
     checks.push(["with neither flag nor env, the default is today's UTC calendar date and says so", (() => { const r = resolveAsOfDate({ argv: [], env: {} }); return r.source === "today (process clock, UTC calendar date)" && isRealCalendarDate(r.value); })()]);
   }
 
+  // The GitHub agent-profile refusals (missing tools, an execute grant, stale, missing, extra)
+  // run here so a registered self-test proves the profile half of this gate can fail.
+  for (const [name, ok] of profileSelfTestChecks()) checks.push([`github agent profiles: ${name}`, ok]);
   const failed = checks.filter(([, k]) => !k);
   for (const [name, k] of checks) console.log(`  ${k ? "ok" : "FAIL"} — self-test: ${name}`);
   console.log(`\nself-test ${failed.length === 0 ? "passed" : "FAILED"} (${checks.length - failed.length}/${checks.length})`);

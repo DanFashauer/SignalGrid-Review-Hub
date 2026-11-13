@@ -654,3 +654,11 @@ block; a stage run on the wrong tier is a lesson here.
 - **evidence:** Registering only the preflight command failed parity with one unwired command. Adding the matching existing validation-job step passes parity with zero unwired commands and passes CI/preflight proof synchronization. The actual emitted non-heavy, non-native command passes 93/93 under Node 22.
 - **landing:** pending — `scripts/preflight.mjs` and `.github/workflows/review-hub-ci.yml` each invoke `node scripts/mac/estate-queue.mjs --self-test` once. No new controller, job, host or provider call is introduced. Same-head full qualification and current CI remain required.
 - **status:** pending
+
+### L74 — Model installation and catalog parity do not prove the delivery chain
+- **date:** 2026-11-13
+- **lane:** both
+- **incident:** The owner clarified that company delivery requires Bonsai first-pass work, two local Claude/Codex passes and a usage-balanced cloud final pass, with second-brain context and selected skills/agents at every stage. The public worker can return after one successful review; copied skill definitions and a running model do not establish the requested chain.
+- **evidence:** `scripts/mac/build-tick-stages.mjs` returns land after review 1 and its stage request does not bind explicit knowledge or predecessor receipts. Root activated the native goal in #439 comment 6867440396; Mac reported the service installed in comment 6867531628. Neither report contains a fresh job's four original execution receipts.
+- **landing:** pending — #439 comment 6867445699 defines the actual pass/context acceptance work for the existing private Root adapter; the existing Codex receiver instructions now require preceding-pass and context receipts for new cloud-final offers. Preserve contained publication review and destination-approved knowledge retrieval. Private enforcement and the complete live chain still require execution evidence; no extra controller or status-only PR is introduced.
+- **status:** pending

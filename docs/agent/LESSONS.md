@@ -606,3 +606,19 @@ block; a stage run on the wrong tier is a lesson here.
 - **evidence:** The parent TERM, INT, HUP/QUIT and baseline-interruption cases in `scripts/check-entry-guards.mjs` used one kill-zero observer. Their terminated node children remained in state Z under container PID 1, the same observation error as L65.
 - **landing:** pending — correct only the fixture's child-liveness observation, preserving the exit, file-restoration, clean-tree, scratch-cleanup and child-termination assertions. Production mutation-runner behavior remains unchanged. Protected delivery remains pending.
 - **status:** pending
+
+### L68 — Keep browser transport explicit and preserve the isolation contract
+- **date:** 2026-11-13
+- **lane:** cloud
+- **incident:** Managed Chromium blocked the six standalone-page file loads before assertions, preventing local preflight from reaching its later stages. The Mac/root coordination on PR #2045 requested a bounded public-fixture HTTP harness while preserving file coverage and browser policy.
+- **evidence:** Explicit HTTP transport passed all 53 browser cases, including the same six case IDs. Planted same-document fetch, popup, extra image and WebSocket requests made the isolation case fail with all four requests recorded; a wrong coverage label made its visible-text case fail. The original HTML bytes were restored before the passing run.
+- **landing:** pending — `scripts/src/e2e/public-fixture-server.ts` serves only the fixed public artifact on an ephemeral loopback port. The spec keeps file mode as default, refuses invalid modes, tests server boundaries and closes owned servers. `scripts/src/e2e/egress-guard.ts` admits only the first main-document GET for this spec. HTTP success establishes rendering/isolation under HTTP, not file-origin execution; the browser file policy is unchanged. Protected delivery remains pending.
+- **status:** pending
+
+### L69 — Report the next failing gate without broadening another lane's repair
+- **date:** 2026-11-13
+- **lane:** cloud
+- **incident:** With explicit HTTP transport, full preflight passed Browser E2E and advanced to the unchanged lane-delivery regression gate, which reported 165 passed, 3 failed and 0 skipped.
+- **evidence:** The failures concern recovery after an original tick child exits, cleanup of a timed-out fetch helper, and cleanup of a timed-out readback helper. The reported original-tick sleep process was independently observed in state Z with PPID 1. That supports a zombie-observation hypothesis for the recovery case; it does not establish the cause of all three failures.
+- **landing:** recorded only — the HTTP follow-up leaves `scripts/check-lane-delivery.mjs`, `scripts/lane-deliver.mjs` and `scripts/mac/lane-tick.sh` unchanged from 741f1c6e5. The PR #2045 coordination note assigns the separate lane-readback repair to Cloud Claude. These observations do not establish that this is the same already-known race. Preserve source ownership, report the three cases and keep the PR draft; a passing browser stage is not a passing full preflight.
+- **status:** landed

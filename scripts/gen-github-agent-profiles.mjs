@@ -13,11 +13,13 @@
 // FAIL-CLOSED GRANTS. A profile is a grant on GitHub's side, and the local guards do not
 // travel with it (the deny hooks and the sandbox that bound `Bash` here are not Copilot's).
 //   - `tools` is ALWAYS written. GitHub reads an omitted `tools` as "all tools".
-//   - Only documented aliases are used (read, search, edit, execute). GitHub silently ignores
-//     an unknown name, so a typo would change the grant without anyone seeing it.
-//   - `agent:<name>` roles take their local agent's tools, mapped to aliases, EXCEPT that a
-//     local agent without Write/Edit is read-only on GitHub too: `read, search`, never
-//     `execute`, because its local Bash is only safe behind the local guards.
+//   - Only documented aliases are used (read, search, edit). GitHub silently ignores an
+//     unknown name, so a typo would change the grant without anyone seeing it.
+//   - NO profile gets `execute`. Every local Bash grant is acceptable only behind the local
+//     deny hooks and sandbox, and none of that travels to Copilot's environment. Whether a
+//     GitHub-side agent should ever get a shell here is the owner's call, not a derivation.
+//   - `agent:<name>` roles take their local agent's read/search/edit tools; a local agent
+//     without Write/Edit is `read, search` only.
 //   - `skill:<name>` and `lane` roles cannot run as a Copilot agent (Copilot loads neither a
 //     .claude skill nor a lane). They get `tools: []` and `disable-model-invocation: true`,
 //     and the body names the real executor. They describe the role; they run nothing.
@@ -32,7 +34,7 @@ import { isMainModule } from "./lib/is-main.mjs";
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const ROSTER = "docs/agent/org-roster.json";
 const OUT = ".github/agents";
-const ALIASES = new Set(["read", "search", "edit", "execute"]);
+const ALIASES = new Set(["read", "search", "edit"]);
 const LOCAL_TO_ALIAS = { Read: "read", Grep: "search", Glob: "search", Edit: "edit", Write: "edit", Bash: "execute" };
 const NAME = /^[a-z0-9][a-z0-9-]*$/;
 
@@ -42,10 +44,9 @@ export function toolsFor(executor, localTools) {
   if (!executor.startsWith("agent:")) throw new Error(`unknown executor form: ${executor}`);
   if (!Array.isArray(localTools)) throw new Error(`no local tool list for ${executor}`);
   for (const t of localTools) if (!(t in LOCAL_TO_ALIAS)) throw new Error(`${executor}: local tool ${t} has no GitHub alias`);
-  const writes = localTools.includes("Edit") || localTools.includes("Write");
   const mapped = new Set(localTools.map((t) => LOCAL_TO_ALIAS[t]));
-  if (!writes) { mapped.delete("execute"); mapped.delete("edit"); }
-  return ["read", "search", "edit", "execute"].filter((a) => mapped.has(a));
+  mapped.delete("execute"); // never on GitHub: see the header
+  return ["read", "search", "edit"].filter((a) => mapped.has(a));
 }
 
 /** `tools:` line of a local .claude/agents/<name>.md file, as a list; null when absent. */
@@ -153,7 +154,7 @@ function selfTest() {
     (n) => (n === "reader" ? "---\ntools: Read, Grep, Glob, Bash\n---\n" : n === "writer" ? "---\ntools: Read, Write, Edit, Bash, Grep, Glob\n---\n" : null));
   checks.push(["a lane role carries tools: [] and is never chosen automatically", /tools: \[\]\ndisable-model-invocation: true/.test(exp.get("r1.agent.md"))]);
   checks.push(["a read-only local agent is read-only on GitHub: read and search, never execute", /tools: \["read", "search"\]\n---/.test(exp.get("r2.agent.md"))]);
-  checks.push(["a writing local agent maps to read, search, edit, execute", /tools: \["read", "search", "edit", "execute"\]/.test(exp.get("r3.agent.md"))]);
+  checks.push(["a writing local agent maps to read, search, edit, and still never execute", /tools: \["read", "search", "edit"\]\n/.test(exp.get("r3.agent.md")) && !/execute/.test(exp.get("r3.agent.md").split("---")[1])]);
   checks.push(["in sync is no problem", diffProfiles(exp, new Map(exp)).length === 0]);
   const missing = new Map(exp); missing.delete("r2.agent.md");
   checks.push(["a roster role with no profile is a problem", diffProfiles(exp, missing).some((p) => p.startsWith("missing"))]);
@@ -163,8 +164,8 @@ function selfTest() {
   checks.push(["a profile with no roster role is extra", diffProfiles(exp, extra).some((p) => p.startsWith("extra"))]);
   const noTools = new Map(exp); noTools.set("r1.agent.md", exp.get("r1.agent.md").replace(/tools: \[\]\n/, ""));
   checks.push(["a profile without a tools line is refused (GitHub would grant all tools)", diffProfiles(exp, noTools).some((p) => /no tools line/.test(p))]);
-  const typo = new Map(exp); typo.set("r3.agent.md", exp.get("r3.agent.md").replace('"execute"', '"exec"'));
-  checks.push(["an undocumented tool name is refused", diffProfiles(exp, typo).some((p) => /undocumented tool name: exec/.test(p))]);
+  const typo = new Map(exp); typo.set("r3.agent.md", exp.get("r3.agent.md").replace('"edit"]', '"edit", "execute"]'));
+  checks.push(["a hand-added execute grant is refused as an undocumented tool name", diffProfiles(exp, typo).some((p) => /undocumented tool name: execute/.test(p))]);
   let threw = false; try { toolsFor("agent:x", ["Read", "WebFetch"]); } catch { threw = true; }
   checks.push(["a local tool with no GitHub alias refuses instead of guessing", threw]);
   threw = false; try { expectedProfiles({ roles: [role({ executor: "agent:none" })] }, () => null); } catch { threw = true; }

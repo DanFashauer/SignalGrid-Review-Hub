@@ -50,7 +50,10 @@ const PRIVATE = /[/\\](?:users|home)[/\\]|[a-z]:[/\\]users[/\\]|(?:\$\{?home\}?|
 const PRIVATE_MARKUP = /\.obsidian(?:[/\\]|$)|\[\[[^\]\[\r\n]{1,240}\]\]|%%/i;
 const PRIVATE_DIRECTORY = /^(?:\.obsidian|\.trash|vaults?|private-notes)$/i;
 const EXECUTION_CONTROL = /^(?:\.git(?:attributes|modules|config)?|\.npmrc|\.pnpmfile\.(?:cjs|mjs|js)|package\.(?:json5?|ya?ml)|pnpm-workspace\.ya?ml|pnpm-lock\.yaml|package-lock\.json|npm-shrinkwrap\.json|\.yarnrc(?:\.yml)?|yarn\.lock|\.pnp\.(?:cjs|loader\.mjs))$/i;
-const NEW_PUBLIC_DIRECTORY = /^(?:docs|src|web|apps|packages|tests?|public|assets)\//;
+// Where a worker may ADD a file. The generic top-level folders, plus the source folders of this
+// repository's three web applications, which live under artifacts/. The record folders that share
+// that parent (results, evidence, heartbeats, raised hands) and every other application stay out.
+const NEW_PUBLIC_DIRECTORY = /^(?:(?:docs|src|web|apps|packages|tests?|public|assets)|artifacts\/signalgrid-(?:app|desktop|mobile-pwa)\/src)\//;
 const ORDINARY_PRE_PUSH_SHA = "ab88ceee48a25a9eb79f072e9315093336ab3ccc810e0fbbe2e49690fa5d8b59";
 const SCANNER_MANIFEST = join(ACCOUNT_HOME, "SignalGrid-Local-AI", "brain-state", "auto-publish-review", "scanner.json");
 const PRIVACY_CLEARANCES = join(dirname(SCANNER_MANIFEST), "clearances");
@@ -1631,6 +1634,27 @@ process.exit(finding ? 2 : 0);
     // config.worktree, so the worker's PHYSICAL file is validated: absent passes, the one inert application key
     // passes, everything else refuses. Real linked worktrees, real Git; nothing here relies on a command-line
     // extension override, which Git ignores (it reads the extension from the repository's own config).
+    // New files in this repository's own application source. The first unattended build that reached
+    // the publisher (2026-11-13) added a test beside the file it fixed, under the mobile app's src,
+    // and was refused: the new-file allowlist named only generic top-level folders. Application
+    // source is allowed; the record folders that also live under artifacts/ stay refused.
+    const nfBase = brain("newfile-base", () => {});
+    let nfCount = 0;
+    const nfOutcome = (file) => {
+      const w = join(root, "newfile-worker-" + (++nfCount));
+      scratchGitOk(nfBase, ["worktree", "add", "-q", "--detach", w, "HEAD"]);
+      mkdirSync(dirname(join(w, file)), { recursive: true });
+      writeFileSync(join(w, file), "NEW FILE BODY\n");
+      try { const { patch, files } = worktreePatch(w); return { ok: patch.includes("NEW FILE BODY") && JSON.stringify(files) === JSON.stringify([file]) }; }
+      catch (e) { if (!(e instanceof Refusal)) throw e; return { refused: e.message }; }
+    };
+    for (const file of ["artifacts/signalgrid-mobile-pwa/src/lib/format.test.ts", "artifacts/signalgrid-app/src/lib/new-helper.ts", "artifacts/signalgrid-desktop/src/new-view.tsx", "docs/new-note.md"])
+      check("(new files) a new file in application source or docs is exported: " + file, nfOutcome(file).ok === true);
+    for (const file of ["artifacts/sim-results/new.json", "artifacts/raised-hands/new.json", "artifacts/live-evidence/new.json", "artifacts/agent-heartbeats/new.json",
+      "artifacts/signalgrid-mobile-pwa/new-root-file.ts", "artifacts/signalgrid-mobile-pwa/scripts/new.mjs", "artifacts/signalgrid-mobile-pwa-other/src/new.ts",
+      "artifacts/unknown-app/src/new.ts", "artifactsx/signalgrid-app/src/new.ts", "native/new.swift", "new-root-file.md"])
+      check("(new files) a new file outside application source is still refused: " + file, typeof nfOutcome(file).refused === "string");
+
     const wtcBase = brain("wtc-base", () => {});
     scratchGitOk(wtcBase, ["config", "extensions.worktreeConfig", "true"]);
     const wtcMarker = join(root, "wtc-program-ran"), wtcProgram = join(root, "wtc-program.cjs");

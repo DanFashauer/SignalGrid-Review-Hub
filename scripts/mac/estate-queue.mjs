@@ -76,6 +76,9 @@ export function classify(pr) {
   const need = ["user", "headSha", "mergeableState", "compareStatus", "gating", "checksPending", "unresolvedThreads", "files"];
   const missing = need.filter((k) => pr[k] === undefined || pr[k] === null);
   if (missing.length) return { action: "unknown", why: `unread: ${missing.join(", ")}` };
+  if (!Array.isArray(pr.checksPending) || !Array.from(pr.checksPending).every((name) => typeof name === "string" && name.trim().length > 0)) {
+    return { action: "unknown", why: "unread: checksPending" };
+  }
   if (!/^[0-9a-f]{40}$/.test(pr.headSha)) return { action: "unknown", why: "head sha not a full sha" };
 
   if (pr.compareStatus === "identical" || pr.compareStatus === "behind") {
@@ -110,7 +113,6 @@ export function classify(pr) {
     // CURRENT head is still queued or running (the Mac-only check included, not only the
     // gating one), refreshing throws that run away and the PR never settles green
     // (2026-11-08: #1932 and #1937 refreshed while their Mac runs were queued).
-    if (!Array.isArray(pr.checksPending)) return { action: "unknown", why: "unread: checksPending" };
     if (pr.checksPending.length) return { action: "wait", why: `behind mainline, but ${pr.checksPending.length} check(s) still running on the head (${pr.checksPending.slice(0, 3).join(", ")}); refresh after they finish` };
     if (pr.ageDays > STALE_DAYS) return { action: "stale", why: `behind mainline and idle ${Math.floor(pr.ageDays)} days; not refreshed` };
     // Only a PR that will merge itself once green is worth a refresh. Unread is not "on".
@@ -122,6 +124,9 @@ export function classify(pr) {
   if (pr.draft) return { action: "wait", why: "draft" };
   if (pr.unresolvedThreads > 0) return { action: "fix", why: `${pr.unresolvedThreads} unresolved thread(s)` };
   if (ownerGated) return { action: "owner", why: `touches ${[...cats].filter((c) => c !== "SAFETY_MACHINERY").join("+")}` };
+  // The primary gate can finish before other current-head checks. Pending work
+  // belongs in neither the builder's fix queue nor the landing/review queue.
+  if (pr.checksPending.length) return { action: "wait", why: `${pr.checksPending.length} check(s) still running on the head (${pr.checksPending.slice(0, 3).join(", ")})` };
   if (pr.mergeableState !== "clean") return { action: "fix", why: `mergeable state ${pr.mergeableState}` };
   return { action: "land-ready", why: cats.has("SAFETY_MACHINERY") ? "SAFETY_MACHINERY, all gates green" : "autonomous, all gates green" };
 }
@@ -462,6 +467,20 @@ function selfTest() {
     [{ ...base, mergeableState: "behind", gating: "pending", checksPending: [GATING] }, "wait"],
     [{ ...base, mergeableState: "behind", checksPending: null }, "unknown"],
     [{ ...base, checksPending: null }, "unknown"],
+    // A green primary check does not finish the other current-head checks.
+    // Waiting is neither new build work nor a landing/review request.
+    ...["clean", "blocked", "unstable"].map((mergeableState) =>
+      [{ ...base, mergeableState, checksPending: ["PR Mac aggregate"] }, "wait"]),
+    [{ ...base, checksPending: ["A newly named check"] }, "wait"],
+    ...["queued", {}, [null], [1], [true], [[]], [""], ["  "], Array(1)].map((checksPending) =>
+      [{ ...base, checksPending }, "unknown"]),
+    [{ ...base, mergeableState: "dirty", checksPending: ["PR Mac aggregate"] }, "fix"],
+    [{ ...base, gating: "failure", checksPending: ["PR Mac aggregate"] }, "fix"],
+    [{ ...base, unresolvedThreads: 2, checksPending: ["PR Mac aggregate"] }, "fix"],
+    [{ ...base, mergeableState: "unknown", checksPending: ["PR Mac aggregate"] }, "unknown"],
+    [{ ...base, compareStatus: "behind", checksPending: ["PR Mac aggregate"] }, "superseded"],
+    [{ ...base, compareStatus: "identical", checksPending: ["PR Mac aggregate"] }, "superseded"],
+    [{ ...base, files: ["docs/DECISION_RECORDS.md"], checksPending: ["PR Mac aggregate"] }, "owner"],
     [{ ...base, mergeableState: "behind", gating: "missing", checksPending: [] }, "refresh"],
     [{ ...base, mergeableState: "behind", gating: "failure", checksPending: ["CodeQL"] }, "fix"],
     [{ ...base, ageDays: null }, "unknown"],
@@ -479,6 +498,15 @@ function selfTest() {
   const ex = execute([{ number: 1, action: "land-ready" }, { number: 2, action: "owner" }, { number: 3, action: "fix" }], 3);
   const okEx = ex.length === 0;
   if (!okEx) console.error(`FAIL execute acted on a non-executable action: ${JSON.stringify(ex)}`);
+  const pending = ["clean", "blocked", "unstable"].map((mergeableState, i) => {
+    const pr = { ...base, number: 30 + i, mergeableState, checksPending: ["PR Mac aggregate"] };
+    return { ...pr, ...classify(pr) };
+  });
+  let pendingCalls = 0;
+  const noPendingCalls = new Proxy({}, { get() { pendingCalls++; throw new Error("pending work must not call the forge or ledger"); } });
+  const pendingRun = execute(pending, 3, null, noPendingCalls, noPendingCalls);
+  const okPending = pending.every((p) => p.action === "wait") && pendingRun.length === 0 && pendingCalls === 0;
+  if (!okPending) console.error(`FAIL pending check work reached an actionable queue or executor: ${JSON.stringify({ actions: pending.map((p) => p.action), pendingRun, pendingCalls })}`);
   const q = [5, 9, 2, 7].map((number) => ({ number, action: "refresh" })).concat([{ number: 4, action: "fix" }]);
   const order = (after) => rotate(q, after).map((i) => i.number).join(",");
   const rot = [[null, "2,5,7,9"], [5, "7,9,2,5"], [9, "2,5,7,9"], [1, "2,5,7,9"]];
@@ -641,8 +669,8 @@ function selfTest() {
     check("all runs completed reads as nothing pending", r4.gating === "success" && Array.isArray(r4.checksPending) && r4.checksPending.length === 0);
   }
   const okFx = fx.filter(Boolean).length;
-  const total = cases.length + 1 + rot.length + fx.length;
-  const got = pass + (okEx ? 1 : 0) + okRot + okFx;
+  const total = cases.length + 2 + rot.length + fx.length;
+  const got = pass + (okEx ? 1 : 0) + (okPending ? 1 : 0) + okRot + okFx;
   console.log(`estate-queue self-test: ${got}/${total} passed`);
   return got === total;
 }

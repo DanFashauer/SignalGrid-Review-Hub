@@ -26,7 +26,7 @@
 //   - No `model`, no `mcp-servers`: either would grant something the roster never granted.
 //   - Only stable roster fields are rendered (id, title, charter, trigger, surface, executor),
 //     never `nextAction`/`nextActionDate`, which move weekly and would make every profile stale.
-import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { closeSync, constants, existsSync, fstatSync, mkdirSync, mkdtempSync, openSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -131,14 +131,21 @@ export function diffProfiles(expected, actual) {
 
 /** EVERY entry in the folder, not only `*.agent.md`: GitHub also reads plain `<name>.md` as a
  *  profile (and grants all tools when it has no `tools`), so anything else here must surface as
- *  an extra profile rather than be silently skipped. A non-file entry is recorded empty, which
+ *  an extra profile rather than be silently skipped. A non-file or symlink entry is recorded empty, which
  *  fails the tools check as well. */
 export function readActual(dir) {
   const m = new Map();
   if (!existsSync(dir)) return m;
   for (const f of readdirSync(dir)) {
-    const p = join(dir, f);
-    m.set(f, lstatSync(p).isFile() ? readFileSync(p, "utf8") : "");
+    // Open first, then inspect and read the SAME descriptor: no check-then-use window, and a
+    // symbolic link is refused rather than followed.
+    let fd = null, body = "";
+    try {
+      fd = openSync(join(dir, f), constants.O_RDONLY | constants.O_NOFOLLOW);
+      if (fstatSync(fd).isFile()) body = readFileSync(fd, "utf8");
+    } catch { body = ""; }
+    finally { if (fd !== null) closeSync(fd); }
+    m.set(f, body);
   }
   return m;
 }

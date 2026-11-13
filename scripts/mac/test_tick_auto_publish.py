@@ -26,6 +26,7 @@ START = "# ── d3."
 END = "# ── e. heartbeat"
 BOUNDARY_HEAD = "1234567890abcdef1234567890abcdef12345678"
 NOT_BEFORE = "2026-11-06T16:40:00Z"
+HOST_HELPER = "scripts/mac/host-verification-lock.sh"
 
 MOCK_NODE = r'''#!/usr/bin/env python3
 import json, os, sys
@@ -252,7 +253,7 @@ class TickAutoPublishRegression(unittest.TestCase):
         self.activation["publisher_sha256"]=hashlib.sha256((REPO/"scripts/mac/brain-proposal-pr.mjs").read_bytes()).hexdigest()
         self.activation["tick_sha256"]=hashlib.sha256((REPO/"scripts/mac/lane-tick.sh").read_bytes()).hexdigest()
         self.activation["dependency_sha256"]={p:hashlib.sha256((REPO/p).read_bytes()).hexdigest() for p in (
-            "scripts/check-owner-gated-surfaces.mjs", "scripts/lib/is-main.mjs", "scripts/lib/scratch-git.mjs", ".githooks/pre-push")}
+            "scripts/check-owner-gated-surfaces.mjs", "scripts/lib/is-main.mjs", "scripts/lib/scratch-git.mjs", ".githooks/pre-push", HOST_HELPER)}
         self.write_activation()
         self.bootstrap_custody()
         self.cfg={"jobs":["freshA"]}
@@ -482,6 +483,10 @@ sg_host_verify_acquire() {
  SG_VERIFY_LOCK_HELD=1
 }
 sg_host_verify_release() { printf 'release\\n' >> "$SG_TEST_ROOT/host-events"; SG_VERIFY_LOCK_HELD=0; }
+sg_host_verify_acquire_bounded() {
+ printf 'bounded %s\\n' "${2:-}" >> "$SG_TEST_ROOT/host-events"
+ sg_host_verify_acquire "$1"
+}
 """
         wrapper += source[a:b] + '\nprintf "__RESULT__%s\\n" "$RESULT"\n'
         # Only the extracted test copy substitutes account/tool transport seams.
@@ -518,15 +523,90 @@ sg_host_verify_release() { printf 'release\\n' >> "$SG_TEST_ROOT/host-events"; S
                 "try:\n    need(MODE in")
         # Scale only the isolated test copy's publication timeout. No production
         # environment flag or model/queue cap is changed or introduced.
+        if self.cfg.get("drop_bounded_helper"):
+            wrapper=wrapper.replace("sg_host_verify_acquire_bounded() {","unused_fixture_bounded() {",1)
         if self.cfg.get("hang_publish"):
             wrapper=wrapper.replace("PUBLICATION_TIMEOUT_SEC = 600", "PUBLICATION_TIMEOUT_SEC = 0.25")
         env={**os.environ,"HOME":str(self.home),"PATH":str(self.bin)+os.pathsep+os.environ["PATH"],
              "SG_TEST_ROOT":str(self.root),"SG_TEST_TRUSTED_HOME":str(self.home),"SG_TEST_HOST_BUSY":"1" if self.host_busy else "0",
-             "SIGNALGRID_PUBLISH_MAX":self.cap,"SIGNALGRID_BRAIN_PUBLICATION_STATE":str(self.state)}
+             "SIGNALGRID_PUBLISH_MAX":self.cap,"SIGNALGRID_BRAIN_PUBLICATION_STATE":str(self.state),
+             # The tick records the digest of the helper it actually sourced; the fixture sources this checkout's.
+             "SG_VERIFY_HELPER_SHA256":hashlib.sha256((REPO/HOST_HELPER).read_bytes()).hexdigest()}
         env.update(self.extra_env)
+        for name in [key for key,value in env.items() if value is None]:
+            del env[name]
         p=subprocess.run(["/bin/bash","-c",wrapper],cwd=self.work,env=env,capture_output=True,text=True,timeout=20)
         self.assertEqual(p.returncode,0,p.stderr)
         return p.stdout,p.stderr
+    # ── bounded ordinary admission on the two publication acquisitions, and the sourced helper binding ──
+    def bootstrap_custody_again(self):
+        # Reseal only this disposable fixture anchor after its activation fixture was rewritten.
+        anchor=json.loads(self.anchor.read_text()); self.anchor.chmod(0o600)
+        anchor["activation_sha256"]=hashlib.sha256((self.state/"activation.json").read_bytes()).hexdigest()
+        self.anchor.write_text(json.dumps(anchor,sort_keys=True)+"\n"); self.anchor.chmod(0o400)
+    def host_events(self):
+        # Host admission events only; the fixture's unrelated heartbeat "metadata" marker shares the file.
+        p=self.root/"host-events"
+        return [e for e in p.read_text().splitlines() if e!="metadata"] if p.exists() else []
+    def state_files(self):
+        return sorted(str(p.relative_to(self.state)) for p in self.state.rglob("*") if p.is_file() and p.name!="activation.json")
+    def test_publication_admission_waits_a_bounded_ninety_seconds(self):
+        out,_=self.run_step()
+        self.assertEqual([e for e in self.host_events() if e.startswith("bounded")],["bounded 90"])
+        self.assertEqual(len(self.calls()),1,out)
+    def test_preparation_admission_waits_a_bounded_ninety_seconds(self):
+        self.enable_preparation()
+        self.run_step()
+        self.assertEqual([e for e in self.host_events() if e.startswith("bounded")],["bounded 90"])
+        self.assertEqual(len(self.jsonlines("prepare-calls.jsonl")),1)
+    def test_still_busy_after_the_bounded_wait_keeps_the_existing_defer(self):
+        self.host_busy=True
+        out,_=self.run_step()
+        self.assertIn("brain publication deferred: host busy or unavailable",out)
+        self.assertEqual(self.host_events(),["bounded 90","acquire"])
+        self.assertEqual(self.calls(),[]); self.assertEqual(self.state_files(),[])
+        self.enable_preparation(); (self.root/"host-events").unlink()
+        out,_=self.run_step()
+        self.assertIn("privacy request preparation deferred: host busy or unavailable",out)
+        self.assertEqual(self.jsonlines("prepare-calls.jsonl"),[])
+        self.assertFalse((self.state/"preparations/freshA").exists())
+    def test_a_tick_without_the_bounded_helper_defers_instead_of_falling_back(self):
+        # An older sourced helper has no bounded function: the tick must defer, never use another admission.
+        self.cfg["drop_bounded_helper"]=True
+        out,_=self.run_step()
+        self.assertIn("brain publication deferred: host busy or unavailable",out)
+        self.assertEqual(self.host_events(),[]); self.assertEqual(self.calls(),[]); self.assertEqual(self.state_files(),[])
+    def test_sourced_helper_that_differs_from_the_bound_dependency_refuses_before_any_claim(self):
+        for label,value in (("drifted","0"*64),("absent",None),("malformed","not-a-digest")):
+            with self.subTest(sourced=label):
+                p=self.root/"host-events"
+                if p.exists(): p.unlink()
+                self.extra_env={"SG_VERIFY_HELPER_SHA256":value}
+                out,_=self.run_step()
+                self.assertIn("brain publication unavailable",out)
+                self.assertEqual(self.calls(),[]); self.assertEqual(self.state_files(),[],"Nothing may be claimed or consumed")
+                self.assertEqual(self.host_events(),["bounded 90","acquire","release"],"Own admission is released; no other holder is touched")
+        self.extra_env={"SG_VERIFY_HELPER_SHA256":"0"*64}
+        self.enable_preparation(); (self.root/"host-events").unlink()
+        out,_=self.run_step()
+        self.assertIn("privacy request preparation unavailable",out)
+        self.assertEqual(self.jsonlines("prepare-calls.jsonl"),[])
+        self.assertFalse((self.state/"preparations/freshA").exists())
+    def test_activation_must_bind_the_host_helper_with_the_other_dependencies(self):
+        self.activation["dependency_sha256"].pop(HOST_HELPER); self.write_activation(); self.bootstrap_custody_again()
+        self.run_step()
+        self.assertEqual(self.calls(),[]); self.assertEqual(self.host_events(),[])
+    def test_activation_bound_to_other_helper_bytes_is_refused(self):
+        self.activation["dependency_sha256"][HOST_HELPER]="0"*64; self.write_activation(); self.bootstrap_custody_again()
+        self.run_step()
+        self.assertEqual(self.calls(),[]); self.assertEqual(self.host_events(),[])
+    def test_private_intent_records_the_host_helper_reference(self):
+        self.run_step()
+        intents=[json.loads(p.read_text()) for p in self.state.rglob("intent.json")]
+        self.assertEqual(len(intents),1)
+        self.assertEqual(intents[0]["dependency_refs"][HOST_HELPER]["sha256"],hashlib.sha256((REPO/HOST_HELPER).read_bytes()).hexdigest())
+        self.assertEqual(len(intents[0]["dependency_refs"]),5)
+
     def test_explicit_activation_is_required_and_never_self_created(self):
         (self.state/"activation.json").unlink()
         self.run_step()
@@ -787,6 +867,70 @@ sg_host_verify_release() { printf 'release\\n' >> "$SG_TEST_ROOT/host-events"; S
         self.run_step()
         self.assertEqual(self.calls(),[],"an inherited second push URL must not receive an artifact")
         self.assertEqual(self.jsonlines("get-calls.jsonl"),[])
+
+class HostAdmissionHelperBehaviour(unittest.TestCase):
+    """The REAL sourced helper against a disposable lock file: real flock, real holder process, no fixture stubs."""
+    HELPER=REPO/HOST_HELPER
+    HOLDER="import fcntl,os,sys,time\nfd=os.open(sys.argv[1],os.O_RDWR|os.O_CREAT,0o600)\nfcntl.flock(fd,fcntl.LOCK_EX)\nopen(sys.argv[2]+'.held','w').close()\ntime.sleep(float(sys.argv[3]))\nopen(sys.argv[2]+'.released-by-self','w').close()\n"
+    def setUp(self):
+        self.tmp=tempfile.TemporaryDirectory(prefix="host-admission-"); self.addCleanup(self.tmp.cleanup)
+        self.root=Path(self.tmp.name); self.lock=self.root/"cache"/"host-verification.lock"
+        self.lock.parent.mkdir(); self.lock.touch(); self.inode=self.lock.stat().st_ino
+    def hold(self,seconds):
+        marker=str(self.root/"holder")
+        p=subprocess.Popen(["/usr/bin/python3","-I","-c",self.HOLDER,str(self.lock),marker,str(seconds)])
+        self.addCleanup(p.wait)
+        for _ in range(100):
+            if Path(marker+".held").exists(): return p,marker
+            import time; time.sleep(0.05)
+        self.fail("fixture holder never acquired")
+    def shell(self,body,timeout=20):
+        import time
+        started=time.monotonic()
+        p=subprocess.run(["/bin/bash","-c",'set -u\n. "$1"\n'+body,"bash",str(self.HELPER),str(self.lock)],capture_output=True,text=True,timeout=timeout)
+        return p.stdout.split(),time.monotonic()-started,p
+    ACQUIRE='sg_host_verify_acquire_bounded "$2" %s; rc=$?; echo "$rc" "$SG_VERIFY_LOCK_HELD"\n'
+    PROBE='sg_host_verify_release; sg_host_verify_acquire "$2"; echo "$?"\n'
+    def test_free_lock_is_admitted_at_once_and_positively_released(self):
+        out,elapsed,_=self.shell(self.ACQUIRE%90+self.PROBE)
+        self.assertEqual(out,["0","1","0"]); self.assertLess(elapsed,3)
+        self.assertEqual(self.lock.stat().st_ino,self.inode)
+    def test_busy_then_released_within_the_bound_is_admitted_without_touching_the_holder(self):
+        holder,marker=self.hold(1.5)
+        out,elapsed,_=self.shell(self.ACQUIRE%20)
+        self.assertEqual(out,["0","1"]); self.assertGreater(elapsed,1.0); self.assertLess(elapsed,12)
+        self.assertEqual(holder.wait(timeout=10),0,"The other holder ended by itself")
+        self.assertTrue(Path(marker+".released-by-self").exists())
+        self.assertEqual(self.lock.stat().st_ino,self.inode,"Same canonical inode; never unlinked or replaced")
+    def test_still_busy_at_the_bound_returns_the_existing_busy_code_and_leaves_the_holder_running(self):
+        holder,marker=self.hold(5)
+        out,elapsed,_=self.shell(self.ACQUIRE%2+'echo "$SG_VERIFY_LOCK_REASON"\n')
+        self.assertEqual(out[:2],["75","0"]); self.assertIn("holds",out)
+        self.assertGreaterEqual(elapsed,2.0); self.assertLess(elapsed,4.8)
+        self.assertIsNone(holder.poll(),"The other holder was not signalled or ended")
+        self.assertFalse(Path(marker+".released-by-self").exists())
+        self.assertEqual(holder.wait(timeout=15),0); self.assertEqual(self.lock.stat().st_ino,self.inode)
+    def test_invalid_custody_is_refused_at_once_without_retrying(self):
+        blocked=self.root/"not-a-directory"; blocked.write_text("x")
+        import time
+        started=time.monotonic()
+        p=subprocess.run(["/bin/bash","-c",'. "$1"\nsg_host_verify_acquire_bounded "$2" 90 2>/dev/null; echo "$?" "$SG_VERIFY_LOCK_HELD"\n',"bash",str(self.HELPER),str(blocked/"child"/"lock")],capture_output=True,text=True,timeout=20)
+        self.assertEqual(p.stdout.split(),["2","0"]); self.assertLess(time.monotonic()-started,3,"A custody failure is not waited on")
+    def test_invalid_or_larger_bound_is_refused_and_nothing_is_acquired(self):
+        for bound in ("abc","''","91","-1","1.5","9999"):
+            with self.subTest(bound=bound):
+                out,elapsed,_=self.shell((self.ACQUIRE%bound)+'sg_host_verify_acquire "$2"; echo "$?"\n')
+                self.assertEqual(out,["2","0","0"],"Refused, nothing held, and the lock was still free"); self.assertLess(elapsed,3)
+    def test_zero_bound_is_the_existing_single_attempt(self):
+        holder,_=self.hold(1.2)
+        out,elapsed,_=self.shell(self.ACQUIRE%0)
+        self.assertEqual(out,["75","0"]); self.assertLess(elapsed,1.0)
+        self.assertEqual(holder.wait(timeout=10),0)
+    def test_existing_single_attempt_caller_is_unchanged(self):
+        holder,_=self.hold(1.2)
+        out,elapsed,_=self.shell('sg_host_verify_acquire "$2"; echo "$?" "$SG_VERIFY_LOCK_HELD"\n')
+        self.assertEqual(out,["75","0"]); self.assertLess(elapsed,1.0,"Every other caller keeps the immediate defer")
+        self.assertEqual(holder.wait(timeout=10),0)
 
 if __name__=="__main__":
     unittest.main()

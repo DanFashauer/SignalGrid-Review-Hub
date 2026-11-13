@@ -759,6 +759,10 @@ if [ "$DRY" = "0" ]; then
   if ! git show "$_verify_sha:scripts/mac/host-verification-lock.sh" > "$_verify_helper"; then
     rm -f "$_verify_helper"; SG_VERIFY_LOCK_REASON="mainline host verification helper unavailable"; defer_host_verification; exit 1
   fi
+  # The digest of the helper this tick actually sources. The publication step requires it to equal the
+  # helper it binds with its other dependencies, so a drifted helper can admit nothing public.
+  SG_VERIFY_HELPER_SHA256="$(shasum -a 256 "$_verify_helper" 2>/dev/null | cut -d' ' -f1)"
+  export SG_VERIFY_HELPER_SHA256
   # shellcheck source=/dev/null
   . "$_verify_helper" || { rm -f "$_verify_helper"; SG_VERIFY_LOCK_REASON="mainline host verification helper could not load"; defer_host_verification; exit 1; }
   rm -f "$_verify_helper"
@@ -957,6 +961,9 @@ fi
 # Missing/corrupt/lost custody stops; a failed or unknown attempt is consumed.
 # Metadata runs without the heavy host. Each new CLI has its own ordinary admission.
 PUBLISH_MAX="${SIGNALGRID_PUBLISH_MAX:-1}"
+# The two publication acquisitions wait a bounded time for ordinary admission, then defer as before.
+# Fixed, not configurable: every other host acquisition in this tick keeps its single attempt.
+PUBLISH_ADMISSION_WAIT_SEC=90
 _pub_state="${SIGNALGRID_BRAIN_PUBLICATION_STATE:-$HOME/.local/state/signalgrid/brain-publications}"
 brain_publication_step() {
   /usr/bin/python3 -I - "$1" "$_pub_state" "${2:-}" "$PUBLISH_MAX" "${REPO_ROOT:-.}/scripts/mac/lane-tick.sh" <<'PY_BRAIN_PUBLICATION'
@@ -982,8 +989,9 @@ PUBLISHER = Path('scripts/mac/brain-proposal-pr.mjs')
 TICK_SOURCE = Path(RAW_TICK).resolve(strict=True)
 SIGNALS = []
 PUBLICATION_TIMEOUT_SEC = 600
+HOST_HELPER = 'scripts/mac/host-verification-lock.sh'
 DEPENDENCIES = ('scripts/check-owner-gated-surfaces.mjs', 'scripts/lib/is-main.mjs',
-                'scripts/lib/scratch-git.mjs', '.githooks/pre-push')
+                'scripts/lib/scratch-git.mjs', '.githooks/pre-push', HOST_HELPER)
 
 class Refusal(Exception):
     pass
@@ -1105,6 +1113,12 @@ def read_json(path):
 def dependency_refs():
     source_repo = PUBLISHER.resolve(strict=True).parents[2]
     return {name: read_file(source_repo / name, private=False)[1] for name in DEPENDENCIES}
+
+def need_sourced_host_helper():
+    # The helper that granted this admission is the one bound with the other dependencies, byte for byte.
+    sourced = os.environ.get('SG_VERIFY_HELPER_SHA256')
+    need(isinstance(sourced, str) and re.fullmatch(r'[0-9a-f]{64}', sourced)
+         and sourced == dependency_refs()[HOST_HELPER]['sha256'])
 
 def need_source_pins(intent):
     # The publisher, this tick and every declared dependency are still the bytes the intent recorded.
@@ -1323,6 +1337,7 @@ def preparation_step(state, active, active_ref, source_ref, tick_ref):
         values, _ = prs(JOB)
         print('EXISTS_READBACK_ONLY' if head is not None or values else 'ABSENT')
     elif MODE == 'prepare-claim':
+        need_sourced_host_helper()
         need(JOB in preparation_jobs(active))
         publish_mirror, publish_attempts = custody(state, active_ref)
         need(not (publish_mirror / (JOB + '.json')).exists() and not (publish_attempts / JOB).exists()
@@ -1552,6 +1567,7 @@ try:
                 values, _ = prs(JOB)
                 print('EXISTS_READBACK_ONLY' if head is not None or values else 'ABSENT')
         elif MODE == 'claim':
+            need_sourced_host_helper()
             need(JOB in review_jobs(active))
             need(not (mirror / (JOB + '.json')).exists() and not (attempts / JOB).exists())
             attempt = attempts / JOB
@@ -1602,7 +1618,7 @@ if [ -f scripts/mac/brain-proposal-pr.mjs ] && command -v gh >/dev/null 2>&1 && 
           *) RESULT="$RESULT; brain publication unavailable"; break ;;
         esac
         if [ "$DRY" = "1" ]; then say "dry-run: would publish an eligible brain job"; continue; fi
-        if ! declare -F sg_host_verify_acquire >/dev/null || ! sg_host_verify_acquire "$HOME/Library/Caches/signalgrid/host-verification.lock"; then
+        if ! declare -F sg_host_verify_acquire_bounded >/dev/null || ! sg_host_verify_acquire_bounded "$HOME/Library/Caches/signalgrid/host-verification.lock" "$PUBLISH_ADMISSION_WAIT_SEC"; then
           RESULT="$RESULT; brain publication deferred: host busy or unavailable"
           break
         fi
@@ -1647,7 +1663,7 @@ if [ -f scripts/mac/brain-proposal-pr.mjs ] && command -v gh >/dev/null 2>&1 && 
           *) RESULT="$RESULT; privacy request preparation unavailable"; break ;;
         esac
         if [ "$DRY" = "1" ]; then say "dry-run: would prepare a private review request"; continue; fi
-        if ! declare -F sg_host_verify_acquire >/dev/null || ! sg_host_verify_acquire "$HOME/Library/Caches/signalgrid/host-verification.lock"; then
+        if ! declare -F sg_host_verify_acquire_bounded >/dev/null || ! sg_host_verify_acquire_bounded "$HOME/Library/Caches/signalgrid/host-verification.lock" "$PUBLISH_ADMISSION_WAIT_SEC"; then
           RESULT="$RESULT; privacy request preparation deferred: host busy or unavailable"
           break
         fi

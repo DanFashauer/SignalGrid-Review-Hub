@@ -32,14 +32,29 @@ sg_host_verify_acquire_bounded() {
   if [ "${#2}" -gt 2 ] || [ "$2" -gt "$SG_VERIFY_WAIT_MAX_SEC" ]; then
     SG_VERIFY_LOCK_REASON="invalid host admission bound"; return 2
   fi
-  _sg_wait_started=$SECONDS
+  # Elapsed time comes from the monotonic clock in whole milliseconds, never from Bash SECONDS:
+  # SECONDS ticks on wall-second boundaries, so two ticks can pass in barely over one second and a
+  # two-second bound could end after about one. If the clock cannot be read, the wait is not
+  # guessed: the caller gets the outcome of the single attempt already made.
+  _sg_wait_started=$(_sg_monotonic_ms) || _sg_wait_started=""
   while :; do
     sg_host_verify_acquire "$1" && return 0
     _sg_wait_rc=$?
     [ "$_sg_wait_rc" = "75" ] || return "$_sg_wait_rc"
-    [ $((SECONDS - _sg_wait_started)) -lt "$2" ] || return 75
-    sleep 1
+    [ "$((10#$2))" -gt 0 ] || return 75   # a zero bound is exactly the single attempt, by construction
+    [ -n "$_sg_wait_started" ] || return 75
+    _sg_wait_now=$(_sg_monotonic_ms) || return 75
+    # 10# keeps a validated bound such as 08 decimal. Both readings are truncated to whole
+    # milliseconds, so one extra millisecond is required before the bound counts as reached.
+    _sg_wait_left=$(( 10#$2 * 1000 + 1 - (_sg_wait_now - _sg_wait_started) ))
+    [ "$_sg_wait_left" -gt 0 ] || return 75
+    if [ "$_sg_wait_left" -ge 1000 ]; then sleep 1; else sleep "$(printf '0.%03d' "$_sg_wait_left")"; fi
   done
+}
+_sg_monotonic_ms() {
+  _sg_ms=$(perl -MTime::HiRes=clock_gettime,CLOCK_MONOTONIC -e 'printf "%d\n", clock_gettime(CLOCK_MONOTONIC) * 1000' 2>/dev/null) || return 1
+  case "$_sg_ms" in ''|*[!0-9]*) return 1 ;; esac
+  printf '%s\n' "$_sg_ms"
 }
 sg_host_verify_release() {
   if [ "${SG_VERIFY_LOCK_HELD:-0}" = "1" ]; then exec 9>&-; SG_VERIFY_LOCK_HELD=0; fi

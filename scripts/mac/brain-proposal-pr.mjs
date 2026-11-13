@@ -28,7 +28,7 @@
 // --publish uses ordinary Git hooks/network and the existing authenticated gh.
 
 import { spawnSync } from "node:child_process";
-import { accessSync, existsSync, mkdtempSync, readFileSync, readSync, rmSync, writeFileSync, chmodSync, fchmodSync, mkdirSync, lstatSync, readdirSync, openSync, closeSync, fstatSync, fsyncSync, constants, realpathSync } from "node:fs";
+import { accessSync, existsSync, symlinkSync, linkSync, mkdtempSync, readFileSync, readSync, rmSync, writeFileSync, chmodSync, fchmodSync, mkdirSync, lstatSync, readdirSync, openSync, closeSync, fstatSync, fsyncSync, constants, realpathSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { tmpdir, userInfo } from "node:os";
 import { dirname, join, resolve, isAbsolute, sep } from "node:path";
@@ -261,10 +261,44 @@ function sourceGitBytes(dir, args, extra = {}, gitDirectory = null) {
 function rejectExecutableLocalConfig(dir) {
   const raw = sourceGitBytes(dir, ["config", "--local", "--no-includes", "--null", "--list"]);
   const rows = raw.toString("utf8").split("\0").filter(Boolean);
+  let perWorktree = false;
   for (const row of rows) {
     const key = row.split("\n", 1)[0];
-    if (/^(?:filter\.|diff\..*\.(?:command|textconv)$|include(?:if)?\.|credential\.|protocol\.|url\..*\.(?:insteadof|pushinsteadof)$|remote\..*\.(?:promisor|partialclonefilter|uploadpack|receivepack|vcs)$|core\.(?:fsmonitor|sshcommand|gitproxy|askpass|alternaterefscommand)$|extensions\.(?:worktreeconfig|partialclone)$)/i.test(key)) refuse("worker Git execution configuration is refused");
+    // A --local listing cannot see a worktree's own config.worktree, so the extension is never accepted
+    // on trust: its presence, whatever its value, makes the physical file mandatory to validate.
+    if (/^extensions\.worktreeconfig$/i.test(key)) { perWorktree = true; continue; }
+    if (/^(?:filter\.|diff\..*\.(?:command|textconv)$|include(?:if)?\.|credential\.|protocol\.|url\..*\.(?:insteadof|pushinsteadof)$|remote\..*\.(?:promisor|partialclonefilter|uploadpack|receivepack|vcs)$|core\.(?:fsmonitor|sshcommand|gitproxy|askpass|alternaterefscommand)$|extensions\.partialclone$)/i.test(key)) refuse("worker Git execution configuration is refused");
   }
+  if (perWorktree) requireInertWorktreeConfig(dir);
+}
+
+// The ONE per-worktree setting an application is known to write, and its one value. Not a pattern:
+// any other key, value, duplicate, include or repository-interpretation setting refuses.
+const INERT_WORKTREE_CONFIG_ROW = "codex.localenvironmentconfigpath\n__none__";
+
+/** Validate the worktree's own PHYSICAL config.worktree; absent passes. Git reads the extension from
+ *  the repository's own config and ignores a command-line override of it, so nothing here relies on
+ *  one: the file is inspected, then parsed outside any repository with includes off. */
+function requireInertWorktreeConfig(dir) {
+  const admin = sourceGitBytes(dir, ["rev-parse", "--absolute-git-dir"]).toString("utf8").replace(/\n$/, "");
+  if (!isAbsolute(admin) || /[\r\n\0]/.test(admin)) refuse("worker Git administrative location is invalid");
+  const file = join(admin, "config.worktree");
+  const identity = (st) => [st.dev, st.ino, st.size, st.mtimeMs, st.ctimeMs, st.mode, st.uid, st.nlink].join(":");
+  let before;
+  try { before = lstatSync(file); }
+  catch (e) { if (e?.code === "ENOENT") return; refuse("worker per-worktree Git configuration cannot be inspected"); }
+  if (!before.isFile() || before.nlink !== 1 || before.uid !== process.getuid() || (before.mode & 0o022) || !(before.mode & 0o400) || before.size > 4096) refuse("worker per-worktree Git configuration is not a plain owned file");
+  const neutral = realpathSync(mkdtempSync(join(tmpdir(), "brain-wtc-")));
+  try {
+    const r = spawnSync(GIT_BINARY, ["config", "--file", file, "--no-includes", "--null", "--list"],
+      { cwd: neutral, env: gitEnv({ GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_NOSYSTEM: "1", GIT_ALLOW_PROTOCOL: "", GIT_CEILING_DIRECTORIES: dirname(neutral) }), timeout: 30000, killSignal: "SIGKILL", maxBuffer: 1 << 20 });
+    if (r.error || r.status !== 0 || r.signal) refuse("worker per-worktree Git configuration cannot be parsed");
+    let after = null;
+    try { after = lstatSync(file); } catch { /* judged below */ }
+    if (!after || identity(after) !== identity(before)) refuse("worker per-worktree Git configuration changed during inspection");
+    const found = r.stdout.toString("utf8").split("\0").filter(Boolean);
+    if (found.length !== 1 || found[0] !== INERT_WORKTREE_CONFIG_ROW) refuse("worker per-worktree Git configuration is not the one permitted inert setting");
+  } finally { rmSync(neutral, { recursive: true, force: true }); }
 }
 
 function privacyText(text) {
@@ -1592,6 +1626,121 @@ process.exit(finding ? 2 : 0);
     let promisorRefused = false;
     try { worktreePatch(wPromisor); } catch (e) { promisorRefused = e instanceof Refusal; }
     check("(security) worker promisor configuration refuses before upload-pack executes", promisorRefused && !existsSync(fetchMarker));
+
+    // Per-worktree configuration (extensions.worktreeConfig). A --local listing cannot see a worktree's own
+    // config.worktree, so the worker's PHYSICAL file is validated: absent passes, the one inert application key
+    // passes, everything else refuses. Real linked worktrees, real Git; nothing here relies on a command-line
+    // extension override, which Git ignores (it reads the extension from the repository's own config).
+    const wtcBase = brain("wtc-base", () => {});
+    scratchGitOk(wtcBase, ["config", "extensions.worktreeConfig", "true"]);
+    const wtcMarker = join(root, "wtc-program-ran"), wtcProgram = join(root, "wtc-program.cjs");
+    writeFileSync(wtcProgram, '#!' + process.execPath + '\nrequire("node:fs").writeFileSync(' + JSON.stringify(wtcMarker) + ',"ran");process.stdout.write(require("node:fs").readFileSync(0));\n', { flag: "wx", mode: 0o500 });
+    const wtcIncluded = join(root, "wtc-included.config");
+    writeFileSync(wtcIncluded, "[core]\n\tfsmonitor = " + wtcProgram + "\n", { flag: "wx", mode: 0o400 });
+    const WTC_INERT = "[codex]\n\tlocalEnvironmentConfigPath = __none__\n";
+    let wtcCount = 0;
+    const wtcLinked = (base, configure) => {
+      const w = join(root, "wtc-worker-" + (++wtcCount));
+      scratchGitOk(base, ["worktree", "add", "-q", "--detach", w, "HEAD"]);
+      writeFileSync(join(w, "docs/x.md"), "one\nPER WORKTREE\nthree\n");
+      const admin = scratchGitOk(w, ["rev-parse", "--absolute-git-dir"]).trim();
+      configure(join(admin, "config.worktree"), admin, w);
+      return w;
+    };
+    const wtcOutcome = (w) => {
+      rmSync(wtcMarker, { force: true });
+      try { const { patch, files } = worktreePatch(w); return { patch, files, ran: existsSync(wtcMarker) }; }
+      catch (e) { if (!(e instanceof Refusal)) throw e; return { refused: e.message, ran: existsSync(wtcMarker) }; }
+    };
+    const wtcExported = (o) => !o.refused && !o.ran && o.patch.includes("PER WORKTREE") && JSON.stringify(o.files) === '["docs/x.md"]';
+
+    // Accepted: no per-worktree file at all, and the one inert application key.
+    check("(worktree config) extension enabled and no per-worktree file exports the ordinary patch",
+      wtcExported(wtcOutcome(wtcLinked(wtcBase, () => {}))));
+    let wtcInertFile = null, wtcInertAdmin = null;
+    const wtcInert = wtcLinked(wtcBase, (file, admin) => { wtcInertFile = file; wtcInertAdmin = admin; writeFileSync(file, WTC_INERT, { flag: "wx", mode: 0o600 }); });
+    const wtcBefore = { config: readFileSync(wtcInertFile), index: readFileSync(join(wtcInertAdmin, "index")), status: scratchGitOk(wtcInert, ["status", "--porcelain"]) };
+    check("(worktree config) the one inert application key exports the ordinary patch", wtcExported(wtcOutcome(wtcInert)));
+    check("(worktree config) export leaves the per-worktree file, the worker index and its status byte-identical",
+      readFileSync(wtcInertFile).equals(wtcBefore.config) && readFileSync(join(wtcInertAdmin, "index")).equals(wtcBefore.index) &&
+      scratchGitOk(wtcInert, ["status", "--porcelain"]) === wtcBefore.status);
+    const wtcInertAgain = wtcOutcome(wtcInert);
+    check("(worktree config) the inert key never enters the exported patch and a second export is identical",
+      wtcExported(wtcInertAgain) && !wtcInertAgain.patch.includes("localEnvironmentConfigPath") && wtcInertAgain.patch === wtcOutcome(wtcInert).patch);
+
+    // Refused: every other key, value, duplicate or indirection in the physical per-worktree file. No program runs.
+    const wtcRefusedCases = {
+      "include.path": "[include]\n\tpath = " + wtcIncluded + "\n",
+      "includeIf": '[includeIf "gitdir:/"]\n\tpath = ' + wtcIncluded + "\n",
+      "clean filter": '[filter "late"]\n\tclean = ' + wtcProgram + "\n",
+      "smudge filter": '[filter "late"]\n\tsmudge = ' + wtcProgram + "\n",
+      "text conversion": '[diff "late"]\n\ttextconv = ' + wtcProgram + "\n",
+      "external diff": '[diff "late"]\n\tcommand = ' + wtcProgram + "\n",
+      "fsmonitor": "[core]\n\tfsmonitor = " + wtcProgram + "\n",
+      "ssh command": "[core]\n\tsshCommand = " + wtcProgram + "\n",
+      "hooks path": "[core]\n\thooksPath = " + root + "\n",
+      "attributes file": "[core]\n\tattributesFile = " + wtcIncluded + "\n",
+      "core.worktree": "[core]\n\tworktree = " + root + "\n",
+      "core.bare": "[core]\n\tbare = true\n",
+      "sparse checkout": "[core]\n\tsparseCheckout = true\n",
+      "repository format": "[core]\n\trepositoryformatversion = 1\n",
+      "partial clone extension": "[extensions]\n\tpartialClone = origin\n",
+      "credential helper": "[credential]\n\thelper = " + wtcProgram + "\n",
+      "alias": "[alias]\n\tx = !" + wtcProgram + "\n",
+      "unknown ordinary key": "[user]\n\tname = Synthetic Worker\n",
+      "other application key": "[codex]\n\tother = 1\n",
+      "inert key plus another key": WTC_INERT + "[user]\n\tname = Synthetic Worker\n",
+      "inert key with another value": "[codex]\n\tlocalEnvironmentConfigPath = /etc/passwd\n",
+      "inert key with an empty value": "[codex]\n\tlocalEnvironmentConfigPath =\n",
+      "inert key twice": WTC_INERT + WTC_INERT,
+      "inert key twice with a late override": WTC_INERT + "[codex]\n\tlocalEnvironmentConfigPath = /etc/passwd\n",
+      "unparseable file": "[codex\n\tlocalEnvironmentConfigPath = __none__\n",
+      "empty file": "",
+    };
+    for (const [label, content] of Object.entries(wtcRefusedCases)) {
+      const o = wtcOutcome(wtcLinked(wtcBase, (file) => writeFileSync(file, content, { flag: "wx", mode: 0o600 })));
+      check("(worktree config) per-worktree " + label + " is refused and nothing executes", typeof o.refused === "string" && !o.ran);
+    }
+    const wtcShape = {
+      "symbolic link to an inert file": (file) => { const real = join(root, "wtc-inert-target"); writeFileSync(real, WTC_INERT, { mode: 0o600 }); symlinkSync(real, file); },
+      "directory": (file) => mkdirSync(file, { mode: 0o700 }),
+      "unreadable file": (file) => { writeFileSync(file, WTC_INERT, { flag: "wx", mode: 0o600 }); chmodSync(file, 0o000); },
+      "group-writable file": (file) => { writeFileSync(file, WTC_INERT, { flag: "wx", mode: 0o600 }); chmodSync(file, 0o660); },
+      "second hard link": (file) => { writeFileSync(file, WTC_INERT, { flag: "wx", mode: 0o600 }); linkSync(file, join(root, "wtc-second-link-" + wtcCount)); },
+    };
+    for (const [label, shape] of Object.entries(wtcShape)) {
+      const o = wtcOutcome(wtcLinked(wtcBase, shape));
+      check("(worktree config) per-worktree " + label + " is refused and nothing executes", typeof o.refused === "string" && !o.ran);
+    }
+
+    // Common executable configuration stays refused, with or without an inert per-worktree file.
+    const wtcCommon = brain("wtc-common", () => {});
+    scratchGitOk(wtcCommon, ["config", "extensions.worktreeConfig", "true"]);
+    scratchGitOk(wtcCommon, ["config", "filter.late.clean", wtcProgram]);
+    const wtcCommonOutcome = wtcOutcome(wtcLinked(wtcCommon, (file) => writeFileSync(file, WTC_INERT, { flag: "wx", mode: 0o600 })));
+    check("(worktree config) dangerous COMMON configuration is still refused beside an inert per-worktree file", typeof wtcCommonOutcome.refused === "string" && !wtcCommonOutcome.ran);
+    const wtcPartial = brain("wtc-partial", () => {});
+    scratchGitOk(wtcPartial, ["config", "extensions.worktreeConfig", "true"]);
+    scratchGitOk(wtcPartial, ["config", "extensions.partialClone", "origin"]);
+    check("(worktree config) the partial-clone extension in COMMON configuration is still refused",
+      typeof wtcOutcome(wtcLinked(wtcPartial, () => {})).refused === "string");
+
+    // The main worktree of an extension-enabled repository: same rule on its own physical file.
+    let wtcMainThrew = false;
+    try { rejectExecutableLocalConfig(wtcBase); } catch (e) { if (!(e instanceof Refusal)) throw e; wtcMainThrew = true; }
+    check("(worktree config) an extension-enabled main worktree with no per-worktree file passes the configuration check", !wtcMainThrew);
+    const wtcMain = brain("wtc-main", () => {});
+    scratchGitOk(wtcMain, ["config", "extensions.worktreeConfig", "true"]);
+    writeFileSync(join(wtcMain, ".git", "config.worktree"), "[core]\n\tfsmonitor = " + wtcProgram + "\n", { flag: "wx", mode: 0o600 });
+    let wtcMainRefused = false;
+    try { rejectExecutableLocalConfig(wtcMain); } catch (e) { if (!(e instanceof Refusal)) throw e; wtcMainRefused = true; }
+    check("(worktree config) a dangerous per-worktree file on the main worktree is refused", wtcMainRefused);
+
+    // Counter-control: Git itself ignores a command-line extension override, so the publisher must not rely on one.
+    const wtcProbe = wtcLinked(wtcBase, (file) => writeFileSync(file, "[synthetic]\n\tprobe = from-worktree\n", { flag: "wx", mode: 0o600 }));
+    check("(worktree config) Git still reads a per-worktree file when the extension is overridden on the command line",
+      scratchGitOk(wtcProbe, ["-c", "extensions.worktreeConfig=false", "config", "--get", "synthetic.probe"]).trim() === "from-worktree");
+    rmSync(wtcMarker, { force: true });
     rmSync(fetchMarker, { force: true });
     const priorLazy = process.env.GIT_NO_LAZY_FETCH;
     process.env.GIT_NO_LAZY_FETCH = "0";

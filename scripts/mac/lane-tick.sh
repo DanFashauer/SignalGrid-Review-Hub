@@ -1166,6 +1166,34 @@ def custody(state, active_ref):
         need(anchor.get(name) == {'path': str(path), 'dev': st.st_dev, 'ino': st.st_ino})
     return mirror, attempts
 
+def need_inert_worktree_config(prefix, env):
+    # The canonical checkout's own PHYSICAL config.worktree; absent passes. Git reads the extension
+    # from the repository's own configuration and ignores a command-line override of it, so none is
+    # used: the file is inspected, then parsed outside any repository with includes disabled, and
+    # must hold exactly the one inert application setting. Any other shape or content refuses.
+    # An absent file passes; an EMPTY file refuses. Scope: the canonical checkout only, whose
+    # administrative directory is a real .git directory under the working directory. A linked
+    # worktree (.git is a file) with the extension on refuses; that case is not generalized here.
+    try:
+        admin = Path.cwd().resolve() / '.git'
+        directory(admin, private=False)
+        path = admin / 'config.worktree'
+        try:
+            before = path.lstat()
+        except FileNotFoundError:
+            return
+        mode = stat.S_IMODE(before.st_mode)
+        need(stat.S_ISREG(before.st_mode) and before.st_nlink == 1 and before.st_uid == UID
+             and not (mode & 0o022) and bool(mode & 0o400) and before.st_size <= 4096)
+        result = subprocess.run(prefix + ['config', '--file', str(path), '--no-includes', '--null', '--list'],
+                                cwd='/', env=env, stdin=subprocess.DEVNULL, capture_output=True, timeout=30)
+        after = path.lstat()
+    except (OSError, subprocess.SubprocessError):
+        raise Refusal()
+    identity = lambda st: (st.st_dev, st.st_ino, st.st_size, st.st_mtime_ns, st.st_ctime_ns, st.st_mode, st.st_uid, st.st_nlink)
+    need(result.returncode == 0 and identity(after) == identity(before)
+         and result.stdout == b'codex.localenvironmentconfigpath\n__none__\0')
+
 def git(*args):
     binary = trusted_client('git')
     prefix = [binary, '--no-replace-objects', '-c', 'core.fsmonitor=false', '-c', 'core.hooksPath=/dev/null']
@@ -1176,14 +1204,22 @@ def git(*args):
     need(result.returncode == 0 and len(result.stdout) <= 1048576)
     rows = result.stdout.decode('utf-8', errors='strict').split('\0')
     origin = []
+    per_worktree = False
     for row in filter(None, rows):
         key, _, value = row.partition('\n')
-        need(not re.search(r'^(?:filter\.|diff\..*\.(?:command|textconv)$|include(?:if)?\.|credential\.|protocol\.|url\..*\.(?:insteadof|pushinsteadof)$|remote\..*\.(?:promisor|partialclonefilter|uploadpack|receivepack|vcs)$|core\.(?:fsmonitor|sshcommand|gitproxy|askpass|alternaterefscommand)$|extensions\.(?:worktreeconfig|partialclone)$)', key, re.I))
+        # A local listing cannot see config.worktree, so the extension is never accepted on trust:
+        # its presence, whatever its value, makes the physical file mandatory to validate below.
+        if key.lower() == 'extensions.worktreeconfig':
+            per_worktree = True
+            continue
+        need(not re.search(r'^(?:filter\.|diff\..*\.(?:command|textconv)$|include(?:if)?\.|credential\.|protocol\.|url\..*\.(?:insteadof|pushinsteadof)$|remote\..*\.(?:promisor|partialclonefilter|uploadpack|receivepack|vcs)$|core\.(?:fsmonitor|sshcommand|gitproxy|askpass|alternaterefscommand)$|extensions\.partialclone$)', key, re.I))
         if key.lower() == 'remote.origin.url':
             origin.append(value)
         if key.lower() == 'remote.origin.pushurl':
             need(value == 'git@github.com:' + REPO + '.git')
     need(origin == ['git@github.com:' + REPO + '.git'])
+    if per_worktree:
+        need_inert_worktree_config(prefix, config_env)
     env = client_env()
     env['GIT_ALLOW_PROTOCOL'] = 'ssh'
     for options in (['--all'], ['--push', '--all']):
@@ -1235,6 +1271,25 @@ def preparation_intent(state, active, job, active_ref):
          and intent.get('job_id') == job and intent.get('activation_ref', {}).get('sha256') == active_ref['sha256']
          and intent.get('attempt_identity') == {'dev': st.st_dev, 'ino': st.st_ino})
     return preparations / job, intent
+
+def consumed_claim(mirror_file, attempt, job, *, preparation):
+    # PREFLIGHT ONLY: is this job's existing claim coherent custody, whichever activation bytes it
+    # was made under? A coherent claim is consumed and passed over, never run again. This grants
+    # nothing: claim, run, finish and handoff still load an intent only through preparation_intent /
+    # job_intent, which require the CURRENT activation. Lost, partial, mismatched or malformed
+    # custody still refuses here, so the caller reports it incomplete.
+    st = directory(attempt)
+    item, _ = read_json(mirror_file)
+    intent, _ = read_json(attempt / 'intent.json')
+    need(isinstance(intent, dict) and item == intent and intent.get('job_id') == job)
+    ref = intent.get('activation_ref')
+    need(isinstance(ref, dict) and isinstance(ref.get('sha256'), str)
+         and re.fullmatch(r'[0-9a-f]{64}', ref['sha256']) is not None)
+    if preparation:
+        need(intent.get('format') == 'signalgrid-brain-privacy-preparation-intent/v1'
+             and intent.get('attempt_identity') == {'dev': st.st_dev, 'ino': st.st_ino})
+    else:
+        need(intent.get('format') == 'signalgrid-brain-publication-intent/v1')
 
 def strict_prepared_json(text):
     def pairs(rows):
@@ -1324,7 +1379,7 @@ def preparation_step(state, active, active_ref, source_ref, tick_ref):
     if MODE == 'prepare-preflight':
         if (mirror / (JOB + '.json')).exists() or (preparations / JOB).exists():
             try:
-                preparation_intent(state, active, JOB, active_ref)
+                consumed_claim(mirror / (JOB + '.json'), preparations / JOB, JOB, preparation=True)
             except (OSError, Refusal, ValueError, TypeError):
                 print('CUSTODY_INCOMPLETE_READBACK_ONLY')
             else:
@@ -1332,7 +1387,14 @@ def preparation_step(state, active, active_ref, source_ref, tick_ref):
             return
         publish_mirror, publish_attempts = custody(state, active_ref)
         if (publish_mirror / (JOB + '.json')).exists() or (publish_attempts / JOB).exists():
-            print('CONSUMED')
+            # The same preflight-only reader as the publication side: damaged publication
+            # custody is reported here too, never passed over as if it were a clean claim.
+            try:
+                consumed_claim(publish_mirror / (JOB + '.json'), publish_attempts / JOB, JOB, preparation=False)
+            except (OSError, Refusal, ValueError, TypeError):
+                print('CUSTODY_INCOMPLETE_READBACK_ONLY')
+            else:
+                print('CONSUMED')
             return
         need(JOB in preparation_jobs(active))
         head, _ = remote_branch(JOB)
@@ -1555,7 +1617,7 @@ try:
         if MODE == 'preflight':
             if (mirror / (JOB + '.json')).exists() or (attempts / JOB).exists():
                 try:
-                    job_intent(state, JOB, active_ref)
+                    consumed_claim(mirror / (JOB + '.json'), attempts / JOB, JOB, preparation=False)
                 except (OSError, Refusal, ValueError, TypeError):
                     print('CUSTODY_INCOMPLETE_READBACK_ONLY')
                 else:

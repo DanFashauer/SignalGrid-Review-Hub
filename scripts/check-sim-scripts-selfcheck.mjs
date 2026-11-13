@@ -892,7 +892,9 @@ const publicationHarness = join(MAC_DIR, "test_tick_auto_publish.py");
 const publicationTests = spawnSync("python3", ["-B", publicationHarness], {
   cwd: repo,
   env: { ...process.env, PYTHONDONTWRITEBYTECODE: "1", SIGNALGRID_AUTOPUBLISH_TEST_REPO: repo },
-  encoding: "utf8", timeout: 120000, maxBuffer: 8 << 20,
+  // A kill limit for this deterministic child, not a pass condition. The 83-method suite measured
+  // about 119 to 120 s natively on the Mac (2026-11-13), which left no headroom under 120 s.
+  encoding: "utf8", timeout: 300000, maxBuffer: 8 << 20,
 });
 const publicationRaw = (publicationTests.stdout ?? "") + (publicationTests.stderr ?? "");
 const publicationCount = [...publicationRaw.matchAll(/^Ran (\d+) tests? in [0-9.]+s$/gm)];

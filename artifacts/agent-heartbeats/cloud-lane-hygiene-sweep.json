@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-11-12T10:12:10.712Z",
-  "result": "09:41Z fire (11-12): keepalive (prior heartbeat 2026-11-11T09:50Z). Freed: 200 top-level scratchpad files older than 24h removed (8.6 MB); pnpm store prune removed 60 files / 1 package. Free space 21G (df /: 18G used, 47%). Scratchpad 4.8G, mostly live worktrees and the validation clones Root asked to retain. No docker daemon and no /var/lib/docker cache present. No owner escalation (well above 1GB)."
+  "firedAt": "2026-11-13T10:13:48.313Z",
+  "result": "Keepalive, sweep fire of 2026-11-13T09:41Z, written 10:13Z. Disk on / at the fire: 29G used, 11G free. Cleanup was deferred about 15 minutes until a running validation closed, because it was using the package store and the scratch directory; then pnpm store prune removed 1 package and 60 files, free space unchanged at 11G. Scratch files older than a day were NOT deleted: they are validation logs other lanes asked to keep read-only. No docker layer cache present. Free space is above the 1G escalation line; no owner message."
 }

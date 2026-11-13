@@ -40,7 +40,7 @@ E2E_STANDALONE_TRANSPORT=http pnpm run test:e2e
 ```
 
 This mode serves only the checked-in `docs/evidence-coverage.html` bytes from an
-ephemeral server bound to `127.0.0.1`. It preserves the six page cases and their
+ephemeral server bound to `127.0.0.1`. It preserves the existing page cases and their
 egress assertions; other paths, methods and browser resource requests are
 refused. It checks rendering and isolation over HTTP. It does not establish
 file-origin execution or remove the browser's file policy. Use

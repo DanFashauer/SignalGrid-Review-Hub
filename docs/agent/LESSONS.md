@@ -630,3 +630,27 @@ block; a stage run on the wrong tier is a lesson here.
 - **evidence:** Readback showed commit 101615b648ba38b3581dd3a63dfb0f795b79d342 on the draft PR but retained the old title and body. The GitHub `update_pull_request` connector then completed the prepared metadata update; readback confirmed the new title and validation sections.
 - **landing:** recorded only — use the supported metadata API and read back uncertain operations; do not mistake a successful source push for a successful PR description update. No source or validation policy changed.
 - **status:** landed
+
+### L71 — Count-free browser documentation also applies inside transport notes
+- **date:** 2026-11-13
+- **lane:** cloud
+- **incident:** PR #2045's HTTP transport note reintroduced a typed live browser-case count in the E2E README. Linux validation and Mac slice 4 both failed the unchanged STATUS.md figure guard.
+- **evidence:** Hosted Mac slice 4 stopped at `STATUS.md figures still describe the repo`; the guard identified the README wording. Replacing the typed count with "existing page cases" makes `node scripts/check-status-figures.mjs` pass without weakening its count-free rule or changing any browser cases.
+- **landing:** pending — the wording correction in `scripts/src/e2e/README.md` is included in the existing draft #2045. The published #2037 worker cooldown changes are integrated serially with the retained zombie-observer assertions; their combined self-test passes 322/322. Current-head hosted checks and full qualification still govern delivery.
+- **status:** pending
+
+### L72 — A completed primary gate does not finish pending estate checks
+- **date:** 2026-11-13
+- **lane:** cloud
+- **incident:** The wired estate classifier could classify a green-primary PR as land-ready while its Mac aggregate was pending, or schedule an unnecessary fix for blocked/unstable mergeability. Malformed pending-check values could also reach land-ready.
+- **evidence:** Expanded regressions failed 79/93 before the fix, including land-ready/fix/fix instead of wait. The corrected classifier passes 93/93; independent classification, work-queue projection and executor controls reproduced the old behavior when the new guard was removed. Pending-only execution performs no forge or ledger calls.
+- **landing:** pending — `scripts/mac/estate-queue.mjs` validates named pending checks and waits before fallback admission, while preserving actual conflicts, failed primary gates and unresolved findings. The isolated source handoff is coordinated on #439; protected qualification, landing and installed consumer behavior remain unverified.
+- **status:** pending
+
+### L73 — A helper self-test needs an actual preflight and CI registration
+- **date:** 2026-11-13
+- **lane:** cloud
+- **incident:** The estate queue's existing self-test was not invoked by preflight or CI. The generic gate self-test registry only enumerates check scripts, so it did not discover this Mac helper.
+- **evidence:** Registering only the preflight command failed parity with one unwired command. Adding the matching existing validation-job step passes parity with zero unwired commands and passes CI/preflight proof synchronization. The actual emitted non-heavy, non-native command passes 93/93 under Node 22.
+- **landing:** pending — `scripts/preflight.mjs` and `.github/workflows/review-hub-ci.yml` each invoke `node scripts/mac/estate-queue.mjs --self-test` once. No new controller, job, host or provider call is introduced. Same-head full qualification and current CI remain required.
+- **status:** pending

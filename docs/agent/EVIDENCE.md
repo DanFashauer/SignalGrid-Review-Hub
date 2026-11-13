@@ -5488,3 +5488,28 @@ Verdict: #1903 is on `SignalGrid_Alpha` at e39becaea0eac9fd0d5268f9f095b690325e9
 **Not fixed, and where it went.** Two Codex P2 findings were resolved on the PR as deferred, not fixed: the group-recovery control in `scripts/check-lane-delivery.mjs` can hold on a host whose PID 1 does not reap a killed fixture survivor; and `scripts/mac/build-tick.sh` can queue a second uncertainty hand for a build hand that was already submitted. Both were mailed to the Mac lane (message `cloud-1903-landed-e39becae-pull-before-the-next-`).
 
 **Not verified.** Whether the Mac's launchd tick now writes `artifacts/agent-heartbeats/mac-lane-tick.json`: at the landing, mainline still carried the 2026-10-24T07:30Z file. Only a tick on the Mac after it pulls can show that.
+
+## 2026-11-13 — #2014 and #2022 landed under DR-037; the first fresh-code proof after them failed
+
+**What.** Two reviewed PRs on the unattended publication path. #2014 "tick publication: bounded host admission; CI: required checks in three shards" (branch codex/automation-delivery-bottlenecks-20261113) gave the tick's two publication admissions a bounded 90-second wait where they previously made one attempt, and split the required CI step into three shards. #2022 "Fix unattended publication and host wait timing" (branch mac/publication-config-and-old-claims) made the publisher and the tick validate the checkout's physical per-worktree Git configuration file where they previously refused the extension outright, made the two tick preflights pass over a coherent consumed claim made under an earlier activation where they previously stopped the loop, moved the bounded host wait to a monotonic clock, and raised the tick-harness child kill limit in `scripts/check-sim-scripts-selfcheck.mjs` from 120 s to 300 s.
+
+**Authority.** DR-037. Both were merged by the Codex lane after its own source review; neither was merged by the owner or by the Mac lane, which wrote #2022 and part of #2014.
+
+**Landed.** #2014 merged 2026-11-13T08:02:57Z: exact head `100bf7829edf7745953ecb5a84328fb56d81bdac` → mainline `50978729d1fd32995039ba70b10e6d4e44c23148`. #2022 merged 2026-11-13T10:20:06Z: exact head `9685381a1835781cbed841de4d8b7f08e5ff1fda` → mainline `efec01f31cd21a778e25dcd289298667128216eb`.
+
+Command: `gh pr view <n> --json number,state,mergedAt,mergeCommit,headRefOid`, `git ls-remote origin SignalGrid_Alpha` and `git merge-base --is-ancestor`, run on the Mac at 2026-11-13T11:30Z.
+Output, verbatim:
+```
+#2014 MERGED mergedAt=2026-11-13T08:02:57Z merge=50978729d1fd32995039ba70b10e6d4e44c23148 head=100bf7829edf7745953ecb5a84328fb56d81bdac
+#2022 MERGED mergedAt=2026-11-13T10:20:06Z merge=efec01f31cd21a778e25dcd289298667128216eb head=9685381a1835781cbed841de4d8b7f08e5ff1fda
+ccb6c60514ed406ffc70965b2505c8971502bca7	refs/heads/SignalGrid_Alpha
+50978729 is an ancestor of ccb6c60514ed406ffc70965b2505c8971502bca7
+efec01f3 is an ancestor of ccb6c60514ed406ffc70965b2505c8971502bca7
+```
+Verdict: #2014 and #2022 are on `SignalGrid_Alpha`, at 50978729d1fd32995039ba70b10e6d4e44c23148 and efec01f31cd21a778e25dcd289298667128216eb.
+
+**Validation of #2022's head before it was pushed, as reported on the PR.** Mac lane, tick harness, one run each under the host lock: 81 methods with 8 assertion failures before the fix; 2 methods with 11 subcase failures for two gaps found in review; 83 of 83 after. Codex lane, native final head: publisher self-test 185 of 185, tick harness 84 of 84 in 122.848 s. Cloud lane, Linux final head: preflight in eight slices, all 436 steps accounted for exactly once (433 ok, 2 database proofs self-skipped, 1 red-streaks check unverified); breadth 58 proofs passed. The previous head of that branch FAILED both runs and is kept as failed: natively on a timing test of the bounded host wait (1.04 s elapsed against a required 2.0 s, a real defect in the helper landed by #2014), and on Linux on the 120 s kill limit. Hosted checks on the merged head: 24 successful, none failed, at 2026-11-13T10:18Z.
+
+**Not achieved.** No brain job has been built, privacy-reviewed and published without a person. After #2022 the Codex lane reported the refreshed publication sources installed and their activation, custody and consumed-claim readers qualified on the Mac (10:29:33Z); that qualifies the readers, not unattended publication. The first fresh local code build after the refresh ended FAILED at its action limit with one supervisor-applied change that remained unaccepted; no test run, no review status and no publication occurred. An earlier candidate task stopped at intake on the combined required-source size bound and produced no build. The Codex lane later reported a bounded runtime repair for that build step installed and qualified at 11:28:33Z (332 candidate and 332 installed cases passed, 80 source pins matched); that is its report of the repair, not a successful build, and unattended code publication remains unproved.
+
+**Not verified.** The two self-skipped database proofs and the red-streaks check on the Linux run. Whether the Mac tick's publication step now proceeds past an old consumed claim in a real tick, as opposed to the fixture harness. The build-start wait measured on 2026-11-13 over 53 build jobs (median 1109 s queued to claimed) has a measured size and an unconfirmed cause. No live-evidence re-mint was run for this entry; `artifacts/live-evidence/mac-run.json` is unchanged.

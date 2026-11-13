@@ -69,7 +69,8 @@ export function evaluateNetwork(
     if (
       containment &&
       containment.expected.length > 0 &&
-      signal.segment !== null &&
+      // No separate null test: includesSegment matches nothing for a null segment, so the last
+      // conjunct is false and an unreported segment falls through to SEGMENT_UNREPORTED_UNDER_POLICY.
       !includesSegment(containment.expected, signal.segment) &&
       includesSegment(containment.restricted ?? [], signal.segment)
     ) {
@@ -109,13 +110,10 @@ export function evaluateNetwork(
       // an unreported segment is not evidence of an expected one.
       return v("network_unknown", "SEGMENT_UNREPORTED_UNDER_POLICY", "step_up", loc);
     }
+    // A restricted segment (management / security / OT: lateral movement into the control plane,
+    // not a misconfiguration) was already answered `restrict` above, before the stale return, under
+    // the identical condition. Only an ordinary unexpected segment can reach this point.
     const expected = includesSegment(policy.expected, signal.segment);
-    if (!expected && includesSegment(policy.restricted ?? [], signal.segment)) {
-      // Reached a management / security / OT segment it has no business on. This is
-      // lateral movement into the control plane, not a misconfiguration, so it
-      // outranks an ordinary unexpected segment.
-      return v("on_unexpected_segment", "SEGMENT_RESTRICTED", "restrict", loc);
-    }
     if (!expected) {
       return v("on_unexpected_segment", "SEGMENT_UNEXPECTED", "step_up", loc);
     }

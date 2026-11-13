@@ -26,7 +26,8 @@
 //   - No `model`, no `mcp-servers`: either would grant something the roster never granted.
 //   - Only stable roster fields are rendered (id, title, charter, trigger, surface, executor),
 //     never `nextAction`/`nextActionDate`, which move weekly and would make every profile stale.
-import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { isMainModule } from "./lib/is-main.mjs";
@@ -128,10 +129,17 @@ export function diffProfiles(expected, actual) {
   return problems;
 }
 
-function readActual(dir) {
+/** EVERY entry in the folder, not only `*.agent.md`: GitHub also reads plain `<name>.md` as a
+ *  profile (and grants all tools when it has no `tools`), so anything else here must surface as
+ *  an extra profile rather than be silently skipped. A non-file entry is recorded empty, which
+ *  fails the tools check as well. */
+export function readActual(dir) {
   const m = new Map();
   if (!existsSync(dir)) return m;
-  for (const f of readdirSync(dir)) if (f.endsWith(".agent.md")) m.set(f, readFileSync(join(dir, f), "utf8"));
+  for (const f of readdirSync(dir)) {
+    const p = join(dir, f);
+    m.set(f, lstatSync(p).isFile() ? readFileSync(p, "utf8") : "");
+  }
   return m;
 }
 
@@ -167,6 +175,15 @@ export function profileSelfTestChecks() {
   checks.push(["a profile without a tools line is refused (GitHub would grant all tools)", diffProfiles(exp, noTools).some((p) => /no tools line/.test(p))]);
   const typo = new Map(exp); typo.set("r3.agent.md", exp.get("r3.agent.md").replace('"edit"]', '"edit", "execute"]'));
   checks.push(["a hand-added execute grant is refused as an undocumented tool name", diffProfiles(exp, typo).some((p) => /undocumented tool name: execute/.test(p))]);
+  // The real folder reader, on a disposable folder: a plain .md profile with no tools is caught.
+  const tmp = mkdtempSync(join(tmpdir(), "agent-profiles-"));
+  try {
+    for (const [f, body] of exp) writeFileSync(join(tmp, f), body);
+    writeFileSync(join(tmp, "unrestricted.md"), "---\nname: unrestricted\ndescription: x\n---\n");
+    const found = diffProfiles(exp, readActual(tmp));
+    checks.push(["a plain .md profile in the folder is reported extra and tool-less, never skipped",
+      found.includes(`extra ${OUT}/unrestricted.md (no roster role)`) && found.some((p) => /unrestricted\.md has no tools line/.test(p))]);
+  } finally { rmSync(tmp, { recursive: true, force: true }); }
   let threw = false; try { toolsFor("agent:x", ["Read", "WebFetch"]); } catch { threw = true; }
   checks.push(["a local tool with no GitHub alias refuses instead of guessing", threw]);
   threw = false; try { expectedProfiles({ roles: [role({ executor: "agent:none" })] }, () => null); } catch { threw = true; }

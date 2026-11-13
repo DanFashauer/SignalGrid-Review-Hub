@@ -64,7 +64,7 @@ export function evaluateNetwork(
     // A device on a RESTRICTED segment is contained whatever the age of its auth. This check used to come only
     // after the stale return below, so a device that reached the management VLAN with a stale, garbled or
     // offset-less `lastAuthAt` stepped up instead of being restricted: the weaker answer won because the auth's
-    // age was looked at first (review F2, 2026-11-07). Same condition as the restricted branch further down.
+    // age was looked at first (review F2, 2026-11-07). It is now the only restricted-segment check.
     const containment = options.segmentPolicy;
     if (
       containment &&

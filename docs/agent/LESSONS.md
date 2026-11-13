@@ -622,3 +622,11 @@ block; a stage run on the wrong tier is a lesson here.
 - **evidence:** The failures concern recovery after an original tick child exits, cleanup of a timed-out fetch helper, and cleanup of a timed-out readback helper. The reported original-tick sleep process was independently observed in state Z with PPID 1. That supports a zombie-observation hypothesis for the recovery case; it does not establish the cause of all three failures.
 - **landing:** recorded only — the HTTP follow-up leaves `scripts/check-lane-delivery.mjs`, `scripts/lane-deliver.mjs` and `scripts/mac/lane-tick.sh` unchanged from 741f1c6e5. The PR #2045 coordination note assigns the separate lane-readback repair to Cloud Claude. These observations do not establish that this is the same already-known race. Preserve source ownership, report the three cases and keep the PR draft; a passing browser stage is not a passing full preflight.
 - **status:** landed
+
+### L70 — Use the supported PR metadata route after a classic-project query fails
+- **date:** 2026-11-13
+- **lane:** cloud
+- **incident:** After the HTTP follow-up source push succeeded, `gh pr edit` failed while querying the deprecated `repository.pullRequest.projectCards` field, before updating the title or body.
+- **evidence:** Readback showed commit 101615b648ba38b3581dd3a63dfb0f795b79d342 on the draft PR but retained the old title and body. The GitHub `update_pull_request` connector then completed the prepared metadata update; readback confirmed the new title and validation sections.
+- **landing:** recorded only — use the supported metadata API and read back uncertain operations; do not mistake a successful source push for a successful PR description update. No source or validation policy changed.
+- **status:** landed

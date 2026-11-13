@@ -26,6 +26,7 @@ START = "# ── d3."
 END = "# ── e. heartbeat"
 BOUNDARY_HEAD = "1234567890abcdef1234567890abcdef12345678"
 NOT_BEFORE = "2026-11-06T16:40:00Z"
+HOST_HELPER = "scripts/mac/host-verification-lock.sh"
 
 MOCK_NODE = r'''#!/usr/bin/env python3
 import json, os, sys
@@ -36,7 +37,10 @@ cfg = json.loads((root/"fixture.json").read_text())
 with (root/"client-context.jsonl").open("a") as f:
     keys=["GIT_SSH_COMMAND","BASH_ENV","ENV","SHELLOPTS","BASHOPTS"]+[k for k in os.environ if k.startswith("BASH_FUNC_")]
     f.write(json.dumps({"client":"node","argv":a,"env":{k:os.environ.get(k) for k in keys}})+"\n")
-if "--list-review" in a:
+if "--list-review" in a or "--list-prepare" in a:
+    if "--list-prepare" in a:
+        print("\n".join(cfg.get("prepare_jobs", [])))
+        sys.exit(0)
     counter=root/"listing-count"
     count=int(counter.read_text())+1 if counter.exists() else 1
     counter.write_text(str(count))
@@ -47,6 +51,47 @@ if "--list-review" in a:
         print("PRIVATE_SYNTHETIC /Users/fixture/private-db", file=sys.stderr)
         sys.exit(42)
     print("\n".join([] if cfg.get("stale_on_preflight") and count>1 else cfg.get("jobs", ["freshA"])))
+    sys.exit(0)
+if "--job" in a and "--publish" not in a:
+    import hashlib
+    job=a[a.index("--job")+1]
+    with (root/"prepare-calls.jsonl").open("a") as f:
+        f.write(json.dumps({"job":job,"argv":a})+"\n")
+    if cfg.get("prepare_error"):
+        print("PRIVATE_SYNTHETIC /Users/fixture/private-source",file=sys.stderr)
+        sys.exit(1)
+    title="Synthetic privacy preparation"
+    body="Synthetic exact screened public metadata."
+    def export(source,text):
+        b=text.encode()
+        return {"source":source,"bytes":len(b),"sha256":hashlib.sha256(b).hexdigest()}
+    publisher=Path("scripts/mac/brain-proposal-pr.mjs").resolve()
+    request={"format":"signalgrid-publication-privacy-request/v1","job":job,
+        "job_sha256":"a"*64,"publisher_sha256":hashlib.sha256(publisher.read_bytes()).hexdigest(),
+        "worker_head":"1"*40,"worker_uid":os.getuid(),"patch_sha256":"b"*64,
+        "replay_base":"3"*40,"head":"4"*40,"tree":"2"*40,
+        "exports":[export("metadata/title.txt",title),export("metadata/body.md",body),
+                   export("metadata/commit.txt","Synthetic commit"),
+                   export("metadata/paths.json",json.dumps(["docs/x.md"],separators=(",",":"))),
+                   export("deleted/docs/x.md.txt","Deleted public path: docs/x.md\n") if cfg.get("prepare_deletion")
+                   else export("files/docs/x.md","Synthetic public file\n")]}
+    if cfg.get("prepare_missing_paths"):
+        request["exports"]=[row for row in request["exports"] if row["source"]!="metadata/paths.json"]
+    if cfg.get("prepare_unknown_export"):
+        request["exports"].append(export("metadata/unknown.txt","Unknown"))
+    if cfg.get("prepare_metadata_only"):
+        request["exports"]=[row for row in request["exports"] if row["source"].startswith("metadata/")]
+    if cfg.get("prepare_bad_deletion"):
+        request["exports"]=[export(row["source"],"Wrong deletion marker") if row["source"].startswith("deleted/") else row
+                            for row in request["exports"]]
+    request["exports"].sort(key=lambda row:row["source"])
+    request_sha=hashlib.sha256(json.dumps(request,sort_keys=True,separators=(",",":"),ensure_ascii=False).encode()).hexdigest()
+    metadata={"format":"signalgrid-publication-prepared-metadata/v1","request_sha256":request_sha,"title":title,"body":body}
+    if cfg.get("prepare_bad_digest"): metadata["request_sha256"]="0"*64
+    print("SIGNALGRID_PUBLICATION_PRIVACY_REQUEST "+json.dumps(request))
+    if cfg.get("prepare_duplicate"): print("SIGNALGRID_PUBLICATION_PRIVACY_REQUEST "+json.dumps(request))
+    if not cfg.get("prepare_missing_metadata"):
+        print("SIGNALGRID_PUBLICATION_PREPARED_METADATA "+json.dumps(metadata))
     sys.exit(0)
 if "--job" not in a or "--publish" not in a:
     print("Fixture refuses an unrecognized node action", file=sys.stderr)
@@ -208,13 +253,187 @@ class TickAutoPublishRegression(unittest.TestCase):
         self.activation["publisher_sha256"]=hashlib.sha256((REPO/"scripts/mac/brain-proposal-pr.mjs").read_bytes()).hexdigest()
         self.activation["tick_sha256"]=hashlib.sha256((REPO/"scripts/mac/lane-tick.sh").read_bytes()).hexdigest()
         self.activation["dependency_sha256"]={p:hashlib.sha256((REPO/p).read_bytes()).hexdigest() for p in (
-            "scripts/check-owner-gated-surfaces.mjs", "scripts/lib/is-main.mjs", "scripts/lib/scratch-git.mjs", ".githooks/pre-push")}
+            "scripts/check-owner-gated-surfaces.mjs", "scripts/lib/is-main.mjs", "scripts/lib/scratch-git.mjs", ".githooks/pre-push", HOST_HELPER)}
         self.write_activation()
         self.bootstrap_custody()
         self.cfg={"jobs":["freshA"]}
         self.cap="1"
         self.host_busy=False
         self.extra_env={}
+
+    def enable_preparation(self):
+        self.activation["privacy_preparation_enabled"]=True
+        self.write_activation()
+        anchor=json.loads(self.anchor.read_text())
+        self.anchor.chmod(0o600)  # Only this disposable setup file, before resealing the fixture.
+        anchor["activation_sha256"]=hashlib.sha256((self.state/"activation.json").read_bytes()).hexdigest()
+        for name,path in (("preparations",self.state/"preparations"),("preparation_mirror",self.mirror/"preparations")):
+            path.mkdir(mode=0o700)
+            s=path.stat()
+            anchor[name]={"path":str(path.resolve()),"dev":s.st_dev,"ino":s.st_ino}
+        self.anchor.write_text(json.dumps(anchor,sort_keys=True)+"\n")
+        self.anchor.chmod(0o400)
+        self.cfg={"jobs":[],"prepare_jobs":["freshA"]}
+
+    def test_preparation_makes_private_bound_handoff_without_publication(self):
+        self.enable_preparation()
+        out,err=self.run_step()
+        handoff=self.state/"preparations/freshA/request.json"
+        self.assertTrue(handoff.exists(),out+err)
+        value=json.loads(handoff.read_text())
+        self.assertEqual(value["format"],"signalgrid-brain-privacy-handoff/v1")
+        self.assertEqual(value["request"]["job"],"freshA")
+        self.assertEqual(value["metadata"]["request_sha256"],value["request_sha256"])
+        self.assertEqual(handoff.stat().st_mode & 0o777,0o400)
+        self.assertNotIn("source_review",value)
+        self.assertNotIn("artifact_review",value)
+        self.assertNotIn("approved",value)
+        self.assertEqual(len(self.jsonlines("prepare-calls.jsonl")),1)
+        self.assertEqual(self.calls(),[])
+        self.assertNotIn("PRIVATE_SYNTHETIC",out+err)
+        events=(self.root/"host-events").read_text().splitlines()
+        self.assertEqual(events.count("acquire"),1)
+        self.assertEqual(events.count("release"),1)
+
+
+    def test_preparation_failed_started_receipt_never_creates_review_handoff(self):
+        self.enable_preparation()
+        self.cfg["fail_started_receipt"] = True
+        out, err = self.run_step()
+        terminal = json.loads((self.state/"preparations/freshA/terminal.json").read_text())
+        self.assertEqual(terminal["started_receipt_error"], "OSError")
+        self.assertEqual(terminal["returncode"], 0)
+        self.assertTrue(terminal["normal_exit"])
+        self.assertTrue(terminal["original_wait_completed"])
+        self.assertFalse((self.state/"preparations/freshA/started.json").exists())
+        self.assertFalse((self.state/"preparations/freshA/request.json").exists(), out + err)
+        self.run_step()
+        self.assertEqual(len(self.jsonlines("prepare-calls.jsonl")), 1)
+        self.assertEqual(self.calls(), [])
+        events = (self.root/"host-events").read_text().splitlines()
+        self.assertEqual(events.count("acquire"), events.count("release"))
+
+    def test_preparation_missing_started_receipt_result_never_creates_review_handoff(self):
+        self.enable_preparation()
+        self.cfg["remove_started_receipt_result"] = True
+        out, err = self.run_step()
+        terminal = json.loads((self.state/"preparations/freshA/terminal.json").read_text())
+        self.assertNotIn("started_receipt_error", terminal)
+        self.assertEqual(terminal["returncode"], 0)
+        self.assertTrue(terminal["original_wait_completed"])
+        self.assertFalse((self.state/"preparations/freshA/request.json").exists(), out + err)
+
+    def test_preparation_incomplete_original_wait_never_creates_review_handoff(self):
+        self.enable_preparation()
+        self.cfg["incomplete_preparation_wait"] = True
+        out, err = self.run_step()
+        terminal = json.loads((self.state/"preparations/freshA/terminal.json").read_text())
+        self.assertIsNone(terminal["started_receipt_error"])
+        self.assertEqual(terminal["returncode"], 0)
+        self.assertFalse(terminal["original_wait_completed"])
+        self.assertFalse((self.state/"preparations/freshA/request.json").exists(), out + err)
+
+    def test_preparation_accepts_deleted_path_inventory(self):
+        self.enable_preparation()
+        self.cfg["prepare_deletion"]=True
+        out,err=self.run_step()
+        handoff=self.state/"preparations/freshA/request.json"
+        self.assertTrue(handoff.exists(),out+err)
+        sources={row["source"] for row in json.loads(handoff.read_text())["request"]["exports"]}
+        self.assertIn("deleted/docs/x.md.txt",sources)
+        self.assertIn("metadata/paths.json",sources)
+        self.assertEqual(self.calls(),[])
+
+    def test_preparation_missing_paths_inventory_never_creates_review_handoff(self):
+        self.enable_preparation()
+        self.cfg["prepare_missing_paths"]=True
+        self.run_step()
+        self.assertEqual(len(self.jsonlines("prepare-calls.jsonl")),1)
+        self.assertFalse((self.state/"preparations/freshA/request.json").exists())
+
+    def test_preparation_unknown_metadata_never_creates_review_handoff(self):
+        self.enable_preparation()
+        self.cfg["prepare_unknown_export"]=True
+        self.run_step()
+        self.assertEqual(len(self.jsonlines("prepare-calls.jsonl")),1)
+        self.assertFalse((self.state/"preparations/freshA/request.json").exists())
+
+    def test_preparation_metadata_without_changed_path_never_creates_review_handoff(self):
+        self.enable_preparation()
+        self.cfg["prepare_metadata_only"]=True
+        self.run_step()
+        self.assertEqual(len(self.jsonlines("prepare-calls.jsonl")),1)
+        self.assertFalse((self.state/"preparations/freshA/request.json").exists())
+
+    def test_preparation_changed_deletion_marker_never_creates_review_handoff(self):
+        self.enable_preparation()
+        self.cfg["prepare_deletion"]=True
+        self.cfg["prepare_bad_deletion"]=True
+        self.run_step()
+        self.assertEqual(len(self.jsonlines("prepare-calls.jsonl")),1)
+        self.assertFalse((self.state/"preparations/freshA/request.json").exists())
+
+    def test_preparation_runs_only_once_while_review_is_pending(self):
+        self.enable_preparation()
+        self.run_step();self.run_step()
+        self.assertEqual(len(self.jsonlines("prepare-calls.jsonl")),1)
+        self.assertEqual(self.calls(),[])
+
+    def test_preparation_requires_explicit_activation(self):
+        self.cfg={"jobs":[],"prepare_jobs":["freshA"]}
+        self.run_step()
+        self.assertEqual(self.jsonlines("prepare-calls.jsonl"),[])
+        self.assertFalse((self.state/"preparations").exists())
+
+    def test_preparation_defers_busy_host_without_consuming_job(self):
+        self.enable_preparation()
+        self.host_busy=True
+        self.run_step()
+        self.assertEqual(self.jsonlines("prepare-calls.jsonl"),[])
+        self.assertFalse((self.state/"preparations/freshA").exists())
+
+    def test_failed_preparation_is_consumed_and_private_errors_stay_private(self):
+        self.enable_preparation()
+        self.cfg["prepare_error"]=True
+        out,err=self.run_step()
+        self.run_step()
+        self.assertEqual(len(self.jsonlines("prepare-calls.jsonl")),1)
+        self.assertFalse((self.state/"preparations/freshA/request.json").exists())
+        self.assertNotIn("PRIVATE_SYNTHETIC",out+err)
+        terminal=json.loads((self.state/"preparations/freshA/terminal.json").read_text())
+        self.assertEqual(terminal["returncode"],1)
+
+    def test_preparation_bad_digest_never_creates_review_handoff(self):
+        self.enable_preparation()
+        self.cfg["prepare_bad_digest"]=True
+        self.run_step()
+        self.assertEqual(len(self.jsonlines("prepare-calls.jsonl")),1)
+        self.assertFalse((self.state/"preparations/freshA/request.json").exists())
+
+    def test_preparation_duplicate_marker_never_creates_review_handoff(self):
+        self.enable_preparation()
+        self.cfg["prepare_duplicate"]=True
+        self.run_step()
+        self.assertEqual(len(self.jsonlines("prepare-calls.jsonl")),1)
+        self.assertFalse((self.state/"preparations/freshA/request.json").exists())
+
+    def test_preparation_missing_metadata_never_creates_review_handoff(self):
+        self.enable_preparation()
+        self.cfg["prepare_missing_metadata"]=True
+        self.run_step()
+        self.assertEqual(len(self.jsonlines("prepare-calls.jsonl")),1)
+        self.assertFalse((self.state/"preparations/freshA/request.json").exists())
+
+    def test_preparation_lost_mirror_is_not_recreated_or_replayed(self):
+        self.enable_preparation()
+        self.run_step()
+        mirror=self.mirror/"preparations/freshA.json"
+        self.assertTrue(mirror.exists())
+        mirror.unlink()
+        self.run_step()
+        self.assertEqual(len(self.jsonlines("prepare-calls.jsonl")),1)
+        self.assertFalse(mirror.exists())
+
     def tearDown(self):
         self.tmp.cleanup()
     def write_activation(self):
@@ -264,6 +483,10 @@ sg_host_verify_acquire() {
  SG_VERIFY_LOCK_HELD=1
 }
 sg_host_verify_release() { printf 'release\\n' >> "$SG_TEST_ROOT/host-events"; SG_VERIFY_LOCK_HELD=0; }
+sg_host_verify_acquire_bounded() {
+ printf 'bounded %s\\n' "${2:-}" >> "$SG_TEST_ROOT/host-events"
+ sg_host_verify_acquire "$1"
+}
 """
         wrapper += source[a:b] + '\nprintf "__RESULT__%s\\n" "$RESULT"\n'
         # Only the extracted test copy substitutes account/tool transport seams.
@@ -272,17 +495,118 @@ sg_host_verify_release() { printf 'release\\n' >> "$SG_TEST_ROOT/host-events"; S
         # Inject into the extracted Python only, after its parent Bash started.
         # Otherwise BASH_ENV would poison the fixture launcher, not this boundary.
         wrapper=wrapper.replace("    account_home = lambda: Path(os.environ['SG_TEST_TRUSTED_HOME'])", "    account_home = lambda: Path(os.environ['SG_TEST_TRUSTED_HOME'])\n    os.environ.update(json.loads((Path(os.environ['SG_TEST_ROOT'])/'fixture.json').read_text()).get('client_shell_env',{}))\n    _fixture_client_env = client_env\n    def client_env():\n        env = _fixture_client_env()\n        env.update(SG_TEST_ROOT=os.environ['SG_TEST_ROOT'], SIGNALGRID_BRAIN_PUBLICATION_STATE=os.environ['SIGNALGRID_BRAIN_PUBLICATION_STATE'])\n        return env")
+        # Faults affect only this extracted fixture. Exercise the real producer's
+        # receipt-error path and the real consumer's persisted-terminal checks.
+        if self.cfg.get("fail_started_receipt"):
+            wrapper = wrapper.replace("try:\n    need(MODE in",
+                "_fixture_write_new = write_new\n"
+                "def write_new(path, value):\n"
+                "    if path.name == 'started.json':\n"
+                "        raise OSError('synthetic start receipt failure')\n"
+                "    return _fixture_write_new(path, value)\n"
+                "try:\n    need(MODE in")
+        if self.cfg.get("remove_started_receipt_result") or self.cfg.get("incomplete_preparation_wait"):
+            wrapper = wrapper.replace("try:\n    need(MODE in",
+                "_fixture_prepared_request = prepared_request\n"
+                "def prepared_request(attempt, intent):\n"
+                "    path = attempt / 'terminal.json'\n"
+                "    terminal = json.loads(path.read_text())\n"
+                "    config = json.loads((Path(os.environ['SG_TEST_ROOT'])/'fixture.json').read_text())\n"
+                "    if config.get('remove_started_receipt_result'):\n"
+                "        terminal.pop('started_receipt_error')\n"
+                "    if config.get('incomplete_preparation_wait'):\n"
+                "        terminal['original_wait_completed'] = False\n"
+                "    path.chmod(0o600)\n"
+                "    path.write_text(json.dumps(terminal))\n"
+                "    path.chmod(0o400)\n"
+                "    return _fixture_prepared_request(attempt, intent)\n"
+                "try:\n    need(MODE in")
         # Scale only the isolated test copy's publication timeout. No production
         # environment flag or model/queue cap is changed or introduced.
+        if self.cfg.get("drop_bounded_helper"):
+            wrapper=wrapper.replace("sg_host_verify_acquire_bounded() {","unused_fixture_bounded() {",1)
         if self.cfg.get("hang_publish"):
             wrapper=wrapper.replace("PUBLICATION_TIMEOUT_SEC = 600", "PUBLICATION_TIMEOUT_SEC = 0.25")
         env={**os.environ,"HOME":str(self.home),"PATH":str(self.bin)+os.pathsep+os.environ["PATH"],
              "SG_TEST_ROOT":str(self.root),"SG_TEST_TRUSTED_HOME":str(self.home),"SG_TEST_HOST_BUSY":"1" if self.host_busy else "0",
-             "SIGNALGRID_PUBLISH_MAX":self.cap,"SIGNALGRID_BRAIN_PUBLICATION_STATE":str(self.state)}
+             "SIGNALGRID_PUBLISH_MAX":self.cap,"SIGNALGRID_BRAIN_PUBLICATION_STATE":str(self.state),
+             # The tick records the digest of the helper it actually sourced; the fixture sources this checkout's.
+             "SG_VERIFY_HELPER_SHA256":hashlib.sha256((REPO/HOST_HELPER).read_bytes()).hexdigest()}
         env.update(self.extra_env)
+        for name in [key for key,value in env.items() if value is None]:
+            del env[name]
         p=subprocess.run(["/bin/bash","-c",wrapper],cwd=self.work,env=env,capture_output=True,text=True,timeout=20)
         self.assertEqual(p.returncode,0,p.stderr)
         return p.stdout,p.stderr
+    # ── bounded ordinary admission on the two publication acquisitions, and the sourced helper binding ──
+    def bootstrap_custody_again(self):
+        # Reseal only this disposable fixture anchor after its activation fixture was rewritten.
+        anchor=json.loads(self.anchor.read_text()); self.anchor.chmod(0o600)
+        anchor["activation_sha256"]=hashlib.sha256((self.state/"activation.json").read_bytes()).hexdigest()
+        self.anchor.write_text(json.dumps(anchor,sort_keys=True)+"\n"); self.anchor.chmod(0o400)
+    def host_events(self):
+        # Host admission events only; the fixture's unrelated heartbeat "metadata" marker shares the file.
+        p=self.root/"host-events"
+        return [e for e in p.read_text().splitlines() if e!="metadata"] if p.exists() else []
+    def state_files(self):
+        return sorted(str(p.relative_to(self.state)) for p in self.state.rglob("*") if p.is_file() and p.name!="activation.json")
+    def test_publication_admission_waits_a_bounded_ninety_seconds(self):
+        out,_=self.run_step()
+        self.assertEqual([e for e in self.host_events() if e.startswith("bounded")],["bounded 90"])
+        self.assertEqual(len(self.calls()),1,out)
+    def test_preparation_admission_waits_a_bounded_ninety_seconds(self):
+        self.enable_preparation()
+        self.run_step()
+        self.assertEqual([e for e in self.host_events() if e.startswith("bounded")],["bounded 90"])
+        self.assertEqual(len(self.jsonlines("prepare-calls.jsonl")),1)
+    def test_still_busy_after_the_bounded_wait_keeps_the_existing_defer(self):
+        self.host_busy=True
+        out,_=self.run_step()
+        self.assertIn("brain publication deferred: host busy or unavailable",out)
+        self.assertEqual(self.host_events(),["bounded 90","acquire"])
+        self.assertEqual(self.calls(),[]); self.assertEqual(self.state_files(),[])
+        self.enable_preparation(); (self.root/"host-events").unlink()
+        out,_=self.run_step()
+        self.assertIn("privacy request preparation deferred: host busy or unavailable",out)
+        self.assertEqual(self.jsonlines("prepare-calls.jsonl"),[])
+        self.assertFalse((self.state/"preparations/freshA").exists())
+    def test_a_tick_without_the_bounded_helper_defers_instead_of_falling_back(self):
+        # An older sourced helper has no bounded function: the tick must defer, never use another admission.
+        self.cfg["drop_bounded_helper"]=True
+        out,_=self.run_step()
+        self.assertIn("brain publication deferred: host busy or unavailable",out)
+        self.assertEqual(self.host_events(),[]); self.assertEqual(self.calls(),[]); self.assertEqual(self.state_files(),[])
+    def test_sourced_helper_that_differs_from_the_bound_dependency_refuses_before_any_claim(self):
+        for label,value in (("drifted","0"*64),("absent",None),("malformed","not-a-digest")):
+            with self.subTest(sourced=label):
+                p=self.root/"host-events"
+                if p.exists(): p.unlink()
+                self.extra_env={"SG_VERIFY_HELPER_SHA256":value}
+                out,_=self.run_step()
+                self.assertIn("brain publication unavailable",out)
+                self.assertEqual(self.calls(),[]); self.assertEqual(self.state_files(),[],"Nothing may be claimed or consumed")
+                self.assertEqual(self.host_events(),["bounded 90","acquire","release"],"Own admission is released; no other holder is touched")
+        self.extra_env={"SG_VERIFY_HELPER_SHA256":"0"*64}
+        self.enable_preparation(); (self.root/"host-events").unlink()
+        out,_=self.run_step()
+        self.assertIn("privacy request preparation unavailable",out)
+        self.assertEqual(self.jsonlines("prepare-calls.jsonl"),[])
+        self.assertFalse((self.state/"preparations/freshA").exists())
+    def test_activation_must_bind_the_host_helper_with_the_other_dependencies(self):
+        self.activation["dependency_sha256"].pop(HOST_HELPER); self.write_activation(); self.bootstrap_custody_again()
+        self.run_step()
+        self.assertEqual(self.calls(),[]); self.assertEqual(self.host_events(),[])
+    def test_activation_bound_to_other_helper_bytes_is_refused(self):
+        self.activation["dependency_sha256"][HOST_HELPER]="0"*64; self.write_activation(); self.bootstrap_custody_again()
+        self.run_step()
+        self.assertEqual(self.calls(),[]); self.assertEqual(self.host_events(),[])
+    def test_private_intent_records_the_host_helper_reference(self):
+        self.run_step()
+        intents=[json.loads(p.read_text()) for p in self.state.rglob("intent.json")]
+        self.assertEqual(len(intents),1)
+        self.assertEqual(intents[0]["dependency_refs"][HOST_HELPER]["sha256"],hashlib.sha256((REPO/HOST_HELPER).read_bytes()).hexdigest())
+        self.assertEqual(len(intents[0]["dependency_refs"]),5)
+
     def test_explicit_activation_is_required_and_never_self_created(self):
         (self.state/"activation.json").unlink()
         self.run_step()
@@ -543,6 +867,70 @@ sg_host_verify_release() { printf 'release\\n' >> "$SG_TEST_ROOT/host-events"; S
         self.run_step()
         self.assertEqual(self.calls(),[],"an inherited second push URL must not receive an artifact")
         self.assertEqual(self.jsonlines("get-calls.jsonl"),[])
+
+class HostAdmissionHelperBehaviour(unittest.TestCase):
+    """The REAL sourced helper against a disposable lock file: real flock, real holder process, no fixture stubs."""
+    HELPER=REPO/HOST_HELPER
+    HOLDER="import fcntl,os,sys,time\nfd=os.open(sys.argv[1],os.O_RDWR|os.O_CREAT,0o600)\nfcntl.flock(fd,fcntl.LOCK_EX)\nopen(sys.argv[2]+'.held','w').close()\ntime.sleep(float(sys.argv[3]))\nopen(sys.argv[2]+'.released-by-self','w').close()\n"
+    def setUp(self):
+        self.tmp=tempfile.TemporaryDirectory(prefix="host-admission-"); self.addCleanup(self.tmp.cleanup)
+        self.root=Path(self.tmp.name); self.lock=self.root/"cache"/"host-verification.lock"
+        self.lock.parent.mkdir(); self.lock.touch(); self.inode=self.lock.stat().st_ino
+    def hold(self,seconds):
+        marker=str(self.root/"holder")
+        p=subprocess.Popen(["/usr/bin/python3","-I","-c",self.HOLDER,str(self.lock),marker,str(seconds)])
+        self.addCleanup(p.wait)
+        for _ in range(100):
+            if Path(marker+".held").exists(): return p,marker
+            import time; time.sleep(0.05)
+        self.fail("fixture holder never acquired")
+    def shell(self,body,timeout=20):
+        import time
+        started=time.monotonic()
+        p=subprocess.run(["/bin/bash","-c",'set -u\n. "$1"\n'+body,"bash",str(self.HELPER),str(self.lock)],capture_output=True,text=True,timeout=timeout)
+        return p.stdout.split(),time.monotonic()-started,p
+    ACQUIRE='sg_host_verify_acquire_bounded "$2" %s; rc=$?; echo "$rc" "$SG_VERIFY_LOCK_HELD"\n'
+    PROBE='sg_host_verify_release; sg_host_verify_acquire "$2"; echo "$?"\n'
+    def test_free_lock_is_admitted_at_once_and_positively_released(self):
+        out,elapsed,_=self.shell(self.ACQUIRE%90+self.PROBE)
+        self.assertEqual(out,["0","1","0"]); self.assertLess(elapsed,3)
+        self.assertEqual(self.lock.stat().st_ino,self.inode)
+    def test_busy_then_released_within_the_bound_is_admitted_without_touching_the_holder(self):
+        holder,marker=self.hold(1.5)
+        out,elapsed,_=self.shell(self.ACQUIRE%20)
+        self.assertEqual(out,["0","1"]); self.assertGreater(elapsed,1.0); self.assertLess(elapsed,12)
+        self.assertEqual(holder.wait(timeout=10),0,"The other holder ended by itself")
+        self.assertTrue(Path(marker+".released-by-self").exists())
+        self.assertEqual(self.lock.stat().st_ino,self.inode,"Same canonical inode; never unlinked or replaced")
+    def test_still_busy_at_the_bound_returns_the_existing_busy_code_and_leaves_the_holder_running(self):
+        holder,marker=self.hold(5)
+        out,elapsed,_=self.shell(self.ACQUIRE%2+'echo "$SG_VERIFY_LOCK_REASON"\n')
+        self.assertEqual(out[:2],["75","0"]); self.assertIn("holds",out)
+        self.assertGreaterEqual(elapsed,2.0); self.assertLess(elapsed,4.8)
+        self.assertIsNone(holder.poll(),"The other holder was not signalled or ended")
+        self.assertFalse(Path(marker+".released-by-self").exists())
+        self.assertEqual(holder.wait(timeout=15),0); self.assertEqual(self.lock.stat().st_ino,self.inode)
+    def test_invalid_custody_is_refused_at_once_without_retrying(self):
+        blocked=self.root/"not-a-directory"; blocked.write_text("x")
+        import time
+        started=time.monotonic()
+        p=subprocess.run(["/bin/bash","-c",'. "$1"\nsg_host_verify_acquire_bounded "$2" 90 2>/dev/null; echo "$?" "$SG_VERIFY_LOCK_HELD"\n',"bash",str(self.HELPER),str(blocked/"child"/"lock")],capture_output=True,text=True,timeout=20)
+        self.assertEqual(p.stdout.split(),["2","0"]); self.assertLess(time.monotonic()-started,3,"A custody failure is not waited on")
+    def test_invalid_or_larger_bound_is_refused_and_nothing_is_acquired(self):
+        for bound in ("abc","''","91","-1","1.5","9999"):
+            with self.subTest(bound=bound):
+                out,elapsed,_=self.shell((self.ACQUIRE%bound)+'sg_host_verify_acquire "$2"; echo "$?"\n')
+                self.assertEqual(out,["2","0","0"],"Refused, nothing held, and the lock was still free"); self.assertLess(elapsed,3)
+    def test_zero_bound_is_the_existing_single_attempt(self):
+        holder,_=self.hold(1.2)
+        out,elapsed,_=self.shell(self.ACQUIRE%0)
+        self.assertEqual(out,["75","0"]); self.assertLess(elapsed,1.0)
+        self.assertEqual(holder.wait(timeout=10),0)
+    def test_existing_single_attempt_caller_is_unchanged(self):
+        holder,_=self.hold(1.2)
+        out,elapsed,_=self.shell('sg_host_verify_acquire "$2"; echo "$?" "$SG_VERIFY_LOCK_HELD"\n')
+        self.assertEqual(out,["75","0"]); self.assertLess(elapsed,1.0,"Every other caller keeps the immediate defer")
+        self.assertEqual(holder.wait(timeout=10),0)
 
 if __name__=="__main__":
     unittest.main()

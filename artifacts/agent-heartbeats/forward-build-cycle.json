@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-11-11T12:15:27.563Z",
-  "result": "10:10Z and 12:10Z fires: quiet on building, no wave dispatched (owner's credit-saving rule stands). Mainline 67184d70. #1903: the Mac's estate queue merged mainline in at 11:58Z, head now 39f90a26; Codex re-review added no new thread (the same two P2 threads stay open for the Mac's #1698 follow-up); CI running on that head; NOT landed, the owner's word is awaited. #1900 (DR-066): refreshed by the estate queue to 96b2738a, every check green there including the gating check and the Mac-only check, Codex clean; owner merges. In flight H/S/O = 0/0/0. sub-brains: signalgrid-mcp #17 unchanged at fdc50f61 (OAuth token, owner-only). Owner queue: word on #1903; merge of #1900; #1937 (Codex's), #1932, #1944, tick PRs #1947 to #1949 and #1912, Mac drafts #1952 and #1954; one line on #1121; the OAuth token."
+  "firedAt": "2026-11-14T14:18:18.075Z",
+  "result": "quiet 14:11Z fire: nothing new to land from this lane (Mac tick #2082 merged under the steward cycle). Credit-saving rule: no workers, H/S/O 0/0/0. sub-brains: none. owner queue: none from this lane; open blockers are Mac-side (node_modules reinstall per #2081, vphone #2070)."
 }

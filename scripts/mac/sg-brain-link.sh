@@ -4,7 +4,7 @@
 # readable by the Mac lane's Claude sessions, without ever committing it.
 #
 # Run ONCE, from ANY directory:
-#   bash /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/scripts/mac/sg-brain-link.sh
+#   bash scripts/mac/sg-brain-link.sh   (from the repository root)
 #
 # It uses absolute paths, so the current directory does not matter, and it is
 # idempotent — run it again any time (after adding docs to iCloud) to refresh.
@@ -22,7 +22,9 @@
 # =============================================================================
 set -uo pipefail
 
-REPO="/Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub"
+if [ "$(uname -s)" != "Darwin" ]; then echo "sg-brain-link.sh: macOS only" >&2; exit 1; fi
+
+REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 KNOWLEDGE="$HOME/Library/Mobile Documents/com~apple~CloudDocs/Documents/SignalGrid"
 REF="$REPO/reference"
 LINK="$REF/knowledge"

@@ -4970,6 +4970,210 @@ Resource preparation failures remain retained: missing dyld literal root-directo
 
 Verdict: holds for the complete applicable installed-toolchain self-test and the specific Git2.56 R6p1d assertion. Six platform-unavailable cases are not passes; two other unavailable platform preconditions still asserted their guarded answers on the installed toolchain. Full local preflight/breadth, fresh same-head source reviews and exact-current-head GitHub CI remain required for protected landing. No gate exemption, real remote branch deletion, source clearance or merge is claimed here.
 
+
+## 2026-10-30 — Mac delivery must use a protected PR; a topic push is not canonical delivery
+Command:
+```
+node scripts/check-lane-delivery.mjs
+node scripts/check-preflight-ci-parity.mjs
+git diff --check
+```
+Output: Original-source regression: `lane-delivery regression: 5 passed, 2 failed, 0 skipped`. The Mac path tried the protected canonical branch five times; a lost successful topic-push response was also resent five times. Corrected-source regression: `lane-delivery regression: 7 passed, 0 failed, 0 skipped`. Preflight/CI parity reported `0 unwired`; diff check exited 0.
+Verdict: The regression runs the actual delivery CLI against disposable local bare Git remotes, with protocol-only gh and schema-gate fixtures and kernel network denial on the Mac. It verifies both lane topic targets, one-attempt refusal, exact readback after a lost push response, compatibility, dry-run and unchanged gate refusal. These are transport checks, not a fresh GitHub heartbeat or product delivery. The first fixture diagnostic (4pass/3fail) included an expanded local transport URL and is retained separately; the corrected fixture presents its explicit test repository identity while all transport remains local. Full current-head local validation, independent own-system source review, current CI and protected landing remain pending. Canonical heartbeat readback is required before reporting restoration.
+
+The added lane-delivery test registration makes `scripts/preflight.mjs` 970 lines on this candidate; the earlier 969-line measurement remains historical. `docs/COMPANY_BUILD_PLAN.md` records the current figure.
+
+
+## 2026-10-30 — Full preflight held the delivery test at the scratch-Git boundary
+Command:
+```
+node scripts/preflight.mjs
+node scripts/check-lane-delivery.mjs
+node scripts/check-scratch-git-hygiene.mjs
+node scripts/check-entry-guards.mjs
+node scripts/check-gate-self-tests-run.mjs
+```
+Output: On a32a263f406135cd4764fb0e984284ca486950e1, full preflight exited 1 with `Preflight FAILED at: Scratch-repo self-tests spawn git through one hermetic helper. Fix before pushing.` The new fixture's Git setup now uses the existing `scratchGit` helper. Independent rerun: `lane-delivery regression: 7 passed, 0 failed, 0 skipped`; hygiene `creators=17 migrated=12 pending=5`; entry guards `0 problem(s)`; self-test reachability `0 with neither`.
+Verdict: The guard held before publication. Production delivery code and the existing guard/debt list are unchanged by this integration correction. The original full failure remains retained, and this updated source still needs its own full preflight/breadth, independent same-head reviews, current CI and protected landing. The Mac web build was explicitly unavailable on the first run because its platform binaries are excluded; that is not a zero-skip product pass.
+
+
+Mac mail expected-head binding before publication (2026-10-30): source assessment found that the inherited cloud auto-merge request did not name the published commit. The two real Mac/cloud CLI controls now compare `--match-head-commit` to the complete 40-character SHA in the disposable remote. Frozen control extension against the prior source: 5 passed / 2 failed / 0 skipped; corrected source: 7 passed / 0 failed / 0 skipped, with kernel network denial. The automatic request now carries that exact published SHA; no force, bypass or extra push. The earlier integrated source preflight passed; full qualification, native source reviews, GitHub CI, protected landing and a fresh canonical heartbeat on this final change remain pending.
+
+
+## 2026-10-30 — Published Mac transport failed source review; frozen caller controls drove the revision
+Command:
+```
+node scripts/check-lane-delivery.mjs
+node scripts/raised-hands.mjs --self-test
+```
+Output: At published head 3a45399bb62b0e0fe097e035b0173ca225c52055 (PR #1698), the genuine Codex Ponytail source lens returned SHIP and Claude Ponytail returned FIX. The other six source lenses did not run. Both known terminal responses are retained as COMMENT reviews 5718795910 and 5718796175; the Cloud lane's separate comment 6533921922 also identified fail-closed and cadence gaps. Old-head applicable CI passed, which does not dispose of these findings.
+
+The expanded frozen controls first reproduced 10 pass / 15 fail / 0 skip on that source; the Mac-mail classification extension was 106/107. Corrected source: 25 pass / 0 fail / 0 skip, raised-hands 107/107, under actual Mac kernel network denial. These execute the real CLI against local bare Git with gh/schema protocol fixtures and the real Bash heartbeat/estate blocks with I/O fixtures and real file ages. They do not execute launchd, GitHub auto-merge or a live heartbeat. The earlier 5/2 result in this journal measures the transport-only test revision; adding exact-head and caller assertions changes the old-source failure count and does not replace earlier receipts.
+
+Verdict: Caller findings are accepted: unchanged submissions wait two hours, the five-minute work poll remains, and the last actual estate result persists between hourly runs. Failed PR creation/auto-merge and uncertain push outcomes are nonzero readback-only results. An independent parent exit record closes each heartbeat attempt; missing, malformed or unconfirmed records stop new submissions. Known failed attempts are paced. Cloud's unavailable-gh branch publication remains an explicit exit-4 PR-tool handoff; Mac refuses before pushing without gh. Full SHA output binds readback. The compatibility control now checks actual committed message bytes. Full current-source validation, eight fresh own-system source lenses, current CI, protected landing and actual canonical heartbeat readback remain required. This is operator source repair, not accepted native coding or full-program operation.
+
+
+## 2026-10-30 — Retention-claims gate refused ambiguous LOOP wording before publication
+Command: `node scripts/preflight.mjs`
+Output: On local integrated head 6d59cef31c3930839dad26cf04c217ce38c25111, full preflight exited 1 after 393.48 seconds: `docs/agent/LOOP.md:64 states a retention duration`. The status sentence placed a heartbeat submission interval near the verb used for keeping the estate outcome; it did not describe a data-store retention guarantee. The current statement now says the heartbeat reports the latest estate outcome.
+Verdict: The original failed full run is preserved. Only the owned status wording and this incident record change; the retention scanner, storage implementation, runtime source and frozen controls remain unchanged. New-head full preflight/breadth, genuine own-system reviews, current CI and protected landing remain pending.
+
+
+## 2026-10-31 — Caller attempts survive uncertain results and canonical readback closes delivery
+Command:
+```
+node scripts/check-lane-delivery.mjs
+node scripts/raised-hands.mjs --self-test
+node scripts/objective-loop.mjs --self-test
+```
+Output: Frozen new caller controls against published be1ef32a0da11ea2a8f3611da827bae18109db24: `23 passed, 12 failed, 0 skipped`. A separate actual Bash control also rejected the old known-refusal cadence (`0 !== 1` fresh observations). First corrected run: `35 passed, 1 failed, 0 skipped`; the existing estate-clearance assertion still expected two submissions, but its old I/O stub did not implement the new receipt/readback protocol. A receipt-aware fixture preserved that assertion and added a pending-then-merged scenario. Final source controls: `37 passed, 0 failed, 0 skipped`; raised-hands `107/107`; objective-loop `136/136`, under actual Mac kernel network denial. The APFS timestamp control observed the keepalive mtime advance. A separate disposable-source driver validated the unchanged source and killed four mutants: unconditional success, exit-3 success, false success wording and removed ID validation. No mutant was applied to production source.
+
+Verdict: Unknown attempts are not retried. Immutable parent intents exist before objective/build children; they survive discarded decision stamps and identify their original receipt. Mac authentication precedes its sole topic push; a nonce avoids same-second topic collisions. GET/fetch readback verifies exact PR head/base, canonical and topic ancestry and each changed blob. Pending auto-merge is distinct from delivery; unresolved evidence records a local hand and names readback. The real CLI tests use disposable bare Git and gh/schema I/O fixtures; Bash controls run actual caller code with fixture external commands. They do not establish a live launchd heartbeat, remote model qualification or GitHub landing. The native Claude review on be1 automatically continued after an output-token limit; its two-turn result was rejected, and the remaining source lenses were not submitted. No complete source review is inferred.
+
+Earlier exact-head qualification is recorded separately: be1ef32a0da11ea2a8f3611da827bae18109db24 full preflight passed in 1057.67036545882 seconds, and breadth passed 58 proofs in 36.711130291223526 seconds using the existing cached pnpm 10.28.1. Two Mac web steps were unavailable and three checks self-skipped explicitly; that was not a zero-skip full-suite claim. These measurements preceded this caller correction. The final qualification after this journal entry is committed must name the resulting full source SHA in PR #1698, followed by genuine own-system reviews, applicable current CI/findings/DR-037 and expected-head protected landing. A fresh canonical heartbeat remains the restoration proof.
+
+
+## 2026-10-31 — Full preflight caught the delivery caller prefix and private-log regressions
+Command:
+```
+node scripts/preflight.mjs
+node scripts/mac/build-tick-stages.mjs --self-test
+node scripts/check-lane-delivery.mjs
+node scripts/objective-loop.mjs --self-test
+```
+Output: Exact local 3c015fc474f2c74518f3571c6532386cd8a8cd96 full preflight failed after 42.329266583081335 seconds at the staged Mac worker self-test (246/248 before its error aborted the remaining cases). New caller arguments had moved `--receipt` ahead of the existing `batch <file>` prefix, and the delivery output no longer appeared in the existing private run log. The correction preserves `batch <file>` / `send <subject> <body>` as the leading arguments, appends the new receipt option, and copies the independently captured output back to that log. Existing staged-worker test source and assertions are unchanged. Actual corrected staged-worker self-test: `265/265`; lane-delivery: `37 passed, 0 failed, 0 skipped`; objective-loop: `136/136`.
+
+Verdict: The full gate held before any source push. No fixture assertion, gate or debt list was relaxed. The failed full run is retained; its two unexecuted native web steps were explicitly unavailable on the Mac. The correction and this journal entry require their resulting exact head's full preflight/breadth and normal source reviews/current CI before landing. No live heartbeat restoration is inferred from local checks.
+
+
+## 2026-10-31 — Canonical readback pins the remote SHA and ignores local graph shadows
+Command: `node scripts/check-lane-delivery.mjs`
+Output: Two frozen disposable-Git controls first returned false canonical verification: a concurrent fetch rewrote FETCH_HEAD, and a local replacement ref changed the ancestry graph. Original new controls: 0 pass / 2 fail. Pinning the exact ls-remote canonical SHA corrected the concurrent-fetch case, leaving 1 pass / 1 fail. Reading real objects with replacement refs disabled and an empty graft file corrected the remaining case. Full integrated caller suite: `39 passed, 0 failed, 0 skipped`, under actual kernel network denial. The production readback does not delete or rewrite the caller's local replacements, grafts or checkout.
+
+Verdict: PR metadata alone is not canonical Git proof. Readback records the raw exact canonical reference before parsing, fetches that immutable SHA and verifies actual merge/topic ancestry and changed blobs against real objects. A malformed or unavailable observation stays held. Earlier 161ac812f946cd96e1151ec33a52b7bd1a411660 full preflight passed in 1108.4009708338417 seconds with two Mac web steps unavailable and three explicit self-skips; that measurement preceded this readback correction and is not reused for the new source. The final commit including this entry needs its own full qualification, normal hooks/current CI and genuine source reviews before landing. Actual canonical heartbeat restoration remains unproven.
+
+
+## 2026-10-31 — CodeQL shell-path finding reproduced and corrected in the caller fixture
+Command: `node scripts/check-lane-delivery.mjs`
+Output: GitHub CodeQL alert239/review thread4429705690 identified environment-derived paths inserted into a Bash program using JSON quoting. Running the actual original build-hand fixture block under an owned path containing spaces, a quote and command-substitution syntax failed (0 pass / 1 fail). The fixture now passes paths and the Node executable through environment values referenced as quoted shell variables. Its original one-attempt/log assertions remain; a second real case uses spaces, both quote forms, dollar-command syntax and backticks, and asserts neither disposable marker is created. Integrated suite: `40 passed, 0 failed, 0 skipped`, under actual kernel network denial.
+
+Verdict: JSON encoding is not shell escaping, including in test harnesses. This correction changes only the fixture and its journal evidence, not delivery behavior or review limits. The previous exact source 03a76c58f74c7e1f955116a9b9d526e908df41da passed full preflight in 1067.9836450000294 seconds (two web steps unavailable and three explicit self-skips), plus 58 breadth proofs in 36.54692254168913 seconds, before this further fixture correction. Those measurements and failures remain retained; the resulting new head needs its own full/breadth/current CI and all eight fresh own-system source reviews. No model request was started on 03a and no canonical heartbeat restoration is inferred.
+
+
+## 2026-10-31 — Genuine Ponytail source findings remove redundant delivery bookkeeping
+Command: `node scripts/check-lane-delivery.mjs`
+Output: The actual Codex own-system Ponytail ULTRA request on 5ed976ad68b9423f2d5c40639a75997b463a8330 returned FIX with two low findings, published once as COMMENT 5720541771: published-ref/SHA aliases no longer needed after the retry path was removed, and an unused Git HEAD read in the disposable landing fixture. The operator verified both source sites, removed those aliases/assignments and the unused fixture read, and kept the final cleanup/submission log inside the existing operation scope. All remote confirmation, receipt binding, full-SHA auto-merge, errors and output text remain. Existing integrated controls: `40 passed, 0 failed, 0 skipped` under actual kernel network denial; no assertion was weakened or added to mirror the cut.
+
+Verdict: One genuine source review, not a complete panel or approving vote. The other seven source reviews and current-findings audit were not started; all four native metadata clients exited 0 after the known FIX stop. No failed coding patch was adopted, model request retried or call refunded. The source before these cuts passed full preflight in 1080.3151635411195 seconds with two unavailable web steps and three explicit self-skips; current-head CodeQL 124409315826 passed, and its old thread was observed resolved. Those prior-head results remain history. The resulting new head requires its own full/breadth, all eight fresh own-system source lenses, current CI/findings/DR-037 and expected-head protected landing. A natural fresh canonical heartbeat remains unproven.
+
+
+## 2026-10-31 — An optional wake cannot reclassify a known accepted PR submission
+Command: `node scripts/check-lane-delivery.mjs`
+Output: The actual EDD Codex Ponytail source lens returned one low finding: a second gh version probe after the PR path had already required gh. The operator verified and removed it and the related availability/URL aliases. Inspection then reproduced a functional outcome defect: malformed and unreadable mailbox metadata threw after the topic push, PR creation and auto-merge request had succeeded, returning exit1 as if publication had been refused. The frozen expanded baseline produced `40 passed, 2 failed, 0 skipped`, with successful push/create/merge assertions preceding each failed outcome check. Optional wake errors now warn while the accepted submission stays pending; no wake or delivery is retried. Final minimal wake flow: `42 passed, 0 failed, 0 skipped` under actual kernel network denial, with the frozen assertions preserved. Existence probing is unnecessary inside the optional read catch; the mailbox id is validated before its single comment call. Cleanup comments distinguish normal exits from abrupt kills, while existing tick comments already describe changed outcomes and keepalives.
+
+Verdict: Genuine source COMMENT 5720678398 is retained once, not an approving vote. The EDD panel stopped after its single FIX; seven remaining source reviews and the audit never started, and all four native metadata clients exited 0. Earlier EDD full preflight passed in 1058.8600885001943 seconds with two web steps unavailable and three explicit self-skips; its breadth and current CI remain prior-head observations. This resulting source needs its own full/breadth, all eight fresh own-system source lenses, current findings/CI/DR-037 and full expected-head serial merge. No restoration, accepted native coding or full-program completion is inferred.
+
+
+## 2026-10-31 — Refreshed mail heads retain the original delivery identity
+Command:
+```
+sandbox-exec -p '(version 1)(allow default)(deny network*)' node scripts/check-lane-delivery.mjs
+```
+Output: Published 19a81800ba37dfcbb36850a28c33b3c48d544a48 received actual Ponytail SHIP from Codex and FIX from Claude, retained once as COMMENTs 5721143494 and 5721143602. Both original requests and all four native clients ended normally. Claude used one caller prompt, two native model turns and one permitted output-limit continuation; those counts are distinct. The other six source lenses and current-findings audit never started. No old report or model patch was adopted for the correction.
+
+The independently expanded frozen baseline reproduced **40 pass / 8 fail / 0 skip** on unchanged production source. The operator correction passed **48 pass / 0 fail / 0 skip** under actual Mac kernel network denial. The obsolete artificial wrong-head test became a real Git history refresh/merge control; a changed original payload still fails canonical blob verification. A separate real operating-system permission denial after one accepted push/create/auto-merge now yields exit3 readback-only, rather than exit1 prepublication refusal. The existing 115-minute boundary subsumes the removed 30-minute duplicate. All 48 semantic cases/expected values were fixed before the source write; the only later fixture ABI addition exposes the actual shared Node record writer, with normalized before/after equality retained.
+
+Canonical readback now verifies the ORIGINAL commit's real ancestry and every recorded blob even when a lawful PR update changes its head. Unchanged ticks defer remote readback until a due observation. Node's shared regular-file/no-follow/nlink-one/fsynced writer replaces the extra Python runtime, explicitly updates stamp times, and retains only a coarse estate failure until actual success; volatile success counts and raw diagnostics stay in the private log. Successful objective runs retain held-delivery warning lines. Both lanes probe gh authentication once; an unauthenticated Cloud session gets its explicit published-topic handoff. Objective raw stdout/stderr and actual exit are consolidated in one immutable terminal record.
+
+Source dispositions: the fetch's raw diagnostic record is intentionally retained, not treated as canonical proof. The fsynced build terminal is also retained: a bare shell printf would drop its durability guarantee. Permanent original-cause dedup across UTC dates remains deliberate; a day change cannot authorize replay of an unknown delivery. Recovery instructions preserve the original attempt and route a separate qualified repair. The redundant owned LOOP preparation tail was removed only after confirming the same facts above/in earlier EVIDENCE and preserving all original Git/private before versions; no canonical journal history was removed.
+
+Verdict: Local operator candidate only. No new models, provider/auth/endpoint/model/cap changes, live runtime installation or activation, topic push, merge or dashboard publication. The prior canonical window was explicitly closed so Cloud keepalives go first; source must be refreshed against their actual canonical landing before full current-source preflight/breadth, eight fresh own-system source methods, current findings/CI/DR-037 and full expected-head protected landing. A natural fresh canonical heartbeat, accepted native coding/#1546 and full-program operation remain unproven.
+
+
+## 2026-10-31 — Remove the redundant uncaught-exception status assignment
+Command: `sandbox-exec -p '(version 1)(allow default)(deny network*)' node scripts/check-lane-delivery.mjs`.
+Output: **48 pass / 0 fail / 0 skip**, with the same frozen assertions and actual Mac network denial. Published bd1703a received a genuine Codex Ponytail FIX, recorded once as COMMENT5721451855. That request and all four unused metadata clients ended normally; the remaining seven source reviews and current-findings audit never started. The operator independently removed one redundant `process.exitCode = code` immediately before unconditional `process.exit(code)`. The diagnostic, explicit exit and separate cleanup-error classification remain. No source finding was waived and no model patch, old report or old CI was adopted.
+
+Verdict: Local operator source qualification only. The first full run stopped at the evidence-entry format gate because this heading lacked its required Verdict field; that failure is retained. This new source still needs its own full/breadth, eight fresh own-system source lenses, current findings/CI/DR-037 and expected-head protected landing, then a natural canonical heartbeat. Local source qualification is not restoration, native coding or whole-program completion.
+
+
+## 2026-10-31 — Keep one owned exit-cleanup path
+Command: `sandbox-exec -p '(version 1)(allow default)(deny network*)' node scripts/check-lane-delivery.mjs`.
+Output: **48 pass / 0 fail / 0 skip**, with unchanged frozen assertions and actual Mac network denial. Published a8a79b3 received genuine Codex Ponytail FIX COMMENT5721580162. That request and all four unused native metadata clients ended normally; the seven remaining source methods and current-findings audit never started. Independent source inspection confirmed cleanup is invoked only by the single exit listener. The operator made the owned path constant, removed the unused second-cleanup state, and inlined its single-use wrapper. All cleanup operations and the catch that preserves post-publication readback-only classification remain, including the real filesystem permission-denial regression. No model patch, old source report or old CI was adopted.
+Verdict: New local operator source only. Full current-head preflight/breadth, eight fresh own-system source methods, current findings/CI/DR-037 and full expected-head protected landing remain required, then a fresh natural canonical Mac heartbeat. This is not restoration, accepted native coding or full-program operation.
+
+
+## 2026-10-31 — Preserve interrupted attempts while simplifying receipt bookkeeping
+Command: Actual Mac network-denied execution of the original frozen48 location companion and current `node scripts/check-lane-delivery.mjs`.
+Output: **48 frozen pass / 0 fail / 0 skip**, then **46 current public pass / 0 fail / 0 skip**. The private original48 controls retain all assertions; only their module/root location was rebound. Current public controls remove two duplicate gh-auth aliases, leaving both stronger Mac and Cloud auth-failure cases. Genuine own-system reviews COMMENT5721772361 (Codex SHIP) and COMMENT5721773018 (Claude FIX) are exact-GET verified. Both original requests and all four native clients ended normally; six other methods and ninth audit never started. Independent operator inspection accepted stdlib exclusive fsynced receipt writes for the repo's Node>=22 contract, one origin parser, dead imports/fixture branches, corrected clock/ancestry wording and consolidated recovery prose. Parent attempt identity, interrupted/missing-evidence holds, regular-file ownership and exact child-exit validation remain: the owner's no-replay/evidence-preservation contract does not permit retries inferred from receipt absence or launchd process-group defaults. The complete raw review and per-finding accepted/declined reasons remain retained. No failed model patch or earlier source-head clearance was adopted.
+Verdict: New operator source candidate only. The prior stable window was explicitly closed; Cloud keeper lands first. Current-base full preflight/breadth, all eight fresh same-head own-system source methods, current findings/CI/DR-037 and expected-head protected landing remain required, then a fresh natural canonical Mac heartbeat. No restoration, accepted native coding or whole-program completion is claimed.
+
+
+## 2026-10-31 — Resolve only the readback fixture OID it uses
+Command: `sandbox-exec -p '(version 1)(allow default)(deny network*)' node scripts/check-lane-delivery.mjs`.
+Output: **46 pass / 0 fail / 0 skip**, with every current assertion byte unchanged. Genuine cfe9 Codex Ponytail FIX COMMENT5721947618 identified one unused topic-OID lookup after production readback stopped requesting headRefOid. Its complete native request and all four unused Claude metadata clients ended normally; seven source methods and ninth audit never started. Independent operator inspection now selects the canonical ref, or the topic ref only for the adversarial canonical-race control, before one Git rev-parse. Both unused headRefOid and url fixture response fields are removed. Every race, refreshed-head and changed-payload assertion remains, and all production runtime/document bytes are unchanged. The original48 private frozen controls and their prior pass on those exact runtime bytes remain preserved, not replayed. No model patch or earlier-head clearance was adopted.
+Verdict: New fixture-only operator source candidate. Current-head full/breadth, all eight fresh own-system source methods, current findings/CI/DR-037 and full expected-head protected landing remain required, then the FIRST fresh natural canonical Mac heartbeat. The window ACK6540702116 still ends at earlier close/first accepted natural heartbeat/12:00UTC, with no silent extension. No restoration, accepted native coding or whole-program completion is claimed.
+
+
+## 2026-10-31 — One durable Mac delivery chain across linked checkouts
+Command: Actual Mac `sandbox-exec -p '(version 1)(allow default)(deny network*)' node scripts/check-lane-delivery.mjs`, with independent frozen cross-checkout acceptance.
+Output: **61 pass / 0 fail / 0 skip**. Four frozen controls first reproduced duplicate pending heartbeat/escalation submissions after a linked-checkout switch or dependency purge (0 pass / 4 fail), then passed on the independently authored shared-store correction (4/0). Missing/malformed independent terminals with a child receipt produced two additional RED controls (57/2) before the exact parent-terminal guard passed (59/0). A real original Bash holder denied a linked caller with a different TMPDIR and completed normally before exact fixture cleanup. Inherited Git variables first redirected the store (60/1); child-only environment scrubbing then passed all61. Marker loss/corruption, directory replacement, marker aliases and repeated initialization refuse without resetting state. All preceding import-precondition, path-alias CLI and fixture-age diagnostics remain retained. Genuine 80a COMMENT5722194961 (Codex SHIP) and COMMENT5722195073 (Claude FIX) are exact-GET verified, both actual requests/all four native clients cleaned up; six other methods and ninth audit never started. No model patch or old-head approval was adopted. The original48 controls remain preserved as historical evidence; the current61 gate retains the46 public behavioral contracts with shared-path scaffold changes and adds15 controls. They are not61 native tasks or live deliveries.
+Verdict: Operator source candidate only. One separately initialized identity-pinned Git common-directory store and shared tick lock now serve both linked checkouts; heartbeat, objective and build attempts survive dependency cleanup. Production store initialization and activation have NOT run. Complete new-head full/breadth, all eight fresh own-system source methods, current findings/CI/DR-037 and full expected-head protected landing remain required, then the first fresh natural canonical Mac heartbeat. Cloud ACK6541546795 changes only the stable-base cutoff to13:00UTC; keepers run first after explicit close. No restoration, accepted native coding/#1546 or whole-program completion is claimed. Per-cause build-hand recurrence after a known resolved blocker remains a separate scoped repair, not automatic reopening or replay of an unknown attempt.
+
+
+## 2026-10-31 — Preserve the pinned objective reader's complete import contract
+Command: Actual Mac network-denied `node scripts/check-lane-delivery.mjs` and supported real-process `node scripts/mac/build-tick-stages.mjs --self-test`, under the same serial host reservation.
+Output: **62 delivery pass / 0 fail / 0 skip** and **265 staged checks pass / 0 fail**. The original82aa full preflight failed at the staged worker: the new objective import was absent from its explicit Git-pinned dependency list. Adding that exact module and fixture source exposed the direct-run guard's non-file `node -e` argv label; a retained import RED control drove the library-only entrypoint correction. Imported readVerdict performs no store lookup or initialization; real CLI path aliases still bind the actual source. All existing staged assertions are unchanged. Two additional network-denied staged attempts were FAILED: that macOS sandbox blocks /bin/ps (exact-owned-process probe exit126), so the existing CI guardian retained scratch reservations. The two own wrappers and their two guardian children were narrowly source/identity-bound, observed through kernel NOTE_EXIT registrations and stopped by positive PIDs only; all four original lifetimes ended, no group signal or other reservation was changed. The staged suite then ran in its supported process-inspection environment and passed265/265. New delivery62 controls retain actual network denial. These are pure fixture checks, not real model builds, provider containment or generic runtime quiet proof. Production initialization/activation remains unrun; all failed logs, source and cleanup receipts stay retained.
+Verdict: New independently authored operator source candidate only. Previous82aa full failure is not green. Current new-head full/breadth, eight fresh own-system source reviews, ninth current-findings audit, current applicable CI/Mac/findings/DR-037 and full expected-head protected landing remain required, then a first fresh natural canonical Mac heartbeat. Neither source preparation nor passing fixtures establishes restoration, native coding/#1546 or whole-program completion. The explicit stable-base window still ends by13:00UTC/first accepted natural heartbeat/earlier close, keepers first afterwards.
+
+
+## 2026-10-31 — A known cleared hand permits one fresh notification episode
+Command: Actual Mac network-denied `node scripts/check-lane-delivery.mjs`, independent frozen notification acceptance, and supported `node scripts/mac/build-tick-stages.mjs --self-test`.
+Output: **74 current delivery pass / 0 fail / 0 skip**, **8 frozen notification pass / 0 fail / 0 skip** after baseline5/3 RED, and **265 staged checks pass / 0 fail** with unchanged existing assertions. A normal independent parent exit0 plus exact original merge proof and the specific current canonical hand resolved with evidence now bind one fresh notification ID to the cleared Git blob. All prior attempts stay immutable. Missing/unknown/nonzero terminals, pending/open hands, absent resolution, a different hand ID, a heartbeat receipt or an unbound/repeated token cannot authorize another notification. Real local Git controls hold the original simulated PR merge OID fixed while a later canonical commit clears the hand; raw upstream readbacks precede parsing. Schema/GH I/O are fixtures, not live GitHub evidence. This is a new notification episode, never a coding-task retry, ownership grant, budget reset or new authority from Generated content.
+Verdict: New operator source candidate, not restoration or native coding. The earlier11f full preflight FAILED at an unchanged hostile-Git self-test (308/309); its isolated source-identical diagnostic then passed309/309 with six explicit kernel-dependent platform skips. The original full failure remains failed and its lost nested detail is not reconstructed as fact. No gate, ceiling or assertion was relaxed, no global Git setting changed. All unavailable and self-skipped checks remain not run, not passes; ordinary preflight success summaries can hide those inner skip notices. A new full run is still required after source completion and current-base integration. The previous stable1a window was explicitly CLOSED early by COMMENT6542387681, exact GET, with mailbox wake6542391433. Keepers go first; a requested new14:30UTC window is NOT active without fresh exact canonical readback and explicit ACK. All current-head eight-method reviews, ninth audit, CI/Mac/findings/DR-037 and expected-head protected landing remain owed, followed by the first fresh natural canonical Mac heartbeat. No old source-head review, failed model patch or whole-program success is adopted.
+
+
+## 2026-10-31 — Descriptor ownership closes the tick's startup and foreign-cleanup races
+Command: Actual Mac network-denied `node scripts/check-lane-delivery.mjs`, with independent frozen subprocess acceptance of the complete tick lock block and helper.
+Output: **84 public delivery checks pass / 0 fail / 0 skip**. Independent acceptance reproduced **1 pass / 11 fail / 0 error / 0 skip** on original source, then passed **12 / 0 / 0 / 0** on the corrected runtime. Actual Bash/Node/Perl operations prove exclusion before ownership publication, linked checkouts with distinct TMPDIR, refusal of unknown legacy PID records, post-OPEN owner-write failure, replacement-store cleanup denial, SIGKILL/SIGTERM before finalization, corrupt slots and normal original release. Original child handles were waited through cleanup; no task, provider or full live tick was executed. The first portable84 run was **77 pass / 7 fail** at strict original-shell identity: fixture command strings were replaced by script files matching production. All249 existing-plus-new assertion expressions remained unchanged; the runtime identity guard was not relaxed. The passing independent12 runtime bytes were unchanged and were not replayed for that fixture-only correction.
+Verdict: Independently authored operator source correction, not restoration, generic native coding or live service qualification. The persistent guard is initialized once and never unlinked; a normal tick opens it read-only and holds the original descriptor. OPEN precedes work, exact owned records precede CLOSED, and unknown evidence is never cleared from PID liveness or kernel availability. The terminal record's exitTrapStatus describes authorized finalization, not an independently observed eventual parent exit or delivery/provider success. Per-attempt receipts keep their separate requirements. Current full/breadth, all eight fresh own-system source methods, ninth findings audit, applicable CI/Mac, findings and source-backed DR-037/DR-064 expected-head landing remain required before audited separate activation and a first fresh natural canonical Mac heartbeat. Earlier failed controls and all old attempts remain retained; no model request, grant or budget was retried or reset by this correction.
+
+
+## 2026-10-31 — Test the production startup and descriptor finalization contract (L47)
+Command: Actual network-denied delivery checker and four frozen startup mutation controls; complete staged worker self-test in the supported process environment.
+Output: **84 delivery checks pass / 0 fail / 0 skip**, **267 staged checks pass / 0 fail**. The old fixture incorrectly passed both startup tests after RECORD_DIR was planted back into node_modules. The corrected fixture runs the exact production assignment: the same mutant fails both tests, while actual source passes both. No delivery assertion was removed. The prior full preflight failed264/265 because one staged check required the obsolete PID-deleting EXIT trap; a distinct complete-output diagnostic reproduced that exact mismatch. Its replacement executes the real Bash finalization function and retains host-path/admission-order checks, with two added controls for nonzero work status and interrupted OPEN retention. Runtime guard bytes and independent12 acceptance bytes are unchanged.
+Verdict: The old full remains FAILED. This test-source correction is independently authored and source-bound, with original child handles waited through fixture cleanup. A new committed-head full/breadth, eight genuine own-system methods, ninth findings audit, current applicable CI/Mac, DR-037/DR-064 and expected-head protected landing remain required before separate preservation audit/activation and natural heartbeat proof. No model, public write, production init or activation occurred in these controls.
+
+
+## 2026-10-31 — Fence mixed producers and preserve the publication boundary (L48)
+Command: Frozen mixed-producer, pending-diagnostic, producing-checkout and real disposable-Git rejection controls; independent descriptor-guard cases; portable delivery suite, all network-denied.
+Output: **45 private cases,12 independent guard cases and96 delivery controls pass / 0 fail / 0 error / 0 skip**. Real local Git rejection reproduced a durable receipt followed by exit1; its12-case RED had6 failures. The corrected tick reads that original receipt regardless exit1/2 and creates no replacement heartbeat. The loaded legacy Bash fixture is byte-exact public source. A prior combined33 result remains32/1: its broad terminal-deletion setup damaged the new guard witness; the corrected fixture deletes only the intended notification terminal, preserving all assertions and the guard. Earlier failed controls remain retained.
+Verdict: Independent operator source correction, not native coding or deployment. D583's prior complete full1022.3195s and breadth58 passed with recorded exclusions; this changed head needs new full/breadth, all eight own-system methods, ninth findings audit, current CI/Mac, DR-037/DR-064 and expected-head protected landing before preservation audit/separate activation. No production initialization or natural canonical heartbeat is claimed.
+
+
+## 2026-10-31 — Refuse an incomplete original-evidence snapshot (L49)
+Command: Source-derived filesystem controls, portable delivery suite and unchanged walker gate/self-test.
+Output: The incomplete2-record and4-record fixtures failed their expected refusal before correction (RED2/3); the complete5-record case passed. With one minimum-five guard,3/3 controls,96/96 delivery checks and16/16 walker self-tests pass; the regular walker gate also passes. Runtime bytes and every prior assertion remain unchanged.
+Verdict: The01fc full489.746s failure at Walker-floor is retained as FAILED; breadth did not start. This fixes the new test's non-vacuity contract without a gate waiver. New exact-head full/breadth and all protected review/CI/activation requirements remain owed.
+
+
+## 2026-10-31 — Bind fixture file checks and reads to one descriptor (L50)
+Command: Frozen filesystem boundary controls and current portable delivery checker, network-denied.
+Output: Pre-open symlink and regular-object swaps exposed2 failures in5 frozen cases. Descriptor-bound reads pass5/5 and delivery96/96 with zero failures/errors/skips; post-open binding, recursive metadata, existing symlinks, hardlinks and owned-descriptor cleanup remain covered. Runtime source and all prior assertion lines are unchanged.
+Verdict: CodeQL flagged the previous test snapshot's separate path check/read. Static scope tracing found no lower-trust product entrypoint, but the correctness gap was hardened rather than suppressed. No alert dismissal or security/containment success is claimed; new-head CodeQL/full/CI/reviews remain owed. The previous Fef6 full1051.8714s/breadth58 passed with its recorded exclusions, not as this changed head's qualification.
+
+
+## 2026-10-31 — Preserve the original push terminal before repair classification (L51)
+Command: Frozen original-push/refusal boundary controls and unchanged portable delivery checker, network-denied.
+Output: The original31 controls reproduced8 failures and23 passes. Exact raw capture, committed-source/ref binding and bounded handoff pass31/31; unchanged delivery96/96 also passes, zero failures/errors/skips. Original assertions and failed histories remain preserved. Signal/spawn errors, missing or foreign records, ambiguous ref results and consumed notification failures remain held.
+Verdict: Independent operator source correction. An exact absent-topic GET plus a known original refusal permits one distinct repair hand under the actual tick owner; it never retries the original push or reaps an uncertain lock. This is focused source qualification, not full changed-head preflight, accepted native coding, formal source-panel clearance, public CI, landing or activation.
+
+
+## 2026-11-01 — Bound repair DATA, notice ownership and pending GET cadence (L52)
+Command: Network-denied current public delivery, repair, caller, bounded-drain, readback, refusal and filesystem entry points.
+Output: The six unchanged-runtime cohorts produced160 passes (96+18+12+9+20+5), zero failures/skips. A separate corrected strict-refusal unit31 and whole-heartbeat wrong-witness4 produced35 passes, zero failures/errors/skips on identical production bytes. The prior combined191 run remains FAILED: its refusal cohort had27 passes and4 failures because a generic uncertainty notice was mistaken for strict refusal acceptance. The explicit unit seam now records only that separate dependency; all31 original test methods/assertions remain byte-exact, while four full heartbeat cases count every operation through the real generic HOLD. This is195 explicit focused checks across separate source-bound cohorts, not one full-head preflight result. Earlier RED/helper/fixture failures remain retained.
+Verdict: Independent operator repair. Producers retain bounded immutable repair DATA; only the actual current descriptor/token owner can submit one distinct, sanitized uncertainty notice. Consumed notification failures never replay. Drain pages are bounded and round-robin; damaged cursors hold. Exact-source normal success suppresses redundant repair DATA. Pending receipt GETs have a120-minute cadence only under the actual tick owner; default and resolved-hand reads stay fresh. Append-only raw frames precede interpretation. The root filesystem snapshot no longer uses a separate exists/read race; current CodeQL clearance is still owed.
+Limits: Startup OPEN/legacy-lock recovery and the generic shell/Git descendant boundary remain unresolved. No interrupted history is abandoned, reaped or adopted; no ordinary startup initialization or transport-timeout cleanup inference was added. No native coding, full preflight/breadth, current CI, complete own-system source panel, protected landing, installation, activation or fresh natural canonical Mac heartbeat is claimed.
 ## 2026-11-01 — Six owner-accepted decision-record PRs landed one at a time
 
 The owner accepted six decision-record PRs in chat on 2026-10-31 (two groups of three). The cloud lane landed each under that acceptance, not as a DR-037 self-merge, one at a time, re-merging `SignalGrid_Alpha` before every push and letting GitHub's strict required-check policy force a branch refresh after every landing. No record's wording was changed by the lane except the owner-sanctioned DR-061 reconciliation note against DR-064.
@@ -4996,7 +5200,7 @@ git log --first-parent --format='%h %s' origin/SignalGrid_Alpha | grep -E 'Merge
 Output, verbatim (first-parent order, newest first; titles cut at 100 columns):
 ```text
 df1ff2df7 Merge pull request #1433: ARC kiosk photo + puck-as-token note absorbed as direction; DR-0
-702d6ca33 Merge pull request #1322: DR-062 — SignalGrid's scope is the whole company incl. legacy 
+702d6ca33 Merge pull request #1322: DR-062 — SignalGrid's scope is the whole company incl. legacy
 972751c4e Merge pull request #1050: DR-058 — a holder-bound device_returned closes custody without
 cfafb095d Merge pull request #1083: DR-059 — estate posture ages at decision time; a refresh retra
 c508cdb39 Merge pull request #1246: DR-061 (owner decision): lanes merge decision-path PRs under con
@@ -5004,6 +5208,68 @@ c508cdb39 Merge pull request #1246: DR-061 (owner decision): lanes merge decisio
 ```
 
 Verdict: six owner-accepted records are on `SignalGrid_Alpha`, each on a head whose gating check and local preflight+breadth were green. Readiness dimension (b) reads low until the Mac re-mints live evidence on the final manifest; that request is already queued by the Mac's own tick (#1716). No new readiness figure is asserted.
+
+
+## 2026-11-01 - Repair handoff fixture contract, L53
+
+Full `node scripts/preflight.mjs` on feef1add exited1 at staged Mac worker self-test264/267; breadth was not started. A separate focused diagnostic retained the same three failing expectations. The production17ac repair deliberately routes a hand to `cloud lane` and uses `scripts/mac/build-tick.sh` as its public location rather than exporting private control-log locations or asking a Mac operator to delete claims and retry.
+
+Only those expected recipient/location values and the fallback case name changed. All267 cases remain, including exact failure-text redaction, four-field home/credential exclusion, unchanged private log text and protected-submission assertions. Executed `node scripts/mac/build-tick-stages.mjs --self-test` prints `self-test passed (267/267)` and exits0 on the corrected working tree; production build-tick and repair module bytes are unchanged. This focused result does not relabel the failed full run or establish full current-head gates, CI, source-review clearance, landing, activation or natural canonical heartbeat restoration.
+
+
+## L54 - Vetted ancestor and exact inventory correction; final qualification pending
+
+Independent operator source checkpoint at 2026-11-01T09:08:10.520264+00:00.
+
+Ordinary integration merged inspected protected ancestor 1691751207779b1a97af0a906c88bc3ff6d0ad57 into 2f64a655fb92a77661aabbe819664ec8076ad93d as intermediate merge 39acc9396483820120eb451cd12407165700e090. Observed live 3d2829778952625cc79d13c369769c989f38cbc0 is newer unreviewed source; only the vetted ancestor was merged. Fresh current-main source inspection still precedes final validation and delivery.
+
+Preflight source stayed byte-identical at SHA256 a41a3859eacdf884e5b9774ed001c5b889ab1464940cf0c7a62414500766ce87 with 977 newline-counted lines; only its COMPANY_BUILD_PLAN inventory number changed from 970 to 977. This documentation step changes no runtime or tests. Prior failed full runs remain failed. Own generators, fresh full/breadth, formal same-head dual-system reviews, current CI/findings, protected landing, installation, activation and natural canonical Mac heartbeat remain pending. Other-lane approved deliveries receive no local native coding or accepted-checkpoint credit.
+
+
+## L55 — Vetted JWT/JWKS source integration; final qualification pending
+
+Independent operator source integration at 2026-11-01T09:27:29.304184+00:00. Protected ancestor 3d2829778952625cc79d13c369769c989f38cbc0 was merged into 5181405c1d4046a3f96199070872a6fcc3413035 as d0427b5bea88cb31d4a33f87d63aeb6e23155770. Later observed main 5886f1e62441bbc272207dc541c9b89407d3e78a remains unreviewed; it was not fetched or merged here and still blocks final current-main delivery. Approved PR1440 was carried by the other lane, not the local native executor. The existing977-line preflight/doc figure and earlierL54 remain intact. Two pinned local sync-manifest/surface-coverage generators are selected in this source phase; no test/full/breadth, formal review, CI, publication, installation or activation is selected. All prior failed/unknown attempts remain unchanged.
+
+
+## L56 — Vetted URL-guard source and exact claim citation; final qualification pending
+
+Independent operator source checkpoint at 2026-11-01T09:58:11.141618+00:00. Inspected protected ancestor 5886f1e62441bbc272207dc541c9b89407d3e78a was merged into d003f7e7911c0178db4a58306566f2c9f4a8895a as 1a83a9bb056bf58cef874cd5e14c119c72e265b9. Only this fixed target was fetched/merged; any newer main still needs source inspection before final delivery. Approved1556 is an other-lane delivery, not local native coding. Preflight remains byte-identical977/doc977 and earlierL54/L55 stay intact. The original D003 full FAILED at a stale README claim-evidence line reference; its breadth never started. The normal claim writer/renderer reanchor only that evidence token after the two pinned derived-view generators; full/breadth/currentCI/reviews/protected landing/activation are still pending.
+
+
+## L57 — Synthetic redaction fixture representation
+
+The retained215cc full stopped at publication-boundary because two source lines in a malformed-payload negative fixture carried a literal synthetic credential-shaped marker. No actual credential or public source push was involved.
+
+Two fixture lines now use the existing safety-check runtime-concatenation convention. A closed literal check preserved every input and forbidden value; all18 repair cases and the unchanged publication-boundary gate passed with actual network denial. Production and publication-policy bytes remained unchanged.
+
+New source qualification and protected delivery remain pending.
+
+
+## L58 — Disposable Git fixture isolation
+
+The retaineded390 full stopped at the unchanged scratch-repository hygiene gate: three new repair fixtures used a bespoke Git launcher instead of the shared helper.
+
+Each fixture now imports and calls scratchGit for its disposable local Git operations. All original assertion lines and cases are preserved; the current18 repair,12 caller and9 bounded-drain cases and unchanged hygiene gate passed with real network denial. Production and gate source bytes remained unchanged.
+
+New exact-head qualification and protected delivery remain pending.
+
+
+## L59 — Actual regression control bindings
+
+The retained88d821 full stopped at the unchanged gate-registration self-test: seven new checks did not name their existing execution controls on a code line.
+
+Only imported local runner names and their bound call identifiers changed. All arguments, targets,177 assertion lines and99 cases remain exact; the current99 controls and unchanged159-case gate self-test passed with real network denial. Registration remains the documented control-only visibility floor, not new self-test coverage. Production, Python targets, gate source and thresholds stayed unchanged.
+
+New exact-head qualification and protected delivery remain pending.
+
+
+## L60 — Shared Git environment policy
+
+The retained4a4158e full stopped at the unchanged walker self-test. Its proximity heuristic classified three duplicated Git-environment-key arrays beside readdirSync as filesystem roots.
+
+The fixtures now use the existing scratchGitEnv function instead of duplicating its16-key policy. Final fixture environment values, executable lookup PATH,177 assertions and all39 cases are preserved. Actual39 controls,16 walker self-tests, the regular walker and scratch-hygiene gates and closed environment-equivalence vectors passed under real network denial. No copy walk, floor, threshold, waiver, PENDING entry or idle-empty rule changed.
+
+New exact-head qualification and protected delivery remain pending.
 
 ## 2026-11-01 — OD01 approved; the verified zero-loss branch list is closed
 
@@ -5201,3 +5467,82 @@ node scripts/preflight.mjs   -> Preflight PASSED — everything it runs is green
 pnpm run verify:breadth      -> Breadth lane PASSED — 58 breadth proofs green (deferred families, doctrine documents, and the DR-005 decision-palette design gate).
 ```
 Verdict: #1885 is on `SignalGrid_Alpha` at 7472bc2453238e256c51d6569ef7857ef7038e5b, merged from exact head c4fb739137df665c6c9d294480f29acaac498207 whose gating check, local preflight and breadth were green.
+
+## 2026-11-11 — #1903 landed under DR-037 on the owner's word: the tick heartbeat self-refresh (e39becae)
+
+**What.** #1903 "#1698 + the tick refreshes its own behind heartbeat PR (owner-approved fix for the HIGH finding)" (branch claude/1698-heartbeat-self-refresh) carries the Mac lane's #1698 delivery code and the cloud's smallest fix for the #1698 HIGH: `scripts/lane-heartbeat-refresh.mjs` refreshes the lane's own heartbeat PR only after reading the complete check list for its pinned head. It also moves three owner-checked tick helpers in `scripts/mac/lane-tick.sh` out of command substitutions, because stock macOS `/bin/bash` 3.2 forks a subshell there and the helper is then not a direct child of the tick. SAFETY_MACHINERY (`scripts/**`).
+
+**Authority.** The owner wrote "land #1903" on 2026-11-11, after being told the two open Codex P2 findings would go to the Mac lane's #1698 follow-up. The Mac lane asked for the landing in lane mail (2026-11-11, 08:41Z).
+
+**Landed.** Merged at 2026-11-11T21:44Z: exact head `e9fe7fd82ffd0c8af494e2aa63203fc4bc7ed4d1` → mainline `e39becaea0eac9fd0d5268f9f095b690325e9c95`. Gating check run 130787553535: success. Mac-only check run 130787553891: success. Unresolved review threads: 0. Record comment on the PR: 6807755396.
+
+Command: `node scripts/preflight.mjs` and `pnpm run verify:breadth`, run in a private worktree detached at `8f5bb00d43e63671179a321559e0ac814acc8d6a`. The landed head adds two commits on top of that one, both GitHub update-branch merges of mainline (`4445f6af`, `e9fe7fd8`); under the owner's 2026-11-07 ruling such a head needs CI only.
+Output, verbatim (command -> printed line):
+```
+node scripts/preflight.mjs   -> Preflight PASSED — everything it runs is green.
+pnpm run verify:breadth      -> Breadth lane PASSED — 58 breadth proofs green (deferred families, doctrine documents, and the DR-005 decision-palette design gate).
+git ls-remote origin SignalGrid_Alpha -> e39becaea0eac9fd0d5268f9f095b690325e9c95	refs/heads/SignalGrid_Alpha
+```
+Verdict: #1903 is on `SignalGrid_Alpha` at e39becaea0eac9fd0d5268f9f095b690325e9c95, merged from exact head e9fe7fd82ffd0c8af494e2aa63203fc4bc7ed4d1 whose gating check and Mac-only check were green; local preflight and breadth were green two GitHub mainline merges earlier.
+
+**Not fixed, and where it went.** Two Codex P2 findings were resolved on the PR as deferred, not fixed: the group-recovery control in `scripts/check-lane-delivery.mjs` can hold on a host whose PID 1 does not reap a killed fixture survivor; and `scripts/mac/build-tick.sh` can queue a second uncertainty hand for a build hand that was already submitted. Both were mailed to the Mac lane (message `cloud-1903-landed-e39becae-pull-before-the-next-`).
+
+**Not verified.** Whether the Mac's launchd tick now writes `artifacts/agent-heartbeats/mac-lane-tick.json`: at the landing, mainline still carried the 2026-10-24T07:30Z file. Only a tick on the Mac after it pulls can show that.
+
+## 2026-11-13 — #2014 and #2022 landed under DR-037; the first fresh-code proof after them failed
+
+**What.** Two reviewed PRs on the unattended publication path. #2014 "tick publication: bounded host admission; CI: required checks in three shards" (branch codex/automation-delivery-bottlenecks-20261113) gave the tick's two publication admissions a bounded 90-second wait where they previously made one attempt, and split the required CI step into three shards. #2022 "Fix unattended publication and host wait timing" (branch mac/publication-config-and-old-claims) made the publisher and the tick validate the checkout's physical per-worktree Git configuration file where they previously refused the extension outright, made the two tick preflights pass over a coherent consumed claim made under an earlier activation where they previously stopped the loop, moved the bounded host wait to a monotonic clock, and raised the tick-harness child kill limit in `scripts/check-sim-scripts-selfcheck.mjs` from 120 s to 300 s.
+
+**Authority.** DR-037. Both were merged by the Codex lane after its own source review; neither was merged by the owner or by the Mac lane, which wrote #2022 and part of #2014.
+
+**Landed.** #2014 merged 2026-11-13T08:02:57Z: exact head `100bf7829edf7745953ecb5a84328fb56d81bdac` → mainline `50978729d1fd32995039ba70b10e6d4e44c23148`. #2022 merged 2026-11-13T10:20:06Z: exact head `9685381a1835781cbed841de4d8b7f08e5ff1fda` → mainline `efec01f31cd21a778e25dcd289298667128216eb`.
+
+Command: `gh pr view <n> --json number,state,mergedAt,mergeCommit,headRefOid`, `git ls-remote origin SignalGrid_Alpha` and `git merge-base --is-ancestor`, run on the Mac at 2026-11-13T11:30Z.
+Output, verbatim:
+```
+#2014 MERGED mergedAt=2026-11-13T08:02:57Z merge=50978729d1fd32995039ba70b10e6d4e44c23148 head=100bf7829edf7745953ecb5a84328fb56d81bdac
+#2022 MERGED mergedAt=2026-11-13T10:20:06Z merge=efec01f31cd21a778e25dcd289298667128216eb head=9685381a1835781cbed841de4d8b7f08e5ff1fda
+ccb6c60514ed406ffc70965b2505c8971502bca7	refs/heads/SignalGrid_Alpha
+50978729 is an ancestor of ccb6c60514ed406ffc70965b2505c8971502bca7
+efec01f3 is an ancestor of ccb6c60514ed406ffc70965b2505c8971502bca7
+```
+Verdict: #2014 and #2022 are on `SignalGrid_Alpha`, at 50978729d1fd32995039ba70b10e6d4e44c23148 and efec01f31cd21a778e25dcd289298667128216eb.
+
+**Validation of #2022's head before it was pushed, as reported on the PR.** Mac lane, tick harness, one run each under the host lock: 81 methods with 8 assertion failures before the fix; 2 methods with 11 subcase failures for two gaps found in review; 83 of 83 after. Codex lane, native final head: publisher self-test 185 of 185, tick harness 84 of 84 in 122.848 s. Cloud lane, Linux final head: preflight in eight slices, all 436 steps accounted for exactly once (433 ok, 2 database proofs self-skipped, 1 red-streaks check unverified); breadth 58 proofs passed. The previous head of that branch FAILED both runs and is kept as failed: natively on a timing test of the bounded host wait (1.04 s elapsed against a required 2.0 s, a real defect in the helper landed by #2014), and on Linux on the 120 s kill limit. Hosted checks on the merged head: 24 successful, none failed, at 2026-11-13T10:18Z.
+
+**Not achieved.** No brain job has been built, privacy-reviewed and published without a person. After #2022 the Codex lane reported the refreshed publication sources installed and their activation, custody and consumed-claim readers qualified on the Mac (10:29:33Z); that qualifies the readers, not unattended publication. The first fresh local code build after the refresh ended FAILED at its action limit with one supervisor-applied change that remained unaccepted; no test run, no review status and no publication occurred. An earlier candidate task stopped at intake on the combined required-source size bound and produced no build. The Codex lane later reported a bounded runtime repair for that build step installed and qualified at 11:28:33Z (332 candidate and 332 installed cases passed, 80 source pins matched); that is its report of the repair, not a successful build, and unattended code publication remains unproved.
+
+**Not verified.** The two self-skipped database proofs and the red-streaks check on the Linux run. Whether the Mac tick's publication step now proceeds past an old consumed claim in a real tick, as opposed to the fixture harness. The build-start wait measured on 2026-11-13 over 53 build jobs (median 1109 s queued to claimed) has a measured size and an unconfirmed cause. No live-evidence re-mint was run for this entry; `artifacts/live-evidence/mac-run.json` is unchanged.
+
+## 2026-11-13 — #2037 (9aefa8af) and #2038 (24bbdddd) landed by the owner; cloud lane closeout
+
+**What.** These are two Mac-lane machinery PRs on the unattended build path.
+- #2037, "CI host wrapper yields during the local brain's cooldown", changes `scripts/mac/ci-host-verification.sh` and adds a regression in `scripts/mac/build-tick-stages.mjs`. A CI admission that lands inside the brain's two-second cooldown after a blocked or failed job now gives the host up for the same bounded budget. Before this, such an admission held the host for a whole CI run.
+- #2038, "publisher: new files in application source", changes `scripts/mac/brain-proposal-pr.mjs`. The new-file allowlist now also admits `artifacts/signalgrid-(app|desktop|mobile-pwa)/src/`. The record folders under `artifacts/` stay refused. The PR adds positive and refusal self-test cases.
+
+**Authority.** Both were merged by the owner, each with one normal merge call at its expected head. This lane did not merge either: its merge call is refused by the session's classifier. The cloud lane reviewed both sources, ran the local qualification and refreshed #2038's branch twice with the normal branch-update control. Both PRs are SAFETY_MACHINERY (`scripts/**`).
+
+**Landed.**
+- #2037 merged 2026-11-13T21:21:56Z: exact head `5e397b4f51f1638fb67c91fe48a8ba39be49d7f2` → mainline `9aefa8af65560a542f4784657f4b698ebb535bc8`.
+- #2038 merged 2026-11-13T22:54:14Z: exact head `c0e817b11c6bb6109a40587488bbc3127f9c67bd` → mainline `24bbdddd5ad03b9b638f4bb4ced9abb1a7205418`. The merge tree `28919b88` equals the head tree.
+
+Command: `gh api repos/DanFashauer/SignalGrid-Review-Hub/pulls/<n>`, `git ls-remote origin refs/heads/SignalGrid_Alpha` and `git merge-base --is-ancestor`, run by the cloud lane at 2026-11-13T23:00Z.
+Output, verbatim:
+```
+#2037 closed merged=true mergedAt=2026-11-13T21:21:56Z merge=9aefa8af65560a542f4784657f4b698ebb535bc8 head=5e397b4f51f1638fb67c91fe48a8ba39be49d7f2 by=DanFashauer
+#2038 closed merged=true mergedAt=2026-11-13T22:54:14Z merge=24bbdddd5ad03b9b638f4bb4ced9abb1a7205418 head=c0e817b11c6bb6109a40587488bbc3127f9c67bd by=DanFashauer
+24bbdddd5ad03b9b638f4bb4ced9abb1a7205418	refs/heads/SignalGrid_Alpha
+9aefa8af is an ancestor of 24bbdddd5ad03b9b638f4bb4ced9abb1a7205418
+24bbdddd is an ancestor of 24bbdddd5ad03b9b638f4bb4ced9abb1a7205418
+```
+Verdict: both are on `SignalGrid_Alpha`.
+
+**Local qualification of #2038 (Linux, cloud lane).**
+- One full run on the combined tree at `e1513c1d2069ca97d5f742da5433cc388a523cbb` (tree `387b6674`), using nine fresh full-history clones with frozen installs. Preflight ran in 8 slices, every slice exit 0. The aggregate exited 0 with "every one of the 436 steps is accounted for exactly once across 8 slices: 433 ok, 2 skipped-db, 1 unverified" and "Preflight PASSED". Breadth exited 0: "Breadth lane PASSED — 58 breadth proofs green". The run started at 22:00:37Z and ended at 22:22:19Z. It is reported on the mailbox PR as comment 6866387521.
+- The final head `c0e817b1` differs from `e1513c1d` by exactly one file, `artifacts/agent-heartbeats/mac-lane-tick.json`. Root accepted that difference under the owner's narrow metadata-only reuse.
+- Fresh delta checks on `c0e817b1`, all exit 0: raised-hands schema and `--check`, lane messages, scheduled routines, publication boundary, launch claims and evidence sources. The publisher self-test reported "self-test passed (196/196)" (comment 6866723529).
+- Hosted: all 10 required checks and the Mac slices 1–4 plus the aggregate were green on `c0e817b1`. "Typecheck, build, and proof scaffold" is check run 132214012529, and "PR — Mac-only checks" is check run 132215924809.
+
+**Local qualification of #2037.** One full Linux run on its earlier head `6bbc24ef` gave the same counts: 436 steps, 433 ok, 2 skipped-db, 1 unverified, and breadth 58. It is comment 6861599458. Its landed head `5e397b4f` was qualified by Root under the owner's metadata-only reuse; this lane does not claim a full run on `5e397b4f`.
+
+**Not verified.** The two database proofs that skip themselves and the one unverified step, in every run. Native Darwin was not run by this lane. Whether an unattended build now publishes a new application-source file end to end: #2038 widens the allowlist, and no unattended publication has yet been observed.

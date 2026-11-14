@@ -6,7 +6,7 @@ Validation in this repository is whole-repo on every push. The deep independent
 reads are not: each one was chosen surface by surface. This page is the ledger of
 that choice, so an unread surface is visible rather than silent.
 
-**105 of 106 surfaces have been read. 1 are partially read. 0 have not been read at all.**
+**105 of 107 surfaces have been read. 1 are partially read. 1 have not been read at all.**
 
 Coverage of the tree is asserted, not assumed: **every in-scope tracked file belongs to a surface on this page** (a file belonging to no surface fails the gate; the declared out-of-scope trees are listed below). File counts are not printed here, for any surface: a generated page that moves when a file is added makes every other open pull request unmergeable on it. `node scripts/check-surface-review-coverage.mjs` prints them. The mailbox trees (`artifacts/lane-messages`, `artifacts/agent-heartbeats`, `artifacts/raised-hands`) are surfaces like any other.
 
@@ -28,6 +28,7 @@ any good. Source of truth: `docs/agent/SURFACE_REVIEW_COVERAGE.json`. Regenerate
 | `.claude/workflows` | tree | **partial** | 1 | 2026-10-15 | cloud lane (Sonnet reviewers in detached worktrees + Opus landing refute, 2026-10-15) | #1468 | 5 | 6 |
 | `.githooks` | tree | read | 1 | 2026-09-05 | cloud lane (independent audit + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 0 | 0 |
 | `.github/*` | loose files | read | 1 | 2026-09-05 | cloud lane (independent audit + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 0 | 0 |
+| `.github/agents` | tree | **NOT READ** | 0 | — | — | — | 0 | 0 |
 | `.github/codeql` | tree | read | 1 | 2026-09-05 | cloud lane (independent audit + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 0 | 0 |
 | `.github/ISSUE_TEMPLATE` | tree | read | 1 | 2026-09-05 | cloud lane (independent audit + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 0 | 0 |
 | `.github/workflows` | tree | read | 2 | 2026-09-05 | cloud lane (independent audit + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 13 | 0 |
@@ -131,9 +132,9 @@ A named slice was read. The rest of the surface has not been.
 
 - `.claude/workflows` (tree)
 
-## Not read (0)
+## Not read (1)
 
-None — every derived surface carries at least one read.
+- `.github/agents` (tree)
 
 ## Execution records (1)
 

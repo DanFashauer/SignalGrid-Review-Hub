@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-11-11T13:27:17.798Z",
-  "result": "12:24Z and 13:24Z cycles: quiet; 2h keepalive. No mail addressed to the cloud, no new sim results, no new mac/* branch without a PR (the estate queue refreshed mac/tick-20261109, mac/tick-20261110 and mac/reland-sim-scripts-bash32-darwin at 13:16Z; all three already have PRs). Tick heartbeat file on mainline still 2026-10-24T07:30Z; #1903 is the fix, every check green at 39f90a26, waiting on the owner's word. Live evidence on mainline dated 2026-11-05; the Mac's re-mint is up as draft #1954, so no refresh ask sent. Owner not escalated this cycle."
+  "firedAt": "2026-11-14T14:06:19.107Z",
+  "result": "acted 13:24Z cycle: merged Mac tick results #2082 (evidence-fresh-2026-11-14-3 failed at the same zod/resolvers typecheck; it ran before the #2081 fix mail landed). Tick last firedAt 2026-11-14T11:10:47Z (deferred: host lock held). Live evidence mac-run.json last 2026-11-10 (over 3 days; refresh already requested by the Mac's own loop and blocked on the node_modules reinstall mailed in #2081). Owner not escalated."
 }

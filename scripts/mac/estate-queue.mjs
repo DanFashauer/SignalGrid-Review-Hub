@@ -21,9 +21,12 @@
 //   superseded  every commit on the head is already on SignalGrid_Alpha → EXECUTED:
 //               one comment saying so, then the PR is closed (the branch is kept;
 //               deletion is branch-prune.yml's job, not this script's)
-//   refresh     behind mainline, no conflict, not a bot's PR, and NO check run on the
-//               head still running → EXECUTED: GitHub's update-branch (a merge of
-//               mainline, never a rebase), pinned to the head sha this run read
+//   refresh     behind mainline, no conflict, not a bot's PR, NO check run on the head
+//               still running, and AUTO-MERGE ON → EXECUTED: GitHub's update-branch (a
+//               merge of mainline, never a rebase), pinned to the head sha this run read.
+//               A behind PR with auto-merge off is `wait`: it cannot land from a refresh,
+//               and every refresh spends a full Mac CI run that locks out the brain and
+//               the tick (2026-11-11: the tick was deferred on 155 of 180 runs that day).
 //   fix         conflicted, or a required check failed → the builder's queue
 //   land-ready  clean, gating check green on the head, no open thread, not draft, and
 //               no DECISION_PATH/OWNER_RESERVED file → a lane lands it under DR-037
@@ -110,7 +113,10 @@ export function classify(pr) {
     if (!Array.isArray(pr.checksPending)) return { action: "unknown", why: "unread: checksPending" };
     if (pr.checksPending.length) return { action: "wait", why: `behind mainline, but ${pr.checksPending.length} check(s) still running on the head (${pr.checksPending.slice(0, 3).join(", ")}); refresh after they finish` };
     if (pr.ageDays > STALE_DAYS) return { action: "stale", why: `behind mainline and idle ${Math.floor(pr.ageDays)} days; not refreshed` };
-    return { action: "refresh", why: "behind mainline, no conflict" };
+    // Only a PR that will merge itself once green is worth a refresh. Unread is not "on".
+    if (typeof pr.autoMerge !== "boolean") return { action: "unknown", why: "unread: autoMerge" };
+    if (!pr.autoMerge) return { action: "wait", why: "behind mainline with auto-merge off; not refreshed (whoever lands it refreshes it then)" };
+    return { action: "refresh", why: "behind mainline, no conflict, auto-merge on" };
   }
   if (pr.gating !== "success") return { action: "wait", why: `gating check ${pr.gating}` };
   if (pr.draft) return { action: "wait", why: "draft" };
@@ -180,6 +186,8 @@ export function readPr(number) {
     title: p.title,
     user: p.user?.login ?? null,
     draft: p.draft === true,
+    // REST returns auto_merge as an object when armed and null when not; a missing key is unread.
+    autoMerge: "auto_merge" in p ? p.auto_merge !== null : null,
     labels: (p.labels ?? []).map((l) => l.name),
     headRef: p.head.ref,
     headSha: p.head.sha,
@@ -409,7 +417,7 @@ export function summarize(items, done = []) {
 function selfTest() {
   const sha = "a".repeat(40);
   const base = { number: 7, user: "DanFashauer", headSha: sha, mergeableState: "clean", compareStatus: "ahead",
-    gating: "success", checksPending: [], unresolvedThreads: 0, files: ["docs/agent/NOTE.md"], draft: false, labels: [], ageDays: 1 };
+    gating: "success", checksPending: [], unresolvedThreads: 0, files: ["docs/agent/NOTE.md"], draft: false, labels: [], ageDays: 1, autoMerge: true };
   const cases = [
     [{ ...base }, "land-ready"],
     [{ ...base, number: 439 }, "keep"],
@@ -423,6 +431,11 @@ function selfTest() {
     [{ ...base, compareStatus: "identical" }, "superseded"],
     [{ ...base, mergeableState: "dirty" }, "fix"],
     [{ ...base, mergeableState: "behind" }, "refresh"],
+    // A behind PR that cannot merge itself is NOT refreshed; an unread flag never acts (2026-11-11).
+    [{ ...base, mergeableState: "behind", autoMerge: false }, "wait"],
+    [{ ...base, mergeableState: "behind", autoMerge: null }, "unknown"],
+    [{ ...base, mergeableState: "behind", autoMerge: undefined }, "unknown"],
+    [{ ...base, autoMerge: false }, "land-ready"],
     [{ ...base, mergeableState: "behind", user: "dependabot[bot]" }, "owner"],
     [{ ...base, mergeableState: "unknown" }, "unknown"],
     [{ ...base, gating: "failure" }, "fix"],

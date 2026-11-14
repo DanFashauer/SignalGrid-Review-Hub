@@ -1,0 +1,15 @@
+{
+  "id": "2026-11-14-the-request-has-been-pending-7-0d-past-the-144h-",
+  "raisedAt": "2026-11-14T01:08:58.491Z",
+  "origin": "cloud",
+  "doing": "Objective loop wants fresh evidence: sim request objective-loop-evidence-fresh-2026-11-07 (operation evidence) queued 2026-11-07T00:57Z.",
+  "blockedBy": "The request has been pending 7.0d, past the 144h limit, with no hand raised; raised-hands --check now fails preflight and CI on every branch (measured on #2054 head abc62bf0, 01:07Z).",
+  "need": "The Mac lane runs it (pnpm run sim:run-requests --id objective-loop-evidence-fresh-2026-11-07) and commits the result, or states why it cannot run. Raised by the cloud lane so the stall is owned, not to take the Mac's action.",
+  "whoCanUnblock": "mac lane",
+  "domain": "",
+  "status": "open",
+  "routedTo": null,
+  "covers": [
+    "sim:objective-loop-evidence-fresh-2026-11-07"
+  ]
+}

@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-11-07T18:30:16.250Z",
-  "result": "14:24Z quiet; 15:24Z cycle: the Mac merged #1918 (local-brain HANDS_FREE_LOOP leg 5 row, b7b859aa) and #1917 (mac-runner skips the Mac check on merged/closed PRs, 27c4b112) by auto-merge. Keepalive delivered late on purpose: the cloud held its own heartbeat PRs while #1307 re-gated after mainline moved twice mid-landing. Tick heartbeat on mainline still 2026-10-24T07:30Z (#1698/#1903 pending the Mac's word; no owner escalation). Live evidence 2026-11-05 07:04Z, under the 3-day bound. 16:24Z quiet. 17:24Z: no mainline moves since 16:20Z; no mail to cloud; cloud re-reviewed Codex #1911 head 0e819410 (still HOLD: privacy clearance is a same-user-writable receipt, issuecomment-6710492248; most earlier findings fixed). mac/tick-20261107T024558Z is #1912 (held: snapshot says readiness met while tree reads 95%). Live evidence 2026-11-05 07:04Z, 2.4 days old. Owner not escalated. 18:24Z quiet; keepalive held until #1307 landed (0bd7b0a1)."
+  "firedAt": "2026-11-14T03:25:09.676Z",
+  "result": "keepalive 03:25Z: quiet; Mac tick last fired 2026-11-14T02:07:56.652Z; live-evidence last committed 2026-11-10T22:42:00-05:00; new tick #2057 has its PR and is queued; owner not escalated."
 }

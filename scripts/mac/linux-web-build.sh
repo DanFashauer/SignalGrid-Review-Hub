@@ -26,6 +26,8 @@
 #                                                                 (scripts/lib/native-build-attestation.mjs)
 set -eu
 
+if [ "$(uname -s)" != "Darwin" ]; then echo "linux-web-build.sh: macOS only" >&2; exit 1; fi
+
 E2E=0
 ATTEST=""
 while [ $# -gt 0 ]; do

@@ -156,6 +156,10 @@ for (const s of fixture.sessions) {
   check("a policy with NO reported segment forecloses rather than assuming it is fine",
     evaluateNetwork(on(null), NOW_MS, { segmentPolicy: POLICY }).reasonCode ===
       "SEGMENT_UNREPORTED_UNDER_POLICY");
+  // An empty expected list is no policy EVEN WHEN a restricted list is given: the restricted check
+  // applies only beside a non-empty expected list, before and after the stale return alike.
+  check("an EMPTY expected list with a restricted list naming the segment is still no policy, not a restriction",
+    evaluateNetwork(on("VLAN60"), NOW_MS, { segmentPolicy: { expected: [], restricted: ["VLAN60"] } }).recommendedAction !== "restrict");
   check("...and an EMPTY expected list is treated as no policy, not as 'nothing is allowed'",
     evaluateNetwork(on("VLAN40"), NOW_MS, { segmentPolicy: { expected: [] } }).reasonCode ===
       "AUTHENTICATED_SEGMENT_UNVERIFIED");
@@ -314,13 +318,15 @@ check("far-future makes the trusted device stale → step_up", evaluateNetwork(b
   check("NEGATIVE CONTROL: declaring unreported compliance clean is CAUGHT (mismatches > 0)",
     wrongPredicate.mismatches > 0 && typeof wrongPredicate.firstMismatch === "string");
 
-  // The unparseable-date sentinel behaves exactly like unreported — pinned so a
-  // future NaN path cannot quietly become fresh.
-  check("an unparseable lastAuthAt grades identically to an unreported one, on every axis combination",
+  // The unparseable-date sentinel behaves exactly like a STALE auth — pinned so a
+  // future NaN path cannot quietly become fresh, nor fall below stale to the milder
+  // unreported grading (deriveFreshness reserves `unknown` for an ABSENT stamp; a
+  // present but unreadable one cannot show the auth recent).
+  check("an unparseable lastAuthAt grades identically to a stale one, on every axis combination",
     ["authenticated", "unauthenticated", "quarantined", "unknown"].every((a) =>
       COMPLIANT.every((nc) => SEGMENT.every((seg) => {
         const va = evaluateNetwork(buildSignal({ authState: a, nacCompliant: nc, lastAuthAt: "not-a-date", segment: seg }), NOW, { segmentPolicy: POLICY });
-        const vb = evaluateNetwork(buildSignal({ authState: a, nacCompliant: nc, lastAuthAt: null, segment: seg }), NOW, { segmentPolicy: POLICY });
+        const vb = evaluateNetwork(buildSignal({ authState: a, nacCompliant: nc, lastAuthAt: STALE_ISO, segment: seg }), NOW, { segmentPolicy: POLICY });
         return va.reasonCode === vb.reasonCode && va.recommendedAction === vb.recommendedAction;
       }))));
 }

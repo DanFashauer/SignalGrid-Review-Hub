@@ -61,7 +61,9 @@ CURRENT EVIDENCE: 2026-10-21 — immutable artifact f3b55f7173ed5d5365a102ebadad
 EVIDENCE PUBLICATION: #1577 carried artifact f3b55f7173ed5d5365a102ebadadef2e0e1dfcea onto canonical mainline at 24eff86a940099e0725d474d1d5520bfbc71d368; the mint and its Linux attestation remain measurements of clean a70c36b3e0e897d8a80a863e7228417f729e487f, not new measurements of the later redaction head or merge.
 PENDING SOURCE PREPARATION: 2026-10-28 — see the 2026-10-27/28 EVIDENCE source-preparation entries for delegated policy, the C0 proof and open coordination covers; no new mint, completed witness or public qualification is claimed.
 PENDING CI FIX: 2026-10-28 — R6p1d explicitly constructs its missing tracking ref; EVIDENCE records applicable local checks, targeted Git2.56 evidence and limited-resource failures. Full current-head source/CI/preflight qualification remains pending.
-LATEST LANDING UPDATE: 2026-11-06 (newest first) — three landings under DR-037 by the cloud lane, each on its exact head with the gating check green and local preflight and breadth passed: #1885 (brain/job-125c1dd17eaf43b9, the third local-brain build; docs only, +4 lines in docs/SIMULATOR_EVENT_MODEL.md; about 16:05Z) head c4fb739137df665c6c9d294480f29acaac498207 → mainline 7472bc2453238e256c51d6569ef7857ef7038e5b, gating run 127973654198, Codex clean, 0 threads; #1869 (mac/loop-state-lane-deliver-worktree, 7 lines in scripts/loop-state.mjs; 14:45Z) head 8fc1e25042e57386404ab749daa18e5ecc1652b9 → 83577eecfe4233f3e0ed5a7394488eeae3e4acb1, gating run 127940328755, cloud review no blocker, Codex clean; #1813 (claude/stop-generated-figure-conflicts, SAFETY_MACHINERY; 14:13:48Z) head 5e06c45eaee100af4379633826b3c36122308f8d → 897464ceeb231237baaf968293726b9fd80cd4da, gating run 127928378268, Opus review NO BLOCKER with two findings folded into 5e06c45e. Record: the 2026-11-06 three-landings EVIDENCE entry.
+LATEST LANDING UPDATE: 2026-11-11 (21:44Z) — #1903 (claude/1698-heartbeat-self-refresh: the Mac lane's #1698 delivery code plus the heartbeat self-refresh and the bash 3.2 tick fix; scripts/** only) landed under DR-037 by the cloud lane on the owner's word "land #1903" and the Mac's mail ask: exact head e9fe7fd82ffd0c8af494e2aa63203fc4bc7ed4d1 → mainline e39becaea0eac9fd0d5268f9f095b690325e9c95, gating run 130787553535 and Mac-only run 130787553891 green, 0 unresolved threads; local preflight and breadth passed on 8f5bb00d, two GitHub mainline merges earlier. Two Codex P2 findings deferred to the Mac's #1698 follow-up and mailed. Whether the Mac tick heartbeat now writes is not yet verified. Record: the 2026-11-11 EVIDENCE entry.
+              Superseded for "latest landing": the 2026-11-06 three-landing update is retained verbatim as history:
+PREVIOUS LANDING UPDATE: 2026-11-06 (newest first) — three landings under DR-037 by the cloud lane, each on its exact head with the gating check green and local preflight and breadth passed: #1885 (brain/job-125c1dd17eaf43b9, the third local-brain build; docs only, +4 lines in docs/SIMULATOR_EVENT_MODEL.md; about 16:05Z) head c4fb739137df665c6c9d294480f29acaac498207 → mainline 7472bc2453238e256c51d6569ef7857ef7038e5b, gating run 127973654198, Codex clean, 0 threads; #1869 (mac/loop-state-lane-deliver-worktree, 7 lines in scripts/loop-state.mjs; 14:45Z) head 8fc1e25042e57386404ab749daa18e5ecc1652b9 → 83577eecfe4233f3e0ed5a7394488eeae3e4acb1, gating run 127940328755, cloud review no blocker, Codex clean; #1813 (claude/stop-generated-figure-conflicts, SAFETY_MACHINERY; 14:13:48Z) head 5e06c45eaee100af4379633826b3c36122308f8d → 897464ceeb231237baaf968293726b9fd80cd4da, gating run 127928378268, Opus review NO BLOCKER with two findings folded into 5e06c45e. Record: the 2026-11-06 three-landings EVIDENCE entry.
               Superseded for "latest landing": the 2026-11-06 01:57Z #1840 update is retained verbatim as history:
 PREVIOUS LANDING UPDATE: 2026-11-06 (about 01:57Z) — #1840 (brain/job-c8ee0dca1f6a4db3, the second local-brain-built change after #1819; docs only: the "Publishing a reviewed local build" section in docs/agent/HANDS_FREE_LOOP.md plus the lane message mac-pr1840-final-head-review-land.json) landed under DR-037 by the cloud lane on exact head c63574d646991adb4b994e95cbab528dc0970d97; merge 8603934326f1e65d694491ab09d11e29537c4c36 on SignalGrid_Alpha. Gating check green, local preflight and breadth passed, 0 unresolved threads, Codex review of c63574d6 with no findings. Codex-system reviews and the third-party Ponytail methods the Mac's mail asked for were not run by the cloud. Record: the 2026-11-06 EVIDENCE entry.
               Superseded for "latest landing": the 2026-11-01 20:00Z item-6 update is retained verbatim as history:
@@ -83,7 +85,8 @@ PREVIOUS LANDING: 2026-10-21 — #1577 24eff86a940099e0725d474d1d5520bfbc71d368 
 EARLIER LANDING: 2026-10-21 — #1576 b0a4568855ca2d2378698ba23e5ff867a7c6650b (2026-10-21T21:33:03Z), from exact head 418221363eea5dc66ff3eda7c21484247d03cfb9; required check 119486613085 completed success at 21:30:31Z; Mac check 119486610742 completed success at 21:25:12Z.
               Local preflight passed with two native web steps explicitly unavailable on the Mac; a separate clean-head Linux build and browser E2E passed 53/53; breadth 58/58; staged helper 243/243; local-brain primitives 41/41. Primary independent source reviews completed per the PR body; optional GitHub Codex review was still running at landing and at the 21:47Z read, with no completed verdict claimed. See the 2026-10-21 EVIDENCE entry. This records the worker integration, not a new readiness figure or owner attestation.
 HISTORICAL SNAPSHOT: the following October 16 LAST TOUCHED block, including its readiness and pending-re-mint statements, records that earlier window. The fresh October 21 receipt is CURRENT EVIDENCE above; no current readiness value is inferred from either entry.
-LAST TOUCHED: 2026-11-01 (cloud lane, 20:00Z) - TWELVE ITEM-6 CLAUDE/* PRs LANDED (#1240 #1222 #1215 #1320 #1230 #1280 #1309 #1330 #1443
+LAST TOUCHED: 2026-11-13 (mac lane, 11:35Z) - TWO PUBLICATION-PATH PRs LANDED UNDER DR-037, AND THE FIRST FRESH-CODE PROOF AFTER THEM FAILED. #2014 (tick bounded host admission + required CI split into three shards) merged 08:02:57Z as 50978729; #2022 "Fix unattended publication and host wait timing" (publisher and tick validate the physical per-worktree Git configuration, tick preflights pass over a coherent consumed claim from an earlier activation, bounded host wait on a monotonic clock, tick-harness kill limit 120 s -> 300 s) merged 10:20:06Z as efec01f3. Neither was merged by the owner or by the Mac lane. After #2022 the refreshed publication sources were installed and their readers qualified on the Mac by the Codex lane (its report, 10:29:33Z). NOT ACHIEVED: no brain job has been built, privacy-reviewed and published unattended. The first fresh local code build after the refresh ended FAILED at its action limit with one supervisor-applied change that remained unaccepted, no test run, no review status and no publication; an earlier candidate stopped at intake on the required-source size bound. The Codex lane reports a runtime repair for that step installed and qualified at 11:28:33Z; unattended code publication remains unproved. No new evidence mint, readiness figure or owner attestation is asserted by this entry. See the 2026-11-13 EVIDENCE record. The 2026-11-01 block below is retained verbatim as the previous recorded state.
+PREVIOUS LAST TOUCHED: 2026-11-01 (cloud lane, 20:00Z) - TWELVE ITEM-6 CLAUDE/* PRs LANDED (#1240 #1222 #1215 #1320 #1230 #1280 #1309 #1330 #1443
               #1459 #1244 #1242; last merge a1f0c05a8341af0d0a3ff9940ff2c3ac8f3e9031) under the 2026-11-01 standing order; the rest of item 6
               is the brain's (FIX-NEEDED verdicts posted on #1463, #1586, #1585; #1442/#1398 redo on fresh branches) or the owner's
               (hold list: #1337, #1338, #1307, #1314, #1321, #1190, #1133, row-91 hand). Mac PRs #1739 (self-recovery for #1698, five
@@ -2300,7 +2303,7 @@ PREVIOUSLY:   owner: merge #1246 #1322 #1357, #1416 #1417 #1422 #1424, signalgri
    frozen" until 2026-09-02 — two days after this file's own STATE section
    recorded DR-021 — which is the contradiction a doc can hold against itself
    when no gate reads English.*
-3. **Nobody has used the product.** 155 proof gates and four native surfaces do
+3. **Nobody has used the product.** 156 proof gates and four native surfaces do
    not change that number. Only a conversation does.
 
 ---
@@ -2346,3 +2349,114 @@ something alongside a life.
 Everything else in this repository is finished enough. If a month passes and
 both are still zero, the problem is not the product, the doctrine, the gates or
 the plan - and no amount of work in any tool will fix it.
+
+
+## Mac transport guard — source correction L46
+
+The shared record store also contains a persistent identity-pinned tick guard. Only the separate explicit store initializer creates it. Normal ticks open that file read-only and retain FD8 while the existing Perl/Fcntl primitive serializes linked checkouts; they never unlink the shared guard or reap a PID file.
+
+An existing legacy tick.lock, missing/corrupt ownership, or an unfinished OPEN slot refuses work even if the kernel guard is available. OPEN is committed and read back before work. Exact original ownership and immutable finalization records precede CLOSED. Signals observed before normal finalization retain OPEN. CLOSED is lease finalization, not an independently observed parent terminal, task acceptance, provider quiet, canonical delivery or authority to retry an old attempt; those remain separately evidenced.
+
+L46 has actual84 portable delivery controls and12 independent Mac subprocess controls, all zero-fail/skip. These are source checks, not native coding or installed operation. Full current-head validation, fresh source reviews, protected landing, preservation audit and separate activation remain required; restoration needs a fresh natural canonical heartbeat.
+
+
+## Mac transport test contract — L47
+
+Linked-checkout heartbeat tests now execute the production RECORD_DIR startup assignment; a planted node_modules regression fails both related controls. The staged checker executes the actual descriptor-finalization Bash function, including host-release order, exact token/root/entry-status arguments, nonzero work status and interrupted OPEN retention. Delivery84/84 and staged267/267 pass. The earlier full264/265 result remains FAILED, not replaced by isolated checks. Runtime guard bytes are unchanged. New exact-head full/breadth, complete source reviews, protected landing, preservation audit and separate activation remain owed; no fresh canonical Mac heartbeat is claimed.
+
+
+## Mac transport producer and receipt boundary — L48
+
+The new transport refuses receipt-less Mac mutations before Git, including old Bash loaded before canonical JS advances. Existing submission evidence always selects original readback, even when its parent status is1/2; no rejected push is retried through another topic. A true prepublication refusal without a receipt remains a different observation, while unknown or damaged evidence holds.
+
+Pending readback binds the original receipt/head, PR age and checks. Behind, failed or one-hour-pending PRs may raise one distinct Cloud hand through the actual producing checkout after rechecking the original FD8/token/store. Unknown or partial notification evidence remains readback-only. Source45/45, independent guard12/12 and delivery96/96 pass, zero failures/errors/skips. These checks do not activate source or prove the complete local coding/delivery loop; new-head full/breadth, protected source reviews/CI/landing and a separate preservation audit/activation remain owed.
+
+
+## Original-evidence non-vacuity — L49
+
+The preservation fixture requires its five original records before snapshotting. Actual2-record and4-record negative cases refuse; complete5 succeeds. Current3 filesystem controls,96 delivery checks and16 unchanged walker self-tests pass. Runtime and previous assertions are unchanged. The01fc full failure remains FAILED and its breadth unstarted; a new exact-head full/breadth must precede protected publication and separate activation.
+
+
+## Fixture snapshot file binding — L50
+
+Regular fixture bytes now come from the exact opened descriptor whose identity was checked before and after reading. Symlink/regular path swaps refuse wrong bytes; original descriptor reads and close-on-error behavior are covered. Frozen5/5 and delivery96/96 pass, zero failures/errors/skips, with runtime and prior assertions unchanged. This is test correctness hardening, not native delivery or a security-boundary certification. The changed head requires new full/breadth, CodeQL/currentCI, protected reviews/landing and separate activation.
+
+
+## Original push evidence and refusal repair — L51
+
+The producer captures raw Git output and a source-bound terminal before parsing. A known failed push alone does not prove no publication: GET-only readback also requires the exact original topic to be absent. Foreign, incomplete, signaled, failed-GET or ambiguous evidence holds without replay. Historical producer bytes are checked against their committed Git blob.
+
+The actual tick owner may create one distinct Cloud repair hand using the original attempt's stable notification identity. Changing diagnostic timing or cause never creates a second hand; failed/unknown notifications stay consumed. Unknown legacy locks remain held. Frozen31/31 and unchanged delivery96/96 pass under real network denial, zero failures/errors/skips. This source correction remains subject to new full/breadth, complete own-system reviews, current CI/findings, protected landing and separate preservation/activation before natural canonical delivery proof.
+
+
+## Source-bound delivery repair and pending readback — L52
+
+Current operator source retains producer repair DATA without granting execution. Only the real FD8 owner may publish one separate generic uncertainty notice, with the original stable identity; failed/unknown hands stay consumed. A bounded round-robin drain handles at most one publication per tick without claiming the remainder is quiet. Pending GET observations are journaled before parsing and paced120 minutes only for the current owner. Ordinary and resolved-hand readback remain fresh.
+
+Focused qualification is160 passes across unchanged production-source cohorts plus35 passes in corrected strict-refusal31/full-heartbeat4 cohorts; all zero failures/skips. The earlier191 cohort remains FAILED27/4 in its refusal portion, preserved without reclassification. Original31 assertions remain exact; the new4 cases exercise the real generic HOLD and count all operations. This is source evidence across separate cohorts, not a new full-head, native, CI, landing or activation result. Startup OPEN/legacy histories and unqualified Git descendant recovery remain held. No natural canonical heartbeat restoration is claimed.
+
+
+## Current repair handoff fixture - L53
+
+The staged worker test now expects the deliberate Cloud repair recipient and public script location. The same267 assertions run; privacy/redaction, private-log preservation and protected submission checks remain. Focused267/267 passes; full feef264/267 is still failed and breadth unstarted. This is an operator test-contract correction with production bytes unchanged, not an accepted native checkpoint, full-head gate, delivery, activation or fresh natural heartbeat.
+
+
+## L54 - Local unpublished operator source checkpoint
+
+Independent operator source checkpoint at 2026-11-01T09:08:10.520264+00:00.
+
+Ordinary integration merged inspected protected ancestor 1691751207779b1a97af0a906c88bc3ff6d0ad57 into 2f64a655fb92a77661aabbe819664ec8076ad93d as intermediate merge 39acc9396483820120eb451cd12407165700e090. Observed live 3d2829778952625cc79d13c369769c989f38cbc0 is newer unreviewed source; only the vetted ancestor was merged. Fresh current-main source inspection still precedes final validation and delivery.
+
+Preflight source stayed byte-identical at SHA256 a41a3859eacdf884e5b9774ed001c5b889ab1464940cf0c7a62414500766ce87 with 977 newline-counted lines; only its COMPANY_BUILD_PLAN inventory number changed from 970 to 977. This documentation step changes no runtime or tests. Prior failed full runs remain failed. Own generators, fresh full/breadth, formal same-head dual-system reviews, current CI/findings, protected landing, installation, activation and natural canonical Mac heartbeat remain pending. Other-lane approved deliveries receive no local native coding or accepted-checkpoint credit.
+
+Next: inspect any newer canonical delta, run owned generators and qualify the exact final head. The local-first program remains incomplete.
+
+
+## L55 — Local source and derived-view follow-through
+
+Independent operator source integration at 2026-11-01T09:27:29.304184+00:00. Protected ancestor 3d2829778952625cc79d13c369769c989f38cbc0 was merged into 5181405c1d4046a3f96199070872a6fcc3413035 as d0427b5bea88cb31d4a33f87d63aeb6e23155770. Later observed main 5886f1e62441bbc272207dc541c9b89407d3e78a remains unreviewed; it was not fetched or merged here and still blocks final current-main delivery. Approved PR1440 was carried by the other lane, not the local native executor. The existing977-line preflight/doc figure and earlierL54 remain intact. Two pinned local sync-manifest/surface-coverage generators are selected in this source phase; no test/full/breadth, formal review, CI, publication, installation or activation is selected. All prior failed/unknown attempts remain unchanged.
+
+Next: qualify the actual final owned source and inspect any later canonical delta before protected delivery. The overall local-first program remains incomplete.
+
+
+## L56 — Exact-source claim evidence follow-through
+
+Independent operator source checkpoint at 2026-11-01T09:58:11.141618+00:00. Inspected protected ancestor 5886f1e62441bbc272207dc541c9b89407d3e78a was merged into d003f7e7911c0178db4a58306566f2c9f4a8895a as 1a83a9bb056bf58cef874cd5e14c119c72e265b9. Only this fixed target was fetched/merged; any newer main still needs source inspection before final delivery. Approved1556 is an other-lane delivery, not local native coding. Preflight remains byte-identical977/doc977 and earlierL54/L55 stay intact. The original D003 full FAILED at a stale README claim-evidence line reference; its breadth never started. The normal claim writer/renderer reanchor only that evidence token after the two pinned derived-view generators; full/breadth/currentCI/reviews/protected landing/activation are still pending.
+
+Next: qualify the newly committed source with a genuinely new full/breadth operation; preserve every earlier failed result. The local-first program remains incomplete.
+
+
+## L57 — Synthetic redaction fixture representation
+
+The retained215cc full stopped at publication-boundary because two source lines in a malformed-payload negative fixture carried a literal synthetic credential-shaped marker. No actual credential or public source push was involved.
+
+Two fixture lines now use the existing safety-check runtime-concatenation convention. A closed literal check preserved every input and forbidden value; all18 repair cases and the unchanged publication-boundary gate passed with actual network denial. Production and publication-policy bytes remained unchanged.
+
+New source qualification and protected delivery remain pending.
+
+
+## L58 — Disposable Git fixture isolation
+
+The retaineded390 full stopped at the unchanged scratch-repository hygiene gate: three new repair fixtures used a bespoke Git launcher instead of the shared helper.
+
+Each fixture now imports and calls scratchGit for its disposable local Git operations. All original assertion lines and cases are preserved; the current18 repair,12 caller and9 bounded-drain cases and unchanged hygiene gate passed with real network denial. Production and gate source bytes remained unchanged.
+
+New exact-head qualification and protected delivery remain pending.
+
+
+## L59 — Actual regression control bindings
+
+The retained88d821 full stopped at the unchanged gate-registration self-test: seven new checks did not name their existing execution controls on a code line.
+
+Only imported local runner names and their bound call identifiers changed. All arguments, targets,177 assertion lines and99 cases remain exact; the current99 controls and unchanged159-case gate self-test passed with real network denial. Registration remains the documented control-only visibility floor, not new self-test coverage. Production, Python targets, gate source and thresholds stayed unchanged.
+
+New exact-head qualification and protected delivery remain pending.
+
+
+## L60 — Shared Git environment policy
+
+The retained4a4158e full stopped at the unchanged walker self-test. Its proximity heuristic classified three duplicated Git-environment-key arrays beside readdirSync as filesystem roots.
+
+The fixtures now use the existing scratchGitEnv function instead of duplicating its16-key policy. Final fixture environment values, executable lookup PATH,177 assertions and all39 cases are preserved. Actual39 controls,16 walker self-tests, the regular walker and scratch-hygiene gates and closed environment-equivalence vectors passed under real network denial. No copy walk, floor, threshold, waiver, PENDING entry or idle-empty rule changed.
+
+New exact-head qualification and protected delivery remain pending.

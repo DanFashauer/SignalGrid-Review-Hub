@@ -20,6 +20,7 @@
 # nothing may touch stdout before exec'ing node.
 
 set -u
+if [ "$(uname -s)" != "Darwin" ]; then echo "mcp-up.sh: macOS only" >&2; exit 1; fi
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 DIST="$REPO/artifacts/mcp-server/dist/index.mjs"
 log() { echo "[mcp-up] $*" >&2; }

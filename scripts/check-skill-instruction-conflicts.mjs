@@ -448,6 +448,30 @@ export function collect(files, verdict, overrides) {
   return { findings, overriddenHits, mentionsDenied, judged, mentions };
 }
 
+// A command the deny list refuses, assembled so this file never contains it whole.
+const PLANTED_DENIED = "rm -" + "rf x";
+
+/** The plant proof: `files` plus ONE fenced step (`plantedCommand`) appended to the first
+ *  SKILL.md must yield exactly one MORE finding than `files` alone. `verdict` holds the
+ *  answers THIS process already got from THIS hook for the unplanted files; only commands
+ *  it lacks are asked now, so the proof costs the planted step's own hook call(s) and
+ *  never re-judges the tree. Nothing is read from disk or from another invocation.
+ *  @returns {Promise<{ok: boolean, before: number, after: number, asked: number}>} */
+export async function plantProof(hookPath, files, verdict, plantedCommand = PLANTED_DENIED) {
+  const victim = files.find((f) => f.path.endsWith("/SKILL.md"));
+  if (!victim) return { ok: false, before: 0, after: 0, asked: 0 };
+  const plantedFiles = files.map((f) =>
+    f === victim ? { path: f.path, text: `${f.text}\n\`\`\`bash\n${plantedCommand}\n\`\`\`\n` } : f,
+  );
+  const needed = [...files, ...plantedFiles].flatMap((f) => extractCandidates(f.text)).filter((c) => !c.mention).map((c) => c.command);
+  const missing = [...new Set(needed)].filter((c) => !verdict.has(c));
+  const all = new Map(verdict);
+  for (const [command, denied] of await judgeAll(hookPath, missing)) all.set(command, denied);
+  const before = collect(files, all, []).findings.length;
+  const after = collect(plantedFiles, all, []).findings.length;
+  return { ok: after === before + 1, before, after, asked: missing.length };
+}
+
 async function run() {
   const hookPath = resolve(repo, HOOK);
   if (!existsSync(hookPath)) {
@@ -486,6 +510,16 @@ async function run() {
       `(${mentions} inline spans read as mentions, not invocations; ` +
       `Overrides section ${overrides.present ? `present, ${overrides.entries.length} parsed row(s)` : "absent"})`,
   );
+
+  // The plant proof against the REAL tree runs here, in the process that just judged the
+  // real tree with this hook. It used to live in --self-test, which re-judged all ~10k
+  // unique commands for it: a second full scan per preflight (240 s on a hosted macOS VM).
+  const plant = await plantProof(hookPath, files, verdict);
+  console.log(`  ${plant.ok ? "✓" : "✗"} planting one denied step into a real skill adds exactly one finding (${plant.before} → ${plant.after})`);
+  if (!plant.ok) {
+    console.error("✗ the real-tree plant proof failed — a denied step planted into a real skill was not reported as exactly one new finding; this scan cannot be trusted to see one.");
+    process.exit(1);
+  }
 
   for (const h of overriddenHits) {
     console.log(`  overridden: ${h.file}:${h.line}  ${h.command}`);
@@ -528,7 +562,7 @@ async function selfTest() {
     process.exit(1);
   }
 
-  const BAD = "rm -" + "rf x";
+  const BAD = PLANTED_DENIED;
 
   // 1. planted invocation inside a bash fence → flagged
   const planted = ["# Fixture", "", "Run the cleanup step:", "", "```bash", BAD, "```", ""].join("\n");
@@ -696,24 +730,37 @@ async function selfTest() {
     pgrepUsable ? `reaped=${descendantReaped}` : "pgrep unavailable — descendant check skipped",
   );
 
-  // 8. plant/remove against the REAL tree: the real files plus one planted fence
-  //    must yield exactly one MORE finding than the real files alone.
-  const realPaths = trackedSkillFiles();
-  const realFiles = realPaths.map((p) => ({ path: p, text: readFileSync(resolve(repo, p), "utf8") }));
-  const realCands = realFiles.flatMap((f) => extractCandidates(f.text)).filter((c) => !c.mention);
-  const realVerdict = await judgeAll(hookPath, realCands.map((c) => c.command));
-  const before = collect(realFiles, realVerdict, []).findings.length;
-  const victim = realFiles.find((f) => f.path.endsWith("/SKILL.md"));
-  const plantedFiles = realFiles.map((f) =>
-    f === victim ? { path: f.path, text: `${f.text}\n\`\`\`bash\n${BAD}\n\`\`\`\n` } : f,
-  );
-  const plantedCands = plantedFiles.flatMap((f) => extractCandidates(f.text)).filter((c) => !c.mention);
-  const plantedVerdict = await judgeAll(hookPath, plantedCands.map((c) => c.command));
-  const after = collect(plantedFiles, plantedVerdict, []).findings.length;
+  // 8. the plant proof itself, both directions, on a fixture tree. The REAL-tree run of the
+  //    same proof is in the gate (run()), where the real answers already exist; here the
+  //    proof is shown able to pass AND to fail without a second scan of the tree.
+  const fixtureTree = [
+    { path: `${SKILLS_DIR}/fixture-a/SKILL.md`, text: ["# A", "", "```bash", "ls -la", "```", ""].join("\n") },
+    { path: `${SKILLS_DIR}/fixture-b/notes.md`, text: ["# B", "", "```bash", "git status", "```", ""].join("\n") },
+  ];
+  const deniedPlant = await plantProof(hookPath, fixtureTree, new Map());
   check(
-    `planting one denied step into a real skill adds exactly one finding (${before} → ${after})`,
-    after === before + 1,
+    `planting one denied step adds exactly one finding (${deniedPlant.before} → ${deniedPlant.after})`,
+    deniedPlant.ok && deniedPlant.after === deniedPlant.before + 1,
   );
+  const allowedPlant = await plantProof(hookPath, fixtureTree, new Map(), "ls");
+  check(
+    "the plant proof FAILS when the planted step is one the hook allows (it cannot pass vacuously)",
+    !allowedPlant.ok && allowedPlant.after === allowedPlant.before,
+    `before=${allowedPlant.before} after=${allowedPlant.after}`,
+  );
+  const known = new Map([["ls -la", false], ["git status", false]]);
+  const reuse = await plantProof(hookPath, fixtureTree, known);
+  check(
+    "answers already held for this hook are not asked again — only the planted step is",
+    reuse.ok && reuse.asked === 1,
+    `asked=${reuse.asked}`,
+  );
+  check(
+    "a tree with no SKILL.md to plant into fails the proof instead of passing it",
+    !(await plantProof(hookPath, [fixtureTree[1]], new Map())).ok,
+  );
+  const realPaths = trackedSkillFiles();
+  const realCands = realPaths.flatMap((p) => extractCandidates(readFileSync(resolve(repo, p), "utf8"))).filter((c) => !c.mention);
 
   // 9. the floors refuse rather than reporting zero
   check("the file floor is above a trivially-small scope", FILE_FLOOR >= 20 && CANDIDATE_FLOOR >= 200);

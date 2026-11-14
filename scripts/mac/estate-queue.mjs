@@ -21,15 +21,19 @@
 //   superseded  every commit on the head is already on SignalGrid_Alpha → EXECUTED:
 //               one comment saying so, then the PR is closed (the branch is kept;
 //               deletion is branch-prune.yml's job, not this script's)
-//   refresh     behind mainline, no conflict, not a bot's PR → EXECUTED: GitHub's
-//               update-branch (a merge of mainline, never a rebase), pinned to the
-//               head sha this run read
+//   refresh     behind mainline, no conflict, not a bot's PR, NO check run on the head
+//               still running, and AUTO-MERGE ON → EXECUTED: GitHub's update-branch (a
+//               merge of mainline, never a rebase), pinned to the head sha this run read.
+//               A behind PR with auto-merge off is `wait`: it cannot land from a refresh,
+//               and every refresh spends a full Mac CI run that locks out the brain and
+//               the tick (2026-11-11: the tick was deferred on 155 of 180 runs that day).
 //   fix         conflicted, or a required check failed → the builder's queue
 //   land-ready  clean, gating check green on the head, no open thread, not draft, and
 //               no DECISION_PATH/OWNER_RESERVED file → a lane lands it under DR-037
 //               (preflight + breadth on the head first). This script NEVER merges.
 //   owner       touches DECISION_PATH or OWNER_RESERVED, or a dependency bump → owner
-//   wait        checks still running, or a draft
+//   wait        checks still running (on a behind PR too: a refresh then would restart
+//               them, the Mac-only check included), or a draft
 //   stale       behind mainline with no real commit in STALE_DAYS; reported, not refreshed
 //
 // Every executed action re-reads the PR first and acts only if the head sha and the
@@ -69,7 +73,7 @@ export function classify(pr) {
   if (KEEP_NUMBERS.has(pr.number) || (pr.labels ?? []).includes("standing")) {
     return { action: "keep", why: "standing PR" };
   }
-  const need = ["user", "headSha", "mergeableState", "compareStatus", "gating", "unresolvedThreads", "files"];
+  const need = ["user", "headSha", "mergeableState", "compareStatus", "gating", "checksPending", "unresolvedThreads", "files"];
   const missing = need.filter((k) => pr[k] === undefined || pr[k] === null);
   if (missing.length) return { action: "unknown", why: `unread: ${missing.join(", ")}` };
   if (!/^[0-9a-f]{40}$/.test(pr.headSha)) return { action: "unknown", why: "head sha not a full sha" };
@@ -102,8 +106,17 @@ export function classify(pr) {
   // non-fast-forward (force-push is forbidden).
   if (pr.mergeableState === "behind") {
     if (pr.draft) return { action: "wait", why: "draft (behind mainline; not refreshed)" };
+    // A refresh moves the head and restarts every check on it. While any check run on the
+    // CURRENT head is still queued or running (the Mac-only check included, not only the
+    // gating one), refreshing throws that run away and the PR never settles green
+    // (2026-11-08: #1932 and #1937 refreshed while their Mac runs were queued).
+    if (!Array.isArray(pr.checksPending)) return { action: "unknown", why: "unread: checksPending" };
+    if (pr.checksPending.length) return { action: "wait", why: `behind mainline, but ${pr.checksPending.length} check(s) still running on the head (${pr.checksPending.slice(0, 3).join(", ")}); refresh after they finish` };
     if (pr.ageDays > STALE_DAYS) return { action: "stale", why: `behind mainline and idle ${Math.floor(pr.ageDays)} days; not refreshed` };
-    return { action: "refresh", why: "behind mainline, no conflict" };
+    // Only a PR that will merge itself once green is worth a refresh. Unread is not "on".
+    if (typeof pr.autoMerge !== "boolean") return { action: "unknown", why: "unread: autoMerge" };
+    if (!pr.autoMerge) return { action: "wait", why: "behind mainline with auto-merge off; not refreshed (whoever lands it refreshes it then)" };
+    return { action: "refresh", why: "behind mainline, no conflict, auto-merge on" };
   }
   if (pr.gating !== "success") return { action: "wait", why: `gating check ${pr.gating}` };
   if (pr.draft) return { action: "wait", why: "draft" };
@@ -121,16 +134,21 @@ function gh(args, input) {
 }
 const tryGh = (args) => { try { return gh(args); } catch { return null; } };
 
-function gatingOf(sha) {
-  const runs = tryGh([`repos/${REPO}/commits/${sha}/check-runs?per_page=100`]);
-  if (!runs || !Array.isArray(runs.check_runs)) return null;
-  // A second page could hold a failing gating run; an unread page is an unread fact.
-  if (runs.total_count > runs.check_runs.length) return null;
+/** The head's check runs, read once: the gating verdict, and the names of every run not
+ *  yet completed. Either is null when the page could not be read in full. */
+export function checksOf(runs) {
+  if (!runs || !Array.isArray(runs.check_runs)) return { gating: null, checksPending: null };
+  // A second page could hold a failing gating run, or a running one; an unread page is an
+  // unread fact.
+  if (!Number.isSafeInteger(runs.total_count) || runs.total_count > runs.check_runs.length) return { gating: null, checksPending: null };
+  const checksPending = runs.check_runs.filter((c) => c.status !== "completed").map((c) => String(c.name ?? "unnamed"));
   const mine = runs.check_runs.filter((c) => c.name === GATING);
-  if (!mine.length) return "missing";
-  if (mine.some((c) => c.status !== "completed")) return "pending";
-  return mine.every((c) => c.conclusion === "success") ? "success" : "failure";
+  const gating = !mine.length ? "missing"
+    : mine.some((c) => c.status !== "completed") ? "pending"
+    : mine.every((c) => c.conclusion === "success") ? "success" : "failure";
+  return { gating, checksPending };
 }
+const checksAt = (sha) => checksOf(tryGh([`repos/${REPO}/commits/${sha}/check-runs?per_page=100`]));
 
 function unresolvedOf(number) {
   const t = tryGh([`repos/${REPO}/pulls/${number}/ccr/review_threads`]);
@@ -168,12 +186,14 @@ export function readPr(number) {
     title: p.title,
     user: p.user?.login ?? null,
     draft: p.draft === true,
+    // REST returns auto_merge as an object when armed and null when not; a missing key is unread.
+    autoMerge: "auto_merge" in p ? p.auto_merge !== null : null,
     labels: (p.labels ?? []).map((l) => l.name),
     headRef: p.head.ref,
     headSha: p.head.sha,
     mergeableState: p.mergeable_state ?? null,
     compareStatus: cmp?.status ?? null,
-    gating: gatingOf(p.head.sha),
+    ...checksAt(p.head.sha),
     unresolvedThreads: unresolvedOf(number),
     ageDays: workAgeDays(cmp),
     // 100 files is the page; a PR with more is judged on the first page plus a sentinel
@@ -397,7 +417,7 @@ export function summarize(items, done = []) {
 function selfTest() {
   const sha = "a".repeat(40);
   const base = { number: 7, user: "DanFashauer", headSha: sha, mergeableState: "clean", compareStatus: "ahead",
-    gating: "success", unresolvedThreads: 0, files: ["docs/agent/NOTE.md"], draft: false, labels: [], ageDays: 1 };
+    gating: "success", checksPending: [], unresolvedThreads: 0, files: ["docs/agent/NOTE.md"], draft: false, labels: [], ageDays: 1, autoMerge: true };
   const cases = [
     [{ ...base }, "land-ready"],
     [{ ...base, number: 439 }, "keep"],
@@ -411,6 +431,11 @@ function selfTest() {
     [{ ...base, compareStatus: "identical" }, "superseded"],
     [{ ...base, mergeableState: "dirty" }, "fix"],
     [{ ...base, mergeableState: "behind" }, "refresh"],
+    // A behind PR that cannot merge itself is NOT refreshed; an unread flag never acts (2026-11-11).
+    [{ ...base, mergeableState: "behind", autoMerge: false }, "wait"],
+    [{ ...base, mergeableState: "behind", autoMerge: null }, "unknown"],
+    [{ ...base, mergeableState: "behind", autoMerge: undefined }, "unknown"],
+    [{ ...base, autoMerge: false }, "land-ready"],
     [{ ...base, mergeableState: "behind", user: "dependabot[bot]" }, "owner"],
     [{ ...base, mergeableState: "unknown" }, "unknown"],
     [{ ...base, gating: "failure" }, "fix"],
@@ -432,6 +457,13 @@ function selfTest() {
     [{ ...base, mergeableState: "behind", draft: true }, "wait"],
     [{ ...base, mergeableState: "behind", gating: "failure" }, "fix"],
     [{ ...base, mergeableState: "behind", ageDays: 30 }, "stale"],
+    // A behind PR whose current-head checks are still running is NOT refreshed (2026-11-08).
+    [{ ...base, mergeableState: "behind", checksPending: ["PR — Mac-only checks (full-clone provenance, preflight on macOS)"] }, "wait"],
+    [{ ...base, mergeableState: "behind", gating: "pending", checksPending: [GATING] }, "wait"],
+    [{ ...base, mergeableState: "behind", checksPending: null }, "unknown"],
+    [{ ...base, checksPending: null }, "unknown"],
+    [{ ...base, mergeableState: "behind", gating: "missing", checksPending: [] }, "refresh"],
+    [{ ...base, mergeableState: "behind", gating: "failure", checksPending: ["CodeQL"] }, "fix"],
     [{ ...base, ageDays: null }, "unknown"],
     [{ ...base, mergeableState: "blocked" }, "fix"],
     [{ ...base, mergeableState: "unstable" }, "fix"],
@@ -594,6 +626,19 @@ function selfTest() {
     const st = mkForge({ compare: "behind", state: "clean" });
     const [d] = execute(sup, 3, null, st.forge, st.ledger);
     check("a clean close is done and NOT reopened, read back through the closed-PR shape", d.done && st.calls.comment === 1 && st.calls.close === 1 && st.calls.reopen === 0);
+  }
+  {
+    // checksOf reads the head's runs once: running names, and the gating verdict.
+    const run = (name, status, conclusion = null) => ({ name, status, conclusion });
+    const mac = "PR — Mac-only checks (full-clone provenance, preflight on macOS)";
+    const r1 = checksOf({ total_count: 2, check_runs: [run(GATING, "completed", "success"), run(mac, "queued")] });
+    check("a queued Mac-only run is pending even when the gating check is green", r1.gating === "success" && r1.checksPending.length === 1 && r1.checksPending[0] === mac);
+    const r2 = checksOf({ total_count: 3, check_runs: [run(GATING, "completed", "success")] });
+    check("a partly read page of check runs is unread, not empty", r2.gating === null && r2.checksPending === null);
+    const r3 = checksOf(null);
+    check("an unread check-run list is unread", r3.gating === null && r3.checksPending === null);
+    const r4 = checksOf({ total_count: 1, check_runs: [run(GATING, "completed", "success")] });
+    check("all runs completed reads as nothing pending", r4.gating === "success" && Array.isArray(r4.checksPending) && r4.checksPending.length === 0);
   }
   const okFx = fx.filter(Boolean).length;
   const total = cases.length + 1 + rot.length + fx.length;

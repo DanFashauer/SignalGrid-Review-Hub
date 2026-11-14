@@ -550,3 +550,139 @@ block; a stage run on the wrong tier is a lesson here.
 - **evidence:** The fixtures now use the existing scratchGitEnv function instead of duplicating its16-key policy. Final fixture environment values, executable lookup PATH,177 assertions and all39 cases are preserved. Actual39 controls,16 walker self-tests, the regular walker and scratch-hygiene gates and closed environment-equivalence vectors passed under real network denial. No copy walk, floor, threshold, waiver, PENDING entry or idle-empty rule changed.
 - **landing:** pending — local fixture/journal checkpoint only; earlier full failures remain failed. New exact-head full/breadth, CI, formal reviews, protected landing and separate activation remain owed.
 - **status:** pending
+
+### L61 — Reconcile completed plan rows before ranking more work
+- **date:** 2026-11-13
+- **lane:** cloud
+- **incident:** A fresh objective derivation still ranked company-plan row 124 first even though its complete repair had merged in PR #1244 on November 1. Row 150 duplicated the same completed defect.
+- **evidence:** `scripts/objective-loop.mjs` read the stale OPEN statuses in `docs/COMPANY_BUILD_PLAN.md`; merge `9df420ddd07d8ee8f06b08f47d44257c982e1f5d` is an ancestor of the cloned source, and the shared action arrays, type aliases and derived-figure guard are present.
+- **landing:** pending — `docs/COMPANY_BUILD_PLAN.md` rows 124 and 150 now record verified completion; fresh derivation excludes both. Protected delivery remains pending.
+- **status:** pending
+
+### L62 — Browser policy failures are unverified tests, not product failures
+- **date:** 2026-11-13
+- **lane:** cloud
+- **incident:** The browser suite passed 47 tests but failed all six standalone Evidence Coverage page tests before loading the document.
+- **evidence:** Playwright reported `net::ERR_BLOCKED_BY_ADMINISTRATOR` for the local `docs/evidence-coverage.html` file in managed Chromium. The HTTP-served cases passed; no standalone-page assertion executed.
+- **landing:** recorded only — retain the six failed cases and their traces as environment-blocked evidence. Browser policy and the tests are unchanged; a permitted file-capable browser must run them before claiming full browser coverage.
+- **status:** landed
+
+### L63 — Use the repository-pinned package manager in worker commands
+- **date:** 2026-11-13
+- **lane:** cloud
+- **incident:** A worker invoked the environment's global pnpm 11 against dependencies installed with the repository's pnpm 10.28.1. Four proof commands refused an unattended modules-directory purge before assertions ran.
+- **evidence:** `ERR_PNPM_ABORTED_REMOVE_MODULES_DIR_NO_TTY`; direct installed proof entrypoints then passed agent-behavior, emitter-discipline, facility-trust-graph and verdict-attestation. Root validation uses Node 22 and pnpm 10.28.1 selected through npx.
+- **landing:** recorded only — select the versions in `package.json` for each shell and worker; do not approve dependency-directory replacement to recover a proof invocation.
+- **status:** landed
+
+### L64 — Regression filenames must also work on case-insensitive Macs
+- **date:** 2026-11-13
+- **lane:** cloud
+- **incident:** Independent source review caught a new sorting fixture that created both lowercase and uppercase forms of the same filename and directory, which collide on default macOS filesystems.
+- **evidence:** `scripts/src/mcp-server-proof.ts` initially used A and a. The fixture now uses Zulu, apple, zulu2 and äther, which have distinct case-insensitive names and still distinguish locale from codepoint order.
+- **landing:** pending — the MCP proof fixture is corrected before delivery; both ordering assertions remain required. Protected delivery remains pending.
+- **status:** pending
+
+### L65 — A zombie descendant is dead even while its PID remains present
+- **date:** 2026-11-13
+- **lane:** cloud
+- **incident:** Full preflight stopped at the staged Mac worker self-test, with 318 of 320 assertions passing. Both timeout cases returned the expected exit 142 but reported the killed grandchild as alive.
+- **evidence:** `scripts/mac/build-tick-stages.mjs` used `process.kill(pid, 0)` in the S-5 and S4 assertions. Process inspection showed both sleep descendants in state Z with PPID 1; the container had not reaped them. The same test file's newer CI descendant assertions already distinguish zombies from running processes with ps.
+- **landing:** pending — align the two older timeout assertions with process-state evidence, preserving failure on a live descendant and leaving production timeout behavior unchanged. Protected delivery remains pending.
+- **status:** pending
+
+### L66 — Update documented counts when adding proof assertions
+- **date:** 2026-11-13
+- **lane:** cloud
+- **incident:** The proof-count guard rejected the new MCP sorting coverage because the validation guide still documented 11 checks while the proof ran 13. The self-audit count had already been updated. The sync guard then required the generated manifest to carry the new proof counts too.
+- **evidence:** `scripts/check-proof-counts.mjs` reported `proof:mcp-server — docs say 11 checks, proof reports 13 (update: CI_AND_VALIDATION.md)`; `scripts/check-live-sync.mjs` refused unpublished manifest drift.
+- **landing:** pending — `docs/CI_AND_VALIDATION.md` now documents the MCP proof's 13 checks; `docs/SELF_AUDIT.md` documents 62. The generator republishes both in `artifacts/sync/live-sync-manifest.json` version 102. Historical evidence records retain their original measurements; no live evidence is minted. Protected delivery remains pending.
+- **status:** pending
+
+### L67 — Signal-handler fixtures need process-state evidence too
+- **date:** 2026-11-13
+- **lane:** cloud
+- **incident:** After the staged-worker repair, full preflight reached the entry-guard self-test and failed four signal-handler cases, passing 145 of 149 assertions.
+- **evidence:** The parent TERM, INT, HUP/QUIT and baseline-interruption cases in `scripts/check-entry-guards.mjs` used one kill-zero observer. Their terminated node children remained in state Z under container PID 1, the same observation error as L65.
+- **landing:** pending — correct only the fixture's child-liveness observation, preserving the exit, file-restoration, clean-tree, scratch-cleanup and child-termination assertions. Production mutation-runner behavior remains unchanged. Protected delivery remains pending.
+- **status:** pending
+
+### L68 — Keep browser transport explicit and preserve the isolation contract
+- **date:** 2026-11-13
+- **lane:** cloud
+- **incident:** Managed Chromium blocked the six standalone-page file loads before assertions, preventing local preflight from reaching its later stages. The Mac/root coordination on PR #2045 requested a bounded public-fixture HTTP harness while preserving file coverage and browser policy.
+- **evidence:** Explicit HTTP transport passed all 53 browser cases, including the same six case IDs. Planted same-document fetch, popup, extra image and WebSocket requests made the isolation case fail with all four requests recorded; a wrong coverage label made its visible-text case fail. The original HTML bytes were restored before the passing run.
+- **landing:** pending — `scripts/src/e2e/public-fixture-server.ts` serves only the fixed public artifact on an ephemeral loopback port. The spec keeps file mode as default, refuses invalid modes, tests server boundaries and closes owned servers. `scripts/src/e2e/egress-guard.ts` admits only the first main-document GET for this spec. HTTP success establishes rendering/isolation under HTTP, not file-origin execution; the browser file policy is unchanged. Protected delivery remains pending.
+- **status:** pending
+
+### L69 — Report the next failing gate without broadening another lane's repair
+- **date:** 2026-11-13
+- **lane:** cloud
+- **incident:** With explicit HTTP transport, full preflight passed Browser E2E and advanced to the unchanged lane-delivery regression gate, which reported 165 passed, 3 failed and 0 skipped.
+- **evidence:** The failures concern recovery after an original tick child exits, cleanup of a timed-out fetch helper, and cleanup of a timed-out readback helper. The reported original-tick sleep process was independently observed in state Z with PPID 1. That supports a zombie-observation hypothesis for the recovery case; it does not establish the cause of all three failures.
+- **landing:** recorded only — the HTTP follow-up leaves `scripts/check-lane-delivery.mjs`, `scripts/lane-deliver.mjs` and `scripts/mac/lane-tick.sh` unchanged from 741f1c6e5. The PR #2045 coordination note assigns the separate lane-readback repair to Cloud Claude. These observations do not establish that this is the same already-known race. Preserve source ownership, report the three cases and keep the PR draft; a passing browser stage is not a passing full preflight.
+- **status:** landed
+
+### L70 — Use the supported PR metadata route after a classic-project query fails
+- **date:** 2026-11-13
+- **lane:** cloud
+- **incident:** After the HTTP follow-up source push succeeded, `gh pr edit` failed while querying the deprecated `repository.pullRequest.projectCards` field, before updating the title or body.
+- **evidence:** Readback showed commit 101615b648ba38b3581dd3a63dfb0f795b79d342 on the draft PR but retained the old title and body. The GitHub `update_pull_request` connector then completed the prepared metadata update; readback confirmed the new title and validation sections.
+- **landing:** recorded only — use the supported metadata API and read back uncertain operations; do not mistake a successful source push for a successful PR description update. No source or validation policy changed.
+- **status:** landed
+
+### L71 — Count-free browser documentation also applies inside transport notes
+- **date:** 2026-11-13
+- **lane:** cloud
+- **incident:** PR #2045's HTTP transport note reintroduced a typed live browser-case count in the E2E README. Linux validation and Mac slice 4 both failed the unchanged STATUS.md figure guard.
+- **evidence:** Hosted Mac slice 4 stopped at `STATUS.md figures still describe the repo`; the guard identified the README wording. Replacing the typed count with "existing page cases" makes `node scripts/check-status-figures.mjs` pass without weakening its count-free rule or changing any browser cases.
+- **landing:** pending — the wording correction in `scripts/src/e2e/README.md` is included in the existing draft #2045. The published #2037 worker cooldown changes are integrated serially with the retained zombie-observer assertions; their combined self-test passes 322/322. Current-head hosted checks and full qualification still govern delivery.
+- **status:** pending
+
+### L72 — A completed primary gate does not finish pending estate checks
+- **date:** 2026-11-13
+- **lane:** cloud
+- **incident:** The wired estate classifier could classify a green-primary PR as land-ready while its Mac aggregate was pending, or schedule an unnecessary fix for blocked/unstable mergeability. Malformed pending-check values could also reach land-ready.
+- **evidence:** Expanded regressions failed 79/93 before the fix, including land-ready/fix/fix instead of wait. The corrected classifier passes 93/93; independent classification, work-queue projection and executor controls reproduced the old behavior when the new guard was removed. Pending-only execution performs no forge or ledger calls.
+- **landing:** pending — `scripts/mac/estate-queue.mjs` validates named pending checks and waits before fallback admission, while preserving actual conflicts, failed primary gates and unresolved findings. The isolated source handoff is coordinated on #439; protected qualification, landing and installed consumer behavior remain unverified.
+- **status:** pending
+
+### L73 — A helper self-test needs an actual preflight and CI registration
+- **date:** 2026-11-13
+- **lane:** cloud
+- **incident:** The estate queue's existing self-test was not invoked by preflight or CI. The generic gate self-test registry only enumerates check scripts, so it did not discover this Mac helper.
+- **evidence:** Registering only the preflight command failed parity with one unwired command. Adding the matching existing validation-job step passes parity with zero unwired commands and passes CI/preflight proof synchronization. The actual emitted non-heavy, non-native command passes 93/93 under Node 22.
+- **landing:** pending — `scripts/preflight.mjs` and `.github/workflows/review-hub-ci.yml` each invoke `node scripts/mac/estate-queue.mjs --self-test` once. No new controller, job, host or provider call is introduced. Same-head full qualification and current CI remain required.
+- **status:** pending
+
+### L74 — Model installation and catalog parity do not prove the delivery chain
+- **date:** 2026-11-13
+- **lane:** both
+- **incident:** The owner clarified that company delivery requires Bonsai first-pass work, two local Claude/Codex passes and a usage-balanced cloud final pass, with second-brain context and selected skills/agents at every stage. The public worker can return after one successful review; copied skill definitions and a running model do not establish the requested chain.
+- **evidence:** `scripts/mac/build-tick-stages.mjs` returns land after review 1 and its stage request does not bind explicit knowledge or predecessor receipts. Root activated the native goal in #439 comment 6867440396; Mac reported the service installed in comment 6867531628. Neither report contains a fresh job's four original execution receipts.
+- **landing:** pending — #439 comment 6867445699 defines the actual pass/context acceptance work for the existing private Root adapter; the existing Codex receiver instructions now require preceding-pass and context receipts for new cloud-final offers. Preserve contained publication review and destination-approved knowledge retrieval. Private enforcement and the complete live chain still require execution evidence; no extra controller or status-only PR is introduced.
+- **status:** pending
+
+### L75 — Check the exact source claim and observe timed-out helper states
+- **date:** 2026-11-14
+- **lane:** cloud
+- **incident:** The retained lane-delivery gate failed 165/168. An earlier broad reading of Cloud's neighboring lane-readback claim delayed investigation of different files; the actual claim names only its three readback files and explicitly excludes everything else.
+- **evidence:** An unchanged-source run on f51b72438 again failed 165/168. Its fetch and ls-remote helpers were independently observed transitioning S to Z with PPID 1 while fixture assertions still required PID disappearance. Production recovery also counted a zombie as a live process-group member. Expanded regressions first failed 181/186; two additional empty-table cases failed 186/188 before the unreadable-table guard was tightened. The initial corrected checkpoint passed 188/188. Published 838ec582 later failed its hosted macOS gate with 187 passed and 1 failed: SIGKILL recovery held on an unparseable process-table row whose rejected field was not recorded. Independently, Apple adv_cmds-237 commit 6bed8737a34dbb54782a18f47dccf933a9967a12 maps H to a halted, non-zombie state. The isolated Node22 expanded gate first failed 190/196 against the published reader, then passed 196/196 with H recognized; all 188 prior cases remain. This does not identify the failed Mac row or establish a current Mac pass.
+- **landing:** pending — `scripts/check-lane-delivery.mjs` distinguishes measured dead helpers from live or unreadable observations; `scripts/lib/lane-attempt-store.mjs` recognizes H as live, excludes only validated zombie group members and refuses empty/malformed process tables. Original-shell, token/worktree, ancestry, record ownership and uncertain-receipt behavior remain intact. Initial independent 38/38 process and 15/15 receipt controls remain recorded; the expanded 196-case pass is Linux source-gate evidence. Combined-source review, full qualification and protected delivery remain separate.
+- **status:** pending
+
+### L76 — Refresh startup knowledge from the actual artifact and owner direction
+- **date:** 2026-11-14
+- **lane:** cloud
+- **incident:** LOOP's startup paragraph still named Ollama primary after the owner directed Bonsai-first delivery, and its CURRENT EVIDENCE label still led with October 21 despite the tracked Mac artifact having a November 11 mint. A brain reading that summary could route against obsolete intent or confuse old prose with missing evidence.
+- **evidence:** `artifacts/live-evidence/mac-run.json` records the November 11 mint and manifest v101 fingerprint e892a94f. The observed canonical fc6df83f match and then-branch f0b1c0a8 mismatch were an initial inspection snapshot. Read `artifacts/sync/live-sync-manifest.json` at the actual checkout head and compare it with the artifact; neither historical fingerprint establishes current qualification. Root's service receipts do not establish active-default routing or four-pass completion.
+- **landing:** pending — `docs/agent/LOOP.md` states the owner's requested route, software work before physical testing, and bounded Drive provenance with actual adapter consumption still required. It points to the artifact and live manifest comparison with the recorded platform limits, and retains the October record as history. No artifact, attestation, readiness field or physical-device claim is changed.
+- **status:** pending
+
+### L77 — Describe operator record ownership with publication-specific terms
+- **date:** 2026-11-14
+- **lane:** cloud
+- **incident:** Full qualification on 7bf167faf stopped at the launch-claims ratchet because the new internal repair journal used a noun reserved for a deferred product capability. The gate measured 408 mentions against its unchanged ceiling of 407.
+- **evidence:** The original failed full log is preserved. The extra occurrence was in L75's operator-record description, rather than a newly shipped product capability.
+- **landing:** pending — `docs/agent/LESSONS.md` and `docs/agent/LOOP.md` use record-ownership and delivery-specific language. The gate and its ceiling remain unchanged; the same claims check must pass before another full qualification run.
+- **status:** pending

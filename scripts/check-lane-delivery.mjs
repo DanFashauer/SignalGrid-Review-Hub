@@ -22,6 +22,29 @@ const GIT = spawnSync("/bin/sh", ["-c", "command -v git"], { encoding: "utf8" })
 let passed = 0;
 let failed = 0;
 
+// kill(0) keeps succeeding for an exited orphan that PID 1 has not reaped.
+// Accept only ESRCH or an explicit zombie state; unreadable and live states fail.
+function fixtureProcessStopped(pid, { kill = process.kill, ps = spawnSync } = {}) {
+  try { kill(pid, 0); } catch (error) { return error.code === "ESRCH"; }
+  const observed = ps("/bin/ps", ["-o", "stat=", "-p", String(pid)], { encoding: "utf8" });
+  return !observed.error && !observed.signal && observed.status === 0 && typeof observed.stdout === "string"
+    && /^Z[<+>AELNSVWXls]*$/.test(observed.stdout.trim());
+}
+
+try {
+  const live = () => {}, observed = (stdout, more = {}) => () => ({ status: 0, stdout, ...more });
+  for (const state of ["Z", "Z+", "Zs"]) assert.equal(fixtureProcessStopped(123, { kill: live, ps: observed(state) }), true, state);
+  for (const state of ["S", "R", "T", "D", "H", "HNs+", "H?", "Hgarbage", "S+", "Ss", "", "?", "Zgarbage", "Z\nS"]) {
+    assert.equal(fixtureProcessStopped(123, { kill: live, ps: observed(state) }), false, state);
+  }
+  for (const observation of [{ status: 1 }, { signal: "SIGTERM" }, { error: Error("unreadable") }, { stdout: null }]) {
+    assert.equal(fixtureProcessStopped(123, { kill: live, ps: observed("Z", observation) }), false);
+  }
+  for (const code of ["EPERM", "EACCES"]) assert.equal(fixtureProcessStopped(123, { kill: () => { throw Object.assign(Error(code), { code }); } }), false);
+  assert.equal(fixtureProcessStopped(123, { kill: () => { throw Object.assign(Error("gone"), { code: "ESRCH" }); } }), true);
+  passed++; console.log("PASS fixture cleanup accepts only ESRCH or a positively read zombie state");
+} catch (error) { failed++; console.error("FAIL fixture process-state observer: " + error.message); }
+
 function fixture({ lane = "mac", reject = false, loseResponse = false, failBeforePush = false, gateFails = false,
   readbackCanonicalRace = false, fixedClock = false, readbackState = "MERGED", readbackObservation = null, denyCleanup = false, ghAuthFails = false, ghCreateFails = false, ghAutoFails = false, wakeMailbox = false, hand = false, tick = false, omitReceipt = false, ...tickOptions } = {}) {
   if (tick) return heartbeatFixture(tickOptions);
@@ -987,6 +1010,43 @@ await leaseControl('a process-table line that does not parse holds recovery',asy
  c.kernelAvailable();const original=leaseTree(c.store),b=c.start('ps-B',{pathPrefix:bin+':'});assert.equal((await b.next()).event,'CLOSED');await b.closed;
  assert.match(b.stdout+b.stderr,/unparseable.*holding/);assert.doesNotMatch(b.stdout+b.stderr,/SECRET-ps-line|Bearer/,'the unparseable line is never echoed');assert.deepEqual(held(leaseTree(c.store)),held(original));
 });
+// Feed state-bearing rows through the actual production ps reader and ownership
+// decision. No fake row can release the original shell or bypass receipt readback.
+for (const [label, rows, enters, read, otherGroup = false] of [
+ ['zombie', ['Z'], true], ['zombie with BSD flag', ['Z+'], true],
+ ['sleeping', ['S'], false], ['running', ['R'], false], ['stopped', ['T'], false], ['uninterruptible', ['D'], false],
+ ['halted group member', ['H'], false], ['BSD halted group member', ['HNs+'], false],
+ ['unrelated halted member', ['H'], true, null, true], ['unrelated BSD halted member', ['HNs+'], true, null, true],
+ ['halted member carrying the token', ['H'], false, 'token', true], ['halted member in an orphaned worktree', ['H'], false, 'worktree', true],
+ ['halted state with unknown flag', ['H?'], false, null, true], ['malformed halted state', ['Hgarbage'], false, null, true],
+ ['BSD sleeping flags', ['Ss+'], false], ['zombie and live member', ['Z', 'S'], false],
+ ['zombie-looking command', ['S'], false, 'zombie-command'],
+ ['missing state', [''], false], ['malformed zombie state', ['Zgarbage'], false], ['unknown state', ['?'], false],
+ ['malformed start', ['Z'], false, 'bad-start'], ['unreadable table', ['Z'], false, 'unreadable'],
+ ['empty table', ['Z'], false, 'empty'], ['whitespace-only table', ['Z'], false, 'whitespace'],
+ ['signalled table reader', ['Z'], false, 'signal'],
+ ['zombie carrying the token', ['Z'], false, 'token'], ['zombie in an orphaned worktree', ['Z'], false, 'worktree'],
+]) await leaseControl('production process-table '+label+(enters?' permits group recovery':' keeps recovery held'),async(f,c)=>{
+ const a=c.start('state-A',{detached:true});assert.equal((await a.next()).event,'ENTER');const open=JSON.parse(readFileSync(c.slot,'utf8'));
+ const owner=JSON.parse(readFileSync(join(c.store,'tick-'+open.token+'.opened.json'),'utf8'));
+ const born=spawnSync('/bin/ps',['-o','lstart=','-p',String(a.child.pid)],{encoding:'utf8',env:{LC_ALL:'C',TZ:'UTC0'}});assert.equal(born.status,0);
+ assert.equal(a.child.kill('SIGKILL'),true);await a.closed;
+ const bin=join(f.parent,'state-ps');mkdirSync(bin);
+ const command=read==='token'?'fixture '+open.token:read==='worktree'?'/tmp/sg-lane-deliver-fixture':read==='zombie-command'?'fixture Z <defunct> Authorization: Bearer SECRET-state':'fixture';
+ const lines=rows.map((state,i)=>`${2147483000+i} 1 ${otherGroup?owner.pgid+1:owner.pgid} ${state} ${read==='bad-start'?'not a start':born.stdout.trim()} ${command}`).join('\n')+'\n';
+ const output=read==='unreadable'?'exit 1':read==='signal'?'kill -TERM $$':`printf '%s' ${q(read==='empty'?'':read==='whitespace'?' \t\n':lines)}`;
+ writeFileSync(join(bin,'ps'),`#!/bin/sh\nif [ "$1" = -eo ]; then ${output}; exit 0; fi\nexec /bin/ps "$@"\n`,{mode:0o755});
+ c.kernelAvailable();const original=leaseTree(c.store),b=c.start('state-B',{pathPrefix:bin+':'});
+ if(enters)await recovers(c,b,open.token);
+ else {
+  assert.equal((await b.next()).event,'CLOSED');await b.closed;assert.match(b.stdout+b.stderr,/holding/);
+  if(rows[0]==='H'||rows[0]==='HNs+'){
+   assert.match(b.stdout+b.stderr,/may survive/,'a known halted state is held as a live member, not a parse error');
+   if(read==='worktree')assert.match(b.stdout+b.stderr,/in a lane-deliver worktree/);
+  }
+  assert.doesNotMatch(b.stdout+b.stderr,/SECRET-state|Bearer/);assert.deepEqual(held(leaseTree(c.store)),held(original));
+ }
+});
 await leaseControl('an invalid recorded start time degrades to PID-only liveness instead of stopping the tick',async(f,c)=>{
  const a=c.start('badstart-A');assert.equal((await a.next()).event,'ENTER');const open=JSON.parse(readFileSync(c.slot,'utf8'));
  assert.equal(a.child.kill('SIGKILL'),true);await a.closed;
@@ -1245,7 +1305,7 @@ for(const item of [
   const began=Date.now(),r=bashNoRc(['-c',script],{cwd:root,encoding:'utf8',timeout:15000,env:{PATH:join(root,'bin')+':/usr/bin:/bin',SIGNALGRID_TICK_FETCH_TIMEOUT_SEC:'3',FIXTURE_CHILD_PID:childPid,FIXTURE_FD8:fd8}});
   assert.equal(r.status,0,'the tick must not hang on fetch: '+(r.error?.code??r.stderr));assert.match(r.stdout,/HEARTBEAT skipped: origin unreachable/);assert.ok(Date.now()-began<10000);
   const pid=pidWhenWritten(childPid);assert.ok(pid>0);let gone=false;
-  for(let i=0;i<40&&!gone;i++){try{process.kill(pid,0);spawnSync('/bin/sleep',['0.1']);}catch(e){gone=e.code==='ESRCH';if(!gone)throw e;}}
+  for(let i=0;i<40&&!gone;i++){gone=fixtureProcessStopped(pid);if(!gone)spawnSync('/bin/sleep',['0.1']);}
   assert.ok(gone,'a child the timed-out fetch spawned must be killed with its process group');
   assert.equal(readFileSync(fd8,'utf8').trim(),'CLOSED','the fetch and its helpers never inherit the tick guard FD8');
   const next=spawnSync('/usr/bin/perl',['-MFcntl=:flock','-e','open(my $f,"<",$ARGV[0]) or exit 2; exit(flock($f,LOCK_EX|LOCK_NB)?0:75)',guard],{encoding:'utf8'});
@@ -1389,7 +1449,7 @@ for(const [mode,want] of [['absent',true],['present',false],['fail',false]]){
   const began=Date.now(),r=spawnSync(process.execPath,[join(ROOT,'scripts/lib/lane-attempt-store.mjs'),'refused-disposition',root,receipt],{cwd:root,encoding:'utf8',timeout:30000,env:{PATH:bin+':/usr/bin:/bin',HOME:process.env.HOME,SIGNALGRID_LS_REMOTE_TIMEOUT_SEC:'3',FIXTURE_HELPER_PID:pidFile}});
   assert.equal(r.status,0,r.stderr);assert.equal(r.stdout.trim(),'unknown','a timed-out read is never absence');assert.ok(Date.now()-began<15000);
   const pid=pidWhenWritten(pidFile);let gone=false;
-  for(let i=0;i<40&&!gone;i++){try{process.kill(pid,0);spawnSync('/bin/sleep',['0.1']);}catch(e){gone=e.code==='ESRCH';if(!gone)throw e;}}
+  for(let i=0;i<40&&!gone;i++){gone=fixtureProcessStopped(pid);if(!gone)spawnSync('/bin/sleep',['0.1']);}
   assert.ok(gone,'the helper spawned by the timed-out ls-remote is killed with its group');
   passed++;console.log('PASS '+label);
  } catch(e){failed++;console.error('FAIL '+label+': '+e.message);}

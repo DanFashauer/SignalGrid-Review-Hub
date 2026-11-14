@@ -26,8 +26,8 @@
 
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
-import { readFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { basename, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
@@ -132,6 +132,31 @@ async function main(): Promise<void> {
     exercised.add(name);
     return payload(await client.callTool({ name, arguments: args }));
   };
+
+  // Exercise filenames whose locale order differs from codepoint order through
+  // the real tool. Keep temporary requests private to this invocation and remove
+  // them even when the tool refuses or the transport fails.
+  const orderFixture = mkdtempSync(resolve(repo, "artifacts/api-collection/codepoint-order-"));
+  const orderFolder = basename(orderFixture);
+  try {
+    // Distinct case-folded names also work on the Mac lane's default APFS.
+    for (const name of ["äther", "apple", "zulu2", "Zulu"]) {
+      writeFileSync(resolve(orderFixture, `${name}.bru`), `meta {\n  name: ${name}\n}\n`);
+      mkdirSync(resolve(orderFixture, name));
+      writeFileSync(resolve(orderFixture, name, "request.bru"), `meta {\n  name: ${name}\n}\n`);
+    }
+    const listing = await answer("bruno_collection_list");
+    const folders = (listing.folders ?? []) as Array<{ path: string; requests: Array<{ file: string }> }>;
+    const fixture = folders.find((folder) => folder.path === orderFolder);
+    check("Bruno request filenames use codepoint order for mixed-case and accented names",
+      JSON.stringify(fixture?.requests.map((request) => basename(request.file))) ===
+        JSON.stringify(["Zulu.bru", "apple.bru", "zulu2.bru", "äther.bru"]));
+    check("Bruno folder traversal uses codepoint order for mixed-case and accented names",
+      JSON.stringify(folders.filter((folder) => folder.path.startsWith(`${orderFolder}/`))
+        .map((folder) => basename(folder.path))) === JSON.stringify(["Zulu", "apple", "zulu2", "äther"]));
+  } finally {
+    rmSync(orderFixture, { recursive: true, force: true });
+  }
   const scenarios = await answer("list_room_scenarios", {});
   const scenarioList = (scenarios.scenarios ?? []) as { id?: string }[];
   check("list_room_scenarios returns scenarios", Array.isArray(scenarioList) && scenarioList.length > 0,

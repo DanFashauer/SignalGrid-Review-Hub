@@ -1,7 +1,9 @@
-import { test, expect, type Locator, type Page } from "@playwright/test";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { test as base, expect, type Locator, type Page } from "@playwright/test";
+import { readFileSync } from "node:fs";
+import { request as httpRequest } from "node:http";
+import { pathToFileURL } from "node:url";
 import { guardEgress } from "./egress-guard";
+import { EVIDENCE_COVERAGE_FIXTURE, startEvidenceCoverageFixtureServer } from "./public-fixture-server";
 
 /**
  * docs/evidence-coverage.html — the standalone, self-contained Evidence Coverage page.
@@ -12,9 +14,10 @@ import { guardEgress } from "./egress-guard";
  * `pnpm run build:evidence-coverage` produces valid HTML whether or not the model linked
  * in, whether or not the toggles wire up, and whether or not anything renders at all.
  *
- * So it is loaded from a `file://` URL — exactly how it will be opened when it is emailed
- * rather than published — and asserted against the same measured figures the proof and the
- * api suite pin by equality. No webServer is involved.
+ * File transport is the default, matching an emailed artifact. Explicit
+ * E2E_STANDALONE_TRANSPORT=http serves the exact artifact bytes from one loopback
+ * endpoint when browser policy prohibits file loads. HTTP coverage proves the same
+ * rendered behavior and off-page isolation; it does not prove file delivery.
  *
  * ASSERTIONS ARE DELIBERATELY NOT ALL KEYED ON `data-*`. A review demonstrated the cost of
  * that habit: inverting every coverage badge's TEXT, swapping the answerable and dark stat
@@ -23,12 +26,30 @@ import { guardEgress } from "./egress-guard";
  * visible strings are what a human is actually shown, so both are pinned.
  */
 
-const here = path.dirname(fileURLToPath(import.meta.url));
-const PAGE_URL = `file://${path.resolve(here, "../../../docs/evidence-coverage.html")}`;
+const transport = process.env.E2E_STANDALONE_TRANSPORT ?? "file";
+if (transport !== "file" && transport !== "http") {
+  throw new Error("E2E_STANDALONE_TRANSPORT must be file or http");
+}
+let PAGE_URL = pathToFileURL(EVIDENCE_COVERAGE_FIXTURE).href;
+const test = base.extend<{}, { publicCoverageFixture: void }>({
+  publicCoverageFixture: [async ({}, use) => {
+    if (transport === "file") {
+      await use(undefined);
+      return;
+    }
+    const fixture = await startEvidenceCoverageFixtureServer();
+    PAGE_URL = fixture.url;
+    try {
+      await use(undefined);
+    } finally {
+      await fixture.close();
+    }
+  }, { scope: "worker", auto: true }],
+});
 
-// Only the file itself passes; every other request — localhost included — is off-page
-// and fails the test (the shared guard's afterEach; see the first test below).
-guardEgress(test, [], { serves: "file" });
+// Only the initial main-page document navigation passes. Every other request,
+// including another localhost URL or WebSocket, is off-page and fails afterEach.
+guardEgress(test, [], { documentUrl: () => PAGE_URL });
 
 test.beforeEach(async ({ page }) => {
   await page.goto(PAGE_URL, { waitUntil: "domcontentloaded" });
@@ -47,6 +68,23 @@ function statCard(page: Page, testId: string): Locator {
   return page.locator(".stat").filter({ has: page.getByTestId(testId) });
 }
 
+/** Raw request targets exercise the server boundary without URL normalization. */
+async function fixtureResponse(fixtureUrl: string, target: string, method = "GET", host?: string): Promise<{ status: number; body: Buffer }> {
+  const origin = new URL(fixtureUrl);
+  return new Promise((resolve, reject) => {
+    const request = httpRequest({ hostname: "127.0.0.1", port: origin.port, path: target, method,
+      headers: { Host: host ?? origin.host } }, (response) => {
+      const chunks: Buffer[] = [];
+      response.on("data", (chunk: Buffer) => chunks.push(chunk));
+      response.on("end", () => resolve({ status: response.statusCode ?? 0, body: Buffer.concat(chunks) }));
+      response.on("error", reject);
+    });
+    request.on("error", reject);
+    request.setTimeout(2000, () => request.destroy(new Error("Public fixture request timed out")));
+    request.end();
+  });
+}
+
 test("the page reaches nothing outside itself", async ({ page }) => {
   // The route handler aborts off-page requests, and the first version of this file
   // stopped there — which meant a page that grew a webfont, a logo or an analytics beacon
@@ -54,7 +92,28 @@ test("the page reaches nothing outside itself", async ({ page }) => {
   // Aborting is the setup; the assertion is the test. It now lives in
   // `egress-guard.ts` and runs after EVERY test here and in each spec that serves a page
   // (plan row 147); this test keeps the load-only case named on its own.
-  await expect(page).toHaveURL(/^file:/);
+  await expect(page).toHaveURL(PAGE_URL);
+  // Exercise the HTTP exposure boundary in both modes, including default file CI.
+  // File mode owns this server only for the boundary assertions; PAGE_URL and
+  // the other five file-origin cases retain their original startup semantics.
+  const ownedFixture = transport === "file" ? await startEvidenceCoverageFixtureServer() : undefined;
+  const fixtureUrl = ownedFixture?.url ?? PAGE_URL;
+  try {
+    const served = await fixtureResponse(fixtureUrl, "/evidence-coverage.html");
+    expect(served.status).toBe(200);
+    expect(served.body.equals(readFileSync(EVIDENCE_COVERAGE_FIXTURE))).toBe(true);
+    const head = await fixtureResponse(fixtureUrl, "/evidence-coverage.html", "HEAD");
+    expect(head.status).toBe(200);
+    expect(head.body.length).toBe(0);
+    for (const target of ["/", "/AGENTS.md", "/../AGENTS.md", "/%2e%2e/AGENTS.md",
+      "/evidence-coverage.html?other=1", "/evidence-coverage.html#other", fixtureUrl]) {
+      expect((await fixtureResponse(fixtureUrl, target)).status, target).toBe(404);
+    }
+    expect((await fixtureResponse(fixtureUrl, "/evidence-coverage.html", "POST")).status).toBe(405);
+    expect((await fixtureResponse(fixtureUrl, "/evidence-coverage.html", "GET", "localhost")).status).toBe(403);
+  } finally {
+    await ownedFixture?.close();
+  }
 });
 
 test("the standalone page renders the real model, not an empty shell", async ({ page }) => {

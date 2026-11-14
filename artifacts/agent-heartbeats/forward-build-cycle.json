@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-11-12T01:49:40.799Z",
-  "result": "Acted: CI was red on every PR from 2026-11-12T00:00Z because the routines registry gate went fatal on dependabot-queue-review-weekly (authorized 2026-11-03, no heartbeat ever). Read the scheduler: the one scheduled fire (2026-11-09T08:47Z) ended in 4s on a usage limit; a manual re-fire at 00:11Z wrote no heartbeat. Opened #1979 declaring the row awaiting-activation (local preflight and breadth passed on e79eaf45); the Mac lane's #1980 made the same declaration with the cause (the routine's sessions have no repository access) and merged as 144859c3; #1979 closed as superseded. On 144859c3 the registry gate prints 'Scheduled-routine check passed'. No build wave dispatched. In flight H/S/O = 0/0/0. Owner queue: attach the repository with push access to the weekly dependabot routine; merge of #1900; #1937, #1932; tick PRs (#1971, #1912, #1947-#1949) have no auto-merge and the cloud may not merge them; one line on #1121; the OAuth token."
+  "firedAt": "2026-11-14T03:25:09.676Z",
+  "result": "acted 03:25Z: owner land-all serial queue merged #2042 #2055 #2048 #2053 #2043 #2059 #2060 since 01:12Z; #1932 in flight, then #2044 #1983 #1354 #2057 #2054. Reviewed #2045 (no findings, 6870330453) and mapped 18 Mac hands (6869364719). Credit-saving rule in force: no workers, H/S/O 0/0/0."
 }

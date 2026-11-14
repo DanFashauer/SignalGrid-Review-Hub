@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-11-12T01:49:40.799Z",
-  "result": "01:5xZ check after the registry fix landed (144859c3): action taken earlier this window (readbacks on #439, #1979 opened then closed as superseded by the Mac's #1980). The Mac tick is alive: its heartbeat PR #1973 (fired 2026-11-11T21:55Z) and hand PRs #1974, #1975 are open with auto-merge armed and were held by the red registry gate; they need a refresh onto 144859c3 by the Mac's own route. Tick heartbeat file on mainline is still 2026-10-24T07:30Z until #1973 merges. Open hand to the cloud on mainline: repair-objective-ef4eb88b (readback only, grants no landing authority): the cloud's readback is that the tick result PRs carry no auto-merge and this lane is refused from merging Mac PRs. Cloud mail '#1903 landed' to the Mac is unread. This heartbeat was late: held from 21:44Z while CI was red."
+  "firedAt": "2026-11-14T03:25:09.676Z",
+  "result": "keepalive 03:25Z: quiet; Mac tick last fired 2026-11-14T02:07:56.652Z; live-evidence last committed 2026-11-10T22:42:00-05:00; new tick #2057 has its PR and is queued; owner not escalated."
 }

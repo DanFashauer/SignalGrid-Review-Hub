@@ -40,7 +40,7 @@ permissions:
 
 jobs:
   validation:
-    name: Typecheck, build, and proof scaffold
+    name: Proof scaffold 1/3 (typecheck, build, core gates)
     runs-on: ubuntu-latest
     # Bounded so a regression that makes a proof HANG (an unbounded prototype walk
     # against a Proxy returning a fresh prototype each call) fails red instead of
@@ -68,6 +68,14 @@ jobs:
     # = 40m10s, which rounds up to 45. A true hang is still caught here, now at
     # 45 minutes rather than 20. Re-derive this number from the longest run
     # whenever one passes half of it (22m30s).
+    #
+    # SPLIT 2026-11-13: this job was the whole serial gate (444 steps, 26m48s on
+    # job 131609026409, past the 22m30s re-derive mark above). Fifteen of its steps,
+    # the fourteen slowest gates and the Playwright install the browser E2E needs,
+    # now run in `validation-heavy-a` and `validation-heavy-b` beside it, and
+    # the required context name lives on `validation-gate` below. The 45 is kept
+    # because this job only got shorter; re-derive it, and the two shard bounds,
+    # by the margin rule above from the first week of measured runs.
     timeout-minutes: 45
     steps:
       - name: Checkout
@@ -87,6 +95,9 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Branch-prune exact-tip regression (real CLI and name-only deletion mutants)
+        run: node scripts/check-pruner-exact-ref.mjs
 
       - name: Invariant review self-test (a default-less switch / stray clock read must fail)
         run: node scripts/review-invariants.mjs --self-test
@@ -153,9 +164,6 @@ jobs:
 
       - name: "Proof: evidence-coverage (what can this estate answer)"
         run: pnpm run proof:evidence-coverage
-
-      - name: "Proof: evidence-observedat-tz (observedAt ordering is host-timezone independent)"
-        run: pnpm run proof:evidence-observedat-tz
       - name: "Proof: device-resolver (read-only injection boundary)"
         run: pnpm run proof:device-resolver
       - name: "Proof: config-scope (per-tenant connector config keys)"
@@ -203,8 +211,6 @@ jobs:
         run: pnpm run proof:mdm-profile
       - name: Proof — facility-trust-graph (canonical space model + location certainty)
         run: pnpm run proof:facility-trust-graph
-      - name: Device-management-health / config-drift proof
-        run: pnpm run proof:device-management-health
 
       # The task plane joins the grid: WMS/task-system exceptions (short pick,
       # wrong-aisle bin, assignment mismatch) as decision signals. The WMS stays
@@ -282,22 +288,14 @@ jobs:
         run: node scripts/check-scheduled-routines.mjs --self-test
       - name: Scheduled routines (every always-on lane declared, authorized, scoped, evidenced)
         run: node scripts/check-scheduled-routines.mjs
-      - name: Lane delivery (protected PR topics and one-attempt readback)
-        run: node scripts/check-lane-delivery.mjs
-      - name: Lane original push (raw terminal and strict refusal unit)
-        run: node scripts/check-lane-push.mjs
       - name: Lane heartbeat mismatch (real uncertainty route, no refusal authority)
         run: node scripts/check-lane-mismatch.mjs
       - name: Lane fixture snapshot (exact filesystem descriptor binding)
         run: node scripts/check-lane-lease-tree.mjs
-      - name: Lane repair (original uncertainty DATA and owned notification)
-        run: node scripts/check-lane-repair.mjs
       - name: Lane repair callers (durable handoff and current tick ownership)
         run: node scripts/check-lane-repair-callers.mjs
       - name: Lane repair bounds (fair cursor and healthy hand suppression)
         run: node scripts/check-lane-repair-bounds.mjs
-      - name: Lane readback (bounded cadence and exact durable observations)
-        run: node scripts/check-lane-readback.mjs
       - name: Lane heartbeat self-refresh (own behind PR only, pinned head, verified)
         run: node scripts/check-lane-heartbeat-refresh.mjs
       - name: iOS dynamic type self-test (the gate must be able to fail)
@@ -334,8 +332,6 @@ jobs:
         run: node scripts/check-screen-inventory.mjs
       - name: Sim-script self-check self-test (the gate must be able to fail)
         run: node scripts/check-sim-scripts-selfcheck.mjs --self-test
-      - name: Sim-script self-check (a queued Mac operation must name a script that runs)
-        run: node scripts/check-sim-scripts-selfcheck.mjs
       - name: Sim-request runner self-test (awaiting-landing classifier, both directions)
         run: node scripts/mac/run-requests.mjs --self-test
       - name: Brain proposal-PR route self-test (review build only; governance, decision-path and non-applying patches refused; publish idempotent)
@@ -544,6 +540,11 @@ jobs:
         run: node scripts/check-scheduled-workflow-liveness.mjs
       - name: CI job timeouts (an unbounded job is an unbounded outage)
         run: node scripts/check-ci-job-timeouts.mjs
+      # The required context sits on `validation-gate`, an aggregate over the three
+      # proof-scaffold shards. A skipped required job reads as passing, so this gate
+      # executes the aggregate's own verdict script against every result combination.
+      - name: CI shard aggregate (the required check cannot pass on a shard that did not)
+        run: node scripts/check-ci-shard-aggregate.mjs
       # Plan row 49's residual: the assessor-facing matrix's status column had no drift gate.
       - name: "Security controls matrix (every status in the legend; every Implemented row's paths + proof exist)"
         run: node scripts/check-security-controls-matrix.mjs
@@ -605,8 +606,6 @@ jobs:
         run: node scripts/check-backlog-ownership.mjs
       - name: Backlog ownership self-test (the gate can fail)
         run: node scripts/check-backlog-ownership.mjs --self-test
-      - name: Loop-state seam self-test
-        run: node scripts/loop-state.mjs --self-test
       - name: Raised-hands monitor self-test (DR-054 routing + gap detection must work)
         run: node scripts/check-raised-hands.mjs --self-test
       - name: Raised hands schema (every hand file has its fields, a valid status/unblocker, id == filename)
@@ -711,8 +710,6 @@ jobs:
       # script-side gate; a missing, non-zero or stale sentinel must refuse the push.
       - name: "Land-branch push gate self-test (a missing, non-zero or stale sentinel must refuse the push)"
         run: node scripts/lib/land-branch-gate.mjs --self-test
-      - name: "Staged Mac worker self-test (triage, review, limits and transport)"
-        run: node scripts/mac/build-tick-stages.mjs --self-test
       - name: "Local worker job-state proofs"
         run: node scripts/mac/local-brain/test/job-state.test.mjs
       - name: "Local worker task-selector proofs"
@@ -1042,11 +1039,6 @@ jobs:
         run: node scripts/check-rendered-assets.mjs
       - name: "Rendered assets self-test (the check can actually fail)"
         run: node scripts/check-rendered-assets.mjs --self-test
-      # The vendored skills prescribed two commands the repo's own Bash hook denies, and
-      # three of them write paths into the tree that were not gitignored — one untracked
-      # directory stamps every later sim result as minted from a dirty tree (2026-09-06).
-      - name: "Skill instruction conflicts (no skill may prescribe a command the Bash deny-list hook refuses, unless VENDORED.md Overrides names the site)"
-        run: node scripts/check-skill-instruction-conflicts.mjs
       - name: "Skill instruction conflicts self-test (the check can actually fail)"
         run: node scripts/check-skill-instruction-conflicts.mjs --self-test
       - name: "Gitignore producers (every path a vendored skill writes into the tree is ignored by the TRACKED ignore files)"
@@ -1087,8 +1079,6 @@ jobs:
         run: pnpm run proof:absent-collection
       - name: "Mutation sharding partitions the registry (the daily sweep loses no target)"
         run: node scripts/check-mutation-sharding.mjs
-      - name: "Scratch-git hygiene self-test (it can actually fail)"
-        run: node scripts/check-scratch-git-hygiene.mjs --self-test
       - name: "Scratch-repo self-tests spawn git through one hermetic helper"
         run: node scripts/check-scratch-git-hygiene.mjs
       - name: "Backlog row citations name rows that exist"
@@ -1146,8 +1136,6 @@ jobs:
         run: node scripts/check-dmh-domains-exhaustive.mjs
       - name: Figure-guard self-test (the baseline-age report must be able to fail)
         run: node scripts/check-proof-figures.mjs --self-test
-      - name: Docs↔proof figure guard
-        run: node scripts/check-proof-figures.mjs
 
       - name: PIM activation decision proof
         run: pnpm run proof:pim-activation
@@ -1159,8 +1147,6 @@ jobs:
       # worse than none. Fails if any "(N checks)" in docs/ disagrees with the proof.
       - name: Proof-count self-test (a zeroed claim scan fails via the floor)
         run: node scripts/check-proof-counts.mjs --self-test
-      - name: Proof-count sync (docs match their proofs)
-        run: pnpm run check:proof-counts
 
       - name: Posture-composition (unified signal fusion) proof
         run: pnpm run proof:posture-composition
@@ -1225,65 +1211,6 @@ jobs:
       # bytes SignalGrid did not fabricate.
       - name: Live IdP proof (real OIDC provider, real DPoP, in-process)
         run: pnpm run proof:live-idp
-
-      # The first browser-level gate: what a human actually sees. The suite's
-      # maiden run caught a real gap (a decision-evidence row the core carried
-      # and no console scenario ever rendered), so this layer has already paid
-      # for itself once.
-      # The GitHub runner ships no Playwright browser — the preinstalled Chromium
-      # this suite uses locally is a property of the dev sandbox, not of CI. The
-      # maiden CI run proved it: all 15 tests failed browser LAUNCH in <11ms
-      # while the same suite passed 15/15 locally. Install before running.
-      # BOUNDED AND RETRIED, because this step hung for 16 minutes on 2026-08-19
-      # and consumed the whole job. `--with-deps` shells out to apt to install
-      # Chromium's system libraries; that run found `azure.archive.ubuntu.com`
-      # unreachable (repeated `Ign:`), fell back to `archive.ubuntu.com`, and then
-      # stalled with no timeout of its own. Everything before it had already
-      # passed — every gate and all 31 assertions of proof:live-idp — so the job
-      # reported `cancelled` for a reason that had nothing to do with the branch.
-      #
-      # A mirror flake is transient, so retry; but an unbounded step that eats the
-      # job's whole budget and reports an ambiguous status is the same defect this
-      # workflow's concurrency comment already complains about — a result nobody
-      # can tell apart from a real regression. The step timeout makes it fail
-      # FAST and legibly instead.
-      - name: Install Playwright Chromium for the E2E suite
-        timeout-minutes: 10
-        run: |
-          # SPLIT ON PURPOSE. `--with-deps` does two things: download the browser
-          # (from Playwright's CDN) and apt-install system libraries. Only the
-          # second touches a distro mirror, and that is the half that failed twice
-          # on 2026-08-19 — first hanging 16 minutes until the job timeout, then
-          # again at the step timeout added in response.
-          #
-          # Each ATTEMPT is bounded with `timeout`, not just the step: a retry loop
-          # around an unbounded command is dead code, because one hung attempt eats
-          # the whole budget before the second ever starts. That was the flaw in
-          # the first fix, and it is exactly the shape this repo keeps finding — a
-          # guard that looks like protection and never runs.
-          ok=
-          for attempt in 1 2 3; do
-            if timeout 180 pnpm --filter @workspace/scripts exec playwright install chromium; then
-              ok=1; break
-            fi
-            echo "::warning::Chromium download failed (attempt ${attempt}/3) — retrying"
-            sleep $((attempt * 10))
-          done
-          if [ -z "$ok" ]; then
-            echo "::error::Playwright Chromium download failed three times; the E2E suite cannot run."
-            exit 1
-          fi
-
-          # System libraries are BEST EFFORT. ubuntu-latest already ships nearly
-          # all of Chromium's, so a mirror outage must not fail a build whose
-          # browser is already in place. If a library really is missing, the E2E
-          # suite fails on launch with a message that names it — a better signal
-          # than an apt stall, and it fails in the step that actually needs it.
-          timeout 240 pnpm --filter @workspace/scripts exec playwright install-deps chromium \
-            || echo "::warning::playwright install-deps did not complete (distro mirror?); relying on the runner's preinstalled libraries."
-
-      - name: Browser E2E (review console, website, admin console)
-        run: pnpm run test:e2e
 
       - name: WebAuthn signature-verification proof
         run: pnpm run proof:webauthn-verify
@@ -1429,6 +1356,200 @@ jobs:
       # cores, or a verdict that changes under concurrency.
       - name: Decision-throughput saturation gate
         run: pnpm run bench:decision-throughput -- --seconds=2
+
+  # Shard 2/3 of the proof scaffold: the tz-ordering proof, the device-management
+  # proof, the lane delivery/push/repair/readback family, the sim-script self-check
+  # and the staged Mac worker self-test. Same commands, same order relative to one
+  # another, after the same checkout/install/typecheck/build as shard 1. Before the
+  # split each was run alone after exactly that setup, on b36cb549 (2026-11-13),
+  # passed, and wrote no file into the tree. The bound is an ESTIMATE (about 9
+  # minutes of steps by one hosted run's arithmetic, x3, rounded up to 5) until
+  # measured; re-derive it by the margin rule on `validation`.
+  validation-heavy-a:
+    name: Proof scaffold 2/3 (tz, device, lane and worker proofs)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Setup pnpm
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
+        with:
+          version: 10.28.1
+          run_install: false
+      - name: Setup Node 22
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Typecheck
+        run: pnpm run typecheck
+      - name: Build
+        run: PORT=3000 BASE_PATH=/ pnpm run build
+
+      - name: "Proof: evidence-observedat-tz (observedAt ordering is host-timezone independent)"
+        run: pnpm run proof:evidence-observedat-tz
+      - name: Device-management-health / config-drift proof
+        run: pnpm run proof:device-management-health
+      - name: Lane delivery (protected PR topics and one-attempt readback)
+        run: node scripts/check-lane-delivery.mjs
+      - name: Lane original push (raw terminal and strict refusal unit)
+        run: node scripts/check-lane-push.mjs
+      - name: Lane repair (original uncertainty DATA and owned notification)
+        run: node scripts/check-lane-repair.mjs
+      - name: Lane readback (bounded cadence and exact durable observations)
+        run: node scripts/check-lane-readback.mjs
+      - name: Sim-script self-check (a queued Mac operation must name a script that runs)
+        run: node scripts/check-sim-scripts-selfcheck.mjs
+      - name: "Staged Mac worker self-test (triage, review, limits and transport)"
+        run: node scripts/mac/build-tick-stages.mjs --self-test
+
+  # Shard 3/3 of the proof scaffold: the loop-state seam self-test, the skill
+  # instruction-conflict gate, the scratch-git hygiene self-test, the docs/proof
+  # figure guard, proof-count sync, and the Playwright install with the Browser
+  # E2E that needs it (kept together). `Deepen the checkout` is repeated here in
+  # its original position because every step after it in this shard ran on the
+  # deepened clone before the split. Each passed alone after the setup on b36cb549;
+  # the only tree write among them is the E2E web server rebuilding `dist`, and that
+  # rebuild was byte-identical to the Build step's output (544 files compared).
+  # Bound: ESTIMATE, same rule as shard 2.
+  validation-heavy-b:
+    name: Proof scaffold 3/3 (docs figures, hygiene, browser E2E)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Setup pnpm
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
+        with:
+          version: 10.28.1
+          run_install: false
+      - name: Setup Node 22
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Typecheck
+        run: pnpm run typecheck
+      - name: Build
+        run: PORT=3000 BASE_PATH=/ pnpm run build
+      - name: Loop-state seam self-test
+        run: node scripts/loop-state.mjs --self-test
+      - name: Deepen the checkout (sim-result provenance needs full history)
+        run: |
+          if [ "$(git rev-parse --is-shallow-repository)" = "true" ]; then
+            git fetch --no-tags --unshallow origin
+          fi
+      # The vendored skills prescribed two commands the repo's own Bash hook denies, and
+      # three of them write paths into the tree that were not gitignored — one untracked
+      # directory stamps every later sim result as minted from a dirty tree (2026-09-06).
+      - name: "Skill instruction conflicts (no skill may prescribe a command the Bash deny-list hook refuses, unless VENDORED.md Overrides names the site)"
+        run: node scripts/check-skill-instruction-conflicts.mjs
+      - name: "Scratch-git hygiene self-test (it can actually fail)"
+        run: node scripts/check-scratch-git-hygiene.mjs --self-test
+      - name: Docs↔proof figure guard
+        run: node scripts/check-proof-figures.mjs
+      - name: Proof-count sync (docs match their proofs)
+        run: pnpm run check:proof-counts
+
+      # The first browser-level gate: what a human actually sees. The suite's
+      # maiden run caught a real gap (a decision-evidence row the core carried
+      # and no console scenario ever rendered), so this layer has already paid
+      # for itself once.
+      # The GitHub runner ships no Playwright browser — the preinstalled Chromium
+      # this suite uses locally is a property of the dev sandbox, not of CI. The
+      # maiden CI run proved it: all 15 tests failed browser LAUNCH in <11ms
+      # while the same suite passed 15/15 locally. Install before running.
+      # BOUNDED AND RETRIED, because this step hung for 16 minutes on 2026-08-19
+      # and consumed the whole job. `--with-deps` shells out to apt to install
+      # Chromium's system libraries; that run found `azure.archive.ubuntu.com`
+      # unreachable (repeated `Ign:`), fell back to `archive.ubuntu.com`, and then
+      # stalled with no timeout of its own. Everything before it had already
+      # passed — every gate and all 31 assertions of proof:live-idp — so the job
+      # reported `cancelled` for a reason that had nothing to do with the branch.
+      #
+      # A mirror flake is transient, so retry; but an unbounded step that eats the
+      # job's whole budget and reports an ambiguous status is the same defect this
+      # workflow's concurrency comment already complains about — a result nobody
+      # can tell apart from a real regression. The step timeout makes it fail
+      # FAST and legibly instead.
+      - name: Install Playwright Chromium for the E2E suite
+        timeout-minutes: 10
+        run: |
+          # SPLIT ON PURPOSE. `--with-deps` does two things: download the browser
+          # (from Playwright's CDN) and apt-install system libraries. Only the
+          # second touches a distro mirror, and that is the half that failed twice
+          # on 2026-08-19 — first hanging 16 minutes until the job timeout, then
+          # again at the step timeout added in response.
+          #
+          # Each ATTEMPT is bounded with `timeout`, not just the step: a retry loop
+          # around an unbounded command is dead code, because one hung attempt eats
+          # the whole budget before the second ever starts. That was the flaw in
+          # the first fix, and it is exactly the shape this repo keeps finding — a
+          # guard that looks like protection and never runs.
+          ok=
+          for attempt in 1 2 3; do
+            if timeout 180 pnpm --filter @workspace/scripts exec playwright install chromium; then
+              ok=1; break
+            fi
+            echo "::warning::Chromium download failed (attempt ${attempt}/3) — retrying"
+            sleep $((attempt * 10))
+          done
+          if [ -z "$ok" ]; then
+            echo "::error::Playwright Chromium download failed three times; the E2E suite cannot run."
+            exit 1
+          fi
+
+          # System libraries are BEST EFFORT. ubuntu-latest already ships nearly
+          # all of Chromium's, so a mirror outage must not fail a build whose
+          # browser is already in place. If a library really is missing, the E2E
+          # suite fails on launch with a message that names it — a better signal
+          # than an apt stall, and it fails in the step that actually needs it.
+          timeout 240 pnpm --filter @workspace/scripts exec playwright install-deps chromium \
+            || echo "::warning::playwright install-deps did not complete (distro mirror?); relying on the runner's preinstalled libraries."
+
+      - name: Browser E2E (review console, website, admin console)
+        run: pnpm run test:e2e
+
+  # THE REQUIRED CONTEXT. Branch protection requires a check named exactly
+  # `Typecheck, build, and proof scaffold`. A required job that is SKIPPED reads as
+  # passing, so the name cannot sit on a job that `needs:` the shards and is
+  # skipped when one fails or is cancelled. This job therefore ALWAYS runs and
+  # fails unless every shard result is literally `success` — `failure`,
+  # `cancelled`, `skipped` and an empty value all fail it. Cost of that choice,
+  # stated: a run superseded mid-flight shows this check red on the OLD head
+  # (its shards were cancelled) instead of `cancelled`; the new head gets its
+  # own run. scripts/check-ci-shard-aggregate.mjs executes the script below
+  # against every result combination and fails if one non-success passes.
+  validation-gate:
+    name: Typecheck, build, and proof scaffold
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: [validation, validation-heavy-a, validation-heavy-b]
+    if: ${{ always() }}
+    steps:
+      - name: Every proof-scaffold shard result is literally success
+        env:
+          SHARD_CORE: ${{ needs.validation.result }}
+          SHARD_HEAVY_A: ${{ needs.validation-heavy-a.result }}
+          SHARD_HEAVY_B: ${{ needs.validation-heavy-b.result }}
+        run: |
+          verdict=0
+          for pair in "validation=${SHARD_CORE:-}" "validation-heavy-a=${SHARD_HEAVY_A:-}" "validation-heavy-b=${SHARD_HEAVY_B:-}"; do
+            name="${pair%%=*}"; result="${pair#*=}"
+            if [ "$result" = "success" ]; then
+              echo "ok    $name: success"
+            else
+              echo "FAIL  $name: '${result}' (anything but success fails the required check)"
+              verdict=1
+            fi
+          done
+          exit "$verdict"
 
   # The deferred-family and doctrine-document proofs (plan §11.4 step 4). A
   # required lane on every PR, run IN PARALLEL with `validation` so the wall

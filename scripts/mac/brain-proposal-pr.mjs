@@ -5,6 +5,7 @@
 //   node scripts/mac/brain-proposal-pr.mjs --job <id> [--db <sqlite>]           # dry run (default)
 //   node scripts/mac/brain-proposal-pr.mjs --job <id> --publish                  # push brain/job-<id> + open PR
 //   node scripts/mac/brain-proposal-pr.mjs --list-review [--not-before <ISO>] [--db <sqlite>]
+//   node scripts/mac/brain-proposal-pr.mjs --list-prepare --not-before <ISO> [--db <sqlite>] # private requests only
 //   node scripts/mac/brain-proposal-pr.mjs --self-test
 //   node scripts/mac/brain-proposal-pr.mjs --qualify-scanner --binary <private-binary> --output <new-private-dir> --host-fd <inherited-fd> --parent-pid <parent>
 //
@@ -20,15 +21,14 @@
 // a worktree; an empty diff; a changed path that classifyDiff calls OWNER_RESERVED or
 // DECISION_PATH; a path in DENY (governance text classifyDiff calls autonomous — AGENTS.md was
 // checked on 2026-11-02 and is); a path outside the repo or under artifacts/agent-heartbeats/; a
-// patch that does not apply cleanly; a title/result naming a private path (it goes in a public
-// PR body); and SAFETY_MACHINERY (scripts/**, workflows, fixtures) too — a local-brain build
+// patch that does not apply cleanly; a title/result naming a private path; and SAFETY_MACHINERY (scripts/**, workflows, fixtures) too — a local-brain build
 // never changes the gates that judge it through this route.
 //
 // Publication screening is separate from full final-head validation and landing.
 // --publish uses ordinary Git hooks/network and the existing authenticated gh.
 
 import { spawnSync } from "node:child_process";
-import { accessSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync, chmodSync, fchmodSync, mkdirSync, lstatSync, readdirSync, openSync, closeSync, fstatSync, fsyncSync, constants, realpathSync } from "node:fs";
+import { accessSync, existsSync, symlinkSync, linkSync, mkdtempSync, readFileSync, readSync, rmSync, writeFileSync, chmodSync, fchmodSync, mkdirSync, lstatSync, readdirSync, openSync, closeSync, fstatSync, fsyncSync, constants, realpathSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { tmpdir, userInfo } from "node:os";
 import { dirname, join, resolve, isAbsolute, sep } from "node:path";
@@ -50,7 +50,10 @@ const PRIVATE = /[/\\](?:users|home)[/\\]|[a-z]:[/\\]users[/\\]|(?:\$\{?home\}?|
 const PRIVATE_MARKUP = /\.obsidian(?:[/\\]|$)|\[\[[^\]\[\r\n]{1,240}\]\]|%%/i;
 const PRIVATE_DIRECTORY = /^(?:\.obsidian|\.trash|vaults?|private-notes)$/i;
 const EXECUTION_CONTROL = /^(?:\.git(?:attributes|modules|config)?|\.npmrc|\.pnpmfile\.(?:cjs|mjs|js)|package\.(?:json5?|ya?ml)|pnpm-workspace\.ya?ml|pnpm-lock\.yaml|package-lock\.json|npm-shrinkwrap\.json|\.yarnrc(?:\.yml)?|yarn\.lock|\.pnp\.(?:cjs|loader\.mjs))$/i;
-const NEW_PUBLIC_DIRECTORY = /^(?:docs|src|web|apps|packages|tests?|public|assets)\//;
+// Where a worker may ADD a file. The generic top-level folders, plus the source folders of this
+// repository's three web applications, which live under artifacts/. The record folders that share
+// that parent (results, evidence, heartbeats, raised hands) and every other application stay out.
+const NEW_PUBLIC_DIRECTORY = /^(?:(?:docs|src|web|apps|packages|tests?|public|assets)|artifacts\/signalgrid-(?:app|desktop|mobile-pwa)\/src)\//;
 const ORDINARY_PRE_PUSH_SHA = "ab88ceee48a25a9eb79f072e9315093336ab3ccc810e0fbbe2e49690fa5d8b59";
 const SCANNER_MANIFEST = join(ACCOUNT_HOME, "SignalGrid-Local-AI", "brain-state", "auto-publish-review", "scanner.json");
 const PRIVACY_CLEARANCES = join(dirname(SCANNER_MANIFEST), "clearances");
@@ -139,28 +142,38 @@ function timestamp(value) {
   return Date.parse(value);
 }
 
-export async function listReview(db = DEFAULT_DB, { notBefore } = {}) {
-  const cutoff = notBefore === undefined ? null : timestamp(notBefore);
+/** One read-only read of the review-shaped build rows, oldest first. Both listings select from it. */
+async function reviewRows(db) {
   if (!existsSync(db)) refuse(`brain DB not found: ${db}`);
-  const sql = "SELECT id, created_at, updated_at, cancel_requested FROM autonomy_jobs WHERE kind = 'build' AND status = 'review' AND repo = 'SignalGrid-Review-Hub' AND worktree IS NOT NULL ORDER BY updated_at, id";
-  let rows;
+  const sql = "SELECT id, created_at, updated_at, cancel_requested, worktree FROM autonomy_jobs WHERE kind = 'build' AND status = 'review' AND repo = 'SignalGrid-Review-Hub' AND worktree IS NOT NULL ORDER BY updated_at, id";
   if (isBuiltin("node:sqlite")) {
     const { DatabaseSync } = await import("node:sqlite");
     const d = new DatabaseSync(db, { readOnly: true });
-    try { rows = d.prepare(sql).all(); } finally { d.close(); }
-  } else {
-    const r = spawnSync("/usr/bin/sqlite3", ["-readonly", "-json", `file:${db}?mode=ro`, sql], { encoding: "utf8" });
-    if (r.status !== 0) refuse(`sqlite3 could not read ${db}: ${r.stderr.trim()}`);
-    rows = JSON.parse(r.stdout || "[]");
+    try { return d.prepare(sql).all(); } finally { d.close(); }
   }
+  const r = spawnSync("/usr/bin/sqlite3", ["-readonly", "-json", `file:${db}?mode=ro`, sql], { encoding: "utf8" });
+  if (r.status !== 0) refuse(`sqlite3 could not read ${db}: ${r.stderr.trim()}`);
+  return JSON.parse(r.stdout || "[]");
+}
+
+/** Created at or after the cutover and never updated before it was created. A timestamp
+ *  that does not parse is not fresh; any other error is not swallowed. */
+function freshSince(row, cutoff) {
+  try {
+    const created = timestamp(row.created_at), updated = timestamp(row.updated_at);
+    return created >= cutoff && updated >= created;
+  } catch (e) { if (!(e instanceof Refusal)) throw e; return false; }
+}
+
+export async function listReview(db = DEFAULT_DB, { notBefore } = {}) {
+  const cutoff = notBefore === undefined ? null : timestamp(notBefore);
+  const rows = await reviewRows(db);
   // Manual listing is read-only and retains its unbounded historical view.
   if (cutoff === null) return rows.map((row) => String(row.id));
   const eligible = [];
   for (const row of rows) {
-    if (!/^[A-Za-z0-9_-]+$/.test(row.id ?? "") || row.cancel_requested !== 0) continue;
+    if (!/^[A-Za-z0-9_-]+$/.test(row.id ?? "") || row.cancel_requested !== 0 || !freshSince(row, cutoff)) continue;
     try {
-      const created = timestamp(row.created_at), updated = timestamp(row.updated_at);
-      if (created < cutoff || updated < created) continue;
       const job = await readJob(db, row.id), clearance = readPrivacyClearance(row.id);
       if (!job || clearance.value.request?.job_sha256 !== valueDigest(job) || clearance.value.request?.publisher_sha256 !== publisherDigest()) continue;
       if (!job.worktree || !existsSync(job.worktree)) continue;
@@ -173,6 +186,23 @@ export async function listReview(db = DEFAULT_DB, { notBefore } = {}) {
     } catch (e) { if (!(e instanceof Refusal)) throw e; }
   }
   return eligible;
+}
+
+/** Private preparation is a separate read-only selection, never publication eligibility.
+ * A fresh cutover is mandatory; actual dry-run validation still judges the source. */
+export async function listPreparation(db = DEFAULT_DB, { notBefore } = {}) {
+  if (notBefore === undefined) refuse("--list-prepare requires an explicit --not-before cutover");
+  const cutoff = timestamp(notBefore);
+  const cleared = new Set(await listReview(db, { notBefore }));
+  const pending = [];
+  // One read of the same ordered rows the manual listing shows; no reopen per id.
+  for (const row of await reviewRows(db)) {
+    const id = String(row.id);
+    if (!/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/.test(id) || cleared.has(id)) continue;
+    if (row.cancel_requested !== 0 || !row.worktree || !existsSync(row.worktree)) continue;
+    if (freshSince(row, cutoff)) pending.push(id);
+  }
+  return pending;
 }
 
 const decode = (s) => { try { const v = JSON.parse(s); return typeof v === "string" ? v : s; } catch { return s ?? ""; } };
@@ -234,10 +264,44 @@ function sourceGitBytes(dir, args, extra = {}, gitDirectory = null) {
 function rejectExecutableLocalConfig(dir) {
   const raw = sourceGitBytes(dir, ["config", "--local", "--no-includes", "--null", "--list"]);
   const rows = raw.toString("utf8").split("\0").filter(Boolean);
+  let perWorktree = false;
   for (const row of rows) {
     const key = row.split("\n", 1)[0];
-    if (/^(?:filter\.|diff\..*\.(?:command|textconv)$|include(?:if)?\.|credential\.|protocol\.|url\..*\.(?:insteadof|pushinsteadof)$|remote\..*\.(?:promisor|partialclonefilter|uploadpack|receivepack|vcs)$|core\.(?:fsmonitor|sshcommand|gitproxy|askpass|alternaterefscommand)$|extensions\.(?:worktreeconfig|partialclone)$)/i.test(key)) refuse("worker Git execution configuration is refused");
+    // A --local listing cannot see a worktree's own config.worktree, so the extension is never accepted
+    // on trust: its presence, whatever its value, makes the physical file mandatory to validate.
+    if (/^extensions\.worktreeconfig$/i.test(key)) { perWorktree = true; continue; }
+    if (/^(?:filter\.|diff\..*\.(?:command|textconv)$|include(?:if)?\.|credential\.|protocol\.|url\..*\.(?:insteadof|pushinsteadof)$|remote\..*\.(?:promisor|partialclonefilter|uploadpack|receivepack|vcs)$|core\.(?:fsmonitor|sshcommand|gitproxy|askpass|alternaterefscommand)$|extensions\.partialclone$)/i.test(key)) refuse("worker Git execution configuration is refused");
   }
+  if (perWorktree) requireInertWorktreeConfig(dir);
+}
+
+// The ONE per-worktree setting an application is known to write, and its one value. Not a pattern:
+// any other key, value, duplicate, include or repository-interpretation setting refuses.
+const INERT_WORKTREE_CONFIG_ROW = "codex.localenvironmentconfigpath\n__none__";
+
+/** Validate the worktree's own PHYSICAL config.worktree; absent passes. Git reads the extension from
+ *  the repository's own config and ignores a command-line override of it, so nothing here relies on
+ *  one: the file is inspected, then parsed outside any repository with includes off. */
+function requireInertWorktreeConfig(dir) {
+  const admin = sourceGitBytes(dir, ["rev-parse", "--absolute-git-dir"]).toString("utf8").replace(/\n$/, "");
+  if (!isAbsolute(admin) || /[\r\n\0]/.test(admin)) refuse("worker Git administrative location is invalid");
+  const file = join(admin, "config.worktree");
+  const identity = (st) => [st.dev, st.ino, st.size, st.mtimeMs, st.ctimeMs, st.mode, st.uid, st.nlink].join(":");
+  let before;
+  try { before = lstatSync(file); }
+  catch (e) { if (e?.code === "ENOENT") return; refuse("worker per-worktree Git configuration cannot be inspected"); }
+  if (!before.isFile() || before.nlink !== 1 || before.uid !== process.getuid() || (before.mode & 0o022) || !(before.mode & 0o400) || before.size > 4096) refuse("worker per-worktree Git configuration is not a plain owned file");
+  const neutral = realpathSync(mkdtempSync(join(tmpdir(), "brain-wtc-")));
+  try {
+    const r = spawnSync(GIT_BINARY, ["config", "--file", file, "--no-includes", "--null", "--list"],
+      { cwd: neutral, env: gitEnv({ GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_NOSYSTEM: "1", GIT_ALLOW_PROTOCOL: "", GIT_CEILING_DIRECTORIES: dirname(neutral) }), timeout: 30000, killSignal: "SIGKILL", maxBuffer: 1 << 20 });
+    if (r.error || r.status !== 0 || r.signal) refuse("worker per-worktree Git configuration cannot be parsed");
+    let after = null;
+    try { after = lstatSync(file); } catch { /* judged below */ }
+    if (!after || identity(after) !== identity(before)) refuse("worker per-worktree Git configuration changed during inspection");
+    const found = r.stdout.toString("utf8").split("\0").filter(Boolean);
+    if (found.length !== 1 || found[0] !== INERT_WORKTREE_CONFIG_ROW) refuse("worker per-worktree Git configuration is not the one permitted inert setting");
+  } finally { rmSync(neutral, { recursive: true, force: true }); }
 }
 
 function privacyText(text) {
@@ -384,7 +448,7 @@ function privateBytes(path, wantedMode, maxBytes = Infinity, ownerUid = process.
     if (lstatSync(part).isSymbolicLink()) refuse("scanner custody contains a symlink");
   }
   const fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
-  const shape = (st) => [st.dev, st.ino, st.size, st.mtimeMs, st.ctimeMs, st.mode, st.uid, st.nlink].join(":");
+  const shape = fileShape;
   try {
     const opened = fstatSync(fd);
     if (!opened.isFile() || opened.nlink !== 1 || opened.uid !== ownerUid || (opened.mode & 0o777) !== wantedMode || opened.size > maxBytes) refuse("private custody is not a frozen owner file");
@@ -404,22 +468,25 @@ function privateBytes(path, wantedMode, maxBytes = Infinity, ownerUid = process.
 // Account/ACL provisioning and actual reviewer qualification are separate work.
 // On Darwin, remove ACLs with chmod -N on clearances/ and every receipt/evidence
 // file, then verify ls -led. The private parent's reviewer search ACL is separate.
+/** Darwin only: true when `path` provably carries no ACL. W_OK misses writesecurity: an
+ *  ACL may allow a later write grant. Darwin can display @ instead of + when extended
+ *  attributes and an ACL coexist, so both the mode and the complete -e output are read.
+ *  An unreadable or unparseable answer is false. Callers refuse in their own words. */
+function darwinAclAbsent(path) {
+  const acl = spawnSync("/bin/ls", ["-lde", path], {
+    env: { PATH: TOOL_PATH, LANG: "C", LC_ALL: "C" },
+    encoding: "utf8", timeout: 5000, maxBuffer: 65536,
+  });
+  const lines = (acl.stdout ?? "").trimEnd().split("\n");
+  const mode = lines[0]?.split(/\s+/, 1)[0] ?? "";
+  return !(acl.error || acl.signal || acl.status !== 0 || (acl.stderr ?? "").trim() ||
+    lines.length !== 1 || !/^[d-][rwxstST-]{9}@?$/.test(mode));
+}
+/** What must not change between open, read and the final no-follow stat of one file. */
+const fileShape = (st) => [st.dev, st.ino, st.size, st.mtimeMs, st.ctimeMs, st.mode, st.uid, st.nlink].join(":");
+
 function requireReviewerReadOnly(path, fixture = false) {
-  if (process.platform === "darwin") {
-    // W_OK misses writesecurity: an ACL may allow a later write grant. Darwin
-    // can display @ instead of + when extended attributes and an ACL coexist,
-    // so inspect both the mode and the complete -e ACL output.
-    const acl = spawnSync("/bin/ls", ["-lde", path], {
-      env: { PATH: TOOL_PATH, LANG: "C", LC_ALL: "C" },
-      encoding: "utf8", timeout: 5000, maxBuffer: 65536,
-    });
-    const lines = (acl.stdout ?? "").trimEnd().split("\n");
-    const mode = lines[0]?.split(/\s+/, 1)[0] ?? "";
-    if (acl.error || acl.signal || acl.status !== 0 || (acl.stderr ?? "").trim() ||
-        lines.length !== 1 || !/^[d-][rwxstST-]{9}@?$/.test(mode)) {
-      refuse("reviewer custody ACL is present or unavailable");
-    }
-  }
+  if (process.platform === "darwin" && !darwinAclAbsent(path)) refuse("reviewer custody ACL is present or unavailable");
   // Only the existing internal synthetic principal fixture skips W_OK. Real
   // Darwin ACL checks still run in that fixture; production never relaxes it.
   if (fixture) return;
@@ -437,7 +504,236 @@ function worktreeOwner(path) {
   return entry.uid;
 }
 
+function validatePrivacyClearanceEnvelope(value, job, now) {
+  if (typeof job !== "string" || !/^[A-Za-z0-9_-]+$/.test(job) ||
+      value?.format !== "signalgrid-publication-privacy-clearance/v2" || value.job !== job ||
+      value.request?.format !== "signalgrid-publication-privacy-request/v1" || value.request.job !== job ||
+      !/^[0-9a-f]{64}$/.test(value.request.job_sha256 ?? "") || !/^[0-9a-f]{64}$/.test(value.request.publisher_sha256 ?? "") ||
+      !full40(value.request.head) || !full40(value.request.tree) || !full40(value.request.replay_base) ||
+      !Number.isSafeInteger(value.request.worker_uid) || value.request.worker_uid < 0 || value.request.worker_uid > 0xffffffff) refuse("artifact-specific privacy clearance is invalid");
+  const issued = timestamp(value.issued_at), expires = timestamp(value.expires_at);
+  if (!Number.isSafeInteger(now) || now < 0 || issued > now || expires <= now || expires <= issued || expires - issued > MAX_PRIVACY_TTL_MS) refuse("artifact-specific privacy clearance is invalid or expired");
+  const sourceRef = value.source_review?.evidence_ref, artifactRef = value.artifact_review?.evidence_ref;
+  if (!sourceRef || !artifactRef || sourceRef.path === artifactRef.path || sourceRef.sha256 === artifactRef.sha256) refuse("source and artifact privacy reviews need distinct evidence");
+  return issued;
+}
+
+/** Validate content only, using exact evidence Buffers and an explicit clock.
+ * This performs no I/O and grants no publication authority. The production
+ * reader separately enforces the real reviewer principal and all custody. */
+export function validatePrivacyClearanceContent(value, evidence, request, now) {
+  const issued = validatePrivacyClearanceEnvelope(value, request?.job, now);
+  if (valueDigest(value.request) !== valueDigest(request)) refuse("privacy clearance does not match the exact job, sources, publisher and artifact");
+  for (const [name, decision] of [["source_review", "public_only"], ["artifact_review", "public_safe"]]) {
+    const review = value[name], ref = review?.evidence_ref, bytes = evidence?.[name];
+    if (review?.decision !== decision || !["codex", "claude", "owner"].includes(review.system) || !ref ||
+        typeof ref.path !== "string" || !/^[0-9a-f]{64}$/.test(ref.sha256 ?? "")) refuse("source and artifact privacy reviews are required");
+    if (!Buffer.isBuffer(bytes) || bytes.length === 0 || bytes.length > (1 << 20) || digest(bytes) !== ref.sha256) refuse("privacy review evidence changed");
+    let reviewed;
+    try { reviewed = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes)); }
+    catch { refuse("privacy review evidence is not a bound structured review"); }
+    if (reviewed?.format !== "signalgrid-publication-privacy-review/v1" || reviewed.job !== request.job || reviewed.review_kind !== name ||
+        reviewed.request_sha256 !== valueDigest(request) || reviewed.system !== review.system || reviewed.decision !== decision ||
+        typeof reviewed.summary !== "string" || !reviewed.summary.trim() || reviewed.summary.length > 16000) refuse("privacy review evidence is not a bound structured review");
+    const reviewedAt = timestamp(reviewed.reviewed_at);
+    if (reviewedAt > issued || reviewedAt < issued - MAX_PRIVACY_TTL_MS) refuse("privacy review evidence is outside its review window");
+  }
+  return true;
+}
+
+// Versioned trusted-controller reader. It retains the independent-UID v2 route
+// when no explicit contained-controller selection exists. Contained code/checks
+// cannot reach this private state; arbitrary unsandboxed owner processes remain
+// in the trusted computing base. This is not equivalent OS-user isolation.
+export const readContainedClearance = (() => {
+// Explicit trusted-controller protocol. This does not claim independent OS-user custody.
+
+const MODE = 'contained_controller_v1';
+const WRAPPER = '\n\nReturn only the requested JSON review. Do not use tools.\n\n';
+// Raw-byte and ordered-JSON digests are the module's own digest() and valueDigest();
+// valueDigest() also refuses a value that is not complete JSON data.
+const equal = (a,b) => valueDigest(a) === valueDigest(b);
+const need = (ok, message) => { if (!ok) throw new Error(message); };
+const hex = x => typeof x === 'string' && /^[0-9a-f]{64}$/.test(x);
+const direct = p => {
+  need(isAbsolute(p) && resolve(p) === p && realpathSync(p) === p, 'Indirect contained controller path');
+  for (let q=p;;q=dirname(q)) { need(!lstatSync(q).isSymbolicLink(),'Indirect contained controller ancestor');if(q===dirname(q))break; }
+};
+function noACL(path) {
+  if (process.platform !== 'darwin') return;
+  need(darwinAclAbsent(path),'Contained controller ACL is present or unavailable');
+}
+function directory(path) {
+  direct(path);const s=lstatSync(path);need(s.isDirectory()&&s.uid===process.getuid()&&(s.mode&0o777)===0o700,'Private contained directory required');noACL(path);return s;
+}
+function file(path,{mode,uid=process.getuid(),maximum=4*1024*1024}={}) {
+  direct(path);noACL(path);
+  const fd=openSync(path,constants.O_RDONLY|constants.O_NOFOLLOW|constants.O_NONBLOCK);
+  const shape=fileShape;
+  try {
+    const s=fstatSync(fd);
+    need(s.isFile()&&s.nlink===1&&s.uid===uid&&s.size<=maximum&&!(s.mode&0o022)&&
+         (mode===undefined||(s.mode&0o777)===mode),'Contained file custody differs');
+    const raw=readFileSync(fd);
+    need(raw.length===s.size&&shape(s)===shape(fstatSync(fd))&&shape(s)===shape(lstatSync(path)),'Contained file changed while reading');
+    return {raw,stat:s,sha256:digest(raw)};
+  } finally {closeSync(fd);}
+}
+function json(path,mode=0o600) {const value=file(path,{mode});return {...value,value:JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(value.raw))};}
+function selected(ref) {
+  need(ref&&typeof ref.path==='string'&&hex(ref.sha256)&&[0,process.getuid()].includes(ref.uid),'Selected contained source reference required');
+  direct(ref.path);noACL(ref.path);
+  const fd=openSync(ref.path,constants.O_RDONLY|constants.O_NOFOLLOW|constants.O_NONBLOCK);
+  const shape=fileShape;
+  try {
+    const s=fstatSync(fd),exact=Number.isSafeInteger(ref.bytes)&&ref.bytes===s.size;
+    const sizeOK=s.size<=100*1024*1024||((s.mode&0o111)!==0&&exact&&s.size<=256*1024*1024);
+    need(s.isFile()&&s.nlink===1&&s.uid===ref.uid&&(s.mode&0o777)===ref.mode&&!(s.mode&0o022)&&
+         sizeOK&&(ref.bytes===undefined||exact),'Selected contained source custody differs');
+    const hash=createHash('sha256'),buffer=Buffer.alloc(1024*1024);let total=0,n;
+    while((n=readSync(fd,buffer,0,Math.min(buffer.length,s.size-total+1),null))>0) {
+      total+=n;need(total<=s.size,'Selected contained source grew');hash.update(buffer.subarray(0,n));
+    }
+    need(total===s.size&&shape(s)===shape(fstatSync(fd))&&shape(s)===shape(lstatSync(ref.path)),
+         'Selected contained source changed while hashing');
+    const actual={stat:s,sha256:hash.digest('hex')};
+    need(actual.sha256===ref.sha256,'Selected contained source changed');return actual;
+  } finally {closeSync(fd);}
+}
+function referenced(ref,path,mode) {
+  need(ref?.path===path&&ref.mode===mode&&ref.uid===process.getuid()&&hex(ref.sha256),'Bound private review reference required');
+  const actual=file(path,{mode});need(actual.sha256===ref.sha256,'Private review bytes changed');
+  for (const [key,value] of [['bytes',actual.stat.size],['dev',actual.stat.dev],['ino',actual.stat.ino]])
+    need(ref[key]===value,'Private review identity changed');
+  return actual.raw;
+}
+
+function readContainedClearance(job,{root,publisherRef,validateContent,verifySource,now=Date.now()}) {
+  need(typeof job==='string'&&/^[A-Za-z0-9_-]{1,64}$/.test(job)&&typeof validateContent==='function'&&typeof verifySource==='function',
+       'Contained reader needs exact job, content validator and current source check');
+  need(root.endsWith(sep+'brain-state'+sep+'contained-publication'),'Contained controller namespace differs');directory(root);
+  const base=dirname(dirname(root)),home=dirname(base),profilePath=join(root,'controller.json');
+  const profileFile=json(profilePath,0o400),profile=profileFile.value;
+  need(profile.format==='signalgrid-contained-publication-controller/v1'&&profile.execution_mode===MODE&&profile.enabled===true&&
+       profile.owner_uid===process.getuid()&&profile.profile_path===profilePath&&
+       profile.attempts_root===join(root,'attempts')&&profile.clearances_root===join(root,'clearances')&&hex(profile.account_sha256),
+       'Explicit current trusted-controller profile required');
+  const cutover=Date.parse(profile.not_before);need(Number.isFinite(cutover)&&cutover<=now,'Current contained cutover required');
+  directory(profile.attempts_root);directory(profile.clearances_root);
+  const host=profile.host,hostPath=join(home,'Library/Caches/signalgrid/host-verification.lock');
+  need(host?.path===hostPath,'Canonical host path differs');
+  const hs=file(hostPath,{mode:0o644}).stat;
+  need(host.dev===hs.dev&&host.ino===hs.ino&&host.uid===hs.uid&&host.nlink===1&&host.mode===0o644,'Canonical host identity differs');
+  need(Array.isArray(profile.source_refs)&&profile.source_refs.length<=100,'Selected contained runtime sources required');
+  const names=new Set();
+  for(const ref of profile.source_refs){need(!names.has(ref.path),'Repeated controller source');selected(ref);names.add(ref.path);}
+  for(const p of [profile.cli,publisherRef.path,...['signalgrid_contained_publication.py','signalgrid_providers.py',
+                 'signalgrid_publication_review.py','signalgrid_agent_runtime.py','signalgrid_brain.py'].map(n=>join(base,n))])
+    need(names.has(p),'Incomplete controller/runtime/publisher source selection');
+  need(equal(profile.publisher_ref,publisherRef),'Current publisher is not selected');selected(publisherRef);
+  const path=join(profile.clearances_root,job+'.json'),clearance=json(path,0o400),packet=clearance.value;
+  need(packet.format==='signalgrid-contained-publication-clearance/v1'&&packet.execution_mode===MODE&&
+       packet.profile_ref?.path===profilePath&&packet.profile_ref.uid===process.getuid()&&packet.profile_ref.mode===0o400&&
+       packet.profile_ref.sha256===profileFile.sha256,'Current contained receipt/profile binding differs');
+  const content=packet.content,request=content?.request,requestSHA=valueDigest(request);
+  const issuedAt=Date.parse(content?.issued_at);
+  need(content?.job===job&&request?.job===job&&request.worker_uid===process.getuid()&&request.publisher_sha256===publisherRef.sha256&&
+       Number.isFinite(issuedAt)&&issuedAt>=cutover,'Contained receipt belongs to another source, worker or cutover');
+  const attempt=join(profile.attempts_root,job);directory(attempt);
+  const outcome=json(join(attempt,'outcome.json')).value;
+  need(outcome.state==='contained-review-written'&&outcome.job===job&&outcome.request_sha256===requestSHA&&
+       outcome.execution_mode===MODE&&outcome.retry_forbidden===true&&outcome.public_egress_allowed===false,
+       'Original contained attempt did not finish');
+  referenced(outcome.clearance_ref,path,0o400);
+  const evidence={},tickets=new Set(),inputs=[];
+  for(const [kind,decision]of [['source_review','public_only'],['artifact_review','public_safe']]) {
+    const stage=join(attempt,kind),native=join(stage,'native'),execution=join(native,'execution');
+    for(const dir of[stage,native,execution])directory(dir);
+    const entry=content[kind];need(entry?.system==='codex'&&entry.decision===decision,'Genuine clearing Codex stage required');
+    evidence[kind]=referenced(entry.evidence_ref,join(stage,'qualified-review.json'),0o400);
+    const record=JSON.parse(evidence[kind]);
+    const admission=packet.admissions?.[kind],storedAdmission=json(join(stage,'dispatch.json')).value;
+    need(admission&&equal(admission,storedAdmission)&&admission.execution_mode===MODE&&admission.phase==='dispatched'&&
+         admission.job===job&&admission.job_sha256===request.job_sha256&&admission.request_sha256===requestSHA&&admission.review_kind===kind&&
+         admission.worker_uid===process.getuid()&&admission.account_sha256===profile.account_sha256&&hex(admission.prompt_sha256)&&
+         hex(admission.ticket_id)&&!tickets.has(admission.ticket_id)&&admission.usage?.provider==='codex'&&
+         admission.usage.transport==='subscription_cli'&&admission.usage.attempted===true&&admission.usage.credit_usage_allowed===false,
+         'Original shared-budget Native admission differs');
+    tickets.add(admission.ticket_id);
+    const response=json(join(native,'response.json')),value=response.value,meta=packet.native_responses?.[kind];
+    need(meta?.response_sha256===response.sha256&&meta.protocol==='subscription_exec_no_user_config'&&meta.normal_original_wait_closed===true&&
+         ['input_tokens','output_tokens'].every(k=>Number.isSafeInteger(meta.tokens?.[k])&&meta.tokens[k]>0)&&
+         value.format==='signalgrid-native-publication-review/v1'&&value.job===job&&value.request_sha256===requestSHA&&value.review_kind===kind&&
+         value.decision===decision&&value.summary===record.summary,'Actual structured Native response differs');
+    const invocation=json(join(execution,'invocation.json')).value,terminal=json(join(execution,'terminal.json')).value;
+    const stdin=file(join(execution,'stdin.raw'),{mode:0o600}),stdout=file(join(execution,'stdout.raw'),{mode:0o600}),stderr=file(join(execution,'stderr.raw'),{mode:0o600});
+    need(terminal.returncode===0&&Number.isSafeInteger(terminal.pid)&&terminal.pid>0&&terminal.normal_original_wait_closed===true&&
+         terminal.child_wait_closed===true&&terminal.timed_out===false&&terminal.error_type===null&&
+         terminal.stdout_sha256===stdout.sha256&&terminal.stderr_sha256===stderr.sha256&&
+         invocation.once_only===true&&invocation.stdin_sha256===stdin.sha256&&admission.prompt_sha256===stdin.sha256&&
+         equal(invocation.inherited_host,{device:host.dev,inode:host.ino}), 'Actual Native execution is incomplete or changed');
+    const argv=invocation.argv;
+    need(Array.isArray(argv)&&realpathSync(argv[0])===realpathSync(profile.cli)&&argv[1]==='exec','Selected Native executable differs');
+    for(const flag of ['--ignore-user-config','--ignore-rules','--ephemeral','project_doc_max_bytes=0','include_environment_context=false',
+      'skills.bundled.enabled=false','skills.include_instructions=false','cloud.skills.enabled=false','notify=[]',
+      'tools.update_plan.enabled=false','tools.experimental_request_user_input.enabled=false'])need(argv.includes(flag),'Ambient Native capability was not disabled');
+    need(argv.some((x,i)=>x==='--sandbox'&&argv[i+1]==='read-only'),'Read-only Native sandbox required');
+    for(const flag of ['stable_environment_tools','shell_tool','unified_exec','plugins','hooks','apps','memories','multi_agent'])
+      need(argv.some((x,i)=>x==='--disable'&&argv[i+1]===flag),'Native tool capability was not disabled');
+    const events=new TextDecoder('utf-8',{fatal:true}).decode(stdout.raw).trimEnd().split('\n').map(x=>JSON.parse(x));
+    const messages=events.filter(e=>e.type==='item.completed'&&e.item?.type==='agent_message'),ends=events.filter(e=>e.type==='turn.completed');
+    need(messages.length===1&&ends.length===1&&equal(JSON.parse(messages[0].item.text),value)&&
+         ['input_tokens','output_tokens'].every(k=>ends[0].usage?.[k]===meta.tokens[k])&&
+         events.every(e=>['thread.started','turn.started','item.started','item.completed','turn.completed'].includes(e.type)&&
+           (!['item.started','item.completed'].includes(e.type)||['agent_message','reasoning'].includes(e.item?.type))),
+         'Native transcript did not produce the reviewed result without tools');
+    const prompt=new TextDecoder('utf-8',{fatal:true}).decode(stdin.raw),index=prompt.indexOf(WRAPPER);
+    need(index>=0&&prompt.indexOf(WRAPPER,index+WRAPPER.length)===-1,'Native input framing differs');
+    const data=JSON.parse(prompt.slice(index+WRAPPER.length));
+    need(data.job===job&&data.request_sha256===requestSHA&&data.review_kind===kind&&data.source?.kind==='cloud_shareable_note'&&
+         digest(data.source.body)===data.source.body_sha256&&data.artifact?.head===request.head&&data.artifact.tree===request.tree&&
+         data.artifact.replay_base===request.replay_base&&Array.isArray(data.artifact.exports)&&data.artifact.exports.length===request.exports.length,
+         'Native source/artifact input is incomplete or unrelated');
+    for(let i=0;i<request.exports.length;i++){
+      const e=data.artifact.exports[i],wanted=request.exports[i];
+      need(typeof e?.text==='string'&&equal({source:e.source,bytes:e.bytes,sha256:e.sha256},wanted)&&
+           Buffer.byteLength(e.text)===e.bytes&&digest(e.text)===e.sha256,'Native omitted or altered an export');
+    }
+    inputs.push({source:data.source,artifact:data.artifact});
+  }
+  need(equal(inputs[0],inputs[1]),'Native stages reviewed different frozen data');
+  validateContent(content,evidence,request,now);
+  const current=verifySource(job,requestSHA);
+  need(current?.format==='signalgrid-contained-source-check/v1'&&current.current===true&&current.job===job&&current.request_sha256===requestSHA,
+       'Current durable source permission did not qualify');
+  need(file(profilePath,{mode:0o400}).sha256===profileFile.sha256&&file(path,{mode:0o400}).sha256===clearance.sha256,
+       'Controller selection or clearance changed during read');
+  return {value:content,path,sha256:clearance.sha256,execution_mode:MODE,profile_ref:packet.profile_ref};
+}
+return readContainedClearance;
+})();
+
+function verifyCurrentContainedSource(job, requestSHA) {
+  const url = 'http://127.0.0.1:8765/api/brain/publication-review-source?id=' + encodeURIComponent(job) + '&request_sha256=' + requestSHA;
+  const r = spawnSync('/usr/bin/curl', ['--disable', '--silent', '--show-error', '--fail',
+    '--noproxy', '*', '--proto', '=http', '--max-redirs', '0', '--connect-timeout', '2', '--max-time', '5', '--url', url],
+    { env: { PATH: '/usr/bin:/bin', LANG: 'C', LC_ALL: 'C' }, encoding: 'utf8', timeout: 6000, maxBuffer: 65536 });
+  if (r.error || r.signal || r.status !== 0 || (r.stderr ?? '').trim()) refuse('current contained source check is unavailable');
+  return JSON.parse(r.stdout);
+}
+
 function readPrivacyClearance(job) {
+  const controllerRoot = SELF_TEST_SCANNER?.controllerRoot ?? join(ACCOUNT_HOME, 'SignalGrid-Local-AI', 'brain-state', 'contained-publication');
+  if (!SELF_TEST_SCANNER?.privacyRoot && existsSync(join(controllerRoot, 'controller.json'))) {
+    try {
+      const self = realpathSync(fileURLToPath(import.meta.url)), st = lstatSync(self);
+      const publisherRef = { path: self, sha256: publisherDigest(), mode: st.mode & 0o777, uid: st.uid,
+        bytes: st.size, dev: st.dev, ino: st.ino };
+      return readContainedClearance(job, { root: controllerRoot, publisherRef,
+        validateContent: validatePrivacyClearanceContent, verifySource: verifyCurrentContainedSource });
+    } catch { refuse('contained source/privacy clearance is unavailable or unqualified'); }
+  }
+
   if (!/^[A-Za-z0-9_-]+$/.test(job ?? "")) refuse("privacy clearance job identity is invalid");
   const root = SELF_TEST_SCANNER?.privacyRoot ?? PRIVACY_CLEARANCES;
   try {
@@ -454,31 +750,18 @@ function readPrivacyClearance(job) {
     requireReviewerReadOnly(path, fixture);
     const bytes = privateBytes(path, mode, 1 << 20, directory.uid);
     const value = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
-    if (value?.format !== "signalgrid-publication-privacy-clearance/v2" || value.job !== job ||
-        value.request?.format !== "signalgrid-publication-privacy-request/v1" || value.request.job !== job ||
-        !/^[0-9a-f]{64}$/.test(value.request.job_sha256 ?? "") || !/^[0-9a-f]{64}$/.test(value.request.publisher_sha256 ?? "") ||
-        !full40(value.request.head) || !full40(value.request.tree) || !full40(value.request.replay_base) ||
-        !Number.isSafeInteger(value.request.worker_uid) || value.request.worker_uid < 0 || value.request.worker_uid > 0xffffffff) refuse("artifact-specific privacy clearance is invalid");
+    validatePrivacyClearanceEnvelope(value, job, Date.now());
     if (!fixture && directory.uid === value.request.worker_uid) refuse("privacy reviewer must differ from the worker checkout owner");
-    const issued = timestamp(value.issued_at), expires = timestamp(value.expires_at), now = Date.now();
-    if (issued > now || expires <= now || expires <= issued || expires - issued > MAX_PRIVACY_TTL_MS) refuse("artifact-specific privacy clearance is invalid or expired");
-    const sourceRef = value.source_review?.evidence_ref, artifactRef = value.artifact_review?.evidence_ref;
-    if (!sourceRef || !artifactRef || sourceRef.path === artifactRef.path || sourceRef.sha256 === artifactRef.sha256) refuse("source and artifact privacy reviews need distinct evidence");
+    const records = {};
     for (const [name, decision] of [["source_review", "public_only"], ["artifact_review", "public_safe"]]) {
       const review = value[name], ref = review?.evidence_ref;
       if (review?.decision !== decision || !["codex", "claude", "owner"].includes(review.system) || !ref ||
           typeof ref.path !== "string" || !ref.path.startsWith(root + sep) || ref.path === path ||
           ref.mode !== mode || ref.uid !== directory.uid || !/^[0-9a-f]{64}$/.test(ref.sha256 ?? "")) refuse("source and artifact privacy reviews are required");
       requireReviewerReadOnly(ref.path, fixture);
-      const evidence = privateBytes(ref.path, mode, 1 << 20, directory.uid);
-      if (digest(evidence) !== ref.sha256) refuse("privacy review evidence changed");
-      const reviewed = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(evidence));
-      if (reviewed?.format !== "signalgrid-publication-privacy-review/v1" || reviewed.job !== job || reviewed.review_kind !== name ||
-          reviewed.request_sha256 !== valueDigest(value.request) || reviewed.system !== review.system || reviewed.decision !== decision ||
-          typeof reviewed.summary !== "string" || !reviewed.summary.trim() || reviewed.summary.length > 16000) refuse("privacy review evidence is not a bound structured review");
-      const reviewedAt = timestamp(reviewed.reviewed_at);
-      if (reviewedAt > issued || reviewedAt < issued - MAX_PRIVACY_TTL_MS) refuse("privacy review evidence is outside its review window");
+      records[name] = privateBytes(ref.path, mode, 1 << 20, directory.uid);
     }
+    validatePrivacyClearanceContent(value, records, value.request, Date.now());
     const end = lstatSync(root);
     if (["dev", "ino", "uid", "mode"].some((key) => end[key] !== directory[key])) refuse("privacy clearance directory changed");
     requireReviewerReadOnly(root, fixture);
@@ -772,7 +1055,9 @@ export async function run({ job, db = DEFAULT_DB, repo = REPO, publish = false, 
     const ap = git(wt, ["apply", "--3way", "--index", pf]);
     const unmerged = git(wt, ["diff", "--name-only", "--diff-filter=U"]).out.trim();
     if (!ap.ok || unmerged) refuse(`job ${job}: the patch does not apply cleanly to origin/${BASE}\n${ap.err.trim()}${unmerged ? `\nunmerged: ${unmerged}` : ""}`);
-    const prTitle = `brain: ${title.slice(0, 80)} (job ${job})`;
+    // The stored task title is unclassified local input. Export only screened
+    // artifact inventory and route facts, including in the commit subject.
+    const prTitle = `brain: update ${files.length} file${files.length === 1 ? "" : "s"} (job ${job})`;
     if (selectedPrivacy) {
       const approved = selectedPrivacy.value.request, proposedTree = gitOk(wt, ["write-tree"]).trim();
       if (approved.replay_base !== replayBase || approved.tree !== proposedTree) refuse("privacy clearance does not match the current replay base and tree");
@@ -791,7 +1076,7 @@ export async function run({ job, db = DEFAULT_DB, repo = REPO, publish = false, 
     const publishedTree = gitOk(wt, ["rev-parse", "HEAD^{tree}"]).trim();
     const body = [
       "## Summary", "",
-      `Local-brain build job \`${job}\` — "${title}".`, "",
+      `Local-brain build job \`${job}\`.`, "",
       `The patch was replayed with \`git apply --3way --index\` onto \`${replayBase}\` from \`origin/${BASE}\`.`,
       `Published branch: \`${branch}\` at \`${publishedHead}\` (tree \`${publishedTree}\`).`, "",
       "## What changed", "", ...files.map((f) => `- \`${f}\``), "",
@@ -810,9 +1095,12 @@ export async function run({ job, db = DEFAULT_DB, repo = REPO, publish = false, 
     if (gitOk(wt, ["rev-parse", "HEAD"]).trim() !== artifact.head || gitOk(wt, ["rev-parse", "HEAD^{tree}"]).trim() !== artifact.tree) refuse("committed publication identity changed after screening");
     if (JSON.stringify(await readJob(db, job)) !== originalJobProjection) refuse(`job ${job} changed before publication; original attempt is readback-only`);
     if (!publish) {
+      const publicationMetadata = { format: "signalgrid-publication-prepared-metadata/v1",
+        request_sha256: valueDigest(privacyRequest), title: prTitle, body };
       log(`dry run: privacy review is still required before pushing ${branch}`);
       log("SIGNALGRID_PUBLICATION_PRIVACY_REQUEST " + JSON.stringify(privacyRequest));
-      return { branch, files, pushed: false, replayBase, publishedHead, publishedTree, privacyRequest };
+      log("SIGNALGRID_PUBLICATION_PREPARED_METADATA " + JSON.stringify(publicationMetadata));
+      return { branch, files, pushed: false, replayBase, publishedHead, publishedTree, privacyRequest, publicationMetadata };
     }
 
     if (requirePrivacyClearance(privacyRequest).sha256 !== privacy.sha256) refuse("privacy clearance changed before push");
@@ -835,6 +1123,176 @@ export async function run({ job, db = DEFAULT_DB, repo = REPO, publish = false, 
   }
 }
 
+async function selfTestContainedReader(check) {
+  const fs = await import('node:fs');
+  const assert = (await import('node:assert/strict')).default;
+  const reader = readContainedClearance;
+const sha = raw => createHash('sha256').update(raw).digest('hex');
+const canonical = x => Array.isArray(x) ? x.map(canonical) : x && typeof x === 'object'
+  ? Object.fromEntries(Object.keys(x).sort().map(k => [k, canonical(x[k])])) : x;
+const digest = x => sha(JSON.stringify(canonical(x)));
+const WRAPPER = '\n\nReturn only the requested JSON review. Do not use tools.\n\n';
+
+function fixture() {
+  assert.equal(typeof reader, 'function', 'No contained publication reader exists');
+  const home = fs.realpathSync(fs.mkdtempSync(join(tmpdir(), 'contained-reader-')));
+  const base = join(home, 'SignalGrid-Local-AI');
+  const root = join(base, 'brain-state', 'contained-publication');
+  const job = 'freshSynthetic';
+  const attempt = join(root, 'attempts', job);
+  const clearances = join(root, 'clearances');
+  for (const p of [base, join(base, 'brain-state'), root, join(root, 'attempts'), attempt, clearances]) fs.mkdirSync(p, { mode: 0o700 });
+  const write = (path, value, mode = 0o400) => {
+    const data = Buffer.isBuffer(value) ? value : Buffer.from(typeof value === 'string' ? value : JSON.stringify(canonical(value)) + '\n');
+    // Replace only a fixture entry; create exclusively and use its descriptor throughout.
+    try { fs.unlinkSync(path); } catch (e) { if (e.code !== 'ENOENT') throw e; }
+    const fd = fs.openSync(path, fs.constants.O_RDWR | fs.constants.O_CREAT | fs.constants.O_EXCL | fs.constants.O_NOFOLLOW, 0o600);
+    try {
+      fs.writeFileSync(fd, data); fs.fchmodSync(fd, mode);
+      const s = fs.fstatSync(fd);
+      return { path, sha256: sha(data), mode, uid: s.uid, bytes: s.size, dev: s.dev, ino: s.ino };
+    } finally { fs.closeSync(fd); }
+  };
+  const refs = [];
+  for (const name of ['signalgrid_contained_publication.py', 'signalgrid_providers.py',
+                      'signalgrid_publication_review.py', 'signalgrid_agent_runtime.py', 'signalgrid_brain.py']) refs.push(write(join(base, name), '# selected synthetic source'));
+  const cliRef = write(join(home, 'codex'), 'synthetic selected CLI; never executed', 0o500);
+  const publisherRef = write(join(home, 'publisher.mjs'), '// synthetic selected publisher');
+  refs.push(cliRef, publisherRef);
+  const hostPath = join(home, 'Library', 'Caches', 'signalgrid', 'host-verification.lock');
+  fs.mkdirSync(join(home, 'Library', 'Caches', 'signalgrid'), { recursive: true, mode: 0o700 });
+  write(hostPath, '', 0o644); const hs = fs.statSync(hostPath);
+  const now = Date.now();
+  const profile = { format: 'signalgrid-contained-publication-controller/v1', execution_mode: 'contained_controller_v1',
+    enabled: true, owner_uid: process.getuid(), profile_path: join(root, 'controller.json'),
+    attempts_root: join(root, 'attempts'), clearances_root: clearances, cli: cliRef.path,
+    account_sha256: 'a'.repeat(64), not_before: new Date(now - 10000).toISOString(), source_refs: refs,
+    publisher_ref: publisherRef, host: { path: hostPath, dev: hs.dev, ino: hs.ino, uid: hs.uid, nlink: 1, mode: 0o644 } };
+  const profileRef = write(profile.profile_path, profile);
+  const exports = [['metadata/title.txt', 'Synthetic public title'], ['metadata/body.md', 'Synthetic body'],
+    ['metadata/commit.txt', 'Synthetic commit'], ['metadata/paths.json', '["src/example.js"]'],
+    ['files/src/example.js', 'export const n=2;\n']].map(([source, text]) => ({source, text, bytes: Buffer.byteLength(text), sha256: sha(text)}));
+  const request = { format: 'signalgrid-publication-privacy-request/v1', job, job_sha256: '1'.repeat(64),
+    publisher_sha256: publisherRef.sha256, worker_head: '2'.repeat(40), worker_uid: process.getuid(), patch_sha256: '3'.repeat(64),
+    head: '4'.repeat(40), tree: '5'.repeat(40), replay_base: '6'.repeat(40),
+    exports: exports.map(({text, ...x}) => x) };
+  const content = { format: 'signalgrid-publication-privacy-clearance/v2', job, request,
+    issued_at: new Date(now).toISOString(), expires_at: new Date(now + 3600000).toISOString() };
+  const packet = { format: 'signalgrid-contained-publication-clearance/v1', execution_mode: 'contained_controller_v1',
+    profile_ref: profileRef, content, admissions: {}, native_responses: {} };
+  const source = { kind: 'cloud_shareable_note', note_id: 'synthetic-note', title: 'Synthetic title',
+    body: 'Change the synthetic public fixture.', body_sha256: sha('Change the synthetic public fixture.') };
+  for (const [kind, decision] of [['source_review','public_only'], ['artifact_review','public_safe']]) {
+    const stage = join(attempt, kind), native = join(stage, 'native'), execution = join(native, 'execution');
+    for (const dir of [stage,native,execution]) fs.mkdirSync(dir,{mode:0o700});
+    const value = { format:'signalgrid-native-publication-review/v1',job,request_sha256:digest(request),
+      review_kind:kind,decision,summary:'Read the complete synthetic source and every export.' };
+    const responseRef = write(join(native,'response.json'),value,0o600);
+    const record = { format:'signalgrid-publication-privacy-review/v1',job,request_sha256:digest(request),
+      review_kind:kind,system:'codex',decision,summary:value.summary,reviewed_at:new Date(now-1).toISOString() };
+    content[kind] = {system:'codex',decision,evidence_ref:write(join(stage,'qualified-review.json'),record)};
+    const data = {review_kind:kind,job,request_sha256:digest(request),source,
+      artifact:{head:request.head,tree:request.tree,replay_base:request.replay_base,exports}};
+    const prompt = 'Synthetic fixed privacy instructions'+WRAPPER+JSON.stringify(canonical(data));
+    const inputRef = write(join(execution,'stdin.raw'),prompt,0o600);
+    const stdout = [JSON.stringify({type:'item.completed',item:{id:'message1',type:'agent_message',text:JSON.stringify(value)}}),
+      JSON.stringify({type:'turn.completed',usage:{input_tokens:30,output_tokens:8}})].join('\n')+'\n';
+    const stdoutRef=write(join(execution,'stdout.raw'),stdout,0o600), stderrRef=write(join(execution,'stderr.raw'),'',0o600);
+    const argv=[cliRef.path,'exec','--ignore-user-config','--ignore-rules','--ephemeral','--sandbox','read-only',
+      '-c','project_doc_max_bytes=0','-c','include_environment_context=false','-c','skills.bundled.enabled=false',
+      '-c','skills.include_instructions=false','-c','cloud.skills.enabled=false','-c','notify=[]',
+      '-c','tools.update_plan.enabled=false','-c','tools.experimental_request_user_input.enabled=false',
+      '--disable','stable_environment_tools','--disable','shell_tool','--disable','unified_exec',
+      '--disable','plugins','--disable','hooks','--disable','apps','--disable','memories','--disable','multi_agent'];
+    write(join(execution,'invocation.json'),{argv,once_only:true,stdin_sha256:inputRef.sha256,
+      inherited_host:{device:hs.dev,inode:hs.ino}},0o600);
+    write(join(execution,'terminal.json'),{pid:12345,returncode:0,normal_original_wait_closed:true,child_wait_closed:true,
+      timed_out:false,error_type:null,stdout_sha256:stdoutRef.sha256,stderr_sha256:stderrRef.sha256},0o600);
+    packet.admissions[kind]={job,job_sha256:request.job_sha256,request_sha256:digest(request),review_kind:kind,
+      worker_uid:process.getuid(),account_sha256:profile.account_sha256,prompt_sha256:sha(prompt),
+      execution_mode:'contained_controller_v1',ticket_id:(kind==='source_review'?'b':'c').repeat(64),phase:'dispatched',
+      usage:{provider:'codex',transport:'subscription_cli',attempted:true,credit_usage_allowed:false}};
+    write(join(stage,'dispatch.json'),packet.admissions[kind],0o600);
+    packet.native_responses[kind]={response_sha256:responseRef.sha256,tokens:{input_tokens:30,output_tokens:8},
+      normal_original_wait_closed:true,protocol:'subscription_exec_no_user_config'};
+  }
+  const path=join(clearances,job+'.json');
+  function save() {
+    const ref=write(path,packet);
+    write(join(attempt,'outcome.json'),{state:'contained-review-written',job,request_sha256:digest(request),
+      clearance_ref:ref,execution_mode:'contained_controller_v1',retry_forbidden:true,public_egress_allowed:false},0o600);
+  }
+  save();
+  const options={root,publisherRef,validateContent:validatePrivacyClearanceContent,now,
+    verifySource:()=>({format:'signalgrid-contained-source-check/v1',job,request_sha256:digest(request),current:true})};
+  return {home,root,job,packet,profile,request,options,write,save,path,attempt,
+    read:()=>reader(job,options),cleanup:()=>fs.rmSync(home,{recursive:true,force:true})};
+}
+
+function checkCase(name, run) { const f=fixture(); try { run(f); check('(contained) '+name, true); } catch { check('(contained) '+name, false); } finally { f.cleanup(); } }
+// A negative case first proves its own fresh fixture crosses the real reader, then mutates it:
+// a broken baseline would otherwise make every assert.throws pass for the wrong reason.
+// `expected` is the reader's exact refusal for that mutation, so one guard cannot stand in for another.
+function refusedCase(name, mutate, expected) {
+  checkCase(name, f => {
+    assert.deepEqual(f.read().value.request, f.request, 'the unmutated fixture must be accepted first');
+    mutate(f);
+    assert.throws(() => f.read(), e => { assert.match(String(e.message), expected); return true; });
+  });
+}
+checkCase('complete contained producer evidence crosses the real content validator',f=>assert.deepEqual(f.read().value.request,f.request));
+refusedCase('an unparseable contained receipt issue time is refused',f=>{
+  f.packet.content.issued_at='not-a-time';f.save();
+},/^Contained receipt belongs to another source, worker or cutover$/);
+function actualToolRef(path) {
+  path=fs.realpathSync(path);
+  const fd=fs.openSync(path,fs.constants.O_RDONLY|fs.constants.O_NOFOLLOW);
+  try {
+    const s=fs.fstatSync(fd),hash=createHash('sha256'),buffer=Buffer.alloc(1024*1024);
+    for(let n;(n=fs.readSync(fd,buffer,0,buffer.length,null))>0;)hash.update(buffer.subarray(0,n));
+    const end=fs.fstatSync(fd);
+    for(const key of ['dev','ino','size','mtimeMs','ctimeMs','mode','uid','nlink']) assert.equal(end[key],s[key]);
+    return {path,sha256:hash.digest('hex'),mode:s.mode&0o777,uid:s.uid,bytes:s.size};
+  } finally {fs.closeSync(fd);}
+}
+function selectTool(f,ref) {
+  f.profile.source_refs.push(ref);f.packet.profile_ref=f.write(f.profile.profile_path,f.profile);f.save();
+}
+// The runner's own Node need not meet the custody rule (a hosted Linux toolcache is group- and
+// world-writable; run 43145314578 failed the positive case there while both refusals passed for
+// the wrong reason). Qualify a private copy of the same real binary under custody this fixture owns.
+function privateToolRef(f) {
+  const path=resolve(dirname(f.profile.profile_path),'..','..','..','node-tool');
+  fs.copyFileSync(process.execPath,path,fs.constants.COPYFILE_EXCL);fs.chmodSync(path,0o500);
+  return actualToolRef(path);
+}
+checkCase('the actual pinned Node executable qualifies without a whole-binary buffer',f=>{
+  selectTool(f,privateToolRef(f));assert.deepEqual(f.read().value.request,f.request);
+});
+refusedCase('a selected executable with the wrong exact size is refused',f=>{
+  const ref=privateToolRef(f);selectTool(f,ref);assert.deepEqual(f.read().value.request,f.request);
+  f.profile.source_refs.pop();selectTool(f,{...ref,bytes:ref.bytes-1});
+},/^Selected contained source custody differs$/);
+refusedCase('a selected executable with a changed hash is refused',f=>{
+  const ref=privateToolRef(f);selectTool(f,ref);assert.deepEqual(f.read().value.request,f.request);
+  f.profile.source_refs.pop();selectTool(f,{...ref,sha256:'0'.repeat(64)});
+},/^Selected contained source changed$/);
+refusedCase('a selected executable that group or others can write is refused',f=>{
+  const ref=privateToolRef(f);selectTool(f,ref);assert.deepEqual(f.read().value.request,f.request);
+  f.profile.source_refs.pop();fs.chmodSync(ref.path,0o777);selectTool(f,{...ref,mode:0o777});
+},/^Selected contained source custody differs$/);
+refusedCase('a worker-supplied v2 file is never treated as a contained receipt',f=>{f.write(f.path,f.packet.content)},/^Current contained receipt\/profile binding differs$/);
+refusedCase('a stale controller profile cannot grant publication',f=>{f.profile.enabled=false;f.write(f.profile.profile_path,f.profile)},/^Explicit current trusted\-controller profile required$/);
+refusedCase('changed selected controller code is refused',f=>{f.write(f.profile.source_refs[0].path,'changed')},/^Selected contained source custody differs$/);
+refusedCase('a failed or missing final controller outcome is readback only',f=>{f.write(join(f.attempt,'outcome.json'),{state:'held'},0o600)},/^Original contained attempt did not finish$/);
+refusedCase('a clearing file cannot replace a Native rejection',f=>{f.write(join(f.attempt,'source_review/native/response.json'),{decision:'reject'},0o600)},/^Actual structured Native response differs$/);
+refusedCase('changed actual Native input cannot keep an old admission',f=>{f.write(join(f.attempt,'source_review/native/execution/stdin.raw'),'different',0o600)},/^Actual Native execution is incomplete or changed$/);
+refusedCase('current source permission is required immediately before publication',f=>{f.options.verifySource=()=>({current:false})},/^Current durable source permission did not qualify$/);
+refusedCase('a symlinked clearance is refused',f=>{const target=join(f.root,'saved.json');fs.renameSync(f.path,target);fs.symlinkSync(target,f.path)},/^Indirect contained controller path$/);
+refusedCase('unknown or unclosed Native terminal evidence is refused',f=>{f.write(join(f.attempt,'artifact_review/native/execution/terminal.json'),{returncode:0,normal_original_wait_closed:false},0o600)},/^Actual Native execution is incomplete or changed$/);
+
+}
+
 async function selfTest() {
   scrubProcessGitEnv();
   const root = realpathSync(mkdtempSync(join(tmpdir(), "brain-pr-st-")));
@@ -851,6 +1309,7 @@ async function selfTest() {
     catch (e) { check(`${name}: ${e.message.split("\n")[0]}`, e instanceof Refusal && e.message.includes(needle)); }
   };
   try {
+    await selfTestContainedReader(check);
     // Portable boundary fixture only: it runs a separate synthetic executable,
     // with the real export/argv/config transport. Upstream compatibility has its
     // own actual pinned-binary qualification; this never claims that proof.
@@ -883,7 +1342,7 @@ function walk(dir, prefix = "") {
 }
 walk(a[13]);
 const mapping = JSON.parse(fs.readFileSync(path.join(process.cwd(), "mapping.json"), "utf8"));
-if (!Array.isArray(mapping) || mapping.length !== seen.length || !mapping.every(m => /^entry-[0-9]{6}$/.test(m.name) && seen.includes(m.name)) || !["metadata/title.txt", "metadata/body.md", "metadata/commit.txt", "metadata/paths.json"].every(p => mapping.some(m => m.source === p)) || !mapping.some(m => m.source.startsWith("files/"))) fail();
+if (!Array.isArray(mapping) || mapping.length !== seen.length || !mapping.every(m => /^entry-[0-9]{6}$/.test(m.name) && seen.includes(m.name)) || !["metadata/title.txt", "metadata/body.md", "metadata/commit.txt", "metadata/paths.json"].every(p => mapping.some(m => m.source === p)) || !mapping.some(m => m.source.startsWith("files/") || m.source.startsWith("deleted/"))) fail();
 fs.writeFileSync(a[12], JSON.stringify(finding ? [{RuleID:"github-pat", Fingerprint:"synthetic:notes.md:1"}] : []), {flag:"wx",mode:384});
 process.exit(finding ? 2 : 0);
 `);
@@ -914,6 +1373,10 @@ process.exit(finding ? 2 : 0);
     const privacyRoot = join(realpathSync(root), "privacy-clearances");
     mkdirSync(privacyRoot, { mode: 0o700 });
     scannerFixture.privacyRoot = privacyRoot;
+    // Model an installed controller without touching the real account namespace.
+    scannerFixture.controllerRoot = join(realpathSync(root), "installed-controller-marker");
+    mkdirSync(scannerFixture.controllerRoot, { mode: 0o700 });
+    writeFileSync(join(scannerFixture.controllerRoot, "controller.json"), "{}\n", { flag: "wx", mode: 0o400 });
     const grantFixturePrivacy = (id, request, changes = {}, directory = privacyRoot) => {
       if (!request) return; // The pre-fix run must fail assertions, not fixture setup.
       const issued = Date.now();
@@ -955,6 +1418,16 @@ process.exit(finding ? 2 : 0);
     };
     try {
       grantFixturePrivacy("self-written", probeRequest("self-written"), {}, privacyProbeRoot);
+      let selectedFixturePath = null;
+      try { selectedFixturePath = readPrivacyClearance("self-written").path; } catch { /* reported below */ }
+      check("(privacy) an installed controller cannot replace the explicit self-test root",
+        selectedFixturePath === join(privacyProbeRoot, "self-written.json"));
+      const explicitFixtureRoot = scannerFixture.privacyRoot;
+      try {
+        delete scannerFixture.privacyRoot;
+        check("(privacy) without an explicit fixture root the installed controller remains fail-closed",
+          probeRefused("self-written", "contained source/privacy clearance is unavailable"));
+      } finally { scannerFixture.privacyRoot = explicitFixtureRoot; }
       scannerFixture.privacyReviewerFixture = false;
       check("(privacy) publisher-account receipt is refused by the actual principal guard", probeRefused("self-written", "independent reviewer"));
       scannerFixture.privacyReviewerFixture = true;
@@ -970,6 +1443,45 @@ process.exit(finding ? 2 : 0);
         value.artifact_review.evidence_ref = { path: unreviewed, sha256: digest(unreviewedBytes), uid: process.getuid(), mode: 0o400 };
       });
       check("(privacy) hashed text alone is not a structured artifact review", probeRefused("unreviewed-text"));
+      // Import from a separate consumer process: awaiting this module's own
+      // import while its top-level self-test is evaluating would deadlock.
+      const consumer = spawnSync(process.execPath, ["--input-type=module", "-e",
+        `const api = await import(${JSON.stringify(import.meta.url)}); process.stdout.write(typeof api.validatePrivacyClearanceContent);`],
+        { encoding: "utf8", env: gitEnv(), timeout: 30000 });
+      const publicAPI = { validatePrivacyClearanceContent: typeof validatePrivacyClearanceContent === "function" ? validatePrivacyClearanceContent : undefined };
+      check("(privacy interface) the shared content validator is exported", consumer.status === 0 && consumer.stdout === "function");
+      if (typeof publicAPI.validatePrivacyClearanceContent === "function") {
+        const receipt = JSON.parse(readFileSync(join(privacyProbeRoot, "self-written.json"), "utf8"));
+        const evidence = Object.fromEntries(["source_review", "artifact_review"].map((name) =>
+          [name, readFileSync(receipt[name].evidence_ref.path)]));
+        const now = timestamp(receipt.issued_at) + 1;
+        check("(privacy interface) exact structured content passes without authorizing custody", publicAPI.validatePrivacyClearanceContent(receipt, evidence, receipt.request, now) === true);
+        const rejects = (value, records = evidence, request = receipt.request, at = now) => {
+          try { publicAPI.validatePrivacyClearanceContent(value, records, request, at); return false; }
+          catch (e) { if (!(e instanceof Refusal)) throw e; return true; }
+        };
+        const copy = () => JSON.parse(JSON.stringify(receipt));
+        const different = { ...receipt.request, tree: "6".repeat(40) };
+        check("(privacy interface) a different prepared request is refused", rejects(receipt, evidence, different));
+        check("(privacy interface) expiry is enforced at the supplied clock", rejects(receipt, evidence, receipt.request, timestamp(receipt.expires_at)));
+        check("(privacy interface) an invalid clock cannot suppress expiry", rejects(receipt, evidence, receipt.request, NaN));
+        const shared = copy(); shared.artifact_review.evidence_ref = shared.source_review.evidence_ref;
+        check("(privacy interface) repeated source/artifact evidence is refused", rejects(shared));
+        check("(privacy interface) modified evidence bytes are refused", rejects(receipt, { ...evidence, artifact_review: Buffer.from("{}\n") }));
+        for (const [label, change] of [
+          ["wrong review kind", (r) => { r.review_kind = "source_review"; }],
+          ["wrong request digest", (r) => { r.request_sha256 = "0".repeat(64); }],
+          ["wrong system", (r) => { r.system = "unknown"; }],
+          ["wrong decision", (r) => { r.decision = "public_only"; }],
+          ["empty summary", (r) => { r.summary = " "; }],
+          ["future review", (r) => { r.reviewed_at = new Date(timestamp(receipt.issued_at) + 1).toISOString(); }],
+        ]) {
+          const value = copy(), record = JSON.parse(evidence.artifact_review.toString("utf8"));
+          change(record); const bytes = Buffer.from(JSON.stringify(record) + "\n");
+          value.artifact_review.evidence_ref.sha256 = digest(bytes);
+          check("(privacy interface) " + label + " is refused after a matching byte hash", rejects(value, { ...evidence, artifact_review: bytes }));
+        }
+      }
       // Real Darwin ACLs on disposable synthetic custody. An ACL that grants
       // writesecurity must not survive as a valid privacy-review boundary.
       if (process.platform === "darwin") {
@@ -1117,6 +1629,142 @@ process.exit(finding ? 2 : 0);
     let promisorRefused = false;
     try { worktreePatch(wPromisor); } catch (e) { promisorRefused = e instanceof Refusal; }
     check("(security) worker promisor configuration refuses before upload-pack executes", promisorRefused && !existsSync(fetchMarker));
+
+    // Per-worktree configuration (extensions.worktreeConfig). A --local listing cannot see a worktree's own
+    // config.worktree, so the worker's PHYSICAL file is validated: absent passes, the one inert application key
+    // passes, everything else refuses. Real linked worktrees, real Git; nothing here relies on a command-line
+    // extension override, which Git ignores (it reads the extension from the repository's own config).
+    // New files in this repository's own application source. The first unattended build that reached
+    // the publisher (2026-11-13) added a test beside the file it fixed, under the mobile app's src,
+    // and was refused: the new-file allowlist named only generic top-level folders. Application
+    // source is allowed; the record folders that also live under artifacts/ stay refused.
+    const nfBase = brain("newfile-base", () => {});
+    let nfCount = 0;
+    const nfOutcome = (file) => {
+      const w = join(root, "newfile-worker-" + (++nfCount));
+      scratchGitOk(nfBase, ["worktree", "add", "-q", "--detach", w, "HEAD"]);
+      mkdirSync(dirname(join(w, file)), { recursive: true });
+      writeFileSync(join(w, file), "NEW FILE BODY\n");
+      try { const { patch, files } = worktreePatch(w); return { ok: patch.includes("NEW FILE BODY") && JSON.stringify(files) === JSON.stringify([file]) }; }
+      catch (e) { if (!(e instanceof Refusal)) throw e; return { refused: e.message }; }
+    };
+    for (const file of ["artifacts/signalgrid-mobile-pwa/src/lib/format.test.ts", "artifacts/signalgrid-app/src/lib/new-helper.ts", "artifacts/signalgrid-desktop/src/new-view.tsx", "docs/new-note.md"])
+      check("(new files) a new file in application source or docs is exported: " + file, nfOutcome(file).ok === true);
+    for (const file of ["artifacts/sim-results/new.json", "artifacts/raised-hands/new.json", "artifacts/live-evidence/new.json", "artifacts/agent-heartbeats/new.json",
+      "artifacts/signalgrid-mobile-pwa/new-root-file.ts", "artifacts/signalgrid-mobile-pwa/scripts/new.mjs", "artifacts/signalgrid-mobile-pwa-other/src/new.ts",
+      "artifacts/unknown-app/src/new.ts", "artifactsx/signalgrid-app/src/new.ts", "native/new.swift", "new-root-file.md"])
+      check("(new files) a new file outside application source is still refused: " + file, typeof nfOutcome(file).refused === "string");
+
+    const wtcBase = brain("wtc-base", () => {});
+    scratchGitOk(wtcBase, ["config", "extensions.worktreeConfig", "true"]);
+    const wtcMarker = join(root, "wtc-program-ran"), wtcProgram = join(root, "wtc-program.cjs");
+    writeFileSync(wtcProgram, '#!' + process.execPath + '\nrequire("node:fs").writeFileSync(' + JSON.stringify(wtcMarker) + ',"ran");process.stdout.write(require("node:fs").readFileSync(0));\n', { flag: "wx", mode: 0o500 });
+    const wtcIncluded = join(root, "wtc-included.config");
+    writeFileSync(wtcIncluded, "[core]\n\tfsmonitor = " + wtcProgram + "\n", { flag: "wx", mode: 0o400 });
+    const WTC_INERT = "[codex]\n\tlocalEnvironmentConfigPath = __none__\n";
+    let wtcCount = 0;
+    const wtcLinked = (base, configure) => {
+      const w = join(root, "wtc-worker-" + (++wtcCount));
+      scratchGitOk(base, ["worktree", "add", "-q", "--detach", w, "HEAD"]);
+      writeFileSync(join(w, "docs/x.md"), "one\nPER WORKTREE\nthree\n");
+      const admin = scratchGitOk(w, ["rev-parse", "--absolute-git-dir"]).trim();
+      configure(join(admin, "config.worktree"), admin, w);
+      return w;
+    };
+    const wtcOutcome = (w) => {
+      rmSync(wtcMarker, { force: true });
+      try { const { patch, files } = worktreePatch(w); return { patch, files, ran: existsSync(wtcMarker) }; }
+      catch (e) { if (!(e instanceof Refusal)) throw e; return { refused: e.message, ran: existsSync(wtcMarker) }; }
+    };
+    const wtcExported = (o) => !o.refused && !o.ran && o.patch.includes("PER WORKTREE") && JSON.stringify(o.files) === '["docs/x.md"]';
+
+    // Accepted: no per-worktree file at all, and the one inert application key.
+    check("(worktree config) extension enabled and no per-worktree file exports the ordinary patch",
+      wtcExported(wtcOutcome(wtcLinked(wtcBase, () => {}))));
+    let wtcInertFile = null, wtcInertAdmin = null;
+    const wtcInert = wtcLinked(wtcBase, (file, admin) => { wtcInertFile = file; wtcInertAdmin = admin; writeFileSync(file, WTC_INERT, { flag: "wx", mode: 0o600 }); });
+    const wtcBefore = { config: readFileSync(wtcInertFile), index: readFileSync(join(wtcInertAdmin, "index")), status: scratchGitOk(wtcInert, ["status", "--porcelain"]) };
+    check("(worktree config) the one inert application key exports the ordinary patch", wtcExported(wtcOutcome(wtcInert)));
+    check("(worktree config) export leaves the per-worktree file, the worker index and its status byte-identical",
+      readFileSync(wtcInertFile).equals(wtcBefore.config) && readFileSync(join(wtcInertAdmin, "index")).equals(wtcBefore.index) &&
+      scratchGitOk(wtcInert, ["status", "--porcelain"]) === wtcBefore.status);
+    const wtcInertAgain = wtcOutcome(wtcInert);
+    check("(worktree config) the inert key never enters the exported patch and a second export is identical",
+      wtcExported(wtcInertAgain) && !wtcInertAgain.patch.includes("localEnvironmentConfigPath") && wtcInertAgain.patch === wtcOutcome(wtcInert).patch);
+
+    // Refused: every other key, value, duplicate or indirection in the physical per-worktree file. No program runs.
+    const wtcRefusedCases = {
+      "include.path": "[include]\n\tpath = " + wtcIncluded + "\n",
+      "includeIf": '[includeIf "gitdir:/"]\n\tpath = ' + wtcIncluded + "\n",
+      "clean filter": '[filter "late"]\n\tclean = ' + wtcProgram + "\n",
+      "smudge filter": '[filter "late"]\n\tsmudge = ' + wtcProgram + "\n",
+      "text conversion": '[diff "late"]\n\ttextconv = ' + wtcProgram + "\n",
+      "external diff": '[diff "late"]\n\tcommand = ' + wtcProgram + "\n",
+      "fsmonitor": "[core]\n\tfsmonitor = " + wtcProgram + "\n",
+      "ssh command": "[core]\n\tsshCommand = " + wtcProgram + "\n",
+      "hooks path": "[core]\n\thooksPath = " + root + "\n",
+      "attributes file": "[core]\n\tattributesFile = " + wtcIncluded + "\n",
+      "core.worktree": "[core]\n\tworktree = " + root + "\n",
+      "core.bare": "[core]\n\tbare = true\n",
+      "sparse checkout": "[core]\n\tsparseCheckout = true\n",
+      "repository format": "[core]\n\trepositoryformatversion = 1\n",
+      "partial clone extension": "[extensions]\n\tpartialClone = origin\n",
+      "credential helper": "[credential]\n\thelper = " + wtcProgram + "\n",
+      "alias": "[alias]\n\tx = !" + wtcProgram + "\n",
+      "unknown ordinary key": "[user]\n\tname = Synthetic Worker\n",
+      "other application key": "[codex]\n\tother = 1\n",
+      "inert key plus another key": WTC_INERT + "[user]\n\tname = Synthetic Worker\n",
+      "inert key with another value": "[codex]\n\tlocalEnvironmentConfigPath = /etc/passwd\n",
+      "inert key with an empty value": "[codex]\n\tlocalEnvironmentConfigPath =\n",
+      "inert key twice": WTC_INERT + WTC_INERT,
+      "inert key twice with a late override": WTC_INERT + "[codex]\n\tlocalEnvironmentConfigPath = /etc/passwd\n",
+      "unparseable file": "[codex\n\tlocalEnvironmentConfigPath = __none__\n",
+      "empty file": "",
+    };
+    for (const [label, content] of Object.entries(wtcRefusedCases)) {
+      const o = wtcOutcome(wtcLinked(wtcBase, (file) => writeFileSync(file, content, { flag: "wx", mode: 0o600 })));
+      check("(worktree config) per-worktree " + label + " is refused and nothing executes", typeof o.refused === "string" && !o.ran);
+    }
+    const wtcShape = {
+      "symbolic link to an inert file": (file) => { const real = join(root, "wtc-inert-target"); writeFileSync(real, WTC_INERT, { mode: 0o600 }); symlinkSync(real, file); },
+      "directory": (file) => mkdirSync(file, { mode: 0o700 }),
+      "unreadable file": (file) => { writeFileSync(file, WTC_INERT, { flag: "wx", mode: 0o600 }); chmodSync(file, 0o000); },
+      "group-writable file": (file) => { writeFileSync(file, WTC_INERT, { flag: "wx", mode: 0o600 }); chmodSync(file, 0o660); },
+      "second hard link": (file) => { writeFileSync(file, WTC_INERT, { flag: "wx", mode: 0o600 }); linkSync(file, join(root, "wtc-second-link-" + wtcCount)); },
+    };
+    for (const [label, shape] of Object.entries(wtcShape)) {
+      const o = wtcOutcome(wtcLinked(wtcBase, shape));
+      check("(worktree config) per-worktree " + label + " is refused and nothing executes", typeof o.refused === "string" && !o.ran);
+    }
+
+    // Common executable configuration stays refused, with or without an inert per-worktree file.
+    const wtcCommon = brain("wtc-common", () => {});
+    scratchGitOk(wtcCommon, ["config", "extensions.worktreeConfig", "true"]);
+    scratchGitOk(wtcCommon, ["config", "filter.late.clean", wtcProgram]);
+    const wtcCommonOutcome = wtcOutcome(wtcLinked(wtcCommon, (file) => writeFileSync(file, WTC_INERT, { flag: "wx", mode: 0o600 })));
+    check("(worktree config) dangerous COMMON configuration is still refused beside an inert per-worktree file", typeof wtcCommonOutcome.refused === "string" && !wtcCommonOutcome.ran);
+    const wtcPartial = brain("wtc-partial", () => {});
+    scratchGitOk(wtcPartial, ["config", "extensions.worktreeConfig", "true"]);
+    scratchGitOk(wtcPartial, ["config", "extensions.partialClone", "origin"]);
+    check("(worktree config) the partial-clone extension in COMMON configuration is still refused",
+      typeof wtcOutcome(wtcLinked(wtcPartial, () => {})).refused === "string");
+
+    // The main worktree of an extension-enabled repository: same rule on its own physical file.
+    let wtcMainThrew = false;
+    try { rejectExecutableLocalConfig(wtcBase); } catch (e) { if (!(e instanceof Refusal)) throw e; wtcMainThrew = true; }
+    check("(worktree config) an extension-enabled main worktree with no per-worktree file passes the configuration check", !wtcMainThrew);
+    const wtcMain = brain("wtc-main", () => {});
+    scratchGitOk(wtcMain, ["config", "extensions.worktreeConfig", "true"]);
+    writeFileSync(join(wtcMain, ".git", "config.worktree"), "[core]\n\tfsmonitor = " + wtcProgram + "\n", { flag: "wx", mode: 0o600 });
+    let wtcMainRefused = false;
+    try { rejectExecutableLocalConfig(wtcMain); } catch (e) { if (!(e instanceof Refusal)) throw e; wtcMainRefused = true; }
+    check("(worktree config) a dangerous per-worktree file on the main worktree is refused", wtcMainRefused);
+
+    // Counter-control: Git itself ignores a command-line extension override, so the publisher must not rely on one.
+    const wtcProbe = wtcLinked(wtcBase, (file) => writeFileSync(file, "[synthetic]\n\tprobe = from-worktree\n", { flag: "wx", mode: 0o600 }));
+    check("(worktree config) Git still reads a per-worktree file when the extension is overridden on the command line",
+      scratchGitOk(wtcProbe, ["-c", "extensions.worktreeConfig=false", "config", "--get", "synthetic.probe"]).trim() === "from-worktree");
+    rmSync(wtcMarker, { force: true });
     rmSync(fetchMarker, { force: true });
     const priorLazy = process.env.GIT_NO_LAZY_FETCH;
     process.env.GIT_NO_LAZY_FETCH = "0";
@@ -1151,9 +1799,12 @@ process.exit(finding ? 2 : 0);
 
     const unverifiedFinish = "SYNTHETIC_UNVERIFIED_TEST_GATE_LINK_FINISH: all checks and reviews passed; link was added.";
     const fixtureResult = (id) => JSON.stringify(id === "jdocs" ? unverifiedFinish : `result ${id}`);
+    const fixtureTitle = (id) => id === "jmetadata" ? "UNCLASSIFIED_JOB_TITLE_CANARY" : `title ${id}`;
     const createdAt = (id) => id === "jreverse" ? "2026-11-06T17:10:00Z" : ["jdocs", "junreviewed", "jcancel", "bad/id", "jstaleprivacy"].includes(id) ? "2026-11-06T16:41:00Z" : "2026-11-05T01:00:00Z";
     const db = join(root, "autonomy.sqlite3");
+    const wDeletion = join(root, "w-deletion");
     const rows = [
+      ["jdeletion", "build", "review", wDeletion],
       ["jdocs", "build", "review", wDocs], ["jagents", "build", "review", wAgents], ["jgate", "build", "review", wGate],
       ["jqueued", "build", "queued", wDocs], ["jempty", "build", "review", wEmpty],
       ["jconflict", "build", "review", wConflict],
@@ -1177,14 +1828,14 @@ process.exit(finding ? 2 : 0);
       const d = new DatabaseSync(db);
       d.exec("CREATE TABLE autonomy_jobs (id TEXT, kind TEXT, status TEXT, repo TEXT, worktree TEXT, title TEXT, result TEXT, updated_at TEXT, created_at TEXT, cancel_requested INTEGER DEFAULT 0)");
       const ins = d.prepare("INSERT INTO autonomy_jobs VALUES (?, ?, ?, 'SignalGrid-Review-Hub', ?, ?, ?, '2026-11-06T17:00:00Z', ?, ?)");
-      for (const [id, k, s, w] of rows) ins.run(id, k, s, w, `title ${id}`, fixtureResult(id), createdAt(id), id === "jcancel" ? 1 : 0);
+      for (const [id, k, s, w] of rows) ins.run(id, k, s, w, fixtureTitle(id), fixtureResult(id), createdAt(id), id === "jcancel" ? 1 : 0);
       d.exec("ALTER TABLE autonomy_jobs ADD COLUMN source_ids TEXT DEFAULT '[]'; ALTER TABLE autonomy_jobs ADD COLUMN cloud_allowed INTEGER DEFAULT 0; ALTER TABLE autonomy_jobs ADD COLUMN evidence TEXT DEFAULT '{}';");
       d.prepare("UPDATE autonomy_jobs SET evidence=? WHERE id='jdocs'").run(JSON.stringify({ private_context: true, sources: [] }));
       d.prepare("UPDATE autonomy_jobs SET evidence=? WHERE id='jprivateorigin'").run(JSON.stringify({ private_context: true, sources: ["synthetic-private-vault-source"], privacy_clearance: { approved: true } }));
       d.close();
     } else {
       const sql = ["CREATE TABLE autonomy_jobs (id TEXT, kind TEXT, status TEXT, repo TEXT, worktree TEXT, title TEXT, result TEXT, updated_at TEXT, created_at TEXT, cancel_requested INTEGER DEFAULT 0);",
-        ...rows.map(([id, k, s, w]) => `INSERT INTO autonomy_jobs VALUES ('${id}','${k}','${s}','SignalGrid-Review-Hub','${w}','title ${id}','${fixtureResult(id)}','2026-11-06T17:00:00Z','${createdAt(id)}',${id === 'jcancel' ? 1 : 0});`),
+        ...rows.map(([id, k, s, w]) => `INSERT INTO autonomy_jobs VALUES ('${id}','${k}','${s}','SignalGrid-Review-Hub','${w}','${fixtureTitle(id)}','${fixtureResult(id)}','2026-11-06T17:00:00Z','${createdAt(id)}',${id === 'jcancel' ? 1 : 0});`),
         "ALTER TABLE autonomy_jobs ADD COLUMN source_ids TEXT DEFAULT '[]'; ALTER TABLE autonomy_jobs ADD COLUMN cloud_allowed INTEGER DEFAULT 0; ALTER TABLE autonomy_jobs ADD COLUMN evidence TEXT DEFAULT '{}';",
         `UPDATE autonomy_jobs SET evidence='${JSON.stringify({ private_context: true, sources: [] })}' WHERE id='jdocs';`,
         `UPDATE autonomy_jobs SET evidence='${JSON.stringify({ private_context: true, sources: ["synthetic-private-vault-source"], privacy_clearance: { approved: true } })}' WHERE id='jprivateorigin';`].join("\n");
@@ -1200,6 +1851,9 @@ process.exit(finding ? 2 : 0);
     scratchGitOk(root, ["clone", "-q", "-b", BASE, origin, wDocs]);
     writeFileSync(join(wDocs, "docs/x.md"), "one\nORIGIN\nTHREE\n");
     writeFileSync(join(wDocs, "docs/new.md"), "new\n");
+
+    scratchGitOk(root, ["clone", "-q", "-b", BASE, origin, wDeletion]);
+    rmSync(join(wDeletion, "docs/x.md"));
 
     // Exercise the production run() in a fresh process, with real ordinary-hook
     // verification and canonical SSH metadata. The poisoned SSH command only
@@ -1302,12 +1956,37 @@ process.exit(finding ? 2 : 0);
     }
 
     // (1) dry run of a clean docs job
-    const r1 = await run({ job: "jdocs", db, repo, log: quiet });
+    const preparedMessages = [];
+    const r1 = await run({ job: "jdocs", db, repo, log: (message) => preparedMessages.push(message) });
     check("(privacy) dry run returns a nonauthorizing request bound to actual public bytes", r1.privacyRequest?.format === "signalgrid-publication-privacy-request/v1" &&
       r1.privacyRequest.tree === r1.publishedTree && r1.privacyRequest.exports?.some((e) => e.source === "files/docs/new.md" && e.sha256 === digest(Buffer.from("new\n"))) &&
       !Object.hasOwn(r1.privacyRequest, "approved"));
     check("(privacy) review includes the exact commit, author headers and complete PR body", r1.privacyRequest?.head === r1.publishedHead &&
       ["metadata/title.txt", "metadata/body.md", "metadata/commit.txt", "metadata/paths.json"].every((name) => r1.privacyRequest?.exports?.some((item) => item.source === name && /^[0-9a-f]{64}$/.test(item.sha256))));
+    const prepared = r1.publicationMetadata;
+    check("(privacy interface) prepare returns the exact screened title/body bytes", prepared?.format === "signalgrid-publication-prepared-metadata/v1" &&
+      prepared.request_sha256 === valueDigest(r1.privacyRequest) && ["title", "body"].every((name) => {
+        const exported = r1.privacyRequest.exports.find((item) => item.source === (name === "title" ? "metadata/title.txt" : "metadata/body.md"));
+        return typeof prepared[name] === "string" && exported?.sha256 === digest(Buffer.from(prepared[name])) && exported.bytes === Buffer.byteLength(prepared[name]);
+      }));
+    check("(privacy interface) CLI prepare emits the same nonauthorizing metadata", prepared !== undefined &&
+      preparedMessages.includes("SIGNALGRID_PUBLICATION_PREPARED_METADATA " + JSON.stringify(prepared)) && !Object.hasOwn(prepared, "approved"));
+    // The actual producer's complete export inventory must cross the tick's
+    // actual validator. A hand-written metadata-only mock missed this contract.
+    const checkTickHandoff = (messages, request, label) => {
+      const result = spawnSync("python3", ["-I", join(REPO, "scripts/mac/test_prepared_request_from_publisher.py")], {
+        input: JSON.stringify({ messages, request }), encoding: "utf8", timeout: 30000,
+      });
+      check(label, result.status === 0 && result.stdout.includes('"fixture_handoff_ok": true') &&
+        result.stdout.includes('"privacy_clearance": false') && result.stdout.includes('"public_egress_allowed": false'));
+      if (result.status !== 0) console.error(result.stdout.trim(), result.stderr.trim());
+    };
+    checkTickHandoff(preparedMessages, r1.privacyRequest,
+      "(prepare interface) actual publisher add/edit exports are accepted by the actual tick validator");
+    const deletionMessages = [];
+    const deletion = await run({ job: "jdeletion", db, repo, log: (message) => deletionMessages.push(message) });
+    checkTickHandoff(deletionMessages, deletion.privacyRequest,
+      "(prepare interface) actual publisher deletion exports are accepted by the actual tick validator");
     grantFixturePrivacy("jdocs", r1.privacyRequest);
     const forgedHome = join(realpathSync(root), "forged-home"), forgedClearances = join(forgedHome, "SignalGrid-Local-AI", "brain-state", "auto-publish-review", "clearances");
     mkdirSync(forgedClearances, { recursive: true, mode: 0o700 });
@@ -1381,6 +2060,17 @@ fs.unlinkSync("synthetic-history-secret.txt"); git("add","-u","--","synthetic-hi
       try { await listReview(db, { notBefore: value }); check(`(auto) invalid timezone-bearing cutover refused: ${value}`, false); }
       catch (e) { check(`(auto) invalid timezone-bearing cutover refused: ${value}`, e instanceof Refusal); }
     }
+    const toPrepare = typeof listPreparation === "function" ? await listPreparation(db, { notBefore: "2026-11-06T16:40:00Z" }) : null;
+    check("(prepare) fresh uncleared jobs are selectable without inventing a clearance",
+      Array.isArray(toPrepare) && toPrepare.includes("junreviewed") && toPrepare.includes("jstaleprivacy") && !toPrepare.includes("jdocs"));
+    check("(prepare) cancelled, old, reversed-time and unsafe ids are excluded",
+      Array.isArray(toPrepare) && !["jcancel", "jagents", "jreverse", "bad/id", "jqueued"].some((id) => toPrepare.includes(id)));
+    let absentCutoffRefused = false;
+    try { if (typeof listPreparation === "function") await listPreparation(db); } catch (e) { absentCutoffRefused = e instanceof Refusal; }
+    check("(prepare) an explicit fresh timezone-bearing cutover is mandatory", absentCutoffRefused);
+    const prepareCLI = spawnSync(process.execPath, [fileURLToPath(import.meta.url), "--list-prepare", "--not-before", "2026-11-06T16:40:00Z", "--db", db], { encoding: "utf8" });
+    check("(prepare) CLI lists fresh requests without running publication",
+      prepareCLI.status === 0 && prepareCLI.stdout.split("\n").includes("junreviewed") && !prepareCLI.stdout.includes("jcancel"));
     const listed = await listReview(db);
     check("(*) --list-review names every review build with a worktree and no queued job", listed.includes("jdocs") && listed.includes("jagents") && listed.includes("jempty") && !listed.includes("jqueued"));
     // (6) publish with a stubbed gh
@@ -1453,6 +2143,11 @@ console.log(fs.readFileSync(${JSON.stringify(ghReply)},"utf8").trim());
     check("(privacy) changed artifact invalidates prior privacy clearance before push", staleBlocked && scratchGitOk(repo, ["ls-remote", "origin", "refs/heads/brain/job-jstaleprivacy"]) === "");
     check("(privacy) automatic selection checks current worker patch before remote preflight", !(await listReview(db, { notBefore: "2026-11-06T16:40:00Z" })).includes("jstaleprivacy"));
     const metadata = await run({ job: "jmetadata", db, repo, log: quiet });
+    const actualMetadataText = [metadata.publicationMetadata.title, metadata.publicationMetadata.body,
+      scratchGitOk(repo, ["show", "-s", "--format=%B", metadata.publishedHead])].join("\n");
+    check("(privacy) unclassified task title stays out of public title, body and commit",
+      (await readJob(db, "jmetadata")).title === "UNCLASSIFIED_JOB_TITLE_CANARY" &&
+      !actualMetadataText.includes("UNCLASSIFIED_JOB_TITLE_CANARY"));
     const wrongBody = metadata.privacyRequest ? JSON.parse(JSON.stringify(metadata.privacyRequest)) : undefined;
     if (wrongBody) wrongBody.exports = wrongBody.exports.map((item) => item.source === "metadata/body.md" ? { ...item, sha256: "0".repeat(64) } : item);
     grantFixturePrivacy("jmetadata", wrongBody);
@@ -1480,11 +2175,16 @@ if (isMainModule(process.argv[1], import.meta.url)) {
   try {
     if (a.includes("--qualify-scanner")) qualifyScanner(a);
     else if (a.includes("--self-test")) await selfTest();
+    else if (a.includes("--list-prepare")) {
+      if (a.includes("--publish") || a.includes("--list-review") || a.includes("--job")) refuse("--list-prepare is a separate read-only action");
+      if (!opt("--not-before") || opt("--not-before").startsWith("--")) refuse("--list-prepare requires an explicit --not-before cutover");
+      for (const id of await listPreparation(opt("--db") ?? DEFAULT_DB, { notBefore: opt("--not-before") })) console.log(id);
+    }
     else if (a.includes("--list-review")) {
       if (a.includes("--not-before") && !opt("--not-before")) refuse("--not-before requires a timezone-bearing timestamp");
       for (const id of await listReview(opt("--db") ?? DEFAULT_DB, { notBefore: opt("--not-before") })) console.log(id);
     }
-    else if (a.includes("--not-before")) refuse("--not-before applies only to the read-only --list-review action");
+    else if (a.includes("--not-before")) refuse("--not-before applies only to the read-only listing actions");
     else await run({ job: opt("--job"), db: opt("--db") ?? DEFAULT_DB, publish: a.includes("--publish") });
   } catch (e) {
     console.error(e instanceof Refusal ? `REFUSED: ${e.message}` : `ERROR: ${e.message}`);

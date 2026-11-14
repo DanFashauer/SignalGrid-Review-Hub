@@ -759,6 +759,10 @@ if [ "$DRY" = "0" ]; then
   if ! git show "$_verify_sha:scripts/mac/host-verification-lock.sh" > "$_verify_helper"; then
     rm -f "$_verify_helper"; SG_VERIFY_LOCK_REASON="mainline host verification helper unavailable"; defer_host_verification; exit 1
   fi
+  # The digest of the helper this tick actually sources. The publication step requires it to equal the
+  # helper it binds with its other dependencies, so a drifted helper can admit nothing public.
+  SG_VERIFY_HELPER_SHA256="$(shasum -a 256 "$_verify_helper" 2>/dev/null | cut -d' ' -f1)"
+  export SG_VERIFY_HELPER_SHA256
   # shellcheck source=/dev/null
   . "$_verify_helper" || { rm -f "$_verify_helper"; SG_VERIFY_LOCK_REASON="mainline host verification helper could not load"; defer_host_verification; exit 1; }
   rm -f "$_verify_helper"
@@ -957,6 +961,9 @@ fi
 # Missing/corrupt/lost custody stops; a failed or unknown attempt is consumed.
 # Metadata runs without the heavy host. Each new CLI has its own ordinary admission.
 PUBLISH_MAX="${SIGNALGRID_PUBLISH_MAX:-1}"
+# The two publication acquisitions wait a bounded time for ordinary admission, then defer as before.
+# Fixed, not configurable: every other host acquisition in this tick keeps its single attempt.
+PUBLISH_ADMISSION_WAIT_SEC=90
 _pub_state="${SIGNALGRID_BRAIN_PUBLICATION_STATE:-$HOME/.local/state/signalgrid/brain-publications}"
 brain_publication_step() {
   /usr/bin/python3 -I - "$1" "$_pub_state" "${2:-}" "$PUBLISH_MAX" "${REPO_ROOT:-.}/scripts/mac/lane-tick.sh" <<'PY_BRAIN_PUBLICATION'
@@ -982,8 +989,11 @@ PUBLISHER = Path('scripts/mac/brain-proposal-pr.mjs')
 TICK_SOURCE = Path(RAW_TICK).resolve(strict=True)
 SIGNALS = []
 PUBLICATION_TIMEOUT_SEC = 600
+# A plain literal: the publisher's handoff fixture reads this one list with ast.literal_eval.
 DEPENDENCIES = ('scripts/check-owner-gated-surfaces.mjs', 'scripts/lib/is-main.mjs',
-                'scripts/lib/scratch-git.mjs', '.githooks/pre-push')
+                'scripts/lib/scratch-git.mjs', '.githooks/pre-push',
+                'scripts/mac/host-verification-lock.sh')
+HOST_HELPER = DEPENDENCIES[-1]
 
 class Refusal(Exception):
     pass
@@ -1106,6 +1116,18 @@ def dependency_refs():
     source_repo = PUBLISHER.resolve(strict=True).parents[2]
     return {name: read_file(source_repo / name, private=False)[1] for name in DEPENDENCIES}
 
+def need_sourced_host_helper():
+    # The helper that granted this admission is the one bound with the other dependencies, byte for byte.
+    sourced = os.environ.get('SG_VERIFY_HELPER_SHA256')
+    need(isinstance(sourced, str) and re.fullmatch(r'[0-9a-f]{64}', sourced)
+         and sourced == dependency_refs()[HOST_HELPER]['sha256'])
+
+def need_source_pins(intent):
+    # The publisher, this tick and every declared dependency are still the bytes the intent recorded.
+    need(read_file(PUBLISHER.resolve(strict=True), private=False)[1] == intent['publisher_ref'])
+    need(read_file(TICK_SOURCE, private=False)[1] == intent['tick_ref'])
+    need(dependency_refs() == intent['dependency_refs'])
+
 def activation():
     state = canonical_directory(RAW_STATE)
     cwd = Path.cwd().resolve()
@@ -1144,6 +1166,34 @@ def custody(state, active_ref):
         need(anchor.get(name) == {'path': str(path), 'dev': st.st_dev, 'ino': st.st_ino})
     return mirror, attempts
 
+def need_inert_worktree_config(prefix, env):
+    # The canonical checkout's own PHYSICAL config.worktree; absent passes. Git reads the extension
+    # from the repository's own configuration and ignores a command-line override of it, so none is
+    # used: the file is inspected, then parsed outside any repository with includes disabled, and
+    # must hold exactly the one inert application setting. Any other shape or content refuses.
+    # An absent file passes; an EMPTY file refuses. Scope: the canonical checkout only, whose
+    # administrative directory is a real .git directory under the working directory. A linked
+    # worktree (.git is a file) with the extension on refuses; that case is not generalized here.
+    try:
+        admin = Path.cwd().resolve() / '.git'
+        directory(admin, private=False)
+        path = admin / 'config.worktree'
+        try:
+            before = path.lstat()
+        except FileNotFoundError:
+            return
+        mode = stat.S_IMODE(before.st_mode)
+        need(stat.S_ISREG(before.st_mode) and before.st_nlink == 1 and before.st_uid == UID
+             and not (mode & 0o022) and bool(mode & 0o400) and before.st_size <= 4096)
+        result = subprocess.run(prefix + ['config', '--file', str(path), '--no-includes', '--null', '--list'],
+                                cwd='/', env=env, stdin=subprocess.DEVNULL, capture_output=True, timeout=30)
+        after = path.lstat()
+    except (OSError, subprocess.SubprocessError):
+        raise Refusal()
+    identity = lambda st: (st.st_dev, st.st_ino, st.st_size, st.st_mtime_ns, st.st_ctime_ns, st.st_mode, st.st_uid, st.st_nlink)
+    need(result.returncode == 0 and identity(after) == identity(before)
+         and result.stdout == b'codex.localenvironmentconfigpath\n__none__\0')
+
 def git(*args):
     binary = trusted_client('git')
     prefix = [binary, '--no-replace-objects', '-c', 'core.fsmonitor=false', '-c', 'core.hooksPath=/dev/null']
@@ -1154,14 +1204,22 @@ def git(*args):
     need(result.returncode == 0 and len(result.stdout) <= 1048576)
     rows = result.stdout.decode('utf-8', errors='strict').split('\0')
     origin = []
+    per_worktree = False
     for row in filter(None, rows):
         key, _, value = row.partition('\n')
-        need(not re.search(r'^(?:filter\.|diff\..*\.(?:command|textconv)$|include(?:if)?\.|credential\.|protocol\.|url\..*\.(?:insteadof|pushinsteadof)$|remote\..*\.(?:promisor|partialclonefilter|uploadpack|receivepack|vcs)$|core\.(?:fsmonitor|sshcommand|gitproxy|askpass|alternaterefscommand)$|extensions\.(?:worktreeconfig|partialclone)$)', key, re.I))
+        # A local listing cannot see config.worktree, so the extension is never accepted on trust:
+        # its presence, whatever its value, makes the physical file mandatory to validate below.
+        if key.lower() == 'extensions.worktreeconfig':
+            per_worktree = True
+            continue
+        need(not re.search(r'^(?:filter\.|diff\..*\.(?:command|textconv)$|include(?:if)?\.|credential\.|protocol\.|url\..*\.(?:insteadof|pushinsteadof)$|remote\..*\.(?:promisor|partialclonefilter|uploadpack|receivepack|vcs)$|core\.(?:fsmonitor|sshcommand|gitproxy|askpass|alternaterefscommand)$|extensions\.partialclone$)', key, re.I))
         if key.lower() == 'remote.origin.url':
             origin.append(value)
         if key.lower() == 'remote.origin.pushurl':
             need(value == 'git@github.com:' + REPO + '.git')
     need(origin == ['git@github.com:' + REPO + '.git'])
+    if per_worktree:
+        need_inert_worktree_config(prefix, config_env)
     env = client_env()
     env['GIT_ALLOW_PROTOCOL'] = 'ssh'
     for options in (['--all'], ['--push', '--all']):
@@ -1176,14 +1234,210 @@ def gh(endpoint):
     return subprocess.run([trusted_client('gh'), 'api', '--hostname', 'github.com', '--method', 'GET', endpoint],
                           env=client_env(), stdin=subprocess.DEVNULL, capture_output=True, timeout=30)
 
-def review_jobs(active):
-    result = subprocess.run([trusted_client('node'), 'scripts/mac/brain-proposal-pr.mjs', '--list-review',
+def listed_jobs(active, flag):
+    # The publisher's two listings share one bounded read; the flag is never caller text.
+    need(flag in ('--list-review', '--list-prepare'))
+    result = subprocess.run([trusted_client('node'), 'scripts/mac/brain-proposal-pr.mjs', flag,
                              '--not-before', active['not_before']], env=client_env(),
                             stdin=subprocess.DEVNULL, capture_output=True, timeout=30)
     need(result.returncode == 0 and len(result.stdout) <= 128000)
     jobs = result.stdout.decode('utf-8', errors='strict').splitlines()
     need(len(jobs) <= 1000 and len(jobs) == len(set(jobs)) and all(JOB_RE.fullmatch(job) for job in jobs))
     return jobs
+
+def review_jobs(active):
+    return listed_jobs(active, '--list-review')
+
+
+def preparation_custody(state, active, active_ref):
+    need(active.get('privacy_preparation_enabled') is True)
+    mirror, _ = custody(state, active_ref)
+    anchor, _ = read_json(account_home() / '.local/state/signalgrid/brain-publication-custody.json')
+    paths = {'preparations': state / 'preparations', 'preparation_mirror': mirror / 'preparations'}
+    for name, path in paths.items():
+        st = directory(path)
+        need(anchor.get(name) == {'path': str(path), 'dev': st.st_dev, 'ino': st.st_ino})
+    return paths['preparation_mirror'], paths['preparations']
+
+def preparation_jobs(active):
+    return listed_jobs(active, '--list-prepare')
+
+def preparation_intent(state, active, job, active_ref):
+    mirror, preparations = preparation_custody(state, active, active_ref)
+    st = directory(preparations / job)
+    item, _ = read_json(mirror / (job + '.json'))
+    intent, _ = read_json(preparations / job / 'intent.json')
+    need(item == intent and intent.get('format') == 'signalgrid-brain-privacy-preparation-intent/v1'
+         and intent.get('job_id') == job and intent.get('activation_ref', {}).get('sha256') == active_ref['sha256']
+         and intent.get('attempt_identity') == {'dev': st.st_dev, 'ino': st.st_ino})
+    return preparations / job, intent
+
+def consumed_claim(mirror_file, attempt, job, *, preparation):
+    # PREFLIGHT ONLY: is this job's existing claim coherent custody, whichever activation bytes it
+    # was made under? A coherent claim is consumed and passed over, never run again. This grants
+    # nothing: claim, run, finish and handoff still load an intent only through preparation_intent /
+    # job_intent, which require the CURRENT activation. Lost, partial, mismatched or malformed
+    # custody still refuses here, so the caller reports it incomplete.
+    st = directory(attempt)
+    item, _ = read_json(mirror_file)
+    intent, _ = read_json(attempt / 'intent.json')
+    need(isinstance(intent, dict) and item == intent and intent.get('job_id') == job)
+    ref = intent.get('activation_ref')
+    need(isinstance(ref, dict) and isinstance(ref.get('sha256'), str)
+         and re.fullmatch(r'[0-9a-f]{64}', ref['sha256']) is not None)
+    if preparation:
+        need(intent.get('format') == 'signalgrid-brain-privacy-preparation-intent/v1'
+             and intent.get('attempt_identity') == {'dev': st.st_dev, 'ino': st.st_ino})
+    else:
+        need(intent.get('format') == 'signalgrid-brain-publication-intent/v1')
+
+def strict_prepared_json(text):
+    def pairs(rows):
+        value = {}
+        for key, item in rows:
+            need(key not in value)
+            value[key] = item
+        return value
+    def invalid(_):
+        raise Refusal()
+    return json.loads(text, object_pairs_hook=pairs, parse_constant=invalid)
+
+def prepared_request(attempt, intent):
+    terminal, _ = read_json(attempt / 'terminal.json')
+    need(terminal.get('returncode') == 0 and terminal.get('normal_exit') is True
+         and terminal.get('timed_out') is False and not terminal.get('interruptions')
+         and terminal.get('original_wait_completed') is True
+         and 'started_receipt_error' in terminal and terminal['started_receipt_error'] is None)
+    raw, raw_ref = read_file(attempt / 'stdout.raw')
+    _, err_ref = read_file(attempt / 'stderr.raw')
+    need(len(raw) <= 1048576 and raw_ref == terminal.get('stdout_ref') and err_ref == terminal.get('stderr_ref'))
+    need_source_pins(intent)
+    lines = raw.decode('utf-8', errors='strict').splitlines()
+    values = []
+    for marker in ('SIGNALGRID_PUBLICATION_PRIVACY_REQUEST ', 'SIGNALGRID_PUBLICATION_PREPARED_METADATA '):
+        found = [line[len(marker):] for line in lines if line.startswith(marker)]
+        need(len(found) == 1)
+        values.append(strict_prepared_json(found[0]))
+    request, metadata = values
+    need(isinstance(request, dict) and set(request) == {'format', 'job', 'job_sha256', 'publisher_sha256',
+         'worker_head', 'worker_uid', 'patch_sha256', 'replay_base', 'head', 'tree', 'exports'})
+    need(request['format'] == 'signalgrid-publication-privacy-request/v1' and request['job'] == intent['job_id']
+         and request['publisher_sha256'] == intent['publisher_ref']['sha256'])
+    for key in ('worker_head', 'replay_base', 'head', 'tree'):
+        need(isinstance(request[key], str) and OID_RE.fullmatch(request[key]))
+    for key in ('job_sha256', 'publisher_sha256', 'patch_sha256'):
+        need(isinstance(request[key], str) and re.fullmatch(r'[0-9a-f]{64}', request[key]))
+    need(type(request['worker_uid']) is int and 0 <= request['worker_uid'] <= 0xffffffff)
+    need(isinstance(metadata, dict) and set(metadata) == {'format', 'request_sha256', 'title', 'body'}
+         and metadata['format'] == 'signalgrid-publication-prepared-metadata/v1')
+    exports = request['exports']
+    need(isinstance(exports, list) and 5 <= len(exports) <= 1000)
+    names, total = {}, 0
+    for row in exports:
+        need(isinstance(row, dict) and set(row) == {'source', 'sha256', 'bytes'})
+        name = row['source']
+        need(isinstance(name, str) and name not in names and not name.startswith('/')
+             and not any(part in ('', '.', '..') for part in name.split('/'))
+             and not any(ord(c) < 32 for c in name) and '\\' not in name
+             and (name in ('metadata/title.txt', 'metadata/body.md', 'metadata/commit.txt', 'metadata/paths.json')
+                  or name.startswith('files/')
+                  or (name.startswith('deleted/') and name.endswith('.txt') and len(name) > len('deleted/.txt'))))
+        need(type(row['bytes']) is int and 0 <= row['bytes'] <= 1048576
+             and isinstance(row['sha256'], str) and re.fullmatch(r'[0-9a-f]{64}', row['sha256']))
+        if name.startswith('deleted/'):
+            marker = ('Deleted public path: ' + name[len('deleted/'):-len('.txt')] + '\n').encode('utf-8')
+            need(row['bytes'] == len(marker) and row['sha256'] == hashlib.sha256(marker).hexdigest())
+        names[name] = row
+        total += row['bytes']
+    # Keep the inventory aligned with committedExport(), including deletion-only changes.
+    need(total <= 16 * 1048576 and all(source in names for source in
+         ('metadata/title.txt', 'metadata/body.md', 'metadata/commit.txt', 'metadata/paths.json')))
+    for label, source in (('title', 'metadata/title.txt'), ('body', 'metadata/body.md')):
+        need(isinstance(metadata[label], str) and source in names)
+        encoded = metadata[label].encode('utf-8', errors='strict')
+        need(names[source]['bytes'] == len(encoded) and names[source]['sha256'] == hashlib.sha256(encoded).hexdigest())
+    # This is the publisher's sorted-key JSON identity over the strictly typed
+    # request above. It binds transport, never source/privacy approval.
+    encoded = json.dumps(request, sort_keys=True, ensure_ascii=False, allow_nan=False, separators=(',', ':')).encode('utf-8')
+    request_sha = hashlib.sha256(encoded).hexdigest()
+    need(metadata['request_sha256'] == request_sha)
+    return {'format': 'signalgrid-brain-privacy-handoff/v1', 'job_id': intent['job_id'],
+            'created_at': utc(), 'request_sha256': request_sha, 'request': request, 'metadata': metadata,
+            'prepared_stdout_ref': raw_ref, 'intent_ref': read_file(attempt / 'intent.json')[1],
+            'source_review_required': True, 'artifact_review_required': True,
+            'privacy_clearance': False, 'public_egress_allowed': False}
+
+def preparation_step(state, active, active_ref, source_ref, tick_ref):
+    mirror, preparations = preparation_custody(state, active, active_ref)
+    if MODE == 'prepare-inspect':
+        need(re.fullmatch(r'[1-3]', CAP) is not None)
+        print('ACTIVE')
+        for job in preparation_jobs(active):
+            print(job)
+        return
+    need(JOB_RE.fullmatch(JOB) is not None)
+    if MODE == 'prepare-preflight':
+        if (mirror / (JOB + '.json')).exists() or (preparations / JOB).exists():
+            try:
+                consumed_claim(mirror / (JOB + '.json'), preparations / JOB, JOB, preparation=True)
+            except (OSError, Refusal, ValueError, TypeError):
+                print('CUSTODY_INCOMPLETE_READBACK_ONLY')
+            else:
+                print('CONSUMED')
+            return
+        publish_mirror, publish_attempts = custody(state, active_ref)
+        if (publish_mirror / (JOB + '.json')).exists() or (publish_attempts / JOB).exists():
+            # The same preflight-only reader as the publication side: damaged publication
+            # custody is reported here too, never passed over as if it were a clean claim.
+            try:
+                consumed_claim(publish_mirror / (JOB + '.json'), publish_attempts / JOB, JOB, preparation=False)
+            except (OSError, Refusal, ValueError, TypeError):
+                print('CUSTODY_INCOMPLETE_READBACK_ONLY')
+            else:
+                print('CONSUMED')
+            return
+        need(JOB in preparation_jobs(active))
+        head, _ = remote_branch(JOB)
+        values, _ = prs(JOB)
+        print('EXISTS_READBACK_ONLY' if head is not None or values else 'ABSENT')
+    elif MODE == 'prepare-claim':
+        need_sourced_host_helper()
+        need(JOB in preparation_jobs(active))
+        publish_mirror, publish_attempts = custody(state, active_ref)
+        need(not (publish_mirror / (JOB + '.json')).exists() and not (publish_attempts / JOB).exists()
+             and not (mirror / (JOB + '.json')).exists() and not (preparations / JOB).exists())
+        attempt = preparations / JOB
+        attempt.mkdir(mode=0o700)
+        st = directory(attempt)
+        sync_dir(preparations)
+        intent = {'format': 'signalgrid-brain-privacy-preparation-intent/v1', 'job_id': JOB, 'at': utc(),
+                  'activation_id': active['activation_id'], 'not_before': active['not_before'],
+                  'activation_ref': active_ref, 'publisher_ref': source_ref, 'tick_ref': tick_ref,
+                  'dependency_refs': dependency_refs(), 'attempt_identity': {'dev': st.st_dev, 'ino': st.st_ino},
+                  'argv': [trusted_client('node'), 'scripts/mac/brain-proposal-pr.mjs', '--job', JOB],
+                  'normal_host_admission_owned_by_parent': True, 'retry_forbidden': True,
+                  'public_egress_allowed': False, 'privacy_clearance': False}
+        write_new(mirror / (JOB + '.json'), intent)
+        write_new(attempt / 'intent.json', intent)
+        print('CLAIMED')
+    elif MODE == 'prepare-run':
+        attempt, intent = preparation_intent(state, active, JOB, active_ref)
+        run_original(attempt, intent, prepare=True)
+        print('CHILD_DONE')
+    else:
+        attempt, intent = preparation_intent(state, active, JOB, active_ref)
+        # Even a known failed preparation is consumed. No follow-up tick retries
+        # the CLI, regenerates the request or turns it into an approval.
+        try:
+            handoff = prepared_request(attempt, intent)
+        except Exception:
+            write_new(attempt / 'preparation-outcome.json', {'at': utc(), 'outcome': 'readback-only', 'retry_forbidden': True})
+            print('UNVERIFIED_READBACK_ONLY')
+        else:
+            write_new(attempt / 'request.json', handoff)
+            write_new(attempt / 'preparation-outcome.json', {'at': utc(), 'outcome': 'private-review-request-prepared',
+                       'request_sha256': handoff['request_sha256'], 'privacy_clearance': False})
+            print('PREPARED_PRIVATE_REQUEST')
 
 def remote_branch(job):
     branch = 'brain/job-' + job
@@ -1213,11 +1467,10 @@ def job_intent(state, job, active_ref):
          and intent.get('activation_ref', {}).get('sha256') == active_ref['sha256'])
     return attempts / job, intent
 
-def run_original(attempt, intent):
-    need(read_file(PUBLISHER.resolve(strict=True), private=False)[1] == intent['publisher_ref'])
-    need(read_file(TICK_SOURCE, private=False)[1] == intent['tick_ref'])
-    need(dependency_refs() == intent['dependency_refs'])
-    argv = [trusted_client('node'), 'scripts/mac/brain-proposal-pr.mjs', '--job', JOB, '--publish']
+def run_original(attempt, intent, *, prepare=False):
+    need_source_pins(intent)
+    argv = [trusted_client('node'), 'scripts/mac/brain-proposal-pr.mjs', '--job', JOB] + ([] if prepare else ['--publish'])
+    need(intent.get('argv') == argv)
     write_new(attempt / 'execution-intent.json', {'job_id': JOB, 'at': utc(), 'argv': argv,
               'intent_sha256': read_file(attempt / 'intent.json')[1]['sha256'], 'retry_forbidden': True})
     stdout, stderr = attempt / 'stdout.raw', attempt / 'stderr.raw'
@@ -1338,9 +1591,7 @@ def verify_publication(attempt, intent):
         branch = get_json('repos/' + REPO + '/git/ref/heads/' + fact['branch'], observations)
         need(isinstance(branch, dict) and branch.get('ref') == 'refs/heads/' + fact['branch']
              and branch.get('object', {}).get('type') == 'commit' and branch.get('object', {}).get('sha') == head)
-        need(read_file(PUBLISHER.resolve(strict=True), private=False)[1] == intent['publisher_ref'])
-        need(read_file(TICK_SOURCE, private=False)[1] == intent['tick_ref'])
-        need(dependency_refs() == intent['dependency_refs'])
+        need_source_pins(intent)
         outcome = 'verified-publication'
     except Exception:
         url = None
@@ -1350,10 +1601,12 @@ def verify_publication(attempt, intent):
     return outcome, url
 
 try:
-    need(MODE in ('inspect', 'preflight', 'claim', 'run', 'finish'))
+    need(MODE in ('inspect', 'preflight', 'claim', 'run', 'finish', 'prepare-inspect', 'prepare-preflight', 'prepare-claim', 'prepare-run', 'prepare-finish'))
     state, active, active_ref, source_ref, tick_ref = activation()
     mirror, attempts = custody(state, active_ref)
-    if MODE == 'inspect':
+    if MODE.startswith('prepare-'):
+        preparation_step(state, active, active_ref, source_ref, tick_ref)
+    elif MODE == 'inspect':
         need(re.fullmatch(r'[1-3]', CAP) is not None)
         jobs = review_jobs(active)
         print('ACTIVE')
@@ -1364,7 +1617,7 @@ try:
         if MODE == 'preflight':
             if (mirror / (JOB + '.json')).exists() or (attempts / JOB).exists():
                 try:
-                    job_intent(state, JOB, active_ref)
+                    consumed_claim(mirror / (JOB + '.json'), attempts / JOB, JOB, preparation=False)
                 except (OSError, Refusal, ValueError, TypeError):
                     print('CUSTODY_INCOMPLETE_READBACK_ONLY')
                 else:
@@ -1378,6 +1631,7 @@ try:
                 values, _ = prs(JOB)
                 print('EXISTS_READBACK_ONLY' if head is not None or values else 'ABSENT')
         elif MODE == 'claim':
+            need_sourced_host_helper()
             need(JOB in review_jobs(active))
             need(not (mirror / (JOB + '.json')).exists() and not (attempts / JOB).exists())
             attempt = attempts / JOB
@@ -1411,12 +1665,12 @@ PY_BRAIN_PUBLICATION
 
 # Do not borrow the earlier sim/objective reservation for publication metadata.
 if [ "${SG_VERIFY_LOCK_HELD:-0}" = "1" ]; then sg_host_verify_release; fi
+_pub_n=0
 if [ -f scripts/mac/brain-proposal-pr.mjs ] && command -v gh >/dev/null 2>&1 && command -v python3 >/dev/null 2>&1; then
   _pub_selection="$(brain_publication_step inspect 2>/dev/null)"
   case "$_pub_selection" in
     ACTIVE|ACTIVE$'\n'*)
       _pub_jobs="$(printf '%s\n' "$_pub_selection" | tail -n +2)"
-      _pub_n=0
       for _job in $_pub_jobs; do
         [ "$_pub_n" -lt "$PUBLISH_MAX" ] || break
         _pub_preflight="$(brain_publication_step preflight "$_job" 2>/dev/null)"
@@ -1428,7 +1682,7 @@ if [ -f scripts/mac/brain-proposal-pr.mjs ] && command -v gh >/dev/null 2>&1 && 
           *) RESULT="$RESULT; brain publication unavailable"; break ;;
         esac
         if [ "$DRY" = "1" ]; then say "dry-run: would publish an eligible brain job"; continue; fi
-        if ! declare -F sg_host_verify_acquire >/dev/null || ! sg_host_verify_acquire "$HOME/Library/Caches/signalgrid/host-verification.lock"; then
+        if ! declare -F sg_host_verify_acquire_bounded >/dev/null || ! sg_host_verify_acquire_bounded "$HOME/Library/Caches/signalgrid/host-verification.lock" "$PUBLISH_ADMISSION_WAIT_SEC"; then
           RESULT="$RESULT; brain publication deferred: host busy or unavailable"
           break
         fi
@@ -1439,7 +1693,7 @@ if [ -f scripts/mac/brain-proposal-pr.mjs ] && command -v gh >/dev/null 2>&1 && 
           break
         fi
         _pub_n=$((_pub_n + 1))
-        _pub_child="$(brain_publication_step run "$_job" 2>/dev/null)"
+        brain_publication_step run "$_job" >/dev/null 2>&1
         # Original wait ends before release, readback, heartbeat or another job.
         sg_host_verify_release
         _pub_readback="$(brain_publication_step finish "$_job" 2>/dev/null)"
@@ -1454,6 +1708,45 @@ if [ -f scripts/mac/brain-proposal-pr.mjs ] && command -v gh >/dev/null 2>&1 && 
   esac
 else
   RESULT="$RESULT; brain publication unavailable"
+fi
+
+# Prepare at most the remaining per-tick CLI budget, after cleared jobs had
+# their publication opportunity. The preparer never creates reviewer evidence.
+if [ -f scripts/mac/brain-proposal-pr.mjs ] && command -v gh >/dev/null 2>&1 && command -v python3 >/dev/null 2>&1; then
+  _prep_selection="$(brain_publication_step prepare-inspect 2>/dev/null)"
+  case "$_prep_selection" in
+    ACTIVE|ACTIVE$'\n'*)
+      _prep_jobs="$(printf '%s\n' "$_prep_selection" | tail -n +2)"
+      for _job in $_prep_jobs; do
+        [ "$_pub_n" -lt "$PUBLISH_MAX" ] || break
+        _prep_preflight="$(brain_publication_step prepare-preflight "$_job" 2>/dev/null)"
+        case "$_prep_preflight" in
+          CONSUMED|EXISTS_READBACK_ONLY) continue ;;
+          CUSTODY_INCOMPLETE_READBACK_ONLY) RESULT="$RESULT; privacy request custody incomplete; readback required"; break ;;
+          ABSENT) : ;;
+          *) RESULT="$RESULT; privacy request preparation unavailable"; break ;;
+        esac
+        if [ "$DRY" = "1" ]; then say "dry-run: would prepare a private review request"; continue; fi
+        if ! declare -F sg_host_verify_acquire_bounded >/dev/null || ! sg_host_verify_acquire_bounded "$HOME/Library/Caches/signalgrid/host-verification.lock" "$PUBLISH_ADMISSION_WAIT_SEC"; then
+          RESULT="$RESULT; privacy request preparation deferred: host busy or unavailable"
+          break
+        fi
+        _prep_claim="$(brain_publication_step prepare-claim "$_job" 2>/dev/null)"
+        if [ "$_prep_claim" != "CLAIMED" ]; then
+          sg_host_verify_release
+          RESULT="$RESULT; privacy request preparation unavailable"
+          break
+        fi
+        _pub_n=$((_pub_n + 1))
+        brain_publication_step prepare-run "$_job" >/dev/null 2>&1
+        sg_host_verify_release
+        _prep_readback="$(brain_publication_step prepare-finish "$_job" 2>/dev/null)"
+        case "$_prep_readback" in
+          PREPARED_PRIVATE_REQUEST) RESULT="$RESULT; private privacy-review request prepared" ;;
+          *) RESULT="$RESULT; privacy request is readback only" ;;
+        esac
+      done ;;
+  esac
 fi
 
 # ── e. heartbeat, always ─────────────────────────────────────────────────────

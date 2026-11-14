@@ -125,6 +125,8 @@ Verified against the live GitHub API:
 | DEV | `"Home"` | Meaningless. |
 | VaultLens | Real, specific description | ✅ the only one written for a reader. |
 
+Correction, 2026-11-11: the SignalGrid-Review-Hub row is out of date on its homepage. `gh repo view --json homepageUrl` returned `https://danfashauer.github.io/work/signalgrid.html`, not a replit.com address, and the owner said that day that the Replit project no longer exists. The other rows were not re-read.
+
 No repository carries topics. **No profile README exists** — `DanFashauer/DanFashauer`
 is absent, which is the highest-leverage missing portfolio artifact.
 

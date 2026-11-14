@@ -408,6 +408,21 @@ This amends the 2026-10-23 placement above in one respect: the Mac is no longer 
 - **DR-064 is not edited by this note.** It still records the 2026-10-23 placement (the brain as primary executor, cloud and Codex as final inspection). `docs/DECISION_RECORDS.md` is the owner's to change; until he amends it, this note is the operating reading of his newer words and DR-064's landing rules stand as written.
 - **Not every remote attachment works yet.** The weekly dependabot routine's fresh sessions cannot reach this repository (the `dependabot-queue-review-weekly` row in `docs/agent/scheduled-routines.json` is `awaiting-activation`); that is a separate open blocker and this note does not claim it is fixed.
 
+### Operating notes, 2026-11-13 (owner directive: the four-pass build pipeline, Bonsai first)
+
+The owner, in the cloud session at about 23:12Z: *"the full automation of local LLM second Brain using Bonsai as first pass and building everything with its usage and agents then passing and load balancing second and third passes and validations through local sessions between Claude and codex then final pass is done again load balances between models and usage of cloud sessions between Claude and Codex. Each pass will use the second brain for everything skills and agents plus knowledge of whole project and company plus all knowledge."* At about 00:00Z on 2026-11-14 the owner added: *"I need to run this and build as much as possible and provide as much proof as possible then will get into physical stage once the brain can fully build and complete this company."*
+
+This lane works to that shape from now on:
+
+1. **Pass 1, local, Bonsai.** The Mac's Bonsai 2 model, the interim default (RESOURCE_INTAKE row of 2026-11-13), does intake, a scoped plan and the first real implementation, using the accountable roster role and its skills and agents.
+2. **Pass 2, local review.** An admitted local Claude or Codex session, chosen by measured capacity, reviews the first artifact and records its findings.
+3. **Pass 3, local validation.** The next admitted local session runs the task's real checks and consumes pass 2's findings. A correction changes the head, and approvals on the older head no longer count.
+4. **Final pass, cloud.** An admitted cloud Claude or Codex session reviews the final head. This lane is a final-pass reviewer: it takes exact-head offers from Root's dispatcher, answers each with a `signalgrid-lane-result/v1` ACK and a separate result, and has no Mac access and no merge.
+
+Every pass retrieves the second brain's approved context (roster role, skills, agents, project and company knowledge) by bounded retrieval, not by copying the vault, and the private-content boundary of the publisher is unchanged. A pass is a review stage, never an approval: landing still needs the protected required checks, the local preflight and breadth receipt, and the owner's word on owner-gated surfaces. "Local session" names where a pass runs, not a separate credit pool, so lanes sharing one account are not counted twice when balancing usage. Unknown capacity stays unknown. A missing or failed pass is reported as missing or failed, never folded into a completion.
+
+Not yet shown when this note was written: Bonsai authoring a first code pass, the brain's default route on Bonsai, restart persistence, recovered disk and memory, a measured concurrency cap, and one fresh job carried through all four passes with its receipts. The dispatcher and router are Root's; the Mac host work is the Mac lane's.
+
 ## Collision log
 
 Kept because the protocol above is only as persuasive as the evidence that it is

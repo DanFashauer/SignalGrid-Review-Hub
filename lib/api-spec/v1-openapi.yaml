@@ -147,7 +147,7 @@ paths:
         the Kotlin and Rust host-app SDKs bind: `assist` is one of allow / step_up /
         restrict / deny, `reasons` is the engine's reason codes verbatim. A host app
         must fail closed on any value outside that vocabulary and on any non-2xx.
-        Bound by the 42 shared conformance vectors in
+        Bound by the 75 shared conformance vectors in
         native/shared/assist-wire-conformance.json (DR-007 declared the gap; DR-023
         closed it).
       requestBody:

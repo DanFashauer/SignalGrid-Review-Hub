@@ -101,7 +101,7 @@ router.post("/v1/decisions/evaluate", async (req: Request, res: Response, next: 
  *
  * WHY A SECOND ROUTE AND NOT A SECOND FIELD. A host app on a shared device obeys
  * ONE word — allow / step_up / restrict / deny — and must fail closed on anything
- * else. The 42 shared conformance vectors (native/shared/assist-wire-conformance.json)
+ * else. The 75 shared conformance vectors (native/shared/assist-wire-conformance.json)
  * bind exactly that contract: top-level `assist`, the four-word vocabulary, unknown
  * fields tolerated, any non-2xx read as deny. EvaluateResult carries policy ids,
  * matched rules and an evidence reference a host app never needs and must not

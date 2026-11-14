@@ -388,3 +388,82 @@ for(const [id,status] of [['CW11',1],['CW12',2]])callerCase(id,'heartbeat exit'+
  const log=readFileSync(join(f.store,marker.successor+'.log'),'utf8');assert.equal(JSON.parse(log.split('\n')[0]).retryOf.attempt,o.prefix.split('/').at(-1));
  const base=o.prefix.split('/').at(-1);preserved(o.prefix,Object.fromEntries(Object.entries(o.initial).filter(([n])=>n.startsWith(base+'.'))));
 });
+
+// Execute the real scheduling shell after the sim/objective host refuses. Only
+// the publication transport and lock helper are fixtures; no live GitHub, model,
+// private publication state or host reservation is accessed by these cases.
+function publicationAfterBusyHost(kind, admitted) {
+ const root=realpathSync(mkdtempSync(join(tmpdir(),'sg-publication-schedule-')));
+ try {
+  const text=readFileSync(join(SOURCE,'scripts/mac/lane-tick.sh'),'utf8');
+  const start=text.indexOf('# Keep the tick alive and honest');
+  const end=text.indexOf('# ── e. heartbeat, always',start);
+  assert.ok(start>=0&&end>start,'real host-to-publication scheduling region required');
+  let region=text.slice(start,end);
+  const transport=/  \/usr\/bin\/python3 -I -[^\n]*<<'PY_BRAIN_PUBLICATION'\n[\s\S]*?\nPY_BRAIN_PUBLICATION\n/g;
+  assert.equal([...region.matchAll(transport)].length,1,'exactly one publication transport required');
+  region=region.replace(transport,'  fixture_publication_step "$@"\n');
+  const log=join(root,'calls');
+  const helper=join(root,'helper');
+  put(helper,`sg_host_verify_acquire() { SG_VERIFY_LOCK_REASON='fixture busy'; return 75; }
+sg_host_verify_acquire_bounded() { printf 'bounded %s\\n' "$2" >> "$CALLS"; ${admitted?'SG_VERIFY_LOCK_HELD=1; return 0':'return 75'}; }
+sg_host_verify_release() { printf 'release\\n' >> "$CALLS"; SG_VERIFY_LOCK_HELD=0; }
+`);
+  put(join(root,'scripts/mac/brain-proposal-pr.mjs'),'// fixture existence only\n');
+  const script=`set -u
+DRY=0
+SG_VERIFY_LOCK_HELD=0
+HOME=${quote(root)}
+REPO_ROOT=${quote(root)}
+RECORD_DIR=${quote(root)}
+CALLS=${quote(log)}
+export CALLS
+say() { :; }
+heartbeat() { printf 'heartbeat\\n' >> "$CALLS"; }
+gh() { return 99; }
+git() { case "$1" in rev-parse) printf 'fixture\\n';; show) cat ${quote(helper)};; *) return 99;; esac; }
+fixture_publication_step() {
+ printf '%s\\n' "$1" >> "$CALLS"
+ case "$1" in
+ inspect) printf '${kind==='disabled'?'UNAVAILABLE':'ACTIVE'}\\n${['publish','both','consumed'].includes(kind)?'fixture-job\\n':''}';;
+ prepare-inspect) printf '${kind==='disabled'?'UNAVAILABLE':'ACTIVE'}\\n${['prepare','both'].includes(kind)?'fixture-job\\n':''}';;
+ preflight|prepare-preflight) printf '${kind==='consumed'?'CONSUMED':'ABSENT'}\\n';;
+ claim|prepare-claim) printf 'CLAIMED\\n';;
+ finish) printf 'VERIFIED https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1\\n';;
+ prepare-finish) printf 'PREPARED_PRIVATE_REQUEST\\n';;
+ run|prepare-run) :;;
+ *) return 99;;
+ esac
+}
+${region}
+heartbeat
+`;
+  const r=spawnSync('/bin/bash',['-c',script],{cwd:root,env:parentEnv,encoding:'utf8',timeout:5000});
+  assert.equal(r.status,0,r.stderr);assert.equal(r.signal,null);
+  return jsonLines(log);
+ } finally { rmSync(root,{recursive:true,force:false}); }
+}
+control('busy sim host still gives a cleared publication its own bounded admission',()=>{
+ assert.deepEqual(publicationAfterBusyHost('publish',true),
+  ['inspect','preflight','bounded 90','claim','run','release','finish','prepare-inspect','heartbeat']);
+});
+control('busy sim host still gives privacy preparation its own bounded admission',()=>{
+ assert.deepEqual(publicationAfterBusyHost('prepare',true),
+  ['inspect','prepare-inspect','prepare-preflight','bounded 90','prepare-claim','prepare-run','release','prepare-finish','heartbeat']);
+});
+control('busy publication admission creates no claim or worker call and still heartbeats',()=>{
+ assert.deepEqual(publicationAfterBusyHost('publish',false),
+  ['inspect','preflight','bounded 90','prepare-inspect','heartbeat']);
+});
+control('busy sim host preserves the shared one-job publication and preparation limit',()=>{
+ assert.deepEqual(publicationAfterBusyHost('both',true),
+  ['inspect','preflight','bounded 90','claim','run','release','finish','prepare-inspect','heartbeat']);
+});
+control('busy sim host never replays an already consumed publication',()=>{
+ assert.deepEqual(publicationAfterBusyHost('consumed',true),
+  ['inspect','preflight','prepare-inspect','heartbeat']);
+});
+control('busy sim host cannot turn unavailable activation into publication authority',()=>{
+ assert.deepEqual(publicationAfterBusyHost('disabled',true),
+  ['inspect','prepare-inspect','heartbeat']);
+});

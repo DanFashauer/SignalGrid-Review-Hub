@@ -1,5 +1,5 @@
 {
-  "$comment": "Task routing for the brain (owner 2026-11-14: route each task to the model, effort, lane, executing role and validators that fit it; local LLM always at highest effort; when no route fits, find or build the agent). The machine-readable form of DR-047 rules 1-3 plus the four-pass pipeline (local LLM -> local Claude/Codex -> local validation -> cloud final). scripts/lib/task-route.mjs resolves a task kind against this file; scripts/check-task-routing.mjs gates it: every role exists in docs/agent/org-roster.json, every skill and agent exists, every build/judgment kind names a validator, decision-path kinds stay owner-gated, and an unknown kind resolves to the capability-gap route in docs/agent/hand-routing.json, never to a default tier. Tier names are DR-047 families, never model ids. Private vault/runtime content never enters this file: it routes kinds of work, not the work itself.",
+  "$comment": "Task routing for the brain (owner 2026-11-14: route each task to the model, effort, lane, executing role and validators that fit it; local LLM always at highest effort; when no route fits, find or build the agent). The machine-readable form of DR-047 rules 1-3 plus the four-pass pipeline (Bonsai intake, plan and first implementation -> local Claude/Codex review -> validation on the other local session -> cloud final; docs/LANE_COORDINATION.md 2026-11-13). scripts/lib/task-route.mjs resolves a task kind against this file; scripts/check-task-routing.mjs gates it: every role exists in docs/agent/org-roster.json, every skill and agent exists, every build/judgment kind names a validator, decision-path kinds stay owner-gated, and an unknown kind resolves to the capability-gap route in docs/agent/hand-routing.json, never to a default tier. Tier names are DR-047 families, never model ids. Private vault/runtime content never enters this file: it routes kinds of work, not the work itself.",
   "version": 1,
   "tiers": {
     "mechanical": { "model": "haiku", "effort": "low" },
@@ -8,10 +8,10 @@
   },
   "unavailableTierResolvesTo": "judgment",
   "lanes": {
-    "local-llm": { "pass": 1, "role": "draft and triage", "effort": "max" },
-    "local-claude": { "pass": 2, "role": "implement" },
-    "local-codex": { "pass": 2, "role": "implement" },
-    "local-validate": { "pass": 3, "role": "validate", "lanes": ["local-claude", "local-codex"], "rule": "the validating lane is never the lane that implemented" },
+    "local-llm": { "pass": 1, "role": "intake, scoped plan and first implementation (Bonsai)", "effort": "max" },
+    "local-claude": { "pass": 2, "role": "review the first artifact and record findings" },
+    "local-codex": { "pass": 2, "role": "review the first artifact and record findings" },
+    "local-validate": { "pass": 3, "role": "run the real checks and consume pass 2 findings", "lanes": ["local-claude", "local-codex"], "rule": "the validating lane is never the pass-2 lane" },
     "cloud-final": { "pass": 4, "role": "final review and DR-037 landing", "lanes": ["cloud-claude", "cloud-codex"] }
   },
   "kinds": {

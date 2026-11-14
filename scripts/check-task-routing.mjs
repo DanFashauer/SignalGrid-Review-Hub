@@ -14,19 +14,34 @@
 //   6. the local LLM runs at "max" effort; an unavailable tier resolves to "judgment";
 //   7. the fallback route exists in docs/agent/hand-routing.json, and the resolver
 //      returns it for an unknown kind instead of any tier;
-//   8. the resolver never validates on the implementing lane, and every implementing
-//      lane has a distinct validation lane;
-//   9. when the judgment tier is unavailable too, the route is pending, never scheduled.
+//   8. passes 2 and 3 run only on the local session lanes, pass 3 never on pass 2's lane;
+//      an unsupported lane is refused with no passes;
+//   9. when the judgment tier is unavailable too, the route is pending, never scheduled;
+//  10. tiers rank upward (judgment = opus at max), so fail-UP is a capability, not a label;
+//  11. each pass carries its stage (Bonsai first implementation, local review, real checks,
+//      cloud final); a missing local LLM build is a missing pass 1, never a complete route;
+//  12. decision-core stays routed and ownerGated whatever its skills say.
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { resolveRoute } from "./lib/task-route.mjs";
+import { LOCAL_SESSION_LANES, resolveRoute } from "./lib/task-route.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const read = (rel) => JSON.parse(readFileSync(join(ROOT, rel), "utf8"));
 const FAMILIES = new Set(["haiku", "sonnet", "opus"]);
 const EFFORTS = new Set(["low", "medium", "high", "xhigh", "max"]);
 const DECISION_SKILLS = new Set(["signalgrid-core"]);
+// Kinds that are owner-gated by name, whatever their optional skill metadata says.
+const OWNER_GATED_KINDS = ["decision-core"];
+const FAMILY_RANK = { haiku: 0, sonnet: 1, opus: 2 };
+const EFFORT_RANK = { low: 0, medium: 1, high: 2, xhigh: 3, max: 4 };
+const TIER_ORDER = ["mechanical", "build", "judgment"];
+const STAGES = [
+  [1, "local-llm", /first implementation/],
+  [2, null, /review/],
+  [3, null, /real checks/],
+  [4, "cloud-final", /final review/],
+];
 
 export function problems(table, { roles, skillExists, handRoutes }) {
   const out = [];
@@ -34,7 +49,21 @@ export function problems(table, { roles, skillExists, handRoutes }) {
     if (!FAMILIES.has(tier?.model)) out.push(`tier ${name}: model must be a DR-047 family (${[...FAMILIES].join("/")}), got ${JSON.stringify(tier?.model)}`);
     if (!EFFORTS.has(tier?.effort)) out.push(`tier ${name}: effort ${JSON.stringify(tier?.effort)} is not a known effort`);
   }
+  // Fail-UP is a capability claim, not a label: each tier may not rank below the one before
+  // it, and judgment must be the top family at the top effort.
+  for (const name of TIER_ORDER) if (!Object.hasOwn(table.tiers ?? {}, name)) out.push(`tier ${name} is missing`);
+  for (let i = 1; i < TIER_ORDER.length; i++) {
+    const lo = table.tiers?.[TIER_ORDER[i - 1]], hi = table.tiers?.[TIER_ORDER[i]];
+    if (lo && hi && (FAMILY_RANK[hi.model] < FAMILY_RANK[lo.model] || EFFORT_RANK[hi.effort] < EFFORT_RANK[lo.effort])) out.push(`tier ${TIER_ORDER[i]} ranks below ${TIER_ORDER[i - 1]} (model or effort)`);
+  }
+  if (table.tiers?.judgment?.model !== "opus" || table.tiers?.judgment?.effort !== "max") out.push("the judgment tier must be the top family (opus) at max effort, or fail-UP is not up");
   if (table.unavailableTierResolvesTo !== "judgment") out.push("an unavailable tier must resolve UP to judgment (DR-047 rule 3)");
+  const vlanes = table.lanes?.["local-validate"]?.lanes;
+  if (!Array.isArray(vlanes) || vlanes.length !== LOCAL_SESSION_LANES.length || !LOCAL_SESSION_LANES.every((l) => vlanes.includes(l))) out.push(`local-validate.lanes must be exactly the local session lanes (${LOCAL_SESSION_LANES.join(", ")})`);
+  for (const gated of OWNER_GATED_KINDS) {
+    if (!Object.hasOwn(table.kinds ?? {}, gated)) out.push(`${gated}: this owner-gated kind must stay routed`);
+    else if (table.kinds[gated].ownerGated !== true) out.push(`${gated}: must be ownerGated whatever its skills say`);
+  }
   if (table.lanes?.["local-llm"]?.effort !== "max") out.push("the local LLM pass must run at max effort");
   const kinds = Object.entries(table.kinds ?? {});
   if (!kinds.length) out.push("no task kinds are routed");
@@ -56,12 +85,22 @@ export function problems(table, { roles, skillExists, handRoutes }) {
   const unknown = resolveRoute(table, "no-such-kind-zz");
   if (!unknown.gap || unknown.tier || unknown.route !== route) out.push("the resolver must return the fallback route, not a tier, for an unknown kind");
   for (const [kind] of kinds) {
-    for (const lane of ["local-claude", "local-codex"]) {
-      const r = resolveRoute(table, kind, { implementLane: lane });
+    for (const lane of LOCAL_SESSION_LANES) {
+      const r = resolveRoute(table, kind, { reviewLane: lane });
       const v = r.passes?.[2]?.lane;
-      if (r.refused || typeof v !== "string" || !v || v === lane) out.push(`${kind}: no validation lane distinct from the implementing lane ${lane}`);
+      if (r.refused || !LOCAL_SESSION_LANES.includes(v) || v === lane) out.push(`${kind}: no supported validation lane distinct from the pass-2 lane ${lane}`);
       if (r.passes?.[0]?.effort !== "max") out.push(`${kind}: pass 1 is not at max effort`);
+      for (const [n, want, does] of STAGES) {
+        const p = r.passes?.[n - 1];
+        if (!p || p.pass !== n || (want && p.lane !== want) || !does.test(p.does ?? "")) out.push(`${kind}: pass ${n} does not carry its stage (${does})`);
+      }
     }
+    for (const bad of ["cloud-final", "cloud-claude", "local-llm", "", "local-claud", null, 42]) {
+      const r = resolveRoute(table, kind, { reviewLane: bad });
+      if (!r.refused || r.passes) out.push(`${kind}: an unsupported pass-2 lane ${JSON.stringify(bad)} produced a route`);
+    }
+    const noBonsai = resolveRoute(table, kind, { localLlmAvailable: false });
+    if (noBonsai.complete !== false || noBonsai.passes?.[0]?.missing !== true) out.push(`${kind}: a missing local LLM build is not reported as a missing pass 1`);
     const up = resolveRoute(table, kind, { unavailableTiers: Object.keys(table.tiers ?? {}).filter((t) => t !== "judgment") });
     if (!up.gap && up.tier !== "judgment") out.push(`${kind}: an unavailable tier did not resolve up to judgment`);
     const none = resolveRoute(table, kind, { unavailableTiers: Object.keys(table.tiers ?? {}) });
@@ -97,6 +136,11 @@ function selfTest() {
     ["an unknown tier on a kind", (t) => { t.kinds["log-scan"].tier = "bargain"; }],
     ["a validation list holding only one lane", (t) => { t.lanes["local-validate"].lanes = ["local-claude"]; }],
     ["an empty validation list", (t) => { t.lanes["local-validate"].lanes = []; }],
+    ["an unsupported validation lane", (t) => { t.lanes["local-validate"].lanes = ["no-such-lane"]; }],
+    ["judgment mapped to haiku/low", (t) => { t.tiers.judgment = { model: "haiku", effort: "low" }; }],
+    ["build ranked above judgment", (t) => { t.tiers.build = { model: "opus", effort: "max" }; t.tiers.judgment = { model: "sonnet", effort: "high" }; }],
+    ["decision-core with its skill and ownerGated both removed", (t) => { t.kinds["decision-core"].skills = []; delete t.kinds["decision-core"].ownerGated; }],
+    ["decision-core removed from the table", (t) => { delete t.kinds["decision-core"]; }],
   ];
   let passed = 0, failed = 0;
   const clean = problems(base, ctx);
@@ -106,9 +150,14 @@ function selfTest() {
     const found = problems(t, ctx);
     if (found.length) { passed++; console.log(`PASS refuses ${label}`); } else { failed++; console.error(`FAIL did not refuse ${label}`); }
   }
-  const r = resolveRoute(base, "gate-or-proof", { implementLane: "local-codex" });
-  const ok = r.passes[0].effort === "max" && r.passes[1].lane === "local-codex" && r.passes[2].lane === "local-claude" && r.passes[3].lane === "cloud-final" && r.tier === "build";
-  if (ok) { passed++; console.log("PASS a routed kind runs local LLM (max) -> implement -> validate on the other lane -> cloud final"); } else { failed++; console.error("FAIL the four-pass route is wrong: " + JSON.stringify(r.passes)); }
+  const r = resolveRoute(base, "gate-or-proof", { reviewLane: "local-codex" });
+  const ok = r.complete === true && r.passes[0].effort === "max" && /first implementation/.test(r.passes[0].does) && r.passes[1].lane === "local-codex" && /review/.test(r.passes[1].does) && r.passes[2].lane === "local-claude" && /real checks/.test(r.passes[2].does) && r.passes[3].lane === "cloud-final" && r.tier === "build";
+  if (ok) { passed++; console.log("PASS a routed kind runs Bonsai (max: intake, plan, first implementation) -> local review -> checks on the other local session -> cloud final"); } else { failed++; console.error("FAIL the four-pass route is wrong: " + JSON.stringify(r.passes)); }
+  let laneOk = true;
+  for (const bad of ["cloud-final", "cloud-claude", "", "local-claud", null, 42]) { const x = resolveRoute(base, "gate-or-proof", { reviewLane: bad }); if (!x.refused || x.passes) laneOk = false; }
+  if (laneOk) { passed++; console.log("PASS an unsupported pass-2 lane (cloud-final, cloud-claude, empty, misspelled, null, number) is refused with no passes"); } else { failed++; console.error("FAIL an unsupported pass-2 lane produced a route"); }
+  const nb = resolveRoute(base, "gate-or-proof", { localLlmAvailable: false });
+  if (nb.complete === false && nb.passes[0].missing === true) { passed++; console.log("PASS a missing local LLM build is a missing pass 1 and the route is not complete"); } else { failed++; console.error("FAIL a missing Bonsai build was folded into a complete route"); }
   const waits = resolveRoute(base, "architecture", { unavailableTiers: ["judgment"] });
   if (waits.pending === true && !waits.passes) { passed++; console.log("PASS judgment work with the judgment tier unavailable is pending, not scheduled"); } else { failed++; console.error("FAIL judgment work was scheduled on an unavailable tier: " + JSON.stringify(waits)); }
   const exhausted = resolveRoute(base, "web-ui", { unavailableTiers: ["build", "judgment"] });

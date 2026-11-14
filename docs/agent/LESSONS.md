@@ -675,8 +675,8 @@ block; a stage run on the wrong tier is a lesson here.
 - **date:** 2026-11-14
 - **lane:** cloud
 - **incident:** LOOP's startup paragraph still named Ollama primary after the owner directed Bonsai-first delivery, and its CURRENT EVIDENCE label still led with October 21 despite the tracked Mac artifact having a November 11 mint. A brain reading that summary could route against obsolete intent or confuse old prose with missing evidence.
-- **evidence:** `artifacts/live-evidence/mac-run.json` records the November 11 mint and manifest v101 fingerprint e892a94f; the inspected canonical manifest matches it. This branch's newer manifest f0b1c0a8 differs, so the record does not qualify the branch. Root's actual Bonsai default qualification remains ongoing; its service report is not a route-switch receipt.
-- **landing:** pending — `docs/agent/LOOP.md` now states the owner's requested route, points at the actual current artifact with its attestation limits, and retains the October record as history. No artifact, attestation, readiness field or physical-device claim is changed.
+- **evidence:** `artifacts/live-evidence/mac-run.json` records the November 11 mint and manifest v101 fingerprint e892a94f. The observed canonical fc6df83f match and then-branch f0b1c0a8 mismatch were an initial inspection snapshot. Read `artifacts/sync/live-sync-manifest.json` at the actual checkout head and compare it with the artifact; neither historical fingerprint establishes current qualification. Root's service receipts do not establish active-default routing or four-pass completion.
+- **landing:** pending — `docs/agent/LOOP.md` states the owner's requested route, software work before physical testing, and bounded Drive provenance with actual adapter consumption still required. It points to the artifact and live manifest comparison with the recorded platform limits, and retains the October record as history. No artifact, attestation, readiness field or physical-device claim is changed.
 - **status:** pending
 
 ### L77 — Describe operator record ownership with publication-specific terms

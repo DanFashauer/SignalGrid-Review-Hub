@@ -1,0 +1,16 @@
+{
+  "id": "2026-11-14-mac-objective-evidence-readback",
+  "raisedAt": "2026-11-14T01:16:50.358Z",
+  "origin": "cloud",
+  "doing": "Qualifying retained software repairs on PR2045 without silently leaving the November7 Mac evidence request unowned",
+  "blockedBy": "Canonical objective-loop-evidence-fresh-2026-11-07 remains pending without its exact result and is past the144h limit. This Linux cloud session cannot execute the Mac evidence operation. Existing host runs and any uncertain original delivery must be reconciled before another mutation.",
+  "need": "Root/Mac: read back the original request, private attempt receipts and already produced evidence; bind or land the original valid result through its authorized path if it exists. Execute only when current durable ownership proves the original operation was not already performed and a current grant permits it. Preserve uncertain delivery as READBACK ONLY. Physical testing is deferred by the owner; this hand records the pending Mac software-evidence work and never claims it ran or qualifies readiness.",
+  "whoCanUnblock": "mac lane",
+  "domain": "lane",
+  "status": "open",
+  "routedTo": null,
+  "where": "PR439; PR2045 a1b434634ce2b048d3cfed8902c593513c03d8ff full preflight Raised hands failure",
+  "covers": [
+    "sim:objective-loop-evidence-fresh-2026-11-07"
+  ]
+}

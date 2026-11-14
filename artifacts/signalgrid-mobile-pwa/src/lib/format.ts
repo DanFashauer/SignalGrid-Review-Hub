@@ -22,7 +22,9 @@ export function formatTimeAgo(dateString: string | undefined): string {
 }
 
 export function formatLatency(ms: number | undefined): string {
-  if (ms === undefined || !Number.isFinite(ms)) return "–";
+  // Below zero is not a measured duration (clock skew can mint one); render it
+  // as absent. Negative zero is not below zero and stays a measured 0ms.
+  if (ms === undefined || !Number.isFinite(ms) || ms < 0) return "–";
   return `${ms.toFixed(0)}ms`;
 }
 

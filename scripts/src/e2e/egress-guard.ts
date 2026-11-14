@@ -24,15 +24,13 @@ import { expect, type test as baseTest } from "@playwright/test";
  * CDN hiccup cannot masquerade as an app regression — but attempting them is not a
  * failure. Any other host is. The default is the empty list.
  *
- * `serves` says what the page under test is loaded from, and only that passes
- * through: `"localhost"` (a webServer of the Playwright config) or `"file"` (a
- * standalone document, for which even localhost is off-page).
+ * `documentUrl` admits only the first main-page GET to that exact document.
+ * Other specs allow local hosts; all unexpected attempts remain recorded.
  *
  * Call it at the top of a spec, BEFORE any `beforeEach` that navigates, so the routes
  * are installed before the first request.
  */
 export interface EgressOptions {
-  serves?: "localhost" | "file";
   settleMs?: number;
   /** Admit only one GET navigation of the main page to this exact document. */
   documentUrl?: () => string;
@@ -43,11 +41,9 @@ const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1"]);
 export function guardEgress(
   test: typeof baseTest,
   allowedHosts: readonly string[] = [],
-  { serves = "localhost", settleMs = 300, documentUrl }: EgressOptions = {},
+  { settleMs = 300, documentUrl }: EgressOptions = {},
 ): void {
   let unexpected: string[] = [];
-  const isServed = (url: URL): boolean =>
-    serves === "file" ? url.protocol === "file:" : LOCAL_HOSTS.has(url.hostname);
   const record = (url: URL): void => {
     if (!allowedHosts.includes(url.hostname)) unexpected.push(url.href);
   };
@@ -70,13 +66,13 @@ export function guardEgress(
         record(url);
         return route.abort();
       }
-      if (isServed(url)) return route.continue();
+      if (LOCAL_HOSTS.has(url.hostname)) return route.continue();
       record(url);
       return route.abort();
     });
     await context.routeWebSocket(/.*/, (ws) => {
       const url = new URL(ws.url());
-      if (expectedDocument === undefined && isServed(url)) return ws.connectToServer();
+      if (expectedDocument === undefined && LOCAL_HOSTS.has(url.hostname)) return ws.connectToServer();
       record(url);
       return ws.close();
     });

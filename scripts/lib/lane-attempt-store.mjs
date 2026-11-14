@@ -207,7 +207,7 @@ const PS_ENV = { ...process.env, LC_ALL: "C", TZ: "UTC0" };
 const LSTART = /^\w{3} \w{3}\s+\d+ \d\d:\d\d:\d\d \d{4}$/;
 // ps stat carries a state plus BSD/Linux flags (for example Ss, S+ and Z+).
 // Unknown/malformed states hold; a Z-looking command is not zombie evidence.
-const PROCESS_STATE = /^[RSDTtWXxKPIUZ][<+>AELNSVWXls]*$/;
+const PROCESS_STATE = /^[RSDTtWXxKPIUHZ][<+>AELNSVWXls]*$/;
 export const lstartEpoch = (lstart) => {
   const text = String(lstart).trim().replace(/\s+/g, " ");
   return LSTART.test(text) ? Date.parse(text + " UTC") : NaN;

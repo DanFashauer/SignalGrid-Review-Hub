@@ -34,7 +34,7 @@ function fixtureProcessStopped(pid, { kill = process.kill, ps = spawnSync } = {}
 try {
   const live = () => {}, observed = (stdout, more = {}) => () => ({ status: 0, stdout, ...more });
   for (const state of ["Z", "Z+", "Zs"]) assert.equal(fixtureProcessStopped(123, { kill: live, ps: observed(state) }), true, state);
-  for (const state of ["S", "R", "T", "D", "S+", "Ss", "", "?", "Zgarbage", "Z\nS"]) {
+  for (const state of ["S", "R", "T", "D", "H", "HNs+", "H?", "Hgarbage", "S+", "Ss", "", "?", "Zgarbage", "Z\nS"]) {
     assert.equal(fixtureProcessStopped(123, { kill: live, ps: observed(state) }), false, state);
   }
   for (const observation of [{ status: 1 }, { signal: "SIGTERM" }, { error: Error("unreadable") }, { stdout: null }]) {
@@ -1012,9 +1012,13 @@ await leaseControl('a process-table line that does not parse holds recovery',asy
 });
 // Feed state-bearing rows through the actual production ps reader and ownership
 // decision. No fake row can release the original shell or bypass receipt readback.
-for (const [label, rows, enters, read] of [
+for (const [label, rows, enters, read, otherGroup = false] of [
  ['zombie', ['Z'], true], ['zombie with BSD flag', ['Z+'], true],
  ['sleeping', ['S'], false], ['running', ['R'], false], ['stopped', ['T'], false], ['uninterruptible', ['D'], false],
+ ['halted group member', ['H'], false], ['BSD halted group member', ['HNs+'], false],
+ ['unrelated halted member', ['H'], true, null, true], ['unrelated BSD halted member', ['HNs+'], true, null, true],
+ ['halted member carrying the token', ['H'], false, 'token', true], ['halted member in an orphaned worktree', ['H'], false, 'worktree', true],
+ ['halted state with unknown flag', ['H?'], false, null, true], ['malformed halted state', ['Hgarbage'], false, null, true],
  ['BSD sleeping flags', ['Ss+'], false], ['zombie and live member', ['Z', 'S'], false],
  ['zombie-looking command', ['S'], false, 'zombie-command'],
  ['missing state', [''], false], ['malformed zombie state', ['Zgarbage'], false], ['unknown state', ['?'], false],
@@ -1029,12 +1033,19 @@ for (const [label, rows, enters, read] of [
  assert.equal(a.child.kill('SIGKILL'),true);await a.closed;
  const bin=join(f.parent,'state-ps');mkdirSync(bin);
  const command=read==='token'?'fixture '+open.token:read==='worktree'?'/tmp/sg-lane-deliver-fixture':read==='zombie-command'?'fixture Z <defunct> Authorization: Bearer SECRET-state':'fixture';
- const lines=rows.map((state,i)=>`${2147483000+i} 1 ${owner.pgid} ${state} ${read==='bad-start'?'not a start':born.stdout.trim()} ${command}`).join('\n')+'\n';
+ const lines=rows.map((state,i)=>`${2147483000+i} 1 ${otherGroup?owner.pgid+1:owner.pgid} ${state} ${read==='bad-start'?'not a start':born.stdout.trim()} ${command}`).join('\n')+'\n';
  const output=read==='unreadable'?'exit 1':read==='signal'?'kill -TERM $$':`printf '%s' ${q(read==='empty'?'':read==='whitespace'?' \t\n':lines)}`;
  writeFileSync(join(bin,'ps'),`#!/bin/sh\nif [ "$1" = -eo ]; then ${output}; exit 0; fi\nexec /bin/ps "$@"\n`,{mode:0o755});
  c.kernelAvailable();const original=leaseTree(c.store),b=c.start('state-B',{pathPrefix:bin+':'});
  if(enters)await recovers(c,b,open.token);
- else {assert.equal((await b.next()).event,'CLOSED');await b.closed;assert.match(b.stdout+b.stderr,/holding/);assert.doesNotMatch(b.stdout+b.stderr,/SECRET-state|Bearer/);assert.deepEqual(held(leaseTree(c.store)),held(original));}
+ else {
+  assert.equal((await b.next()).event,'CLOSED');await b.closed;assert.match(b.stdout+b.stderr,/holding/);
+  if(rows[0]==='H'||rows[0]==='HNs+'){
+   assert.match(b.stdout+b.stderr,/may survive/,'a known halted state is held as a live member, not a parse error');
+   if(read==='worktree')assert.match(b.stdout+b.stderr,/in a lane-deliver worktree/);
+  }
+  assert.doesNotMatch(b.stdout+b.stderr,/SECRET-state|Bearer/);assert.deepEqual(held(leaseTree(c.store)),held(original));
+ }
 });
 await leaseControl('an invalid recorded start time degrades to PID-only liveness instead of stopping the tick',async(f,c)=>{
  const a=c.start('badstart-A');assert.equal((await a.next()).event,'ENTER');const open=JSON.parse(readFileSync(c.slot,'utf8'));

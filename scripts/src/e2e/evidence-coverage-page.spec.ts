@@ -31,7 +31,6 @@ if (transport !== "file" && transport !== "http") {
   throw new Error("E2E_STANDALONE_TRANSPORT must be file or http");
 }
 let PAGE_URL = pathToFileURL(EVIDENCE_COVERAGE_FIXTURE).href;
-let HTTP_FIXTURE_URL = "";
 const test = base.extend<{}, { publicCoverageFixture: void }>({
   publicCoverageFixture: [async ({}, use) => {
     if (transport === "file") {
@@ -39,7 +38,6 @@ const test = base.extend<{}, { publicCoverageFixture: void }>({
       return;
     }
     const fixture = await startEvidenceCoverageFixtureServer();
-    HTTP_FIXTURE_URL = fixture.url;
     PAGE_URL = fixture.url;
     try {
       await use(undefined);
@@ -99,7 +97,7 @@ test("the page reaches nothing outside itself", async ({ page }) => {
   // File mode owns this server only for the boundary assertions; PAGE_URL and
   // the other five file-origin cases retain their original startup semantics.
   const ownedFixture = transport === "file" ? await startEvidenceCoverageFixtureServer() : undefined;
-  const fixtureUrl = ownedFixture?.url ?? HTTP_FIXTURE_URL;
+  const fixtureUrl = ownedFixture?.url ?? PAGE_URL;
   try {
     const served = await fixtureResponse(fixtureUrl, "/evidence-coverage.html");
     expect(served.status).toBe(200);

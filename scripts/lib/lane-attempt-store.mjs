@@ -184,7 +184,7 @@ function initializeTickGuard(directory, store) {
 // Guard capacity alone is not cleanup: a descendant may have closed FD8 and kept
 // running. Recovery needs positive evidence that the original tick is gone: its
 // shell PID is dead (ESRCH; alive or EPERM holds) and, when its owner record names
-// a process group other than ours, that group is empty. launchd runs the tick from
+// a process group other than ours, that group has no live members. launchd runs the tick from
 // ~/Library/LaunchAgents/com.signalgrid.lane-tick.plist, which sets no
 // AbandonProcessGroup key, so launchd's default (false) applies: when a tick job
 // exits, launchd kills its whole process group.
@@ -205,6 +205,9 @@ function processGroupOf(pid) {
 // and compared as epochs, so a TZ change between ticks can never fake a reuse.
 const PS_ENV = { ...process.env, LC_ALL: "C", TZ: "UTC0" };
 const LSTART = /^\w{3} \w{3}\s+\d+ \d\d:\d\d:\d\d \d{4}$/;
+// ps stat carries a state plus BSD/Linux flags (for example Ss, S+ and Z+).
+// Unknown/malformed states hold; a Z-looking command is not zombie evidence.
+const PROCESS_STATE = /^[RSDTtWXxKPIUZ][<+>AELNSVWXls]*$/;
 export const lstartEpoch = (lstart) => {
   const text = String(lstart).trim().replace(/\s+/g, " ");
   return LSTART.test(text) ? Date.parse(text + " UTC") : NaN;
@@ -229,15 +232,15 @@ function assertOriginalGone(shellPid, { pgid = null, token = null, shellStart = 
   // Without a recorded start, the OPEN slot's write time (less 1 s for lstart's
   // resolution) bounds when the original tick's descendants can have started.
   const own = processGroupOf(process.pid), since = recorded ?? (Number.isFinite(openedMs) ? Math.floor(openedMs / 1000) * 1000 - 1000 : -Infinity);
-  const ps = spawnSync("ps", ["-eo", "pid=,ppid=,pgid=,lstart=,command="], { encoding: "utf8", env: PS_ENV, maxBuffer: 64 * 1024 * 1024 });
-  if (ps.error || ps.signal || ps.status !== 0 || own === null) throw Error("process table is unreadable; holding");
+  const ps = spawnSync("ps", ["-eo", "pid=,ppid=,pgid=,stat=,lstart=,command="], { encoding: "utf8", env: PS_ENV, maxBuffer: 64 * 1024 * 1024 });
+  if (ps.error || ps.signal || ps.status !== 0 || typeof ps.stdout !== "string" || !ps.stdout.trim() || own === null) throw Error("process table is unreadable; holding");
   const table = new Map();
   for (const line of ps.stdout.split("\n")) {
     if (!line.trim()) continue;
-    const m = /^\s*(\d+)\s+(\d+)\s+(\d+)\s+(\w{3} \w{3}\s+\d+ \d\d:\d\d:\d\d \d{4})\s(.*)$/.exec(line), started = m ? lstartEpoch(m[4]) : NaN;
+    const m = /^\s*(\d+)\s+(\d+)\s+(\d+)\s+(\S+)\s+(\w{3} \w{3}\s+\d+ \d\d:\d\d:\d\d \d{4})\s(.*)$/.exec(line), started = m ? lstartEpoch(m[5]) : NaN;
     // Never echo a process line: argv can carry credentials, and this text is published.
-    if (!m || !Number.isFinite(started)) throw Error("a process table line is unparseable; holding");
-    table.set(Number(m[1]), { ppid: Number(m[2]), group: Number(m[3]), started, command: m[5] });
+    if (!m || !PROCESS_STATE.test(m[4]) || !Number.isFinite(started)) throw Error("a process table line is unparseable; holding");
+    table.set(Number(m[1]), { ppid: Number(m[2]), group: Number(m[3]), state: m[4], started, command: m[6] });
   }
   // A lane-deliver worktree process counts only when its whole ancestry started at or
   // after the original tick until it reaches pid 1 (orphaned with that tick): a live
@@ -251,11 +254,13 @@ function assertOriginalGone(shellPid, { pgid = null, token = null, shellStart = 
     }
     return true;
   };
-  for (const [pid, { group, started, command }] of table) {
+  for (const [pid, { group, state, started, command }] of table) {
     if (pid === process.pid) continue;
     if (!(started >= since)) continue; // started before the original tick: not its descendant
     const worktree = command.includes("sg-lane-deliver-") && orphanedSince(pid);
-    if ((pgid !== null && group === pgid && pgid !== own) || (token && command.includes(token)) || worktree) {
+    // An unreaped zombie cannot keep the original group running. Keep its row
+    // for ancestry, and retain independent token/worktree uncertainty holds.
+    if ((pgid !== null && group === pgid && pgid !== own && !state.startsWith("Z")) || (token && command.includes(token)) || worktree) {
       // Publishable fields only: pid, group, start and the program's basename; never its
       // arguments (live-lane scripts pass Authorization headers to curl in argv).
       const program = (command.trim().split(/\s+/)[0] ?? "").split("/").pop().replace(/[^A-Za-z0-9._+-]/g, "?").slice(0, 40);

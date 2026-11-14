@@ -96,6 +96,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Branch-prune exact-tip regression (real CLI and name-only deletion mutants)
+        run: node scripts/check-pruner-exact-ref.mjs
+
       - name: Invariant review self-test (a default-less switch / stray clock read must fail)
         run: node scripts/review-invariants.mjs --self-test
       - name: Invariant review (fail-closed / determinism / Assist / truth)

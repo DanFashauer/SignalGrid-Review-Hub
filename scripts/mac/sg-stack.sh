@@ -28,6 +28,8 @@
 # =============================================================================
 set -uo pipefail
 
+if [ "$(uname -s)" != "Darwin" ]; then echo "sg-stack.sh: macOS only" >&2; exit 1; fi
+
 REPO="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$REPO" || { echo "sg-stack: cannot enter repo root" >&2; exit 1; }
 

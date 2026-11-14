@@ -129,8 +129,13 @@ let s = ""; process.stdin.on("data", (d) => { s += d; }).on("end", () => {
   const c = (b && b.coordinator) || {}; const queued = c.counts && c.counts.queued;
   const reason = String(c.blocked_reason || "none");
   const starved = Number.isInteger(queued) && queued > 0 && /^Host resources are reserved/.test(reason);
-  console.log((starved ? "starved" : "not starved") + ": queued=" + queued + ", reason=" + reason.slice(0, 60).replace(/[^ -~]/g, "?"));
-  process.exit(starved ? 0 : 1);
+  // The brain pauses about two seconds after a blocked or failed job and queues the follow-up
+  // attempt right after it, with nothing counted as queued in between. An admission landing in
+  // that pause used to win the host for a whole run (2026-11-13: a follow-up waited behind a
+  // 5400 s budget). Treat the pause as wanting the host; the same wall-time budget bounds it.
+  const cooling = /^Brief cooldown after a /.test(reason);
+  console.log((starved ? "starved" : cooling ? "cooling down" : "not starved") + ": queued=" + queued + ", reason=" + reason.slice(0, 60).replace(/[^ -~]/g, "?"));
+  process.exit(starved || cooling ? 0 : 1);
 });' 2>/dev/null)
 }
 sg_brain_yield_left() {

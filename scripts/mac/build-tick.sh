@@ -162,13 +162,15 @@ say() {
   return 0
 }
 
-# A hand through lane-deliver (straight to mainline on the Mac), never only a file in the
-# build clone — that clone is reset next run. raise-hand.mjs keys a hand on the day
-# and its `blocked` text.
+# A hand through lane-deliver's protected mail PR, never only a file in the
+# build clone — that clone is reset next run. The parent keeps one immutable
+# attempt for each redacted cause, even across a UTC day change. A new notification
+# episode requires the original known parent completion and exact canonical hand clearance.
 raise_hand() {
   if [ "$DRY" = "1" ]; then say "dry-run: would raise a hand: $1"; return 0; fi
+  _hand_records="$(node "$REPO_ROOT/scripts/lib/lane-attempt-store.mjs" path "$REPO_ROOT")" || { say "RAISED HAND: shared delivery records unavailable; READBACK ONLY"; return 0; }
   _ops="$(mktemp "$CACHE/hand.XXXXXX")" || { say "WARN could not raise a hand (mktemp)"; return 0; }
-  if node -e 'const [f, blocked, where] = process.argv.slice(1);
+  if _hand_attempt="$(node -e 'const [f, blocked, where, cache, stamp, repo] = process.argv.slice(1);
       // Same public-diagnostic policy as run-requests.mjs; private shell logs stay verbatim.
       const home = (process.env.HOME ?? "").replace(/\/+$/, "");
       const redact = (value) => (home ? value.split(home).join("<HOME>") : value)
@@ -178,16 +180,92 @@ raise_hand() {
         .replace(/\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]+/g, "<REDACTED-JWT>")
         .replace(/\b(?:[A-Za-z0-9+/]{40,}={0,2})\b/g, "<REDACTED-BLOB>")
         .replace(/\b(\w*(?:secret|password|token|api[_-]?key|credential)\w*)\s*[:=]\s*\S+/gi, "$1=<REDACTED>");
-      const hand = { op: "raise", who: "mac lane", domain: "lane", where,
+      const hand = { op: "raise", who: "cloud lane", domain: "lane", where: "scripts/mac/build-tick.sh",
         doing: "the unattended build tick (scripts/mac/build-tick.sh)", blocked,
-        need: "a person on the Mac to read the log named in where, fix the cause or re-rank the row, and delete the claim branch it names when the row should be retried" };
+        need: "Cloud lane: inspect the current source, protected PR checks and findings, then route a scoped repair or protected landing through the existing lane review process. Preserve original attempts and claims until their exact source-backed disposition is established." };
       for (const key of ["doing", "blocked", "need", "where"]) hand[key] = redact(hand[key]);
-      require("fs").writeFileSync(f, JSON.stringify([hand]));' \
-      "$_ops" "$1" "${RUN_LOG:-launchd log ~/Library/Logs/signalgrid-build-tick.log}" \
-    && node "$REPO_ROOT/scripts/lane-deliver.mjs" batch "$_ops" >> "${RUN_LOG:-/dev/null}" 2>&1; then
-    say "raised a hand: $1"
+      const fs = require("fs"), path = require("path");
+      const digest = value => require("crypto").createHash("sha256").update(value).digest("hex");
+      const cause = digest(hand.blocked), visited = new Set();
+      const read = file => {
+        const fd = fs.openSync(file, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW);
+        try {
+          const st = fs.fstatSync(fd);
+          if (!st.isFile() || st.nlink !== 1) throw Error("owned regular attempt record required");
+          return fs.readFileSync(fd, "utf8");
+        } finally { fs.closeSync(fd); }
+      };
+      const queueRepair = original => {
+        const repair = require("child_process").spawnSync(process.execPath,
+          [path.join(repo, "scripts/lib/lane-repair.mjs"), "request", repo, "build", original],
+          { cwd: repo, encoding: "utf8" });
+        if (repair.error || repair.signal || repair.status !== 0) throw Error("original held; repair DATA request is unconfirmed");
+      };
+      const hasEvidence = original => fs.readdirSync(cache).some(name => name.startsWith(path.basename(original) + "."));
+      let episode = cause, attempt = path.join(cache, "hand-" + episode), retryOf = null;
+      while (hasEvidence(attempt)) {
+        try {
+          if (visited.has(attempt)) throw Error("repeated clearance binding");
+          visited.add(attempt);
+          // A refused original stays in place; its retry runs under the successor prefix it names.
+          const marker = path.join(cache, "refused", path.basename(attempt) + ".retried");
+          if (fs.existsSync(marker)) { attempt = path.join(cache, JSON.parse(read(marker)).successor); continue; }
+          let exit = null; try { exit = read(attempt + ".exit").trim(); } catch { /* unknown stays held below */ }
+          // Exit 1/2 is retried only when a readback proves nothing was published;
+          // a published or unreadable target falls through to the held path below.
+          if (exit === "1" || exit === "2") {
+            const moved = require("child_process").spawnSync(process.execPath, [path.join(repo, "scripts/lib/lane-attempt-store.mjs"),
+              "retry-refused", repo, cache, path.basename(attempt), exit, "derive"], { cwd: repo, encoding: "utf8" });
+            const retry = moved.status === 0 ? JSON.parse(moved.stdout) : null;
+            if (retry && retry.done) process.exit(4); // the hand id already exists on the Hub: done, not refused
+            // A prepublication retry reuses the hand id the refused attempt meant to raise.
+            let meant = null; try { meant = JSON.parse(read(attempt + ".attempt.json")).handId || null; } catch { /* legacy intent */ }
+            if (retry && retry.successor) { retryOf = { ...retry, stamp, handId: retry.reraise ? null : meant }; attempt = path.join(cache, retry.successor); continue; }
+          }
+          if (JSON.parse(read(attempt + ".attempt.json")).receipt !== attempt + ".submission.json" || read(attempt + ".exit").trim() !== "0") throw Error("original parent is not known complete");
+          read(attempt + ".output"); // missing original evidence never renews an attempt
+          const result = require("child_process").spawnSync(process.execPath, [path.join(repo, "scripts/lane-deliver.mjs"), "readback", attempt + ".submission.json", "--resolved-hand", JSON.parse(read(attempt + ".attempt.json")).handId || "build-" + episode], { cwd: repo, encoding: "utf8" });
+          const cleared = /^resolved hand ([a-f0-9]{40})$/m.exec(result.stdout ?? "");
+          if (result.error || result.signal || result.status !== 0 || !cleared) throw Error("original hand not canonically resolved");
+          episode = digest(cause + ":" + cleared[1]);
+          attempt = path.join(cache, "hand-" + episode);
+        } catch (error) {
+          // DATA only: this producer has no lane-tick FD8 publication authority.
+          queueRepair(attempt);
+          throw error;
+        }
+      }
+      // A resolved hand whose cause recurs is raised again under a new id.
+      hand.id = retryOf && retryOf.reraise ? "build-" + episode + "-again-" + retryOf.n : (retryOf && retryOf.handId) || "build-" + episode;
+      fs.writeFileSync(attempt + ".attempt.json", JSON.stringify({ at: stamp, state: "attempted; pending exact readback", receipt: attempt + ".submission.json", handId: hand.id, ...(retryOf ? { retryOf } : {}) }) + "\n", { flag: "wx", mode: 0o600, flush: true });
+      fs.writeFileSync(f, JSON.stringify([hand]));
+      process.stdout.write(attempt);' \
+      "$_ops" "$1" "${RUN_LOG:-launchd log ~/Library/Logs/signalgrid-build-tick.log}" "$_hand_records" "$STAMP" "$REPO_ROOT" 2>/dev/null)"; then
+    if (umask 077; set -C; node "$REPO_ROOT/scripts/lane-deliver.mjs" batch "$_ops" --receipt "${_hand_attempt}.submission.json" >"${_hand_attempt}.output" 2>&1); then _hand_exit=0; else _hand_exit=$?; fi
+    if [ -n "$RUN_LOG" ]; then cat "${_hand_attempt}.output" >> "$RUN_LOG"; fi
+    if node -e 'require("fs").writeFileSync(process.argv[1], process.argv[2]+"\n", {flag:"wx",mode:0o600,flush:true})' "${_hand_attempt}.exit" "$_hand_exit"; then
+      # Only a proven prepublication refusal (exit 1/2 with no receipt: lane-deliver writes
+      # it right before its push) skips repair DATA; it is retried by the next raise.
+      _hand_repair=1
+      case "$_hand_exit" in
+        0) _hand_repair=0 ;;
+        1|2) [ -e "${_hand_attempt}.submission.json" ] || [ -L "${_hand_attempt}.submission.json" ] || _hand_repair=0 ;;
+      esac
+      if [ "$_hand_repair" = "1" ]; then
+        node "$REPO_ROOT/scripts/lib/lane-repair.mjs" request "$REPO_ROOT" build "$_hand_attempt" >/dev/null 2>&1 || say "RAISED HAND: repair DATA request unavailable; original hand remains READBACK ONLY"
+      fi
+    else
+      say "RAISED HAND: terminal receipt unavailable; original hand remains READBACK ONLY"
+    fi
+    if [ "$_hand_exit" = "0" ]; then
+      say "hand submitted for protected PR merge, canonical landing pending: $1"
+    else
+      say "WARN hand submission unconfirmed (exit $_hand_exit); READBACK ONLY: ${_hand_attempt}.submission.json"
+    fi
+  elif [ "$?" = "4" ]; then
+    say "hand already on the Hub (existing id); done, nothing to retry: $1"
   else
-    say "WARN could not deliver a hand (already raised today, or lane-deliver refused): $1"
+    say "RAISED HAND: original hand already attempted or its intent unavailable; READBACK ONLY: $1"
     printf '%s  %s\n' "$STAMP" "$1" >> "$CACHE/undelivered-hands.log"
   fi
   rm -f "$_ops"
@@ -499,7 +577,7 @@ fi
 # Import the canonical readVerdict contract from pinned objects, never from a topic checkout.
 _contract_dir="$(mktemp -d "$CACHE/objective-contract.XXXXXX")" || fail "could not prepare the pinned objective reader"
 mkdir -p "$_contract_dir/scripts/lib" || fail "could not prepare the pinned objective reader's imports"
-for _contract_file in scripts/objective-loop.mjs scripts/check-backlog-ownership.mjs scripts/lib/sim-operations.mjs scripts/lib/raised-hand-kinds.mjs scripts/lib/is-main.mjs; do
+for _contract_file in scripts/objective-loop.mjs scripts/check-backlog-ownership.mjs scripts/lib/lane-attempt-store.mjs scripts/lib/sim-operations.mjs scripts/lib/raised-hand-kinds.mjs scripts/lib/is-main.mjs; do
   if ! git -C "$REPO_ROOT" show "$MAINLINE_SHA:$_contract_file" > "$_contract_dir/$_contract_file" 2>/dev/null; then
     rm -rf "$_contract_dir"
     fail "pinned mainline $MAINLINE_SHA has no readable objective contract ($_contract_file)"

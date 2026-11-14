@@ -87,7 +87,11 @@ WORKDIR /app
 # the gate working. This cannot be built in the cloud lane (no docker daemon);
 # it is verified by dispatching scheduled-verification.yml on the branch and
 # watching the vuln-gate job, exactly as the tar removal was.
-RUN apk upgrade --no-cache libssl3 libcrypto3
+#
+# zlib, 2026-11-13: the same gate went red on CVE-2026-4738 (Critical), zlib
+# installed 1.3.2-r1, fixed in 1.4-r0 (scheduled run 43452745744). Added to the
+# same targeted upgrade for the same reason.
+RUN apk upgrade --no-cache libssl3 libcrypto3 zlib
 
 RUN corepack enable pnpm && for attempt in 1 2 3 4; do corepack install -g pnpm@10.28.1 && exit 0; echo "corepack: pnpm@10.28.1 fetch attempt $attempt/4 failed, retrying" >&2; sleep $((attempt * 5)); done; echo "FATAL: corepack could not fetch pnpm@10.28.1 after 4 attempts" >&2; exit 1
 

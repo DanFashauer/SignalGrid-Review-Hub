@@ -668,7 +668,7 @@ block; a stage run on the wrong tier is a lesson here.
 - **lane:** cloud
 - **incident:** The retained lane-delivery gate failed 165/168. An earlier broad reading of Cloud's neighboring lane-readback claim delayed investigation of different files; the actual claim names only its three readback files and explicitly excludes everything else.
 - **evidence:** An unchanged-source run on f51b72438 again failed 165/168. Its fetch and ls-remote helpers were independently observed transitioning S to Z with PPID 1 while fixture assertions still required PID disappearance. Production recovery also counted a zombie as a live process-group member. Expanded regressions first failed 181/186; two additional empty-table cases then failed 186/188 before the unreadable-table guard was tightened.
-- **landing:** pending — `scripts/check-lane-delivery.mjs` distinguishes measured dead helpers from live or unreadable observations; `scripts/lib/lane-attempt-store.mjs` excludes only validated zombie group members and refuses empty/malformed process tables. Original-shell, token/worktree, ancestry, custody and uncertain-receipt behavior remain intact. Independent 38/38 process and 15/15 receipt controls pass; full qualification and protected delivery remain separate.
+- **landing:** pending — `scripts/check-lane-delivery.mjs` distinguishes measured dead helpers from live or unreadable observations; `scripts/lib/lane-attempt-store.mjs` excludes only validated zombie group members and refuses empty/malformed process tables. Original-shell, token/worktree, ancestry, record ownership and uncertain-receipt behavior remain intact. Independent 38/38 process and 15/15 receipt controls pass; full qualification and protected delivery remain separate.
 - **status:** pending
 
 ### L76 — Refresh startup knowledge from the actual artifact and owner direction
@@ -677,4 +677,12 @@ block; a stage run on the wrong tier is a lesson here.
 - **incident:** LOOP's startup paragraph still named Ollama primary after the owner directed Bonsai-first delivery, and its CURRENT EVIDENCE label still led with October 21 despite the tracked Mac artifact having a November 11 mint. A brain reading that summary could route against obsolete intent or confuse old prose with missing evidence.
 - **evidence:** `artifacts/live-evidence/mac-run.json` records the November 11 mint and manifest v101 fingerprint e892a94f; the inspected canonical manifest matches it. This branch's newer manifest f0b1c0a8 differs, so the record does not qualify the branch. Root's actual Bonsai default qualification remains ongoing; its service report is not a route-switch receipt.
 - **landing:** pending — `docs/agent/LOOP.md` now states the owner's requested route, points at the actual current artifact with its attestation limits, and retains the October record as history. No artifact, attestation, readiness field or physical-device claim is changed.
+- **status:** pending
+
+### L77 — Describe operator record ownership with publication-specific terms
+- **date:** 2026-11-14
+- **lane:** cloud
+- **incident:** Full qualification on 7bf167faf stopped at the launch-claims ratchet because the new internal repair journal used a noun reserved for a deferred product capability. The gate measured 408 mentions against its unchanged ceiling of 407.
+- **evidence:** The original failed full log is preserved. The extra occurrence was in L75's operator-record description, rather than a newly shipped product capability.
+- **landing:** pending — `docs/agent/LESSONS.md` and `docs/agent/LOOP.md` use record-ownership and delivery-specific language. The gate and its ceiling remain unchanged; the same claims check must pass before another full qualification run.
 - **status:** pending

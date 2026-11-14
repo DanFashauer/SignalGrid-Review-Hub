@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-11-14T18:11:13.010Z",
-  "result": "18:11Z fire: #2092 (task routing) round 4 in local preflight after Codex/Root reviews (stages, supported lanes, upward tiers, review on the judgment tier); reviewed Root's #2096 (no blocking findings) and landing it under DR-037 on Root's written ask once its Mac slices finish. Credit-saving rule: no workers, H/S/O 0/0/0. sub-brains: none. owner queue: none from this lane."
+  "firedAt": "2026-11-14T20:11:33.376Z",
+  "result": "20:11Z fire: landed #2096 (Root's publication scheduling fix) under DR-037 at 18:16Z as 22536b4d; #2092 (task routing) round 5 in local preflight after a Codex P1 (decision-record and launch-surface work now owner-gated). Credit-saving rule: no workers, H/S/O 0/0/0. sub-brains: none. owner queue: #2092 needs the owner's word to resolve its addressed Codex threads."
 }

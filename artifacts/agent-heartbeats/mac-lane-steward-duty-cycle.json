@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-11-14T01:08:57.495Z",
-  "result": "acted: 2026-11-14T01:1xZ — owner load-balance directive relayed on #439 (6868999957); #2054 waits on this hand landing, then re-run and land."
+  "firedAt": "2026-11-14T06:28:16.639Z",
+  "result": "keepalive 06:30Z (held ~5 min past 3h so #2054 could land without another re-qualification): quiet; Mac tick last fired 2026-11-14T04:17:53.821Z; tick #2057 merged 864cdf51; live-evidence refresh request queued by the Mac's own loop; owner not escalated."
 }

@@ -12,7 +12,7 @@
       "scope": "machine",
       "state": "unmet",
       "measured": {
-        "headline": 3,
+        "headline": 0,
         "floor": 80
       },
       "source": "scripts/check-readiness-figure.mjs --json (headline, floor)"
@@ -22,8 +22,8 @@
       "scope": "machine",
       "state": "unmet",
       "measured": {
-        "pct": 3,
-        "reason": "12/20 bound proofs/steps current against manifest e892a94fd5c4; not current (stale fingerprint, stale/absent source digest, or unrecorded): proof:evidence-adapter, proof:isolation-scope, proof:launch-seam, proof:observability, proof:signalgrid-core, proof:webauthn-verify, step:API integration test (boots the server), step:Browser E2E (review console, website, admin); launch items fully current 1/28"
+        "pct": 0,
+        "reason": "0/20 bound proofs/steps current — evidence covers manifest e892a94fd5c4, tree is 66e2c11f2042; refresh on the Mac; launch items fully current 0/28"
       },
       "source": "scripts/check-readiness-figure.mjs --json (.details.evidence)"
     },
@@ -419,6 +419,12 @@
       "since": "2026-11-05T02:42:19.307Z"
     },
     {
+      "id": "stalled-top-task",
+      "clears": "cloud",
+      "asks": "row 124 (\"`ladderRungs` is published as a derived figure by twelve proofs, is a literal in all twelve, and they disagree.\") has been ranked #1 for over 7 days with no change in docs/COMPANY_BUILD_PLAN.md — build it, re-rank it, or record why it waits",
+      "since": "2026-11-14T02:05:45.428Z"
+    },
+    {
       "id": "readiness-floor-no-clearing-op",
       "clears": "mac",
       "asks": "readiness fell below the DR-036 floor — read the dimension that fell and re-mint or repair it",
@@ -436,15 +442,13 @@
       "criterionId": "evidence-fresh",
       "op": "evidence",
       "clears": "artifacts/live-evidence/mac-run.json",
-      "id": "objective-loop-evidence-fresh-2026-11-08",
-      "queuedAs": "working tree (objective-loop-evidence-fresh-2026-11-07.json)"
+      "id": "objective-loop-evidence-fresh-2026-11-14",
+      "queuedAs": "this tick"
     }
   ],
   "probeErrors": [],
   "report": {
-    "pendingSimRequests": [
-      "objective-loop-evidence-fresh-2026-11-07"
-    ],
+    "pendingSimRequests": [],
     "badRequestFiles": [],
     "needsExecutorCount": 0,
     "unmeasuredCount": 54,
@@ -453,8 +457,8 @@
     "partialRows": 5
   },
   "staleAfterHours": 3,
-  "derivedAt": "2026-11-08T00:57:06.784Z",
-  "derivedAtCommit": "de1dfaf338de2ff94a301b911c5c62c57163e378",
+  "derivedAt": "2026-11-14T02:05:45.428Z",
+  "derivedAtCommit": "3b533f0c9b71759dc24430294dc67f55ba3e4251",
   "workingTreeCleanAtEntry": true,
-  "decisionAddress": "1d03f502e6814a3d6840768365b32d847dfc60619c9cdb8ffa5cabc1e23fcba1"
+  "decisionAddress": "3d8e2756289bfc027519351063392610ae4a06a08e203bd2e3d62fb5eb12b4b6"
 }

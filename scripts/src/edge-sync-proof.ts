@@ -13,7 +13,7 @@
 // Run: pnpm --filter @workspace/scripts run proof:edge-sync
 
 import { createHmac } from "crypto";
-import { ControlPlane, bundleChecksum, verifyBundleChecksum, verifyBundleSignature, type PolicyBundle } from "@workspace/control-plane";
+import { ControlPlane, bundleChecksum, canonicalBundle, verifyBundleChecksum, verifyBundleSignature, type PolicyBundle } from "@workspace/control-plane";
 
 let passed = 0;
 const failures: string[] = [];
@@ -62,7 +62,7 @@ function main() {
     const evilTenant = "tenant_unprovisioned_attacker";
     const evilVersion = 1;
     const evilWorkflows = ["exfiltrate"];
-    const evilCanonical = `${evilTenant}:${evilVersion}:${evilWorkflows.join(",")}`;
+    const evilCanonical = canonicalBundle(evilTenant, evilVersion, evilWorkflows);
     const evilBundle: PolicyBundle = {
       tenantId: evilTenant,
       version: evilVersion,

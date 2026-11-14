@@ -751,6 +751,7 @@ defer_host_verification() {
   say "$RESULT"
   heartbeat
 }
+SIM_HOST_DEFERRED=0
 if [ "$DRY" = "0" ]; then
   _verify_cache="$HOME/Library/Caches/signalgrid"
   mkdir -p "$_verify_cache" || { SG_VERIFY_LOCK_REASON="host verification cache unavailable"; defer_host_verification; exit 1; }
@@ -767,10 +768,15 @@ if [ "$DRY" = "0" ]; then
   . "$_verify_helper" || { rm -f "$_verify_helper"; SG_VERIFY_LOCK_REASON="mainline host verification helper could not load"; defer_host_verification; exit 1; }
   rm -f "$_verify_helper"
   if ! sg_host_verify_acquire "$HOME/Library/Caches/signalgrid/host-verification.lock"; then
-    defer_host_verification
-    exit 0
+    RESULT="deferred: $SG_VERIFY_LOCK_REASON; sim requests and objective evaluation not run"
+    say "$RESULT"
+    SIM_HOST_DEFERRED=1
   fi
 fi
+# A busy sim/objective lane skips only work covered by that reservation. Step d3
+# still inspects review jobs and uses its own bounded ordinary host admission.
+# No install, sim, objective or estate operation below runs without admission.
+if [ "$SIM_HOST_DEFERRED" = "0" ]; then
 LOCK_SHA="$(shasum -a 256 pnpm-lock.yaml 2>/dev/null | cut -d' ' -f1)"
 INSTALL_STAMP="node_modules/.sg-installed-lock-sha"
 if [ -z "$LOCK_SHA" ] || [ ! -f "$INSTALL_STAMP" ] || [ "$(cat "$INSTALL_STAMP" 2>/dev/null)" != "$LOCK_SHA" ]; then
@@ -928,6 +934,7 @@ fi
 # not fire; scripts/check-sim-scripts-selfcheck.mjs rule (i) keeps it from returning.
 
 RESULT="$RESULT; objective: $LOOP_VERDICT"
+fi # sim/objective host admitted (or dry run)
 
 # ── d2. the estate queue, at most hourly ─────────────────────────────────────
 # The owner gave the Mac brain the estate (2026-10-23; #1546, 2026-10-29). The queue
@@ -938,7 +945,7 @@ RESULT="$RESULT; objective: $LOOP_VERDICT"
 # in the shared private store, like the heartbeat's.
 ESTATE_STAMP="$RECORD_DIR/.sg-estate-last"
 ESTATE_MAX="${SIGNALGRID_ESTATE_MAX:-3}"
-if [ -f scripts/mac/estate-queue.mjs ] && command -v gh >/dev/null 2>&1; then
+if [ "${SIM_HOST_DEFERRED:-0}" = "0" ] && [ -f scripts/mac/estate-queue.mjs ] && command -v gh >/dev/null 2>&1; then
   if [ -z "$(find "$ESTATE_STAMP" -mmin -60 2>/dev/null)" ]; then
     if [ "$DRY" = "1" ]; then
       _est="$(node scripts/mac/estate-queue.mjs plan 2>&1 | tail -1)"
@@ -953,7 +960,7 @@ if [ -f scripts/mac/estate-queue.mjs ] && command -v gh >/dev/null 2>&1; then
     fi
   fi
 else
-  say "estate queue not run: scripts/mac/estate-queue.mjs or gh missing"
+  say "estate queue not run: host deferred, scripts/mac/estate-queue.mjs missing, or gh missing"
 fi
 
 # ── d3. publish local-brain builds that reached review ───────────────────────

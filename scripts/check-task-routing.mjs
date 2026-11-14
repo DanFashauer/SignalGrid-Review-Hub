@@ -20,7 +20,9 @@
 //  10. tiers rank upward (judgment = opus at max), so fail-UP is a capability, not a label;
 //  11. each pass carries its stage (Bonsai first implementation, local review, real checks,
 //      cloud final); a missing local LLM build is a missing pass 1, never a complete route;
-//  12. decision-core stays routed and ownerGated whatever its skills say.
+//  12. decision-core stays routed and ownerGated whatever its skills say;
+//  13. pass 2 review runs on the review tier (judgment, DR-060 rule 1) whatever the task
+//      tier, and waits rather than downgrades when that tier is unavailable.
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -58,6 +60,7 @@ export function problems(table, { roles, skillExists, handRoutes }) {
   }
   if (table.tiers?.judgment?.model !== "opus" || table.tiers?.judgment?.effort !== "max") out.push("the judgment tier must be the top family (opus) at max effort, or fail-UP is not up");
   if (table.unavailableTierResolvesTo !== "judgment") out.push("an unavailable tier must resolve UP to judgment (DR-047 rule 3)");
+  if (table.reviewTier !== "judgment") out.push("the review tier must be judgment (DR-060 rule 1: review runs on Opus whatever the task tier)");
   const vlanes = table.lanes?.["local-validate"]?.lanes;
   if (!Array.isArray(vlanes) || vlanes.length !== LOCAL_SESSION_LANES.length || !LOCAL_SESSION_LANES.every((l) => vlanes.includes(l))) out.push(`local-validate.lanes must be exactly the local session lanes (${LOCAL_SESSION_LANES.join(", ")})`);
   for (const gated of OWNER_GATED_KINDS) {
@@ -90,6 +93,8 @@ export function problems(table, { roles, skillExists, handRoutes }) {
       const v = r.passes?.[2]?.lane;
       if (r.refused || !LOCAL_SESSION_LANES.includes(v) || v === lane) out.push(`${kind}: no supported validation lane distinct from the pass-2 lane ${lane}`);
       if (r.passes?.[0]?.effort !== "max") out.push(`${kind}: pass 1 is not at max effort`);
+      const rv = r.passes?.[1];
+      if (rv && (rv.tier !== table.reviewTier || rv.effort !== table.tiers?.[table.reviewTier]?.effort || (lane === "local-claude" && rv.model !== table.tiers?.[table.reviewTier]?.model))) out.push(`${kind}: pass 2 review does not run on the review tier`);
       for (const [n, want, does] of STAGES) {
         const p = r.passes?.[n - 1];
         if (!p || p.pass !== n || (want && p.lane !== want) || !does.test(p.does ?? "")) out.push(`${kind}: pass ${n} does not carry its stage (${does})`);
@@ -103,6 +108,8 @@ export function problems(table, { roles, skillExists, handRoutes }) {
     if (noBonsai.complete !== false || noBonsai.passes?.[0]?.missing !== true) out.push(`${kind}: a missing local LLM build is not reported as a missing pass 1`);
     const up = resolveRoute(table, kind, { unavailableTiers: Object.keys(table.tiers ?? {}).filter((t) => t !== "judgment") });
     if (!up.gap && up.tier !== "judgment") out.push(`${kind}: an unavailable tier did not resolve up to judgment`);
+    const noReview = resolveRoute(table, kind, { unavailableTiers: [table.reviewTier] });
+    if (noReview.pending !== true || noReview.passes) out.push(`${kind}: with the review tier unavailable the route must be pending, not reviewed on a lower tier`);
     const none = resolveRoute(table, kind, { unavailableTiers: Object.keys(table.tiers ?? {}) });
     if (none.pending !== true || none.passes) out.push(`${kind}: with every tier unavailable the route must be pending, not scheduled`);
   }
@@ -141,6 +148,8 @@ function selfTest() {
     ["build ranked above judgment", (t) => { t.tiers.build = { model: "opus", effort: "max" }; t.tiers.judgment = { model: "sonnet", effort: "high" }; }],
     ["decision-core with its skill and ownerGated both removed", (t) => { t.kinds["decision-core"].skills = []; delete t.kinds["decision-core"].ownerGated; }],
     ["decision-core removed from the table", (t) => { delete t.kinds["decision-core"]; }],
+    ["review tier set to the build tier", (t) => { t.reviewTier = "build"; }],
+    ["review tier missing", (t) => { delete t.reviewTier; }],
   ];
   let passed = 0, failed = 0;
   const clean = problems(base, ctx);
@@ -156,6 +165,9 @@ function selfTest() {
   let laneOk = true;
   for (const bad of ["cloud-final", "cloud-claude", "", "local-claud", null, 42]) { const x = resolveRoute(base, "gate-or-proof", { reviewLane: bad }); if (!x.refused || x.passes) laneOk = false; }
   if (laneOk) { passed++; console.log("PASS an unsupported pass-2 lane (cloud-final, cloud-claude, empty, misspelled, null, number) is refused with no passes"); } else { failed++; console.error("FAIL an unsupported pass-2 lane produced a route"); }
+  const dr = resolveRoute(base, "docs-restamp");
+  const dr2 = resolveRoute(base, "docs-restamp", { reviewLane: "local-codex" });
+  if (dr.passes?.[1]?.model === "opus" && dr.passes[1].effort === "max" && dr2.passes?.[1]?.effort === "max" && dr2.passes[2].model === "haiku" && dr2.passes[2].effort === "low") { passed++; console.log("PASS a mechanical kind is still reviewed on opus at max; its checks keep the task tier"); } else { failed++; console.error("FAIL a mechanical kind's review inherited the task tier: " + JSON.stringify(dr.passes)); }
   const nb = resolveRoute(base, "gate-or-proof", { localLlmAvailable: false });
   if (nb.complete === false && nb.passes[0].missing === true) { passed++; console.log("PASS a missing local LLM build is a missing pass 1 and the route is not complete"); } else { failed++; console.error("FAIL a missing Bonsai build was folded into a complete route"); }
   const waits = resolveRoute(base, "architecture", { unavailableTiers: ["judgment"] });

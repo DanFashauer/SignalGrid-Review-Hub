@@ -45,6 +45,13 @@ export function resolveRoute(table, kind, { reviewLane = "local-claude", unavail
   if (!tier || unavailableTiers.includes(tierName)) {
     return { kind, gap: false, pending: true, refused: false, tier: tierName, why: `tier ${tierName} is unavailable; the work waits for its reset (DR-047 rule 4)` };
   }
+  // Pass 2 is review, and review runs on its own tier whatever the task's tier (DR-060
+  // rule 1: review on Opus); cheaper implementation work never downgrades its review.
+  const reviewTierName = table.reviewTier ?? up;
+  const reviewTier = Object.hasOwn(table.tiers ?? {}, reviewTierName) ? table.tiers[reviewTierName] : null;
+  if (!reviewTier || unavailableTiers.includes(reviewTierName)) {
+    return { kind, gap: false, pending: true, refused: false, tier: tierName, why: `review tier ${reviewTierName} is unavailable; the review waits for its reset (DR-047 rule 4, DR-060 rule 1)` };
+  }
   const refuse = (why) => ({ kind, gap: false, pending: false, refused: true, tier: tierName, why });
   if (typeof reviewLane !== "string" || !LOCAL_SESSION_LANES.includes(reviewLane)) {
     return refuse(`pass 2 must run on a local session lane (${LOCAL_SESSION_LANES.join(", ")}), got ${JSON.stringify(reviewLane)}`);
@@ -55,7 +62,7 @@ export function resolveRoute(table, kind, { reviewLane = "local-claude", unavail
     return refuse(`no supported validation lane other than ${reviewLane}`);
   }
   // A tier names a Claude family (DR-047); a Codex lane picks its own model and takes only the effort.
-  const modelFor = (lane) => (lane === "local-claude" ? tier.model : null);
+  const modelFor = (lane, t) => (lane === "local-claude" ? t.model : null);
   const bonsai = localLlmAvailable === true;
   return {
     kind,
@@ -73,8 +80,8 @@ export function resolveRoute(table, kind, { reviewLane = "local-claude", unavail
       bonsai
         ? { pass: 1, lane: "local-llm", effort: "max", does: "intake, scoped plan and first implementation" }
         : { pass: 1, lane: "local-llm", missing: true, does: "MISSING: no local LLM build available; the route is not complete" },
-      { pass: 2, lane: reviewLane, model: modelFor(reviewLane), effort: tier.effort, does: "review the first artifact and record findings" },
-      { pass: 3, lane: validateLane, model: modelFor(validateLane), effort: tier.effort, does: "run the real checks and consume pass 2 findings", validators: [...(entry.validators ?? [])] },
+      { pass: 2, lane: reviewLane, tier: reviewTierName, model: modelFor(reviewLane, reviewTier), effort: reviewTier.effort, does: "review the first artifact and record findings" },
+      { pass: 3, lane: validateLane, tier: tierName, model: modelFor(validateLane, tier), effort: tier.effort, does: "run the real checks and consume pass 2 findings", validators: [...(entry.validators ?? [])] },
       { pass: 4, lane: "cloud-final", does: entry.ownerGated === true ? "final review of the final head; owner merges" : "final review of the final head; DR-037 landing" },
     ],
   };

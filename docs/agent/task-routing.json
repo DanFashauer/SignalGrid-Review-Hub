@@ -7,6 +7,7 @@
     "judgment": { "model": "opus", "effort": "max" }
   },
   "unavailableTierResolvesTo": "judgment",
+  "reviewTier": "judgment",
   "lanes": {
     "local-llm": { "pass": 1, "role": "intake, scoped plan and first implementation (Bonsai)", "effort": "max" },
     "local-claude": { "pass": 2, "role": "review the first artifact and record findings" },

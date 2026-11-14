@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-11-14T18:11:13.010Z",
-  "result": "keepalive 18:11Z: Mac tick last fired 16:56Z; tick PR #2088 merged; no mail to cloud; live evidence mac-run.json last 2026-11-10 (refresh blocked on the Mac node_modules reinstall mailed in #2081). Owner not escalated."
+  "firedAt": "2026-11-14T20:11:33.376Z",
+  "result": "keepalive 20:11Z: Mac tick last fired 18:23Z; tick PR #2098 auto-merge armed; no mail to cloud; live evidence mac-run.json last 2026-11-10 (Mac evidence runs still fail typecheck on stale canonical node_modules; Root fixed it only in an isolated workspace). Owner not escalated."
 }

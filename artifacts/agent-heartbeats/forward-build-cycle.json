@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-11-14T08:11:28.815Z",
-  "result": "quiet 08:11Z: nothing landed this fire. #2044 waits on one outdated review thread (resolve refused for this session); #2061 validated (56ddd30f) but push refused by this session's classifier again (relayed grants not accepted). Credit-saving rule: no workers, H/S/O 0/0/0. sub-brains: none spawned."
+  "firedAt": "2026-11-14T10:47:48.411Z",
+  "result": "acted 10:4xZ: landed #2072 (#2061 negative-latency fix) 3a9ae828 and #2044 2365bd81, each exact-head with local preflight 0 (434) / breadth 0 quoted. Credit-saving rule: no workers, H/S/O 0/0/0. sub-brains: none. owner queue: none from this lane."
 }

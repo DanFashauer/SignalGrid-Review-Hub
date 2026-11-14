@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-11-14T08:11:28.815Z",
-  "result": "keepalive 08:1xZ: quiet; Mac evidence run 2026-11-14 failed at typecheck (TS2345, likely stale Mac node_modules, reported on #439); vphone guest-admission intake tracked as #2070 for Root/Mac; owner not escalated."
+  "firedAt": "2026-11-14T10:47:48.411Z",
+  "result": "acted 10:4xZ: landed Mac PR #2044 (GitHub agent profiles) at exact head 7d61cd93 -> 2365bd81 on the Mac's written ask, after owner-approved thread resolve; Mac ticks landing normally (#2075, #2076); no new mac/* branches; owner not escalated."
 }

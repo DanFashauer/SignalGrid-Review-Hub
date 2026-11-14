@@ -20,7 +20,8 @@
 //  10. tiers rank upward (judgment = opus at max), so fail-UP is a capability, not a label;
 //  11. each pass carries its stage (Bonsai first implementation, local review, real checks,
 //      cloud final); a missing local LLM build is a missing pass 1, never a complete route;
-//  12. decision-core stays routed and ownerGated whatever its skills say;
+//  12. decision-core, decision-record and launch-surface stay routed and ownerGated whatever their
+//      skills say, and any kind using the decision-record skill is ownerGated;
 //  13. pass 2 review runs on the review tier (judgment, DR-060 rule 1) whatever the task
 //      tier, and waits rather than downgrades when that tier is unavailable.
 import { existsSync, readFileSync } from "node:fs";
@@ -32,9 +33,11 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const read = (rel) => JSON.parse(readFileSync(join(ROOT, rel), "utf8"));
 const FAMILIES = new Set(["haiku", "sonnet", "opus"]);
 const EFFORTS = new Set(["low", "medium", "high", "xhigh", "max"]);
-const DECISION_SKILLS = new Set(["signalgrid-core"]);
+// Skills whose work lands only on the owner's word: the decision core, and decision
+// records (DR-061 rule 2 keeps docs/DECISION_RECORDS.md the owner's to merge).
+const DECISION_SKILLS = new Set(["signalgrid-core", "documentation-and-adrs", "shipping-and-launch"]);
 // Kinds that are owner-gated by name, whatever their optional skill metadata says.
-const OWNER_GATED_KINDS = ["decision-core"];
+const OWNER_GATED_KINDS = ["decision-core", "decision-record", "launch-surface"];
 const FAMILY_RANK = { haiku: 0, sonnet: 1, opus: 2 };
 const EFFORT_RANK = { low: 0, medium: 1, high: 2, xhigh: 3, max: 4 };
 const TIER_ORDER = ["mechanical", "build", "judgment"];
@@ -79,7 +82,7 @@ export function problems(table, { roles, skillExists, handRoutes }) {
     if ((k.tier === "build" || k.tier === "judgment") && !validators.length) {
       if (kind !== "prioritization") out.push(`${kind}: a ${k.tier} kind needs a validator other than its own role`);
     }
-    if ((k.skills ?? []).some((s) => DECISION_SKILLS.has(s)) && k.ownerGated !== true) out.push(`${kind}: touches the decision core and must be ownerGated`);
+    if ((k.skills ?? []).some((s) => DECISION_SKILLS.has(s)) && k.ownerGated !== true) out.push(`${kind}: touches the decision core or decision records and must be ownerGated`);
     if (typeof k.when !== "string" || !k.when.trim()) out.push(`${kind}: says nothing about when it applies`);
   }
   const route = table.fallback?.route;
@@ -148,6 +151,10 @@ function selfTest() {
     ["build ranked above judgment", (t) => { t.tiers.build = { model: "opus", effort: "max" }; t.tiers.judgment = { model: "sonnet", effort: "high" }; }],
     ["decision-core with its skill and ownerGated both removed", (t) => { t.kinds["decision-core"].skills = []; delete t.kinds["decision-core"].ownerGated; }],
     ["decision-core removed from the table", (t) => { delete t.kinds["decision-core"]; }],
+    ["decision-record not owner-gated", (t) => { delete t.kinds["decision-record"].ownerGated; }],
+    ["decision-record removed from the table", (t) => { delete t.kinds["decision-record"]; }],
+    ["launch-surface not owner-gated", (t) => { delete t.kinds["launch-surface"].ownerGated; }],
+    ["a non-gated kind given the decision-record skill", (t) => { t.kinds.architecture.skills = ["documentation-and-adrs"]; }],
     ["review tier set to the build tier", (t) => { t.reviewTier = "build"; }],
     ["review tier missing", (t) => { delete t.reviewTier; }],
   ];

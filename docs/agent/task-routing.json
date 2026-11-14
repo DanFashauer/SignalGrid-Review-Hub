@@ -45,8 +45,13 @@
       "when": "Anything handling input, auth, secrets, credentials or a trust boundary."
     },
     "architecture": {
+      "tier": "judgment", "role": "principal-engineer", "skills": ["codebase-design"], "validators": ["security-engineer", "qa-engineer"],
+      "when": "Design and module boundaries. Never edits docs/DECISION_RECORDS.md: that is the decision-record kind."
+    },
+    "decision-record": {
       "tier": "judgment", "role": "principal-engineer", "skills": ["documentation-and-adrs"], "validators": ["security-engineer", "qa-engineer"],
-      "when": "Design, module boundaries or a reversible technical decision record."
+      "ownerGated": true,
+      "when": "Adds or edits a record in docs/DECISION_RECORDS.md, reversible or not; DR-061 rule 2 keeps that file the owner's to merge."
     },
     "agent-or-skill": {
       "tier": "judgment", "role": "agent-platform-engineer", "skills": ["writing-skills"], "validators": ["devex-tooling-engineer"],
@@ -56,6 +61,11 @@
       "tier": "judgment", "role": "principal-engineer", "skills": ["signalgrid-core"], "validators": ["security-engineer", "qa-engineer"],
       "ownerGated": true,
       "when": "lib/* decision core, /v1 contracts or anything that changes what SignalGrid decides; never auto-merged."
+    },
+    "launch-surface": {
+      "tier": "judgment", "role": "release-engineer", "skills": ["shipping-and-launch"], "validators": ["security-engineer", "qa-engineer"],
+      "ownerGated": true,
+      "when": "The launch profile, the launch-claims gate, the publication boundary or an OWNER_RESERVED surface; the owner merges these whatever their size."
     },
     "prioritization": {
       "tier": "judgment", "role": "product-manager", "skills": ["planning-and-task-breakdown"], "validators": [],

@@ -23,7 +23,7 @@
       "state": "unmet",
       "measured": {
         "pct": 3,
-        "reason": "12/20 bound proofs/steps current against manifest e892a94fd5c4; not current (stale fingerprint, stale/absent source digest, or unrecorded): proof:evidence-adapter, proof:isolation-scope, proof:launch-seam, proof:observability, proof:signalgrid-core, proof:webauthn-verify, step:API integration test (boots the server), step:Browser E2E (review console, website, admin); launch items fully current 1/28"
+        "reason": "10/20 bound proofs/steps current against manifest e892a94fd5c4; not current (stale fingerprint, stale/absent source digest, or unrecorded): proof:device-management-health, proof:evidence-adapter, proof:isolation-scope, proof:launch-seam, proof:observability, proof:posture-composition, proof:signalgrid-core, proof:webauthn-verify, step:API integration test (boots the server), step:Browser E2E (review console, website, admin); launch items fully current 1/28"
       },
       "source": "scripts/check-readiness-figure.mjs --json (.details.evidence)"
     },
@@ -436,7 +436,7 @@
       "criterionId": "evidence-fresh",
       "op": "evidence",
       "clears": "artifacts/live-evidence/mac-run.json",
-      "id": "objective-loop-evidence-fresh-2026-11-08",
+      "id": "objective-loop-evidence-fresh-2026-11-11",
       "queuedAs": "working tree (objective-loop-evidence-fresh-2026-11-07.json)"
     }
   ],
@@ -453,8 +453,8 @@
     "partialRows": 5
   },
   "staleAfterHours": 3,
-  "derivedAt": "2026-11-08T00:57:06.784Z",
-  "derivedAtCommit": "de1dfaf338de2ff94a301b911c5c62c57163e378",
+  "derivedAt": "2026-11-11T00:01:25.206Z",
+  "derivedAtCommit": "ea17c113d24dec8fdd40a8df995830dc464b3b69",
   "workingTreeCleanAtEntry": true,
-  "decisionAddress": "1d03f502e6814a3d6840768365b32d847dfc60619c9cdb8ffa5cabc1e23fcba1"
+  "decisionAddress": "4a5c8b3393a26b8f409db07673da40c683f0e9999fc9730195bfd045f049d720"
 }

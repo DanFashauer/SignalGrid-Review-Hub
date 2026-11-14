@@ -7,9 +7,12 @@
   "need": "The Mac lane runs it (pnpm run sim:run-requests --id objective-loop-evidence-fresh-2026-11-07) and commits the result, or states why it cannot run. Raised by the cloud lane so the stall is owned, not to take the Mac's action.",
   "whoCanUnblock": "mac lane",
   "domain": "",
-  "status": "open",
+  "status": "resolved",
   "routedTo": null,
   "covers": [
     "sim:objective-loop-evidence-fresh-2026-11-07"
-  ]
+  ],
+  "resolvedAt": "2026-11-14T14:50:24.590Z",
+  "resolvedBy": "cloud",
+  "resolution": "The Mac lane ran objective-loop-evidence-fresh-2026-11-07 and committed its result (artifacts/sim-results/objective-loop-evidence-fresh-2026-11-07.json, commit 5b23bc86, 2026-11-13); raised-hands now reports the stall as no longer stuck. Later evidence runs (-14, -14-2, -14-3) fail on a stale Mac node_modules; that cause and fix were mailed in #2081."
 }

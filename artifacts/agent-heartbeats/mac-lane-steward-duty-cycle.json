@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-11-14T10:47:48.411Z",
-  "result": "acted 10:4xZ: landed Mac PR #2044 (GitHub agent profiles) at exact head 7d61cd93 -> 2365bd81 on the Mac's written ask, after owner-approved thread resolve; Mac ticks landing normally (#2075, #2076); no new mac/* branches; owner not escalated."
+  "firedAt": "2026-11-14T14:06:19.107Z",
+  "result": "acted 13:24Z cycle: merged Mac tick results #2082 (evidence-fresh-2026-11-14-3 failed at the same zod/resolvers typecheck; it ran before the #2081 fix mail landed). Tick last firedAt 2026-11-14T11:10:47Z (deferred: host lock held). Live evidence mac-run.json last 2026-11-10 (over 3 days; refresh already requested by the Mac's own loop and blocked on the node_modules reinstall mailed in #2081). Owner not escalated."
 }

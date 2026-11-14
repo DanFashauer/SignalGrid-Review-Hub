@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-11-14T10:47:48.411Z",
-  "result": "acted 10:4xZ: landed #2072 (#2061 negative-latency fix) 3a9ae828 and #2044 2365bd81, each exact-head with local preflight 0 (434) / breadth 0 quoted. Credit-saving rule: no workers, H/S/O 0/0/0. sub-brains: none. owner queue: none from this lane."
+  "firedAt": "2026-11-14T12:24:17.172Z",
+  "result": "acted 12:11Z fire (delivered 12:2xZ after #2081 landed): merged Mac tick results #2073 (auto-merge); mailed the Mac the evidence-failure root cause (#2081: stale Mac node_modules, lockfile pins @hookform/resolvers 3.10.0; run pnpm install --frozen-lockfile). Credit-saving rule: no workers, H/S/O 0/0/0. sub-brains: none. owner queue: none from this lane."
 }

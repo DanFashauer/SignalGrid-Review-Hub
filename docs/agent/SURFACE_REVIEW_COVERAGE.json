@@ -242,6 +242,10 @@
         }
       ]
     },
+    ".github/agents": {
+      "path": ".github/agents",
+      "reads": []
+    },
     ".github/codeql": {
       "path": ".github/codeql",
       "reads": [

@@ -389,6 +389,21 @@ Owner, 2026-10-23 about 23:00Z, verbatim: *"Need to offload and let the local ag
 - **What the cloud keeps running**, because the registry and the raised-hands gate expect them: the hourly steward cycle (reads Mac mail and branches, lands lane-mail and tick PRs, escalates a silent Mac to the owner), the 2-hourly forward-build heartbeat as a report of the pool with no refill, and the daily hygiene sweep.
 - **What does not change:** DR-037's five landing conditions and its owner-only surfaces (launch profile, launch-claims gate, publication boundary, decision records, `OWNER_RESERVED`); DR-054, a stuck unit raises a hand on either machine; claim discipline; the second-revision loop above for mail, acks and heartbeats. Authority for the brain's own writes is a registry row in `docs/agent/scheduled-routines.json` citing the owner's words, which the brain proposes and the cloud inspects; until it lands, the brain's deliveries ride the registered Mac lane identity, as they do today.
 
+### Operating notes, 2026-11-13 (owner directive: the four-pass build pipeline, Bonsai first)
+
+The owner, in the cloud session at about 23:12Z: *"the full automation of local LLM second Brain using Bonsai as first pass and building everything with its usage and agents then passing and load balancing second and third passes and validations through local sessions between Claude and codex then final pass is done again load balances between models and usage of cloud sessions between Claude and Codex. Each pass will use the second brain for everything skills and agents plus knowledge of whole project and company plus all knowledge."* At about 00:00Z on 2026-11-14 the owner added: *"I need to run this and build as much as possible and provide as much proof as possible then will get into physical stage once the brain can fully build and complete this company."*
+
+This lane works to that shape from now on:
+
+1. **Pass 1, local, Bonsai.** The Mac's Bonsai 2 model, the interim default (RESOURCE_INTAKE row of 2026-11-13), does intake, a scoped plan and the first real implementation, using the accountable roster role and its skills and agents.
+2. **Pass 2, local review.** An admitted local Claude or Codex session, chosen by measured capacity, reviews the first artifact and records its findings.
+3. **Pass 3, local validation.** The next admitted local session runs the task's real checks and consumes pass 2's findings. A correction changes the head, and approvals on the older head no longer count.
+4. **Final pass, cloud.** An admitted cloud Claude or Codex session reviews the final head. This lane is a final-pass reviewer: it takes exact-head offers from Root's dispatcher, answers each with a `signalgrid-lane-result/v1` ACK and a separate result, and has no Mac access and no merge.
+
+Every pass retrieves the second brain's approved context (roster role, skills, agents, project and company knowledge) by bounded retrieval, not by copying the vault, and the private-content boundary of the publisher is unchanged. A pass is a review stage, never an approval: landing still needs the protected required checks, the local preflight and breadth receipt, and the owner's word on owner-gated surfaces. "Local session" names where a pass runs, not a separate credit pool, so lanes sharing one account are not counted twice when balancing usage. Unknown capacity stays unknown. A missing or failed pass is reported as missing or failed, never folded into a completion.
+
+Not yet shown when this note was written: Bonsai authoring a first code pass, the brain's default route on Bonsai, restart persistence, recovered disk and memory, a measured concurrency cap, and one fresh job carried through all four passes with its receipts. The dispatcher and router are Root's; the Mac host work is the Mac lane's.
+
 ## Collision log
 
 Kept because the protocol above is only as persuasive as the evidence that it is

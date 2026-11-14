@@ -14,7 +14,9 @@
 //   6. the local LLM runs at "max" effort; an unavailable tier resolves to "judgment";
 //   7. the fallback route exists in docs/agent/hand-routing.json, and the resolver
 //      returns it for an unknown kind instead of any tier;
-//   8. the resolver never validates on the implementing lane.
+//   8. the resolver never validates on the implementing lane, and every implementing
+//      lane has a distinct validation lane;
+//   9. when the judgment tier is unavailable too, the route is pending, never scheduled.
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -56,11 +58,14 @@ export function problems(table, { roles, skillExists, handRoutes }) {
   for (const [kind] of kinds) {
     for (const lane of ["local-claude", "local-codex"]) {
       const r = resolveRoute(table, kind, { implementLane: lane });
-      if (r.passes?.[2]?.lane === lane) out.push(`${kind}: validates on the implementing lane ${lane}`);
+      const v = r.passes?.[2]?.lane;
+      if (r.refused || typeof v !== "string" || !v || v === lane) out.push(`${kind}: no validation lane distinct from the implementing lane ${lane}`);
       if (r.passes?.[0]?.effort !== "max") out.push(`${kind}: pass 1 is not at max effort`);
     }
     const up = resolveRoute(table, kind, { unavailableTiers: Object.keys(table.tiers ?? {}).filter((t) => t !== "judgment") });
     if (!up.gap && up.tier !== "judgment") out.push(`${kind}: an unavailable tier did not resolve up to judgment`);
+    const none = resolveRoute(table, kind, { unavailableTiers: Object.keys(table.tiers ?? {}) });
+    if (none.pending !== true || none.passes) out.push(`${kind}: with every tier unavailable the route must be pending, not scheduled`);
   }
   return out;
 }
@@ -90,6 +95,8 @@ function selfTest() {
     ["a fallback route that does not exist", (t) => { t.fallback.route = "nowhere"; }],
     ["a fallback with no find-or-build steps", (t) => { t.fallback.steps = []; }],
     ["an unknown tier on a kind", (t) => { t.kinds["log-scan"].tier = "bargain"; }],
+    ["a validation list holding only one lane", (t) => { t.lanes["local-validate"].lanes = ["local-claude"]; }],
+    ["an empty validation list", (t) => { t.lanes["local-validate"].lanes = []; }],
   ];
   let passed = 0, failed = 0;
   const clean = problems(base, ctx);
@@ -102,6 +109,10 @@ function selfTest() {
   const r = resolveRoute(base, "gate-or-proof", { implementLane: "local-codex" });
   const ok = r.passes[0].effort === "max" && r.passes[1].lane === "local-codex" && r.passes[2].lane === "local-claude" && r.passes[3].lane === "cloud-final" && r.tier === "build";
   if (ok) { passed++; console.log("PASS a routed kind runs local LLM (max) -> implement -> validate on the other lane -> cloud final"); } else { failed++; console.error("FAIL the four-pass route is wrong: " + JSON.stringify(r.passes)); }
+  const waits = resolveRoute(base, "architecture", { unavailableTiers: ["judgment"] });
+  if (waits.pending === true && !waits.passes) { passed++; console.log("PASS judgment work with the judgment tier unavailable is pending, not scheduled"); } else { failed++; console.error("FAIL judgment work was scheduled on an unavailable tier: " + JSON.stringify(waits)); }
+  const exhausted = resolveRoute(base, "web-ui", { unavailableTiers: ["build", "judgment"] });
+  if (exhausted.pending === true && !exhausted.passes) { passed++; console.log("PASS a tier and its fallback both unavailable is pending"); } else { failed++; console.error("FAIL a build kind with build and judgment unavailable was scheduled"); }
   for (const bad of ["", "UPPER", "../escape", null, 42, "__proto__", "constructor"]) {
     const g = resolveRoute(base, bad);
     if (g.gap && !g.tier) passed++; else { failed++; console.error(`FAIL a malformed kind ${JSON.stringify(bad)} got a tier`); }

@@ -6,12 +6,17 @@
 //     capability-gap route (find an existing agent/skill, search sibling repos, or
 //     have one built), so the brain never guesses;
 //   - an unknown or unavailable tier resolves UP to the judgment tier (DR-047 rule 3);
+//     when that tier is unavailable too, the route is PENDING: the work waits for the
+//     reset and is never scheduled on an exhausted tier (DR-047 rule 4);
+//   - with no validation lane distinct from the implementing lane, the route is
+//     REFUSED rather than returned with an empty pass 3;
 //   - pass 1 (local LLM) always runs at the highest effort;
 //   - pass 3 validates on a lane other than the one that implemented;
 //   - an owner-gated kind is marked so, and is never landed by a lane.
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { isMainModule } from "./is-main.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 export const TABLE_PATH = join(ROOT, "docs/agent/task-routing.json");
@@ -30,14 +35,22 @@ export function resolveRoute(table, kind, { implementLane = "local-claude", unav
   const up = table.unavailableTierResolvesTo ?? "judgment";
   let tierName = Object.hasOwn(table.tiers ?? {}, entry.tier) ? entry.tier : up;
   if (unavailableTiers.includes(tierName)) tierName = up;
-  const tier = table.tiers[tierName] ?? table.tiers[up];
-  const validateLanes = table.lanes?.["local-validate"]?.lanes ?? ["local-claude", "local-codex"];
-  const validateLane = validateLanes.find((lane) => lane !== implementLane) ?? null;
+  const tier = table.tiers[tierName];
+  if (!tier || unavailableTiers.includes(tierName)) {
+    return { kind, gap: false, pending: true, tier: tierName, why: `tier ${tierName} is unavailable; the work waits for its reset (DR-047 rule 4)` };
+  }
+  const validateLanes = Array.isArray(table.lanes?.["local-validate"]?.lanes) ? table.lanes["local-validate"].lanes : [];
+  const validateLane = validateLanes.find((lane) => typeof lane === "string" && lane && lane !== implementLane) ?? null;
+  if (!validateLane) {
+    return { kind, gap: false, refused: true, tier: tierName, why: `no validation lane other than ${implementLane}` };
+  }
   // A tier names a Claude family (DR-047); a Codex lane picks its own model and takes only the effort.
   const modelFor = (lane) => (typeof lane === "string" && lane.includes("claude") ? tier.model : null);
   return {
     kind,
     gap: false,
+    pending: false,
+    refused: false,
     tier: tierName,
     ownerGated: entry.ownerGated === true,
     role: entry.role,
@@ -53,7 +66,7 @@ export function resolveRoute(table, kind, { implementLane = "local-claude", unav
 }
 
 // CLI: node scripts/lib/task-route.mjs <kind> [implementLane]  -> JSON route
-if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+if (isMainModule(process.argv[1], import.meta.url)) {
   const [kind, implementLane] = process.argv.slice(2);
   console.log(JSON.stringify(resolveRoute(loadRoutingTable(), kind, implementLane ? { implementLane } : {}), null, 2));
 }

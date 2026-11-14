@@ -834,7 +834,9 @@ function listBrunoCollection(): {
   const folders: Array<{ path: string; requests: Array<{ file: string; name: string | null }> }> = [];
   const walk = (rel: string) => {
     const abs = resolve(BRUNO_ROOT, rel);
-    const entries = readdirSync(abs, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name));
+    const entries = readdirSync(abs, { withFileTypes: true }).sort((a, b) =>
+      a.name < b.name ? -1 : a.name > b.name ? 1 : 0,
+    );
     const requests: Array<{ file: string; name: string | null }> = [];
     for (const e of entries) {
       if (!e.isFile() || !e.name.endsWith(".bru")) continue;

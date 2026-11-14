@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-11-14T10:47:48.411Z",
-  "result": "acted 10:4xZ: landed #2072 (#2061 negative-latency fix) 3a9ae828 and #2044 2365bd81, each exact-head with local preflight 0 (434) / breadth 0 quoted. Credit-saving rule: no workers, H/S/O 0/0/0. sub-brains: none. owner queue: none from this lane."
+  "firedAt": "2026-11-14T14:18:18.075Z",
+  "result": "quiet 14:11Z fire: nothing new to land from this lane (Mac tick #2082 merged under the steward cycle). Credit-saving rule: no workers, H/S/O 0/0/0. sub-brains: none. owner queue: none from this lane; open blockers are Mac-side (node_modules reinstall per #2081, vphone #2070)."
 }

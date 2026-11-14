@@ -124,6 +124,7 @@ const STEPS = [
   { name: "Local worker task-selector C0 regressions", cmd: ["node", "scripts/mac/local-brain/test/task-selector-control-scope.test.mjs"] },
   { name: "Local worker task-selector C0 proof envelope", cmd: ["node", "scripts/check-local-worker-task-selector-proof.mjs"] },
   { name: "Local worker proof-policy proofs", cmd: ["node", "scripts/mac/local-brain/test/proof-policy.test.mjs"] },
+  { name: "Estate queue self-test (pending checks wait; real failures remain actionable)", cmd: ["node", "scripts/mac/estate-queue.mjs", "--self-test"] },
   // DR-060 rule 3, first slice: docs/agent/mcp-roster.json names which lane or
   // first-party skill may call which MCP server, with signalgrid-mcp's tool count
   // DERIVED from artifacts/mcp-server/src/index.ts, never hand-typed.

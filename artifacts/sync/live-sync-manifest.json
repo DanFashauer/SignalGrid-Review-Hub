@@ -1,6 +1,6 @@
 {
-  "manifestVersion": 102,
-  "fingerprint": "66e2c11f2042a7d0b2caf8c4e7c2ae73f869da06608399824db3f9984886c133",
+  "manifestVersion": 103,
+  "fingerprint": "5cd8c83bccf0e6ac95829ee19cab4d1e56cc25c3badcc9e8b7f9c29b4e1744cd",
   "body": {
     "schema": "signalgrid-live-sync-manifest/v1",
     "contract": {
@@ -136,7 +136,7 @@
       "live-idp": 31,
       "macos-apple-schema": 53,
       "mcp-answer-discipline": 55,
-      "mcp-server": 11,
+      "mcp-server": 13,
       "mobile-app-catalog": 19,
       "nac": 59,
       "network-nac": 69,
@@ -155,7 +155,7 @@
       "response-accountability": 82,
       "rtls-custody": 227,
       "secrets": 28,
-      "self-audit": 61,
+      "self-audit": 62,
       "service-lifecycle": 86,
       "session-readiness": 64,
       "shift-context": 67,

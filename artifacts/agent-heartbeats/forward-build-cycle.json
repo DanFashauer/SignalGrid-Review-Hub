@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-11-14T03:25:09.676Z",
-  "result": "acted 03:25Z: owner land-all serial queue merged #2042 #2055 #2048 #2053 #2043 #2059 #2060 since 01:12Z; #1932 in flight, then #2044 #1983 #1354 #2057 #2054. Reviewed #2045 (no findings, 6870330453) and mapped 18 Mac hands (6869364719). Credit-saving rule in force: no workers, H/S/O 0/0/0."
+  "firedAt": "2026-11-14T06:28:16.639Z",
+  "result": "acted 06:30Z: serial landing queue merged #2042 #2055 #2048 #2053 #2043 #2059 #2060 #1932 #2062 #1983 #2063 #2064 #1354 #2057 #2054 (5d8ca542). #2044 waits on one outdated review thread (resolve refused for this session); #2061 implemented+validated (56ddd30f) but its push needs authorization. Dispatcher review of #2044: no findings. Credit-saving rule: no workers, H/S/O 0/0/0."
 }

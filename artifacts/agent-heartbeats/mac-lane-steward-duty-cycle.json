@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-11-14T03:25:09.676Z",
-  "result": "keepalive 03:25Z: quiet; Mac tick last fired 2026-11-14T02:07:56.652Z; live-evidence last committed 2026-11-10T22:42:00-05:00; new tick #2057 has its PR and is queued; owner not escalated."
+  "firedAt": "2026-11-14T06:28:16.639Z",
+  "result": "keepalive 06:30Z (held ~5 min past 3h so #2054 could land without another re-qualification): quiet; Mac tick last fired 2026-11-14T04:17:53.821Z; tick #2057 merged 864cdf51; live-evidence refresh request queued by the Mac's own loop; owner not escalated."
 }

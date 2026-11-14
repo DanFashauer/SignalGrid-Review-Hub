@@ -1,0 +1,72 @@
+{
+  "$comment": "Task routing for the brain (owner 2026-11-14: route each task to the model, effort, lane, executing role and validators that fit it; local LLM always at highest effort; when no route fits, find or build the agent). The machine-readable form of DR-047 rules 1-3 plus the four-pass pipeline (local LLM -> local Claude/Codex -> local validation -> cloud final). scripts/lib/task-route.mjs resolves a task kind against this file; scripts/check-task-routing.mjs gates it: every role exists in docs/agent/org-roster.json, every skill and agent exists, every build/judgment kind names a validator, decision-path kinds stay owner-gated, and an unknown kind resolves to the capability-gap route in docs/agent/hand-routing.json, never to a default tier. Tier names are DR-047 families, never model ids. Private vault/runtime content never enters this file: it routes kinds of work, not the work itself.",
+  "version": 1,
+  "tiers": {
+    "mechanical": { "model": "haiku", "effort": "low" },
+    "build": { "model": "sonnet", "effort": "high" },
+    "judgment": { "model": "opus", "effort": "max" }
+  },
+  "unavailableTierResolvesTo": "judgment",
+  "lanes": {
+    "local-llm": { "pass": 1, "role": "draft and triage", "effort": "max" },
+    "local-claude": { "pass": 2, "role": "implement" },
+    "local-codex": { "pass": 2, "role": "implement" },
+    "local-validate": { "pass": 3, "role": "validate", "lanes": ["local-claude", "local-codex"], "rule": "the validating lane is never the lane that implemented" },
+    "cloud-final": { "pass": 4, "role": "final review and DR-037 landing", "lanes": ["cloud-claude", "cloud-codex"] }
+  },
+  "kinds": {
+    "docs-restamp": {
+      "tier": "mechanical", "role": "docs-writer", "skills": ["documentation"], "validators": ["qa-engineer"],
+      "when": "Docs-only restamps, figure re-measures a gate already computes, ledger rows."
+    },
+    "log-scan": {
+      "tier": "mechanical", "role": "sre", "skills": ["debugging-and-error-recovery"], "validators": [],
+      "when": "Read-only scanning of logs, CI output or tables to map facts for a later decision."
+    },
+    "gate-or-proof": {
+      "tier": "build", "role": "devex-tooling-engineer", "skills": ["test-driven-development", "poka-yoke"], "validators": ["qa-engineer", "security-engineer"],
+      "when": "A gate, proof or script under scripts/** with a falsifiable check."
+    },
+    "ci-workflow": {
+      "tier": "build", "role": "release-engineer", "skills": ["ci-cd-and-automation"], "validators": ["devex-tooling-engineer", "security-engineer"],
+      "when": "A .github/workflows edit or CI job change."
+    },
+    "web-ui": {
+      "tier": "build", "role": "web-engineer", "skills": ["frontend-ui-engineering"], "validators": ["qa-engineer"],
+      "when": "Web app, PWA or accessibility work outside the decision path."
+    },
+    "build-failure": {
+      "tier": "build", "role": "devex-tooling-engineer", "skills": ["debugging-and-error-recovery"], "validators": ["qa-engineer"],
+      "when": "A red build, typecheck or failing test that must be root-caused."
+    },
+    "security-review": {
+      "tier": "judgment", "role": "security-engineer", "skills": ["security-and-hardening"], "validators": ["threat-modeler"],
+      "when": "Anything handling input, auth, secrets, credentials or a trust boundary."
+    },
+    "architecture": {
+      "tier": "judgment", "role": "principal-engineer", "skills": ["documentation-and-adrs"], "validators": ["security-engineer", "qa-engineer"],
+      "when": "Design, module boundaries or a reversible technical decision record."
+    },
+    "agent-or-skill": {
+      "tier": "judgment", "role": "agent-platform-engineer", "skills": ["writing-skills"], "validators": ["devex-tooling-engineer"],
+      "when": "Creating or changing a .claude agent, skill or command; also where a capability gap lands once specified."
+    },
+    "decision-core": {
+      "tier": "judgment", "role": "principal-engineer", "skills": ["signalgrid-core"], "validators": ["security-engineer", "qa-engineer"],
+      "ownerGated": true,
+      "when": "lib/* decision core, /v1 contracts or anything that changes what SignalGrid decides; never auto-merged."
+    },
+    "prioritization": {
+      "tier": "judgment", "role": "product-manager", "skills": ["planning-and-task-breakdown"], "validators": [],
+      "when": "Which work next, how items fit together, grooming the queue."
+    }
+  },
+  "fallback": {
+    "route": "capability-gap",
+    "steps": [
+      "Search the existing roster, skills and agents for a fit (docs/agent/org-roster.json, .claude/skills, .claude/agents).",
+      "Search the sibling repositories for a tool to absorb (pnpm run scan:estate; docs/agent/RESOURCE_INTAKE.md rules).",
+      "If none fits, raise a capability-gap hand: blocker-dispatcher writes the spec and agent-platform-steward builds and registers the agent or skill, then the kind is added here."
+    ]
+  }
+}

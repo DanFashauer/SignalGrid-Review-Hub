@@ -884,12 +884,6 @@ export const ALLOWED = [
       "Inert by construction: `known` (CUSTODY_BEACON_REPORT_KEYS) holds only strings, so the includes() on the next line returns true for every symbol anyway (survived `if (false)` with proof:custody-beacon green, 2026-10-01). Kept as the type guard narrowing `k` to string, same as its agent-identity twin.",
   },
   {
-    file: "lib/integrations/src/integrations/network-nac/evaluate.ts",
-    line: "if (segment === null) return false;",
-    reason:
-      "Unreachable through its callers: `includesSegment` is module-private and both call sites (`policy.expected`, `policy.restricted`) sit after `if (signal.segment === null)` returns SEGMENT_UNREPORTED_UNDER_POLICY, so `segment` is never null there (survived `if (false)` with proof:network-nac green, 2026-10-01). Kept on purpose — the function's own comment records that without a null-safe helper a reordering of the caller throws inside a decision path.",
-  },
-  {
     file: "lib/integrations/src/integrations/platform-sso/platform-sso-connector.ts",
     line: 'if (typeof k === "symbol") return true;',
     reason:

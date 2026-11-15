@@ -7,6 +7,9 @@
   "need": "Cloud lane: inspect the current source, protected PR checks and findings. Preserve the original attempt as readback-only; this separate uncertainty notice grants no execution, landing or retry authority.",
   "whoCanUnblock": "cloud lane",
   "domain": "lane",
-  "status": "open",
-  "routedTo": null
+  "status": "resolved",
+  "routedTo": null,
+  "resolvedAt": "2026-11-15T01:25:28.562Z",
+  "resolvedBy": "cloud",
+  "resolution": "Cloud inspected: no failed check or finding. #2107 was only behind mainline under the strict rule. Updated via update-branch, it merged as ca46ba0b, and the Mac tick heartbeat (#2110, firedAt 00:48:36Z) is on mainline as f831fcf4. Original attempt left readback-only."
 }

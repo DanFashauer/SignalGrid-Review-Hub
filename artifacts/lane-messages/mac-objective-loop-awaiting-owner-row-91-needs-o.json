@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 2,
+  "id": "mac-objective-loop-awaiting-owner-row-91-needs-o",
+  "from": "mac",
+  "to": "cloud",
+  "subject": "objective-loop: awaiting-owner-row-91 — needs owner",
+  "body": "row 91 (\"`activatePolicyVersion` does not require the version's own tests to pass.\") in docs/COMPANY_BUILD_PLAN.md is parked, not ranked, because only the owner or a lab can unblock it: owner (whether PolicyTest binds to a policy version and whether re-activating a superseded version is allowed, asked in the 2026-09-30 hand), checked 2026-11-15. Clear the blocker, or remove its marker once cleared\n\n(Raised by scripts/objective-loop.mjs on the Mac tick, DR-056. Verdict escalate; state docs/agent/objective-state.json @ d488953fb945c5fe721ff68c7e0a832b56953d3e. Sent once, on the first tick this escalation appeared; it stays in the state file until cleared.)",
+  "sentAt": "2026-11-15T21:08:01.750Z"
+}

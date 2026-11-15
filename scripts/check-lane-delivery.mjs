@@ -417,13 +417,21 @@ control("a real successful heartbeat advances the APFS keepalive timestamp", { t
   assert.ok(statSync(p).mtimeMs>before+60000,"the attempt pointer must actually advance");
 });
 
+// These fixtures exercise escalation delivery with an explicitly empty request queue.
+// Keep the actual emitter AND its assignment helper. Any queue work is outside
+// this fixture's scope and must fail rather than silently simulate a request.
+function objectiveEmitterFixtureSource(source) {
+  const start=source.indexOf("export function assignFreeRequestIds(");
+  const emit=source.indexOf("function emit(state,",start);
+  const end=source.indexOf("// ── --check:",emit);
+  assert.ok(start>=0&&emit>start&&end>emit);
+  return `const queueWork=()=>{throw Error('escalation fixture unexpectedly queried a request')};const queuedWhere=queueWork,requestIdTaken=queueWork,nextFreeRequestId=queueWork,decisionAddress=queueWork;\n${source.slice(start,end)}`;
+}
+
 function objectiveCaller(rc) {
   const root=mkdtempSync(join(tmpdir(),"sg-objective-delivery-test-"));
   mkdirSync(join(root,"node_modules"));
   const source=readFileSync(join(ROOT,"scripts/objective-loop.mjs"),"utf8");
-  const start=source.indexOf("function emit(state,");
-  const end=source.indexOf("// ── --check:",start);
-  assert.ok(start>=0&&end>start);
   const harness=join(root,"caller.mjs");
   writeFileSync(harness,`
 import {lstatSync,mkdirSync,readFileSync,readdirSync,rmSync,writeFileSync} from 'node:fs';
@@ -432,7 +440,7 @@ import {createHash} from 'node:crypto';
 const deliveryRecordDirectory=()=>${JSON.stringify(join(root,'node_modules'))};const retryHead=(_dir,name)=>name,setAsideRefusedAttempt=()=>null; // no refused (1/2) attempts in this fixture\nconst ROOT=${JSON.stringify(root)},STATE_REL='state.json',STAMP_REL='node_modules/.sg-objective-loop-last.json';
 const calls=[];
 function spawnSync(_cmd,args){if(args[0].endsWith('/scripts/lane-deliver.mjs')){calls.push(1);return {status:${rc},stdout:'fixture raw output',stderr:''};}if(args[0].endsWith('/scripts/lib/lane-repair.mjs')&&['repair-status','request'].includes(args[1]))return {status:0,stdout:'fixture DATA only',stderr:''};throw Error('unexpected fixture operation');}
-${source.slice(start,end)}
+${objectiveEmitterFixtureSource(source)}
 const state={decisionAddress:'fixture-d',derivedAt:'2026-10-31T00:00:00Z',queue:[],escalations:[{id:'fixture-executor',clears:'cloud',asks:'repair'}],criteria:[],tasks:[],verdict:'building'};
 const results=[];
 for(let n=0;n<3;n++){
@@ -640,8 +648,8 @@ function calls(f){return readFileSync(join(f.parent,'calls'),'utf8').trim().spli
 check('pending heartbeat is one chain across primary and linked tick worktree',f=>{heartbeat(f,f.root);heartbeat(f,f.linked);assert.equal(calls(f),1)});
 check('removing both node_modules cannot erase a pending heartbeat fence',f=>{heartbeat(f,f.root);rmSync(join(f.root,'node_modules'),{recursive:true});heartbeat(f,f.root);assert.equal(calls(f),1)});
 for(const purge of [false,true])check('one escalation across '+(purge?'dependency purge':'linked checkouts'),f=>{
- const source=readFileSync(join(ROOT,'scripts/objective-loop.mjs'),'utf8');const a=source.indexOf('function emit(state,'),b=source.indexOf('// ── --check:',a);assert.ok(a>=0&&b>a);
- const harness=join(f.parent,'objective.mjs');writeFileSync(harness,`import {lstatSync,mkdirSync,readFileSync,readdirSync,renameSync,rmSync,writeFileSync} from 'node:fs';import {dirname,join} from 'node:path';import {createHash,randomBytes} from 'node:crypto';import {deliveryRecordDirectory,retryHead,setAsideRefusedAttempt} from ${JSON.stringify('file://'+join(f.root,'scripts/lib/lane-attempt-store.mjs'))};\nlet ROOT=${JSON.stringify(f.root)};const STATE_REL='state.json',STAMP_REL='node_modules/stamp.json';let calls=0;function spawnSync(_cmd,args){if(args[0].endsWith('/scripts/lane-deliver.mjs')){calls++;return {status:3,stdout:'raw fixture',stderr:''}}if(args[0].endsWith('/scripts/lib/lane-repair.mjs')&&['repair-status','request'].includes(args[1]))return {status:0,stdout:'fixture DATA only',stderr:''};throw Error('unexpected fixture operation')}\n${source.slice(a,b)}\nconst state={decisionAddress:'d',derivedAt:'2026-10-31T01:00:00Z',queue:[],escalations:[{id:'same-source-escalation',clears:'cloud',asks:'repair'}],criteria:[],tasks:[],verdict:'building'};emit(state,{write:true,deliver:true});rmSync(join(ROOT,STATE_REL),{force:true});${purge?"rmSync(join(ROOT,'node_modules'),{recursive:true,force:true});":"ROOT="+JSON.stringify(f.linked)+";"}emit(state,{write:true,deliver:true});console.log(calls);`);
+ const source=readFileSync(join(ROOT,'scripts/objective-loop.mjs'),'utf8');
+ const harness=join(f.parent,'objective.mjs');writeFileSync(harness,`import {lstatSync,mkdirSync,readFileSync,readdirSync,renameSync,rmSync,writeFileSync} from 'node:fs';import {dirname,join} from 'node:path';import {createHash,randomBytes} from 'node:crypto';import {deliveryRecordDirectory,retryHead,setAsideRefusedAttempt} from ${JSON.stringify('file://'+join(f.root,'scripts/lib/lane-attempt-store.mjs'))};\nlet ROOT=${JSON.stringify(f.root)};const STATE_REL='state.json',STAMP_REL='node_modules/stamp.json';let calls=0;function spawnSync(_cmd,args){if(args[0].endsWith('/scripts/lane-deliver.mjs')){calls++;return {status:3,stdout:'raw fixture',stderr:''}}if(args[0].endsWith('/scripts/lib/lane-repair.mjs')&&['repair-status','request'].includes(args[1]))return {status:0,stdout:'fixture DATA only',stderr:''};throw Error('unexpected fixture operation')}\n${objectiveEmitterFixtureSource(source)}\nconst state={decisionAddress:'d',derivedAt:'2026-10-31T01:00:00Z',queue:[],escalations:[{id:'same-source-escalation',clears:'cloud',asks:'repair'}],criteria:[],tasks:[],verdict:'building'};emit(state,{write:true,deliver:true});rmSync(join(ROOT,STATE_REL),{force:true});${purge?"rmSync(join(ROOT,'node_modules'),{recursive:true,force:true});":"ROOT="+JSON.stringify(f.linked)+";"}emit(state,{write:true,deliver:true});console.log(calls);`);
  const r=run(process.execPath,[harness],f.root);assert.equal(r.status,0,r.stderr);assert.equal(Number(r.stdout.trim()),1);
 });
 

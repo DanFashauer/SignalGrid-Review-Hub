@@ -297,3 +297,72 @@ test('valid completed snapshots restore as terminal with the same evidence and v
   assert.throws(() => restored.complete(true, 3, 'worker-a'), /Stale state version/);
   assert.throws(() => restored.complete(true, 4, 'worker-a'), /Invalid transition/);
 });
+
+const contradictoryVerificationCounts = [
+  ['failed tests', { failed: 1 }],
+  ['TAP failures', { fail: 1 }],
+  ['test errors', { errors: 1 }],
+  ['skipped tests', { skipped: 1 }],
+  ['cancelled tests', { cancelled: 1 }],
+  ['unfinished TODO tests', { todo: 1 }],
+  ['an incomplete total', { tests: 2 }],
+  ['disagreeing pass counts', { pass: 2 }],
+  ['a string failure count', { fail: '0' }],
+  ['a null skip count', { skipped: null }],
+  ['a negative failure count', { failed: -1 }],
+  ['a string test total', { tests: '1' }],
+  ['a fractional test total', { tests: 1.5 }],
+  ['an unsafe test total', { tests: Number.MAX_SAFE_INTEGER + 1 }],
+];
+const withCounts = (counts) => ({ command: 'node --test fixture.test.mjs', exitCode: 0, passed: 1, ...counts });
+
+test('checkpoint refuses contradictory test counts without changing the job', () => {
+  for (const [label, counts] of contradictoryVerificationCounts) {
+    const job = make();
+    claim(job);
+    const before = job.snapshot();
+    assert.throws(() => job.checkpoint({ type: 'verification', details: withCounts(counts) }, 2, 'worker-a'),
+      /Verification requires/, label);
+    assert.deepEqual(job.snapshot(), before, label);
+  }
+});
+
+test('restore refuses contradictory test counts in assigned and completed snapshots', () => {
+  const job = make();
+  claim(job);
+  verify(job);
+  const assigned = job.snapshot();
+  job.complete(true, job.getVersion(), 'worker-a');
+  for (const snapshot of [assigned, job.snapshot()]) {
+    for (const [label, counts] of contradictoryVerificationCounts) {
+      const saved = structuredClone(snapshot);
+      saved.checkpoints[0].details = withCounts(counts);
+      assert.throws(() => JobState.restore(saved), /Invalid saved verification checkpoint/, label);
+    }
+  }
+});
+
+test('completion rechecks contradictory test counts after in-memory evidence changes', () => {
+  for (const [label, counts] of contradictoryVerificationCounts) {
+    const job = make();
+    claim(job);
+    verify(job);
+    job.checkpoints[0].details = withCounts(counts);
+    const before = job.snapshot();
+    assert.throws(() => job.complete(true, job.getVersion(), 'worker-a'), /fresh successful verification/, label);
+    assert.deepEqual(job.snapshot(), before, label);
+  }
+});
+
+test('coherent full test counters preserve verified completion and restore', () => {
+  const job = make();
+  claim(job);
+  const details = {
+    command: 'node --test fixture.test.mjs', exitCode: 0,
+    tests: 2, passed: 2, pass: 2, fail: 0, failed: 0, errors: 0, skipped: 0, cancelled: 0, todo: 0,
+  };
+  job.checkpoint({ type: 'verification', details }, job.getVersion(), 'worker-a');
+  const restored = JobState.restore(job.snapshot());
+  assert.equal(restored.complete(true, restored.getVersion(), 'worker-a').status, 'COMPLETED');
+  assert.deepEqual(JobState.restore(restored.snapshot()).snapshot(), restored.snapshot());
+});

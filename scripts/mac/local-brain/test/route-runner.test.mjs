@@ -28,7 +28,7 @@ function honest(calls = []) {
     'local-llm': (r) => { calls.push(['local-llm', r]); return { ok: true, head: H1, effort: r.pass.effort }; },
     'local-claude': session('local-claude', calls),
     'local-codex': session('local-codex', calls),
-    'cloud-final': (r) => { calls.push(['cloud-final', r]); return { ok: true, head: r.head, effort: r.pass.effort, deliveredRef: 'lane/local-mail-x@' + r.head }; },
+    'cloud-final': (r) => { calls.push(['cloud-final', r]); return { ok: true, head: r.head, provider: 'claude', model: r.pass.claudeModel, effort: r.pass.effort, deliveredRef: 'lane/local-mail-x@' + r.head }; },
   };
 }
 
@@ -84,6 +84,16 @@ test('a task scoped under a dot-directory (.claude) is blocked by the proof poli
   assert.match(r.why, /did not pass the brain's proof policy/);
 });
 
+test('a Codex cloud reviewer keeps its own model choice at the review effort, and the hand-off records the provider', () => {
+  const ex = honest();
+  const f = ex['cloud-final'];
+  ex['cloud-final'] = (r) => ({ ...f(r), provider: 'codex', model: 'codex-own-choice', effort: r.pass.effort });
+  const r = runNext(base(ex));
+  assert.equal(r.status, 'handed-to-cloud');
+  const hand = r.job.checkpoints.find((c) => c.type === 'cloud-handoff').details;
+  assert.equal(hand.provider, 'codex');
+});
+
 test('reviewLane local-codex swaps the two local sessions', () => {
   const calls = [];
   const r = runNext(base(honest(calls), { reviewLane: 'local-codex' }));
@@ -112,6 +122,10 @@ for (const [label, mutate, why] of [
   ['an executor that throws', (e) => { e['local-llm'] = () => { throw new Error('model not loaded'); }; }, /pass 1 on local-llm threw: model not loaded/],
   ['an executor that reports failure', (e) => { e['local-llm'] = () => ({ ok: false, why: 'out of memory' }); }, /reported failure: out of memory/],
   ['an executor that answers no head', (e) => { const f = e['local-llm']; e['local-llm'] = (r) => ({ ...f(r), head: 'abc' }); }, /full 40-character head/],
+  ['a Claude cloud reviewer reporting a smaller model (Root #2142/6896173894: provider claude, model haiku, effort max)', (e) => { const f = e['cloud-final']; e['cloud-final'] = (r) => ({ ...f(r), provider: 'claude', model: 'haiku', effort: 'max' }); }, /ran on "haiku", route asked for opus/],
+  ['a cloud reviewer naming no provider', (e) => { const f = e['cloud-final']; e['cloud-final'] = (r) => { const x = f(r); delete x.provider; return x; }; }, /named no known cloud provider/],
+  ['a cloud reviewer naming an unknown provider', (e) => { const f = e['cloud-final']; e['cloud-final'] = (r) => ({ ...f(r), provider: 'mystery' }); }, /named no known cloud provider/],
+  ['a Codex cloud reviewer below the review effort', (e) => { const f = e['cloud-final']; e['cloud-final'] = (r) => ({ ...f(r), provider: 'codex', model: 'any', effort: 'high' }); }, /ran at effort "high", route asked for max/],
   ['a cloud hand-off with no delivered ref', (e) => { const f = e['cloud-final']; e['cloud-final'] = (r) => ({ ...f(r), deliveredRef: '' }); }, /named no delivered ref/],
 ]) {
   test(`refuses ${label}: a hand, the job INTERRUPTED with the reason, no later pass runs`, () => {

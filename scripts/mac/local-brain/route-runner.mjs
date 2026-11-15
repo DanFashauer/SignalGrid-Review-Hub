@@ -41,9 +41,16 @@ import { isMainModule } from "../../lib/is-main.mjs";
 
 const hand = (why, need, extra = {}) => ({ status: "hand", why, need, whoCanUnblock: extra.who ?? "mac lane", ...extra });
 
-/** What a pass must have done, from its route entry. A Codex lane names no model (it picks its own). */
-function expectation(pass) {
-  if (pass.pass === 4) return { effort: pass.effort, model: null };
+const CLOUD_PROVIDERS = new Set(["claude", "codex"]);
+
+/**
+ * What a pass must have done, from its route entry. A local Codex lane names no model (it picks
+ * its own). The cloud final pass may run on either provider, so its receipt must NAME the provider:
+ * a Claude reviewer must report the route's claudeModel, a Codex reviewer keeps its own model
+ * choice, and a missing or unknown provider is refused, never read as a waiver.
+ */
+function expectation(pass, result) {
+  if (pass.pass === 4) return { effort: pass.effort, model: result?.provider === "claude" ? pass.claudeModel ?? null : null };
   return { effort: pass.effort ?? null, model: pass.model ?? null };
 }
 
@@ -51,7 +58,9 @@ function checkReceipt(pass, result, task, findings) {
   if (!result || typeof result !== "object" || Array.isArray(result)) return "answered nothing usable";
   if (result.ok !== true) return `reported failure: ${typeof result.why === "string" ? result.why : "no reason given"}`;
   if (typeof result.head !== "string" || !/^[0-9a-f]{40}$/.test(result.head)) return "did not report a full 40-character head";
-  const want = expectation(pass);
+  if (pass.pass === 4 && !CLOUD_PROVIDERS.has(result.provider)) return `named no known cloud provider (got ${JSON.stringify(result.provider)}; claude or codex)`;
+  if (pass.pass === 4 && result.provider === "claude" && !pass.claudeModel) return "has a claude provider but the route names no claudeModel";
+  const want = expectation(pass, result);
   if (want.effort && result.effort !== want.effort) return `ran at effort ${JSON.stringify(result.effort)}, route asked for ${want.effort}`;
   if (want.model && result.model !== want.model) return `ran on ${JSON.stringify(result.model)}, route asked for ${want.model}`;
   if (pass.pass === 2 && (!Array.isArray(result.findings) || !result.findings.every((f) => f && typeof f.id === "string" && f.id.length > 0))) {
@@ -112,7 +121,7 @@ export function runNext({ tasks, scope, table, repo, head, executors, reviewLane
     }
     const bad = checkReceipt(pass, result, task, reviewFindings);
     if (bad) return stop(bad);
-    const receipt = { pass: pass.pass, lane, tier: pass.tier ?? null, model: result.model ?? null, effort: result.effort ?? null, headIn: current, headOut: result.head };
+    const receipt = { pass: pass.pass, lane, tier: pass.tier ?? null, provider: pass.pass === 4 ? result.provider : null, model: result.model ?? null, effort: result.effort ?? null, headIn: current, headOut: result.head };
     if (pass.pass === 2) {
       reviewFindings = result.findings.map((f) => ({ ...f }));
       job.checkpoint({ type: "pass", details: { ...receipt, findings: reviewFindings } }, job.getVersion(), lane);

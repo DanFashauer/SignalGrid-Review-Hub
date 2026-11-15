@@ -10,6 +10,8 @@
 //
 //   The commit carries the mail directories and, when a message file was added,
 //   the regenerated docs/agent/SURFACE_REVIEW_COVERAGE.md when it changed (it prints no file counts, so mail alone never moves it).
+//   A genuine first heartbeat may additionally clear only its own waiting fields
+//   in the existing routines registry, in the same gated artifact commit.
 //   flags: --dry-run        build and gate the commit, push nothing, keep nothing
 //          --via-pr         compatibility flag; both lanes already use a mail PR
 //          --trailer "K: v" append a commit trailer (repeatable)
@@ -53,7 +55,7 @@
 // instants, branch names and readback observations; it never authorizes replay.
 import { spawnSync } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
-import { closeSync, constants, existsSync, fstatSync, lstatSync, mkdirSync, mkdtempSync, openSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { closeSync, constants, existsSync, fstatSync, ftruncateSync, lstatSync, mkdirSync, mkdtempSync, openSync, readFileSync, rmSync, writeFileSync, writeSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -79,6 +81,57 @@ process.on("uncaughtException", (error) => {
 function die(msg, code = 2) {
   console.error(`lane-deliver: ${msg}`);
   process.exit(code);
+}
+
+// Operational bookkeeping only: a first heartbeat ends its own declared wait.
+// It grants no trigger, schedule, write scope, consent or merge permission.
+function firstHeartbeatRegistry(text, registry, row, targetExists, now) {
+  if (row.status !== "awaiting-activation") return null;
+  if (registry.routines.filter((item) => item.id === row.id).length !== 1) die("first heartbeat: ambiguous routine identity");
+  if (targetExists) die("first heartbeat: waiting row already carries a heartbeat; preserve state for review");
+  const since = typeof row.awaitingSince === "string" ? Date.parse(row.awaitingSince) : NaN;
+  if (!Number.isFinite(since) || since > now.getTime() || now.getTime() - since > 30 * 86400000 ||
+      typeof row.awaitingReason !== "string" || row.awaitingReason.length < 40) {
+    die("first heartbeat: waiting declaration is invalid or past its existing 30-day bound");
+  }
+  // Preserve the existing serialization. Duplicate object keys, unrecognized
+  // formatting or lossy numbers must not be silently normalized by activation.
+  const indent = [1, 2, 4, "\t"].find((space) => JSON.stringify(registry, null, space) + "\n" === text);
+  if (indent === undefined) die("first heartbeat: registry serialization requires source review");
+  const next = structuredClone(registry);
+  const selected = next.routines.find((item) => item.id === row.id);
+  for (const key of ["status", "awaitingReason", "awaitingSince"]) delete selected[key];
+  return JSON.stringify(next, null, indent) + "\n";
+}
+
+
+// The gate consumes only flat JSON heartbeat artifacts. Refuse an indirect or
+// outside target before a write, even when the later schema gate will fail.
+function heartbeatTarget(wt, path) {
+  if (typeof path !== "string" || !/^artifacts\/agent-heartbeats\/[a-zA-Z0-9][a-zA-Z0-9._-]*\.json$/.test(path)) {
+    die("heartbeat: target must be a flat JSON file in artifacts/agent-heartbeats");
+  }
+  let parent = wt;
+  for (const part of ["artifacts", "agent-heartbeats"]) {
+    parent = join(parent, part);
+    if (!present(parent)) mkdirSync(parent);
+    if (!lstatSync(parent).isDirectory()) die("heartbeat: indirect artifact directory refused");
+  }
+  const target = join(wt, path);
+  if (present(target)) {
+    const st = lstatSync(target);
+    if (!st.isFile() || st.nlink !== 1) die("heartbeat: indirect artifact file refused");
+  }
+  return target;
+}
+function writeHeartbeat(target, text) {
+  const fd = openSync(target, constants.O_WRONLY | constants.O_CREAT | constants.O_NOFOLLOW, 0o644);
+  try {
+    const st = fstatSync(fd);
+    if (!st.isFile() || st.nlink !== 1) throw Error("heartbeat: indirect opened artifact refused");
+    ftruncateSync(fd, 0);
+    writeFileSync(fd, text, "utf8");
+  } finally { closeSync(fd); }
 }
 
 function run(cmd, args, opts = {}) {
@@ -304,7 +357,7 @@ function readback(path) {
       || !/^[a-f0-9]{40}$/.test(r.head)
       || !Array.isArray(r.blobs) || !r.blobs.length
       || r.blobs.some(b => typeof b.path !== "string" || b.path.includes("..") || !/^[a-f0-9]{40}$/.test(b.oid)
-        || ![...MAIL_DIRS, COVERAGE_PAGE].some(p => b.path === p || b.path.startsWith(p + "/")))) throw Error("invalid submission binding");
+        || (b.path !== ROUTINES_FILE && ![...MAIL_DIRS, COVERAGE_PAGE].some(p => b.path === p || b.path.startsWith(p + "/"))))) throw Error("invalid submission binding");
     if (!repoSlug || repoSlug !== r.repository) throw Error("receipt repository differs");
     const evidence = new ReadbackEvidence(path, receipt.sha256, {
       pendingCadence: Boolean(flags.pendingCadence), resolvedHand: flags.resolvedHand ?? null,
@@ -421,6 +474,7 @@ console.log(`  worktree    ${wt} @ ${base} (origin/${MAINLINE})`);
   // lands where the commit is built and the caller's checkout stays untouched.
   const summary = [];
   const env = { ...process.env, SIGNALGRID_LANE_REPO: wt, SIGNALGRID_LANE: lane };
+  let activatedRegistryText = null;
   let touchesHeartbeat = false;
   let touchesHands = false;
   for (const o of ops) {
@@ -445,16 +499,35 @@ console.log(`  worktree    ${wt} @ ${base} (origin/${MAINLINE})`);
       // "undeclared always-on lane" the routines gate calls fatal. Refuse here,
       // before a commit exists, rather than let the gate fail after.
       const registryPath = join(wt, ROUTINES_FILE);
-      const registry = existsSync(registryPath) ? JSON.parse(readFileSync(registryPath, "utf8")) : null;
+      // One descriptor for the read, the check and any first-heartbeat rewrite: a path
+      // reopened after the check could name a different file by the time it is written.
+      const registryFd = (() => {
+        try { return openSync(registryPath, constants.O_RDWR | constants.O_NOFOLLOW); }
+        catch (e) { if (e?.code === "ENOENT") return null; throw e; }
+      })();
+      try {
+      const registryText = registryFd === null ? null : readFileSync(registryFd, "utf8");
+      const registry = registryText === null ? null : JSON.parse(registryText);
       const row = registry?.routines?.find((r) => r.id === o.routine);
       if (!row) die(`heartbeat: "${o.routine}" is not a routine declared in ${ROUTINES_FILE}`);
       if (!row.heartbeatPath) die(`heartbeat: "${o.routine}" declares no heartbeat path (${row.heartbeatPathReason ?? "no reason given"})`);
       if (!o.result || !String(o.result).trim()) die("heartbeat: an empty result is not evidence — say 'quiet' or what was done");
-      const target = join(wt, row.heartbeatPath);
-      mkdirSync(dirname(target), { recursive: true });
-      writeFileSync(target, `${JSON.stringify({ firedAt: now.toISOString(), result: String(o.result) }, null, 2)}\n`, "utf8");
+      const target = heartbeatTarget(wt, row.heartbeatPath);
+      const activated = firstHeartbeatRegistry(registryText, registry, row, existsSync(target), now);
+      if (activated !== null) {
+        if (!existsSync(join(wt, "scripts/check-scheduled-routines.mjs"))) {
+          die("first heartbeat: the scheduled routines gate is required even with --allow-ungated", 1);
+        }
+        const bytes = Buffer.from(activated, "utf8");
+        ftruncateSync(registryFd, 0);
+        if (writeSync(registryFd, bytes, 0, bytes.length, 0) !== bytes.length) die("first heartbeat: registry rewrite was incomplete");
+        activatedRegistryText = activated;
+        summary.push(`activate first heartbeat ${o.routine}`);
+      }
+      writeHeartbeat(target, `${JSON.stringify({ firedAt: now.toISOString(), result: String(o.result) }, null, 2)}\n`);
       touchesHeartbeat = true;
       summary.push(`heartbeat ${o.routine}`);
+      } finally { if (registryFd !== null) closeSync(registryFd); }
     } else if (o.op === "raise" || o.op === "take" || o.op === "clear") {
       // A raised hand rides the same delivery as mail: a stuck lane must be able to
       // say so without a code branch, a PR of its own, or a person to relay it.
@@ -511,6 +584,11 @@ console.log(`  worktree    ${wt} @ ${base} (origin/${MAINLINE})`);
   // refuses the delivery: mail must never ship a page the gate will not accept.
   const stagedMail = mustGit(["diff", "--cached", "--name-only"], wt, "listing the stage").split("\n").filter(Boolean);
   const allowed = [...MAIL_DIRS];
+  if (activatedRegistryText !== null) {
+    if (readFileSync(join(wt, ROUTINES_FILE), "utf8") !== activatedRegistryText) die("first heartbeat: generated registry transition changed during gates", 1);
+    mustGit(["add", "--", ROUTINES_FILE], wt, "staging only the generated first-heartbeat activation");
+    allowed.push(ROUTINES_FILE);
+  }
   if (stagedMail.length > 0 && !existsSync(join(wt, COVERAGE_SCRIPT))) {
     // Same rule as the gates above: a generator that is not there is not a page
     // that is current. Named, and refused unless asked for.

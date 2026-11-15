@@ -4374,7 +4374,7 @@ earlier — that is the loop working, not a reason to soften the record.
     declarative registration. Adding a source is cheap but not yet a configuration
     act, which is the gap between "26 lines" and "just build the workflow and the
     process takes it". Whether to close that gap is a product call and is NOT
-    assumed here. Re-measured 2026-11-15: still open; lib/integration-bridge/src has only evidence.ts and index.ts with two source converters in evidence.ts, and docs/agent/evidence-sources.json lists sources under a gate, but adding a source still means writing a function.
+    assumed here. Re-measured 2026-11-15: still open; `lib/integration-bridge/src` has only evidence.ts and index.ts with two source converters in evidence.ts, and `docs/agent/evidence-sources.json` lists sources under a gate, but adding a source still means writing a function.
 
 175. **Four deployment claims cited the script that could deploy them.** — FIXED
     2026-08-25, secops-domain. `docs/agent/open-source-lab-registry.json` carries six

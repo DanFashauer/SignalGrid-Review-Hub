@@ -602,6 +602,10 @@ jobs:
         run: node scripts/check-org-roster.mjs
       - name: Org roster self-test (the gate can fail)
         run: node scripts/check-org-roster.mjs --self-test
+      - name: Task routing (each task kind routes to a model, effort, lane, role and validators)
+        run: node scripts/check-task-routing.mjs
+      - name: Task routing self-test (the gate can fail)
+        run: node scripts/check-task-routing.mjs --self-test
       - name: Backlog ownership (work left in a row names the role that owns it)
         run: node scripts/check-backlog-ownership.mjs
       - name: Backlog ownership self-test (the gate can fail)

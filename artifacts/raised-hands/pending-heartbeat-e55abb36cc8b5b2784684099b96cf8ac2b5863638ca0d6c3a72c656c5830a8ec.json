@@ -7,6 +7,9 @@
   "need": "Cloud lane: inspect the current source, protected PR checks and findings. Preserve the original attempt as readback-only; this separate uncertainty notice grants no execution, landing or retry authority.",
   "whoCanUnblock": "cloud lane",
   "domain": "lane",
-  "status": "open",
-  "routedTo": null
+  "status": "resolved",
+  "routedTo": null,
+  "resolvedAt": "2026-11-15T09:22:24.121Z",
+  "resolvedBy": "cloud",
+  "resolution": "Both heartbeat deliveries are on mainline: #2127 merged 2ce2c6ef (07:30Z), #2129 merged 95bfbde0 after cloud's catch-up, and this hand's own PR #2130 merged 499bdf14. Readback: #439/6891329562."
 }

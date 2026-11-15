@@ -27,7 +27,8 @@
 // `derivedFrom` field. This file never trusts a count the profile states about
 // itself — a self-reported total is the fossil class this repo keeps finding.
 
-import { readdirSync, readFileSync, existsSync } from "node:fs";
+import { readdirSync, readFileSync, existsSync, statSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { spawnSync } from "node:child_process";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -258,12 +259,20 @@ for (const gap of GAPS) {
 const stripComments = (s) =>
   s.replace(/\/\*[\s\S]*?\*\//g, (m) => " ".repeat(m.length)).replace(/\/\/[^\n]*/g, (m) => " ".repeat(m.length));
 
-function conditionMet(cond) {
+function conditionMet(cond, root = repoRoot) {
   if (cond.dir) {
-    const dirPath = join(repoRoot, cond.dir);
+    const dirPath = join(root, cond.dir);
     if (!existsSync(dirPath)) return { met: false, why: `${cond.dir} does not exist` };
+    if (!statSync(dirPath).isDirectory()) return { met: false, why: `${cond.dir} is not a directory` };
+    // No needles would make `every` vacuously true and close the gap on nothing. Fail closed.
+    // An empty or whitespace-only needle is the same vacuous truth one level down:
+    // every source includes "", and nearly every source includes " ".
+    const needles = cond.anyFileContainsAll;
+    if (!Array.isArray(needles) || needles.length === 0 || !needles.every((n) => typeof n === "string" && n.trim().length > 0)) {
+      return { met: false, why: `${cond.dir} condition needs anyFileContainsAll to be non-empty strings` };
+    }
     for (const f of readdirSync(dirPath)) {
-      if (!f.endsWith(".ts")) continue;
+      if (!f.endsWith(".ts") || !statSync(join(dirPath, f)).isFile()) continue;
       const src = stripComments(readFileSync(join(dirPath, f), "utf8"));
       if (cond.anyFileContainsAll.every((needle) => src.includes(needle))) {
         return { met: true, why: `${cond.dir}/${f} now carries ${cond.anyFileContainsAll.join(" + ")}` };
@@ -284,6 +293,54 @@ function conditionMet(cond) {
   return !src.includes(cond.absent)
     ? { met: true, why: `${cond.file} no longer contains "${cond.absent}"` }
     : { met: false, why: `${cond.file} still contains "${cond.absent}"` };
+}
+
+// Reachability self-test for the dir-shaped branch. No GAP in launch-profile.mjs uses
+// `dir:` today, so nothing else executes it — a branch that never runs can be broken
+// for as long as nobody needs it, and then close a gap wrongly the day someone does.
+// A real directory with a real needle must read MET; a missing directory, an empty
+// directory, a file named as the directory, and a condition with no needles or with
+// an empty/non-string needle must each read NOT MET (fail-closed).
+{
+  const REAL_DIR = "artifacts/api-server/src/routes";
+  const emptyRoot = mkdtempSync(join(tmpdir(), "launch-profile-dir-"));
+  mkdirSync(join(emptyRoot, "empty"));
+  // Fixtures that pin the rule itself, not just reachability: every needle in ONE
+  // file, comments do not count, only .ts files are read, and `root` is honoured.
+  mkdirSync(join(emptyRoot, "split"));
+  writeFileSync(join(emptyRoot, "split", "a.ts"), "export const alpha = 1;\n");
+  writeFileSync(join(emptyRoot, "split", "b.ts"), "export const beta = 2;\n");
+  writeFileSync(join(emptyRoot, "split", "c.ts"), "// gamma\n/* delta */\nexport {};\n");
+  writeFileSync(join(emptyRoot, "split", "d.md"), "epsilon\n");
+  mkdirSync(join(emptyRoot, "split", "dir.ts"));
+  const cases = [
+    [conditionMet({ dir: REAL_DIR, anyFileContainsAll: ["Router"] }), true, "real directory, real needle"],
+    [conditionMet({ dir: REAL_DIR, anyFileContainsAll: ["\u0000no-such-needle\u0000"] }), false, "real directory, absent needle"],
+    [conditionMet({ dir: REAL_DIR, anyFileContainsAll: [] }), false, "real directory, no needles"],
+    [conditionMet({ dir: REAL_DIR, anyFileContainsAll: [""] }), false, "real directory, empty-string needle"],
+    [conditionMet({ dir: REAL_DIR, anyFileContainsAll: [undefined] }), false, "real directory, undefined needle"],
+    [conditionMet({ dir: REAL_DIR, anyFileContainsAll: [" "] }), false, "real directory, whitespace-only needle"],
+    [conditionMet({ dir: `${REAL_DIR}/v1.ts`, anyFileContainsAll: ["Router"] }), false, "a file named as the directory"],
+    [conditionMet({ dir: "no/such/dir-for-self-test", anyFileContainsAll: ["Router"] }), false, "missing directory"],
+    [conditionMet({ dir: "empty", anyFileContainsAll: ["Router"] }, emptyRoot), false, "empty directory"],
+    [conditionMet({ dir: "split", anyFileContainsAll: ["alpha"] }, emptyRoot), true, "fixture directory under the given root"],
+    [conditionMet({ dir: "split", anyFileContainsAll: ["alpha", "beta"] }, emptyRoot), false, "needles split across two files"],
+    [conditionMet({ dir: "split", anyFileContainsAll: ["gamma"] }, emptyRoot), false, "needle only in a // comment"],
+    [conditionMet({ dir: "split", anyFileContainsAll: ["delta"] }, emptyRoot), false, "needle only in a /* */ comment"],
+    [conditionMet({ dir: "split", anyFileContainsAll: ["epsilon"] }, emptyRoot), false, "needle only in a non-.ts file"],
+    [conditionMet({ dir: "split", anyFileContainsAll: "alpha" }, emptyRoot), false, "needles given as a string, not a list"],
+    [conditionMet({ dir: "split", anyFileContainsAll: ["zeta"] }, emptyRoot), false, "a subdirectory named *.ts is skipped, not read"],
+  ];
+  rmSync(emptyRoot, { recursive: true, force: true });
+  const wrong = cases.filter(([r, want]) => r.met !== want);
+  if (wrong.length > 0) {
+    die(
+      "dir-condition self-test failed: " +
+        wrong.map(([r, want, label]) => `${label} read ${r.met ? "MET" : "NOT MET"} (want ${want ? "MET" : "NOT MET"}: ${r.why})`).join("; ") +
+        "\n  A closedWhen dir condition cannot be trusted until the evaluator reads these correctly.",
+    );
+  }
+  console.log(`  dir-condition self-test: ${cases.length}/${cases.length} (real dir MET; missing, empty, not-a-dir, vacuous needles, split needles, comment-only, non-.ts, *.ts subdirectory NOT MET)`);
 }
 
 for (const gap of GAPS) {

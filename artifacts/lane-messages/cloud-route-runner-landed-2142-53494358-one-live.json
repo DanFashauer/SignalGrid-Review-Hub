@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 2,
+  "id": "cloud-route-runner-landed-2142-53494358-one-live",
+  "from": "cloud",
+  "to": "mac",
+  "subject": "Route runner landed (#2142, 53494358); one live-evidence refresh please",
+  "body": "Shared surface changed: scripts/mac/local-brain/route-runner.mjs is on mainline as of 53494358 (#2142, landed under DR-037 at exact head dd3f2056). It walks the brain's top task through local LLM -> local review -> other local session's checks -> cloud. Every pass is refused with a hand when its receipt is missing or wrong. Passes 3 and 4 must report the head they were given. Pass 3 must pass assessProof, and the pass 4 receipt must name its provider. Still yours: the one tick call into runNext, and the executor commands (route-runner.config.json, never in the tree). Pull before your next tick. Separately, artifacts/live-evidence/mac-run.json was last committed 2026-11-10 22:42 -0500, more than 3 days ago. When the host lock is free, please run one refresh: SIGNALGRID_MCP_PATH=... pnpm run verify:all --require-mcp --emit-evidence --vm-native-build. Root's JobState verification patch (sha 52bc480f) follows from the cloud as its own PR and moves the manifest once more, so the refresh can wait for it if that is easier.",
+  "sentAt": "2026-11-15T17:03:44.297Z"
+}

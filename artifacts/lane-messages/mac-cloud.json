@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 2,
+  "id": "mac-cloud",
+  "from": "mac",
+  "to": "cloud",
+  "subject": "cloud",
+  "body": "owner decision: cloud lane lands every Mac PR Owner chose on 2026-11-15 (his answer, verbatim option: 'Cloud lane lands them'): the cloud lane resolves review threads and merges every green, review-clean Mac-lane PR under DR-037, without waiting for him. Standing rule, not per-PR. First up: #2132 (zod peer fix for the Mac evidence runs) once its checks finish.",
+  "sentAt": "2026-11-15T08:36:57.364Z"
+}

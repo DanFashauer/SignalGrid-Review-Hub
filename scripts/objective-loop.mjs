@@ -69,7 +69,8 @@
 import { createHash } from "node:crypto";
 import { execFileSync, spawnSync } from "node:child_process";
 import { deliveryRecordDirectory, retryHead, setAsideRefusedAttempt } from "./lib/lane-attempt-store.mjs";
-import { existsSync, lstatSync, readFileSync, readdirSync, writeFileSync, mkdirSync } from "node:fs";
+import { existsSync, lstatSync, readFileSync, readdirSync, writeFileSync, mkdirSync, mkdtempSync, copyFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { auditBacklogOwnership, parseRows, rosterIds, statusText } from "./check-backlog-ownership.mjs";
@@ -577,7 +578,27 @@ function requestIdTaken(id) {
   return refs.some((ref) => git(["cat-file", "-e", `${ref}:${REQ_DIR_REL}/${id}.json`]).status === 0 || git(["cat-file", "-e", `${ref}:${RES_DIR_REL}/${id}.json`]).status === 0);
 }
 
+/** Gives each request this tick queues its first free id (nextFreeRequestId) and marks one already queued
+ *  elsewhere with where it is. The decision address covers queue ids, so a rename re-addresses the state:
+ *  writing a renamed id with the address derived before the rename produced a state file the loop's own
+ *  --check rejects (Mac tick PR #2113, 2026-11-15). Pure: `where` and `taken` are injected. Returns whether
+ *  any id was renamed. */
+export function assignFreeRequestIds(state, { where, taken }) {
+  let renamed = false;
+  for (const q of state.queue) {
+    const queuedAt = where(q.criterionId, state);
+    if (queuedAt) { q.queuedAs = queuedAt; continue; }
+    const id = nextFreeRequestId(q.id, taken);
+    if (id !== q.id) { q.id = id; renamed = true; }
+  }
+  if (renamed) state.decisionAddress = decisionAddress(state);
+  return renamed;
+}
+
 function emit(state, { write, deliver }) {
+  // The decision AS DERIVED: the delivery stamp keeps it, because the next tick re-derives the day id
+  // again and must read as unchanged against what this machine already pushed.
+  const derivedAddress = state.decisionAddress;
   const prior = (() => { try { return JSON.parse(readFileSync(join(ROOT, STATE_REL), "utf8")); } catch { return null; } })();
   const stamp = (() => { try { return JSON.parse(readFileSync(join(ROOT, STAMP_REL), "utf8")); } catch { return null; } })();
   // "Changed" against BOTH the tracked state (what mainline knows) and the delivery stamp (what this
@@ -592,10 +613,9 @@ function emit(state, { write, deliver }) {
     wrote.push(STATE_REL);
   }
   if (write) {
+    const renamed = assignFreeRequestIds(state, { where: queuedWhere, taken: requestIdTaken });
     for (const q of state.queue) {
-      const where = queuedWhere(q.criterionId, state);
-      if (where) { q.queuedAs = where; lines.push(`request ${q.id} already queued (${where}) — not re-queued`); continue; }
-      q.id = nextFreeRequestId(q.id, requestIdTaken);
+      if (q.queuedAs) { lines.push(`request ${q.id} already queued (${q.queuedAs}) — not re-queued`); continue; }
       const rel = `${REQ_DIR_REL}/${q.id}.json`;
       mkdirSync(join(ROOT, REQ_DIR_REL), { recursive: true });
       writeFileSync(join(ROOT, rel), JSON.stringify({
@@ -608,7 +628,12 @@ function emit(state, { write, deliver }) {
       wrote.push(rel);
       lines.push(`queued ${rel}`);
     }
-    if (state.queue.some((q) => q.queuedAs) && changed) writeFileSync(join(ROOT, STATE_REL), JSON.stringify(state, null, 2) + "\n");
+    // A rename is itself a reason to write: the queued request carries a new id, so the tracked state must name
+    // it (with its re-addressed decision) even when the decision was otherwise unchanged against prior or stamp.
+    if (renamed || (state.queue.some((q) => q.queuedAs) && changed)) {
+      writeFileSync(join(ROOT, STATE_REL), JSON.stringify(state, null, 2) + "\n");
+      if (!wrote.includes(STATE_REL)) wrote.push(STATE_REL);
+    }
   }
   if (deliver) {
     const queueRepair = attempt => {
@@ -684,7 +709,7 @@ function emit(state, { write, deliver }) {
   if (write) {
     try {
       mkdirSync(dirname(join(ROOT, STAMP_REL)), { recursive: true });
-      writeFileSync(join(ROOT, STAMP_REL), JSON.stringify({ decisionAddress: state.decisionAddress, submittedEscalations: [...submitted], at: state.derivedAt }) + "\n");
+      writeFileSync(join(ROOT, STAMP_REL), JSON.stringify({ decisionAddress: derivedAddress, submittedEscalations: [...submitted], at: state.derivedAt }) + "\n");
     } catch (e) { lines.push(`WARN could not write the delivery stamp ${STAMP_REL} (${e.message.split("\n")[0]}) — independent attempt records keep consumed escalations held`); }
   }
   const met = state.criteria.filter((c) => c.state === "met").length;
@@ -1028,6 +1053,81 @@ function selfTest() {
   t("wiring: a tick ref younger than the bound suppresses, and an unreadable tip suppresses (fail-closed)", queuedWhere("evidence-fresh", wst, stubReader({ [TICK]: ago(1) }).rd) !== null && queuedWhere("evidence-fresh", wst, stubReader({ [TICK]: "" }).rd) !== null);
   t("wiring: the bound follows state.derivedAt (the one sampled instant), not a fresh clock read", queuedWhere("evidence-fresh", { ...wst, derivedAt: "2026-09-30T20:00:00.000Z" }, stubReader({ [TICK]: "2026-09-30T16:45:09-04:00" }).rd) !== null);
   t("perf: result lookups are made only for requests matching the criterion prefix — 1 cat-file for 3 request files on the tick ref, none on mainline", (() => { const { rd, calls } = stubReader({ [TICK]: ago(1) }); queuedWhere("evidence-fresh", wst, rd); return calls.hasResult === 1; })());
+  // QUEUE IDS AND THE ADDRESS (2026-11-15, Mac tick PR #2113): emit() renamed a queued request whose day id was
+  // taken (…-2026-11-15 → …-2026-11-15-2) AFTER the decision address was computed, then rewrote the state with
+  // the new id and the OLD address — a state file the loop's own --check rejects as "hand-edited". The address
+  // covers queue ids, so a rename must re-address the written state; the delivery stamp keeps the address AS
+  // DERIVED, which is what the next tick (naming the day id again) compares against.
+  const assign = typeof assignFreeRequestIds === "function" ? assignFreeRequestIds : null;
+  const DAY_ID = "objective-loop-evidence-fresh-2026-11-15";
+  const qState = (id = DAY_ID) => { const s = mk({ queue: [{ criterionId: "evidence-fresh", op: "evidence", clears: EVIDENCE_REL, id }] }); s.decisionAddress = decisionAddress(s); return s; };
+  t("queue ids: a request renamed to its first free id re-addresses the state, so the written file passes its own address check", (() => {
+    if (!assign) return false;
+    const s = qState(), before = s.decisionAddress;
+    const renamed = assign(s, { where: () => null, taken: (id) => id === DAY_ID });
+    return renamed === true && s.queue[0].id === `${DAY_ID}-2` && s.queue[0].queuedAs === undefined && decisionAddress(s) === s.decisionAddress && s.decisionAddress !== before;
+  })());
+  t("queue ids: an untaken day id keeps its id and the address it was derived with", (() => {
+    if (!assign) return false;
+    const s = qState(), before = s.decisionAddress;
+    return assign(s, { where: () => null, taken: () => false }) === false && s.queue[0].id === DAY_ID && s.decisionAddress === before;
+  })());
+  t("queue ids: a request already queued elsewhere is marked where, never renamed, and the address is unchanged", (() => {
+    if (!assign) return false;
+    const s = qState(), before = s.decisionAddress;
+    const renamed = assign(s, { where: () => "mac/tick-x (r.json)", taken: () => { throw new Error("taken() must not be asked for a queued request"); } });
+    return renamed === false && s.queue[0].id === DAY_ID && s.queue[0].queuedAs === "mac/tick-x (r.json)" && s.decisionAddress === before;
+  })());
+  t("queue ids: emit() assigns ids through assignFreeRequestIds and stamps the address AS DERIVED, not the re-addressed one", (() => {
+    const src = readFileSync(HERE, "utf8"), body = src.slice(src.indexOf("function emit("), src.indexOf("// ── --check:"));
+    return /assignFreeRequestIds\(state, \{ where: queuedWhere, taken: requestIdTaken \}\)/.test(body) && /decisionAddress: derivedAddress/.test(body) && !/nextFreeRequestId\(/.test(body);
+  })());
+  // EMIT WRITE PATH, end to end (Root review of 671dc086, 2026-11-15): the real emit() run against a disposable root
+  // — a copy of this script and its import closure under the temp dir, its own git repository, never the live tree,
+  // write=true and deliver=false. A test-only shim exports emit() from the COPY when the file under test does not.
+  const emitRuns = (() => {
+    const fixtureRoot = mkdtempSync(join(tmpdir(), "objective-loop-emit-"));
+    try {
+      const closure = ["scripts/objective-loop.mjs", "scripts/lib/is-main.mjs", "scripts/lib/raised-hand-kinds.mjs", "scripts/lib/sim-operations.mjs", "scripts/check-backlog-ownership.mjs", "scripts/lib/lane-attempt-store.mjs"];
+      for (const rel of closure) { mkdirSync(dirname(join(fixtureRoot, rel)), { recursive: true }); copyFileSync(join(ROOT, rel), join(fixtureRoot, rel)); }
+      const copied = join(fixtureRoot, "scripts/objective-loop.mjs");
+      if (!/^export function emit\(/m.test(readFileSync(copied, "utf8"))) writeFileSync(copied, readFileSync(copied, "utf8") + "\nexport { emit };\n");
+      spawnSync("git", ["init", "-q", fixtureRoot], { encoding: "utf8" });
+      const driver = join(fixtureRoot, "drive-emit.mjs");
+      writeFileSync(driver, `
+import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync, unlinkSync } from "node:fs";
+import { join } from "node:path";
+import { pathToFileURL } from "node:url";
+const root = process.argv[2];
+mkdirSync(join(root, "docs/agent"), { recursive: true }); // the tracked state's directory, as in any checkout
+const m = await import(pathToFileURL(join(root, "scripts/objective-loop.mjs")).href);
+const DAY = "objective-loop-evidence-fresh-2026-11-15";
+const STATE = "docs/agent/objective-state.json", STAMP = "node_modules/.sg-objective-loop-last.json";
+const derive = () => { const s = { schemaVersion: 1, objectiveId: "o", objectiveSha: "s", verdict: "escalate", staleAfterHours: 3, criteria: [{ id: "evidence-fresh", state: "unmet" }], unmet: ["evidence-fresh"], tasks: [], needsExecutor: [], escalations: [], queue: [{ criterionId: "evidence-fresh", op: "evidence", clears: "artifacts/live-evidence/mac-run.json", id: DAY }], derivedAt: "2026-11-15T05:00:00.000Z", derivedAtCommit: "f", workingTreeCleanAtEntry: true }; s.decisionAddress = m.decisionAddress(s); return s; };
+const put = (rel, obj) => { mkdirSync(join(root, rel, ".."), { recursive: true }); writeFileSync(join(root, rel), JSON.stringify(obj, null, 2) + "\\n"); };
+const read = (rel) => { try { return JSON.parse(readFileSync(join(root, rel), "utf8")); } catch { return null; } };
+const wipe = () => { for (const rel of [STATE, STAMP]) if (existsSync(join(root, rel))) unlinkSync(join(root, rel)); for (const d of ["artifacts/sim-requests", "artifacts/sim-results"]) { mkdirSync(join(root, d), { recursive: true }); for (const f of readdirSync(join(root, d))) unlinkSync(join(root, d, f)); } };
+const dayDone = () => { put("artifacts/sim-requests/" + DAY + ".json", { schemaVersion: 1, id: DAY, runs: ["evidence"] }); put("artifacts/sim-results/" + DAY + ".json", { requestId: DAY, status: "passed" }); };
+const view = (out) => { const st = read(STATE), sp = read(STAMP); return { wrote: out.wrote, changed: out.changed, stateQueueId: st && st.queue && st.queue[0] && st.queue[0].id, stateAddrOk: !!st && m.decisionAddress(st) === st.decisionAddress, stateAddr: st && st.decisionAddress, stampAddr: sp && sp.decisionAddress, requests: readdirSync(join(root, "artifacts/sim-requests")).sort() }; };
+const res = {};
+// A: changed=true (no prior state, no stamp), the day id already has a result
+wipe(); dayDone();
+let d = derive(); res.A = { derived: d.decisionAddress, ...view(m.emit(d, { write: true, deliver: false })) };
+// C: the next tick re-derives the day id; its renamed request is outstanding — quiet, no third id
+d = derive(); res.C = { derived: d.decisionAddress, ...view(m.emit(d, { write: true, deliver: false })) };
+// B: changed=false (the tracked state already carries the derived decision), the day id already has a result
+wipe(); dayDone(); put(STATE, derive());
+d = derive(); res.B = { derived: d.decisionAddress, ...view(m.emit(d, { write: true, deliver: false })) };
+console.log(JSON.stringify(res));
+`);
+      const r = spawnSync(process.execPath, [driver, fixtureRoot], { cwd: fixtureRoot, encoding: "utf8", timeout: 120000 });
+      try { return { ok: r.status === 0, ...JSON.parse(String(r.stdout).trim().split("\n").pop()) }; } catch { return { ok: false, status: r.status, stderr: String(r.stderr).slice(-400) }; }
+    } finally { rmSync(fixtureRoot, { recursive: true, force: true }); }
+  })();
+  const DAY2 = "objective-loop-evidence-fresh-2026-11-15-2";
+  t("emit (changed=true): a taken day id is written as -2, the written state passes its own address check, STATE is in wrote, and the stamp keeps the address AS DERIVED", emitRuns.ok && emitRuns.A.stateQueueId === DAY2 && emitRuns.A.stateAddrOk && emitRuns.A.wrote.includes(STATE_REL) && emitRuns.A.wrote.includes(`${REQ_DIR_REL}/${DAY2}.json`) && emitRuns.A.stampAddr === emitRuns.A.derived && emitRuns.A.stateAddr !== emitRuns.A.derived);
+  t("emit (changed=false): a rename alone still rewrites the tracked state — -2 in the state, self-consistent address, STATE in wrote — while the stamp keeps the derived address", emitRuns.ok && emitRuns.B.changed === false && emitRuns.B.stateQueueId === DAY2 && emitRuns.B.stateAddrOk && emitRuns.B.wrote.includes(STATE_REL) && emitRuns.B.wrote.includes(`${REQ_DIR_REL}/${DAY2}.json`) && emitRuns.B.stampAddr === emitRuns.B.derived);
+  t("emit (next tick): after a rename the re-derived day id reads unchanged — no state write, no third id, the -2 request stays the queued one", emitRuns.ok && emitRuns.C.changed === false && !emitRuns.C.wrote.includes(STATE_REL) && emitRuns.C.stateQueueId === DAY2 && emitRuns.C.stateAddrOk && !emitRuns.C.requests.some((f) => /-3\.json$/.test(f)) && emitRuns.C.requests.includes(`${DAY2}.json`));
   // floor
   t("self-test floor: at least 40 assertions ran", checks.length >= 40);
 

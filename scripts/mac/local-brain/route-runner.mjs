@@ -19,7 +19,12 @@
  *  - a review (pass 2) that returns no findings list (an empty list is allowed; a missing one is not);
  *  - a pass 3 whose proof the brain's own policy (proof-policy.mjs assessProof) does not pass:
  *    exit 0, tests > 0, every test passed, no failures, no skips, changed files inside the task's
- *    scope. The runner never bypasses that policy.
+ *    scope. The runner never bypasses that policy. A proof with no changed files (a read-only kind)
+ *    is refused with its own reason until the policy has an explicit read-only path;
+ *  - a pass 3 or pass 4 that reports a head other than the one it was given: the validated
+ *    artifact and the handed-off artifact must be the reviewed one, never a silent substitute;
+ *  - a pass 3 whose answers list is not a list of {id, disposition} rows, or whose open findings
+ *    are not a list of {id} rows.
  * The review's findings are forwarded to pass 3 (which must answer each one) and to the cloud
  * hand-off, together with any findings pass 3 leaves open.
  * The job is left INTERRUPTED with the reason recorded, so a later run can resume it.
@@ -54,10 +59,15 @@ function expectation(pass, result) {
   return { effort: pass.effort ?? null, model: pass.model ?? null };
 }
 
-function checkReceipt(pass, result, task, findings) {
+const isRow = (f) => f !== null && typeof f === "object" && !Array.isArray(f) && typeof f.id === "string" && f.id.length > 0;
+
+function checkReceipt(pass, result, task, findings, headIn) {
   if (!result || typeof result !== "object" || Array.isArray(result)) return "answered nothing usable";
   if (result.ok !== true) return `reported failure: ${typeof result.why === "string" ? result.why : "no reason given"}`;
   if (typeof result.head !== "string" || !/^[0-9a-f]{40}$/.test(result.head)) return "did not report a full 40-character head";
+  if ((pass.pass === 3 || pass.pass === 4) && result.head !== headIn) {
+    return `reported head ${result.head}, but was given ${headIn} (pass ${pass.pass} must not change the artifact it was handed)`;
+  }
   if (pass.pass === 4 && !CLOUD_PROVIDERS.has(result.provider)) return `named no known cloud provider (got ${JSON.stringify(result.provider)}; claude or codex)`;
   if (pass.pass === 4 && result.provider === "claude" && !pass.claudeModel) return "has a claude provider but the route names no claudeModel";
   const want = expectation(pass, result);
@@ -67,13 +77,19 @@ function checkReceipt(pass, result, task, findings) {
     return "returned no findings list (each finding needs an id; an empty list means none)";
   }
   if (pass.pass === 3) {
+    if (result.proof && typeof result.proof === "object" && Array.isArray(result.proof.changedFiles) && result.proof.changedFiles.length === 0) {
+      return "pass 3 proof changed no files: a read-only kind has no proof-policy path yet, so it is refused, not waived";
+    }
     if (assessProof(result.proof, task.scope) !== "review") {
       return "pass 3 proof did not pass the brain's proof policy (exit 0, tests > 0, all passed, no fail, no skip, changed files in scope)";
     }
-    const answered = new Set(Array.isArray(result.findingsAnswered) ? result.findingsAnswered.filter((f) => f && typeof f.id === "string" && typeof f.disposition === "string" && f.disposition.trim()).map((f) => f.id) : []);
+    if (!Array.isArray(result.findingsAnswered) || !result.findingsAnswered.every((f) => isRow(f) && typeof f.disposition === "string" && f.disposition.trim().length > 0)) {
+      return "findingsAnswered must be a list of {id, disposition} rows (an empty list when the review found nothing)";
+    }
+    const answered = new Set(result.findingsAnswered.map((f) => f.id));
     const missing = findings.filter((f) => !answered.has(f.id)).map((f) => f.id);
     if (missing.length) return `pass 3 did not answer review finding(s) ${missing.join(", ")}`;
-    if (result.openFindings !== undefined && !Array.isArray(result.openFindings)) return "openFindings must be a list";
+    if (result.openFindings !== undefined && (!Array.isArray(result.openFindings) || !result.openFindings.every(isRow))) return "openFindings must be a list of {id} rows";
   }
   if (pass.pass === 4 && (typeof result.deliveredRef !== "string" || !result.deliveredRef.trim())) return "the cloud hand-off named no delivered ref";
   return null;
@@ -119,14 +135,14 @@ export function runNext({ tasks, scope, table, repo, head, executors, reviewLane
     } catch (e) {
       return stop(`threw: ${e?.message ?? String(e)}`);
     }
-    const bad = checkReceipt(pass, result, task, reviewFindings);
+    const bad = checkReceipt(pass, result, task, reviewFindings, current);
     if (bad) return stop(bad);
     const receipt = { pass: pass.pass, lane, tier: pass.tier ?? null, provider: pass.pass === 4 ? result.provider : null, model: result.model ?? null, effort: result.effort ?? null, headIn: current, headOut: result.head };
     if (pass.pass === 2) {
       reviewFindings = result.findings.map((f) => ({ ...f }));
       job.checkpoint({ type: "pass", details: { ...receipt, findings: reviewFindings } }, job.getVersion(), lane);
     } else if (pass.pass === 3) {
-      answered = (result.findingsAnswered ?? []).map((f) => ({ id: f.id, disposition: f.disposition }));
+      answered = result.findingsAnswered.map((f) => ({ id: f.id, disposition: f.disposition }));
       openFindings = Array.isArray(result.openFindings) ? result.openFindings.map((f) => ({ ...f })) : [];
       job.checkpoint({ type: "pass", details: { ...receipt, findingsAnswered: answered, openFindings, proof: result.proof } }, job.getVersion(), lane);
       job.checkpoint({ type: "verification", details: { command: result.proof.command, exitCode: result.proof.exitCode, passed: result.proof.pass } }, job.getVersion(), lane);

@@ -198,6 +198,13 @@ control("first-heartbeat delivery clears only its own waiting fields in the same
   assert.deepEqual(changed, ["artifacts/agent-heartbeats/mac-lane-tick.json", "docs/agent/scheduled-routines.json"]);
   assert.equal(JSON.parse(f.git(["show", `${topic}:artifacts/agent-heartbeats/mac-lane-tick.json`], remote)).result, "acted: fixture");
 });
+control("first-heartbeat activation receipt passes exact canonical readback", { lane: "cloud", firstHeartbeat: "awaiting" }, (f) => {
+  const receipt = join(f.root, "activation-submission.json");
+  const sent = f.run(["--receipt", receipt]); assert.equal(sent.status, 0, sent.stderr + sent.stdout);
+  f.land();
+  const r = f.readback(receipt); assert.equal(r.status, 0, r.stderr + r.stdout);
+  assert.match(r.stdout, /canonical merge verified/);
+});
 control("an active routine's first heartbeat leaves the registry unchanged", { lane: "cloud", firstHeartbeat: "active" }, (f) => {
   const r = f.run(); assert.equal(r.status, 0, r.stderr + r.stdout);
   const topic = f.pushes()[0].at(-1).slice("HEAD:".length);

@@ -357,7 +357,7 @@ function readback(path) {
       || !/^[a-f0-9]{40}$/.test(r.head)
       || !Array.isArray(r.blobs) || !r.blobs.length
       || r.blobs.some(b => typeof b.path !== "string" || b.path.includes("..") || !/^[a-f0-9]{40}$/.test(b.oid)
-        || ![...MAIL_DIRS, COVERAGE_PAGE].some(p => b.path === p || b.path.startsWith(p + "/")))) throw Error("invalid submission binding");
+        || (b.path !== ROUTINES_FILE && ![...MAIL_DIRS, COVERAGE_PAGE].some(p => b.path === p || b.path.startsWith(p + "/"))))) throw Error("invalid submission binding");
     if (!repoSlug || repoSlug !== r.repository) throw Error("receipt repository differs");
     const evidence = new ReadbackEvidence(path, receipt.sha256, {
       pendingCadence: Boolean(flags.pendingCadence), resolvedHand: flags.resolvedHand ?? null,

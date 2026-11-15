@@ -77,6 +77,7 @@ import { auditBacklogOwnership, parseRows, rosterIds, statusText } from "./check
 import { SIM_OPERATIONS } from "./lib/sim-operations.mjs";
 import { SOFT_LIMIT_H } from "./lib/raised-hand-kinds.mjs";
 import { isMainModule } from "./lib/is-main.mjs";
+import { scratchGitOk, scratchGitEnv } from "./lib/scratch-git.mjs";
 
 const HERE = fileURLToPath(import.meta.url);
 const ROOT = resolve(dirname(HERE), "..");
@@ -1088,11 +1089,11 @@ function selfTest() {
   const emitRuns = (() => {
     const fixtureRoot = mkdtempSync(join(tmpdir(), "objective-loop-emit-"));
     try {
-      const closure = ["scripts/objective-loop.mjs", "scripts/lib/is-main.mjs", "scripts/lib/raised-hand-kinds.mjs", "scripts/lib/sim-operations.mjs", "scripts/check-backlog-ownership.mjs", "scripts/lib/lane-attempt-store.mjs"];
+      const closure = ["scripts/objective-loop.mjs", "scripts/lib/is-main.mjs", "scripts/lib/raised-hand-kinds.mjs", "scripts/lib/sim-operations.mjs", "scripts/check-backlog-ownership.mjs", "scripts/lib/lane-attempt-store.mjs", "scripts/lib/scratch-git.mjs"];
       for (const rel of closure) { mkdirSync(dirname(join(fixtureRoot, rel)), { recursive: true }); copyFileSync(join(ROOT, rel), join(fixtureRoot, rel)); }
       const copied = join(fixtureRoot, "scripts/objective-loop.mjs");
       if (!/^export function emit\(/m.test(readFileSync(copied, "utf8"))) writeFileSync(copied, readFileSync(copied, "utf8") + "\nexport { emit };\n");
-      spawnSync("git", ["init", "-q", fixtureRoot], { encoding: "utf8" });
+      scratchGitOk(fixtureRoot, ["init", "-q"]);
       const driver = join(fixtureRoot, "drive-emit.mjs");
       writeFileSync(driver, `
 import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync, unlinkSync } from "node:fs";
@@ -1120,7 +1121,7 @@ wipe(); dayDone(); put(STATE, derive());
 d = derive(); res.B = { derived: d.decisionAddress, ...view(m.emit(d, { write: true, deliver: false })) };
 console.log(JSON.stringify(res));
 `);
-      const r = spawnSync(process.execPath, [driver, fixtureRoot], { cwd: fixtureRoot, encoding: "utf8", timeout: 120000 });
+      const r = spawnSync(process.execPath, [driver, fixtureRoot], { cwd: fixtureRoot, env: scratchGitEnv(), encoding: "utf8", timeout: 120000 });
       try { return { ok: r.status === 0, ...JSON.parse(String(r.stdout).trim().split("\n").pop()) }; } catch { return { ok: false, status: r.status, stderr: String(r.stderr).slice(-400) }; }
     } finally { rmSync(fixtureRoot, { recursive: true, force: true }); }
   })();

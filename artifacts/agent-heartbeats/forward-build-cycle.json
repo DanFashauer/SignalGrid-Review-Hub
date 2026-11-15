@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-11-14T22:11:45.093Z",
-  "result": "22:11Z fire: #2092 (task routing) green on 8e1e9e98 after round 5; full preflight+breadth pass on 319c202a and 473f4984; merge blocked only on the owner's word to resolve four addressed Codex threads. Credit-saving rule: no workers, H/S/O 0/0/0. sub-brains: none. owner queue: #2092 thread resolution."
+  "firedAt": "2026-11-15T00:11:00.101Z",
+  "result": "00:11Z fire: ran the Root-routed resolver-peer qualification on Linux (fixture RED->GREEN; real project lock delta 8 lines, full typecheck exit 0; reported on #439, nothing shared changed). #2092 green, merge blocked only on the owner's word to resolve four addressed Codex threads. Credit-saving rule: no workers, H/S/O 0/0/0. sub-brains: none. owner queue: #2092 thread resolution."
 }

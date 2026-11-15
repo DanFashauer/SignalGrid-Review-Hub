@@ -159,3 +159,12 @@ overrides:
   qs: ">=6.15.2"
   body-parser: ">=2.3.0"
   proxy-addr: "2.0.8"
+
+# @hookform/resolvers 3.x imports `zod` without declaring it, so pnpm resolved it through
+# the hidden hoist (node_modules/.pnpm/node_modules/zod), whose pick between zod 3 and 4 is
+# order-dependent: zod 4 on the Mac broke the app typecheck (PolicyCreate.tsx TS2345) while
+# Linux got zod 3. Declaring the peer makes it resolve the consuming package's zod.
+packageExtensions:
+  '@hookform/resolvers@3':
+    peerDependencies:
+      zod: '*'

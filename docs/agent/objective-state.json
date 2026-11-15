@@ -412,6 +412,12 @@
       "since": "2026-11-05T02:42:19.307Z"
     },
     {
+      "id": "stalled-top-task",
+      "clears": "cloud",
+      "asks": "row 168 (\"The palette gate cannot see a verdict painted with the WRONG ratified token.\") has been ranked #1 for over 7 days with no change in docs/COMPANY_BUILD_PLAN.md — build it, re-rank it, or record why it waits",
+      "since": "2026-11-15T01:58:28.920Z"
+    },
+    {
       "id": "readiness-floor-no-clearing-op",
       "clears": "mac",
       "asks": "readiness fell below the DR-036 floor — read the dimension that fell and re-mint or repair it",
@@ -429,7 +435,7 @@
       "criterionId": "evidence-fresh",
       "op": "evidence",
       "clears": "artifacts/live-evidence/mac-run.json",
-      "id": "objective-loop-evidence-fresh-2026-11-15",
+      "id": "objective-loop-evidence-fresh-2026-11-15-2",
       "queuedAs": "this tick"
     }
   ],
@@ -444,8 +450,8 @@
     "partialRows": 5
   },
   "staleAfterHours": 3,
-  "derivedAt": "2026-11-15T00:15:21.715Z",
-  "derivedAtCommit": "8e52c0914ef498f6803378a42ffcd7a0f1ae1c7a",
+  "derivedAt": "2026-11-15T01:58:28.920Z",
+  "derivedAtCommit": "c6289c2df13a73ec5036370fdfbadbbe9f323954",
   "workingTreeCleanAtEntry": false,
-  "decisionAddress": "f2df58e7604726b7a19dcaa5384fcfce78cd0779022764464c49d0f0dca0b278"
+  "decisionAddress": "9511677b625f5ac39f0ffa0883dfe1a7f74502902c7bd08d35f0492e69532bcb"
 }

@@ -608,6 +608,8 @@ const STEPS = [
   { name: "Evidence sources (the contract's vocabulary matches what exists)", cmd: ["node", "scripts/check-evidence-sources.mjs"] },
   { name: "Org roster (a role nobody has ever run is named on every run)", cmd: ["node", "scripts/check-org-roster.mjs"] },
   { name: "Org roster self-test (the gate can actually fail)", cmd: ["node", "scripts/check-org-roster.mjs", "--self-test"] },
+  { name: "Task routing (each task kind -> model, effort, lane, role, validators; unknown kinds go to capability-gap)", cmd: ["node", "scripts/check-task-routing.mjs"] },
+  { name: "Task routing self-test (the gate can actually fail)", cmd: ["node", "scripts/check-task-routing.mjs", "--self-test"] },
   { name: "Backlog ownership (a row with work left in it names the role that owns it)", cmd: ["node", "scripts/check-backlog-ownership.mjs"] },
   { name: "Backlog ownership self-test (the gate can actually fail)", cmd: ["node", "scripts/check-backlog-ownership.mjs", "--self-test"] },
   { name: "Loop-state seam self-test (squash-of-a-merge-tree, whitespace twin and same-name-ahead fixtures can fail)", cmd: ["node", "scripts/loop-state.mjs", "--self-test"] },

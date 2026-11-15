@@ -216,13 +216,13 @@ function runBuild(f,body,{extra={}}={}) {
  return spawnSync('/bin/bash',[file],{cwd:f.root,env:{...f.env,...extra},encoding:'utf8'});
 }
 function emitObjective(f,{existingState=false,rounds=1}={}) {
- const text=readFileSync(join(SOURCE,'scripts/objective-loop.mjs'),'utf8'),a=text.indexOf('function emit(state, { write, deliver }) {'),b=text.indexOf('\n// ── --check:',a);
- assert.ok(a>=0&&b>a,'actual emit source boundaries required');
+ const text=readFileSync(join(SOURCE,'scripts/objective-loop.mjs'),'utf8'),a=text.indexOf('export function assignFreeRequestIds('),e=text.indexOf('function emit(state, { write, deliver }) {',a),b=text.indexOf('\n// ── --check:',e);
+ assert.ok(a>=0&&e>a&&b>e,'actual emit source and its id-assignment helper required');
  const escalation={id:'same-source-escalation',clears:'cloud',asks:'source-backed repair remains needed'};
  const state={decisionAddress:'same frozen decision',derivedAt:'2026-11-01T01:00:00Z',derivedAtCommit:f.head,queue:[],escalations:[escalation],criteria:[],tasks:[],verdict:'building'};
  if(existingState)put(join(f.root,'frozen-state.json'),enc(state));
  const file=join(f.parent,'objective-caller-'+(++serial)+'.mjs');
- put(file,`import {createHash,randomBytes} from 'node:crypto';import {spawnSync} from 'node:child_process';import {lstatSync,mkdirSync,readFileSync,readdirSync,renameSync,existsSync,writeFileSync,rmSync} from 'node:fs';import {dirname,join} from 'node:path';import {fileURLToPath} from 'node:url';import {deliveryRecordDirectory,retryHead,setAsideRefusedAttempt} from ${JSON.stringify('file://'+join(f.root,'scripts/lib/lane-attempt-store.mjs'))};\nconst ROOT=${JSON.stringify(f.root)},STATE_REL='frozen-state.json',STAMP_REL='node_modules/frozen-objective-stamp.json';\n${text.slice(a,b)}\nconst state=${JSON.stringify(state)};for(let n=0;n<${rounds};n++){const r=emit(state,{write:true,deliver:true});console.log(r.lines.join('\\n'));}\n`);
+ put(file,`import {createHash,randomBytes} from 'node:crypto';import {spawnSync} from 'node:child_process';import {lstatSync,mkdirSync,readFileSync,readdirSync,renameSync,existsSync,writeFileSync,rmSync} from 'node:fs';import {dirname,join} from 'node:path';import {fileURLToPath} from 'node:url';import {deliveryRecordDirectory,retryHead,setAsideRefusedAttempt} from ${JSON.stringify('file://'+join(f.root,'scripts/lib/lane-attempt-store.mjs'))};\nconst ROOT=${JSON.stringify(f.root)},STATE_REL='frozen-state.json',STAMP_REL='node_modules/frozen-objective-stamp.json';\nconst queueWork=()=>{throw Error('escalation fixture unexpectedly queried a request')};const queuedWhere=queueWork,requestIdTaken=queueWork,nextFreeRequestId=queueWork,decisionAddress=queueWork;\n${text.slice(a,b)}\nconst state=${JSON.stringify(state)};for(let n=0;n<${rounds};n++){const r=emit(state,{write:true,deliver:true});console.log(r.lines.join('\\n'));}\n`);
  return spawnSync(process.execPath,[file],{cwd:f.root,env:f.env,encoding:'utf8'});
 }
 function exactRequest(f,o,{atLeast=1}={}) {

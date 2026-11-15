@@ -153,6 +153,10 @@ if (process.argv.includes("--self-test")) {
   const good = readRatchetFile(p("good.json", '{ "maxOrphans": 7 }'), "maxOrphans");
   const corrupt = readRatchetFile(p("corrupt.json", "{ this is not json"), "maxOrphans");
   const wrongShape = readRatchetFile(p("shape.json", '{ "somethingElse": 7 }'), "maxOrphans");
+  // JSON.parse turns an overflowing literal into Infinity: typeof says "number", so it must be refused explicitly.
+  const plusInf = readRatchetFile(p("inf.json", '{ "maxOrphans": 1e999 }'), "maxOrphans");
+  const minusInf = readRatchetFile(p("ninf.json", '{ "maxOrphans": -1e999 }'), "maxOrphans");
+  const stringNum = readRatchetFile(p("str.json", '{ "maxOrphans": "7" }'), "maxOrphans");
   const missingNoHistory = readRatchetFile(p("gone.json", null), "maxOrphans", () => false);
   const missingWithHistory = readRatchetFile(p("gone.json", null), "maxOrphans", () => true);
   const src = readFileSync(fileURLToPath(import.meta.url), "utf8");
@@ -162,6 +166,10 @@ if (process.argv.includes("--self-test")) {
     // corrupt file \u2014 which is how it turned a 1 into a 0 with the ceiling raised.
     ["a CORRUPT pin REFUSES (it is not a first run)", corrupt.action === "refuse", true],
     ["a pin missing its numeric key REFUSES", wrongShape.action === "refuse", true],
+    // An infinite ceiling can never be exceeded: read as "use", the rise branch could not fire, the same silent pass as a corrupt pin.
+    ["a +Infinity pin (1e999) REFUSES as ESHAPE", plusInf.action === "refuse" && plusInf.errCode === "ESHAPE" && plusInf.value === null, true],
+    ["a -Infinity pin (-1e999) REFUSES as ESHAPE", minusInf.action === "refuse" && minusInf.errCode === "ESHAPE" && minusInf.value === null, true],
+    ["a numeric STRING pin still REFUSES as ESHAPE", stringNum.action === "refuse" && stringNum.errCode === "ESHAPE", true],
     ["an absent pin with NO git history is genesis", missingNoHistory.action === "genesis", true],
     ["an absent pin that HAS git history REFUSES", missingWithHistory.action === "refuse", true],
     // Live controls on the history probe: it must be able to answer both ways, or the

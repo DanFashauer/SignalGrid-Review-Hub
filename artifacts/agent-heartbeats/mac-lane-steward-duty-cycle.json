@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-11-15T03:41:44.783Z",
-  "result": "03:24Z cycle (delivered 03:4xZ, held until the Root-selected #2045 qualification run finished to avoid load overlap): Mac tick firedAt 02:57:47Z (#2115); tick PR #2113 caught up, auto-merge armed; Mac hand PRs #2111 and #2116 merged after catch-ups, both hands cleared here; #2045 repaired source tree 86144044 qualified on Linux (preflight 0, breadth 0; #439 6888692433); live evidence mac-run.json last 2026-11-10T22:42:00-05:00; owner not escalated."
+  "firedAt": "2026-11-15T05:25:22.725Z",
+  "result": "05:24Z cycle: Mac tick firedAt 05:11:24Z (heartbeat #2121 merged); hand PR #2122 caught up, auto-merge armed; tick PR #2113 RED on the Mac's own commit 404d4725 — scripts/objective-loop.mjs writes objective-state.json after renaming a queued request id (-2) without recomputing decisionAddress, so --check fails; root cause and proposed fix on #439 6889684723, owner/selection with Root, #2113 left unedited; live evidence mac-run.json last 2026-11-10T22:42:00-05:00; owner not escalated."
 }

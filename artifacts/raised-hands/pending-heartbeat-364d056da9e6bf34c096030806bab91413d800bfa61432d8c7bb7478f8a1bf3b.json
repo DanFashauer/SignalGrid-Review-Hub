@@ -7,6 +7,9 @@
   "need": "Cloud lane: inspect the current source, protected PR checks and findings. Preserve the original attempt as readback-only; this separate uncertainty notice grants no execution, landing or retry authority.",
   "whoCanUnblock": "cloud lane",
   "domain": "lane",
-  "status": "open",
-  "routedTo": null
+  "status": "resolved",
+  "routedTo": null,
+  "resolvedAt": "2026-11-15T12:01:18.685Z",
+  "resolvedBy": "cloud",
+  "resolution": "The heartbeat delivery it covers is on mainline: #2137 merged 91858ea0 (10:06:57Z) with the gating check green on head b129a047; this hand's PR #2138 merged 5b634d0b. Readback #439/6893595079."
 }

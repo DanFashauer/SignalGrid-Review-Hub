@@ -34,6 +34,8 @@ import { expect, type test as baseTest } from "@playwright/test";
 export interface EgressOptions {
   serves?: "localhost" | "file";
   settleMs?: number;
+  /** Admit only one GET navigation of the main page to this exact document. */
+  documentUrl?: () => string;
 }
 
 const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1"]);
@@ -41,7 +43,7 @@ const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1"]);
 export function guardEgress(
   test: typeof baseTest,
   allowedHosts: readonly string[] = [],
-  { serves = "localhost", settleMs = 300 }: EgressOptions = {},
+  { serves = "localhost", settleMs = 300, documentUrl }: EgressOptions = {},
 ): void {
   let unexpected: string[] = [];
   const isServed = (url: URL): boolean =>
@@ -52,17 +54,29 @@ export function guardEgress(
 
   test.use({ serviceWorkers: "block" });
 
-  test.beforeEach(async ({ context }) => {
+  test.beforeEach(async ({ context, page }) => {
     unexpected = [];
+    let documentAdmitted = false;
+    const expectedDocument = documentUrl?.();
     await context.route("**/*", (route) => {
-      const url = new URL(route.request().url());
+      const request = route.request();
+      const url = new URL(request.url());
+      if (expectedDocument !== undefined) {
+        if (!documentAdmitted && url.href === expectedDocument && request.method() === "GET"
+          && request.isNavigationRequest() && request.frame() === page.mainFrame()) {
+          documentAdmitted = true;
+          return route.continue();
+        }
+        record(url);
+        return route.abort();
+      }
       if (isServed(url)) return route.continue();
       record(url);
       return route.abort();
     });
     await context.routeWebSocket(/.*/, (ws) => {
       const url = new URL(ws.url());
-      if (isServed(url)) return ws.connectToServer();
+      if (expectedDocument === undefined && isServed(url)) return ws.connectToServer();
       record(url);
       return ws.close();
     });

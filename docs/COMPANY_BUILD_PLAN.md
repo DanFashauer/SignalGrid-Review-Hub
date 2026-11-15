@@ -3108,15 +3108,26 @@ earlier — that is the loop working, not a reason to soften the record.
     hard failure — that breaks every developer without Postgres, which is how gates get
     switched off.
 
-124. **`ladderRungs` is published as a derived figure by twelve proofs, is a literal in
-    all twelve, and they disagree.** — OPEN, devex-tooling-engineer. FIX PROPOSED 2026-09-30 (branch claude/build-ladder-rungs-derived, lands under DR-037): the six-rung family ladder is now ONE const array, `FAMILY_ACTIONS` in `lib/integrations/src/integrations/action-ladder.ts`, and the eleven family action unions in `lib/integrations/src/integrations/*/types.ts` derive from it; `lib/dual-control/src/types.ts` gains `DUAL_CONTROL_OUTCOMES` with `DualControlOutcome` derived from it; all thirteen proofs print `ladderRungs=${...length}` (dual-control 3, the rest 6); `scripts/src/facility-trust-graph-proof.ts` holds its package's two independent action unions equal to the shared ladder at the type level; `scripts/src/verdict-attestation-proof.ts` ranks with the package's own `UNIFIED_ACTIONS` instead of its local eight-rung copy; `scripts/src/emitter-discipline-proof.ts` measures `gateClausesPerFamily` from the clauses whose checks each family actually flipped AND passed (deleting the dev-tier check drops the figure to 3 and fails the proof) (one new assertion, 100 -> 101) and its header now says six families. THE CHECK: `scripts/check-proof-figures.mjs` fails any proof whose `figures=` line prints `ladderRungs` or `gateClausesPerFamily` as a digit literal (`DERIVED_ONLY_KEYS`), with five new self-test cases; run over every pre-fix proof source (base 8654f135) it reports fourteen literals — thirteen `ladderRungs`, one `gateClausesPerFamily` — and against the fixed tree none. RE-MEASURED 2026-10-23 (this branch, after merging SignalGrid_Alpha): `grep -ho 'ladderRungs=[0-9]*' scripts/src/*.ts` prints 13 empty matches, so no proof publishes a ladderRungs digit; all 13 print it from an array length; `git ls-files lib/integrations | grep -c action-ladder` prints 1 (`lib/integrations/src/integrations/action-ladder.ts`); running `scripts/src/emitter-discipline-proof.ts` prints summary=pass (151/151) and gateClausesPerFamily=4. Open until PR #1244 merges. RE-MEASURED 2026-11-01 (cloud, on the branch merged with mainline a9789f25): `pnpm run proof:emitter-discipline` prints summary=pass (165/165) and gateClausesPerFamily=4 — mainline added fourteen url-guard and redirect checks since; the catalog figure follows the measurement. RE-MEASURED 2026-10-22 (still open): `grep -ho 'ladderRungs=[0-9]*' scripts/src/*.ts | sort | uniq -c` printed 11 at ladderRungs=6, 1 at ladderRungs=5 and 1 at ladderRungs=3, thirteen literals unchanged; `git ls-files lib/integrations | grep -c action-ladder` printed 0, so open PR #1244 (merged false per gh api) has not landed; verdict-attestation-proof.ts line 53 still defines the eight-rung LADDER. RE-MEASURED 2026-10-08 (still open): `grep -ho "ladderRungs=[0-9]*" scripts/src/*.ts | sort | uniq -c` printed eleven at `ladderRungs=6`, one at `ladderRungs=5` and one at `ladderRungs=3`, thirteen literals in all. The remainder is open PR #1244: per `gh api repos/DanFashauer/SignalGrid-Review-Hub/pulls/1244/files` it adds action-ladder.ts (new, under `lib/integrations/src/integrations/`) (a const FAMILY_ACTIONS array of six), derives the families' action types from it and edits 15 proofs under `scripts/src/` plus `scripts/check-proof-figures.mjs`; none of that is on this head. RE-MEASURED 2026-09-26 (still open, and one copy worse): a thirteenth proof, `scripts/src/app-protection-proof.ts` (added 2026-09-20), also publishes ladderRungs as a literal, so eleven proofs print 6, one prints 5 and one prints 3; `scripts/src/verdict-attestation-proof.ts` still defines an unreconciled eight-rung ladder at its original line; `scripts/src/emitter-discipline-proof.ts` still says "five families" over a six-entry array, with its gateClausesPerFamily literal now printed near line 572; no shared ladder constant exists. NOTE. Ten publish
-    6, one publishes 5, one publishes 3, and `verdict-attestation-proof.ts:53` defines
-    an eight-rung ladder. Nothing reads the value. Inert today because the figure guard
-    only holds docs to comma-formatted numbers of four digits or more — but it sits on the same line
-    as genuinely derived values, which makes it read as measured. That is the
-    "fossil that looks precise" the figure guard's own header was written about. Same
-    for `gateClausesPerFamily=4` in `emitter-discipline-proof.ts:140`, whose header
-    still says "five families" against six entries in the array.
+124. **Derive action-ladder figures from the action definitions.** — FIXED,
+    devex-tooling-engineer. RE-MEASURED 2026-11-13 against the source and Git
+    ancestry: PR #1244 merged on 2026-11-01 as
+    `9df420ddd07d8ee8f06b08f47d44257c982e1f5d`, an ancestor of this checkout.
+    The earlier open status was stale; the merged implementation satisfies this row.
+    `lib/integrations/src/integrations/action-ladder.ts` defines `FAMILY_ACTIONS`
+    and derives `FamilyAction`; the repaired family action types use that shared type.
+    `lib/dual-control/src/types.ts` derives `DualControlOutcome` from
+    `DUAL_CONTROL_OUTCOMES`. The proofs derive `ladderRungs` from those arrays,
+    rather than publishing hand-typed counts. The type assertions in
+    `scripts/src/facility-trust-graph-proof.ts` hold its independent action unions
+    equal to `FamilyAction`, and `scripts/src/verdict-attestation-proof.ts` ranks
+    against the package's `UNIFIED_ACTIONS`. The emitter proof derives
+    `gateClausesPerFamily` from the exercised clauses and compares it with
+    `GATE_CLAUSES.length`; its header names the emitter families it checks.
+    `scripts/check-proof-figures.mjs` keeps both figure keys in
+    `DERIVED_ONLY_KEYS`, with self-tests refusing their digit-literal forms.
+    Historical defect: the proofs published inconsistent literal ladder counts,
+    and the emitter figure was also typed rather than measured. No product
+    readiness or live-integration result follows from this source repair.
 
 125. **The Graph connector reports a device MANAGED when the tenant never said
     so.** — FIXED 2026-08-25, endpoint-uem-domain. Was BLOCKING. Reproduced end to
@@ -3724,18 +3735,19 @@ earlier — that is the loop working, not a reason to soften the record.
     decision path. Recorded as a coverage gap rather than a defect: nobody has looked,
     and the ledger now says so.
 
-150. **`ladderRungs=5` in the agent-behavior proof matches nothing in its source of
-    truth.** — OPEN, devex-tooling-engineer. FIX PROPOSED 2026-09-30 (branch claude/build-ladder-rungs-derived, lands under DR-037): `scripts/src/agent-behavior-proof.ts` now prints `ladderRungs=${FAMILY_ACTIONS.length}` = 6, read from `lib/integrations/src/integrations/action-ladder.ts`, which `AgentBehaviorAction` in `lib/integrations/src/integrations/agent-behavior/types.ts` is derived from — the figure is the length of the array the type is made of; a typed literal now fails `scripts/check-proof-figures.mjs` (see row 124). RE-MEASURED 2026-10-23 (this branch, after merging SignalGrid_Alpha): `grep -n ladderRungs scripts/src/agent-behavior-proof.ts` prints line 222 with `ladderRungs=${FAMILY_ACTIONS.length}`, no literal; `lib/integrations/src/integrations/action-ladder.ts` holds the six-member array it reads. Open until PR #1244 merges. RE-MEASURED 2026-10-22 (still open): `grep -n ladderRungs scripts/src/agent-behavior-proof.ts` still prints the literal ending ladderRungs=5 at line 221, `find lib scripts -iname 'action-ladder*'` finds 0 files, and `gh api repos/DanFashauer/SignalGrid-Review-Hub/pulls/1244` prints state open and merged false, so the derive-from-array fix is unmerged; 13 proofs carry the literal, 11 at six, one at five, one at three. RE-MEASURED 2026-10-08 (still open): `grep -n ladderRungs scripts/src/agent-behavior-proof.ts` still prints the literal five at line 221, and `grep -c agent-behavior scripts/check-proof-figures.mjs` printed 1 for its registration. The remainder is open PR #1244: per `gh api repos/DanFashauer/SignalGrid-Review-Hub/pulls/1244/files` it edits `scripts/src/agent-behavior-proof.ts` and `lib/integrations/src/integrations/agent-behavior/types.ts` to derive the figure from the shared const action array in action-ladder.ts (new, under `lib/integrations/src/integrations/`); none of that is on this head. RE-MEASURED 2026-09-26 (still open, unchanged since 2026-07-31): `scripts/src/agent-behavior-proof.ts` still prints a ladderRungs literal of five, which matches none of the real figures — the six-member action union and nine-member posture union in `lib/integrations/src/integrations/agent-behavior/types.ts`, the eight-member unified ladder in `lib/posture-composition/src/types.ts`, or the four actions the proof itself exercises — and `scripts/check-proof-figures.mjs` still registers this proof as the figure guard's source for it; the sibling context has drifted (eleven proofs at six today, see row 124). NOTE. The family's action type has 6
-    members, the unified ladder has 8, its postures have 9, and the proof exercises 4
-    distinct actions. Five is none of them. The proof IS registered in the figure
-    guard, so this literal is what documentation about agent-behavior gets validated
-    against — a doc correctly stating "six" would be FAILED by the guard.
-    CONTEXT, not a separate row: eight other proofs publish `ladderRungs=6` and all
-    eight are correct today, but every one is a hand-typed literal restating a bare
-    TypeScript union with no runtime value. `agent-behavior` is the copy that already
-    drifted.
-    FIX: convert each family's action union to a const array and emit
-    `${X_ACTIONS.length}` — for all nine, not just the one that drifted.
+150. **Derive the agent-behavior ladder figure from its action type's source.** —
+    FIXED, devex-tooling-engineer. RE-MEASURED 2026-11-13: PR #1244 merged on
+    2026-11-01 as `9df420ddd07d8ee8f06b08f47d44257c982e1f5d`, an ancestor of
+    this checkout. `scripts/src/agent-behavior-proof.ts` emits
+    `ladderRungs=${FAMILY_ACTIONS.length}` from
+    `lib/integrations/src/integrations/action-ladder.ts`;
+    `lib/integrations/src/integrations/agent-behavior/types.ts` defines
+    `AgentBehaviorAction = FamilyAction` from that same module. The sibling family proofs
+    use the shared array too; `scripts/check-proof-figures.mjs` refuses a typed
+    `ladderRungs` count. This closes the duplicate action-ladder defect tracked
+    in row 124, including its sibling figures. Historical defect: the agent proof
+    published a literal count that matched neither its action union nor the
+    actions it exercised. The earlier open status survived the merge in error.
 
 151. **The desktop Policies page paints `fail-closed` as danger and `fail-open` as
     healthy — the product's first invariant, inverted in pixels.** — FIXED

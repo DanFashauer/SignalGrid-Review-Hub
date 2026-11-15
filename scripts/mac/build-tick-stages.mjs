@@ -862,6 +862,15 @@ const buildTriage = (kind) => JSON.stringify({ status: "build", kind, marker: ""
 const flagsOf = (argv) => argv.filter((_, i) => i !== argv.indexOf("-p") + 1); // minus the brief text
 const after = (argv, f) => argv[argv.indexOf(f) + 1];
 
+function fixtureProcessIsRunning(pid) {
+  try { process.kill(pid, 0); } catch (error) { return error.code !== "ESRCH"; }
+  // A container's PID 1 may retain a killed grandchild as a zombie. kill(pid, 0)
+  // still finds that PID; only a measured Z state proves it cannot run anymore.
+  // Failed or empty ps output stays live/unknown, so it cannot hide a survivor.
+  const ps = spawnSync("/bin/ps", ["-p", String(pid), "-o", "state="], { encoding: "utf8" });
+  return !(ps.status === 0 && /^Z/.test(ps.stdout.trim()));
+}
+
 function selfTestBody(root, ok) {
   const guard = (name, fn) => { try { fn(); } catch (e) { ok(`${name} threw: ${e.message}`, false); } }; // a missing export is one FAIL, not an aborted self-test
   const stubDir = join(root, "bin");
@@ -1404,8 +1413,7 @@ process.stdout.write(JSON.stringify(result)); process.stderr.write(r.stderr || '
     const pidFile = join(dir, "bg.pid");
     const r = spawnCapped(1, "/bin/sh", ["-c", `sleep 30 & echo $! > "${pidFile}"; wait`], { stdio: ["ignore", "ignore", "ignore"], env: process.env });
     const bg = Number(readFileSync(pidFile, "utf8"));
-    let alive = true;
-    try { process.kill(bg, 0); } catch { alive = false; }
+    const alive = fixtureProcessIsRunning(bg);
     if (alive) process.kill(bg, "SIGKILL"); // this pid, by number: never by pattern
     ok("S-5 spawnCapped: at the cap the whole process GROUP dies (the backgrounded grandchild too) and the exit is 142", r.status === 142 && !alive, `exit ${r.status}, grandchild alive ${alive}`);
     ok("S-5 spawnCapped: a command that finishes passes its own exit status through", spawnCapped(5, "/bin/sh", ["-c", "exit 7"], { stdio: "ignore" }).status === 7 && spawnCapped(5, "/bin/sh", ["-c", "true"], { stdio: "ignore" }).status === 0);
@@ -1512,8 +1520,7 @@ process.stdout.write(JSON.stringify(result)); process.stderr.write(r.stderr || '
       const run = (cap, cmd) => spawnSync("/bin/bash", ["-c", `${fn}\ncapped ${cap} sh -c '${cmd}'`], { env: { ...process.env, P: pidFile }, encoding: "utf8", timeout: 60000 });
       const r = run(1, `sleep 30 & echo $! > "$P"; wait`);
       const bg = Number(readFileSync(pidFile, "utf8"));
-      let alive = true;
-      try { process.kill(bg, 0); } catch { alive = false; }
+      const alive = fixtureProcessIsRunning(bg);
       if (alive) process.kill(bg, "SIGKILL"); // this pid, by number: never by pattern
       ok("S4 capped(): at the cap the whole process GROUP dies (the backgrounded grandchild too) and the exit is 142", r.status === 142 && !alive, `exit ${r.status}, grandchild alive ${alive}`);
       ok("S4 capped(): a command that finishes passes its own exit status through", run(5, "exit 7").status === 7 && run(5, "true").status === 0);

@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-11-15T05:25:22.725Z",
-  "result": "05:24Z cycle: Mac tick firedAt 05:11:24Z (heartbeat #2121 merged); hand PR #2122 caught up, auto-merge armed; tick PR #2113 RED on the Mac's own commit 404d4725 — scripts/objective-loop.mjs writes objective-state.json after renaming a queued request id (-2) without recomputing decisionAddress, so --check fails; root cause and proposed fix on #439 6889684723, owner/selection with Root, #2113 left unedited; live evidence mac-run.json last 2026-11-10T22:42:00-05:00; owner not escalated."
+  "firedAt": "2026-11-15T07:25:19.387Z",
+  "result": "07:24Z cycle (2h keepalive): Mac tick firedAt 05:11:24Z (within 3h); Mac heartbeat mail #2127 open with auto-merge armed; tick PR #2113 still red on the objective-loop rename-after-address defect (fix accepted by Root, delivery with Root), left unedited; no mail addressed to cloud; one cloud->mac message unread (stale node_modules for the evidence run), so no duplicate refresh ask; sim request objective-loop-evidence-fresh-2026-11-15 pending on the Mac; live evidence mac-run.json last 2026-11-10T22:42:00-05:00; owner not escalated."
 }

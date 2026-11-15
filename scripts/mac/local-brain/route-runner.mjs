@@ -16,7 +16,12 @@
  *  - no route, a pending tier, a refused lane, or a missing pass 1;
  *  - no executor for a lane, or an executor that throws or answers malformed;
  *  - a pass that reports a different model or effort than its route asked for (no silent downgrade);
- *  - a pass 3 without a successful verification.
+ *  - a review (pass 2) that returns no findings list (an empty list is allowed; a missing one is not);
+ *  - a pass 3 whose proof the brain's own policy (proof-policy.mjs assessProof) does not pass:
+ *    exit 0, tests > 0, every test passed, no failures, no skips, changed files inside the task's
+ *    scope. The runner never bypasses that policy.
+ * The review's findings are forwarded to pass 3 (which must answer each one) and to the cloud
+ * hand-off, together with any findings pass 3 leaves open.
  * The job is left INTERRUPTED with the reason recorded, so a later run can resume it.
  *
  * Executors are injected: each is `(request) => result`. commandExecutor() below turns a command
@@ -30,6 +35,7 @@ import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { selectEligible } from "./task-selector.mjs";
 import JobState from "./job-state.mjs";
+import { assessProof } from "./proof-policy.mjs";
 import { resolveRoute, loadRoutingTable } from "../../lib/task-route.mjs";
 import { isMainModule } from "../../lib/is-main.mjs";
 
@@ -41,18 +47,24 @@ function expectation(pass) {
   return { effort: pass.effort ?? null, model: pass.model ?? null };
 }
 
-function checkReceipt(pass, result) {
+function checkReceipt(pass, result, task, findings) {
   if (!result || typeof result !== "object" || Array.isArray(result)) return "answered nothing usable";
   if (result.ok !== true) return `reported failure: ${typeof result.why === "string" ? result.why : "no reason given"}`;
   if (typeof result.head !== "string" || !/^[0-9a-f]{40}$/.test(result.head)) return "did not report a full 40-character head";
   const want = expectation(pass);
   if (want.effort && result.effort !== want.effort) return `ran at effort ${JSON.stringify(result.effort)}, route asked for ${want.effort}`;
   if (want.model && result.model !== want.model) return `ran on ${JSON.stringify(result.model)}, route asked for ${want.model}`;
+  if (pass.pass === 2 && (!Array.isArray(result.findings) || !result.findings.every((f) => f && typeof f.id === "string" && f.id.length > 0))) {
+    return "returned no findings list (each finding needs an id; an empty list means none)";
+  }
   if (pass.pass === 3) {
-    const v = result.verification;
-    if (!v || typeof v.command !== "string" || !v.command.trim() || v.exitCode !== 0 || !Number.isSafeInteger(v.passed) || v.passed < 1) {
-      return "pass 3 returned no successful verification (command, exitCode 0, passed > 0)";
+    if (assessProof(result.proof, task.scope) !== "review") {
+      return "pass 3 proof did not pass the brain's proof policy (exit 0, tests > 0, all passed, no fail, no skip, changed files in scope)";
     }
+    const answered = new Set(Array.isArray(result.findingsAnswered) ? result.findingsAnswered.filter((f) => f && typeof f.id === "string" && typeof f.disposition === "string" && f.disposition.trim()).map((f) => f.id) : []);
+    const missing = findings.filter((f) => !answered.has(f.id)).map((f) => f.id);
+    if (missing.length) return `pass 3 did not answer review finding(s) ${missing.join(", ")}`;
+    if (result.openFindings !== undefined && !Array.isArray(result.openFindings)) return "openFindings must be a list";
   }
   if (pass.pass === 4 && (typeof result.deliveredRef !== "string" || !result.deliveredRef.trim())) return "the cloud hand-off named no delivered ref";
   return null;
@@ -76,6 +88,9 @@ export function runNext({ tasks, scope, table, repo, head, executors, reviewLane
   const job = new JobState(task.id, repo, route.passes[0].lane, head);
   job.claim(route.passes[0].lane, job.getVersion());
   let current = head;
+  let reviewFindings = [];
+  let answered = [];
+  let openFindings = [];
   for (const pass of route.passes) {
     const lane = pass.lane;
     if (job.assignedWorkerId !== lane) job.handoff(lane, job.getVersion(), job.assignedWorkerId);
@@ -88,18 +103,26 @@ export function runNext({ tasks, scope, table, repo, head, executors, reviewLane
     if (typeof run !== "function") return stop("has no executor configured");
     let result;
     try {
-      result = run({ task, pass, head: current, role: route.role, skills: route.skills, validators: route.validators, ownerGated: route.ownerGated });
+      result = run({ task, pass, head: current, role: route.role, skills: route.skills, validators: route.validators, ownerGated: route.ownerGated,
+        reviewFindings: pass.pass >= 3 ? reviewFindings : undefined,
+        findingsAnswered: pass.pass === 4 ? answered : undefined,
+        openFindings: pass.pass === 4 ? openFindings : undefined });
     } catch (e) {
       return stop(`threw: ${e?.message ?? String(e)}`);
     }
-    const bad = checkReceipt(pass, result);
+    const bad = checkReceipt(pass, result, task, reviewFindings);
     if (bad) return stop(bad);
     const receipt = { pass: pass.pass, lane, tier: pass.tier ?? null, model: result.model ?? null, effort: result.effort ?? null, headIn: current, headOut: result.head };
-    if (pass.pass === 3) {
-      job.checkpoint({ type: "pass", details: receipt }, job.getVersion(), lane);
-      job.checkpoint({ type: "verification", details: result.verification }, job.getVersion(), lane);
+    if (pass.pass === 2) {
+      reviewFindings = result.findings.map((f) => ({ ...f }));
+      job.checkpoint({ type: "pass", details: { ...receipt, findings: reviewFindings } }, job.getVersion(), lane);
+    } else if (pass.pass === 3) {
+      answered = (result.findingsAnswered ?? []).map((f) => ({ id: f.id, disposition: f.disposition }));
+      openFindings = Array.isArray(result.openFindings) ? result.openFindings.map((f) => ({ ...f })) : [];
+      job.checkpoint({ type: "pass", details: { ...receipt, findingsAnswered: answered, openFindings, proof: result.proof } }, job.getVersion(), lane);
+      job.checkpoint({ type: "verification", details: { command: result.proof.command, exitCode: result.proof.exitCode, passed: result.proof.pass } }, job.getVersion(), lane);
     } else if (pass.pass === 4) {
-      job.checkpoint({ type: "cloud-handoff", details: { ...receipt, deliveredRef: result.deliveredRef, ownerGated: route.ownerGated === true } }, job.getVersion(), lane);
+      job.checkpoint({ type: "cloud-handoff", details: { ...receipt, deliveredRef: result.deliveredRef, ownerGated: route.ownerGated === true, reviewFindings, findingsAnswered: answered, openFindings } }, job.getVersion(), lane);
     } else {
       job.checkpoint({ type: "pass", details: receipt }, job.getVersion(), lane);
     }

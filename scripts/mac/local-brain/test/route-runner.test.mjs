@@ -12,11 +12,22 @@ const queue = (over = {}) => [
 const base = (executors, extra = {}) => ({ tasks: queue(), scope: 'scripts', table, repo: 'org/repo', head: H0, executors, ...extra });
 
 // Honest executors: each reports exactly what its route pass asked for.
+const FINDINGS = [{ id: 'F1', severity: 'P2', text: 'missing refusal test' }];
+const PROOF = { command: 'node scripts/preflight.mjs', exitCode: 0, tests: 436, pass: 436, fail: 0, skipped: 0, changedFiles: ['scripts/mac/local-brain/route-runner.mjs'] };
+// A local session answers as reviewer on pass 2 and as validator on pass 3.
+function session(lane, calls) {
+  return (r) => {
+    calls.push([lane, r]);
+    const base = { ok: true, head: r.pass.pass === 2 ? H2 : H3, effort: r.pass.effort, ...(r.pass.model ? { model: r.pass.model } : {}) };
+    if (r.pass.pass === 2) return { ...base, findings: FINDINGS.map((f) => ({ ...f })) };
+    return { ...base, proof: { ...PROOF }, findingsAnswered: (r.reviewFindings ?? []).map((f) => ({ id: f.id, disposition: 'fixed' })), openFindings: [] };
+  };
+}
 function honest(calls = []) {
   return {
     'local-llm': (r) => { calls.push(['local-llm', r]); return { ok: true, head: H1, effort: r.pass.effort }; },
-    'local-claude': (r) => { calls.push(['local-claude', r]); return { ok: true, head: r.pass.pass === 2 ? H2 : H3, model: r.pass.model, effort: r.pass.effort, verification: { command: 'node scripts/preflight.mjs', exitCode: 0, passed: 436 } }; },
-    'local-codex': (r) => { calls.push(['local-codex', r]); return { ok: true, head: r.pass.pass === 2 ? H2 : H3, effort: r.pass.effort, verification: { command: 'node scripts/preflight.mjs', exitCode: 0, passed: 436 } }; },
+    'local-claude': session('local-claude', calls),
+    'local-codex': session('local-codex', calls),
     'cloud-final': (r) => { calls.push(['cloud-final', r]); return { ok: true, head: r.head, effort: r.pass.effort, deliveredRef: 'lane/local-mail-x@' + r.head }; },
   };
 }
@@ -44,6 +55,35 @@ test('the top-priority task runs local LLM -> local Claude review -> local Codex
   assert.deepEqual(handoffs, ['local-claude', 'local-codex', 'cloud-final']);
 });
 
+test('the review findings reach pass 3 and the cloud hand-off, with pass 3 answers and open findings recorded', () => {
+  const calls = [];
+  const ex = honest(calls);
+  const f3 = ex['local-codex'];
+  ex['local-codex'] = (r) => ({ ...f3(r), openFindings: [{ id: 'F2', text: 'follow-up for cloud' }] });
+  const r = runNext(base(ex));
+  assert.equal(r.status, 'handed-to-cloud');
+  const p3 = calls.find(([, req]) => req.pass.pass === 3)[1];
+  assert.deepEqual(p3.reviewFindings.map((f) => f.id), ['F1']);
+  const p4 = calls.find(([, req]) => req.pass.pass === 4)[1];
+  assert.deepEqual(p4.reviewFindings.map((f) => f.id), ['F1']);
+  assert.deepEqual(p4.findingsAnswered, [{ id: 'F1', disposition: 'fixed' }]);
+  assert.deepEqual(p4.openFindings.map((f) => f.id), ['F2']);
+  const hand = r.job.checkpoints.find((c) => c.type === 'cloud-handoff').details;
+  assert.deepEqual(hand.reviewFindings.map((f) => f.id), ['F1']);
+  assert.deepEqual(hand.openFindings.map((f) => f.id), ['F2']);
+  const v = r.job.checkpoints.find((c) => c.type === 'verification').details;
+  assert.deepEqual(v, { command: PROOF.command, exitCode: 0, passed: 436 });
+});
+
+test('a task scoped under a dot-directory (.claude) is blocked by the proof policy, not bypassed', () => {
+  const ex = honest();
+  const f3 = ex['local-codex'];
+  ex['local-codex'] = (r) => ({ ...f3(r), proof: { ...PROOF, changedFiles: ['.claude/skills/x/SKILL.md'] } });
+  const r = runNext(base(ex, { tasks: [{ id: 'skill', status: 'queued', priority: 5, scope: '.claude', dependencies: [], kind: 'agent-or-skill' }], scope: '.claude' }));
+  assert.equal(r.status, 'hand');
+  assert.match(r.why, /did not pass the brain's proof policy/);
+});
+
 test('reviewLane local-codex swaps the two local sessions', () => {
   const calls = [];
   const r = runNext(base(honest(calls), { reviewLane: 'local-codex' }));
@@ -63,7 +103,12 @@ for (const [label, mutate, why] of [
   ['a missing executor for a lane', (e) => { delete e['local-codex']; }, /pass 3 on local-codex has no executor configured/],
   ['a pass that silently ran on a lower effort', (e) => { const f = e['local-claude']; e['local-claude'] = (r) => ({ ...f(r), effort: 'high' }); }, /ran at effort "high", route asked for max/],
   ['a review that silently ran on a smaller model', (e) => { const f = e['local-claude']; e['local-claude'] = (r) => ({ ...f(r), model: 'sonnet' }); }, /ran on "sonnet", route asked for opus/],
-  ['pass 3 without a successful verification', (e) => { const f = e['local-codex']; e['local-codex'] = (r) => ({ ...f(r), verification: { command: 'x', exitCode: 1, passed: 0 } }); }, /no successful verification/],
+  ['pass 3 whose proof exits non-zero', (e) => { const f = e['local-codex']; e['local-codex'] = (r) => ({ ...f(r), proof: { ...PROOF, exitCode: 1 } }); }, /did not pass the brain's proof policy/],
+  ['pass 3 whose proof reports a failed test despite exit 0 (Codex #2142 example: tests 2, pass 1, fail 1)', (e) => { const f = e['local-codex']; e['local-codex'] = (r) => ({ ...f(r), proof: { ...PROOF, tests: 2, pass: 1, fail: 1, skipped: 0 } }); }, /did not pass the brain's proof policy/],
+  ['pass 3 whose proof skipped a test', (e) => { const f = e['local-codex']; e['local-codex'] = (r) => ({ ...f(r), proof: { ...PROOF, tests: 437, pass: 436, skipped: 1 } }); }, /did not pass the brain's proof policy/],
+  ['pass 3 whose proof changed a file outside the task scope', (e) => { const f = e['local-codex']; e['local-codex'] = (r) => ({ ...f(r), proof: { ...PROOF, changedFiles: ['lib/signalgrid-core/x.ts'] } }); }, /did not pass the brain's proof policy/],
+  ['pass 3 that does not answer a review finding', (e) => { const f = e['local-codex']; e['local-codex'] = (r) => ({ ...f(r), findingsAnswered: [] }); }, /did not answer review finding\(s\) F1/],
+  ['a review that returns no findings list', (e) => { const f = e['local-claude']; e['local-claude'] = (r) => { const x = f(r); if (r.pass.pass === 2) delete x.findings; return x; }; }, /returned no findings list/],
   ['an executor that throws', (e) => { e['local-llm'] = () => { throw new Error('model not loaded'); }; }, /pass 1 on local-llm threw: model not loaded/],
   ['an executor that reports failure', (e) => { e['local-llm'] = () => ({ ok: false, why: 'out of memory' }); }, /reported failure: out of memory/],
   ['an executor that answers no head', (e) => { const f = e['local-llm']; e['local-llm'] = (r) => ({ ...f(r), head: 'abc' }); }, /full 40-character head/],

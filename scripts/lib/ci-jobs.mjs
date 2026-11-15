@@ -62,6 +62,23 @@ export const MIRRORED = new Map([
     "review-hub-ci.yml:validation",
     "preflight runs the same typecheck, proofs and safety gates this job runs",
   ],
+  // The proof scaffold runs as three parallel shards since 2026-11-13; preflight still
+  // runs every one of their steps serially, so each shard is mirrored for the same reason
+  // the single job was. `validation-gate` runs no gate of its own: it fails unless every
+  // shard result is `success` (scripts/check-ci-shard-aggregate.mjs), which preflight
+  // mirrors by stopping red on the first failing step.
+  [
+    "review-hub-ci.yml:validation-heavy-a",
+    "preflight runs the tz, device-management, lane and staged-worker proofs this shard runs",
+  ],
+  [
+    "review-hub-ci.yml:validation-heavy-b",
+    "preflight runs the loop-state, skill-conflict, hygiene, figure, proof-count and browser E2E gates this shard runs",
+  ],
+  [
+    "review-hub-ci.yml:validation-gate",
+    "aggregates the three shards above into the required check; preflight fails on the same step failures",
+  ],
   [
     "review-hub-ci.yml:docs-sanity",
     "preflight runs the doc-orphan, figure, proof-count and unsafe-claim checks directly",

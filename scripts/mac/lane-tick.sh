@@ -751,6 +751,7 @@ defer_host_verification() {
   say "$RESULT"
   heartbeat
 }
+SIM_HOST_DEFERRED=0
 if [ "$DRY" = "0" ]; then
   _verify_cache="$HOME/Library/Caches/signalgrid"
   mkdir -p "$_verify_cache" || { SG_VERIFY_LOCK_REASON="host verification cache unavailable"; defer_host_verification; exit 1; }
@@ -759,14 +760,23 @@ if [ "$DRY" = "0" ]; then
   if ! git show "$_verify_sha:scripts/mac/host-verification-lock.sh" > "$_verify_helper"; then
     rm -f "$_verify_helper"; SG_VERIFY_LOCK_REASON="mainline host verification helper unavailable"; defer_host_verification; exit 1
   fi
+  # The digest of the helper this tick actually sources. The publication step requires it to equal the
+  # helper it binds with its other dependencies, so a drifted helper can admit nothing public.
+  SG_VERIFY_HELPER_SHA256="$(shasum -a 256 "$_verify_helper" 2>/dev/null | cut -d' ' -f1)"
+  export SG_VERIFY_HELPER_SHA256
   # shellcheck source=/dev/null
   . "$_verify_helper" || { rm -f "$_verify_helper"; SG_VERIFY_LOCK_REASON="mainline host verification helper could not load"; defer_host_verification; exit 1; }
   rm -f "$_verify_helper"
   if ! sg_host_verify_acquire "$HOME/Library/Caches/signalgrid/host-verification.lock"; then
-    defer_host_verification
-    exit 0
+    RESULT="deferred: $SG_VERIFY_LOCK_REASON; sim requests and objective evaluation not run"
+    say "$RESULT"
+    SIM_HOST_DEFERRED=1
   fi
 fi
+# A busy sim/objective lane skips only work covered by that reservation. Step d3
+# still inspects review jobs and uses its own bounded ordinary host admission.
+# No install, sim, objective or estate operation below runs without admission.
+if [ "$SIM_HOST_DEFERRED" = "0" ]; then
 LOCK_SHA="$(shasum -a 256 pnpm-lock.yaml 2>/dev/null | cut -d' ' -f1)"
 INSTALL_STAMP="node_modules/.sg-installed-lock-sha"
 if [ -z "$LOCK_SHA" ] || [ ! -f "$INSTALL_STAMP" ] || [ "$(cat "$INSTALL_STAMP" 2>/dev/null)" != "$LOCK_SHA" ]; then
@@ -924,6 +934,7 @@ fi
 # not fire; scripts/check-sim-scripts-selfcheck.mjs rule (i) keeps it from returning.
 
 RESULT="$RESULT; objective: $LOOP_VERDICT"
+fi # sim/objective host admitted (or dry run)
 
 # ── d2. the estate queue, at most hourly ─────────────────────────────────────
 # The owner gave the Mac brain the estate (2026-10-23; #1546, 2026-10-29). The queue
@@ -934,7 +945,7 @@ RESULT="$RESULT; objective: $LOOP_VERDICT"
 # in the shared private store, like the heartbeat's.
 ESTATE_STAMP="$RECORD_DIR/.sg-estate-last"
 ESTATE_MAX="${SIGNALGRID_ESTATE_MAX:-3}"
-if [ -f scripts/mac/estate-queue.mjs ] && command -v gh >/dev/null 2>&1; then
+if [ "${SIM_HOST_DEFERRED:-0}" = "0" ] && [ -f scripts/mac/estate-queue.mjs ] && command -v gh >/dev/null 2>&1; then
   if [ -z "$(find "$ESTATE_STAMP" -mmin -60 2>/dev/null)" ]; then
     if [ "$DRY" = "1" ]; then
       _est="$(node scripts/mac/estate-queue.mjs plan 2>&1 | tail -1)"
@@ -949,7 +960,7 @@ if [ -f scripts/mac/estate-queue.mjs ] && command -v gh >/dev/null 2>&1; then
     fi
   fi
 else
-  say "estate queue not run: scripts/mac/estate-queue.mjs or gh missing"
+  say "estate queue not run: host deferred, scripts/mac/estate-queue.mjs missing, or gh missing"
 fi
 
 # ── d3. publish local-brain builds that reached review ───────────────────────
@@ -957,6 +968,9 @@ fi
 # Missing/corrupt/lost custody stops; a failed or unknown attempt is consumed.
 # Metadata runs without the heavy host. Each new CLI has its own ordinary admission.
 PUBLISH_MAX="${SIGNALGRID_PUBLISH_MAX:-1}"
+# The two publication acquisitions wait a bounded time for ordinary admission, then defer as before.
+# Fixed, not configurable: every other host acquisition in this tick keeps its single attempt.
+PUBLISH_ADMISSION_WAIT_SEC=90
 _pub_state="${SIGNALGRID_BRAIN_PUBLICATION_STATE:-$HOME/.local/state/signalgrid/brain-publications}"
 brain_publication_step() {
   /usr/bin/python3 -I - "$1" "$_pub_state" "${2:-}" "$PUBLISH_MAX" "${REPO_ROOT:-.}/scripts/mac/lane-tick.sh" <<'PY_BRAIN_PUBLICATION'
@@ -982,8 +996,11 @@ PUBLISHER = Path('scripts/mac/brain-proposal-pr.mjs')
 TICK_SOURCE = Path(RAW_TICK).resolve(strict=True)
 SIGNALS = []
 PUBLICATION_TIMEOUT_SEC = 600
+# A plain literal: the publisher's handoff fixture reads this one list with ast.literal_eval.
 DEPENDENCIES = ('scripts/check-owner-gated-surfaces.mjs', 'scripts/lib/is-main.mjs',
-                'scripts/lib/scratch-git.mjs', '.githooks/pre-push')
+                'scripts/lib/scratch-git.mjs', '.githooks/pre-push',
+                'scripts/mac/host-verification-lock.sh')
+HOST_HELPER = DEPENDENCIES[-1]
 
 class Refusal(Exception):
     pass
@@ -1106,6 +1123,12 @@ def dependency_refs():
     source_repo = PUBLISHER.resolve(strict=True).parents[2]
     return {name: read_file(source_repo / name, private=False)[1] for name in DEPENDENCIES}
 
+def need_sourced_host_helper():
+    # The helper that granted this admission is the one bound with the other dependencies, byte for byte.
+    sourced = os.environ.get('SG_VERIFY_HELPER_SHA256')
+    need(isinstance(sourced, str) and re.fullmatch(r'[0-9a-f]{64}', sourced)
+         and sourced == dependency_refs()[HOST_HELPER]['sha256'])
+
 def need_source_pins(intent):
     # The publisher, this tick and every declared dependency are still the bytes the intent recorded.
     need(read_file(PUBLISHER.resolve(strict=True), private=False)[1] == intent['publisher_ref'])
@@ -1150,6 +1173,34 @@ def custody(state, active_ref):
         need(anchor.get(name) == {'path': str(path), 'dev': st.st_dev, 'ino': st.st_ino})
     return mirror, attempts
 
+def need_inert_worktree_config(prefix, env):
+    # The canonical checkout's own PHYSICAL config.worktree; absent passes. Git reads the extension
+    # from the repository's own configuration and ignores a command-line override of it, so none is
+    # used: the file is inspected, then parsed outside any repository with includes disabled, and
+    # must hold exactly the one inert application setting. Any other shape or content refuses.
+    # An absent file passes; an EMPTY file refuses. Scope: the canonical checkout only, whose
+    # administrative directory is a real .git directory under the working directory. A linked
+    # worktree (.git is a file) with the extension on refuses; that case is not generalized here.
+    try:
+        admin = Path.cwd().resolve() / '.git'
+        directory(admin, private=False)
+        path = admin / 'config.worktree'
+        try:
+            before = path.lstat()
+        except FileNotFoundError:
+            return
+        mode = stat.S_IMODE(before.st_mode)
+        need(stat.S_ISREG(before.st_mode) and before.st_nlink == 1 and before.st_uid == UID
+             and not (mode & 0o022) and bool(mode & 0o400) and before.st_size <= 4096)
+        result = subprocess.run(prefix + ['config', '--file', str(path), '--no-includes', '--null', '--list'],
+                                cwd='/', env=env, stdin=subprocess.DEVNULL, capture_output=True, timeout=30)
+        after = path.lstat()
+    except (OSError, subprocess.SubprocessError):
+        raise Refusal()
+    identity = lambda st: (st.st_dev, st.st_ino, st.st_size, st.st_mtime_ns, st.st_ctime_ns, st.st_mode, st.st_uid, st.st_nlink)
+    need(result.returncode == 0 and identity(after) == identity(before)
+         and result.stdout == b'codex.localenvironmentconfigpath\n__none__\0')
+
 def git(*args):
     binary = trusted_client('git')
     prefix = [binary, '--no-replace-objects', '-c', 'core.fsmonitor=false', '-c', 'core.hooksPath=/dev/null']
@@ -1160,14 +1211,22 @@ def git(*args):
     need(result.returncode == 0 and len(result.stdout) <= 1048576)
     rows = result.stdout.decode('utf-8', errors='strict').split('\0')
     origin = []
+    per_worktree = False
     for row in filter(None, rows):
         key, _, value = row.partition('\n')
-        need(not re.search(r'^(?:filter\.|diff\..*\.(?:command|textconv)$|include(?:if)?\.|credential\.|protocol\.|url\..*\.(?:insteadof|pushinsteadof)$|remote\..*\.(?:promisor|partialclonefilter|uploadpack|receivepack|vcs)$|core\.(?:fsmonitor|sshcommand|gitproxy|askpass|alternaterefscommand)$|extensions\.(?:worktreeconfig|partialclone)$)', key, re.I))
+        # A local listing cannot see config.worktree, so the extension is never accepted on trust:
+        # its presence, whatever its value, makes the physical file mandatory to validate below.
+        if key.lower() == 'extensions.worktreeconfig':
+            per_worktree = True
+            continue
+        need(not re.search(r'^(?:filter\.|diff\..*\.(?:command|textconv)$|include(?:if)?\.|credential\.|protocol\.|url\..*\.(?:insteadof|pushinsteadof)$|remote\..*\.(?:promisor|partialclonefilter|uploadpack|receivepack|vcs)$|core\.(?:fsmonitor|sshcommand|gitproxy|askpass|alternaterefscommand)$|extensions\.partialclone$)', key, re.I))
         if key.lower() == 'remote.origin.url':
             origin.append(value)
         if key.lower() == 'remote.origin.pushurl':
             need(value == 'git@github.com:' + REPO + '.git')
     need(origin == ['git@github.com:' + REPO + '.git'])
+    if per_worktree:
+        need_inert_worktree_config(prefix, config_env)
     env = client_env()
     env['GIT_ALLOW_PROTOCOL'] = 'ssh'
     for options in (['--all'], ['--push', '--all']):
@@ -1219,6 +1278,25 @@ def preparation_intent(state, active, job, active_ref):
          and intent.get('job_id') == job and intent.get('activation_ref', {}).get('sha256') == active_ref['sha256']
          and intent.get('attempt_identity') == {'dev': st.st_dev, 'ino': st.st_ino})
     return preparations / job, intent
+
+def consumed_claim(mirror_file, attempt, job, *, preparation):
+    # PREFLIGHT ONLY: is this job's existing claim coherent custody, whichever activation bytes it
+    # was made under? A coherent claim is consumed and passed over, never run again. This grants
+    # nothing: claim, run, finish and handoff still load an intent only through preparation_intent /
+    # job_intent, which require the CURRENT activation. Lost, partial, mismatched or malformed
+    # custody still refuses here, so the caller reports it incomplete.
+    st = directory(attempt)
+    item, _ = read_json(mirror_file)
+    intent, _ = read_json(attempt / 'intent.json')
+    need(isinstance(intent, dict) and item == intent and intent.get('job_id') == job)
+    ref = intent.get('activation_ref')
+    need(isinstance(ref, dict) and isinstance(ref.get('sha256'), str)
+         and re.fullmatch(r'[0-9a-f]{64}', ref['sha256']) is not None)
+    if preparation:
+        need(intent.get('format') == 'signalgrid-brain-privacy-preparation-intent/v1'
+             and intent.get('attempt_identity') == {'dev': st.st_dev, 'ino': st.st_ino})
+    else:
+        need(intent.get('format') == 'signalgrid-brain-publication-intent/v1')
 
 def strict_prepared_json(text):
     def pairs(rows):
@@ -1308,7 +1386,7 @@ def preparation_step(state, active, active_ref, source_ref, tick_ref):
     if MODE == 'prepare-preflight':
         if (mirror / (JOB + '.json')).exists() or (preparations / JOB).exists():
             try:
-                preparation_intent(state, active, JOB, active_ref)
+                consumed_claim(mirror / (JOB + '.json'), preparations / JOB, JOB, preparation=True)
             except (OSError, Refusal, ValueError, TypeError):
                 print('CUSTODY_INCOMPLETE_READBACK_ONLY')
             else:
@@ -1316,13 +1394,21 @@ def preparation_step(state, active, active_ref, source_ref, tick_ref):
             return
         publish_mirror, publish_attempts = custody(state, active_ref)
         if (publish_mirror / (JOB + '.json')).exists() or (publish_attempts / JOB).exists():
-            print('CONSUMED')
+            # The same preflight-only reader as the publication side: damaged publication
+            # custody is reported here too, never passed over as if it were a clean claim.
+            try:
+                consumed_claim(publish_mirror / (JOB + '.json'), publish_attempts / JOB, JOB, preparation=False)
+            except (OSError, Refusal, ValueError, TypeError):
+                print('CUSTODY_INCOMPLETE_READBACK_ONLY')
+            else:
+                print('CONSUMED')
             return
         need(JOB in preparation_jobs(active))
         head, _ = remote_branch(JOB)
         values, _ = prs(JOB)
         print('EXISTS_READBACK_ONLY' if head is not None or values else 'ABSENT')
     elif MODE == 'prepare-claim':
+        need_sourced_host_helper()
         need(JOB in preparation_jobs(active))
         publish_mirror, publish_attempts = custody(state, active_ref)
         need(not (publish_mirror / (JOB + '.json')).exists() and not (publish_attempts / JOB).exists()
@@ -1538,7 +1624,7 @@ try:
         if MODE == 'preflight':
             if (mirror / (JOB + '.json')).exists() or (attempts / JOB).exists():
                 try:
-                    job_intent(state, JOB, active_ref)
+                    consumed_claim(mirror / (JOB + '.json'), attempts / JOB, JOB, preparation=False)
                 except (OSError, Refusal, ValueError, TypeError):
                     print('CUSTODY_INCOMPLETE_READBACK_ONLY')
                 else:
@@ -1552,6 +1638,7 @@ try:
                 values, _ = prs(JOB)
                 print('EXISTS_READBACK_ONLY' if head is not None or values else 'ABSENT')
         elif MODE == 'claim':
+            need_sourced_host_helper()
             need(JOB in review_jobs(active))
             need(not (mirror / (JOB + '.json')).exists() and not (attempts / JOB).exists())
             attempt = attempts / JOB
@@ -1602,7 +1689,7 @@ if [ -f scripts/mac/brain-proposal-pr.mjs ] && command -v gh >/dev/null 2>&1 && 
           *) RESULT="$RESULT; brain publication unavailable"; break ;;
         esac
         if [ "$DRY" = "1" ]; then say "dry-run: would publish an eligible brain job"; continue; fi
-        if ! declare -F sg_host_verify_acquire >/dev/null || ! sg_host_verify_acquire "$HOME/Library/Caches/signalgrid/host-verification.lock"; then
+        if ! declare -F sg_host_verify_acquire_bounded >/dev/null || ! sg_host_verify_acquire_bounded "$HOME/Library/Caches/signalgrid/host-verification.lock" "$PUBLISH_ADMISSION_WAIT_SEC"; then
           RESULT="$RESULT; brain publication deferred: host busy or unavailable"
           break
         fi
@@ -1647,7 +1734,7 @@ if [ -f scripts/mac/brain-proposal-pr.mjs ] && command -v gh >/dev/null 2>&1 && 
           *) RESULT="$RESULT; privacy request preparation unavailable"; break ;;
         esac
         if [ "$DRY" = "1" ]; then say "dry-run: would prepare a private review request"; continue; fi
-        if ! declare -F sg_host_verify_acquire >/dev/null || ! sg_host_verify_acquire "$HOME/Library/Caches/signalgrid/host-verification.lock"; then
+        if ! declare -F sg_host_verify_acquire_bounded >/dev/null || ! sg_host_verify_acquire_bounded "$HOME/Library/Caches/signalgrid/host-verification.lock" "$PUBLISH_ADMISSION_WAIT_SEC"; then
           RESULT="$RESULT; privacy request preparation deferred: host busy or unavailable"
           break
         fi

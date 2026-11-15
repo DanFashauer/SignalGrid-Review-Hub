@@ -156,6 +156,10 @@ for (const s of fixture.sessions) {
   check("a policy with NO reported segment forecloses rather than assuming it is fine",
     evaluateNetwork(on(null), NOW_MS, { segmentPolicy: POLICY }).reasonCode ===
       "SEGMENT_UNREPORTED_UNDER_POLICY");
+  // An empty expected list is no policy EVEN WHEN a restricted list is given: the restricted check
+  // applies only beside a non-empty expected list, before and after the stale return alike.
+  check("an EMPTY expected list with a restricted list naming the segment is still no policy, not a restriction",
+    evaluateNetwork(on("VLAN60"), NOW_MS, { segmentPolicy: { expected: [], restricted: ["VLAN60"] } }).recommendedAction !== "restrict");
   check("...and an EMPTY expected list is treated as no policy, not as 'nothing is allowed'",
     evaluateNetwork(on("VLAN40"), NOW_MS, { segmentPolicy: { expected: [] } }).reasonCode ===
       "AUTHENTICATED_SEGMENT_UNVERIFIED");

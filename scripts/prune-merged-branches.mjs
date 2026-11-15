@@ -95,6 +95,7 @@ const headers = {
   authorization: `Bearer ${TOKEN}`,
   accept: "application/vnd.github+json",
   "x-github-api-version": "2022-11-28",
+  "content-type": "application/json",
   "user-agent": "signalgrid-branch-prune",
 };
 
@@ -290,6 +291,32 @@ async function api(path, init = {}) {
     throw new Error(`${init.method ?? "GET"} ${path} → ${res.status} ${body.slice(0, 200)}`);
   }
   return res.status === 204 ? null : res.json();
+}
+
+/** Delete only the selected tip. A name-only DELETE can erase a concurrent push. */
+async function deleteExactHeadRef(name, expectedSha) {
+  if (typeof expectedSha !== "string" || !/^[0-9a-f]{40}$/.test(expectedSha) || /^0+$/.test(expectedSha) ||
+      typeof repo.node_id !== "string" || !repo.node_id || repo.node_id.length > 512) {
+    throw new Error("Exact-tip deletion requires a full selected SHA and repository identity");
+  }
+  const clientMutationId = "branch-prune:" + name + ":" + expectedSha;
+  const result = await api("/graphql", {
+    method: "POST",
+    body: JSON.stringify({
+      query: "mutation PruneExactHeadRef($input: UpdateRefsInput!) { updateRefs(input: $input) { clientMutationId } }",
+      variables: { input: {
+        repositoryId: repo.node_id, clientMutationId,
+        refUpdates: [{ name: "refs/heads/" + name, beforeOid: expectedSha,
+          afterOid: "0000000000000000000000000000000000000000", force: false }],
+      } },
+    }),
+  });
+  if (!result || typeof result !== "object" || Array.isArray(result) ||
+      ("errors" in result && (!Array.isArray(result.errors) || result.errors.length > 0)) ||
+      result.data?.updateRefs?.clientMutationId !== clientMutationId) {
+    // No name-only fallback or retry: preserve the newer tip and report failure.
+    throw new Error("Exact-tip deletion was not confirmed; inspect the current ref before any new action");
+  }
 }
 
 /** Follow Link headers rather than assuming one page holds everything. */
@@ -540,7 +567,7 @@ const failed = [];
 if (APPLY) {
   for (const d of doomed) {
     try {
-      await api(`/repos/${OWNER}/${REPO}/git/refs/heads/${encodeRefPath(d.name)}`, { method: "DELETE" });
+      await deleteExactHeadRef(d.name, d.sha);
       deleted += 1;
     } catch (err) {
       failed.push(`${d.name}: ${err.message}`);
@@ -581,7 +608,7 @@ if (APPLY) {
       continue;
     }
     try {
-      await api(`/repos/${OWNER}/${REPO}/git/refs/heads/${encodeRefPath(f.name)}`, { method: "DELETE" });
+      await deleteExactHeadRef(f.name, f.sha);
       deleted += 1;
       console.log(`  archived ${tag} then deleted ${f.name}`);
     } catch (err) {

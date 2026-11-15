@@ -18,7 +18,11 @@ the agent is authorized to use for it.
 
 - GitHub → this repo → **About** (gear icon, top-right of the repo home) →
   **Website**.
-- Remove the old `replit.com` link and set it to the published GitHub Pages URL:
+- The old `replit.com` link is already gone. Read on 2026-11-11 with
+  `gh repo view --json homepageUrl`: the field holds
+  `https://danfashauer.github.io/work/signalgrid.html`. The owner said the same day
+  that the Replit project no longer exists. Nothing is owed here unless the field
+  should point at this repository's own Pages URL instead:
   `https://danfashauer.github.io/SignalGrid-Review-Hub/`
 - Pages is enabled with source "Deploy from a branch", and that branch build
   FAILED on every push from 2026-08-23 (PR #263) to 2026-09-26: Jekyll dies on

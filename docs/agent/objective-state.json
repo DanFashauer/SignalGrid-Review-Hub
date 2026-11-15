@@ -12,7 +12,7 @@
       "scope": "machine",
       "state": "unmet",
       "measured": {
-        "headline": 3,
+        "headline": 0,
         "floor": 80
       },
       "source": "scripts/check-readiness-figure.mjs --json (headline, floor)"
@@ -22,8 +22,8 @@
       "scope": "machine",
       "state": "unmet",
       "measured": {
-        "pct": 3,
-        "reason": "12/20 bound proofs/steps current against manifest e892a94fd5c4; not current (stale fingerprint, stale/absent source digest, or unrecorded): proof:evidence-adapter, proof:isolation-scope, proof:launch-seam, proof:observability, proof:signalgrid-core, proof:webauthn-verify, step:API integration test (boots the server), step:Browser E2E (review console, website, admin); launch items fully current 1/28"
+        "pct": 0,
+        "reason": "0/20 bound proofs/steps current — evidence covers manifest e892a94fd5c4, tree is 66e2c11f2042; refresh on the Mac; launch items fully current 0/28"
       },
       "source": "scripts/check-readiness-figure.mjs --json (.details.evidence)"
     },
@@ -58,19 +58,6 @@
   "tasks": [
     {
       "rank": 1,
-      "rowId": "124",
-      "title": "`ladderRungs` is published as a derived figure by twelve proofs, is a literal in all twelve, and they disagree.",
-      "role": "devex-tooling-engineer",
-      "executor": "agent:gate-and-proof-engineer",
-      "kind": "role",
-      "source": {
-        "path": "docs/COMPANY_BUILD_PLAN.md",
-        "section": "Global backlog"
-      },
-      "firstRankedAt": "2026-11-06T02:15:29.728Z"
-    },
-    {
-      "rank": 2,
       "rowId": "168",
       "title": "The palette gate cannot see a verdict painted with the WRONG ratified token.",
       "role": "devex-tooling-engineer",
@@ -308,6 +295,12 @@
       "reason": "stamp 2026-10-22 is older than 14 days"
     },
     {
+      "rowId": "124",
+      "title": "`ladderRungs` is published as a derived figure by twelve proofs, is a literal in all twelve, and they disagree.",
+      "measuredAt": "2026-11-01",
+      "reason": "stamp 2026-11-01 is older than 14 days"
+    },
+    {
       "rowId": "128",
       "title": "The ITSM aggregate reports `unhealthy` for a call the gate never let it make.",
       "measuredAt": "2026-10-22",
@@ -415,7 +408,7 @@
     {
       "id": "plan-rows-unmeasured",
       "clears": "cloud",
-      "asks": "54 open row(s) in docs/COMPANY_BUILD_PLAN.md carry no `re-measured YYYY-MM-DD` stamp within 14 days and were ranked from nothing — a row nobody measured against the tree is an unknown input: 17, 17b, 17c, 18, 22, 24, 26, 27, 29, 30, 33, 35, 36, 38, 40, 43, 48, 49, 50, 61, 73, 76a, 77, 78, 80, 81, 84, 85, 86, 91, 95, 97, 98, 99, 101, 102, 109, 128, 130, 131, 138, 140, 149, 150, 152, 154, 161, 162, 165, 166, 182, 180, 176, 170. Measure each against the tree; close it, or restamp it with what was measured (a row whose AWAITING OWNER / BLOCKED ON LAB marker is expired or future-dated needs the blocker re-checked and the marker re-dated or removed — restamping alone does not rank it)",
+      "asks": "55 open row(s) in docs/COMPANY_BUILD_PLAN.md carry no `re-measured YYYY-MM-DD` stamp within 14 days and were ranked from nothing — a row nobody measured against the tree is an unknown input: 17, 17b, 17c, 18, 22, 24, 26, 27, 29, 30, 33, 35, 36, 38, 40, 43, 48, 49, 50, 61, 73, 76a, 77, 78, 80, 81, 84, 85, 86, 91, 95, 97, 98, 99, 101, 102, 109, 124, 128, 130, 131, 138, 140, 149, 150, 152, 154, 161, 162, 165, 166, 182, 180, 176, 170. Measure each against the tree; close it, or restamp it with what was measured (a row whose AWAITING OWNER / BLOCKED ON LAB marker is expired or future-dated needs the blocker re-checked and the marker re-dated or removed — restamping alone does not rank it)",
       "since": "2026-11-05T02:42:19.307Z"
     },
     {
@@ -436,25 +429,23 @@
       "criterionId": "evidence-fresh",
       "op": "evidence",
       "clears": "artifacts/live-evidence/mac-run.json",
-      "id": "objective-loop-evidence-fresh-2026-11-08",
-      "queuedAs": "working tree (objective-loop-evidence-fresh-2026-11-07.json)"
+      "id": "objective-loop-evidence-fresh-2026-11-15",
+      "queuedAs": "this tick"
     }
   ],
   "probeErrors": [],
   "report": {
-    "pendingSimRequests": [
-      "objective-loop-evidence-fresh-2026-11-07"
-    ],
+    "pendingSimRequests": [],
     "badRequestFiles": [],
     "needsExecutorCount": 0,
-    "unmeasuredCount": 54,
+    "unmeasuredCount": 55,
     "awaitingCount": 0,
     "openRows": 51,
     "partialRows": 5
   },
   "staleAfterHours": 3,
-  "derivedAt": "2026-11-08T00:57:06.784Z",
-  "derivedAtCommit": "de1dfaf338de2ff94a301b911c5c62c57163e378",
-  "workingTreeCleanAtEntry": true,
-  "decisionAddress": "1d03f502e6814a3d6840768365b32d847dfc60619c9cdb8ffa5cabc1e23fcba1"
+  "derivedAt": "2026-11-15T00:15:21.715Z",
+  "derivedAtCommit": "8e52c0914ef498f6803378a42ffcd7a0f1ae1c7a",
+  "workingTreeCleanAtEntry": false,
+  "decisionAddress": "f2df58e7604726b7a19dcaa5384fcfce78cd0779022764464c49d0f0dca0b278"
 }

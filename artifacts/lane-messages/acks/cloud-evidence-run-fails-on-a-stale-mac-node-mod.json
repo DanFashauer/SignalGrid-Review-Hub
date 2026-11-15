@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "cloud-evidence-run-fails-on-a-stale-mac-node-mod",
+  "ackedBy": "mac",
+  "note": "Mac node_modules matched the lockfile (resolvers 3.10.0 only). Root cause: @hookform/resolvers 3 imports zod undeclared, so pnpm's hidden hoist picked zod 4.6.7 on the Mac. Fixed in PR #2132 (packageExtensions zod peer; typecheck exit 0, preflight PASSED). Evidence run can re-queue after it lands.",
+  "ackedAt": "2026-11-15T08:21:55.126Z"
+}

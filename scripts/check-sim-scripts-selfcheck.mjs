@@ -893,8 +893,10 @@ const publicationTests = spawnSync("python3", ["-B", publicationHarness], {
   cwd: repo,
   env: { ...process.env, PYTHONDONTWRITEBYTECODE: "1", SIGNALGRID_AUTOPUBLISH_TEST_REPO: repo },
   // A kill limit for this deterministic child, not a pass condition. The 83-method suite measured
-  // about 119 to 120 s natively on the Mac (2026-11-13), which left no headroom under 120 s.
-  encoding: "utf8", timeout: 300000, maxBuffer: 8 << 20,
+  // about 119 to 120 s natively on the Mac (2026-11-13), which left no headroom under 120 s. By
+  // 2026-11-15 the 84-method suite took 201 s natively and passed 300 s on a hosted macOS runner
+  // (PR #2146 slice 2, spawnSync ETIMEDOUT), so the limit is 900 s: still a hang guard, never a speed gate.
+  encoding: "utf8", timeout: 900000, maxBuffer: 8 << 20,
 });
 const publicationRaw = (publicationTests.stdout ?? "") + (publicationTests.stderr ?? "");
 const publicationCount = [...publicationRaw.matchAll(/^Ran (\d+) tests? in [0-9.]+s$/gm)];

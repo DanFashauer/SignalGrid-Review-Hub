@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-11-14T20:11:33.376Z",
-  "result": "keepalive 20:11Z: Mac tick last fired 18:23Z; tick PR #2098 auto-merge armed; no mail to cloud; live evidence mac-run.json last 2026-11-10 (Mac evidence runs still fail typecheck on stale canonical node_modules; Root fixed it only in an isolated workspace). Owner not escalated."
+  "firedAt": "2026-11-15T07:25:19.387Z",
+  "result": "07:24Z cycle (2h keepalive): Mac tick firedAt 05:11:24Z (within 3h); Mac heartbeat mail #2127 open with auto-merge armed; tick PR #2113 still red on the objective-loop rename-after-address defect (fix accepted by Root, delivery with Root), left unedited; no mail addressed to cloud; one cloud->mac message unread (stale node_modules for the evidence run), so no duplicate refresh ask; sim request objective-loop-evidence-fresh-2026-11-15 pending on the Mac; live evidence mac-run.json last 2026-11-10T22:42:00-05:00; owner not escalated."
 }

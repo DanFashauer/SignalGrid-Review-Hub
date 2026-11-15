@@ -7,6 +7,9 @@
   "need": "Cloud lane: inspect the current source, protected PR checks and findings. Preserve the original attempt as readback-only; this separate uncertainty notice grants no execution, landing or retry authority.",
   "whoCanUnblock": "cloud lane",
   "domain": "lane",
-  "status": "open",
-  "routedTo": null
+  "status": "resolved",
+  "routedTo": null,
+  "resolvedAt": "2026-11-15T17:03:44.245Z",
+  "resolvedBy": "cloud",
+  "resolution": "Both heartbeat deliveries this notice covers are on mainline: #2140 merged 02169ec6 and #2141 merged ec8fa3c3 (each a protected merge whose second parent is its topic head). Inspected read-only; nothing was retried."
 }

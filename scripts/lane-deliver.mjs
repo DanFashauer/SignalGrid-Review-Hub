@@ -55,7 +55,7 @@
 // instants, branch names and readback observations; it never authorizes replay.
 import { spawnSync } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
-import { closeSync, constants, existsSync, fstatSync, ftruncateSync, lstatSync, mkdirSync, mkdtempSync, openSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { closeSync, constants, existsSync, fstatSync, ftruncateSync, lstatSync, mkdirSync, mkdtempSync, openSync, readFileSync, rmSync, writeFileSync, writeSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -499,7 +499,11 @@ console.log(`  worktree    ${wt} @ ${base} (origin/${MAINLINE})`);
       // "undeclared always-on lane" the routines gate calls fatal. Refuse here,
       // before a commit exists, rather than let the gate fail after.
       const registryPath = join(wt, ROUTINES_FILE);
-      const registryText = existsSync(registryPath) ? readFileSync(registryPath, "utf8") : null;
+      // One descriptor for the read, the check and any first-heartbeat rewrite: a path
+      // reopened after the check could name a different file by the time it is written.
+      const registryFd = existsSync(registryPath) ? openSync(registryPath, constants.O_RDWR | constants.O_NOFOLLOW) : null;
+      try {
+      const registryText = registryFd === null ? null : readFileSync(registryFd, "utf8");
       const registry = registryText === null ? null : JSON.parse(registryText);
       const row = registry?.routines?.find((r) => r.id === o.routine);
       if (!row) die(`heartbeat: "${o.routine}" is not a routine declared in ${ROUTINES_FILE}`);
@@ -511,13 +515,16 @@ console.log(`  worktree    ${wt} @ ${base} (origin/${MAINLINE})`);
         if (!existsSync(join(wt, "scripts/check-scheduled-routines.mjs"))) {
           die("first heartbeat: the scheduled routines gate is required even with --allow-ungated", 1);
         }
-        writeFileSync(registryPath, activated, "utf8");
+        const bytes = Buffer.from(activated, "utf8");
+        ftruncateSync(registryFd, 0);
+        if (writeSync(registryFd, bytes, 0, bytes.length, 0) !== bytes.length) die("first heartbeat: registry rewrite was incomplete");
         activatedRegistryText = activated;
         summary.push(`activate first heartbeat ${o.routine}`);
       }
       writeHeartbeat(target, `${JSON.stringify({ firedAt: now.toISOString(), result: String(o.result) }, null, 2)}\n`);
       touchesHeartbeat = true;
       summary.push(`heartbeat ${o.routine}`);
+      } finally { if (registryFd !== null) closeSync(registryFd); }
     } else if (o.op === "raise" || o.op === "take" || o.op === "clear") {
       // A raised hand rides the same delivery as mail: a stuck lane must be able to
       // say so without a code branch, a PR of its own, or a person to relay it.

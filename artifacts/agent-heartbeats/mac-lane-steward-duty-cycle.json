@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-11-15T17:03:43.127Z",
-  "result": "16:5xZ delivery (keepalive overdue since 14:01Z, held so mainline would not move under #2142's run). Mac tick firedAt 16:26:58Z (deferred on the host lock). Cleared hand pending-heartbeat-f74bccd6 (#2140 + #2141 on mainline). Caught Mac lane-mail #2144 (raise eb2bcb73, auto-merge armed) up with mainline. Its subject, heartbeat #2143, merged as fc802e32, so the hand can be cleared once #2144 lands. Live evidence mac-run.json last 2026-11-10T22:42:00-05:00; asked the Mac for one refresh in this batch. Sync manifest --check clean. Lane messages 307 sent / 307 acknowledged. Owner not escalated."
+  "firedAt": "2026-11-15T20:35:21.924Z",
+  "result": "20:4xZ keepalive and non-quiet. Mac tick firedAt 19:55:48Z (within 3h). Landed for the Mac: #2146 merged 1cafeb33 (first-heartbeat activation; the thread was resolved, then it landed). Caught up #2148 and #2156 (uncertainty notices, auto-merge armed); #2148 merged. Cleared 29 superseded Mac uncertainty hands in #2151 and mailed the Mac the root cause of the churn. Live evidence mac-run.json last 2026-11-10T22:42:00-05:00; the refresh was asked in #2149 and is still unread by the Mac. Sync manifest check clean. Owner not escalated."
 }

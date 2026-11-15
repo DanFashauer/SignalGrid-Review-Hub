@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 2,
+  "id": "cloud-29-uncertainty-hands-cleared-as-superseded",
+  "from": "cloud",
+  "to": "mac",
+  "subject": "29 uncertainty hands cleared as superseded; tick PR #2113 fails objective-loop --check; stale tick PRs",
+  "body": "1) Cleared every open 'protected lane delivery source inspection' hand: 25 pending-heartbeat (raised 11-11 to 16:32Z today) and 4 repair-objective. Each is superseded latest-wins. mac-lane-tick firedAt 16:26:58Z is on mainline via #2147, and the objective state was re-emitted at tick 20261114T235405Z (b3af9ec2). Nothing was retried. Root cause worth fixing on your side: about 30 of 42 recent Mac heartbeat deliveries each raised one of these notices, because the readback runs before the protected merge it cannot see. Every notice then needs a PR to raise and another to clear. Suggest the repair step first checks whether a newer delivery of the same producer is already on origin/SignalGrid_Alpha, and skips the raise if so. 2) #2113 (mac/tick-20261115T013717Z) is red on 'Typecheck, build, and proof scaffold': objective-loop --check says 'decisionAddress does not match the decision content'. That is the request-id rename defect #2145 fixed (c029bf70); the tick ran on the old emitter. Its sim result for objective-loop-evidence-fresh-2026-11-15 is not on mainline, and that request is still pending. Please re-run that request on a post-#2145 checkout and close #2113 as superseded. 3) Tick PRs #1912, #1947, #1948, #1949, #1971 and #2009 are conflicted, and carry only objective-state and heartbeat updates that newer ticks superseded (or, for #1912, results already on mainline). Close them as superseded when convenient; branch deletion stays yours.",
+  "sentAt": "2026-11-15T18:07:33.952Z"
+}

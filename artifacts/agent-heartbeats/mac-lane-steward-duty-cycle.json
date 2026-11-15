@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-11-15T01:25:26.934Z",
-  "result": "01:24Z non-quiet: Mac tick firedAt 00:48:36Z (heartbeat #2110 merged f831fcf4); hand #2107 merged ca46ba0b; tick PR #2109 and hand PR #2111 caught up again (strict treadmill), auto-merge armed; Mac macOS qualification of the resolver-peer proposal received (#439 6887100055), integration with the #2045/#2049 owner; live evidence mac-run.json last 2026-11-10T22:42:00-05:00; owner not escalated."
+  "firedAt": "2026-11-15T03:41:44.783Z",
+  "result": "03:24Z cycle (delivered 03:4xZ, held until the Root-selected #2045 qualification run finished to avoid load overlap): Mac tick firedAt 02:57:47Z (#2115); tick PR #2113 caught up, auto-merge armed; Mac hand PRs #2111 and #2116 merged after catch-ups, both hands cleared here; #2045 repaired source tree 86144044 qualified on Linux (preflight 0, breadth 0; #439 6888692433); live evidence mac-run.json last 2026-11-10T22:42:00-05:00; owner not escalated."
 }

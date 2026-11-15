@@ -501,7 +501,10 @@ console.log(`  worktree    ${wt} @ ${base} (origin/${MAINLINE})`);
       const registryPath = join(wt, ROUTINES_FILE);
       // One descriptor for the read, the check and any first-heartbeat rewrite: a path
       // reopened after the check could name a different file by the time it is written.
-      const registryFd = existsSync(registryPath) ? openSync(registryPath, constants.O_RDWR | constants.O_NOFOLLOW) : null;
+      const registryFd = (() => {
+        try { return openSync(registryPath, constants.O_RDWR | constants.O_NOFOLLOW); }
+        catch (e) { if (e?.code === "ENOENT") return null; throw e; }
+      })();
       try {
       const registryText = registryFd === null ? null : readFileSync(registryFd, "utf8");
       const registry = registryText === null ? null : JSON.parse(registryText);

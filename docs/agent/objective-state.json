@@ -58,19 +58,6 @@
   "tasks": [
     {
       "rank": 1,
-      "rowId": "124",
-      "title": "`ladderRungs` is published as a derived figure by twelve proofs, is a literal in all twelve, and they disagree.",
-      "role": "devex-tooling-engineer",
-      "executor": "agent:gate-and-proof-engineer",
-      "kind": "role",
-      "source": {
-        "path": "docs/COMPANY_BUILD_PLAN.md",
-        "section": "Global backlog"
-      },
-      "firstRankedAt": "2026-11-06T02:15:29.728Z"
-    },
-    {
-      "rank": 2,
       "rowId": "168",
       "title": "The palette gate cannot see a verdict painted with the WRONG ratified token.",
       "role": "devex-tooling-engineer",
@@ -308,6 +295,12 @@
       "reason": "stamp 2026-10-22 is older than 14 days"
     },
     {
+      "rowId": "124",
+      "title": "`ladderRungs` is published as a derived figure by twelve proofs, is a literal in all twelve, and they disagree.",
+      "measuredAt": "2026-11-01",
+      "reason": "stamp 2026-11-01 is older than 14 days"
+    },
+    {
       "rowId": "128",
       "title": "The ITSM aggregate reports `unhealthy` for a call the gate never let it make.",
       "measuredAt": "2026-10-22",
@@ -415,14 +408,8 @@
     {
       "id": "plan-rows-unmeasured",
       "clears": "cloud",
-      "asks": "54 open row(s) in docs/COMPANY_BUILD_PLAN.md carry no `re-measured YYYY-MM-DD` stamp within 14 days and were ranked from nothing — a row nobody measured against the tree is an unknown input: 17, 17b, 17c, 18, 22, 24, 26, 27, 29, 30, 33, 35, 36, 38, 40, 43, 48, 49, 50, 61, 73, 76a, 77, 78, 80, 81, 84, 85, 86, 91, 95, 97, 98, 99, 101, 102, 109, 128, 130, 131, 138, 140, 149, 150, 152, 154, 161, 162, 165, 166, 182, 180, 176, 170. Measure each against the tree; close it, or restamp it with what was measured (a row whose AWAITING OWNER / BLOCKED ON LAB marker is expired or future-dated needs the blocker re-checked and the marker re-dated or removed — restamping alone does not rank it)",
+      "asks": "55 open row(s) in docs/COMPANY_BUILD_PLAN.md carry no `re-measured YYYY-MM-DD` stamp within 14 days and were ranked from nothing — a row nobody measured against the tree is an unknown input: 17, 17b, 17c, 18, 22, 24, 26, 27, 29, 30, 33, 35, 36, 38, 40, 43, 48, 49, 50, 61, 73, 76a, 77, 78, 80, 81, 84, 85, 86, 91, 95, 97, 98, 99, 101, 102, 109, 124, 128, 130, 131, 138, 140, 149, 150, 152, 154, 161, 162, 165, 166, 182, 180, 176, 170. Measure each against the tree; close it, or restamp it with what was measured (a row whose AWAITING OWNER / BLOCKED ON LAB marker is expired or future-dated needs the blocker re-checked and the marker re-dated or removed — restamping alone does not rank it)",
       "since": "2026-11-05T02:42:19.307Z"
-    },
-    {
-      "id": "stalled-top-task",
-      "clears": "cloud",
-      "asks": "row 124 (\"`ladderRungs` is published as a derived figure by twelve proofs, is a literal in all twelve, and they disagree.\") has been ranked #1 for over 7 days with no change in docs/COMPANY_BUILD_PLAN.md — build it, re-rank it, or record why it waits",
-      "since": "2026-11-14T02:05:45.428Z"
     },
     {
       "id": "readiness-floor-no-clearing-op",
@@ -442,7 +429,7 @@
       "criterionId": "evidence-fresh",
       "op": "evidence",
       "clears": "artifacts/live-evidence/mac-run.json",
-      "id": "objective-loop-evidence-fresh-2026-11-14",
+      "id": "objective-loop-evidence-fresh-2026-11-15",
       "queuedAs": "this tick"
     }
   ],
@@ -451,14 +438,14 @@
     "pendingSimRequests": [],
     "badRequestFiles": [],
     "needsExecutorCount": 0,
-    "unmeasuredCount": 54,
+    "unmeasuredCount": 55,
     "awaitingCount": 0,
     "openRows": 51,
     "partialRows": 5
   },
   "staleAfterHours": 3,
-  "derivedAt": "2026-11-14T02:05:45.428Z",
-  "derivedAtCommit": "3b533f0c9b71759dc24430294dc67f55ba3e4251",
-  "workingTreeCleanAtEntry": true,
-  "decisionAddress": "3d8e2756289bfc027519351063392610ae4a06a08e203bd2e3d62fb5eb12b4b6"
+  "derivedAt": "2026-11-15T00:15:21.715Z",
+  "derivedAtCommit": "8e52c0914ef498f6803378a42ffcd7a0f1ae1c7a",
+  "workingTreeCleanAtEntry": false,
+  "decisionAddress": "f2df58e7604726b7a19dcaa5384fcfce78cd0779022764464c49d0f0dca0b278"
 }

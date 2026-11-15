@@ -24,9 +24,20 @@ function validVersion(value, label = 'State version') {
 }
 
 function successfulVerification(details) {
-  return details !== null && typeof details === 'object' && !Array.isArray(details) &&
+  const valid = details !== null && typeof details === 'object' && !Array.isArray(details) &&
     typeof details.command === 'string' && details.command.trim().length > 0 &&
     details.exitCode === 0 && Number.isSafeInteger(details.passed) && details.passed > 0;
+  if (!valid) return false;
+  // Legacy receipts contain only command/exitCode/passed. Additional test
+  // counters must agree with that success claim, including after restore or
+  // an in-memory checkpoint change. Missing counters are not invented.
+  for (const key of ['fail', 'failed', 'errors', 'skipped', 'cancelled', 'todo']) {
+    if (Object.hasOwn(details, key) && details[key] !== 0) return false;
+  }
+  for (const key of ['tests', 'pass']) {
+    if (Object.hasOwn(details, key) && details[key] !== details.passed) return false;
+  }
+  return true;
 }
 
 function freshVerification(checkpoint, workerId) {
@@ -119,7 +130,7 @@ export class JobState {
     }
     if (type === 'verification') {
       if (!successfulVerification(data.details)) {
-        throw new Error('Verification requires a command, exitCode 0, and a positive passed count');
+        throw new Error('Verification requires a command, exitCode 0, a positive passed count, and consistent all-passing test counts');
       }
     }
     const item = this.#record(type, data.details, workerId);

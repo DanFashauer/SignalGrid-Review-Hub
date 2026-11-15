@@ -7,6 +7,9 @@
   "need": "Cloud lane: inspect the current source, protected PR checks and findings. Preserve the original attempt as readback-only; this separate uncertainty notice grants no execution, landing or retry authority.",
   "whoCanUnblock": "cloud lane",
   "domain": "lane",
-  "status": "open",
-  "routedTo": null
+  "status": "resolved",
+  "routedTo": null,
+  "resolvedAt": "2026-11-15T18:07:32.581Z",
+  "resolvedBy": "cloud",
+  "resolution": "Superseded, not retried. The Mac's only heartbeat routine is mac-lane-tick, and heartbeats are latest-wins. A newer one is on mainline: firedAt 2026-11-15T16:26:58.781Z, delivered by #2147 (26cc0e7a, merged 16:37:21Z), after this notice was raised (2026-11-13T06:46:52.354Z). Whether the original attempt published or not, it can no longer change the heartbeat state. Read-only inspection; the original attempt stays readback-only."
 }

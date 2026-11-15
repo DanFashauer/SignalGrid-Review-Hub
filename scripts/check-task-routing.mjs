@@ -98,6 +98,8 @@ export function problems(table, { roles, skillExists, handRoutes }) {
       if (r.passes?.[0]?.effort !== "max") out.push(`${kind}: pass 1 is not at max effort`);
       const rv = r.passes?.[1];
       if (rv && (rv.tier !== table.reviewTier || rv.effort !== table.tiers?.[table.reviewTier]?.effort || (lane === "local-claude" && rv.model !== table.tiers?.[table.reviewTier]?.model))) out.push(`${kind}: pass 2 review does not run on the review tier`);
+      const fr = r.passes?.[3];
+      if (fr && (fr.tier !== table.reviewTier || fr.effort !== table.tiers?.[table.reviewTier]?.effort || fr.claudeModel !== table.tiers?.[table.reviewTier]?.model)) out.push(`${kind}: pass 4 final review does not carry the review tier`);
       for (const [n, want, does] of STAGES) {
         const p = r.passes?.[n - 1];
         if (!p || p.pass !== n || (want && p.lane !== want) || !does.test(p.does ?? "")) out.push(`${kind}: pass ${n} does not carry its stage (${does})`);
@@ -175,6 +177,8 @@ function selfTest() {
   const dr = resolveRoute(base, "docs-restamp");
   const dr2 = resolveRoute(base, "docs-restamp", { reviewLane: "local-codex" });
   if (dr.passes?.[1]?.model === "opus" && dr.passes[1].effort === "max" && dr2.passes?.[1]?.effort === "max" && dr2.passes[2].model === "haiku" && dr2.passes[2].effort === "low") { passed++; console.log("PASS a mechanical kind is still reviewed on opus at max; its checks keep the task tier"); } else { failed++; console.error("FAIL a mechanical kind's review inherited the task tier: " + JSON.stringify(dr.passes)); }
+  const fin = [resolveRoute(base, "docs-restamp"), resolveRoute(base, "gate-or-proof", { reviewLane: "local-codex" })].map((x) => x.passes?.[3]);
+  if (fin.every((p) => p && p.tier === "judgment" && p.claudeModel === "opus" && p.effort === "max")) { passed++; console.log("PASS the final review (pass 4) names the review tier, its Claude family and its effort, whatever the task tier"); } else { failed++; console.error("FAIL the final review does not carry the review tier: " + JSON.stringify(fin)); }
   const nb = resolveRoute(base, "gate-or-proof", { localLlmAvailable: false });
   if (nb.complete === false && nb.passes[0].missing === true) { passed++; console.log("PASS a missing local LLM build is a missing pass 1 and the route is not complete"); } else { failed++; console.error("FAIL a missing Bonsai build was folded into a complete route"); }
   const waits = resolveRoute(base, "architecture", { unavailableTiers: ["judgment"] });

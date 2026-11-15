@@ -971,10 +971,14 @@ async function selfTest() {
       const alive = () => {
         try {
           process.kill(childPid, 0);
-          return true;
-        } catch {
-          return false;
+        } catch (error) {
+          return error.code !== "ESRCH";
         }
+        // Container PID 1 can retain an exited orphan as a zombie. Its PID
+        // still answers kill(0), but a measured Z state cannot execute work.
+        // Failed or empty observations remain live/unknown, never a clean exit.
+        const ps = spawnSync("/bin/ps", ["-p", String(childPid), "-o", "state="], { encoding: "utf8" });
+        return !(ps.status === 0 && /^Z/.test(ps.stdout.trim()));
       };
       for (let i = 0; i < 100 && alive(); i += 1) await new Promise((r) => setTimeout(r, 20)); // reaping is asynchronous
       if (done === null) {

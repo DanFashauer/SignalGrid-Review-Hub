@@ -555,28 +555,6 @@ const DECLARED_LOCALE_COMPARE = new Map([
         "Flagging it would be flagging the test for containing the thing it forbids.",
     },
   ],
-  [
-    "artifacts/mcp-server/src/index.ts",
-    {
-      count: 1,
-      class: "pinned-defect",
-      reason:
-        "readdirSync(...).sort(a.name.localeCompare(b.name)) orders a directory listing the MCP client " +
-        "reads. Not a digest, so the blast radius is presentation order, but it is still locale-dependent " +
-        "output from a shipped service. Owned by artifacts/mcp-server, outside this change.",
-    },
-  ],
-  [
-    "scripts/src/self-audit-proof.ts",
-    {
-      count: 1,
-      class: "pinned-defect",
-      reason:
-        "`[...checklist].map(i => i.id).sort(localeCompare).join(\"|\")` builds a FINGERPRINT string. " +
-        "Same class as the connector-emulator digest that was fixed: two ICU builds, two fingerprints, " +
-        "one of them wrong. Outside this change's file set.",
-    },
-  ],
 ]);
 {
   const wider = [

@@ -31,6 +31,22 @@ config prefers the stable `/opt/pw-browsers/chromium` symlink when it exists
 does today: 1194 installed vs 1234 expected — and a download must never
 happen mid-CI). `E2E_CHROMIUM_PATH` overrides the binary explicitly.
 
+The Evidence Coverage cases use `file://` by default to check the standalone
+artifact as a local file. If the managed browser blocks local files, select the
+explicit HTTP fixture transport:
+
+```sh
+E2E_STANDALONE_TRANSPORT=http pnpm run test:e2e
+```
+
+This mode serves only the checked-in `docs/evidence-coverage.html` bytes from an
+ephemeral server bound to `127.0.0.1`. It preserves the existing page cases and their
+egress assertions; other paths, methods and browser resource requests are
+refused. It checks rendering and isolation over HTTP. It does not establish
+file-origin execution or remove the browser's file policy. Use
+`E2E_STANDALONE_TRANSPORT=file` (or omit the variable) where local files are
+permitted. Unknown transport values fail rather than falling back.
+
 Everything is localhost and every fixture is the deterministic demo seed, so
 `retries: 0` — a red run is a regression, not a coin-flip. Each spec also
 blocks all non-localhost requests (the consoles' `index.html` references

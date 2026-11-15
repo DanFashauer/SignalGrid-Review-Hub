@@ -75,7 +75,7 @@ names, under the same governance.
 
 ## The proof
 
-`pnpm run proof:self-audit` (61 checks) proves every invariant above over a
+`pnpm run proof:self-audit` (62 checks) proves every invariant above over a
 representative four-layer checklist, and prints its live figures so a stale quote is
 catchable:
 
@@ -98,12 +98,13 @@ The load-bearing assertions:
   non-empty approver ref); a blank ref is refused at both approve and apply.
 - **Deterministic + immutable** — identical input yields byte-identical output,
   every returned value is deep-frozen, and an input proposal is never mutated across
-  a transition.
+  a transition. Mixed-case and accented checklist IDs use codepoint order rather
+  than the process locale.
 
 Run it directly:
 
 ```bash
-cd scripts && npx tsx ./src/self-audit-proof.ts    # proof:self-audit (61 checks)
+cd scripts && npx tsx ./src/self-audit-proof.ts    # proof:self-audit (62 checks)
 ```
 
 ## Running it for real

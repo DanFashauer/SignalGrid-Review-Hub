@@ -1,0 +1,152 @@
+/**
+ * SignalGrid Local Brain: the route runner. It is the execution link between the brain's
+ * queue and the four-pass route.
+ *
+ * The local brain owns the work and the queue (owner decision, 2026-11-15). This module takes
+ * the brain's top eligible task (task-selector.mjs), resolves its route (scripts/lib/task-route.mjs,
+ * DR-047 as data) and walks one JobState (job-state.mjs) through the passes:
+ *
+ *   pass 1  local LLM: intake, scoped plan, first implementation
+ *   pass 2  a local session, Claude or Codex: review the first artifact
+ *   pass 3  the OTHER local session: run the real checks (must return a verification)
+ *   pass 4  handed to the cloud lane for the final review and landing
+ *
+ * Fail-closed. Each of these stops the run with a HAND (DR-054). None is skipped, guessed,
+ * or folded into a later pass:
+ *  - no route, a pending tier, a refused lane, or a missing pass 1;
+ *  - no executor for a lane, or an executor that throws or answers malformed;
+ *  - a pass that reports a different model or effort than its route asked for (no silent downgrade);
+ *  - a pass 3 without a successful verification.
+ * The job is left INTERRUPTED with the reason recorded, so a later run can resume it.
+ *
+ * Executors are injected: each is `(request) => result`. commandExecutor() below turns a command
+ * into one (JSON in on stdin, JSON out on stdout). The commands are the Mac's to configure
+ * (route-runner.config.json, which never lives in the tree). With no executor for a lane, the run
+ * refuses; it never runs a default.
+ *
+ * Deterministic: no clock, no randomness. Times and ids come from the queue and the executors.
+ */
+import { spawnSync } from "node:child_process";
+import { readFileSync } from "node:fs";
+import { selectEligible } from "./task-selector.mjs";
+import JobState from "./job-state.mjs";
+import { resolveRoute, loadRoutingTable } from "../../lib/task-route.mjs";
+import { isMainModule } from "../../lib/is-main.mjs";
+
+const hand = (why, need, extra = {}) => ({ status: "hand", why, need, whoCanUnblock: extra.who ?? "mac lane", ...extra });
+
+/** What a pass must have done, from its route entry. A Codex lane names no model (it picks its own). */
+function expectation(pass) {
+  if (pass.pass === 4) return { effort: pass.effort, model: null };
+  return { effort: pass.effort ?? null, model: pass.model ?? null };
+}
+
+function checkReceipt(pass, result) {
+  if (!result || typeof result !== "object" || Array.isArray(result)) return "answered nothing usable";
+  if (result.ok !== true) return `reported failure: ${typeof result.why === "string" ? result.why : "no reason given"}`;
+  if (typeof result.head !== "string" || !/^[0-9a-f]{40}$/.test(result.head)) return "did not report a full 40-character head";
+  const want = expectation(pass);
+  if (want.effort && result.effort !== want.effort) return `ran at effort ${JSON.stringify(result.effort)}, route asked for ${want.effort}`;
+  if (want.model && result.model !== want.model) return `ran on ${JSON.stringify(result.model)}, route asked for ${want.model}`;
+  if (pass.pass === 3) {
+    const v = result.verification;
+    if (!v || typeof v.command !== "string" || !v.command.trim() || v.exitCode !== 0 || !Number.isSafeInteger(v.passed) || v.passed < 1) {
+      return "pass 3 returned no successful verification (command, exitCode 0, passed > 0)";
+    }
+  }
+  if (pass.pass === 4 && (typeof result.deliveredRef !== "string" || !result.deliveredRef.trim())) return "the cloud hand-off named no delivered ref";
+  return null;
+}
+
+/**
+ * Run the brain's next task through its route.
+ * @returns {{status:"idle"} | {status:"handed-to-cloud", task, route, job} | {status:"hand", why, need, whoCanUnblock, task?, route?, job?}}
+ */
+export function runNext({ tasks, scope, table, repo, head, executors, reviewLane = "local-claude", localLlmAvailable = true, unavailableTiers = [] }) {
+  const eligible = selectEligible(tasks, scope);
+  if (eligible.length === 0) return { status: "idle" };
+  const task = eligible[0];
+  if (typeof head !== "string" || !/^[0-9a-f]{40}$/.test(head)) return hand("no full starting head", "the 40-character commit the task starts from", { task: task.id });
+  const route = resolveRoute(table, task.kind, { reviewLane, localLlmAvailable, unavailableTiers });
+  if (route.gap) return hand(`no route for kind ${JSON.stringify(task.kind)}`, `the capability-gap route: ${route.route ?? "fallback"}`, { task: task.id, route, who: "cloud lane" });
+  if (route.pending) return hand(`route pending: ${route.why ?? "tier unavailable"}`, "the tier to come back; work waits, never runs lower", { task: task.id, route });
+  if (route.refused) return hand(`route refused: ${route.why}`, "a supported lane configuration", { task: task.id, route });
+  if (route.complete !== true) return hand("pass 1 is missing: no local LLM build available", "the local LLM running (Bonsai)", { task: task.id, route });
+
+  const job = new JobState(task.id, repo, route.passes[0].lane, head);
+  job.claim(route.passes[0].lane, job.getVersion());
+  let current = head;
+  for (const pass of route.passes) {
+    const lane = pass.lane;
+    if (job.assignedWorkerId !== lane) job.handoff(lane, job.getVersion(), job.assignedWorkerId);
+    const run = executors?.[lane];
+    const stop = (why) => {
+      const reason = `pass ${pass.pass} on ${lane} ${why}`;
+      job.interrupt(reason, job.getVersion(), lane);
+      return hand(reason, `a working ${lane} executor`, { task: task.id, route, job: job.snapshot() });
+    };
+    if (typeof run !== "function") return stop("has no executor configured");
+    let result;
+    try {
+      result = run({ task, pass, head: current, role: route.role, skills: route.skills, validators: route.validators, ownerGated: route.ownerGated });
+    } catch (e) {
+      return stop(`threw: ${e?.message ?? String(e)}`);
+    }
+    const bad = checkReceipt(pass, result);
+    if (bad) return stop(bad);
+    const receipt = { pass: pass.pass, lane, tier: pass.tier ?? null, model: result.model ?? null, effort: result.effort ?? null, headIn: current, headOut: result.head };
+    if (pass.pass === 3) {
+      job.checkpoint({ type: "pass", details: receipt }, job.getVersion(), lane);
+      job.checkpoint({ type: "verification", details: result.verification }, job.getVersion(), lane);
+    } else if (pass.pass === 4) {
+      job.checkpoint({ type: "cloud-handoff", details: { ...receipt, deliveredRef: result.deliveredRef, ownerGated: route.ownerGated === true } }, job.getVersion(), lane);
+    } else {
+      job.checkpoint({ type: "pass", details: receipt }, job.getVersion(), lane);
+    }
+    current = result.head;
+  }
+  // The job stays ASSIGNED to cloud-final: the cloud lane completes it after its final review,
+  // with its own verification (JobState refuses completion without one).
+  return { status: "handed-to-cloud", task: task.id, route, job: job.snapshot() };
+}
+
+/** An executor that runs `argv` with the request as JSON on stdin and parses its JSON stdout. */
+export function commandExecutor(argv, { timeoutMs = 4 * 60 * 60 * 1000 } = {}) {
+  if (!Array.isArray(argv) || argv.length === 0 || !argv.every((a) => typeof a === "string" && a.length > 0)) {
+    throw new TypeError("an executor command must be a non-empty array of strings");
+  }
+  return (request) => {
+    const r = spawnSync(argv[0], argv.slice(1), { input: JSON.stringify(request), encoding: "utf8", timeout: timeoutMs, maxBuffer: 16 * 1024 * 1024 });
+    if (r.error) throw new Error(`could not run ${argv[0]}: ${r.error.message}`);
+    if (r.status !== 0) return { ok: false, why: `exit ${r.status}${r.signal ? ` (${r.signal})` : ""}` };
+    try { return JSON.parse(r.stdout); } catch { return { ok: false, why: "stdout was not JSON" }; }
+  };
+}
+
+/** Executors from a config object: { "local-llm": [argv...], "local-claude": [...], "local-codex": [...], "cloud-final": [...] }. */
+export function executorsFromConfig(config) {
+  if (!config || typeof config !== "object" || Array.isArray(config)) throw new TypeError("the route-runner config must be an object of lane -> argv");
+  const out = Object.create(null);
+  for (const [lane, argv] of Object.entries(config)) out[lane] = commandExecutor(argv);
+  return out;
+}
+
+// CLI: node scripts/mac/local-brain/route-runner.mjs --tasks <queue.json> --scope <path> --repo <owner/name> --head <sha> --config <route-runner.config.json> [--review-lane local-codex] [--no-local-llm]
+// Prints the result as JSON. Exit 0 idle or handed-to-cloud, 3 hand (the caller raises it with hand:raise).
+if (isMainModule(process.argv[1], import.meta.url)) {
+  const arg = (name) => { const i = process.argv.indexOf(name); return i > 0 ? process.argv[i + 1] : undefined; };
+  const need = ["--tasks", "--scope", "--repo", "--head", "--config"].filter((n) => !arg(n));
+  if (need.length) { console.error(`route-runner: missing ${need.join(", ")}`); process.exit(2); }
+  const result = runNext({
+    tasks: JSON.parse(readFileSync(arg("--tasks"), "utf8")),
+    scope: arg("--scope"),
+    table: loadRoutingTable(),
+    repo: arg("--repo"),
+    head: arg("--head"),
+    executors: executorsFromConfig(JSON.parse(readFileSync(arg("--config"), "utf8"))),
+    reviewLane: arg("--review-lane") ?? "local-claude",
+    localLlmAvailable: !process.argv.includes("--no-local-llm"),
+  });
+  console.log(JSON.stringify(result, null, 2));
+  process.exit(result.status === "hand" ? 3 : 0);
+}

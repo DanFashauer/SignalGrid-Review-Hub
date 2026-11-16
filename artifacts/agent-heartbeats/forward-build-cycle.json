@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-11-16T19:31:56.052Z",
-  "result": "18:10Z fire, quiet by owner priority (#439 6920829918, restated 6923574148): independent Mac delivery is the exclusive critical path and unrelated repair-queue work stays parked, so no wave dispatched. In flight H/S/O = 0/0/0. Landed this fire: none. Cloud role: final-pass review and DR-037 landing of the Mac's auto-published #2230 PR once Root's publisher fix lands. Sub-brains: none dispatched (parked). Owner queue unchanged: #1900."
+  "firedAt": "2026-11-16T21:50:08.996Z",
+  "result": "20:11Z fire, quiet by owner priority (#439 6920829918, restated 6923574148): independent Mac delivery is the exclusive critical path and unrelated repair-queue work stays parked, so no wave dispatched. In flight H/S/O = 0/0/0. Landed this fire: #2235 (held-heartbeat hand correction, supersedes #2231). Critical path: Root's private publisher fix for #2230; cloud does the final validation and DR-037 landing when it publishes. Sub-brains: none dispatched (parked). Owner queue unchanged: #1900."
 }

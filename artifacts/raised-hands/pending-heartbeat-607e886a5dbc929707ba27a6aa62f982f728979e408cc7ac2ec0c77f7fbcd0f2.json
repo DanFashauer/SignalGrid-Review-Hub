@@ -7,6 +7,9 @@
   "need": "Cloud lane: inspect the current source, protected PR checks and findings. Preserve the original attempt as readback-only; this separate uncertainty notice grants no execution, landing or retry authority.",
   "whoCanUnblock": "cloud lane",
   "domain": "lane",
-  "status": "open",
-  "routedTo": null
+  "status": "resolved",
+  "routedTo": null,
+  "resolvedAt": "2026-11-16T07:05:01.894Z",
+  "resolvedBy": "cloud",
+  "resolution": "Cloud inspected: no failed check or finding. The Mac tick heartbeat delivered just before this hand (0e3653ae, firedAt 05:05:28Z, lane/mac-mail-20261116-050528Z) is on mainline via #2188 (cb5d132c); this hand's own PR #2189 merged 08309a72. Original attempt left readback-only."
 }

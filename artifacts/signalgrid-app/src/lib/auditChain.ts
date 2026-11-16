@@ -34,8 +34,9 @@ export interface ChainVerdict {
   length: number;
 }
 
-/** A count of records: a non-negative integer, or null. -1 or 1.5 is malformed, not a count. */
-const count = (v: unknown) => (typeof v === "number" && Number.isInteger(v) && v >= 0 ? v : null);
+/** A count of records: a non-negative SAFE integer, or null. -1, 1.5, or anything past
+ *  Number.MAX_SAFE_INTEGER (which JavaScript cannot represent exactly) is malformed, not a count. */
+const count = (v: unknown) => (typeof v === "number" && Number.isSafeInteger(v) && v >= 0 ? v : null);
 
 export function normalizeChain(raw: unknown): ChainVerdict {
   const c = (raw ?? {}) as Record<string, unknown>;
@@ -53,8 +54,8 @@ export function normalizeChain(raw: unknown): ChainVerdict {
     // `evictedCount` > 0 means older events were discarded: it contradicts
     // `truncated: false`, and a count that is not a non-negative integer is malformed.
     if ("evictedCount" in c) {
-      const ev = c.evictedCount;
-      if (typeof ev !== "number" || !Number.isInteger(ev) || ev < 0 || (ev > 0 && c.truncated === false)) return unverifiedVerdict;
+      const ev = count(c.evictedCount);
+      if (ev === null || (ev > 0 && c.truncated === false)) return unverifiedVerdict;
     }
     // A located break must be a real position: a one-based tenant sequence among the
     // RETAINED events. Sequences stay monotonic across eviction, so after N evicted

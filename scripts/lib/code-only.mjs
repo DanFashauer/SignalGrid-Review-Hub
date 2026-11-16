@@ -88,13 +88,18 @@ export function codeOnly(text, keepStrings = false) {
       } else if (text[i] === "$" && text[i + 1] === "{") {
         out += keepStrings ? "${" : " (";
         i = lex(i + 2, true);
-        out += keepStrings ? "}" : ")";
-        i += 1;
+        // An interpolation that never closes ends at EOF: emit no `}` the input does not contain.
+        if (i < n) {
+          out += keepStrings ? "}" : ")";
+          i += 1;
+        }
       } else {
         out += keepStrings ? text[i] : blank(text[i]);
         i += 1;
       }
     }
+    // An unterminated template ends at EOF: emit no closing backtick the input does not contain (offsets preserved).
+    if (i >= n) return n;
     out += "`";
     return i + 1;
   };

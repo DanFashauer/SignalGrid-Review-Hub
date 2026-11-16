@@ -736,6 +736,8 @@ jobs:
         run: node scripts/mac/local-brain/test/code-only-offsets.test.mjs
       - name: "Ratchet genesis: only an exact boolean false from the history probe is proven absence"
         run: node scripts/mac/local-brain/test/ratchet-history-shape.test.mjs
+      - name: "Sanitizer line continuation: a backslash-LF inside a literal keeps its newline at the same offset"
+        run: node scripts/mac/local-brain/test/sanitize-line-continuation.test.mjs
       - name: "E2E port allocator self-test (distinct free ports; an explicit or busy port is never reused)"
         run: node scripts/lib/e2e-ports.mjs --self-test
       # DR-060 rule 3, first slice: docs/agent/mcp-roster.json names which lane or

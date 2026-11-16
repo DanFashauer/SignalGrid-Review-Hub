@@ -1,0 +1,4 @@
+{
+  "firedAt": "2026-11-16T08:48:08.653Z",
+  "result": "08:47Z first fire (brain session). Open dependabot PRs: 8. #1379 (github-actions minor/patch: setup-gradle 6.4.1, pnpm/action-setup 6.1.0) is the only patch/minor bump; it was BEHIND, so '@dependabot rebase' was requested. It lands under DR-037 once the rebased head passes the gating check and a local preflight + breadth. Escalated to the owner as majors (never merged by the lane): #1381 thread-stream 4, #1382 @types/node 26, #1383 ioredis 6, #1384 lucide-react 1.x, #1385 zod 4, #1386 @hookform/resolvers 5, #1387 framer-motion 13. Landed: none this fire."
+}

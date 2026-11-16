@@ -33,3 +33,30 @@ test('dot segments and malformed changed paths never count as in-scope changes',
   assert.equal(assessProof({...pass,changedFiles},scope),'blocked');
  }
 });
+
+test('#2182: in-scope changes under the three public agent trees are reviewable',()=>{
+ for (const tree of ['.claude/agents','.claude/skills','.claude/commands']) {
+  const file = tree==='.claude/skills' ? tree+'/x/SKILL.md' : tree+'/x.md';
+  assert.equal(assessProof({...pass,changedFiles:[file]},tree),'review',tree);
+  assert.equal(assessProof({...pass,changedFiles:[file]},'.claude'),'blocked','bare .claude is never a scope: '+tree);
+ }
+});
+
+test('#2182: private, hidden and malformed .claude paths stay blocked',()=>{
+ const tree='.claude/agents';
+ for (const changedFiles of [['.claude/settings.json'],['.claude/agents/.hidden.md'],['.claude/agents/.private/x.md'],['.claude/agentsx/x.md'],
+   ['.claude/agents/../settings.json'],['.claude/agents//x.md'],['.claude/agents\\x.md'],['.github/agents/x.md'],['.agents/x.md'],['x/.claude/agents/x.md'],
+   ['.claude/skills/x.md']]) {
+  assert.equal(assessProof({...pass,changedFiles},tree),'blocked',JSON.stringify(changedFiles));
+ }
+ for (const allowedScope of ['.claude','.claude/','.claude/settings','.claude/agents/.x','.github/agents','.claude//agents']) {
+  assert.equal(assessProof({...pass,changedFiles:['.claude/agents/x.md']},allowedScope),'blocked',allowedScope);
+ }
+});
+
+test('#2182: public trees keep every count and command check',()=>{
+ const tree='.claude/commands', changedFiles=[tree+'/x.md'];
+ for (const bad of [{fail:1},{skipped:1},{exitCode:1},{tests:0,pass:0},{command:' '},{errors:1},{todo:1}]) {
+  assert.equal(assessProof({...pass,changedFiles,...bad},tree),'blocked',JSON.stringify(bad));
+ }
+});

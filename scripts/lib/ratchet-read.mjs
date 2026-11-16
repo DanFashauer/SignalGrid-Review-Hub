@@ -61,7 +61,7 @@ export function ratchetAction({ errCode, hasGitHistory }) {
       : { action: "genesis", why: "no such file and no git history for it — genuinely the first run" };
   }
   if (errCode === "ESHAPE") {
-    return { action: "refuse", why: "parsed, but does not carry the numeric key this ratchet is made of" };
+    return { action: "refuse", why: "parsed, but does not carry the finite numeric key this ratchet is made of" };
   }
   return { action: "refuse", why: `could not be read as JSON (${errCode}) — an unknown ceiling is not an absent ceiling` };
 }
@@ -123,7 +123,8 @@ export function readRatchetFile(path, key, hasHistory = gitHasHistory) {
   let errCode = null;
   try {
     value = JSON.parse(readFileSync(path, "utf8"));
-    if (!value || typeof value !== "object" || typeof value[key] !== "number") errCode = "ESHAPE";
+    // Number.isFinite, not typeof: JSON.parse reads 1e999 as Infinity, and an infinite ceiling can never be exceeded.
+    if (!value || typeof value !== "object" || !Number.isFinite(value[key])) errCode = "ESHAPE";
   } catch (err) {
     errCode = err && err.code === "ENOENT" ? "ENOENT" : (err && err.code) || "EPARSE";
   }

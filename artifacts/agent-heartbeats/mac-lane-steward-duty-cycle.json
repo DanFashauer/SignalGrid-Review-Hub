@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-11-16T05:24:53.339Z",
-  "result": "05:24Z fire: keepalive (the last heartbeat at 03:24Z reaches the 2h mark). Quiet otherwise. Mac tick firedAt 05:05:28Z (within 3h). No new or moved mac/* branch, no sim results, no mail to cloud, manifest clean. Live evidence mac-run.json last 2026-11-10T22:42:00-05:00; refresh asked, not acked. Owner not escalated."
+  "firedAt": "2026-11-16T07:25:10.079Z",
+  "result": "07:24Z fire (non-quiet + 2h keepalive). Mac tick firedAt 05:05:28Z (within 3h; deferred on host lock). No new or moved mac/* branch, no new sim results, no unread mail to cloud; manifest clean. Cloud landed #2193 dc46919e and cleared stale Mac heartbeat notices (#2194, #2195). Mailed the BEHIND root cause (#2196). Live evidence mac-run.json last 2026-11-10T22:42:00-05:00; evidence request 2026-11-15 pending 1 day; refresh asked again. Owner not escalated."
 }

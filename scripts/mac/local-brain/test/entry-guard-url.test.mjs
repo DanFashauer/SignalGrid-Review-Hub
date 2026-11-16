@@ -1,16 +1,22 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {fileURLToPath} from 'node:url';
-import {isMainModule as m} from '../../../lib/is-main.mjs';
-const u=import.meta.url, p=fileURLToPath(u);
-test('#2185: a query or fragment import is never the entry',()=>{
- for (const x of [u+'?case=1',u+'#tag',u+'?a#b',new URL(u+'?case=1'),new URL(u+'#tag')]) assert.equal(m(p,x),false,String(x));
+import {mkdtempSync, writeFileSync} from 'node:fs';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
+import {execFileSync} from 'node:child_process';
+const helper = new URL('../../../lib/is-main.mjs', import.meta.url).href;
+const dir = mkdtempSync(join(tmpdir(), 'entry-url-'));
+const entry = join(dir, 'entry.mjs');
+writeFileSync(entry, `import {isMainModule} from ${JSON.stringify(helper)};
+if (isMainModule(process.argv[1], import.meta.url)) {
+ console.log('BODY ' + import.meta.url.split('/').pop());
+ if (!process.env.NO_REIMPORT) { await import(import.meta.url + '?case=1'); await import(import.meta.url + '#tag'); }
+}`);
+const runs = (args, env = {}) => execFileSync(process.execPath, args, {env: {...process.env, ...env}, encoding: 'utf8'}).trim().split('\n').filter(Boolean);
+test('#2185: re-importing the entry with ?query or #fragment never runs its body again', () => {
+ assert.deepEqual(runs([entry]), ['BODY entry.mjs']);
 });
-test('#2185: ordinary match and refusal controls unchanged',()=>{
- assert.equal(m(p,u),true);
- assert.equal(m(p,new URL(u)),true);
- assert.equal(m(p,u+'?'),true);
- assert.equal(m(p,u+'#'),true);
- for (const a of [undefined,'',p+'.missing']) assert.equal(m(a,u),false);
- assert.equal(m(p,'not a url'),false);
+test('#2185: ordinary entry runs, and a plain import from another file does not', () => {
+ assert.deepEqual(runs([entry], {NO_REIMPORT: '1'}), ['BODY entry.mjs']);
+ assert.deepEqual(runs(['--input-type=module', '-e', `await import(${JSON.stringify(new URL('file://' + entry).href)})`]), []);
 });

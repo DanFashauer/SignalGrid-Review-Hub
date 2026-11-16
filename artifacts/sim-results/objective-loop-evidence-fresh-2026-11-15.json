@@ -1,14 +1,14 @@
 {
   "schemaVersion": 1,
   "requestId": "objective-loop-evidence-fresh-2026-11-15",
-  "completedAt": "2026-11-16T21:23:38.384Z",
+  "completedAt": "2026-11-16T22:05:47.576Z",
   "provenance": {
     "platform": "darwin",
     "arch": "arm64",
     "nodeVersion": "v24.18.0",
     "macosVersion": "27.0.1",
-    "commit": "b216a3a1966c333516e40c3968fc10e612e08519",
-    "branch": "SignalGrid_Alpha",
+    "commit": "6b0aa5f384b9ba8af360f079c4f94bef2cb2d2e9",
+    "branch": "HEAD",
     "workingTreeClean": true
   },
   "runs": [
@@ -16,7 +16,7 @@
       "operation": "evidence",
       "status": "passed",
       "exitCode": 0,
-      "durationMs": 2070520,
+      "durationMs": 2021533,
       "tail": [
         "  Commit artifacts/live-evidence/ to publish the run as repo evidence.",
         "[0/6] [0s]",
@@ -42,7 +42,7 @@
         "[WebServer]   dist/pino-pretty.mjs.map           236.8kb",
         "[WebServer]   dist/thread-stream-worker.mjs.map   12.0kb",
         "[WebServer] ",
-        "[WebServer] ⚡ Done in 423ms"
+        "[WebServer] ⚡ Done in 407ms"
       ]
     }
   ]

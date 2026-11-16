@@ -3,16 +3,26 @@
   "manifestFingerprint": "66e2c11f2042a7d0b2caf8c4e7c2ae73f869da06608399824db3f9984886c133",
   "manifestVersion": 102,
   "platform": "darwin",
-  "mintedAt": "2026-11-16T21:23:35.204Z",
+  "mintedAt": "2026-11-16T22:05:43.621Z",
   "preflightCoverage": {
     "nativeBuildExcluded": true,
     "target": "darwin-arm64",
-    "stepsNotRun": [
-      "Build (all packages)",
-      "Browser E2E (review console, website, admin)"
-    ],
+    "stepsNotRun": [],
     "reason": "pnpm-workspace.yaml strips 5 native binaries for darwin-arm64 (@rollup/rollup-darwin-arm64, @rolldown/binding-darwin-arm64, @esbuild/darwin-arm64, lightningcss-darwin-arm64, @tailwindcss/oxide-darwin-arm64), and they are not installed. The repo pins the web build to linux-x64 on purpose, so this step cannot run here — it is not failing, it is absent. Install the binaries to run it for real.",
-    "nativeBuildAttestation": null,
+    "nativeBuildAttestation": {
+      "steps": [
+        "Browser E2E (review console, website, admin)",
+        "Build (all packages)"
+      ],
+      "treeSha": "6b0aa5f384b9ba8af360f079c4f94bef2cb2d2e9",
+      "ranAt": "2026-11-16T21:35:39.009Z",
+      "runner": {
+        "kind": "apple-container",
+        "arch": "amd64",
+        "image": "node:22",
+        "host": "darwin"
+      }
+    },
     "vmNativeBuildNote": null
   },
   "reviewHubPass": true,
@@ -2263,6 +2273,12 @@
         "manifestFingerprint": "66e2c11f2042a7d0b2caf8c4e7c2ae73f869da06608399824db3f9984886c133",
         "sourceDigest": null
       },
+      "Build (all packages)": {
+        "status": "passed",
+        "manifestFingerprint": "66e2c11f2042a7d0b2caf8c4e7c2ae73f869da06608399824db3f9984886c133",
+        "sourceDigest": null,
+        "attestedBy": "native-build-attestation/v1 (Linux VM on this tree)"
+      },
       "Proof: intune-entra-posture": {
         "status": "passed",
         "manifestFingerprint": "66e2c11f2042a7d0b2caf8c4e7c2ae73f869da06608399824db3f9984886c133",
@@ -2282,6 +2298,12 @@
         "status": "passed",
         "manifestFingerprint": "66e2c11f2042a7d0b2caf8c4e7c2ae73f869da06608399824db3f9984886c133",
         "sourceDigest": null
+      },
+      "Browser E2E (review console, website, admin)": {
+        "status": "passed",
+        "manifestFingerprint": "66e2c11f2042a7d0b2caf8c4e7c2ae73f869da06608399824db3f9984886c133",
+        "sourceDigest": "a6e1bfa2125da69801bfd346f397e988cad0b9616c55c77fe75beb0f0a42a3ab",
+        "attestedBy": "native-build-attestation/v1 (Linux VM on this tree)"
       },
       "Proof: signalgrid-simulator": {
         "status": "passed",
@@ -3110,8 +3132,6 @@
       }
     },
     "stepsExcluded": [
-      "Browser E2E (review console, website, admin)",
-      "Build (all packages)",
       "Mainline workflow red streaks (report-only — names every non-gating workflow red 3+ runs in a row; own errors REPORTED here, fatal only in CI)",
       "Proof: backup-restore (the restore path, exercised not assumed)",
       "Proof: db-role-split (the ledger append-only by privilege)"

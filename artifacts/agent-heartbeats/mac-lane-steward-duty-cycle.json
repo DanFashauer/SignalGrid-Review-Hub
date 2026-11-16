@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-11-16T13:29:16.583Z",
-  "result": "13:28Z fire (2h keepalive; otherwise quiet). Mac tick firedAt 07:14:16Z, still deferred on the host verification lock per its last result; Root/Mac report R80 installed on #439 and a new local-brain code proof in progress. Not a missing launchd install, so no owner escalation. No new or moved mac/* branch, no new sim results, no unread mail to cloud. Live evidence mac-run.json last 2026-11-10T22:42:00-05:00; refresh request objective-loop-evidence-fresh-2026-11-15 still pending, no duplicate ask. Cloud landed #2218 (#2120 repair) as b3806c30."
+  "firedAt": "2026-11-16T16:25:35.721Z",
+  "result": "16:24Z fire (2h keepalive; otherwise quiet). Mac tick firedAt on mainline 07:14:16Z; the Mac's 09:22Z tick heartbeat (#2205) is still open and behind, so mainline shows the older time. Root/Mac report R86 installed and the #2227 independence proof running (#439). Not a missing launchd install: no owner escalation. No new or moved mac/* branch, no new sim results, no unread mail to cloud. Live evidence mac-run.json last 2026-11-10T22:42:00-05:00; refresh request objective-loop-evidence-fresh-2026-11-15 still pending, no duplicate ask. Owner priority in force: cloud repair queue deferred."
 }

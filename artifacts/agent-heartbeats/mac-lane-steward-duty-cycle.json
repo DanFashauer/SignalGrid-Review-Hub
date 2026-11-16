@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-11-16T22:27:20.294Z",
-  "result": "22:24Z fire (non-quiet). Mac tick heartbeat on mainline: firedAt 2026-11-16T21:44:05.214Z via #2237 (deferred tick: host lock held). Cleared hand 2026-11-16-pr-2205-is-behind-... on its own stated condition, per Root's disposition on #439 (6931230105). pending-heartbeat-424b4831 and pending-heartbeat-d788abc9 stay open and readback-only. No new or moved mac/* branch, no new sim results, no unread mail to cloud. Live evidence mac-run.json last 2026-11-10T22:42:00-05:00; Mac evidence refresh #2236 open. Owner not escalated: owner is directing this work on #439."
+  "firedAt": "2026-11-16T23:25:08.026Z",
+  "result": "23:24Z fire (non-quiet). Mac evidence refresh #2236 landed (b2687881): live evidence mac-run.json re-minted 2026-11-16, readiness (b) 20/20, headline 100%. The Mac's unattended tick opened #2242 itself; cloud merged it at exact head 20c415c5 (e7712e40) after objective-loop --check, check-sim-requests and raised-hands --check passed: readiness-floor and evidence-fresh met, only owner-real-in-hand unmet. Mac tick heartbeat on mainline firedAt 2026-11-16T21:44:05.214Z. Open disposition conflict on hand 424b4831 (resolved by #2236 against Root's hold) awaits Root on #439. No unread mail to cloud. Owner not escalated."
 }

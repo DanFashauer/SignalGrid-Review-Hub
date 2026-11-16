@@ -7,6 +7,9 @@
   "need": "Cloud lane: inspect the current source, protected PR checks and findings. Preserve the original attempt as readback-only; this separate uncertainty notice grants no execution, landing or retry authority.",
   "whoCanUnblock": "cloud lane",
   "domain": "lane",
-  "status": "open",
-  "routedTo": null
+  "status": "resolved",
+  "routedTo": null,
+  "resolvedAt": "2026-11-16T01:48:13.953Z",
+  "resolvedBy": "cloud",
+  "resolution": "Superseded latest-wins: the Mac tick objective delivery 20261116T004146Z (PR #2174, merged on origin) replaces the T210748Z delivery these notices were raised against; the original attempt stays readback-only and no execution, landing or retry authority was taken."
 }

@@ -20,7 +20,8 @@
  *  - a pass 3 whose proof the brain's own policy (proof-policy.mjs assessProof) does not pass:
  *    exit 0, tests > 0, every test passed, no failures, no skips, changed files inside the task's
  *    scope. The runner never bypasses that policy. A proof with no changed files (a read-only kind)
- *    is refused with its own reason until the policy has an explicit read-only path;
+ *    is refused with its own reason until the policy has an explicit read-only path, and a kind
+ *    known to be read-only (log-scan) is refused before any job or executor starts (#2176);
  *  - a pass 3 or pass 4 that reports a head other than the one it was given: the validated
  *    artifact and the handed-off artifact must be the reviewed one, never a silent substitute;
  *  - a pass 3 whose answers list is not a list of {id, disposition} rows, or whose open findings
@@ -44,6 +45,7 @@ import { assessProof } from "./proof-policy.mjs";
 import { resolveRoute, loadRoutingTable } from "../../lib/task-route.mjs";
 import { isMainModule } from "../../lib/is-main.mjs";
 
+const READ_ONLY_KINDS = new Set(["log-scan"]);
 const hand = (why, need, extra = {}) => ({ status: "hand", why, need, whoCanUnblock: extra.who ?? "mac lane", ...extra });
 
 const CLOUD_PROVIDERS = new Set(["claude", "codex"]);
@@ -109,6 +111,9 @@ export function runNext({ tasks, scope, table, repo, head, executors, reviewLane
   if (route.pending) return hand(`route pending: ${route.why ?? "tier unavailable"}`, "the tier to come back; work waits, never runs lower", { task: task.id, route });
   if (route.refused) return hand(`route refused: ${route.why}`, "a supported lane configuration", { task: task.id, route });
   if (route.complete !== true) return hand("pass 1 is missing: no local LLM build available", "the local LLM running (Bonsai)", { task: task.id, route });
+  // A read-only kind changes no files, so pass 3's proof would be refused after three passes of
+  // work (#2176). Refuse it here, before any job is claimed or any executor runs.
+  if (READ_ONLY_KINDS.has(task.kind)) return hand(`read-only ${task.kind} has no proof-policy path yet`, "an explicit read-only proof path in proof-policy.mjs", { task: task.id, route });
 
   const job = new JobState(task.id, repo, route.passes[0].lane, head);
   job.claim(route.passes[0].lane, job.getVersion());

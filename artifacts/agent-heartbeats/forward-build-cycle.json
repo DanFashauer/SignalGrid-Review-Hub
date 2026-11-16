@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-11-16T14:17:39.881Z",
-  "result": "acted (credit-saving mode, no worker sessions): landed #2218 (#2120 repair, b3806c30) and #2221 (#2213 repair, 5f95466c), plus steward keepalive #2220; #2215 repair qualified on #2213's head (RED 8/16 assertion -> GREEN 16/16), full gates running, PR next; then #2219 (Root release 6918532507), then #1379. in flight H/S/O = 0/0/0; sub-brains: none spawned; owner queue: #1900 merge, #1121 answer. Independent Native code-to-PR operation still unverified (Root/Mac; #2219 original timed out)."
+  "firedAt": "2026-11-16T16:17:13.853Z",
+  "result": "quiet by owner priority (6920829918: independent Mac operation is the exclusive critical path): no worker sessions, no new repair work. Landed since last fire: #2224 (#2215, 483f8a6b) and #2225 (#2219, edb492a4), both in flight before the priority. Parked: #2222 cloud repair (local only; full gates passed), #2226 cloud repair, #1379. Cloud role: final-pass reviewer of the Mac's auto-published proof PR (#2227 now active on Root's R86; no PR yet). in flight H/S/O = 0/0/0; sub-brains: none; owner queue: #1900 merge, #1121 answer. Independent operation still unverified."
 }

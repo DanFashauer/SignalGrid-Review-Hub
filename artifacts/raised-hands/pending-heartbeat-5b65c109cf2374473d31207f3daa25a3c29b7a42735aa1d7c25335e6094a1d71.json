@@ -7,6 +7,9 @@
   "need": "Cloud lane: inspect the current source, protected PR checks and findings. Preserve the original attempt as readback-only; this separate uncertainty notice grants no execution, landing or retry authority.",
   "whoCanUnblock": "cloud lane",
   "domain": "lane",
-  "status": "open",
-  "routedTo": null
+  "status": "resolved",
+  "routedTo": null,
+  "resolvedAt": "2026-11-15T23:39:19.722Z",
+  "resolvedBy": "cloud",
+  "resolution": "Landed, not retried. The heartbeat delivery raised about at 22:12:56Z is topic lane/mac-mail-20261115-220708Z-e87b53650c0b, PR #2167, merged into mainline. Its heartbeat firedAt 2026-11-15T22:07:08.802Z matches the topic stamp to the second. Read-only inspection; the original stays readback-only."
 }

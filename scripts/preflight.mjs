@@ -648,6 +648,7 @@ const STEPS = [
   { name: "Proof: lane-messages (the cloud↔Mac channel — identity is derived, and no lane acknowledges its own mail)", cmd: ["pnpm", "run", "proof:lane-messages"] },
   { name: "Lane messages (unread mail is named on every run; only the addressee can close one)", cmd: ["node", "scripts/check-lane-messages.mjs"] },
   { name: "Lane message self-test (the gate can actually fail)", cmd: ["node", "scripts/check-lane-messages.mjs", "--self-test"] },
+  { name: "codeOnly offsets: an unterminated template never gains a closing backtick or interpolation delimiter", cmd: ["node", "scripts/mac/local-brain/test/code-only-offsets.test.mjs"] },
   // Raised hands (owner, 2026-09-23: "agents never raise their hand when they get stuck").
   // Fails only when a stall is past 3x its limit with NO hand raised; overdue hands are reported.
   { name: "Raised hands (nothing stuck past its limit without a hand raised)", cmd: ["node", "scripts/raised-hands.mjs", "--check"] },

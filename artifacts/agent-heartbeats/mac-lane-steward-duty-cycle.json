@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-11-16T19:31:56.052Z",
-  "result": "19:24Z fire (2h keepalive; last 16:25Z). Mac tick heartbeat firedAt 07:14:16Z on mainline; the newer one is held in #2205 (behind), and Mac draft #2231 links that stall to its open report. No new or moved mac/* branch since 2026-11-16T01:36Z, no new sim results, no unread mail to cloud (6 cloud-to-mac messages unread, 2 past 24h). Live evidence mac-run.json last 2026-11-10T22:42:00-05:00; refresh already asked. Critical path is Root's #2230 proof: reached review via automatic Bonsai-to-Codex handoff, blocked on the publisher contract; Bonsai tuning and automatic escalation asked on #439 (6926784796). Owner not escalated: owner is directing this work on #439."
+  "firedAt": "2026-11-16T22:27:20.294Z",
+  "result": "22:24Z fire (non-quiet). Mac tick heartbeat on mainline: firedAt 2026-11-16T21:44:05.214Z via #2237 (deferred tick: host lock held). Cleared hand 2026-11-16-pr-2205-is-behind-... on its own stated condition, per Root's disposition on #439 (6931230105). pending-heartbeat-424b4831 and pending-heartbeat-d788abc9 stay open and readback-only. No new or moved mac/* branch, no new sim results, no unread mail to cloud. Live evidence mac-run.json last 2026-11-10T22:42:00-05:00; Mac evidence refresh #2236 open. Owner not escalated: owner is directing this work on #439."
 }

@@ -7,9 +7,12 @@
   "need": "This hand lands (with PR #2233), CI goes green, then #2205 or the next tick heartbeat merges and refreshes firedAt; clear this hand when mainline shows a fresh mac-lane-tick firedAt",
   "whoCanUnblock": "mac lane",
   "domain": "",
-  "status": "open",
+  "status": "resolved",
   "routedTo": null,
   "covers": [
     "heartbeat:mac-lane-tick"
-  ]
+  ],
+  "resolvedAt": "2026-11-16T22:27:22.201Z",
+  "resolvedBy": "cloud",
+  "resolution": "Fresh ordinary mac-lane-tick observation delivered to canonical by #2237 (merge d24fe31150ecd6bc0a3848664f41eae819e18393; firedAt 2026-11-16T21:44:05.214Z), meeting this hand's explicit delivery condition. The observation was deferred; simulator/objective execution, brain publication and independent operation are not proved."
 }

@@ -7,9 +7,12 @@
   "need": "Cloud lane: inspect the current source, protected PR checks and findings. Preserve the original attempt as readback-only; this separate uncertainty notice grants no execution, landing or retry authority.",
   "whoCanUnblock": "cloud lane",
   "domain": "lane",
-  "status": "open",
+  "status": "resolved",
   "routedTo": null,
   "covers": [
     "heartbeat:mac-lane-tick"
-  ]
+  ],
+  "resolvedAt": "2026-11-16T22:20:09.833Z",
+  "resolvedBy": "mac",
+  "resolution": "A fresh mac-lane-tick heartbeat landed on mainline; the raised-hands gate no longer measures the stall"
 }

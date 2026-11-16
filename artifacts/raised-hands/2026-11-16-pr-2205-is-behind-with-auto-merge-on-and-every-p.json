@@ -1,0 +1,15 @@
+{
+  "id": "2026-11-16-pr-2205-is-behind-with-auto-merge-on-and-every-p",
+  "raisedAt": "2026-11-16T19:47:19.164Z",
+  "origin": "mac",
+  "doing": "Refreshing the mac-lane-tick heartbeat on mainline; the tick runs every 5 min but its heartbeat delivery, PR #2205, has sat unmerged since 09:22Z",
+  "blockedBy": "PR #2205 is BEHIND with auto-merge on, and every PR's CI fails the raised-hands gate on this very stall, so the heartbeat that would clear it cannot land",
+  "need": "This hand lands (with PR #2233), CI goes green, then #2205 or the next tick heartbeat merges and refreshes firedAt; clear this hand when mainline shows a fresh mac-lane-tick firedAt",
+  "whoCanUnblock": "mac lane",
+  "domain": "",
+  "status": "open",
+  "routedTo": null,
+  "covers": [
+    "heartbeat:mac-lane-tick"
+  ]
+}

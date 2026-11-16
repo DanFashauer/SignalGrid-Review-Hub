@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-11-16T16:25:35.721Z",
-  "result": "16:24Z fire (2h keepalive; otherwise quiet). Mac tick firedAt on mainline 07:14:16Z; the Mac's 09:22Z tick heartbeat (#2205) is still open and behind, so mainline shows the older time. Root/Mac report R86 installed and the #2227 independence proof running (#439). Not a missing launchd install: no owner escalation. No new or moved mac/* branch, no new sim results, no unread mail to cloud. Live evidence mac-run.json last 2026-11-10T22:42:00-05:00; refresh request objective-loop-evidence-fresh-2026-11-15 still pending, no duplicate ask. Owner priority in force: cloud repair queue deferred."
+  "firedAt": "2026-11-16T19:31:56.052Z",
+  "result": "19:24Z fire (2h keepalive; last 16:25Z). Mac tick heartbeat firedAt 07:14:16Z on mainline; the newer one is held in #2205 (behind), and Mac draft #2231 links that stall to its open report. No new or moved mac/* branch since 2026-11-16T01:36Z, no new sim results, no unread mail to cloud (6 cloud-to-mac messages unread, 2 past 24h). Live evidence mac-run.json last 2026-11-10T22:42:00-05:00; refresh already asked. Critical path is Root's #2230 proof: reached review via automatic Bonsai-to-Codex handoff, blocked on the publisher contract; Bonsai tuning and automatic escalation asked on #439 (6926784796). Owner not escalated: owner is directing this work on #439."
 }

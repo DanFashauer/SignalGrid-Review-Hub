@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-11-16T01:48:13.020Z",
-  "result": "01:24Z fire, non-quiet. Mac tick firedAt 00:13:34Z (within 3h). Landed Mac tick #2174 (objective state derived 00:41:51Z, 0 sim requests) after a lane-file catch-up, gating check green. Cleared the 6 repair-objective notices of 21:14-21:43Z as superseded by that newer delivery. Live evidence mac-run.json last 2026-11-10T22:42:00-05:00; refresh asked, not yet acked by the Mac. Owner not escalated."
+  "firedAt": "2026-11-16T03:24:51.946Z",
+  "result": "03:24Z fire, non-quiet: a shared surface changed (#2180 route-runner and its new test), so the Mac was mailed. Mac tick firedAt 02:34:51Z (within 3h). Mac lane-mail PRs #2181 and #2183 are open and the Mac's own. No new or moved mac/* branch; no sim results; no mail to cloud; manifest clean. Live evidence mac-run.json last 2026-11-10T22:42:00-05:00; refresh asked, not acked. Owner not escalated."
 }

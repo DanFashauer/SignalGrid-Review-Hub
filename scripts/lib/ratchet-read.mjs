@@ -53,12 +53,21 @@ const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
 export function ratchetAction({ errCode, hasGitHistory }) {
   if (errCode === null) return { action: "use" };
   if (errCode === "ENOENT") {
-    return hasGitHistory
-      ? {
-          action: "refuse",
-          why: "absent from the working tree but PRESENT in git history — a deleted ceiling is not a first run",
-        }
-      : { action: "genesis", why: "no such file and no git history for it — genuinely the first run" };
+    // Only an exact boolean `false` is PROVEN absence. Any other answer (missing, null, 0, "", an object) is unknown,
+    // and an unknown history answer must refuse: truthiness here would let a broken probe authorise a fresh baseline.
+    if (hasGitHistory === false) {
+      return { action: "genesis", why: "no such file and no git history for it — genuinely the first run" };
+    }
+    if (hasGitHistory === true) {
+      return {
+        action: "refuse",
+        why: "absent from the working tree but PRESENT in git history — a deleted ceiling is not a first run",
+      };
+    }
+    return {
+      action: "refuse",
+      why: "absent from the working tree and its git history is UNKNOWN (no boolean answer) — genesis needs proven absence",
+    };
   }
   if (errCode === "ESHAPE") {
     return { action: "refuse", why: "parsed, but does not carry the finite numeric key this ratchet is made of" };

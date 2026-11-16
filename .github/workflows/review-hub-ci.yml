@@ -732,6 +732,8 @@ jobs:
         run: node scripts/mac/local-brain/test/log-scan.test.mjs
       - name: "Untracked-ignore input: a non-string is never ignored scratch and no coercion hook runs"
         run: node scripts/mac/local-brain/test/untracked-ignore-input.test.mjs
+      - name: "codeOnly offsets: an unterminated template never gains a closing backtick or interpolation delimiter"
+        run: node scripts/mac/local-brain/test/code-only-offsets.test.mjs
       - name: "E2E port allocator self-test (distinct free ports; an explicit or busy port is never reused)"
         run: node scripts/lib/e2e-ports.mjs --self-test
       # DR-060 rule 3, first slice: docs/agent/mcp-roster.json names which lane or

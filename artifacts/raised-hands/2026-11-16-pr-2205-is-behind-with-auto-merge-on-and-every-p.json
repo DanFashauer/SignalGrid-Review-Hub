@@ -7,9 +7,12 @@
   "need": "This hand lands (with PR #2233), CI goes green, then #2205 or the next tick heartbeat merges and refreshes firedAt; clear this hand when mainline shows a fresh mac-lane-tick firedAt",
   "whoCanUnblock": "mac lane",
   "domain": "",
-  "status": "open",
+  "status": "resolved",
   "routedTo": null,
   "covers": [
     "heartbeat:mac-lane-tick"
-  ]
+  ],
+  "resolvedAt": "2026-11-16T22:20:09.860Z",
+  "resolvedBy": "mac",
+  "resolution": "#2205 merged and a fresh mac-lane-tick heartbeat followed; the stall is no longer measured"
 }

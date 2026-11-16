@@ -16,6 +16,10 @@ import { fileURLToPath } from "node:url";
 export function isMainModule(argv1, moduleUrl) {
   if (!argv1) return false;
   try {
+    // A module imported as `<entry>?x` or `<entry>#y` is a second instance, not the entry
+    // (Node reports import.meta.main=false for it), but fileURLToPath drops the suffix (#2185).
+    const url = new URL(moduleUrl);
+    if (url.search || url.hash) return false;
     return realpathSync(argv1) === realpathSync(fileURLToPath(moduleUrl));
   } catch {
     return false;

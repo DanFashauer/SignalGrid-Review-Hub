@@ -74,7 +74,7 @@ test('the review findings reach pass 3 and the cloud hand-off, with pass 3 answe
   assert.deepEqual(hand.reviewFindings.map((f) => f.id), ['F1']);
   assert.deepEqual(hand.openFindings.map((f) => f.id), ['F2']);
   const v = r.job.checkpoints.find((c) => c.type === 'verification').details;
-  assert.deepEqual(v, { command: PROOF.command, exitCode: 0, passed: 436 });
+  assert.deepEqual(v, { command: PROOF.command, exitCode: 0, passed: 436, tests: 436, pass: 436, fail: 0, skipped: 0 });
 });
 
 test('a review with no findings and an empty answers list still hands to cloud (the clean empty control)', () => {
@@ -86,6 +86,20 @@ test('a review with no findings and an empty answers list still hands to cloud (
   const hand = r.job.checkpoints.find((c) => c.type === 'cloud-handoff').details;
   assert.deepEqual(hand.reviewFindings, []);
   assert.deepEqual(hand.findingsAnswered, []);
+});
+
+test('zero optional counters remain admissible and survive in the verification receipt', () => {
+  const ex = honest();
+  const f3 = ex['local-codex'];
+  ex['local-codex'] = (r) => ({ ...f3(r), proof: { ...PROOF, failed: 0, errors: 0, cancelled: 0, todo: 0 } });
+  const r = runNext(base(ex));
+  assert.equal(r.status, 'handed-to-cloud');
+  const v = r.job.checkpoints.find((c) => c.type === 'verification').details;
+  assert.deepEqual(v, {
+    command: PROOF.command, exitCode: 0, passed: 436,
+    tests: 436, pass: 436, fail: 0, skipped: 0,
+    failed: 0, errors: 0, cancelled: 0, todo: 0,
+  });
 });
 
 test('a task scoped under a dot-directory (.claude) is blocked by the proof policy, not bypassed', () => {
@@ -128,6 +142,10 @@ for (const [label, mutate, why] of [
   ['a review that silently ran on a smaller model', (e) => { const f = e['local-claude']; e['local-claude'] = (r) => ({ ...f(r), model: 'sonnet' }); }, /ran on "sonnet", route asked for opus/],
   ['pass 3 whose proof exits non-zero', (e) => { const f = e['local-codex']; e['local-codex'] = (r) => ({ ...f(r), proof: { ...PROOF, exitCode: 1 } }); }, /did not pass the brain's proof policy/],
   ['pass 3 whose proof reports a failed test despite exit 0 (Codex #2142 example: tests 2, pass 1, fail 1)', (e) => { const f = e['local-codex']; e['local-codex'] = (r) => ({ ...f(r), proof: { ...PROOF, tests: 2, pass: 1, fail: 1, skipped: 0 } }); }, /did not pass the brain's proof policy/],
+  ['pass 3 whose proof reports failed despite all primary counters passing', (e) => { const f = e['local-codex']; e['local-codex'] = (r) => ({ ...f(r), proof: { ...PROOF, failed: 1 } }); }, /did not pass the brain's proof policy/],
+  ['pass 3 whose proof reports errors despite all primary counters passing', (e) => { const f = e['local-codex']; e['local-codex'] = (r) => ({ ...f(r), proof: { ...PROOF, errors: 1 } }); }, /did not pass the brain's proof policy/],
+  ['pass 3 whose proof reports cancelled despite all primary counters passing', (e) => { const f = e['local-codex']; e['local-codex'] = (r) => ({ ...f(r), proof: { ...PROOF, cancelled: 1 } }); }, /did not pass the brain's proof policy/],
+  ['pass 3 whose proof reports todo despite all primary counters passing', (e) => { const f = e['local-codex']; e['local-codex'] = (r) => ({ ...f(r), proof: { ...PROOF, todo: 1 } }); }, /did not pass the brain's proof policy/],
   ['pass 3 whose proof skipped a test', (e) => { const f = e['local-codex']; e['local-codex'] = (r) => ({ ...f(r), proof: { ...PROOF, tests: 437, pass: 436, skipped: 1 } }); }, /did not pass the brain's proof policy/],
   ['pass 3 whose proof changed a file outside the task scope', (e) => { const f = e['local-codex']; e['local-codex'] = (r) => ({ ...f(r), proof: { ...PROOF, changedFiles: ['lib/signalgrid-core/x.ts'] } }); }, /did not pass the brain's proof policy/],
   ['pass 3 that does not answer a review finding', (e) => { const f = e['local-codex']; e['local-codex'] = (r) => ({ ...f(r), findingsAnswered: [] }); }, /did not answer review finding\(s\) F1/],

@@ -7,7 +7,10 @@
 export const IGNORED_UNTRACKED =
   /(^|\/)(\.venv|venv|node_modules|__pycache__|\.pytest_cache|\.mypy_cache|\.ruff_cache|dist|build|\.DS_Store)(\/|$)|\.egg-info(\/|$)/;
 
-/** @param {string} path a `git status --porcelain` path (the part after "?? ") */
+/** @param {string} path a `git status --porcelain` path (the part after "?? ")
+ *  Only an actual string can be ignored scratch. Anything else returns false WITHOUT being
+ *  coerced: RegExp.test would call toString/valueOf, so an object mimicking a scratch path
+ *  would loosen the dirty-tree verdict, and a hostile hook would run or throw. */
 export function isIgnoredUntracked(path) {
-  return IGNORED_UNTRACKED.test(path);
+  return typeof path === "string" && IGNORED_UNTRACKED.test(path);
 }

@@ -6,7 +6,7 @@
 // report green for code it never served. Picking free ports for every E2E_*_PORT the caller
 // did not set gives each run its own servers. An explicit E2E_*_PORT is always respected.
 import net from "node:net";
-import { pathToFileURL } from "node:url";
+import { isMainModule } from "./is-main.mjs";
 
 export const E2E_PORT_VARS = ["E2E_REVIEW_PORT", "E2E_WEB_PORT", "E2E_API_PORT", "E2E_ADMIN_PORT", "E2E_DESKTOP_PORT", "E2E_PWA_PORT"];
 
@@ -53,4 +53,4 @@ async function selfTest() {
   console.log("e2e-ports self-test passed");
 }
 
-if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href && process.argv.includes("--self-test")) await selfTest();
+if (isMainModule(process.argv[1], import.meta.url) && process.argv.includes("--self-test")) await selfTest();

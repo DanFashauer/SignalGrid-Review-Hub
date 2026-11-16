@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-11-16T01:21:24.406Z",
-  "result": "01:2xZ keepalive and non-quiet. Mac tick firedAt 00:13:34Z (within 3h). Drained the Mac notice queue: #2160, #2162, #2164, #2166 and #2167 (tick heartbeat) merged after serial catch-ups. #2159 (tick objective state) merged 439bbba4. #2170 cleared 2 superseded heartbeat notices; 6 repair-objective notices stay open for the Mac, because no tick topic after T210748Z is on origin (mailed). Acked the row 91 escalation (owner-only). Live evidence mac-run.json last 2026-11-10T22:42:00-05:00; the refresh was asked in #2149 and the Mac has not acked it. Owner not escalated."
+  "firedAt": "2026-11-16T01:48:13.020Z",
+  "result": "01:24Z fire, non-quiet. Mac tick firedAt 00:13:34Z (within 3h). Landed Mac tick #2174 (objective state derived 00:41:51Z, 0 sim requests) after a lane-file catch-up, gating check green. Cleared the 6 repair-objective notices of 21:14-21:43Z as superseded by that newer delivery. Live evidence mac-run.json last 2026-11-10T22:42:00-05:00; refresh asked, not yet acked by the Mac. Owner not escalated."
 }

@@ -210,7 +210,7 @@
       "criterionId": "evidence-fresh",
       "op": "evidence",
       "clears": "artifacts/live-evidence/mac-run.json",
-      "id": "objective-loop-evidence-fresh-2026-11-15",
+      "id": "objective-loop-evidence-fresh-2026-11-16",
       "queuedAs": "working tree (objective-loop-evidence-fresh-2026-11-15.json)"
     }
   ],
@@ -227,8 +227,8 @@
     "partialRows": 5
   },
   "staleAfterHours": 3,
-  "derivedAt": "2026-11-15T21:07:52.770Z",
-  "derivedAtCommit": "d488953fb945c5fe721ff68c7e0a832b56953d3e",
+  "derivedAt": "2026-11-16T00:41:51.023Z",
+  "derivedAtCommit": "8305c3772825da54c9cb5a682dbdb39def79c1d2",
   "workingTreeCleanAtEntry": true,
-  "decisionAddress": "70aee7909719abbabc159eabdf74b40c7fd0de5e9b162b272ce3767a5475c3b6"
+  "decisionAddress": "99996c29bf501ab78fe159fd947a49afa96cb8bf040254061f0c6f31851a9801"
 }

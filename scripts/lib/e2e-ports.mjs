@@ -58,7 +58,8 @@ async function selfTest() {
   check(Object.keys(second).length === E2E_PORT_VARS.length, "a second allocation also succeeds");
   // The consumer half: a server another tree left on a PINNED port must make a qualification run
   // fail, never stand in for this tree's build. Occupy a free port, pin the review server to it, and
-  // let Playwright's own webServer setup decide; no test runs and nothing is built.
+  // let Playwright's own webServer setup decide. The fixture config holds only that one server,
+  // wired with the real config's REUSE_SERVERS, so no test runs and no application is built.
   const pw = join(SCRIPTS, "node_modules", ".bin", "playwright");
   if (!existsSync(pw)) { check(false, `playwright binary present at ${pw} (run pnpm install)`); }
   else {
@@ -67,7 +68,7 @@ async function selfTest() {
     const run = (extra) => new Promise((resolve) => {
       const env = { ...process.env, E2E_REVIEW_PORT: String(port), ...extra };
       delete env.CI; if (!("E2E_FRESH_SERVERS" in extra)) delete env.E2E_FRESH_SERVERS;
-      execFile(pw, ["test", "--config", "playwright.config.ts", "--grep", "@@no-such-test@@"], { cwd: SCRIPTS, env, timeout: 120000 }, (_e, out, err) => resolve(`${out}${err}`));
+      execFile(pw, ["test", "--config", "lib/e2e-fresh-server.fixture.config.ts", "--grep", "@@no-such-test@@"], { cwd: SCRIPTS, env, timeout: 60000 }, (_e, out, err) => resolve(`${out}${err}`));
     });
     const fresh = await run({ E2E_FRESH_SERVERS: "1" });
     const dev = await run({});

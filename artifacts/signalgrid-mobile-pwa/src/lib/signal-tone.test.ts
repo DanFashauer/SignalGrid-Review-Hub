@@ -44,3 +44,19 @@ test("a non-string type renders as unknown instead of throwing", () => {
 test("labels replace every hyphen, not just the first", () => {
   assert.equal(signalBadge("operational-signals").label, "operational signals");
 });
+
+test("the exported palette is frozen: a caller cannot replace or delete a known tone", () => {
+  assert.equal(Object.isFrozen(SIGNAL_BADGE_TONE), true, "SIGNAL_BADGE_TONE is mutable");
+  const before = ALL_SIX.map((t) => signalBadge(t).tone);
+  const palette = SIGNAL_BADGE_TONE as Record<string, string>;
+  // Under ESM strict mode a write to a frozen object throws; either outcome is fine
+  // so long as the map is unchanged afterwards.
+  try { palette.identity = UNKNOWN_SIGNAL_TONE; } catch { /* refused */ }
+  try { delete palette["device-posture"]; } catch { /* refused */ }
+  try { palette["badge-reader"] = "text-red-400"; } catch { /* refused */ }
+  assert.deepEqual(ALL_SIX.map((t) => signalBadge(t).tone), before, "a known badge changed after mutation");
+  for (const t of ALL_SIX) assert.equal(signalBadge(t).known, true, t);
+  const u = signalBadge("badge-reader");
+  assert.equal(u.known, false);
+  assert.equal(u.tone, UNKNOWN_SIGNAL_TONE);
+});

@@ -9,18 +9,19 @@
  * unknown, visibly, never in a tone a reader takes for an ordinary signal.
  *
  * The map is a TOTAL `Record` over the enum, so a seventh signal type is a
- * typecheck failure here rather than a silent fallthrough.
+ * typecheck failure here rather than a silent fallthrough. It is frozen: a caller
+ * that replaced or deleted an entry would otherwise change every later badge.
  */
 import type { SignalType } from "@workspace/api-client-react";
 
-export const SIGNAL_BADGE_TONE: Record<SignalType, string> = {
+export const SIGNAL_BADGE_TONE: Readonly<Record<SignalType, string>> = Object.freeze({
   identity: "text-teal-400 bg-teal-400/10 border-teal-400/20",
   "device-posture": "text-emerald-400 bg-emerald-400/10 border-emerald-400/20",
   "session-context": "text-purple-400 bg-purple-400/10 border-purple-400/20",
   "operational-signals": "text-pink-400 bg-pink-400/10 border-pink-400/20",
   "physical-access": "text-sky-400 bg-sky-400/10 border-sky-400/20",
   "network-posture": "text-indigo-400 bg-indigo-400/10 border-indigo-400/20",
-};
+});
 
 /** Tone for a type outside the enum: dashed and amber, distinct from every known type. */
 export const UNKNOWN_SIGNAL_TONE = "text-amber-300 bg-amber-400/10 border-amber-400/60 border-dashed";

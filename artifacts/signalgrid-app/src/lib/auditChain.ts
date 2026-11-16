@@ -54,8 +54,8 @@ export function normalizeChain(raw: unknown): ChainVerdict {
     // `evictedCount` > 0 means older events were discarded: it contradicts
     // `truncated: false`, and a count that is not a non-negative integer is malformed.
     if ("evictedCount" in c) {
-      const ev = c.evictedCount;
-      if (count(ev) === null || (ev > 0 && c.truncated === false)) return unverifiedVerdict;
+      const ev = count(c.evictedCount);
+      if (ev === null || (ev > 0 && c.truncated === false)) return unverifiedVerdict;
     }
     // A located break must be a real position: a one-based tenant sequence among the
     // RETAINED events. Sequences stay monotonic across eviction, so after N evicted

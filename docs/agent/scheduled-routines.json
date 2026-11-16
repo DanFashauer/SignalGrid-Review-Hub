@@ -153,9 +153,6 @@
   },
   {
    "id": "dependabot-queue-review-weekly",
-   "status": "awaiting-activation",
-   "awaitingSince": "2026-11-03",
-   "awaitingReason": "The account trigger exists and fires, but its fresh sessions cannot reach this repository, so the routine has never done its work or written a heartbeat. Read on 2026-11-12 from the two fires that day (00:11Z and a re-fire): each stopped with \"this session has no GitHub API or push access\", gh returned 403 and git push was refused. Waiting since the authorization date because no fire before that could have worked either. On 2026-11-16 at 01:40Z the cloud lane rebound the routine to the operating session, which already holds the repository with push access. It created trig_012X8ygGZFQis2bXCyFb1WZ3 with the same cron and duty, fired into that session, and disabled trig_012Lh3q196QWZhJ7Fy79xrCc, which stays stored. No owner action was needed for this. The row becomes active when that first fire (2026-11-16T08:47Z) delivers the first heartbeat; nothing was faked to clear the gate.",
    "trigger": "trig_012X8ygGZFQis2bXCyFb1WZ3",
    "cron": "47 8 * * 1",
    "binding": "self-session (resumes the operating session)",

@@ -83,6 +83,16 @@ export function layoutFacilityGraph(nodes: readonly GraphNodeInput[]): GraphLayo
     return col;
   }
   for (const root of roots) place(root, 0);
+  // A parentId cycle (a self-parent, a↔b, …) has no root to descend from, and
+  // neither has anything hanging under it. Rather than silently dropping those
+  // nodes, place each one as a flat root after the normal trees, in input
+  // order: the valid trees above keep their exact coordinates, and no
+  // recursion enters the cycle, so it cannot loop.
+  for (const n of nodes) {
+    if (columnOf.has(n.spaceId)) continue;
+    depthOf.set(n.spaceId, 0);
+    columnOf.set(n.spaceId, nextColumn++);
+  }
 
   const laidOut: LaidOutNode[] = nodes
     .filter((n) => columnOf.has(n.spaceId))

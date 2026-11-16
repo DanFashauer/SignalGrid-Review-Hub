@@ -48,6 +48,11 @@ export function assessProof(proof, allowedScope) {
   if (pass !== tests) return 'blocked';
   if (fail !== 0) return 'blocked';
   if (skipped !== 0) return 'blocked';
+  // Optional reported counters must agree with the all-passing claim. Preserve
+  // unknown as absent; a supplied failure, error, cancellation or TODO is not a pass.
+  for (const key of ['failed', 'errors', 'cancelled', 'todo']) {
+    if (Object.hasOwn(proof, key) && proof[key] !== 0) return 'blocked';
+  }
   if (!Array.isArray(changedFiles) || changedFiles.length === 0) return 'blocked';
   if (typeof command !== 'string' || !command.trim()) return 'blocked';
 

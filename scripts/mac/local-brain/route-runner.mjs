@@ -145,7 +145,13 @@ export function runNext({ tasks, scope, table, repo, head, executors, reviewLane
       answered = result.findingsAnswered.map((f) => ({ id: f.id, disposition: f.disposition }));
       openFindings = Array.isArray(result.openFindings) ? result.openFindings.map((f) => ({ ...f })) : [];
       job.checkpoint({ type: "pass", details: { ...receipt, findingsAnswered: answered, openFindings, proof: result.proof } }, job.getVersion(), lane);
-      job.checkpoint({ type: "verification", details: { command: result.proof.command, exitCode: result.proof.exitCode, passed: result.proof.pass } }, job.getVersion(), lane);
+      const verification = { command: result.proof.command, exitCode: result.proof.exitCode, passed: result.proof.pass };
+      // Keep every reported counter for JobState and downstream readback; do not
+      // turn contradictory original evidence into a smaller green summary.
+      for (const key of ["tests", "pass", "fail", "failed", "errors", "skipped", "cancelled", "todo"]) {
+        if (Object.hasOwn(result.proof, key)) verification[key] = result.proof[key];
+      }
+      job.checkpoint({ type: "verification", details: verification }, job.getVersion(), lane);
     } else if (pass.pass === 4) {
       job.checkpoint({ type: "cloud-handoff", details: { ...receipt, deliveredRef: result.deliveredRef, ownerGated: route.ownerGated === true, reviewFindings, findingsAnswered: answered, openFindings } }, job.getVersion(), lane);
     } else {

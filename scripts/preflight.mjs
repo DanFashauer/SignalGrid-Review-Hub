@@ -123,6 +123,7 @@ const STEPS = [
   { name: "Local worker job-state proofs", cmd: ["node", "scripts/mac/local-brain/test/job-state.test.mjs"] },
   { name: "Local worker task-selector proofs", cmd: ["node", "scripts/mac/local-brain/test/task-selector.test.mjs"] },
   { name: "Local worker task-selector C0 regressions", cmd: ["node", "scripts/mac/local-brain/test/task-selector-control-scope.test.mjs"] },
+  { name: "Entry identity: a query or fragment import is never the entry (#2185)", cmd: ["node", "scripts/mac/local-brain/test/entry-guard-url.test.mjs"] },
   { name: "Local worker task-selector C0 proof envelope", cmd: ["node", "scripts/check-local-worker-task-selector-proof.mjs"] },
   { name: "Local worker proof-policy proofs", cmd: ["node", "scripts/mac/local-brain/test/proof-policy.test.mjs"] },
   { name: "Local worker route-runner proofs (queue -> local LLM -> local sessions -> cloud, fail-closed)", cmd: ["node", "scripts/mac/local-brain/test/route-runner.test.mjs"] },

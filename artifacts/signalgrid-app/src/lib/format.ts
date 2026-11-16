@@ -2,6 +2,8 @@ import { format, formatDistanceToNow, isValid } from "date-fns";
 
 export function formatDate(dateStr: string | undefined | null) {
   if (!dateStr) return "N/A";
+  // A truthy non-string runtime value (#2190) is unparseable: never coerce it into a Date.
+  if (typeof dateStr !== "string") return "unparseable timestamp";
   // A non-empty but unparseable timestamp yields an Invalid Date; date-fns's
   // format()/formatDistanceToNow() throw RangeError on one. Guard with isValid so
   // a bad value reads as unverified/unparseable, never crashes the render.
@@ -12,6 +14,8 @@ export function formatDate(dateStr: string | undefined | null) {
 
 export function formatTimeAgo(dateStr: string | undefined | null) {
   if (!dateStr) return "N/A";
+  // A truthy non-string runtime value (#2190) is unparseable: never coerce it into a Date.
+  if (typeof dateStr !== "string") return "unparseable timestamp";
   const d = new Date(dateStr);
   if (!isValid(d)) return "unparseable timestamp";
   return formatDistanceToNow(d, { addSuffix: true });

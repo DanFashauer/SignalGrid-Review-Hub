@@ -726,6 +726,8 @@ jobs:
         run: node scripts/mac/local-brain/test/proof-policy.test.mjs
       - name: "Local worker route-runner proofs (queue -> local LLM -> local sessions -> cloud, fail-closed)"
         run: node scripts/mac/local-brain/test/route-runner.test.mjs
+      - name: "Local worker log-scan early refusal (no executor call before the hand)"
+        run: node scripts/mac/local-brain/test/log-scan.test.mjs
       # DR-060 rule 3, first slice: docs/agent/mcp-roster.json names which lane or
       # first-party skill may call which MCP server, with signalgrid-mcp's tool count
       # DERIVED from artifacts/mcp-server/src/index.ts, never hand-typed.

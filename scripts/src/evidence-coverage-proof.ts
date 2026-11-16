@@ -24,7 +24,11 @@
 //      counts always summing to the axis total — a denominator a reviewer can check.
 //   5. NON-VACUITY throughout: silent holes must be reachable AND avoidable.
 
-import { evaluatePolicy, fixedClock, seedDemoStore } from "@workspace/signalgrid-core";
+import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
+import { EVIDENCE_FIELDS, evaluatePolicy, fixedClock, seedDemoStore } from "@workspace/signalgrid-core";
 import type { DecisionEvidence, PolicyVersion } from "@workspace/signalgrid-core";
 import {
   buildCoverageReport,
@@ -100,6 +104,9 @@ const ALL_PLANES: readonly SourcePlane[] = KNOWN_SOURCE_PLANES;
     badgeBinding: "present",
     managementHealthState: "healthy",
     localAuthorityState: "verified",
+    attachState: "attached",
+    enrollmentStrength: "strong",
+    credentialReadMethod: "strong",
     criticalSignalsPresent: true,
   };
   check(
@@ -110,6 +117,75 @@ const ALL_PLANES: readonly SourcePlane[] = KNOWN_SOURCE_PLANES;
     "NON-VACUITY: the fully-clean baseline itself grants, so every probe below starts from allow",
     evaluatePolicy(active, base).outcome === "allow",
   );
+
+  // ── THE AXIS TABLE IS COMPLETE, IN BOTH DIRECTIONS ─────────────────────────
+  //
+  // WHAT WAS HERE INSTEAD, and why it proved nothing. The only completeness assertion
+  // this proof carried was "the three coverage buckets always sum to the axis total" —
+  // a partition of `EVIDENCE_AXES` summing to `EVIDENCE_AXES.length`, which is true by
+  // construction for ANY axis list, including an empty one. Under it, the table sat at
+  // 18 axes while `DecisionEvidence` had 21 fields, and the three it omitted were
+  // `managementHealthState`, `localAuthorityState` — two of the three Limited GA launch
+  // families — and `dockEvidenceFreshness`. The consequence ran in the direction that
+  // matters on the one page whose entire job is counting gaps: an estate with no
+  // device-management-health and no local-authority plane produced no dark axis and no
+  // silent hole for either. Absence was not counted as a gap.
+  //
+  // `base` above is the derivation, and the COMPILER is what makes it one: it is typed
+  // `DecisionEvidence`, so a field missing from it is a type error and a field that is
+  // not on the interface is an excess-property error. `Object.keys(base)` is therefore
+  // the interface's field list, at runtime, with the typechecker standing behind it —
+  // no second hand-written copy to drift.
+  {
+    const axisIds = EVIDENCE_AXES.map((a) => a.id).sort();
+    const evidenceFields = Object.keys(base).sort();
+    const missingAxes = evidenceFields.filter((f) => !axisIds.includes(f));
+    const phantomAxes = axisIds.filter((a) => !evidenceFields.includes(a));
+    check(
+      `the axis table covers EVERY field of DecisionEvidence and invents none (${axisIds.length} axes, ${evidenceFields.length} fields)` +
+        `${missingAxes.length ? `: missing ${missingAxes.join(", ")}` : ""}` +
+        `${phantomAxes.length ? `: not a field ${phantomAxes.join(", ")}` : ""}`,
+      missingAxes.length === 0 && phantomAxes.length === 0,
+    );
+    check(
+      `NON-VACUITY: the comparison is over a real field set (${evidenceFields.length} fields), not an empty one`,
+      evidenceFields.length >= 20 && axisIds.length >= 20,
+    );
+
+    // AND THE OTHER DENOMINATOR. `EVIDENCE_FIELDS` is the core's list of fields a policy
+    // RULE can test, and five of its names differ from the interface's
+    // (`chargeState` ⇄ `dockChargeState`, `baselineState` ⇄ `baselineCompliance`, …).
+    // The mapping is not restated here: it is parsed out of the engine's own
+    // `matches()` switch, where each `case "<ruleField>"` returns a test of exactly one
+    // `evidence.<field>`. Rename either side and this parse moves with it.
+    const POLICY_TS = resolve(dirname(fileURLToPath(import.meta.url)), "../../lib/signalgrid-core/src/policy.ts");
+    const policySrc = readFileSync(POLICY_TS, "utf8");
+    const ruleFieldToEvidence = new Map<string, string>();
+    for (const m of policySrc.matchAll(/case "(\w+)":\s*\n\s*return [^;]*?evidence\.(\w+)/g)) {
+      ruleFieldToEvidence.set(m[1], m[2]);
+    }
+    const unmapped = EVIDENCE_FIELDS.filter((f) => !ruleFieldToEvidence.has(f));
+    const uncovered = EVIDENCE_FIELDS.map((f) => ruleFieldToEvidence.get(f)).filter(
+      (f) => f !== undefined && !axisIds.includes(f),
+    );
+    check(
+      `every rule-testable EVIDENCE_FIELDS entry resolves to an axis (${EVIDENCE_FIELDS.length} fields)` +
+        `${unmapped.length ? `: no engine mapping for ${unmapped.join(", ")}` : ""}` +
+        `${uncovered.length ? `: no axis for ${uncovered.join(", ")}` : ""}`,
+      unmapped.length === 0 && uncovered.length === 0,
+    );
+    check(
+      `NON-VACUITY: the engine's own switch yielded a real mapping (${ruleFieldToEvidence.size} rule fields parsed from policy.ts)`,
+      ruleFieldToEvidence.size >= EVIDENCE_FIELDS.length,
+    );
+    // SELF-TEST: the comparison above must be able to FAIL. Drop one axis and the
+    // completeness check has to notice — otherwise it is the partition sum again.
+    const oneShort = axisIds.filter((a) => a !== "managementHealthState");
+    check(
+      "SELF-TEST: dropping one axis is detected by the same comparison, so it is not true by construction",
+      evidenceFields.filter((f) => !oneShort.includes(f)).length === 1,
+    );
+  }
 
   // The ignorance member of EVERY axis that has one — not just the ones already
   // claimed quiet.
@@ -144,6 +220,15 @@ const ALL_PLANES: readonly SourcePlane[] = KNOWN_SOURCE_PLANES;
     benchmarkSelection: "unverified",
     shiftContext: "unverified",
     badgeBinding: "unknown",
+    managementHealthState: "unknown",
+    localAuthorityState: "unverified",
+    dockEvidenceFreshness: "unknown",
+    // DR-043: an estate that cannot answer these emits NOTHING, which reads
+    // `not_applicable` — that is the ignorance a coverage report must count. (An
+    // emitted-but-unreadable `unknown` attach state steps up; silence does not.)
+    attachState: "not_applicable",
+    enrollmentStrength: "not_applicable",
+    credentialReadMethod: "not_applicable",
     criticalSignalsPresent: false,
   };
 
@@ -275,13 +360,24 @@ const ALL_PLANES: readonly SourcePlane[] = KNOWN_SOURCE_PLANES;
   // the two numbers this artifact leads with in a meeting, and which two other surfaces
   // (the api suite and the console E2E) already state as measurements. A figure quoted
   // in three places and gated in two is a fossil waiting to happen.
+  // MOVED 10 → 12 on 2026-09-06, and the reason is the completeness check above: the
+  // axis table was missing `managementHealthState` and `localAuthorityState`, both of
+  // which an Entra + Intune estate CAN answer. The wedge did not get better; the
+  // denominator stopped omitting two of its rows.
+  // MOVED 12/6 → 13/8 on 2026-09-23 (DR-043): three credential axes joined. The
+  // identity plane answers enrollmentStrength; attachState (dock) and
+  // credentialReadMethod (badge/physical access) are dark on the wedge, and both are
+  // quiet on silence (`not_applicable`), so both are silent holes.
+  // MOVED 8 → 7 silent on 2026-09-24 (owner call 4): credentialReadMethod is no longer
+  // quiet — a strong enrollment with no read method steps up — so it stays dark on the
+  // wedge but is GRADED there, not a silent hole. answerable and dark do not move.
   check(
-    `the Entra + Intune wedge answers EXACTLY 10 of ${wedge.totalAxes} axes and leaves ${dark.length} needing instrumentation`,
-    wedge.answerable === 10 && dark.length === 6,
+    `the Entra + Intune wedge answers EXACTLY 13 of ${wedge.totalAxes} axes and leaves ${dark.length} needing instrumentation`,
+    wedge.answerable === 13 && dark.length === 8,
   );
   check(
-    `…of which EXACTLY 6 are SILENT holes — dark AND ungraded, where a naive backtest would read health`,
-    wedge.silentHoles === 6 && wedge.silentHoles <= dark.length,
+    `…of which EXACTLY 7 are SILENT holes — dark AND ungraded, where a naive backtest would read health`,
+    wedge.silentHoles === 7 && wedge.silentHoles <= dark.length,
   );
   check(
     "every dark axis names the planes that would answer it, so the gap is actionable rather than a complaint",

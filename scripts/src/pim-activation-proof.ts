@@ -79,6 +79,18 @@ const aliased = normalizeActivationRequest("al", { ...CONFIRMED, ticket_state: "
 check("an unrecognized key means the envelope was not understood", aliased.requestIntegrity === "malformed" && evaluatePimActivation(aliased).outcome !== "AutoApproved");
 const protoAlias = normalizeActivationRequest("pa", Object.assign(Object.create({ ticket_state: "valid" }), CONFIRMED) as PimActivationRequestRaw);
 check("an unrecognized key INHERITED from the prototype is caught too", protoAlias.requestIntegrity === "malformed");
+// The prototype scan's brace-less guards, each ISOLATED (the mutation sweep reaches them
+// via `oneLine: true`; each check fails when its guard alone is set to `if (false)`).
+// A RECOGNIZED key inherited from the prototype is read by nobody — value reads are
+// own-only — so the scan must count it, not wave it through because the spelling is known.
+const { ticketState: _ticketHoisted, ...confirmedSansTicket } = CONFIRMED;
+check("a RECOGNIZED key inherited from the prototype is an unrecognized envelope → malformed",
+  normalizeActivationRequest("rk", Object.assign(Object.create({ ticketState: "valid" }), confirmedSansTicket) as PimActivationRequestRaw).requestIntegrity === "malformed");
+// Every level EMPTY, so only the depth bound (not a key on some level) can refuse it.
+let pimDeepEmpty: object = {};
+for (let i = 0; i < 100; i += 1) pimDeepEmpty = Object.create(pimDeepEmpty);
+check("a request behind a 100-deep EMPTY prototype chain is malformed — the walk is bounded, not trusted",
+  normalizeActivationRequest("deep", Object.assign(Object.create(pimDeepEmpty), CONFIRMED) as PimActivationRequestRaw).requestIntegrity === "malformed");
 const hidden = new Proxy({ ...CONFIRMED }, { ownKeys: () => [], getOwnPropertyDescriptor: () => undefined }) as PimActivationRequestRaw;
 check("a Proxy hiding its own descriptors reads as ABSENT and cannot AutoApprove", evaluatePimActivation(normalizeActivationRequest("px", hidden)).outcome !== "AutoApproved");
 const throwing = new Proxy({ ...CONFIRMED }, { ownKeys: () => { throw new Error("hostile"); } }) as PimActivationRequestRaw;
@@ -232,6 +244,23 @@ const emptyPosture = composeDeviceRisk([]);
 check("an EMPTY grid still reports riskTier 'ok' (composeDeviceRisk is right to)", emptyPosture.riskTier === "ok" && emptyPosture.signalCount === 0);
 check("...but maps to 'unknown', because no signals is not a clean bill of health", deviceRiskTierFromPosture(emptyPosture) === "unknown");
 check("...so an unonboarded or unreachable device routes to the approver group, never auto-approved", activationFor(deviceRiskTierFromPosture(emptyPosture)).outcome === "Approved");
+
+// A count that could not be READ is not a count of confirmations. `count <= 0` read
+// undefined and NaN as "some signals" and fell through to the tier — the trusting side.
+for (const bad of [undefined, NaN, -1, 0, "3"]) {
+  check(`a posture whose signalCount is ${String(bad)} (${typeof bad}) maps to 'unknown' — an unreadable count is not a confirmation`,
+    deviceRiskTierFromPosture({ ...emptyPosture, signalCount: bad as never }) === "unknown");
+}
+check("a posture with signals but an off-tier riskTier maps to 'unknown', never 'ok'",
+  deviceRiskTierFromPosture({ ...emptyPosture, signalCount: 1, riskTier: "green" as never }) === "unknown");
+check("...and a real count with a real tier still passes the tier through (the guard is not vacuous)",
+  deviceRiskTierFromPosture({ ...emptyPosture, signalCount: 1, riskTier: "watch" }) === "watch");
+// The exhaustive sweep's domains are HAND-LISTED above. A request field added
+// tomorrow and silently ignored by the evaluator would not be in that list, so the
+// 3240-state sweep could not see it. Pin the list to the request's own key set.
+const { PIM_ACTIVATION_REQUEST_KEYS } = await import("@workspace/pim-activation");
+check("the exhaustive sweep's domains are exactly the request's declared keys plus requestIntegrity — a new field cannot be ignored unseen",
+  JSON.stringify(Object.keys(domains).sort()) === JSON.stringify([...PIM_ACTIVATION_REQUEST_KEYS, "requestIntegrity"].sort()));
 
 // Worst-concern-wins survives the bridge: one blocked signal among healthy ones still blocks.
 const mixedTier = deviceRiskTierFromPosture(composeDeviceRisk([fromAgentIdentity(governedAgent), fromDeviceManagementHealth(retiredDevice)]));

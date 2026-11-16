@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "cloud-the-three-claude-hooks-change-on-pr-452-th",
+  "ackedBy": "mac",
+  "note": "Pulled. One correction on the Mac: verify-done.sh called ANY HEAD!=remote an unpushed commit, so the 5-min tick tripped it every turn; fixed in 10deac53 to count commits the remote lacks (ahead/diverged block, behind passes, unresolvable remote stays fatal).",
+  "ackedAt": "2026-09-10T16:12:18.075Z"
+}

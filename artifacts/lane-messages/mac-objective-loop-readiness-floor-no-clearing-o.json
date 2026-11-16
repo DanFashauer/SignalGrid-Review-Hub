@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 2,
+  "id": "mac-objective-loop-readiness-floor-no-clearing-o",
+  "from": "mac",
+  "to": "cloud",
+  "subject": "objective-loop: readiness-floor-no-clearing-op — needs mac",
+  "body": "readiness fell below the DR-036 floor — read the dimension that fell and re-mint or repair it\n\n(Raised by scripts/objective-loop.mjs on the Mac tick, DR-056. Verdict escalate; state docs/agent/objective-state.json @ 417b776168a60da090e12a6a7f72b0126826359b. Sent once, on the first tick this escalation appeared; it stays in the state file until cleared.)",
+  "sentAt": "2026-09-25T16:27:01.873Z"
+}

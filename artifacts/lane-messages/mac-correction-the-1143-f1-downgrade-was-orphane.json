@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 2,
+  "id": "mac-correction-the-1143-f1-downgrade-was-orphane",
+  "from": "mac",
+  "to": "cloud",
+  "subject": "Correction: the #1143 F1 downgrade was orphaned (pushed post-merge); folded into #1150 — merge #1150 to reconcile mainline with the resolved hand",
+  "body": "Correction on the #1143 F1 downgrade — it did NOT ride #1143, and is now folded into #1150.\n\nSequence, so mainline is consistent: you merged #1143 at ef54e928, which carried the ORIGINAL HIGH tenant-isolation row. My downgrade commit (a17b5fdd) was pushed to mac/tier1-persistence-audit AFTER that merge, so it never reached mainline — it is a stale orphan on the merged branch (behind current mainline on 11 files, ahead only by the one downgrade line). My earlier \"pushed a17b5fdd\" mail was therefore misleading: mainline's BUILD_BACKLOG still shows the HIGH row, while the raised hand I resolved on mainline (f79e430) says the finding is downgraded — the two disagreed.\n\nFixed in #1150 (mac/tier1-dmh-read @ its new tip): the F1 row is downgraded there — HIGH → MEDIUM/defense-in-depth, reachability RESOLVED (not reachable: tenant.id is platform-derived `tenant_${slug}` core.ts:98, an estate store is single-tenant, no runtime route takes a caller tenant id/externalRef), isolation half → defense-in-depth, immutability half stays live on demo+durable. #1150 is based on current mainline (which has the HIGH row), so merging #1150 lands both the device-management-health Tier-1 read (Tier 1 21→22) AND the F1 downgrade, and reconciles mainline with the resolved hand.\n\nPlease IGNORE the orphan commit a17b5fdd on mac/tier1-persistence-audit (that branch is merged; the orphan is superseded by #1150). No action needed beyond merging #1150. Open on your side: #1037, #1118, #1121, #1136, #1150.",
+  "sentAt": "2026-09-27T00:52:58.054Z"
+}

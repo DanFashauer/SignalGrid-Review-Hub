@@ -7,7 +7,7 @@ first change. These rules override default behavior.
 
 A pnpm/TypeScript monorepo for **SignalGrid**. `docs/PURPOSE.md` is canonical
 (DR-020) and states what SignalGrid is; this file governs implementation only.
-SignalGrid connects the systems a building runs into one grid that decides and
+SignalGrid connects the systems a company runs, legacy systems included, into one grid that decides and
 acts on a person's behalf as they move through door, device, room and app — a
 decision is the trigger for a cascade, not the end of it, and the worker never
 sees SignalGrid. The decision core is deterministic and
@@ -46,41 +46,50 @@ proofs miss:
 
 ```bash
 ./validate-sim-macos.sh          # full suite → the harness prints
-                                 # "== SUMMARY: N passed, M failed =="; compare M
-                                 # against 0. Do NOT compare N against a total quoted
-                                 # here — the suite grows, and a pinned total silently
-                                 # turns a regression into a pass.
+                                 # "== SUMMARY: N passed, M failed, S skipped =="; compare
+                                 # M against 0 AND read S — a skip is not a pass, and the
+                                 # skipped gates are named above the line. Do NOT compare
+                                 # N against a total quoted here — the suite grows, and a
+                                 # pinned total silently turns a regression into a pass.
                                  # (--sim-only for just the scenarios)
 ```
 
 **`validate-sim-macos.sh` green is NARROWER than preflight green, and the
 difference is not small.** The harness enumerates every `proof:*` script, so a
-new proof joins it automatically — but roughly thirty-five preflight gates are
-not proofs and it never runs them: the docs↔proof figure guard, the launch
-profile, both preflight↔CI parity checks, the guard registries, the publication
-boundary, the simulation-request gate, `test:load`, the benches. A branch can
-therefore pass the harness and fail CI on a gate the harness has no concept of.
-Run BOTH before pushing anything that touches gates, docs figures, or the
-launch surface:
+new proof joins it automatically — but MOST preflight gates are not proofs and
+it never runs them: the docs↔proof figure guard, the launch profile, both
+preflight↔CI parity checks, the guard registries, the publication boundary, the
+simulation-request gate, `test:load`, the benches, and well over a hundred more.
+(An earlier version of this paragraph said "roughly thirty-five"; measured with
+the parity gate's own extractor on 2026-09-06 the non-proof count was 233 of 310
+— the paragraph that warned the difference was not small had quantified it as
+small. Do not retype a number here: `node scripts/check-preflight-ci-parity.mjs`
+prints the current one.) A branch can therefore pass the harness and fail CI on
+a gate the harness has no concept of. Run BOTH before pushing anything that
+touches gates, docs figures, or the launch surface:
 
 ```bash
-node scripts/preflight.mjs       # the per-push lane CI mirrors (~35 non-proof gates)
-pnpm run verify:breadth          # 47 deferred families + 8 doctrine proofs, its own CI job
+node scripts/preflight.mjs       # the per-push lane CI mirrors (every non-proof gate lives here)
+pnpm run verify:breadth          # every STEPS entry in scripts/verify-breadth.mjs, its own CI job
+                                 # (count the entries, not this comment — the header there says why)
 ```
 
 ### Commands worth knowing, and when
 
 | Command | When |
 | --- | --- |
-| `pnpm run lane:inbox` | **Run this first, every session.** What the other lane needs you to know. `pnpm run lane:send "subject" "body…"` to write back, `pnpm run lane:ack <id> "what I did"` to close one — then commit and push `artifacts/lane-messages/`, because the push is the delivery. The owner is not a message bus; do not ask them to relay. |
+| `bash scripts/mac/install-launchd.sh` | **Mac, once.** Installs the 5-minute lane tick (`scripts/mac/lane-tick.sh`): runs queued sim requests and heartbeats without a Claude session open. The cloud lane does everything CI's macOS runners can verify itself (Swift twins, xcodebuilds, Mac-owned script fixes) and no longer mails the Mac for builds — see `docs/LANE_COORDINATION.md`, second revision. `--status` to check, `--uninstall` to remove. |
+| `pnpm run lane:inbox` | **Run this first, every session.** What the other lane needs you to know, how long it has waited, and which of your branches mainline does not carry yet. The owner is not a message bus; do not ask them to relay. |
+| `pnpm run lane:deliver send\|ack\|heartbeat\|batch …` | **One-step protected delivery.** Writes and gates the artifact in a throwaway worktree, then publishes one `lane/<lane>-mail-<stamp>` topic and requests its protected PR merge. The Mac requires authenticated `gh` before push; Cloud without usable `gh` publishes once and returns exit 4 for its own PR-tool handoff. Unattended callers preserve an immutable parent intent and pass `--receipt <unused-file>` before publication. Exit 0 means accepted PR/auto-merge submission, pending canonical landing. `lane:deliver readback <receipt>` uses GET/fetch only: 0 verifies the original commit and payload in real canonical history (including a lawfully refreshed PR head); 4 means pending auto-merge; 3 holds an unconfirmed attempt. Never erase receipts or resend unknown mutations. `lane:send`/`lane:ack` only WRITE files. Wake: the mailbox-PR comment (`docs/agent/lane-mailbox.json`), otherwise hourly. Current gates, recovery and landing protocol: `docs/LANE_COORDINATION.md`. |
+| `pnpm run hands` | **The channel for a raised hand (DR-054's "who can unblock it").** Everything stuck, grouped by who can clear it: hands agents raised in `artifacts/raised-hands/` (`pnpm run hand:raise -- --doing "…" --blocked "…" --need "…" --who owner\|"mac lane"\|"cloud lane" [--domain d]`, or a `raise` op in `lane:deliver batch`; `hand:take -- <id>` before working one, `hand:clear -- <id> "what unblocked it"` when done) PLUS stalls nobody raised a hand for — mail unread past 24h, a sim request pending past 48h, a routine past its heartbeat tolerance. A stall past 3× its limit with no hand raised FAILS preflight and CI (`scripts/raised-hands.mjs --check`). Ledger: one file per hand; `scripts/check-raised-hands.mjs` routes each to its org-roster role or names a GAP. The owner sees it on one GitHub issue labelled `raised-hands`, refreshed hourly with PRs included; a NEW hand posts a comment so he is notified once. **Answering** a hand: the `raised-hands` skill + `blocker-dispatcher` agent route each one (explicit hands by roster role, auto stalls by `docs/agent/hand-routing.json`); a stall kind with no responder, or a responder that does not exist, fails the same gate. The page's health line counts stalls the system found that no agent raised — the monitor on hand-raising itself. |
 | `pnpm run sim:run-requests` | On the Mac: run the verification operations the cloud lane queued in `artifacts/sim-requests/`. `--plan` first to see what would run; `--id <id>` for one. Results land in `artifacts/sim-results/` with provenance and are COMMITTED — that is how the other lane learns the run happened. See `docs/LIVE_SYNC_LOOP.md`. |
 | `node scripts/check-sim-requests.mjs` | What is still owed. A refusal or a skip never closes a request; pending is reported on every run and never counts green. |
 | `node scripts/check-lane-messages.mjs` | What mail is still unread, in either direction. Unread is REPORTED, never fatal — the other machine is not always awake — but it is never silent, and only the addressee can close a message. |
 | `pnpm run check:absence <topic>` | **Before writing "X does not exist."** Probes four differently-shaped ways; exits 1 refuted, 2 inconclusive, 0 corroborated. A word appearing in a disclaimer is NOT the thing existing — that verdict is `inconclusive`, and you read the matches yourself. TWO in-repo documents have now claimed a surface was absent while it sat in the tree — `docs/DELIVERY_GAP_ANALYSIS.md` (several claims, recorded in `docs/agent/FALSE_CLAIMS.json`, and repeated by external analyses) and `docs/company/ICP_EVIDENCE.md` on 2026-08-24, which said no competitive surface named OLOID or Imprivata while four anchored briefs and a battlecard had sat in `docs/research/` for two weeks. (An earlier version of this row said "two" and then "three" without citing which; the registry substantiates one prior in-repo document, so the number now names its sources.) **The tool ITSELF fail-opened until 2026-08-24**: its content probe excluded `docs/*`, so a topic living only in prose returned CORROBORATED instead of INCONCLUSIVE — and a roster entry was rewritten on that verdict to say a live, buyer-facing label drift was "named NOWHERE". Fixed, with a live self-test. Run it BEFORE the sentence goes in, and read the matches yourself: the feeling of being sure is what every instance had in common. |
-| `pnpm run scan:estate` | The cited-path check across ALL SEVEN repositories, not just this one — the other six have no gates watching them. Needs the siblings cloned under `/workspace`; a repo it cannot reach is reported NOT SCANNED and never counted clean. Not a CI gate for that reason: CI has one checkout. |
+| `pnpm run scan:estate` | The cited-path check across ALL SEVEN repositories, not just this one — the other six have no gates watching them. Finds the siblings under `/workspace` and, from PR #1356 (DR-063), beside this checkout — a sibling counts only when its `origin` is a `github.com` URL naming the expected repository; a repo it cannot reach or confirm is reported NOT SCANNED and never counted clean. Not a CI gate for that reason: CI has one checkout. |
 | `pnpm run test:load` / `test:stress` | The `/v1` HTTP surface under concurrency. Correctness is GATED; throughput, percentiles and the saturation knee are REPORTED — a latency threshold on a shared runner is a flaky gate and a flaky gate gets switched off. |
 | `pnpm run bench:decision-latency` / `bench:decision-throughput` | The in-process decision core: one decision, then saturation across every core. **Not the same number as `test:load`** — no HTTP, no connector, no database. The gap between them is the transport. |
-| `SIGNALGRID_MCP_PATH=… pnpm run verify:all --require-mcp --emit-evidence` | The ONLY lane that can refresh `artifacts/live-evidence/mac-run.json`. macOS only, refuses on CI, refuses unless both halves are green. |
+| `SIGNALGRID_MCP_PATH=… pnpm run verify:all --require-mcp --emit-evidence` | The ONLY lane that can refresh `artifacts/live-evidence/mac-run.json`. macOS only, refuses on CI, refuses unless both halves are green. Add `--vm-native-build` (the `evidence` sim operation already carries it): the two native-build steps then run in the amd64 Linux VM and are recorded from an attestation bound to this tree's HEAD and a clean working tree (DR-057) — without it the figure's ceiling on this Mac is 19/20. |
 | `node scripts/generate-sync-manifest.mjs` | After changing any cross-surface contract. Never hand-edit the manifest. |
 
 - **Added or changed a package's deps?** Regenerate the lockfile —
@@ -112,8 +121,14 @@ Vite 8's bundler, win32 bindings deliberately kept for the windows desktop CI), 
 
 - Proofs/sim/`test:api` run natively once tsx's esbuild binary for this arch is
   present and the api-server is built (both handled by `validate-sim-macos.sh`).
-- `pnpm run build` (the vite web build) only runs on linux-x64 / in CI. Don't try
-  to "fix" a web-build failure here — it's expected off linux-x64.
+- `pnpm run build` (the vite web build) only runs natively on linux-x64 / in CI. Don't
+  try to "fix" a native web-build failure here — it's expected off linux-x64. On the
+  Mac it DOES run inside an amd64 Linux VM with Apple's `container`, installed
+  user-level (no admin) under `~/.local/container`:
+  `bash scripts/mac/linux-web-build.sh` starts the service if it is down and runs
+  `pnpm install --frozen-lockfile && pnpm run build` against a read-only copy
+  (measured 2026-09-18 from a stopped service: exit 0 in 51 s, all five vite apps).
+  `--arch arm64` fails on the rolldown binding by design.
 - **Shell scripts run under bash 3.2** — the only `bash` on a stock Mac, and 20
   years behind the one on your Linux CI box. Under `set -u` it treats an EMPTY
   array's `"${a[@]}"` as *unbound* and aborts (bash 4.4+ expands it to nothing).
@@ -187,8 +202,10 @@ Vite 8's bundler, win32 bindings deliberately kept for the windows desktop CI), 
     against both `SG.background` and `SG.card` in both appearances. `deny` once
     sat at 3.18:1 on card — the weakest contrast in the system on its most
     safety-critical state.
-  - `SignalGridMobile` is pure SwiftUI with semantic colors and needs none of
-    this; it is already adaptive. Do not "fix" it into a UIKit shape.
+  - `SignalGridMobile`'s WardlinkDemo target is pure SwiftUI with semantic colors and
+    needs none of this; it is already adaptive. Do not "fix" it into a UIKit shape.
+    SignalGridOperator is NOT covered by that sentence (BUILD_BACKLOG row 103) — this
+    line named the whole app until 2026-09-06.
 
 ## Simulation results — provenance is the product
 
@@ -207,6 +224,8 @@ Vite 8's bundler, win32 bindings deliberately kept for the windows desktop CI), 
   state at launch. Do not move it back after the loop.
 
 ## Multiple Claude lanes
+
+- **Model routing and usage-limit fallback (DR-047).** Every subagent spawn names its own tier (Haiku for bulk mechanical work, Sonnet for reads/verification/build, Opus for judgment; Fable/Mythos never run an engineering or review stage) and never inherits the coordinator's model; an unavailable tier resolves UP to Opus and a spawn killed by a usage limit is logged pending and re-issued, never silently dropped. The owner sets the CLI primary-model auto-fallback to Opus so a limited coordinating model continues instead of going dark.
 
 Parallel Claude sessions work this repo (cloud + Mac). Before touching a
 shared surface (discipline gate, mutation guard, sync manifest, proof
@@ -242,8 +261,9 @@ HIPAA/SOC 2 — a human compliance review is required, not optional.
 - Done = tests/gates pass with quoted output AND the commit is confirmed on origin via `git ls-remote`. Local-only is not done.
 - Never bypass a check: no `--no-verify`, no stash-to-dodge, no quiet flags, no force-push. Report the failure and fix the cause.
 - Session ritual: START — read `docs/agent/LOOP.md`, run `pnpm run loop:state`, quote output. END — update the LOOP.md STATE block, push, confirm on remote.
+- **Raise your hand when stuck (DR-054).** Be fail-closed about your OWN progress, not only the code. If you hit a wall you cannot clear — a tool/permission you lack, a dependency you cannot reach, a missing or contradictory input, an owner-only decision, a usage limit, a refusal — STOP and surface it: what you were doing, what blocked you, exactly what you need, and who can unblock it. Never return an empty/partial/best-guess result as if complete, never silently drop a step, never narrate past the blocker. This binds every lane and every subagent (`scripts/check-agent-raise-hand.mjs` enforces the clause in every first-party `.claude/agents/*.md`; the vendored ones inherit it from this file); a stuck unit raises a hand (`pnpm run hand:raise`, below) and a stuck lane can also mail (`lane:deliver`), a workflow surfaces a dead/`null` agent instead of filtering it away. A raised hand is the job done right; a silent stall is the one failure this system will not tolerate.
 
 ## Scope (current phase — DR-021, 2026-08-31)
 - Engineering is UNFROZEN across every lane (DR-021). Build what strengthens the solution; new verticals/platforms/hardware still get a decision record first (DR-020 rule).
 - Claim discipline is unchanged: the launch-claims gate, launch-profile classification, and publication boundary still govern what may be *said* to ship. Building and claiming are different acts.
-- The only number that moves the company is discovery conversations (`docs/agent/DISCOVERY_LOG.md`). Code work never substitutes for it.
+- Current phase is Build / execution (DR-033, 2026-09-10 — past Customer Discovery). Discovery evidence (`docs/agent/DISCOVERY_LOG.md`) is still a valued input, but it is no longer the sole gating metric and does not gate the loop. Near-term objective (DR-033): a working core product that does what it claims — something real in hand for partners/collaborators before GTM/execution (pilots, revenue and launch timing come after). Outreach opens only at readiness ≥ 80% (target 92–95%, goal 100%) as derived by `node scripts/check-readiness-figure.mjs` — the lowest of three measured dimensions, never a typed number (DR-036).

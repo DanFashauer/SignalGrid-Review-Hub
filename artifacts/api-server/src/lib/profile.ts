@@ -22,7 +22,10 @@
 //      and then WRITES — decision, evidence snapshot, two audit-ledger appends, a
 //      metrics increment.
 //   3. The whole `/cp/v1` control plane is mounted with no auth, so its
-//      client-supplied `?tenant=` query parameter is the only scoping there is.
+//      client-supplied `?tenant=` query parameter is the only scoping there is —
+//      and `POST /cp/v1/telemetry` WRITES: it overwrites a seeded edge node's
+//      decision counts, so an anonymous caller can move another tenant's rollup
+//      (unknown node ids are refused 404, which bounds it to the fixture's nodes).
 //
 // The `/v1` isolation model underneath is sound — every route derives its tenant
 // from the verified bearer and a cross-tenant read returns the same 404 as a
@@ -94,7 +97,20 @@ export function demoSurfacesEnabled(profile: ProductProfile = resolveProfile()):
 // that is not part of Limited GA, and a surface nobody scoped is a surface nobody
 // reviewed — which is Blocker 8 stated precisely.
 //
-// So the gateway profile carries an ALLOWLIST, and everything outside it 404s.
+// So the gateway profile carries an ALLOWLIST, and everything outside it 404s —
+// UNDER `/api`, which is the exact reach of this fence and is stated that way
+// because the shorter sentence was not true. The fence is registered inside the
+// router (`routes/index.ts`), and that router is mounted at `/api` (`app.ts`), so
+// routes registered directly on the app ABOVE that mount never meet it: `GET
+// /metrics` is served under the gateway profile and is deliberately not in the
+// list below. That carve-out is a decision, not an oversight — an orchestrator
+// that cannot scrape a customer deployment is a customer deployment nobody can
+// operate, and the endpoint is global-aggregate only with no tenant label, bearer-
+// gatable via METRICS_TOKEN. `scripts/launch-profile.mjs` records the same fact
+// ("the server mounts this contract under /api and ALSO registers `/`, `/console`
+// and `/metrics` directly on the app, outside it"), and `test/api.test.mjs`'s
+// gateway block now asserts BOTH halves live: `/metrics` answers 200, `/api/metrics`
+// 404s.
 //
 // WHY AN ALLOWLIST AND NOT A DENYLIST. A denylist has to be updated every time a
 // route is added, and the failure mode of forgetting is that the new route SHIPS.
@@ -131,7 +147,23 @@ export const GA_ALLOWED_ROUTES: readonly { method: string; path: string }[] = [
   { method: "GET", path: "/v1/decisions/:id" },
   { method: "GET", path: "/v1/decisions/:id/evidence" },
   { method: "GET", path: "/v1/audit" },
+  // ANSWERING a step_up (the `step-up-answerability` gap, closed 2026-09-18). The
+  // gate returns four words and Limited GA could act on three: nothing served could
+  // carry a completed challenge back, so a deployment was in shadow mode by omission.
+  // These three are the whole ceremony and no more — enrollment, a challenge bound to
+  // ONE decision, and the verified answer. The app-workflows variants
+  // (POST /v1/step-up/challenge, POST /v1/app-workflows/complete-step-up) stay OFF the
+  // fence: they belong to the deferred integration catalog, not to the gate.
+  { method: "POST", path: "/v1/step-up/enroll/options" },
+  { method: "POST", path: "/v1/step-up/enroll/verify" },
+  { method: "POST", path: "/v1/decisions/:id/step-up/challenge" },
+  { method: "POST", path: "/v1/decisions/:id/step-up" },
   { method: "GET", path: "/v1/metrics" },
+  // Blocker 10 at runtime: what this process is actually doing, per signal family.
+  // A customer deployment that cannot ask the running server whether its signals are
+  // observed or simulated is a deployment whose autonomy claims live only in a
+  // document — which is the blocker, not a symptom of it.
+  { method: "GET", path: "/v1/launch-status" },
   // Launch wireframe screen 2 (connector setup/health) — read + fixture-sync
   // only. POST /sync runs the core's fixture pipeline; runFixtureSync throws on
   // any non-fixture connector, so no route here can touch a source system.
@@ -176,6 +208,10 @@ const GA_MATCHERS = GA_ALLOWED_ROUTES.map((r) => ({ method: r.method, re: pathMa
  */
 export function routeServedByGateway(method: string, path: string): boolean {
   const clean = path.split("?")[0]!.replace(/\/+$/, "") || "/";
-  const verb = method.toUpperCase();
+  // HEAD is answered by Express from the GET handler, so it is served exactly where
+  // GET is — a load-balancer probe sending HEAD /api/healthz must not read 404 from a
+  // healthy instance. Only HEAD is folded; every other verb still matches literally.
+  const upper = method.toUpperCase();
+  const verb = upper === "HEAD" ? "GET" : upper;
   return GA_MATCHERS.some((m) => m.method === verb && m.re.test(clean));
 }

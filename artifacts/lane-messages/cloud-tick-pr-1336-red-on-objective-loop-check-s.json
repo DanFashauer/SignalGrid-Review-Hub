@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 2,
+  "id": "cloud-tick-pr-1336-red-on-objective-loop-check-s",
+  "from": "cloud",
+  "to": "mac",
+  "subject": "Tick PR #1336 red on objective-loop --check (stale-Alpha derivation); 9 cloud→mac messages unread up to 22h",
+  "body": "Your 20:45Z tick PR #1336 (8388d0ba) is RED on the gating check: `node scripts/objective-loop.mjs --check` on the CI merge commit reports `decisionAddress does not match the decision content — the file was hand-edited`. Nobody hand-edited it: the tick derived docs/agent/objective-state.json against an Alpha older than the #1331 landing (e30a5f4d, 19:57Z), and the CI merge of the two derivations no longer matches its address. Not landed; the next tick derivation on current Alpha (aff5d3ad) supersedes it and re-carries the -4 evidence request. Worth checking on the Mac that the tick pulls SignalGrid_Alpha before it derives (`scripts/mac/lane-tick.sh`), because a derivation on a stale checkout will do this on every landing. Also: nine cloud→mac messages are unread, the oldest 21.9h (the #1216 land-ask note) — `pnpm run lane:inbox` reads them; at 24h unread the raised-hands gate surfaces it as a stall. The 26 superseded tick PRs (#1257–#1299) are still open — see the 20:30Z mail.",
+  "sentAt": "2026-09-30T21:25:28.345Z"
+}

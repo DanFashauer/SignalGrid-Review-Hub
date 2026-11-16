@@ -5,6 +5,14 @@ on:
   push:
     branches:
       - SignalGrid_Alpha
+    # A heartbeat-only push (the Mac tick rewriting artifacts/agent-heartbeats/*.json,
+    # gated by lane-deliver's own checks) changes no code and used to start this
+    # workflow every 5 minutes, cancelling the mainline run of the merge before it
+    # (concurrency below) and spending the repository's GITHUB_TOKEN budget — the
+    # CI liveness gate failed a product PR on a 403 for exactly that (2026-09-12).
+    # A push that touches anything else still runs.
+    paths-ignore:
+      - "artifacts/agent-heartbeats/**"
   pull_request:
   schedule:
     - cron: "17 7 * * 1"
@@ -101,6 +109,11 @@ jobs:
           # and `${{ }}` inside `run:` is exactly how that becomes shell injection.
           IS_DEPENDABOT_PR: ${{ github.event_name == 'pull_request' && github.event.pull_request.user.login == 'dependabot[bot]' && github.event.pull_request.head.repo.full_name == github.repository }}
         run: |
+          # `git diff --quiet` is silent about an UNTRACKED file: a regenerated
+          # SBOM that was never committed reports "in sync". The three
+          # regenerate-and-compare steps in review-hub-ci.yml guard this with
+          # ls-files; this one did not.
+          git ls-files --error-unmatch artifacts/sbom/cyclonedx.json > /dev/null || (echo "::error::artifacts/sbom/cyclonedx.json is not tracked — a generated SBOM must be committed." && exit 1)
           if git diff --quiet -- artifacts/sbom/cyclonedx.json; then
             echo "drifted=false" >> "$GITHUB_OUTPUT"
             echo "SBOM is in sync with the lockfile."
@@ -142,9 +155,9 @@ jobs:
       - name: Install pinned syft + grype (sha256-verified)
         run: |
           set -euo pipefail
-          curl -sSL -o syft.tgz https://github.com/anchore/syft/releases/download/v1.44.0/syft_1.44.0_linux_amd64.tar.gz
+          curl --fail --retry 3 --retry-all-errors --retry-delay 2 --connect-timeout 15 --max-time 120 -sSL -o syft.tgz https://github.com/anchore/syft/releases/download/v1.44.0/syft_1.44.0_linux_amd64.tar.gz
           echo "0e91737aee2b5baf1d255b959630194a302335d848ff97bb07921eb6205b5f5a  syft.tgz" | sha256sum -c -
-          curl -sSL -o grype.tgz https://github.com/anchore/grype/releases/download/v0.112.0/grype_0.112.0_linux_amd64.tar.gz
+          curl --fail --retry 3 --retry-all-errors --retry-delay 2 --connect-timeout 15 --max-time 120 -sSL -o grype.tgz https://github.com/anchore/grype/releases/download/v0.112.0/grype_0.112.0_linux_amd64.tar.gz
           echo "acb14a030010fe9bdb9594b4ae108d9d14ef2f926d936aa0916dc62c89c058ea  grype.tgz" | sha256sum -c -
           mkdir -p "$HOME/bin"
           tar -xzf syft.tgz -C "$HOME/bin" syft
@@ -161,7 +174,13 @@ jobs:
           # Evidence, not a frozen claim: the same image scans differently as
           # the database moves, so the db build date rides with the result.
           grype db update
-          grype sbom:image-sbom.cyclonedx.json -o json --file grype-report.json || true
+          # No --fail-on is set, so findings exit 0 and are REPORTED below. A
+          # non-zero status is grype itself failing (crash, unreadable SBOM or
+          # db): no scan ran, so the step fails rather than report over it.
+          # Guarded by scripts/check-image-build-hardening.mjs.
+          gs=0
+          grype sbom:image-sbom.cyclonedx.json -o json --file grype-report.json || gs=$?
+          if [ "$gs" -ne 0 ]; then echo "::error::grype exited $gs: the scanner failed, no scan ran"; exit 1; fi
           python3 - <<'PY'
           import json
           r = json.load(open("grype-report.json"))
@@ -228,12 +247,13 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.ref }}
       - name: Download the SBOM the read-only job generated
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: cyclonedx-sbom
           path: artifacts/sbom
       - name: Commit the refreshed SBOM
         run: |
+          git ls-files --error-unmatch artifacts/sbom/cyclonedx.json > /dev/null || (echo "::error::artifacts/sbom/cyclonedx.json is not tracked — nothing to refresh against." && exit 1)
           if git diff --quiet -- artifacts/sbom/cyclonedx.json; then
             echo "SBOM already in sync - nothing to commit."
             exit 0

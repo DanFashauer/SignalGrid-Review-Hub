@@ -11,8 +11,20 @@
 # fails rather than quietly using the other one, because a caller who named an engine
 # is making a claim about what is being tested.
 #
-# Auto-detection prefers PODMAN (the chosen runtime); docker is tried next, so a
-# machine that only has docker keeps working with no change.
+# Auto-detection prefers DOCKER; podman is tried next, so a machine that only has
+# podman keeps working with no change.
+#
+# FLIPPED 2026-09-09 (engine split adjudicated in the #555 ack: docker is the engine
+# of record). The header said podman while the Mac's entire lab — every sg-* container,
+# the Fleet stack, the live-vendor lanes — runs on docker, and scripts/mac/sg-stack.sh
+# had to work AROUND this preference, noting that "a blind sg_resolve_engine would
+# manage the empty podman and report the docker containers" as missing. A stated
+# default that contradicts the running system is a lie the next reader has to discover.
+#
+# SAFE FOR THE PODMAN-ONLY LANE by construction: the loop below requires the engine to
+# ANSWER (`version --format` must succeed), not merely to be installed, so a box where
+# docker is absent or its daemon is dead falls through to podman exactly as before.
+# That is the cloud sandbox, where docker cannot start at all.
 
 sg_resolve_engine() {
   if [ -n "${CONTAINER_ENGINE:-}" ]; then
@@ -24,7 +36,7 @@ sg_resolve_engine() {
     SG_ENGINE=""
     return 1
   fi
-  for _sg_e in podman docker; do
+  for _sg_e in docker podman; do
     if command -v "$_sg_e" >/dev/null 2>&1 &&
       "$_sg_e" version --format '{{.Server.Version}}' >/dev/null 2>&1; then
       SG_ENGINE="$_sg_e"
@@ -116,3 +128,46 @@ SG_IMAGE_PROMETHEUS="docker.io/prom/prometheus:v3.1.0"
 SG_IMAGE_HMDM="docker.io/headwindmdm/hmdm:0.1.5"
 # shellcheck disable=SC2034
 SG_IMAGE_POSTGRES="docker.io/library/postgres:16"
+
+# --- self-test -----------------------------------------------------------------
+# This file is normally SOURCED. Executed directly with --self-test it asserts its own
+# rules, including the one it was just fixed for: THE HEADER MUST NAME THE ENGINE THE
+# LOOP ACTUALLY TRIES FIRST. The stated preference and the code disagreed for weeks —
+# nothing could catch that, because a comment is not executable. This makes it so.
+#
+#   sh scripts/lib/container-engine.sh --self-test
+sg_engine_self_test() {
+  _st_pass=0; _st_fail=0
+  _st() { # name, condition-already-evaluated ("ok"/"no")
+    if [ "$2" = "ok" ]; then printf "  ok   — %s\n" "$1"; _st_pass=$((_st_pass+1))
+    else printf "  FAIL — %s\n" "$1"; _st_fail=$((_st_fail+1)); fi
+  }
+
+  # 1. DOC↔CODE PARITY. Both are read out of this file rather than restated here, so
+  #    editing one without the other fails instead of drifting silently.
+  _st_self="${0}"
+  _st_stated=$(grep -m1 '^# Auto-detection prefers ' "$_st_self" | awk '{print tolower($4)}' | tr -d ';')
+  _st_first=$(grep -m1 '^  for _sg_e in ' "$_st_self" | awk '{print $4}' | tr -d ';')
+  [ -n "$_st_stated" ] && [ "$_st_stated" = "$_st_first" ] && _st_r=ok || _st_r=no
+  _st "the header's stated preference ($_st_stated) is the engine the loop tries first ($_st_first)" "$_st_r"
+
+  # 2. CONTAINER_ENGINE IS AUTHORITATIVE — a named engine that does not answer must
+  #    FAIL, never quietly resolve to the other one. That silent fallback would launder
+  #    a claim about what was tested.
+  ( CONTAINER_ENGINE=sg_no_such_engine_zz; SG_ENGINE=""; sg_resolve_engine ) 2>/dev/null && _st_r=no || _st_r=ok
+  _st "CONTAINER_ENGINE naming an absent engine FAILS rather than falling back" "$_st_r"
+
+  # 3. Auto-detection resolves to an engine that genuinely answers on this machine.
+  SG_ENGINE=""
+  if ( unset CONTAINER_ENGINE; sg_resolve_engine ) 2>/dev/null; then
+    ( unset CONTAINER_ENGINE; sg_resolve_engine; printf "  ..   resolved: %s\n" "$SG_ENGINE" )
+    _st "auto-detection resolves an engine that answers version" ok
+  else
+    _st "auto-detection resolves an engine that answers version (none present — reported, not passed)" no
+  fi
+
+  printf "\nself-test %s (%s/%s)\n" "$([ $_st_fail -eq 0 ] && echo passed || echo FAILED)" "$_st_pass" "$((_st_pass+_st_fail))"
+  [ $_st_fail -eq 0 ]
+}
+
+case "${1:-}" in --self-test) sg_engine_self_test; exit $? ;; esac

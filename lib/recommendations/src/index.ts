@@ -104,37 +104,56 @@ export function recommend(usage: UsageHistory, flows: Flow[]): Recommendation[] 
 
   // 1 & 2. Per-action: relax a consistently-approved gate, or tighten an anomalous one.
   for (const a of usage.actions) {
-    if (a.samples < MIN_SAMPLES) continue;
+    // Every numeric guard here is written so that an UNREADABLE value (undefined, NaN —
+    // this history will one day arrive from a store or a wire, where types do not
+    // survive) takes the restrictive branch. `a.samples < MIN_SAMPLES` let an unreadable
+    // sample count clear the evidence gate; `a.denied > 0 || a.overrides > 0` let an
+    // unreadable denial count skip the anomaly arm and fall into RELAX — the one field
+    // that would have blocked the relaxation was the one that could not be read, and
+    // the rationale then asserted "no denials/overrides" about a count nobody observed.
+    if (!(Number.isFinite(a.samples) && a.samples >= MIN_SAMPLES)) continue;
     const approveRate = a.approved / a.samples;
     const flowName = flowById.get(a.flowId)?.name ?? a.flowId;
 
-    // Anomalies (a denial or an override) → recommend MORE scrutiny, first.
-    if (a.denied > 0 || a.overrides > 0) {
+    // Anomalies (a denial or an override) → recommend MORE scrutiny, first. An
+    // anomaly count that could not be read IS an anomaly: unknown scrutiny is more
+    // scrutiny, never less.
+    const anomalyUnreadable = !Number.isFinite(a.denied) || !Number.isFinite(a.overrides);
+    if (anomalyUnreadable || a.denied > 0 || a.overrides > 0) {
       const stricter = tighten(a.approvalPolicy);
       if (stricter) {
+        const anomalies = anomalyUnreadable ? 0 : a.denied + a.overrides;
         recs.push({
           id: `tighten:${a.flowId}:${a.actionKey}`,
           kind: "tighten_action",
           target: `${a.flowId}:${a.actionKey}`,
           title: `Tighten "${a.actionKey}" in ${flowName}`,
-          rationale: `${a.denied} denial(s) and ${a.overrides} override(s) over ${a.samples} samples suggest this action needs more scrutiny.`,
-          confidence: round2(Math.min(1, (a.denied + a.overrides) / a.samples + 0.5)),
+          rationale: anomalyUnreadable
+            ? `The denial/override counts for this action could not be read over ${a.samples} samples; an unreadable anomaly count is treated as an anomaly, not as a clean record.`
+            : `${a.denied} denial(s) and ${a.overrides} override(s) over ${a.samples} samples suggest this action needs more scrutiny.`,
+          confidence: bounded(anomalies / a.samples + 0.5),
           suggestedChange: `Change approval from ${a.approvalPolicy} → ${stricter}.`,
         });
       }
       continue; // don't also recommend relaxing an action with anomalies
     }
 
-    // Consistently approved on healthy posture → recommend one step LESS strict.
+    // Consistently approved on healthy posture → recommend one step LESS strict. Both
+    // rates must be READ, not merely compare favourably: NaN compares false anyway,
+    // but the guard states the rule rather than leaning on IEEE semantics.
     const relaxed = relax(a.approvalPolicy);
-    if (relaxed && approveRate >= AUTO_APPROVE_RATE && a.postureHealthyRate >= HEALTHY_RATE) {
+    if (
+      relaxed &&
+      Number.isFinite(approveRate) && approveRate >= AUTO_APPROVE_RATE &&
+      Number.isFinite(a.postureHealthyRate) && a.postureHealthyRate >= HEALTHY_RATE
+    ) {
       recs.push({
         id: `automate:${a.flowId}:${a.actionKey}`,
         kind: "automate_action",
         target: `${a.flowId}:${a.actionKey}`,
         title: `Reduce friction on "${a.actionKey}" in ${flowName}`,
         rationale: `Approved ${Math.round(approveRate * 100)}% of ${a.samples} times, no denials/overrides, posture healthy ${Math.round(a.postureHealthyRate * 100)}% of the time.`,
-        confidence: round2(Math.min(1, a.samples / 50) * approveRate),
+        confidence: bounded(Math.min(1, a.samples / 50) * approveRate),
         suggestedChange: `Change approval from ${a.approvalPolicy} → ${relaxed} (one step; review before applying).`,
       });
     }
@@ -153,7 +172,7 @@ export function recommend(usage: UsageHistory, flows: Flow[]): Recommendation[] 
         target: f.flowId,
         title: `Add signal "${f.candidateSignal}" to ${flowName}`,
         rationale: `${flowName} ${why}; the "${f.candidateSignal}" signal would harden it and tighten its decisions.`,
-        confidence: round2(Math.min(1, (f.breaks / (f.samples || 1)) + f.frictionRate)),
+        confidence: bounded((f.breaks / (f.samples || 1)) + (Number.isFinite(f.frictionRate) ? f.frictionRate : 0)),
         suggestedChange: `Wire "${f.candidateSignal}" into ${flowName}'s required signals.`,
       });
     }
@@ -170,14 +189,23 @@ export function recommend(usage: UsageHistory, flows: Flow[]): Recommendation[] 
           target: `${flows[i].id}:${flows[j].id}`,
           title: `Consider merging ${flows[i].name} and ${flows[j].name}`,
           rationale: `The two flows share ${Math.round(sim * 100)}% of their signals and actions; one flow may be simpler to run.`,
-          confidence: round2(sim),
+          confidence: bounded(sim),
           suggestedChange: `Review whether ${flows[i].name} and ${flows[j].name} can be a single flow.`,
         });
       }
     }
   }
 
-  return recs.sort((a, b) => b.confidence - a.confidence || a.id.localeCompare(b.id));
+  // Codepoint order for the tiebreak, not `localeCompare`: ids interpolate tenant-
+  // authored names, and a locale-sensitive collation would make the served order depend
+  // on the machine's locale (verified: `sv-SE` and `de-DE` sort "ä" differently).
+  return recs.sort((a, b) => b.confidence - a.confidence || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+}
+
+/** A confidence in [0, 1], and a NUMBER: NaN (an unreadable input somewhere upstream)
+ *  used to escape as `null` on the wire and `NaN%` on the page. Unreadable is 0. */
+function bounded(x: number): number {
+  return Number.isFinite(x) ? round2(Math.min(1, Math.max(0, x))) : 0;
 }
 
 /** Jaccard similarity over a flow's required signals + action keys. */

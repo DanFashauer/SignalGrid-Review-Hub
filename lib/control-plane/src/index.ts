@@ -16,6 +16,13 @@
 
 import { createHmac, timingSafeEqual } from "crypto";
 
+// Codepoint comparison for sorts that must be DETERMINISTIC on any machine.
+// `localeCompare` follows the process locale (sv_SE sorts "ä" after "z", de_DE
+// before it), so two hosts ordered the same input differently; ISO timestamps
+// and ids compare exactly as intended by codepoint. Gated by review:invariants.
+const cmpCodepoint = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
+
+
 // ── deterministic checksum (FNV-1a, dependency-free, browser-safe) ───────────
 
 function fnv1a(input: string): string {
@@ -598,7 +605,7 @@ export class ControlPlane {
           denyRate: round4(t.deny / t.decisions),
         };
       })
-      .sort((a, b) => b.frictionRate - a.frictionRate || a.nodeId.localeCompare(b.nodeId));
+      .sort((a, b) => b.frictionRate - a.frictionRate || cmpCodepoint(a.nodeId, b.nodeId));
 
     // Posture/config drift — nodes behind the tenant's current bundle.
     const postureDrift: PostureDrift[] = nodes
@@ -612,7 +619,7 @@ export class ControlPlane {
         targetBundleVersion: plan!.targetBundleVersion,
         behindBy: plan!.targetBundleVersion - plan!.currentBundleVersion,
       }))
-      .sort((a, b) => b.behindBy - a.behindBy || a.nodeId.localeCompare(b.nodeId));
+      .sort((a, b) => b.behindBy - a.behindBy || cmpCodepoint(a.nodeId, b.nodeId));
 
     // Custody gaps — unreachable/degraded nodes, or a stale last sync.
     const custodyGaps: CustodyGap[] = nodes
@@ -630,7 +637,7 @@ export class ControlPlane {
           reason: reasons.join("; "),
         };
       })
-      .sort((a, b) => b.lastSyncMinsAgo - a.lastSyncMinsAgo || a.nodeId.localeCompare(b.nodeId));
+      .sort((a, b) => b.lastSyncMinsAgo - a.lastSyncMinsAgo || cmpCodepoint(a.nodeId, b.nodeId));
 
     const avgFrictionRate = hotspots.length
       ? round4(hotspots.reduce((s, h) => s + h.frictionRate, 0) / hotspots.length)

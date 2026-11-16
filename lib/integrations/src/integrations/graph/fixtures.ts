@@ -17,19 +17,36 @@
 
 import { createMockGraphTransport } from "./mock-transport";
 import { GraphPostureConnector } from "./posture-connector";
-import type { GraphManagedDeviceRaw, GraphUserRaw } from "./types";
+import type { GraphManagedDeviceRaw, GraphRiskyUserRaw, GraphUserRaw } from "./types";
 
 /** Obviously-fake token the fixture transport expects. Never a real secret. */
 export const FIXTURE_GRAPH_TOKEN = "fixture-demo-token-not-a-secret";
 
 export const FIXTURE_GRAPH_USERS: readonly GraphUserRaw[] = [
-  { id: "synthetic-user-001", userPrincipalName: "synthetic-user-001@fixture.example", accountEnabled: true, riskLevel: "low" },
-  { id: "synthetic-user-002", userPrincipalName: "synthetic-user-002@fixture.example", accountEnabled: false, riskLevel: "high" },
-  { id: "synthetic-user-003", userPrincipalName: "synthetic-user-003@fixture.example", accountEnabled: true, riskLevel: "medium" },
-  { id: "synthetic-user-004", userPrincipalName: "synthetic-user-004@fixture.example", accountEnabled: true, riskLevel: "medium" },
-  { id: "synthetic-user-005", userPrincipalName: "synthetic-user-005@fixture.example", accountEnabled: true, riskLevel: "medium" },
-  { id: "synthetic-user-006", userPrincipalName: "synthetic-user-006@fixture.example", accountEnabled: true, riskLevel: "medium" },
-  { id: "synthetic-user-007", userPrincipalName: "synthetic-user-007@fixture.example", accountEnabled: true, riskLevel: "medium" },
+  { id: "synthetic-user-001", userPrincipalName: "synthetic-user-001@fixture.example", accountEnabled: true },
+  { id: "synthetic-user-002", userPrincipalName: "synthetic-user-002@fixture.example", accountEnabled: false },
+  { id: "synthetic-user-003", userPrincipalName: "synthetic-user-003@fixture.example", accountEnabled: true },
+  { id: "synthetic-user-004", userPrincipalName: "synthetic-user-004@fixture.example", accountEnabled: true },
+  { id: "synthetic-user-005", userPrincipalName: "synthetic-user-005@fixture.example", accountEnabled: true },
+  { id: "synthetic-user-006", userPrincipalName: "synthetic-user-006@fixture.example", accountEnabled: true },
+  { id: "synthetic-user-007", userPrincipalName: "synthetic-user-007@fixture.example", accountEnabled: true },
+];
+
+/**
+ * Identity Protection's risky-user list for the same seven subjects. This is
+ * where user risk LIVES on the wire (`/identityProtection/riskyUsers`); until
+ * 2026-09-06 the fixture users carried a `riskLevel` the live `$select` on
+ * `/users` never requested, so the proofs exercised a value production could not
+ * produce. Levels mirror `identity-device-posture.json` case for case.
+ */
+export const FIXTURE_GRAPH_RISKY_USERS: readonly GraphRiskyUserRaw[] = [
+  { id: "synthetic-user-001", riskLevel: "low", riskState: "atRisk" },
+  { id: "synthetic-user-002", riskLevel: "high", riskState: "atRisk" },
+  { id: "synthetic-user-003", riskLevel: "medium", riskState: "atRisk" },
+  { id: "synthetic-user-004", riskLevel: "medium", riskState: "atRisk" },
+  { id: "synthetic-user-005", riskLevel: "medium", riskState: "atRisk" },
+  { id: "synthetic-user-006", riskLevel: "medium", riskState: "atRisk" },
+  { id: "synthetic-user-007", riskLevel: "medium", riskState: "atRisk" },
 ];
 
 export const FIXTURE_GRAPH_DEVICES: readonly GraphManagedDeviceRaw[] = [
@@ -110,6 +127,7 @@ export function createFixtureGraphPostureConnector(): GraphPostureConnector {
   const transport = createMockGraphTransport({
     users: [...FIXTURE_GRAPH_USERS],
     devices: [...FIXTURE_GRAPH_DEVICES],
+    riskyUsers: [...FIXTURE_GRAPH_RISKY_USERS],
     expectedToken: FIXTURE_GRAPH_TOKEN,
     pageSize: 3,
   });

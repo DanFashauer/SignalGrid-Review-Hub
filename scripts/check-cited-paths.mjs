@@ -24,6 +24,13 @@ import { existsSync, readFileSync, mkdirSync, mkdtempSync, writeFileSync, rmSync
 import { dirname, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
+import { vendoredSkillPrefixes } from "./lib/skill-plane.mjs";
+import { isMainModule } from "./lib/is-main.mjs";
+import { repoKeyFromRemote } from "./lib/remote-key.mjs";
+
+// Re-exported: the parser lives in lib/remote-key.mjs (pure, loadable without git);
+// scan-estate-citations and this file's self-test reach it through here as before.
+export { repoKeyFromRemote };
 
 const SELF_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -83,9 +90,119 @@ export function deriveRoots(root = ROOT) {
   return [...tops].filter((d) => !d.startsWith(".")).sort();
 }
 
+const esc = (r) => r.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
 export function buildPattern(roots) {
-  const alt = roots.map((r) => r.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|");
+  const alt = roots.map(esc).join("|");
   return new RegExp("`((?:" + alt + ")\\/[A-Za-z0-9._\\/-]+\\.[A-Za-z0-9]{1,6})`", "g");
+}
+
+// ── LINE CITATIONS (2026-09-06) ──────────────────────────────────────────────
+// `path:N` and `path:N-M` are the most precise citations a document makes and, until
+// this date, the least checked: the rule above asked only whether the FILE exists.
+// 3,080 such citations sat in the tracked docs; ten reached past the end of the file
+// they named (two in the live CLAIM_INVENTORY, eight in a dated audit record), and
+// nothing could tell a range measured against today's file from one measured against
+// a revision four cuts ago. The bound is the file's line count — cheap, exact, and
+// the only property a line range claims.
+//
+// A document whose ranges are a DATED RECORD declares it with the marker below and is
+// REPORTED, not failed: rewriting an audit's ranges to today's file would falsify the
+// record it is part of, while leaving them unmarked would let the next reader act on
+// them. Backticked or not — a bracketed `[lib/x.ts:12-40]` is the audit skill's own form.
+export function buildLineRefPattern(roots) {
+  const alt = roots.map(esc).join("|");
+  return new RegExp(`(?<![A-Za-z0-9_/.-])((?:${alt})\\/[A-Za-z0-9._\\/-]+\\.[A-Za-z0-9]{1,6}):(\\d+)(?:-(\\d+))?`, "g");
+}
+
+/** Pure: every `path:N[-M]` citation in `text`. */
+export function lineRefsIn(text, pattern) {
+  return [...text.matchAll(pattern)].map((m) => ({
+    path: m[1],
+    from: Number(m[2]),
+    to: Number(m[3] ?? m[2]),
+    index: m.index,
+  }));
+}
+
+/** Pure: how a line citation stands against the line count of the file it names. */
+export function classifyLineRef(ref, lineCount) {
+  if (!Number.isInteger(lineCount)) return { state: "unresolved" };
+  const hi = Math.max(ref.from, ref.to);
+  if (ref.from < 1 || hi > lineCount) return { state: "past-eof", lineCount };
+  return { state: "within", lineCount };
+}
+
+// ── UNBACKTICKED CITATIONS, REPORTED (2026-09-06) ────────────────────────────
+// A backticked `lib/x.ts` is GATED by the file rule at the top of this module: it must
+// exist and be tracked. An UNBACKTICKED `lib/x.ts:12` is not — the file rule requires
+// the backticks, and the line rule below counts an untracked target as "unresolved" and
+// walks past it. So the most-cited document in this repository can carry two thousand
+// citations that nothing checks the existence of, and the run still prints a clean
+// total. That is not a defect to fail on — an audit record written in running prose is
+// a legitimate form, and demanding backticks would be a style gate wearing a
+// correctness gate's clothes. It IS a defect to be unable to see, which is what a
+// REPORT is for: the count, and which documents carry it.
+//
+// This changes NOTHING the gate fails on. Every existing failure mode is untouched.
+
+/** Pure: is column `col` inside a backtick span on this line? */
+export function insideBackticks(line, col) {
+  let open = -1;
+  for (let i = 0; i < line.length; i += 1) {
+    if (line[i] !== "`") continue;
+    if (open === -1) open = i;
+    else {
+      if (col > open && col < i) return true;
+      open = -1;
+    }
+  }
+  return false;
+}
+
+/**
+ * Pure: how many of `text`'s line citations stand OUTSIDE backticks. Split out from the
+ * scan so the self-test can plant one and read the count through the same code the gate
+ * reports from — a report computed twice is a report that can disagree with itself.
+ */
+export function unbacktickedLineRefs(text, pattern) {
+  const lines = text.split("\n");
+  let n = 0;
+  for (const ref of lineRefsIn(text, pattern)) {
+    const before = text.slice(0, ref.index);
+    const row = before.split("\n").length;
+    const col = ref.index - (before.lastIndexOf("\n") + 1);
+    if (!insideBackticks(lines[row - 1] ?? "", col)) n += 1;
+  }
+  return n;
+}
+
+/** Pure: lines in a file — a trailing newline ends the last line rather than starting an empty one. */
+export function countLines(content) {
+  if (content.length === 0) return 0;
+  const n = content.split("\n").length;
+  return content.endsWith("\n") ? n - 1 : n;
+}
+
+/** The declaration a dated record carries so its ranges are reported rather than failed. */
+export const HISTORICAL_LINES = /<!--\s*line-citations:\s*as measured (\d{4}-\d{2}-\d{2}),\s*not maintained\s*-->/;
+
+// ── MACHINE-LOCAL PREFIXES (2026-09-06) ──────────────────────────────────────
+// `/home/user/SignalGrid-Review-Hub/artifacts/api-server/src/app.ts:108-112` is one
+// container's path, not a citation: it resolves on no other machine, the backticked
+// rule above never sees it (no backtick, no derived root at the front), and one
+// audit record carried 44 of them. A path that reaches a repository root THROUGH
+// `/home/<user>/…` or `/Users/<user>/…` is rejected wherever it stands. An absolute
+// path that names a directory OUTSIDE this tree (the owner's Mac checkout in
+// RUN_ON_MAC.md) is not matched — nothing after it is a root of this repository.
+export function buildMachineLocalPattern(roots) {
+  const alt = roots.map(esc).join("|");
+  return new RegExp(`\\/(?:home|Users)\\/[^\\s\`'"()\\[\\]]*?\\/(?:${alt})\\/[A-Za-z0-9._\\/-]+`, "g");
+}
+
+/** Pure: every citation that reaches a repository path through a machine-local prefix. */
+export function machineLocalCitationsIn(text, pattern) {
+  return [...text.matchAll(pattern)].map((m) => ({ text: m[0], index: m.index }));
 }
 
 // Citations that legitimately name a path this checkout does not contain. Keep SHORT
@@ -107,14 +224,22 @@ export const ALLOW = [
 // tree and are not this repository's claims to keep true. `attached_assets/` is the
 // Replit paste convention and is where the private core keeps scraped vendor pages.
 // This is a skip with a reason, not a silent exclusion: the count is reported.
-// `.claude/skills/` is VENDORED third-party work (obra/superpowers, MIT — see
-// .claude/skills/VENDORED.md). Its documentation cites illustrative example paths
-// — `tests/exact/path/to/test.py`, `scripts/helper.py`, `docs/file1.md` — which are
-// placeholders in somebody else's prose, not claims about this tree. The alternative
-// was editing the vendored files to satisfy our gate, which would have destroyed the
-// one property that makes a vendored copy auditable: that it is byte-identical to
-// upstream and can be diffed against it. Skipping is the cheaper honesty.
-export const INTAKE_PREFIXES = ["attached_assets/", "vendor/", "third_party/", ".claude/skills/"];
+// The 14 VENDORED skill directories under `.claude/skills/` (obra/superpowers, MIT —
+// see .claude/skills/VENDORED.md) cite illustrative example paths —
+// `tests/exact/path/to/test.py`, `scripts/helper.py`, `docs/file1.md` — which are
+// placeholders in somebody else's prose, not claims about this tree. Editing them to
+// satisfy this gate would destroy the one property that makes a vendored copy
+// auditable: byte-identity with upstream. Skipping THOSE is the cheaper honesty.
+//
+// Until 2026-09-06 the exemption was the literal prefix `.claude/skills/` — the whole
+// directory, including the 12 FIRST-PARTY skills VENDORED.md's own first paragraph
+// says are "written in this repository and NOT part of the upstream set". Those
+// twelve carried 96 repository-path citations (the vendored set: 5), and three were
+// dead — `lib/profile.ts` for a file that lives under artifacts/api-server, and a
+// `tools/` script that never existed — for as long as the prefix stood. The set is
+// now DERIVED from VENDORED.md's carve-out table (scripts/lib/skill-plane.mjs):
+// tracked skill directories minus the first-party rows. Authored prose is checked.
+export const INTAKE_PREFIXES = ["attached_assets/", "vendor/", "third_party/", ...vendoredSkillPrefixes(ROOT)];
 
 // Documents whose subject IS another repository, keyed by REPOSITORY IDENTITY —
 // `owner/repo` read out of `git remote get-url origin`, not the checkout's directory
@@ -177,46 +302,6 @@ export function missingIn(text, exists, pattern) {
 }
 
 /**
- * Pure: the identity a remote URL implies, as `{ key, hasOwner }`. Handles the https
- * form (`https://host/owner/repo`), the scp-style ssh form (`git@host:owner/repo`), the
- * `ssh://` form, an optional `.git` suffix and a trailing slash.
- *
- * `hasOwner` is the load-bearing half. A hosted remote yields `owner/repo` and
- * `hasOwner: true` — a full identity. A LOCAL PATH origin (`/home/user/Repo`,
- * `file:///srv/git/Repo`, `../Repo`) has no owner in any meaningful sense: every
- * segment before the last is a filesystem accident of that machine, so the key
- * degrades to the name alone and `hasOwner: false` tells the caller to LABEL it as a
- * basename fallback rather than claim an identity it did not read.
- *
- * Returns undefined for anything it cannot read, so the caller falls back rather than
- * inventing a key.
- */
-export function repoKeyFromRemote(url) {
-  if (typeof url !== "string") return undefined;
-  const trimmed = url.trim().replace(/\/+$/, "").replace(/\.git$/, "");
-  if (!trimmed) return undefined;
-
-  // A hosted remote — the only shape that carries an owner. Anything with a scheme that
-  // is not `file:`, or the scp-style `user@host:owner/repo`, is hosted.
-  const scheme = /^([A-Za-z][A-Za-z0-9+.-]*):\/\//.exec(trimmed)?.[1]?.toLowerCase();
-  const scp = /^[^/]+@[^/:]+:(.+)$/.exec(trimmed);
-  const isLocalPath =
-    scheme === "file" || (!scheme && !scp && (trimmed.startsWith("/") || trimmed.startsWith(".") || trimmed.startsWith("~")));
-
-  const segs = (scp ? scp[1] : trimmed.replace(/^[A-Za-z][A-Za-z0-9+.-]*:\/\//, "")).split("/").filter(Boolean);
-  const name = segs[segs.length - 1];
-  if (!name) return undefined;
-
-  // For a hosted URL the host is segs[0] when there was a scheme; drop it, then the
-  // segment immediately before the name is the owner.
-  const path = scheme && !scp ? segs.slice(1) : segs;
-  const owner = path.length >= 2 ? path[path.length - 2] : undefined;
-
-  if (isLocalPath || !owner) return { key: name, hasOwner: false };
-  return { key: `${owner}/${name}`, hasOwner: true };
-}
-
-/**
  * The exemption key for a checkout, and where it came from. A hosted origin remote is
  * the repository's identity (`owner/repo`); a local-path origin and a checkout with no
  * remote at all both degrade to a NAME, and both are LABELLED as a basename fallback so
@@ -235,7 +320,7 @@ export function repoKey(root = ROOT) {
 
   const nameOnly = fromRemote?.key ?? basename;
   const source = fromRemote
-    ? "basename fallback (origin remote carries no owner — a local-path remote)"
+    ? "basename fallback (origin remote carries no owner — a local path, or a transport that names none)"
     : "basename fallback (no origin remote)";
   const alias = CROSS_REPO_NAME_ALIASES[nameOnly];
   return alias
@@ -319,12 +404,32 @@ export function scanRepo(root) {
   // directories somebody maintains: whatever a repo generates, it is untracked, and
   // untracked is what a fresh clone does not have.
   const exists = (p) => existsSync(join(root, p));
+  const linePattern = buildLineRefPattern(roots);
+  const machinePattern = buildMachineLocalPattern(roots);
+  const lineCounts = new Map();
+  const lineCountOf = (p) => {
+    if (!lineCounts.has(p)) {
+      try {
+        lineCounts.set(p, countLines(readFileSync(join(root, p), "utf8")));
+      } catch {
+        lineCounts.set(p, undefined);
+      }
+    }
+    return lineCounts.get(p);
+  };
+  const lineOf = (text, index) => text.slice(0, index).split("\n").length;
 
   const missing = [];
   const exempted = [];
+  const historicalPastEof = [];
   let checked = 0;
   let intakeDocs = 0;
   let generated = 0;
+  let lineRefs = 0;
+  let lineRefsUnresolved = 0;
+  let lineRefsUnbackticked = 0;
+  const unbacktickedWorst = [];
+  let historicalDocs = 0;
 
   for (const rel of docs) {
     if (INTAKE_PREFIXES.some((p) => rel.startsWith(p))) {
@@ -350,6 +455,40 @@ export function scanRepo(root) {
           c.state === "generated"
             ? `resolves ONLY to generated, untracked output (${c.at}) — absent from a fresh clone`
             : "points at nothing",
+      });
+    }
+    // Line citations: bounded by the named file's line count. Untracked targets are
+    // counted, not judged — the file rule above owns "does it exist".
+    const historical = HISTORICAL_LINES.exec(text);
+    if (historical) historicalDocs += 1;
+    // REPORTED, never fatal. Counted through the same helper the self-test plants into.
+    const unb = unbacktickedLineRefs(text, linePattern);
+    if (unb > 0) {
+      lineRefsUnbackticked += unb;
+      unbacktickedWorst.push({ doc: rel, count: unb });
+    }
+    for (const ref of lineRefsIn(text, linePattern)) {
+      lineRefs += 1;
+      if (!tracked.has(ref.path)) {
+        lineRefsUnresolved += 1;
+        continue;
+      }
+      const c = classifyLineRef(ref, lineCountOf(ref.path));
+      if (c.state !== "past-eof") continue;
+      const range = `${ref.path}:${ref.from}${ref.to !== ref.from ? `-${ref.to}` : ""}`;
+      if (historical) {
+        historicalPastEof.push({ doc: `${rel}:${lineOf(text, ref.index)}`, range, lineCount: c.lineCount, asOf: historical[1] });
+        continue;
+      }
+      bad.push({
+        path: `${range} (line ${lineOf(text, ref.index)} of the doc)`,
+        why: `cites past the end of a ${c.lineCount}-line file — the range was measured against an older revision`,
+      });
+    }
+    for (const m of machineLocalCitationsIn(text, machinePattern)) {
+      bad.push({
+        path: `${m.text} (line ${lineOf(text, m.index)} of the doc)`,
+        why: "reaches a repository path through a MACHINE-LOCAL absolute prefix — resolves on one machine only; write it repo-relative",
       });
     }
     if (bad.length === 0) continue;
@@ -398,6 +537,13 @@ export function scanRepo(root) {
     roots: roots.length,
     checked,
     generated,
+    lineRefs,
+    lineRefsUnresolved,
+    lineRefsUnbackticked,
+    unbacktickedDocs: unbacktickedWorst.length,
+    unbacktickedWorst: unbacktickedWorst.sort((a, b) => b.count - a.count),
+    historicalDocs,
+    historicalPastEof,
     missing,
     exempted,
   };
@@ -455,8 +601,91 @@ function selfTest() {
   ]);
   checks.push(["multiple citations on one line are each checked", missingIn("`lib/a/x.ts` and `scripts/b/y.mjs`", none, pattern).length === 2]);
   checks.push(["unbackticked prose is NOT a citation", citationsIn("the file lib/foo/src/index.ts is interesting", pattern).length === 0]);
+  // …AND THE SAME SENTENCE IS COUNTED BY THE REPORT. The assertion above is what the
+  // GATE does (a bare path in prose is not a file citation, and demanding backticks
+  // would be a style rule); this one is what the REPORT does, so the blind spot the
+  // first assertion creates is visible rather than silent. Both, or neither means
+  // anything.
+  checks.push([
+    "A PLANTED UNBACKTICKED `path:line` IS COUNTED BY THE REPORT — the blind spot made visible",
+    unbacktickedLineRefs("the audit read lib/foo/src/index.ts:12-40 and moved on", buildLineRefPattern(["lib", "docs"])) === 1,
+  ]);
+  checks.push([
+    "…and a BACKTICKED one is not counted (the report is about the ungated half, not about all citations)",
+    unbacktickedLineRefs("the audit read `lib/foo/src/index.ts:12-40` and moved on", buildLineRefPattern(["lib", "docs"])) === 0 &&
+      insideBackticks("a `lib/x.ts:1` b", 4) &&
+      !insideBackticks("a lib/x.ts:1 b", 4),
+  ]);
+  checks.push([
+    "LIVE: the report is non-zero and names its worst document — a report at zero over 3,000 citations would be a broken counter, not a tidy tree",
+    (() => {
+      const live = scanRepo(SELF_ROOT);
+      return (
+        live.lineRefsUnbackticked > 100 &&
+        live.lineRefsUnbackticked <= live.lineRefs &&
+        live.unbacktickedDocs >= 1 &&
+        live.unbacktickedWorst[0].count >= live.unbacktickedWorst[live.unbacktickedWorst.length - 1].count
+      );
+    })(),
+  ]);
+  checks.push([
+    "…and the report changes NOTHING the gate fails on: a clean tree with unbackticked citations still passes",
+    (() => {
+      const live = scanRepo(SELF_ROOT);
+      return live.lineRefsUnbackticked > 0 && live.missing.length === 0;
+    })(),
+  ]);
   checks.push(["a path outside the derived roots is NOT a citation", citationsIn("`nowhere/thing/file.ts`", pattern).length === 0]);
   checks.push(["a bare directory is NOT a citation", citationsIn("`lib/signalgrid-core/src/`", pattern).length === 0]);
+
+  // ── line citations and machine-local prefixes (2026-09-06) ────────────────
+  const lp = buildLineRefPattern(["lib", "scripts", "artifacts", "docs"]);
+  const refs = lineRefsIn("see `lib/a/x.ts:129-138` and [artifacts/b/y.ts:42] and location-services/evaluate.ts:72-81", lp);
+  checks.push([
+    "A LINE CITATION IS EXTRACTED, backticked or bracketed, with its range — a rootless one is not",
+    refs.length === 2 && refs[0].path === "lib/a/x.ts" && refs[0].from === 129 && refs[0].to === 138 && refs[1].from === 42 && refs[1].to === 42,
+  ]);
+  checks.push([
+    "A RANGE PAST THE END OF THE FILE IS CAUGHT — metrics.ts:183-192 against a 181-line file, the planted miss",
+    classifyLineRef({ from: 183, to: 192 }, 181).state === "past-eof",
+  ]);
+  checks.push([
+    "…a range ending exactly on the last line is within (the bound is inclusive), and line 0 is past",
+    classifyLineRef({ from: 147, to: 184 }, 184).state === "within" && classifyLineRef({ from: 0, to: 3 }, 10).state === "past-eof",
+  ]);
+  checks.push([
+    "…and a file whose length cannot be read is UNRESOLVED, never silently within",
+    classifyLineRef({ from: 1, to: 1 }, undefined).state === "unresolved",
+  ]);
+  checks.push([
+    "line counting: a trailing newline ends the last line rather than adding an empty one",
+    countLines("a\nb\n") === 2 && countLines("a\nb") === 2 && countLines("") === 0,
+  ]);
+  checks.push([
+    "the historical marker is recognized only in its exact dated shape",
+    HISTORICAL_LINES.test("<!-- line-citations: as measured 2026-09-01, not maintained -->") &&
+      !HISTORICAL_LINES.test("these line citations are historical") &&
+      !HISTORICAL_LINES.test("<!-- line-citations: not maintained -->"),
+  ]);
+  const mp = buildMachineLocalPattern(["lib", "artifacts", "docs"]);
+  checks.push([
+    "A MACHINE-LOCAL PREFIX IN FRONT OF A REPOSITORY PATH IS CAUGHT — the 44-row defect",
+    machineLocalCitationsIn("[/home/user/SignalGrid-Review-Hub/artifacts/api-server/src/app.ts:108-112]", mp).length === 1 &&
+      machineLocalCitationsIn("/Users/someone/src/hub/lib/x.ts", mp).length === 1,
+  ]);
+  checks.push([
+    "…and an absolute path that names a directory OUTSIDE this tree is not (the owner's Mac checkout in RUN_ON_MAC.md)",
+    machineLocalCitationsIn("cd /Users/danfashauer/Public/Projects/SignalGrid   # the owner's working copy", mp).length === 0 &&
+      machineLocalCitationsIn("`artifacts/api-server/src/app.ts:108-112` repo-relative", mp).length === 0,
+  ]);
+  checks.push([
+    "LIVE: the tracked docs carry line citations, some past-EOF only inside declared historical records, and none machine-local",
+    (() => {
+      const r = scanRepo(SELF_ROOT);
+      return r.lineRefs > 1000 && r.historicalDocs >= 1 && r.historicalPastEof.length >= 1 &&
+        !r.missing.some((m) => m.why.includes("MACHINE-LOCAL") || m.why.includes("past the end"));
+    })(),
+  ]);
 
   // The regression this gate caused before it caught anything. A nested README linked
   // `docs/REPO_ALIGNMENT.md`, which sits beside it; root-only resolution called that
@@ -598,6 +827,64 @@ function selfTest() {
       return [a, b, c].every((k) => k?.key === "SignalGrid-Review-Hub" && k.hasOwner === false);
     })(),
   ]);
+  // PR #1356's refuter: `git remote set-url origin DanFashauer/SignalGrid-Review-Hub` stores a
+  // bare relative path, which git resolves as a LOCAL DIRECTORY — and this parser read it as a
+  // hosted owner/repo (it only called a path local when it began with / . or ~). Hosted means
+  // `scheme://` (not file:) or `user@host:path`.
+  checks.push([
+    "a remote that git resolves as a DIRECTORY (no ':' before the first '/') is a LOCAL PATH however much it looks like owner/repo",
+    [
+      "DanFashauer/SignalGrid-Review-Hub", // bare relative path
+      "mirrors/DanFashauer/SignalGrid-Review-Hub",
+      "DanFashauer/SignalGrid-Review-Hub.git",
+    ].every((u) => {
+      const k = repoKeyFromRemote(u);
+      return k?.key === "SignalGrid-Review-Hub" && k.hasOwner === false;
+    }),
+  ]);
+  // …but ONLY what git resolves as a directory degrades to the bare name. An owner-less scp
+  // (`host:owner/repo`) and a remote helper (`helper::url`) are ssh / helper transports to a
+  // HOST — real forks, not directories — and the bare name would hand them this repository's
+  // CROSS_REPO_NAME_ALIASES exemptions (the fail-open direction the alias table forbids). They
+  // keep their raw string as the key, which no alias matches.
+  // GH is interpolated so the publication-boundary gate does not read `:x@` + the host as a
+  // token-bearing git remote.
+  const GH = "github.com";
+  const transports = [
+    "evil.example:x/DanFashauer/SignalGrid-Review-Hub", // scp form with no user
+    "github.com:someone-else/SignalGrid-Review-Hub", // a real hosted fork over ssh, no user
+    "evilhelper::https://github.com/DanFashauer/SignalGrid-Review-Hub", // remote-helper transport
+    "hg::https://github.com/someone-else/SignalGrid-Review-Hub", // a helper in front of a hosted fork
+    "x\ngit@github.com:DanFashauer/SignalGrid-Review-Hub", // a stray first line before the scp form
+    `evil.invalid:x@${GH}:DanFashauer/SignalGrid-Review-Hub`, // scp splits at the FIRST colon
+    "https://evil.invalid#@github.com/DanFashauer/SignalGrid-Review-Hub", // `#` ends the authority
+  ];
+  checks.push([
+    `a transport that is not a directory and not a readable host names NO owner and NO alias-able name (${transports.length} spellings)`,
+    transports.every((u) => {
+      const k = repoKeyFromRemote(u);
+      return k?.hasOwner === false && k.key === u.trim() && !CROSS_REPO_NAME_ALIASES[k.key];
+    }),
+  ]);
+  checks.push([
+    "a hosted remote also reports its host and path depth, so a caller can demand github.com/owner/name exactly",
+    (() => {
+      const at = (u) => {
+        const k = repoKeyFromRemote(u);
+        return `${k?.hasOwner}|${k?.host}|${k?.depth}`;
+      };
+      return (
+        at("https://github.com/DanFashauer/X") === "true|github.com|2" &&
+        at("git@github.com:DanFashauer/X.git") === "true|github.com|2" &&
+        at("ssh://git@GitHub.com:22/DanFashauer/X") === "true|github.com|2" &&
+        at("https://user@github.com:443/DanFashauer/X/") === "true|github.com|2" &&
+        at("https://gitlab.com/DanFashauer/X") === "true|gitlab.com|2" &&
+        at("https://github.com/evil/DanFashauer/X") === "true|github.com|3" &&
+        // the cloud sandbox's proxy origin keeps its owner/repo key (only the estate locator is stricter)
+        at("http://local_proxy@127.0.0.1:41234/git/DanFashauer/X") === "true|127.0.0.1|3"
+      );
+    })(),
+  ]);
   checks.push([
     "…and an unreadable/absent remote yields undefined so the caller can fall back, never a wrong key",
     repoKeyFromRemote("") === undefined && repoKeyFromRemote(undefined) === undefined,
@@ -630,6 +917,10 @@ function selfTest() {
     scans.stranger = scanRepo(tmpNamed);
     g("remote set-url origin /srv/mirrors/SignalGrid-Review-Hub");
     scans.localPath = scanRepo(tmpNamed);
+    g("remote set-url origin github.com:someone-else/SignalGrid-Review-Hub");
+    scans.scpFork = scanRepo(tmpNamed);
+    g("remote set-url origin hg::https://github.com/someone-else/SignalGrid-Review-Hub");
+    scans.helperFork = scanRepo(tmpNamed);
   } catch {
     // leave the map empty — the checks below then fail, which is the fail-closed direction
   } finally {
@@ -659,6 +950,12 @@ function selfTest() {
       scans.localPath.exempted.length === 1 &&
       scans.localPath.missing.length === 0,
   ]);
+  checks.push([
+    "…and a FORK over an owner-less ssh remote or a remote helper is NOT exempted either: the bare name never reaches the alias table",
+    [scans.scpFork, scans.helperFork].every(
+      (r) => !!r && r.repo !== SELF_KEY && !r.repoKeyAliasedFrom && r.exempted.length === 0 && r.missing.length === 1,
+    ),
+  ]);
 
   const failed = checks.filter(([, ok]) => !ok);
   for (const [name, ok] of checks) console.log(`  ${ok ? "ok" : "FAIL"} — self-test: ${name}`);
@@ -669,7 +966,7 @@ function selfTest() {
 // Guarded on being the entry point: `scan-estate-citations.mjs` imports `scanRepo` from
 // here, and a module that gates its own repository as a side effect of being imported
 // makes every consumer's exit code a lie about the wrong tree.
-const isEntry = process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+const isEntry = isMainModule(process.argv[1], import.meta.url);
 if (!isEntry) {
   // exported API only
 } else if (argv.includes("--self-test")) {
@@ -720,12 +1017,36 @@ if (r.exempted.length > 0) {
   for (const e of r.exempted) console.log(`  · ${e.doc} — ${e.count} path(s) describing ${e.reason}`);
   console.log("");
 }
+// The line-citation half. Counted on every run; past-EOF ranges inside a declared
+// historical record are REPORTED here and never counted clean.
+console.log(
+  `Line citations (path:N, path:N-M): ${r.lineRefs} found, each bounded by the named file's line count; ` +
+    `${r.lineRefsUnresolved} name untracked paths (owned by the file rule above).`,
+);
+if (r.historicalPastEof.length > 0) {
+  console.log(`  REPORTED — ${r.historicalPastEof.length} range(s) past EOF inside ${r.historicalDocs} document(s) declared "as measured <date>, not maintained":`);
+  for (const h of r.historicalPastEof) console.log(`    · ${h.doc} → ${h.range} (file has ${h.lineCount} lines; measured ${h.asOf})`);
+}
+// UNBACKTICKED CITATIONS — REPORTED, never fatal, and never counted as a failure above.
+// The file rule GATES a backticked `lib/x.ts`; an unbackticked `lib/x.ts:12` reaches
+// neither it nor a tracked-file check, so these are the citations nothing holds to
+// existing. Printed so "nothing broken" and "nothing checked" stay different claims.
+console.log(
+  `  REPORTED — ${r.lineRefsUnbackticked} of those ${r.lineRefs} line citation(s) stand OUTSIDE backticks, ` +
+    `across ${r.unbacktickedDocs} document(s). Not a failure and not a style rule: the file-existence gate ` +
+    "above only reads BACKTICKED paths, so these are ungated by construction.",
+);
+for (const u of r.unbacktickedWorst.slice(0, 5)) console.log(`    ${String(u.count).padStart(5)}  ${u.doc}`);
 
 if (r.missing.length > 0) {
   console.error(`Cited-path check FAILED for ${r.repo}: ${r.missing.length} citation(s) do not resolve to a tracked file.\n`);
   for (const { doc, path, why } of r.missing.slice(0, 60)) console.error(`  ✗ ${doc}  →  ${path}  (${why})`);
   if (r.missing.length > 60) console.error(`    … and ${r.missing.length - 60} more`);
-  console.error("\nA citation that points nowhere reads as evidence and is not.");
+  console.error("\nA citation that points nowhere reads as evidence and is not. A line range past");
+  console.error("the end of its file was measured against a revision that is gone; re-measure it,");
+  console.error("or — for a dated audit record — declare `<!-- line-citations: as measured");
+  console.error("YYYY-MM-DD, not maintained -->` so it is reported instead. A machine-local");
+  console.error("prefix (/home/<user>/…, /Users/<user>/…) is never a citation: write it repo-relative.");
   console.error("A citation that resolves only to GENERATED, UNTRACKED output is the same");
   console.error("defect wearing a green: it reads fine on the machine that ran the producer");
   console.error("and fails on a fresh clone. Name the producing command in prose instead of");

@@ -19,8 +19,11 @@ export interface DecisionStore {
   saveDecision(decision: Decision, snapshot: EvidenceSnapshot): Promise<void>;
   /** A decision by id, ONLY if it belongs to the tenant (else null). */
   getDecision(tenantId: string, id: string): Promise<Decision | null>;
-  /** A tenant's decisions, newest first. */
+  /** A tenant's decisions, newest first, at most `limit` (default 100). A PAGE:
+   *  callers reporting a total must ask countDecisions, never this array's length. */
   listDecisions(tenantId: string, limit?: number): Promise<Decision[]>;
+  /** How many decisions the tenant has — the real count, independent of any page. */
+  countDecisions(tenantId: string): Promise<number>;
   /** An evidence snapshot by id, ONLY if it belongs to the tenant (else null). */
   getSnapshot(tenantId: string, id: string): Promise<EvidenceSnapshot | null>;
   /**
@@ -130,6 +133,11 @@ export class PostgresDecisionStore implements DecisionStore {
       // with insufficient_privilege in front of a user instead of here.
       await this.assertPrivileges();
     }
+    // Existence + privilege is still not SHAPE: CREATE TABLE IF NOT EXISTS is a
+    // no-op against an older table, so a database behind its code passed both
+    // probes and failed on the first bound column (the audit ledger learned this
+    // first — lib/audit/src/backend.ts assertSchema). Checked here and on ping().
+    await this.assertSchema();
   }
 
   /**
@@ -194,11 +202,21 @@ export class PostgresDecisionStore implements DecisionStore {
 
   async listDecisions(tenantId: string, limit = 100): Promise<Decision[]> {
     await this.ensureReady();
+    // `id DESC` as the tiebreak: deterministic fixtures make equal created_at
+    // likely, and without it "newest first" was nondeterministic among ties.
     const res = await this.pool.query(
-      "SELECT data FROM public.decisions WHERE tenant_id = $1 ORDER BY created_at DESC LIMIT $2",
+      "SELECT data FROM public.decisions WHERE tenant_id = $1 ORDER BY created_at DESC, id DESC LIMIT $2",
       [tenantId, limit],
     );
     return res.rows.map((r: any) => r.data as Decision);
+  }
+
+  async countDecisions(tenantId: string): Promise<number> {
+    await this.ensureReady();
+    const res = await this.pool.query("SELECT COUNT(*)::int AS n FROM public.decisions WHERE tenant_id = $1", [tenantId]);
+    const n = res.rows[0]?.n;
+    if (typeof n !== "number" || !Number.isFinite(n)) throw new Error("decision count did not come back as a number");
+    return n;
   }
 
   async getSnapshot(tenantId: string, id: string): Promise<EvidenceSnapshot | null> {
@@ -210,6 +228,30 @@ export class PostgresDecisionStore implements DecisionStore {
     return res.rows[0] ? (res.rows[0].data as EvidenceSnapshot) : null;
   }
 
+  /** Every column the store's statements bind, per table. A missing one means the
+   *  schema predates the code; readiness must say so rather than 500 on first use. */
+  private static readonly BOUND_COLUMNS: Record<string, string[]> = {
+    decisions: ["id", "tenant_id", "created_at", "outcome", "data"],
+    evidence_snapshots: ["id", "tenant_id", "decision_id", "data"],
+  };
+
+  private async assertSchema(): Promise<void> {
+    for (const [table, columns] of Object.entries(PostgresDecisionStore.BOUND_COLUMNS)) {
+      const res = await this.pool.query(
+        `SELECT column_name FROM information_schema.columns WHERE table_schema = 'public' AND table_name = $1`,
+        [table],
+      );
+      const present = new Set(res.rows.map((r: any) => String(r.column_name)));
+      const missing = columns.filter((c) => !present.has(c));
+      if (missing.length > 0) {
+        throw new Error(
+          `${table} is missing column(s) ${missing.join(", ")} — the schema is behind the code. ` +
+            "Run `pnpm run db:migrate` with the admin credential; refusing to report ready for statements that would fail.",
+        );
+      }
+    }
+  }
+
   async ping(): Promise<void> {
     await this.ensureReady();
     // Liveness AND fitness: `SELECT 1` proves the connection; the privilege
@@ -217,6 +259,7 @@ export class PostgresDecisionStore implements DecisionStore {
     // 200 while every write would 42501 is a health report about nothing.
     await this.pool.query("SELECT 1");
     await this.assertPrivileges();
+    await this.assertSchema();
   }
 
   async close(): Promise<void> {

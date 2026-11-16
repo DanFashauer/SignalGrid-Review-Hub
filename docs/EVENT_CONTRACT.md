@@ -21,7 +21,7 @@ Required anchors (every event): `eventType`, `eventId`, `occurredAt` (ISO-8601),
 | --- | --- |
 | Subjects | `userId`, `badgeId`, `mobileCredentialId`, `deviceId`, `iccid` |
 | Physical custody | `dockId`, `bayId`, `pacsSite`, `doorOrElevator` |
-| Observed states | `mdmDeviceState`, `carrierConnectivityState`, `tamperState`, `batteryPercent` (0–100), `chargeState`, `lastSeenNetwork` |
+| Observed states | `mdmDeviceState`, `carrierConnectivityState`, `tamperState`, `badgeAuthOutcome` (on a `badge_access` event), `batteryPercent` (0–100), `chargeState`, `lastSeenNetwork` |
 | Governance | `policyVersion`, `incidentKey` |
 
 **Event types:** `checkout_requested`, `checkout_granted`, `checkout_denied`,
@@ -32,7 +32,9 @@ Required anchors (every event): `eventType`, `eventId`, `occurredAt` (ISO-8601),
 **State domains:** `mdmDeviceState` ∈ {compliant, noncompliant, unmanaged,
 unknown}; `carrierConnectivityState` ∈ {online, idle, offline, unknown};
 `tamperState` ∈ {none, suspected, confirmed}; `chargeState` ∈ {charging,
-discharging, full, unknown}.
+discharging, full, unknown}; `badgeAuthOutcome` ∈ {success, failure, unknown}
+(the reader's badge-auth result on a `badge_access` event; absent or `unknown`
+is treated fail-closed — it never lifts an outcome on its own).
 
 ## Validation (fail-closed)
 

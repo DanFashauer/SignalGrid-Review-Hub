@@ -433,6 +433,8 @@ async function dispatchWithRetry(
   config: DispatcherConfig = DEFAULT_DISPATCHER_CONFIG
 ): Promise<DeliveryResult> {
   let lastResult: DeliveryResult | null = null;
+  // COUNTED, not assumed: the DLQ record below states how many deliveries were made.
+  let attemptsMade = 0;
 
   // WHAT IS PERMANENT, and why the list is no longer typed out here.
   //
@@ -453,6 +455,7 @@ async function dispatchWithRetry(
 
   for (let attempt = 1; attempt <= config.retry.maxAttempts; attempt++) {
     const result = await dispatchToEndpoint(webhook, payload, config);
+    attemptsMade += 1;
     lastResult = result;
 
     if (result.success || isPermanentDeliveryError(result)) {
@@ -473,11 +476,23 @@ async function dispatchWithRetry(
   // it is permanent above — so this cannot dead-letter a delivery that policy
   // withheld, which is what used to happen at dev tier.
   const finalError = lastResult?.error || 'Max retries exceeded';
+
+  // TERMINAL, AND SAID SO IN THE DELIVERY LOG. `dead_letter` has been a member of
+  // DeliveryStatusSchema since the family was written and NOTHING EVER WROTE ONE:
+  // the last attempt recorded `failed`, identical to every attempt before it, and
+  // only the DLQ — a separate list an operator has to know to open — carried the
+  // fact that we had given up. The per-webhook delivery log, which is what an
+  // operator actually opens, could not distinguish "failed, will retry" from
+  // "failed, and nobody will try again". Recorded BEFORE the DLQ write so the log
+  // is terminal even if the DLQ write is the thing that fails.
+  await recordDelivery(webhook.id, payload.id, 'dead_letter', undefined, undefined, finalError);
+
   await addToDLQ(
     webhook.id,
     payload.id,
     payload,
-    finalError
+    finalError,
+    attemptsMade
   );
 
   return {

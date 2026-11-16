@@ -1,5 +1,7 @@
 # Social Visual Concepts
 
+> **SUPERSEDED 2026-09-06 — do not post or send from this file.** Pre-DR-011 category-building visual concepts whose captions carried the retired label until 2026-09-06 (see the dated note under Concept 2); the live outbound surface is `docs/outreach/` (claim-scanned on every push). Kept for provenance only; `scripts/check-send-copy-banner.mjs` holds the rule.
+
 These concepts are for static social graphics or simple carousel frames. Keep them minimal, enterprise-grade, and public-safe.
 
 ## Visual style
@@ -32,7 +34,7 @@ Use a simple equation-like layout:
 
 Identity + Device + Custody + Workflow + Risk Context → Auditable decision
 
-Add a small caption: "Operational trust orchestration for shared, mobile, and frontline environments."
+Add a small caption: "Access-decision orchestration for shared, mobile, and frontline environments." (This line set the retired label until 2026-09-06.)
 
 ## Concept 3: "What should happen next?" decision flow
 
@@ -63,7 +65,7 @@ Show source-system layers at the bottom:
 
 IAM / MDM-UEM / Readers-Lockers / Network / ITSM / SIEM
 
-Place "SignalGrid operational trust orchestration" above them as a neutral orchestration layer. Add arrows upward for signals and downward for approval-required routes or evidence expectations, not direct production actions.
+Place "SignalGrid access-decision orchestration" above them as a neutral orchestration layer. Add arrows upward for signals and downward for approval-required routes or evidence expectations, not direct production actions.
 
 Public-safe note: label all systems generically and avoid implying current integrations, partnerships, or replacement.
 

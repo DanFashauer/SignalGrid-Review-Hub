@@ -12,9 +12,10 @@ evidence of one grep.
 **Allow / step_up / restrict / deny** — the four decision outcomes the Assist
 gate returns. Nothing else escapes the engine.
 
-**Assist gate** — the product: a deterministic decision layer a HOST app
-consults before a sensitive workflow proceeds. SignalGrid is invisible to the
-end user; the host app owns the user experience.
+**Assist gate** — a mechanism, not the product's name: the deterministic decision a
+HOST app consults before a sensitive workflow proceeds (allow / step_up / restrict /
+deny). SignalGrid is invisible to the end user; the host app owns the user
+experience. `docs/PURPOSE.md` §2 owns the product sentence (DR-020).
 
 **Assurance** — the engine's internal confidence requirement. An unknown or
 unreachable signal RAISES the assurance required, never lowers it — that
@@ -67,8 +68,11 @@ decision tightens. The opposite default — assuming absent means fine — is
 the defect class the whole repo exists to prevent.
 
 **Fossil figure** — a number typed into prose that a later run no longer
-produces. Guarded by `check:proof-counts` and the docs↔proof figure guard;
-the cure is deriving figures from runs, not updating them by hand.
+produces. Guarded by `check:proof-counts` and the docs↔proof figure guard —
+within their shape: the figure guard's `FIGURE_RE` matches only comma-formatted
+values ≥ 1,000, and it says so on every run ("NOT checked — out of SHAPE"), so a
+small integer such as "42 cases" or "7/7" is outside it. The cure is deriving
+figures from runs, not updating them by hand.
 
 **Freshness** — evidence carries `observedAt` and a validity window; a stale
 observation is not evidence of the present. "The MDM said healthy" always

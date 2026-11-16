@@ -41,4 +41,4 @@ Reproducing this takes five minutes — **on a disposable copy, never on retaine
 
 ---
 
-*This came out of hardening the audit ledger behind SignalGrid, a fail-closed assist gate for shared frontline devices; the full lab notes are public in our review repository.*
+*This came out of hardening the audit ledger behind SignalGrid. What SignalGrid is — canonical, not paraphrased here — is [`docs/PURPOSE.md`](PURPOSE.md) (DR-020); the full lab notes for this piece are public in our review repository.*

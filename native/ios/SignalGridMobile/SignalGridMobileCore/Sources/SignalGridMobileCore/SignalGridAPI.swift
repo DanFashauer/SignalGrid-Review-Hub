@@ -42,7 +42,7 @@ public protocol SignalGridAPI: Sendable {
     func fetchMetrics() async throws -> MetricsSummary
     func fetchDecisions() async throws -> [Decision]
     func fetchDecision(id: String) async throws -> Decision
-    func fetchEvidence(decisionId: String) async throws -> EvidenceSnapshot
+    func fetchEvidence(decisionId: String) async throws -> EvidenceFetch
     func evaluate(_ request: EvaluateRequest) async throws -> EvaluateResult
 
     func startSession(_ request: EvaluateRequest, ttlSeconds: Int) async throws -> SessionStartResult
@@ -106,9 +106,11 @@ public actor LiveSignalGridAPI: SignalGridAPI {
         return response.decision
     }
 
-    public func fetchEvidence(decisionId: String) async throws -> EvidenceSnapshot {
+    public func fetchEvidence(decisionId: String) async throws -> EvidenceFetch {
         let response: EvidenceEnvelope = try await request(path: "v1/decisions/\(escape(decisionId))/evidence")
-        return response.evidence
+        // `verified` is the server's tamper check on the digest. It was decoded
+        // and discarded here, so a failed check rendered exactly like a passed one.
+        return EvidenceFetch(snapshot: response.evidence, verified: response.verified)
     }
 
     public func evaluate(_ requestBody: EvaluateRequest) async throws -> EvaluateResult {

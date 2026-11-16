@@ -103,8 +103,10 @@ function attestationMalformed(a: unknown): boolean {
       if (depth >= 32) return true;
       for (const k of Reflect.ownKeys(o)) {
         if (depth > 0) return true;
-        if (typeof k === "symbol") return true;
-        if (!(ATTESTATION_KEYS as readonly string[]).includes(k)) return true;
+        // A symbol key needs no guard of its own: ATTESTATION_KEYS holds strings, so the
+        // membership test below is false for any symbol (the brace-less mutation sweep
+        // showed the separate check could be deleted with nothing noticing).
+        if (!(ATTESTATION_KEYS as readonly (string | symbol)[]).includes(k)) return true;
       }
       o = Object.getPrototypeOf(o) as object | null;
     }

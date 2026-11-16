@@ -1,6 +1,7 @@
 # Skill-collection intake — nine repositories, what was taken, and what was not
 
-**Date:** 2026-08-20. **Requested by the owner**, who supplied ten repositories (nine skill collections plus two tools) and
+**Date:** 2026-08-20. **Requested by the owner**, who supplied twelve repositories (nine skill collections, two tools and one docs
+mirror — the table in §1 lists all twelve; an earlier version of this line said "ten (nine plus two)") and
 asked that their capabilities "become an employee for the company and do what they
 do for my company."
 
@@ -62,7 +63,9 @@ that ledger exists to prevent.
 
 ## 3. What became a role
 
-Nine, taking the roster from 31 to 40. A role is a *job with a trigger*, written in
+Nine, taking the roster from 31 to 40 on 2026-08-20. The roster has moved since —
+`node scripts/check-org-roster.mjs` prints the current count (42 roles, 17 activated,
+25 never yet run, on 2026-09-06); do not read the 40 as today's figure. A role is a *job with a trigger*, written in
 our own words against this company's actual situation — not a copy of anyone's
 prompt, which is why the unlicensed collections could still inform the gap analysis
 without being republished.
@@ -120,7 +123,9 @@ oversight — a decision, and the roster gate states the principle it rests on:
   dependency decision, not an employee.
 - **Adding them anyway would have broken the thing that makes the roster useful.**
   It was deliberately converted from a census into a queue, with priorities and next
-  actions. Forty roles where twenty-six are still cold is already a real backlog.
+  actions. A roster where most roles are still cold is already a real backlog
+  (`node scripts/check-org-roster.mjs` prints the split — 42 roles, 25 never yet run, on
+  2026-09-06; this line said forty and twenty-six when it was written on 2026-08-20).
   Two hundred would make the chart decorative, and a decorative org chart reads as
   capability — the same unearned affirmative this repository exists to refuse.
 

@@ -75,11 +75,32 @@
 
 /** Bumped whenever a status changes. Not a semver — a serial number, so a doc or a
  *  review can name the exact revision of the scope it was written against. */
-export const LAUNCH_PROFILE_VERSION = 5;
+export const LAUNCH_PROFILE_VERSION = 7;
 
 // VERSION HISTORY, kept because a scope decision that changes silently is not a
 // decision anyone can hold you to.
 //
+//   7  BLOCKER 10, AT RUNTIME (2026-09-18). The `runtime-launch-status` gap said the
+//      enforced/observed/simulated labels existed only here, in a governance file, so
+//      an operator could read what the product intends and never ask the running
+//      server what it is doing. GET /v1/launch-status now answers it per signal
+//      family, derived from the connectors the core holds and from nothing
+//      configurable — and it reports `enforced` UNREACHABLE with its reason, which is
+//      the half this file kept implicit. One launch path added; nothing reclassified.
+//      The gap is REMOVED because its closedWhen condition is met in code.
+//   6  STEP-UP BECOMES ANSWERABLE (2026-09-18). The `step-up-answerability` gap said
+//      Limited GA ships in SHADOW mode: the gate returns step_up and no launch route
+//      can answer one. That was true and it was a hole in the product, not a scope
+//      decision — three of the four words the gate can say were actionable and the
+//      fourth was not. Four paths move onto the fence: the two enrollment routes
+//      (deferred → launch; they are the prerequisite, and an answer route without
+//      enrollment is a ceremony nobody can start) and two new decision-scoped routes,
+//      POST /v1/decisions/{id}/step-up/challenge and POST /v1/decisions/{id}/step-up.
+//      The app-workflows variants stay deferred with the integration catalog they
+//      belong to. Nothing about the criterion moves: same one product, same one host
+//      app, same gate — it is the gate finishing a sentence it could already start.
+//      The gap is REMOVED because its closedWhen condition is now met in code, which
+//      is the only reason this list ever loses an entry.
 //   4  THE FREEZE EXTENSION (2026-08-16). The app-surfaces derivation read
 //      artifacts/, tools/ and the two iOS project files — and nothing else. An
 //      ENTIRE ANDROID PORT (native/android: Compose shell + :assist-core, unit-
@@ -157,6 +178,23 @@ export const DEFERRED_RATIONALE =
 /**
  * SURFACES. Each carries how its real membership is DERIVED — the gate re-derives
  * from that source every run and refuses to trust this file's own arithmetic.
+ *
+ * PROOF BINDINGS (DR-036's named follow-up, executed 2026-09-12). Every `launch`
+ * entry carries `proofs: ["proof:<name>", …]` — the package.json proof scripts that
+ * certify it. Until then the readiness figure's dimension (b) was BINARY: 100 while
+ * the last Mac evidence run was green, fresh and covered the current manifest, else 0,
+ * because only 3 of the 23 launch ids happened to match a proof name and a per-item
+ * ratio would have been invented. Now `scripts/check-readiness-figure.mjs` computes
+ * (b) as a RATIO: of the distinct proofs these entries bind, the share the Mac's
+ * evidence (`artifacts/live-evidence/mac-run.json`, `proofs.passed`) records as
+ * passed against the manifest the tree carries. A binding is a claim, and
+ * `scripts/check-launch-proof-bindings.mjs` (preflight + CI, self-tested) fails when
+ * a launch entry binds nothing, binds a name that is not a proof script, binds one
+ * not registered in `scripts/preflight.mjs` (launch coverage is per push), or binds
+ * one that self-skips without an env var, and — the ratchet — when a binding is removed
+ * without docs/agent/launch-proof-bindings-record.json changing in the same diff.
+ * Non-launch entries may not carry `proofs`.
+ * A binding is NOT a status and does not move LAUNCH_PROFILE_VERSION.
  */
 export const SURFACES = [
   {
@@ -167,6 +205,7 @@ export const SURFACES = [
     launch: [
   {
     id: "graph",
+    proofs: ["proof:graph-connector", "proof:graph-wire", "proof:microsoft-graph-sandbox", "proof:launch-seam", "proof:evidence-adapter"],
     reason:
       "The one read-only Entra/Intune connector — since v3, the first ENTERPRISE " +
       "production connector rather than the prerequisite: the open-source lab (Fleet, via " +
@@ -178,6 +217,7 @@ export const SURFACES = [
   },
   {
     id: "device-management-health",
+    proofs: ["proof:device-management-health", "proof:launch-seam"],
     reason:
       "Grades whether an Intune compliance answer is CURRENT. A device reported " +
       "compliant that has not checked in for weeks is the unearned affirmative in its " +
@@ -191,6 +231,7 @@ export const SURFACES = [
   },
   {
     id: "local-authority",
+    proofs: ["proof:local-authority", "proof:launch-seam"],
     reason:
       "Answers whether a shared device may act on its OWN authority right now — awaiting " +
       "first unlock after a restart, or past the interval its offline grant declares. " +
@@ -204,6 +245,7 @@ export const SURFACES = [
       "access-governance",
       "agent-behavior",
       "agent-identity",
+      "app-protection",
       "app-update",
       "benchmark-selection",
       "bootstrap-credential",
@@ -257,14 +299,17 @@ export const SURFACES = [
     launch: [
       {
         id: "device_posture",
+        proofs: ["proof:graph-connector", "proof:posture-composition", "proof:posture-allow", "proof:launch-seam"],
         reason: "What the one Graph connector produces.",
       },
       {
         id: "device_management_health",
+        proofs: ["proof:device-management-health", "proof:launch-seam"],
         reason: "Whether that posture answer is current rather than merely present.",
       },
       {
         id: "local_authority",
+        proofs: ["proof:local-authority", "proof:launch-seam"],
         reason: "Whether the shared device may act on its own authority right now.",
       },
     ],
@@ -274,6 +319,7 @@ export const SURFACES = [
       "access_governance",
       "agent_behavior",
       "agent_identity",
+      "app_protection",
       "app_update",
       "attestation",
       "benchmark_selection",
@@ -324,29 +370,43 @@ export const SURFACES = [
     launch: [
   {
     id: "/v1/decisions/evaluate",
+    proofs: ["proof:api-contract", "proof:signalgrid-core", "proof:observability", "proof:launch-seam", "step:API integration test (boots the server)"],
     reason: "The Assist gate itself. If only one route shipped, it would be this one.",
   },
   {
     id: "/v1/authorize",
+    proofs: ["proof:api-contract", "proof:signalgrid-core", "step:API integration test (boots the server)"],
     reason:
       "The same gate, in the shape a host app obeys: {assist, reasons, decisionId}. " +
-      "The wire the Kotlin and Rust SDKs bind and the 42 shared conformance vectors " +
-      "hold. Declared a gap by DR-007 while the surface was frozen; served under DR-023.",
+      "The wire the Kotlin and Rust SDKs bind and the shared conformance vectors under " +
+      "native/shared hold (the count lives in the fixture, not here — it read 42 while the " +
+      "file carried 44). Declared a gap by DR-007 while the surface was frozen; served under DR-023.",
   },
   {
     id: "/v1/decisions",
+    proofs: ["proof:api-contract", "proof:signalgrid-core", "step:API integration test (boots the server)"],
     reason: "The console's list view; without it an operator cannot see what the gate did.",
   },
-  { id: "/v1/decisions/{id}", reason: "One decision in full." },
+  {
+    id: "/v1/decisions/{id}",
+    proofs: ["proof:api-contract", "proof:signalgrid-core", "proof:observability", "step:API integration test (boots the server)"],
+    reason: "One decision in full.",
+  },
   {
     id: "/v1/decisions/{id}/evidence",
+    proofs: ["proof:api-contract", "proof:signalgrid-core", "proof:launch-seam", "step:API integration test (boots the server)"],
     reason:
       "WHY the gate answered as it did. The product's entire claim is that its answers are " +
       "explainable and reproducible, so this route is not optional garnish — it is the claim.",
   },
-  { id: "/v1/context", reason: "Tenant context. \"Tenant-aware\" is in the criterion." },
+  {
+    id: "/v1/context",
+    proofs: ["proof:api-contract", "proof:signalgrid-core", "proof:isolation-scope", "step:API integration test (boots the server)"],
+    reason: "Tenant context. \"Tenant-aware\" is in the criterion.",
+  },
   {
     id: "/v1/audit",
+    proofs: ["proof:api-contract", "proof:signalgrid-core", "step:API integration test (boots the server)"],
     reason:
       "The per-tenant audit chain a reviewer reads. Honestly: this route serves the core's " +
       "in-process digest chain, which does not survive a restart; the DURABLE hash-chain " +
@@ -354,37 +414,93 @@ export const SURFACES = [
       "surface — docs/BACKUP_AND_RESTORE.md names both. Calling this one 'durable' was a " +
       "false claim and is the kind this file exists to prevent.",
   },
-  { id: "/v1/metrics", reason: "Operability. A service nobody can watch cannot be run." },
+  {
+    id: "/v1/metrics",
+    proofs: ["proof:api-contract", "proof:signalgrid-core", "proof:observability", "step:API integration test (boots the server)"],
+    reason: "Operability. A service nobody can watch cannot be run.",
+  },
+  {
+    id: "/v1/launch-status",
+    proofs: ["proof:api-contract", "proof:signalgrid-core", "step:API integration test (boots the server)"],
+    reason:
+      "Blocker 10, answered by the RUNNING server instead of by this file. Per signal " +
+      "family: enforced, observed or simulated — every field derived from the connectors " +
+      "the core holds, never from an environment flag (SIGNALGRID_LIVE_INTEGRATIONS " +
+      "caused precisely that defect once). It also reports `enforced` UNREACHABLE with " +
+      "its reason, which is the half a governance file kept implicit.",
+  },
   {
     id: "/v1/connectors",
+    proofs: ["proof:api-contract", "proof:signalgrid-core", "proof:launch-seam", "step:API integration test (boots the server)"],
     reason:
       "Read-only connector inventory: the setup/health screen (launch wireframe 2) renders " +
       "the MODE the gate actually resolved — 'bring your tenant' is not concrete without it.",
   },
   {
     id: "/v1/connectors/{id}/sync-runs",
+    proofs: ["proof:api-contract", "proof:signalgrid-core", "step:API integration test (boots the server)"],
     reason: "Read-only sync history: last sync, records processed, signals normalized.",
   },
   {
     id: "/v1/policies",
+    proofs: ["proof:api-contract", "proof:signalgrid-core", "step:API integration test (boots the server)"],
     reason:
       "Read-only policy inventory: the 'what decided this' page (launch wireframe 5). An " +
       "operator who cannot read the active policy cannot trust the verdicts it mints.",
   },
   {
     id: "/v1/policies/{id}/versions",
+    proofs: ["proof:api-contract", "proof:signalgrid-core", "step:API integration test (boots the server)"],
     reason:
       "Read-only versioned rule sets with content digests — the versioned half of every " +
       "decision's provenance (decisions carry policyVersionId).",
   },
   {
     id: "/v1/policies/{id}/tests",
+    proofs: ["proof:api-contract", "proof:signalgrid-core", "step:API integration test (boots the server)"],
     reason:
       "Runs the pinned policy tests against a version and reports pass/fail — evidence the " +
       "active rule set still behaves, on demand, read-only.",
   },
   {
+    id: "/v1/decisions/{id}/step-up/challenge",
+    proofs: ["proof:api-contract", "proof:signalgrid-core", "proof:webauthn-verify", "step:API integration test (boots the server)"],
+    reason:
+      "ANSWERING the verdict. The gate returns four words and Limited GA could act on " +
+      "three: nothing served could carry a completed challenge back, so a deployment " +
+      "shipped in shadow mode by omission rather than by decision. This mints the " +
+      "single-use WebAuthn challenge bound to ONE step_up decision — the subjects come " +
+      "from the decision, never from the request.",
+  },
+  {
+    id: "/v1/decisions/{id}/step-up",
+    proofs: ["proof:api-contract", "proof:signalgrid-core", "proof:webauthn-verify", "step:API integration test (boots the server)"],
+    reason:
+      "The answer itself: a verified, user-verifying WebAuthn assertion, checked against " +
+      "the credential enrolled for the identity the DECISION was about and against the " +
+      "challenge's stored binding. It records the answer beside the decision and does " +
+      "NOT rewrite it — a step_up stays a step_up, because it was computed from digested, " +
+      "immutable evidence.",
+  },
+  {
+    id: "/v1/step-up/enroll/options",
+    proofs: ["proof:api-contract", "proof:signalgrid-core", "proof:webauthn-verify", "step:API integration test (boots the server)"],
+    reason:
+      "Enrollment is the prerequisite of the answer above: no enrolled credential, no " +
+      "challenge, nothing to sign. Moved deferred → launch at v6 with the answer route; " +
+      "shipping the answer without enrollment would be a ceremony nobody can start.",
+  },
+  {
+    id: "/v1/step-up/enroll/verify",
+    proofs: ["proof:api-contract", "proof:signalgrid-core", "proof:webauthn-verify", "step:API integration test (boots the server)"],
+    reason:
+      "The other half of enrollment — the attestation is verified before a credential is " +
+      "stored, and the ceremony must be completed by the same operator/owner principal " +
+      "that started it.",
+  },
+  {
     id: "/v1/connectors/{id}/sync",
+    proofs: ["proof:api-contract", "proof:signalgrid-core", "proof:launch-seam", "step:API integration test (boots the server)"],
     reason:
       "Trigger a FIXTURE sync (the core refuses non-fixture connectors by construction) — " +
       "how the setup screen demonstrates the pipeline without a tenant. No write to any " +
@@ -415,8 +531,7 @@ export const SURFACES = [
       "/v1/remediation/{id}/approve",
       "/v1/app-workflows/integrations",
       "/v1/app-workflows/evaluate",
-      "/v1/step-up/enroll/options",
-      "/v1/step-up/enroll/verify",
+      "/v1/step-up/enroll/revoke",
       "/v1/step-up/challenge",
       "/v1/app-workflows/complete-step-up",
       "/cp/v1/tenants",
@@ -463,19 +578,38 @@ export const SURFACES = [
     launch: [
   {
     id: "api-server",
+    proofs: ["proof:api-contract", "proof:observability", "proof:signalgrid-core", "proof:isolation-scope", "proof:launch-seam", "step:API integration test (boots the server)"],
     reason: "The product: one tenant-aware decision service. The whole of \"one product\".",
   },
   {
     id: "signalgrid-app",
+    proofs: ["proof:api-client-react", "step:Browser E2E (review console, website, admin)"],
     reason:
       "The one operator console, bound to the served /v1 surface: decisions list, decision " +
       "detail (reason codes, matched rules, digest-verified evidence, per-signal freshness), " +
       "the tamper-evident audit ledger, and an assurance label on every verdict. Ratified by " +
       "the 2026-08-10 product-design review (PRODUCT_COMPLETION_PLAN §10/§11): the console " +
-      "must read the same API a customer would, not an in-browser copy of the core.",
+      "must read the same API a customer would, not an in-browser copy of the core. " +
+      "proof:api-client-react ALONE is not enough (2026-09-12 review finding): it exercises " +
+      "customFetch against canned Response objects and never builds or launches the console " +
+      "at all, so a Mac evidence mint could certify signalgrid-app without the console ever " +
+      "running. The one thing that DOES run it — a live browser against a live api-server, " +
+      "scripts/src/e2e/admin-console.spec.ts — is a preflight STEP, not a `proof:*` (a proof " +
+      "runs under tsx and cannot drive a built bundle), so it is bound as a step: entry. NOTE " +
+      "for whoever reads (b) and finds this half unrecorded: that step carries " +
+      "`needsNativeBuild: true` and is structurally excluded on every machine but linux-x64 " +
+      "(pnpm-workspace.yaml strips the darwin build binaries on purpose; see " +
+      "scripts/lib/platform-native-build.mjs) — including every Mac, the ONLY platform " +
+      "verify:all --emit-evidence is allowed to mint from. So this binding will read as " +
+      "genuinely unrecorded (0), not passed, on every real evidence file until that toolchain " +
+      "gap closes or evidence-minting is extended past macOS. That is dimension (b) telling " +
+      "the truth about a real gap in the console's evidence, not a defect in the binding — " +
+      "the alternative (leaving it bound only to proof:api-client-react) is the false-positive " +
+      "this finding exists to close.",
   },
   {
     id: "ios:EnterpriseShell",
+    proofs: ["proof:posture-allow", "proof:remediation-allow", "proof:signalgrid-simulator", "proof:mdm-profile"],
     reason:
       "The one host app — the reference shell a design partner integrates against. Under " +
       "the embedded-UX law the worker uses their OWN app, so this ships as the integration " +
@@ -579,6 +713,15 @@ export const SURFACES = [
       "and no customer ever sees it.",
   },
   {
+    id: "raised-hands",
+    reason:
+      "DR-054's ledger of raised hands: one {doing, blockedBy, need, whoCanUnblock, " +
+      "domain} JSON per blocker an agent, lane or routine could not clear alone, written " +
+      "by scripts/raise-hand.mjs and routed by scripts/check-raised-hands.mjs. Agent-ops " +
+      "plumbing gated by scripts/raised-hands.mjs --check; no tenant, no worker and no " +
+      "customer ever sees it.",
+  },
+  {
     id: "sim-requests",
     reason:
       "The cloud→Mac half of the simulation request loop: committed JSON asking the " +
@@ -615,9 +758,11 @@ export const SURFACES = [
   {
     id: "native:shared",
     reason:
-      "One JSON file: the assist-wire conformance fixture every native port (iOS, Android, " +
-      "desktop) must parse identically, so the ports cannot drift apart on the wire. A " +
-      "contract fixture between surfaces, not a surface — no person opens it.",
+      "Three JSON files (it said one until 2026-09-06): the assist-wire conformance fixture " +
+      "every native port (iOS, Android, desktop) must parse identically, plus the " +
+      "posture-allow and remediation-allow vector sets the Swift twins are pinned to, so the " +
+      "ports cannot drift apart on the wire. Contract fixtures between surfaces, not a " +
+      "surface — no person opens them.",
   },
   {
     id: "tools:evidence-coverage",
@@ -661,7 +806,8 @@ export const SURFACES = [
  * "compares a thing to itself" defect this repo keeps finding, wearing a governance
  * hat.
  *
- * It had already gone wrong. TWO of the five gaps below had been closed in code —
+ * It had already gone wrong. TWO of the five gaps THIS LIST THEN HELD had been closed
+ * in code —
  * the runtime allowlist fence and the served-vs-published surface, both with tests
  * asserting a 404 for every deferred path — and this list still declared them
  * missing, as did LAUNCH_PROFILE.md. A third had drifted: the Graph transport it
@@ -671,6 +817,11 @@ export const SURFACES = [
  * direction and is exactly why it can rot for so long unnoticed. It is still a
  * false statement about the repository, and worse, it makes the honest gaps cheaper
  * to ignore: a reader who finds two of five wrong stops trusting the other three.
+ *
+ * "five" is the count that list carried on the day of that correction, and it is
+ * deliberately in the PAST tense: the sentence said "the five gaps below" while the
+ * array below held four, so a paragraph about a stale count had itself gone stale.
+ * The current number is `GAPS.length` and nothing in this comment restates it.
  *
  * So each gap now states, mechanically, what would make it CLOSED, and
  * `check-launch-profile.mjs` evaluates that against source. Every condition met →
@@ -701,48 +852,18 @@ export const GAPS = [
     ],
   },
   {
-    id: "step-up-answerability",
-    surface: "published-api-paths",
-    whatIsMissing:
-      "Limited GA ships in SHADOW mode: the gate returns step_up, and no launch route can " +
-      "answer one. /v1/step-up/* exists and is deferred on purpose — enabling bounded " +
-      "enforcement is a later phase of the owner's plan, not this one. Stated here so " +
-      "\"returns step_up\" is never read as \"performs step-up\".",
-    // Closed when the GA allowlist admits a step-up path — i.e. a served route can
-    // answer the verdict the gate returns. Deliberate today, so this is the one gap
-    // expected to stay open longest; it still gets a condition, because "deliberate"
-    // and "permanent" are different and only the second needs no check.
-    closedWhen: [
-      { file: "artifacts/api-server/src/lib/profile.ts", contains: "/v1/step-up" },
-    ],
-  },
-  {
-    id: "runtime-launch-status",
-    surface: "published-api-paths",
-    whatIsMissing:
-      "A runtime report of enforced-vs-observed-vs-simulated per signal kind. The labels " +
-      "exist here, in a governance file; nothing serves them, so an operator cannot ask the " +
-      "running server what it is actually enforcing. It would close Blocker 10 more " +
-      "completely than a governance file can, and it is deliberately not built here: it " +
-      "widens the API surface and adds diff to a pull request Blocker 1 says is already too " +
-      "large to review.",
-    // Closed when some route file carries all three labels — the shape a served
-    // report must have. Verified against today's tree: no routes file has all three.
-    closedWhen: [
-      { dir: "artifacts/api-server/src/routes", anyFileContainsAll: ['"enforced"', '"observed"', '"simulated"'] },
-    ],
-  },
-  {
     id: "non-demo-core-constructor",
     surface: "app-surfaces",
     whatIsMissing:
-      "A decision core a CUSTOMER deployment can boot. SignalGridCore has one public " +
-      "factory — demo(), a seeded core on a fixed clock — and the served API constructs " +
-      "exactly that (artifacts/api-server/src/lib/core.ts). The shared-device-gateway " +
-      "profile fences the demo SURFACES, and the database posture is real, but the " +
-      "evaluated tenants/identities/devices are still the demo seed: this deployment " +
-      "demonstrates in a customer environment and does not yet decide about the " +
-      "customer's own estate.",
+      "A served core that decides about a CUSTOMER estate by default. The constructor " +
+      "now exists — SignalGridCore.fromEstate() (lib/signalgrid-core/src/estate.ts), " +
+      "proven by proof:estate-core over the Graph fixture dataset — and the served API " +
+      "boots it under SIGNALGRID_CORE=estate (artifacts/api-server/src/lib/core.ts), " +
+      "reading posture once through the read-only Graph connector. What is still " +
+      "missing: the default boot is the demo factory, the posture is read once at boot " +
+      "with no refresh loop, and a live read needs the beta/prod tier gate plus a " +
+      "GRAPH_ACCESS_TOKEN — so an unconfigured deployment still demonstrates in a " +
+      "customer environment rather than deciding about its estate.",
     // Closed when the served core stops being the demo factory. Matched WITHOUT the
     // argument list: `SignalGridCore.demo()` read as CLOSED once a legitimate argument
     // was added, so `demo(` matches the call however it is parameterised.

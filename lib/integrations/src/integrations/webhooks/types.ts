@@ -46,15 +46,14 @@ export type DeliveryStatus = z.infer<typeof DeliveryStatusSchema>;
 /**
  * Create webhook request.
  *
- * NOT `.strict()`, and that is a decision rather than an omission. The question was
- * raised because the strip default has the familiar asymmetry — a caller writing
- * `secrets` for `secret` gets an UNSIGNED webhook — and it was refused on a measurement:
- * nothing in the repository calls `.parse()` on this schema. It is a type source, and a
- * schema nobody parses cannot reject anything, so `.strict()` here would change no
- * behaviour while making the next reader believe the boundary is defended.
+ * `.strict()`, AND PARSED — `createWebhook` in `./store` calls `.parse()` on it, which
+ * is the condition an earlier version of this note set for the modifier being anything
+ * other than decorative ("a schema nobody parses cannot reject anything"). Both landed
+ * together, 2026-09-18.
  *
- * It becomes correct — and required — the moment `createWebhook` parses its input. See
- * the note on that function in `./store`.
+ * What strictness buys: the strip default has the familiar asymmetry — a caller writing
+ * `secrets` for `secret` gets an UNSIGNED webhook, silently, in the permissive
+ * direction. Under `.strict()` that is a rejection.
  */
 export const CreateWebhookSchema = z.object({
   name: z.string().min(1).max(100),
@@ -62,14 +61,14 @@ export const CreateWebhookSchema = z.object({
   events: z.array(z.enum(WEBHOOK_EVENTS)).min(1),
   secret: z.string().min(32).max(256).optional(),
   // TODO: Add secret rotation fields
-});
+}).strict();
 
 export type CreateWebhookRequest = z.infer<typeof CreateWebhookSchema>;
 
-/** Update webhook request. Not `.strict()` for the same measured reason as
+/** Update webhook request. `.strict()` and parsed by `updateWebhook`, like
  *  `CreateWebhookSchema` above — and with a sharper field at stake: a misspelled
- *  `rotateSecret` is dropped, the update succeeds, and the secret the operator believes
- *  they just retired is still live. */
+ *  `rotateSecret` used to be dropped, the update succeeded, and the secret the operator
+ *  believed they had just retired was still live. That is now a rejection. */
 export const UpdateWebhookSchema = z.object({
   name: z.string().min(1).max(100).optional(),
   url: z.string().url().optional(),
@@ -77,7 +76,7 @@ export const UpdateWebhookSchema = z.object({
   status: WebhookStatusSchema.optional(),
   // Secret rotation
   rotateSecret: z.boolean().optional(),
-});
+}).strict();
 
 export type UpdateWebhookRequest = z.infer<typeof UpdateWebhookSchema>;
 

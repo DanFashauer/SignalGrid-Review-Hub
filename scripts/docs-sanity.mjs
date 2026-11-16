@@ -171,12 +171,33 @@ const NEGATOR = /\b(?:not|no|never|cannot|can'?t|isn'?t|does\s?not|doesn'?t|won'
 // check exempted any line containing "no"/"not" ANYWHERE, so a real over-claim
 // slipped through if the line also said e.g. "no setup" after the claim. A line is
 // a bare claim if any occurrence of the phrase has no negator preceding it.
+//
+// ONE EXCEPTION TO "negation scopes forward" (plan row 118): a phrase that ENDS in
+// the verb `replaces` can be negated by its own direct object — "SignalGrid
+// replaces no system of record" denies, it does not claim. That form failed this
+// gate while the negation-aware classifier (scripts/src/unsafe-claim-classifier.ts)
+// cleared it, so the gate that CAN fail was the one that got it wrong. The window
+// is the classifier's POSTPOSED_NEGATION exactly: ONE token, a closed set of
+// negators, and "no fewer/less than" excluded because it asserts. Anything wider
+// ("replaces Jamf and no one disputes it") stays a claim.
+// The window also REFUSES a negator that opens an intensifier or an exception —
+// "not only", "not one", "no one", "no other", "nothing short", "no more than", or a later
+// but/except/other than in the same clause — because "replaces no system of record
+// except Jamf" asserts a replacement (adversarial review of row 118). The classifier
+// carries the same pair: POSTPOSED_NEGATION and POSTPOSED_EXCEPTION.
+const POSTPOSED_NEGATOR = /^\s+(?:no|none|nothing|neither|nobody|not)(?=[\s,.;:|]|$)(?!\s+(?:fewer|less|more|only|just|merely|one|other|short)\b)/i;
+const POSTPOSED_EXCEPTION = /\b(?:but|except|save|besides|other\s+than|apart\s+from|beyond)\b/i;
 function hasBareClaim(content, phrase) {
   const lower = content.toLowerCase();
   const p = phrase.toLowerCase();
+  const verbFinal = /\breplaces$/.test(p);
   let idx = lower.indexOf(p);
   while (idx !== -1) {
-    if (!NEGATOR.test(content.slice(0, idx))) return true; // un-negated claim
+    const negatedBefore = NEGATOR.test(content.slice(0, idx));
+    const after = content.slice(idx + p.length);
+    const negatedAfter =
+      verbFinal && POSTPOSED_NEGATOR.test(after) && !POSTPOSED_EXCEPTION.test(after.split(/[.;|]/)[0] ?? "");
+    if (!negatedBefore && !negatedAfter) return true; // un-negated claim
     idx = lower.indexOf(p, idx + p.length);
   }
   return false;
@@ -288,6 +309,43 @@ function selfTest() {
   checks.push([
     "a negated claim on the same line is not flagged",
     isBareOverclaim("SignalGrid is production-ready", "docs/x.md", "SignalGrid is not production-ready today", null) === false,
+  ]);
+  // Row 118, BOTH directions: a verb-final phrase negated by its own object clears,
+  // and every near-miss of that window stays a claim.
+  checks.push([
+    "a postposed negator on a verb-final phrase is not flagged (\"replaces no …\")",
+    isBareOverclaim("SignalGrid replaces", "docs/x.md", "SignalGrid replaces no system of record.", null) === false,
+  ]);
+  checks.push([
+    "a genuine replacement claim with a trailing negation is still flagged",
+    isBareOverclaim("SignalGrid replaces", "docs/x.md", "SignalGrid replaces Jamf and needs no configuration.", null) === true,
+  ]);
+  checks.push([
+    "\"replaces no fewer than\" asserts and is still flagged",
+    isBareOverclaim("SignalGrid replaces", "docs/x.md", "SignalGrid replaces no fewer than three systems.", null) === true,
+  ]);
+  checks.push([
+    "postposed negation does not reach a phrase that is not verb-final",
+    isBareOverclaim("replaces Jamf", "docs/x.md", "It replaces Jamf nothing more.", null) === true,
+  ]);
+  for (const line of [
+    "SignalGrid replaces not only Jamf but Intune too.",
+    "SignalGrid replaces no one but Jamf.",
+    "SignalGrid replaces nothing short of your whole MDM stack.",
+    "SignalGrid replaces no system of record except Jamf and Intune.",
+    "SignalGrid replaces not one but three tools.",
+    "SignalGrid replaces no other tool in the estate.",
+    "SignalGrid replaces nothing more than your MDM.",
+    "SignalGrid replaces no more than three tools.",
+  ]) {
+    checks.push([
+      `a postposed negator that opens an exception is still flagged: ${line}`,
+      isBareOverclaim("SignalGrid replaces", "docs/x.md", line, null) === true,
+    ]);
+  }
+  checks.push([
+    "a hyphenated \"no-\" object is not the negator",
+    isBareOverclaim("SignalGrid replaces", "docs/x.md", "SignalGrid replaces no-code tooling.", null) === true,
   ]);
   // A denied claim under a colon lead-in that negates it is not flagged.
   checks.push([

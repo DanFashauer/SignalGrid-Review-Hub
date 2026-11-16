@@ -13,9 +13,11 @@ lives or dies by whether it can be checked.
 
 ## The observation the product is built on
 
-The clearest statement of SignalGrid's thesis is not in this repository. It is the
-closing line of a **macOS troubleshooting framework** diagram kept in the founder's
-project folder:
+Until 2026-09-12 the clearest statement of SignalGrid's thesis was not in this
+repository at all — the founder's own statement of it now is, further down this page
+under *What only the founder can write*. What follows is the observation it is built
+on: the closing line of a **macOS troubleshooting framework** diagram kept in the
+founder's project folder:
 
 > *"macOS doesn't just apply profiles. It evaluates trust, privacy and security at
 > every layer. Always validate each layer to find the real root cause."*
@@ -83,13 +85,43 @@ Two things follow, and only two — this page will not invent a third:
 
 ### What only the founder can write
 
-**This section is deliberately blank, and should stay blank until he fills it.**
+**Filled 2026-09-12. It had been deliberately blank since this page was written,
+on the rule that the part which cannot be inferred is his to write in his own
+words.** He wrote it, dictated, and it is reproduced here exactly as he said it —
+punctuation, spelling and all. Tidying dictated prose into corporate sentences is
+how a founder's thesis becomes somebody else's paraphrase, which is the failure
+this page was created to prevent.
 
-Everything above is inferred from artifacts. The part that cannot be inferred — what
-made this worth starting, and worth continuing — is his to write in his own words,
-and it should not be reconstructed by anyone else from his files. When it is written,
-it belongs here, and the rest of this page should be read as supporting evidence for
-it rather than as a substitute.
+> "This is also another great example of all of this stuff is individual
+> controlled by people and sometimes teams and they all have to decide how to do
+> what and config this to make whatever communicate with it for end users and
+> customers or whoever the person in other end needs X on the device no matter the
+> platform will need to go through all this process and chain of commands and
+> whatever else is going on but my point is with SignalGrid my solution sits on top
+> of all of this that ingest to crest super simple automated workflows to simply
+> allow or deny based on how you want auth to be handled which in this case using
+> some sort of RFID and or security token that allows access and usage of any
+> device within there department or assigned area or equipment then if X process
+> breaks then the solution can self resolve and notify the proper protocol and
+> teams that are assign to that resource and monitor the fix or jump in and resolve
+> problem and it will kick off tickets and change management while notification for
+> users affected and all that it's the smart system of systems that orchestras
+> every to ask it to do for you for the entire company no matter the product or
+> solution you use we will ingest in the signal and power the grid plan and
+> simple."
+
+**Why it belongs on this page rather than anywhere else.** The nine-layer diagram
+above is his observation about how trust is evaluated; this is his statement of
+what to do about it, and the two are the same argument read from opposite ends.
+The diagram says nothing joins the layers. This says who owns each layer, why that
+is the reason nothing joins them, and what a joining layer would have to do after
+it decides. The rest of this page was assembled from his artifacts by someone
+else; this paragraph is the only part of it that is first-hand, so everything above
+should now be read as supporting evidence for it.
+
+`docs/DECISION_RECORDS.md` (DR-042) tests each of its assertions against
+`docs/PURPOSE.md` and records which were already doctrine, which were stated only
+partially, and which became the smallest truthful addition to the canonical page.
 
 ## What this changes about the work
 
@@ -115,6 +147,7 @@ the same idea applied inward.
 | The nine-layer trust evaluation and its closing line | macOS troubleshooting framework diagram, founder's project folder, saved 2026-07-19 |
 | The clinical systems a workflow runs through | HIS architecture diagram, same folder, saved 2026-08-24 |
 | Fleet scale and chosen audience | The founder's own public LinkedIn posts, April–July 2026 |
+| The founder's thesis, verbatim | Dictated by the founder to the cloud lane, 2026-09-12; recorded and tested against the canonical purpose doc in `docs/DECISION_RECORDS.md` (DR-042) |
 | Positioning as a runtime decision layer, explicitly not replacing IAM/UEM/SIEM/ITSM | SignalGrid Second-Opinion Review, May 2025, v0.1 |
 | The open questions this page answers | Same review, "Open Questions" section |
 

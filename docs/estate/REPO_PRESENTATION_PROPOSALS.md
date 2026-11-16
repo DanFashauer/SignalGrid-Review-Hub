@@ -1,7 +1,7 @@
 # Repo presentation proposals — descriptions, topics, homepages
 
-> **What this file is.** The estate audit (ESTATE_SYNC_REPORT.md §4) found five
-> of seven repositories describing themselves with their own name repeated, two
+> **What this file is.** The estate audit (ESTATE_SYNC_REPORT.md §4) found three
+> of the six repositories in that table describing themselves with their own name repeated (four, counting one that repeats "SignalGrid" inside a different string), two
 > homepages pointing at replit.com, and zero topics anywhere. The App cannot
 > edit repository metadata, so these are ready-to-paste proposals — one block
 > per repository. Applying each takes under a minute from any browser, phone
@@ -10,6 +10,7 @@
 >
 > Everything below follows the standing guardrails: no production claims, no
 > MDM-replacement claims; connectors are described as evidence-only.
+
 
 ---
 
@@ -21,6 +22,10 @@
   (replaces the replit.com link; goes live once the Pages deployment-branch
   setting clears — open item 2 in the estate report. Until then it renders the
   README, which is still better than Replit.)
+  Read on 2026-11-11 with `gh repo view --json homepageUrl`: the field now holds
+  `https://danfashauer.github.io/work/signalgrid.html`, not a replit.com address,
+  and the owner said that day that the Replit project is gone. The private
+  repository's field was not re-read.
 - **Topics:** `device-trust` `zero-trust` `shared-devices` `frontline`
   `mdm` `typescript` `deterministic-testing`
 

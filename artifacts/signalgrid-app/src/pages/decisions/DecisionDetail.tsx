@@ -10,6 +10,31 @@ import { getDecisionV1, getEvidenceV1 } from "@/lib/v1";
 import { routeOwnersFor } from "@/lib/route-owner";
 
 /**
+ * Freshness badge tone, from the core's severity ladder.
+ *
+ * MIRRORS `FRESHNESS_SEVERITY` in lib/signalgrid-core/src/evidence.ts (fresh 0 <
+ * missing 1 < unknown 2 < stale 3 < expired 4, worst-wins). It is mirrored rather
+ * than imported because the core is not a dependency of this package and this
+ * batch may not touch package.json; the union it keys on is the core's `Freshness`
+ * (lib/signalgrid-core/src/types.ts). `Record<…>` over the full union is exhaustive
+ * by construction — a member added to the core union must be placed here too.
+ *
+ * Only `fresh` earns the ok tone. Every other member is the warning or danger tone,
+ * and a value outside the union is DANGER: a live nurse.stale decision rendered
+ * seven stale rows in the same neutral outline as fresh ones, beside values reading
+ * compliant / true / verified, so a stale reading looked like a fresh one.
+ */
+export type Freshness = "fresh" | "missing" | "unknown" | "stale" | "expired";
+export const FRESHNESS_TONE: Record<Freshness, string> = {
+  fresh: "bg-status-allow",
+  missing: "bg-signal-anomalous",
+  unknown: "bg-signal-anomalous",
+  stale: "bg-status-deny",
+  expired: "bg-status-deny",
+};
+export const freshnessTone = (f: string): string => FRESHNESS_TONE[f as Freshness] ?? "bg-status-deny";
+
+/**
  * The product's trust moment: one decision, fully explained from the real /v1
  * core — outcome, reason codes, matched rules, the tamper-evident evidence
  * snapshot with its verification result, every signal the engine read (with
@@ -177,7 +202,13 @@ export function DecisionDetail() {
                               {sourceSystemOf(s.sourceReference)}
                             </Badge>
                           )}
-                          <Badge variant="outline" className="font-mono text-[10px] uppercase">{s.freshness}</Badge>
+                          <Badge
+                            variant="outline"
+                            className={`font-mono text-[10px] uppercase border-transparent ${freshnessTone(s.freshness)}`}
+                            title={s.freshness === "fresh" ? "freshness: fresh" : `freshness: ${s.freshness} — this reading did not vouch for the value beside it`}
+                          >
+                            {s.freshness}
+                          </Badge>
                           <span className="font-mono text-[10px] text-muted-foreground truncate max-w-[200px]" title={s.sourceReference}>
                             {s.sourceReference}
                           </span>

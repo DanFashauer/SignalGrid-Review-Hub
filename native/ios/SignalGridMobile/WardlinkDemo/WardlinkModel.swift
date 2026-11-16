@@ -1,5 +1,4 @@
 import Foundation
-import LocalAuthentication
 import Observation
 import SignalGridMobileCore
 
@@ -17,7 +16,6 @@ final class WardlinkModel {
     var hostMessage: String?
     var toastMessage: String?
     var showInstrumentation = false
-    var showDemoStepUpFallback = false
 
     @ObservationIgnored private let api: any SignalGridAPI = MockSignalGridAPI()
 
@@ -109,40 +107,32 @@ final class WardlinkModel {
         toastMessage = "Action canceled."
     }
 
-    func completeDemoStepUp() {
-        showDemoStepUpFallback = false
-        processStepUpSuccess(demo: true)
-    }
-
     private func authenticateForStepUp() async {
         guard !isAuthenticating else { return }
         isAuthenticating = true
         defer { isAuthenticating = false }
 
-        let context = LAContext()
-        context.localizedCancelTitle = "Cancel"
-        var evaluationError: NSError?
-        guard context.canEvaluatePolicy(.deviceOwnerAuthentication, error: &evaluationError) else {
-            showDemoStepUpFallback = true
+        // Routed through the core's fail-closed gate. `StepUpGate` had zero production
+        // callers while this model hand-rolled the same LAContext call INVERTED: when
+        // the device could not ask (no passcode — a plausible state for a shared
+        // clinical iPad), an alert offered a "demo verification" button that granted
+        // the gated action. "We could not ask" is not "they answered" (2026-09-05).
+        let gate = StepUpGate(authenticator: LocalAuthenticationStepUp())
+        let outcome = await gate.evaluate(outcome: .stepUp, reason: .privilegedAction)
+        if StepUpGate.permits(outcome) {
+            processStepUpSuccess()
             return
         }
-
-        do {
-            let success = try await context.evaluatePolicy(
-                .deviceOwnerAuthentication,
-                localizedReason: "Verify this controlled clinical action"
-            )
-            if success {
-                processStepUpSuccess(demo: false)
-            } else {
-                hostMessage = "Verification was not completed. The action remains unavailable."
-            }
-        } catch {
-            hostMessage = "Verification was canceled or could not be completed."
+        pendingStepUp = nil
+        switch outcome {
+        case .unavailable(let why):
+            hostMessage = "This device cannot verify presence (\(why)). The action remains unavailable — set a device passcode or use a device with Face ID / Touch ID."
+        default:
+            hostMessage = "Verification was not completed. The action remains unavailable."
         }
     }
 
-    private func processStepUpSuccess(demo: Bool) {
+    private func processStepUpSuccess() {
         guard let action = pendingStepUp else { return }
         pendingStepUp = nil
         if action.sensitive {
@@ -153,15 +143,11 @@ final class WardlinkModel {
                 sensitive: action.sensitive,
                 disposition: .assist,
                 requiresConfirmation: true,
-                reason: demo
-                    ? "Demo verification completed; Wardlink confirmation still required"
-                    : "Native verification completed; Wardlink confirmation still required"
+                reason: "Native verification completed; Wardlink confirmation still required"
             )
         } else {
             appliedActionKeys.insert(action.key)
-            toastMessage = demo
-                ? "Demo verification completed. \(action.label) is available."
-                : "Verified. \(action.label) completed."
+            toastMessage = "Verified. \(action.label) completed."
         }
     }
 }

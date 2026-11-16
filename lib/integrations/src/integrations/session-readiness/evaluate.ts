@@ -122,6 +122,17 @@ export function evaluateSessionReadiness(state: NormalizedSessionReadiness): Ses
   if (state.budget !== null && budgetThreshold === null) {
     candidates.push({ action: "monitor", reason: "READINESS_BUDGET_UNREADABLE" });
   }
+  // The measurement can be garbled too. An elapsed time that is PRESENT but
+  // unreadable (NaN — a failed upstream parse) is "the plane reported and still
+  // could not say", which is exactly READINESS_UNKNOWN's meaning. Until 2026-09-06
+  // it graded READY: `NaN > threshold` is false, so the EXCEEDED branch below never
+  // fired, and with a budget posed the UNPOSED fallback was skipped as well — the
+  // same double switch-off the budget side above had, on the other operand
+  // (check-nan-fail-open rule 5). `Number.isFinite` here is what lets the
+  // comparison below trust its left operand.
+  if (state.elapsedToUsableSeconds !== null && !Number.isFinite(state.elapsedToUsableSeconds)) {
+    candidates.push({ action: "step_up", reason: "READINESS_UNKNOWN" });
+  }
   if (
     // A `state.budget !== null` term stood here and was REMOVED on 2026-08-25,
     // not exempted. `budgetThreshold` is computed directly above as

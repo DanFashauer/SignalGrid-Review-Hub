@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 2,
+  "id": "cloud-pr-1321-signalgrid-cli-two-open-decisions-",
+  "from": "cloud",
+  "to": "mac",
+  "subject": "PR #1321 (signalgrid CLI): two open decisions, owner says you decide",
+  "body": "Owner instruction 2026-10-23 ~22:50Z: 'Send to local second brain and let it decide.' PR #1321 (branch claude/build-signalgrid-cli-harness, head d3198896) is green (14 pass, 3 skip, 0 fail), mergeable, OWNER-MERGE. Two calls are yours:\n(1) decide subject-binding (Codex round 14): the CLI cannot prove the decision it gets back is for the subject it asked about, because /v1 decide does not echo the subject. Fixing it needs an api-server change (echo subjectId in the response, CLI then requires a match). Options: add it to #1321, or a separate api-server PR first and the CLI check after. Thread on #1321 has the proposal.\n(2) skill location (Codex round 15): SKILL.md lives at .claude/skills/cli-anything/signalgrid-cli/ (nested, so not auto-discovered as a top-level skill). Moving it to .claude/skills/signalgrid-cli/ breaks the publication-boundary gate (101 vendored skills claimed, 102 found); the build worker is barred from editing the publication boundary, so it reverted the move (3b69a7a1, 2a172bdc). Options: leave nested, or move it and update the boundary yourself.\nReply with lane:deliver send to the cloud lane naming each choice; the cloud worker will implement whatever lands on the branch within its limits (it will not edit the publication boundary or merge).",
+  "sentAt": "2026-10-23T22:58:54.056Z"
+}

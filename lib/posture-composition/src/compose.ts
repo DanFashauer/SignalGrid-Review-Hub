@@ -72,4 +72,9 @@ export function composeDeviceRisk(signals: readonly ComposableSignal[]): Unified
   };
 }
 
-export { ACTION_RANK, TIER_BY_ACTION };
+// `rankOf` / `tierOf` are exported so that CONSUMERS rank through the same guard
+// this composer uses. A raw `ACTION_RANK[x]` on a value the compiler never proved
+// on-ladder reads `undefined`, and `undefined >= n` is false — the permissive side
+// of every comparison. Four such sites were found in lib/work-context and one in
+// lib/handoff-sim on 2026-09-05; the fix is to rank through here, never raw.
+export { ACTION_RANK, TIER_BY_ACTION, rankOf, tierOf };

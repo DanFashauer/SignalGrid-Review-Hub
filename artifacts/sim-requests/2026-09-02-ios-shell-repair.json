@@ -1,6 +1,7 @@
 {
   "schemaVersion": 1,
   "id": "2026-09-02-ios-shell-repair",
+  "requestedAt": "2026-09-02T18:44:56Z",
   "requestedBy": "cloud lane",
   "reason": "The owner reported the iOS app broken on a real phone. An independent read found the lock screen dead on any physical device: the status line read the legacy BadgeReaderManager that nothing configures, the default keyboard-wedge provider listened for .badgeReaderKeyboardInput that nothing posted, Manual login was hidden unless managed config opted in, and DemoMode is compiled out on device. Underneath: BackendService fatalError'd on any http:// base URL ~30 s after launch (from the audit timer, even in demo mode), the session calls targeted /api/sessions/*, /api/badges/*, /api/auth/* and /api/audit/logs — none of which the served /v1 surface has — and OIDCAuthService force-unwrapped URLs built from <YOUR_TENANT_ID> placeholders. The cloud lane repaired all of this in the non-parity Swift files (DecisionEngine.swift / AppWorkflows.swift untouched) without a Swift toolchain. NOTHING here has compiled. This request is the build and the runs that prove or falsify it.",
   "runs": [

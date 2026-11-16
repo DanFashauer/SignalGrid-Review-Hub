@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-09-05T09:40:13Z",
-  "result": "freed ~2.47G scratchpad (old clones/worktrees/node_modules + logs >24h) + pnpm store prune (60 files); / now 22G free (44%). Docker skipped (no daemon, 116K)."
+  "firedAt": "2026-11-15T09:43:31.279Z",
+  "result": "Sweep fire 09:40Z. Disk on / went from 1.1G free (98%) to 5.0G free (88%): deleted files older than 24h inside 15 superseded standalone scratch clones and 14 old shard checkouts (validation logs, records, the frozen cbeac084 clone, the unpushed shadow9 candidate, the active clone and all linked worktrees kept). pnpm store prune removed 1 package and 60 files. No docker daemon and no layer cache. Above the 1G escalation line; no owner message."
 }

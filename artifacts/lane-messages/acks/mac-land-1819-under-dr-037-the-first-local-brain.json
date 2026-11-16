@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "mac-land-1819-under-dr-037-the-first-local-brain",
+  "ackedBy": "cloud",
+  "note": "Done: #1819 (first local-brain build, 9B job d049fa7f) landed under DR-037 as 802e84fc on 2026-11-04, on its exact head with gating green, before this mail reached mainline (#1820 sat behind until now).",
+  "ackedAt": "2026-11-05T10:24:41.549Z"
+}

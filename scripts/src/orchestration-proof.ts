@@ -140,6 +140,53 @@ check("fleet confirmation language names the dispatcher",
   gfAllow.summary.includes("dispatcher") &&
   (gfAllow.actions.find((a) => a.disposition === "assist")?.reason.includes("dispatcher") ?? false));
 
+// ── unknown sensitivity / domain / reason codes fail CLOSED (2026-09-05) ──────
+// Three catalog entries and the catalog selector compared `=== "controlled"`, so a
+// sensitivity the compiler never proved (a stale enum, a typo, undefined) received
+// the STANDARD room's plan: no cabinet, no witness, device.assign auto. Sensitivity
+// is now read fail-closed — controlled unless a recognised LOWER tier.
+const unknownSens = planOrchestration({ outcome: "allow", reasonCodes: [], room: { ...controlled, sensitivity: "restricted" as never } });
+check("SAFETY: an unrecognized room sensitivity is treated as CONTROLLED — the controlled-only extras are present and device.assign is sensitive",
+  unknownSens.actions.some((x) => x.kind === "medication.cabinet.unlock") &&
+  unknownSens.actions.find((x) => x.kind === "device.assign")?.sensitive === true);
+const absentSens = planOrchestration({ outcome: "allow", reasonCodes: [], room: { ...controlled, sensitivity: undefined as never } });
+check("SAFETY: an ABSENT sensitivity is controlled too — no sensitive action runs auto, the extras are present",
+  absentSens.actions.some((x) => x.kind === "medication.cabinet.unlock") &&
+  absentSens.actions.every((x) => !(x.sensitive && x.disposition === "auto")));
+// Monotone up the ladder, for every outcome: as a room gets MORE sensitive, no action
+// stops being sensitive and no action becomes auto. Asserted over the whole ladder
+// rather than at one rung, so the ordering cannot drift one tier at a time.
+const LADDER: RoomContext["sensitivity"][] = ["standard", "elevated", "controlled"];
+let sensDrops = 0;
+let autoGains = 0;
+for (const outcome of ["allow", "restrict", "step_up", "deny"] as const) {
+  const plans = LADDER.map((s) => planOrchestration({ outcome, reasonCodes: ["R"], room: room(s, "clinical-session") }));
+  for (let i = 1; i < plans.length; i += 1) {
+    const prevSens = new Set(plans[i - 1].actions.filter((x) => x.sensitive).map((x) => x.kind));
+    const curSens = new Set(plans[i].actions.filter((x) => x.sensitive).map((x) => x.kind));
+    for (const k of prevSens) if (!curSens.has(k)) sensDrops += 1;
+    const prevAuto = new Set(plans[i - 1].actions.filter((x) => x.disposition === "auto").map((x) => x.kind));
+    const prevKinds = new Set(plans[i - 1].actions.map((x) => x.kind));
+    for (const x of plans[i].actions) if (x.disposition === "auto" && prevKinds.has(x.kind) && !prevAuto.has(x.kind)) autoGains += 1;
+  }
+}
+check(`sensitivity is monotone up the ladder for every outcome: nothing stops being sensitive, nothing becomes auto (drops=${sensDrops}, gains=${autoGains})`,
+  sensDrops === 0 && autoGains === 0);
+// An unrecognised facility domain used to destructure `undefined` and THROW — no
+// plan, no audit record. Now: a plan, every action blocked, mode deny.
+const unknownDomain = planOrchestration({ outcome: "allow", reasonCodes: [], room: { ...controlled, domain: "spaceport" as never } });
+check("SAFETY: an unrecognized facility domain fails closed — mode deny, every action blocked, and it does not throw",
+  unknownDomain.mode === "deny" && unknownDomain.actions.length > 0 && unknownDomain.actions.every((x) => x.disposition === "blocked"));
+check("SAFETY: a prototype-key domain (\"constructor\") is unrecognized, not a catalog",
+  planOrchestration({ outcome: "allow", reasonCodes: [], room: { ...controlled, domain: "constructor" as never } }).mode === "deny");
+// Malformed reason codes at the untyped boundary: never a crash, never "Denied — undefined".
+const noCodes = planOrchestration({ outcome: "deny", reasonCodes: undefined as never, room: controlled });
+check("SAFETY: a deny whose reasonCodes is not an array still yields a fully blocked plan with the fallback reason",
+  noCodes.mode === "deny" && noCodes.actions.every((x) => x.disposition === "blocked" && x.reason.includes("trust conditions not met")));
+const holeyCodes = planOrchestration({ outcome: "restrict", reasonCodes: [undefined as never], room: controlled });
+check("SAFETY: a reason list whose first entry is not a string falls back to the named default, never \"Restricted — undefined\"",
+  holeyCodes.actions.find((x) => x.kind === "door.unlock")?.reason === "Restricted — elevated risk");
+
 // ── fail closed on a malformed / unrecognized outcome ────────────────────────
 const badOutcome = planOrchestration({ outcome: "sideways" as never, reasonCodes: [], room: controlled });
 check("SAFETY: unrecognized outcome fails closed (mode deny, all blocked)",

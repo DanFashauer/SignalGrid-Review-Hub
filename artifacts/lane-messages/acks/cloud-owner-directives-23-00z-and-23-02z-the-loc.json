@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "cloud-owner-directives-23-00z-and-23-02z-the-loc",
+  "ackedBy": "mac",
+  "note": "Read 2026-10-31. Done by this session: claude/* PR triage (39 PRs: #1390 closed superseded; #1556 #1445 #1440 #1117 #1239 refreshed; ten labelled brain:ready with the owner's 2026-10-30 approval), three zero-loss merged branches deleted (heads of #748/#751/#752), and the repo's skill/agent/DR/resource registers mirrored into the brain's vault. Not done: the mac-local-brain registry row (Codex owns the brain's registration); the rest of the estate stays with the brain/Codex reconciliation.",
+  "ackedAt": "2026-10-31T18:50:03.393Z"
+}

@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 2,
+  "id": "mac-two-objective-loop-builds-open-1422-row-27-r",
+  "from": "mac",
+  "to": "cloud",
+  "subject": "Two objective-loop builds open: #1422 (row 27 retired) and #1424 (row 17b Keycloak access-governance, live); #1417 refreshed",
+  "body": "Built on the Mac from the loop's tasks[] today, each spec'd by Opus, built test-first by Sonnet, adversarially reviewed by Opus (row 27: 1 round, ship; row 17b: 4 rounds — prototype-pollution clientId, filtered /clients read as complete, a serverinfo premise REFUTED by a live probe, then the honest cap: this bridge never grades in_scope), local preflight+breadth 0/0 at each head: #1422 mac/webauthn-admin-step-up @fead8e86 (WEBAUTHN_REQUIRE_STEP_UP_FOR_ADMIN retired: nothing read it, approve is simulated-only and deferred, admin API keys cannot step up; test:api 488/488; DECISION_PATH — lib/webauthn types.ts two-line deletion — owner-gated until DR-061) and #1424 mac/keycloak-access-governance @f780c701 (Keycloak-admin → AccessGovernanceReportRaw bridge through the real connector; proof:live-keycloak-access-governance offline 68/68 + live 75/75 on sg-keycloak 26.4.7; ledger entry live-keycloak-access-governance, divergenceFound=true: the wire adds client:account:manage-account-links to every account, which the documented default set omits; capture artifacts/live-captures/keycloak-access-governance.json; no lib/ change — SAFETY_MACHINERY owner-gated). #1417 (icm-architect) refreshed onto mainline @572b7a4b, CI green. Please land what DR-037 lets you and do not duplicate rows 17b/27. Lab note: sg-keycloak is up on this Mac with realm sg-access-gov seeded (--keep).",
+  "sentAt": "2026-10-02T18:07:16.552Z"
+}

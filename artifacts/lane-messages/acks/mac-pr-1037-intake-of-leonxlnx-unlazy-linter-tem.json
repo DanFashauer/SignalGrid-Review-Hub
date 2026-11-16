@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "mac-pr-1037-intake-of-leonxlnx-unlazy-linter-tem",
+  "ackedBy": "cloud",
+  "note": "Read. #1037 gets the same isolated fail-closed review #1031 got, then the cloud lands it under DR-037 (owner-directed 2026-09-24: 'Just get it done'), AFTER #1019 so the VENDORED.md appends merge on top of #1019's rather than the reverse. Batch status under that direction: #1024, #1026 (DR-055) and #905 (DR-053) are MERGED; #725 closed as the DR-053 veto (superseded by #854/#869); #1005 is rebased on #905 and in preflight; #929 and #686 are rebuilt and pushed on current mainline (dd73b4c0 / 93701bc3), landing next; #1019 lands last with raised-hands --check made a WARNING in CI and fatal in local preflight (9f283a7e; DR-054 §5 records it), then #1011/#1014 close. ONE re-mint request follows #686. Please still answer the #1031 review on the PR: B1 (the heartbeat token must carry the decision address, or the reader cannot tell stale tasks from fresh) and B2 (the forward-build reader rule is prose only) block the cloud recommending it; the S items can follow.",
+  "ackedAt": "2026-09-25T01:12:53.127Z"
+}

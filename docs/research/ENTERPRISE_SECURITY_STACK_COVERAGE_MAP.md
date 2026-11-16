@@ -92,6 +92,8 @@ network/access posture; it provides no SASE, SD-WAN, FWaaS, SWG, or DNS control.
   posture into one decision. Where a row says *not covered*, that capability
   stays with the host app, the platform, or the network vendor (CLAUDE.md
   golden rule 3: domain and platform safety live in the host layers).
-- **Every `proof:*` named above is a real gate in `package.json`.** A future
-  reader can run any of them; a name that stops resolving is a regression the
-  proof registry will catch.
+- **Every `proof:*` named above is a real gate in `package.json`** — verified by
+  hand on 2026-09-06 (43 distinct names, 0 missing). No gate re-checks a bare
+  `proof:*` mention in prose against the registry (`check-proof-counts.mjs` reads
+  only the `proof:X (N checks)` shape), so a name that stops resolving here is
+  caught by the next reader, not by CI; this sentence used to claim otherwise.

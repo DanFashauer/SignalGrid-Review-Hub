@@ -28,6 +28,7 @@ import {
 } from "@workspace/signalgrid-core";
 import {
   deviceManagementHealthToDrafts,
+  fleetDMToPostureDrafts,
   graphPostureToDrafts,
   localAuthorityToDrafts,
   type PostureSignalDraft,
@@ -35,6 +36,7 @@ import {
 import {
   FIXTURE_GRAPH_DEVICES,
   FIXTURE_GRAPH_USERS,
+  FIXTURE_GRAPH_RISKY_USERS,
   resolveGraphPostureConnector,
 } from "@workspace/integrations/graph";
 import {
@@ -105,7 +107,7 @@ async function main(): Promise<void> {
   check("graph: fixture connector reads the full synthetic inventory (7 devices, paged)", postures.length === 7, `count=${postures.length}`);
   check(
     "graph: every posture signal carries provenance (source, correlation, subject)",
-    postures.every((p) => p.sourceSystem === "microsoft-graph" && p.correlationId.length > 0 && p.subjectId.startsWith("synthetic-user-")),
+    postures.every((p) => p.sourceSystem === "microsoft-graph" && p.correlationId.length > 0 && p.subjectId !== null && p.subjectId.startsWith("synthetic-user-")),
   );
 
   const healthy = postures.find((p) => p.deviceId === "synthetic-device-001");
@@ -128,6 +130,16 @@ async function main(): Promise<void> {
   check("bridge: disabled identity maps to identity_state=false", valueOf(graphPostureToDrafts(disabled!), "identity_state") === false);
   check("bridge: unmanaged maps to device_management=false", valueOf(graphPostureToDrafts(unmanaged!), "device_management") === false);
   check("bridge: missing compliance maps to the honest 'unknown', never 'compliant'", valueOf(graphPostureToDrafts(missing!), "device_compliance") === "unknown");
+  // The Fleet posture signal carries NO enrollment field. Until 2026-09-05 the adapter
+  // asserted `device_management: true` from it unconditionally — derived from "Fleet
+  // returned a host row", not from an answer about management — and that literal
+  // satisfied the healthy-allow rule, moving a verdict from step_up to allow on a fact
+  // nobody had read. Silence is the rule where a source did not answer.
+  const fleetDrafts = fleetDMToPostureDrafts({ hostUuid: "h-1", platform: "darwin", compliant: true, lastCheckAt: OBSERVED, policies: [{ response: "pass" }] } as never);
+  check(
+    "bridge: the Fleet posture signal (no enrollment field) emits NO device_management draft — silence, never an asserted `true` — while compliance still maps",
+    !fleetDrafts.some((d) => d.category === "device_management") && valueOf(fleetDrafts, "device_compliance") === "compliant",
+  );
 
   // ── 3. In-code fixture dataset must not drift from the committed JSON ──────
   const repo = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
@@ -137,6 +149,7 @@ async function main(): Promise<void> {
       subjectId: string;
       deviceId: string;
       identityStatus: string;
+      userRisk: string;
       deviceComplianceState: string;
       deviceManagementState: string;
       deviceRegistrationState: string;
@@ -150,12 +163,14 @@ async function main(): Promise<void> {
   const wireComplianceFor = (jsonState: string): string => (jsonState === "missing" ? "unknown" : jsonState);
   for (const c of fixture.cases) {
     const user = FIXTURE_GRAPH_USERS.find((u) => u.id === c.subjectId);
+    const risky = FIXTURE_GRAPH_RISKY_USERS.find((r) => r.id === c.subjectId);
     const device = FIXTURE_GRAPH_DEVICES.find((d) => d.id === c.deviceId);
     check(
       `drift: ${c.deviceId} matches fixtures/microsoft-graph JSON case for case`,
       user !== undefined &&
         device !== undefined &&
         user.accountEnabled === (c.identityStatus === "enabled") &&
+        (risky?.riskLevel ?? "none") === c.userRisk &&
         device.complianceState === wireComplianceFor(c.deviceComplianceState) &&
         device.managementState === c.deviceManagementState &&
         device.deviceRegistrationState === c.deviceRegistrationState &&

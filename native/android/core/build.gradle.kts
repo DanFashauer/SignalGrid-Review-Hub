@@ -49,4 +49,14 @@ java {
     targetCompatibility = JavaVersion.VERSION_17
 }
 
-tasks.test { useJUnitPlatform() }
+tasks.test {
+    useJUnitPlatform()
+    // SharedConformanceTest.kt reads the shared vectors through `File("../../shared/
+    // assist-wire-conformance.json")` — a path Gradle's up-to-date check cannot see,
+    // because nothing here told it the task depends on that file. Without this line, a
+    // change to ONLY the vector file leaves every input Gradle DOES track untouched, so a
+    // bare `gradle test` reports the task UP-TO-DATE and never re-reads it: a stale pass
+    // that looks green while proving nothing about the new cases. Declaring the file here
+    // is how the task is told this is one of its inputs (#1145 follow-up).
+    inputs.file("../../shared/assist-wire-conformance.json")
+}

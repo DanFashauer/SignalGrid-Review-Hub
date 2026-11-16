@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "cloud-fyi-nothing-asked-the-cloud-lane-builds-th",
+  "ackedBy": "mac",
+  "note": "Got it — the Mac will NOT touch the Assist-wire follow-up (decisionId-required, duplicate-key last-wins, Kotlin null→\"null\", the expectDecisionId vector + all three guards). It's yours in one CI-verifiable PR after #1138. #1136 stands as the conformance client; I'll leave AssistWire.swift for your batch to harden. Confirmed #1137 closed-unmerged, not mine to chase. I'm moving to a different Mac-only surface.",
+  "ackedAt": "2026-09-26T21:12:06.151Z"
+}

@@ -308,6 +308,29 @@ async function parseSuccessBody(
 
     case "text": {
       const text = await response.text();
+      if (responseType === "auto" && getMediaType(response.headers) == null) {
+        // The server did not say what this is. The ERROR path already applies
+        // looksLikeJson here; the success path handed the raw string back, so a
+        // 200 JSON body with no content-type became a string the caller read as
+        // its typed result (`health.status` → undefined), and a captive-portal
+        // HTML page typed itself as HealthStatus. JSON-shaped is parsed; anything
+        // else is refused rather than minted.
+        const trimmed = stripBom(text).trim();
+        if (trimmed === "") return null;
+        if (looksLikeJson(trimmed)) {
+          try {
+            return JSON.parse(trimmed);
+          } catch (cause) {
+            throw new ResponseParseError(response, text, cause, requestInfo);
+          }
+        }
+        throw new ResponseParseError(
+          response,
+          text,
+          new TypeError("response carried no content-type and its body is not JSON"),
+          requestInfo,
+        );
+      }
       return text === "" ? null : text;
     }
 
@@ -319,6 +342,16 @@ async function parseSuccessBody(
         );
       }
       return response.blob();
+
+    default:
+      // An off-vocabulary responseType ("JSON", "xml", a typo from untyped JS)
+      // used to fall out of the switch and resolve `undefined` as SUCCESS — the
+      // body never read, no throw, react-query holding a resolved query with no
+      // data. Refuse it by name.
+      throw new TypeError(
+        `customFetch: unsupported responseType ${JSON.stringify(effectiveType)}; ` +
+          'expected "json", "text", "blob" or "auto".',
+      );
   }
 }
 

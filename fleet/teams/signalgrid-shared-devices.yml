@@ -17,13 +17,29 @@ spec:
       macos_updates: {}
       ios_updates: {}
       # The supervised restrictions profile (kiosk allowlist + non-removable).
-      # Managed App Config for com.enterprise.shell (SingleAppModeEnabled /
-      # AllowManualOverride / RecoveryCode) is set as the app's managed
-      # configuration when Fleet installs it as a managed app.
+      # Its payload keys (autonomousSingleAppModePermittedAppIDs,
+      # allowListedAppBundleIDs, allowAppRemoval) are iOS/iPadOS restriction
+      # keys: delivered to a macOS host they are INERT, so the macos_settings
+      # entry below installs the profile on Macs without restricting them. It
+      # is kept so a Mac in this team carries the same declared intent, not as
+      # a claim that Macs are kiosked — they are not.
+      # Managed App Config for com.enterprise.shell is set as the app's managed
+      # configuration when Fleet installs it as a managed app. ALL EIGHT keys
+      # the shell reads are listed in native/ios/mdm/README.md ("Managed App
+      # Config keys"), and BackendBaseURL is REQUIRED on a managed device for
+      # any session to start — deploying only what is in this directory, with
+      # no managed app configuration, yields a device that never starts a
+      # session (fail-closed, but not a deployment).
+      # No tracked artifact sets that configuration; it is an operator step.
       macos_settings:
         custom_settings:
           - path: ../profiles/signalgrid-restrictions.mobileconfig
       # iOS/iPadOS get the same restrictions profile (supervised only).
+      # PATH RESOLUTION, unverified here: fleet/README.md applies this file
+      # from fleet/ and the header above from the repo root; `../profiles/`
+      # resolves under only one of those conventions unless fleetctl resolves
+      # relative to the YAML file itself. Verify on the Mac lane before relying
+      # on either command.
       ios_settings:
         custom_settings:
           - path: ../profiles/signalgrid-restrictions.mobileconfig

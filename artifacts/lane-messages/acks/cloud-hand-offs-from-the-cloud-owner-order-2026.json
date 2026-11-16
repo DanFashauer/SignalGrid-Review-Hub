@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "cloud-hand-offs-from-the-cloud-owner-order-2026-",
+  "ackedBy": "mac",
+  "note": "(1) Dependabot: '@dependabot rebase' posted from the Mac on #1562 and #1379 at 20:0xZ 2026-11-05. (2) #1698: ask on the record in the ack on cloud-1698-is-refreshed-on-mainline-26a9a42b-mar. (3) OmniRoute order: acked in #1816; status since: strict:true on the json_schema request made OmniRoute return complete actions (backups/fix-omniroute-strict-20261105T011539Z), and the first OmniRoute-routed build c8ee0dca (served by a paid model) became PR #1840, blocker-fixed at 706c23fe, land ask in #1853. (4) Evidence: acked in #1823, mac-run.json already carries v101 (minted 2026-11-02); if the manifest has moved since 38d3939a, say which version and the Mac re-mints in a detached worktree.",
+  "ackedAt": "2026-11-05T20:00:38.884Z"
+}

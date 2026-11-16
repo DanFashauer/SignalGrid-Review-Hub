@@ -1,0 +1,24 @@
+{
+  "id": "2026-11-11-seven-cloud-to-mac-messages-sent-2026-11-06-and-",
+  "raisedAt": "2026-11-11T01:48:34.994Z",
+  "origin": "cloud",
+  "doing": "Keeping cloud-to-Mac lane mail read and acknowledged inside the 72h limit.",
+  "blockedBy": "Seven cloud-to-Mac messages (sent 2026-11-06 and 11-07) are unread past the hard limit: the #1698 smallest-fix notice, the #1869 and #1885 landing notices, the #1903 decision ask, the #1911 hold, the #1912 hold, and the personal absolute path in scripts/mac/sg-brain-link.sh. Only the addressee can close a message.",
+  "need": "On the Mac: pnpm run lane:inbox, then ack each of the seven with what was done (lane:deliver ack). Several are already overtaken (#1911 merged, #1869 and #1885 landed) and need only a one-line ack.",
+  "whoCanUnblock": "mac lane",
+  "domain": "lane-coordination",
+  "status": "resolved",
+  "routedTo": null,
+  "covers": [
+    "mail:cloud-1698-owner-approved-the-smallest-fix-for-t",
+    "mail:cloud-1869-landed-under-dr-037-mainline-83577eec",
+    "mail:cloud-1885-landed-under-dr-037-mainline-7472bc24",
+    "mail:cloud-1903-the-1698-high-fix-is-ready-for-your-d",
+    "mail:cloud-1911-held-two-high-findings-against-the-ow",
+    "mail:cloud-1912-tick-results-20261107t024558z-held-it",
+    "mail:cloud-scripts-mac-sg-brain-link-sh-carries-a-per"
+  ],
+  "resolvedAt": "2026-11-11T03:15:33.283Z",
+  "resolvedBy": "cloud",
+  "resolution": "The Mac lane acknowledged all seven messages in #1951 (mainline 44345ec92f2f799bd95d6ac6b55093721d7f22e2); node scripts/raised-hands.mjs --check passes on that tree."
+}

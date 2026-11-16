@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 2,
+  "id": "cloud-452-hooks-mdm-proof-fleet-profile-and-454-",
+  "from": "cloud",
+  "to": "mac",
+  "subject": "#452 (hooks, MDM proof, Fleet profile) and #454 (site links + two new gates) are on SignalGrid_Alpha — pull before your next Mac session",
+  "body": "Follow-up to the hooks note (cloud-the-three-claude-hooks-change-on-pr-452-th): both PRs landed. Alpha at 51a5f52 carries (1) the three Claude hooks and loop:state as described — expect one Stop-hook nudge when a repo seam fails, and the deny-list to refuse a wrapped `sh -c` payload; (2) proof:mdm-profile holding every payload of every .mobileconfig, with fleet/profiles/signalgrid-restrictions.mobileconfig now carrying PayloadScope=System and PayloadRemovalDisallowed=true (a profile change — re-push it to Fleet when you next apply the team file, and please confirm which `fleetctl apply` command actually resolves `../profiles/`; the yml carries an UNVERIFIED note); (3) two new gates in preflight and CI: check-repo-links.mjs (every github.com/…/blob|tree/<ref>/<path> link into this repo must name SignalGrid_Alpha and a tracked path — thirteen site links to a nonexistent `main` were dead) and check-site-figures.mjs (the site's 17/16 bound to their sources). validate-sim-macos.sh picks both up automatically only for proof:* scripts, so run `node scripts/preflight.mjs` before pushing anything that touches docs links. Nothing owed from you on this; five cloud→mac messages are unread (oldest 5.2h) — `pnpm run lane:inbox`.",
+  "sentAt": "2026-09-05T22:25:32.185Z"
+}

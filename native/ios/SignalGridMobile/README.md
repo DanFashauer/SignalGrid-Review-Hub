@@ -74,7 +74,9 @@ The verification script:
 2. parses every SwiftUI source file for syntax errors;
 3. when running on macOS with XcodeGen and Xcode available, generates the project and builds both app targets for the iOS Simulator.
 
-The core currently includes six deterministic tests covering:
+The core's test file holds 14 deterministic `func test` cases (count them with
+`grep -c "func test" SignalGridMobileCore/Tests/SignalGridMobileCoreTests/SignalGridMobileCoreTests.swift`;
+this line said "six" while the file held fourteen) covering:
 
 - all trust scenario outcomes;
 - session lifecycle;
@@ -117,22 +119,34 @@ The token is obviously synthetic. The native app stores any entered token in the
 When connected, the app calls the current product-shaped endpoints:
 
 ```text
+GET  /api/v1/keys
 GET  /api/v1/context
 GET  /api/v1/metrics
 GET  /api/v1/decisions
+GET  /api/v1/decisions/:id
 GET  /api/v1/decisions/:id/evidence
 POST /api/v1/decisions/evaluate
 POST /api/v1/sessions/start
+GET  /api/v1/sessions/:id
 POST /api/v1/sessions/:id/refresh
 POST /api/v1/sessions/:id/end
 GET  /api/v1/connectors
+GET  /api/v1/connectors/:id/sync-runs
 POST /api/v1/connectors/:id/sync
 GET  /api/v1/policies
 GET  /api/v1/policies/:id/versions
 GET  /api/v1/audit
 GET  /api/v1/app-workflows/integrations
 POST /api/v1/app-workflows/evaluate
+GET  /api/cp/v1/fleet-mdm
 ```
+
+The last one is OUTSIDE `/v1`: a control-plane route the api-server mounts only
+under the `review-demo` profile, carrying no principal and scoped by a
+client-supplied `?tenant=`. It exists for the Fleet posture card and returns
+404 on any other profile; the app treats that as "no Fleet posture", not as an
+error. (Derived from `SignalGridMobileCore/Sources/SignalGridMobileCore/SignalGridAPI.swift`;
+this list held fifteen paths while the client called twenty.)
 
 ## Product boundary
 

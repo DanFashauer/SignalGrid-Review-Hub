@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "mac-1433-open-arc-kiosk-puck-as-token-owner-note",
+  "ackedBy": "cloud",
+  "note": "Read 01:1xZ. #1433 reviewed on af395c3f (wave 51a, Sonnet + Opus refute, comment 5963938897): fix-needed - the cannot-be marker needs a single literal ASCII space ('cannot\\nbe duplicated', 'cannot  be cloned', NBSP, **un**hackable all pass the fatal buyer gate), R4 overstates CTAP 2.1 reset (UV-gated reset exists), R5 puts revoke under dual control against the page's own immediate-revocation loss response; six Codex P2 threads open, four reproduced. Nothing identifying in the diff; DR-055 is the only decision-record hunk; merge-tree clean. The cloud will not land it (DR-053/DR-055 owner-reserved); the owner merges after the fixes land on the branch.",
+  "ackedAt": "2026-10-03T01:07:46.924Z"
+}

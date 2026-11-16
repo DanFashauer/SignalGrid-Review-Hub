@@ -3,13 +3,14 @@ import { useListDecisions, useGetDecision, ListDecisionsOutcome } from "@workspa
 import { OutcomeBadge } from "@/components/OutcomeBadge";
 import { BottomSheet } from "@/components/BottomSheet";
 import { StatusDot } from "@/components/StatusDot";
+import { FixtureLabel } from "@/components/FixtureLabel";
 import { formatTimeAgo, formatLatency } from "@/lib/format";
 
 export default function Decisions() {
   const [filter, setFilter] = useState<ListDecisionsOutcome | "all">("all");
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  const { data, isLoading, refetch } = useListDecisions({ 
+  const { data, isLoading, isError, refetch } = useListDecisions({
     limit: 100, 
     outcome: filter === "all" ? undefined : filter 
   });
@@ -23,7 +24,8 @@ export default function Decisions() {
   return (
     <div className="h-full w-full flex flex-col pt-safe bg-background">
       <header className="px-4 py-3 shrink-0 bg-background z-10 border-b border-border/50">
-        <h1 className="text-lg font-bold">Decisions</h1>
+        <h1 className="text-lg font-bold">Decisions (fixture)</h1>
+        <FixtureLabel className="mt-1" />
         <div className="flex gap-2 mt-3 overflow-x-auto pb-1 scroll-area -mx-4 px-4">
           {filters.map(f => (
             <button
@@ -56,12 +58,18 @@ export default function Decisions() {
           <div className="p-4 space-y-4">
             {[1,2,3,4,5].map(i => <div key={i} className="h-20 bg-card border rounded-xl animate-pulse" />)}
           </div>
+        ) : isError ? (
+          // A failed fetch used to render the same blank list as "no decisions".
+          <div className="p-6 text-sm text-status-restrict">
+            Decision log unreachable — nothing is known about recent decisions. Refresh, or check the control plane.
+          </div>
         ) : (
           <div className="divide-y divide-border/50 pb-safe">
             {(data?.decisions ?? []).map(d => (
               <button 
                 key={d.id} 
                 onClick={() => setSelectedId(d.id)}
+                aria-label={`Decision ${d.outcome} for ${d.identityId} on ${d.deviceId}, ${d.workflowId}, ${formatTimeAgo(d.evaluatedAt)}`}
                 className="w-full text-left p-4 flex flex-col gap-2 active:bg-muted/50 transition-colors"
               >
                 <div className="flex items-start justify-between gap-4">
@@ -94,6 +102,7 @@ export default function Decisions() {
           </div>
         ) : detailData ? (
           <div className="space-y-6 pb-safe">
+            <FixtureLabel className="text-center" />
             <div className="flex flex-col items-center py-4 bg-muted/20 rounded-xl border">
               <span className="text-xs text-muted-foreground mb-2">Outcome</span>
               <div className="scale-150 transform-gpu mb-1">

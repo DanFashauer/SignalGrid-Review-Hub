@@ -20,6 +20,15 @@ export interface AuditBackend {
   appendWithChain(build: (prevHash: string) => AuditRecord): Promise<AuditRecord>;
   /** Records in insertion order, sliced. */
   getRecords(limit: number, offset: number): Promise<AuditRecord[]>;
+  /**
+   * The next `limit` records in insertion order AFTER an opaque `cursor` ("" =
+   * the start of the ledger), plus the cursor of the last record returned. The
+   * whole-chain walk (`verifyLedgerFull`) pages with this when it exists: on
+   * Postgres an OFFSET read re-scans every skipped row, so paging a long ledger
+   * by OFFSET costs roughly the square of its length; a keyset read on `seq`
+   * keeps the walk linear. The cursor is only ever one this method returned.
+   */
+  getRecordsAfter?(cursor: string, limit: number): Promise<{ records: AuditRecord[]; cursor: string }>;
   /** One tenant's records in ledger order, sliced (a READ view over the one chain). */
   getRecordsForTenant?(tenantId: string, limit: number, offset: number): Promise<AuditRecord[]>;
   /**
@@ -46,6 +55,11 @@ export class InMemoryAuditBackend implements AuditBackend {
 
   async getRecords(limit: number, offset: number): Promise<AuditRecord[]> {
     return this.ledger.slice(offset, offset + limit);
+  }
+  async getRecordsAfter(cursor: string, limit: number): Promise<{ records: AuditRecord[]; cursor: string }> {
+    const start = cursor === "" ? 0 : Number(cursor);
+    const records = this.ledger.slice(start, start + limit);
+    return { records, cursor: String(start + records.length) };
   }
   async getRecordsForTenant(tenantId: string, limit: number, offset: number): Promise<AuditRecord[]> {
     return this.ledger.filter((r) => r.tenantId === tenantId).slice(offset, offset + limit);
@@ -281,6 +295,19 @@ export class PostgresAuditBackend implements AuditBackend {
       [offset, limit],
     );
     return res.rows.map(rowToRecord);
+  }
+
+  async getRecordsAfter(cursor: string, limit: number): Promise<{ records: AuditRecord[]; cursor: string }> {
+    await this.ensureReady();
+    // Keyset on the BIGSERIAL primary key: the index seeks straight to the page,
+    // where OFFSET would re-scan every row before it. Same order as getRecords.
+    const res = await this.pool.query(
+      `SELECT seq, id, ts, request_id, actor, event_type, target, meta, tenant_id, prev_hash, hash
+         FROM public.audit_ledger WHERE seq > $1 ORDER BY seq ASC LIMIT $2`,
+      [cursor === "" ? "0" : cursor, limit],
+    );
+    const last = res.rows[res.rows.length - 1];
+    return { records: res.rows.map(rowToRecord), cursor: last ? String(last.seq) : cursor };
   }
 
   async getRecordsForTenant(tenantId: string, limit: number, offset: number): Promise<AuditRecord[]> {

@@ -20,3 +20,11 @@ services:
       SIGNALGRID_TIER: dev # fixture-safe; never makes a live integration call
     ports:
       - "8080:8080"
+    # Same rule as docker-compose.yml / .prod.yml: "Up" must mean the server
+    # answers, not that the process exists. node:22-alpine runtime → BusyBox wget.
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8080/api/healthz || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+      start_period: 20s

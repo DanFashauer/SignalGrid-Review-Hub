@@ -22,16 +22,27 @@ declare global {
   }
 }
 
+/** The only shape a caller-supplied x-request-id is echoed in: 1–128 chars of
+ *  [A-Za-z0-9._-]. Exported so the api test can assert the boundary by value. */
+export const REQUEST_ID_SHAPE = /^[A-Za-z0-9._-]{1,128}$/;
+
 /** Attach a request id and standard security headers to every response. */
 export const requestContext: RequestHandler = (
   req: Request,
   res: Response,
   next: NextFunction,
 ): void => {
+  // A caller-supplied id is honoured only when it is shaped like an id. The
+  // value is echoed on every response, written into the envelope, and HASHED
+  // INTO THE AUDIT CHAIN as the row's provenance — so an unbounded, free-form
+  // header let a caller choose the correlation id of a tamper-evident record
+  // (COMPANY_BUILD_PLAN row: caller-chosen correlation id; measured with a
+  // 429-character forged header landing verbatim in the ledger, 2026-09-05).
+  // Anything outside the shape is REPLACED with a minted uuid, not rejected:
+  // correlation is a courtesy, never a way to write into the ledger.
+  const supplied = req.headers["x-request-id"];
   const requestId =
-    typeof req.headers["x-request-id"] === "string"
-      ? req.headers["x-request-id"]
-      : randomUUID();
+    typeof supplied === "string" && REQUEST_ID_SHAPE.test(supplied) ? supplied : randomUUID();
   req.requestId = requestId;
   res.setHeader("x-request-id", requestId);
   res.setHeader("x-content-type-options", "nosniff");
@@ -80,9 +91,36 @@ function initEnterpriseAuth(): EnterpriseAuthenticator | null {
     return createEnterpriseAuthenticator(result.config, defaultJwksFetch);
   }
   if (result.status === "invalid") {
-    logger.warn(
-      { reason: result.reason },
-      "Enterprise OIDC config is incomplete — staying on demo-key auth (fail-closed).",
+    // REFUSE TO BOOT. `invalid` is only ever returned when SOME OIDC variable is
+    // non-blank (every OIDC_* unset or blank is `disabled`, the untouched
+    // demo/fixture default), so it means exactly one thing: an operator reached
+    // for enterprise authentication and got some part of it wrong — a missing
+    // audience or JWKS URI, an unparseable or empty tenant/role map, a role value
+    // that is not a role, or (owner decision 2026-11-06) a blank or
+    // whitespace-only OIDC_ISSUER beside other OIDC settings. The reason names
+    // variables, never their values.
+    //
+    // The previous behaviour logged this at WARN and returned null, which under
+    // the DEFAULT profile falls through to the demo-key branch below: the
+    // published `sgk_demo_*` bearers are accepted, and `/v1/keys` hands them to
+    // anonymous callers. So a single mistyped variable turned "OIDC is on" into
+    // an open credential dispenser, while `/readyz` still reported ready
+    // (routes/health.ts gates its auth-config check on `!demoSurfacesEnabled()`)
+    // and the only trace was a warn line. The old message called that
+    // "fail-closed"; it was the opposite, and an unusable configuration value
+    // LOOSENING the answer is what golden rule 2 forbids.
+    //
+    // This mirrors, on the authentication knob itself, the boot-time refusals the
+    // server already applies to lesser ones: METRICS_TOKEN present-but-blank
+    // (app.ts), SIGNALGRID_MAX_DECISIONS_PER_TENANT (lib/core.ts), and an
+    // unrecognised SIGNALGRID_PRODUCT_PROFILE (lib/profile.ts) — "a configuration
+    // error on a security knob is answered by not serving, never by serving less
+    // safely". Unset EVERY OIDC_* variable to serve the demo surface deliberately.
+    throw new Error(
+      `Enterprise OIDC is configured but invalid: ${result.reason} ` +
+        "Refusing to start rather than silently accepting demo bearer tokens on a deployment " +
+        "whose operator believes OIDC is enforcing. Fix the OIDC_* variables (docs/DEPLOYMENT.md), " +
+        "or unset every OIDC_* variable to serve the demo credential surface deliberately.",
     );
   }
   return null;

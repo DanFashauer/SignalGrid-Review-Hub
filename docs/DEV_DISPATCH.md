@@ -48,7 +48,9 @@ pnpm run dispatch "keep building the backlog while I'm out, open PRs as you go"
 3. **Push before you switch.** Finish a session with `git push`; the other
    environment picks it up with a pull.
 4. **The default branch is `SignalGrid_Alpha`.** Feature work goes on a branch and
-   lands via PR (so CI + Codex review run), then both copies pull the merged base.
+   lands via PR (so CI runs — and the in-repo reviewer role has run before the push:
+   `docs/agent/ORG.md`, `.claude/skills/signalgrid-reviewer/SKILL.md`; the Codex
+   review lane is retired), then both copies pull the merged base.
 
 ### One command: `pnpm run sync`
 
@@ -92,7 +94,12 @@ pnpm --filter @workspace/api-server run dev            # the /v1 decision API
 open docs/embedded-desktop-demo.html                   # a self-contained demo
 ```
 
-If `pnpm run preflight` passes locally, it will pass in CI — it's the same suite.
+A green `pnpm run preflight` means everything reproducible locally is green, not that
+CI cannot go red: `scripts/preflight.mjs`'s own header says there are three CI jobs it
+does not mirror, and `docs/CI_AND_VALIDATION.md` names them (Postgres, the Docker-compose
+smoke and gitleaks); `pnpm run verify:breadth`
+is its own CI job and must be run too (CLAUDE.md), and `node scripts/check-preflight-ci-parity.mjs`
+prints the current coverage.
 
 ## Claude Code in each environment
 

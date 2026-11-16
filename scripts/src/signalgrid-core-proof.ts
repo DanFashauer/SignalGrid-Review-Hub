@@ -17,10 +17,14 @@
  * data, no live vendor calls.
  */
 import {
+  authenticate,
+  authorize,
   buildEvidence,
   buildResolutionPlan,
   computeMetrics,
   runDockSync,
+  runFixtureSync,
+  runShiftSync,
   foldIdentityEnabled,
   deriveCriticalSignalsPresent,
   FRESHNESS_VALUES,
@@ -28,6 +32,10 @@ import {
   EVIDENCE_VALUE_DOMAINS,
   canonicalJson,
   constantTimeEquals,
+  digest,
+  deterministicId,
+  DIGEST_ALG,
+  type EvidenceSnapshot,
   CoreError,
   evaluatePolicy,
   fixedClock,
@@ -39,10 +47,19 @@ import {
   seedDemoStore,
   verifySnapshot,
   CORE_NORMALIZATION_VERSION,
+  AUDIT_EVENT_TYPES,
+  PUCK_LIFECYCLE_EVENT_TYPES,
+  isAuditEventType,
+  appendAudit,
+  verifyAuditChain,
   SignalGridCore,
   SHARED_DEVICE_RULES_V1,
   SHARED_DEVICE_RULES_V2,
   validatePolicyRules,
+  puckVerdict,
+  type AttachState,
+  type TamperState,
+  type PuckSituation,
   type Decision,
   type DecisionEvidence,
   type DecisionOutcome,
@@ -54,7 +71,7 @@ import {
   SIGNAL_CATEGORIES,
   EVIDENCE_FIELDS,
 } from "@workspace/signalgrid-core";
-import type { Freshness } from "@workspace/signalgrid-core";
+import type { Freshness, Role } from "@workspace/signalgrid-core";
 
 interface Assertion {
   name: string;
@@ -190,11 +207,16 @@ for (const scenario of scenarios) {
 // sample body moved; the digest function is unchanged. (seed.ts is outside the normalization
 // closure; the same change set bumped the version 9 -> 10 for store.ts, which is inside it.)
 // Was 9347fb8f9ad49d31.
-const LEGACY_SNAPSHOT_DIGEST = "621410dc07677bb2";
+// 2026-09-23 (DR-043 live attach rules): DecisionEvidence gained attachState,
+// enrollmentStrength and credentialReadMethod, so the pinned SAMPLE body moved; the
+// digest function is unchanged and real pre-stamp rows carry their own stored bytes.
+// Recomputed with the core's own digest()/verifySnapshot() over the unstamped body,
+// not hand-picked. Was 621410dc07677bb2.
+const LEGACY_SNAPSHOT_DIGEST = "43b8b1702ae630de";
 const freshSnapshot = core.getSnapshot(T.operator, decisions[0].evidenceSnapshotId);
 
 // The exact shape a pre-stamp row deserializes into: every field the same, no stamp.
-const { coreNormalizationVersion: _omitted, ...legacyFields } = freshSnapshot;
+const { coreNormalizationVersion: _omitted, digestAlg: _alg, ...legacyFields } = freshSnapshot;
 const legacySnapshot = { ...legacyFields, digest: LEGACY_SNAPSHOT_DIGEST };
 
 check(
@@ -214,6 +236,81 @@ check(
     digest: LEGACY_SNAPSHOT_DIGEST,
   }) === false,
 );
+// ── 1c. digest(): WTF-8 bytes, not the low byte of each UTF-16 unit ─────────────
+// Until 2026-09 digest() hashed `charCodeAt(i) & 0xff`, so any two characters sharing a
+// low byte aliased, and deterministicId's bare "|" join was ambiguous. ASCII digests and
+// ids did NOT move (one byte per char either way), which is why the pins above hold.
+check("DIGEST: standard FNV-1a 64 vectors (a, foobar) — ASCII digests are unchanged by the WTF-8 fix",
+  digest("a") === "af63dc4c8601ec8c" && digest("foobar") === "85944171f73967e8");
+check("DIGEST: characters sharing a low byte no longer alias (Alice vs \u0141lice; lone surrogate vs U+FFFD)",
+  digest("Alice") !== digest("\u0141lice") && digest("a\uD800") !== digest("a\uFFFD"));
+check("DIGEST_ALG: the stamped identifier names what digest() actually hashes (\"fnv1a64-wtf8\", not \"-utf8\")",
+  DIGEST_ALG === "fnv1a64-wtf8");
+// For every WELL-FORMED string, WTF-8 and UTF-8 are the same bytes by definition — they
+// diverge only on an unpaired surrogate. So a from-scratch FNV-1a 64 over Node's own
+// TextEncoder (real UTF-8, independent of digest()'s hand-rolled encoder loop) must match
+// digest() exactly across ASCII, Latin-1, CJK and an astral (surrogate-pair) emoji.
+function fnv1a64OverBytes(bytes: Uint8Array): string {
+  const FNV_PRIME = 0x100000001b3n;
+  const MASK = 0xffffffffffffffffn;
+  let hash = 0xcbf29ce484222325n;
+  for (const byte of bytes) {
+    hash = ((hash ^ BigInt(byte)) * FNV_PRIME) & MASK;
+  }
+  return hash.toString(16).padStart(16, "0");
+}
+const WELL_FORMED_DIGEST_SAMPLES = ["hello world", "caf\u00e9", "\u65e5\u672c\u8a9e", "\ud83d\ude00"];
+check("DIGEST: for well-formed strings (ASCII, Latin-1, CJK, astral emoji), digest() matches FNV-1a 64 over TextEncoder's real UTF-8 bytes exactly",
+  WELL_FORMED_DIGEST_SAMPLES.every((s) => digest(s) === fnv1a64OverBytes(new TextEncoder().encode(s))));
+check("IDS: the join is injective — a '|' inside a part, or U+017C (low byte 0x7C), cannot shift a part boundary",
+  deterministicId("dec", "t|a", "b") !== deterministicId("dec", "t", "a|b") &&
+    deterministicId("dec", "t\u017Ca", "b") !== deterministicId("dec", "t", "a", "b"));
+check("IDS: parts with no '|' or '\\' mint the same id as before the fix (dec_4851ac1906a7425e)",
+  deterministicId("dec", "t", "a", "b") === "dec_4851ac1906a7425e");
+// A NON-ASCII row minted by the PRE-FIX code (digest measured with it, not hand-picked):
+// the one shape whose digest the fix moves. It must still verify, via its missing marker.
+const PRE_FIX_ROW = {
+  id: "evid_prefix_row", tenantId: "t-\u0142\u00f3d\u017a", decisionId: "dec_prefix_row",
+  capturedAt: "2026-09-01T00:00:00.000Z", evidence: {} as EvidenceSnapshot["evidence"],
+  signalsUsed: [], policyVersionId: "pv_prefix", policyVersion: 1,
+  sourceReferences: ["fixture:\u0141ukasz"], digest: "277d335d96ad0713",
+} satisfies EvidenceSnapshot;
+check("MIGRATION: a non-ASCII row minted before the fix (no digestAlg) still verifies — no false tamper alarm",
+  verifySnapshot(PRE_FIX_ROW) === true);
+check("MIGRATION: forging the marker onto a pre-fix row fails; an unknown digestAlg fails closed",
+  verifySnapshot({ ...PRE_FIX_ROW, digestAlg: DIGEST_ALG }) === false &&
+    verifySnapshot({ ...PRE_FIX_ROW, digestAlg: "sha256" as unknown as typeof DIGEST_ALG }) === false);
+check("MIGRATION: a snapshot stamped with the OLD name \"fnv1a64-utf8\" verifies false — no row was ever minted under it, and the verifier must not start accepting it",
+  verifySnapshot({ ...freshSnapshot, digestAlg: "fnv1a64-utf8" as unknown as typeof DIGEST_ALG }) === false);
+check("MIGRATION: a fresh snapshot is marked, and stripping the marker (downgrade to the legacy check) fails",
+  freshSnapshot.digestAlg === DIGEST_ALG && verifySnapshot(freshSnapshot) === true &&
+    verifySnapshot({ ...freshSnapshot, digestAlg: undefined }) === false);
+const aliasEdit = (s: string): string => String.fromCharCode(s.charCodeAt(0) + 0x100) + s.slice(1);
+check("TAMPER: a same-low-byte substitution in a MARKED snapshot is now detected",
+  verifySnapshot({ ...freshSnapshot, tenantId: aliasEdit(freshSnapshot.tenantId) }) === false);
+// Part two of the digest/deterministicId check named in BUILD_BACKLOG.md's util.ts row: not
+// the impossible universal no-collisions claim for a 64-bit hash, but a FIXED, literal corpus
+// spanning the alphabets the fix touches — ASCII, Latin-1, CJK, astral (surrogate-pair emoji
+// plus two lone/unpaired halves), and delimiter-bearing strings (`|`, `\`) — asserted pairwise
+// distinct. Against the unpatched (pre-fix) `charCodeAt(i) & 0xff` loop this collides: "Alice"
+// and "Łlice" share every low byte, so DIGEST_COLLISION_CORPUS's Set would shrink.
+const DIGEST_COLLISION_CORPUS = [
+  "", "a", "b", "Alice", "alice", "hello world", "The quick brown fox",
+  "café", "über", "señor", "Łlice", "Łukasz",
+  "日本語", "中文你好", "한국어",
+  "😀", "🎉", "𝄞",
+  "a\ud800", "\ud800", "\udc00", "a�",
+  "t|a", "t\\a", "a|b", "b|a", "a\\|b", "\\|", "|\\",
+];
+check(
+  `DIGEST: a fixed ${DIGEST_COLLISION_CORPUS.length}-member regression corpus (ASCII, Latin-1, CJK, astral, lone surrogates, '|'/'\\\\' strings) digests pairwise-distinct`,
+  new Set(DIGEST_COLLISION_CORPUS.map((s) => digest(s))).size === DIGEST_COLLISION_CORPUS.length,
+);
+check(
+  "IDS: deterministicId over the same corpus (as lone parts) also stays pairwise-distinct",
+  new Set(DIGEST_COLLISION_CORPUS.map((s) => deterministicId("dec", s))).size === DIGEST_COLLISION_CORPUS.length,
+);
+
 check(
   `all three carriers report the version that was actually digested (v${CORE_NORMALIZATION_VERSION})`,
   freshSnapshot.coreNormalizationVersion === CORE_NORMALIZATION_VERSION &&
@@ -346,6 +443,42 @@ expectError("rbac: operator cannot read the audit ledger", "forbidden", () =>
     () => core.listDecisions(connectorToken),
   );
 }
+// registerVerifiedPrincipal validates the role at the boundary (plan row 86): a
+// role outside the five — including inherited Object members, which an `in` check
+// would wrongly accept — is a validation/400 at registration, and the token is
+// never bound, so it cannot surface later as an accepted-then-broken principal.
+// Every inherited Object.prototype member is enumerated, not a hand-picked four, so a
+// deny-list of known-bad names cannot pass where the own-property allow-list is needed.
+// Case and whitespace variants pin EXACT-match semantics: a normalising check would
+// accept "OWNER" here and then fail later on the raw-keyed matrix lookup.
+for (const [badIndex, badRole] of ["superuser", "OWNER", " owner", "owner ", ...Object.getOwnPropertyNames(Object.prototype)].entries()) {
+  const badToken = `sgk_proof_bad_role_${badIndex}`;
+  let status: number | undefined;
+  expectError(
+    `registerVerifiedPrincipal: role "${badRole}" is refused as validation at registration`,
+    "validation",
+    () => {
+      try {
+        return core.registerVerifiedPrincipal(badToken, {
+          tenantId: core.context(T.owner).tenant.id,
+          role: badRole as Role,
+          subjectId: "svc_proof_bad_role",
+          principalType: "service",
+          keyReference: "proof:bad-role",
+        });
+      } catch (err) {
+        if (err instanceof CoreError) status = err.status;
+        throw err;
+      }
+    },
+  );
+  check(`registerVerifiedPrincipal: role "${badRole}" refusal is a 400`, status === 400, `got ${status}`);
+  expectError(
+    `registerVerifiedPrincipal: the "${badRole}" token was never bound (unknown token → unauthorized)`,
+    "unauthorized",
+    () => core.context(badToken),
+  );
+}
 check(
   "rbac: auditor CAN read the audit ledger",
   core.listAudit(T.auditor).length > 0,
@@ -408,6 +541,47 @@ check(
   tamperedChain.valid === false && tamperedChain.brokenAtSeq !== null,
   `brokenAtSeq=${tamperedChain.brokenAtSeq}`,
 );
+
+// ── 6b. THE EVENT-TYPE CENSUS (DR-043, Puck 3) ───────────────────────────────
+//
+// `AuditEventType` was a bare type union: erased at runtime, so nothing could count
+// it and nothing could refuse a string that was not in it. A caller could append
+// "session.hijacked" and the ledger would record it, tamper-evidently, as a member of
+// a vocabulary it is not in. The union is now derived FROM a runtime array, and this
+// is the census that holds the two in step.
+//
+// It must count FOURTEEN — the original six plus the eight the puck lifecycle needs —
+// and it must REFUSE a fifteenth. Both halves: a census that only counts would pass on
+// a tree where any string is admitted.
+check(`audit vocabulary: the ledger names exactly 16 event types (found ${AUDIT_EVENT_TYPES.length})`, AUDIT_EVENT_TYPES.length === 16);
+check("audit vocabulary: no type is named twice", new Set(AUDIT_EVENT_TYPES).size === AUDIT_EVENT_TYPES.length);
+check("audit vocabulary: every member passes its own membership test", AUDIT_EVENT_TYPES.every((t) => isAuditEventType(t)));
+check(`audit vocabulary: the nine puck-lifecycle types are all members (found ${PUCK_LIFECYCLE_EVENT_TYPES.length})`,
+  PUCK_LIFECYCLE_EVENT_TYPES.length === 9 && PUCK_LIFECYCLE_EVENT_TYPES.every((t) => isAuditEventType(t)));
+check("audit vocabulary: the original six survive the extension",
+  ["decision.evaluated", "connector.synced", "policy.version_activated", "evidence.captured", "remediation.requested", "remediation.approved"].every((t) => isAuditEventType(t)));
+check("audit vocabulary: a FIFTEENTH type is not a member", !isAuditEventType("session.hijacked"));
+
+// …and the refusal is not merely advisory: the one writer into the chain enforces it.
+const censusStore = new MemoryStore();
+const censusBase = { tenantId: "t-census", actor: "system", subject: "sub-1", summary: "s", references: [], recordedAt: "2026-06-09T14:00:00.000Z" };
+expectError("audit admission: a type outside the union is refused, not recorded", "validation", () =>
+  appendAudit(censusStore, { ...censusBase, type: "session.hijacked" as never }));
+expectError("audit admission: an event with no subject is refused, not recorded blank", "validation", () =>
+  appendAudit(censusStore, { ...censusBase, type: "decision.evaluated", subject: "   " }));
+expectError("audit admission: a puck-lifecycle event with no decisionId is refused", "validation", () =>
+  appendAudit(censusStore, { ...censusBase, type: "session.suspended" }));
+check("audit admission: three refusals left NOTHING in the chain (a refused event is not a blank row)",
+  censusStore.listAudit("t-census").length === 0);
+const suspended = appendAudit(censusStore, { ...censusBase, type: "session.suspended", decisionId: "dec-census-1" });
+check("audit admission: a puck-lifecycle event WITH a decision is recorded", suspended.type === "session.suspended");
+check("audit admission: the decision it evidences is carried in the chain", suspended.references.includes("dec-census-1"));
+check("audit admission: the chain still verifies after the puck event", verifyAuditChain(censusStore, "t-census").valid === true);
+// The original six must NOT have acquired the stricter rule — their callers carry the
+// decision in `references` already, and a new requirement on them would break chains
+// that are committed.
+const legacyEvent = appendAudit(censusStore, { ...censusBase, type: "connector.synced", references: ["sync-1"] });
+check("audit admission: the original six still admit without a decisionId", legacyEvent.seq === 2);
 
 // ── 7. Determinism ────────────────────────────────────────────────────────────
 
@@ -908,7 +1082,15 @@ if (pending) {
     );
   }
 
+  // PREMISE FIRST — the house style in this file, applied consistently 2026-09-06.
+  // Six `const x = decisions.find(...); if (x) { …assertions… }` blocks had no premise
+  // check (this one, IDENTITY_DISABLED, TAMPER_SUSPECTED, BATTERY_CRITICAL, and
+  // TRUST_ESTABLISHED twice), so roughly ten assertions would have vanished WITHOUT A
+  // TRACE the day the subject decision stopped being produced — surfacing, if at all,
+  // as a docs↔proof figure mismatch in a different gate. Every neighbouring block
+  // already guarded its premise; this was an inconsistency inside one file, not a style.
   const ncDec = decisions.find((d) => d.reasonCodes.includes("DEVICE_NONCOMPLIANT"));
+  check("resolution: non-compliant decision found", Boolean(ncDec));
   if (ncDec) {
     const plan = core.getResolution(T.operator, ncDec.id);
     check(
@@ -926,6 +1108,7 @@ if (pending) {
   }
 
   const disDec = decisions.find((d) => d.reasonCodes.includes("IDENTITY_DISABLED"));
+  check("resolution: disabled-identity decision found", Boolean(disDec));
   if (disDec) {
     const plan = core.getResolution(T.operator, disDec.id);
     check(
@@ -986,6 +1169,7 @@ if (pending) {
   }
 
   const tamper = decisions.find((d) => d.reasonCodes.includes("TAMPER_SUSPECTED"));
+  check("dockbridge: suspected-tamper decision found", Boolean(tamper));
   if (tamper) {
     const plan = core.getResolution(T.operator, tamper.id);
     check(
@@ -995,6 +1179,7 @@ if (pending) {
   }
 
   const battery = decisions.find((d) => d.reasonCodes.includes("BATTERY_CRITICAL"));
+  check("dockbridge: battery-critical decision found", Boolean(battery));
   if (battery) {
     const sim = core.simulateResolution(T.operator, battery.id);
     check(
@@ -1383,9 +1568,12 @@ if (pending) {
     gathered[0].id === "s_new" && gathered[1].id === "s_old",
   );
 
-  // Tie-break: on EQUAL observedAt, the first-inserted signal wins — matching a
-  // stable descending sort's first element. Insert in both orders on separate
-  // stores and assert the derived compliance is stable (first-inserted's value).
+  // Tie: on EQUAL observedAt, WORST WINS, in either insertion order (2026-09-05,
+  // eighth verdict-core round). The previous rule — "the first-inserted signal
+  // wins" — was asserted here as a feature, and it was array order deciding the
+  // answer: `compliant` then `non_compliant` derived compliant, the reverse derived
+  // non_compliant. Two readings of one category at one instant have an equal claim
+  // to be current, so neither may be dropped for the other.
   const sameTs = "2026-07-13T12:00:00.000Z";
   const tie = (first: string, second: string): string => {
     const s = new MemoryStore();
@@ -1395,10 +1583,40 @@ if (pending) {
     return buildEvidence(identity, dev, workflow, s.listSignalsForSubject("tenant_a", "device", "dv_x")).deviceCompliance;
   };
   check(
-    "index: equal-observedAt tie resolves to the first-inserted signal",
-    tie("compliant", "non_compliant") === "compliant" &&
+    "index: an equal-observedAt tie resolves WORST-WINS regardless of insertion order",
+    tie("compliant", "non_compliant") === "non_compliant" &&
       tie("non_compliant", "compliant") === "non_compliant",
   );
+  check("index: a tie between two good readings stays good (a twin changes nothing)", tie("compliant", "compliant") === "compliant");
+  // A strictly NEWER reading still replaces both halves of an older tie: the tie
+  // was at the old instant, and a current good reading is the answer.
+  {
+    const s = new MemoryStore();
+    s.putDevice(dev);
+    s.putSignal(mk("t_old_bad", "non_compliant", sameTs));
+    s.putSignal(mk("t_old_good", "compliant", sameTs));
+    s.putSignal(mk("t_new", "compliant", "2026-07-13T13:00:00.000Z"));
+    check(
+      "index: a strictly newer reading replaces an older tie (the tie does not outlive its instant)",
+      buildEvidence(identity, dev, workflow, s.listSignalsForSubject("tenant_a", "device", "dv_x")).deviceCompliance === "compliant",
+    );
+  }
+  // The same rule on the freshness axis: two posture_freshness readings at one
+  // instant, one fresh and one stale, read stale in either order.
+  {
+    const mkF = (id: string, value: string, order: number): NormalizedSignal => ({
+      id, tenantId: "tenant_a", connectorId: "c", subjectType: "device", subjectId: "dv_x",
+      category: "posture_freshness", value, observedAt: sameTs, freshness: "fresh", sourceReference: `fixture-${order}`,
+    });
+    const fr = (first: string, second: string): string => {
+      const s = new MemoryStore();
+      s.putDevice(dev);
+      s.putSignal(mkF("f_a", first, 1));
+      s.putSignal(mkF("f_b", second, 2));
+      return buildEvidence(identity, dev, workflow, s.listSignalsForSubject("tenant_a", "device", "dv_x")).postureFreshness;
+    };
+    check("index: an equal-observedAt freshness tie resolves worst-wins in either order", fr("fresh", "stale") === "stale" && fr("stale", "fresh") === "stale");
+  }
 }
 
 // ── 18. Badge-reader case: identity↔device binding as a decision dimension ────
@@ -1431,6 +1649,7 @@ if (pending) {
   // A bound badge is a positive signal that never blocks on its own; an unknown
   // badge (no reader) never fabricates a healthy state.
   const bound = decisions.find((d) => d.reasonCodes.includes("TRUST_ESTABLISHED"));
+  check("badge: a TRUST_ESTABLISHED decision exists to check the badge on", Boolean(bound));
   if (bound) {
     const snap = core.getSnapshot(T.operator, bound.evidenceSnapshotId);
     check("badge: a healthy allow carries a present (bound) badge", snap.evidence.badgeBinding === "present");
@@ -1491,6 +1710,7 @@ if (pending) {
 
   // A healthy allow carries an occupied dock; an unknown dock never fabricates one.
   const bound = decisions.find((d) => d.reasonCodes.includes("TRUST_ESTABLISHED"));
+  check("smartdock: a TRUST_ESTABLISHED decision exists to check the dock state on", Boolean(bound));
   if (bound) {
     const snap = core.getSnapshot(T.operator, bound.evidenceSnapshotId);
     check("smartdock: a healthy allow carries an occupied dock state", snap.evidence.dockState === "occupied");
@@ -1840,6 +2060,69 @@ for (const [fromRow, fromSignal, want, why] of [
 }
 
 
+
+// ── MEMORY BOUND (F6e): step-up answers are evicted WITH their decision ─────────
+// A read-side filter alone would pass the first check and leave the map growing, so
+// the second check counts the collection itself.
+{
+  const answered = SignalGridCore.demo(undefined, { maxDecisionsPerTenant: 1 });
+  const answeredStore = (answered as unknown as { store: MemoryStore }).store;
+  const stepUpIds: string[] = [];
+  for (let i = 0; i < 3; i += 1) {
+    const d = answered.evaluate(T.operator, { identityRef: "nurse.stale", deviceRef: "ipad-ward-03", workflowKey: "clinical-session" });
+    if (d.outcome === "step_up") {
+      answered.answerStepUp(T.operator, d.decisionId, { credentialReference: `cred_${i}` });
+      stepUpIds.push(d.decisionId);
+    }
+  }
+  check("step-up eviction: three step_up decisions were each answered (floor, so the checks below measure real rows)", stepUpIds.length === 3);
+  // Count BEFORE any read: a getStepUpAnswer that lazily dropped dead rows would otherwise
+  // empty the map before it is measured, and a store with no eviction delete would pass.
+  const answeredCount = answeredStore.stepUpAnswerCount();
+  check("step-up eviction: an answer is unreadable once its decision has been evicted",
+    answered.getStepUpAnswer(T.operator, stepUpIds[0]) === undefined && answered.getStepUpAnswer(T.operator, stepUpIds[1]) === undefined);
+  check("step-up eviction: the newest decision keeps its answer", answered.getStepUpAnswer(T.operator, stepUpIds[2])?.decisionId === stepUpIds[2]);
+  check(`step-up eviction: the stepUpAnswers collection itself holds exactly 1 answer, not 3 (got ${answeredCount})`,
+    answeredCount === 1);
+
+  // A RETAINED decision must keep its answer. Bound 2, answers minted out of decision
+  // order (d1 before d0), then a third decision evicts d0 only: a mutant that wipes every
+  // answer on each eviction, or gives answers their own FIFO, turns this red.
+  const retained = SignalGridCore.demo(undefined, { maxDecisionsPerTenant: 2 });
+  const retainedStore = (retained as unknown as { store: MemoryStore }).store;
+  const stale = { identityRef: "nurse.stale", deviceRef: "ipad-ward-03", workflowKey: "clinical-session" };
+  const d0 = retained.evaluate(T.operator, stale);
+  const d1 = retained.evaluate(T.operator, stale);
+  retained.answerStepUp(T.operator, d1.decisionId, { credentialReference: "cred_d1" });
+  retained.answerStepUp(T.operator, d0.decisionId, { credentialReference: "cred_d0" });
+  const d2 = retained.evaluate(T.operator, stale);
+  const retainedCount = retainedStore.stepUpAnswerCount(); // before any read, as above
+  check("step-up eviction (bound 2): the evicted decision's answer is gone", retained.getStepUpAnswer(T.operator, d0.decisionId) === undefined);
+  check("step-up eviction (bound 2): the RETAINED decision keeps its answer", retained.getStepUpAnswer(T.operator, d1.decisionId)?.credentialReference === "cred_d1");
+  check(`step-up eviction (bound 2): the collection holds exactly the retained decision's answer (got ${retainedCount})`,
+    retainedCount === 1 && d2.outcome === "step_up");
+  let secondAccepted = true;
+  try { retained.answerStepUp(T.operator, d1.decisionId, { credentialReference: "replay" }); } catch { secondAccepted = false; }
+  check("step-up eviction (bound 2): a second answer for the retained decision is still refused (replay guard intact)", secondAccepted === false);
+
+  // Tenant isolation of the eviction: one tenant's FIFO must never touch another tenant's
+  // answers. Decisions are cloned from a real one so the store is exercised directly.
+  const template = retained.listDecisions(T.operator)[0];
+  const tenantStore = new MemoryStore({ maxDecisionsPerTenant: 1 });
+  const putAnswered = (tenantId: string, id: string): void => {
+    tenantStore.putDecision({ ...template, id, tenantId, evidenceSnapshotId: `snap_${id}` });
+    tenantStore.putStepUpAnswer({ id: `sua_${id}`, tenantId, decisionId: id, identityId: template.identityId, method: "webauthn", credentialReference: `cred_${id}`, answeredAt: "2026-01-01T00:00:00.000Z" });
+  };
+  putAnswered("tenant_atlas", "dec_atlas_1");
+  putAnswered("tenant_northwind", "dec_nw_1");
+  putAnswered("tenant_northwind", "dec_nw_2"); // evicts dec_nw_1 only
+  const tenantCount = tenantStore.stepUpAnswerCount(); // before any read
+  check("step-up eviction (tenants): one tenant's eviction removes only its own answer",
+    tenantStore.getStepUpAnswer("tenant_northwind", "dec_nw_1") === undefined
+      && tenantStore.getStepUpAnswer("tenant_northwind", "dec_nw_2")?.credentialReference === "cred_dec_nw_2");
+  check(`step-up eviction (tenants): another tenant's answer survives (collection holds 2, got ${tenantCount})`,
+    tenantStore.getStepUpAnswer("tenant_atlas", "dec_atlas_1")?.credentialReference === "cred_dec_atlas_1" && tenantCount === 2);
+}
 
 // ── MEMORY BOUND (F6): the in-process store must not grow without limit ─────────
 // A bound of 3 makes the eviction observable in a handful of evaluates. FIFO by
@@ -2512,8 +2795,10 @@ for (const [fromRow, fromSignal, want, why] of [
     sig("tamper_state", "none", { observedAt: ILLEGIBLE_AT }),
   ]);
   check(
-    "f-a: an affirmative-GOOD value with an unorderable stamp is downgraded — tamper_state 'none' reads 'unknown', not 'none', and the decision does not reach allow",
-    goodIllegible.evidence.tamperState === "unknown" && goodIllegible.outcome !== "allow",
+    // DR-065: the floor is now "unreadable" (an EMITTED reading that cannot vouch),
+    // not the silence value "unknown" — the stricter of the two, and it steps up.
+    "f-a: an affirmative-GOOD value with an unorderable stamp is downgraded — tamper_state 'none' reads 'unreadable' (DR-065), not 'none', and the decision does not reach allow",
+    goodIllegible.evidence.tamperState === "unreadable" && goodIllegible.outcome !== "allow",
     `tamperState=${goodIllegible.evidence.tamperState} outcome=${goodIllegible.outcome}`,
   );
   check(
@@ -2630,8 +2915,8 @@ for (const [fromRow, fromSignal, want, why] of [
     sig("tamper_state", "none", { id: "sig_f1_peer_h2", observedAt: ILLEGIBLE_AT }),
   ]);
   check(
-    "f-1: two illegible readings that both say 'none' still cannot vouch — tamperState reads 'unknown' and the decision does not reach allow",
-    allGoodPeers.evidence.tamperState === "unknown" && allGoodPeers.outcome !== "allow",
+    "f-1: two illegible readings that both say 'none' still cannot vouch — tamperState reads 'unreadable' (DR-065) and the decision does not reach allow",
+    allGoodPeers.evidence.tamperState === "unreadable" && allGoodPeers.outcome !== "allow",
     `tamperState=${allGoodPeers.evidence.tamperState} outcome=${allGoodPeers.outcome}`,
   );
 
@@ -2829,6 +3114,12 @@ const monotonicityTable: string[] = [];
     sig("device_encryption", true),
     sig("os_support", true),
     sig("posture_freshness", "fresh"),
+    // DR-043: a strong-enrolled worker read by their strong credential — the real
+    // happy path, and REQUIRED for scope: credential-downgrade is a TWO-condition
+    // rule, so a single-field probe can reach it only from a base that already
+    // holds the other half (see the conjunction escalation below).
+    sig("enrollment_strength", "strong"),
+    sig("credential_read_method", "strong"),
   ];
   const healthyEvidence = buildEvidence(identity, device, workflow, healthy);
   // The live v1 rule set, so the verdict dimension below is measured through the
@@ -3022,22 +3313,459 @@ const monotonicityTable: string[] = [];
       domain: EVIDENCE_VALUE_DOMAINS.localAuthority,
       reading: (m, at) => sig("local_authority", m as string, { observedAt: at }),
     },
+    {
+      field: "attachState",
+      category: "attach_state",
+      domain: EVIDENCE_VALUE_DOMAINS.attach,
+      reading: (m, at) => sig("attach_state", m as string, { observedAt: at }),
+    },
+    {
+      field: "enrollmentStrength",
+      category: "enrollment_strength",
+      domain: EVIDENCE_VALUE_DOMAINS.enrollment,
+      reading: (m, at) => sig("enrollment_strength", m as string, { observedAt: at }),
+    },
+    {
+      field: "credentialReadMethod",
+      category: "credential_read_method",
+      domain: EVIDENCE_VALUE_DOMAINS.readMethod,
+      reading: (m, at) => sig("credential_read_method", m as string, { observedAt: at }),
+    },
   ];
+
+  // ── DR-043 on the LIVE path: the attach matrix's rows, pinned by VERDICT ──────
+  //
+  // `puckVerdict` (attach.ts) grades the matrix; SHARED_DEVICE_RULES_V1 is what /v1
+  // runs. These pins hold the live half to the same answers, and the parity rows at
+  // the end hold the two matrices to EACH OTHER — two unconnected matrices is exactly
+  // how PR #753 and #864 drifted apart.
+  {
+    // (a) The three readers: silence is `not_applicable`, a present-but-unreadable
+    // reading is `unknown`. `readEnum` answers undefined for both, so `.has()` is
+    // what keeps a garbled reading from riding the day-one-quiet default.
+    const absentAll = buildEvidence(identity, device, workflow, []);
+    const credentialReaders: [keyof DecisionEvidence, SignalCategory][] = [
+      ["attachState", "attach_state"],
+      ["enrollmentStrength", "enrollment_strength"],
+      ["credentialReadMethod", "credential_read_method"],
+    ];
+    for (const [field, category] of credentialReaders) {
+      check(
+        `22 DR-043 present-but-out-of-domain ${category} (string) → ${String(field)}='unknown', not 'not_applicable' — a garbled reading raises`,
+        buildEvidence(identity, device, workflow, [sig(category, "not_a_real_member")])[field] === "unknown",
+      );
+      check(
+        `22 DR-043 present-but-non-string ${category} → ${String(field)}='unknown'`,
+        buildEvidence(identity, device, workflow, [sig(category, 7)])[field] === "unknown",
+      );
+      check(
+        `22 DR-043 absent ${category} → ${String(field)}='not_applicable' (true silence stays quiet)`,
+        absentAll[field] === "not_applicable",
+      );
+    }
+
+    // Posture only — no credential signals — so each pin states exactly its own.
+    const posture = healthy.filter(
+      (s) => !["attach_state", "enrollment_strength", "credential_read_method"].includes(s.category),
+    );
+    const live = (signals: NormalizedSignal[]) => {
+      const evidence = buildEvidence(identity, device, workflow, [...posture, ...signals]);
+      return { evidence, evaluation: evaluatePolicy(monoV1, evidence) };
+    };
+    const E = (value: string, at = VALID_AT) => sig("enrollment_strength", value, { observedAt: at });
+    const R = (value: string, at = VALID_AT) => sig("credential_read_method", value, { observedAt: at });
+    const A = (value: string, at = VALID_AT) => sig("attach_state", value, { observedAt: at });
+
+    // (b) The downgrade row.
+    const strongLegacy = live([E("strong"), R("legacy_125khz")]).evaluation;
+    check(
+      `22 DR-043 strong enrollment + legacy_125khz read → deny CREDENTIAL_DOWNGRADE (got ${strongLegacy.outcome})`,
+      strongLegacy.outcome === "deny" && strongLegacy.reasonCodes.includes("CREDENTIAL_DOWNGRADE"),
+    );
+    const legacyLegacy = live([E("legacy_125khz"), R("legacy_125khz")]).evaluation;
+    check(
+      `22 DR-043 legacy enrollment + legacy read → allow (no downgrade: it is the only credential they hold) (got ${legacyLegacy.outcome})`,
+      legacyLegacy.outcome === "allow",
+    );
+    const strongStrong = live([E("strong"), R("strong")]).evaluation;
+    check(
+      `22 DR-043 strong enrollment + strong read → allow (got ${strongStrong.outcome})`,
+      strongStrong.outcome === "allow",
+    );
+
+    // (b2) THE WHOLE GRID, 16 cells (owner call 4; golden rule 2). Enrollment and
+    // read method come from different planes, so either can be strong, legacy,
+    // present-but-unreadable (`unknown`) or silent (`not_applicable`) while the other
+    // speaks. Where a strong→legacy downgrade cannot be RULED OUT the gate steps up;
+    // only any×strong, legacy×legacy, legacy×n/a and n/a×n/a allow. `unknown` goes
+    // over the wire as a value outside the domain and n/a as NOTHING, so every cell
+    // is reached through buildEvidence, never written into the evidence by hand.
+    const LEGACY = "legacy_125khz" as const;
+    const NA = "not_applicable" as const;
+    type Strength = "strong" | typeof LEGACY | "unknown" | typeof NA;
+    const emit = (make: (value: string) => NormalizedSignal, value: Strength) => (value === NA ? [] : [make(value)]);
+    const UNKNOWN_CODE = "CREDENTIAL_STRENGTH_UNKNOWN";
+    const GRID: [Strength, Strength, DecisionOutcome, string][] = [
+      ["strong", "strong", "allow", "TRUST_ESTABLISHED"],
+      ["strong", LEGACY, "deny", "CREDENTIAL_DOWNGRADE"],
+      ["strong", "unknown", "step_up", UNKNOWN_CODE],
+      ["strong", NA, "step_up", UNKNOWN_CODE],
+      [LEGACY, "strong", "allow", "TRUST_ESTABLISHED"],
+      [LEGACY, LEGACY, "allow", "TRUST_ESTABLISHED"],
+      [LEGACY, "unknown", "step_up", UNKNOWN_CODE],
+      [LEGACY, NA, "allow", "TRUST_ESTABLISHED"],
+      ["unknown", "strong", "allow", "TRUST_ESTABLISHED"],
+      ["unknown", LEGACY, "step_up", UNKNOWN_CODE],
+      ["unknown", "unknown", "step_up", UNKNOWN_CODE],
+      ["unknown", NA, "step_up", UNKNOWN_CODE],
+      [NA, "strong", "allow", "TRUST_ESTABLISHED"],
+      [NA, LEGACY, "step_up", UNKNOWN_CODE],
+      [NA, "unknown", "step_up", UNKNOWN_CODE],
+      [NA, NA, "allow", "TRUST_ESTABLISHED"],
+    ];
+    check(
+      `22 DR-043 GRID covers the full 4×4 enrollment × read space, each cell once (${GRID.length} cells)`,
+      GRID.length === 16 && new Set(GRID.map(([e, r]) => `${e}|${r}`)).size === 16,
+    );
+    for (const [enrolled, read, outcome, code] of GRID) {
+      const cell = live([...emit(E, enrolled), ...emit(R, read)]);
+      check(
+        `22 DR-043 GRID enrollment=${enrolled} × read=${read} → ${outcome} ${code} (got ${cell.evaluation.outcome}/[${cell.evaluation.reasonCodes.join(",")}])`,
+        cell.evidence.enrollmentStrength === enrolled &&
+          cell.evidence.credentialReadMethod === read &&
+          cell.evaluation.outcome === outcome &&
+          cell.evaluation.reasonCodes.includes(code) &&
+          // The step-up code fires on its eight cells and NOWHERE else — not beside the
+          // deny, and never on a cell that allows.
+          cell.evaluation.reasonCodes.includes(UNKNOWN_CODE) === (code === UNKNOWN_CODE),
+      );
+    }
+    // Worst-wins still holds across multiple readings: a same-instant strong+legacy
+    // READ pair resolves to legacy whatever order it arrived in, so with an unreadable
+    // enrollment it steps up rather than riding the strong read to an allow.
+    for (const [label, pair] of [
+      ["strong first", [R("strong"), R(LEGACY)]],
+      ["legacy first", [R(LEGACY), R("strong")]],
+    ] as const) {
+      const tied = live([E("unknown"), ...pair]);
+      check(
+        `22 DR-043 tied same-instant read strong+legacy (${label}) with an unreadable enrollment → step_up ${UNKNOWN_CODE} (got ${tied.evaluation.outcome}, read=${tied.evidence.credentialReadMethod})`,
+        tied.evaluation.outcome === "step_up" &&
+          tied.evidence.credentialReadMethod === LEGACY &&
+          tied.evaluation.reasonCodes.includes(UNKNOWN_CODE),
+      );
+    }
+
+    // (c) THE ENROLLMENT-DOMAIN FIX over #753. Strong enrollment is the ACCUSING half
+    // of this rule, so it must survive worst-wins resolution. With #753's
+    // `good: ["strong"]` a same-instant strong+legacy pair resolved to legacy and a
+    // lone strong with an illegible stamp floored to unknown — both ALLOWED a
+    // downgrade. Both orders of the tie are pinned, so array order cannot pick it.
+    for (const [label, pair] of [
+      ["strong first", [E("strong"), E("legacy_125khz")]],
+      ["legacy first", [E("legacy_125khz"), E("strong")]],
+    ] as const) {
+      const tied = live([...pair, R("legacy_125khz")]);
+      check(
+        `22 DR-043 FIX: tied same-instant enrollment strong+legacy (${label}) with a legacy read → deny (got ${tied.evaluation.outcome}, enrollment=${tied.evidence.enrollmentStrength})`,
+        tied.evaluation.outcome === "deny" && tied.evidence.enrollmentStrength === "strong",
+      );
+    }
+    // Asserted as DENY, stronger than "not allow": only the enrollment reading is
+    // illegible here and enrollment is not dock-family, so no freshness backstop can
+    // make this pass for the wrong reason — the verdict turns on the domain alone.
+    const illegibleStrong = live([E("strong", ILLEGIBLE_AT), R("legacy_125khz")]);
+    check(
+      `22 DR-043 FIX: a lone strong enrollment with an illegible stamp + legacy read → NOT allow (deny; got ${illegibleStrong.evaluation.outcome}, enrollment=${illegibleStrong.evidence.enrollmentStrength})`,
+      illegibleStrong.evaluation.outcome === "deny",
+    );
+
+    // (d) The attach rows.
+    const removedRow = live([A("removed")]).evaluation;
+    check(
+      `22 DR-043 attach removed → restrict CUSTODY_REMOVED (got ${removedRow.outcome})`,
+      removedRow.outcome === "restrict" && removedRow.reasonCodes.includes("CUSTODY_REMOVED"),
+    );
+    const unknownRow = live([A("unknown")]).evaluation;
+    check(
+      `22 DR-043 attach unknown → step_up CUSTODY_UNKNOWN, never a grant (got ${unknownRow.outcome})`,
+      unknownRow.outcome === "step_up" && unknownRow.reasonCodes.includes("CUSTODY_UNKNOWN"),
+    );
+    const notApplicable = live([]);
+    check(
+      `22 DR-043 attach not_applicable (nothing sent) → allow (got ${notApplicable.evaluation.outcome}, attach=${notApplicable.evidence.attachState})`,
+      notApplicable.evaluation.outcome === "allow" && notApplicable.evidence.attachState === "not_applicable",
+    );
+    const garbled = live([A("seated-ish")]);
+    check(
+      `22 DR-043 present-but-garbled attach_state through buildEvidence→evaluatePolicy → step_up (got ${garbled.evaluation.outcome}, attach=${garbled.evidence.attachState})`,
+      garbled.evaluation.outcome === "step_up" && garbled.evidence.attachState === "unknown",
+    );
+    for (const [label, pair] of [
+      ["removed first", [A("removed"), A("unknown")]],
+      ["unknown first", [A("unknown"), A("removed")]],
+    ] as const) {
+      const tied = live([...pair]).evaluation;
+      check(
+        `22 DR-043 tied same-instant attach removed+unknown (${label}) → restrict whatever the order (got ${tied.outcome})`,
+        tied.outcome === "restrict",
+      );
+    }
+
+    // (e) CROSS-MATRIX PARITY. For every overlapping row, attach.ts's puckVerdict and
+    // the live SHARED_DEVICE_RULES_V1 give the same verdict (and the matrix's reason
+    // code is among the live ones). The situation is otherwise fully confirmed so the
+    // row under test is the only thing either matrix can see.
+    const confirmed: PuckSituation = {
+      attach: "attached",
+      forced: false,
+      release: "not_applicable",
+      returned: "not_applicable",
+      identityConfirmed: true,
+      postureCompliant: true,
+      credentialStanding: "valid",
+      readStrength: "strong",
+      enrolledStrength: "strong",
+      higherRiskAction: false,
+      presenceRadioLost: false,
+      inactive: false,
+      redockPendingReevaluation: false,
+    };
+    const PARITY_ROWS: { row: string; puck: Partial<PuckSituation>; signals: NormalizedSignal[] }[] = [
+      { row: "downgrade", puck: { readStrength: "legacy_125khz" }, signals: [A("attached"), E("strong"), R("legacy_125khz")] },
+      { row: "removed", puck: { attach: "removed" }, signals: [A("removed"), E("strong"), R("strong")] },
+      { row: "unknown", puck: { attach: "unknown" }, signals: [A("unknown"), E("strong"), R("strong")] },
+      { row: "downgrade + removed", puck: { attach: "removed", readStrength: "legacy_125khz" }, signals: [A("removed"), E("strong"), R("legacy_125khz")] },
+      { row: "control: seated, strong/strong", puck: {}, signals: [A("attached"), E("strong"), R("strong")] },
+      // The rest of the 3×3 the two matrices share (puckVerdict has no not_applicable,
+      // so those seven cells are pinned by the GRID above only). Built from GRID so a
+      // cell cannot be pinned on one side and forgotten on the other.
+      ...GRID.filter(
+        ([e, r]) => e !== NA && r !== NA && !(e === "strong" && (r === "strong" || r === LEGACY)),
+      ).map(([e, r]) => ({
+        row: `grid enrollment=${e} × read=${r}`,
+        puck: { enrolledStrength: e, readStrength: r } as Partial<PuckSituation>,
+        signals: [A("attached"), E(e), R(r)],
+      })),
+    ];
+    // Coverage is asserted on the cells themselves, not on a row count: every
+    // enrollment × read pair outside not_applicable appears in some PARITY row.
+    const sharedCells = GRID.filter(([e, r]) => e !== NA && r !== NA).map(([e, r]) => `${e}|${r}`);
+    const coveredCells = new Set(
+      PARITY_ROWS.map(({ puck }) => {
+        const s = { ...confirmed, ...puck };
+        return `${s.enrolledStrength}|${s.readStrength}`;
+      }),
+    );
+    check(
+      `22 DR-043 PARITY covers every one of the ${sharedCells.length} cells the two matrices share (${PARITY_ROWS.length - 5} grid-derived rows + 5 hand-written rows: downgrade, removed, unknown, downgrade+removed, control)`,
+      sharedCells.length === 9 && sharedCells.every((c) => coveredCells.has(c)),
+    );
+    for (const { row, puck, signals } of PARITY_ROWS) {
+      const matrix = puckVerdict({ ...confirmed, ...puck });
+      const gate = live(signals).evaluation;
+      check(
+        `22 DR-043 PARITY ${row}: puckVerdict ${matrix.verdict}/${matrix.reasonCode} === live gate ${gate.outcome}/[${gate.reasonCodes.join(",")}]`,
+        matrix.verdict === gate.outcome &&
+          (matrix.verdict === "allow" || gate.reasonCodes.includes(matrix.reasonCode)),
+      );
+    }
+  }
+
+  // (f) END TO END through the dock connector: runDockSync → buildEvidence →
+  // evaluatePolicy. A removal reported by the dock restricts; a record that carries
+  // no attach read emits no attach_state signal at all (absence stays absent).
+  {
+    const clk = fixedClock("2026-07-13T15:00:00.000Z");
+    const throughDock = (attach: AttachState | undefined) => {
+      const seeded = seedDemoStore(clk);
+      const store = seeded.store;
+      const tenantId = seeded.tenants.northwind;
+      const conn = store.listConnectors(tenantId).find((c) => c.kind === "dockbridge-custody");
+      const rec = conn ? seeded.dockRecords[conn.id]?.find((r) => r.deviceRef === "ipad-ward-01") : undefined;
+      const dev = store.findDeviceByRef(tenantId, "ipad-ward-01");
+      const idn = store.findIdentityByRef(tenantId, "nurse.compliant");
+      const wf = store.findWorkflowByKey(tenantId, "clinical-session");
+      if (!conn || !rec || !dev || !idn || !wf) return undefined;
+      const { attachState: _seeded, ...bare } = rec;
+      runDockSync(store, clk, conn, [attach === undefined ? bare : { ...bare, attachState: attach }]);
+      const signals = [
+        ...store.listSignalsForSubject(tenantId, "identity", idn.id),
+        ...store.listSignalsForSubject(tenantId, "device", dev.id),
+      ];
+      const evidence = buildEvidence(idn, dev, wf, signals);
+      return { signals, evidence, evaluation: evaluatePolicy(monoV1, evidence) };
+    };
+    const removedE2E = throughDock("removed");
+    check(
+      `22 DR-043 e2e: a dock record reporting removed → runDockSync→buildEvidence→evaluatePolicy → restrict CUSTODY_REMOVED (got ${removedE2E?.evaluation.outcome})`,
+      removedE2E !== undefined &&
+        removedE2E.evidence.attachState === "removed" &&
+        removedE2E.evaluation.outcome === "restrict" &&
+        removedE2E.evaluation.reasonCodes.includes("CUSTODY_REMOVED"),
+    );
+    const silentE2E = throughDock(undefined);
+    check(
+      `22 DR-043 e2e: a dock record with no attachState emits NO attach_state signal and reads not_applicable (got ${silentE2E?.evidence.attachState}, ${silentE2E?.evaluation.outcome})`,
+      silentE2E !== undefined &&
+        !silentE2E.signals.some((s) => s.category === "attach_state") &&
+        silentE2E.evidence.attachState === "not_applicable" &&
+        silentE2E.evaluation.outcome === "allow",
+    );
+  }
+
+  // ── DR-065 (PROPOSED): an EMITTED-but-unreadable dock-family reading steps up ──
+  //
+  // Owner decision 2026-11-03 on raised hand 2026-09-25-policy-ts-v1-stays-silent-
+  // on-an-emitted-present- (option a). Before DR-065 every dock-family reader folded
+  // an out-of-domain value to the SILENCE value "unknown", no v1 rule matched it, and
+  // a fresh `tamper_state: "garbled"` ALLOWED while the identical shape on attach_state
+  // stepped up. These pins fail on that code and hold the split: silence stays
+  // "unknown" and quiet; an emitted reading nothing can be read from is "unreadable"
+  // and steps up with DOCK_EVIDENCE_UNREADABLE — and an affirmative accusation in a
+  // same-instant twin still beats it.
+  {
+    const DOCK_FAMILY: [keyof DecisionEvidence, SignalCategory, string, string][] = [
+      // field, category, an accusing member, the rule id that steps it up
+      ["custodyState", "custody_state", "exception", "custody-unreadable"],
+      ["dockChargeState", "charge_state", "critical", "charge-unreadable"],
+      ["batteryHealth", "battery_health", "failing", "battery-health-unreadable"],
+      ["tamperState", "tamper_state", "confirmed", "tamper-unreadable"],
+      ["dockState", "dock_state", "faulted", "dock-unreadable"],
+      ["badgeBinding", "badge_binding", "forced", "badge-unreadable"],
+    ];
+    const at = (signals: NormalizedSignal[], rules = SHARED_DEVICE_RULES_V1) => {
+      const evidence = buildEvidence(identity, device, workflow, [...healthy, ...signals]);
+      return { evidence, evaluation: evaluatePolicy({ ...monoV1, rules }, evidence) };
+    };
+    // A custom rule set an owner could activate: v1 with every DR-065 row removed.
+    // The backstop (deriveCriticalSignalsPresent) must still keep it from allowing.
+    const withoutDr065 = SHARED_DEVICE_RULES_V1.filter((r) => !r.id.endsWith("-unreadable"));
+    check(
+      "22 DR-065 v1 carries exactly six *-unreadable rows, all step_up DOCK_EVIDENCE_UNREADABLE",
+      SHARED_DEVICE_RULES_V1.length - withoutDr065.length === 6 &&
+        SHARED_DEVICE_RULES_V1.filter((r) => r.id.endsWith("-unreadable")).every(
+          (r) => r.outcome === "step_up" && r.reasonCode === "DOCK_EVIDENCE_UNREADABLE",
+        ),
+    );
+    const silent = at([]);
+    for (const [field, category, accusing, ruleId] of DOCK_FAMILY) {
+      const garbled = at([sig(category, "garbled-out-of-domain")]);
+      check(
+        `22 DR-065 emitted out-of-domain ${category} → ${String(field)}='unreadable' → step_up DOCK_EVIDENCE_UNREADABLE via ${ruleId} (got ${String(garbled.evidence[field])}, ${garbled.evaluation.outcome} [${garbled.evaluation.reasonCodes.join(",")}])`,
+        garbled.evidence[field] === "unreadable" &&
+          garbled.evaluation.outcome === "step_up" &&
+          garbled.evaluation.reasonCodes.includes("DOCK_EVIDENCE_UNREADABLE") &&
+          garbled.evaluation.matchedRules.some((m) => m.ruleId === ruleId),
+      );
+      const nonString = at([sig(category, 7)]);
+      check(
+        `22 DR-065 emitted non-string ${category} → step_up, never allow (got ${String(nonString.evidence[field])}, ${nonString.evaluation.outcome})`,
+        nonString.evidence[field] === "unreadable" && nonString.evaluation.outcome === "step_up",
+      );
+      const wireUnknown = at([sig(category, "unknown")]);
+      check(
+        `22 DR-065 an emitted literal "unknown" ${category} is not a member and is not silence → step_up (got ${wireUnknown.evaluation.outcome})`,
+        wireUnknown.evidence[field] === "unreadable" && wireUnknown.evaluation.outcome === "step_up",
+      );
+      check(
+        `22 DR-065 SILENCE: no ${category} at all → ${String(field)}='unknown' and allow TRUST_ESTABLISHED (day-one-quiet unchanged; got ${String(silent.evidence[field])}, ${silent.evaluation.outcome})`,
+        silent.evidence[field] === "unknown" &&
+          silent.evaluation.outcome === "allow" &&
+          silent.evaluation.reasonCodes.includes("TRUST_ESTABLISHED"),
+      );
+      for (const [label, pair] of [
+        ["accusation first", [sig(category, accusing, { id: `sig_dr065_${category}_a` }), sig(category, "garbled", { id: `sig_dr065_${category}_b` })]],
+        ["garbled first", [sig(category, "garbled", { id: `sig_dr065_${category}_b` }), sig(category, accusing, { id: `sig_dr065_${category}_a` })]],
+      ] as const) {
+        const tied = at([...pair]);
+        check(
+          `22 DR-065 tied same-instant ${category} ${accusing}+garbled (${label}) → the accusation stands, not the step-up floor (got ${String(tied.evidence[field])})`,
+          tied.evidence[field] === accusing,
+        );
+      }
+      const backstop = at([sig(category, "garbled-out-of-domain")], withoutDr065);
+      check(
+        `22 DR-065 BACKSTOP: with every *-unreadable rule removed, an unreadable ${category} still does not allow (criticalSignalsPresent=${String(backstop.evidence.criticalSignalsPresent)}, got ${backstop.evaluation.outcome})`,
+        backstop.evidence.criticalSignalsPresent === false && backstop.evaluation.outcome !== "allow",
+      );
+      const strict = at([sig(category, "garbled-out-of-domain")], SHARED_DEVICE_RULES_V2);
+      check(
+        `22 DR-065 the v2 strict draft inherits the step-up (got ${strict.evaluation.outcome})`,
+        strict.evaluation.outcome !== "allow",
+      );
+    }
+    // The hand's own reproduction, end to end through the dock connector: a dock
+    // record whose tamper reading is outside its domain, runDockSync → buildEvidence
+    // → evaluatePolicy. Before DR-065 this ALLOWED.
+    const clk = fixedClock("2026-07-13T15:00:00.000Z");
+    const seeded = seedDemoStore(clk);
+    const store = seeded.store;
+    const tenantId = seeded.tenants.northwind;
+    const conn = store.listConnectors(tenantId).find((c) => c.kind === "dockbridge-custody");
+    const rec = conn ? seeded.dockRecords[conn.id]?.find((r) => r.deviceRef === "ipad-ward-01") : undefined;
+    const dev = store.findDeviceByRef(tenantId, "ipad-ward-01");
+    const idn = store.findIdentityByRef(tenantId, "nurse.compliant");
+    const wf = store.findWorkflowByKey(tenantId, "clinical-session");
+    let e2e: { tamper: string; outcome: string; codes: string[] } | undefined;
+    if (conn && rec && dev && idn && wf) {
+      runDockSync(store, clk, conn, [{ ...rec, tamperState: "garbled" as unknown as TamperState }]);
+      const evidence = buildEvidence(idn, dev, wf, [
+        ...store.listSignalsForSubject(tenantId, "identity", idn.id),
+        ...store.listSignalsForSubject(tenantId, "device", dev.id),
+      ]);
+      const evaluation = evaluatePolicy(monoV1, evidence);
+      e2e = { tamper: evidence.tamperState, outcome: evaluation.outcome, codes: evaluation.reasonCodes };
+    }
+    check(
+      `22 DR-065 e2e (the hand's reproduction): a dock record with an out-of-domain tamper_state → runDockSync→buildEvidence→evaluatePolicy → step_up DOCK_EVIDENCE_UNREADABLE (got ${e2e?.tamper}, ${e2e?.outcome} [${e2e?.codes.join(",")}])`,
+      e2e !== undefined &&
+        e2e.tamper === "unreadable" &&
+        e2e.outcome === "step_up" &&
+        e2e.codes.includes("DOCK_EVIDENCE_UNREADABLE"),
+    );
+  }
 
   // Scope for the VERDICT dimension is derived the same way, through the REAL
   // evaluator: any field whose substitution can change the outcome is in scope.
   // This is what pulled eleven rule-carrying families in that a backstop-only
   // sweep never saw.
   const baselineOutcome = evaluatePolicy(monoV1, healthyEvidence).outcome;
-  const verdictFields = (Object.keys(healthyEvidence) as (keyof DecisionEvidence)[]).filter((key) =>
-    PROBES.some(
+  const allEvidenceFields = Object.keys(healthyEvidence) as (keyof DecisionEvidence)[];
+  /** Can substituting `key` change the answer FROM THIS BASE? The base's own outcome
+   *  is recomputed rather than closed over, or a perturbed base would be compared
+   *  against the healthy outcome and re-create the blindness fixed below. */
+  const changesOutcomeFrom = (base: DecisionEvidence, key: keyof DecisionEvidence): boolean => {
+    const baseOutcome = evaluatePolicy(monoV1, base).outcome;
+    return PROBES.some(
       (probe) =>
-        evaluatePolicy(monoV1, {
-          ...healthyEvidence,
-          [key]: probe,
-        } as unknown as DecisionEvidence).outcome !== baselineOutcome,
-    ),
-  );
+        evaluatePolicy(monoV1, { ...base, [key]: probe } as unknown as DecisionEvidence).outcome !== baseOutcome,
+    );
+  };
+  const singleBaselineFields = allEvidenceFields.filter((key) => changesOutcomeFrom(healthyEvidence, key));
+  // THE DERIVATION WAS CONJUNCTION-BLIND (carried from PR #753). A field that is only
+  // ever HALF of an AND cannot change the verdict from one baseline: the other half
+  // never holds there, so the rule never fires and the field reads as out of scope
+  // while a live deny rule names it. `credential-downgrade` (enrollmentStrength strong
+  // AND credentialReadMethod legacy_125khz) is the first such rule on signal-derived
+  // fields. So any field the single-baseline probe leaves unresolved is escalated to
+  // the healthy evidence plus every single-field perturbation of it, and counts as in
+  // scope if it can change the answer from ANY of them.
+  //
+  // What this does NOT close: the SWEEP below stays single-axis, so enrollmentStrength
+  // is swept with credentialReadMethod pinned at "strong" and no enrollment mutation
+  // there can fire the downgrade rule. That direction is pinned positively in the
+  // DR-043 block above (tied and illegible enrollment → deny).
+  const perturbedBases: DecisionEvidence[] = [healthyEvidence];
+  for (const axis of allEvidenceFields) {
+    for (const probe of PROBES) {
+      perturbedBases.push({ ...healthyEvidence, [axis]: probe } as unknown as DecisionEvidence);
+    }
+  }
+  const conjunctiveFields = allEvidenceFields
+    .filter((key) => !singleBaselineFields.includes(key))
+    .filter((key) => perturbedBases.some((base) => changesOutcomeFrom(base, key)));
+  const verdictFields = [...singleBaselineFields, ...conjunctiveFields];
   // Two fields are in that derived set but cannot be swept by these mutations,
   // and they are named rather than silently dropped: they are NOT read from a
   // signal at all — they come from the resolved device and workflow rows — so
@@ -3064,7 +3792,16 @@ const monotonicityTable: string[] = [];
   // meaning invisibly. The derived side of this comparison is the fact; the
   // declared side is the expectation, and changing the ladder means changing it
   // here, deliberately, in the same commit.
+  // DR-065 widened the ladder by the six dock-family fields: an EMITTED-but-
+  // unreadable dock-family reading is not evidence, so the backstop holds for a
+  // custom rule set that carries no `*-unreadable` rule.
   const BACKSTOP_FIELDS: (keyof DecisionEvidence)[] = [
+    "badgeBinding",
+    "batteryHealth",
+    "custodyState",
+    "dockChargeState",
+    "dockState",
+    "tamperState",
     "deviceCompliance",
     "deviceEncrypted",
     "deviceManaged",
@@ -3074,7 +3811,7 @@ const monotonicityTable: string[] = [];
     "postureFreshness",
   ].sort() as (keyof DecisionEvidence)[];
   check(
-    `22 backstop scope is PINNED: exactly ${BACKSTOP_FIELDS.length} fields can change deriveCriticalSignalsPresent, and they are the seven the ladder names`,
+    `22 backstop scope is PINNED: exactly ${BACKSTOP_FIELDS.length} fields can change deriveCriticalSignalsPresent, and they are the ones the ladder names`,
     JSON.stringify(feedingFields) === JSON.stringify(BACKSTOP_FIELDS),
     `derived=[${feedingFields.join(", ")}] declared=[${BACKSTOP_FIELDS.join(", ")}]`,
   );
@@ -3184,6 +3921,24 @@ const monotonicityTable: string[] = [];
     // quiet", because no tenant-level EXPECTATION of a category is modelled
     // anywhere — that is a real deferred capability, not a bug in this sweep, and
     // it is REPORTED here rather than gated.
+    {
+      name: "attach-absence-is-not-an-attach-answer",
+      field: "attachState",
+      mutation: "absent signal",
+      dimension: "verdict",
+      members: ["removed"],
+      reason:
+        "restrict→allow. The same shape as every row here: the attach reading carried the bad news, so with it gone the field is 'not_applicable' and no attach rule matches. A tenant with no pucks emits nothing, and the core cannot tell that from a dock that went quiet. NOT exempted, and pinned in the DR-043 block: an attach reading that EXISTS and is unreadable reads 'unknown' and steps up.",
+    },
+    {
+      name: "read-method-absence-is-not-a-downgrade",
+      field: "credentialReadMethod",
+      mutation: "absent signal",
+      dimension: "verdict",
+      members: ["legacy_125khz"],
+      reason:
+        "deny→step_up, and it is half of an AND rather than a quiet family: deleting the read-method signal removes one condition of credential-downgrade while enrollmentStrength 'strong' still holds. The result is a real deployment — a strong-enrolled worker whose readers report no read method — which is 'not_applicable', not a downgrade, and since owner call 4 it no longer reaches allow: strong × not_applicable steps up with CREDENTIAL_STRENGTH_UNKNOWN (GRID in the DR-043 block). A read that EXISTS and says legacy_125khz still denies.",
+    },
     {
       name: "identity-signal-absence-is-not-an-identity-answer",
       field: "identityEnabled",
@@ -3553,6 +4308,135 @@ const monotonicityTable: string[] = [];
     "22 self-test: the verdict classifier is blind to csp and the csp classifier is blind to the verdict — the two dimensions really are independent, which is why sweeping one alone passed every F-A vector",
     violations(synth(true, false, "deny", "step_up"), "criticalSignalsPresent").length === 0 &&
       violations(synth(false, true, "deny", "deny"), "verdict").length === 0,
+  );
+}
+
+// ── 30. Eighth verdict-core round (2026-09-05): four fail-open shapes ──────────
+
+{
+  // (a) A tenant with NO resolution configuration must not get auto-proposed
+  // resolution: the engine's fallback config used to say `autoProposeEnabled:
+  // true`, so an ABSENT configuration switched the most permissive class on.
+  // Exercised on the real engine by hiding the seeded config for one call.
+  const staleDec = decisions.find((d) => d.reasonCodes.includes("POSTURE_STALE"));
+  const hidden = core as unknown as { store: MemoryStore };
+  const original = hidden.store.getResolutionConfig;
+  let planWithout: ReturnType<typeof core.getResolution> | undefined;
+  try {
+    hidden.store.getResolutionConfig = () => undefined;
+    if (staleDec) planWithout = core.getResolution(T.operator, staleDec.id);
+  } finally {
+    hidden.store.getResolutionConfig = original;
+  }
+  check(
+    "resolution: with NO tenant configuration, nothing is auto-proposed (absence of a decision is not a decision to propose)",
+    planWithout !== undefined &&
+      planWithout.steps.length > 0 &&
+      planWithout.steps.every((s) => s.resolutionClass !== "auto_proposed"),
+  );
+  check(
+    "resolution: ...and the SAME decision with the seeded config still auto-proposes (the assertion above can fail)",
+    staleDec !== undefined && core.getResolution(T.operator, staleDec.id).steps.some((s) => s.resolutionClass === "auto_proposed"),
+  );
+
+  // (b) A fixture sync whose EVERY record names an unknown subject used to report
+  // status "success" and mark the connector "healthy" — a sync that applied nothing
+  // reading as a clean sync.
+  const syncStore = seedDemoStore(fixedClock("2026-07-13T15:00:00.000Z")).store;
+  const fixtureConnector = syncStore.listConnectors("tenant_northwind").find((c) => c.mode === "fixture" && c.kind !== "dockbridge-custody");
+  check("sync: a fixture posture connector is seeded", fixtureConnector !== undefined);
+  if (fixtureConnector) {
+    const orphan = {
+      deviceRef: "no-such-device", identityRef: "no-such-identity", identityEnabled: true, managed: true,
+      compliance: "compliant" as const, encrypted: true, osSupported: true, lastSyncAt: "2026-07-13T14:00:00.000Z", sourceReference: "fixture:orphan",
+    };
+    const run = runFixtureSync(syncStore, fixedClock("2026-07-13T15:00:00.000Z"), fixtureConnector, [orphan, orphan]);
+    check("sync: a run that skipped EVERY record reports partial, not success", run.status === "partial" && run.recordsProcessed === 0 && run.signalsNormalized === 0);
+    check("sync: ...names the skip count in its note", /2 of 2 record/.test(run.note));
+    check("sync: ...and leaves the connector degraded, not healthy", syncStore.listConnectors("tenant_northwind").find((c) => c.id === fixtureConnector.id)?.status === "degraded");
+    const known = seedDemoStore(fixedClock("2026-07-13T15:00:00.000Z"));
+    const knownConnector = known.store.listConnectors("tenant_northwind").find((c) => c.id === fixtureConnector.id);
+    const knownRecords = known.fixtureRecords[fixtureConnector.id] ?? [];
+    check("sync: the seeded records are all known subjects (control)", knownConnector !== undefined && knownRecords.length > 0);
+    if (knownConnector) {
+      const clean = runFixtureSync(known.store, fixedClock("2026-07-13T15:00:00.000Z"), knownConnector, knownRecords);
+      check("sync: a run that skipped nothing still reports success and healthy (the assertions above can fail)", clean.status === "success" && clean.recordsProcessed === knownRecords.length);
+    }
+  }
+
+  // (b2) THE OTHER TWO FIXTURE-SYNC PATHS. `runFixtureSync` above is one of THREE
+  // functions carrying the identical "a record whose subject the store does not know
+  // is SKIPPED, not trusted" branch — `runDockSync` (dock.ts) and `runShiftSync`
+  // (shift.ts) carry the same counter, the same partial/degraded verdict and the
+  // same note, and neither branch was ever driven. `runShiftSync` had no caller in
+  // any proof at all. A copied fail-safe with no test is how one copy quietly stops
+  // matching the others.
+  //
+  // Both are asserted the same way as (b): an all-orphan run must report `partial`
+  // with zero processed, must NAME the skip count, and must leave the connector
+  // `degraded` — plus a known-subject control run, so a function that refused
+  // everything could not pass.
+  {
+    const seeded = seedDemoStore(fixedClock("2026-07-13T15:00:00.000Z"));
+    const clk = fixedClock("2026-07-13T15:00:00.000Z");
+
+    const dockConnector = seeded.store
+      .listConnectors(seeded.tenants.northwind)
+      .find((c) => c.kind === "dockbridge-custody");
+    const dockRecords = dockConnector ? (seeded.dockRecords[dockConnector.id] ?? []) : [];
+    check("dock sync: a dockbridge connector and its records are seeded", dockConnector !== undefined && dockRecords.length > 0);
+    if (dockConnector && dockRecords[0]) {
+      const orphan = { ...dockRecords[0], deviceRef: "no-such-device" };
+      const run = runDockSync(seeded.store, clk, dockConnector, [orphan, orphan]);
+      check("dock sync: a run that skipped EVERY record reports partial, not success",
+        run.status === "partial" && run.recordsProcessed === 0 && run.signalsNormalized === 0);
+      check("dock sync: ...names the skip count in its note", /2 of 2 record/.test(run.note));
+      check("dock sync: ...and leaves the connector degraded, not healthy",
+        seeded.store.listConnectors(seeded.tenants.northwind).find((c) => c.id === dockConnector.id)?.status === "degraded");
+      const control = seedDemoStore(fixedClock("2026-07-13T15:00:00.000Z"));
+      const controlConnector = control.store.listConnectors(control.tenants.northwind).find((c) => c.id === dockConnector.id);
+      if (controlConnector) {
+        const clean = runDockSync(control.store, clk, controlConnector, control.dockRecords[controlConnector.id] ?? []);
+        check("dock sync: a run that skipped nothing still reports success (the assertions above can fail)",
+          clean.status === "success" && clean.recordsProcessed === (control.dockRecords[controlConnector.id] ?? []).length);
+      }
+    }
+
+    const shiftSeed = seedDemoStore(fixedClock("2026-07-13T15:00:00.000Z"));
+    const shiftConnector = shiftSeed.store
+      .listConnectors(shiftSeed.tenants.northwind)
+      .find((c) => c.kind === "wfm-shift");
+    const shiftRecords = shiftConnector ? (shiftSeed.shiftRecords[shiftConnector.id] ?? []) : [];
+    check("shift sync: a wfm-shift connector and its records are seeded", shiftConnector !== undefined && shiftRecords.length > 0);
+    if (shiftConnector && shiftRecords[0]) {
+      const orphan = { ...shiftRecords[0], deviceRef: "no-such-device" };
+      const run = runShiftSync(shiftSeed.store, clk, shiftConnector, [orphan, orphan, orphan]);
+      check("shift sync: a run that skipped EVERY record reports partial, not success",
+        run.status === "partial" && run.recordsProcessed === 0 && run.signalsNormalized === 0);
+      check("shift sync: ...names the skip count in its note", /3 of 3 record/.test(run.note));
+      check("shift sync: ...and leaves the connector degraded, not healthy",
+        shiftSeed.store.listConnectors(shiftSeed.tenants.northwind).find((c) => c.id === shiftConnector.id)?.status === "degraded");
+      const control = seedDemoStore(fixedClock("2026-07-13T15:00:00.000Z"));
+      const controlConnector = control.store.listConnectors(control.tenants.northwind).find((c) => c.id === shiftConnector.id);
+      if (controlConnector) {
+        const clean = runShiftSync(control.store, clk, controlConnector, control.shiftRecords[controlConnector.id] ?? []);
+        check("shift sync: a run that skipped nothing still reports success (the assertions above can fail)",
+          clean.status === "success" && clean.recordsProcessed === (control.shiftRecords[controlConnector.id] ?? []).length);
+      }
+    }
+  }
+
+  // (c) A principal whose role is not in the permission table must resolve to NO
+  // permission — never to a prototype member or a thrown TypeError. Reached by
+  // binding a key whose role arrived across a boundary the type cannot see.
+  const roleStore = seedDemoStore(fixedClock("2026-07-13T15:00:00.000Z")).store;
+  roleStore.putApiKey({
+    id: "key_bogus_role", tenantId: "tenant_northwind", principalType: "user", subjectId: "user_bogus",
+    role: "constructor" as unknown as Role, token: "sgk_bogus_role", keyReference: "bogus",
+  });
+  const rolePrincipal = authenticate(roleStore, "sgk_bogus_role");
+  expectError("rbac: a role outside the table (\"constructor\") is forbidden, not resolved through the prototype", "forbidden", () =>
+    authorize(rolePrincipal, "decision:read"),
   );
 }
 

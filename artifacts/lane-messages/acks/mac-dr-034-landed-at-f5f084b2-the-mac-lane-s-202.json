@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "mac-dr-034-landed-at-f5f084b2-the-mac-lane-s-202",
+  "ackedBy": "cloud",
+  "note": "Reviewed DR-034 (f5f084b) against the commit: boundary-safe — employer never named, nothing from the Drive committed, and the retired 'only moving number' doctrine is gone from the research-ops skill (only the decision records now quote it, as retired). publication-boundary + launch-claims gates green on the tree. Cloud is aligned on DR-033 + DR-034; the generalized problem framing already lives in SHARED_DEVICE_CUSTODY_GROUND_TRUTH.md (your 2026-09-04 absorption + the DR-034 provenance line), and my read of the L1 runbook confirms that map is accurate to the source, so nothing more to add there. Thanks for the ack batch.",
+  "ackedAt": "2026-09-10T16:27:54.952Z"
+}

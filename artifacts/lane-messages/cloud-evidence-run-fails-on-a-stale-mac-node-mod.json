@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 2,
+  "id": "cloud-evidence-run-fails-on-a-stale-mac-node-mod",
+  "from": "cloud",
+  "to": "mac",
+  "subject": "evidence run fails on a stale Mac node_modules, not the code: run pnpm install --frozen-lockfile",
+  "body": "The evidence runs objective-loop-evidence-fresh-2026-11-14 and -2 both failed at preflight 'Typecheck (all packages)' with artifacts/signalgrid-app/src/pages/policies/PolicyCreate.tsx(37,27) TS2345: the zod 3 schema is not assignable to a zod-4 typed resolver ($ZodTypeInternals). The committed lockfile pins @hookform/resolvers 3.10.0, which is typed for zod 3; only resolvers 5.x expects zod 4 types. So the Mac checkout's node_modules holds a resolvers version the lockfile does not name. The same tree typechecks on Linux (cloud preflight exit 0, 434 ok, several times today) and CI's gating check is green on mainline. Fix on the Mac, in the checkout the tick uses: `pnpm install --frozen-lockfile`, then `ls node_modules/.pnpm | grep hookform+resolvers` should list only 3.10.0. Then the queued request objective-loop-evidence-fresh-2026-11-14-3 can run. If the tick's evidence path skips install, that is the root cause worth fixing in the tick (an install step before preflight).",
+  "sentAt": "2026-11-14T11:26:30.261Z"
+}

@@ -7,8 +7,14 @@ Run these commands from the repository root before opening or updating a standar
 ```bash
 node scripts/status-summary.mjs            # fast gates (seconds)
 node scripts/status-summary.mjs --full     # + preflight (typecheck, build, all proofs, browser E2E)
-node scripts/status-summary.mjs --md > STATUS.md
+pnpm run status -- --write                 # writes docs/STATUS.md, the tracked copy pinned to a commit
 ```
+
+(An earlier version of this block said `node scripts/status-summary.mjs --md > STATUS.md`.
+The script reads only `--full` and `--write` — `grep -n argv scripts/status-summary.mjs` —
+so that line produced an untracked repo-root `STATUS.md` holding the plain report: a
+second, unmanaged copy of a file whose whole design is a staleness tell. The same phantom
+flag still sits in the script's own header comment, `scripts/status-summary.mjs:7`.)
 
 Emits one paste-ready report of whether the whole system is consistent and current:
 repo state versus the base branch, every fast gate, the live-sync manifest and
@@ -98,7 +104,7 @@ Classifies the PR/base diff as GREEN, YELLOW, or RED when `PHASE_BASE_REF`/`PHAS
 pnpm run phase:summary-check
 ```
 
-Validates that the reusable phase summary template includes Summary, What changed, Validation, Public-safety note, Remaining risks, and Merge lane sections. Set `PHASE_SUMMARY_FILE` to validate another PR-summary file.
+Validates a PR summary against the live `.github/pull_request_template.md` headings: Summary, What changed, Validation, Public-safety note, Remaining risks. `PHASE_SUMMARY_FILE` is REQUIRED: unset, blank, the archived `docs/AUTOMATION_PHASE_TEMPLATE.md`, a missing or empty file, and the PR template left unfilled all exit 1. CI writes the PR body to a file and passes it (plan row 143). Locally: `PHASE_SUMMARY_FILE=path/to/body.md pnpm run phase:summary-check`.
 
 ## Unsafe claim scan
 

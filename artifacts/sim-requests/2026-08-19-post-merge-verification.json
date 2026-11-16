@@ -1,6 +1,7 @@
 {
   "schemaVersion": 1,
   "id": "2026-08-19-post-merge-verification",
+  "requestedAt": "2026-08-20T01:07:09Z",
   "requestedBy": "cloud lane",
   "reason": "PR #212 merged as 1fb081e — 47 files, 24 commits, the largest single landing this repo has taken. It carries five NEW gates (memory-freshness, action-pinning, org-roster, cited-commands, and a rewired assist-conformance), a restructured SBOM job, a rebuilt Playwright install step, and the org/decision surfaces. All of it is green on Linux CI. NONE of it has ever run on macOS. The Mac lane is the only place that can answer whether the merged base holds on darwin — bash 3.2, the arm64 toolchain, and a real container engine — and every one of those has broken something in this repo before.",
   "runs": [

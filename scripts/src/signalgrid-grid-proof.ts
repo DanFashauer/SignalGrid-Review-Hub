@@ -147,6 +147,36 @@ assertions.push(
     hashes.join(", "),
   ),
 );
+// SELF-TEST ON THE COMPARATOR THAT MINTS THAT HASH. The check above runs three times
+// in ONE process, so it shares a locale with itself and cannot see a locale-dependent
+// comparator at all. These keys are ordered one way by codepoint ("B" < "a", because
+// uppercase sorts first in ASCII) and the other way by `localeCompare` under every
+// locale this repo has been run in. If `sortValue` ever reverts to `localeCompare`,
+// this assertion fails HERE rather than on someone else's machine.
+{
+  const LOCALE_DIVERGENT_KEYS = ["a", "B"] as const;
+  const codepointOrder = [...LOCALE_DIVERGENT_KEYS].sort(codepointCompare);
+  const localeOrder = [...LOCALE_DIVERGENT_KEYS].sort((l, r) => l.localeCompare(r));
+  const sorted = Object.keys(
+    sortValue({ a: 1, B: 2 }) as Record<string, unknown>,
+  );
+  assertions.push(
+    assertion(
+      "determinism: the evidence comparator is CODEPOINT order, not localeCompare",
+      JSON.stringify(sorted) === JSON.stringify(codepointOrder),
+      `sortValue=[${sorted.join(", ")}] codepoint=[${codepointOrder.join(", ")}] locale=[${localeOrder.join(", ")}]`,
+    ),
+  );
+  // NON-VACUITY: the two comparators must actually disagree on this pair, or the
+  // assertion above passes under both and proves nothing.
+  assertions.push(
+    assertion(
+      "determinism: …and the probe pair is one the two comparators order DIFFERENTLY",
+      JSON.stringify(codepointOrder) !== JSON.stringify(localeOrder),
+      `codepoint=[${codepointOrder.join(", ")}] locale=[${localeOrder.join(", ")}]`,
+    ),
+  );
+}
 
 for (const result of baselineResults) {
   assertBaselineCoverage(result);
@@ -312,7 +342,7 @@ const proofOutput = {
   routedActionCount: routedActionsAll.length,
 };
 
-assertPublicSafety(JSON.stringify({ scenarios, proofOutput }, null, 2));
+assertPublicSafety({ scenarios, proofOutput });
 
 const failed = assertions.filter((item) => !item.passed);
 const unsafeAllowCount = mutationResults.filter(isPlainAllow).length;
@@ -1021,13 +1051,123 @@ function toEvidenceRecord(result: SimulatorRunResult) {
   };
 }
 
-function assertPublicSafety(content: string): void {
+// SECRETS ARE FOUND BY WALKING THE OBJECT, not by regexing its serialisation (plan
+// row 145). The old pattern — `(api_key|secret|token|password)\s*[:=]\s*value` — ran
+// against JSON.stringify output, where a key is followed by `"` before the colon and
+// a value opens with `"`; neither is `\s`, `[:=]` nor a value character, so the check
+// could not fire on the one shape this proof produces and had always passed.
+//
+// The walk is fail-closed on shape (widened after an adversarial review of the row):
+//   - a key is split into words (camelCase, snake_case, kebab-case) and is secret-
+//     named when a word, or a two-word pair, is on the list — so `privateKey`,
+//     `accessKey`, `Authorization`, `pwd` and `pass` count, while `passed`,
+//     `bypass` and `tokenizer` do not;
+//   - ANY non-empty string under a secret-named key, or anywhere in its subtree
+//     (`{ token: ["…"] }`, `{ secrets: { prod: "…" } }`), is a finding — whatever its
+//     length or alphabet, spaces included;
+//   - a `key=value` inside a single string literal is still caught, with a value
+//     class that runs to whitespace or a quote (so `password=Abc!…` is not cut at `!`).
+// The evidence payload carries no secret-named key at all today, so the strictness
+// costs nothing; a future fixture that trips it renames the key.
+// (The patterns live inside the functions: they run from top-level code above this
+// point in the file, before a module-level const would be initialised.)
+
+/** True when a key names a credential. Split into lower-cased words first, so the
+ *  test is on whole words, never substrings. */
+function isSecretKey(key: string): boolean {
+  const WORDS = new Set([
+    "secret", "secrets", "token", "tokens", "password", "passwords", "passwd", "pwd", "pass",
+    "passphrase", "credential", "credentials", "bearer", "authorization", "apikey", "privatekey",
+    "accesskey", "cookie",
+  ]);
+  const PAIRS = new Set(["api key", "private key", "access key", "secret key", "client secret", "auth token"]);
+  const words = key
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .split(/[^A-Za-z0-9]+/)
+    .filter(Boolean)
+    .map((w) => w.toLowerCase());
+  if (words.some((w) => WORDS.has(w))) return true;
+  for (let i = 0; i + 1 < words.length; i += 1) if (PAIRS.has(`${words[i]} ${words[i + 1]}`)) return true;
+  return false;
+}
+
+/** Every `path` holding a string under a secret-named key (at any depth beneath it),
+ *  plus every string anywhere holding an inline `key=value` credential. */
+function findSecretLikePairs(value: unknown, path = "$", inSecret = false): string[] {
+  const SECRET_IN_STRING =
+    /(api[_-]?key|private[_-]?key|access[_-]?key|secret|token|passw(?:or)?d|pwd|authorization|bearer)\s*[:=]\s*[^\s"'`]{4,}/i;
+  const found: string[] = [];
+  if (typeof value === "string") {
+    if ((inSecret && value.trim() !== "") || SECRET_IN_STRING.test(value)) found.push(path);
+  } else if (Array.isArray(value)) {
+    value.forEach((v, i) => found.push(...findSecretLikePairs(v, `${path}[${i}]`, inSecret)));
+  } else if (value !== null && typeof value === "object") {
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+      found.push(...findSecretLikePairs(v, `${path}.${k}`, inSecret || isSecretKey(k)));
+    }
+  }
+  return found;
+}
+
+function assertPublicSafety(payload: unknown): void {
+  const content = JSON.stringify(payload, null, 2);
+  const secretPaths = findSecretLikePairs(payload);
+  assertions.push(
+    assertion(
+      "public safety: secret-like strings",
+      secretPaths.length === 0,
+      secretPaths.slice(0, 5).join(", ") || "none found",
+    ),
+  );
+  // NEGATIVE CONTROL: a synthetic object carrying fake credentials in exactly the
+  // serialisation shape above must be caught — the old regex returned false on all
+  // three, so without this control the check is invisible again the moment it rots.
+  // One planted control PER SHAPE, each asserted on its own so a regression names
+  // the shape it reopened.
+  const plantedShapes: Array<[string, unknown]> = [
+    ["camelCase apiKey", { apiKey: "FAKE0000example0000" }],
+    ["nested snake_case client_secret", { config: { client_secret: "FAKE-not-a-real-secret-0000" } }],
+    ["password inside an array element", { steps: [{ password: "FAKEpassword0000" }] }],
+    ["array under a secret-named key", { token: ["FAKE-tok-0000"] }],
+    ["object under a secret-named parent", { secrets: { prod: "FAKE-prod-0000" } }],
+    ["privateKey", { privateKey: "FAKE-pk" }],
+    ["accessKey", { accessKey: "FAKE-ak" }],
+    ["Authorization header", { headers: { Authorization: "Bearer FAKE" } }],
+    ["pwd", { pwd: "FAKE" }],
+    ["pass", { pass: "FAKE" }],
+    ["value with spaces", { passphrase: "fake correct horse battery" }],
+    ["value under 12 characters", { password: "Fk1!" }],
+    ["inline key=value with punctuation", { note: "set password=Abc!FAKE#0000 here" }],
+  ];
+  for (const [shape, obj] of plantedShapes) {
+    const hits = findSecretLikePairs(obj);
+    assertions.push(
+      assertion(`public safety self-test: secret walk catches a planted credential (${shape})`, hits.length > 0, hits.join(", ") || "none caught"),
+    );
+  }
+  // ...and does not fire on words that merely CONTAIN a secret word, or on non-string
+  // values, so the check stays one a real payload can pass.
+  const benign = findSecretLikePairs({
+    passed: "yes, every one",
+    bypassReason: "none recorded",
+    tokenizer: "whitespace",
+    sessionless: "true",
+    password: null,
+    token: 123456789012345,
+  });
+  assertions.push(
+    assertion(
+      "public safety self-test: secret walk ignores lookalike keys and non-string values",
+      benign.length === 0,
+      benign.join(", ") || "none matched",
+    ),
+  );
+
+  // A phone number stands alone: not preceded or followed by a letter or digit,
+  // so ten digits inside a hex hash or an alphanumeric id are not mistaken for one.
+  const PHONE_NUMBER_PATTERN =
+    /(?<![0-9A-Za-z])(?:\+1[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}(?![0-9A-Za-z])/;
   const checks = [
-    {
-      name: "secret-like strings",
-      pattern:
-        /(api[_-]?key|secret|token|password)\s*[:=]\s*[a-z0-9_\-.]{12,}/i,
-    },
     {
       name: "tenant IDs",
       pattern:
@@ -1037,10 +1177,7 @@ function assertPublicSafety(content: string): void {
       name: "real-looking emails",
       pattern: /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i,
     },
-    {
-      name: "phone numbers",
-      pattern: /(?:\+1[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}/,
-    },
+    { name: "phone numbers", pattern: PHONE_NUMBER_PATTERN },
     {
       name: "patient/customer-like data",
       pattern: /\b(patient|customer)\s*[:=]\s*[A-Z][a-z]+\s+[A-Z][a-z]+\b/,
@@ -1061,7 +1198,30 @@ function assertPublicSafety(content: string): void {
       assertion(`public safety: ${check.name}`, !check.pattern.test(content)),
     );
   }
+
+  // The phone check must still catch a real number in every common shape, and
+  // must NOT fire on decimal digits inside a longer token. The unbounded form
+  // matched any ten digits in a row, so the printed determinism hash (hex)
+  // tripped it on roughly 18% of scenario sets — e.g. the 2026-09-23 merged
+  // tree's hash 3f7b6f40eb7765781071408832… turned CI red with no phone
+  // number anywhere. Both directions are asserted so neither the strength nor
+  // the fix can regress silently.
+  const realPhones = ["555-123-4567", "(555) 123-4567", "+1 555 123 4567", "call 5551234567."];
+  const notPhones = ["3f7b6f40eb7765781071408832", "hash=ab12345678901cd"];
+  assertions.push(
+    assertion(
+      "public safety self-test: phone pattern still catches real numbers",
+      realPhones.every((s) => PHONE_NUMBER_PATTERN.test(s)),
+      realPhones.filter((s) => !PHONE_NUMBER_PATTERN.test(s)).join(", ") || "all caught",
+    ),
+    assertion(
+      "public safety self-test: phone pattern ignores digits inside a hash token",
+      notPhones.every((s) => !PHONE_NUMBER_PATTERN.test(s)),
+      notPhones.filter((s) => PHONE_NUMBER_PATTERN.test(s)).join(", ") || "none matched",
+    ),
+  );
 }
+
 
 function isPlainAllow(result: SimulatorRunResult): boolean {
   return (
@@ -1125,6 +1285,33 @@ function stableStringify(value: unknown): string {
   return JSON.stringify(sortValue(value), null, 2);
 }
 
+/** CODEPOINT order, never `localeCompare`.
+ *
+ *  This function feeds `stableStringify` → `hashForResults` → the printed
+ *  `determinismHash` and the generated evidence file, so its comparator decides a
+ *  digest. `String.prototype.localeCompare` is locale- and ICU-build-dependent: the
+ *  same keys can order differently under `sv_SE` than under `en_US`, which would make
+ *  the digest a fact about the machine rather than about the run. Three sibling proofs
+ *  in this directory forbid it for exactly this reason and say so in their comments
+ *  (`signal-radar-proof.ts:59-64`, `signal-discovery-proof.ts:71-75`,
+ *  `recommendations-proof.ts:92`), and `scripts/review-invariants.mjs` gates it — but
+ *  only over `determinismScope()`, a lib/ derivation, so `scripts/src/*.ts` sat outside
+ *  the gate that exists for it and this call survived until 2026-09-06.
+ *
+ *  Measured before the change: across the C, sv_SE.UTF-8, de_DE.UTF-8 and en_US.UTF-8
+ *  locales the two comparators produced the same digest, because every key in the
+ *  hashed structure is a lowercase ASCII identifier. It was a latent hazard, not a live
+ *  defect — and it goes live the day a signal `attributes` object carries a mixed-case
+ *  or non-ASCII key, which is caller-supplied data. The determinism check at :137-149
+ *  could never have caught it: three runs in ONE process share a locale.
+ *
+ *  `codepointCompare` is asserted below against a key pair the two comparators order
+ *  differently, so a silent revert to `localeCompare` fails rather than passing until
+ *  someone changes locale. */
+function codepointCompare(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+
 function sortValue(value: unknown): unknown {
   if (Array.isArray(value)) {
     return value.map(sortValue);
@@ -1133,7 +1320,7 @@ function sortValue(value: unknown): unknown {
   if (value && typeof value === "object") {
     return Object.fromEntries(
       Object.entries(value)
-        .sort(([left], [right]) => left.localeCompare(right))
+        .sort(([left], [right]) => codepointCompare(left, right))
         .map(([key, item]) => [key, sortValue(item)]),
     );
   }

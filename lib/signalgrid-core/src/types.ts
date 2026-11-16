@@ -1,3 +1,4 @@
+import type { AttachState, CredentialStrength } from "./attach";
 /**
  * SignalGrid product-shaped core — type model.
  *
@@ -121,7 +122,10 @@ export interface Workflow {
 // ── Connector (fixture-only, read-only) ──────────────────────────────────────
 
 export type ConnectorKind = "microsoft-entra-intune" | "dockbridge-custody" | "wfm-shift";
-export type ConnectorMode = "fixture";
+/** `fixture`: synthetic posture committed to the repo. `live`: posture a caller
+ *  fetched from a real read-only source and handed to the core — the core itself
+ *  never performs I/O, in either mode. */
+export type ConnectorMode = "fixture" | "live";
 export type ConnectorStatus = "healthy" | "degraded" | "never_synced";
 
 /**
@@ -253,7 +257,8 @@ export type BadgeBindingState =
   | "removed"
   | "forced"
   | "absent"
-  | "unknown";
+  | "unknown"
+  | "unreadable";
 
 // Physical-custody / DockBridge hardware states (vendor-neutral).
 export type CustodyState =
@@ -262,27 +267,40 @@ export type CustodyState =
   | "overdue"
   | "exception"
   | "maintenance"
-  | "unknown";
+  | "unknown"
+  | "unreadable";
 export type ChargeState =
   | "charging"
   | "charged"
   | "low"
   | "critical"
   | "not_present"
-  | "unknown";
+  | "unknown"
+  | "unreadable";
 export type TamperState =
   | "none"
   | "suspected"
   | "confirmed"
   | "sensor_unavailable"
-  | "unknown";
+  | "unknown"
+  | "unreadable";
 export type DockState =
   | "occupied"
   | "empty"
   | "reserved"
   | "faulted"
   | "offline"
-  | "unknown";
+  | "unknown"
+  | "unreadable";
+/**
+ * DR-043 credential fields on the LIVE evidence path. The vocabularies are
+ * attach.ts's own (`AttachState`, `CredentialStrength`) — one vocabulary shared
+ * with `puckVerdict`, never a second one — plus `not_applicable`: the category
+ * never appeared, so no credential of this kind is in play. That is distinct from
+ * `unknown` (a reading was present but unreadable), which raises.
+ */
+export type AttachEvidence = AttachState | "not_applicable";
+export type CredentialStrengthEvidence = CredentialStrength | "not_applicable";
 /**
  * Battery HEALTH, which is a different question from `ChargeState`.
  *
@@ -311,7 +329,18 @@ export type DockState =
  * a grant requires positive confirmation of every input — it is an honest gap,
  * not a safe default, and calling it "fail-safe" would have hidden that.
  */
-export type BatteryHealthState = "healthy" | "degraded" | "failing" | "unknown";
+/**
+ * DR-065 (PROPOSED). The six dock-family evidence unions (BadgeBindingState,
+ * CustodyState, ChargeState, TamperState, DockState and this one) carry
+ * TWO non-answers, and they are different answers:
+ *  - `"unknown"`    — SILENCE: no reading of that category arrived at all. This is
+ *                     day-one-quiet: a tenant without dock hardware is not stepped up.
+ *  - `"unreadable"` — an EMITTED reading was present but nothing in it could be read
+ *                     (a value outside the family's domain, or only a good value whose
+ *                     clock stamp cannot be ordered). It steps up, exactly as an
+ *                     emitted unknown attach / credential reading does under DR-043.
+ */
+export type BatteryHealthState = "healthy" | "degraded" | "failing" | "unknown" | "unreadable";
 
 /** Every normalized signal category the core evaluates.
  *
@@ -342,6 +371,10 @@ export const SIGNAL_CATEGORIES = [
   "benchmark_selection",
   "shift_context",
   "badge_binding",
+  // DR-043: the credential's own custody and strength (see attach.ts).
+  "attach_state",
+  "enrollment_strength",
+  "credential_read_method",
   // The two launch families the core could not previously represent — found by the
   // 2026-08-10 full-repo scan (PRODUCT_COMPLETION_PLAN §9): device-management-health
   // and local-authority shipped as connectors, proofs and doctrine while the engine
@@ -411,6 +444,9 @@ export const EVIDENCE_FIELDS = [
   "badgeState",
   "managementHealthState",
   "localAuthorityState",
+  "attachState",
+  "enrollmentStrength",
+  "credentialReadMethod",
 ] as const;
 
 export type EvidenceField = (typeof EVIDENCE_FIELDS)[number];
@@ -435,7 +471,10 @@ export type RuleCondition =
   | { field: "shiftContextState"; in: ShiftContextState[] }
   | { field: "badgeState"; in: BadgeBindingState[] }
   | { field: "managementHealthState"; in: ManagementHealthState[] }
-  | { field: "localAuthorityState"; in: LocalAuthorityGrantState[] };
+  | { field: "localAuthorityState"; in: LocalAuthorityGrantState[] }
+  | { field: "attachState"; in: AttachEvidence[] }
+  | { field: "enrollmentStrength"; in: CredentialStrengthEvidence[] }
+  | { field: "credentialReadMethod"; in: CredentialStrengthEvidence[] };
 
 export interface PolicyRuleSpec {
   id: string;
@@ -493,7 +532,7 @@ export interface DecisionEvidence {
   tamperState: TamperState;
   /**
    * The WORST freshness across the dock-family signals that are actually
-   * present (custody, charge, battery health, tamper, dock, badge binding), or
+   * present (custody, charge, battery health, tamper, dock, badge binding, attach), or
    * "missing" when the device has no dock evidence at all.
    *
    * WHY THIS EXISTS. `runDockSync` already classified each record's age and
@@ -536,8 +575,67 @@ export interface DecisionEvidence {
   /** Local-authority grant rollup (default "unverified" — day-one-quiet until the
    *  connector emits it, like benchmarkSelection and shiftContext). */
   localAuthorityState: LocalAuthorityGrantState;
+  /** DR-043: is the credential seated in its receiver. Absent → "not_applicable";
+   *  present but unreadable → "unknown", which steps up and never grants. */
+  attachState: AttachEvidence;
+  /** DR-043: how the worker is ENROLLED. Strong enrollment is the accusing half of
+   *  the downgrade rule (see EVIDENCE_VALUE_DOMAINS.enrollment in evidence.ts). */
+  enrollmentStrength: CredentialStrengthEvidence;
+  /** DR-043: how THIS read arrived. legacy_125khz for a strong-enrolled worker → deny. */
+  credentialReadMethod: CredentialStrengthEvidence;
   /** True only when every critical input is present and not degraded. */
   criticalSignalsPresent: boolean;
+  /**
+   * OWNER DECISION (a), 2026-11-06 — KEEP BOTH. When one family carries two or more
+   * DIFFERENT values the core cannot order (the same instant, or a stamp it cannot
+   * read), the field above holds the one the SHIPPED rules rank worst, and this lists
+   * every value the reader could have answered (good values and the family's
+   * unreadable floor included, since the 2026-11-07 reviews), sorted. `evaluatePolicy` runs the
+   * active policy once per combination and keeps the most restrictive outcome, so a
+   * tenant policy that ranks the members differently still sees the milder one.
+   * ABSENT whenever there is no such ambiguity, so every unambiguous snapshot's
+   * digest body is byte-identical to before; present, it is inside the digest.
+   */
+  retainedAccusations?: RetainedAccusations;
+  /**
+   * ROUND 5 (2026-11-07). The evidence as the PRE-STRICT reader (`Date.parse`, mainline's) read the same signals,
+   * once per modelled host offset, each kept as the fields where it DIFFERS from the strict evidence above (the
+   * backstop is recomputed on each, never carried). `evaluatePolicy` judges every one with the active policy and
+   * keeps the most restrictive outcome, so the verdict is never milder than the pre-strict reader's. `bounded` is
+   * set when a stamp's pre-strict reading could not be placed: the policy then bounds the outcome. ABSENT whenever
+   * the two readers agree, so every such snapshot's digest body is byte-identical to before.
+   */
+  preStrictReadings?: PreStrictReadings;
+}
+
+/** Round 5: the pre-strict readings of one evidence set (see `DecisionEvidence.preStrictReadings`). */
+export interface PreStrictReadings {
+  readonly worlds: readonly Partial<Omit<DecisionEvidence, "criticalSignalsPresent" | "retainedAccusations" | "preStrictReadings">>[];
+  readonly bounded?: true;
+}
+
+/** Owner decision (a): every accusing member a family read, when the core could not order them. */
+export interface RetainedAccusations {
+  identityEnabled?: readonly (boolean | "unknown")[];
+  deviceManaged?: readonly (boolean | "unknown")[];
+  deviceEncrypted?: readonly (boolean | "unknown")[];
+  osSupported?: readonly (boolean | "unknown")[];
+  deviceCompliance?: readonly ComplianceState[];
+  postureFreshness?: readonly Freshness[];
+  custodyState?: readonly CustodyState[];
+  dockChargeState?: readonly ChargeState[];
+  batteryHealth?: readonly BatteryHealthState[];
+  tamperState?: readonly TamperState[];
+  dockState?: readonly DockState[];
+  baselineCompliance?: readonly BaselineState[];
+  benchmarkSelection?: readonly BenchmarkSelectionState[];
+  shiftContext?: readonly ShiftContextState[];
+  badgeBinding?: readonly BadgeBindingState[];
+  managementHealthState?: readonly ManagementHealthState[];
+  localAuthorityState?: readonly LocalAuthorityGrantState[];
+  attachState?: readonly AttachEvidence[];
+  enrollmentStrength?: readonly CredentialStrengthEvidence[];
+  credentialReadMethod?: readonly CredentialStrengthEvidence[];
 }
 
 export interface MatchedRule {
@@ -573,6 +671,10 @@ export interface EvidenceSnapshot {
    * a different value means something in the core decision path changed.
    */
   coreNormalizationVersion?: number;
+  /** Which digest function minted `digest`. ABSENT = a row minted before the WTF-8 fix
+   *  (legacy low-byte FNV); verified with that function, never re-stamped. Any other
+   *  value verifies false. Inside the digest body, so stripping it is itself tampering. */
+  digestAlg?: "fnv1a64-wtf8";
   /** Deterministic content digest making the snapshot tamper-evident. */
   digest: string;
 }
@@ -676,7 +778,12 @@ export type RemediationKind =
   | "notify_identity_owner"
   | "notify_security"
   | "request_custody_check"
-  | "request_baseline_reapply";
+  | "request_baseline_reapply"
+  // DR-043 (Puck 2). A custody CHECK asks somebody to go and look; a session
+  // SUSPEND asks the host app to stop the session it is running. They are different
+  // requests with different verifications, so folding the second into the first
+  // would have made "the suspend landed" unanswerable.
+  | "request_session_suspend";
 
 export type RemediationStatus =
   | "requires_approval"
@@ -703,6 +810,32 @@ export interface RemediationAction {
   requestedAt: string;
   approvedAt: string | null;
   note: string;
+}
+
+/**
+ * The ANSWER to a `step_up` verdict, recorded against the decision that raised it.
+ *
+ * The gate can return `step_up`; until this record existed nothing served could say
+ * one had been SATISFIED, so a deployment in shadow mode returned a verdict the host
+ * app had no way to resolve. One answer per decision, minted only after a
+ * cryptographic verification the caller could not fake, and it carries a MASKED
+ * credential reference — never the credential.
+ *
+ * It does not change the decision. A `step_up` stays a `step_up` forever: the
+ * evidence it was computed from is immutable, and rewriting a stored verdict because
+ * a gesture arrived later would make the audit chain describe something that never
+ * happened. The host app reads the answer beside the decision and proceeds.
+ */
+export interface StepUpAnswer {
+  id: string;
+  tenantId: string;
+  decisionId: string;
+  /** The identity the decision was about — never one named by the request. */
+  identityId: string;
+  method: "webauthn";
+  /** A masked reference to the credential that signed. Never the credential. */
+  credentialReference: string;
+  answeredAt: string;
 }
 
 // ── Resolution Assistant (deterministic, approval-gated, simulated) ──────────
@@ -819,13 +952,64 @@ export interface WebhookDelivery {
 
 // ── Audit ledger ─────────────────────────────────────────────────────────────
 
-export type AuditEventType =
-  | "decision.evaluated"
-  | "connector.synced"
-  | "policy.version_activated"
-  | "evidence.captured"
-  | "remediation.requested"
-  | "remediation.approved";
+/**
+ * The ledger's whole vocabulary, as a RUNTIME array.
+ *
+ * It was a bare type union, which no census can count and no guard can check: a
+ * caller could append any string it liked and TypeScript's erasure meant nothing
+ * downstream could tell. The union is derived from this array instead, so the
+ * compile-time and run-time answers cannot disagree.
+ *
+ * The first seven are the original ledger plus the step_up answer (#869). The last nine are the session-puck
+ * lifecycle (DR-043, Puck 6): a credential presented, a dock seated, an identity proven, a
+ * posture read, a session opened, the dock broken, the device RETURNED by its holder
+ * (Puck 6 — a planned return is not a removal, so it is not recorded as one), the session
+ * suspended, the credential revoked. Each is what the system KNEW at that instant,
+ * recorded once and never rewritten — the chain digest is over the canonical body, as it
+ * already was.
+ */
+export const AUDIT_EVENT_TYPES = [
+  "decision.evaluated",
+  "connector.synced",
+  "policy.version_activated",
+  "evidence.captured",
+  "remediation.requested",
+  "remediation.approved",
+  "decision.step_up_answered",
+  "credential.presented",
+  "dock.attached",
+  "identity.authenticated",
+  "posture.observed",
+  "session.opened",
+  "dock.removed",
+  "dock.returned",
+  "session.suspended",
+  "credential.revoked",
+] as const;
+
+export type AuditEventType = (typeof AUDIT_EVENT_TYPES)[number];
+
+/**
+ * The nine puck-lifecycle members. They carry a stricter admission rule than the
+ * original seven (see `appendAudit`): each must name the decision it evidences, because
+ * a lifecycle event with no decision behind it is a log line, not a ledger entry.
+ */
+export const PUCK_LIFECYCLE_EVENT_TYPES = [
+  "credential.presented",
+  "dock.attached",
+  "identity.authenticated",
+  "posture.observed",
+  "session.opened",
+  "dock.removed",
+  "dock.returned",
+  "session.suspended",
+  "credential.revoked",
+] as const;
+
+/** Runtime membership test. A string that is not in the union is not an event type. */
+export function isAuditEventType(value: string): value is AuditEventType {
+  return (AUDIT_EVENT_TYPES as readonly string[]).includes(value);
+}
 
 export interface AuditEvent {
   id: string;

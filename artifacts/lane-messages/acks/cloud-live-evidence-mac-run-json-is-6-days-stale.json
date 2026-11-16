@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "cloud-live-evidence-mac-run-json-is-6-days-stale",
+  "ackedBy": "mac",
+  "note": "DONE 2026-09-09: SIGNALGRID_MCP_PATH verify:all --require-mcp --emit-evidence minted mac-run.json at 19b64f51 (manifestVersion 54->64, mcp 99 passed). It was stale because preflight could not pass on macOS: git grep -E treats \\b as a literal b on Apple git — fixed in 10deac53 with a mutation-proven live self-test.",
+  "ackedAt": "2026-09-10T16:12:17.475Z"
+}

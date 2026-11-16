@@ -55,6 +55,19 @@ function payload(result: unknown): Record<string, unknown> {
   }
 }
 
+/** Prints the summary line, names every failed property, and exits 1 if any failed.
+ *  Shared by the boot-failure early return and the end of the run so that BOTH paths
+ *  produce `summary=FAIL (n/total)` and a named check rather than only a stack trace. */
+function summarize(): void {
+  const total = passed + failures.length;
+  console.log(`\nsummary=${failures.length === 0 ? "pass" : "FAIL"} (${passed}/${total})`);
+  if (failures.length > 0) {
+    console.error("failed:");
+    for (const f of failures) console.error(`  - ${f}`);
+    process.exit(1);
+  }
+}
+
 async function main(): Promise<void> {
   // cwd is the SERVER's own package, not the repo root: `tsx` is a devDependency
   // of artifacts/mcp-server and is not resolvable from the root, so spawning from
@@ -68,8 +81,25 @@ async function main(): Promise<void> {
   });
   const client = new Client({ name: "signalgrid-proof", version: "0.0.0" });
 
-  await client.connect(transport);
-  check("the published MCP server boots and completes a real protocol handshake", true);
+  // A LITERAL-`true` ASSERTION WAS GATED BY THE LINE ABOVE IT, AND THAT IS NOT THE SAME
+  // THING AS AN ASSERTION. `await client.connect(transport)` throwing meant the run died
+  // in `main().catch` with a crash message and no `summary=` line at all — "a crash tells
+  // a reader which file broke but not which PROPERTY did"
+  // (mcp-answer-discipline-proof.ts). The boot is now a value the check reads, and a
+  // failed boot ends the run through the same summary every other failure uses.
+  let booted = false;
+  let bootError = "";
+  try {
+    await client.connect(transport);
+    booted = true;
+  } catch (err) {
+    bootError = err instanceof Error ? err.message : String(err);
+  }
+  check("the published MCP server boots and completes a real protocol handshake", booted, bootError);
+  if (!booted) {
+    summarize();
+    return;
+  }
 
   // ── 1. The declared surface is the served surface ──────────────────────────
   // The manifest tells external builders which tools exist. Until now that was
@@ -173,13 +203,7 @@ async function main(): Promise<void> {
 
   await client.close();
 
-  const total = passed + failures.length;
-  console.log(`\nsummary=${failures.length === 0 ? "pass" : "FAIL"} (${passed}/${total})`);
-  if (failures.length > 0) {
-    console.error("failed:");
-    for (const f of failures) console.error(`  - ${f}`);
-    process.exit(1);
-  }
+  summarize();
   console.log(
     `The published MCP server boots, serves exactly the declared tools, and answers each of the ${exercised.size} it exercises here.`,
   );

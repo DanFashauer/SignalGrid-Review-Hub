@@ -35,7 +35,7 @@ final class AppModel {
     @ObservationIgnored private var api: any SignalGridAPI
     @ObservationIgnored private let keychain = KeychainStore()
     @ObservationIgnored private let defaults = UserDefaults.standard
-    @ObservationIgnored private var evidenceCache: [String: EvidenceSnapshot] = [:]
+    @ObservationIgnored private var evidenceCache: [String: EvidenceFetch] = [:]
 
     init() {
         self.api = MockSignalGridAPI()
@@ -98,13 +98,9 @@ final class AppModel {
         // Review Hub fixture-backed. The launch-arg convenience exists to point demos
         // at a LOCALLY running api-server; that is loopback, and that is all this
         // accepts — any other host is ignored and the app stays on fixtures.
-        func isLoopback(_ u: URL) -> Bool {
-            let host = (u.host ?? "").lowercased()
-            return host == "localhost" || host == "127.0.0.1" || host == "::1"
-        }
         if let base = d.string(forKey: "LiveBaseURL"), !base.isEmpty,
            let token = d.string(forKey: "LiveToken"), !token.isEmpty,
-           let url = URL(string: base), isLoopback(url) {
+           let url = URL(string: base), Self.isLoopbackHost(url) {
             // Launch-arg live connect for demos. Use the token IN-MEMORY only — an
             // unsigned simulator build has no Keychain entitlement (errSecMissingEntitlement
             // -34018), so connectLive()'s keychain.save() would fail. The Settings-driven
@@ -131,9 +127,29 @@ final class AppModel {
         await bootstrap()
     }
 
+    static func isLoopbackHost(_ u: URL) -> Bool {
+        let host = (u.host ?? "").lowercased()
+        return host == "localhost" || host == "127.0.0.1" || host == "::1"
+    }
+
+    /// The bearer token typed into Settings is persisted to the Keychain and sent on
+    /// every request. ATS permits cleartext to local-network and `.local` names, so
+    /// a plain-http URL to a local-network name would carry it in the clear. Only https, or http to a
+    /// loopback host, is an acceptable transport (2026-09-05 — the launch-arg path
+    /// had this guard; the Settings path, the one the comment above calls the only
+    /// live route off-simulator, did not).
+    static func isTransportAcceptable(_ u: URL) -> Bool {
+        let scheme = (u.scheme ?? "").lowercased()
+        return scheme == "https" || (scheme == "http" && isLoopbackHost(u))
+    }
+
     func connectLive(baseURL: String, token: String) async -> Bool {
         guard let url = URL(string: baseURL), !token.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             errorMessage = "Enter a valid API base URL and bearer token."
+            return false
+        }
+        guard Self.isTransportAcceptable(url) else {
+            errorMessage = "The live API base URL must use https (http is accepted only for localhost / 127.0.0.1) — the bearer token would otherwise travel in the clear."
             return false
         }
 
@@ -156,6 +172,10 @@ final class AppModel {
     func reconnectSavedLiveMode() async -> Bool {
         guard let token = keychain.load(), let url = URL(string: baseURLText) else {
             errorMessage = "No saved live API token is available."
+            return false
+        }
+        guard Self.isTransportAcceptable(url) else {
+            errorMessage = "The saved live API base URL is not https (or http to localhost); refusing to send the saved token over it."
             return false
         }
         mode = .live
@@ -266,7 +286,7 @@ final class AppModel {
         }
     }
 
-    func evidence(for decision: Decision) async -> EvidenceSnapshot? {
+    func evidence(for decision: Decision) async -> EvidenceFetch? {
         if let cached = evidenceCache[decision.id] {
             return cached
         }

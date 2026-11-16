@@ -20,7 +20,7 @@
  *
  * Run `--self-test` to prove the comparison can still fail.
  */
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -31,13 +31,76 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
  * owns. Adding a route file without adding it here is caught by the
  * unregistered-file check below, not by a reviewer noticing.
  */
-const ROUTE_FILES = [
-  "artifacts/api-server/src/routes/v1.ts",
-  "artifacts/api-server/src/routes/control-plane.ts",
-] as const;
+/**
+ * ONE SCOPE PER DOCUMENT. The check was written for v1-openapi.yaml and read
+ * only that file; lib/api-spec/openapi.yaml — the document orval generates TWO
+ * shipping packages from (@workspace/api-zod via api-server, @workspace/
+ * api-client-react via signalgrid-app) — was read by no gate at all, and
+ * documented six write operations the server never served (POST /decisions,
+ * /signals/ingest, and the whole policy create/get/update/delete set). Generated
+ * hooks for them existed and reached the JSON 404 catch-all. This proof printed
+ * "Contract holds" throughout, because its scope was narrower than the documents
+ * it guarded — the same defect the header above describes, one document over.
+ */
+interface ContractDocument {
+  readonly spec: string;
+  readonly routeFiles: readonly string[];
+  /** Served paths under these prefixes are governed by this document. */
+  readonly prefixes: readonly string[];
+}
+const DOCUMENTS: readonly ContractDocument[] = [
+  {
+    spec: "lib/api-spec/v1-openapi.yaml",
+    routeFiles: ["artifacts/api-server/src/routes/v1.ts", "artifacts/api-server/src/routes/control-plane.ts"],
+    prefixes: ["/v1/", "/cp/v1/"],
+  },
+  {
+    // Mounted under /api; the spec's `servers: - url: /api` carries the prefix,
+    // so paths compare root-relative.
+    spec: "lib/api-spec/openapi.yaml",
+    routeFiles: [
+      "artifacts/api-server/src/routes/health.ts",
+      "artifacts/api-server/src/routes/integrations.ts",
+      "artifacts/api-server/src/routes/monitoring.ts",
+      "artifacts/api-server/src/routes/radar.ts",
+      "artifacts/api-server/src/routes/simulator.ts",
+    ],
+    prefixes: ["/"],
+  },
+];
 
-/** Prefixes this contract governs. A served path outside them is out of scope. */
-const GOVERNED_PREFIXES = ["/v1/", "/cp/v1/"] as const;
+/**
+ * THE SPEC-DIRECTORY REGISTRY. Every OpenAPI-shaped file in lib/api-spec must be a
+ * document above. A third, `product-openapi.json`, sat there from 2026-08-03 to
+ * 2026-09-30 describing ten paths (eight never served) against a server that does
+ * not exist — in the directory REPO_LAYOUT.md calls "The OpenAPI contract", read by
+ * no gate. It now lives at docs/archive/product-openapi.json; this check is what
+ * stops the next one appearing ungoverned. Pure, so the self-test can watch it fail.
+ */
+export function ungovernedSpecs(files: readonly string[], documents: readonly ContractDocument[] = DOCUMENTS): string[] {
+  const governed = new Set(documents.map((d) => d.spec.split("/").pop()!));
+  return files
+    .filter((f) => !/(^|\/)node_modules\//.test(f))
+    .filter((f) => /\.(ya?ml|json)$/i.test(f) && f !== "package.json" && !/^tsconfig.*\.json$/i.test(f))
+    .filter((f) => !governed.has(f))
+    .sort();
+}
+
+/**
+ * Route files that are deliberately in NO document, each with the reason. The
+ * registry check below fails on a route file that is neither here nor in a
+ * document, so a new router cannot appear ungoverned by omission.
+ */
+const UNDOCUMENTED_BY_DESIGN: ReadonlyMap<string, string> = new Map([
+  ["index.ts", "the mount, registers no route of its own (the 404 catch-all is not a route)"],
+  [
+    "sim.ts",
+    "demo-only, mounted only under the review-demo profile: POST /api/sim/room-entry writes another tenant's ledger from a client-supplied scenarioId and is unauthenticated by construction (routes/index.ts) — a public contract must not advertise it",
+  ],
+]);
+
+/** The v1 document's prefixes — the default for the self-test's older cases. */
+const GOVERNED_PREFIXES = DOCUMENTS[0]!.prefixes;
 
 const METHODS = ["get", "post", "put", "delete", "patch"] as const;
 
@@ -46,8 +109,8 @@ function normalize(path: string): string {
   return path.replace(/:([A-Za-z0-9_]+)/g, "{$1}");
 }
 
-function governed(path: string): boolean {
-  return GOVERNED_PREFIXES.some((p) => path.startsWith(p));
+function governed(path: string, prefixes: readonly string[] = GOVERNED_PREFIXES): boolean {
+  return prefixes.some((p) => path.startsWith(p));
 }
 
 /**
@@ -56,18 +119,18 @@ function governed(path: string): boolean {
  * and a matcher that misses it under-reports the implementation — which fails
  * SILENTLY, in the direction that looks green.
  */
-export function parseRoutes(source: string): Set<string> {
+export function parseRoutes(source: string, prefixes: readonly string[] = GOVERNED_PREFIXES): Set<string> {
   const routes = new Set<string>();
   const re = /router\.(get|post|put|delete|patch)\(\s*"(\/[^"]*)"/g;
   let match: RegExpExecArray | null;
   while ((match = re.exec(source)) !== null) {
     const path = normalize(match[2]);
-    if (governed(path)) routes.add(`${match[1].toUpperCase()} ${path}`);
+    if (governed(path, prefixes)) routes.add(`${match[1].toUpperCase()} ${path}`);
   }
   return routes;
 }
 
-export function parseSpec(source: string): Set<string> {
+export function parseSpec(source: string, prefixes: readonly string[] = GOVERNED_PREFIXES): Set<string> {
   const endpoints = new Set<string>();
   const lines = source.split("\n");
   let currentPath: string | null = null;
@@ -79,7 +142,7 @@ export function parseSpec(source: string): Set<string> {
       currentPath = pathMatch[1];
       continue;
     }
-    if (currentPath && governed(currentPath)) {
+    if (currentPath && governed(currentPath, prefixes)) {
       const methodMatch = line.match(/^ {4}([a-z]+):\s*$/);
       if (methodMatch && (METHODS as readonly string[]).includes(methodMatch[1])) {
         endpoints.add(`${methodMatch[1].toUpperCase()} ${currentPath}`);
@@ -132,6 +195,31 @@ function selfTest(): number {
     [...drifted].some((r) => !silent.has(r)),
   ]);
 
+  // The SECOND document's scope: root-relative /api paths are governed under "/".
+  const apiPrefixes = DOCUMENTS[1]!.prefixes;
+  checks.push([
+    "a root-relative /api route is in the second document's scope",
+    parseRoutes(`router.get("/decisions", h);`, apiPrefixes).has("GET /decisions"),
+  ]);
+  const specOnly = parseSpec(["paths:", "  /policies:", "    get:", "    post:"].join("\n"), apiPrefixes);
+  const served = parseRoutes(`router.get("/policies", h);`, apiPrefixes);
+  checks.push([
+    "a spec-only write operation under openapi.yaml IS drift (the six the server never served)",
+    [...specOnly].some((e) => !served.has(e)),
+  ]);
+  checks.push([
+    "a third spec in lib/api-spec IS ungoverned (the orphan product-openapi.json), and the two documents plus package.json are not",
+    ungovernedSpecs(["openapi.yaml", "v1-openapi.yaml", "package.json", "orval.config.ts", "product-openapi.json"]).join() === "product-openapi.json" &&
+      ungovernedSpecs(["openapi.yaml", "v1-openapi.yaml", "package.json", "tsconfig.json", "orval.config.ts"]).length === 0 &&
+      // nested and upper-case spellings are specs too; the package's own node_modules is not
+      ungovernedSpecs(["openapi.yaml", "v1-openapi.yaml", "legacy/Old.JSON", "X.YAML", "node_modules/x/openapi.json"]).join() === "X.YAML,legacy/Old.JSON",
+  ]);
+  checks.push([
+    "every document names at least one route file, and every UNDOCUMENTED_BY_DESIGN entry carries a reason",
+    DOCUMENTS.every((d) => d.routeFiles.length > 0 && d.prefixes.length > 0) &&
+      [...UNDOCUMENTED_BY_DESIGN.values()].every((r) => r.length > 20),
+  ]);
+
   const failed = checks.filter(([, ok]) => !ok);
   for (const [name, ok] of checks) console.log(`  ${ok ? "ok" : "FAIL"} — self-test: ${name}`);
   console.log(`\nself-test ${failed.length === 0 ? "passed" : "FAILED"} (${checks.length - failed.length}/${checks.length})`);
@@ -144,58 +232,93 @@ async function main(): Promise<void> {
     return;
   }
 
-  const specSrc = await readFile(resolve(root, "lib/api-spec/v1-openapi.yaml"), "utf8");
-  const sources = await Promise.all(
-    ROUTE_FILES.map(async (f) => [f, await readFile(resolve(root, f), "utf8")] as const),
-  );
-
-  const implemented = new Set<string>();
-  const perFile = new Map<string, number>();
-  for (const [file, src] of sources) {
-    const routes = parseRoutes(src);
-    perFile.set(file, routes.size);
-    for (const r of routes) implemented.add(r);
-  }
-  const documented = parseSpec(specSrc);
-
-  const undocumented = [...implemented].filter((r) => !documented.has(r)).sort();
-  const unimplemented = [...documented].filter((r) => !implemented.has(r)).sort();
-
+  // The route-file registry: every file under routes/ is in a document or is
+  // named undocumented WITH a reason. A router added tomorrow is caught here.
+  const routesDir = resolve(root, "artifacts/api-server/src/routes");
+  const onDisk = (await readdir(routesDir)).filter((f) => f.endsWith(".ts")).sort();
+  const registered = new Set(DOCUMENTS.flatMap((d) => d.routeFiles.map((f) => f.split("/").pop()!)));
+  const unregistered = onDisk.filter((f) => !registered.has(f) && !UNDOCUMENTED_BY_DESIGN.has(f));
+  const staleExemptions = [...UNDOCUMENTED_BY_DESIGN.keys()].filter((f) => !onDisk.includes(f) || registered.has(f));
   console.log("OpenAPI contract check (served routes ↔ spec)");
-  console.log(`Governed prefixes: ${GOVERNED_PREFIXES.join(" ")}`);
-  for (const [file, n] of perFile) console.log(`  ${n} routes — ${file}`);
-  console.log(`Implemented routes: ${implemented.size}`);
-  console.log(`Documented endpoints: ${documented.size}`);
-
-  for (const route of [...implemented].sort()) {
-    console.log(`${documented.has(route) ? "OK  " : "MISS"} ${route}`);
-  }
-
-  // A route file that registers nothing under a governed prefix is either newly
-  // empty or newly mis-parsed. Both look green from the totals alone.
-  const empty = [...perFile].filter(([, n]) => n === 0).map(([f]) => f);
-  if (empty.length > 0) {
-    console.error("\nRoute file registering NO governed route — stale matcher or stale registry:");
-    for (const f of empty) console.error(`- ${f}`);
+  console.log(`Route files on disk: ${onDisk.length}; in a document: ${registered.size}; undocumented by design: ${UNDOCUMENTED_BY_DESIGN.size}`);
+  if (unregistered.length > 0 || staleExemptions.length > 0) {
+    for (const f of unregistered) console.error(`- routes/${f} is in NO document and has no stated reason — a router nobody gates`);
+    for (const f of staleExemptions) console.error(`- UNDOCUMENTED_BY_DESIGN names routes/${f}, which is absent or now in a document — remove the entry`);
     process.exitCode = 1;
     return;
   }
 
-  if (undocumented.length > 0) {
-    console.error("\nImplemented but NOT documented in the OpenAPI spec:");
-    for (const r of undocumented) console.error(`- ${r}`);
-  }
-  if (unimplemented.length > 0) {
-    console.error("\nDocumented but NOT implemented:");
-    for (const r of unimplemented) console.error(`- ${r}`);
-  }
-
-  if (undocumented.length > 0 || unimplemented.length > 0) {
+  // Recursive: a spec one directory down is still in the contract directory.
+  const strays = ungovernedSpecs(
+    (await readdir(resolve(root, "lib/api-spec"), { recursive: true })).map((f) => String(f).split("\\").join("/")),
+  );
+  if (strays.length > 0) {
+    for (const f of strays) console.error(`- lib/api-spec/${f} is a spec in the contract directory that no DOCUMENTS entry governs — add it above, or archive it under docs/archive/`);
     process.exitCode = 1;
     return;
   }
+  console.log(`Spec files in lib/api-spec: every one governed (${DOCUMENTS.map((d) => d.spec.split("/").pop()).join(", ")})`);
 
-  console.log("\nContract holds: every governed route is documented and vice versa.");
+  let failed = false;
+  for (const doc of DOCUMENTS) {
+    const specSrc = await readFile(resolve(root, doc.spec), "utf8");
+    const sources = await Promise.all(
+      doc.routeFiles.map(async (f) => [f, await readFile(resolve(root, f), "utf8")] as const),
+    );
+
+    const implemented = new Set<string>();
+    const perFile = new Map<string, number>();
+    for (const [file, src] of sources) {
+      const routes = parseRoutes(src, doc.prefixes);
+      perFile.set(file, routes.size);
+      for (const r of routes) implemented.add(r);
+    }
+    const documented = parseSpec(specSrc, doc.prefixes);
+
+    const undocumented = [...implemented].filter((r) => !documented.has(r)).sort();
+    const unimplemented = [...documented].filter((r) => !implemented.has(r)).sort();
+
+    console.log(`\n${doc.spec} — governed prefixes: ${doc.prefixes.join(" ")}`);
+    for (const [file, n] of perFile) console.log(`  ${n} routes — ${file}`);
+    console.log(`Implemented routes: ${implemented.size}`);
+    console.log(`Documented endpoints: ${documented.size}`);
+
+    for (const route of [...implemented].sort()) {
+      console.log(`${documented.has(route) ? "OK  " : "MISS"} ${route}`);
+    }
+
+    // A document that parses to ZERO endpoints, or a route file that registers
+    // nothing under a governed prefix, is a stale matcher or a stale registry —
+    // and both look green from the totals alone.
+    if (documented.size === 0) {
+      console.error(`\n${doc.spec} parsed to ZERO documented endpoints — the spec parser is not reading this document.`);
+      failed = true;
+      continue;
+    }
+    const empty = [...perFile].filter(([, n]) => n === 0).map(([f]) => f);
+    if (empty.length > 0) {
+      console.error("\nRoute file registering NO governed route — stale matcher or stale registry:");
+      for (const f of empty) console.error(`- ${f}`);
+      failed = true;
+      continue;
+    }
+
+    if (undocumented.length > 0) {
+      console.error(`\nImplemented but NOT documented in ${doc.spec}:`);
+      for (const r of undocumented) console.error(`- ${r}`);
+    }
+    if (unimplemented.length > 0) {
+      console.error(`\nDocumented in ${doc.spec} but NOT implemented:`);
+      for (const r of unimplemented) console.error(`- ${r}`);
+    }
+    if (undocumented.length > 0 || unimplemented.length > 0) failed = true;
+  }
+
+  if (failed) {
+    process.exitCode = 1;
+    return;
+  }
+  console.log(`\nContract holds across ${DOCUMENTS.length} documents: every governed route is documented and vice versa.`);
 }
 
 await main();

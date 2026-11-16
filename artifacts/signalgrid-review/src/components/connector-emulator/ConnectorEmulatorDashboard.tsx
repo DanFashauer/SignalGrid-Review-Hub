@@ -1,26 +1,16 @@
 import type { ReactNode } from "react";
 import {
+  connectorEmulatorGuardrails,
   connectorEmulatorProof,
   connectorEmulatorScenarios,
   type ConnectorDecision,
 } from "@/data/connectorEmulatorData";
-
-const decisionStyles: Record<ConnectorDecision, string> = {
-  allowCandidate: "border-teal-500/50 bg-teal-950/30 text-teal-200",
-  deny: "bg-status-deny",
-  restrict: "bg-status-restrict",
-  stepUp: "border-sky-500/50 bg-sky-950/30 text-sky-200",
-  approvalRequired: "border-violet-500/50 bg-violet-950/30 text-violet-200",
-};
+import { connectorDecisionTone } from "@/lib/outcome-tone";
 
 const flow = ["signals", "evaluation", "decision", "route", "verification"];
-const guardrails = [
-  "no unsafe allow for degraded/unknown health",
-  "high-risk remediation requires approval",
-  "simulated first",
-  "route owner required",
-  "verification expectation required",
-];
+// The guardrail pills are COMPUTED over the committed proof results (see
+// connectorEmulatorData.ts) — they used to be a hardcoded string array rendered
+// with a green tick, which would have looked identical with the proof red.
 const safetyNotes = [
   "synthetic emulator only",
   "not live integration evidence",
@@ -109,7 +99,7 @@ export default function ConnectorEmulatorDashboard() {
           </div>
           <div className="mt-4 flex flex-wrap gap-2">
             {decisions.map((decision) => (
-              <Pill key={decision} className={decisionStyles[decision]}>
+              <Pill key={decision} className={connectorDecisionTone(decision)}>
                 {decision}
               </Pill>
             ))}
@@ -155,12 +145,16 @@ export default function ConnectorEmulatorDashboard() {
             Guardrail indicators
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
-            {guardrails.map((guardrail) => (
+            {connectorEmulatorGuardrails.map((guardrail) => (
               <Pill
-                key={guardrail}
-                className="border-teal-500/40 bg-teal-950/20 text-teal-200"
+                key={guardrail.label}
+                className={
+                  guardrail.holds
+                    ? "border-teal-500/40 bg-teal-950/20 text-teal-200"
+                    : "border-red-500/50 bg-red-950/30 text-red-200"
+                }
               >
-                ✓ {guardrail}
+                {guardrail.holds ? "✓" : "✗"} {guardrail.label}
               </Pill>
             ))}
           </div>
@@ -201,8 +195,21 @@ export default function ConnectorEmulatorDashboard() {
                     <Pill className="border-border bg-muted text-muted-foreground">
                       {scenario.group}
                     </Pill>
-                    <Pill className={decisionStyles[scenario.expectedDecision]}>
-                      {scenario.expectedDecision}
+                    {/* The ENGINE's decision from the committed proof run, not
+                        the fixture's intent; a mismatch renders red. */}
+                    <Pill
+                      className={
+                        scenario.actualDecision === "unverified"
+                          ? "border-amber-500/50 bg-amber-950/30 text-amber-200"
+                          : scenario.actualDecision === scenario.expectedDecision
+                            ? connectorDecisionTone(scenario.actualDecision)
+                            : "border-red-500/50 bg-red-950/30 text-red-200"
+                      }
+                    >
+                      {scenario.actualDecision}
+                      {scenario.actualDecision !== "unverified" &&
+                        scenario.actualDecision !== scenario.expectedDecision &&
+                        ` (expected ${scenario.expectedDecision})`}
                     </Pill>
                     <Pill className="border-border bg-background text-muted-foreground">
                       severity: {scenario.severity}

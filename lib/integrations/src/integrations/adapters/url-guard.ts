@@ -31,6 +31,46 @@
  * and it is named in `docs/COMPANY_BUILD_PLAN.md`. What it DOES now cover that it
  * did not before: the redirect hop, because no emitter follows one any more
  * (`adapters/redirect.ts`).
+ *
+ * THE LITERAL HOST HAS MORE THAN ONE SPELLING, AND EVERY RULE ABOVE WAS COMPARING
+ * AGAINST ONLY ONE OF THEM. `[::ffff:127.0.0.1]`, `[::ffff:169.254.169.254]` and
+ * `[::ffff:10.0.0.7]` are the SAME loopback/metadata/private addresses as their plain
+ * IPv4 spellings — IPv4-mapped IPv6 — and `[::127.0.0.1]` (IPv4-compatible, deprecated
+ * but still parses) is the same address again. `new URL(...)` accepts every one of
+ * these, and every equivalent respelling of them (hex groups, fully expanded, mixed
+ * case) canonicalizes to exactly one of two textual shapes — confirmed against the
+ * platform URL parser, not assumed: `::ffff:<hex16>:<hex16>` (mapped) or
+ * `::<hex16>:<hex16>` (compatible) — so `validateWebhookUrl` decodes those two shapes
+ * back to dotted-decimal BEFORE running the checks below, and every existing rule
+ * then applies to the decoded address exactly as it already applied to the plain
+ * spelling. Nothing else changes: a genuinely different IPv6 address (`2001:db8::1`,
+ * `fe80::1`, `fc00::1`) never matches either shape, because both require the leading
+ * 80 bits to be all zero (the compatible shape 96), which no routable IPv6 prefix is.
+ *
+ * A THIRD SHAPE, ADDED 2026-10-17: the IPv4-TRANSLATED form `::ffff:0:a.b.c.d`
+ * (`::ffff:0:0:0/96`, RFC 2765 §2.1 SIIT, obsoleted by RFC 6145) canonicalizes to
+ * `::ffff:0:<hex16>:<hex16>`, which neither pattern above matched, so
+ * `[::ffff:0:127.0.0.1]` was judged as an IPv6 address no rule names and passed. It is
+ * decoded the same way, so it gets its IPv4 twin's verdict. Its leading 64 bits are
+ * zero and the next 16 are `ffff`, so no routable IPv6 prefix matches it either.
+ *
+ * THE TRAILING DOT IS A SPELLING TOO. `localhost.` and `app.localhost.` are the
+ * fully-qualified spellings of `localhost` and `app.localhost` (RFC 6761 reserves the
+ * whole `.localhost` name), and `new URL()` keeps the dot. The rules therefore run on
+ * the host AS PARSED and again with its trailing dots stripped, and the URL is refused
+ * if EITHER is refused. Stripping alone would loosen: `127..` and `10..` stay domains
+ * to the URL parser, which `/^127\./` and `/^10\./` refuse, while their stripped forms
+ * `127` and `10` match nothing. Checking both can only add refusals, never remove one.
+ *
+ * A DIFFERENT EMBEDDING IS DELIBERATELY LEFT ALONE: the NAT64 well-known prefix
+ * `64:ff9b::/96` (e.g. `64:ff9b::7f00:1` for 127.0.0.1) is a FOURTH way to spell an
+ * IPv4 address inside IPv6, is not in the reported bypass, and decoding it is a
+ * bigger change than this fix — a NAT64 resolver on an actual deployment's network
+ * can legitimately hand back addresses in that block for otherwise-ordinary public
+ * IPv4 hosts, and this file's job today is closing the reported bypass, not widening
+ * the rule. Named here so it is not mistaken for closed. The 6to4 prefix `2002::/16`
+ * (e.g. `2002:7f00:1::1` for 127.0.0.1) embeds an IPv4 address too and is left alone
+ * for the same reason; it is not closed either.
  */
 
 /**
@@ -106,6 +146,33 @@ export const WEBHOOK_URL_REFUSALS = {
  *  retried six times over ~31 seconds instead of being refused once. */
 export const WEBHOOK_URL_REFUSAL_REASONS: readonly string[] = Object.values(WEBHOOK_URL_REFUSALS);
 
+/**
+ * `new URL()` canonicalizes every IPv4-mapped (`::ffff:a.b.c.d`) or IPv4-compatible
+ * (`::a.b.c.d`) IPv6 literal — however the caller spelled it, dotted or hex, padded
+ * or not, upper- or lower-case — to one of exactly two lowercase shapes:
+ * `::ffff:<hex16>:<hex16>` or `::<hex16>:<hex16>`, and every IPv4-translated
+ * (`::ffff:0:a.b.c.d`) literal to `::ffff:0:<hex16>:<hex16>`. All three mean the same
+ * thing: the trailing 32 bits ARE an IPv4 address. Decode them back to dotted-decimal so the
+ * rules in {@link validateWebhookUrl} see the same literal regardless of spelling.
+ *
+ * Anchored full-string match on purpose: `::1`, `::`, `fe80::1`, `fc00::1` and every
+ * ordinary global-unicast address have EITHER a nonzero leading group (fails the
+ * required `::` prefix) or fewer than two explicit trailing groups (fails the
+ * `<hex16>:<hex16>` requirement), so none of them match here and each still falls
+ * through to its own existing check unchanged.
+ *
+ * Exported so `proof:emitter-discipline` can pin all four decoded octets directly:
+ * the guard's verdict reads only the first two, so a corrupted low group is
+ * otherwise visible only at `[::ffff:0.0.0.0]`.
+ */
+export function decodeIPv4InIPv6(hostname: string): string | null {
+  const match = /^::(?:ffff:(?:0:)?)?([0-9a-f]{1,4}):([0-9a-f]{1,4})$/.exec(hostname);
+  if (!match) return null;
+  const hi = parseInt(match[1], 16);
+  const lo = parseInt(match[2], 16);
+  return `${hi >> 8}.${hi & 0xff}.${lo >> 8}.${lo & 0xff}`;
+}
+
 export function validateWebhookUrl(
   url: string,
   opts: { live: boolean },
@@ -117,36 +184,51 @@ export function validateWebhookUrl(
       return { valid: false, error: WEBHOOK_URL_REFUSALS.httpsRequired };
     }
 
-    const hostname = parsed.hostname.toLowerCase().replace(/^\[|\]$/g, '');
-
-    // Loopback and unspecified, in both families.
-    if (
-      hostname === 'localhost' ||
-      hostname.endsWith('.localhost') ||
-      hostname === '0.0.0.0' ||
-      hostname === '::' ||
-      hostname === '::1' ||
-      /^127\./.test(hostname)
-    ) {
-      return { valid: false, error: WEBHOOK_URL_REFUSALS.loopback };
-    }
-
-    // RFC1918 private ranges, RFC6598 shared address space, and link-local —
-    // including IPv6 unique-local (fc00::/7) and link-local (fe80::/10).
-    if (
-      /^10\./.test(hostname) ||
-      /^192\.168\./.test(hostname) ||
-      /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(hostname) ||
-      /^100\.(6[4-9]|[7-9][0-9]|1[0-1][0-9]|12[0-7])\./.test(hostname) ||
-      /^169\.254\./.test(hostname) ||
-      /^f[cd][0-9a-f]{2}:/.test(hostname) ||
-      /^fe[89ab][0-9a-f]:/.test(hostname)
-    ) {
-      return { valid: false, error: WEBHOOK_URL_REFUSALS.privateRange };
+    // Zone ids (`[fe80::1%eth0]`) are refused by `new URL()` itself for the
+    // http/https schemes this guard validates — confirmed above, not assumed —
+    // so a zone id never reaches here; it is already caught below as invalidUrl.
+    const bracketless = parsed.hostname.toLowerCase().replace(/^\[|\]$/g, '');
+    const refusal = literalHostRefusal(bracketless) ?? literalHostRefusal(bracketless.replace(/\.+$/, ''));
+    if (refusal) {
+      return { valid: false, error: refusal };
     }
 
     return { valid: true };
   } catch {
     return { valid: false, error: WEBHOOK_URL_REFUSALS.invalidUrl };
   }
+}
+
+/** The loopback and private-range rules for one lowercase, bracketless host spelling:
+ *  the refusal reason, or null when no rule refuses it. */
+function literalHostRefusal(bracketless: string): string | null {
+  const hostname = decodeIPv4InIPv6(bracketless) ?? bracketless;
+
+  // Loopback and unspecified, in both families.
+  if (
+    hostname === 'localhost' ||
+    hostname.endsWith('.localhost') ||
+    hostname === '0.0.0.0' ||
+    hostname === '::' ||
+    hostname === '::1' ||
+    /^127\./.test(hostname)
+  ) {
+    return WEBHOOK_URL_REFUSALS.loopback;
+  }
+
+  // RFC1918 private ranges, RFC6598 shared address space, and link-local —
+  // including IPv6 unique-local (fc00::/7) and link-local (fe80::/10).
+  if (
+    /^10\./.test(hostname) ||
+    /^192\.168\./.test(hostname) ||
+    /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(hostname) ||
+    /^100\.(6[4-9]|[7-9][0-9]|1[0-1][0-9]|12[0-7])\./.test(hostname) ||
+    /^169\.254\./.test(hostname) ||
+    /^f[cd][0-9a-f]{2}:/.test(hostname) ||
+    /^fe[89ab][0-9a-f]:/.test(hostname)
+  ) {
+    return WEBHOOK_URL_REFUSALS.privateRange;
+  }
+
+  return null;
 }

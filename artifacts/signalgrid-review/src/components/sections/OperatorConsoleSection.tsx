@@ -17,6 +17,7 @@ import {
   type SimulationResult,
   type WebhookDelivery,
 } from "@workspace/signalgrid-core";
+import { verdictBadgeTone } from "@/lib/outcome-tone";
 
 /**
  * Operator Console — a public-safe, in-browser trace of the SignalGrid decision
@@ -58,13 +59,6 @@ const SCENARIOS: ScenarioSpec[] = [
   { label: "SmartDock faulted", identityRef: "nurse.dock_faulted", deviceRef: "ipad-dock-01", workflowKey: "clinical-session" },
   { label: "SmartDock offline", identityRef: "nurse.dock_offline", deviceRef: "ipad-dock-02", workflowKey: "clinical-session" },
 ];
-
-const outcomeTone: Record<DecisionOutcome, string> = {
-  allow: "bg-status-allow",
-  step_up: "bg-status-step-up",
-  restrict: "bg-status-restrict",
-  deny: "bg-status-deny",
-};
 
 const outcomeLabel: Record<DecisionOutcome, string> = {
   allow: "ALLOW",
@@ -171,7 +165,7 @@ export default function OperatorConsoleSection() {
                       {row.label}
                     </span>
                     <span
-                      className={`text-[10px] font-mono font-semibold px-1.5 py-0.5 rounded border shrink-0 ${outcomeTone[row.decision.outcome]}`}
+                      className={`text-[10px] font-mono font-semibold px-1.5 py-0.5 rounded border shrink-0 ${verdictBadgeTone(row.decision.outcome)}`}
                     >
                       {outcomeLabel[row.decision.outcome]}
                     </span>
@@ -341,7 +335,7 @@ function ContinuityPanel() {
             <div className="flex items-center justify-between gap-2 pt-1 border-t border-border/60">
               <span className="text-[11px] text-muted-foreground">Stands</span>
               <span
-                className={`text-[10px] font-mono px-2 py-0.5 rounded border ${outcomeTone[c.result.outcome]}`}
+                className={`text-[10px] font-mono px-2 py-0.5 rounded border ${verdictBadgeTone(c.result.outcome)}`}
               >
                 {outcomeLabel[c.result.outcome]}
               </span>
@@ -543,7 +537,7 @@ function DecisionDetail({
           <p className="text-sm font-mono text-foreground">{decision.id}</p>
         </div>
         <span
-          className={`text-xs font-mono font-semibold px-2 py-1 rounded border ${outcomeTone[decision.outcome]}`}
+          className={`text-xs font-mono font-semibold px-2 py-1 rounded border ${verdictBadgeTone(decision.outcome)}`}
         >
           {outcomeLabel[decision.outcome]}
         </span>
@@ -657,7 +651,7 @@ function DecisionDetail({
                   {rule.reasonCode}
                 </span>
                 <span
-                  className={`font-mono px-1.5 py-0.5 rounded border shrink-0 ${outcomeTone[rule.outcome]}`}
+                  className={`font-mono px-1.5 py-0.5 rounded border shrink-0 ${verdictBadgeTone(rule.outcome)}`}
                 >
                   {outcomeLabel[rule.outcome]} · {rule.severity}
                 </span>
@@ -733,7 +727,7 @@ function DecisionDetail({
                     <span className="text-[10px] text-amber-300">changed</span>
                   )}
                   <span
-                    className={`font-mono px-1.5 py-0.5 rounded border ${outcomeTone[sim.simulatedOutcome]}`}
+                    className={`font-mono px-1.5 py-0.5 rounded border ${verdictBadgeTone(sim.simulatedOutcome)}`}
                   >
                     {outcomeLabel[sim.simulatedOutcome]}
                   </span>

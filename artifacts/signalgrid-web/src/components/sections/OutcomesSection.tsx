@@ -40,7 +40,7 @@ const PHASES = [
     border: "border-orange-400/20",
     bg: "bg-orange-400/10",
     steps: [
-      "Session close recorded — credential revocation stays with your identity stack",
+      "Your host app closes the session — credential revocation stays with your identity stack",
       "Every verdict of the day sits in the audit ledger, tamper-evident",
       "An operator can reconstruct any decision: source → evidence → policy → verdict",
       "Enforcement on the device itself remained your MDM's job throughout",
@@ -102,8 +102,9 @@ export default function OutcomesSection() {
         >
           <div className="flex flex-col md:flex-row md:items-center gap-4">
             <div className="shrink-0">
-              <div className="text-xs font-mono text-destructive mb-1">EXIT VIOLATION SCENARIO</div>
+              <div className="text-xs font-mono text-destructive mb-1">EXIT VIOLATION SCENARIO — DEFERRED ROADMAP, ILLUSTRATIVE</div>
               <div className="text-sm font-semibold text-foreground">Device not docked by end of shift — no badge checkout recorded</div>
+              <div className="text-xs text-muted-foreground mt-1">Dock, badge, location and PACS signals are deferred — not Limited GA. The chips are what the evidence would recommend; every action stays with its source system.</div>
             </div>
             <div className="md:ml-auto flex flex-wrap gap-2">
               {[
@@ -111,7 +112,7 @@ export default function OutcomesSection() {
                 "Supervisor notification recommended",
                 "MDM Lost Mode recommended (approval-gated)",
                 "Location escalation recommended",
-                "Badge suspension routed to the PACS",
+                "Badge suspension recommended — the PACS stays the actor",
               ].map((action) => (
                 <span key={action} className="inline-flex items-center rounded-md border border-destructive/20 bg-destructive/10 px-2.5 py-1 text-xs font-mono text-destructive">
                   {action}

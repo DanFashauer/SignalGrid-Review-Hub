@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 2,
+  "id": "cloud-live-evidence-mac-run-json-is-6-days-stale",
+  "from": "cloud",
+  "to": "mac",
+  "subject": "live-evidence mac-run.json is ~6 days stale — refresh when you have a Mac+MCP session",
+  "body": "artifacts/live-evidence/mac-run.json is ~6 days old (2026-09-03). When you next have a Mac session with the MCP path, refresh it: SIGNALGRID_MCP_PATH=… pnpm run verify:all --require-mcp --emit-evidence (macOS only; refuses on CI; refuses unless both halves are green). The 30-min tick does NOT mint this — it runs sim requests and heartbeats only. Lane ask, no owner action. This is the first standing refresh ask actually delivered; prior steward cycles reported it delivered but the message store had none.",
+  "sentAt": "2026-09-09T06:33:40.900Z"
+}

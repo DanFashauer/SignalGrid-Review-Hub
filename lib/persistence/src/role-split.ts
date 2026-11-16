@@ -458,8 +458,13 @@ export async function assertRoleSplitProvisionable(
     SELECT (SELECT rolsuper FROM pg_roles WHERE rolname = current_user) AS is_super,
            pg_has_role(current_user,
              (SELECT datdba FROM pg_database WHERE datname = current_database()), 'USAGE') AS owns_db,
+           -- FALSE, not TRUE, when the schema row is absent: a missing public schema
+           -- makes the subquery NULL and pg_has_role NULL, and the old COALESCE
+           -- reported ownership PROVEN from evidence that did not exist — the
+           -- precheck passed and the REVOKE on that schema failed mid-flight, the
+           -- exact half-applied state this function exists to prevent.
            COALESCE(pg_has_role(current_user,
-             (SELECT nspowner FROM pg_namespace WHERE nspname = 'public'), 'USAGE'), TRUE) AS owns_schema,
+             (SELECT nspowner FROM pg_namespace WHERE nspname = 'public'), 'USAGE'), FALSE) AS owns_schema,
            NOT EXISTS (
              SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
              WHERE n.nspname = 'public'

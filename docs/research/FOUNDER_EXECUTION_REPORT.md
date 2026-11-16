@@ -218,7 +218,16 @@ observable exit evidence.
 - customer data, real credentials, or live vendor calls in Review Hub;
 - public production, compliance, partnership, or replacement claims.
 
-## Current execution state
+## Execution state as of 2026-08-06
+
+Dated by this file's last substantive commit (`d3adc2b`, 2026-08-06, per
+`git log --follow`; the 2026-08-10 commit only moved it into `docs/research/`),
+which is the change the next sentence names. Nothing re-measures this section:
+several Gate 1 items listed below as unbuilt have since gained proofs in the tree
+(`proof:enterprise-auth`, `proof:decision-store-pg`, `proof:db-role-split`,
+`proof:audit-ledger-pg`, `proof:backup-restore` in `package.json`), while the
+gates themselves still require private deployment, so the status below is a
+dated record, not a current reading.
 
 This change completes a public-safe portion of Gate 0: it corrects conflicting
 autonomy language, establishes this founder execution contract, and records the

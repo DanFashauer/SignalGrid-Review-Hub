@@ -97,10 +97,12 @@
 // leaves the rest of the repository unopened.
 
 import { execFileSync } from "node:child_process";
+import { scratchGitOk, scrubProcessGitEnv } from "./lib/scratch-git.mjs";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { isMainModule } from "./lib/is-main.mjs";
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const LEDGER_REL = "docs/agent/SURFACE_REVIEW_COVERAGE.json";
@@ -122,6 +124,27 @@ export const NON_SURFACE_TREES = new Map([
     "attached_assets",
     "owner-pasted raw material whose disposition is an OPEN owner decision (LOOP.md NEXT ACTION, 2026-09-02), so there is no settled shape to read yet.",
   ],
+]);
+
+/**
+ * Trees that ARE surfaces (they were read, they keep their row, every file in them is
+ * claimed) but whose files are RECORDS the lanes append to — a message, an ack, a
+ * heartbeat — rather than code anyone reads again. Their file counts are therefore
+ * not printed, and they are left out of the in-scope figures in the page header.
+ *
+ * WHY (2026-09-12). The page printed those counts, so every lane delivery that added
+ * one message moved this generated file, and every open product PR — including the
+ * Mac's combined landing #653 and the cloud's #649/#654 — went unmergeable on it within
+ * the hour, each cycle, until somebody merged mainline in and regenerated. A page that
+ * changes on mail is a page nobody can land against. The completeness assertion is
+ * untouched: a mailbox file still belongs to exactly one surface; only the NUMBER is
+ * withheld from the render, and the self-test proves the page is byte-identical
+ * before and after one more record lands.
+ */
+export const MAILBOX_TREES = new Map([
+  ["artifacts/lane-messages", "lane mail — every send, ack and batch appends a message file"],
+  ["artifacts/agent-heartbeats", "routine heartbeats — a new routine appends a file; a firing rewrites one"],
+  ["artifacts/raised-hands", "raised hands (DR-054) — every raise appends a file; a take or resolve rewrites one"],
 ]);
 
 /**
@@ -163,6 +186,22 @@ export function listTracked(root = REPO) {
   const files = out.split("\0").filter(Boolean);
   if (files.length === 0) throw new Error(`\`git ls-files\` returned nothing in ${root} — refusing to report coverage over an empty tree.`);
   return files;
+}
+
+// L11: `--write` regenerated this page once while docs/agent/SURFACE_REVIEW_COVERAGE.md
+// itself sat mid-merge-conflict (e3b444cf) — the file walk saw three index stages
+// (ours/theirs/base) and rendered wrong counts. Pure so the self-test can exercise it
+// without a real merge: `unmergedListing` is `git ls-files -u`'s raw stdout (one line
+// per conflicted stage, tab-separated path last); any non-empty listing means the index
+// is mid-merge, regardless of which path is unmerged — a conflict anywhere else in the
+// tree still means the walk `--write` performs is reading multiple stages.
+export function writeRefusal(unmergedListing) {
+  const paths = [...new Set(unmergedListing.split("\n").filter(Boolean).map((l) => l.split("\t").slice(1).join("\t")))];
+  if (paths.length === 0) return null;
+  return (
+    `refusing to regenerate over a mid-conflict index — resolve the conflict first, then regenerate. ` +
+    `Unmerged path(s):\n` + paths.map((p) => `  ✗ ${p}`).join("\n")
+  );
 }
 
 const isDir = (p) => {
@@ -299,6 +338,10 @@ export function coverTracked(surfaces, tracked) {
   // one still matches something. A key here that stays at 0 is a stale fossil — a hole
   // dressed as a decision — and is FATAL, distinct from the aggregate `outOfScope > 0`.
   const outOfScopeByKey = new Map([...NON_SURFACE_TREES.keys()].map((k) => [k, 0]));
+  // Mailbox records are claimed like any other file (below) AND tallied here, so the
+  // page can leave them out of the printed figures without losing them.
+  let mailbox = 0;
+  const mailboxByKey = new Map([...MAILBOX_TREES.keys()].map((k) => [k, 0]));
 
   // Longest path first, so a child surface always beats its parent tree.
   const exact = surfaces.filter((s) => !s.id.endsWith("/*") && s.id !== ROOT_ID).sort((a, b) => b.path.length - a.path.length);
@@ -306,6 +349,12 @@ export function coverTracked(surfaces, tracked) {
 
   for (const f of tracked) {
     const top = f.split("/")[0];
+    for (const key of mailboxByKey.keys()) {
+      if (f.startsWith(`${key}/`)) {
+        mailbox += 1;
+        mailboxByKey.set(key, mailboxByKey.get(key) + 1);
+      }
+    }
     if (NON_SURFACE_TREES.has(top)) {
       outOfScope += 1;
       outOfScopeByKey.set(top, outOfScopeByKey.get(top) + 1);
@@ -333,7 +382,7 @@ export function coverTracked(surfaces, tracked) {
     }
     uncovered.push(f);
   }
-  return { byId, uncovered, outOfScope, outOfScopeByKey, total: tracked.length };
+  return { byId, uncovered, outOfScope, outOfScopeByKey, mailbox, mailboxByKey, total: tracked.length };
 }
 
 // ── field validation ─────────────────────────────────────────────────────────
@@ -351,16 +400,24 @@ export function isIsoDate(v) {
  * depending on this checkout's actual depth.
  */
 const defaultRecordIO = {
-  /** A squash-merge lands "(#N)" in the commit subject; a `--fixed-strings` grep finds
-   * it. Non-empty output ⇒ the referenced PR is in LOCAL history. */
+  /** GitHub writes a merged PR's number into the commit subject in TWO shapes, and this
+   * probe knew only one of them. A SQUASH merge lands "(#N)"; a MERGE COMMIT lands
+   * "Merge pull request #N from …". Both are in this repository's history (324 and 83
+   * subjects respectively when the second form was added). That mattered the moment the
+   * full-clone rule below became fatal: `#491` is a real, merged, checkable pull request
+   * that lands as a merge commit, so a probe that only knew the squash form would have
+   * called an honest record fabricated. A gate that flags a true statement is wrong, so
+   * the probe learned the second idiom rather than the ledger losing the reference.
+   * `n` is digits-only (anchored `[1-9]\d*` at the call site), so it cannot carry regex.
+   * Non-empty output ⇒ the referenced PR is in LOCAL history. */
   prInHistory(n, root) {
     let out = "";
     try {
-      out = execFileSync("git", ["log", "--all", "--fixed-strings", `--grep=(#${n})`, "--format=%H", "-1"], {
-        cwd: root,
-        encoding: "utf8",
-        stdio: ["ignore", "pipe", "ignore"],
-      });
+      out = execFileSync(
+        "git",
+        ["log", "--all", "--extended-regexp", `--grep=(\\(#${n}\\)|^Merge pull request #${n}([^0-9]|$))`, "--format=%H", "-1"],
+        { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] },
+      );
     } catch {
       return false;
     }
@@ -376,14 +433,19 @@ const defaultRecordIO = {
       return false;
     }
   },
-  /** True when this clone is shallow — a miss then cannot be told from a PR beyond depth. */
+  /** True when this clone is shallow — a miss then cannot be told from a PR beyond depth.
+   * Reads as "this clone cannot be PROVEN complete": git failing to answer returns TRUE,
+   * not false. The fatal arm below asserts "the clone is full, therefore the number is
+   * fabricated", and that is an affirmative claim; with no answer from git there is no
+   * evidence for it, so the record is REPORTED instead. Nothing passes silently either
+   * way — an unverified record is always printed. */
   isShallow(root) {
     try {
       return (
-        execFileSync("git", ["rev-parse", "--is-shallow-repository"], { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim() === "true"
+        execFileSync("git", ["rev-parse", "--is-shallow-repository"], { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim() !== "false"
       );
     } catch {
-      return false;
+      return true;
     }
   },
 };
@@ -408,17 +470,22 @@ export function resolveRecord(record, root = REPO, io = {}) {
   const r = record.trim();
   const prInHistory = io.prInHistory ?? defaultRecordIO.prInHistory;
   const commitExists = io.commitExists ?? defaultRecordIO.commitExists;
+  const isShallow = io.isShallow ?? defaultRecordIO.isShallow;
   const m = /^#([1-9]\d*)$/.exec(r);
   if (m) {
     const n = m[1];
     if (prInHistory(n, root)) return "pull-request reference";
-    // Clone depth is environment-dependent: CI checks out shallow (depth 1) and
-    // even a local clone may lack older merge commits, so a "(#N)" miss cannot
-    // be told apart from a fabricated number. A miss is therefore REPORTED as
-    // unverified — truthy, never fatal — so a fabricated #NNN surfaces in the
-    // unverified list rather than passing silently, and a real older PR beyond
-    // the fetch depth never false-fails the gate in CI.
-    return `pull-request reference — UNVERIFIED ("(#${n})" not in local history; clone may be shallow)`;
+    // The header's rule, now implemented rather than only described. It was written
+    // here from the first version and never ran: whatever the depth, a miss returned
+    // the UNVERIFIED string, so the FULL-clone arm the header promised was prose.
+    // In a clone git confirms is COMPLETE, a number absent from every subject cannot
+    // be an old PR beyond the fetch depth — the history is all here — so it is
+    // fabricated, and fabricated is fatal.
+    if (!isShallow(root)) return null;
+    // In a SHALLOW clone (this repository, and CI's depth-1 checkout) a real older PR
+    // and a fabricated number are indistinguishable, so the miss is REPORTED as
+    // unverified — truthy, never fatal — and printed rather than swallowed.
+    return `pull-request reference — UNVERIFIED ("(#${n})" not in local history; clone is shallow, so a real older PR cannot be told from a fabricated number)`;
   }
   if (existsSync(join(root, r))) return "path in the tree";
   if (/^[0-9a-f]{7,40}$/i.test(r)) {
@@ -487,6 +554,23 @@ export function auditSurfaceCoverage(surfaces, ledger, opts = {}) {
           `NON_SURFACE_TREES key \`${key}/\` is declared out-of-scope but matches no tracked file — ` +
             "a stale exclusion is a hole: delete the key, or restore the tree it was meant to exclude.",
         );
+      }
+    }
+  }
+
+  // (1c) PER-KEY: every declared mailbox tree must be a derived surface AND still hold
+  // records. `MAILBOX_TREES` only decides what the page PRINTS; a key naming a tree that
+  // no longer exists, or that the derivation does not treat as a surface, is a fossil
+  // that would silently withhold a number from a surface it was never about.
+  const mailboxByKey = opts.mailboxByKey ?? cover?.mailboxByKey ?? null;
+  const mailboxKeys = opts.mailboxKeys ?? [...MAILBOX_TREES.keys()];
+  if (mailboxByKey) {
+    const ids = new Set(surfaces.map((s) => s.id));
+    for (const key of mailboxKeys) {
+      if (!ids.has(key)) {
+        fatal.push(`MAILBOX_TREES key \`${key}\` is not a derived surface — a mailbox declaration must name a surface row, or be deleted.`);
+      } else if ((mailboxByKey.get(key) ?? 0) === 0) {
+        fatal.push(`MAILBOX_TREES key \`${key}/\` holds no tracked record — a stale mailbox declaration withholds a count from nothing: delete the key.`);
       }
     }
   }
@@ -653,10 +737,15 @@ export function renderPage(audit) {
   );
   L.push("");
   if (c) {
+    // NO FILE COUNT is printed, for any surface (2026-11-04). Every PR that added one file moved this generated page, and
+    // every other open PR then conflicted on it (#1321, #1314, #1265, #1190 at once). The mailbox trees taught the same
+    // lesson in 2026-09; the rule now covers every tree. The assertion is unchanged: a file belonging to no surface fails the gate.
     L.push(
-      `Coverage of the tree is asserted, not assumed: **${c.total - c.outOfScope - c.uncovered.length} of ` +
-        `${c.total - c.outOfScope} in-scope tracked files** belong to a surface on this page ` +
-        `(${c.outOfScope} more are in declared out-of-scope trees). A file belonging to no surface fails the gate.`,
+      `Coverage of the tree is asserted, not assumed: **every in-scope tracked file belongs to a surface on this page** ` +
+        "(a file belonging to no surface fails the gate; the declared out-of-scope trees are listed below). " +
+        "File counts are not printed here, for any surface: a generated page that moves when a file is added makes every " +
+        "other open pull request unmergeable on it. `node scripts/check-surface-review-coverage.mjs` prints them. " +
+        `The mailbox trees (${[...MAILBOX_TREES.keys()].map((k) => `\`${k}\``).join(", ")}) are surfaces like any other.`,
     );
     L.push("");
   }
@@ -668,11 +757,11 @@ export function renderPage(audit) {
     "`node scripts/check-surface-review-coverage.mjs --write`.",
   );
   L.push("");
-  L.push("| Surface | Kind | Files | State | Reads | Last read | Reviewer | Record | Closed | Open |");
-  L.push("| --- | --- | ---: | --- | ---: | --- | --- | --- | ---: | ---: |");
+  L.push("| Surface | Kind | State | Reads | Last read | Reviewer | Record | Closed | Open |");
+  L.push("| --- | --- | --- | ---: | --- | --- | --- | ---: | ---: |");
   for (const r of audit.table) {
     L.push(
-      `| \`${r.id}\` | ${r.kind} | ${r.files} | ${r.state === "READ" ? "read" : r.state === "PARTIAL" ? "**partial**" : "**NOT READ**"} | ` +
+      `| \`${r.id}\` | ${r.kind} | ${r.state === "READ" ? "read" : r.state === "PARTIAL" ? "**partial**" : "**NOT READ**"} | ` +
         `${r.count} | ${r.last ?? "—"} | ${r.reviewer || "—"} | ${r.record || "—"} | ${r.closed} | ${r.open} |`,
     );
   }
@@ -770,7 +859,11 @@ function makeTempRepo() {
   w("lib/core/src/index.ts", "export const x = 1;\n");
   w("artifacts/api-server/package.json", '{"name":"api"}\n');
   w("artifacts/api-server/src/index.ts", "export const y = 1;\n");
+  // One record under EVERY declared mailbox tree, so the fixture is consistent with the
+  // per-key mailbox check (a key naming no surface, or holding no record, is fatal).
   w("artifacts/lane-messages/one.json", "{}\n");
+  w("artifacts/agent-heartbeats/one.json", "{}\n");
+  w("artifacts/raised-hands/one.json", "{}\n");
   w("scripts/package.json", '{"name":"scripts"}\n');
   w("scripts/a.mjs", "// a\n");
   w("docs/TOP.md", "# top\n");
@@ -783,12 +876,13 @@ function makeTempRepo() {
   // per-key F2 check (a key matching zero tracked files is fatal) rather than tripping it.
   w("third_party/vendor/thing.js", "// vendored\n");
   w("attached_assets/raw/pasted.txt", "raw\n");
-  execFileSync("git", ["init", "-q"], { cwd: root });
-  execFileSync("git", ["add", "-A"], { cwd: root });
+  scratchGitOk(root, ["init", "-q"]);
+  scratchGitOk(root, ["add", "-A"]);
   return root;
 }
 
 function selfTest() {
+  scrubProcessGitEnv(); // inherited GIT_DIR/GIT_WORK_TREE/GIT_INDEX_FILE would aim the gate's own plain-git calls at the real repo
   const controls = [];
   const check = (name, fn) => {
     let ok = false;
@@ -842,6 +936,40 @@ function selfTest() {
     return auditReal(ledger, { nonSurfaceKeys: [...NON_SURFACE_TREES.keys()] }).fatal.length === 0;
   });
 
+  // ── the mailbox trees: claimed, counted, but the page must not move on mail ─
+  check("every declared mailbox tree is a derived surface and holds records (baseCover proves it)", () => {
+    const ids = new Set(base.map((s) => s.id));
+    return [...MAILBOX_TREES.keys()].every((k) => ids.has(k) && (baseCover.mailboxByKey.get(k) ?? 0) > 0);
+  });
+  check("a MAILBOX_TREES key that is not a surface is FATAL, naming the key", () => {
+    const { fatal } = auditReal(ledger, { mailboxKeys: [...MAILBOX_TREES.keys(), "artifacts/no_such_mailbox"] });
+    return fatal.some((f) => f.includes("artifacts/no_such_mailbox") && f.includes("not a derived surface"));
+  });
+  check("a MAILBOX_TREES key whose tree holds no record is FATAL, naming the key", () => {
+    const emptied = new Map(baseCover.mailboxByKey);
+    emptied.set("artifacts/lane-messages", 0);
+    const { fatal } = auditReal(ledger, { mailboxByKey: emptied });
+    return fatal.some((f) => f.includes("artifacts/lane-messages/") && f.includes("holds no tracked record"));
+  });
+  check("one more record under a mailbox tree leaves the rendered page BYTE-IDENTICAL (the reason the trees are declared)", () => {
+    const before = renderPage(auditReal(ledger));
+    const planted = [...tracked, "artifacts/lane-messages/self-test-planted-message.json", "artifacts/agent-heartbeats/self-test-planted.json"];
+    const cover = coverTracked(base, planted);
+    if (cover.uncovered.length !== 0 || cover.mailbox !== baseCover.mailbox + 2) return false;
+    return renderPage(auditSurfaceCoverage(base, ledger, { cover })) === before;
+  });
+  check("one more file under an ordinary (non-mailbox) surface ALSO leaves the page BYTE-IDENTICAL (2026-11-04: no file counts at all)", () => {
+    const before = renderPage(auditReal(ledger));
+    const cover = coverTracked(base, [...tracked, "lib/integrations/self-test-planted.ts"]);
+    return cover.uncovered.length === 0 && renderPage(auditSurfaceCoverage(base, ledger, { cover })) === before;
+  });
+  check("…and a read-state change DOES change the page (the identity tests are not vacuous)", () => {
+    const before = renderPage(auditReal(ledger));
+    const audit = auditReal(ledger);
+    const flipped = { ...audit, table: audit.table.map((r, i) => (i === 0 ? { ...r, count: r.count + 1 } : r)) };
+    return renderPage(flipped) !== before;
+  });
+
   // ── plants on a REAL but THROWAWAY git tree ────────────────────────────────
   let temp = null;
   try {
@@ -864,7 +992,7 @@ function selfTest() {
     mkdirSync(join(temp, "lib/planted"), { recursive: true });
     writeFileSync(join(temp, "lib/planted/package.json"), '{"name":"planted"}\n');
     writeFileSync(join(temp, "lib/planted/index.ts"), "export const z = 1;\n");
-    execFileSync("git", ["add", "-A"], { cwd: temp });
+    scratchGitOk(temp, ["add", "-A"]);
     const pTracked = listTracked(temp);
     const pSurfaces = deriveSurfaces(temp, pTracked);
     const pCover = coverTracked(pSurfaces, pTracked);
@@ -886,7 +1014,7 @@ function selfTest() {
 
     // PLANT 2 — the surface is gone, the row is not.
     rmSync(join(temp, "lib/planted"), { recursive: true, force: true });
-    execFileSync("git", ["add", "-A"], { cwd: temp });
+    scratchGitOk(temp, ["add", "-A"]);
     const dTracked = listTracked(temp);
     const dSurfaces = deriveSurfaces(temp, dTracked);
     check("a row whose directory has been DELETED is FATAL", () => {
@@ -906,6 +1034,32 @@ function selfTest() {
       rmSync(join(temp, PAGE_REL));
       const gone = comparePageOnDisk(temp, page);
       return clean.status === "ok" && dirty.status === "stale" && gone.status === "missing";
+    });
+
+    // PLANT 4 — the PR probe and the full-clone rule, against REAL git rather than
+    // injected IO. A freshly `git init`ed tree is not shallow, so this is the only place
+    // the fatal arm runs end to end: the injected checks above pin the decision, this
+    // one pins that the decision is reached from real `git log` / `git rev-parse` output.
+    const commitHere = (subject) =>
+      scratchGitOk(temp, ["commit", "-q", "--allow-empty", "-m", subject]);
+    commitHere("core: something (#4242)");
+    commitHere("Merge pull request #4243 from someone/branch");
+    check("the REAL probe finds BOTH subject forms GitHub writes — squash \"(#N)\" and merge-commit \"Merge pull request #N\" — and finds neither for an absent number", () => {
+      return (
+        defaultRecordIO.prInHistory("4242", temp) === true &&
+        defaultRecordIO.prInHistory("4243", temp) === true &&
+        defaultRecordIO.prInHistory("9999", temp) === false
+      );
+    });
+    check("a FULL clone (real git, not injected): a merge-commit PR reference RESOLVES, and an absent number is FATAL", () => {
+      const full = defaultRecordIO.isShallow(temp) === false;
+      const merged = resolveRecord("#4243", temp) === "pull-request reference";
+      const fabricated = resolveRecord("#9999", temp) === null;
+      return full && merged && fabricated;
+    });
+    check("that same absent number in a SHALLOW clone is REPORTED, not fatal (only the depth differs between the two arms)", () => {
+      const r = resolveRecord("#9999", temp, { isShallow: () => true });
+      return typeof r === "string" && /unverified/i.test(r);
     });
 
     check("listTracked FAILS CLOSED on a directory git cannot enumerate (it never returns [])", () => {
@@ -964,9 +1118,22 @@ function selfTest() {
     const a = audit1(withRead({ ...good, record: "#4242" }), { recordOk: recordOkWith({ prInHistory: () => true, isShallow: () => false }) });
     return a.fatal.length === 0 && a.readCount === 1 && a.unverified.length === 0;
   });
-  check("a #NNN NOT in local history is NOT fatal but is REPORTED unverified — regardless of clone depth (a real miss and a fabricated number are indistinguishable, so neither false-fails CI nor passes silently)", () => {
-    const a = audit1(withRead({ ...good, record: "#99999" }), { recordOk: recordOkWith({ prInHistory: () => false }) });
+  check("a #NNN NOT in local history, in a SHALLOW clone, is NOT fatal but is REPORTED unverified (a real older PR cannot be told from a fabricated number at depth 1, so CI never false-fails)", () => {
+    const a = audit1(withRead({ ...good, record: "#99999" }), { recordOk: recordOkWith({ prInHistory: () => false, isShallow: () => true }) });
     return a.fatal.length === 0 && a.unverified.length === 1 && a.unverified[0].record === "#99999" && /unverified/i.test(a.unverified[0].reason);
+  });
+  check("a #NNN NOT in local history, in a FULL clone, is FATAL — the header's rule, and it must be able to fire", () => {
+    const a = audit1(withRead({ ...good, record: "#99999" }), { recordOk: recordOkWith({ prInHistory: () => false, isShallow: () => false }) });
+    return a.fatal.some((f) => f.includes("#99999") && f.includes("resolves to nothing")) && a.unverified.length === 0;
+  });
+  check("git failing to report depth is treated as NOT-PROVEN-FULL: reported, never fatal (the fatal arm is an affirmative claim and needs evidence)", () => {
+    // The REAL depth probe, pointed at a directory that is not a git repository at all,
+    // so `git rev-parse --is-shallow-repository` errors rather than answering.
+    const notARepo = "/nonexistent-root-for-selftest";
+    const a = audit1(withRead({ ...good, record: "#99999" }), {
+      recordOk: (rec) => resolveRecord(rec, notARepo, { prInHistory: () => false, isShallow: defaultRecordIO.isShallow }),
+    });
+    return defaultRecordIO.isShallow(notARepo) === true && a.fatal.length === 0 && a.unverified.length === 1;
   });
   check("a read with no reviewer is FATAL", () => audit1(withRead({ ...good, reviewer: "" })).fatal.some((f) => f.includes("reviewer")));
   check("a read with an impossible date is FATAL", () => audit1(withRead({ ...good, date: "2026-02-30" })).fatal.some((f) => f.includes("must name the day")));
@@ -1016,6 +1183,17 @@ function selfTest() {
     return p.includes("`third_party/`") && p.includes("`attached_assets/`") && p.includes("vendored");
   });
 
+  // ── L11: --write refuses over a mid-conflict index ──────────────────────────
+  check("an empty `git ls-files -u` listing lets --write proceed", () => writeRefusal("") === null);
+  check("a listing naming the coverage page itself refuses", () => {
+    const r = writeRefusal(`100644 abc123 1\t${PAGE_REL}\n100644 def456 2\t${PAGE_REL}\n100644 fed321 3\t${PAGE_REL}\n`);
+    return typeof r === "string" && r.includes(PAGE_REL) && r.includes("resolve the conflict first");
+  });
+  check("a listing naming an unrelated file refuses too — any unmerged path means a mid-merge index", () => {
+    const r = writeRefusal("100644 abc123 1\tdocs/README.md\n100644 def456 3\tdocs/README.md\n");
+    return typeof r === "string" && r.includes("docs/README.md");
+  });
+
   let bad = 0;
   console.log("Surface-read-coverage self-test — the gate must be able to fail\n");
   for (const c of controls) {
@@ -1033,6 +1211,15 @@ function selfTest() {
 // ── main ─────────────────────────────────────────────────────────────────────
 
 function main({ write }) {
+  if (write) {
+    const unmergedListing = execFileSync("git", ["ls-files", "-u"], { cwd: REPO, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+    const refusal = writeRefusal(unmergedListing);
+    if (refusal) {
+      console.error(`✗ ${refusal}`);
+      process.exit(1);
+    }
+  }
+
   let ledger;
   try {
     ledger = JSON.parse(readFileSync(join(REPO, LEDGER_REL), "utf8"));
@@ -1085,8 +1272,8 @@ function main({ write }) {
   console.log("            Never fatal — a ledger that reddens on the calendar gets switched off, and then reports nothing.");
   console.log("  NOT PROVEN by any row here: that the read was any good. The record is what proves that.\n");
 
-  const inScope = cover.total - cover.outOfScope;
-  console.log(`  tracked files: ${cover.total} — ${inScope - cover.uncovered.length}/${inScope} in-scope files belong to a surface, ${cover.outOfScope} in declared out-of-scope trees`);
+  const inScope = cover.total - cover.outOfScope - cover.mailbox;
+  console.log(`  tracked files: ${cover.total} — ${inScope - cover.uncovered.length}/${inScope} in-scope files belong to a surface, ${cover.outOfScope} in declared out-of-scope trees, ${cover.mailbox} mailbox records (claimed, not printed)`);
   console.log(`  READ:     ${audit.readCount} of ${audit.total} surfaces`);
   console.log(`  PARTIAL:  ${audit.partial.length} of ${audit.total} surfaces`);
   for (const s of audit.partial) console.log(`            · ${s.id} (${s.kind})`);
@@ -1143,7 +1330,7 @@ function main({ write }) {
 // Importable: `scripts/loop-state.mjs` reuses the derivation for its one-line row, and a
 // module that ran its own gate on import would turn that reuse into a second full run
 // with a second exit code. Same guard `check-review-coverage.mjs` uses, for the same reason.
-const runAsCli = process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+const runAsCli = isMainModule(process.argv[1], import.meta.url);
 if (runAsCli) {
   const argv = process.argv.slice(2);
   if (argv.includes("--self-test")) selfTest();

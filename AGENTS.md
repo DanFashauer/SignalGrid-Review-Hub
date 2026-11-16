@@ -81,7 +81,7 @@ Every PR should include:
 - Remaining risks or owner decisions
 - Screenshots or local QA notes when UI changes are perceptible
 
-Do not merge your own PR. Leave merge decisions to the repository owner.
+Under DR-037 and the owner's current delegation, the repository steward selects bounded source-backed work, claims it visibly and may apply `brain:ready`; the owner need not label or press merge for each task. Land only after the applicable same-head source reviews, full local preflight/breadth, current required GitHub checks, findings disposition and DR-037 qualification. Use an expected-head serial merge and verify ancestry and journals. Preserve owner-reserved decisions, protections and branches; never force-push or bypass checks. Genuine source review is evidence, never a fabricated approving vote.
 
 ## Review guidelines
 

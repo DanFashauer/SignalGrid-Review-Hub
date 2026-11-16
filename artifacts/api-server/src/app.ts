@@ -6,12 +6,13 @@ import { CONSOLE_HTML } from "./console-html";
 import { logger } from "./lib/logger";
 import { requestContext } from "./middlewares/context";
 import { demoSurfacesEnabled } from "./lib/profile";
-import { constantTimeEquals } from "@workspace/signalgrid-core";
+import { readSecret, secretMatches } from "@workspace/secrets";
 import { errorHandler } from "./middlewares/errors";
 import { globalRateLimiter } from "./middlewares/rateLimit";
 import { deprecationHeaders } from "./middlewares/deprecation";
 import { metricsMiddleware } from "./middlewares/metrics";
-import { renderMetrics } from "./lib/metrics";
+import { refreshInventoryGauges, renderMetrics } from "./lib/metrics";
+import { core } from "./lib/core";
 
 const app: Express = express();
 
@@ -46,7 +47,13 @@ const corsOptions: CorsOptions = {
   // here, a browser console on an allowed cross-origin deployment with
   // SIGNALGRID_ENROLLMENT_SECRET set would have every correctly-authorized enrollment
   // request blocked at CORS preflight, before the server-side check could even run.
-  allowedHeaders: ["authorization", "content-type", "x-request-id", "x-enrollment-authorization"],
+  // idempotency-key: the same defect as the line above, one header along. The server
+  // READS it (middlewares/idempotency.ts) and lib/api-spec/v1-openapi.yaml DOCUMENTS it as
+  // the opt-in exactly-once mechanism for POST /v1 — but it was absent here, so a browser
+  // on an allowed cross-origin deployment had every retry-safe POST rejected at preflight,
+  // before a single line of the idempotency middleware could run. The documented safe way
+  // to retry was the one way that could not be used from a browser.
+  allowedHeaders: ["authorization", "content-type", "x-request-id", "x-enrollment-authorization", "idempotency-key"],
   maxAge: 600,
 };
 
@@ -102,26 +109,77 @@ if (demoSurfacesEnabled()) {
   });
 }
 
+/**
+ * `METRICS_TOKEN` — the bearer a /metrics scraper must present.
+ *
+ * UNSET means the endpoint is open, per Prometheus convention, and that is
+ * unchanged. PRESENT BUT BLANK refuses to boot, which is the whole point of
+ * resolving it here instead of in the handler: `process.env.METRICS_TOKEN?.trim()`
+ * used as a truthiness guard treats `""` and `"   "` exactly like unset, so an
+ * operator who set the variable and got the quoting wrong believed the endpoint
+ * was protected while it was served open — an unusable configuration value
+ * LOOSENING the answer, which golden rule 2 forbids. Mirrors the boot-time refusal
+ * `lib/core.ts` already applies to SIGNALGRID_MAX_DECISIONS_PER_TENANT and
+ * `lib/profile.ts` to an unrecognised profile: a configuration error on a security
+ * knob is answered by not serving, never by serving less safely.
+ *
+ * The VALUE now comes from `@workspace/secrets`, the one read site (DR-010,
+ * docs/SECRET_MODEL.md). Two things follow. The blank check is the accessor's
+ * `presentButBlank`, so the same rule covers the successor variable too — a blank
+ * METRICS_TOKEN_NEXT is as much a misconfiguration as a blank METRICS_TOKEN. And the
+ * comparison below accepts EITHER value while both are set, which is what makes a
+ * rotation possible at all: publish the successor, move the scrapers, promote it,
+ * delete it. Before this there was no window — the instant the variable changed,
+ * every scraper still holding the old value was 401.
+ */
+function metricsSecretAtBoot(): { enabled: boolean } {
+  const reading = readSecret("METRICS_TOKEN");
+  if (reading.presentButBlank) {
+    throw new Error(
+      'METRICS_TOKEN (or METRICS_TOKEN_NEXT) is set but blank (""/whitespace) — refusing to start rather than ' +
+        "serving /metrics unauthenticated to an operator who believes it is protected. " +
+        "Unset the variable to serve metrics openly, or give it a value.",
+    );
+  }
+  return { enabled: reading.value !== undefined };
+}
+const METRICS_BEARER_REQUIRED = metricsSecretAtBoot().enabled;
+
 // Prometheus scrape endpoint (operational metrics). Global AGGREGATE only —
 // counters/latencies with no tenant label and no request payloads, so the
 // endpoint can never become a cross-tenant side channel. Open by default per
 // Prometheus convention; setting METRICS_TOKEN requires scrapers to present it
 // as a bearer, without breaking deployments that never set it.
 app.get("/metrics", (req, res) => {
-  const required = process.env.METRICS_TOKEN?.trim();
-  // constantTimeEquals, not `!==`: an early-exit string compare on the one
-  // static secret an operator actually sets leaks it character by character,
-  // and the core already protects even its PUBLIC demo keys this way
-  // (store.ts:128). The weaker guard sat on the stronger secret.
+  // `secretMatches` compares in constant time, not with `!==`: an early-exit string
+  // compare on the one static secret an operator actually sets leaks it character by
+  // character, and the core already protects even its PUBLIC demo keys this way
+  // (store.ts:128). The weaker guard sat on the stronger secret. It also accepts the
+  // staged successor while one is set, and it can never return true for an
+  // unconfigured secret — which is why the `enabled` flag is still consulted first
+  // rather than inferred from a failed match.
   const presented = typeof req.headers.authorization === "string" ? req.headers.authorization : "";
-  if (required && !constantTimeEquals(presented, `Bearer ${required}`)) {
+  const offered = presented.startsWith("Bearer ") ? presented.slice("Bearer ".length) : "";
+  if (METRICS_BEARER_REQUIRED && !secretMatches("METRICS_TOKEN", offered)) {
     res.status(401).type("text/plain").send("metrics: bearer token required");
     return;
   }
-  res.type("text/plain; version=0.0.4").send(renderMetrics(Date.now()));
+  // Connector health and evidence freshness are read off held state at scrape time.
+  // A throwing read folds into `unknown` inside refreshInventoryGauges; it never 500s.
+  refreshInventoryGauges(core);
+  res.type("text/plain; version=0.0.4").send(renderMetrics());
 });
 
 app.use("/api", router);
+
+// JSON 404 for every root path nothing above claimed. The human surfaces (the demo
+// console at / and /console, /metrics) are registered earlier and keep their own
+// responses; everything else used to fall through to Express's default HTML error
+// page — and under shared-device-gateway, where the console is not mounted, that
+// included GET / itself. Same flat envelope as the /api catch-all.
+app.use((req, res) => {
+  res.status(404).json({ requestId: req.requestId ?? null, error: "not_found", message: "No such route." });
+});
 
 // Structured error translation must be registered after the routes.
 app.use(errorHandler);

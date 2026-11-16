@@ -30,7 +30,7 @@ export function SignalList() {
 
   const signalType = activeTab === "all" ? undefined : activeTab as ListLatestSignalsSignalType;
 
-  const { data: signalsData, isLoading } = useListLatestSignals({
+  const { data: signalsData, isLoading, isError, error } = useListLatestSignals({
     limit: 100,
     signalType,
   });
@@ -39,7 +39,11 @@ export function SignalList() {
     <div className="p-8 max-w-7xl mx-auto space-y-6">
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Signal Feed</h1>
-        <p className="text-muted-foreground mt-1 font-mono text-sm">SIGNAL STREAM (FIXTURE) — {signalsData?.signals.length ?? 0} SIGNALS</p>
+        {/* A failed read is not "0 SIGNALS": the count defaulted to 0 and the body
+            rendered an empty table, which is exactly what a quiet, healthy feed looks like. */}
+        <p className="text-muted-foreground mt-1 font-mono text-sm">
+          SIGNAL STREAM (FIXTURE) — {signalsData ? `${signalsData.signals.length} SIGNALS` : isError ? "FEED UNAVAILABLE" : "…"}
+        </p>
         <p className="text-xs text-amber-400/80 mt-2 max-w-2xl">
           Synthetic fixture data. This catalog view includes candidate signal categories
           (session, network, operational) that the decision core does not evaluate today —
@@ -73,6 +77,13 @@ export function SignalList() {
             {isLoading ? (
               <TableRow>
                 <TableCell colSpan={6} className="h-32 text-center text-muted-foreground font-mono">Loading signals...</TableCell>
+              </TableRow>
+            ) : isError ? (
+              <TableRow>
+                <TableCell colSpan={6} className="h-32 text-center text-muted-foreground font-mono">
+                  Signal feed unavailable — the control plane did not answer.
+                  <div className="text-xs mt-1">{String(error instanceof Error ? error.message : error)}</div>
+                </TableCell>
               </TableRow>
             ) : signalsData?.signals.length === 0 ? (
               <TableRow>

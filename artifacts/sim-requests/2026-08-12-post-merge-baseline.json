@@ -1,6 +1,7 @@
 {
   "schemaVersion": 1,
   "id": "2026-08-12-post-merge-baseline",
+  "requestedAt": "2026-08-12T15:29:14Z",
   "requestedBy": "cloud lane",
   "reason": "First run after the launch spine merged (PR #152, #202, #203). The default branch has never been exercised on real hardware: the committed live evidence still fingerprints against a pre-merge tree, and the iOS simulator + MCP phases have no post-merge run at all. This establishes the baseline every later request is compared against.",
   "runs": [

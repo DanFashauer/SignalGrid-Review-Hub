@@ -227,6 +227,12 @@ check("the order is antisymmetric on a sample", compareProvenance(prov({ policyV
   check("an offline decision with an UNSTATED age expires (silence buys nothing)", unstated.outcome === "step_up");
   check("...and is reported as unstated rather than exceeded", unstated.reasonCodes.includes("OFFLINE_STANDING_AGE_UNSTATED") && !unstated.reasonCodes.includes("OFFLINE_STANDING_BOUND_EXCEEDED"));
 
+  // A record whose id names an INHERITED member of the bound map ("constructor")
+  // must read as UNSTATED, not as a function that fails the numeric bound under
+  // the wrong reason (eighth verdict-core round, 2026-09-05: raw index).
+  const proto = reconcileDecisions([rec("constructor", "allow", { policyVersion: 8, coreNormalizationVersion: 2, evaluatedOffline: true })], { standingBound: { maxStandingSeconds: 3600, elapsedSecondsById: {} } });
+  check("a record id that is a prototype member reads as UNSTATED, with the unstated reason", proto.outcome === "step_up" && proto.reasonCodes.includes("OFFLINE_STANDING_AGE_UNSTATED") && !proto.reasonCodes.includes("OFFLINE_STANDING_BOUND_EXCEEDED"));
+
   // Expiry RAISES; it never drops the record out of the set.
   const expiredDeny = reconcileDecisions([rec("device", "deny", { policyVersion: 8, coreNormalizationVersion: 2, evaluatedOffline: true })], { standingBound: { maxStandingSeconds: 60, elapsedSecondsById: { device: 999 } } });
   check("expiry never LOWERS an outcome (a deny stays a deny)", expiredDeny.outcome === "deny");

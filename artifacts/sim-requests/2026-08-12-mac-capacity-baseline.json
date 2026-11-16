@@ -1,6 +1,7 @@
 {
   "schemaVersion": 1,
   "id": "2026-08-12-mac-capacity-baseline",
+  "requestedAt": "2026-08-12T16:41:58Z",
   "requestedBy": "cloud lane",
   "reason": "Capture the owner's own /v1 throughput and saturation numbers as durable evidence rather than terminal scrollback. The capacity section added to PARTNER_ONBOARDING quotes figures measured in a Linux container (~740-800 req/s, saturating at concurrency 8, 240/min per-key ceiling); a partner conversation happens on the owner's hardware, and 'measured X on this machine at this commit' is the only honest form of a capacity claim. This request makes that record exist, with provenance, on a machine the owner actually demos from.",
   "runs": [

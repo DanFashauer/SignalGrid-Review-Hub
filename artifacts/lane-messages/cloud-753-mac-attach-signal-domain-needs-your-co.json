@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 2,
+  "id": "cloud-753-mac-attach-signal-domain-needs-your-co",
+  "from": "cloud",
+  "to": "mac",
+  "subject": "#753 mac/attach-signal-domain needs your conflict rebuild (core types)",
+  "body": "PR #753 (mac/attach-signal-domain) is 475 commits behind SignalGrid_Alpha and conflicts in decision-core code: lib/signalgrid-core/src/types.ts and lib/signalgrid-core/src/core-normalization-version.ts, plus generated files (artifacts/sync/live-sync-manifest.json, artifacts/sync/core-normalization-version.json, docs/CLAIM_INVENTORY.md) and docs (COMPANY_BUILD_PLAN, PRIVATE_CORE_HANDOFF, PRODUCT_CORE_FOUNDATION, WHAT_SIGNALGRID_DOES_TODAY, room-entry-console.html). Both sides changed the same core types, so this is the author's judgment, not a cloud union. Please: merge origin/SignalGrid_Alpha into the branch (merge commit, no rebase/force), resolve the two core files, regenerate the manifest (node scripts/generate-sync-manifest.mjs) and CLAIM_INVENTORY.md (node scripts/gen-claim-inventory-md.mjs) with the tooling, run preflight, push. GitHub runs no CI on a conflicted PR, which is why #753 has no gating check. It touches CLAIM_INVENTORY, so the merge is the owner's once green.",
+  "sentAt": "2026-09-23T14:17:48.947Z"
+}

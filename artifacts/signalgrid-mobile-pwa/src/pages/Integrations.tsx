@@ -4,9 +4,10 @@ import { formatNumber, formatLatency, formatTimeAgo } from "@/lib/format";
 import { StatusDot } from "@/components/StatusDot";
 import { SignalBadge } from "@/components/SignalBadge";
 import { BottomSheet } from "@/components/BottomSheet";
+import { FixtureLabel } from "@/components/FixtureLabel";
 
 export default function Integrations() {
-  const { data, isLoading } = useListIntegrations();
+  const { data, isLoading, isError } = useListIntegrations();
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const { data: detailData, isLoading: detailLoading } = useGetIntegration(selectedId || "", {
@@ -44,13 +45,18 @@ export default function Integrations() {
   return (
     <div className="h-full w-full flex flex-col pt-safe bg-background">
       <header className="px-4 py-3 shrink-0 bg-background z-10 border-b border-border/50">
-        <h1 className="text-lg font-bold">Integrations</h1>
+        <h1 className="text-lg font-bold">Integrations (fixture)</h1>
+        <FixtureLabel className="mt-1" />
       </header>
       
       <div className="flex-1 overflow-y-auto scroll-area bg-muted/10 pb-safe">
         {isLoading ? (
           <div className="p-4 space-y-4">
             {[1,2,3,4].map(i => <div key={i} className="h-24 bg-card border rounded-xl animate-pulse" />)}
+          </div>
+        ) : isError ? (
+          <div className="p-6 text-sm text-status-restrict">
+            Integration catalog unreachable — the state of every source is unknown, not healthy.
           </div>
         ) : (
           <div className="p-4 space-y-8">
@@ -115,6 +121,7 @@ export default function Integrations() {
           </div>
         ) : detailData ? (
           <div className="space-y-6 pb-safe">
+            <FixtureLabel />
             <div className="flex items-start justify-between">
               <div>
                 <h2 className="text-xl font-bold">{detailData.vendor}</h2>

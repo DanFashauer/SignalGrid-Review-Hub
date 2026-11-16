@@ -9,6 +9,9 @@ import {
 export * from "./types";
 export * from "./evaluate";
 export * from "./rtls-connector";
+// The custody-ledger RECONCILIATION — ledger vs bay vs the requester's cap, a distinct
+// surface from where the device physically is (docs/research/SHARED_DEVICE_CUSTODY_GROUND_TRUTH.md).
+export * from "./custody-ledger";
 export { createMockRtlsTransport, type MockRtlsOptions } from "./mock-transport";
 
 /**

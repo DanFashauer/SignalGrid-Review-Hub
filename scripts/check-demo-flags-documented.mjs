@@ -68,6 +68,18 @@ const SHELL_DIR = "native/ios/EnterpriseShell";
 const DEMO_MODE = `${SHELL_DIR}/Services/DemoMode.swift`;
 const KIOSK_CONFIG = `${SHELL_DIR}/Services/KioskController.swift`;
 const README = "native/ios/README.md";
+// The managed-key table is copied in two more documents — the one an endpoint
+// team configures from (native/ios/mdm/README.md) and the MDM boundary doc —
+// and until 2026-09-05 only README.md was gated: a ninth key would have
+// reached one table and silently missed the two a customer actually reads.
+// Every copy is held to the same derived set, both directions.
+// Each copy sits under its own heading; the heading is a prefix match, and the
+// section ends at the next level-2/3 heading, exactly as for README.md.
+const MANAGED_KEY_DOCS = [
+  { doc: "native/ios/README.md", heading: "### Managed App Config keys" },
+  { doc: "native/ios/mdm/README.md", heading: "## Managed App Configuration" },
+  { doc: "native/ios/MDM_CONFIGURATION.md", heading: "## 1. Managed App Configuration" },
+];
 const MIN_FLAGS = 10;
 // Six managed keys are read today (SingleAppModeEnabled, AllowManualOverride,
 // RecoveryCode, BackendBaseURL, BackendBearerToken, BackendWorkflowKey — the last
@@ -225,18 +237,18 @@ function deriveSettingsKeys(plistText, plistPath, sources) {
  * self-tests. Both directions: a control nothing documents, and a row nothing
  * reads.
  */
-function compare(derived, rows, { prefix = "", tableName, missingWhy, fossilWhy }) {
+function compare(derived, rows, { prefix = "", tableName, missingWhy, fossilWhy, doc = README }) {
   const problems = [];
   for (const [key, file] of [...derived].sort()) {
     if (!rows.has(key)) {
-      problems.push(`  ✗ ${prefix}${key}: read by ${file}, absent from the ${tableName} in ${README} — ` + missingWhy);
+      problems.push(`  ✗ ${prefix}${key}: read by ${file}, absent from the ${tableName} in ${doc} — ` + missingWhy);
     } else if (rows.get(key).length === 0) {
-      problems.push(`  ✗ ${prefix}${key}: documented with an empty meaning — the row says nothing`);
+      problems.push(`  ✗ ${prefix}${key}: documented with an empty meaning in ${doc} — the row says nothing`);
     }
   }
   for (const key of [...rows.keys()].sort()) {
     if (!derived.has(key)) {
-      problems.push(`  ✗ ${prefix}${key}: listed in the ${README} ${tableName}, but nothing under ${SHELL_DIR} reads it — ` + fossilWhy);
+      problems.push(`  ✗ ${prefix}${key}: listed in the ${doc} ${tableName}, but nothing under ${SHELL_DIR} reads it — ` + fossilWhy);
     }
   }
   return problems;
@@ -485,6 +497,29 @@ for (const line of compare(managed, managedRows, MANAGED_MSGS)) {
   console.error(line);
   problems += 1;
 }
+// The other copies of the managed-key table. A copy that lacks the heading, or
+// has no rows under it, is a problem — not a skipped document.
+const otherManagedDocs = MANAGED_KEY_DOCS.filter((d) => d.doc !== README);
+for (const { doc, heading } of otherManagedDocs) {
+  let text = null;
+  try { text = readFileSync(resolve(repo, doc), "utf8"); } catch { /* reported below */ }
+  if (text === null) {
+    console.error(`  ✗ ${doc}: not found — a managed-key table copy this gate holds has moved or gone`);
+    problems += 1;
+    continue;
+  }
+  const section = sectionUnder(text, heading);
+  const copyRows = keyedRows(section);
+  if (section === null || copyRows.size === 0) {
+    console.error(`  ✗ ${doc}: no "${heading}" section with rows shaped \`| \`Key\` | meaning |\` — the copy is unreadable, not exempt`);
+    problems += 1;
+    continue;
+  }
+  for (const line of compare(managed, copyRows, { ...MANAGED_MSGS, doc })) {
+    console.error(line);
+    problems += 1;
+  }
+}
 for (const line of compare(settings.declared, settingsRows, SETTINGS_MSGS)) {
   console.error(line);
   problems += 1;
@@ -502,8 +537,8 @@ if (problems > 0) {
 console.log(
   `demo flags: ${flags.size} derived from ${sources.length} Swift source(s), all documented in ${README} with a meaning; ` +
     `${rows.size} table row(s), no fossils.\n` +
-    `managed app config keys: ${managed.size} derived (managedBool/managedString + configured(managed: ConfigKeys.*)), all documented under "${MANAGED_HEADING}"; ` +
-    `${managedRows.size} table row(s), no fossils.\n` +
+    `managed app config keys: ${managed.size} derived (managedBool/managedString + configured(managed: ConfigKeys.*)), all documented in ${MANAGED_KEY_DOCS.length} document(s) (${MANAGED_KEY_DOCS.map((d) => d.doc).join(", ")}); ` +
+    `${managedRows.size} table row(s) in ${README}, no fossils in any copy.\n` +
     `settings bundle keys: ${settings.declared.size} declared in ${SETTINGS_BUNDLE}, each read by the shell and documented under "${SETTINGS_HEADING}"; ` +
     `${settingsRows.size} table row(s), no fossils.\n` +
     `  (GATED: presence + a non-empty meaning, both directions, for all three sets. REPORTED, not gated: whether each meaning is accurate.)`,

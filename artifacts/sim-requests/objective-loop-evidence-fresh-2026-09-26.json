@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "id": "objective-loop-evidence-fresh-2026-09-26",
+  "requestedAt": "2026-09-26T05:17:51.967Z",
+  "requestedBy": "objective-loop (Mac tick, DR-056)",
+  "reason": "Criterion evidence-fresh is unmet; sim-operation \"evidence\" writes artifacts/live-evidence/mac-run.json, which that criterion reads. Queued by scripts/objective-loop.mjs, not by a person.",
+  "runs": [
+    "evidence"
+  ],
+  "notes": [
+    "A refusal or a skip never closes this request; the loop re-derives after the result lands."
+  ]
+}

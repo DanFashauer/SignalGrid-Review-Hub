@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 2,
+  "id": "mac-objective-loop-stalled-top-task-needs-cloud",
+  "from": "mac",
+  "to": "cloud",
+  "subject": "objective-loop: stalled-top-task — needs cloud",
+  "body": "row 17b (\"Drive access-governance against the Keycloak lab that already exists\") has been ranked #1 for over 7 days with no change in docs/COMPANY_BUILD_PLAN.md — build it, re-rank it, or record why it waits\n\n(Raised by scripts/objective-loop.mjs on the Mac tick, DR-056. Verdict escalate; state docs/agent/objective-state.json @ 4488520181a42f2ab6fc3fc2e549f062fd5ec458. Sent once, on the first tick this escalation appeared; it stays in the state file until cleared.)",
+  "sentAt": "2026-10-08T16:59:29.086Z"
+}

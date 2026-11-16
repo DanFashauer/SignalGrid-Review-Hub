@@ -108,6 +108,7 @@
 </style>
 </head>
 <body>
+<div style="max-width:70rem;margin:0 auto;padding:.75rem 1rem;background:#3b2f0b;color:#f5e6b8;border-bottom:1px solid #6b5a1f;font:14px/1.5 system-ui,sans-serif"><strong>Scope:</strong> this is a scripted demonstration driven by fixtures &mdash; no live evidence, no connector and no network. The shared-workstation and change-risk families it steps up on are <strong>deferred &mdash; proven in the repository, not shipping at Limited GA</strong>, and the biometric prompt is a demo stand-in for the platform&rsquo;s own authenticator. What ships today is three signals: device compliance, how current that answer is, and whether the device can vouch for itself right now (see <a href="https://github.com/DanFashauer/SignalGrid-Review-Hub/blob/SignalGrid_Alpha/docs/POSITIONING.md" style="color:#ffd97a">POSITIONING.md</a>). Nothing here is a claim of current capability.</div>
 <div class="wrap">
   <header>
     <div class="glyph"></div>
@@ -216,7 +217,12 @@
   document.getElementById("mac").onclick=function(){setPlatform("mac");};
   document.getElementById("win").onclick=function(){setPlatform("win");};
 
-  function setDecision(a,v,why,body){ decAction.textContent=a; decVerdict.textContent=v.toUpperCase(); decVerdict.className="verdict v-"+v; decBody.innerHTML=body; decWhy.textContent=why?("reason · "+why):""; }
+  // `verdict` may be NULL — the neutral state. It renders the em dash and no `v-*` class.
+  // The reset path used to pass "allow" here and then overwrite the element three lines
+  // later, so nothing green ever rendered; but the state a reset CONSTRUCTED was a grant,
+  // and the correction was a separate statement a future edit could drop. Fail-closed
+  // applies to the code that builds the decision, not only to what ends up on screen.
+  function setDecision(a,v,why,body){ decAction.textContent=a; decVerdict.textContent=v?v.toUpperCase():"—"; decVerdict.className=v?("verdict v-"+v):"verdict"; decBody.innerHTML=body; decWhy.textContent=why?("reason · "+why):""; }
   function addOp(label,state){ ops.insertAdjacentHTML("beforeend",'<div class="op '+state+'"><div class="ic">•</div><div>'+label+'</div><div class="st">'+(state==="done"?"DONE":"HELD")+'</div></div>'); return ops.lastElementChild; }
   function updatePrimary(){ if(i>=STEPS.length){primary.textContent="All done ✓";primary.disabled=true;return;} primary.disabled=false; primary.textContent=STEPS[i].label; }
 
@@ -246,7 +252,7 @@
   primary.onclick=function(){ if(!awaitingStepUp && !awaitingConfirm) advance(); };
   document.getElementById("osGo").onclick=completeStepUp;
   document.getElementById("osNo").onclick=function(){ osdim.classList.remove("show"); awaitingStepUp=false; primary.disabled=false; msg.innerHTML='<div class="msg">Cancelled. The action stays held — nothing was pushed.</div>'; setDecision(STEPS[i].action,"step_up","STEP_UP_NOT_SATISFIED","The engineer declined the check, so the held push never fires. Fail-closed: no gesture, no release."); };
-  document.getElementById("reset").onclick=function(){ i=0;awaitingStepUp=false;awaitingConfirm=false;heldOp=null; ops.innerHTML="";msg.innerHTML="";confirmEl.innerHTML=""; setDecision("—","allow","","Press <strong>View topology</strong> to begin."); decAction.textContent="—";decVerdict.textContent="—";decVerdict.className="verdict"; osdim.classList.remove("show"); updatePrimary(); };
+  document.getElementById("reset").onclick=function(){ i=0;awaitingStepUp=false;awaitingConfirm=false;heldOp=null; ops.innerHTML="";msg.innerHTML="";confirmEl.innerHTML=""; setDecision("—",null,"","Press <strong>View topology</strong> to begin."); osdim.classList.remove("show"); updatePrimary(); };
 
   setPlatform("mac"); updatePrimary();
 })();

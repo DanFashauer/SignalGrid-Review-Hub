@@ -1,5 +1,7 @@
 # LinkedIn Post Drafts
 
+> **SUPERSEDED 2026-09-06 — do not post or send from this file.** Pre-DR-011 category-building copy that still carries the retired label (counted by the docs ceiling); the live outbound surface is `docs/outreach/` (claim-scanned on every push). Kept for provenance only; `scripts/check-send-copy-banner.mjs` holds the rule.
+
 These drafts are pre-announcement and category-building copy. They are designed to create curiosity and credibility without making production, partnership, compliance, certification, replacement, autonomous-remediation, funding, customer, valuation, or acquisition claims.
 
 ## A. Founder teaser: "Something important is coming"

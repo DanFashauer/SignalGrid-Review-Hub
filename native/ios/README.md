@@ -9,12 +9,15 @@ environments. Users authenticate using hardware badge readers; the app drives th
 session lifecycle and wipes session data on teardown.
 
 **What the app does versus what the OS does.** The app cannot make itself
-non-removable, force full screen, or relaunch itself — those are OS capabilities.
-`Services/KioskController.swift` *requests* Autonomous Single App Mode, which the OS
-grants only on an **MDM-supervised** device whose management profile authorizes this
-bundle ID. Enforcement is the MDM's and the OS's; on an unsupervised device or the
-simulator the request is refused and the shell stays windowed and removable. The
-device-side half is documented in `native/ios/mdm/README.md`.
+non-removable, keep the worker from leaving it, or relaunch itself — those are OS
+capabilities. It does declare full screen on its own: `UIRequiresFullScreen` in
+`native/ios/EnterpriseShell/Info.plist` opts out of Split View, Slide Over and resizable
+windows on current iPadOS, with no MDM. `Services/KioskController.swift` *requests*
+Autonomous Single App Mode, which the OS grants only on an **MDM-supervised** device
+whose management profile authorizes this bundle ID. Enforcement is the MDM's and the
+OS's; on an unsupervised device or the simulator the request is refused and the
+shell stays removable and can be left. The device-side half is documented in
+`native/ios/mdm/README.md`.
 
 ## Features
 

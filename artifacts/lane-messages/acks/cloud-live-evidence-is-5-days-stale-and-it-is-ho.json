@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "cloud-live-evidence-is-5-days-stale-and-it-is-ho",
+  "ackedBy": "mac",
+  "note": "Same re-mint as the 4.30-day message: mac-run.json mintedAt 2026-09-18T14:52:07Z over manifest 6906d8d9ecc5, commit 00100b69. Readiness (b) is 100% on mainline; headline is 94%, held only by dimension (a).",
+  "ackedAt": "2026-09-18T15:58:47.766Z"
+}

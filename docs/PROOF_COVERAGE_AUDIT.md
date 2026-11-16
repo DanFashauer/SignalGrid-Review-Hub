@@ -22,7 +22,7 @@ Across 28 per-gate coverage audits, overall proof health is **fair-to-good but u
 | audit-ledger | moderate | No | Recursive redaction of secret-named fields + SHA-256 hash-chain verify accepts genuine, detects in-place mutation |
 | audit-ledger-pg | moderate | No | Live-Postgres hash-chained ledger: persistence, tamper detection, redaction, 25-way concurrent append |
 | signalgrid-simulator | moderate | No | 11 fixtures through decisionEngine→routing→audit; a few allow-suppression negatives |
-| signalgrid-grid | moderate | No | 11 scenarios × 22 risk mutations for riskScore monotonicity (never checks baseline correctness) |
+| signalgrid-grid | moderate | No | 13 scenarios × 21 risk mutations = 273 for riskScore monotonicity (never checks baseline correctness). The "22" this row carried was never right in either era: the proof printed 11/231 on mainline and 13/273 here, and both divide by 21 |
 | microsoft-graph-sandbox | moderate | No | 11 synthetic Graph fixtures through an *inline* decision-mapper to expected decisions |
 | connector-emulator | moderate | No | Connector `decide()` maps posture/identity/custody/credential inputs to decision+reason with precedence |
 | orchestration | strong | No | `planOrchestration` turns outcome+room context into an Assist-safe action plan (sensitive actions held) |
@@ -48,9 +48,24 @@ Across 28 per-gate coverage audits, overall proof health is **fair-to-good but u
 
 Ranked by risk-reduction. Each is a concrete test to add.
 
+> **Closure status as of 2026-09-06** — the numbered list below is the dated 2026-08-03
+> audit and is kept as written. Seven of the eight are CLOSED in the tree; gap 3 is half
+> closed. The closing assertions: **1** `scripts/src/signalgrid-core-proof.ts:1633-1642`
+> (an ungated allow rule → `step_up`, and `ALLOW_SUPPRESSED_DEGRADED_EVIDENCE` asserted);
+> **2** `scripts/src/signalgrid-grid-proof.ts:379-380` (`result.status === "PASS"`);
+> **3** the three "never allows" negatives are in at
+> `scripts/src/signalgrid-simulator-proof.ts:78-80` — the exact-outcome half is still OPEN:
+> `scripts/src/signalgrid-simulator-proof.ts:217` remains a subset check that permits extra
+> outcomes; **4** `scripts/src/control-plane-proof.ts:119-120`; **5**
+> `scripts/src/webauthn-verify-proof.ts:538-559` and `scripts/src/webauthn-verify-proof.ts:584-586`;
+> **6** `scripts/src/audit-ledger-proof.ts:97-107` (a reordered middle record detected);
+> **7** `scripts/src/microsoft-graph-sandbox-proof.ts:11` imports `@workspace/integrations/graph`;
+> **8** `scripts/src/enterprise-auth-proof.ts:107` (~30s past exp accepted) and
+> `scripts/src/enterprise-auth-proof.ts:112` (~90s rejected).
+
 1. **`signalgrid-core` — reach the `ALLOW_SUPPRESSED_DEGRADED_EVIDENCE` guardrail directly.** The proof's headline fail-closed invariant is dead-code-untested: no allow rule is ungated from `criticalSignalsPresent`, so "allow with degraded critical evidence → suppress to step_up" is never constructed. Build a rule set whose allow rule isn't gated on critical signals, evaluate with `criticalSignalsPresent===false`, and assert suppression + the reason code.
 
-2. **`signalgrid-grid` — assert baseline decision correctness for all 11 scenarios.** Today baseline checks only that `primaryOutcome` is truthy and `reasonCodes.length>0`; if the engine returned `allow` instead of `restrict` for `non-compliant-clinical-device`, the proof still passes. Assert `result.status === "PASS"` (equivalently `outcomes` deep-equals `expectedOutcomes`).
+2. **`signalgrid-grid` — assert baseline decision correctness for all 13 scenarios.** Today baseline checks only that `primaryOutcome` is truthy and `reasonCodes.length>0`; if the engine returned `allow` instead of `restrict` for `non-compliant-clinical-device`, the proof still passes. Assert `result.status === "PASS"` (equivalently `outcomes` deep-equals `expectedOutcomes`).
 
 3. **`signalgrid-simulator` — exact-outcome-set assertions + explicit "allow absent" negatives on high-risk scenarios.** The current per-scenario check is a self-referential subset check that never fails on extra/over-permissive outcomes; `edr-security-risk`, `wrong-zone`, and `dock-missing-overdue-device` have no guard against a spurious `allow`. A security regression that trusts a high-risk device currently passes.
 
@@ -69,7 +84,7 @@ Ranked by risk-reduction. Each is a concrete test to add.
 **None were formally flagged** (`rubber_stamp: false` across all 28). That said, three gates contain enough tautological or self-referential assertions to warrant scrutiny in the next review cycle:
 
 - **`signalgrid-grid`** — multiple assertion blocks cannot fail against the code under test: the approval-gate block checks hardcoded local booleans, evidence-integrity checks compare a value to a copy of itself, and malformed-input guards test a validator defined inside the proof file rather than the shipped module. Its genuine value (riskScore monotonicity) is real, but a large fraction of its 880 assertions are structurally incapable of catching a regression.
-- **`microsoft-graph-sandbox`** — the oracle is defined inline in the proof; no production Graph connector code is exercised, so expected values are self-referential.
+- **`microsoft-graph-sandbox`** — the oracle is defined inline in the proof; no production Graph connector code is exercised, so expected values are self-referential. *(As of 2026-09-06 this no longer holds: the proof imports the real connector — `scripts/src/microsoft-graph-sandbox-proof.ts:11`.)*
 - **`signalgrid-simulator`** — the core per-scenario "PASS" assertion is a subset check against the fixture's own `expectedOutcomes`, and "audit evidence exists" / "routed owner exists" are constant-true tautologies.
 
 These are not rubber stamps in the formal sense (each does validate *some* real behavior), but their assertion counts overstate their protective value.

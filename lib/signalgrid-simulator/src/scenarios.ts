@@ -91,6 +91,79 @@ export const simulatorScenarios: SimulatorScenario[] = [
     ],
   },
   {
+    id: "custody-removal-without-session",
+    title: "Credential removed with no session owning it",
+    summary:
+      "A shared device is lifted from its dock while nothing asserts an active session owns it — the key pulled from the ignition.",
+    persona: "Shared-device pool operator watching an unclaimed removal",
+    expectedOutcomes: ["create_ticket", "alert_operator", "route_to_owner", "record_audit"],
+    expectedOwnerTeam: "Shared device pool owner",
+    safeDemoNote:
+      "DockBridge undock events are software fixtures; no dock, puck or lock hardware is touched. SignalGrid OBSERVES the removal and correlates it — it never commands the dock.",
+    startingSignals: [
+      signal("identity.authenticated", "identity", "Entra fixture", "user:rn-204", "info", "A user session is valid elsewhere on the floor", { risk: "low" }),
+      signal("device.posture_observed", "device", "Intune fixture", "device:ios-shared-061", "info", "Device is compliant and fresh", { compliance: "compliant", freshness: "fresh" }),
+      signal("dock.device_undocked", "dockbridge", "DockBridge fixture", "device:ios-shared-061", "high", "Device was lifted from its bay", { dockId: "ED-02", slot: "03" }),
+      signal("workflow.assignment_changed", "workflow", "Workflow fixture", "workflow:none", "medium", "No active session claims the device", { active: false }),
+    ],
+  },
+  {
+    id: "custody-removal-with-session",
+    title: "Credential removed by the session that owns it",
+    summary:
+      "The same lift, with an active session bound to it — the ordinary shift handoff, which must stay allowed.",
+    persona: "Nurse taking an assigned shared device at shift start",
+    expectedOutcomes: ["allow", "record_audit"],
+    expectedOwnerTeam: "Clinical mobility operations",
+    safeDemoNote:
+      "Paired with custody-removal-without-session so the removal rule is proven in BOTH directions: it must fire on an unclaimed lift and stay silent on a claimed one.",
+    startingSignals: [
+      signal("identity.authenticated", "identity", "Entra fixture", "user:rn-204", "info", "User session is valid", { risk: "low" }),
+      signal("device.posture_observed", "device", "Intune fixture", "device:ios-shared-061", "info", "Device is compliant and fresh", { compliance: "compliant", freshness: "fresh" }),
+      signal("dock.device_undocked", "dockbridge", "DockBridge fixture", "device:ios-shared-061", "info", "Device was lifted from its bay by its assigned holder", { dockId: "ED-02", slot: "03" }),
+      signal("workflow.assignment_changed", "workflow", "Workflow fixture", "workflow:shift-am", "info", "An active session owns the device", { active: true }),
+    ],
+  },
+  {
+    id: "puck-session-lifecycle",
+    title: "Session puck: dock, session, undock, re-dock within N",
+    summary:
+      "The whole custody lifecycle in one fixture — the credential is seated, a session runs, the credential is lifted, and it is re-seated 12 seconds later. The re-dock does not resume anything: nothing has re-evaluated since, and the only posture read on file predates the removal.",
+    persona: "Shared-device pool operator watching a quick lift-and-return",
+    expectedOutcomes: ["step_up", "create_ticket", "alert_operator", "route_to_owner", "request_remediation", "record_audit"],
+    expectedOwnerTeam: "Shared device pool owner",
+    safeDemoNote:
+      "Every signal is a software fixture. No puck, dock, reader or lock hardware exists or is touched — the receiver is a source of evidence, never the policy engine. DR-043's hardware remains a hypothesis behind the discovery gates; only this software half is built.",
+    startingSignals: [
+      signal("identity.authenticated", "identity", "Entra fixture", "user:rn-500", "info", "Worker authenticated when the credential was first seated", { risk: "low" }),
+      signal("dock.device_docked", "dockbridge", "DockBridge fixture", "device:ios-shared-500", "info", "Credential re-seated 12s after the lift", { dockId: "ED-05", slot: "02", redockSeconds: 12, reevaluated: false }),
+      signal("dock.device_undocked", "dockbridge", "DockBridge fixture", "device:ios-shared-500", "high", "Credential was lifted out of the receiver", { dockId: "ED-05", slot: "02", forced: false }),
+      // The posture on file was read BEFORE the removal. That is the honest state of a
+      // re-dock nobody has re-evaluated, and it is why this resumes at step_up rather
+      // than at allow: a quick return is not evidence that anything is still true.
+      signal("device.posture_observed", "device", "Intune fixture", "device:ios-shared-500", "medium", "The only posture read on file predates the removal", { compliance: "compliant", freshness: "stale" }),
+      signal("workflow.assignment_changed", "workflow", "Workflow fixture", "workflow:none", "medium", "The session was suspended on the lift and has not resumed", { active: false }),
+    ],
+  },
+  {
+    id: "smart-charging-checkout-to-checkin",
+    title: "Smart charging: badge, dock, provision, in use, check-in",
+    summary:
+      "The real workflow end to end rather than an abstraction of it — a worker badges at the charging cabinet, the device is seated and provisioned, the shift runs, and the device comes back. The happy path; its four failure branches are derived from this fixture in proof:signalgrid-simulator.",
+    persona: "Field technician taking a charged shared device at shift start",
+    expectedOutcomes: ["allow", "record_audit"],
+    expectedOwnerTeam: "Clinical mobility operations",
+    safeDemoNote:
+      "Charging, dock and badge events are software fixtures. SignalGrid reads a cabinet's events; it does not control charging, power or any hardware, and no vendor API is called.",
+    startingSignals: [
+      signal("identity.authenticated", "identity", "Entra fixture", "user:tech-700", "info", "Badge read at the charging cabinet, MFA-backed", { risk: "low" }),
+      signal("dock.device_docked", "dockbridge", "DockBridge fixture", "device:ios-shared-700", "info", "Device seated in its bay and charging to the configured cap", { dockId: "CAB-01", slot: "11", chargeCapPct: 80, batteryPct: 79 }),
+      signal("device.posture_observed", "device", "Intune fixture", "device:ios-shared-700", "info", "Provisioning completed; posture compliant and fresh", { compliance: "compliant", freshness: "fresh" }),
+      signal("workflow.assignment_changed", "workflow", "Workflow fixture", "workflow:field-round-70", "info", "Shift assignment owns the device for the round", { active: true }),
+      signal("dock.device_undocked", "dockbridge", "DockBridge fixture", "device:ios-shared-700", "info", "Device taken by the holder the assignment names", { dockId: "CAB-01", slot: "11" }),
+    ],
+  },
+  {
     id: "low-battery-workflow-impact",
     title: "Low battery workflow impact",
     summary: "A shared device is assigned to an active workflow while battery is critical.",

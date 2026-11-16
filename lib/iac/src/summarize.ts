@@ -18,6 +18,18 @@ export function summarizePlan(plan: Plan): string {
 /** One-line summary of the drift between Git and the fleet. */
 export function summarizeDrift(report: DriftReport): string {
   const off = report.counts.drifted + report.counts.missing + report.counts.unmanaged + report.counts.unknown;
+  // Nothing declared is not a match, and it is not "1 thing differs" either: the
+  // synthetic unknown finding detectDrift emits for an empty desired state is
+  // named for what it is. Defence in depth: an `unknown` overall with no other
+  // count never reads as a match, whatever produced it.
+  const nothingDeclared = report.findings.some((f) => f.status === "unknown" && f.id === "(declared state)");
+  if (nothingDeclared || (report.overall === "unknown" && off === 0)) {
+    const undeclared = report.counts.unmanaged;
+    return (
+      "The fleet cannot be compared: nothing is declared, or the declared state could not be read." +
+      (undeclared > 0 ? ` ${undeclared} observed resource(s) are not declared anywhere.` : "")
+    );
+  }
   if (off === 0) return "The fleet matches the declared configuration.";
   const parts: string[] = [];
   if (report.counts.drifted) parts.push(`${report.counts.drifted} drifted`);

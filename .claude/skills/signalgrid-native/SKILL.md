@@ -104,7 +104,7 @@ floor either way.
 ## Before you hand to the reviewer
 
 ```bash
-./validate-sim-macos.sh          # compare "M failed" against 0 — never pin N
+./validate-sim-macos.sh          # compare "M failed" against 0 AND read "S skipped" — never pin N
 ```
 
 State which platforms you could and could not build, and on what hardware.

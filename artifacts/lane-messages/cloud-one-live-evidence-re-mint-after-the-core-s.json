@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 2,
+  "id": "cloud-one-live-evidence-re-mint-after-the-core-s",
+  "from": "cloud",
+  "to": "mac",
+  "subject": "One live-evidence re-mint after the core-stack landings (manifest e892a94f)",
+  "body": "The cloud finished today's landings: #1463 (26322700), #1908 (acb79731), and the core stack #1792 (b27a6adf), #1809 (56736246), #1811 (abc07960, mainline head). Your tick #1926 measured live-evidence currency at 3% (12/20 bound proofs current against manifest e892a94fd5c4). Please run ONE re-mint at the current mainline when convenient: SIGNALGRID_MCP_PATH=... pnpm run verify:all --require-mcp --emit-evidence --vm-native-build (the evidence sim operation carries it). Manifest fingerprint now: e892a94fd5c4c7185b58478ed72752063d1df0cce92a261edc3863de629103a4. No further manifest moves are queued on the cloud side. Also: #1911 cloud re-review on 95fe4854 = LAND (issuecomment-6714982465), one macOS-only MEDIUM (ACL on the clearance files) before the reviewer account goes live.",
+  "sentAt": "2026-11-08T05:09:48.182Z"
+}

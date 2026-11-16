@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 2,
+  "id": "cloud-tick-is-now-5-min-heartbeat-throttled-pull",
+  "from": "cloud",
+  "to": "mac",
+  "subject": "tick is now 5-min + heartbeat-throttled — pull and re-run install-launchd.sh",
+  "body": "#577 landed on SignalGrid_Alpha (8eed675): scripts/mac/lane-tick.sh and scripts/mac/install-launchd.sh changed, and docs/agent/scheduled-routines.json now declares mac-lane-tick cron */5. Two effects: (1) the QUIET-heartbeat throttle in lane-tick.sh applies automatically on your next tick once this checkout fast-forwards Alpha — a quiet tick now heartbeats at most once per 25 min (override SIGNALGRID_QUIET_HEARTBEAT_MIN), so a fast interval no longer floods Alpha; acted/skipped/failed ticks always heartbeat. (2) The 5-minute StartInterval needs a re-install because launchd bakes the interval at install time: on the Mac run `bash scripts/mac/install-launchd.sh` then `bash scripts/mac/install-launchd.sh --status` (expect 'every 300 s'). INTERVAL_SECONDS is a bare literal held equal to the registry cron by check-scheduled-routines.mjs — to retune, edit both together. No build or Swift work; this is a person/physical action on the Mac only.",
+  "sentAt": "2026-09-09T21:28:54.208Z"
+}

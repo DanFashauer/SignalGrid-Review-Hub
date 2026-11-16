@@ -1,0 +1,15 @@
+{
+  "id": "2026-10-09-node-scripts-check-scheduled-routines-mjs-exits-",
+  "raisedAt": "2026-10-09T00:59:51.831Z",
+  "origin": "cloud",
+  "doing": "PR #1470 review round 1 fixes: preflight on merged head 2f51da39",
+  "blockedBy": "node scripts/check-scheduled-routines.mjs exits 1 on today's date (2026-10-09): brain-cycle awaiting-activation since 2026-09-09 is 30.0 days, past the 30-day bound. docs/agent/scheduled-routines.json is byte-identical to origin/SignalGrid_Alpha 8a1f1516, so mainline fails identically; preflight halts there and the later gates cannot run",
+  "need": "owner decision: install the brain-cycle trigger or retire the row with evidence (or extend the bound)",
+  "whoCanUnblock": "owner",
+  "domain": "",
+  "status": "resolved",
+  "routedTo": null,
+  "resolvedAt": "2026-10-09T02:45:18.307Z",
+  "resolvedBy": "cloud",
+  "resolution": "origin/SignalGrid_Alpha e276446d retired the brain-cycle row (#1480); check-scheduled-routines.mjs exits 0 on the merged head"
+}

@@ -30,6 +30,11 @@
 // pins now hold the corrected behaviour in both directions: absence raises caution,
 // and an observed-empty result is still allowed to be good news.
 //
+// "Every place" was a hand-list, and it stopped at the connector tier: signal-radar's
+// scanSignals grades a collection too, and at zero signals it concluded "All observed
+// signals are already evaluated by the grid" — the exact shape this proof exists to
+// refuse — while sitting outside a scope that called itself total. Pinned below now.
+//
 // Pure and offline: these are all pure functions.
 
 import { evaluateVulnPosture } from "@workspace/integrations/vuln-scan";
@@ -40,6 +45,7 @@ import * as peripheral from "@workspace/integrations/peripheral-control";
 import * as credential from "@workspace/integrations/credential-exposure";
 import { composeDeviceRisk, fromThreat } from "@workspace/posture-composition";
 import { evaluateReachability, normalizeSession } from "@workspace/integrations/carrier";
+import { scanSignals } from "@workspace/signal-radar";
 
 let passed = 0;
 const failures: string[] = [];
@@ -395,6 +401,16 @@ check(
     posedPresent.posture !== "reachable" && posedPresent.locatable === false,
     `posture=${posedPresent.posture} locatable=${posedPresent.locatable}`,
   );
+}
+
+// ── signal-radar: a scan over NOTHING is not a covered grid ──────────────────
+{
+  const empty = scanSignals([]);
+  check("radar: an empty batch reports scanned=0, and its summary is coverage UNKNOWN, never 'already evaluated'",
+    empty.scanned === 0 && empty.summary.includes("coverage unknown") && !empty.summary.includes("already evaluated"),
+    empty.summary);
+  const covered = scanSignals([{ category: "device_compliance" }]);
+  check("radar: an OBSERVED all-evaluated batch is still allowed to be good news", covered.scanned === 1 && covered.summary.includes("already evaluated"));
 }
 
 const total = passed + failures.length;

@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "cloud-phase-pivot-is-recorded-dr-033-in-pr-584-a",
+  "ackedBy": "mac",
+  "note": "Superseded; no parallel phase record was built. DR-034 is a different question (research basis and corpus), recorded after DR-033 landed and after owner approval.",
+  "ackedAt": "2026-09-10T16:12:17.571Z"
+}

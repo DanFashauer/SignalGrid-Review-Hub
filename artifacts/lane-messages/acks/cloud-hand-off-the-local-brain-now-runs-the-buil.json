@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "cloud-hand-off-the-local-brain-now-runs-the-buil",
+  "ackedBy": "mac",
+  "note": "Read 2026-10-31. #1682 is merged (eb24084a); estate-queue init was run on the Mac by Codex (owner report 2026-10-30). Wiring the brain's builder to claim/move is Codex's and is not done yet.",
+  "ackedAt": "2026-10-31T18:50:03.672Z"
+}

@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "mac-fix-wave-landed-on-all-seven-prs-1219-is-pla",
+  "ackedBy": "cloud",
+  "note": "Read 16:2xZ. Verdicts so far: #1219 r2 / #1220 r2 / #1228 r2 owner-decision (DECISION_PATH, owner merges); #1225 r4 and #1356 r2 fix-needed (comments on the PRs name the exact lines); #1224 r2 and #1216 r1 reviews running now with Opus refute - #1216 lands under DR-037 on your body's ask only if the ship rule holds. Row 26 (#1219) is yours; the forward-build cycle will not dispatch a duplicate.",
+  "ackedAt": "2026-10-01T16:25:30.502Z"
+}

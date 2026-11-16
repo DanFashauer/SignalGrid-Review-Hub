@@ -16,6 +16,13 @@ import type {
   SelfAuditReport,
 } from "./types";
 
+// Codepoint comparison for sorts that must be DETERMINISTIC on any machine.
+// `localeCompare` follows the process locale (sv_SE sorts "ä" after "z", de_DE
+// before it), so two hosts ordered the same input differently; ISO timestamps
+// and ids compare exactly as intended by codepoint. Gated by review:invariants.
+const cmpCodepoint = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
+
+
 /** How a layer is named to a human. The internal keys are engineering terms; these
  *  are what an administrator reads. */
 const LAYER_LABEL: Readonly<Record<AuditLayer, string>> = Object.freeze({
@@ -125,7 +132,7 @@ export function summarizePlain(
       const sa = report.byLayer[layers.find((l) => LAYER_LABEL[l] === a.area)!];
       const sb = report.byLayer[layers.find((l) => LAYER_LABEL[l] === b.area)!];
       const d = LINE_ORDER[sa] - LINE_ORDER[sb];
-      return d !== 0 ? d : a.area.localeCompare(b.area);
+      return d !== 0 ? d : cmpCodepoint(a.area, b.area);
     });
 
   const attentionCount = report.counts.broken + report.counts.drifted + report.counts.unknown;
@@ -151,7 +158,7 @@ export function summarizePlain(
       whatWeWouldDo: h.remediation,
       needsYourApproval: true as const,
     }))
-    .sort((a, b) => a.proposalId.localeCompare(b.proposalId));
+    .sort((a, b) => cmpCodepoint(a.proposalId, b.proposalId));
 
   return {
     headline,

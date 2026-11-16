@@ -67,9 +67,10 @@ public actor MockSignalGridAPI: SignalGridAPI {
         return decision
     }
 
-    public func fetchEvidence(decisionId: String) async throws -> EvidenceSnapshot {
+    public func fetchEvidence(decisionId: String) async throws -> EvidenceFetch {
         let decision = try await fetchDecision(id: decisionId)
-        return Self.evidenceSnapshot(for: decision)
+        // Fixture snapshots are minted in-process; nothing can have altered them.
+        return EvidenceFetch(snapshot: Self.evidenceSnapshot(for: decision), verified: true)
     }
 
     public func evaluate(_ request: EvaluateRequest) async throws -> EvaluateResult {
@@ -102,7 +103,12 @@ public actor MockSignalGridAPI: SignalGridAPI {
             createdAt: createdAt,
             reviewStatus: verdict.outcome == .allow ? .notRequired : .pendingReview,
             reviewable: verdict.outcome != .allow,
-            explanation: verdict.explanation
+            explanation: verdict.explanation,
+            // UNSTAMPED, deliberately. `coreNormalizationVersion` names the build of
+            // `lib/signalgrid-core` that derived the facts; this mock derives nothing —
+            // it hands back fixtures. A number here would be a provenance claim about a
+            // core that never ran, so absence is reported as absence (Models.swift).
+            coreNormalizationVersion: nil
         )
         decisions.append(decision)
         return Self.result(from: decision)
@@ -414,7 +420,8 @@ public actor MockSignalGridAPI: SignalGridAPI {
             matchedRules: decision.matchedRules,
             reviewable: decision.reviewable,
             latencyMs: decision.latencyMs,
-            explanation: decision.explanation
+            explanation: decision.explanation,
+            coreNormalizationVersion: decision.coreNormalizationVersion
         )
     }
 
@@ -485,7 +492,8 @@ public actor MockSignalGridAPI: SignalGridAPI {
             policyVersionId: decision.policyVersionId,
             policyVersion: decision.policyVersion,
             sourceReferences: signals.map(\.sourceReference),
-            digest: "sha256:\(decision.id)-evidence-demo"
+            digest: "sha256:\(decision.id)-evidence-demo",
+            coreNormalizationVersion: decision.coreNormalizationVersion
         )
     }
 
@@ -535,7 +543,8 @@ public actor MockSignalGridAPI: SignalGridAPI {
                 createdAt: String(format: "2026-07-13T14:%02d:00.000Z", 58 - index * 4),
                 reviewStatus: item.outcome == .allow ? .notRequired : .pendingReview,
                 reviewable: item.outcome != .allow,
-                explanation: item.explanation
+                explanation: item.explanation,
+                coreNormalizationVersion: nil  // see evaluate(): the mock runs no core
             )
         }
     }

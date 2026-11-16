@@ -1,7 +1,10 @@
 # LAB 001 — cloud rehearsal of Step 1's verification protocol
 
 **Date: 2026-08-31. Lane: cloud sandbox. Status: protocol PROVEN over the real
-wire; real-hardware evidence NOT minted — that is the Mac's half, by design.**
+wire. The Mac's half — real posture, real hardware — RAN on 2026-09-02 (as of
+2026-09-06: `artifacts/sim-results/2026-08-31-lab001-step1-real-posture.json`,
+status passed, exit 0, working tree clean); this record is the cloud rehearsal
+that preceded it and is not that evidence.**
 
 ## What this is, and is not
 
@@ -11,9 +14,17 @@ verification protocol the owner named as the check not to skip — *"force an
 unreadable probe and confirm unknown raises assurance rather than lowering
 it"* — is testable against the first-party MCP server's real stdio wire, and
 the owner directed that the simulator carry the tasks a container can carry.
-This record is that rehearsal: the same server, the same JSON-RPC wire, the
-same tool the Mac run will use, driven with a healthy baseline and four
-forced-unknown probes.
+This record is that rehearsal, and it is an ANALOGUE, not a baseline: it drives
+the in-repo TypeScript server (`artifacts/mcp-server`, registered in
+`.mcp.json` under the name `signalgrid-mcp`) and its `evaluate_location_certainty`
+tool over the fixture hospital graph — a LOCATION observation graded for
+certainty. The Mac's half runs a DIFFERENT server (the separate Python
+repository `signalgrid-mcp`, which `scripts/verify-all.mjs` clones and runs
+with pytest — the two share a name and nothing else) against a DIFFERENT
+signal (macOS POSTURE: FileVault, SIP, Gatekeeper, firewall). Same JSON-RPC
+wire discipline, same unknown-tightens law under test; not the same server,
+not the same tool. Driven with a healthy baseline and four forced-unknown
+probes.
 
 Not claimed: anything about real hardware. The signals here are the tool's
 deterministic inputs, not a machine's posture. What IS established: the wire
@@ -44,9 +55,20 @@ spent last week killing, holding at the served boundary.
 
 ## What this hands the Mac
 
-`artifacts/sim-requests/2026-08-31-lab001-step1-real-posture.json` asks the
+`artifacts/sim-requests/2026-08-31-lab001-step1-real-posture.json` asked the
 Mac lane to run the real half: `verify:all --require-mcp --emit-evidence`
-against `signalgrid-mcp` reading the MacBook's actual posture, minting
-`artifacts/live-evidence/mac-run.json`. When that lands, LAB_001 Step 1 is
-done for real, and this rehearsal is its known-good wire baseline: if the
-Mac's run disagrees with a row above, the disagreement is the finding.
+against the Python `signalgrid-mcp` reading the MacBook's actual posture,
+minting `artifacts/live-evidence/mac-run.json`. It ran on 2026-09-02 (as of
+2026-09-06, the result file named in the header: `99 passed`, evidence
+written). Two things a reader must not conclude from that:
+
+- **The table above is not a baseline the Mac run can be diffed against.** The
+  Mac run never calls `evaluate_location_certainty`; it exercises a different
+  server and a different signal (see "What this is"). "No disagreement" between
+  the two is guaranteed by construction and means nothing. What the Mac run
+  proves is its own: posture read from real hardware, unknown-tightens verified
+  deliberately per `docs/lab/LAB_001.md`'s definition of done.
+- **`artifacts/live-evidence/mac-run.json` is a single slot.** The LAB_001 run
+  wrote it (manifest fingerprint `655b9fae…` in the sim-result's tail); the next
+  evidence run overwrote it (`dee798b`, 2026-09-03). The durable record of the
+  LAB_001 run is the sim-result file, not `mac-run.json`.

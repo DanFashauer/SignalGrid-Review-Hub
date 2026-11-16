@@ -37,6 +37,12 @@ enforces the third except you — see *Prose is unguarded* below.
 
 ## Orient before you touch anything
 
+Start from the founder's seat: `docs/company/FOUNDER_PROFILE.md` says who is building
+this (a senior platform engineer who ran the shared-device problem for a decade) and
+how he thinks; DR-039 says how the resources he shares are absorbed — taken if any part
+can aid building the company, excluded only for licence, auto-execution, egress
+without his consent, or a directory collision.
+
 ```bash
 cat CLAUDE.md                  # golden rules; they override default behaviour
 cat AGENTS.md                  # public-safety scope for the Review Hub
@@ -67,7 +73,8 @@ Then measure rather than assume: `git ls-files | grep …`, not "the doc says."
 5. **Read-only and fixture-backed first.** New connectors start read-only unless
    the task explicitly says otherwise and supplies a safe private context.
 6. **Approval gates are explicit.** A default path must never bypass one.
-7. **Don't merge your own PR.** Merge decisions belong to the owner. Ask before
+7. **Don't merge your own PR.** Merge decisions belong to the owner, except where
+   DR-037 or DR-061 hand one to a lane (see the checklist below). Ask before
    destructive git, before sending data anywhere external, and before pushing.
 
 ---
@@ -85,15 +92,17 @@ pnpm run preflight              # the service-free CI gate suite
 ```
 
 **Read the summary correctly.** The harness prints `== SUMMARY: N passed, M
-failed ==`. **Compare M against 0.** Never compare N against a total quoted in
-any document — the suite grows, and a pinned total silently converts a
+failed, S skipped ==`. **Compare M against 0 AND read S** — a skip is not a pass,
+and the skipped gates are named above the line. Never compare N against a total
+quoted in any document — the suite grows, and a pinned total silently converts a
 regression into a pass.
 
-**Know what preflight does *not* cover.** It mirrors three of six CI jobs. The
-three needing external services — `durable-persistence` (Postgres),
-`deploy-stack` (Docker) and `secret-scan` (gitleaks) — only run in CI. A green
-preflight does **not** mean CI will be green, and saying so was itself a
-documented false claim that survived in `docs/SELF_REVIEW.md`.
+**Know what preflight does *not* cover.** Do not retype the number here: `node
+scripts/check-preflight-ci-parity.mjs` prints how many CI jobs preflight mirrors
+and how many it cannot (external services, macOS runners, scheduled lanes). This
+paragraph used to name "three of six" and a list of three jobs; the derived answer
+was 23 uncovered of 31, and the list named a job that is not even in the main
+workflow. A green preflight does **not** mean CI will be green.
 
 **Touched api-server?** `pnpm --filter @workspace/api-server run test:api` must
 be N/N green. Adding a route near others: confirm you didn't drop the neighbours.
@@ -181,7 +190,7 @@ announce in the commit message, not only in chat.
   repo-relative. New sources go in a test target's explicit `sources` list in
   `project.yml`, then `xcodegen generate`. App targets auto-glob.
 - Some proofs need services: `proof:enrollment-race` refuses without `REDIS_URL`;
-  the `-pg` proofs need Postgres. Refusing is correct behaviour, not a failure.
+  the `-pg` proofs need Postgres. Refusing is correct behaviour — and it is a SKIP, not a pass: it lands in the summary's third field.
 
 ---
 
@@ -194,7 +203,7 @@ announce in the commit message, not only in chat.
   main way this repo breaks.
 - **Record what you did NOT verify.** Coverage gaps are findings. An honest
   "not checked: iOS build, no Xcode here" is worth more than silence.
-- **Prefer deleting to adding.** With ~1,800 files, ~131 proofs and four native
+- **Prefer deleting to adding.** With thousands of tracked files (`git ls-files | wc -l` counts them; never type the number here), well over a hundred `proof:*` scripts (`node scripts/check-status-figures.mjs` prints the live count) and four native
   surfaces maintained by one non-engineer, added surface area is a cost. The
   question is rarely "can this be built" — it is "should this exist."
 
@@ -210,4 +219,6 @@ announce in the commit message, not only in chat.
 - [ ] Docs cite only paths that exist; no figure quoted that will age
 - [ ] PR body: summary, what changed, validation performed, public-safety note,
       remaining risks, and what you could not verify
-- [ ] Owner merges, not you
+- [ ] Owner merges, not you — unless every DR-037 or DR-061
+      (DECISION_PATH) condition holds on the current head; DR-061 rule 2's paths
+      are always the owner's

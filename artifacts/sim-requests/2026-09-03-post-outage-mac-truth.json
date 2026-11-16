@@ -1,6 +1,7 @@
 {
   "schemaVersion": 1,
   "id": "2026-09-03-post-outage-mac-truth",
+  "requestedAt": "2026-09-03T17:24:20Z",
   "requestedBy": "cloud lane",
   "reason": "Two blockers cleared on Alpha today (mutation-sweep CI outage #406; a critical OpenSSL image vuln #407), both verified in CI. This request asks the Mac for the truth CI cannot produce: a freshly-emitted live-evidence artifact, an on-hardware build+scan of the api image that independently confirms the #407 OpenSSL fix, and the full macOS proof suite. Owner directive 2026-09-03: keep this lane fully utilized on the work only it can run.",
   "runs": [

@@ -40,6 +40,11 @@ final class SignalContextTests: XCTestCase {
     func testUnobservedPostureFailsClosed() {
         let r = DecisionEngine.evaluate(SignalContext.signals(env(postureObserved: false)))
         XCTAssertNotEqual(r.outcome, .allow)
+        // Pin the CAUSE, not only the non-allow: neither base-trust reason may be
+        // present when posture was never sourced (a step_up, restrict or deny that
+        // still carried IDENTITY_AND_POSTURE_TRUSTED would have satisfied the line above).
+        XCTAssertFalse(r.reasonCodes.contains("IDENTITY_AND_POSTURE_TRUSTED"))
+        XCTAssertFalse(r.reasonCodes.contains("APPLE_DECLARED_STATE_TRUSTED"))
     }
 
     // Stale posture (real freshness OR injected) → step_up.

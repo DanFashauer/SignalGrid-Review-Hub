@@ -39,7 +39,7 @@ already has:
 
 1. **The decision core never calls it.** `lib/*` decision paths are deterministic and offline
    (golden rule 2). A public API's output can become a **committed fixture** — a CVE record, a
-   holiday table, a geofence centre — minted by a human-run script, reviewed, and checked in (a deferred family, not shipping)
+   holiday table, a geofence centre (geofences feed a deferred family, not Limited GA) — minted by a human-run script, reviewed, and checked in
    with the source URL, the commit sha of this brief, and the retrieval date in the file.
 2. **Live only behind the three gates.** A live read, if ever built, sits in a connector family
    under `lib/integrations/src/integrations/` behind tier (`beta`/`prod`) **and**
@@ -88,7 +88,7 @@ carried the fact.
 
 **Named in the intake but not in the directory at this sha** (checked by `grep` over the clone;
 recorded so nobody cites the directory for them): OSV, CIRCL CVE, CISA KEV, FIRST EPSS,
-WorldTimeAPI / time-zone services, macvendors.com. Each may well exist; this resource does not (a deferred family, not shipping)
+WorldTimeAPI / time-zone services, macvendors.com (time-zone and location inputs feed deferred families, not Limited GA). Each may well exist; this resource does not
 establish it, and this brief does not claim it.
 
 ## What each top candidate must never do here

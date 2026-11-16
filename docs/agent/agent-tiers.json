@@ -37,7 +37,7 @@
       "tier": 3,
       "provenance": "vendored",
       "writeScope": null,
-      "charter": "Auth seams, injection, secret handling, supply chain. Reports only.",
+      "charter": "Auth seams, injection, secret handling, supply chain. Reports only. LOCAL CORRECTION (2026-09-05), vendored body must NOT be edited: `npx eslint . --plugin security` and `eslint-plugin-security` are not installed; `npm audit` is `pnpm audit` here. The repo's own scanners are the ones to run: `pnpm run review:invariants`, `node scripts/check-nan-fail-open.mjs`, gitleaks/CodeQL in CI (SECURITY.md).",
       "carvedOutOf": null
     },
     {
@@ -61,7 +61,7 @@
       "tier": 2,
       "provenance": "vendored",
       "writeScope": "tests/",
-      "charter": "Writes failing tests before implementation. Bounded to tests/ so it cannot make an assertion pass by changing the code under test.",
+      "charter": "Writes failing tests before implementation. Bounded to tests/ so it cannot make an assertion pass by changing the code under test. LOCAL CORRECTION (2026-09-05) to the vendored definition, which must NOT be edited: its `npm test` / `npm run test:coverage` do not exist in this repository (root package.json has neither), and tests/ holds three k6 load scripts, not a test suite — this repository's tests are the proof harnesses under scripts/src, owned by gate-and-proof-engineer. Dispatch this role to DESIGN the failing assertion (name, input, expected refusal) and hand it to gate-and-proof-engineer to land; it must not be dispatched expecting a green `npm test`.",
       "carvedOutOf": null
     },
     {
@@ -69,7 +69,7 @@
       "tier": 2,
       "provenance": "vendored",
       "writeScope": "lib/",
-      "charter": "Behaviour-preserving cleanup of the decision fabric only.",
+      "charter": "Behaviour-preserving cleanup of the decision fabric only. LOCAL CORRECTION (2026-09-05), vendored body must NOT be edited: `npx knip`, `npx depcheck`, `npx ts-prune` and `npx eslint` are not installed and must not be added ad hoc — dead-code evidence here comes from `pnpm run typecheck`, the reachability gate in scripts/ (`check-package-reachability.mjs`), and `git grep` for consumers.",
       "carvedOutOf": null
     },
     {
@@ -77,7 +77,7 @@
       "tier": 2,
       "provenance": "vendored",
       "writeScope": "artifacts/",
-      "charter": "Resolves build and type failures in the server and web artifacts.",
+      "charter": "Resolves build and type failures in the server and web artifacts. LOCAL CORRECTION (2026-09-05), vendored body must NOT be edited: `npx eslint`, `npm run build`, `npm install` and the `rm -rf .next node_modules/.cache` recovery do not apply here — there is no ESLint config, no Next.js, installs are pnpm-only (preinstall refuses npm), and the repo's own PreToolUse hook DENIES that recovery line. Use `pnpm run typecheck`, `pnpm run build` (linux-x64 only) and `pnpm install --frozen-lockfile`.",
       "carvedOutOf": null
     },
     {
@@ -86,14 +86,14 @@
       "provenance": "first-party",
       "writeScope": "scripts/",
       "carvedOutOf": null,
-      "charter": "Owns every gate and proof harness in scripts/ (317 files, the largest unowned surface in the tree). Falsifies both directions before claiming a gate works, self-tests every gate, derives scope instead of hand-listing it, and registers in preflight AND CI. Hired 2026-08-23 by the DR-016 loop: most open build-plan rows live in scripts/ and no Tier-2 agent could write there."
+      "charter": "Owns every gate and proof harness in scripts/ (the largest unowned surface in the tree; count it with `git ls-files scripts | wc -l`, never from a charter). Falsifies both directions before claiming a gate works, self-tests every gate, derives scope instead of hand-listing it, and registers in preflight AND CI. Hired 2026-08-23 by the DR-016 loop: most open build-plan rows live in scripts/ and no Tier-2 agent could write there."
     },
     {
       "id": "verdict-core-reader",
       "tier": 3,
       "provenance": "first-party",
       "writeScope": null,
-      "charter": "Reads the ~3,900 lines of decision core that compute every verdict and have no named reader in review-coverage.json, and reports: dead computed fields, unexercised branches, unfailable assertions, and any path where unknown evidence could loosen rather than tighten the answer. Reports only, never fixes. Hired 2026-08-23 by the DR-016 loop to close build-plan row 42.",
+      "charter": "Reads the decision core that computes every verdict — first read completed 2026-08-23 and recorded in review-coverage.json; the role now re-reads what changed since each entry's date and whatever the ledger marks UNREAD or PARTIAL — and reports: dead computed fields, unexercised branches, unfailable assertions, and any path where unknown evidence could loosen rather than tighten the answer. Reports only, never fixes. Its Bash tool exists for one purpose, set by the brain-cycle writer contract (docs/agent/BRAIN_CYCLE_DESIGN.md): write exactly one board file for the cycle it audited under artifacts/brain-cycle/, stamped with auditedSha. It never edits source, so it holds no Write or Edit tool and its writeScope stays null. Hired 2026-08-23 by the DR-016 loop to close build-plan row 42.",
       "carvedOutOf": null
     },
     {
@@ -111,6 +111,20 @@
       "writeScope": ".claude/",
       "carvedOutOf": null,
       "charter": "The org's own executable definition: the skills, agents and commands every other role runs through. WRITES only .claude/. Its review surface is wider than its write surface — .agents/, artifacts/mcp-server/, CLAUDE.md and AGENTS.md are READ and REPORTED, never written, because artifacts/ already belongs to build-error-resolver and the two instruction files are read by every role at once."
+    },
+    {
+      "id": "blocker-dispatcher",
+      "tier": 3,
+      "provenance": "first-party",
+      "writeScope": null,
+      "charter": "Answers every raised hand (DR-054). Reads `pnpm run hands` (the per-file ledger artifacts/raised-hands/ plus the stalls scripts/raised-hands.mjs detects that nobody raised), takes each hand (`hand:take`), and routes it: an explicit hand goes to the org-roster role check-raised-hands.mjs names, and an auto stall goes by docs/agent/hand-routing.json. It returns a dispatch plan the coordinator executes. For a GAP it specifies the missing agent or skill and hands that spec to the agent-platform-steward. Its only state changes go through the raise-hand CLI; it has no Write/Edit tools. Built by the Mac lane (#1014) and the cloud lane on the owner's 2026-09-23 directive, merged into one on his 'Merge into one' decision."
+    },
+    {
+      "id": "project-manager",
+      "tier": 3,
+      "provenance": "first-party",
+      "writeScope": null,
+      "charter": "The executor for the org-roster's product-manager and program-manager roles. Takes the raised hands and stalls that ask for direction (what next, which priority, how these fit), ranks the queue against the objective (DR-033; DR-036 readiness gates outreach), decides reversible calls within delegated authority, and routes the top item to the role that builds it. Escalates to the owner only what DR-037 and the OWNER_RESERVED / DECISION_PATH rules in scripts/check-owner-gated-surfaces.mjs keep with him, as narrowed by DR-061 (a lane may merge a DECISION_PATH PR under its conditions; its rule 2 paths never), as a ranked recommendation. Read-only tools (Read, Grep, Glob, Bash): it directs, the domain roles write. Written by the Mac lane (3654425f, #1014) on the owner's 2026-09-23 direction and carried onto #1019."
     }
   ]
 }

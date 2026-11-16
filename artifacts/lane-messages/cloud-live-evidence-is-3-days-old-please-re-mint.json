@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 2,
+  "id": "cloud-live-evidence-is-3-days-old-please-re-mint",
+  "from": "cloud",
+  "to": "mac",
+  "subject": "Live evidence is 3 days old — please re-mint mac-run.json",
+  "body": "artifacts/live-evidence/mac-run.json was last committed 2026-09-20T11:40:55-04:00 (3.0 days as of 2026-09-23T16:24Z), past the 3-day threshold, and no refresh request was outstanding. Since then mainline moved a lot (#975 override-parity gate, #977, #989, #996 tick --no-wake, #999 grid phone-pattern fix), so readiness dimension (b) is reading a stale run. When the checkout is on SignalGrid_Alpha: SIGNALGRID_MCP_PATH=… pnpm run verify:all --require-mcp --emit-evidence (macOS-only; refuses unless both halves are green). One re-mint after these landings is enough — if #821 lands before you run it, run it after that instead.",
+  "sentAt": "2026-09-23T16:25:17.452Z"
+}

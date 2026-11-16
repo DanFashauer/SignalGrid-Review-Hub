@@ -175,7 +175,8 @@ none imply a current certification, attestation, or partnership.
 | Control | Framework refs | Status | Where |
 | ------- | -------------- | ------ | ----- |
 | Incident response plan and runbooks | CSF 2.0 (RS/RC) | Human-owned (planned) | Security program; `docs/REALISTIC_LAUNCH_PLAN.md` (pilot readiness) |
-| Backup and restore, with a verified restore test | CSF 2.0 (RC.RP); ASVS 5.0 | Human-owned (planned) | Private production repo / operations; launch-plan pilot gates |
+| Backup and restore, with a verified restore test | CSF 2.0 (RC.RP); ASVS 5.0 | Implemented (public core) | `pnpm run proof:backup-restore` — in preflight (`scripts/preflight.mjs:486`) and CI (`review-hub-ci.yml`): real Postgres, the database destroyed between backup and restore, a truncated archive refused and named as truncated. `docs/BACKUP_AND_RESTORE.md`; `docs/LEDGER_TRUNCATION_FINDING.md`. (This row read Human-owned (planned) until 2026-09-06.) |
+| Backup and restore — production operation (schedule, off-site copy, restore drill on the deployed system) | CSF 2.0 (RC.RP) | Human-owned (planned) | Private production repo / operations; launch-plan pilot gates |
 | Independent penetration test / security review | ASVS 5.0; CSF 2.0 (ID.RA) | Human-owned (planned) | External engagement; `docs/REALISTIC_LAUNCH_PLAN.md` (phase E/G) |
 | Vendor / third-party risk management | CSF 2.0 (GV.SC) | Human-owned (planned) | Security program (vendor register) |
 | Vulnerability-disclosure contact | CSF 2.0 (RS); ASVS 5.0 | Human-owned (planned) | Security program |

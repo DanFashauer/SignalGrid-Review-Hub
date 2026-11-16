@@ -251,7 +251,7 @@ The doctrine rule that ties these together **(DOCTRINE)**:
 
 ## 7. Web / API security — SignalGrid's own surface
 
-Domain 7 turns inward: the Shared-Device Trust Gateway cannot be launch-ready if its own
+Domain 7 turns inward: the launch surface (DR-004's Shared-Device Trust Gateway, a label DR-019 superseded) cannot be launch-ready if its own
 API has the OWASP failures it would refuse in someone else's. What is **already proven**
 of the api-server (PROVEN, via `test:api`, `check-durable-path-authorization.mjs`, and
 the GA route fence): a cross-tenant decision or audit read fails; a demo key is rejected

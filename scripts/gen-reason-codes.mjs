@@ -17,6 +17,8 @@
 // fail, not just code-name drift.
 import { readFileSync, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
+import { pathToFileURL } from "node:url";
+import { isMainModule } from "./lib/is-main.mjs";
 
 const FILES = {
   "lib/signalgrid-core/src/decision.ts": "decision",
@@ -135,6 +137,16 @@ export const SIMULATOR_ENGINE = "lib/signalgrid-simulator/src/decisionEngine.ts"
 // are simulator/iOS-surface, not launch /v1 vocabulary — catalogued here so they are
 // not read as the core's, and so the seven the engine never emits stop being absent.
 export const REMEDIATION_ALLOW_WRAPPER = "lib/signalgrid-simulator/src/remediation-allow.ts";
+// The posture-allow WRAPPER (2026-09-05) is the fourth surface, same shape: it decides
+// whether an `allow` the engine offered on the PRESENCE of a posture signal survives
+// the ATTRIBUTES of that signal. Declares `POSTURE_ALLOW_REASONS`; Swift twin pending
+// against `native/shared/posture-allow-vectors.json`.
+export const POSTURE_ALLOW_WRAPPER = "lib/signalgrid-simulator/src/posture-allow.ts";
+/** Every wrapper whose declared reason array joins the simulator vocabulary. */
+export const SIMULATOR_WRAPPERS = [
+  { path: REMEDIATION_ALLOW_WRAPPER, array: "REMEDIATION_ALLOW_REASONS" },
+  { path: POSTURE_ALLOW_WRAPPER, array: "POSTURE_ALLOW_REASONS" },
+];
 
 export function parseSimulatorVocabulary(coreCodes) {
   const src = readFileSync(SIMULATOR_ENGINE, "utf8");
@@ -158,24 +170,28 @@ export function parseSimulatorVocabulary(coreCodes) {
   // Fold in the remediation-allow wrapper's DECLARED vocabulary (its source of
   // truth is the exported array, not scattered emit sites — one push is computed,
   // `REASON_FOR_STATE[state]`, which a literal-after-paren scan cannot read).
-  const wrapperSrc = readFileSync(REMEDIATION_ALLOW_WRAPPER, "utf8");
-  const declMatch = wrapperSrc.match(/REMEDIATION_ALLOW_REASONS\s*=\s*\[([\s\S]*?)\]\s*as const/);
-  if (!declMatch) {
-    problems.push(`${REMEDIATION_ALLOW_WRAPPER}: REMEDIATION_ALLOW_REASONS array not found — the wrapper vocabulary cannot be derived`);
-  } else {
+  const wrapperCounts = [];
+  for (const wrapper of SIMULATOR_WRAPPERS) {
+    const wrapperSrc = readFileSync(wrapper.path, "utf8");
+    const declMatch = wrapperSrc.match(new RegExp(`${wrapper.array}\\s*=\\s*\\[([\\s\\S]*?)\\]\\s*as const`));
+    if (!declMatch) {
+      problems.push(`${wrapper.path}: ${wrapper.array} array not found — the wrapper vocabulary cannot be derived`);
+      continue;
+    }
     const declared = [...declMatch[1].matchAll(CODE_LIT)].map((x) => x[1]);
-    if (declared.length === 0) problems.push(`${REMEDIATION_ALLOW_WRAPPER}: REMEDIATION_ALLOW_REASONS declares no reason code`);
+    wrapperCounts.push({ array: wrapper.array, path: wrapper.path, count: declared.length });
+    if (declared.length === 0) problems.push(`${wrapper.path}: ${wrapper.array} declares no reason code`);
     const declaredSet = new Set(declared);
     for (const c of declared) codes.add(c);
     // DRIFT GUARD: every reason-code literal ANYWHERE in the wrapper must be named
     // in the declared array. An emit site (or the REASON_FOR_STATE map) that uses a
     // code the array does not declare is a code no catalog can promise, so it fails
-    // generation rather than shipping an uncatalogued code. (The state array is
-    // lowercase, so CODE_LIT does not match it.)
+    // generation rather than shipping an uncatalogued code. (The state arrays are
+    // lowercase, so CODE_LIT does not match them.)
     for (const m of wrapperSrc.matchAll(CODE_LIT)) {
       if (!declaredSet.has(m[1])) {
         const line = wrapperSrc.slice(0, m.index).split("\n").length;
-        problems.push(`${REMEDIATION_ALLOW_WRAPPER}:${line} uses reason code "${m[1]}" not declared in REMEDIATION_ALLOW_REASONS`);
+        problems.push(`${wrapper.path}:${line} uses reason code "${m[1]}" not declared in ${wrapper.array}`);
       }
     }
   }
@@ -198,6 +214,7 @@ export function parseSimulatorVocabulary(coreCodes) {
     shared: all.filter((c) => core.has(c)),
     simulatorOnly: all.filter((c) => !core.has(c)),
     nearCollisions,
+    wrapperCounts,
     problems,
   };
 }
@@ -406,12 +423,13 @@ trusting this table's age.
 
 The tables above are the **launch decision core** (\`lib/signalgrid-core\`). The
 **fixture simulator** surface — the engine \`${SIMULATOR_ENGINE}\` plus the
-remediation-allow wrapper \`${REMEDIATION_ALLOW_WRAPPER}\` — is a second, separate
+remediation-allow wrapper \`${REMEDIATION_ALLOW_WRAPPER}\` and the posture-allow
+wrapper \`${POSTURE_ALLOW_WRAPPER}\` — is a second, separate
 decision path. Together they emit ${simulator.codes.length} reason codes. ${simulator.shared.length} of them the core also emits
 (${simulator.shared.map((c) => `\`${c}\``).join(", ")}); the other ${simulator.simulatorOnly.length}
 appear nowhere above. The lists are parsed from those files by this generator —
-the engine's emit sites and the wrapper's declared \`REMEDIATION_ALLOW_REASONS\` —
-not maintained by hand. Several of them name **deferred** families
+the engine's emit sites and each wrapper's declared reason array
+(${SIMULATOR_WRAPPERS.map((w) => `\`${w.array}\``).join(", ")}) — not maintained by hand. Several of them name **deferred** families
 (custody, dock, location) — the simulator is a fixture harness, so it models
 families the launch profile does not serve.
 
@@ -424,7 +442,7 @@ API vocabulary, and a host app must not build against them as if they were.
 They are also not renameable at will: \`native/ios/EnterpriseShell/Services/DecisionEngine.swift\`
 is a byte-faithful port of the simulator engine (CLAUDE.md golden rule 1), so the
 iOS app's reason codes ARE these spellings. Aligning them with the core's would
-break the parity the port exists to prove. The wrapper's eight codes have the same
+break the parity the port exists to prove. The wrapper's ${simulator.wrapperCounts.find((w) => w.array === "REMEDIATION_ALLOW_REASONS")?.count ?? "?"} codes have the same
 constraint by a different mechanism: \`native/ios/EnterpriseShell/Services/RemediationAllow.swift\`
 is held to the wrapper by the shared vector table and \`scripts/check-remediation-allow-conformance.mjs\`,
 so the spellings are a contract there too.
@@ -473,4 +491,4 @@ function generate() {
   );
 }
 
-if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split("/").pop())) generate();
+if (isMainModule(process.argv[1], import.meta.url)) generate();

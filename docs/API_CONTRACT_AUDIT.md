@@ -15,8 +15,9 @@ The answer was no, in four ways. Three are fixed here; all four are gated now.
 > *Every route is tenant-scoped: the tenant is derived from the authenticated
 > bearer token, never from a client-supplied id.*
 
-That is true of `/v1/*`. It is the **inverse** of `/cp/v1/*`, which is 21 of the
-55 operations the same document publishes. Every one of them declares
+That is true of `/v1/*`. It is the **inverse** of `/cp/v1/*`, which is 24 of the
+59 operations the same document publishes (as of 2026-09-06, parsed from
+`lib/api-spec/v1-openapi.yaml`; 21 of 55 when this was written). Every one of them declares
 `security: []`, carries no principal, and is scoped only by a client-supplied
 `?tenant=` query parameter — a fact `artifacts/api-server/src/routes/index.ts`
 states plainly in a comment that never reached the contract.
@@ -77,7 +78,8 @@ read as complete coverage.
 a declared registry, and **fails if any registered file yields zero routes** —
 because a matcher that silently stops matching under-reports the
 implementation, and under-reporting fails in the direction that looks green.
-Self-test 7/7, including the multi-line `router.post(\n  "/path"` form the
+Self-test 10/10 as of 2026-09-06 (`pnpm run proof:api-contract -- --self-test`; 7/7 when this
+was written), including the multi-line `router.post(\n  "/path"` form the
 original matcher happened to handle and a naive rewrite would not, and a
 negative control reproducing the exact drift that shipped.
 
@@ -115,6 +117,12 @@ the handlers return. Two known gaps, recorded rather than smoothed:
   checkable one either.
 - Documented status codes (`400`, `403`, `404`, `429`) are not exercised against
   the routes that declare them.
+- One response shape IS now specified field-by-field: `POST /v1/app-workflows/evaluate`,
+  the one route a shipping native client binds, documents its 200 as
+  `Envelope + { decision: EvaluateResult, plan: AppSessionPlan }` (2026-09-19), written
+  from the api tests that pin `plan.actions[].disposition` and from
+  `lib/app-workflows/src/index.ts`. It is still not compared to the handler by a gate;
+  the same caveat as every other shape applies.
 
 `pnpm --filter @workspace/api-server run test:api` covers behaviour for the
 routes it names; it is not driven from the spec, so a documented status nobody

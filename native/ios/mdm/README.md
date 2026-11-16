@@ -1,11 +1,16 @@
 # Kiosk lockdown — MDM configuration
 
 **The device-side half of the kiosk.** An iOS app cannot make itself
-non-removable, force full screen, or auto-relaunch — those are OS capabilities
-gated on **supervision + MDM**. The app does its half (`UIRequiresFullScreen`,
-and `KioskController` requests Autonomous Single App Mode); this profile does the
-other half. **None of this works on an unsupervised device or the simulator** —
-that is why the shell looks windowed/removable there.
+non-removable, keep the worker from leaving it, or auto-relaunch — those are OS
+capabilities gated on **supervision + MDM**. The app does its half alone: it
+declares full screen (`UIRequiresFullScreen` in
+`native/ios/EnterpriseShell/Info.plist`, which on current iPadOS opts out of Split
+View, Slide Over and resizable windows; an app-declared key, no MDM needed — Apple
+is deprecating it, so re-check on each major iPadOS), and `KioskController` requests
+Autonomous Single App Mode, which only a supervised device carrying this profile
+grants. This profile does the other half. **None of the MDM half works on an
+unsupervised device or the simulator** — that is why the shell is removable and
+can be left there.
 
 ## What `EnterpriseShell-Kiosk.mobileconfig` does
 
@@ -33,7 +38,10 @@ permanently trapping the device.
 1. **Supervise the device** — via Apple Business/School Manager + Automated Device
    Enrollment (preferred, for fleets) or Apple Configurator (for a few devices).
    ASAM authorization requires supervision; it is refused otherwise.
-2. **Enroll in your MDM** (Jamf, Intune, Kandji, Mosyle, …).
+2. **Enroll in your MDM** — Fleet is the MDM this repo is built against (see
+   `fleet/README.md` and `fleet/profiles/signalgrid-restrictions.mobileconfig`,
+   the Fleet-delivered twin of this profile); Jamf, Intune, Kandji, Mosyle and
+   the rest deliver the same payload.
 3. **Install this profile** through the MDM (or scope it to the kiosk device
    group). Push the Enterprise Shell app as a **managed, non-removable** app.
 4. Verify: at badge-idle the device is locked to Enterprise Shell (Home
@@ -56,10 +64,26 @@ The shell reads these keys from Managed App Config (delivered under
 | `badge_reader_type` | String | `keyboard_wedge` | Which badge-reader provider the shell builds (`BadgeReaderType` raw value). A present managed dictionary answers only from itself; the environment fallback exists on the simulator or with no dictionary. |
 | `identity_provider_type` | String | — | `IdentityProviderType` raw value, same precedence as `badge_reader_type`; unset ⇒ the control-plane session provider. |
 
+## Not in this profile: declarative configurations
+
+Three controls a shared clinical device should carry are **declarations**, which
+the MDM delivers over its declarative channel — they cannot be expressed in this
+`.mobileconfig`. All three are supervised-only. From the Apple Platform
+Deployment guide, 2026-09-17 edition (`native/ios/FLEET_MDM.md` items c and d):
+
+| Declaration | Minimum OS | What it does here |
+| --- | --- | --- |
+| App settings | iOS / iPadOS 27 | The allow-list of (c) as a declaration, plus default privacy permissions for the shell (camera, Bluetooth, local network) with a justification string. |
+| External intelligence | iOS / iPadOS 26.4 | Turns off external intelligence integrations and their sign-in on a device that passes between clinicians. |
+| Apple Intelligence | iOS / iPadOS 26.4 | Turns off Writing Tools, Genmoji, Image Playground, Visual Intelligence and the per-app summaries; forces on-device dictation and translation. |
+
 ## What the simulator can and can't show
 
 - **Can**: the full session flow, the configured per-role workspace and its
-  launchable apps, teardown, idle-lock, the Assist gate.
-- **Can't**: Autonomous Single App Mode, non-removability, forced full screen,
-  auto-relaunch — all require a supervised device with this profile. On the
-  simulator the app is windowed and removable; that is expected, not a bug.
+  launchable apps, teardown, idle-lock, the Assist gate, and the app's own
+  full-screen declaration (`UIRequiresFullScreen` is app-declared and needs no MDM
+  on current iPadOS).
+- **Can't**: Autonomous Single App Mode (the device held on the shell so the
+  worker cannot leave it), non-removability, auto-relaunch — all require a
+  supervised device with this profile. On the simulator the app is removable and
+  can be left; that is expected, not a bug.

@@ -36,7 +36,11 @@ export interface SessionStore {
   start(session: Session): Promise<void>;
   /** A session by id (only within the tenant), with expiry applied as of nowMs. */
   get(tenantId: string, id: string, nowMs: number): Promise<Session | null>;
-  /** Extend an ACTIVE, unexpired session's TTL; returns the session or null. */
+  /** Extend an ACTIVE, unexpired session's TTL; returns the refreshed session, or
+   *  null when there is nothing to refresh — unknown, another tenant's, expired or
+   *  ended. It used to return the expired/ended session object itself, so the
+   *  route answered 200 and wrote a `session.refresh` audit row for a refresh that
+   *  never happened. */
   refresh(tenantId: string, id: string, ttlSeconds: number, nowMs: number): Promise<Session | null>;
   /** End a session (sign-out). Returns the ended session or null. */
   end(tenantId: string, id: string): Promise<Session | null>;
@@ -63,8 +67,14 @@ function withExpiry(s: Session, nowMs: number): Session {
   if (s.status === "active" && (!Number.isFinite(expiresAtMs) || expiresAtMs < nowMs)) {
     return { ...s, status: "expired" };
   }
+  // `status` is TEXT NOT NULL with no CHECK, so a durable row can hold any string
+  // and `rowToSession` only casts it. An unrecognised status is unknown state and
+  // reads EXPIRED, never verbatim (fail closed: unknown tightens, never loosens).
+  if (!KNOWN_STATUSES.has(s.status)) return { ...s, status: "expired" };
   return s;
 }
+
+const KNOWN_STATUSES: ReadonlySet<string> = new Set<SessionStatus>(["active", "expired", "ended"]);
 
 // ── in-memory (default, fixture-safe) ───────────────────────────────────────
 export class InMemorySessionStore implements SessionStore {
@@ -84,12 +94,16 @@ export class InMemorySessionStore implements SessionStore {
 
   async refresh(tenantId: string, id: string, ttlSeconds: number, nowMs: number): Promise<Session | null> {
     const current = await this.get(tenantId, id, nowMs);
-    if (!current || current.status !== "active") return current;
+    if (!current || current.status !== "active") return null;
     const next: Session = {
       ...current,
       lastSeenAt: new Date(nowMs).toISOString(),
       expiresAt: new Date(nowMs + ttlSeconds * 1000).toISOString(),
     };
+    // Parity with the Postgres `UPDATE … WHERE status = 'active'`: the read above
+    // awaited, so an end() that landed in that window must win. Re-check the live
+    // row immediately before the write; a non-active row is never revived.
+    if (this.byId.get(id)?.status !== "active") return null;
     this.byId.set(id, next);
     return next;
   }
@@ -196,6 +210,28 @@ export class PostgresSessionStore implements SessionStore {
       // surface here as "not ready" instead of as a 42501 mid-request.
       await this.assertPrivileges();
     }
+    // And usability is not SHAPE — see decision-store.ts assertSchema.
+    await this.assertSchema();
+  }
+
+  /** Every column the store's statements bind. */
+  private static readonly BOUND_COLUMNS = [
+    "id", "tenant_id", "identity_ref", "device_ref", "workflow_key", "status", "outcome",
+    "decision_id", "created_at", "last_seen_at", "expires_at",
+  ];
+
+  private async assertSchema(): Promise<void> {
+    const res = await this.pool.query(
+      `SELECT column_name FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'sessions'`,
+    );
+    const present = new Set(res.rows.map((r: any) => String(r.column_name)));
+    const missing = PostgresSessionStore.BOUND_COLUMNS.filter((c) => !present.has(c));
+    if (missing.length > 0) {
+      throw new Error(
+        `sessions is missing column(s) ${missing.join(", ")} — the schema is behind the code. ` +
+          "Run `pnpm run db:migrate` with the admin credential; refusing to report ready for statements that would fail.",
+      );
+    }
   }
 
   /** The exact per-table privileges the store's statements need; also run on
@@ -218,6 +254,7 @@ export class PostgresSessionStore implements SessionStore {
     await this.ensureReady();
     await this.pool.query("SELECT 1");
     await this.assertPrivileges();
+    await this.assertSchema();
   }
 
   private rowToSession(r: any): Session {
@@ -266,14 +303,18 @@ export class PostgresSessionStore implements SessionStore {
   async refresh(tenantId: string, id: string, ttlSeconds: number, nowMs: number): Promise<Session | null> {
     await this.ensureReady();
     const current = await this.get(tenantId, id, nowMs);
-    if (!current || current.status !== "active") return current;
+    if (!current || current.status !== "active") return null;
     const lastSeenAt = new Date(nowMs).toISOString();
     const expiresAt = new Date(nowMs + ttlSeconds * 1000).toISOString();
-    await this.pool.query(
-      "UPDATE public.sessions SET last_seen_at = $1, expires_at = $2 WHERE id = $3 AND tenant_id = $4",
+    // The status guard makes the UPDATE the arbiter: an end() that committed after
+    // the read above matches no row, so the losing refresh returns null (the route
+    // answers 404 and appends no session.refresh audit row) instead of echoing an
+    // `active` session that is already ended.
+    const res = await this.pool.query(
+      "UPDATE public.sessions SET last_seen_at = $1, expires_at = $2 WHERE id = $3 AND tenant_id = $4 AND status = 'active' RETURNING *",
       [lastSeenAt, expiresAt, id, tenantId],
     );
-    return { ...current, lastSeenAt, expiresAt };
+    return res.rows[0] ? this.rowToSession(res.rows[0]) : null;
   }
 
   async end(tenantId: string, id: string): Promise<Session | null> {

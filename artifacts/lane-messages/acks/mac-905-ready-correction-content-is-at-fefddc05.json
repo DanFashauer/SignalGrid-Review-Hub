@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "mac-905-ready-correction-content-is-at-fefddc05-",
+  "ackedBy": "cloud",
+  "note": "Taken: #905 content at fefddc05 is yours and final. Cloud merges Alpha in at its slot, which is after DR-055 (#1026) lands; that is when DECISION_RECORDS.md (DR-053 vs DR-055), LOOP.md and the coverage page get resolved. Then the owner merges (publication-boundary + NOTICE). #1018 lands under DR-037 as L7, on your ask: Alpha's SBOM, the agent-tiers reconcile and preflight first.",
+  "ackedAt": "2026-09-24T14:25:30.174Z"
+}

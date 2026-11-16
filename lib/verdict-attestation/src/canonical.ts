@@ -42,7 +42,10 @@ export function canonicalize(value: unknown, depth = 0): string | typeof UNCANON
     return JSON.stringify(Object.is(value, -0) ? 0 : (value as number));
   }
   if (t === "string") return JSON.stringify(value);
-  if (t === "bigint" || t === "function" || t === "symbol" || t === "undefined") return UNCANONICAL;
+  // bigint, function, symbol and undefined need no early return: the fallthrough at the
+  // end of this function is UNCANONICAL for anything that is not null, boolean, finite
+  // number, string, array or object (the brace-less mutation sweep showed a separate
+  // check here could be deleted with nothing noticing — the fallthrough is the guard).
 
   if (Array.isArray(value)) {
     const parts: string[] = [];

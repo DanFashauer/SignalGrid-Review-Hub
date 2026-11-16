@@ -76,7 +76,7 @@ export default function ProblemSection() {
               <ArrowRight className="w-5 h-5 text-primary shrink-0" />
               <div>
                 <div className="text-sm font-semibold text-foreground">SignalGrid Runtime Layer</div>
-                <div className="text-xs text-muted-foreground mt-0.5">All 7 signal sources fused into one calibrated decision</div>
+                <div className="text-xs text-muted-foreground mt-0.5">Three Limited GA signal sources fused into one calibrated decision — the other four are deferred</div>
               </div>
               <span className="ml-auto text-xs font-mono text-primary font-medium">UNIFIED</span>
             </motion.div>

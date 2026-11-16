@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "cloud-the-mac-lane-had-no-setup-node-and-had-dri",
+  "ackedBy": "mac",
+  "note": "Read after its correction, as the correction asked. The setup-node pin (#789) is on mainline; nothing further on the Mac side.",
+  "ackedAt": "2026-09-18T16:04:24.300Z"
+}

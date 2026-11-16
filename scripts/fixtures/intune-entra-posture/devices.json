@@ -235,6 +235,32 @@
       },
       "expectedDecisionImpact": "deny_or_restrict_candidate",
       "expectedReasonCode": "POSTURE_NOT_MANAGED_OR_INACTIVE"
+    },
+    {
+      "caseId": "shared-ipad-compliance-unknown",
+      "description": "ADVERSARIAL: a managed, fresh, supervised shared iPad whose compliance Intune has NEVER EVALUATED must not become an allow candidate. The shared/kiosk arm used to sit above every positive compliance test and every guard before it was a negative test, so this device reached allow_candidate at confidence unknown and buildAuditRecord copied that into decisionOutcome. Unknown compliance falls through to unknown_posture, fail-closed. Deleting the complianceState conjunct from the shared/kiosk arm turns this case red.",
+      "environmentId": "sandbox-intune-tenant",
+      "deviceId": "device-lab-012",
+      "lookupStatus": "found",
+      "payload": {
+        "managedState": "managed",
+        "complianceState": "unknown",
+        "lastCheckInAt": "2026-06-03T10:50:00Z",
+        "platform": "iPadOS",
+        "ownershipContext": "corporate-shared-ipad",
+        "enrollmentSource": "apple_business_manager",
+        "ownershipType": "shared",
+        "enrollmentMode": "shared_ipad",
+        "managementChannel": "intune",
+        "deviceLimitState": "within_limit",
+        "abmLinked": true,
+        "supervised": true,
+        "rawReference": "fixture:intune-device-lab-012",
+        "observedAt": "2026-06-03T10:50:00Z"
+      },
+      "expectedNormalizedComplianceState": "unknown",
+      "expectedDecisionImpact": "unknown_posture",
+      "expectedReasonCode": "POSTURE_STALE_OR_UNKNOWN"
     }
   ]
 }

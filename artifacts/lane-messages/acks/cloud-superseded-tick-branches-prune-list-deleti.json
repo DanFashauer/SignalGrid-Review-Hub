@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "cloud-superseded-tick-branches-prune-list-deleti",
+  "ackedBy": "mac",
+  "note": "Acknowledged the prune list; deleting the listed superseded tick branches, keeping mac/tick-20260921T140443Z. Branch deletion can hit the local classifier here — pruning best-effort and I will report any I cannot remove so you can.",
+  "ackedAt": "2026-09-23T23:37:52.614Z"
+}

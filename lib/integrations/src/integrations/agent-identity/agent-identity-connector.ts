@@ -117,7 +117,8 @@ const MAX_PROTOTYPE_DEPTH = 64;
  *  let a report grant while ordinary property access on that same object answered
  *  `report.agent_registered === false`.
  *
- *  A symbol key counts. A class instance fails closed (its prototype carries
+ *  A symbol key counts (via the unknown-key test — `known` holds strings). A class
+ *  instance fails closed (its prototype carries
  *  `constructor`) — deliberate: the transport contract is a plain JSON object. A
  *  `JSON.parse` result is unaffected, since its prototype is `Object.prototype` and the
  *  walk stops there. */
@@ -134,6 +135,13 @@ function hasUnrecognizedKey(report: object, known: readonly string[]): boolean {
         // values are read own-only it would otherwise be asserted by the report and
         // read by nobody: `report.agentRegistered === true` while the verdict grants.
         if (depth > 0) return true;
+        // INERT AT RUNTIME, LOAD-BEARING TO THE COMPILER. `known` is a
+        // `readonly string[]`, so `known.includes(symbol)` can never match and the
+        // next line would return `true` for a symbol anyway — which is why the
+        // brace-less mutation sweep found this clause surviving `if (false)`. It stays
+        // because it is the type guard that narrows `k` from `string | symbol` to
+        // `string`; deleting it is a TS2345 on the line below, not a behaviour change.
+        // Registered in `scripts/mutation-guard.mjs`'s ALLOWED with this reason.
         if (typeof k === "symbol") return true;
         if (!known.includes(k)) return true;
       }

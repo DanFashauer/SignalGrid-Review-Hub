@@ -1,5 +1,16 @@
 # Phase Automation Orchestrator
 
+> **SUPERSEDED 2026-09-06 — do not follow this loop as the merge lane.**
+> Steps 7–8 below make an external ChatGPT reviewer a precondition of the merge lane.
+> That reviewer is retired (`docs/COMPANY_BUILD_PLAN.md` records it; `docs/BRANCH_HYGIENE.md`
+> describes the `codex/*` lane in the past tense), and no workflow wires one —
+> `grep -il 'chatgpt\|codex' .github/workflows/` matches only a comment in
+> `review-hub-ci.yml` — so step 8 cannot run and step 9 never waited on it. The
+> adversarial review that exists is the in-repo Reviewer role (`docs/agent/ORG.md`,
+> `.claude/skills/signalgrid-reviewer/SKILL.md`); the live queue is `docs/BUILD_BACKLOG.md`
+> (the phase backlog was archived 2026-08-15). Kept as the record of the Autopilot-era
+> operating model.
+
 The Phase Automation Orchestrator is a public-safe operating model for turning user-provided summaries, screenshots, links, vendor findings, automation outputs, and GitHub validation results into scoped SignalGrid Review Hub phases.
 
 It is process scaffolding only. It does not add live integrations, authentication, secrets, tenant data, customer data, PHI/PII, production device actions, or blind auto-merge.
@@ -46,7 +57,7 @@ The backlog is seeded with public-safe observations from recent work: rf IDEAS-s
 
 ## Autopilot extension
 
-The SignalGrid Autopilot Control Plane extends this loop so the user can hand off a PR number, workflow URL, screenshot, link, or short command instead of a long automation summary. The Autopilot layer is documented in `docs/SIGNALGRID_AUTOPILOT_CONTROL_PLANE.md`, with intake classification in `docs/AUTOPILOT_INTAKE_BOT.md`, PR evidence reporting in `docs/PHASE_PR_EVIDENCE_BOT.md`, backlog checks in `docs/AUTOPILOT_BACKLOG_CURATOR.md`, and command syntax in `docs/AUTOPILOT_COMMAND_GUIDE.md`.
+The SignalGrid Autopilot Control Plane extends this loop so the user can hand off a PR number, workflow URL, screenshot, link, or short command instead of a long automation summary. The Autopilot layer is documented in `docs/SIGNALGRID_AUTOPILOT_CONTROL_PLANE.md`, with intake classification in `docs/AUTOPILOT_INTAKE_BOT.md`, PR evidence reporting in `docs/PHASE_PR_EVIDENCE_BOT.md`, backlog checks in `docs/AUTOPILOT_BACKLOG_CURATOR.md` (RETIRED 2026-08-15 — the curator script is deleted and that page is kept only as the record of what it was meant to do; the live queue is `docs/BUILD_BACKLOG.md`), and command syntax in `docs/AUTOPILOT_COMMAND_GUIDE.md`.
 
 ## Next recommended phase
 

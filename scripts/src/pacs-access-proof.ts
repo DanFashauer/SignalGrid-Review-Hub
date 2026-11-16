@@ -290,6 +290,23 @@ check("unrecognized enums normalize to 'unknown' (never a fabricated granted/aut
 const boolNorm = normalizeReport("b", { identityMatched: "yes", bridgeReachable: 1 } as unknown as PacsAccessReportRaw);
 check("a non-boolean identityMatched / bridgeReachable is null, never fabricated", boolNorm.identityMatched === null && boolNorm.bridgeReachable === null);
 
+// The brace-less guards the mutation sweep could not reach until this family joined it
+// (`oneLine: true`, 2026-09-30). Each check below fails with its guard removed.
+//
+// A Date-PARSEABLE but non-Zulu spelling is not the strict instant the wire contract
+// names. The garbled case above ("noonish") never reached the strict-shape guard —
+// Date.parse already refused it — so an offset or date-only spelling pins it.
+for (const spelling of ["2026-07-31T11:00:00+01:00", "2026-07-31"]) {
+  check(`a Date-parseable non-Zulu observedAt (${spelling}) normalizes to null, never a coerced instant`, normalizeReport("t", { ...cleanRaw, observedAt: spelling } as PacsAccessReportRaw).observedAt === null);
+}
+// Subjects that carry no identity must never CORROBORATE one another: two blanks, or two
+// bridge sentinels, are equal strings, and equal subjects with no explicit flag confirm
+// a match (identityMatched=true) — a grant input manufactured from two non-answers.
+for (const [label, subject] of [["blank", "   "], ["'Not found' sentinel", "Not found"], ["'unavailable' sentinel", "UNAVAILABLE"], ["'error' sentinel", "error: bridge timeout"]] as const) {
+  const n = normalizeReport("s", { pacsSubject: subject, expectedSubject: subject } as PacsAccessReportRaw);
+  check(`two ${label} subjects are unreadable (null), and never corroborate a match`, n.pacsSubject === null && n.expectedSubject === null && n.identityMatched === null);
+}
+
 // Worst-concern-wins: a denial (escalate) outranks the restricts and step_ups.
 const worst = evaluatePacsAccess(await connector.fetchAccess(fixture.entries["worst-of-several"].deviceId));
 check("worst-concern-wins: a denial (escalate) outranks the tailgating/forced restricts", worst.recommendedAction === "escalate" && worst.criticalFindings.length === 5);

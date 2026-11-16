@@ -1,0 +1,60 @@
+title: Status Software Update Install State
+description: The status item that reports the device's software update install state.
+payload:
+  statusitemtype: softwareupdate.install-state
+  supportedOS:
+    iOS:
+      introduced: '17.0'
+      allowed-enrollments:
+      - supervised
+      - device
+      allowed-scopes:
+      - system
+      sharedipad:
+        allowed-scopes:
+        - system
+    macOS:
+      introduced: '14.0'
+      allowed-enrollments:
+      - supervised
+      allowed-scopes:
+      - system
+    tvOS:
+      introduced: '18.4'
+      allowed-enrollments:
+      - supervised
+      - device
+      allowed-scopes:
+      - system
+    visionOS:
+      introduced: '26.0'
+      allowed-enrollments:
+      - supervised
+      - device
+      allowed-scopes:
+      - system
+    watchOS:
+      introduced: n/a
+payloadkeys:
+- key: softwareupdate.install-state
+  title: The software update install state.
+  type: <string>
+  presence: required
+  rangelist:
+  - none
+  - downloading
+  - prepared
+  - installing
+  - failed
+  content: |-
+    The software update install status, which has the following values:
+
+    - `none`: There's no software update pending, and any previous software update succeeded.
+    - `downloading`: The system is downloading data for a software update.
+    - `prepared`: The system prepared the software update and it's ready for installation.
+    - `installing`: The system is installing the software update.
+    - `failed`: The software update failed.
+examples:
+- title: Status item example
+  files:
+  - file: examples/declarative/status/softwareupdate.install-state/example1.json

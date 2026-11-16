@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "id": "2026-09-18-evidence-remint-readiness-zero",
+  "requestedAt": "2026-09-18T13:58:00Z",
+  "requestedBy": "cloud lane",
+  "reason": "The live evidence (artifacts/live-evidence/mac-run.json) was minted 2026-09-13T02:55Z against manifest 4afa60cf2fd5; the tree is at 6906d8d9ecc5, so DR-036 dimension (b) reads 0% and the company readiness headline is 0% (OUTREACH CLOSED) while (a) is 94% and (c) is 100%. Two lane-mail asks for a refresh have sat unread for 27h and 11h: the Mac's 5-minute tick has heartbeat 'quiet' 33 times today (2026-09-18) and by design never acks mail or re-mints evidence on its own. This request moves the re-mint onto the channel the tick DOES execute unattended.",
+  "runs": [
+    "evidence"
+  ],
+  "notes": [
+    "evidence (macOS-only): verify:all --require-mcp --emit-evidence. The tick's launchd environment does not export SIGNALGRID_MCP_PATH; verify-all then auto-discovers a sibling checkout at ../signalgrid-mcp relative to the worktree it runs from. If no sibling is found the run FAILS and the result records it — that failure is the finding (the tick's worktree cannot see the MCP checkout), not a reason to mark this settled.",
+    "Do not substitute a weaker run: the artifact only counts when both halves are green against the current manifest. A result that passes should move dimension (b) back above 0% on the next `node scripts/check-readiness-figure.mjs`.",
+    "The tick commits results on a mac/tick-<stamp> branch; the cloud steward opens the PR within the hour."
+  ]
+}

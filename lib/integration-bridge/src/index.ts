@@ -45,7 +45,13 @@ export function fleetDMToPostureDrafts(
       value: posture.compliant ? "compliant" : "non_compliant",
       observedAt,
     },
-    { category: "device_management", value: true, observedAt },
+    // `device_management: true` used to be asserted here UNCONDITIONALLY. The source
+    // shape (`FleetDMPostureSignal`) carries no enrollment field — it was derived from
+    // "Fleet returned a host row", not from an answer about management — and the
+    // literal `true` satisfied the healthy-allow rule, moving a verdict from step_up to
+    // allow on a fact nobody had read. Silence is the rule where a source did not
+    // affirmatively answer (see the header); the sibling adapter reads a real
+    // `mdmEnrolled` field for the same draft. Restored when the signal carries one.
   ];
   // All FleetDM policies passing → aligned security baseline; any failing → drifted.
   if (posture.policies.length > 0) {

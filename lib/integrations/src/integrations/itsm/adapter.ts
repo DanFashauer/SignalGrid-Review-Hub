@@ -50,7 +50,7 @@ import { resolveEmission, type EmissionCredential } from '../adapters/emit-gate'
  * silently inheriting "no credential required". proof:emit-gate derives the
  * vendor list from the schema, so the omission fails a proof, not a customer.
  */
-function requiredCredential(vendor: ITSMVendor, config: ITSMFullConfig): EmissionCredential {
+export function requiredCredential(vendor: ITSMVendor, config: ITSMFullConfig): EmissionCredential {
   const c = config.credentials;
   switch (vendor) {
     case 'servicenow':
@@ -331,7 +331,11 @@ export class ITSMAdapterManager {
         continue;
       }
       try {
-        results[vendor] = (await adapter.healthCheck()) ? 'healthy' : 'unhealthy';
+        // A gate-suppressed adapter reports 'unchecked': it made no call, so it has
+        // found neither health nor its absence. Mapping that to 'unhealthy' was the
+        // same ignorance as the missing-healthCheck arm above, answered differently.
+        const outcome = await adapter.healthCheck();
+        results[vendor] = outcome === 'unchecked' ? 'unchecked' : outcome === true ? 'healthy' : 'unhealthy';
       } catch {
         results[vendor] = 'unhealthy';
       }

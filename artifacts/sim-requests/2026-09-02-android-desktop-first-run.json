@@ -1,6 +1,7 @@
 {
   "schemaVersion": 1,
   "id": "2026-09-02-android-desktop-first-run",
+  "requestedAt": "2026-09-02T17:19:54Z",
   "requestedBy": "cloud lane",
   "reason": "The native Android and desktop trees have only ever run on Linux CI, and CI never opens the desktop window. The 2026-09-02 native read found that native/desktop/app/tauri.conf.json never set app.withGlobalTauri, so every launch of the Tauri shell showed 'Could not read the decision from the core' over empty panels while cargo build stayed green — a defect no test could see because nothing anywhere ran the window. That key is now set and held by a cargo test in main.rs, but the test asserts the CONFIG, not the render. This request is the first run of the window on a real machine, plus darwin truth for the two core suites (Kotlin: emulator loopback is now a constructor parameter, 10.0.2.2 refused by default; Rust and Kotlin: two new shared vectors for the served no-obligations shape and the /api-mount base URL).",
   "runs": [

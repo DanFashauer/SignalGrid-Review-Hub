@@ -18,6 +18,21 @@
 // refused (unknown management may not become an "unmanaged" boolean).
 //
 // Zero network, enforced: `fetch` is replaced with a tripwire for the run.
+//
+// CAPTURE FRESHNESS IS DECLARED HERE AND ENFORCED BELOW. A live capture records
+// its own `capturedAt`, and until 2026-09-06 nothing anywhere read it: a capture
+// minted once and never re-run read identically to one minted this morning, on
+// every surface that cites it (`docs/agent/evidence-sources.json` cites
+// artifacts/live-captures/headwind.json as liveEvidence). The age is now REPORTED
+// on the provenance line on every run, and is FATAL past a declared bound of
+// CAPTURE_MAX_AGE_DAYS = 90 days — a quarter, chosen because the lane is run
+// occasionally by hand and a server image older than that is no longer evidence
+// about the shape the connectors meet today. A capture with no parseable instant,
+// or one dated in the FUTURE, fails closed: an execution record that cannot say
+// when it executed is not evidence. Absence of a capture is still not a failure
+// (the section reports ABSENT and the proof stays green). Set
+// SIGNALGRID_CAPTURE_REF_NOW to an ISO instant to evaluate the bound against a
+// fixed reference instead of the wall clock; an unparseable value fails.
 
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
@@ -290,8 +305,31 @@ async function main(): Promise<void> {
     if (existsSync(capPath)) {
       const cap = JSON.parse(readFileSync(capPath, "utf8")) as {
         serverImage?: string;
+        capturedAt?: string;
         devices?: Array<{ deviceNumber: string; model: string; enrolled: boolean; kioskLocked: boolean; configApplied: "applied" | "failed" | "unknown"; lastSeenAt: string | null }>;
       };
+      // ── capture freshness: the instant the capture records about ITSELF ──────
+      // Declared bound, stated in the header. REPORTED on every run; FATAL only
+      // past the bound, or when the instant is missing/unparseable/in the future.
+      const CAPTURE_MAX_AGE_DAYS = 90;
+      const refRaw = process.env["SIGNALGRID_CAPTURE_REF_NOW"] ?? new Date().toISOString();
+      const refMs = Date.parse(refRaw);
+      check("the capture-freshness reference instant parses (wall clock, or SIGNALGRID_CAPTURE_REF_NOW)",
+        Number.isFinite(refMs), refRaw);
+      const capturedMs = Date.parse(cap.capturedAt ?? "");
+      check("the headwind capture records its OWN instant (capturedAt) and it parses — an execution record that cannot say when it ran is not evidence",
+        Number.isFinite(capturedMs), `capturedAt=${cap.capturedAt ?? "absent"}`);
+      const ageDays = Number.isFinite(capturedMs) && Number.isFinite(refMs)
+        ? (refMs - capturedMs) / 86_400_000
+        : Number.NaN;
+      check("...and the capture is not dated in the FUTURE (clock contradiction, fail-closed)",
+        Number.isFinite(ageDays) && ageDays >= 0, `age=${ageDays.toFixed(1)}d`);
+      check(`...and the capture is inside the declared ${CAPTURE_MAX_AGE_DAYS}-day evidence bound (REPORTED every run, fatal past the bound)`,
+        Number.isFinite(ageDays) && ageDays <= CAPTURE_MAX_AGE_DAYS,
+        `age=${ageDays.toFixed(1)}d bound=${CAPTURE_MAX_AGE_DAYS}d — re-run the lane: ./scripts/run-live-lanes.sh --only headwind`);
+      const ageReport = Number.isFinite(ageDays)
+        ? `captured ${ageDays.toFixed(1)}d ago (bound ${CAPTURE_MAX_AGE_DAYS}d, ref ${refRaw})`
+        : `capture age UNKNOWN (capturedAt=${cap.capturedAt ?? "absent"})`;
       const devs = cap.devices ?? [];
       check("headwind capture parses and carries at least one live-derived device", devs.length > 0, capPath);
       const capEv = devs.map((d) => headwindLabToDeviceManagementEvidence(d, { tenantId: "tenant_lab", observedAt: NOW }));
@@ -309,8 +347,19 @@ async function main(): Promise<void> {
           liveEv.managedState === fixtureTwin.managedState &&
           liveEv.ownership === fixtureTwin.ownership,
           `live=${liveEv.complianceState}/${liveEv.managedState} fixture=${fixtureTwin.complianceState}/${fixtureTwin.managedState}`);
+      } else {
+        // THE INNER SKIP IS NOT SILENT. The outer absence has always announced
+        // itself; this one did not, so a capture whose devices were all
+        // `configApplied: "failed"` or `enrolled: false` dropped the section's only
+        // load-bearing assertion and the proof printed its normal pass. It is a
+        // FAILURE rather than a report because proof:live-headwind writes a capture
+        // only when its own run passed (`failed === 0`), with enrolled/kioskLocked
+        // true and configApplied "applied" whenever lastUpdate > 0 — a written
+        // capture without such a device did not come from a passing lane run.
+        check("the capture carries an applied+enrolled+kiosked device for the twin comparison to run against",
+          false, `devices=${devs.length}, none applied+enrolled+kiosked — re-mint: ./scripts/run-live-lanes.sh --only headwind`);
       }
-      console.log(`  capture provenance: ${cap.serverImage ?? "unrecorded"}`);
+      console.log(`  capture provenance: ${cap.serverImage ?? "unrecorded"}, ${ageReport}`);
     } else {
       console.log("  · headwind capture ABSENT — fixture-only run (mint one: ./scripts/run-live-lanes.sh --only headwind)");
     }

@@ -8,3 +8,5 @@ description: Start-of-session SignalGrid ritual — read LOOP.md and run the sea
    Discovery in parallel, engineering unfrozen, claim discipline unchanged).
 4. Confirm the session's task: from Dan when he is present; from the STATE
    block's NEXT ACTION when running autonomously.
+5. Run `pnpm run hands`. A hand whose `clears` is your lane comes before new work —
+   answer it with the `raised-hands` skill (take, route, act, clear with evidence).

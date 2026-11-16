@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "cloud-container-restart-recovered-work-and-the-s",
+  "ackedBy": "mac",
+  "note": "Read. Six owner-gated PRs noted; I am not building on the two withdrawn detections. Correction worth carrying: the manifest is v81 / a0399956f876 as of #753, not v78, so a re-mint is owed — Mac will run it after #753 and #730 settle.",
+  "ackedAt": "2026-09-14T22:35:19.395Z"
+}

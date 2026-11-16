@@ -24,7 +24,7 @@
 // normalizer and no allow path of its own — the only "grant" near it is the one each
 // device's composition earns for itself, downstream.
 
-import { ACTION_RANK, type RiskDriver, type RiskTier, type UnifiedAction } from "@workspace/posture-composition";
+import { ACTION_RANK, rankOf, type RiskDriver, type RiskTier, type UnifiedAction } from "@workspace/posture-composition";
 
 // ── the trust ceiling ─────────────────────────────────────────────────────────
 
@@ -55,7 +55,9 @@ export type ContextTrustCeiling = (typeof CONTEXT_TRUST_CEILINGS)[number];
  *  step-up floor), and everything milder projects to `none` — `monitor`, `patch`
  *  and `locate` are things to DO about a device, not levels a person re-proves. */
 export function ceilingFromAction(action: UnifiedAction): ContextTrustCeiling {
-  const rank = ACTION_RANK[action];
+  // Guarded lookup: an off-ladder action ranks ABOVE restrict and projects to
+  // `restrict` — the fail-safe direction — instead of `undefined` projecting to `none`.
+  const rank = rankOf(action);
   if (rank >= ACTION_RANK.restrict) return "restrict";
   if (rank >= ACTION_RANK.step_up) return "step_up";
   return "none";
@@ -64,7 +66,7 @@ export function ceilingFromAction(action: UnifiedAction): ContextTrustCeiling {
 /** The stricter of two ceilings, using the SAME ladder ranks composition uses —
  *  a private severity table here would be one more hand-copy waiting to drift. */
 export function worstCeiling(a: ContextTrustCeiling, b: ContextTrustCeiling): ContextTrustCeiling {
-  return ACTION_RANK[a] >= ACTION_RANK[b] ? a : b;
+  return rankOf(a) >= rankOf(b) ? a : b;
 }
 
 // ── the schema ────────────────────────────────────────────────────────────────

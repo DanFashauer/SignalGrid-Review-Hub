@@ -69,18 +69,20 @@ final class SignalGridMobileCoreTests: XCTestCase {
         )
 
         XCTAssertEqual(evaluation.decision.outcome, .stepUp)
-        XCTAssertTrue(
-            evaluation.plan.actions
-                .filter { $0.sensitive || $0.riskTier != .standard }
-                .allSatisfy { $0.disposition == .stepUp }
-        )
+        let gated = evaluation.plan.actions.filter { $0.sensitive || $0.riskTier != .standard }
+        // `allSatisfy` over an EMPTY list is vacuously true; the guard above at
+        // testSensitiveActionsNeverAutoRun has this check, this test did not.
+        XCTAssertFalse(gated.isEmpty, "emr-chart must expose at least one gated action, or this test proves nothing")
+        XCTAssertTrue(gated.allSatisfy { $0.disposition == .stepUp })
     }
 
     func testEvidenceMatchesDecision() async throws {
         let api = MockSignalGridAPI()
         let decision = try await api.fetchDecisions().first { $0.outcome == .deny }
         let unwrapped = try XCTUnwrap(decision)
-        let evidence = try await api.fetchEvidence(decisionId: unwrapped.id)
+        let fetch = try await api.fetchEvidence(decisionId: unwrapped.id)
+        let evidence = fetch.snapshot
+        XCTAssertTrue(fetch.verified, "a fixture snapshot minted in-process must report verified")
 
         XCTAssertEqual(evidence.decisionId, unwrapped.id)
         XCTAssertEqual(evidence.policyVersionId, unwrapped.policyVersionId)

@@ -1,5 +1,13 @@
 # Agentic Connector Strategy
 
+> **SUPERSEDED 2026-09-06 in its connector sequence — do not follow the order below.**
+> Last substantively written 2026-08-03, before DR-012 (2026-08-22) redirected the proof
+> stack to Fleet-first, with Microsoft only when a prospect brings a tenant. Fleet is not a
+> future category: `lib/fleet-connector` ships with `proof:fleet-connector`,
+> `proof:live-fleet` and `proof:live-fleet-workflow` registered, and
+> `docs/FLEET_LIVE_INTEGRATION.md` records live runs. The sentences that said otherwise are
+> annotated in place; the market-signal reasoning is kept for provenance.
+
 SignalGrid should treat agentic operations, MCP-style connectors, and governed control planes as a market signal, not as a reason to become a generic AI infrastructure platform. The SignalGrid lane remains focused: runtime decision orchestration for shared-device and mobile frontline access workflows.
 
 ## Market signal
@@ -42,7 +50,7 @@ Future connector capabilities may include:
 
 ## Jamf and broader UEM connector direction
 
-Jamf is the Apple-specific follow-on posture connector after the Microsoft Intune / Entra first proof. Fleet, Workspace ONE, and broader UEM/MDM platforms remain additional future connector categories because they can provide important device-management and posture signals for shared-device access decisions.
+Jamf is the Apple-specific follow-on posture connector after the Microsoft Intune / Entra first proof. *(Dated 2026-08-03; superseded by DR-012 — Fleet-first.)* Fleet, Workspace ONE, and broader UEM/MDM platforms remain additional future connector categories *(as written 2026-08-03; on 2026-09-06 Fleet SHIPS — `lib/fleet-connector`, `proof:fleet-connector` — and is the chosen MDM per DR-012)* because they can provide important device-management and posture signals for shared-device access decisions.
 
 A future Jamf proof could focus on Apple-native posture depth: device inventory, compliance/security posture, Apple Business Manager / Automated Device Enrollment context, configuration profile status, Declarative Device Management state, Managed Device Attestation or hardware attestation where available, Platform SSO context where available, Jamf Self Service/remediation status, APNs health, and Apple OS/update readiness.
 
@@ -54,7 +62,7 @@ A future Fleet / Workspace ONE / broader UEM proof could focus on:
 - Compliance freshness.
 - Remediation or action-request handoff back to the UEM/MDM platform.
 
-These are future directions only. Review Hub does not claim a current Jamf, Fleet, Workspace ONE, Cisco, Microsoft MCP, marketplace, customer deployment, partner, production, or certification integration, and SignalGrid does not replace Jamf or any UEM/MDM system.
+These are future directions only *(as written 2026-08-03; Fleet is now a shipped, proven connector — see the banner)*. Review Hub does not claim a current Jamf, Workspace ONE, Cisco, Microsoft MCP, marketplace, customer deployment, partner, production, or certification integration, and SignalGrid does not replace Jamf or any UEM/MDM system.
 
 ## Cisco Cloud Control and agentic operations note
 
@@ -91,7 +99,7 @@ SignalGrid should preserve the same principle across agentic connectors: suggest
 
 ## First practical proof sequence
 
-The connector strategy should not displace the near-term proof path. The recommended sequence is:
+The connector strategy should not displace the near-term proof path. The recommended sequence was *(2026-08-03; superseded by DR-012, which puts Fleet first and Microsoft when a prospect brings a tenant)*:
 
 1. Intune / Entra posture proof first.
 2. Jamf Apple-specific posture proof second.

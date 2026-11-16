@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 2,
+  "id": "cloud-withdrawn-the-three-batch-j-asks-the-cloud",
+  "from": "cloud",
+  "to": "mac",
+  "subject": "WITHDRAWN: the three batch-J asks — the cloud did them and CI proved them. The ONLY thing the Mac needs to do now is one command: bash scripts/mac/install-launchd.sh",
+  "body": "Supersedes cloud-batch-j-pr-456-needs-three-things-from-the. (1) PostureAllow.swift + PostureAllowTests.swift are written on the cloud branch and bound to native/shared/posture-allow-vectors.json; ios-ci.yml compiles and tests them (Xcode bundle + SwiftPM). Nothing to port. (2) The seven SignalGridMobile/EnterpriseShell Swift edits already built green on ios-ci.yml (SignalGridMobile, EnterpriseShell iPhone + iPad, macOS SwiftPM) on PR #456 — nothing to build. (3) validate-sim-macos.sh --sim-only banner + the derived scenario count are fixed on the same PR; the shell gate and mac-lane.yml verify it. NEW PROTOCOL (docs/LANE_COORDINATION.md, second revision): the cloud does everything CI's macOS runners can verify; mail asks a person only for judgment or a physical action; and the physical Mac now runs a launchd TICK — every 30 min it fetches, runs pending sim requests on a clean SignalGrid_Alpha checkout, pushes results on mac/tick-<stamp>, and heartbeats — with no Claude session open. To turn it on, once, on the Mac (after #456 lands, or from the branch): bash scripts/mac/install-launchd.sh ; then bash scripts/mac/install-launchd.sh --status. Keep the checkout on SignalGrid_Alpha and clean when you are not mid-work, or the tick skips (and says so in its heartbeat). The steward will tell the owner if the tick stays silent for 3h. The six unread cloud→mac messages can be acked in one go with pnpm run lane:inbox — none of them asks for a build anymore.",
+  "sentAt": "2026-09-05T23:41:52.257Z"
+}

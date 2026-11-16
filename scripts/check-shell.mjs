@@ -44,6 +44,23 @@ const DEFERRED = new Map([
       reason: "Mac lane owns this file (LANE_COORDINATION.md); coordinate before editing",
     },
   ],
+  // A VENDORED SKILL script, which is the one case the third_party/ exclusion above
+  // does NOT cover: it lives under .claude/skills/ because that is where the harness
+  // loads skills from, and it is held byte-identical to mattpocock/skills@3cca18b3
+  // (.claude/skills/VENDORED.md). So it can carry neither an edit nor an inline
+  // disable, and DEFERRED is the mechanism that fits: the code is recorded, not
+  // waved through, and if a re-vendor makes the finding disappear the stale-deferral
+  // check above FAILS and someone re-reads the file. RED is assigned in both arms of
+  // the colour probe at :17 and :19 and then never used by the library half of the
+  // template — the author is expected to use it in the stages half they write below
+  // the marker, which is exactly why upstream leaves it there.
+  [
+    ".claude/skills/wizard/template.sh",
+    {
+      codes: ["SC2034"],
+      reason: "vendored byte-identical (mattpocock/skills@3cca18b3); no edit and no inline disable is permitted in .claude/skills/",
+    },
+  ],
 ]);
 
 const listed = spawnSync("git", ["ls-files", "*.sh"], { encoding: "utf8" });
@@ -51,7 +68,18 @@ if (listed.status !== 0) {
   console.error("✗ could not list shell files");
   process.exit(1);
 }
-const files = listed.stdout.split("\n").filter(Boolean);
+// VENDORED TREES ARE NOT LINTED. `third_party/**` is copied in byte-identical under
+// someone else's licence (`scripts/publication-boundary.mjs`, class third_party_intake)
+// and the rule there is "do not edit files here" — so a finding in one of those scripts
+// could only ever be answered by editing the vendored file or by a suppression, and
+// neither is allowed. Nothing under third_party/ is executed by any gate, hook or
+// script (each directory's VENDORED.md says so). Added 2026-09-12 when the first
+// vendored shell script arrived (third_party/cli-anything/, DR-040) and SC2034 fired on
+// an unused variable this repository must not touch. First-party shell — including
+// every script a vendored SKILL under .claude/skills/ tells Claude to run — is still
+// linted; only the third_party/ prefix is excluded, and the non-vacuity floor below
+// still applies to what remains.
+const files = listed.stdout.split("\n").filter(Boolean).filter((f) => !f.startsWith("third_party/"));
 
 // NON-VACUITY. A glob that matched nothing would make this gate pass forever while
 // checking not one line — the shape of "green because nothing ran" this repo treats
@@ -69,22 +97,43 @@ if (probe.status !== 0) {
   process.exit(1);
 }
 
-const run = spawnSync(
-  "shellcheck",
-  ["-x", `--severity=${SEVERITY}`, "-f", "gcc", ...files],
-  { encoding: "utf8" },
-);
-const out = `${run.stdout ?? ""}${run.stderr ?? ""}`.trim();
-const findings = out ? out.split("\n").filter((l) => /: (error|warning|note|style):/.test(l)) : [];
-
-// Split findings into deferred (owned elsewhere, codes already recorded) and live.
-const parse = (line) => {
-  const file = line.split(":")[0];
-  const code = (line.match(/\[(SC\d+)\]/) ?? [])[1] ?? "";
-  return { file, code, line };
+const lint = (args, input) => {
+  const r = spawnSync("shellcheck", ["-x", `--severity=${SEVERITY}`, "-f", "gcc", ...args], { encoding: "utf8", input });
+  return `${r.stdout ?? ""}${r.stderr ?? ""}`.trim();
 };
-const parsed = findings.map(parse);
-const live = parsed.filter((f) => !DEFERRED.get(f.file)?.codes.includes(f.code));
+
+/** The verdict, as a pure function of shellcheck's gcc-format output: every finding
+ *  parsed, and the LIVE ones — those not already recorded against a deferred file. */
+function splitFindings(out) {
+  const findings = out ? out.split("\n").filter((l) => /: (error|warning|note|style):/.test(l)) : [];
+  // Split findings into deferred (owned elsewhere, codes already recorded) and live.
+  const parse = (line) => {
+    const file = line.split(":")[0];
+    const code = (line.match(/\[(SC\d+)\]/) ?? [])[1] ?? "";
+    return { file, code, line };
+  };
+  const parsed = findings.map(parse);
+  const live = parsed.filter((f) => !DEFERRED.get(f.file)?.codes.includes(f.code));
+  return { parsed, live };
+}
+
+// ── in-run control ───────────────────────────────────────────────────────────
+// The rule this gate most exists to hold, planted on every invocation through the
+// real shellcheck and the real verdict: a bare `cd` must be a live SC2164, and the
+// same line with `|| exit 1` must be clean. Fed on stdin, so nothing touches the tree.
+{
+  const planted = splitFindings(lint(["-"], "#!/bin/bash\ncd /nonexistent-control-dir\necho ok\n")).live;
+  const guarded = splitFindings(lint(["-"], "#!/bin/bash\ncd /nonexistent-control-dir || exit 1\necho ok\n")).live;
+  if (!planted.some((f) => f.code === "SC2164") || guarded.length !== 0) {
+    console.error(
+      `✗ SELF-TEST FAILED — planted bare \`cd\` caught as SC2164: ${planted.some((f) => f.code === "SC2164")}; ` +
+        `guarded \`cd\` live findings: ${guarded.length} (want 0). The lint no longer sees the defect it exists for.`,
+    );
+    process.exit(1);
+  }
+}
+
+const { parsed, live } = splitFindings(lint(files));
 
 // A deferral that no longer describes anything is itself a finding.
 const stale = [];
@@ -110,7 +159,7 @@ if (live.length > 0) {
 }
 
 const deferredCount = parsed.length - live.length;
-console.log(`Shell lint passed — ${files.length} script(s) clean at severity ${SEVERITY} and above.`);
+console.log(`Shell lint passed — ${files.length} script(s) clean at severity ${SEVERITY} and above; in-run control green.`);
 if (deferredCount > 0) {
   console.log(`  ${deferredCount} finding(s) DEFERRED, not ignored:`);
   for (const [file, { codes, reason }] of DEFERRED) console.log(`    · ${file} [${codes.join(", ")}] — ${reason}`);

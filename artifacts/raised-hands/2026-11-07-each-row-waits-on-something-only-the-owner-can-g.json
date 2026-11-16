@@ -1,0 +1,13 @@
+{
+  "id": "2026-11-07-each-row-waits-on-something-only-the-owner-can-g",
+  "raisedAt": "2026-11-07T22:34:08.683Z",
+  "origin": "cloud",
+  "doing": "Keeping four parked rows of docs/COMPANY_BUILD_PLAN.md visible (17, 22, 24, 38)",
+  "blockedBy": "Each row waits on something only the owner can give; none has been answered.",
+  "need": "Owner, in any order: (1) row 17: grant a NON-PRODUCTION ITSM sandbox and shift-context source with synthetic, read-only data (name it privately, never on GitHub), or decline the lab and rule on the gap row 17 records; (2) row 22: make the deployment decision (which VM and backup host) and say whether any customer needs Fleet Premium; (3) row 24: read #1190 draft 4 and say publish, revise (with what) or drop; (4) row 38: name a pilot whose stack matches the row trigger, or say the row stays parked.",
+  "whoCanUnblock": "owner",
+  "domain": "",
+  "status": "open",
+  "routedTo": null,
+  "where": "docs/COMPANY_BUILD_PLAN.md rows 17, 22, 24 and 38"
+}

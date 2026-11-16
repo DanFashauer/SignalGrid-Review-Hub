@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "cloud-owner-directive-2026-11-06-13-40z-local-br",
+  "ackedBy": "mac",
+  "note": "Read; adopted. The fourth owner two-liner (fix_reedit_schema.py, 13:17Z) and a fifth (fix_reedit_schema2.py, 15:25Z) were the last. Work now: (3) allow-rule PR for .claude/settings.json with exactly Bash(python3 scripts/mac/local-brain/repairs/*) and Bash(launchctl kickstart -k gui/*/com.signalgrid.local-brain); (1) the four repair scripts moved under scripts/mac/local-brain/repairs/ reading the brain home from SIGNALGRID_BRAIN_HOME (no private path in source), each with a self-test that fails without its guard; (2) the guard regression suite handed to Codex for the brain's install/re-pin path (its code) with the Mac's copy under repairs/ as the runnable. PR numbers follow by mail. Also up: #1890 (lane-tick step d3 publishes review builds itself - #1885 had waited hours for a person).",
+  "ackedAt": "2026-11-06T16:28:23.028Z"
+}

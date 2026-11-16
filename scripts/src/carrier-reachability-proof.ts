@@ -21,6 +21,7 @@ import {
   normalizeSession,
   resolveCarrierReachabilityConnector,
   type CarrierSessionRaw,
+  type CarrierTransport,
   type CellularBackchannel,
   type ReachabilitySignal,
   type ReachabilityVerdict,
@@ -251,11 +252,14 @@ check("a stale sighting degrades a reachable device to STALE_LAST_SEEN", future.
   // Wedge #15 pinned directly: an online, non-roaming device whose sighting
   // timestamp is missing or unparseable is DEGRADED, never confidently
   // reachable — and a provably-stale sighting keeps the stronger locate.
-  for (const [label, at] of [["a missing lastSeenAt", null], ["an unparseable lastSeenAt", "not-a-date"]] as const) {
-    const w = evaluateReachability(build({ cellularBackchannel: "present", provisioning: "active", cellularReachability: "online", smsReachable: true, roaming: false, lastSeenAt: at }), NOW_ENUM);
-    check(`online + ${label} → degraded/LAST_SEEN_UNVERIFIED/monitor, never 'reachable' (wedge #15)`,
-      w.posture === "degraded" && w.reasonCode === "LAST_SEEN_UNVERIFIED" && w.recommendedAction === "monitor");
-  }
+  const missingSeen = evaluateReachability(build({ cellularBackchannel: "present", provisioning: "active", cellularReachability: "online", smsReachable: true, roaming: false, lastSeenAt: null }), NOW_ENUM);
+  check("online + a missing lastSeenAt → degraded/LAST_SEEN_UNVERIFIED/monitor, never 'reachable' (wedge #15)",
+    missingSeen.posture === "degraded" && missingSeen.reasonCode === "LAST_SEEN_UNVERIFIED" && missingSeen.recommendedAction === "monitor");
+  // A PRESENT but unreadable stamp is graded stale, not unknown (deriveFreshness): it cannot show the sighting
+  // recent, and in this family stale is the stronger call. It once read monitor here, below a provably-stale one.
+  const garbledSeen = evaluateReachability(build({ cellularBackchannel: "present", provisioning: "active", cellularReachability: "online", smsReachable: true, roaming: false, lastSeenAt: "not-a-date" }), NOW_ENUM);
+  check("online + an unparseable lastSeenAt → degraded/STALE_LAST_SEEN/locate, never 'reachable' and never milder than stale (wedge #15)",
+    garbledSeen.posture === "degraded" && garbledSeen.reasonCode === "STALE_LAST_SEEN" && garbledSeen.recommendedAction === "locate");
   const futureSeen = evaluateReachability(build({ cellularBackchannel: "present", provisioning: "active", cellularReachability: "online", smsReachable: true, roaming: false, lastSeenAt: "2026-07-20T14:00:00Z" }), NOW_ENUM);
   check("online + a future-dated lastSeenAt (a contradiction) → degraded/LAST_SEEN_UNVERIFIED, never the freshest reading (wedge #15)",
     futureSeen.posture === "degraded" && futureSeen.reasonCode === "LAST_SEEN_UNVERIFIED");
@@ -286,6 +290,52 @@ try {
 check("a bad token surfaces a typed auth_failed error", authErr?.code === "auth_failed" && authErr.status === 401);
 const goodHealth = await connector.healthCheck();
 check("health check reports healthy with a valid token", goodHealth.healthy === true && goodHealth.status === 200);
+
+// ── brace-less guards in the connector (wave 5, 2026-10-01) ───────────────────
+// `oneLine` mutation sweep: each of these `if (...) return/throw` guards survived being
+// replaced by `if (false)` because no check exercised it.
+const sessionAt = (raw: Partial<CarrierSessionRaw>) =>
+  normalizeSession({ deviceId: "dev-x", ...raw } as CarrierSessionRaw, "2026-01-01T00:00:00.000Z");
+check(
+  "a live data session is `online` even when the sessionState string says offline (the data flag wins)",
+  sessionAt({ dataConnected: true, sessionState: "offline" }).cellularReachability === "online" &&
+    sessionAt({ dataConnected: false, sessionState: "offline" }).cellularReachability === "offline",
+);
+check(
+  "with no data session and no state, SMS-capable is `idle` and not-SMS-capable is `unknown`",
+  sessionAt({ smsCapable: true }).cellularReachability === "idle" &&
+    sessionAt({ smsCapable: false }).cellularReachability === "unknown" &&
+    sessionAt({}).cellularReachability === "unknown",
+);
+const jsonTransport =
+  (bodyFor: (n: number) => unknown): CarrierTransport => {
+    let n = 0;
+    return async () => {
+      const body = bodyFor(n);
+      n += 1;
+      return { status: 200, ok: true, json: async () => body };
+    };
+  };
+const readCode = async (c: CarrierReachabilityConnector): Promise<string> => {
+  try {
+    await c.listSessions();
+    return "no-error";
+  } catch (err) {
+    return err instanceof CarrierConnectorError ? err.code : "other-error";
+  }
+};
+check(
+  "a collection whose `value` is not an array is refused as bad_response (a string would otherwise spread into characters)",
+  (await readCode(new CarrierReachabilityConnector({ accessToken: "t", baseUrl: BASE_URL }, jsonTransport(() => ({ value: "abc" }))))) === "bad_response",
+);
+check(
+  "an endless next-page cursor hits the cap and is refused as incomplete_read, never returned as a short list",
+  (await readCode(new CarrierReachabilityConnector({ accessToken: "t", baseUrl: BASE_URL, pageLimit: 2 }, jsonTransport(() => ({ value: [], nextPageToken: "more" }))))) === "incomplete_read",
+);
+check(
+  "NON-VACUITY: a final page with no cursor reads cleanly",
+  (await readCode(new CarrierReachabilityConnector({ accessToken: "t", baseUrl: BASE_URL, pageLimit: 2 }, jsonTransport(() => ({ value: [] }))))) === "no-error",
+);
 
 // ── gating: live vendor calls off unless explicitly enabled ────────────────────
 check("dev tier resolves to fixture mode", resolveCarrierReachabilityConnector({ SIGNALGRID_TIER: "dev" }).mode === "fixture");

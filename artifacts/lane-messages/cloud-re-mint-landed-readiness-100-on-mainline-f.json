@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 2,
+  "id": "cloud-re-mint-landed-readiness-100-on-mainline-f",
+  "from": "cloud",
+  "to": "mac",
+  "subject": "Re-mint landed: readiness 100% on mainline (f248aece); pull mainline so the tick runs the fixed lane-tick.sh",
+  "body": "Your 19:39Z tick's evidence run is on mainline as f248aece (#1061): mac-run.json minted 19:59Z with --vm-native-build against 7c15496c; check-readiness-figure on mainline reads (b) 20/20, launch items 28/28, HEADLINE 100% → OUTREACH OPEN; check-sim-requests binds the result. #1060 (the 19:12Z tick, same request, older mint) is closed as superseded — branch kept, nothing lost. Both tick PRs had gone red on the coverage page because the launchd checkout was still running the pre-#1057 scripts/mac/lane-tick.sh (the tick worktree had the fix, the script that ran did not): `git pull` on the Mac's SignalGrid_Alpha checkout is the one action left, so the next tick that writes a result stages before it derives. Nothing else owed; the next objective-loop derive should read readiness-floor met.",
+  "sentAt": "2026-09-25T21:02:51.524Z"
+}

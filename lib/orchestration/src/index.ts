@@ -34,6 +34,16 @@ export type ActionDisposition =
 /** How sensitive is the physical space the workflow is firing in. */
 export type RoomSensitivity = "standard" | "elevated" | "controlled";
 
+/** Sensitivity is read FAIL-CLOSED: a room is controlled unless its sensitivity is a
+ *  recognised LOWER tier. A value the compiler never proved — a stale enum from a
+ *  caller, a typo, `undefined` — must not receive the standard room's catalog and
+ *  dispositions, because that is the permissive side: the cabinet and witness
+ *  actions vanish and device.assign runs unattended. Compare `=== "controlled"`,
+ *  which is what three catalog entries and the catalog selector did until 2026-09-05. */
+function isControlled(room: RoomContext): boolean {
+  return room.sensitivity !== "standard" && room.sensitivity !== "elevated";
+}
+
 /**
  * Which vertical the space belongs to. It selects the downstream action
  * catalog and the human-confirmation language (a clinician confirms a bedside
@@ -133,7 +143,7 @@ const CATALOG: ActionSpec[] = [
     kind: "device.assign",
     label: "Assign shared device to holder",
     targetSystem: "Shared-device broker",
-    sensitive: (r) => r.sensitivity === "controlled",
+    sensitive: isControlled,
     gatedByStepUp: true,
   },
   {
@@ -216,7 +226,7 @@ const WAREHOUSE_CATALOG: ActionSpec[] = [
     kind: "device.assign",
     label: "Assign shared handheld to holder",
     targetSystem: "Shared-device broker",
-    sensitive: (r) => r.sensitivity === "controlled",
+    sensitive: isControlled,
     gatedByStepUp: true,
   },
   {
@@ -298,7 +308,7 @@ const FLEET_CATALOG: ActionSpec[] = [
     kind: "device.assign",
     label: "Assign shared mount tablet to holder",
     targetSystem: "Shared-device broker",
-    sensitive: (r) => r.sensitivity === "controlled",
+    sensitive: isControlled,
     gatedByStepUp: true,
   },
   {
@@ -356,13 +366,27 @@ const CATALOGS: Record<FacilityDomain, { catalog: ActionSpec[]; extras: ActionSp
   global_fleet: { catalog: FLEET_CATALOG, extras: FLEET_CONTROLLED_EXTRAS },
 };
 
-function applicableSpecs(room: RoomContext): ActionSpec[] {
-  const { catalog, extras } = CATALOGS[room.domain ?? "clinical"];
-  return room.sensitivity === "controlled" ? [...catalog, ...extras] : catalog;
+/** The specs a room can coordinate, plus whether its domain was one the catalog
+ *  knows. An unrecognised domain (`"spaceport"`, a prototype key like
+ *  `"constructor"`, anything the union does not name) is enumerated against the
+ *  DEFAULT catalog so the plan can still record what would have been coordinated —
+ *  and the planner then blocks every action, because downstream systems it cannot
+ *  name are not systems it may actuate. Before 2026-09-05 this destructured
+ *  `undefined` and threw, so a bad domain produced no plan and no audit record. */
+function applicableSpecs(room: RoomContext): { specs: ActionSpec[]; domainKnown: boolean } {
+  const domain = room.domain ?? "clinical";
+  const domainKnown = Object.prototype.hasOwnProperty.call(CATALOGS, domain);
+  const { catalog, extras } = domainKnown ? CATALOGS[domain] : CATALOGS.clinical;
+  return { specs: isControlled(room) ? [...catalog, ...extras] : catalog, domainKnown };
 }
 
-const firstReason = (codes: string[], fallback: string): string =>
-  codes.length > 0 ? codes[0] : fallback;
+/** The first reason code, or the fallback. Defensive at the untyped boundary: a
+ *  `reasonCodes` that is not an array, or whose first entry is not a non-empty
+ *  string, yields the fallback — never a crash on `.length`, never "Denied — undefined". */
+const firstReason = (codes: unknown, fallback: string): string => {
+  const first = Array.isArray(codes) ? codes[0] : undefined;
+  return typeof first === "string" && first.trim() !== "" ? first : fallback;
+};
 
 /**
  * Turn a decision + room context into an orchestration plan. Pure and
@@ -382,14 +406,21 @@ export function planOrchestration(input: PlanInput): OrchestrationPlan {
   const stepUpDone = outcome === "step_up" && input.stepUpSatisfied === true;
   const effective: DecisionOutcome = stepUpDone ? "allow" : outcome;
 
-  const actions: DownstreamAction[] = applicableSpecs(room).map((spec) => {
+  const { specs, domainKnown } = applicableSpecs(room);
+  const actions: DownstreamAction[] = specs.map((spec) => {
     const id = `act-${room.roomId}-${spec.kind}`;
     const sensitive = spec.sensitive(room);
     let disposition: ActionDisposition;
     let reason: string;
     let requiresConfirmation = false;
 
-    switch (effective) {
+    if (!domainKnown) {
+      // A facility domain the catalog does not know is not "probably clinical": the
+      // downstream systems cannot be named, so nothing is actuated, whatever the
+      // decision said, and the plan records why.
+      disposition = "blocked";
+      reason = "Denied — unrecognized facility domain (fail closed)";
+    } else switch (effective) {
       case "deny":
         disposition = "blocked";
         reason = `Denied — ${firstReason(reasonCodes, "trust conditions not met")}`;
@@ -449,7 +480,7 @@ export function planOrchestration(input: PlanInput): OrchestrationPlan {
     };
   });
 
-  const mode = deriveMode(effective, actions);
+  const mode = domainKnown ? deriveMode(effective, actions) : "deny";
   return { mode, summary: summarize(mode, room, stepUpDone, confirmer), actions };
 }
 

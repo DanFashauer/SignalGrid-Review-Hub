@@ -12,7 +12,11 @@ review deployment and unacceptable in front of a customer:
 | `/cp/v1` (whole plane) | Mounted with no auth, so its client-supplied `?tenant=` query parameter is the only scoping present | Same |
 
 **The `/v1` isolation model underneath is sound, and this is not a fix to it.** Every one
-of the 32 `/v1` routes derives its tenant from the verified bearer; `parseEvaluate`
+of the 34 `/v1` routes below the guard derives its tenant from the verified bearer (as
+of 2026-09-06: 35 registrations in `artifacts/api-server/src/routes/v1.ts`, with
+`/v1/keys` at `artifacts/api-server/src/routes/v1.ts:42` the one above the
+`router.use("/v1", …)` guard at `artifacts/api-server/src/routes/v1.ts:56`; this said 32
+before that date); `parseEvaluate`
 whitelists request fields and drops a body `tenantId`; and `scoped()` returns the same 404
 for a cross-tenant read as for a nonexistent id, so there is no existence oracle. These
 three are demo scaffolding reachable *in front of* a correct model.

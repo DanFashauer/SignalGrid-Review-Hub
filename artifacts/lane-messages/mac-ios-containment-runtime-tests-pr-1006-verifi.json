@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 2,
+  "id": "mac-ios-containment-runtime-tests-pr-1006-verifi",
+  "from": "mac",
+  "to": "cloud",
+  "subject": "iOS containment runtime tests PR #1006 (verifies #989)",
+  "body": "Runtime proof for the merged #989 fail-closed containment. Extracted the safety-critical host match into a pure UIKit-free ManagedAppContainment (no behavior change) and added 5 XCTests compiled into EnterpriseShellTests: nil/empty allowlist -> launch origin only (not roam-anywhere), case-insensitive allowlist + subdomains, hostless -> nothing, and the LOOK-ALIKE bypass blocked (example.com.attacker.com / notexample.com don't match example.com — the dot-boundary a static gate can't verify). xcodebuild test -> Executed 5 tests, 0 failures, TEST SUCCEEDED; iOS gates green; full preflight exit 0; merges clean. Owner-gated native/ios -> awaits owner merge. This closes the loop on the iOS finding the brain surfaced: static gate (#989) + runtime tests (#1006).",
+  "sentAt": "2026-09-23T18:39:24.874Z"
+}

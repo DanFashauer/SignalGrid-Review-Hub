@@ -97,8 +97,11 @@ concentration the same way.
    release. The user sees only their own app's familiar prompt — never a SignalGrid
    screen (`docs/EMBEDDED_UX_PRINCIPLE.md`). Because a public-safe fixture can't
    provide real hardware evidence, the product API does **not** ship a release
-   stand-in; in the demo, step-up completion is a clearly-labeled simulation. This
-   is the next build.
+   stand-in; in the demo, step-up completion is a clearly-labeled simulation. **BUILT:**
+   the real release path is `POST /v1/app-workflows/complete-step-up`
+   (`artifacts/api-server/src/routes/v1.ts`), which verifies a WebAuthn assertion
+   against a credential enrolled for the tenant + identity before re-cutting the plan.
+   (This sentence said "the next build" until 2026-09-06.)
 4. **Workflow templates** — per-vertical starter catalogs an integrator clones.
 5. **Admin surface** — an "App workflows" page: the integration catalog + a live
    gated-action preview per vertical.
@@ -111,7 +114,10 @@ stays green.
 
 ---
 
-**Now building: P1 + building blocks 1–2** — the app-workflow orchestration
-engine, the healthcare app catalog (EMR / BCMA / secure messaging / alarms), the
-`/v1/app-workflows` API, a proof, and an admin preview. P2–P4 catalogs are data
-that plug into the same engine and follow next.
+**BUILT: P1 + building blocks 1–3** — the app-workflow orchestration engine, the
+healthcare app catalog (EMR / BCMA / secure messaging / alarms), the three
+`/v1/app-workflows` routes (`integrations`, `evaluate`, `complete-step-up` in
+`lib/api-spec/v1-openapi.yaml` and `artifacts/api-server/src/routes/v1.ts`),
+`proof:app-workflows`, and the admin preview (`/app-workflows` in
+`artifacts/signalgrid-app/src/App.tsx`). This paragraph read "Now building" until
+2026-09-06. P2–P4 catalogs are data that plug into the same engine and follow next.

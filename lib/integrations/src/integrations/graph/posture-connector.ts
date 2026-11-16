@@ -6,6 +6,7 @@ import {
   type GraphCollection,
   type GraphManagedDeviceRaw,
   type GraphPostureSignal,
+  type GraphRiskyUserRaw,
   type GraphUserRaw,
   type IdentityStatus,
   type UserRisk,
@@ -90,12 +91,35 @@ export class GraphPostureConnector {
   }
 
   /**
+   * Read the at-risk users, following pagination. Identity Protection lists ONLY
+   * the users it has flagged; a user absent from this list has no detected risk.
+   * Needs the IdentityRiskyUser.Read.All scope — a tenant without it answers 403,
+   * and that must surface as `unknown` risk, never as "none".
+   */
+  async listRiskyUsers(): Promise<GraphRiskyUserRaw[]> {
+    return this.getAllPages<GraphRiskyUserRaw>(
+      `${this.baseUrl}/identityProtection/riskyUsers?$select=id,riskLevel,riskState`,
+    );
+  }
+
+  /**
    * Read users + devices and emit one normalized posture signal per managed
    * device, joined to its owning user. `observedAt` is injected so the emitted
    * provenance is deterministic in tests.
    */
   async fetchPosture(observedAt: string): Promise<GraphPostureSignal[]> {
-    const [users, devices] = await Promise.all([this.listUsers(), this.listManagedDevices()]);
+    const [users, devices, riskRead] = await Promise.all([
+      this.listUsers(),
+      this.listManagedDevices(),
+      // The risk read fails INDEPENDENTLY of the two inventory reads: a tenant
+      // missing IdentityRiskyUser.Read.All still has users and devices. Its
+      // failure is kept, named, and turned into `unknown` for every subject —
+      // never swallowed into "no risk detected".
+      this.listRiskyUsers().then(
+        (rows) => ({ ok: true as const, byId: new Map(rows.map((r) => [r.id, r])) }),
+        (err: unknown) => ({ ok: false as const, reason: err instanceof Error ? err.message : String(err) }),
+      ),
+    ]);
     const userById = new Map<string, GraphUserRaw>();
     const userByUpn = new Map<string, GraphUserRaw>();
     for (const u of users) {
@@ -107,14 +131,19 @@ export class GraphPostureConnector {
       const user =
         (device.userId ? userById.get(device.userId) : undefined) ??
         (device.userPrincipalName ? userByUpn.get(device.userPrincipalName.toLowerCase()) : undefined);
-      const subjectId = user?.id ?? device.userId ?? device.userPrincipalName ?? "unknown";
+      const subjectId = user?.id ?? device.userId ?? device.userPrincipalName ?? null;
+      // Risk: resolved user + a successful risk read → the flagged level, or "none"
+      // when Identity Protection lists nobody by that id (its contract: absent means
+      // not flagged). No resolved user, or a failed risk read → "unknown".
+      const userRisk: UserRisk =
+        user === undefined || !riskRead.ok ? "unknown" : normalizeUserRisk(riskRead.byId.get(user.id)?.riskLevel ?? "none");
       return {
         sourceSystem: "microsoft-graph",
-        correlationId: `${subjectId}:${device.id}`,
+        correlationId: `${subjectId ?? "unresolved"}:${device.id}`,
         observedAt,
         subjectId,
         identityStatus: normalizeIdentityStatus(user?.accountEnabled),
-        userRisk: normalizeUserRisk(user?.riskLevel),
+        userRisk,
         deviceId: device.id,
         deviceComplianceState: normalizeCompliance(device.complianceState),
         deviceManagementState: normalizeManagement(device.managementState, device.managementAgent),

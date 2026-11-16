@@ -7,7 +7,9 @@ what real APIs actually expose, instead of from an invented shape.
 
 > **Non-claims.** Nothing here is a partnership, endorsement, certification,
 > integration, procurement recommendation, or vendor ranking. No live vendor call is
-> made anywhere in this repository — every connector is fixture-backed and gated.
+> made **by default** anywhere in this repository — every connector is fixture-backed and
+> gated behind tier + `SIGNALGRID_LIVE_INTEGRATIONS=true` + a credential (the `proof:live-*`
+> lanes exist and refuse without all three; `docs/FLEET_LIVE_INTEGRATION.md`).
 > Vendor names appear as *public API surfaces studied*, nothing more. Where an entry
 > says "unverified", it has not been confirmed against primary documentation and must
 > not be treated as fact.
@@ -253,7 +255,7 @@ The framing that "device compliance data is meaningless in isolation; its value 
 realized when the health proof reaches the identity plane before access is granted" is
 the same thesis this product is built on, and the Conditional Access comparison it
 implies is already handled honestly in
-[COMPETITIVE_ENTRA](COMPETITIVE_ENTRA.md) — including the note that SignalGrid must
+[COMPETITIVE_ENTRA](research/COMPETITIVE_ENTRA.md) — including the note that SignalGrid must
 *stop* claiming Entra cannot do per-action step-up. The real-time health telemetry it
 names (firewall state, BitLocker/encryption, antivirus health, OS patch level) is
 already carried by `macos-posture` and `intune-entra-posture`.

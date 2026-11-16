@@ -24,7 +24,7 @@ import {
   type WorkContextSubject,
   type WorkContextWork,
 } from "./types";
-import { ACTION_RANK, type UnifiedAction } from "@workspace/posture-composition";
+import { ACTION_RANK, rankOf, type UnifiedAction } from "@workspace/posture-composition";
 
 /** One dimension's contribution to the assembly: the fabric's conclusion, by ref.
  *  A VERDICT summary — action + reason codes + the handle of the sealed verdict —
@@ -127,7 +127,7 @@ export function assembleWorkContext(inputs: AssembleWorkContextInputs): Portable
   const restrictions: string[] = [];
   for (const v of inputs.sourceVerdicts) {
     ceiling = worstCeiling(ceiling, ceilingFromAction(v.strongestAction));
-    if (ACTION_RANK[v.strongestAction] >= RESTRICT_RANK) {
+    if (rankOf(v.strongestAction) >= RESTRICT_RANK) {
       for (const code of v.reasonCodes) if (!restrictions.includes(code)) restrictions.push(code);
     }
   }

@@ -1,0 +1,22 @@
+meta {
+  name: Step-up enroll - revoke
+  type: http
+  seq: 17
+}
+
+post {
+  url: {{baseUrl}}/v1/step-up/enroll/revoke
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "identityRef": "nurse.compliant",
+    "credentialId": "cred-never-enrolled"
+  }
+}
+
+docs {
+  Revokes one enrolled WebAuthn step-up credential. Same owner/operator privilege as enrolling. Fail-closed and idempotent: as sent (a credential id that was never enrolled), the fixture demo core answers 200 with revoked:false rather than a 404 that would let a caller distinguish "wrong id" from "already revoked" — see the api-server test suite for the full enroll -> revoke -> challenge-fails-closed round trip.
+}

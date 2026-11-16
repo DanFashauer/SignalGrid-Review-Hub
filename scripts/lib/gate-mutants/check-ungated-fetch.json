@@ -1,0 +1,37 @@
+[
+ {
+  "name": "sink not passed",
+  "find": "  unreadableResolvers,\n  (rel) =>",
+  "replace": "  [],\n  (rel) =>"
+ },
+ {
+  "name": "process.exit removed",
+  "find": "      unreadableResolvers.map((u) => `    ${SCAN_ROOT}/${u}`).join(\"\\n\"),\n  );\n  process.exit(1);",
+  "replace": "      unreadableResolvers.map((u) => `    ${SCAN_ROOT}/${u}`).join(\"\\n\"),\n  );"
+ },
+ {
+  "name": "block disabled",
+  "find": "if (unreadableResolvers.length > 0) {",
+  "replace": "if (false) {"
+ },
+ {
+  "name": "ENOENT guard widened to EACCES/ELOOP",
+  "find": "if (e.code !== \"ENOENT\") unreadable.push(`${entry}/resolve.ts: ${e.message}`);\n      else if",
+  "replace": "if (![\"ENOENT\", \"EACCES\", \"ELOOP\"].includes(e.code)) unreadable.push(`${entry}/resolve.ts: ${e.message}`);\n      else if"
+ },
+ {
+  "name": "lstat presence check removed",
+  "find": "else if (isPresent(`${entry}/resolve.ts`))",
+  "replace": "else if (false)"
+ },
+ {
+  "name": "real call omits isPresent",
+  "find": "  (rel) => { try { lstatSync(resolve(repoRoot, SCAN_ROOT, rel)); return true; } catch { return false; } },\n);",
+  "replace": "\n);"
+ },
+ {
+  "name": "F13 tracked unreadable source is skipped, not named",
+  "find": "refusing to report a pass.`);\n    process.exit(1);",
+  "replace": "refusing to report a pass.`);\n    return \"\";"
+ }
+]

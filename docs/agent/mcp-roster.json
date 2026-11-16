@@ -1,0 +1,403 @@
+{
+  "$comment": "This $comment and `landing` describe the THIRD-PARTY servers[] entries only — everything below except the two first-party servers, `signalgrid-mcp` (this repository's own) and `signalgrid-macos` (the sibling repository's, registered by mac-kickoff.sh and NOT by the tracked .mcp.json), each documented by its own `firstParty`/`config`/`offline`/`reads`/`writes`/`network` fields on its entry and exempt from this paragraph by name. Third-party MCP servers evaluated BY USE for SignalGrid (docs/agent/RESOURCE_INTAKE.md rules). Every third-party entry was cloned at the pinned sha, read for what it reads/writes/sends/hooks, built, and probed over stdio with every socket denied. None of them runs from this repository's .mcp.json (which carries only signalgrid-mcp) and none of them may enter the decision path. The four live-lane servers are aids for the Mac lane's rehearsal, added to a PERSON'S user-level MCP config by hand, never to a hook; context7 is the one exception in kind — a dev-docs aid both lanes register at user scope through `pnpm run mcp:setup` (scripts/install-context7.mjs), still never .mcp.json and never a hook. Measured 2026-09-18 on the cloud lane; context7 row measured 2026-09-19 on the Mac; signalgrid-macos row read from source at its pinned sha on 2026-10-01, not probed offline.",
+  "measuredAt": "2026-09-18",
+  "landing": "For every THIRD-PARTY server: documented, registered by hand at USER scope on the machine that needs it (`claude mcp add … --scope user`), the same way the parity doc treats GitHub; never .mcp.json, never a hook, never the decision path. No installer script: an automated registration into a session config was refused by the harness on 2026-09-18, and the manual command is one line. `signalgrid-mcp` and `signalgrid-macos` are the two first-party exceptions, each named on its own entry. `signalgrid-mcp` is registered through this repository's tracked `.mcp.json`, which both lanes get on pull, and its `evaluate_decision` tool is a first-party read of the same decision core the API server calls, not a third-party call into the decision path. `signalgrid-macos` is the sibling repository's server: the Mac lane registers it with mac-kickoff.sh (step 4/7, `claude mcp add` at the CLI's default scope), never through the tracked `.mcp.json` (DR-060 rule 3), and all 22 of its tools are annotated read-only.",
+  "external": [
+    {
+      "id": "github",
+      "registeredBy": "the harness, on the cloud lane",
+      "decision": "documented, not auto-registered — the correct command depends on the transport (hosted HTTP vs a local server image), and guessing wrong is worse than documenting",
+      "note": "docs/MCP_AND_SKILLS_LANE_PARITY.md row 47 ('GitHub | Documented, not auto-registered ... | GITHUB_PERSONAL_ACCESS_TOKEN (secret)'); never probed under this roster's by-use protocol"
+    },
+    {
+      "id": "firecrawl",
+      "aliases": ["Firecrawl"],
+      "registeredBy": "scripts/install-firecrawl.mjs (pnpm run mcp:setup), when FIRECRAWL_API_KEY is set; skips cleanly otherwise",
+      "decision": "DR-022; adopted for research and source verification only, never a decision-path input",
+      "note": "docs/MCP_AND_SKILLS_LANE_PARITY.md row 46; docs/agent/RESOURCE_INTAKE.md (Firecrawl, DR-022); never probed under this roster's by-use protocol"
+    },
+    {
+      "id": "neural-memory",
+      "aliases": ["Neural Memory", "NeuralMemory"],
+      "registeredBy": "scripts/install-neural-memory.mjs (pnpm run mcp:setup), when uv and claude are present; skips cleanly otherwise",
+      "decision": "DR-026; adopted as the memory substrate under the DR-024 stack",
+      "note": "docs/MCP_AND_SKILLS_LANE_PARITY.md row 45; docs/agent/RESOURCE_INTAKE.md (Neural Memory, DR-026); never probed under this roster's by-use protocol"
+    }
+  ],
+  "grants": {
+    "$comment": "A grant means a lane or a first-party skill MAY call that server, for the stated purpose. This gate (scripts/check-mcp-roster.mjs) checks DOCUMENTS — that a skill naming an mcp__<server>__ tool, or the server's own id/aliases as a whole word, holds a matching grant OR a `mentions` entry here — it does not intercept or authorize any live call. `mentions` means the opposite of a grant: the skill names the server as precedent, context or a cross-reference, never as something it calls.",
+    "lanes": {
+      "cloud": [
+        {
+          "server": "signalgrid-mcp",
+          "for": "the repo's own decision fabric over stdio, registered from the tracked .mcp.json",
+          "source": "docs/MCP_AND_SKILLS_LANE_PARITY.md"
+        },
+        {
+          "server": "context7",
+          "for": "dependency work — current library docs before a version or API change; reached through a hosted claude.ai connector on this lane",
+          "source": "docs/MCP_AND_SKILLS_LANE_PARITY.md"
+        },
+        {
+          "server": "firecrawl",
+          "for": "research and source verification only; external web content, never a decision-path input",
+          "source": "docs/MCP_AND_SKILLS_LANE_PARITY.md"
+        },
+        {
+          "server": "neural-memory",
+          "for": "the memory substrate — a session remembers what an earlier one learned about working this repo",
+          "source": "docs/MCP_AND_SKILLS_LANE_PARITY.md"
+        },
+        {
+          "server": "github",
+          "for": "harness-provided GitHub access on the cloud lane",
+          "source": "this roster's own external[] entry for \"github\" (registeredBy: \"the harness, on the cloud lane\")"
+        },
+        {
+          "server": "playwright",
+          "for": "walking the operator/admin console screen inventory for the design gap; local pages only, never a tenant's console",
+          "source": "docs/MCP_AND_SKILLS_LANE_PARITY.md"
+        }
+      ],
+      "mac": [
+        {
+          "server": "signalgrid-mcp",
+          "for": "the repo's own decision fabric over stdio, registered from the tracked .mcp.json",
+          "source": "docs/MCP_AND_SKILLS_LANE_PARITY.md"
+        },
+        {
+          "server": "signalgrid-macos",
+          "for": "Mac-native grid_collected posture reads from the sibling repository's server",
+          "source": "mac-kickoff.sh (step 4/7, MCP_SERVER_NAME)"
+        },
+        {
+          "server": "context7",
+          "for": "dependency work — current library docs before a version or API change; registered via scripts/install-context7.mjs on this lane",
+          "source": "docs/MCP_AND_SKILLS_LANE_PARITY.md"
+        },
+        {
+          "server": "firecrawl",
+          "for": "research and source verification only; external web content, never a decision-path input",
+          "source": "docs/MCP_AND_SKILLS_LANE_PARITY.md"
+        },
+        {
+          "server": "neural-memory",
+          "for": "the memory substrate — a session remembers what an earlier one learned about working this repo",
+          "source": "docs/MCP_AND_SKILLS_LANE_PARITY.md"
+        },
+        {
+          "server": "playwright",
+          "for": "walking the operator/admin console screen inventory for the design gap; local pages only, never a tenant's console",
+          "source": "docs/MCP_AND_SKILLS_LANE_PARITY.md"
+        },
+        {
+          "server": "wazuh",
+          "for": "reading the live Wazuh the Mac lane already runs during a live-edr rehearsal",
+          "source": "docs/MCP_AND_SKILLS_LANE_PARITY.md"
+        }
+      ]
+    },
+    "skills": {
+      "signalgrid-master": [
+        {
+          "server": "context7",
+          "for": "pulling current docs through Context7 (resolve-library-id, then query-docs) for dependency work"
+        },
+        {
+          "server": "firecrawl",
+          "for": "research and source verification only, adopted on top of ECC by owner direction (DR-022)"
+        }
+      ],
+      "signalgrid-evidence-toolchain": [
+        {
+          "server": "signalgrid-macos",
+          "for": "the first-party Mac-native grid_collected evidence path"
+        },
+        {
+          "server": "firecrawl",
+          "for": "web research / source-verification lane, report-only, never an authoritative verdict"
+        },
+        {
+          "server": "neural-memory",
+          "for": "the memory substrate under the DR-024 stack"
+        }
+      ],
+      "signalgrid-native": [
+        {
+          "server": "signalgrid-macos",
+          "for": "the first-party Mac-native grid_collected path"
+        }
+      ]
+    },
+    "mentions": {
+      "$comment": "scripts/check-mcp-roster.mjs D5: a first-party skill doc naming a server's id or one of its aliases as a whole word (or an mcp__<server>__ token) needs EITHER a grants.skills entry OR an entry here. Every row below was found naming the server in prose — a cross-reference, a workflow-file path, a precedent for how another server was adopted — never an instruction to call it; a skill that actually instructs a call keeps or gets a grants.skills entry instead, not a mention.",
+      "research-ops": [
+        {
+          "server": "firecrawl",
+          "why": "cited in docs/agent/RESOURCE_INTAKE.md as how Firecrawl itself was adopted (DR-022) — an adoption-process precedent for evaluating a NEW research tool, not an instruction for this skill to call Firecrawl"
+        }
+      ],
+      "stack-reference": [
+        {
+          "server": "firecrawl",
+          "why": "ai-cli.md cites the Firecrawl key's env-only `claude mcp add -e KEY=val` registration as the worked example of the credentialed-MCP-registration form, not an instruction to call Firecrawl"
+        },
+        {
+          "server": "github",
+          "why": "SKILL.md, git-ci.md, http-docs.md, mac-host.md and native.md all name GitHub as the platform (GitHub Actions, github.com, GitHub's Markdown rendering, `.github/workflows/*.yml` paths) — none instructs a call to the github MCP server"
+        }
+      ],
+      "signalgrid-master": [
+        {
+          "server": "neural-memory",
+          "why": "names Neural Memory as the memory substrate under the whole stack doctrine (DR-026) — descriptive of the stack this skill orchestrates, not an instruction for signalgrid-master itself to call it (the toolchain skill's own grant covers the actual calls)"
+        }
+      ],
+      "owner-comms": [
+        {
+          "server": "github",
+          "why": "names the GitHub mobile app as the surface a bad owner-action list pointed at, not a call to the github MCP server"
+        }
+      ],
+      "signalgrid": [
+        {
+          "server": "github",
+          "why": "names the `.github/workflows/review-hub-ci.yml` path a new gate must also be registered in, not a call to the github MCP server"
+        }
+      ],
+      "signalgrid-core": [
+        {
+          "server": "github",
+          "why": "names the `.github/workflows/review-hub-ci.yml` path alongside the other gate registries, not a call to the github MCP server"
+        }
+      ],
+      "signalgrid-evidence-toolchain": [
+        {
+          "server": "github",
+          "why": "links a third-party skill's GitHub repository (mvanhorn/last30days-skill) as its provenance, not a call to the github MCP server"
+        },
+        {
+          "server": "signalgrid-mcp",
+          "why": "names the sibling repository signalgrid-mcp (SKILL.md lines 52/134/138), whose server registers as signalgrid-macos — the repository's name, not a call to this tree's 16-tool server"
+        }
+      ],
+      "signalgrid-native": [
+        {
+          "server": "signalgrid-mcp",
+          "why": "names the sibling repository signalgrid-mcp (SKILL.md line 74), whose server registers as signalgrid-macos — the repository's name, not a call to this tree's 16-tool server"
+        }
+      ],
+      "landing-under-dr-037": [
+        {
+          "server": "github",
+          "why": "names `.github/workflows/**` as one of the path globs a SAFETY_MACHINERY PR may match, not a call to the github MCP server"
+        }
+      ],
+      "orchestrator-over-workers": [
+        {
+          "server": "github",
+          "why": "L15 names GitHub's own single-base mergeability check (as distinct from git's own recursive merge), not a call to the github MCP server"
+        }
+      ],
+      "raised-hands": [
+        {
+          "server": "github",
+          "why": "names the `.github/workflows/raised-hands.yml` page and GitHub's own 60-day scheduled-workflow disable behavior, not a call to the github MCP server"
+        }
+      ]
+    }
+  },
+  "ungranted": {
+    "cloud": {
+      "observedAt": "2026-09-26",
+      "count": 12,
+      "rule": "12 distinct mcp__<server>__ prefixes visible in the cloud session's tool list on 2026-09-26 beyond the granted set and the harness's own session tools; names deliberately not recorded (they are the owner's claude.ai account connections, not repository surface); none granted; a use goes through RESOURCE_INTAKE + tool-evaluation-by-use first (DR-060 rule 3)"
+    }
+  },
+  "servers": [
+    {
+      "id": "signalgrid-mcp",
+      "firstParty": true,
+      "upstream": "artifacts/mcp-server/src/index.ts (this repository; the tree is the pin)",
+      "sha": null,
+      "license": "MIT (repository LICENSE; artifacts/mcp-server/package.json declares no license field of its own — a private workspace package)",
+      "language": "typescript",
+      "packageName": "@workspace/mcp-server",
+      "packageVersion": "0.0.0",
+      "matches": "both lanes — the repo's own decision fabric over stdio, registered from the tracked .mcp.json",
+      "reads": "repo-relative paths under REPO_ROOT only: the generated live-sync manifest and named repository documents (fabric_status), docs/inspiration (signal_catalog's asset list), artifacts/api-collection/**/*.bru (bruno_collection_list, bruno_request_get, refused outside that root), and its own source; nothing outside this checkout",
+      "writes": "nothing on disk, except bruno_collection_run, which delegates to scripts/run-bruno-collection.mjs (that script writes dist/ and a gitignored results file under artifacts/bruno/)",
+      "network": "none from any tool except bruno_collection_run, which boots and tears down its own fixture api-server on localhost only (intentionally-public sgk_demo_* tokens) — no external peer, no product, tenant or vendor state change",
+      "hooks": "none",
+      "tools": 16,
+      "toolNames": [
+        "list_room_scenarios",
+        "evaluate_room_entry",
+        "signal_catalog",
+        "scan_signals",
+        "evaluate_decision",
+        "facility_graph",
+        "evaluate_location_certainty",
+        "fabric_status",
+        "explain_decision",
+        "evidence_freshness",
+        "list_connectors",
+        "list_policies",
+        "query_audit",
+        "bruno_collection_list",
+        "bruno_request_get",
+        "bruno_collection_run"
+      ],
+      "readOnlyTools": 7,
+      "mutatingTools": 1,
+      "unannotatedTools": 8,
+      "offline": "the probe: fabric_status called from the cloud session on 2026-09-26 (main checkout at 8bd63bae) returned manifestVersion 84, fingerprint 7c15496cfc1b936fb998d4879dcb9007f384fe778d3627036a49f6006eb7a04b, 42 signal kinds, 20 categories, and an mcpTools list identical as a set to the 16 registerTool names in artifacts/mcp-server/src/index.ts",
+      "disposition": "adopted",
+      "reason": "first-party; DR-060 rule 3: where a tool call exists the coordinator prefers it over a hand read",
+      "config": ".mcp.json (tracked; both lanes on pull)"
+    },
+    {
+      "id": "signalgrid-macos",
+      "firstParty": true,
+      "upstream": "https://github.com/DanFashauer/signalgrid-mcp (sibling repository, not this tree)",
+      "sha": "10c5b52e0181720cd6497fabeb1f4892d83ad1f4",
+      "license": "MIT",
+      "language": "python",
+      "reads": "local macOS system state through system binaries (scutil, system_profiler, sw_vers, launchctl, defaults, csrutil, fdesetup, systemsetup, pmset, socketfilterfw, networksetup, systemextensionsctl, codesign, spctl, profiles, kextstat, kmutil, dscl, tmutil, lsof, ps, stat, uname and others); a direct directory listing (names and mtimes) of /Library/LaunchDaemons, /Library/LaunchAgents, ~/Library/LaunchAgents and ~/Library/LaunchDaemons; and the file path handed to signalgrid_codesign_inspect",
+      "writes": "nothing on disk",
+      "network": "no socket of its own (imports no HTTP client); signalgrid_software_updates with check_online=true runs `softwareupdate -l`, which contacts Apple's update catalog, and signalgrid_codesign_inspect runs `spctl --assess`, which may make a Gatekeeper lookup",
+      "hooks": "none",
+      "tools": 22,
+      "readOnlyTools": 22,
+      "mutatingTools": 0,
+      "offline": "not probed under this roster's by-use protocol (no stdio run with sockets denied); 22 mcp__signalgrid-macos__ tools were listed in a Mac session on 2026-10-01, matching 22 @mcp.tool(… READ_ONLY) decorators at the pinned sha",
+      "disposition": "adopted",
+      "reason": "first-party sibling; the Mac-native grid_collected path the signalgrid-evidence-toolchain and signalgrid-native skills name (SKILL.md 134 / 74); its code is also exercised by verify-all --require-mcp through the sibling's pytest, not through this registration",
+      "config": "mac-kickoff.sh step 4/7: claude mcp add signalgrid-macos -- uv run --python 3.12 --with 'mcp[cli]<2' python <sibling>/server.py (the CLI's default scope, a departure from DR-060 rule 3's user scope that mac-kickoff.sh keeps; not yet a BUILD_BACKLOG row; never .mcp.json)"
+    },
+    {
+      "id": "context7",
+      "aliases": ["Context7"],
+      "upstream": "https://github.com/upstash/context7",
+      "sha": "12db78ea043954de047277960fda7e1d28f1d420",
+      "license": "MIT",
+      "language": "typescript",
+      "packageName": "@upstash/context7-mcp",
+      "packageVersion": "4.1.1",
+      "packageShasum": "c19d746c5c8b3341dd57a24174e7f3a597e05003",
+      "matches": "dependency work on both lanes — current library docs before a version or API change (signalgrid-master, Supply chain and dependencies)",
+      "reads": "nothing on disk; the library name, pinned version and question the agent sends",
+      "writes": "nothing on disk",
+      "network": "context7.com over HTTPS, keyless (CONTEXT7_API_KEY optional, never set here); a failed or 429 fetch is returned as an error string, the tool never throws (packages/mcp/src/lib/api.ts)",
+      "hooks": "none",
+      "build": "npm i @upstash/context7-mcp@4.1.1, prebuilt dist; boots in under 1 s",
+      "tools": 2,
+      "readOnlyTools": 2,
+      "mutatingTools": 0,
+      "offline": "boots and lists both tools (resolve-library-id, query-docs; readOnlyHint true on each) with sockets denied via sandbox-exec; identical to the online run",
+      "disposition": "adopted",
+      "reason": "keyless, read-only, pinned; the only doc-lookup both lanes share. Unreachable means 'docs not checked', never a loosened claim — the skill line says so.",
+      "config": "pnpm run mcp:setup  (runs scripts/install-context7.mjs: claude mcp add context7 --scope user -- npx -y @upstash/context7-mcp@4.1.1)"
+    },
+    {
+      "id": "wazuh",
+      "aliases": ["Wazuh"],
+      "upstream": "https://github.com/gbrigandi/mcp-server-wazuh",
+      "sha": "969f36fb833c5404055a668dc27b97f0ea3cc755",
+      "license": "MIT",
+      "language": "rust",
+      "matches": "live-edr lane (Wazuh)",
+      "reads": "the Wazuh manager API and indexer named by WAZUH_API_HOST/PORT and WAZUH_INDEXER_HOST/PORT with the credentials in WAZUH_API_USERNAME/PASSWORD and WAZUH_INDEXER_USERNAME/PASSWORD; WAZUH_VERIFY_SSL",
+      "writes": "nothing on disk",
+      "network": "only the two Wazuh endpoints it is configured with",
+      "hooks": "none",
+      "build": "cargo build --release, 263 s cold",
+      "tools": 14,
+      "readOnlyTools": 14,
+      "mutatingTools": 0,
+      "toolNames": [
+        "get_wazuh_agent_ports",
+        "get_wazuh_agent_processes",
+        "get_wazuh_agents",
+        "get_wazuh_alert_summary",
+        "get_wazuh_cluster_health",
+        "get_wazuh_cluster_nodes",
+        "get_wazuh_critical_vulnerabilities",
+        "get_wazuh_log_collector_stats",
+        "get_wazuh_manager_error_logs",
+        "get_wazuh_remoted_stats",
+        "get_wazuh_rules_summary",
+        "get_wazuh_vulnerability_summary",
+        "get_wazuh_weekly_stats",
+        "search_wazuh_manager_logs"
+      ],
+      "offline": "boots and lists all 14 tools with sockets denied; identical on two runs",
+      "disposition": "adopted-by-reference",
+      "reason": "read-only by construction (every tool is a get_/search_ read; no POST/PUT/DELETE in src), env-configured, deterministic tool surface. Lets the Mac lane read the live Wazuh it already runs during a live-edr rehearsal.",
+      "config": "claude mcp add wazuh --scope user --env WAZUH_API_HOST=… --env WAZUH_API_PORT=55000 --env WAZUH_INDEXER_HOST=… --env WAZUH_INDEXER_PORT=9200 --env WAZUH_API_USERNAME=<read-only user> --env WAZUH_API_PASSWORD=<from the keychain> --env WAZUH_INDEXER_USERNAME=… --env WAZUH_INDEXER_PASSWORD=… -- <path to target/release/mcp-server-wazuh built at the pinned sha under ~/.cache/signalgrid/>"
+    },
+    {
+      "id": "keycloak-admin",
+      "upstream": "https://github.com/mrz1880/mcp-keycloak-admin",
+      "sha": "8f977514ea3ba00d1eecc24016964de23fea0055",
+      "license": "MIT",
+      "language": "typescript",
+      "matches": "live-keycloak lane",
+      "reads": "the Keycloak Admin REST API at KEYCLOAK_BASE_URL/KEYCLOAK_REALM, authenticating with AUTH_MODE=password (KC_ADMIN_USERNAME/PASSWORD/REALM) or service_account (KC_CLIENT_ID/SECRET)",
+      "writes": "nothing on disk; 31 of 56 tools WRITE to Keycloak (create, delete, assign, unassign, update, set-enabled, reset-password, logout, sync)",
+      "network": "only the Keycloak base URL",
+      "hooks": "none",
+      "build": "npm ci + tsc, 12 s",
+      "tools": 56,
+      "readOnlyTools": 25,
+      "mutatingTools": 31,
+      "offline": "boots and lists all 56 tools with sockets denied once AUTH_MODE and the KC_ADMIN_* variables are set; refuses to start without them; identical on two runs",
+      "disposition": "evaluated-not-adopted",
+      "reason": "an ADMIN server: more than half its tools mutate the realm. The read-only doctrine has no way to switch those off, and a Keycloak the live lane stands up and tears down does not need administering by an agent. If a read-only fork or an allow-list flag appears upstream, re-evaluate.",
+      "config": null
+    },
+    {
+      "id": "playwright",
+      "aliases": ["@playwright/mcp", "playwright-mcp"],
+      "upstream": "https://github.com/microsoft/playwright-mcp",
+      "sha": "a188920a0373ba2491472161a7ffda130fb75cb2",
+      "license": "Apache-2.0",
+      "language": "typescript",
+      "packageName": "@playwright/mcp",
+      "packageVersion": "0.0.81",
+      "matches": "the operator surfaces (admin console, operator console, PWA, public site) — the screen inventory and demo-path brief row in BUILD_BACKLOG",
+      "reads": "whatever page it is pointed at, through the pre-installed Chromium",
+      "writes": "nothing on disk by default (screenshots/traces only where the caller asks)",
+      "network": "the pages it is pointed at; no telemetry endpoint in src",
+      "hooks": "none",
+      "build": "npm ci --ignore-scripts, 3 s; runs against /opt/pw-browsers/chromium with --executable-path",
+      "tools": 26,
+      "readOnlyTools": null,
+      "mutatingTools": null,
+      "offline": "boots and lists all 26 tools with sockets denied; identical on two runs",
+      "disposition": "adopted-by-reference",
+      "reason": "official, no env, no writes, pinned package. The one server that serves the design gap directly: it can walk every screen of the consoles and hand back accessibility snapshots and screenshots for the inventory. Local pages only — it must never be pointed at a tenant's live console.",
+      "config": "claude mcp add playwright --scope user -- npx -y @playwright/mcp@0.0.81 --headless --browser chromium  (add --executable-path /opt/pw-browsers/chromium on the cloud lane; on a Mac run `npx playwright install chromium` once first)"
+    },
+    {
+      "id": "postgres-hardened",
+      "upstream": "https://github.com/Eszetael/postgres-mcp-hardened",
+      "sha": "17721cce47f622d456a86b09a8b70b1a1e6edf1a",
+      "license": "MIT",
+      "language": "rust",
+      "matches": "the durable audit ledger (Postgres) in the deploy stack",
+      "reads": "DATABASE_URL (or MCP_DATABASE_URLS); 44 MCP_* knobs for allow-lists, redaction, rate limits, audit HMAC",
+      "writes": "an audit log on disk when MCP_AUDIT_LOG is set (src/audit_log.rs)",
+      "network": "only the database URL; sets default_transaction_read_only and a statement timeout",
+      "hooks": "none",
+      "build": "cargo build --release, 188 s cold",
+      "tools": null,
+      "readOnlyTools": null,
+      "mutatingTools": null,
+      "offline": "REFUSES to serve without a reachable database: logs 'DB CONNECT FAILED' plus a signed posture line and never answers tools/list (fail-closed, the right shape). Tool count therefore unmeasured here.",
+      "disposition": "deferred",
+      "reason": "read-only by construction and fail-closed, but it needs the live Postgres the deploy-stack CI job or the Mac lane stands up; re-measure the tool surface there before adopting.",
+      "config": null
+    }
+  ]
+}

@@ -82,6 +82,7 @@ const simFolder = {
 const v1Requests = [
   item("List demo keys", "GET", "/v1/keys", { auth: NOAUTH }),
   item("Context (principal + tenant)", "GET", "/v1/context"),
+  item("Launch status (enforced / observed / simulated, per signal family)", "GET", "/v1/launch-status"),
   item("Evaluate a decision", "POST", "/v1/decisions/evaluate", { body: { identityRef: "nurse.compliant", deviceRef: "ipad-ward-01", workflowKey: "clinical-session" } }),
   // The Assist wire (DR-023): the same decision, in the {assist, reasons, decisionId} shape a host-app SDK obeys.
   item("Authorize (the Assist wire)", "POST", "/v1/authorize", { body: { identityRef: "nurse.compliant", deviceRef: "ipad-ward-01", workflowKey: "clinical-session" } }),
@@ -90,6 +91,8 @@ const v1Requests = [
   item("Get decision evidence", "GET", "/v1/decisions/{{decisionId}}/evidence"),
   item("Simulate (replay) a decision", "POST", "/v1/decisions/{{decisionId}}/simulate", { body: { policyVersionId: "{{policyVersionId}}" } }),
   item("Get decision resolution", "GET", "/v1/decisions/{{decisionId}}/resolution"),
+  item("Mint a step-up challenge bound to one decision", "POST", "/v1/decisions/{{decisionId}}/step-up/challenge"),
+  item("Answer a step_up verdict (verified WebAuthn assertion)", "POST", "/v1/decisions/{{decisionId}}/step-up", { body: { challengeId: "{{stepUpChallengeId}}", assertion: { id: "{{credentialId}}", rawId: "{{credentialId}}", type: "public-key", response: { clientDataJSON: "…", authenticatorData: "…", signature: "…" } } } }),
   item("Resolve a decision", "POST", "/v1/decisions/{{decisionId}}/resolve", { body: {} }),
   item("Metrics", "GET", "/v1/metrics"),
   item("List policies", "GET", "/v1/policies"),
@@ -126,6 +129,7 @@ const v1Requests = [
   // the fail-closed paths (403/409), not mint a genuine release.
   item("Step-up: enrollment options", "POST", "/v1/step-up/enroll/options", { body: { identityRef: "nurse.baseline_drift" } }),
   item("Step-up: verify enrollment", "POST", "/v1/step-up/enroll/verify", { body: { identityRef: "nurse.baseline_drift", challengeId: "{{stepUpChallengeId}}", response: { id: "{{credentialId}}", rawId: "{{credentialId}}", type: "public-key", response: { clientDataJSON: "…", attestationObject: "…" } } } }),
+  item("Step-up: revoke enrolled credential", "POST", "/v1/step-up/enroll/revoke", { body: { identityRef: "nurse.baseline_drift", credentialId: "{{credentialId}}" } }),
   item("Step-up: auth challenge (action-bound)", "POST", "/v1/step-up/challenge", { body: { identityRef: "nurse.baseline_drift", integrationId: "bcma", deviceRef: "ipad-ward-06", actionKey: "controlled.administer" } }),
   item("Complete step-up (release held plan)", "POST", "/v1/app-workflows/complete-step-up", { body: { integrationId: "bcma", identityRef: "nurse.baseline_drift", deviceRef: "ipad-ward-06", actionKey: "controlled.administer", challengeId: "{{stepUpChallengeId}}", assertion: { id: "{{credentialId}}", rawId: "{{credentialId}}", type: "public-key", response: { clientDataJSON: "…", authenticatorData: "…", signature: "…" } } } }),
   item("Start a device session", "POST", "/v1/sessions/start", { body: { identityRef: "nurse.compliant", deviceRef: "ipad-ward-01", workflowKey: "clinical-session", ttlSeconds: 900 } }),
@@ -206,29 +210,87 @@ const environment = {
 
 // ── /v1 spec-coverage check ──────────────────────────────────────────────────
 const canon = (p) => p.replace(/\{\{[^}]+\}\}/g, "*").replace(/\{[^}]+\}/g, "*").replace(/:[^/]+/g, "*");
-function coverage(prefixRe, requests) {
-  const spec = readFileSync(resolve(repo, "lib/api-spec/v1-openapi.yaml"), "utf8");
-  const specPaths = [...spec.matchAll(prefixRe)].map((m) => canon(m[1]));
-  const collectionPaths = new Set(
-    requests.map((r) => canon("/" + r.request.url.path.join("/").split("?")[0])),
-  );
+
+/** Pure: `{ [canonPath]: Set<METHOD> }` for every path under `prefixRe` in the OpenAPI text. */
+function specOperations(spec, prefixRe) {
+  const ops = {};
+  let current = null;
+  for (const line of spec.split("\n")) {
+    const p = new RegExp(prefixRe.source).exec(line);
+    if (p) {
+      current = canon(p[1]);
+      ops[current] ??= new Set();
+      continue;
+    }
+    if (/^ {2}\S/.test(line)) current = null; // another top-level path or section
+    const m = current && /^ {4}(get|post|put|patch|delete|head|options):/.exec(line);
+    if (m) ops[current].add(m[1].toUpperCase());
+  }
+  return ops;
+}
+
+/**
+ * Coverage in BOTH directions, keyed on method + path. The first version checked
+ * spec → collection only, by path: a request for a route the API does not serve,
+ * or a POST to a path the spec defines only as GET, produced no signal (thirteenth
+ * audit round, 2026-09-06 — zero live orphans, a planted one went unnoticed). The
+ * demo and smart-hospital folders intentionally hit non-/v1 routes and are not
+ * passed here.
+ */
+function coverage(prefixRe, requests, spec = readFileSync(resolve(repo, "lib/api-spec/v1-openapi.yaml"), "utf8")) {
+  const ops = specOperations(spec, prefixRe);
+  const specPaths = Object.keys(ops);
+  const collectionPaths = new Set();
+  const orphans = [];
+  for (const r of requests) {
+    const path = canon("/" + r.request.url.path.join("/").split("?")[0]);
+    const method = String(r.request.method).toUpperCase();
+    collectionPaths.add(path);
+    if (!ops[path]) orphans.push(`${method} ${path} (no such path in the spec)`);
+    else if (!ops[path].has(method)) orphans.push(`${method} ${path} (spec defines only ${[...ops[path]].join("/")})`);
+  }
   const missing = specPaths.filter((p) => !collectionPaths.has(p));
-  return { specCount: specPaths.length, missing };
+  return { specCount: specPaths.length, missing, orphans };
+}
+
+if (process.argv.includes("--self-test")) {
+  const spec = "paths:\n  /v1/things:\n    get:\n      x: 1\n  /v1/things/{id}:\n    get:\n      x: 1\n    delete:\n      x: 1\n";
+  const rx = /^ {2}(\/v1[^\s:]*):/;
+  const ok = coverage(rx, [item("a", "GET", "/v1/things"), item("b", "GET", "/v1/things/{{id}}"), item("c", "DELETE", "/v1/things/{{id}}")], spec);
+  const orphanPath = coverage(rx, [item("a", "GET", "/v1/things"), item("b", "GET", "/v1/things/{{id}}"), item("x", "POST", "/v1/totally-not-a-route")], spec);
+  const orphanMethod = coverage(rx, [item("a", "POST", "/v1/things"), item("b", "GET", "/v1/things/{{id}}")], spec);
+  const checks = [
+    ["a collection matching the spec both ways is clean", ok.missing.length === 0 && ok.orphans.length === 0 && ok.specCount === 2],
+    ["THE PLANTED ORPHAN: a request for a path the spec does not define is reported", orphanPath.orphans.length === 1 && orphanPath.orphans[0].includes("totally-not-a-route")],
+    ["…and a METHOD the spec does not define for that path is reported (the direction that was never checked)", orphanMethod.orphans.some((o) => o.startsWith("POST /v1/things ("))],
+    ["a spec path with no request is still reported as missing (the original direction)", coverage(rx, [item("a", "GET", "/v1/things")], spec).missing.length === 1],
+  ];
+  const failed = checks.filter(([, pass]) => !pass);
+  for (const [name, pass] of checks) console.log(`  ${pass ? "ok" : "FAIL"} — self-test: ${name}`);
+  console.log(`\nself-test ${failed.length === 0 ? "passed" : "FAILED"} (${checks.length - failed.length}/${checks.length})`);
+  process.exit(failed.length === 0 ? 0 : 1);
 }
 
 // /v1 product API and /cp/v1 control plane are each kept in lockstep with the spec.
-const v1 = coverage(/^ {2}(\/v1[^\s:]*):/gm, v1Requests);
-const cp = coverage(/^ {2}(\/cp\/v1[^\s:]*):/gm, cpRequests);
+const v1 = coverage(/^ {2}(\/v1[^\s:]*):/, v1Requests);
+const cp = coverage(/^ {2}(\/cp\/v1[^\s:]*):/, cpRequests);
 const specCount = v1.specCount + cp.specCount;
 const missing = [...v1.missing, ...cp.missing];
-if (missing.length > 0) {
-  console.error(`Postman collection is missing ${missing.length} path(s) from the OpenAPI spec:`);
-  for (const m of missing) console.error(`  - ${m}`);
+const orphans = [...v1.orphans, ...cp.orphans];
+if (missing.length > 0 || orphans.length > 0) {
+  if (missing.length > 0) {
+    console.error(`Postman collection is missing ${missing.length} path(s) from the OpenAPI spec:`);
+    for (const m of missing) console.error(`  - ${m}`);
+  }
+  if (orphans.length > 0) {
+    console.error(`Postman collection holds ${orphans.length} request(s) the OpenAPI spec does not define:`);
+    for (const o of orphans) console.error(`  - ${o}`);
+  }
   process.exit(1);
 }
 
 if (process.argv.includes("--check")) {
-  console.log(`Postman /v1 coverage OK: ${specCount} spec paths all present.`);
+  console.log(`Postman /v1 coverage OK: ${specCount} spec paths all present, ${v1Requests.length + cpRequests.length} /v1 + /cp/v1 requests all defined by the spec (method + path).`);
   process.exit(0);
 }
 

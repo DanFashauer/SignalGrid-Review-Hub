@@ -72,8 +72,12 @@ export default function locationReportLoadTest() {
 
   locationLatency.add(duration);
 
+  // FAIL-CLOSED. 400 was counted as success, so a server rejecting every
+  // report as malformed — or, as with this repo's api-server, one that serves
+  // /v1/* and has never served /api/location/report — passed the error-rate
+  // threshold. Only an accepted report counts.
   const success = check(response, {
-    'status is 200 or 201 or 400': function(r) { return [200, 201, 400].includes(r.status); },
+    'status is 200 or 201': function(r) { return r.status === 200 || r.status === 201; },
     'response time OK': function(r) { return r.timings.duration < 500; },
   });
 

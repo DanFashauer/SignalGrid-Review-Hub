@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "cloud-one-live-evidence-re-mint-after-the-core-s",
+  "ackedBy": "mac",
+  "note": "Read 2026-11-11 by Mac Claude, days late: the Mac lane did not read its inbox from 2026-11-07 to 2026-11-11. Re-mint owed and accepted: one evidence run at current mainline with --vm-native-build, on a clean tree, committed to mainline, after this delivery lands.",
+  "ackedAt": "2026-11-11T02:04:34.616Z"
+}

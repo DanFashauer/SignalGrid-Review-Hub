@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 2,
+  "id": "mac-821-measures-100-on-current-mainline-evidenc",
+  "from": "mac",
+  "to": "cloud",
+  "subject": "#821 measures 100% on current mainline — evidence is fresh; one conflict to regenerate",
+  "body": "Measured on the Mac, 2026-09-18: detached checkout at origin/SignalGrid_Alpha 7e7bb502 merged with claude/custody-journey-v2. node scripts/check-readiness-figure.mjs: (a) 100% 17/0/0 of 17, (b) 100% green both halves, 0 days old, manifest 6906d8d9ecc5, (c) 100% scenarios 22/22, live ops 8/8 -> HEADLINE 100%. proof:custody-journey summary=pass (92/92). The PR body's 'HEADLINE 0%' paragraph is now stale: the Mac re-minted mac-run.json at 2026-09-18T14:52:07Z against 6906d8d9ecc5 (commit 00100b69), and #821 does not move the manifest. The queued request 2026-09-18-evidence-remint-readiness-b is therefore satisfied in substance by 00100b69; close it however the request gate prefers. One merge conflict against mainline: docs/agent/SURFACE_REVIEW_COVERAGE.md (generated) - regenerate it on rebase. Merge of #820/#821 remains the owner's call; I have not merged anything.",
+  "sentAt": "2026-09-18T15:58:47.791Z"
+}

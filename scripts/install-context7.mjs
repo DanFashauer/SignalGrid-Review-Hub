@@ -8,7 +8,7 @@
 // installer, so the Mac lane could not reach it in one command. It fetches
 // up-to-date library docs and code examples for an LLM straight from source, which
 // is a research/reference aid — it never enters a decision path, a proof fixture,
-// the deterministic core, or the product build.
+// the deterministic core, or the product build. NON-DETERMINISTIC: its output is not a pure function of the tree (keyless, rate-limited: the same query has returned a quota error and then real docs on consecutive runs), so it is never cited in a gate, a proof, a fixture or a doc figure.
 //
 // FOLLOWS THE DR-026 INSTALLER PATTERN, like install-firecrawl.mjs:
 //   · PINNED to an exact version, not @latest (RESOURCE_INTAKE rule 3).
@@ -21,7 +21,10 @@
 //     is reported plainly. not-installed is never reported as success.
 import { spawnSync } from "node:child_process";
 
-const PINNED = "@upstash/context7-mcp@4.0.4"; // MIT, keyless, pinned (not @latest)
+// Exported so setup-mcp-lane.mjs prints THIS literal instead of carrying a second
+// one: the two drifted silently until 2026-09-19 (four unguarded copies of "4.0.4").
+// 4.1.1 published 2026-09-14; dist.shasum c19d746c5c8b3341dd57a24174e7f3a597e05003.
+export const PINNED = "@upstash/context7-mcp@4.1.1"; // MIT, keyless, pinned (not @latest)
 
 // The Claude Code CLI is how an MCP server is registered without hand-editing config.
 const hasClaude = spawnSync("claude", ["--version"], { stdio: "ignore" }).status === 0;
@@ -56,3 +59,4 @@ if (res.status !== 0) {
   process.exit(res.status || 1);
 }
 console.log(`context7:install: registered ${PINNED} as a user-scoped, keyless MCP server (repo untouched).`);
+console.log(`context7:install: reference only — its output is not a pure function of the tree (keyless, rate-limited: the same query has returned a quota error and then real docs on consecutive runs), so it is never cited in a gate, a proof, a fixture or a doc figure.`);

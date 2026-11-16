@@ -92,6 +92,39 @@ export function peekJwtKid(token: string): string | undefined {
   }
 }
 
+/**
+ * Read a STABLE CALLER REFERENCE out of a token's payload WITHOUT verifying anything.
+ *
+ * `iss\nsub` when both are present and non-empty, otherwise undefined. Like
+ * `peekJwtKid` this is deliberately unverified input, and like it there is exactly
+ * one thing it may be used for: BUCKETING. The `/v1` rate limiter runs UPSTREAM of
+ * authentication by design — a 429 must be answerable before a JWKS fetch, and a
+ * limiter behind auth cannot throttle the unauthenticated flood it exists for — so
+ * it cannot have a verified principal to key on, and keying on the raw bearer gave a
+ * refreshed or concurrently-minted JWT a brand-new bucket every time.
+ *
+ * SAID PLAINLY, because "unverified" has a cost here and it is not zero: a caller who
+ * forges `iss`/`sub` can land in another tenant's bucket and consume their quota.
+ * That is a throttling nuisance, never an authorization decision — nothing downstream
+ * reads this value, and `verifyJwtRs256` still decides who the caller is. It is
+ * bounded by the per-address global limiter, which the forger is also subject to.
+ * The alternative — a per-token bucket a refresh resets — is a rate limit that does
+ * not limit, which is strictly worse.
+ */
+export function peekJwtCallerRef(token: string): string | undefined {
+  if (typeof token !== "string") return undefined;
+  const parts = token.split(".");
+  if (parts.length !== 3 || parts.some((p) => p.length === 0)) return undefined;
+  try {
+    const claims = decodeJsonSegment<JwtClaims>(parts[1]);
+    const iss = typeof claims.iss === "string" ? claims.iss.trim() : "";
+    const sub = typeof claims.sub === "string" ? claims.sub.trim() : "";
+    return iss.length > 0 && sub.length > 0 ? `${iss}\n${sub}` : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export function verifyJwtRs256(token: string, opts: VerifyOptions): VerifyResult {
   if (typeof token !== "string") {
     return fail("token is not a string");
@@ -109,6 +142,20 @@ export function verifyJwtRs256(token: string, opts: VerifyOptions): VerifyResult
     claims = decodeJsonSegment<JwtClaims>(payloadSeg);
   } catch {
     return fail("header or payload is not valid base64url JSON");
+  }
+  // Valid JSON is not enough: `null`, a number, a string or an array parses fine
+  // and would throw on the first property read. Refuse at the decode boundary.
+  if (!isJsonObject(header) || !isJsonObject(claims)) {
+    return fail("header or payload is not a JSON object");
+  }
+
+  // `alg` and `kid` are echoed into refusal messages; a non-string (an object with a
+  // hostile `toString`, say) would throw there. Refuse it before it can be stringified.
+  if (typeof header.alg !== "string") {
+    return fail("header alg is not a string");
+  }
+  if (header.kid !== undefined && typeof header.kid !== "string") {
+    return fail("header kid is not a string");
   }
 
   // Algorithm gate FIRST — reject `none`/HMAC before touching key material.
@@ -178,7 +225,7 @@ export function verifyJwtRs256(token: string, opts: VerifyOptions): VerifyResult
 function selectKey(jwks: Jwks, kid: string | undefined): JwkKey | null {
   const keys = Array.isArray(jwks.keys) ? jwks.keys : [];
   const usable = keys.filter(
-    (k) => k.kty === "RSA" && typeof k.n === "string" && typeof k.e === "string",
+    (k) => isJsonObject(k) && k.kty === "RSA" && typeof k.n === "string" && typeof k.e === "string",
   );
   if (usable.length === 0) {
     return null;
@@ -198,6 +245,10 @@ function audienceMatches(aud: string | string[] | undefined, expected: string): 
     return aud.includes(expected);
   }
   return false;
+}
+
+function isJsonObject(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null && !Array.isArray(v);
 }
 
 function fail(reason: string): VerifyResult {

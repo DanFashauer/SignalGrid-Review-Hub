@@ -111,11 +111,16 @@ first coverage").
 ## The partner-conversation frame (owner's call)
 
 The complementarity is structural: Smplify actuates, SignalGrid decides — and
-SignalGrid's IaC doctrine ("an apply is refused unless a live decision returns
-allow") slots in front of Smplify's apply exactly as it slots in front of
-Fleet GitOps. Their approval gates govern WHO may act; SignalGrid's gate
-grades WHETHER the world's evidence supports acting now. Those compose rather
-than compete. The founders are the "MDM/UEM vendors exploring orchestration
-opportunities" audience the executive one-pager names. Outreach is the owner's
-decision; this study and the live Fleet proofs are the show-and-tell if it
-happens.
+the planned trust-gated apply (`/cp/v1/iac` and `/v1/remediation` are deferred
+routes in `scripts/launch-profile.mjs`; no apply against a real fleet exists
+today) would sit in front of Smplify's apply exactly as it is designed to sit
+in front of Fleet GitOps. Their approval gates govern WHO may act; SignalGrid's
+gate grades WHETHER the world's evidence supports acting now. Those compose
+rather than compete. The founders are an MDM/UEM control-plane vendor — not an
+audience `docs/EXECUTIVE_ONE_PAGER.md` names: its "Who it is for" is the DR-012
+lean-IT segment (roughly 75–1,000 employees, 1–10 in IT, shared or roaming
+frontline devices) plus design partners and pre-seed investors. (Until
+2026-09-06 this paragraph quoted an audience phrase the one-pager never carried
+and an IaC sentence the claim inventory had already graded deferred.) Outreach
+is the owner's decision; this study and the live Fleet proofs are the
+show-and-tell if it happens.

@@ -22,7 +22,7 @@ six things:
 | Classification | Meaning |
 | --- | --- |
 | `LAB_SOURCE` | A real external system the lab stands up (or intends to) so adapters have something true to talk to. |
-| `PRODUCTION_CONNECTOR_TARGET` | A system a shipping connector would target. Connector scope is frozen (DR-005), so these are targets on paper, not connectors in the tree. |
+| `PRODUCTION_CONNECTOR_TARGET` | A system a shipping connector would target. Connector scope was frozen (DR-005; lifted by DR-021 (2026-08-31); see `docs/DECISION_RECORDS.md`), so these are targets on paper, not connectors in the tree — building one still needs its own decision record, and claim discipline did not lift. |
 | `OPEN_STANDARD` | A schema or vocabulary studied for field naming and interop — read, never embedded. |
 | `REFERENCE_ARCHITECTURE` | A design studied for how it solves a problem SignalGrid also has. The decision core stays in-house, deterministic, and fixture-backed. |
 | `INTERNAL_COMPANY_TOOL` | Tooling for the company's own build/release/ops surface. Never product surface. |
@@ -133,7 +133,7 @@ gate fails any entry that claims otherwise without evidence on disk.
 
 ## What we deploy now vs later
 
-**Now** (tooling and lab surface only — launch scope is frozen under DR-005):
+**Now** (tooling and lab surface only — launch scope was frozen under DR-005; the engineering freeze was lifted by DR-021 (2026-08-31), see `docs/DECISION_RECORDS.md`, while launch-claim discipline stands):
 the three deployed `LAB_SOURCE` systems above, run as containers by
 `scripts/run-live-lanes.sh` so the adapters and `proof:live-*` gates have real
 systems to be truthful against. The `INTERNAL_COMPANY_TOOL` rows are candidates
@@ -142,7 +142,9 @@ surface.
 
 **Later, and only after licence review**: everything marked
 `DEFERRED_RESEARCH` waits for a decision record; `PRODUCTION_CONNECTOR_TARGET`
-waits for the connector-scope freeze to lift; `REFERENCE_ARCHITECTURE` and
+waited for the connector-scope freeze to lift — lifted by DR-021 (2026-08-31), see
+`docs/DECISION_RECORDS.md`; a target still needs its own decision record before it
+becomes a connector; `REFERENCE_ARCHITECTURE` and
 `OPEN_STANDARD` rows are read, cited, and never embedded. Any change to a row's
 classification, licence, caution flag, or deployed status is made in the JSON
 and this table together — `scripts/check-lab-registry.mjs` fails the build when

@@ -3,21 +3,28 @@ import { useListLatestSignals, ListLatestSignalsSignalType } from "@workspace/ap
 import { formatTimeAgo } from "@/lib/format";
 import { StatusDot } from "@/components/StatusDot";
 import { SignalBadge } from "@/components/SignalBadge";
+import { LiveRegion } from "@/components/LiveRegion";
 
 export default function Signals() {
   const [filter, setFilter] = useState<ListLatestSignalsSignalType | "all">("all");
 
-  const { data, isLoading } = useListLatestSignals({ 
+  const { data, isLoading, isError } = useListLatestSignals({ 
     limit: 50,
     signalType: filter === "all" ? undefined : filter
   }, {
     query: { refetchInterval: 30_000, queryKey: ["signals", filter] },
   });
+  // The feed can replace a signal without changing either count: name the newest one.
+  const newest = data?.signals.reduce<(typeof data.signals)[number] | undefined>((a, b) => (!a || b.receivedAt > a.receivedAt ? b : a), undefined);
 
   const types = ["all", "identity", "device-posture", "session-context", "operational-signals", "network-posture", "physical-access"] as const;
 
   return (
     <div className="h-full w-full flex flex-col pt-safe bg-background">
+      <LiveRegion
+        message={data ? `${filter} filter: ${data.signals.length} signals, ${data.signals.filter((s) => s.status === "critical").length} critical${newest ? `; newest: ${newest.status} ${newest.signalType} on ${newest.deviceId}, received ${new Date(newest.receivedAt).toLocaleTimeString()}` : ""}.` : ""}
+        alert={isError ? "Signal feed unreachable; critical signal count unknown." : ""}
+      />
       <header className="px-4 py-3 shrink-0 bg-background z-10 border-b border-border/50">
         <h1 className="text-lg font-bold">Signals (fixture)</h1>
         <p className="text-[11px] text-amber-400/80 mt-1">Synthetic data · some categories are candidate, not core-evaluated</p>

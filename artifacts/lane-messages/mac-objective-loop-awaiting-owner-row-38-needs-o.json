@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 2,
+  "id": "mac-objective-loop-awaiting-owner-row-38-needs-o",
+  "from": "mac",
+  "to": "cloud",
+  "subject": "objective-loop: awaiting-owner-row-38 — needs owner",
+  "body": "row 38 (\"Free-tier proprietary validation targets\") in docs/COMPANY_BUILD_PLAN.md is parked, not ranked, because only the owner or a lab can unblock it: owner (a pilot whose stack matches the row's trigger - the discovery log records 0 of 15 conversations), checked 2026-10-08. Clear the blocker, or remove its marker once cleared\n\n(Raised by scripts/objective-loop.mjs on the Mac tick, DR-056. Verdict escalate; state docs/agent/objective-state.json @ 16cd115843ab72030beac8a9d9cc148566a0ac02. Sent once, on the first tick this escalation appeared; it stays in the state file until cleared.)",
+  "sentAt": "2026-10-08T14:30:41.104Z"
+}

@@ -33,11 +33,11 @@ packages:
   - scripts
 
 catalog:
-  '@tailwindcss/vite': ^4.3.3
-  '@tanstack/react-query': ^5.101.4
+  '@tailwindcss/vite': ^4.3.4
+  '@tanstack/react-query': ^5.105.3
   '@types/node': ^25.3.3
-  '@types/react': ^19.2.18
-  '@types/react-dom': ^19.2.4
+  '@types/react': ^19.3.0
+  '@types/react-dom': ^19.3.0
   '@vitejs/plugin-react': ^5.0.4
   class-variance-authority: ^0.7.1
   clsx: ^2.1.1
@@ -45,14 +45,14 @@ catalog:
   framer-motion: ^12.23.24
   lucide-react: ^0.545.0
   # Must be this exact version because expo requires it
-  react: 19.2.8
+  react: 19.3.1
   # Must be this exact version because expo requires it
-  react-dom: 19.2.8
-  tailwind-merge: ^3.6.0
-  tailwindcss: ^4.3.3
-  tsx: ^4.23.12
-  vite: ^8.2.0
-  wouter: ^3.10.0
+  react-dom: 19.3.1
+  tailwind-merge: ^3.7.0
+  tailwindcss: ^4.3.4
+  tsx: ^4.23.15
+  vite: ^8.3.5
+  wouter: ^3.13.0
   zod: ^3.25.76
 
 autoInstallPeers: false
@@ -106,6 +106,7 @@ overrides:
   # Vite 8 bundles via Rolldown; mirror the rollup policy below EXACTLY:
   # linux-x64-gnu kept for CI/deploy, win32 bindings kept because the desktop
   # shell's windows-latest CI builds with vite, everything else stripped.
+  "rolldown>@rolldown/binding-android-arm-eabi": "-"
   "rolldown>@rolldown/binding-android-arm64": "-"
   "rolldown>@rolldown/binding-darwin-arm64": "-"
   "rolldown>@rolldown/binding-darwin-x64": "-"
@@ -145,9 +146,11 @@ overrides:
   "@expo/ngrok-bin>@expo/ngrok-bin-linux-arm": "-"
   "@expo/ngrok-bin>@expo/ngrok-bin-linux-ia32": "-"
   "@expo/ngrok-bin>@expo/ngrok-bin-sunos-x64": "-"
-  # drizzle-kit uses esbuild internally on an older version that's vulnerable, this overrides it
+  # esbuild is pinned WORKSPACE-WIDE here (it began as a drizzle-kit transitive fix); every
+  # package.json declares the same 0.27.3 — a different declared number is dead text,
+  # which is how three of them said 0.28.2 while resolving 0.27.3 (found 2026-09-19).
   "@esbuild-kit/esm-loader": "npm:tsx@^4.21.0"
-  esbuild: "0.27.3"
+  esbuild: "0.28.2"
   # Security: force patched transitive deps that express 5.2.1 still resolves to
   # vulnerable ranges. Both reach the two HTTP front doors (api-server + mcp-server).
   #   qs <=6.15.1 — remotely-triggerable DoS in qs.stringify (GHSA-q8mj-m7cp-5q26)
@@ -155,3 +158,13 @@ overrides:
   # express has no release above 5.2.1 that bundles the fixes, so pin them here.
   qs: ">=6.15.2"
   body-parser: ">=2.3.0"
+  proxy-addr: "2.0.8"
+
+# @hookform/resolvers 3.x imports `zod` without declaring it, so pnpm resolved it through
+# the hidden hoist (node_modules/.pnpm/node_modules/zod), whose pick between zod 3 and 4 is
+# order-dependent: zod 4 on the Mac broke the app typecheck (PolicyCreate.tsx TS2345) while
+# Linux got zod 3. Declaring the peer makes it resolve the consuming package's zod.
+packageExtensions:
+  '@hookform/resolvers@3':
+    peerDependencies:
+      zod: '*'

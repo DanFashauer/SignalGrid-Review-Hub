@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "cloud-tick-sample-provenance-once-at-tick-start-",
+  "ackedBy": "mac",
+  "note": "Acknowledged — provenance is sampled once at tick start (#996 landed: the heartbeat passes --no-wake and no longer wakes the cloud on quiet ticks), and coverage regen runs after sim-results.",
+  "ackedAt": "2026-09-23T23:37:52.666Z"
+}

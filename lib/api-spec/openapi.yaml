@@ -20,6 +20,8 @@ tags:
     description: Policy configuration
   - name: metrics
     description: Dashboard metrics and analytics
+  - name: simulator
+    description: Deterministic fixture scenarios run through the real decision core (deferred surface)
 
 paths:
   /healthz:
@@ -35,6 +37,17 @@ paths:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
 
+  /readyz:
+    get:
+      operationId: readinessCheck
+      tags: [health]
+      summary: Readiness — a configured durable store must round-trip; the in-memory core is always ready
+      responses:
+        "200":
+          description: Ready
+        "503":
+          description: Not ready — a configured store is unreachable (never swallowed into a 200)
+
   # ── Decisions ──────────────────────────────────────────────────────────────
 
   /decisions:
@@ -45,16 +58,26 @@ paths:
       parameters:
         - in: query
           name: limit
+          description: >-
+            Clamped by the server: a non-numeric, zero or negative value falls back to
+            the default, and anything above the maximum is capped to it.
           schema:
             type: integer
-            default: 50
+            default: 20
+            minimum: 1
+            maximum: 200
         - in: query
           name: outcome
+          description: >-
+            Filter only. The server does NOT reject an unlisted value — it filters with
+            it and returns an empty list, so this enum is the vocabulary, not a promise
+            of a 400.
           schema:
             type: string
             enum: [allow, step-up, restrict, deny]
         - in: query
           name: integrationId
+          description: Filter only; an unknown id returns an empty list rather than a 404.
           schema:
             type: string
       responses:
@@ -73,23 +96,6 @@ paths:
                     type: integer
                 required: [decisions, total]
 
-    post:
-      operationId: evaluateDecision
-      tags: [decisions]
-      summary: Evaluate an access decision request
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/DecisionRequest"
-      responses:
-        "200":
-          description: Decision evaluated
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Decision"
 
   /decisions/{id}:
     get:
@@ -164,31 +170,6 @@ paths:
 
   # ── Signals ─────────────────────────────────────────────────────────────────
 
-  /signals/ingest:
-    post:
-      operationId: ingestSignal
-      tags: [signals]
-      summary: Ingest a signal from an integration source
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/SignalIngestionRequest"
-      responses:
-        "202":
-          description: Signal accepted
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  signalId:
-                    type: string
-                  accepted:
-                    type: boolean
-                required: [signalId, accepted]
-
   /signals/latest:
     get:
       operationId: listLatestSignals
@@ -197,14 +178,23 @@ paths:
       parameters:
         - in: query
           name: signalType
+          description: >-
+            Filter only. The server does NOT reject an unlisted value — it filters with
+            it and returns an empty list, so this enum is the vocabulary, not a promise
+            of a 400.
           schema:
             type: string
             enum: [identity, device-posture, session-context, operational-signals, physical-access, network-posture]
         - in: query
           name: limit
+          description: >-
+            Clamped by the server: a non-numeric, zero or negative value falls back to
+            the default, and anything above the maximum is capped to it.
           schema:
             type: integer
-            default: 20
+            default: 50
+            minimum: 1
+            maximum: 200
       responses:
         "200":
           description: Recent signals
@@ -218,6 +208,145 @@ paths:
                     items:
                       $ref: "#/components/schemas/Signal"
                 required: [signals]
+
+  /signals/catalog:
+    get:
+      operationId: getSignalCatalog
+      tags: [signals]
+      summary: The signal categories the grid evaluates today and the candidate categories it knows of
+      responses:
+        "200":
+          description: Catalog
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  demo:
+                    type: boolean
+                  evaluated:
+                    type: array
+                    items:
+                      type: string
+                  candidate:
+                    type: array
+                    items:
+                      type: string
+                required: [demo, evaluated, candidate]
+
+  /signals/radar:
+    post:
+      operationId: scanSignalRadar
+      tags: [signals]
+      summary: Classify a batch of incoming signals as evaluated / candidate / novel and raise first-seen alerts
+      description: >-
+        `signals` must be an array; a body without one is 400, never an empty scan.
+        An explicit empty batch is 200 with `scanned: 0` and a summary that says
+        coverage is unknown — an empty batch never reads as a covered grid.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                signals:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      category:
+                        type: string
+                      sourceReference:
+                        type: string
+                      observedAt:
+                        type: string
+                    required: [category]
+              required: [signals]
+      responses:
+        "200":
+          description: Radar report
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  demo:
+                    type: boolean
+                  scanned:
+                    type: integer
+                  summary:
+                    type: string
+                required: [demo, scanned, summary]
+        "400":
+          description: signals is not an array
+
+  # ── Simulator (deterministic fixture scenarios; deferred surface) ──────────
+
+  /simulator/scenarios:
+    get:
+      operationId: listSimulatorScenarios
+      tags: [simulator]
+      summary: The deterministic fixture scenarios the simulator can run
+      responses:
+        "200":
+          description: Scenario list
+
+  /simulator/scenarios/{id}:
+    get:
+      operationId: getSimulatorScenario
+      tags: [simulator]
+      summary: One scenario by id
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Scenario
+        "404":
+          description: Unknown scenario
+
+  /simulator/run:
+    post:
+      operationId: runSimulatorScenario
+      tags: [simulator]
+      summary: Run one scenario through the real decision core and return its audit evidence
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                scenarioId:
+                  type: string
+              required: [scenarioId]
+      responses:
+        "200":
+          description: Run result with audit evidence
+        "400":
+          description: scenarioId missing
+
+  /simulator/audit:
+    get:
+      operationId: getSimulatorAudit
+      tags: [simulator]
+      summary: The simulator's audit trail so far
+      responses:
+        "200":
+          description: Audit entries
+
+  /simulator/reset:
+    post:
+      operationId: resetSimulator
+      tags: [simulator]
+      summary: Reset the simulator's in-memory state
+      responses:
+        "200":
+          description: Reset
 
   # ── Policies ─────────────────────────────────────────────────────────────────
 
@@ -240,78 +369,6 @@ paths:
                       $ref: "#/components/schemas/Policy"
                 required: [policies]
 
-    post:
-      operationId: createPolicy
-      tags: [policies]
-      summary: Create a new access policy
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/PolicyInput"
-      responses:
-        "201":
-          description: Policy created
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Policy"
-
-  /policies/{id}:
-    get:
-      operationId: getPolicy
-      tags: [policies]
-      summary: Get policy detail
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema:
-            type: string
-      responses:
-        "200":
-          description: Policy
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Policy"
-    put:
-      operationId: updatePolicy
-      tags: [policies]
-      summary: Update a policy
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema:
-            type: string
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/PolicyInput"
-      responses:
-        "200":
-          description: Updated policy
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Policy"
-    delete:
-      operationId: deletePolicy
-      tags: [policies]
-      summary: Delete a policy
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema:
-            type: string
-      responses:
-        "204":
-          description: Deleted
 
   # ── Metrics ──────────────────────────────────────────────────────────────────
 
@@ -320,13 +377,9 @@ paths:
       operationId: getDashboardMetrics
       tags: [metrics]
       summary: Aggregated metrics for the operator dashboard
-      parameters:
-        - in: query
-          name: window
-          schema:
-            type: string
-            enum: [1h, 24h, 7d, 30d]
-            default: 24h
+      description: >-
+        Takes no parameters. A `window` query was documented here and the handler never
+        read it — the fixture is a fixed 24h aggregate, and `window` in the response says so.
       responses:
         "200":
           description: Dashboard metrics
@@ -340,19 +393,9 @@ paths:
       operationId: getDecisionSeries
       tags: [metrics]
       summary: Time-series decision counts for charting
-      parameters:
-        - in: query
-          name: window
-          schema:
-            type: string
-            enum: [1h, 24h, 7d, 30d]
-            default: 24h
-        - in: query
-          name: granularity
-          schema:
-            type: string
-            enum: [minute, hour, day]
-            default: hour
+      description: >-
+        Takes no parameters. `window` and `granularity` were documented here and the
+        handler never read either — the fixture is a fixed 24-point hourly series.
       responses:
         "200":
           description: Time-series data
@@ -442,30 +485,6 @@ components:
           additionalProperties: true
       required: [id, identityId, deviceId, workflowId, outcome, signals, evaluatedAt, latencyMs]
 
-    DecisionRequest:
-      type: object
-      properties:
-        identityId:
-          type: string
-        deviceId:
-          type: string
-        workflowId:
-          type: string
-        integrationContext:
-          type: object
-          properties:
-            mdmPlatform:
-              type: string
-            identityProvider:
-              type: string
-            itsmPlatform:
-              type: string
-          additionalProperties: true
-        metadata:
-          type: object
-          additionalProperties: true
-      required: [identityId, deviceId, workflowId]
-
     IntegrationHealth:
       type: object
       properties:
@@ -485,7 +504,8 @@ components:
           type: string
           enum: [connected, degraded, disconnected, not-configured]
         lastSync:
-          type: string
+          # NULL in the served catalog for every integration that has never synced.
+          type: [string, "null"]
           format: date-time
         signalsIngested24h:
           type: integer
@@ -516,23 +536,6 @@ components:
           type: string
           format: date-time
       required: [id, signalType, platform, deviceId, value, status, receivedAt]
-
-    SignalIngestionRequest:
-      type: object
-      properties:
-        signalType:
-          $ref: "#/components/schemas/SignalType"
-        platform:
-          type: string
-        deviceId:
-          type: string
-        value:
-          type: object
-          additionalProperties: true
-        sourceTimestamp:
-          type: string
-          format: date-time
-      required: [signalType, platform, deviceId, value]
 
     PolicyRule:
       type: object
@@ -576,26 +579,6 @@ components:
           format: date-time
       required: [id, name, workflowPattern, rules, failMode, active, createdAt, updatedAt]
 
-    PolicyInput:
-      type: object
-      properties:
-        name:
-          type: string
-        description:
-          type: string
-        workflowPattern:
-          type: string
-        rules:
-          type: array
-          items:
-            $ref: "#/components/schemas/PolicyRule"
-        failMode:
-          type: string
-          enum: [fail-open, fail-closed]
-        active:
-          type: boolean
-      required: [name, workflowPattern, rules, failMode]
-
     DashboardMetrics:
       type: object
       properties:
@@ -618,7 +601,8 @@ components:
           type: number
           format: float
         avgLatencyMs:
-          type: integer
+          type: number
+          format: float
         activeIntegrations:
           type: integer
         totalIntegrations:

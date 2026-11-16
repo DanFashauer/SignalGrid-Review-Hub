@@ -39,10 +39,26 @@
  * at this commit", which is what the sim-result provenance carries.
  */
 import { spawn } from "node:child_process";
+import { createServer as netCreateServer } from "node:net";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const PORT = 5320;
+// OS-assigned ports, as `api.test.mjs` (#1106) does — a fixed port here collides
+// with the SAME fixed port bound by another tree or tick on the same host.
+// `handedOut` stops one run from reusing a number it just released to itself.
+const handedOut = [];
+const freePort = () => new Promise((resolvePort) => {
+  const probe = netCreateServer();
+  probe.listen(0, () => {
+    const p = probe.address().port;
+    probe.close(() => {
+      if (handedOut.includes(p)) return resolvePort(freePort());
+      handedOut.push(p);
+      resolvePort(p);
+    });
+  });
+});
+const PORT = await freePort();
 const BASE = `http://localhost:${PORT}/api`;
 const here = dirname(fileURLToPath(import.meta.url));
 const serverEntry = resolve(here, "../dist/index.mjs");
@@ -72,8 +88,47 @@ function sandboxEnv(extra) {
 }
 
 const STRESS = process.argv.includes("--stress");
-const CONCURRENCY = Number(process.env.LOAD_CONCURRENCY ?? 32);
-const REQUESTS = Number(process.env.LOAD_REQUESTS ?? 600);
+
+/**
+ * THE KNOBS ARE VALIDATED AT START, and a run too small to mean anything is refused.
+ *
+ * `Number("abc")` is NaN; `while (issued < NaN)` is false and `Array.from({length: NaN})`
+ * is empty, so a typo'd LOAD_REQUESTS drove ZERO requests — and every GATED assertion
+ * below is an `.every()` or a `=== 0` over the resulting EMPTY array, so all of them
+ * passed. `LOAD_REQUESTS=abc` and a real 600-request run printed the identical
+ * `summary=pass (15/15)` and the identical exit code; the only tell, `throughput NaN
+ * req/s`, sat in the block this file declares REPORTED and never asserts. A gate that
+ * drove nothing must be red, not green.
+ *
+ * Digits-only, and the reason is `src/lib/core.ts`'s cap parser verbatim: Number("1e4"),
+ * Number(" 3 ") and Number("0x10") all coerce to something plausible. Unset/empty means
+ * "use the default" and is the only value that falls through. Exit 2, not 1: a refusal to
+ * run is not a failed assertion, and the two should not read the same in CI.
+ */
+const MIN_REQUESTS = 24;
+function positiveIntEnv(name, fallback) {
+  const raw = process.env[name];
+  if (raw === undefined || raw.trim() === "") return fallback;
+  const text = raw.trim();
+  if (!/^\d+$/.test(text) || Number(text) < 1) {
+    console.error(
+      `refusing to run: ${name} must be a positive integer, got "${raw}". ` +
+        "A non-numeric knob drives zero requests and every gated check passes vacuously.",
+    );
+    process.exit(2);
+  }
+  return Number(text);
+}
+const CONCURRENCY = positiveIntEnv("LOAD_CONCURRENCY", 32);
+const REQUESTS = positiveIntEnv("LOAD_REQUESTS", 600);
+if (REQUESTS < MIN_REQUESTS) {
+  console.error(
+    `refusing to run: LOAD_REQUESTS=${REQUESTS} is below the non-vacuity floor of ${MIN_REQUESTS}. ` +
+      "A handful of requests cannot exercise concurrency, and a gate that drove almost nothing " +
+      "reports the same green as one that drove everything.",
+  );
+  process.exit(2);
+}
 
 // Two tenants, interleaved on purpose: the cross-tenant assertion below is only
 // meaningful if both are genuinely in flight at once.
@@ -92,6 +147,14 @@ const failures = [];
 const check = (name, ok) => {
   if (ok) { passed += 1; console.log(`  ok — ${name}`); }
   else { failures.push(name); console.log(`  FAIL — ${name}`); }
+};
+
+/** Why a burst request never produced a response at all. undici reports every
+ *  socket-level failure as a bare `TypeError: fetch failed`, so the part worth
+ *  printing is the cause underneath it (EPIPE, ECONNRESET, ECONNREFUSED). */
+const describeDrop = (err) => {
+  const cause = err?.cause;
+  return cause?.code ?? cause?.message ?? err?.code ?? err?.message ?? String(err);
 };
 
 const pct = (sorted, p) => sorted.length === 0 ? 0 : sorted[Math.min(sorted.length - 1, Math.floor((p / 100) * sorted.length))];
@@ -176,7 +239,7 @@ const server = spawn("node", [serverEntry], {
 // asserted through the running surface. If the fallback ever breaks, the burst
 // below sails through and this test goes red rather than the door opening
 // quietly in production.
-const LIMIT_PORT = 5321;
+const LIMIT_PORT = await freePort();
 const LIMIT_BASE = `http://localhost:${LIMIT_PORT}/api`;
 const SHIPPED_V1_LIMIT = 240;
 const limitServer = spawn("node", [serverEntry], {
@@ -226,6 +289,16 @@ try {
   const load = await drive(REQUESTS, CONCURRENCY);
 
   // ── GATED: correctness under concurrency, machine-independent ─────────────
+  // THE WORK FLOOR COMES FIRST. Every check under this heading is an `.every()` or a
+  // `=== 0` over `load.results`, and all of them are satisfied by an EMPTY array — so
+  // this assertion is what makes the rest of them mean anything. Exact, not `>= 1`:
+  // the count is knowable, and a run that lost 300 of 600 responses is a finding, not
+  // a rounding error. The house standard is api.test.mjs, which floors every derived
+  // set it reasons over; this file did not meet it.
+  check(
+    `NOT VACUOUS: the load drove exactly the ${REQUESTS} requests it claims (recorded=${load.results.length}, concurrency=${CONCURRENCY})`,
+    load.results.length === REQUESTS && load.results.length >= MIN_REQUESTS,
+  );
   check(`no transport errors under load (errors=${load.errors})`, load.errors === 0);
   check(`no 5xx under load (server5xx=${load.server5xx})`, load.server5xx === 0);
   check(`every response is 200 (non200=${load.non200})`, load.non200 === 0);
@@ -275,19 +348,81 @@ try {
     }
     check("the malformed-limit server boots", limitReady === true);
 
-    const burst = [];
-    for (let i = 0; i < 300; i += 1) {
-      burst.push(fetch(`${LIMIT_BASE}/v1/decisions/evaluate`, {
-        method: "POST",
-        headers: { authorization: `Bearer ${KEYS.northwind}`, "content-type": "application/json" },
-        body: JSON.stringify(CASES[0].body),
-      }));
+    // THE BURST IS BOUNDED IN FLIGHT, AND THAT IS THE POINT OF THE CHECK BELOW.
+    //
+    // This block opened all 300 connections at once until 2026-09-17, and on the
+    // macOS lane that measured the KERNEL rather than the application: macOS clamps
+    // a listener's backlog to `kern.ipc.somaxconn`, 128 by default, and resets the
+    // overflow. `preflight.log` from the Mac run of PR #801 recorded
+    // `dropped=144/300, first: ECONNRESET` — 144 connections the kernel killed before
+    // Express saw them. The three assertions after this one then failed as
+    // CONSEQUENCES of that, not on their own merits (`429s=0`, `allowed=156` against
+    // a 240 ceiling), which is why this one failure read as five. Linux passes the
+    // identical code only because its somaxconn is far larger and an overflowing
+    // accept queue drops the SYN for the client to retry instead of resetting it.
+    //
+    // Raising the backlog does NOT fix it: `listen(2)` on macOS clamps to somaxconn,
+    // so asking for 511 still yields 128, still short of 300. Bounding the in-flight
+    // count does, on every kernel — and it is what the assertion was always named
+    // for. "THROTTLED at the application, never DROPPED at the socket" is a claim
+    // about Express answering 429, and 300 simultaneous sockets never let Express
+    // answer at all. With the queue kept shallow, a drop here means the APPLICATION
+    // dropped it, which is the only version of this check worth gating.
+    //
+    // The overload is undiminished. The window is 60s and the whole burst completes
+    // in well under a second, so all 300 still land inside ONE window and still
+    // overrun the 240 ceiling by exactly 60 — `allowed === SHIPPED_V1_LIMIT` below is
+    // unchanged and still exact. Per-key counting does not depend on arrival order.
+    const BURST_TOTAL = 300;
+    // Comfortably under a default somaxconn of 128, with room for the readiness probe.
+    const BURST_CONCURRENCY = 32;
+    // Settled outcomes, not a throw. A connection the server DROPPED is exactly the
+    // condition the next check is named for — and collecting rejections rather than
+    // propagating them is what lets a drop COUNT as a drop and fail BY NAME, instead
+    // of taking the harness down with a stack trace before the check is reached. A
+    // check that cannot distinguish its own two outcomes is not yet a check.
+    //
+    // STRICTLY NO WEAKER than a throw. A drop fails the assertion below; and because
+    // every count downstream runs over the responses that actually arrived, a burst
+    // with drops ALSO fails `allowed === SHIPPED_V1_LIMIT` and can no longer reach
+    // the throttled-count check with a full house. Nothing that was red turns green.
+    const outcomes = [];
+    {
+      let issued = 0;
+      const burstWorker = async () => {
+        while (issued < BURST_TOTAL) {
+          issued += 1;
+          try {
+            outcomes.push({
+              status: "fulfilled",
+              value: await fetch(`${LIMIT_BASE}/v1/decisions/evaluate`, {
+                method: "POST",
+                headers: { authorization: `Bearer ${KEYS.northwind}`, "content-type": "application/json" },
+                body: JSON.stringify(CASES[0].body),
+              }),
+            });
+          } catch (err) {
+            outcomes.push({ status: "rejected", reason: err });
+          }
+        }
+      };
+      await Promise.all(Array.from({ length: BURST_CONCURRENCY }, burstWorker));
     }
-    const settled = await Promise.all(burst);
-    const throttled = settled.filter((r) => r.status === 429);
-    const fived = settled.filter((r) => r.status >= 500);
+    check(
+      `the burst actually issued every request (issued=${outcomes.length}/${BURST_TOTAL})`,
+      outcomes.length === BURST_TOTAL,
+    );
+    const responses = outcomes.flatMap((o) => (o.status === "fulfilled" ? [o.value] : []));
+    const dropped = outcomes.flatMap((o) => (o.status === "rejected" ? [o.reason] : []));
+    check(
+      `deliberate overload is THROTTLED at the application, never DROPPED at the socket ` +
+        `(dropped=${dropped.length}/${BURST_TOTAL}${dropped.length > 0 ? `, first: ${describeDrop(dropped[0])}` : ""})`,
+      dropped.length === 0,
+    );
+    const throttled = responses.filter((r) => r.status === 429);
+    const fived = responses.filter((r) => r.status >= 500);
     check(`deliberate overload is THROTTLED, not dropped (429s=${throttled.length})`, throttled.length > 0);
-    const allowed = settled.filter((r) => r.status === 200).length;
+    const allowed = responses.filter((r) => r.status === 200).length;
     check(
       `A ZERO LIMIT DOES NOT OPEN THE DOOR: a malformed value falls back to EXACTLY the shipped ceiling (allowed=${allowed}, expected ${SHIPPED_V1_LIMIT})`,
       // Exactly, not at-most. `<=` also passed if the fallback became 1, or if
@@ -339,9 +474,11 @@ try {
       // only at concurrency 64+ left `test:stress` green — the exact regime the
       // stress phase exists to explore was the one regime nothing asserted.
       // Latency and throughput stay unasserted; correctness does not.
+      const want = Math.max(200, c * 6);
       check(
-        `stress c=${c}: correctness holds — no 5xx, no transport errors, every outcome still the known answer`,
-        r.errors === 0 && r.server5xx === 0 && r.non200 === 0 &&
+        `stress c=${c}: correctness holds — no 5xx, no transport errors, every outcome still the known answer (over ${r.results.length}/${want} responses)`,
+        r.results.length === want &&
+          r.errors === 0 && r.server5xx === 0 && r.non200 === 0 &&
           r.results.every((x) => x.enveloped && x.outcome === x.expect),
       );
       console.log(
@@ -368,7 +505,7 @@ try {
 
   const total = passed + failures.length;
   console.log(`\nsummary=${failures.length === 0 ? "pass" : "FAIL"} (${passed}/${total})`);
-  console.log(`figures=cases=${CASES.length},concurrency=${CONCURRENCY}`);
+  console.log(`figures=cases=${CASES.length},concurrency=${CONCURRENCY},requests=${REQUESTS},responses=${load.results.length}`);
   if (failures.length > 0) {
     console.error("Failed checks:");
     for (const f of failures) console.error(`  - ${f}`);

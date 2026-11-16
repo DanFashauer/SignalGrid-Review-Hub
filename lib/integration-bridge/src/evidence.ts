@@ -26,6 +26,13 @@ import type { FixturePostureRecord } from "@workspace/signalgrid-core";
 import { normalizeFleetReport, type FleetHostReport } from "@workspace/fleet-connector";
 import type { PostureSignalDraft } from "./index";
 
+/** A provenance string, or undefined when it is absent OR empty — so that `??` can
+ *  fall back on both. Provenance is this repository's product; an empty citation
+ *  that reads as a present one is the unearned affirmative in miniature. */
+function nonEmpty(value: string | undefined): string | undefined {
+  return typeof value === "string" && value.trim() !== "" ? value : undefined;
+}
+
 /**
  * The closed set of device-management sources the contract names today.
  * Closed ON PURPOSE: a new source system is a declared event (a new adapter,
@@ -148,7 +155,9 @@ export function deviceManagementEvidenceToFixtureRecord(
     ...(baseline ? { baseline } : {}),
     ...(ctx.managementHealth ? { managementHealth: ctx.managementHealth } : {}),
     ...(ctx.localAuthority ? { localAuthority: ctx.localAuthority } : {}),
-    sourceReference: e.sourceReferences[0] ?? `${e.sourceSystem}:${e.sourceRecordId}`,
+    // `??` does not skip an EMPTY string, and an empty provenance string reaching a
+    // snapshot is an absent citation that reads as a present one.
+    sourceReference: nonEmpty(e.sourceReferences[0]) ?? `${e.sourceSystem}:${e.sourceRecordId}`,
   };
 }
 
@@ -253,8 +262,12 @@ export function headwindLabToDeviceManagementEvidence(
     platform: "android",
     managedState: device.enrolled ? "managed" : "unmanaged",
     complianceState,
-    policyState:
-      device.configApplied === "applied" ? "passing" : device.configApplied === "failed" ? "failing" : "unknown",
+    // Enrollment gates policy state exactly as it gates compliance three lines up: an
+    // UNENROLLED device with a stale "applied" config push is not a passing policy —
+    // it is a device whose policy nobody is currently applying.
+    policyState: !device.enrolled
+      ? "unknown"
+      : device.configApplied === "applied" ? "passing" : device.configApplied === "failed" ? "failing" : "unknown",
     ownership: "shared",
     ...(device.lastSeenAt ? { lastSeenAt: device.lastSeenAt } : {}),
     observedAt: ctx.observedAt,

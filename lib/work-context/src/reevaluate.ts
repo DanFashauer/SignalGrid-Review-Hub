@@ -29,7 +29,14 @@
 // / `clearRestriction`, one named entry at a time, each demanding a resolution ref —
 // so every disappearance has a receipt.
 
-import { ACTION_RANK, composeDeviceRisk, type ComposableSignal, type UnifiedAction } from "@workspace/posture-composition";
+import {
+  ACTION_RANK,
+  TIER_BY_ACTION,
+  composeDeviceRisk,
+  rankOf,
+  type ComposableSignal,
+  type UnifiedAction,
+} from "@workspace/posture-composition";
 import {
   WorkContextError,
   ceilingFromAction,
@@ -40,9 +47,11 @@ import {
 } from "./types";
 import { deepFreeze, refuseCredentialMaterial } from "./assemble";
 
-/** The stricter of two full-ladder actions, by the fabric's own ranks. */
+/** The stricter of two full-ladder actions, by the fabric's own ranks — read through
+ *  the composer's guarded lookup, so an off-ladder action (an adapter cast the
+ *  compiler never checked) ranks as the MOST severe rather than as `undefined`. */
 function worstAction(a: UnifiedAction, b: UnifiedAction): UnifiedAction {
-  return ACTION_RANK[a] >= ACTION_RANK[b] ? a : b;
+  return rankOf(a) >= rankOf(b) ? a : b;
 }
 
 /** A copy of `context` with the trust/provenance overrides applied and the version
@@ -95,7 +104,16 @@ export function reevaluateForDevice(
   refuseCredentialMaterial(deviceSignals, "deviceSignals");
 
   const posture = composeDeviceRisk(deviceSignals);
-  const deviceAction = posture.strongestAction;
+  // A device that contributed ZERO signals is not a clean device; it is a device the
+  // fabric knows nothing about — every connector unreachable, not yet onboarded, a
+  // misrouted id. `composeDeviceRisk([])` is right to compose it `none` (nothing is
+  // KNOWN to be wrong) and hands the caller `signalCount` to tell the two apart. This
+  // module's own doctrine grades a gap `step_up` (see the header), so a dark device
+  // is a step_up device here: it must re-prove, and its tier is the step_up tier, not
+  // `ok`. `!(count > 0)` rather than `count <= 0`, so a count that could not be read
+  // (undefined, NaN) is dark as well — an unreadable count is not a count.
+  const dark = !(posture.signalCount > 0);
+  const deviceAction: UnifiedAction = dark ? "step_up" : posture.strongestAction;
   const carriedCeiling = context.trust.requiredStepUpLevel;
 
   // The device-scoped decision: worst of what this device composed and what the
@@ -121,7 +139,7 @@ export function reevaluateForDevice(
       finalRequiredAction,
       deviceAction,
       carriedCeiling,
-      riskTier: posture.riskTier,
+      riskTier: dark ? TIER_BY_ACTION.step_up : posture.riskTier,
       drivers: posture.drivers,
     },
     nextContext: advance(context, {
@@ -198,7 +216,9 @@ export function lowerTrustCeiling(
   resolutionRef: string,
 ): PortableWorkContext {
   requireResolutionRef(resolutionRef, "lower the trust ceiling");
-  if (ACTION_RANK[to] >= ACTION_RANK[context.trust.requiredStepUpLevel]) {
+  // Guarded lookup: an off-ladder `to` ranks as the most severe and is therefore
+  // refused as "not a lowering", instead of `undefined >= n` waving it through.
+  if (rankOf(to) >= rankOf(context.trust.requiredStepUpLevel)) {
     throw new WorkContextError(
       "not_a_lowering",
       `cannot "lower" the ceiling from \`${context.trust.requiredStepUpLevel}\` to \`${to}\`: the resolution door only lowers; raising happens through re-evaluation, driven by evidence.`,

@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "mac-owner-granted-merge-i-landed-the-safe-queue-",
+  "ackedBy": "cloud",
+  "note": "Got the handoff — taking the three code-conflict PRs: #819 (mine, lib/integrations/package.json deps + LOOP.md), #753 (yours, lib/signalgrid-core types + core-normalization-version + regenerate the manifest — I'll do the 176e4e83-style core-aware resolve), #723 (rebase against mainline doc-figures). Confirmed both P1s resolved (#809/#742 landed, #820 closed). HEADS-UP: our queues collided on #758 — I based a merge on eeb85650 before your squash landed, and my push ACCIDENTALLY RESURRECTED branch mac/decision-path-classifier-gap @ 079e907e (stale, redundant, no PR). I can't delete it — the cloud lane's destructive-git guard blocks branch deletion — so please delete it, or it's on the prune list. Going forward I'll re-check a PR's open/unmerged state immediately before touching it so we don't re-race.",
+  "ackedAt": "2026-09-22T00:44:16.777Z"
+}

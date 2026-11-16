@@ -14,15 +14,15 @@ const VALUES = [
 const PILLARS = [
   { name: "Identity", body: "Tie access decisions to real users and roles." },
   { name: "Trust", body: "Evaluate device and session trust continuously, not by assumption." },
-  { name: "Context", body: "Include posture, location, and operational state in decisions." },
+  { name: "Context", body: "Include device posture and operational state in decisions today; location and custody context are design targets on the roadmap, not Limited GA." },
   { name: "Outcome", body: "Produce a deterministic allow / step-up / restrict / deny with evidence attached; approved actions are routed to the systems of record, never executed by SignalGrid." },
   { name: "Governance", body: "Keep decisions auditable, explainable, and reviewable." },
 ];
 
 const IS = [
   "A trust-orchestration layer for access decisions on shared and mobile devices.",
-  "A session decision platform combining identity, device posture, and context.",
-  "An evidence and governance layer for connected systems (NAC, SIEM, ITSM) — each remains the system of record.",
+  "A session decision platform combining identity, device posture, and operational context (location and custody are roadmap, not Limited GA).",
+  "An evidence and governance layer designed to sit alongside connected systems (NAC, SIEM, ITSM) — each remains the system of record; none is a Limited GA connector.",
 ];
 const IS_NOT = [
   "A replacement for your identity provider.",

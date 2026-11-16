@@ -31,7 +31,10 @@ final class ManagedAppViewController: UIViewController {
     }()
     private let progress = UIActivityIndicatorView(style: .medium)
 
-    init(app: EnterpriseApp, url: URL, allowedDomains: [String]? = nil, allowCopyPaste: Bool = true) {
+    /// `allowCopyPaste` defaults to FALSE. It was `true`, so any call site that simply did not
+    /// pass the argument got the permissive answer — the restriction was opt-in at the very
+    /// place it is meant to be enforced. The restrictive default is the safe one to forget.
+    init(app: EnterpriseApp, url: URL, allowedDomains: [String]? = nil, allowCopyPaste: Bool = false) {
         self.app = app
         self.url = url
         self.allowedDomains = allowedDomains
@@ -56,14 +59,24 @@ final class ManagedAppViewController: UIViewController {
         title.font = SG.sans(17, .semibold)
         title.adjustsFontForContentSizeCategory = true
         title.textAlignment = .center
+        // Same defect, same fix as HostAppViewController's top bar: a scaling label in a
+        // fixed 48pt bar truncates at accessibility text sizes. The sibling bar was left
+        // behind once already (CLAUDE.md, the bash-3.2 idiom that did not generalize).
+        title.numberOfLines = 0
         title.translatesAutoresizingMaskIntoConstraints = false
 
         let done = UIButton(type: .system)
         done.setTitle("Done", for: .normal)
         done.titleLabel?.font = SG.sans(17, .semibold)
         done.titleLabel?.adjustsFontForContentSizeCategory = true
+        done.titleLabel?.numberOfLines = 1
+        done.titleLabel?.adjustsFontSizeToFitWidth = true
+        done.titleLabel?.minimumScaleFactor = 0.7
         done.addTarget(self, action: #selector(close), for: .touchUpInside)
         done.translatesAutoresizingMaskIntoConstraints = false
+        // The title yields before the exit control does.
+        done.setContentCompressionResistancePriority(.required, for: .horizontal)
+        title.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
 
         webView.translatesAutoresizingMaskIntoConstraints = false
         webView.navigationDelegate = self
@@ -80,12 +93,18 @@ final class ManagedAppViewController: UIViewController {
             bar.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
             bar.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             bar.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            bar.heightAnchor.constraint(equalToConstant: 48),
+            bar.heightAnchor.constraint(greaterThanOrEqualToConstant: 48),
 
             title.centerXAnchor.constraint(equalTo: bar.centerXAnchor),
             title.centerYAnchor.constraint(equalTo: bar.centerYAnchor),
+            title.topAnchor.constraint(greaterThanOrEqualTo: bar.topAnchor, constant: 6),
+            title.bottomAnchor.constraint(lessThanOrEqualTo: bar.bottomAnchor, constant: -6),
+            title.leadingAnchor.constraint(greaterThanOrEqualTo: bar.leadingAnchor, constant: 16),
+            title.trailingAnchor.constraint(lessThanOrEqualTo: done.leadingAnchor, constant: -8),
             done.trailingAnchor.constraint(equalTo: bar.trailingAnchor, constant: -16),
             done.centerYAnchor.constraint(equalTo: bar.centerYAnchor),
+            done.topAnchor.constraint(greaterThanOrEqualTo: bar.topAnchor, constant: 4),
+            done.bottomAnchor.constraint(lessThanOrEqualTo: bar.bottomAnchor, constant: -4),
 
             webView.topAnchor.constraint(equalTo: bar.bottomAnchor),
             webView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
@@ -117,20 +136,25 @@ final class ManagedAppViewController: UIViewController {
         loadWithDomainContainment()
     }
 
-    /// Enforce the persona's `allowedDomains` on ALL web traffic, not just top-level
-    /// navigation (review finding): `decidePolicyFor` governs navigations only, so a
-    /// script on an allowed page could still fetch/XHR/beacon session data to any
-    /// origin. A WKContentRuleList blocks every request whose domain is not on the
-    /// allowlist at the resource layer. FAIL CLOSED: with an allowlist configured,
-    /// nothing loads until the rules are compiled and attached; if compilation fails,
-    /// the page is not loaded at all rather than loaded unrestricted.
+    /// The hosts this managed app may reach: ALWAYS its own launch origin, plus any
+    /// persona `allowedDomains`. FAIL CLOSED (golden rule 2): an absent or empty
+    /// allowlist does NOT mean "roam anywhere" — it yields just the launch origin, so an
+    /// unconfigured persona is contained to the site the shell deliberately opened, never
+    /// unrestricted. Empty only when the launch URL is itself hostless (about:/data:),
+    /// which then loads nothing rather than everything.
+    private func permittedHosts() -> [String] {
+        ManagedAppContainment.permittedHosts(launchHost: url.host, allowedDomains: allowedDomains)
+    }
+
+    /// Enforce `permittedHosts()` on ALL web traffic, not just top-level navigation
+    /// (review finding): `decidePolicyFor` governs navigations only, so a script on an
+    /// allowed page could still fetch/XHR/beacon session data to any origin. A
+    /// WKContentRuleList blocks every request whose domain is not permitted at the
+    /// resource layer. FAIL CLOSED: containment is ALWAYS applied (launch origin + any
+    /// allowlist); nothing loads until the rules are compiled and attached, and if
+    /// compilation fails the page is not loaded at all rather than loaded unrestricted.
     private func loadWithDomainContainment() {
-        guard let allow = allowedDomains, !allow.isEmpty else {
-            webView.load(URLRequest(url: url))
-            return
-        }
-        let permitted = (([url.host?.lowercased()].compactMap { $0 }) + allow.map { $0.lowercased() })
-            .map { "*\($0)" }
+        let permitted = permittedHosts().map { "*\($0)" }
         let rules = """
         [
           {"trigger": {"url-filter": ".*"}, "action": {"type": "block"}},
@@ -178,28 +202,23 @@ final class ManagedAppViewController: UIViewController {
 }
 
 extension ManagedAppViewController: WKNavigationDelegate {
-    /// Contain navigation to approved origins. Without this, a link, redirect, or
+    /// Contain navigation to `permittedHosts()`. Without this, a link, redirect, or
     /// script-driven navigation could carry the user OUT of the intended enterprise
     /// origin while still inside the kiosk browser — the same escape Safari/other
     /// apps are MDM-blocked to prevent. The app's own launch origin is always
-    /// permitted; a persona allowlist adds further hosts. No allowlist configured
-    /// ⇒ unrestricted (unchanged behavior).
+    /// permitted; a persona allowlist adds further hosts. FAIL CLOSED: an absent or
+    /// empty allowlist contains to the launch origin only, never unrestricted.
     func webView(
         _ webView: WKWebView,
         decidePolicyFor navigationAction: WKNavigationAction,
         decisionHandler: @escaping (WKNavigationActionPolicy) -> Void
     ) {
-        guard let allow = allowedDomains, !allow.isEmpty else {
-            decisionHandler(.allow)
-            return
-        }
         guard let host = navigationAction.request.url?.host?.lowercased() else {
             // Hostless (about:blank, data:) — not an origin escape; allow.
             decisionHandler(.allow)
             return
         }
-        let permitted = ([url.host?.lowercased()].compactMap { $0 }) + allow.map { $0.lowercased() }
-        let ok = permitted.contains { host == $0 || host.hasSuffix("." + $0) }
+        let ok = ManagedAppContainment.isPermitted(host: host, permitted: permittedHosts())
         decisionHandler(ok ? .allow : .cancel)
     }
 

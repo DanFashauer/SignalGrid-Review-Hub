@@ -22,10 +22,17 @@ const MIN_REALIZATION = 0.5;
  *  modelled here as an incident for this target that carried a signal ref to route on,
  *  and whose resolution was NOT a manual remediation (i.e. it did not fall back to a
  *  human). Determined purely from the fixture; nothing is written. */
+/** The event types that MEAN "the grid resolved it" — an ALLOWLIST, mirroring the
+ *  allowlist `observe.ts` uses for manual resolutions. The previous denylist counted
+ *  every type that was not a remediation as a success, so `connector.synced` on the
+ *  target subject scored as the automation resolving an incident, and any type added
+ *  to core later would have joined the success column silently. */
+const AUTO_RESOLVED_TYPES: readonly AuditEvent["type"][] = ["decision.evaluated"];
+
 function wasAutoResolved(event: AuditEvent, target: string): boolean {
   if (event.subject !== target) return false;
-  if (event.references.length === 0) return false;
-  return event.type !== "remediation.requested" && event.type !== "remediation.approved";
+  if (!Array.isArray(event.references) || event.references.length === 0) return false;
+  return AUTO_RESOLVED_TYPES.includes(event.type);
 }
 
 /**
@@ -56,10 +63,20 @@ export function measureActivated(
   // through simulation, so this is normally present; a missing one reads as prediction 0.
   const predictedRate = proposal.simulation?.helpedRate ?? 0;
 
-  // Helped only when there were real post-activation incidents AND the realized rate
-  // reached at least half the prediction. Zero incidents, or a rate that collapsed
-  // against the prediction, is a finding — not an error, not a silent pass.
-  const helped = activatedIncidentCount > 0 && helpedRate >= predictedRate * MIN_REALIZATION;
+  // Helped only when there were real post-activation incidents, at least one of them
+  // was actually auto-resolved, the simulation had predicted SOME benefit, and the
+  // realized rate reached at least half the prediction. A prediction of zero used to
+  // make the threshold `helpedRate >= 0`, which every realization satisfies — twenty
+  // incidents that all fell back to a human reported `helped: true` "realizing the
+  // simulation's 0% prediction". Absent or zero projected benefit does not lower the
+  // bar; it removes the grounds for having approved the change at all.
+  const priorFinding = proposal.measurement !== null && proposal.measurement.helped === false;
+  const helped =
+    !priorFinding &&
+    activatedIncidentCount > 0 &&
+    helpedCount > 0 &&
+    predictedRate > 0 &&
+    helpedRate >= predictedRate * MIN_REALIZATION;
 
   const measurement: MeasurementResult = {
     activatedIncidentCount,
@@ -71,9 +88,17 @@ export function measureActivated(
       ? `after activation, ${helpedCount} of ${activatedIncidentCount} incident(s) for "${target}" were ` +
         `auto-resolved (${Math.round(helpedRate * 100)}%), realizing the simulation's ` +
         `${Math.round(predictedRate * 100)}% prediction.`
-      : `FINDING: after activation, ${helpedCount} of ${activatedIncidentCount} incident(s) for "${target}" were ` +
-        `auto-resolved (${Math.round(helpedRate * 100)}%), short of the simulation's ` +
-        `${Math.round(predictedRate * 100)}% prediction — the approved change did not help.`,
+      : priorFinding
+        ? `FINDING (standing): an earlier measurement already found this change did not help; ` +
+          `a later, kinder fixture does not overwrite a finding — supersede the proposal instead. ` +
+          `This run: ${helpedCount} of ${activatedIncidentCount} auto-resolved.`
+        : predictedRate > 0
+          ? `FINDING: after activation, ${helpedCount} of ${activatedIncidentCount} incident(s) for "${target}" were ` +
+            `auto-resolved (${Math.round(helpedRate * 100)}%), short of the simulation's ` +
+            `${Math.round(predictedRate * 100)}% prediction — the approved change did not help.`
+          : `FINDING: the simulation predicted no benefit (0%), so there was nothing for activation to realize; ` +
+            `${helpedCount} of ${activatedIncidentCount} incident(s) for "${target}" were auto-resolved — ` +
+            `the change should not have been approved on this evidence.`,
   };
 
   return advanceWith(proposal, { measurement });

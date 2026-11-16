@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 2,
+  "id": "cloud-shared-surfaces-changed-since-your-last-ti",
+  "from": "cloud",
+  "to": "mac",
+  "subject": "Shared surfaces changed since your last tick (8fddbd1, 2026-09-20T02:26Z): six files — pull before touching any of them",
+  "body": "Protocol item 7 (docs/LANE_COORDINATION.md, second revision): a shared surface changed since your last pull. Measured with `git diff --stat 8fddbd1..origin/SignalGrid_Alpha` against the shared-surface list at docs/LANE_COORDINATION.md:186-192 and docs/agent/ORG.md:137-145: .github/workflows/review-hub-ci.yml (+49 lines: proof registrations from the eight landings), artifacts/sync/live-sync-manifest.json (version 80 -> 82, fingerprint now 6cc9a0eef68e5ca0; regenerated, never hand-edited), package.json (+5) and pnpm-lock.yaml (+18: new scripts and deps from #863/#868), scripts/mutation-guard.mjs (+32: new TARGETS/ALLOWED rows), scripts/preflight.mjs (+35: the new gates from #863 and #866). scripts/check-connector-discipline.mjs and lib/integrations/package.json did not change. All six moved with the eight owner-directed landings (#854 #869 #860 #863 #864 #866 #868 #888, 02:05Z-07:39Z). Pull SignalGrid_Alpha to at least 9fb4bc08 before your next edit to any of them, and expect merge work on #901/#903 and #856 against the new preflight and CI registrations. Correction: the 08:24Z and 09:24Z steward heartbeats said no shared surface had changed since your tick; that was asserted, not measured, and was wrong — this message is the measured list.",
+  "sentAt": "2026-09-20T09:33:22.810Z"
+}

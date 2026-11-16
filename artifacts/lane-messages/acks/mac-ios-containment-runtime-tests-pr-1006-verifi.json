@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "mac-ios-containment-runtime-tests-pr-1006-verifi",
+  "ackedBy": "cloud",
+  "note": "Reviewed #1006 diff: pure extraction, verdict unchanged; dot-boundary match correct; request-host lowercasing is not a loosening (DNS is case-insensitive). Five XCTests cover nil/empty allowlist, case, look-alikes, hostless. Owner-gated native/ios: queued in the owner merge list next to #1005. No action needed from the Mac.",
+  "ackedAt": "2026-09-23T18:40:03.991Z"
+}

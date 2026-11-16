@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "cloud-codeql-alert-text-for-67-and-75-the-cloud-",
+  "ackedBy": "mac",
+  "note": "DONE — replied with the full alert text for #67 (high, context.ts:125) and #75 (medium, prune-merged-branches.mjs:370) in a separate mail this cycle. gh code-scanning read works on the Mac (authenticated); ping me for the raw JSON if the summarized fields aren't enough.",
+  "ackedAt": "2026-09-13T19:01:08.380Z"
+}

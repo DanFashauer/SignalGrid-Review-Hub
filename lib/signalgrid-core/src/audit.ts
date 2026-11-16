@@ -1,5 +1,6 @@
 import type { MemoryStore } from "./store";
 import { canonicalJson, deterministicId, digest } from "./util";
+import { CoreError, PUCK_LIFECYCLE_EVENT_TYPES, isAuditEventType } from "./types";
 import type { AuditEvent, AuditEventType } from "./types";
 
 export const GENESIS_DIGEST = "genesis";
@@ -12,7 +13,22 @@ export interface AppendAuditInput {
   summary: string;
   references: string[];
   recordedAt: string;
+  /**
+   * The decision this event evidences. REQUIRED for the puck-lifecycle types and
+   * optional for the original six, whose callers already carry the decision id in
+   * `references` and whose digests must not move.
+   *
+   * It is folded into `references` rather than into the digested body for exactly that
+   * reason: adding a field to the canonical body would change every existing event's
+   * digest and break chains that are already committed.
+   */
+  decisionId?: string;
 }
+
+const PUCK_TYPES: readonly string[] = PUCK_LIFECYCLE_EVENT_TYPES;
+
+/** Blank means blank — an all-whitespace subject is not a subject. */
+const blank = (value: unknown): boolean => typeof value !== "string" || value.trim().length === 0;
 
 /**
  * Append a tamper-evident audit event to a tenant's chain. Each event's digest
@@ -24,6 +40,28 @@ export function appendAudit(
   store: MemoryStore,
   input: AppendAuditInput,
 ): AuditEvent {
+  // FAIL-CLOSED ADMISSION, and the reason it is here rather than at each call site:
+  // there is one writer into the chain, so one guard covers every caller. A refused
+  // event is NOT recorded — a blank row in a tamper-evident ledger is worse than an
+  // absent one, because it is evidence-shaped and evidences nothing.
+  if (!isAuditEventType(input.type)) {
+    throw new CoreError("validation", `Unknown audit event type: ${String(input.type)}`, 400);
+  }
+  if (blank(input.subject)) {
+    throw new CoreError("validation", `Audit event ${input.type} names no subject.`, 400);
+  }
+  const references =
+    PUCK_TYPES.includes(input.type) && !blank(input.decisionId)
+      ? [input.decisionId as string, ...input.references.filter((r) => r !== input.decisionId)]
+      : input.references;
+  if (PUCK_TYPES.includes(input.type) && blank(input.decisionId)) {
+    throw new CoreError(
+      "validation",
+      `Audit event ${input.type} names no decision — a lifecycle event with no decision behind it is a log line, not a ledger entry.`,
+      400,
+    );
+  }
+
   const prevDigest = store.lastAuditDigest(input.tenantId) ?? GENESIS_DIGEST;
   const seq = store.nextAuditSeq(input.tenantId);
 
@@ -34,7 +72,7 @@ export function appendAudit(
     actor: input.actor,
     subject: input.subject,
     summary: input.summary,
-    references: input.references,
+    references,
     recordedAt: input.recordedAt,
     prevDigest,
   });
@@ -47,7 +85,7 @@ export function appendAudit(
     actor: input.actor,
     subject: input.subject,
     summary: input.summary,
-    references: input.references,
+    references,
     recordedAt: input.recordedAt,
     prevDigest,
     digest: digest(body),

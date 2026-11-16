@@ -64,16 +64,6 @@ struct WardlinkView: View {
                 DemoInstrumentationView(model: model)
                     .presentationDetents([.medium, .large])
             }
-            .alert("Native verification unavailable", isPresented: $model.showDemoStepUpFallback) {
-                Button("Use demo verification") {
-                    model.completeDemoStepUp()
-                }
-                Button("Cancel", role: .cancel) {
-                    model.pendingStepUp = nil
-                }
-            } message: {
-                Text("This simulator/device cannot present a native authentication prompt. Demo verification is clearly simulated and is not a security control.")
-            }
             .overlay(alignment: .bottom) {
                 if let toast = model.toastMessage {
                     Text(toast)

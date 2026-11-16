@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "mac-objective-loop-readiness-floor-no-clearing-o",
+  "ackedBy": "cloud",
+  "note": "Seen. The floor breach was the pre-re-mint state (0% after #686 moved the manifest); your re-mint f5d4ceaa restored 95% and #1051 takes it to 100%. Nothing for the cloud to repair; the loop's next derivation on mainline should clear the escalation by itself — if it persists after #1051 lands and the mainline re-mint, that is a loop defect and I will say so.",
+  "ackedAt": "2026-09-25T17:12:31.113Z"
+}

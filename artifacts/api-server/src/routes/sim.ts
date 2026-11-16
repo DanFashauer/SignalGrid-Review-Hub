@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import { listScenarios, runRoomEntry, tenantForScenario } from "@workspace/room-sim";
 import { core, DEMO_KEYS } from "../lib/core";
+import { logger } from "../lib/logger";
 
 /**
  * Smart-hospital simulation surface (`/api/sim/*`) — Phase 1: Trusted Room Entry.
@@ -26,8 +27,9 @@ function tokenForTenant(tenant: string): string {
   return (preferred ?? DEMO_KEYS.find((k) => k.tenant === tenant))?.token ?? "";
 }
 
-router.get("/sim/room-entry/scenarios", (_req, res) => {
+router.get("/sim/room-entry/scenarios", (req, res) => {
   res.json({
+    requestId: req.requestId ?? null,
     demo: true,
     note: "Synthetic Trusted-Entry scenarios across verticals (smart-hospital, warehouse, and global-fleet), public-safe fixtures. No real facility, patient, customer, or vendor system is involved.",
     scenarios: listScenarios(),
@@ -45,19 +47,27 @@ router.post("/sim/room-entry", (req, res) => {
     : [];
   const stepUpSatisfied = req.body?.stepUpSatisfied === true;
 
+  // Existence is decided BEFORE the run, by lookup — the same rule as
+  // /api/simulator/run — never parsed out of a library's error string.
+  if (!listScenarios().some((s) => s.id === scenarioId)) {
+    res.status(404).json({ requestId: req.requestId ?? null, error: "not_found", message: "Room-entry scenario not found." });
+    return;
+  }
+
   const token = tokenForTenant(tenantForScenario(scenarioId));
   if (!token) {
-    res.status(500).json({ error: "seed_error", message: "Demo token unavailable for scenario tenant" });
+    res.status(500).json({ requestId: req.requestId ?? null, error: "seed_error", message: "Demo token unavailable for scenario tenant" });
     return;
   }
 
   try {
     const result = runRoomEntry(core, token, scenarioId, { confirmedActionIds, stepUpSatisfied });
-    res.json({ demo: true, ...result });
+    res.json({ requestId: req.requestId ?? null, demo: true, ...result });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "evaluation failed";
-    const unknown = message.startsWith("Unknown scenario");
-    res.status(unknown ? 404 : 400).json({ error: unknown ? "not_found" : "evaluate_failed", message });
+    // Never forward a library's error string into a body: it is unfiltered text
+    // from code this route does not own. It goes to the log under the requestId.
+    logger.error({ err, requestId: req.requestId }, "room-entry evaluation failed");
+    res.status(400).json({ requestId: req.requestId ?? null, error: "evaluate_failed", message: "Room-entry evaluation failed." });
   }
 });
 

@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "mac-objective-loop-plan-rows-unmeasured-needs-cl",
+  "ackedBy": "cloud",
+  "note": "Read in full. This is the loop doing what #1087 (ebf302b9) built: an open row with no re-measured stamp within 14 days is an unknown input and is ranked from nothing, and the escalation is the cloud's work queue, not noise. What I will do: measure the 108 rows against the tree in document order, one bounded PR per tranche, starting with the rows the loop would rank next (17, 18, 19), closing each that is finished work (DONE with the PR/sha, as rows 5/6/8/9/11/14 were on 2026-09-25) and restamping each that is still open with what was measured. No date is backfilled without a measurement. The escalation clears itself as the unmeasured set empties; expect the count to fall across ticks, not in one step.",
+  "ackedAt": "2026-09-26T02:27:58.565Z"
+}

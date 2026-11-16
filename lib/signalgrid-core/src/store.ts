@@ -12,7 +12,10 @@ import type {
   Policy,
   PolicyTest,
   PolicyVersion,
+  ConnectorMode,
+  SignalCategory,
   RemediationAction,
+  StepUpAnswer,
   ResolutionConfig,
   Tenant,
   User,
@@ -21,6 +24,13 @@ import type {
   Workflow,
 } from "./types";
 import { constantTimeEquals } from "./util";
+
+// Codepoint comparison for sorts that must be DETERMINISTIC on any machine.
+// `localeCompare` follows the process locale (sv_SE sorts "ä" after "z", de_DE
+// before it), so two hosts ordered the same input differently; ISO timestamps
+// and ids compare exactly as intended by codepoint. Gated by review:invariants.
+const cmpCodepoint = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
+
 
 /**
  * In-memory, tenant-scoped store.
@@ -52,6 +62,8 @@ export class MemoryStore {
   // constant than the memory it holds:
   //
   //   decisions + snapshots  1x  one snapshot per decision
+  //   stepUpAnswers          1x  at most one per decision; deleted in putDecision's
+  //                              evict callback together with the decision
   //   auditEvents            2x  decision.evaluated + evidence.snapshot.created
   //                              (lib/signalgrid-core/src/decision.ts:157,166)
   //   webhookDeliveries      2x  one per ACTIVE subscribed endpoint — a fan-out
@@ -88,6 +100,9 @@ export class MemoryStore {
   private readonly webhookEndpoints = new Map<string, WebhookEndpoint>();
   private readonly webhookDeliveries = new Map<string, WebhookDelivery>();
   private readonly remediations = new Map<string, RemediationAction>();
+  /** One answer per decision, keyed by decision id — so a second answer for the same
+   *  decision is a collision the caller is told about, not a silent second row. */
+  private readonly stepUpAnswers = new Map<string, StepUpAnswer>();
   private readonly resolutionConfigs = new Map<string, ResolutionConfig>();
   private readonly decisionSeq = new Map<string, number>();
   // Per tenant. `auditTail` deliberately not trimmed: seq must stay monotonic.
@@ -191,6 +206,10 @@ export class MemoryStore {
     return scoped(this.devices.get(id), tenantId);
   }
 
+  listDevices(tenantId: string): Device[] {
+    return [...this.devices.values()].filter((d) => d.tenantId === tenantId);
+  }
+
   findDeviceByRef(tenantId: string, ref: string): Device | undefined {
     return this.deviceByRef.get(refKey(tenantId, ref));
   }
@@ -233,6 +252,83 @@ export class MemoryStore {
     return [...this.connectors.values()].some((row) => (row.mode as string) !== "fixture");
   }
 
+  /**
+   * Per signal CATEGORY: how many signals this process holds and which connector
+   * modes produced them. A deployment fact, like `hasNonFixtureConnector`, so
+   * deliberately unscoped by tenant — and deliberately carrying no id, ref, subject
+   * or tenant, only category names, counts and modes. Nothing here can identify a
+   * device, a person or a customer, which is what lets an unscoped aggregate be
+   * served at all (the same rule /metrics already follows).
+   */
+  signalInventory(): Array<{ category: SignalCategory; signalsHeld: number; modes: ConnectorMode[] }> {
+    const byConnector = new Map<string, ConnectorMode>();
+    for (const connector of this.connectors.values()) byConnector.set(connector.id, connector.mode);
+    const acc = new Map<SignalCategory, { signalsHeld: number; modes: Set<ConnectorMode> }>();
+    for (const signal of this.signals.values()) {
+      let row = acc.get(signal.category);
+      if (!row) {
+        row = { signalsHeld: 0, modes: new Set() };
+        acc.set(signal.category, row);
+      }
+      row.signalsHeld += 1;
+      const mode = byConnector.get(signal.connectorId);
+      // A signal whose connector is GONE keeps its count and contributes no mode:
+      // the category still reports what is held, and an unknown provenance must not
+      // be read as a fixture one.
+      if (mode) row.modes.add(mode);
+    }
+    return [...acc.entries()]
+      .map(([category, row]) => ({ category, signalsHeld: row.signalsHeld, modes: [...row.modes].sort() }))
+      .sort((a, b) => cmpCodepoint(a.category, b.category));
+  }
+
+  /**
+   * Per connector KIND and STATUS: how many connectors this process holds. A
+   * deployment fact, like `signalInventory`, so deliberately unscoped by tenant —
+   * and deliberately carrying no id, ref, subject or tenant, only kind names,
+   * status names and counts. Nothing here can identify a device, a person or a
+   * customer, which is what lets an unscoped aggregate be served at all (the same
+   * rule /metrics already follows).
+   *
+   * A value outside the declared union is returned as the literal string it is,
+   * not coerced: the core reports what it holds, and the exporter decides how an
+   * unrecognised value folds (fail-closed, into `unknown`).
+   */
+  connectorInventory(): Array<{ kind: string; status: string; count: number }> {
+    const acc = new Map<string, { kind: string; status: string; count: number }>();
+    for (const connector of this.connectors.values()) {
+      const kind = String(connector.kind as string);
+      const status = String(connector.status as string);
+      const k = `${kind}\u0000${status}`;
+      const row = acc.get(k) ?? { kind, status, count: 0 };
+      row.count += 1;
+      acc.set(k, row);
+    }
+    return [...acc.values()].sort(
+      (a, b) => cmpCodepoint(a.kind, b.kind) || cmpCodepoint(a.status, b.status),
+    );
+  }
+
+  /**
+   * Per FRESHNESS value: how many normalized signals this process holds. Same
+   * rule as `signalInventory` — unscoped, no id, ref, subject or tenant. Signal
+   * ids are deterministic per source, so a re-sync overwrites in place and these
+   * counts track the latest reading rather than accumulating history. A value
+   * outside `Freshness` is returned as the literal string it is. `age`, when
+   * given, maps a held signal to the freshness the decision path would read it
+   * as at the caller's instant (the store itself never reads a clock).
+   */
+  signalFreshnessInventory(age?: (signal: NormalizedSignal) => string): Array<{ freshness: string; count: number }> {
+    const acc = new Map<string, number>();
+    for (const signal of this.signals.values()) {
+      const freshness = age ? age(signal) : String(signal.freshness as string);
+      acc.set(freshness, (acc.get(freshness) ?? 0) + 1);
+    }
+    return [...acc.entries()]
+      .map(([freshness, count]) => ({ freshness, count }))
+      .sort((a, b) => cmpCodepoint(a.freshness, b.freshness));
+  }
+
   putSyncRun(run: ConnectorSyncRun): void {
     this.syncRuns.set(run.id, run);
   }
@@ -242,7 +338,7 @@ export class MemoryStore {
       .filter(
         (row) => row.tenantId === tenantId && row.connectorId === connectorId,
       )
-      .sort((a, b) => b.startedAt.localeCompare(a.startedAt));
+      .sort((a, b) => cmpCodepoint(b.startedAt, a.startedAt));
   }
 
   // ── Normalized signals ────────────────────────────────────────────────────
@@ -348,6 +444,8 @@ export class MemoryStore {
       const evicted = this.decisions.get(evictId);
       this.decisions.delete(evictId);
       if (evicted) this.snapshots.delete(evicted.evidenceSnapshotId);
+      // The answer is keyed by its decision and bounded by it: dropped here, not filtered on read.
+      this.stepUpAnswers.delete(`${evicted?.tenantId ?? decision.tenantId}::${evictId}`);
       // Counted so /v1/metrics can say its numbers cover a WINDOW, not the whole history.
       this.decisionsEvicted.set(decision.tenantId, (this.decisionsEvicted.get(decision.tenantId) ?? 0) + 1);
     });
@@ -381,7 +479,7 @@ export class MemoryStore {
   listDecisions(tenantId: string): Decision[] {
     return [...this.decisions.values()]
       .filter((row) => row.tenantId === tenantId)
-      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+      .sort((a, b) => cmpCodepoint(b.createdAt, a.createdAt));
   }
 
   putSnapshot(snapshot: EvidenceSnapshot): void {
@@ -415,7 +513,7 @@ export class MemoryStore {
   listWebhookDeliveries(tenantId: string): WebhookDelivery[] {
     return [...this.webhookDeliveries.values()]
       .filter((row) => row.tenantId === tenantId)
-      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+      .sort((a, b) => cmpCodepoint(b.createdAt, a.createdAt));
   }
 
   // ── Remediation ───────────────────────────────────────────────────────────
@@ -437,7 +535,27 @@ export class MemoryStore {
   listRemediations(tenantId: string): RemediationAction[] {
     return [...this.remediations.values()]
       .filter((row) => row.tenantId === tenantId)
-      .sort((a, b) => b.requestedAt.localeCompare(a.requestedAt));
+      .sort((a, b) => cmpCodepoint(b.requestedAt, a.requestedAt));
+  }
+
+  // ── Step-up answers ───────────────────────────────────────────────────────
+  //
+  // At most one per decision, and deleted by putDecision's evict callback when its
+  // decision leaves the FIFO window, so this collection can never outgrow the one
+  // knob. Callers must only put an answer for a retained decision (answerStepUp
+  // 404s first); an answer put for an absent decision would never be evicted.
+
+  putStepUpAnswer(answer: StepUpAnswer): void {
+    this.stepUpAnswers.set(`${answer.tenantId}::${answer.decisionId}`, answer);
+  }
+
+  /** Rows held across all tenants — exists so a proof can measure the collection, not just reads. */
+  stepUpAnswerCount(): number {
+    return this.stepUpAnswers.size;
+  }
+
+  getStepUpAnswer(tenantId: string, decisionId: string): StepUpAnswer | undefined {
+    return scoped(this.stepUpAnswers.get(`${tenantId}::${decisionId}`), tenantId);
   }
 
   // ── Resolution config ─────────────────────────────────────────────────────

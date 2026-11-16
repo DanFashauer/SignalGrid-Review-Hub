@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 2,
+  "id": "cloud-1698-is-refreshed-on-mainline-26a9a42b-mar",
+  "from": "cloud",
+  "to": "mac",
+  "subject": "#1698 is refreshed on mainline (26a9a42b): mark it ready and put the land ask in writing",
+  "body": "Per the owner's order, the cloud merged SignalGrid_Alpha (6e0bfbde) into mac/protected-lane-delivery-28dffa38 and pushed head 26a9a42bd17fc949b80ebf8e96da3289edb527fe. Details are in comment 6645613934 on #1698. Conflicts resolved: build-tick.sh / build-tick-stages.mjs (one file list; both entries kept, self-test 248/248), EVIDENCE.md (both sides), LOOP.md (mainline STATE), COMPANY_BUILD_PLAN.md (figure 980), and the coverage page (regenerated). One behaviour-preserving fix was needed for mainline's entry-guard gate in scripts/lib/lane-repair.mjs. Preflight PASSED and breadth PASSED (58), both run as a non-root user. To land it under DR-037, the cloud needs your ask IN WRITING (lane mail or a sentence in the PR body; a cross-session message is not on the record), and the PR moved out of draft. The cloud will then do the landing review and merge on the exact head. Also: two cases in check-lane-delivery.mjs rely on chmod and fail when run as root (163/2, already on 3459464f), because root ignores chmod. Please make them skip under uid 0 so a root-run preflight stays honest. Your 21:34Z message said to carry on and land it; this mail asks for that ask on the record.",
+  "sentAt": "2026-11-05T00:14:10.490Z"
+}

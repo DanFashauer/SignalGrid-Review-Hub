@@ -5,22 +5,22 @@ Use this checklist for strategic partner, design partner, investor, or potential
 ## Product proof assets
 
 - Review Hub documentation map.
-- Connector Emulator Dashboard.
-- Credential Reader / Smart Locker Dashboard narrative.
-- Connector Emulator Smoke evidence.
+- Connector Emulator Dashboard (a `demo_only` surface per `scripts/launch-profile.mjs` — never presented as shipping product).
+- Credential Reader / Smart Locker Dashboard narrative (`pacs-access` / `custody-beacon` — deferred families; design target, not Limited GA).
+- Connector Emulator Smoke evidence (from that same `demo_only` surface).
 - Autopilot Control Plane.
-- Strategic Buyer / Partner Pitch Pack.
-- Pitch Execution Pack.
-- Synthetic proof commands for simulator, posture, grid, Microsoft Graph sandbox, and connector emulator validation.
+- Strategic Buyer / Partner Pitch Pack — superseded 2026-09-06, do not send; provenance only.
+- Pitch Execution Pack — superseded 2026-09-06, do not send; provenance only.
+- Deterministic, fixture-backed proof commands (`proof:*` in `package.json`) for simulator, posture, grid, Microsoft Graph sandbox, and connector emulator validation.
 
 ## Docs to send
 
 - `docs/EXECUTIVE_ONE_PAGER.md`.
-- `docs/research/PITCH_EXECUTION_PACK.md`.
-- `docs/research/OUTREACH_EMAIL_TEMPLATES.md` if outreach drafts are relevant.
-- `docs/research/FIRST_CALL_TALK_TRACK.md` for call preparation.
+- `docs/research/PITCH_EXECUTION_PACK.md` — superseded 2026-09-06; do not send. Sequence a conversation with `docs/outreach/OPERATING_RULES.md` and `docs/outreach/TARGETS_CRITERIA.md` instead.
+- `docs/research/OUTREACH_EMAIL_TEMPLATES.md` — superseded 2026-08-23; do not send. The live drafts are `docs/outreach/TEMPLATES.md`.
+- `docs/research/FIRST_CALL_TALK_TRACK.md` — superseded 2026-08-23; do not send. Call preparation follows `docs/outreach/OPERATING_RULES.md`.
 - `docs/DEMO_SCRIPT_FOR_PARTNERS.md` for demo alignment.
-- `docs/research/STRATEGIC_BUYER_PARTNER_PITCH_PACK.md`.
+- `docs/research/STRATEGIC_BUYER_PARTNER_PITCH_PACK.md` — superseded 2026-09-06; do not send. Provenance only.
 - `docs/research/BUYER_PARTNER_READINESS_PACK.md`.
 - `docs/research/FOUNDER_CONTROL_REQUIREMENTS.md` when founder-control expectations are relevant.
 - `docs/research/REAL_WORLD_TESTING_READINESS_PLAN.md` when staged validation is relevant.
@@ -53,4 +53,4 @@ Use this checklist for strategic partner, design partner, investor, or potential
 
 ## Guardrails
 
-SignalGrid Review Hub is not production-ready, not compliance-certified, not a current vendor partnership, and not a replacement for IAM, MDM, UEM, PACS, SIEM, ITSM, credential-reader, locker, or other systems of record. It does not claim autonomous production remediation. Current proof is synthetic and fixture-backed. Live integrations require separate private/sandbox validation, owner approval, and safe test boundaries.
+SignalGrid Review Hub is not production-ready, not compliance-certified, not a current vendor partnership, and not a replacement for IAM, MDM, UEM, PACS, SIEM, ITSM, credential-reader, locker, or other systems of record. It does not claim autonomous production remediation. Public proof is deterministic and fixture-backed; live open-source proof (Fleet, Keycloak, RADIUS/NAC) exists in the lab — see DR-013 in `docs/DECISION_RECORDS.md`, `docs/FLEET_LIVE_INTEGRATION.md`, `docs/KEYCLOAK_LIVE_INTEGRATION.md` and `docs/RADIUS_NAC_LIVE_SHAPE_CHECK.md`. Paid-platform integrations require separate private/sandbox validation, owner approval, and safe test boundaries.

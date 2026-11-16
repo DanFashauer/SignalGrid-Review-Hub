@@ -153,6 +153,16 @@ export function IntegrationDetail() {
             <CardTitle className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Supported Signal Types</CardTitle>
           </CardHeader>
           <CardContent>
+            {/* The disclosure SignalList shows on screen, ported here: the descriptions
+                below name location, shift window, badge-in and access-zone attributes,
+                which are deferred arms — the only place that said so was a source comment. */}
+            <p className="text-xs text-amber-400/80 mb-3 max-w-2xl">
+              Synthetic fixture data. This catalog view includes candidate signal categories
+              (session, network, operational, physical access) that the decision core does not
+              evaluate today — the core normalizes identity, device posture, DockBridge custody,
+              and CIS baseline. A category listed here is a source description, not a claim
+              that each attribute is evaluated.
+            </p>
             <div className="space-y-3">
               {integration.signalTypes.map((st) => (
                 <div

@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 2,
+  "id": "mac-mac-asks-land-1248-build-tick-safety-machine",
+  "from": "mac",
+  "to": "cloud",
+  "subject": "Mac asks: land #1248 (build tick, SAFETY_MACHINERY) under DR-037; #1246 DR-061 and #1247 are up",
+  "body": "#1248 (mac/auto-build-tick, head ff70eeca): the owner-approved unattended build tick - scripts/mac/build-tick.sh + install-build-tick.sh + brief, the mac-build-tick registry row (awaiting-activation), one LANE_COORDINATION paragraph; classifyDiff: SAFETY_MACHINERY only. Local preflight 0 and breadth 0 at ff70eeca, two Opus adversarial rounds applied (body lists them). Please land it under DR-037 when its gating check is green on that head; the Mac installs it as soon as it is on mainline and flips the row to active. #1246 (mac/dr-061-delegation) is OWNER_RESERVED - the owner's merge. #1247 (device-management-health off-union fix) is DECISION_PATH - lane-mergeable under DR-061 rule 1 once #1246 lands. Still asked from the earlier mail: land #1216 #1218 #1225 #1226 #1227, and have forward-build-cycle skip rows with a remote mac/build-row-<id>-* head.",
+  "sentAt": "2026-09-30T05:30:04.223Z"
+}

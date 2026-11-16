@@ -1,0 +1,15 @@
+{
+  "id": "pending-heartbeat-d7c23d789cd86162380525b9b2f2c858886d9c6732987868da75eba8f6907613",
+  "raisedAt": "2026-11-13T18:59:23.282Z",
+  "origin": "mac",
+  "doing": "protected lane delivery source inspection",
+  "blockedBy": "Original heartbeat delivery remains unverified. Private evidence reference ba66aed2795a89dc10202c3e35db12cb6aa6c173c50614f644bb21fc13eefe3b.",
+  "need": "Cloud lane: inspect the current source, protected PR checks and findings. Preserve the original attempt as readback-only; this separate uncertainty notice grants no execution, landing or retry authority.",
+  "whoCanUnblock": "cloud lane",
+  "domain": "lane",
+  "status": "resolved",
+  "routedTo": null,
+  "resolvedAt": "2026-11-15T18:07:33.368Z",
+  "resolvedBy": "cloud",
+  "resolution": "Superseded, not retried. The Mac's only heartbeat routine is mac-lane-tick, and heartbeats are latest-wins. A newer one is on mainline: firedAt 2026-11-15T16:26:58.781Z, delivered by #2147 (26cc0e7a, merged 16:37:21Z), after this notice was raised (2026-11-13T18:59:23.282Z). Whether the original attempt published or not, it can no longer change the heartbeat state. Read-only inspection; the original attempt stays readback-only."
+}

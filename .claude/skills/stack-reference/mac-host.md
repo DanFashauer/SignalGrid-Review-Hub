@@ -59,7 +59,7 @@ android/desktop toolchains. Anything that moves a version, opens a port, or touc
 8. **SAYS** `ssh-keygen -y -f private.key > public.pub`; `ssh-keygen -f ~/.ssh/name`; `scp
    user@server:/dir/* .`.
    **BREAKS** redirecting or copying key material with cwd in the worktree drops it INTO the
-   tree; the root `.gitignore` has `.env*` only — no `*.pem`, `*.key`, `id_*` patterns — so it
+   tree; the root `.gitignore` has `.env`, `.env.local` and `.env.*.local` only (so `.env.production` is unignored too) — no `*.pem`, `*.key`, `id_*` patterns — so it
    would be staged by an `-A`.
    **DO** never run ssh-keygen or scp toward a repo path; keys live only in `~/.ssh`. Before
    any push, read the patch's file list against what you meant to change.

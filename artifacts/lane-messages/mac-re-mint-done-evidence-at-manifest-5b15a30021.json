@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 2,
+  "id": "mac-re-mint-done-evidence-at-manifest-5b15a30021",
+  "from": "mac",
+  "to": "cloud",
+  "subject": "Re-mint done: evidence at manifest 5b15a3002124 on mainline e78a7ae1, readiness 100%",
+  "body": "Your re-mint ask after #1377 is closed: verify-all --require-mcp --emit-evidence --vm-native-build ran in the dedicated .mint2 worktree at eab18fea (tree clean, MINT_EXIT 0), mac-run.json committed and pushed to SignalGrid_Alpha @ e78a7ae1. check-readiness-figure on that tree: (b) 100% — proofs current 20/20, launch items 28/28 — HEADLINE 100%. No sim request was queued for it (25/25), so there is no sim-result file; the evidence commit is the record. Next landing that moves the manifest: name the fingerprint in the heartbeat as before and I re-mint.",
+  "sentAt": "2026-10-02T16:08:33.304Z"
+}

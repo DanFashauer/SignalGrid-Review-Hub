@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "cloud-shared-surface-changed-scripts-mac-lane-ti",
+  "ackedBy": "mac",
+  "note": "Read. #846 (7ff0e520) is on mainline; the launchd tick runs scripts/mac/lane-tick.sh from the mainline checkout, so it picks up the coverage re-derive on its next run.",
+  "ackedAt": "2026-09-18T16:04:43.506Z"
+}

@@ -4,6 +4,7 @@
 //   pnpm run sim:run-requests --id <id>    # run one request by id
 //   pnpm run sim:run-requests --plan       # print what would run, run nothing
 //   pnpm run sim:run-requests --rerun      # include requests that already have a result
+//   node scripts/mac/run-requests.mjs --self-test   # the awaiting-landing classifier, both directions
 //
 // THE LOOP THIS CLOSES. The cloud lane cannot execute anything on the owner's
 // Mac, and the Mac lane cannot be reached by CI. Before this, the coordination
@@ -58,6 +59,34 @@ if (idFlag >= 0 && (onlyId === undefined || onlyId.startsWith("--"))) {
 const readJson = (p) => JSON.parse(readFileSync(p, "utf8"));
 const listJson = (dir) =>
   existsSync(dir) ? readdirSync(dir).filter((f) => f.endsWith(".json")).sort() : [];
+
+/** A result that already exists on an UNLANDED origin/mac/tick-* branch is not pending —
+ *  it is AWAITING LANDING, and the request must not run again. (2026-09-25: the loop's
+ *  evidence request was re-run on three consecutive ticks, ~20 min of Mac each, while its
+ *  passing result sat on mac/tick-…193946Z waiting for the cloud to land it; the third
+ *  re-run FAILED and would have replaced the passing result under the same file name.)
+ *  Same lookup objective-loop.mjs uses for queued requests. Pure: every git read is
+ *  injected. Fail-safe direction: unreadable refs or an unparseable branch result mark
+ *  nothing awaiting, so the request runs as before — a re-run wastes a machine; a false
+ *  "awaiting" hides work. Returns Map<id, ref>. */
+export function awaitingOnBranches({ requestFiles, settledIds, listRefs, showResult, readRequest }) {
+  const awaiting = new Map();
+  let refs = [];
+  try { refs = listRefs().filter(Boolean); } catch { return awaiting; }
+  for (const ref of refs) {
+    for (const file of requestFiles) {
+      const id = file.replace(/\.json$/, "");
+      if (settledIds.has(id) || awaiting.has(id)) continue;
+      let res, req;
+      try { res = JSON.parse(showResult(ref, file)); req = readRequest(file); } catch { continue; }
+      if (!res || !req) continue;
+      const answered = (req.runs ?? []).length > 0 && (req.runs ?? []).every((k) =>
+        (res.runs ?? []).some((r) => r.operation === k && EXECUTED_STATUSES.includes(r.status)));
+      if (answered) awaiting.set(id, ref);
+    }
+  }
+  return awaiting;
+}
 
 /** Capture the machine this ran on. Provenance is the whole point of a result:
  *  "the proofs passed" means nothing without "on what, at which commit". */
@@ -179,16 +208,46 @@ function main() {
     }
   }
   const doneIds = settledIds;
+  const awaiting = awaitingOnBranches({
+    requestFiles,
+    settledIds,
+    listRefs: () => {
+      const r = spawnSync("git", ["for-each-ref", "--format=%(refname:short)", "refs/remotes/origin/mac/tick-*"], { cwd: repo, encoding: "utf8" });
+      return r.status === 0 ? r.stdout.split("\n") : [];
+    },
+    showResult: (ref, file) => {
+      const r = spawnSync("git", ["show", `${ref}:artifacts/sim-results/${file}`], { cwd: repo, encoding: "utf8" });
+      return r.status === 0 ? r.stdout : null;
+    },
+    readRequest: (file) => readJson(join(REQ_DIR, file)),
+  });
+  const awaitingRoster = [];
   let ran = 0;
   let considered = 0;
   let anyFailed = false;
+  // The roster --plan prints at the end. See the PENDING block below for why it is
+  // not optional.
+  const pendingRoster = [];
 
   for (const file of requestFiles) {
     const id = file.replace(/\.json$/, "");
     if (onlyId && id !== onlyId) continue;
     if (!rerun && !onlyId && doneIds.has(id)) continue;
+    if (!rerun && !onlyId && awaiting.has(id)) { awaitingRoster.push({ id, ref: awaiting.get(id) }); continue; }
 
-    const req = readJson(join(REQ_DIR, file));
+    let req;
+    try {
+      req = readJson(join(REQ_DIR, file));
+    } catch (e) {
+      // DR-054: a single malformed request file must not throw out of the loop and
+      // silently drop every sibling request queued after it — in the unattended tick
+      // the trace is discarded, so the cloud lane's other work just never ran with
+      // nothing naming the culprit. Name it, keep it PENDING (write NO result), and
+      // fail the run so the exit code and the launchd log both show it.
+      console.error(`\n== request ${id} == does not parse: ${e.message} — skipped, still PENDING`);
+      anyFailed = true;
+      continue;
+    }
     // A superseded request is retired work — but only a VALIDATED retirement
     // skips: the successor must exist, name this request back, and itself be
     // active. Skipping on the field's mere presence let a dangling pointer
@@ -205,6 +264,7 @@ function main() {
       console.log(`\n== request ${id} == supersededBy "${req.supersededBy}" does NOT validate (missing, non-reciprocal, or itself superseded) — running the request; fix the link (check-sim-requests names the problem)`);
     }
     considered += 1;
+    if (plan) pendingRoster.push({ id, runs: req.runs ?? [] });
     console.log(`\n== request ${id} ==`);
     console.log(`   ${req.reason ?? "(no reason recorded)"}`);
     console.log(`   runs: ${req.runs.join(", ")}`);
@@ -249,6 +309,26 @@ function main() {
     ran += 1;
   }
 
+  if (plan) {
+    // THE MACHINE-READABLE ROSTER, and the reason it exists (2026-09-06).
+    // scripts/mac/lane-tick.sh — the unattended 5-minute tick — counts pending work
+    // with `run-requests.mjs --plan … | grep -c '^  PENDING'`. Nothing in this file
+    // could ever print that: the only occurrences of the word were in `//` comments.
+    // The count was therefore 0 on every tick, the tick logged "no pending sim
+    // requests" forever, and step (c) — the single thing the unattended tick exists
+    // to do — never fired once. A grep that cannot match is indistinguishable from
+    // an empty queue, which is the fail-open shape this repo keeps finding.
+    //
+    // One line per request, anchored `^  PENDING <id>`, so `grep -c` counts requests
+    // and nothing else. `scripts/check-sim-scripts-selfcheck.mjs` rule (f) now fails
+    // if a scripts/mac/*.sh anchors a grep at a marker its target cannot print.
+    console.log("");
+    for (const p of pendingRoster) console.log(`  PENDING ${p.id} — runs: ${p.runs.join(", ")}`);
+    console.log(`--plan: ${pendingRoster.length} request(s) PENDING of ${requestFiles.length} on disk; no result written.`);
+  }
+  // Not anchored `^  PENDING`, deliberately: the tick counts PENDING and must not count these.
+  for (const a of awaitingRoster) console.log(`  AWAITING ${a.id} — result already on ${a.ref}, not yet landed; not re-run (the cloud lands it)`);
+
   if (considered === 0) {
     // Never exit silently. The first version printed nothing at all when every
     // request already had a result AND --plan was set, so a caller capturing the
@@ -276,4 +356,31 @@ function main() {
 // caller that CAPTURED its output got silence. Every refusal this runner exists to
 // announce was in that dropped buffer. Setting the code and returning lets Node
 // flush and exit on its own.
-process.exitCode = main();
+function selfTest() {
+  const ok = [];
+  const t = (name, pass) => { ok.push(pass); console.log(`  ${pass ? "ok" : "FAIL"} — self-test: ${name}`); };
+  const files = ["r1.json", "r2.json", "r3.json"];
+  const req = () => ({ runs: ["evidence"] });
+  const passed = JSON.stringify({ runs: [{ operation: "evidence", status: "passed" }] });
+  const refused = JSON.stringify({ runs: [{ operation: "evidence", status: "refused_platform" }] });
+  const base = { requestFiles: files, settledIds: new Set(), listRefs: () => ["origin/mac/tick-A"], readRequest: req };
+  t("a passing result on an unlanded tick branch is AWAITING, not pending",
+    awaitingOnBranches({ ...base, showResult: (ref, f) => (f === "r1.json" ? passed : null) }).get("r1") === "origin/mac/tick-A");
+  t("…a failed result counts too (executed is executed; the cloud reads it)",
+    awaitingOnBranches({ ...base, showResult: () => JSON.stringify({ runs: [{ operation: "evidence", status: "failed" }] }) }).size === 3);
+  t("a REFUSED result on a branch does not close the request — it stays pending",
+    awaitingOnBranches({ ...base, showResult: () => refused }).size === 0);
+  t("a request already settled locally is not reported awaiting",
+    !awaitingOnBranches({ ...base, settledIds: new Set(["r1"]), showResult: () => passed }).has("r1"));
+  t("an unparseable branch result marks nothing (fail-safe: the request runs)",
+    awaitingOnBranches({ ...base, showResult: () => "{not json" }).size === 0);
+  t("unreadable refs mark nothing (fail-safe: the request runs)",
+    awaitingOnBranches({ ...base, listRefs: () => { throw new Error("no remote"); }, showResult: () => passed }).size === 0);
+  t("a result answering only SOME of the request's runs is not awaiting",
+    awaitingOnBranches({ ...base, readRequest: () => ({ runs: ["evidence", "proofs-full"] }), showResult: () => passed }).size === 0);
+  const failed = ok.filter((x) => !x).length;
+  console.log(`\nself-test ${failed ? "FAILED" : "passed"} (${ok.length - failed}/${ok.length})`);
+  return failed ? 1 : 0;
+}
+
+process.exitCode = argv.includes("--self-test") ? selfTest() : main();

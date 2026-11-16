@@ -7,6 +7,7 @@ import {
   type AppVertical,
   type V1AppIntegration,
   type V1AppActionPlan,
+  type V1AppSessionPlan,
 } from "@/lib/v1";
 
 const VERTICAL_LABEL: Record<AppVertical, string> = {
@@ -36,6 +37,20 @@ const DISP_STYLE: Record<V1AppActionPlan["disposition"], string> = {
   step_up: "text-status-step-up border-[hsl(var(--decision-review)/0.3)]",
   blocked: "text-red-400 border-red-400/30",
 };
+
+// Session mode → badge style. `Record<mode, …>` is exhaustive by construction: a
+// mode added to the wire type fails to compile here until it is placed. `hold` is
+// the server's spelling of a `restrict` outcome (lib/app-workflows: restrict → hold)
+// and is mapped explicitly; the runtime fallback for a value outside the union is
+// the MOST restrictive style, never the amber "assist" this used to default to.
+const MODE_STYLE: Record<V1AppSessionPlan["mode"], keyof typeof DISP_STYLE> = {
+  proceed: "auto",
+  assist: "assist",
+  step_up: "step_up",
+  hold: "blocked",
+  deny: "blocked",
+};
+const modeStyle = (mode: string): string => DISP_STYLE[MODE_STYLE[mode as V1AppSessionPlan["mode"]] ?? "blocked"];
 
 export function AppWorkflows() {
   const integrations = useQuery({ queryKey: ["aw-integrations"], queryFn: listAppWorkflowIntegrations });
@@ -87,7 +102,7 @@ export function AppWorkflows() {
               </div>
             </div>
           ))}
-          {!integrations.data && <div className="text-sm text-muted-foreground">Loading catalog…</div>}
+          {!integrations.data && <div className="text-sm text-muted-foreground">{integrations.isError ? "App catalog unavailable — the control plane did not answer." : "Loading catalog…"}</div>}
         </div>
 
         {/* Gated plan */}
@@ -121,7 +136,7 @@ export function AppWorkflows() {
                 <div>
                   {plan.data && (
                     <div className="mb-3 flex flex-wrap items-center gap-2">
-                      <span className={`font-mono text-[0.6rem] uppercase tracking-wider px-1.5 py-0.5 rounded border ${DISP_STYLE[plan.data.plan.mode === "deny" ? "blocked" : plan.data.plan.mode === "proceed" ? "auto" : "assist"]}`}>
+                      <span className={`font-mono text-[0.6rem] uppercase tracking-wider px-1.5 py-0.5 rounded border ${modeStyle(plan.data.plan.mode)}`}>
                         decision · {plan.data.decision.outcome}
                       </span>
                       <span className="font-mono text-[0.6rem] uppercase tracking-wider px-1.5 py-0.5 rounded border border-border text-muted-foreground">
@@ -131,7 +146,12 @@ export function AppWorkflows() {
                   )}
                   {plan.data && <div className="text-xs text-muted-foreground mb-3">{plan.data.plan.summary}</div>}
                   {plan.isLoading && <div className="text-sm text-muted-foreground">Evaluating…</div>}
-                  {plan.error && <div className="text-sm text-red-400">Evaluation failed.</div>}
+                  {plan.error && (
+                    <div className="text-sm text-red-400">
+                      Evaluation failed — no decision was returned, so nothing here is gated open.
+                      <div className="text-xs font-mono text-muted-foreground mt-1">{String(plan.error instanceof Error ? plan.error.message : plan.error)}</div>
+                    </div>
+                  )}
                   {plan.data?.plan.actions.map((a) => (
                     <div key={a.key} className="flex items-center justify-between gap-3 text-xs font-mono py-1.5 border-b border-border/30 last:border-0">
                       <div className="min-w-0">

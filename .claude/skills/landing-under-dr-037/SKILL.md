@@ -1,0 +1,131 @@
+---
+name: landing-under-dr-037
+description: Use when the cloud lane is about to merge its own green product PR, or several in a row — before pressing merge, and before deciding the order they land in.
+---
+
+# Landing a product PR under DR-037
+
+DR-037 (owner-directed 2026-09-12) moved the merge button from the owner to the
+cloud lane: *"I didn't want that on me."* The authority is conditional, and the
+conditions are the whole record. `docs/LANE_COORDINATION.md` protocol item 7 is
+the short form.
+
+## The five conditions — all of them, on the CURRENT head
+
+1. The gating check "Typecheck, build, and proof scaffold" has **passed on that
+   head**. Read the check RUN. A `check_suite.completed` event is not a pass, and
+   a pass on an earlier head is not a pass on this one.
+2. `node scripts/preflight.mjs` and `pnpm run verify:breadth` passed **locally on
+   the branch**, before the push that produced that head, with the output quoted
+   in the PR body or in `docs/agent/EVIDENCE.md`. CI green is necessary, never
+   sufficient (CLAUDE.md, "Before you push").
+3. Every review thread is resolved, and every bot finding was verified against the
+   source and then fixed or answered with the reason. A human reviewer's thread is
+   never resolved by the lane unless the lane addressed it.
+4. The PR is not conflicted with `SignalGrid_Alpha`. A conflict is merged in and
+   regenerated files are regenerated with the repo's own tooling.
+5. The lane never approves, never merges a PR it did not open — except a Mac lane
+   landing PR the Mac asked for in mail — never merges a change to the launch
+   profile, the launch-claims gate or the publication boundary, and never deletes
+   a branch.
+
+A SAFETY_MACHINERY PR (`scripts/**`, `.github/workflows/**`, fixtures) may be
+merged under the same five conditions, and the PR body must say so under "Owner
+decision needed" as "merged under DR-037" with the check-run id.
+
+A DECISION_PATH PR may be merged by a lane under DR-061 (owner-directed
+2026-09-29, in force once its PR is merged) only when, on the CURRENT head, the
+same five conditions hold AND an adversarial review by an Opus-tier agent that did
+not author the change found no unresolved blocking finding AND the body quotes an
+executed counterexample (the command, its failing line on the base, its passing
+line on the head). The body says "DECISION_PATH: merged under DR-061 with check
+run <id>". DR-061 rule 2's paths stay the owner's merge whatever their category:
+`docs/DECISION_RECORDS.md`, `docs/agent/objective.json`, the launch profile, the
+launch-claims gate and its two ceiling ratchets, the publication boundary, every
+path `scripts/check-owner-gated-surfaces.mjs` classifies OWNER_RESERVED (pricing,
+positioning, the buyer-facing site and outreach among them), CLAUDE.md's golden
+rules, and `DecisionEngine.swift` / `AppWorkflows.swift` outside a literal re-port
+the owner has ruled on in a record. A PR touching any of them is the owner's whole.
+
+## Native client and shared-vector PRs
+
+The gating check runs only the static conformance gate (`review-hub-ci.yml`'s
+step, which checks each client HAS a test reading the vectors, not that it
+passes), so a PR that changes `native/shared/**`, `native/android/**`,
+`native/desktop/**` or `native/ios/**` also waits, before merge, for its
+client suites on the current head: "Assist core (pure Kotlin, no SDK)",
+"Android app (assembleDebug)", "Assist core (ubuntu-latest)" and
+"(windows-latest)", "Desktop shell (ubuntu-latest)" and "(windows-latest)",
+"Shared Assist vectors bind every client", the iOS simulator job and "macOS
+native (SwiftPM, no simulator)" — whichever the PR's paths trigger; making
+them required checks is an owner setting. `ios-ci.yml`'s `pull_request`
+trigger runs only for PRs targeting `SignalGrid_Alpha` (line 37), so a
+native PR stacked on another feature branch never runs the iOS simulator or
+macOS-native jobs at all — target `SignalGrid_Alpha` directly, or there is
+nothing to wait for.
+
+## The merge call
+
+Pass the **full 40-character head sha** as `expectedHeadSha`. An abbreviated sha
+is not accepted, and the parameter is the only thing standing between "the head I
+verified" and "whatever the head is now" — re-read the head immediately before the
+call and merge that exact string.
+
+## Order, when several land in a row
+
+Each landing moves generated files, so they land ONE AT A TIME, and the next one
+is rebuilt on top of the last:
+
+1. Merge `SignalGrid_Alpha` into the branch — never rebase, never force anything.
+2. Regenerate ON TOP of the previous landing:
+   ```bash
+   node scripts/generate-sync-manifest.mjs
+   node scripts/check-surface-review-coverage.mjs --write
+   ```
+   Regenerate the coverage page on a CLEAN index only, so the write is the
+   generator's output and not a half-staged tree. Never hand-edit either file.
+3. Resolve a conflict in `docs/agent/LOOP.md` or `docs/agent/EVIDENCE.md` by
+   **keeping both sides**. They are append-only records of two lanes; a dropped
+   entry is a lost record, and the STATE block is edited afterwards, not during
+   the merge.
+4. Re-run `node scripts/preflight.mjs` and `pnpm run verify:breadth` on the merged
+   tree, push, and wait for the check run on the NEW head before merging.
+5. This applies to a Mac tick PR too (lesson L12). Tick PR #1114's coverage page
+   was generated before #1111 added the root `.nojekyll` to mainline; the merge
+   ref's own gating run was green, but mainline's own run failed the
+   surface-read-coverage gate right after the merge landed, because a counted
+   surface (`docs/`, `scripts/`, `artifacts/sim-requests/`, `artifacts/sim-results/`
+   — the mailbox trees `artifacts/lane-messages`, `artifacts/agent-heartbeats`,
+   `artifacts/raised-hands` are not counted) had moved on mainline between the
+   run and the merge. A green merge-ref run is not proof of this: check whether
+   mainline has moved a counted surface since the tick's page was generated, and
+   if so merge `SignalGrid_Alpha` into the tick branch and regenerate (step 2)
+   before merging, exactly as for any other landing.
+
+## After the last one
+
+The manifest has moved N times; the Mac's evidence covers the first of them. Mail
+the Mac lane for **ONE** re-mint, after the last manifest move, naming the final
+fingerprint:
+
+```bash
+pnpm run lane:deliver send "<subject>" "<body>"     # positional; flags here become the subject (see the 2026-11-01 EVIDENCE lesson)
+```
+
+Readiness dimension (b) reads 0 until that re-mint lands — by design
+(`node scripts/check-readiness-figure.mjs`), not a regression to work around. One
+request per batch: a queued request runs the moment the Mac's checkout returns to
+`SignalGrid_Alpha`, so a request written early runs against an intermediate
+manifest and cannot be superseded afterwards.
+
+## Never
+
+- Never merge on CI green alone — condition 2 is the local half.
+- Never merge on a head you have not re-read.
+- Never approve a PR, delete a branch, or merge a launch-profile, launch-claims or
+  publication-boundary change; those stay the owner's.
+- Never hand-edit `artifacts/sync/live-sync-manifest.json` or
+  `docs/agent/SURFACE_REVIEW_COVERAGE.md`.
+- Never land two PRs in parallel that both move the manifest.
+- Never close a landing without the record: the PR body, the `docs/agent/EVIDENCE.md`
+  entry and the LOOP STATE line each name the merged sha.

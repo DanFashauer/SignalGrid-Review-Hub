@@ -1,4 +1,6 @@
 # Issue migration checklist — pre-filled
+> **SUPERSEDED 2026-08-19 — do not execute.** The Phase 6 cutover these records prepared plans the OPPOSITE of the current decision (`docs/PHASE6_CUTOVER_RUNBOOK.md` carries the same banner): `SignalGrid-Review-Hub` is the maintained tree and `DanFashauer/SignalGrid` is legacy, retirement-pending. Kept as a dated record (issues snapshot 2026-07-14); nothing here is pending.
+
 
 Pre-filled from the **live** open issues across the consolidation sources on
 2026-07-14 (cutover prep). Machine snapshot: [`issues-snapshot.json`](./issues-snapshot.json).

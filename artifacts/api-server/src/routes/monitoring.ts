@@ -98,7 +98,7 @@ const POLICIES: Policy[] = [
   {
     id: "pol-med-admin",
     name: "Medication administration",
-    description: "Require a compliant, badge-bound device in custody for controlled workflows.",
+    description: "Require a compliant, badge-bound device in custody for controlled workflows.", // deferred family — fixture catalog data, not Limited GA capability
     workflowPattern: "med-admin*",
     rules: [
       { signal: "identity", condition: "identity.verified == true", outcome: "allow", severity: "high" },

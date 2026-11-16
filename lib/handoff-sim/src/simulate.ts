@@ -24,7 +24,7 @@ import {
   type DeviceDecision,
   type PortableWorkContext,
 } from "@workspace/work-context";
-import { ACTION_RANK, fromTaskException, type ComposableSignal } from "@workspace/posture-composition";
+import { ACTION_RANK, fromTaskException, rankOf, type ComposableSignal } from "@workspace/posture-composition";
 import { evaluateTaskException, normalizeReport } from "@workspace/integrations/task-exception";
 import { releaseHeldTask } from "./release";
 import {
@@ -62,9 +62,12 @@ export function runHandoffScript(script: HandoffScript): HandoffRunResult {
   let deviceRef: string | null = null;
   let deviceSignals: ComposableSignal[] = [];
   let lastDecision: DeviceDecision | null = null;
-  const resolutions: Record<string, string> = {};
-  const holdsMap: Record<string, string> = {};
-  const verifications: Record<string, string> = {};
+  // Null-prototype maps: they are keyed by caller-supplied refs, and a plain `{}`
+  // answers `holdsMap["constructor"]` with an inherited function (review crashed a
+  // run with taskRef "constructor" once holds became lists).
+  const resolutions: Record<string, string> = Object.create(null);
+  const holdsMap: Record<string, string[]> = Object.create(null);
+  const verifications: Record<string, string> = Object.create(null);
 
   const entries: HandoffTraceEntry[] = [];
 
@@ -90,6 +93,10 @@ export function runHandoffScript(script: HandoffScript): HandoffRunResult {
           break;
         }
         case "handoff": {
+          // The device ref lands verbatim in the deep-frozen trace — the audit story —
+          // so it is swept like every other ingress ref (review found it as the one
+          // ingress the "every ref is swept" claim did not cover).
+          refuseCredentialMaterial(step.deviceRef, "handoff.deviceRef");
           const result = reevaluateForDevice(context as PortableWorkContext, step.deviceSignals);
           context = result.nextContext;
           deviceRef = step.deviceRef;
@@ -105,13 +112,21 @@ export function runHandoffScript(script: HandoffScript): HandoffRunResult {
         }
         case "exception": {
           const current = context as PortableWorkContext;
+          // Past the type system (a JSON script) an exception can name no task.
+          // The REPORT still counts: its signal is composed and its entry carried,
+          // so the device and ceiling rise exactly as base did. Only the hold is
+          // skipped — there is no task to hold. (Refusing the whole step dropped a
+          // restrict-grade report and let a later release through: review round 3.)
+          const taskless = typeof step.taskRef !== "string" || step.taskRef.trim().length === 0;
           // The REAL chain, end to end: hardened normalize → fail-safe evaluate →
           // unified-ladder adapter. The simulator invents no verdict of its own.
           const normalized = normalizeReport(deviceRef ?? UNATTRIBUTED_DEVICE, step.raw);
           const verdict = evaluateTaskException(normalized);
           const signal = fromTaskException(verdict);
           const carriedEntry = `${verdict.reasonCode}:${step.exceptionRef}`;
-          const holds = ACTION_RANK[signal.action] >= HOLD_RANK;
+          // Guarded rank: an off-ladder action holds (it ranks above every rung)
+          // rather than `undefined >= 5` quietly not holding.
+          const holds = rankOf(signal.action) >= HOLD_RANK;
 
           // A hold-grade exception is a work transition: the named task moves
           // active→held and the entry joins the travelling exceptions BEFORE the
@@ -126,12 +141,17 @@ export function runHandoffScript(script: HandoffScript): HandoffRunResult {
           refuseCredentialMaterial(step.exceptionRef, "exception.exceptionRef");
           const base = copy(current);
           if (holds) {
-            base.work.activeTaskRefs = base.work.activeTaskRefs.filter((r) => r !== step.taskRef);
-            if (!base.work.heldTaskRefs.includes(step.taskRef)) base.work.heldTaskRefs.push(step.taskRef);
             if (!base.work.unresolvedExceptionRefs.includes(carriedEntry)) {
               base.work.unresolvedExceptionRefs.push(carriedEntry);
             }
-            holdsMap[step.taskRef] = carriedEntry;
+            if (!taskless) {
+              base.work.activeTaskRefs = base.work.activeTaskRefs.filter((r) => r !== step.taskRef);
+              if (!base.work.heldTaskRefs.includes(step.taskRef)) base.work.heldTaskRefs.push(step.taskRef);
+              // Appended, never assigned: a second hold on the same task must not
+              // erase the first (release frees the task only when none is left).
+              const taskHolds = (holdsMap[step.taskRef] ??= []);
+              if (!taskHolds.includes(carriedEntry)) taskHolds.push(carriedEntry);
+            }
           }
           const result = reevaluateForDevice(base, [...deviceSignals, signal]);
           context = result.nextContext;
@@ -147,7 +167,7 @@ export function runHandoffScript(script: HandoffScript): HandoffRunResult {
             reasonCode: verdict.reasonCode,
             recommendedAction: signal.action,
             carriedEntry,
-            taskHeld: holds,
+            taskHeld: holds && !taskless,
           };
           break;
         }
@@ -156,6 +176,7 @@ export function runHandoffScript(script: HandoffScript): HandoffRunResult {
           break;
         }
         case "verify": {
+          refuseCredentialMaterial(step.verificationEvidenceRef, "verify.verificationEvidenceRef");
           verifications[step.exceptionRef] = step.verificationEvidenceRef;
           break;
         }
@@ -166,8 +187,21 @@ export function runHandoffScript(script: HandoffScript): HandoffRunResult {
             verifications,
             currentDeviceDecision: lastDecision,
           });
+          // A released hold leaves the task's list: a stale entry must not let a
+          // later release on THIS task clear the same exception re-raised on another.
+          if (holdsMap[step.taskRef]) {
+            holdsMap[step.taskRef] = holdsMap[step.taskRef].filter((e) => e !== step.exceptionRef);
+          }
           break;
         }
+        default:
+          // The union is exhaustive for the compiler; at the untyped boundary (a
+          // script loaded from JSON) a kind this simulator does not know must be a
+          // REFUSED entry in the audit story, never an "applied" one that did nothing.
+          throw new HandoffSimError(
+            "unknown_step_kind",
+            "cannot apply this step: its kind is not one the simulator knows — recorded as a refusal, never as applied.",
+          );
       }
     } catch (err) {
       // Typed refusals are part of the story; anything else is a bug and escapes.

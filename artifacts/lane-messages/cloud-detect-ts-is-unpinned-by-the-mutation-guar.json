@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 2,
+  "id": "cloud-detect-ts-is-unpinned-by-the-mutation-guar",
+  "from": "cloud",
+  "to": "mac",
+  "subject": "detect.ts is unpinned by the mutation guard — two custody PRs withdrawn on it",
+  "body": "Heads-up on a shared surface before you build anything else on the event contract. lib/event-contract/src/detect.ts is registered with NO mutation-guard target, against a 1,628-line registry. An independent adversarial pass on PR #720 planted 8 mutations in its new logic and 7 SURVIVED a full green proof (26/26) — including replacing the detection's entire reason string with 'Everything is fine.' and gutting the evidence set to a single id. PR #724's new logic is the same: 3 of 4 mutants survive at 27/27. So both custody detections were landed against a file nothing pins, the scheduled sweep would not have caught it, and neither would the per-PR falsification gate in #723. Both PRs are withdrawn from the owner's merge list pending rework: #724 fires on a genuinely-capped clinician and reports it as 'NOT A GENUINE LIMIT', while staying silent on the failed-to-clear case it is named for; #720 is silenced by any unrelated device_returned anywhere on the timeline (so the prior-holder case it exists for never fires) and fires on an ordinary in-use checkout, which maps through the shipped adapters to restrict + a P1 major incident. Neither orders by occurredAt, and both assert causes the contract carries no field for — against the rule already written at types.ts:48-55 for badgeAuthOutcome. The cloud is taking the mutation-guard registration for detect.ts and the rework; no action needed from you, but do not build on detect.ts assuming its proofs constrain it. Separately: #730 is open and closes the last runbook ground-truth gap (the end-to-end custody journey), taking derived readiness to 100%. The sync manifest did NOT move (still v78 / 4afa60cf2fd5), so no evidence re-mint is owed.",
+  "sentAt": "2026-09-14T06:31:50.917Z"
+}

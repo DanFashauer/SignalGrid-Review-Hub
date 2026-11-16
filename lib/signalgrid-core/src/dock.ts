@@ -1,6 +1,7 @@
 import type { MemoryStore } from "./store";
 import { classifyFreshness, deterministicId } from "./util";
 import type { Clock } from "./util";
+import type { AttachState } from "./attach";
 import {
   CoreError,
   type BadgeBindingState,
@@ -49,6 +50,12 @@ export interface DockCustodyRecord {
    * which normalizes to "unknown".
    */
   badgeBinding?: BadgeBindingState;
+  /**
+   * DR-043: whether the credential is seated in its receiver. Optional, and absence
+   * stays absent: a dock that cannot sense the credential emits nothing, which reads
+   * `not_applicable`. Inferring `attached` from silence would fabricate custody.
+   */
+  attachState?: AttachState;
   observedAt: string;
   sourceReference: string;
 }
@@ -74,10 +81,16 @@ export function runDockSync(
 
   const startedAt = clock.now().toISOString();
   let signalsNormalized = 0;
+  // A record whose subject the store does not know is SKIPPED, and a skip is
+  // counted: a run that applied nothing reports "partial", not "success", and the
+  // connector is "degraded", not "healthy" (eighth-round verdict-core finding,
+  // 2026-09-05 — every record skipped used to read as a clean sync).
+  let recordsSkipped = 0;
 
   for (const record of records) {
     const device = store.findDeviceByRef(connector.tenantId, record.deviceRef);
     if (!device) {
+      recordsSkipped += 1;
       continue;
     }
     const freshness = classifyFreshness(
@@ -101,6 +114,9 @@ export function runDockSync(
     // The reader case reports a badge-binding read when present.
     if (record.badgeBinding !== undefined) {
       pairs.push({ category: "badge_binding", value: record.badgeBinding });
+    }
+    if (record.attachState !== undefined) {
+      pairs.push({ category: "attach_state", value: record.attachState });
     }
     for (const pair of pairs) {
       store.putSignal({
@@ -135,12 +151,12 @@ export function runDockSync(
     connectorId: connector.id,
     startedAt,
     completedAt,
-    status: "success",
-    recordsProcessed: records.length,
+    status: recordsSkipped === 0 ? "success" : "partial",
+    recordsProcessed: records.length - recordsSkipped,
     signalsNormalized,
-    note: `DockBridge fixture sync (${connector.ingestionMode ?? "app_in_dock"}): synthetic custody events only, read-only, no dock action.`,
+    note: `DockBridge fixture sync (${connector.ingestionMode ?? "app_in_dock"}): synthetic custody events only, read-only, no dock action.${recordsSkipped === 0 ? "" : ` ${recordsSkipped} of ${records.length} record(s) named a device this tenant does not hold and were skipped.`}`,
   };
   store.putSyncRun(run);
-  store.putConnector({ ...connector, status: "healthy", lastSyncAt: completedAt });
+  store.putConnector({ ...connector, status: recordsSkipped === 0 ? "healthy" : "degraded", lastSyncAt: completedAt });
   return run;
 }

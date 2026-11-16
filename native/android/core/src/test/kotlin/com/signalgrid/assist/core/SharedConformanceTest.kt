@@ -2,6 +2,7 @@ package com.signalgrid.assist.core
 
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -135,6 +136,14 @@ class SharedConformanceTest {
                 val want = expected.map { it.jsonPrimitive.content }
                 if (decision.obligations != want) {
                     failures += "  $id: obligations parsed as ${decision.obligations}, expected $want"
+                }
+            }
+
+            // The id a client must have PARSED: a string pins it, JSON null pins "absent".
+            if ("expectDecisionId" in case) {
+                val want = case["expectDecisionId"]!!.jsonPrimitive.contentOrNull
+                if (decision.decisionId != want) {
+                    failures += "  $id: decisionId parsed as ${decision.decisionId}, expected $want"
                 }
             }
 

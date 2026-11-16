@@ -10,7 +10,7 @@ renderer only where the markdown is plain. Verified 2026-09-04.
 
 1. **SAYS** 403 Forbidden — "access is forbidden to the requested page" (use it whenever the
    caller may not see the thing).
-   **BREAKS** `lib/profile.ts` — "WHY 404 AND NOT 403": a route that exists and refuses still
+   **BREAKS** `artifacts/api-server/src/lib/profile.ts` — "WHY 404 AND NOT 403": a route that exists and refuses still
    answers "does this deployment have a control plane?" A cross-tenant read must be
    indistinguishable from a nonexistent id.
    **DO** 404 in the flat envelope (`error: 'not_found'`) for BOTH "no such id" and "exists
@@ -24,7 +24,7 @@ renderer only where the markdown is plain. Verified 2026-09-04.
    Basic auth, a `WWW-Authenticate` prompt, a second credential path, or a demo key to make
    the request succeed.
 3. **SAYS** 404 Not Found — a harmless client error.
-   **BREAKS** the `GA_ALLOWED_ROUTES` comment in `lib/profile.ts`: the Assist wire MUST sit on
+   **BREAKS** the `GA_ALLOWED_ROUTES` comment in `artifacts/api-server/src/lib/profile.ts`: the Assist wire MUST sit on
    the fence — a gateway that 404s it denies every worker in the building.
    **DO** treat a 404 on `POST /v1/authorize`, `/healthz` or `/readyz` in ANY test or proof
    output as a deny/outage regression. When classifying a route `launch`, add it to

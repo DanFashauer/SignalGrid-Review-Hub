@@ -25,6 +25,7 @@ import type {
 
 export * from "./types";
 export { evaluateBreakGlass } from "./evaluate";
+export * from "./fallback-sequence";
 
 /** A read transport. Deliberately NOT implemented in this repository. */
 export interface BreakGlassReadTransport {

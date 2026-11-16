@@ -115,10 +115,15 @@ const mkSignal = (geofenceState: string, capturedAt: string | null): NormalizedL
 // #12: an inside-geofence fix with NO capture time (or an unparseable one) used
 // to skip the stale guard — only provably-stale fixes were caught — and mint the
 // on_premises/none grant. A membership of unverifiable currency is not "inside".
-for (const [label, at] of [["a null capturedAt", null], ["an unparseable capturedAt", "not-a-date"]] as const) {
-  const w = evaluateLocation(mkSignal("inside", at), NOW_ENUM);
-  check(`inside + ${label} → monitor/UNVERIFIED_LOCATION_FRESHNESS, never on_premises (wedge #12)`,
+{
+  const w = evaluateLocation(mkSignal("inside", null), NOW_ENUM);
+  check("inside + a null capturedAt → monitor/UNVERIFIED_LOCATION_FRESHNESS, never on_premises (wedge #12)",
     w.recommendedAction === "monitor" && w.reasonCode === "UNVERIFIED_LOCATION_FRESHNESS" && w.locatable === false);
+  // A PRESENT but unreadable capture time is graded stale, not unknown (deriveFreshness): it cannot show the fix
+  // current, and in this family stale is the stronger call. It once read monitor here, below a provably-stale fix.
+  const g = evaluateLocation(mkSignal("inside", "not-a-date"), NOW_ENUM);
+  check("inside + an unparseable capturedAt → locate/STALE_LOCATION_FIX, never on_premises and never milder than stale (wedge #12)",
+    g.recommendedAction === "locate" && g.reasonCode === "STALE_LOCATION_FIX");
 }
 
 // #13: a capture time claimed from the FUTURE (beyond clock-skew tolerance) is a
@@ -261,6 +266,28 @@ process.env.LOCATION_MODE = "coarse";
   check("DHCP ingest: a current lease is accepted with observedAt = the lease timestamp", leaseFresh !== null && leaseFresh.observedAt === Date.parse(freshTs) && leaseFresh.buildingId === "BLDG7");
   check("DHCP ingest: a replayed lease from beyond the max age is REFUSED", (await radiusDhcp.ingestDHCP(leaseAt(iso(nowMs - maxAgeMs - 3_600_000)))) === null);
   check("DHCP ingest: a lease expiry creates no presence (unchanged)", (await radiusDhcp.ingestDHCP(leaseAt(freshTs, "expire"))) === null);
+}
+
+// THE MOCK TRANSPORT'S REFUSALS (brace-less guards, joined the sweep in wave 9). `mock-transport.ts`
+// lines for the non-GET and unknown-path refusals survived `if (false)` with this proof green: the
+// connector only ever sends an authorised GET to the one real path, so neither refusal had been
+// driven. They are what makes the mock a faithful stand-in rather than an any-request echo, so a
+// proof that "the connector gets a 405/404 from a real-shaped server" needs them. Driven directly,
+// each with a VALID token so the refusal under test is the only thing standing in the way.
+{
+  const mock = createMockLocationTransport({ fixes: rawFixes, expectedToken: fixture.accessToken, pageSize: 2, baseUrl: BASE_URL });
+  const auth = { authorization: `Bearer ${fixture.accessToken}` };
+  // The request type is GET-only; the cast is how a hostile or buggy caller would arrive.
+  const post = await mock({ method: "POST", url: `${BASE_URL}/locations`, headers: auth } as never);
+  check("mock transport: a non-GET request with a valid token is refused 405, not served", post.status === 405 && post.ok === false && JSON.stringify(await post.json()) === JSON.stringify({ error: "method_not_allowed" }));
+  const other = await mock({ method: "GET", url: `${BASE_URL}/not-locations`, headers: auth });
+  check("mock transport: an unknown path with a valid token is refused 404, not served", other.status === 404 && other.ok === false && JSON.stringify(await other.json()) === JSON.stringify({ error: "not_found" }));
+  const bare = await mock({ method: "GET", url: `${BASE_URL}`, headers: auth });
+  check("mock transport: the bare base URL is not the collection — 404", bare.status === 404);
+  const ok = await mock({ method: "GET", url: `${BASE_URL}/locations`, headers: auth });
+  check("mock transport: NON-VACUITY — the same valid-token GET to the real path IS served (200)", ok.status === 200 && ok.ok === true);
+  const noTok = await mock({ method: "GET", url: `${BASE_URL}/locations`, headers: {} });
+  check("mock transport: no token is refused 401 before the path is looked at", noTok.status === 401);
 }
 
 const total = passed + failures.length;

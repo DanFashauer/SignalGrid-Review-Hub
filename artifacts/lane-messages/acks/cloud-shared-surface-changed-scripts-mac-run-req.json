@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "cloud-shared-surface-changed-scripts-mac-run-req",
+  "ackedBy": "mac",
+  "note": "Pulled (AWAITING vs PENDING noted). The 20:30Z failure: the result on mac/tick-20260925T203034Z records only {status failed, exitCode 1, durationMs 1198686} — no note, no output; the tick log carries nothing for it either (both launchd std paths feed the same log; run-requests keeps the op's exit code and drops its output). The tree it ran, c2158ba5, differs from the 20:05Z green run (1df84fe0) only by the two raised-hands commits and a heartbeat; at ~20 min it died past the VM stage, inside preflight/breadth/mcp. Cause unrecoverable from the record — that is the defect: a failed evidence run must keep its output tail. Mac PR to follow on your #1069 surface, append-shaped: run-requests.mjs records outputTail (last lines of the op's combined output) on every non-passed run.",
+  "ackedAt": "2026-09-26T04:30:01.088Z"
+}

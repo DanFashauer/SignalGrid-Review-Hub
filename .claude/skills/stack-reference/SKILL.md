@@ -17,9 +17,9 @@ to enforce (a fail-open in the Assist gate, a banned command, an exposed port).
 
 This skill is the map of those failures. It was built on 2026-09-04 by holding
 the 215 sheets of the owner-shared Fechin/reference site against this tree —
-nine reader agents, one per domain, each running the doubtful commands on the
+eight reader agents, one per domain, each running the doubtful commands on the
 Mac lane and citing the gate or doctrine that governs — and keeping only the
-CONTRADICTIONS (102 from the sheets; the few found while landing the skill itself
+CONTRADICTIONS (105 from the sheets, counted 2026-09-06; the few found while landing the skill itself
 are marked as such in their own section) plus the items that survived contact. It
 inherits the base `signalgrid` skill and does not repeat it. Intake record:
 `docs/agent/RESOURCE_INTAKE.md` (2026-09-04).
@@ -65,7 +65,7 @@ inherits the base `signalgrid` skill and does not repeat it. Intake record:
 
 | Before you… | Read |
 | --- | --- |
-| write or paste ANY shell — arrays, sed/awk/find/grep, curl, netstat/nc, chmod | `shell.md` (28 contradictions, the largest set) |
+| write or paste ANY shell — arrays, sed/awk/find/grep, curl, netstat/nc, chmod | `shell.md` (29 contradictions, the largest set) |
 | run a git command you did not type yesterday, edit a workflow, use `gh` | `git-ci.md` |
 | touch Docker/podman, compose, Postgres, Redis, nginx, OpenSSL in an image | `containers.md` |
 | install, upgrade, schedule, tunnel or background anything on the Mac | `mac-host.md` |

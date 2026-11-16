@@ -38,7 +38,8 @@ if (!result.ok) throw new Error(result.errors.map((e) => e.message).join("\n"));
 `starterTemplate(vertical)` returns a deep copy (safe to mutate) with one action
 at each disposition: a low-risk **visible read**, an **elevated write**, and a
 **critical** action that is sensitive + gated. `STARTER_TEMPLATES` exposes all
-six at once.
+of them at once — one per `AppVertical` member (seven on 2026-09-06, `government`
+included; count the entries in `lib/app-workflows/src/templates.ts`, not this sentence).
 
 ## Action model (what each field means)
 

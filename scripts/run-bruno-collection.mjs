@@ -28,6 +28,7 @@
 // record, not a committed claim; committed evidence flows through the
 // sim-results loop with provenance).
 import { spawn, spawnSync } from "node:child_process";
+import { createServer } from "node:net";
 import { mkdirSync, readFileSync, rmSync } from "node:fs";
 import { resolve } from "node:path";
 
@@ -36,19 +37,39 @@ const COLLECTION = resolve(repo, "artifacts/api-collection");
 const BRU = resolve(repo, "scripts/node_modules/.bin/bru");
 const SERVER = resolve(repo, "artifacts/api-server/dist/index.mjs");
 const OUT_DIR = resolve(repo, "artifacts/bruno");
-const PORT = 5310;
+// Ephemeral port: the Local environment bakes :5310 for a human at the keyboard, but
+// this runner shares the build Mac with the launchd tick and the self-hosted runner,
+// and a fixed port is a bind race between them (2026-09-25). bru gets the real base
+// URL via --env-var, which overrides the environment file's `baseUrl`.
+// The probe binds the WILDCARD, as the api-server does: a port free on 127.0.0.1 can be
+// held on <eth0> by an outbound connection, and the server then reads EADDRINUSE
+// (2026-10-02, cloud box: 55% of the ephemeral range held by a sibling process).
+const PORT = await new Promise((resolvePort) => {
+  const probe = createServer();
+  probe.listen(0, () => { const p = probe.address().port; probe.close(() => resolvePort(p)); });
+});
 
-function waitForServer(timeoutMs = 15000) {
+// `exitedOf()` reports the child's exit once it has happened. A server that dies at
+// startup (EADDRINUSE on a port another process took between the probe and the bind,
+// a missing build, a throw at import) used to be indistinguishable from a slow one:
+// the runner waited out the whole deadline and printed only "did not answer"
+// (2026-11-08, Mac job 128762340027). It now fails at once, naming the exit.
+function waitForServer(exitedOf, timeoutMs = 15000) {
   const deadline = Date.now() + timeoutMs;
   return new Promise((resolveWait, reject) => {
     const tick = async () => {
+      const exited = exitedOf();
+      if (exited) return reject(new Error(`server exited before answering /healthz (code ${exited.code}, signal ${exited.signal})`));
       try {
-        const res = await fetch(`http://localhost:${PORT}/api/healthz`);
+        // Bounded per probe: a listener that accepts and never answers (another
+        // process holding the port) would otherwise park this loop forever, past
+        // both the exit check and the deadline.
+        const res = await fetch(`http://localhost:${PORT}/api/healthz`, { signal: AbortSignal.timeout(2000) });
         if (res.ok) return resolveWait();
       } catch {
         // not up yet
       }
-      if (Date.now() > deadline) return reject(new Error("server did not answer /healthz in time"));
+      if (Date.now() > deadline) return reject(new Error(`server did not answer /healthz within ${timeoutMs} ms (still running)`));
       setTimeout(tick, 250);
     };
     tick();
@@ -68,7 +89,7 @@ function runBru(target, outFile) {
   // -r: a folder target runs its subfolders too (review-demo/ is ONLY
   // subfolders and executed zero requests without it — the empty-run check
   // below caught that, which is exactly why it exists).
-  const args = ["run", target, "-r", "--env", "Local", "--output", outFile, "--format", "json",
+  const args = ["run", target, "-r", "--env", "Local", "--env-var", `baseUrl=http://localhost:${PORT}/api`, "--output", outFile, "--format", "json",
     "--reporter-skip-all-headers", "--reporter-skip-response-body", "--reporter-skip-request-body"];
   const r = spawnSync(BRU, args, { cwd: COLLECTION, encoding: "utf8" });
   return r;
@@ -120,13 +141,31 @@ async function pass(profile, targets, outPrefix) {
       PATH: process.env.PATH ?? "",
       PORT: String(PORT),
       SIGNALGRID_PRODUCT_PROFILE: profile,
-      LOG_LEVEL: "silent",
+      // "error", not "silent": a listen failure is logged at error level and then
+      // exits, and a silent logger made that exit carry no reason at all.
+      LOG_LEVEL: "error",
     },
-    stdio: "ignore",
+    // Piped, not ignored, so a startup failure can say why. The tail is kept in a
+    // bounded buffer and printed ONLY when the server never became ready; a
+    // healthy pass prints nothing from it. Both pipes are drained continuously
+    // so the child can never block on a full pipe.
+    stdio: ["ignore", "pipe", "pipe"],
   });
+  let output = "";
+  const keep = (chunk) => { output = (output + chunk).slice(-8000); };
+  server.stdout.on("data", keep);
+  server.stderr.on("data", keep);
+  let exited = null;
+  server.on("exit", (code, signal) => { exited = { code, signal }; });
   const problems = [];
   try {
-    await waitForServer();
+    try {
+      await waitForServer(() => exited);
+    } catch (e) {
+      console.error(`  ${profile}: ${e.message} on port ${PORT}`);
+      console.error(output.trim() ? `  server output (last ${output.length} chars):\n${output.trimEnd()}` : "  server output: (none)");
+      throw e;
+    }
     for (const target of targets) {
       const outFile = resolve(OUT_DIR, `${outPrefix}-${target.replaceAll("/", "_").replace(".bru", "")}.json`);
       rmSync(outFile, { force: true });

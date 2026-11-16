@@ -25,6 +25,8 @@ export type AuditEventType =
   | "telemetry.sync.completed_with_errors"
   | "telemetry.sync.failed"
   | "security.webauthn.registered"
+  // A registration refused at the store (today: a revoked credential, by id or key, re-presented).
+  | "security.webauthn.registration.refused"
   | "security.webauthn.step_up.success"
   | "security.webauthn.step_up.failure"
   // Phase 5: SIEM events
@@ -42,7 +44,13 @@ export type AuditEventType =
   | "decision.allow"
   | "decision.deny"
   | "decision.step_up"
-  | "decision.engine_error";
+  | "decision.engine_error"
+  // Data lifecycle (DR-003). The erasure row is a TOMBSTONE: it records that an
+  // erasure of a given size happened, and deliberately carries no subject
+  // identifier — writing one into an append-only ledger in response to a request to
+  // erase it would create a permanent new copy of the very thing being removed.
+  | "data.retention.applied"
+  | "data.subject.erased";
 
 export type Actor = {
   type: "device" | "admin" | "system" | "user";
@@ -50,7 +58,9 @@ export type Actor = {
 };
 
 export type Target = {
-  type: "badge" | "session" | "device" | "policy" | "connector" | "decision";
+  // `tenant` is the target of a lifecycle run: retention and erasure act on a
+  // TENANT'S records, and naming any narrower target would name the subject.
+  type: "badge" | "session" | "device" | "policy" | "connector" | "decision" | "tenant";
   id?: string;
 };
 

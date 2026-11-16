@@ -18,7 +18,14 @@ import type { DeviceRiskTier } from "./types";
  * across the board. So an empty posture maps to `unknown`, which routes the activation
  * to the approver group rather than auto-approving it.
  */
+const KNOWN_TIERS: ReadonlySet<string> = new Set(["ok", "watch", "at_risk", "blocked"]);
+
 export function deviceRiskTierFromPosture(posture: UnifiedPosture): DeviceRiskTier {
-  if (posture.signalCount <= 0) return "unknown";
-  return posture.riskTier;
+  // A count that could not be read is not a count of confirmations. `count <= 0`
+  // read `undefined` and `NaN` as "some signals" and fell through to the tier — the
+  // trusting side. The guard is the positive form: a real, positive number, or unknown.
+  if (typeof posture.signalCount !== "number" || !(posture.signalCount > 0)) return "unknown";
+  // And the tier itself must be one the PIM decision knows. Anything else — a tier
+  // added upstream, a deserialised typo — is unknown, never `ok`.
+  return KNOWN_TIERS.has(posture.riskTier) ? posture.riskTier : "unknown";
 }

@@ -185,13 +185,22 @@ export function extractAuthData(attestationObjectB64: string): Buffer | null {
   }
 }
 
-/** The `signCount` (uint32) from an authenticatorData buffer. */
+/** rpIdHash (32) + flags (1) + signCount (4): the shortest authenticatorData that
+ *  carries the fields the flag and counter readers below address. Anything shorter
+ *  used to THROW out of `readUInt8(32)` — a RangeError, a 500 — instead of refusing. */
+export const AUTH_DATA_MIN_BYTES = 37;
+
+/** The `signCount` (uint32) from an authenticatorData buffer. 0 when the buffer is
+ *  too short to carry one — the same value an always-zero authenticator registers,
+ *  which the counter checks already treat as "no counter to trust". */
 export function readSignCount(authData: Buffer): number {
+  if (authData.length < AUTH_DATA_MIN_BYTES) return 0;
   return authData.readUInt32BE(33);
 }
 
-/** Is the User-Present (UP) flag set in authenticatorData? */
+/** Is the User-Present (UP) flag set in authenticatorData? False when unreadable. */
 export function isUserPresent(authData: Buffer): boolean {
+  if (authData.length < AUTH_DATA_MIN_BYTES) return false;
   return (authData.readUInt8(32) & 0x01) !== 0;
 }
 
@@ -201,7 +210,14 @@ export function isUserPresent(authData: Buffer): boolean {
  * present. A step-up is a high-assurance gate, so the step-up path requires UV.
  */
 export function isUserVerified(authData: Buffer): boolean {
+  if (authData.length < AUTH_DATA_MIN_BYTES) return false;
   return (authData.readUInt8(32) & 0x04) !== 0;
+}
+
+/** The attested credential id, base64url, or null when authData carries none. */
+export function readAttestedCredentialId(authData: Buffer): string | null {
+  const attested = readAttestedCredential(authData);
+  return attested ? attested.credId.toString('base64url') : null;
 }
 
 /**

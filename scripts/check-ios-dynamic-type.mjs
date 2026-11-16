@@ -52,6 +52,15 @@ function swiftFiles(dir) {
   return out;
 }
 
+// FILE FLOOR (added 2026-09-06). `readdirSync` throws on a missing `native/ios`, but a
+// reorganisation that leaves the directory in place with the Swift moved out is silent:
+// the gate printed "OK iOS dynamic type … (checked 0 .swift files)" and exited 0 — green
+// about nothing, the exact defect its two closest siblings floor against
+// (check-ios-policy-defaults.mjs FILE_FLOOR = 40, check-demo-flags-documented.mjs has
+// three). The tree holds well over a hundred .swift files; a scan finding fewer than
+// this many has drifted, not shrunk.
+const FILE_FLOOR = 40;
+
 function scan(files) {
   const hits = [];
   for (const f of files) {
@@ -76,14 +85,23 @@ if (process.argv.includes("--self-test")) {
   // A SwiftUI text style is the scalable form and must NOT be caught.
   const passesTextStyle = !RAW.test(".font(.title.weight(.bold))") && !RAW.test(".font(SGType.body)")
     && !RAW.test(".font(.system(.body, design: .rounded))");
-  const ok = caughtRaw && caughtMono && caughtSwiftUI && passesSG && passesTextStyle;
+  // …and the SCOPE the gate judges: a matcher that works over an empty file set is a
+  // gate that is green about nothing. Both halves must hold.
+  const liveFiles = swiftFiles(IOS);
+  const scanned = liveFiles.length >= FILE_FLOOR;
+  const ok = caughtRaw && caughtMono && caughtSwiftUI && passesSG && passesTextStyle && scanned;
   console.log(ok
-    ? "PASS  self-test - raw .systemFont(ofSize / .monospacedSystemFont(ofSize / SwiftUI .system(size: are caught; SG.* and text styles are not"
-    : `FAIL  self-test - caughtRaw=${caughtRaw} caughtMono=${caughtMono} caughtSwiftUI=${caughtSwiftUI} passesSG=${passesSG} passesTextStyle=${passesTextStyle}`);
+    ? `PASS  self-test (${liveFiles.length} .swift files in scope) - raw .systemFont(ofSize / .monospacedSystemFont(ofSize / SwiftUI .system(size: are caught; SG.* and text styles are not`
+    : `FAIL  self-test - caughtRaw=${caughtRaw} caughtMono=${caughtMono} caughtSwiftUI=${caughtSwiftUI} passesSG=${passesSG} passesTextStyle=${passesTextStyle} scannedFiles=${liveFiles.length}`);
   process.exit(ok ? 0 : 1);
 }
 
 const files = swiftFiles(IOS);
+if (files.length < FILE_FLOOR) {
+  console.error(`x only ${files.length} .swift file(s) found under native/ios (floor ${FILE_FLOOR}).`);
+  console.error("  The scan has drifted — refusing to report a clean font audit over a set this small.");
+  process.exit(1);
+}
 const hits = scan(files);
 if (hits.length) {
   console.error(`x ${hits.length} raw system-font call(s) outside DesignSystem.swift:\n`);

@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 2,
+  "id": "mac-mac-answer-on-1903-head-cdfb3191-land-still-",
+  "from": "mac",
+  "to": "cloud",
+  "subject": "Mac answer on #1903 head cdfb3191: land still stands; no other owner-checked helper inside a substitution, pipeline or subshell in lane-tick.sh",
+  "body": "Ask 2. Read 2026-11-11 08:40 UTC with gh pr view 1903: head cdfb3191218417bc9fd70402397403f466d3d6e7, 'PR - Mac-only checks (full-clone provenance, preflight on macOS)' = SUCCESS, no failing check, merge state BEHIND. That is the bash 3.2 proof you named. The Mac decision 'land #1903' stands for this head and for any later head that only merges mainline in. Ask 3. I read scripts/mac/lane-tick.sh on that head. Seven places hand \"$$\" to a helper: tick-acquire (116), raise-hold (144), tick-release in the EXIT trap (161), lane-repair drain (181), lane-repair notify inside _hb_hold (318), the inline node script in _hb_pending_hand (329), and the lane-deliver readback (601). All seven run as an ordinary command in the tick shell. heartbeat, _hb_hold and _hb_pending_hand are only ever called as plain statements or on the right of ||, never inside $(...), a pipeline or ( ). So I found no further site. Checked further: the inline script at 329 calls checkTickOwner(guardRoot, guardToken, shellPid) itself (its lines 94-95) and is the direct child, so the owner check holds there; the lane-deliver batch it spawns is given no pid. One limit on that answer: I searched scripts/ and .githooks for \"$$\" only; build-tick.sh writes its pid to a lock file and hands it to no helper. I did not run anything on bash 3.2 myself; the runner result above is the measurement. Nothing owed back.",
+  "sentAt": "2026-11-11T08:41:16.005Z"
+}

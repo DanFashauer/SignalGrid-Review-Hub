@@ -59,10 +59,24 @@ export function evaluateScenario(
   };
 }
 
+/**
+ * CODEPOINT order, never `localeCompare` — in a function whose name is the claim.
+ *
+ * `String.prototype.localeCompare` follows the process locale and the ICU build:
+ * sv_SE orders "a" after "z", de_DE before it, and at primary strength ICU can
+ * ignore punctuation entirely, so `a-b` and `ab` compare equal. Two machines with
+ * different ICU data therefore hash the SAME results to DIFFERENT digests, and the
+ * one thing this function exists to provide is that they do not. The current 15
+ * scenario ids happen to order identically both ways (measured 2026-09-06 — the
+ * digest is unchanged by this edit), which is exactly why it survived: the defect
+ * is dormant until an id arrives with a character the two orders disagree on.
+ */
 export function deterministicHash(results: EvaluationResult[]): string {
   return createHash("sha256")
     .update(
-      JSON.stringify([...results].sort((a, b) => a.id.localeCompare(b.id))),
+      JSON.stringify(
+        [...results].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)),
+      ),
     )
     .digest("hex");
 }
@@ -95,6 +109,22 @@ function decide(s: ConnectorScenario): { decision: Decision; reason: string } {
       reason: "NETWORK_ZONE_MISMATCH_HIGH_RISK_APP",
     };
   if (s.group === "credentialReader") {
+    // Evidence the reader family DECLARES but the old decide() never read: a
+    // degraded/unknown/absent read confidence and an unreadable badge-event time
+    // were both waved through to allowCandidate. A field that exists and is never
+    // read is worse than one that is absent — the fixture looked like it carried
+    // recency and confidence evidence. Unknown tightens, never loosens.
+    if (
+      s.credentialConfidence === undefined ||
+      s.credentialConfidence === "degraded" ||
+      s.credentialConfidence === "unknown"
+    )
+      return { decision: "stepUp", reason: "CREDENTIAL_CONFIDENCE_DEGRADED_OR_UNKNOWN" };
+    if (
+      typeof s.badgeEventObservedAt !== "string" ||
+      !Number.isFinite(Date.parse(s.badgeEventObservedAt))
+    )
+      return { decision: "stepUp", reason: "BADGE_EVENT_TIME_UNREADABLE" };
     if (
       s.identityCorrelationState === "unresolved" ||
       s.actorResolved === false
@@ -112,11 +142,18 @@ function decide(s: ConnectorScenario): { decision: Decision; reason: string } {
         decision: "restrict",
         reason: "CREDENTIAL_WORKFLOW_ASSIGNMENT_MISMATCH",
       };
+    // POSITIVE members only. The zone guards above test the BAD member ("wrong",
+    // "mismatch"), so "unknown" slipped past them and neither allow arm re-checked
+    // it: a reader offline or a segmentation lookup timing out (200-with-null from
+    // the real vendor) was emulated as an allow candidate. Same shape as
+    // `s.identity === "healthy"` below, which was already written correctly.
     if (
       s.credentialReadState === "valid" &&
       s.identityCorrelationState === "resolved" &&
       s.custodyCorrelationState === "matched" &&
-      s.deviceCompliance === "compliant"
+      s.deviceCompliance === "compliant" &&
+      s.custodyZone === "expected" &&
+      s.networkZone === "expected"
     )
       return {
         decision: "allowCandidate",
@@ -130,7 +167,9 @@ function decide(s: ConnectorScenario): { decision: Decision; reason: string } {
   if (
     s.identity === "healthy" &&
     s.deviceCompliance === "compliant" &&
-    s.edrRisk === "low"
+    s.edrRisk === "low" &&
+    s.custodyZone === "expected" &&
+    s.networkZone === "expected"
   )
     return {
       decision: "allowCandidate",

@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "cloud-sg-stack-556-landed-on-alpha-docker-fix-li",
+  "ackedBy": "mac",
+  "note": "Pulled. Engine split done on my side: scripts/lib/container-engine.sh is docker-first with a self-test that fails on header/loop drift (e6cc4952). NOT edited: scripts/lib/container-engine.mjs still argues podman-first in its header — your file; the twins now disagree in prose until you flip it. mac-run.json refreshed.",
+  "ackedAt": "2026-09-10T16:12:17.667Z"
+}

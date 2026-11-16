@@ -28,6 +28,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { maskSource, scanSource, clockSelfTestChecks, CONFUSER_WRAPS } from "./lib/clock-spellings.mjs";
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const failures = [];
@@ -100,9 +101,15 @@ const DECLARED_CLOCK_READS = new Map([
   [
     "lib/integrations/src/",
     {
-      count: 20,
+      count: 64,
       reason:
         "Connector boundary. Fixture/demo enrolment and last-seen timestamps, and freshness computed " +
+        "AT the boundary where wall-clock is the input being read. The 21st and 22nd (2026-09-06) are " +
+        "deviceRegistry.isAllowed on BOTH backends: the allowlist freshness bound reads the clock once " +
+        "at the boundary and hands it to the pure isAllowedByPolicy(now), which proof:device-registry " +
+        "drives with a fixed clock — the answer is 'fresh enrolment or not', never a verdict. Before " +
+        "2026-09-06 lastSeenAt was stamped and never consulted, so this pair is the read that was " +
+        "missing, not one that crept in. Original wording continues: freshness computed " +
         "AT the boundary where wall-clock is the input being read — not a decision path. The decision " +
         "core receives the derived Freshness value and never reads a clock itself. " +
         "The 23rd (2026-08-24) is the default argument of telemetry/store.ts getPostureForHost(), " +
@@ -122,7 +129,20 @@ const DECLARED_CLOCK_READS = new Map([
         "several signatures. The read is REMOVED, not injected and not moved: the instant is derived " +
         "from the payload's own `timestamp` (minted once per delivery in dispatch.ts buildPayload), and " +
         "an unresolvable instant now throws WebhookTimestampUnresolvable rather than falling back to " +
-        "the clock. sign.ts reads no clock at all; `proof:webhooks` asserts the refusal by name.",
+        "the clock. sign.ts reads no clock at all; `proof:webhooks` asserts the refusal by name. " +
+        "RE-MEASURED 22 -> 64 LINES holding a read (2026-10-17, the gate learned the spellings " +
+        "scripts/lib/clock-spellings.mjs lists; golden rule 2). The pin counts LINES, not reads: a second " +
+        "read on a line already counted does not move it. The 22 counted only Date.now()/Math.random(). " +
+        "On the same tree the scan finds Date.now() 24 + Math.random() 1 = 25 of those (+3: the old " +
+        "masker lost siem/sentinel.ts's OAuth token-cache expiry Date.now() at lines 243/251/259, after " +
+        "the `https://${…}` template literals at 105/172/219 desynced it, so they were never counted; " +
+        "same cache-expiry shape as telemetry/store.ts above) + argless `new Date()` 29 (receivedAt / " +
+        "createdAt / lastSeenAt stamps on SIEM, syslog, ITSM and registry records, the x-ms-date header, " +
+        "and device-management-health's injected `now: () => new Date()` default) + crypto " +
+        "randomUUID()/randomBytes() 10 (correlation, event and delivery ids, the ITSM IV, webhook " +
+        "secrets). 25 + 29 + 10 = 64. The one Math.random() is webhooks/retry.ts backoff jitter. Each is " +
+        "an identifier, timestamp or backoff at the connector boundary; none feeds a verdict. The jitter " +
+        "and the ids are non-deterministic by design, which is why they live HERE and not in the core.",
       retires: "When connector fixtures move to injected clocks, this drops to the freshness derivations only.",
     },
   ],
@@ -150,7 +170,7 @@ const DECLARED_CLOCK_READS = new Map([
   [
     "lib/webauthn/src/",
     {
-      count: 13,
+      count: 21,
       reason:
         "Challenge and step-up session expiry. An expiry check is inherently clock-dependent; the risk " +
         "here was never the read but its DIRECTION, which is now gated separately by " +
@@ -158,8 +178,46 @@ const DECLARED_CLOCK_READS = new Map([
         "12 -> 13 on 2026-08-24: verifyStepUp compared bare Date objects (`new Date(a) < new Date()`), " +
         "which reads an unparseable expiry as VALID; closing it required an explicit Date.now() beside a " +
         "finiteness check. This pin is what surfaced the delta — the fix was written, preflight failed on " +
-        "the count, and the number was re-stated deliberately rather than drifting.",
+        "the count, and the number was re-stated deliberately rather than drifting. " +
+        "RE-MEASURED 13 -> 21 LINES holding a read (2026-10-17, the spellings scripts/lib/clock-spellings.mjs " +
+        "lists; the pin counts lines, not reads). The 13 are Date.now() 12 + Math.random() 1 (the store " +
+        "lock's retry jitter, store.ts:250). Two of the 12 Date.now() lines carry a second read: " +
+        "stepUpStore.ts:119 (`su_${Date.now()}_${randomBytes(16)…}`) and store.ts:228 " +
+        "(`${Date.now()}-${randomUUID()}` lock token) are each ONE counted line holding two reads. The " +
+        "other 8 are argless `new Date()` 6 (ISO timestamps on credentials, challenges and step-up " +
+        "records, and stepUpStore.ts:160, which mints the session's expiresAt; the expiry COMPARISONS " +
+        "are the Date.now() lines at :208 and :225) and crypto randomBytes() 2 (server.ts:43 " +
+        "generateChallenge() and :50 generateCredentialId(), 32 bytes each, whose whole job is to be " +
+        "unpredictable). That is 4 CSPRNG sites in all, counting stepUpStore.ts:119 and store.ts:228. " +
+        "No verdict reads any of them.",
       retires: "When step-up moves to an injected clock for testability, this drops to the store TTLs.",
+    },
+  ],
+  [
+    "lib/verdict-attestation/src/",
+    {
+      count: 1,
+      reason:
+        "attest.ts `options.nonce ?? randomUUID()` (2026-10-17, first counted when the gate learned the " +
+        "imported-randomBytes/randomUUID spelling). The nonce is the attestation's replay-uniqueness " +
+        "value and must be unpredictable; it is minted at the signing boundary, is an INJECTABLE option " +
+        "(`options.nonce`, so a proof can fix it), and is not an input to the verdict being attested.",
+      retires: "When every caller supplies the nonce from an injected source, this drops to zero and the entry goes.",
+    },
+  ],
+  [
+    "lib/audit/src/",
+    {
+      count: 2,
+      reason:
+        "appendAuditRecord() in index.ts holds two lines (2026-10-17, first counted: the argless-Date " +
+        "spelling at :151 and the imported uuid generator at :156; a regex literal holding a quote had " +
+        "also blinded the old masker for the rest of that file). :151 `new Date().toISOString()` stamps " +
+        "the ledger entry: an append-only audit ledger records WHEN a thing was written, the instant is " +
+        "the datum being recorded, and no decision reads it back as an input. :156 `id: uuidv4()` " +
+        "(`v4 as uuidv4` from `uuid`) mints the record's id; a random id is the point of the field, and " +
+        "the hash chain is over the content, not over the id's value being predictable.",
+      retires: "When appendAuditRecord takes an injected clock (as the hash chain's proof already wants).",
     },
   ],
 ]);
@@ -168,7 +226,9 @@ const inAny = (f, prefixes) => prefixes.some((p) => f.startsWith(p));
 
 // Strip line/block comments so textual scans don't trip on prose in comments.
 // Block comments are blanked in place (newlines preserved) so reported line
-// numbers stay accurate.
+// numbers stay accurate. Used only by the catalog and `.attested` checks below;
+// every scan that must also see through string/template/regex literals goes
+// through maskedFor() and the shared masker instead.
 function stripComments(src) {
   return src
     .replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, " "))
@@ -177,46 +237,22 @@ function stripComments(src) {
     .join("\n");
 }
 
-// Blank the TEXT of string and template literals (keeping delimiters + newlines,
-// so offsets and line numbers are preserved) so that braces or keywords inside a
-// literal are never mistaken for code structure. Template `${…}` expressions are
-// real code and are left intact via a small mode stack. This is what lets the
-// brace matcher below bound switch blocks correctly even when a `case` body
-// contains a string like `"}"` or a backtick template with `{`.
-function maskLiterals(src) {
-  const arr = src.split("");
-  const n = src.length;
-  const blank = (k) => { if (arr[k] !== "\n") arr[k] = " "; };
-  const stack = [{ mode: "code", depth: 0 }];
-  let i = 0;
-  while (i < n) {
-    const top = stack[stack.length - 1];
-    const c = src[i];
-    if (top.mode === "code") {
-      if (c === "\\") { i += 2; continue; }
-      if (c === "'") { stack.push({ mode: "sq" }); i++; continue; }
-      if (c === '"') { stack.push({ mode: "dq" }); i++; continue; }
-      if (c === "`") { stack.push({ mode: "tmpl" }); i++; continue; }
-      if (c === "{") { top.depth++; i++; continue; }
-      if (c === "}") {
-        if (top.depth === 0 && stack.length > 1) { stack.pop(); i++; continue; } // close ${…}
-        top.depth--; i++; continue;
-      }
-      i++; continue;
-    }
-    if (top.mode === "sq" || top.mode === "dq") {
-      const q = top.mode === "sq" ? "'" : '"';
-      if (c === "\\") { blank(i); blank(i + 1); i += 2; continue; }
-      if (c === q) { stack.pop(); i++; continue; }
-      blank(i); i++; continue;
-    }
-    // template literal
-    if (c === "\\") { blank(i); blank(i + 1); i += 2; continue; }
-    if (c === "`") { stack.pop(); i++; continue; }
-    if (c === "$" && src[i + 1] === "{") { stack.push({ mode: "code", depth: 0 }); i += 2; continue; }
-    blank(i); i++;
+// The shared masker (scripts/lib/clock-spellings.mjs) blanks comments and literal
+// text, and REPORTS a file it can no longer follow. A file it loses the thread on
+// is recorded here and fails the "scannable" check below, so a misread never
+// reads as a clean scan on any check that uses it (switch, clock, collation).
+const unscannable = new Map();
+// A file that cannot be read is recorded the same way: it is not an empty (clean) file.
+const readOrRecord = (f) => {
+  try { return readFileSync(resolve(repo, f), "utf8"); } catch (e) {
+    if (!unscannable.has(f)) unscannable.set(f, [{ line: 0, what: `cannot be read: ${e.code ?? e.message}` }]);
+    return "";
   }
-  return arr.join("");
+};
+function maskedFor(f, src = readOrRecord(f)) {
+  const m = maskSource(src, true);
+  if (m.problems.length && !unscannable.has(f)) unscannable.set(f, m.problems);
+  return m.text;
 }
 
 // Find every `switch (...) { … }` block (including nested ones) with proper,
@@ -249,6 +285,23 @@ function findSwitchBlocks(code) {
 // Every `switch (...) { ... }` in a scanned lib must contain its OWN `default:`
 // arm. Returns the 1-based line numbers of switches that lack one. `code` must
 // already be comment-stripped and literal-masked. Extracted so check 1 and the
+// Locale-dependent collation in a deterministic path. `localeCompare` follows the
+// PROCESS locale — verified: sv_SE sorts "ä" after "z", de_DE before it, en-US
+// case-folds — so the same input orders differently on another machine, and
+// "deterministic" quietly means "on this laptop". Two packages had already fixed
+// it with a comment (adaptive-proposals, recommendations) and two more had not
+// (signal-radar, signal-discovery, both shipping, both caller-fed over HTTP): the
+// rule stopped at its own edge until it became a check. Runs over the same
+// comment-stripped, literal-masked text as the clock scan, so a comment that
+// NAMES the method, or a string containing it, is not a hit.
+function localeCompareViolations(code) {
+  const hits = [];
+  code.split("\n").forEach((line, idx) => {
+    if (/\.localeCompare\s*\(/.test(line)) hits.push(idx + 1);
+  });
+  return hits;
+}
+
 // self-test exercise the same matcher.
 function switchViolations(code) {
   const blocks = findSwitchBlocks(code);
@@ -295,7 +348,7 @@ if (process.argv.includes("--self-test")) {
 
   // A default-less switch is flagged; a defaulted one is not — the matcher check 1
   // relies on. Run through the same mask/strip path check 1 uses.
-  const prep = (src) => maskLiterals(stripComments(src));
+  const prep = (src) => maskSource(src, true).text;
   checks.push([
     "a switch with NO default arm is flagged",
     switchViolations(prep("function f(x){ switch (x) { case 1: return 1; } }")).length === 1,
@@ -311,6 +364,38 @@ if (process.argv.includes("--self-test")) {
     PURE_LIBS.length >= 8 && PURE_LIBS.every((p) => existsSync(resolve(repo, p))),
   ]);
 
+  // A locale-dependent sort is flagged; a comment naming it and a string containing it are not.
+  checks.push([
+    "a localeCompare sort is flagged",
+    localeCompareViolations(prep("items.sort((a, b) => a.id.localeCompare(b.id));")).length === 1,
+  ]);
+  checks.push([
+    "a comment that NAMES localeCompare is not flagged",
+    localeCompareViolations(prep("// codepoint order, not localeCompare, whose collation follows the locale\nitems.sort();")).length === 0,
+  ]);
+  checks.push([
+    "a string literal containing localeCompare is not flagged",
+    localeCompareViolations(prep('const why = "a.localeCompare(b) is locale-dependent";')).length === 0,
+  ]);
+
+  // A default-less switch and a localeCompare each stay VISIBLE behind a confuser
+  // that used to blind the shared masker (i++ / 2 then a slash in a string; a
+  // regex holding a quote or backtick after `if (...)` / `else`).
+  for (const [name, wrap] of CONFUSER_WRAPS) {
+    checks.push([
+      `a default-less switch behind a confuser is still flagged: ${name}`,
+      switchViolations(prep(wrap("function f(x){ switch (x) { case 1: return 1; } }"))).length === 1,
+    ]);
+    checks.push([
+      `a localeCompare behind a confuser is still flagged: ${name}`,
+      localeCompareViolations(prep(wrap("items.sort((a, b) => a.id.localeCompare(b.id))"))).length === 1,
+    ]);
+  }
+
+  // One planted case per clock/randomness pattern, every blind-spot plant, prose
+  // that must not count, and desync sources the masker must report.
+  checks.push(...clockSelfTestChecks(scanSource));
+
   // A clock read in a package OUTSIDE the pinned set is flagged as undeclared.
   const undecl = classifyClockReads(
     new Map([["lib/not-a-declared-pkg/src/", ["lib/not-a-declared-pkg/src/x.ts:5"]]]),
@@ -323,7 +408,17 @@ if (process.argv.includes("--self-test")) {
     new Map([[firstDeclared, Array(DECLARED_CLOCK_READS.get(firstDeclared).count + 1).fill("x")]]),
     DECLARED_CLOCK_READS,
   );
-  checks.push(["a declared count that no longer matches is drift", drift.drifted.length === 1]);
+  checks.push(["MORE clock reads than declared is drift", drift.drifted.length === 1]);
+  const fewer = classifyClockReads(
+    new Map([[firstDeclared, Array(DECLARED_CLOCK_READS.get(firstDeclared).count - 1).fill("x")]]),
+    DECLARED_CLOCK_READS,
+  );
+  checks.push(["FEWER clock reads than declared is drift (the pin fails in both directions)", fewer.drifted.length === 1]);
+  // Every declared package named by the widened-spelling work is present and pinned.
+  checks.push([
+    "verdict-attestation and audit carry declared, reasoned entries",
+    ["lib/verdict-attestation/src/", "lib/audit/src/"].every((k) => (DECLARED_CLOCK_READS.get(k)?.reason ?? "").length > 40),
+  ]);
   // A declared package that reads NO clock is a stale exemption.
   const staleR = classifyClockReads(new Map(), DECLARED_CLOCK_READS);
   checks.push(["a declared package that no longer reads a clock is stale", staleR.stale.length === DECLARED_CLOCK_READS.size]);
@@ -352,7 +447,7 @@ if (process.argv.includes("--self-test")) {
   for (const f of files) {
     // Mask literals AFTER stripping comments so neither prose nor string/template
     // contents can spoof (or hide) a `{`, `}`, `switch`, or `default:`.
-    const code = maskLiterals(stripComments(read(f)));
+    const code = maskedFor(f);
     for (const line of switchViolations(code)) violations.push(`${f}:${line}`);
   }
   if (violations.length) bad(`Fail-closed: switch without a default arm in a planner lib — ${violations.join(", ")}`);
@@ -364,20 +459,22 @@ if (process.argv.includes("--self-test")) {
   const scope = determinismScope();
   const files = tracked.filter((f) => isTs(f) && inAny(f, scope));
   // LITERALS ARE MASKED as well as comments. This scan used stripComments alone
-  // while check 1 above used maskLiterals(stripComments(...)) — a difference that
+  // while check 1 above used the literal-masking pass — a difference that
   // did not matter while the scope was eight planner libs and matters immediately
   // at thirty-four packages, where a string containing the text of a clock call
   // would be reported as a clock call.
   const byPackage = new Map();
   for (const f of files) {
-    const code = maskLiterals(stripComments(read(f)));
-    code.split("\n").forEach((line, idx) => {
-      if (/\b(Date\.now|Math\.random)\s*\(/.test(line)) {
-        const pkg = scope.find((p) => f.startsWith(p)) ?? f;
-        if (!byPackage.has(pkg)) byPackage.set(pkg, []);
-        byPackage.get(pkg).push(`${f}:${idx + 1}`);
-      }
-    });
+    // The spellings live in scripts/lib/clock-spellings.mjs, shared with
+    // safety-check.mjs check 1: Date.now/Math.random AND their bracket,
+    // destructured, argless-Date, crypto, performance and hrtime forms.
+    const scanned = scanSource(readOrRecord(f));
+    if (scanned.problems.length && !unscannable.has(f)) unscannable.set(f, scanned.problems);
+    for (const line of scanned.lines) {
+      const pkg = scope.find((p) => f.startsWith(p)) ?? f;
+      if (!byPackage.has(pkg)) byPackage.set(pkg, []);
+      byPackage.get(pkg).push(`${f}:${line}`);
+    }
   }
 
   // An exemption for a package that no longer reads the clock at all has outlived
@@ -401,6 +498,152 @@ if (process.argv.includes("--self-test")) {
         `${byPackage.size} with declared clock reads (${declaredTotal} pinned), ` +
         `${scope.length - byPackage.size} at zero`,
     );
+  }
+}
+
+// 2b — collation in the pure planners follows the machine, not the code ───────
+{
+  const scope = determinismScope();
+  const files = tracked.filter((f) => isTs(f) && inAny(f, scope));
+  const hits = [];
+  for (const f of files) {
+    for (const line of localeCompareViolations(maskedFor(f))) hits.push(`${f}:${line}`);
+  }
+  if (hits.length) {
+    bad(
+      `Determinism: localeCompare in ${hits.length} site(s) — collation follows the process locale ` +
+        `(sv_SE sorts "ä" after "z", de_DE before it), so the same input orders differently on another ` +
+        `machine; compare codepoints ((a < b ? -1 : a > b ? 1 : 0)) — ${hits.join(", ")}`,
+    );
+  } else {
+    ok(`Determinism: no localeCompare in ${files.length} planner files (codepoint order everywhere)`);
+  }
+}
+
+// 2c — the same collation rule, over the code lib/ does not contain ───────────
+//
+// 2b covers lib/ only, and the sentence it prints — "codepoint order everywhere" —
+// was true of the population it scanned and false of the repository. Every proof
+// under scripts/src and every shipped service under artifacts/*/src was outside it,
+// and that is where the digests live: `deterministicHash` in
+// scripts/src/connector-emulator-harness.ts sorted with `localeCompare` inside a
+// function whose NAME is the claim, and the SBOM generator orders its component
+// list the same way. Two machines with different ICU data hash the same input to
+// different digests; the drift gate then fails on a tree nobody changed.
+//
+// Scope is DERIVED (`scripts/src/` plus every `artifacts/*/src/` that exists), never
+// typed, so a new artifact package joins the scan by existing.
+//
+// DECLARED EXEMPTIONS, pinned by count and split into two honest classes, because
+// they are not the same thing and printing them as one would be the over-claim:
+//   · "exempt"        — correct as written; the pin stops it from growing.
+//   · "pinned-defect" — a real locale-dependent sort, contained rather than fixed
+//                       here (the file belongs to another change in flight). GATED
+//                       against growth, and REPORTED by name with the verdict so it
+//                       is never mistaken for a clean scan.
+// Both fail in both directions, like DECLARED_CLOCK_READS: an undeclared site, a
+// count that drifted, or an entry whose file no longer has any hit at all.
+const DECLARED_LOCALE_COMPARE = new Map([
+  [
+    "scripts/src/signalgrid-grid-proof.ts",
+    {
+      count: 1,
+      class: "exempt",
+      reason:
+        "The NEGATIVE CONTROL. This line builds the locale order on purpose and asserts the evidence " +
+        "comparator disagrees with it, which is how the proof shows the comparator is codepoint order. " +
+        "Flagging it would be flagging the test for containing the thing it forbids.",
+    },
+  ],
+  [
+    "artifacts/mcp-server/src/index.ts",
+    {
+      count: 1,
+      class: "pinned-defect",
+      reason:
+        "readdirSync(...).sort(a.name.localeCompare(b.name)) orders a directory listing the MCP client " +
+        "reads. Not a digest, so the blast radius is presentation order, but it is still locale-dependent " +
+        "output from a shipped service. Owned by artifacts/mcp-server, outside this change.",
+    },
+  ],
+  [
+    "scripts/src/self-audit-proof.ts",
+    {
+      count: 1,
+      class: "pinned-defect",
+      reason:
+        "`[...checklist].map(i => i.id).sort(localeCompare).join(\"|\")` builds a FINGERPRINT string. " +
+        "Same class as the connector-emulator digest that was fixed: two ICU builds, two fingerprints, " +
+        "one of them wrong. Outside this change's file set.",
+    },
+  ],
+]);
+{
+  const wider = [
+    "scripts/src/",
+    ...readdirSync(resolve(repo, "artifacts"), { withFileTypes: true })
+      .filter((e) => e.isDirectory())
+      .map((e) => `artifacts/${e.name}/src/`)
+      .filter((d) => existsSync(resolve(repo, d))),
+  ];
+  const files = tracked.filter((f) => isTs(f) && inAny(f, wider));
+  // FLOOR. Scanning nothing is not a clean scan. The scope is derived, so a moved
+  // directory or a changed `isTs` would silently empty it.
+  if (files.length < 50) {
+    bad(
+      `Determinism (wider): the derived scope found only ${files.length} file(s) across ${wider.length} root(s) ` +
+        `— that is a broken derivation, not a small repository. Refusing to report a clean scan.`,
+    );
+  } else {
+    const byFile = new Map();
+    for (const f of files) {
+      const lines = localeCompareViolations(maskedFor(f));
+      if (lines.length) byFile.set(f, lines);
+    }
+    const undeclared = [];
+    const drifted = [];
+    for (const [f, lines] of byFile) {
+      const d = DECLARED_LOCALE_COMPARE.get(f);
+      if (!d) undeclared.push(`${f}:${lines.join(",")}`);
+      else if (d.count !== lines.length) drifted.push(`${f}: declared ${d.count}, found ${lines.length}`);
+    }
+    const stale = [...DECLARED_LOCALE_COMPARE.keys()].filter((f) => !byFile.has(f));
+    if (undeclared.length || drifted.length || stale.length) {
+      const parts = [];
+      if (undeclared.length) {
+        parts.push(
+          `UNDECLARED localeCompare — ${undeclared.join(" | ")} (collation follows the process locale and the ` +
+            `ICU build; compare codepoints: (a < b ? -1 : a > b ? 1 : 0))`,
+        );
+      }
+      if (drifted.length) parts.push(`COUNT DRIFT — ${drifted.join(" | ")} (a pin that stops matching is not a pin)`);
+      if (stale.length) parts.push(`STALE exemption, file no longer uses localeCompare — ${stale.join(", ")}`);
+      bad(`Determinism (wider): ${parts.join("; ")}`);
+    } else {
+      const pinnedDefects = [...DECLARED_LOCALE_COMPARE].filter(([, d]) => d.class === "pinned-defect");
+      ok(
+        `Determinism (wider): ${files.length} file(s) across ${wider.length} derived root(s); ` +
+          `${byFile.size} declared site(s) — ${DECLARED_LOCALE_COMPARE.size - pinnedDefects.length} exempt, ` +
+          `${pinnedDefects.length} PINNED DEFECT (gated against growth, NOT fixed): ` +
+          `${pinnedDefects.map(([f]) => f).join(", ")}`,
+      );
+    }
+  }
+}
+
+// 2d — every file the shared masker read is a file it could follow ────────────
+// Checks 1, 2, 2b and 2c all trust one masker. A file it loses the thread on (a
+// string crossing a newline, a template or comment still open at end of file) is
+// not verified clean by ANY of them, so it is fatal and named, never skipped.
+{
+  if (unscannable.size) {
+    bad(
+      `Masker: ${unscannable.size} file(s) the scanner cannot follow, so no check above verified them — ` +
+        [...unscannable].slice(0, 6).map(([f, ps]) => `${f}:${ps[0].line} (${ps[0].what})`).join(" | ") +
+        (unscannable.size > 6 ? " | …" : ""),
+    );
+  } else {
+    ok("Masker: every file the switch, clock and collation scans read was followed to the end (none unscannable)");
   }
 }
 
@@ -483,6 +726,18 @@ if (process.argv.includes("--self-test")) {
   //              serves would get this gate switched off — which is how it lost its
   //              scope in the first place.
   const SHIPPED_TREES = ["artifacts/signalgrid-web/", "artifacts/signalgrid-app/"];
+  // RATCHET — demo-only trees already migrated to @fontsource. They are not served,
+  // but once self-hosted a returning vendor fetch is a regression, not a backlog
+  // item, so they are GATED like a served tree. The PWA joined 2026-09-30 (build
+  // plan row 108): it is the one surface where a third-party font blocks first
+  // paint on bad hospital wifi, the exact condition it exists for. signalgrid-review
+  // and signalgrid-desktop joined the same day (build plan row 70 residual), which
+  // leaves no demo-only tree loading a remote font.
+  const SELF_HOSTED_DEMO_TREES = [
+    "artifacts/signalgrid-mobile-pwa/",
+    "artifacts/signalgrid-review/",
+    "artifacts/signalgrid-desktop/",
+  ];
   const isWebSource = (f) =>
     f.endsWith(".html") || f.endsWith(".ts") || f.endsWith(".tsx") || f.endsWith(".css");
   const inArtifactWebTree = (f) => f.startsWith("artifacts/") && isWebSource(f) && !f.includes("/dist/");
@@ -490,7 +745,7 @@ if (process.argv.includes("--self-test")) {
     inArtifactWebTree(f) ||
     (f.startsWith("docs/") && f.endsWith(".html")) ||
     (f.startsWith("site/") && f.endsWith(".html")));
-  const shipped = (f) => SHIPPED_TREES.some((t) => f.startsWith(t)) || f.startsWith("docs/") || f.startsWith("site/");
+  const shipped = (f) => [...SHIPPED_TREES, ...SELF_HOSTED_DEMO_TREES].some((t) => f.startsWith(t)) || f.startsWith("docs/") || f.startsWith("site/");
   const hits = [];
   const reported = [];
   for (const f of scan) {
@@ -506,10 +761,10 @@ if (process.argv.includes("--self-test")) {
   if (reported.length) {
     console.log(`  ⚠ third-party vendor host in ${reported.length} DEMO-ONLY web file(s) — not served, so reported:`);
     for (const r of reported) console.log(`      ${r}`);
-    console.log("      Fix by self-hosting (@fontsource), as signalgrid-web and signalgrid-app do.");
+    console.log("      Fix by self-hosting (@fontsource), as signalgrid-web, signalgrid-app, signalgrid-mobile-pwa, signalgrid-review and signalgrid-desktop do.");
   }
-  if (hits.length) bad(`Public-safe web: third-party vendor host in a SERVED artifact — ${hits.join(", ")}. Self-host it instead.`);
-  else ok(`Public-safe web: no third-party vendor host in any SERVED web artifact (${scan.length} files scanned across every web tree)`);
+  if (hits.length) bad(`Public-safe web: third-party vendor host in a SERVED or already-self-hosted artifact — ${hits.join(", ")}. Self-host it instead.`);
+  else ok(`Public-safe web: no third-party vendor host in any SERVED or already-self-hosted web artifact (${scan.length} files scanned across every web tree)`);
 }
 
 // ── An unearned attestation claim may not become load-bearing ────────────────

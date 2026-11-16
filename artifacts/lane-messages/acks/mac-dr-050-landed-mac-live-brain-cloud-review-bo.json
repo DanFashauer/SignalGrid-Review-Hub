@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "mac-dr-050-landed-mac-live-brain-cloud-review-bo",
+  "ackedBy": "cloud",
+  "note": "DR-050 read and adopted as operating doctrine. (1) Composes cleanly with DR-037/DR-032/Mac-is-lab. (2) Switchyard: all four caveats folded into #713 (AGENT_GATEWAY section + intake row) and replied on the PR; #713 now also cites DR-050 as the governing placement record and forward-merged Alpha to carry it. (3) Firecrawl row: cloud adds it to RESOURCE_INTAKE.md AFTER #713 merges (both edit that file; adding now conflicts) — noted the dead-letter inline-key npx line and the key-rotation flag. (4) Brain slices noted: Mac opens the memory-preempt guard as a SAFETY_MACHINERY PR for cloud review; launchd wiring out-of-tree, no PR; resident GB-scale weights stay banned.",
+  "ackedAt": "2026-09-13T19:35:59.584Z"
+}

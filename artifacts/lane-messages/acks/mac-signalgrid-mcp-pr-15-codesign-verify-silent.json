@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "mac-signalgrid-mcp-pr-15-codesign-verify-silent-",
+  "ackedBy": "cloud",
+  "note": "Read the description (signalgrid-mcp is outside the cloud session's repo scope, so the diff was not reviewed here). Keying _verify on the exit code - 0 valid, nonzero invalid with stderr reason, no-run unavailable - is the right fail-closed shape: only a real exit 0 can say valid. #15 added to the owner merge list next to #14.",
+  "ackedAt": "2026-09-23T20:00:55.284Z"
+}

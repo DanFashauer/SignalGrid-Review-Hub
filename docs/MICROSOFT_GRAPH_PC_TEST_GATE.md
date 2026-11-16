@@ -71,7 +71,7 @@ Before any live PC-only smoke test, confirm:
 - [ ] No production data.
 - [ ] No screenshots with tenant data.
 - [ ] No logs committed.
-- [ ] Sanitized output is enabled.
+- [ ] Saved output is sanitized by inspection: no tenant IDs, UPNs, device serials or object IDs appear in the saved fixture. (Sanitization is not a switch — `docs/MICROSOFT_GRAPH_LIVE_SMOKE_TEST_RUNBOOK.md` records the removed variable; until 2026-09-06 this box read "Sanitized output is enabled", a control nothing implemented.)
 - [ ] Output maps back to deterministic fixture shape before it is considered for a follow-up PR.
 
 ## Expected sanitized output targets

@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { useListIntegrations } from "@workspace/api-client-react";
+import { LiveRegion } from "@/components/LiveRegion";
 
 const STATUS_COLOR: Record<string, string> = {
   connected: "text-green-400",
@@ -8,8 +9,14 @@ const STATUS_COLOR: Record<string, string> = {
   "not-configured": "text-muted-foreground",
 };
 
+// A status the map does not name is not a connected one. The bare lookup emitted
+// the literal class `undefined` and the row rendered in the default foreground —
+// indistinguishable from a healthy row at a glance. Unknown reads as
+// disconnected, the restrictive arm.
+const statusColor = (status: string) => STATUS_COLOR[status] ?? STATUS_COLOR.disconnected;
+
 export default function IntegrationsPage() {
-  const { data, isLoading } = useListIntegrations();
+  const { data, isLoading, isError } = useListIntegrations();
   const [search, setSearch] = useState("");
 
   const filtered = data?.integrations.filter(i =>
@@ -20,17 +27,32 @@ export default function IntegrationsPage() {
 
   const connected = data?.integrations.filter(i => i.status === "connected").length ?? 0;
   const degraded = data?.integrations.filter(i => i.status === "degraded").length ?? 0;
+  // A poll can change one integration's status, latency or sync time while both
+  // counts stay the same: name the most recently synced one, with its state.
+  const lastSynced = data?.integrations.reduce<(typeof data.integrations)[number] | undefined>((a, b) => (b.lastSync && (!a?.lastSync || b.lastSync > a.lastSync) ? b : a), undefined);
 
   return (
     <div className="p-6 space-y-4">
+      <LiveRegion
+        message={data ? `${connected} integrations connected, ${degraded} degraded${lastSynced?.lastSync ? `; last sync: ${lastSynced.vendor} ${lastSynced.product} (${lastSynced.status}, ${lastSynced.latencyMs}ms) at ${new Date(lastSynced.lastSync).toLocaleTimeString()}` : ""}.` : ""}
+        alert={isError ? "Integrations could not be loaded." : ""}
+      />
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold tracking-tight">Integrations</h1>
-          <p className="text-xs font-mono text-muted-foreground mt-0.5">TELEMETRY SOURCES · {data?.integrations.length ?? 0} TOTAL</p>
+          <p className="text-xs font-mono text-muted-foreground mt-0.5">TELEMETRY SOURCES · {data ? `${data.integrations.length} TOTAL` : "– TOTAL"}</p>
         </div>
         <div className="flex gap-4 text-xs font-mono">
-          <span className="text-green-400">{connected} CONNECTED</span>
-          {degraded > 0 && <span className="text-yellow-400">{degraded} DEGRADED</span>}
+          {/* "0 CONNECTED" in green for a catalog that never loaded is a measured
+              zero wearing a reassuring face; the counts render only from data. */}
+          {data ? (
+            <>
+              <span className="text-green-400">{connected} CONNECTED</span>
+              {degraded > 0 && <span className="text-yellow-400">{degraded} DEGRADED</span>}
+            </>
+          ) : (
+            <span className="text-muted-foreground">– CONNECTED</span>
+          )}
         </div>
       </div>
 
@@ -55,6 +77,10 @@ export default function IntegrationsPage() {
             Array.from({ length: 10 }).map((_, i) => (
               <div key={i} className="h-9 bg-muted/10 animate-pulse mx-3 my-1 rounded" />
             ))
+          ) : isError ? (
+            <div className="px-3 py-6 text-xs font-mono text-status-restrict">
+              INTEGRATION CATALOG UNREACHABLE — the state of every source below is unknown, not healthy.
+            </div>
           ) : filtered.map(i => (
             <div key={i.id} className="grid grid-cols-[1fr_1fr_160px_80px_100px_100px] px-3 py-2 hover:bg-muted/20 transition-colors text-xs font-mono">
               <span className="font-semibold text-foreground truncate pr-2">{i.vendor}</span>
@@ -62,7 +88,7 @@ export default function IntegrationsPage() {
               <span className="text-muted-foreground/70 truncate pr-2">{i.category}</span>
               <span className="text-right text-muted-foreground">{i.signalsIngested24h.toLocaleString()}</span>
               <span className="text-right text-muted-foreground">{i.latencyMs > 0 ? `${i.latencyMs}ms` : "–"}</span>
-              <span className={`text-right font-semibold ${STATUS_COLOR[i.status]}`}>{i.status.replace("-", " ").toUpperCase()}</span>
+              <span className={`text-right font-semibold ${statusColor(i.status)}`}>{i.status.replace("-", " ").toUpperCase()}</span>
             </div>
           ))}
         </div>

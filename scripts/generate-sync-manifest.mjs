@@ -37,6 +37,8 @@ import { createHash } from "node:crypto";
 import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { readRatchetFile, refusalLines } from "./lib/ratchet-read.mjs";
+import { isMainModule } from "./lib/is-main.mjs";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 export const MANIFEST_PATH = resolve(repoRoot, "artifacts/sync/live-sync-manifest.json");
@@ -176,12 +178,18 @@ function main() {
   const body = computeBody();
   const fingerprint = fingerprintOf(body);
 
-  let existing = null;
-  try {
-    existing = JSON.parse(readFileSync(MANIFEST_PATH, "utf8"));
-  } catch {
-    existing = null;
+  // A corrupt or DELETED manifest must not be read as "no manifest yet" — that would
+  // silently reset manifestVersion to 1 and destroy the monotonic count the two
+  // out-of-repo consumers rely on. Genesis (never existed, no git history) is the only
+  // absence that starts the count; everything else refuses.
+  const read = readRatchetFile(MANIFEST_PATH, "manifestVersion");
+  if (read.action === "refuse") {
+    for (const line of refusalLines("artifacts/sync/live-sync-manifest.json", read.why, "delete it deliberately only if you truly mean a fresh manifest, then re-run")) {
+      console.error(line);
+    }
+    process.exit(1);
   }
+  const existing = read.action === "use" ? read.value : null;
 
   const unchanged = existing?.fingerprint === fingerprint;
   const manifestVersion = unchanged
@@ -213,6 +221,6 @@ function main() {
 }
 
 // Run only when invoked directly (check-live-sync imports the extractors above).
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (isMainModule(process.argv[1], import.meta.url)) {
   main();
 }

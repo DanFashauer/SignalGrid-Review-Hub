@@ -19,8 +19,15 @@ const errorRate = new Rate('errors');
 const webhookLatency = new Trend('webhook_dispatch_latency');
 const webhookDeliveries = new Counter('webhook_deliveries');
 
-// Webhook test endpoint (would need to be configured)
-const WEBHOOK_URL = __ENV.WEBHOOK_URL || 'https://httpbin.org/post';
+// Webhook test endpoint. REQUIRED, never defaulted: the previous default was
+// a third-party host (httpbin.org), so running this file with no configuration
+// posted synthetic session/device/user payloads to a server nobody in this repo
+// operates. A load driver must not have an external egress as its zero-config
+// behaviour; the operator names the receiver or the run refuses.
+const WEBHOOK_URL = __ENV.WEBHOOK_URL;
+if (!WEBHOOK_URL) {
+  throw new Error('WEBHOOK_URL is required (the receiver you operate); this driver has no default target');
+}
 
 export const options = {
   scenarios: {
@@ -88,8 +95,11 @@ export default function webhooksLoadTest() {
 
   webhookLatency.add(duration);
 
+  // FAIL-CLOSED. 4xx was counted as success ("webhook may fail"), so a receiver
+  // rejecting every delivery scored a perfect run. A rejected delivery is a
+  // failed delivery; only 2xx counts.
   var success = check(response, {
-    'status is 2xx or 4xx': function(r) { return r.status >= 200 && r.status < 500; },
+    'status is 2xx': function(r) { return r.status >= 200 && r.status < 300; },
     'response time OK': function(r) { return r.timings.duration < 2000; },
   });
 

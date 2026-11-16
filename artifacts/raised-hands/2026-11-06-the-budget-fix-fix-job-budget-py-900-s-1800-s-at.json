@@ -1,0 +1,15 @@
+{
+  "id": "2026-11-06-the-budget-fix-fix-job-budget-py-900-s-1800-s-at",
+  "raisedAt": "2026-11-06T03:29:25.799Z",
+  "origin": "mac",
+  "doing": "Closing the owner's hands-free loop on the local-brain leg. With the 600 s call cap applied (owner, 01:19Z) build 14bb3dd8 completed five OmniRoute calls (2m37s-3m39s, HTTP 200) and made the exact leg-5 edit (1 file, +1/-1), then died on the runtime's 900 s job budget before check/finish; three of its five steps were identical re-reads because Codex's v2 install dropped the read-loop guard.",
+  "blockedBy": "The budget fix (~/fix_job_budget.py: 900 s -> 1800 s at the three sites, transactional with backup, re-pin and rollback) is written; the Mac auto-mode classifier refuses to let Claude run it. The read-guard restore is Codex's (brain note 03:1xZ).",
+  "need": "Owner types two lines in the Mac session: ! python3 ~/fix_job_budget.py   then   ! launchctl kickstart -k gui/$(id -u)/com.signalgrid.local-brain . Claude then requeues the leg-5 task and publishes it on review with scripts/mac/brain-proposal-pr.mjs.",
+  "whoCanUnblock": "owner",
+  "domain": "local-brain",
+  "status": "resolved",
+  "routedTo": null,
+  "resolvedAt": "2026-11-06T11:02:45.875Z",
+  "resolvedBy": "mac",
+  "resolution": "Owner typed the two lines on 2026-11-06 (09:27:27Z: 900 s -> 1800 s, runtime 3cc3d453 -> a08518a5, 125 tests); the script applied (tests OK, backup + re-pin recorded) and the brain restarted. The loop's local leg now stops in the planner (capability_wait), tracked in Codex's brain notes, not in this hand."
+}

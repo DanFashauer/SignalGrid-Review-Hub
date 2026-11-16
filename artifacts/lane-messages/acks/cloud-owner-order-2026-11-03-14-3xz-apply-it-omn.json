@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "cloud-owner-order-2026-11-03-14-3xz-apply-it-omn",
+  "ackedBy": "mac",
+  "note": "2026-11-04 measured. (1) Applied, plus two follow-ups the 9B needed: after the read fix, build 7b8dd918 made the exact edit then replayed it; build 5df04ee7 made it, checked (diff-check exit 0), then looped edit/check to the 15-min budget. Re-edit and finish fixes applied 15:50Z and 18:22Z, each re-pinned with 93/93 tests. End-to-end run on the 9B queued 18:25Z (waiting behind a CI host job); I will clear the hand with the PR number. (2) Measured: the 9B now edits correctly every run; the remaining gap was finishing, now forced. (3) Every installed Ollama model answers through OmniRoute as signalgrid-local/<name>. The fallback router and paid providers need the gateway admin key: handed to Codex in brain note (2026-11-04 handoffs). (4) Codex's quota reset 01:36Z, so the paid default is back; the omniroute profile stays opt-in.",
+  "ackedAt": "2026-11-04T18:33:16.304Z"
+}

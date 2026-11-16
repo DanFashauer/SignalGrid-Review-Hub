@@ -157,6 +157,33 @@ check("an invalid setup kind is not deploy-ready (setup invalid)", !setupRecordi
 check("lintTeardown also flags the unknown reversed kind (defense-in-depth)", lintTeardown(typoKind).some((i) => i.code === "teardown_unknown_setup_kind"));
 const typoPlan = planTeardown(typoKind, { serial: "CMAC-0002" }, { mode: "enforced", enforcementEnabled: true });
 check("an invalid recording NEVER auto-removes (no stranded extension)", typoPlan.matched === false && typoPlan.willRemoveAnything === false && typoPlan.steps.length === 0);
+// A PROTOTYPE-KEY kind ("toString") is the class `in` cannot see: `"toString" in
+// TEARDOWN_ORDER` is true and the value is a function, so the unknown-kind guard stayed
+// silent and `Math.max(prev, function)` poisoned the ordering guard with NaN for the rest
+// of the plan — `lintTeardown` then reported NO order violation for a reversal that
+// removes the allow profile before deactivating the extension it authorizes.
+const maskedKind = {
+  id: "rec_masked",
+  name: "Masked kind",
+  match: { serialPrefix: "CMAC-" },
+  triggers: ["first_boot"],
+  steps: [
+    { key: "mask", label: "Masked", kind: "toString" as never },
+    { key: "prof", label: "Allow profile", kind: "profile" as const },
+    { key: "agent", label: "Install agent", kind: "app_install" as const },
+  ],
+  teardown: { verifyClean: true, steps: [
+    { key: "mask", label: "Remove masked", action: "remove" as const },
+    { key: "prof", label: "Remove profile", action: "remove" as const },
+    { key: "agent", label: "Deactivate agent", action: "deactivate" as const, requiresRestart: true },
+  ] },
+};
+const maskedIssues = lintTeardown(maskedKind as never);
+check("SAFETY: a prototype-key setup kind is flagged as UNKNOWN by lintTeardown (own-key membership, not `in`)",
+  maskedIssues.some((i) => i.code === "teardown_unknown_setup_kind"));
+check("SAFETY: ...and it cannot poison the ordering guard — the profile-before-agent violation is still reported",
+  maskedIssues.some((i) => i.code === "teardown_order_violation"));
+check("SAFETY: a recording with a masked kind is not deploy-ready", !deployReady(maskedKind as never));
 
 // Regression (review MINOR): a non-boolean requiresRestart is rejected (symmetric
 // with sensitive) so a mistyped flag can't silently drop the restart hold.

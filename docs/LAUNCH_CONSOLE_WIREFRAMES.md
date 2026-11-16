@@ -45,7 +45,7 @@ Conventions for every screen:
   last sync off `/v1/connectors`.
 - Error state: each card fails alone with its message; the page never blanks.
 
-## 2. Microsoft connector setup & health — `/connectors/setup`  (TO BUILD)
+## 2. Microsoft connector setup & health — `/connectors/setup`  (BUILT 2026-08-11)
 
 The screen that makes "bring your tenant" concrete. It renders the RESOLUTION
 the gate actually computed — mode plus the resolver's own reason string —
@@ -69,10 +69,11 @@ never a hopeful status.
 └──────────────────────────────────────────────────────────────────┘
 ```
 
-- Data: needs a small read-only endpoint `GET /v1/connectors` +
-  `GET /v1/connectors/:id/syncs`, `POST /v1/connectors/:id/sync` — these exist
-  in the core/API but are **not in the GA route fence**; adding them (read +
-  sync only, no write) is a YELLOW governance change recorded here first.
+- Data: `GET /v1/connectors`, `GET /v1/connectors/{id}/sync-runs`,
+  `POST /v1/connectors/{id}/sync` — all three are `launch` in
+  `scripts/launch-profile.mjs` published-api-paths (added to the fence 2026-08-10;
+  `docs/LAUNCH_PROFILE.md` records it). Read + sync only, no write. (Until
+  2026-09-06 this bullet still said they were outside the GA route fence.)
 - Messaging: the reason string is the resolver's own
   (`"GRAPH_ACCESS_TOKEN is not set"`) — setup instructions ARE the gate
   checklist; a partner flips the named env vars and the checks go green.
@@ -124,7 +125,7 @@ never a hopeful status.
   loud red state with `brokenAtSeq`.
 - Separation of duties is displayed, not hidden: operator ≠ auditor.
 
-## 5. Policy version — `/policies/:id`  (TO REBIND)
+## 5. Policy version — `/policies/:id`  (BUILT 2026-08-11 — rebound to `/v1`)
 
 Today's policies pages read the fixtures client. The launch version reads the
 core's versioned policy store — the "what decided this" page.
@@ -141,12 +142,14 @@ core's versioned policy store — the "what decided this" page.
 └──────────────────────────────────────────────────────────────────┘
 ```
 
-- Data: `GET /v1/policies`, `GET /v1/policies/:id/versions`, policy tests via
-  the existing test-run route. Not in the GA fence → same YELLOW governance
-  note as screen 2 (read-only additions only; **no policy editing UI at
-  launch** — versions are read and tested, changes ride the repo).
+- Data: `GET /v1/policies`, `GET /v1/policies/{id}/versions`,
+  `GET /v1/policies/{id}/tests` — all three `launch` in `scripts/launch-profile.mjs`
+  published-api-paths (fence additions of 2026-08-10); the page reads them
+  (`artifacts/signalgrid-app/src/pages/policies/PolicyDetail.tsx:19-20`). Read-only:
+  **no policy editing UI at launch** — versions are read and tested, changes ride
+  the repo.
 
-## 6. Limited-GA assurance status — `/status`  (TO BUILD)
+## 6. Limited-GA assurance status — `/status`  (BUILT 2026-08-11)
 
 The honest one-pager a partner opens first: what this deployment IS.
 
@@ -185,10 +188,14 @@ Both are pinned in the admin-console e2e suite.
 
 ## Build order and governance
 
-1. Screen 6 (`/status`) — smallest, closes the assurance P0 loop. GREEN.
-2. Screen 2 (`/connectors/setup`) — needs the read-only GA-fence additions:
-   `GET /v1/connectors`, `GET /v1/connectors/:id/syncs`,
-   `POST /v1/connectors/:id/sync`. YELLOW (fence change, owner-visible).
-3. Screen 5 rebind — `GET /v1/policies*` fence additions. YELLOW.
+1. Screen 6 (`/status`) — smallest, closes the assurance P0 loop. GREEN. — BUILT
+   2026-08-11 (`artifacts/signalgrid-app/src/App.tsx:125`).
+2. Screen 2 (`/connectors/setup`) — the read-only fence additions `GET /v1/connectors`,
+   `GET /v1/connectors/{id}/sync-runs`, `POST /v1/connectors/{id}/sync` landed
+   2026-08-10 as `launch` routes. — BUILT 2026-08-11
+   (`artifacts/signalgrid-app/src/App.tsx:126`).
+3. Screen 5 rebind — `GET /v1/policies*` are `launch` routes and the page reads them
+   (`artifacts/signalgrid-app/src/pages/policies/PolicyDetail.tsx:19-20`). — BUILT
+   2026-08-11.
 4. Screen 1 connector-health card + screen 3 route-owner line. GREEN. — BUILT
    2026-08-11; all six screens are now coherent and e2e-pinned.

@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 2,
+  "id": "cloud-six-mac-branches-on-origin-have-all-landed",
+  "from": "cloud",
+  "to": "mac",
+  "subject": "Six mac/* branches on origin have all landed and can be deleted",
+  "body": "The hourly steward lists origin/mac/* branches mainline does not carry as ancestors. All six are STALE — their work reached SignalGrid_Alpha by another PR — so no draft PR was opened for them: mac/ios-shell-swiftui-phase1 (landed #394), mac/ios-shell-swiftui-phase2 (landed), mac/ios-shell-swiftui-phase3 (landed #412; PR #411 closed), mac/native-ledger-2026-09-02 (superseded; PR #385 closed), mac/remediation-allow-swift-twin (landed #403; I closed stale PR #395 today), mac/session-expiry-hardening (landed). Branch deletion is yours: `git push origin --delete <name>` for each. Once gone, `pnpm run lane:inbox` stops listing them and a NEW mac/* branch stands out. Also on mainline since your last pull: lane:deliver (#440), the unknown-as-permissive batch across six libs (#443), and the second-round fixes in flows/recommendations/adaptive-proposals/app-workflows (PR #444, in CI now). None touch scripts/mac/* or run-live-lanes.sh.",
+  "sentAt": "2026-09-05T18:34:59.876Z"
+}

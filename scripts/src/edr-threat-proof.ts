@@ -122,6 +122,17 @@ check("an active critical threat outranks degraded protection (escalate, not ste
 const freshSigs = evaluateThreatPosture(normalizeEndpoint({ deviceId: "f", agentInstalled: true, agentRunning: true, realtimeProtection: true, signatureAgeHours: 71, threats: [] }));
 check("signatures under the 72h threshold stay protected", freshSigs.posture === "protected" && freshSigs.protectionHealthy === true);
 
+// Fail-safe (regression, 2026-09-06): an UNREADABLE signature age — NaN, the value a
+// source that sent "unknown" or a failed upstream parse produces — must grade exactly
+// like an unreported one. `=== null || >= stale` let NaN fall through both arms and
+// graded PROTECTED, the fifth NaN variant this repository has met; Number.isFinite
+// closes it. Mutation record: with the isFinite predicate reverted to `=== null`, this
+// assertion fails by name.
+const nanSigs = evaluateThreatPosture({ ...normalizeEndpoint({ deviceId: "nan", agentInstalled: true, agentRunning: true, realtimeProtection: true, signatureAgeHours: 1, threats: [] }), signatureAgeHours: Number.NaN });
+check("an UNREADABLE signature age (NaN) is stale, never protected — it grades like an unreported one", nanSigs.posture !== "protected" && nanSigs.protectionHealthy === false && nanSigs.recommendedAction === "step_up");
+const infSigs = evaluateThreatPosture({ ...normalizeEndpoint({ deviceId: "inf", agentInstalled: true, agentRunning: true, realtimeProtection: true, signatureAgeHours: 1, threats: [] }), signatureAgeHours: Number.POSITIVE_INFINITY });
+check("an infinite signature age is stale too (the same predicate, the other end)", infSigs.posture !== "protected" && infSigs.protectionHealthy === false);
+
 // Fail-safe (regression): an UNREPORTED signature age must NOT read as fresh —
 // unverifiable freshness degrades protection, it never passes as protected.
 const unknownSigAge = evaluateThreatPosture(normalizeEndpoint({ deviceId: "u", agentInstalled: true, agentRunning: true, realtimeProtection: true, threats: [] }));
@@ -309,6 +320,81 @@ check("signature age: ...while a finite non-negative age is preserved, 0 include
   }
   const fresh = evaluateThreatPosture(normalizeEndpoint({ deviceId: "ep-fresh", agentInstalled: true, agentRunning: true, realtimeProtection: true, signatureAgeHours: 1, threats: [] }), { staleSignatureHours: 72 });
   check("...and a readable posed bound still grades fresh signatures protected (not over-tight)", fresh.posture === "protected");
+}
+
+// THE SIGHTING, which nothing read until 2026-09-18. `lastSeen` was normalized off the
+// vendor record and consulted by NO evaluator, so an endpoint whose agent last checked
+// in years ago — still claiming installed, running, real-time protection on, fresh
+// signatures — graded `protected` / action `none`. The record was not wrong; it was
+// OLD, and nothing here could tell the difference.
+//
+// The evaluator reads no clock (golden rule 2), so the reference instant is POSED. Four
+// things are asserted: a fresh sighting still grants; a stale one raises; an
+// absent/unparseable/future one raises the same way (unknown must never resolve
+// downward); and an UNPOSED instant leaves the verdict exactly as it was, saying
+// `ungraded` rather than pretending the endpoint was seen.
+{
+  const NOW = Date.parse("2026-07-20T12:00:00.000Z");
+  const healthy = (lastSeen: string | undefined) => normalizeEndpoint({
+    deviceId: "ep-seen", agentInstalled: true, agentRunning: true, realtimeProtection: true,
+    signatureAgeHours: 1, threats: [], ...(lastSeen === undefined ? {} : { lastSeen }),
+  });
+
+  const fresh = evaluateThreatPosture(healthy("2026-07-20T11:00:00.000Z"), { nowMs: NOW });
+  check("last seen: an endpoint seen an hour ago still grades protected (the assertions below are not over-tight)",
+    fresh.posture === "protected" && fresh.recommendedAction === "none" && fresh.lastSeenFreshness === "fresh");
+
+  const stale = evaluateThreatPosture(healthy("2019-01-01T00:00:00.000Z"), { nowMs: NOW });
+  check("last seen: an otherwise-perfect endpoint last seen in 2019 is NOT protected — a report we cannot date is one we cannot rely on",
+    stale.posture === "degraded_protection" && stale.recommendedAction === "step_up" && stale.reasonCode === "ENDPOINT_NOT_RECENTLY_SEEN");
+  check("last seen: ...and the verdict says the sighting is stale", stale.lastSeenFreshness === "stale");
+
+  for (const [label, seen] of [["absent", undefined], ["unparseable", "not-a-date"], ["future-dated", "2030-01-01T00:00:00.000Z"]] as const) {
+    const v = evaluateThreatPosture(healthy(seen), { nowMs: NOW });
+    // A PRESENT but unreadable stamp grades `stale` (deriveFreshness reserves `unknown` for an absent one); both
+    // members raise to the same rung here, so the verdict is identical either way.
+    const expectFreshness = label === "unparseable" ? "stale" : "unknown";
+    check(`last seen: an ${label} sighting RAISES (${expectFreshness}; never resolves downward)`,
+      v.recommendedAction === "step_up" && v.reasonCode === "ENDPOINT_NOT_RECENTLY_SEEN" && v.lastSeenFreshness === expectFreshness);
+  }
+
+  const ungraded = evaluateThreatPosture(healthy("2019-01-01T00:00:00.000Z"));
+  check("last seen: with NO reference instant posed the sighting is UNGRADED, not silently fresh — the caller did not ask, so no concern is invented",
+    ungraded.posture === "protected" && ungraded.lastSeenFreshness === "ungraded");
+
+  // A real active threat still outranks a stale sighting — the ladder, not the order.
+  const compromisedAndStale = evaluateThreatPosture({
+    ...healthy("2019-01-01T00:00:00.000Z"),
+    threats: [{ threatId: "t", name: "n", severity: "critical", remediationState: "active", category: null, detectedAt: null, active: true }],
+  }, { nowMs: NOW });
+  check("last seen: a critical active threat still outranks a stale sighting (escalate, not step_up)",
+    compromisedAndStale.recommendedAction === "escalate");
+
+  // The BOUND is posed too, and a garbled one must raise like an unreadable sighting.
+  const garbled = evaluateThreatPosture(healthy("2026-07-20T11:00:00.000Z"), { nowMs: NOW, staleLastSeenHours: Number.NaN });
+  check("last seen: a garbled staleLastSeenHours raises — stale, never fresh", garbled.lastSeenFreshness === "stale");
+}
+
+// THE MOCK TRANSPORT'S REFUSALS (brace-less guards, joined the sweep in wave 9). `mock-transport.ts`
+// lines for the non-GET and unknown-path refusals survived `if (false)` with this proof green: the
+// connector only ever sends an authorised GET to the one real path, so neither refusal had been
+// driven. They are what makes the mock a faithful stand-in rather than an any-request echo, so a
+// proof that "the connector gets a 405/404 from a real-shaped server" needs them. Driven directly,
+// each with a VALID token so the refusal under test is the only thing standing in the way.
+{
+  const mock = createMockEdrTransport({ endpoints: records, expectedToken: fixture.accessToken, pageSize: 2, baseUrl: BASE_URL });
+  const auth = { authorization: `Bearer ${fixture.accessToken}` };
+  // The request type is GET-only; the cast is how a hostile or buggy caller would arrive.
+  const post = await mock({ method: "POST", url: `${BASE_URL}/endpoints`, headers: auth } as never);
+  check("mock transport: a non-GET request with a valid token is refused 405, not served", post.status === 405 && post.ok === false && JSON.stringify(await post.json()) === JSON.stringify({ error: "method_not_allowed" }));
+  const other = await mock({ method: "GET", url: `${BASE_URL}/not-endpoints`, headers: auth });
+  check("mock transport: an unknown path with a valid token is refused 404, not served", other.status === 404 && other.ok === false && JSON.stringify(await other.json()) === JSON.stringify({ error: "not_found" }));
+  const bare = await mock({ method: "GET", url: `${BASE_URL}`, headers: auth });
+  check("mock transport: the bare base URL is not the collection — 404", bare.status === 404);
+  const ok = await mock({ method: "GET", url: `${BASE_URL}/endpoints`, headers: auth });
+  check("mock transport: NON-VACUITY — the same valid-token GET to the real path IS served (200)", ok.status === 200 && ok.ok === true);
+  const noTok = await mock({ method: "GET", url: `${BASE_URL}/endpoints`, headers: {} });
+  check("mock transport: no token is refused 401 before the path is looked at", noTok.status === 401);
 }
 
 const total = passed + failures.length;

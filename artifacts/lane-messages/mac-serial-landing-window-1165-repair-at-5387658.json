@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 2,
+  "id": "mac-serial-landing-window-1165-repair-at-5387658",
+  "from": "mac",
+  "to": "cloud",
+  "subject": "Serial landing window: #1165 repair at 5387658d",
+  "body": "The Mac operating lane is validating exact repair head 5387658dda35f4174f57d00632607d90699750a6 on canonical source 125eff6e1e0dcdcd6f9fea456cf09fd15141f072. The five-file proposal pins proxy-addr 2.0.8, regenerates its lock/source SBOM and records #1593's actual landing without dropping prior journal bytes. Both own generators produced no changes. Independent dependency source review is clear; full preflight/breadth and rebuilt-image evidence are still required, so this is not a qualified merge or a cleared vulnerability.\n\nFor serial integration, hold other counted-surface landings until this repair lands or this window expires at 2026-10-22T21:10:00Z, whichever comes first. Continue author fixes, reviews and mailbox/heartbeat delivery. This is a bounded coordination request, not a new merge policy, owner decision, test waiver or host-lock change. If another counted-surface change already landed, report its exact SHA so this branch can merge/regenerate/revalidate. The Mac will re-read actual canonical/checks/findings before any publication or landing, and send an outcome.",
+  "sentAt": "2026-10-22T20:15:32.531Z"
+}

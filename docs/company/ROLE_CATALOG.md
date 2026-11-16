@@ -23,13 +23,14 @@ Three conventions apply to every row below:
 - **Role is not headcount.** A role with status COVERED is work being done today by
   the CEO or by an agent lane, not a person the company employs.
 - **The agent roster is the layer beneath this one.** `docs/agent/org-roster.json`
-  declares 41 engineering, signal-domain, company, and go-to-market agent roles, and
+  declares 42 engineering, signal-domain, company, and go-to-market agent roles, and
   `scripts/check-org-roster.mjs` reports on every run which of them have never been
   activated. Where a lane covers a role here, Current coverage names the lane and, if
   the lane has never run, says so.
-- **Hiring priority is a proposed ordering, not an owner-ratified sequence.** No
-  hiring sequence has been published. Numbers rank 1 (earliest) to 10 within this
-  catalog; `-` means the role should not be hired against on its current trigger.
+- **Hiring priority here is an ordering within a division.** `docs/company/HIRING_SEQUENCE.md`
+  (ratified by the founder, 2026-08-21) is the company-level order across all
+  divisions, and it wins where the two are read together. Numbers rank 1 (earliest)
+  to 10 within this catalog; `-` means the role should not be hired against on its current trigger.
 
 ### Chief Executive Officer (founder)
 
@@ -39,7 +40,7 @@ Three conventions apply to every row below:
 | Status | ACTIVE |
 | Reports to | No internal reporting line; accountable to shareholders. No board exists today. |
 | Mission | Set product scope and company direction, and hold the only signature the company has. |
-| Responsibilities | Owns launch scope and the decision records that change it (DR-005 ratified launch-profile v4 and froze the current edge); holds product strategy and the endpoint/infrastructure domain expertise the signal model rests on; approves everything that leaves the company — publication, outreach, counterparty paperwork; supplies the inputs only the owner can supply (billing figures, vendor accounts, repo-admin settings); directs the agent lanes and sets their delegated-authority boundaries; decides which roles in this catalog activate, and when. |
+| Responsibilities | Owns launch scope and the decision records that change it (DR-005 ratified launch-profile v4 and froze the current edge; the profile is at v5 today — read `LAUNCH_PROFILE_VERSION` in `scripts/launch-profile.mjs`); holds product strategy and the endpoint/infrastructure domain expertise the signal model rests on; approves everything that leaves the company — publication, outreach, counterparty paperwork; supplies the inputs only the owner can supply (billing figures, vendor accounts, repo-admin settings); directs the agent lanes and sets their delegated-authority boundaries; decides which roles in this catalog activate, and when. |
 | Authority | Scope, publication, spend, counterparty engagement, role activation, and reversal of any delegated decision. |
 | Cannot approve alone | Nothing structurally — but by standing rule: no scope widening without a written decision record; no compliance, certification, or attestation claim at all; no claim published against a gate that is failing. Regulated-vertical questions (healthcare, fintech) need a human compliance review, which this role does not itself supply. |
 | Inputs | `docs/OWNER_ACTIONS.md`; `docs/COMPANY_BUILD_PLAN.md`; `docs/INTAKE_LEDGER.md`; lane inbox (`pnpm run lane:inbox`); gate, proof, and sim-result output. |
@@ -172,7 +173,7 @@ Three conventions apply to every row below:
 | Outputs | Investor updates; data-room index; the question-and-answer log with sources. |
 | KPIs | Update figures traceable to a committed source (target 100%); investor questions answered with a citable artifact within 5 business days (target ≥90%); corrections issued after publication (target 0). |
 | Activation trigger | **No investor relationship exists today; this role activates when the CEO opens a financing process in writing, or the first external party holds a security in the company.** |
-| Current coverage | Not held, and there is nothing to hold — the company has taken no external investment and has no investors. The agent roster's `finance-fundraising` lane is declared and has never been activated; no cost model exists yet, which is a stated gap in `docs/COMPANY_BUILD_PLAN.md`. |
+| Current coverage | Not held, and there is nothing to hold — the company has taken no external investment and has no investors. The agent roster's `finance-fundraising` lane is declared and has never been activated; the cost model landed 2026-08-22 (`docs/COST_MODEL.md`, backlog row 22); the four owner-only billing figures remain unsupplied there. |
 | Human / fractional / AI-supported | Human (CEO at activation), AI-supported for assembly. |
 | Hiring priority | 7 |
 | Required competencies | Investor communication in early-stage deep-tech; financial literacy sufficient to refuse an unsupported number; disclosure discipline. |
@@ -267,7 +268,7 @@ Two honest notes carry across every row:
 | Status | COVERED |
 | Reports to | Head of quality & operational governance |
 | Mission | Decide, on recorded criteria, whether a surface may ship and what it is allowed to be called. |
-| Responsibilities | Owns the launch profile — every surface classified launch, deferred, demo-only, or internal, and no surface unclassified (`scripts/launch-profile.mjs`, ratified as v4 by DR-005); runs the go/no-go for each release against written criteria, with the decision and its evidence recorded; keeps release artifacts and versioning coherent, including the API versioning policy; enforces that buyer-facing surfaces never present deferred capability as shipping, and that the claims gate covering this stays green; maintains release records so any shipped artifact can be traced to the revision and the gate run that cleared it. |
+| Responsibilities | Owns the launch profile — every surface classified launch, deferred, demo-only, or internal, and no surface unclassified (`scripts/launch-profile.mjs`, ratified at v4 by DR-005; currently v5 with 180 classifications — read `LAUNCH_PROFILE_VERSION`, not this sentence); runs the go/no-go for each release against written criteria, with the decision and its evidence recorded; keeps release artifacts and versioning coherent, including the API versioning policy; enforces that buyer-facing surfaces never present deferred capability as shipping, and that the claims gate covering this stays green; maintains release records so any shipped artifact can be traced to the revision and the gate run that cleared it. |
 | Authority | Holding a release; requiring a proof or gate run before go; classification proposals. |
 | Cannot approve alone | Reclassifying a surface or otherwise widening launch scope — that is an owner decision record under DR-005; shipping with a failing gate; any public claim about a released surface. |
 | Inputs | Launch profile; preflight and breadth results; `pnpm --filter @workspace/api-server run test:api` results; the merge policy classification; pilot readiness criteria. |
@@ -413,7 +414,8 @@ Two honest notes carry across every row:
 Product strategy is founder-held and performed today. Product management is
 covered by AI agent lanes plus the founder; no product manager has been hired.
 The launch edge is frozen by owner decision DR-005 (`docs/DECISION_RECORDS.md`,
-2026-08-20), which ratified all 174 classifications in `scripts/launch-profile.mjs`
+2026-08-20), which ratified the then-174 classifications of v4 in `scripts/launch-profile.mjs`
+(v5 today, 180 classifications — read `LAUNCH_PROFILE_VERSION`; the launch set below is unchanged)
 — three launch connector families (`graph`, `device-management-health`,
 `local-authority`), three launch signal kinds, three launch app surfaces (the
 API server, the operator console, `ios:EnterpriseShell`) — and closed with the
@@ -519,7 +521,7 @@ headcount.
 | Responsibilities | Own the three ratified launch connector families (`graph`, `device-management-health`, `local-authority`) as products, not adapters; keep the deferred families visibly deferred everywhere they are named, including on buyer-facing surfaces; require a live shape check before any family's behavior is described in the present tense; specify how an unknown, missing, stale, or contradictory input raises assurance rather than lowering it, per family; own the connector deprecation and vendor-drift response path. |
 | Authority | Sequencing within the ratified launch families; the acceptance bar for a family's fixtures; the wording that describes what a family observes and what it only infers. |
 | Cannot approve alone | Activating any of the deferred families (a decision record plus a live shape check are required); describing a derived state as a wire fact; any vendor engagement, integration listing, or joint statement — no such relationship exists today and none may be implied; access to a vendor's live tenant data (AI/Agent Operations and independent assurance both concur). |
-| Inputs | `pnpm run verify:breadth` (47 deferred families plus 8 doctrine proofs); live shape-check records in `docs/*_LIVE_SHAPE_CHECK.md`; `docs/SIGNAL_SOURCE_CATALOG.md`; domain-lead findings. |
+| Inputs | `pnpm run verify:breadth` (56 steps: 47 gates covering the 48 deferred families, 8 doctrine proofs, and `proof:decision-palette` — count the STEPS entries in `scripts/verify-breadth.mjs`, not this parenthetical); live shape-check records in `docs/*_LIVE_SHAPE_CHECK.md`; `docs/SIGNAL_SOURCE_CATALOG.md`; domain-lead findings. |
 | Outputs | Connector roadmap inside ratified scope; per-family honesty notes (observed versus derived); the deferred-family register as it appears publicly. |
 | KPIs | Zero deferred families described in the present tense on any buyer-facing surface; every launch family has at least one live shape check on record; every family's unknown-input path has an explicit counterexample. |
 | Activation trigger | Covered and running now. Becomes a dedicated human role when a deferred family is activated by decision record, or when a second launch family requires a vendor-specific certification or review process to proceed. |
@@ -588,11 +590,11 @@ under DR-005 to `#C67070` dark / `#8A3F3F` light — measured at 5.05:1 and 4.55
 dark, 6.50:1 and 7.33:1 light, replacing a 3.18:1 pairing on card that was the
 weakest contrast in the system on its most safety-critical state.
 
-The unfinished part is stated as plainly: as of 2026-08-21, a grep of
-`native/ios/EnterpriseShell` finds 18 raw `UIFont.systemFont` /
-`monospacedSystemFont` calls outside `DesignSystem.swift`, and no lint rule yet
-prevents the next one. Hiring-priority numbers below are this catalog's proposed
-sequence, not a commitment.
+The once-unfinished part is stated as plainly: raw `UIFont.systemFont` /
+`monospacedSystemFont` calls outside `DesignSystem.swift` in
+`native/ios/EnterpriseShell` stand at 0 as of 2026-09-06 (18 on 2026-08-21), and
+`scripts/check-ios-dynamic-type.mjs` gates the next one in preflight and CI.
+Hiring-priority numbers below are this division's proposed sequence, not a commitment.
 
 ### Head of Design
 
@@ -649,9 +651,9 @@ sequence, not a commitment.
 | Cannot approve alone | Decision-state color meaning or values (Head of Design, with measured ratios); removing a contrast check; any exception to the both-appearances rule. |
 | Inputs | Measured contrast ratios; the two token trees; native and web lane findings; accessibility audit results. |
 | Outputs | The canonical token set; the component library; drift checks and lint rules; migration notes when a token changes. |
-| KPIs | Zero token forks between trees at merge; zero raw `UIFont.systemFont` / `monospacedSystemFont` calls outside `DesignSystem.swift` (18 remain in `native/ios/EnterpriseShell` as of 2026-08-21); every color defined for light and dark. |
+| KPIs | Zero token forks between trees at merge; zero raw `UIFont.systemFont` / `monospacedSystemFont` calls outside `DesignSystem.swift` (0 as of 2026-09-06; 18 on 2026-08-21; gated by `scripts/check-ios-dynamic-type.mjs`); every color defined for light and dark. |
 | Activation trigger | Covered and running now. Becomes a dedicated human role when a third rendering target adopts the tokens (the desktop shell, or a host-app SDK component set), because two trees can be held by review and three cannot. |
-| Current coverage | AI-covered via agent roster: `brand-design` lane, with `mobile-native-engineer` and `web-engineer` applying changes. The system is real and in use; the drift protection is partly written guidance rather than a gate, which is why the lint rule is a tracked backlog item. |
+| Current coverage | AI-covered via agent roster: `brand-design` lane, with `mobile-native-engineer` and `web-engineer` applying changes. The system is real and in use; the raw-font drift check is a gate (`scripts/check-ios-dynamic-type.mjs`, in preflight and CI) and the contrast measurement runs as `proof:decision-palette`. |
 | Human / fractional / AI-supported | AI-supported today; human when the trigger fires |
 | Hiring priority | 8 |
 | Required competencies | Cross-platform design systems (SwiftUI/UIKit and CSS custom properties); contrast measurement; writing lint rules and checks rather than guidelines; migration discipline. |
@@ -672,7 +674,7 @@ sequence, not a commitment.
 | Outputs | Measured contrast records; accessibility verification runs; lint rules and automated checks; remediation lists with concrete file and line references. |
 | KPIs | Every decision-state pairing at or above 4.5:1 on `SG.background` and `SG.card` in both appearances; zero raw system-font calls outside the design system; every user-facing change verified at `accessibility-extra-large` before merge. |
 | Activation trigger | Covered and running now — the roster's trigger is "any user-facing surface changes". Becomes a dedicated human or fractional role when a customer procurement process requires an accessibility conformance report, or when a surface ships that automated checks cannot evaluate. |
-| Current coverage | Declared in the agent roster (`accessibility-specialist`) but not yet activated as its own lane; the accessibility work delivered so far was done by the `brand-design`, `mobile-native-engineer`, and `web-engineer` lanes — the Dynamic Type ramp, the `onDeny` foreground fix (white on the dark `deny` fill measures 3.53:1, so the foreground flips instead), and the web pass covering viewport, contrast, live regions, and reduced motion. Eighteen raw font calls remain outside the design system as of 2026-08-21. |
+| Current coverage | Declared in the agent roster (`accessibility-specialist`) but not yet activated as its own lane; the accessibility work delivered so far was done by the `brand-design`, `mobile-native-engineer`, and `web-engineer` lanes — the Dynamic Type ramp, the `onDeny` foreground fix (white on the dark `deny` fill measures 3.53:1, so the foreground flips instead), and the web pass covering viewport, contrast, live regions, and reduced motion. No raw font calls remain outside the design system as of 2026-09-06 (eighteen on 2026-08-21; `scripts/check-ios-dynamic-type.mjs` gates it). |
 | Human / fractional / AI-supported | AI-supported today; fractional human for any conformance report |
 | Hiring priority | 7 |
 | Required competencies | WCAG 2.2 AA in practice; iOS Dynamic Type and Auto Layout failure modes; VoiceOver and screen-reader testing; the habit of converting a finding into a check. |
@@ -1157,7 +1159,7 @@ with the condition that turns them on, and they are off today.
 | Required competencies | Detection engineering; incident command; digital forensics and evidence handling; log integrity design; writing incident communications that are accurate under time pressure |
 | Customer/security implications | A shared-device trust gate failing in a hospital is a clinical continuity event, not only a security one. Detection and honest reconstruction are what let a customer decide whether to keep running. |
 
-### Offensive security specialist — penetration testing and red team (engaged)
+### Offensive security specialist — penetration testing and red team
 
 | Field | Value |
 |---|---|
@@ -1381,7 +1383,7 @@ no auditor, no assessor and no vendor risk program in operation.
 | Required competencies | Regulatory research across healthcare, privacy, AI and public sector; policy writing that engineers will read; obligation mapping; distinguishing what a regulation requires from what a vendor says it requires |
 | Customer/security implications | Customers ask which obligations SignalGrid takes on and which stay with them. The honest boundary — domain safety and clinical decisions sit in host applications — has to be stated the same way every time. |
 
-### External audit, assessment & advisory partners (engaged)
+### External audit, assessment & advisory partners
 
 | Field | Value |
 |---|---|
@@ -1602,7 +1604,7 @@ Two rules bind the doctrine to this division's staffing. First, **toil is capped
 | Outputs | Attribution reports by environment, workload, and lane; forecasts with stated assumptions; waste findings with proposed removals; unit-consumption models |
 | KPIs | 100 percent of consumption attributable to a named environment, workload, or lane; forecast versus actual divergence reported every month with the reason for each variance; every waste finding carries a specific proposed action and an owner; zero cost figures published outside owner-only channels |
 | Activation trigger | Activates when recurring infrastructure or model-provider consumption exists across more than one provider account, or when the owner sets a monthly consumption threshold in the owner-only finance record and asks for it to be tracked. |
-| Current coverage | Not staffed. Consumption is currently visible directly to the owner, who holds all spend authority; the agent-lane economics half is AI-covered via agent roster: `agent-ops-economics` lane. No cost or billing figure appears in this repository, and none may — costs and billing are owner-only by policy, and this catalog states no dollar amount anywhere. |
+| Current coverage | Not staffed. Consumption is currently visible directly to the owner, who holds all spend authority; the agent-lane economics half is AI-covered via agent roster: `agent-ops-economics` lane. No owner-only billing figure (Claude spend, Apple Developer fee, GitHub plan, domain — DR-005 item 4) appears in this repository, and none may — those are owner-only by policy, and this catalog states no such amount anywhere. The product's own price points and the cost model do appear (`artifacts/signalgrid-web/src/pages/Pricing.tsx`, `docs/COST_MODEL.md`); scripts/check-cost-figures.mjs, being added this round, gates the distinction. |
 | Human / fractional / AI-supported | Fractional or AI-supported (future) |
 | Hiring priority | - |
 | Required competencies | Cloud and model-provider consumption analysis; tagging and attribution design; forecasting with explicit assumptions; unit-economics modeling; the discipline to report consumption without publishing prices |
@@ -1612,7 +1614,7 @@ Two rules bind the doctrine to this division's staffing. First, **toil is capped
 
 **Measurable output: scale human execution without losing accountability.** Leadership row: Head of AI/Automation.
 
-This division exists because SignalGrid is built with substantial AI assistance and therefore needs AI to be an organizational function rather than a developer tool. NIST's AI Risk Management Framework calls for explicitly defined human roles for AI oversight; that is what these roles are. The important honesty here is stated once, plainly, and repeated in the coverage fields below: **the agent lanes that would be governed by this function are the same lanes that already execute this company's work, including writing this catalog.** The function does not create that arrangement — it formalizes it, under owner oversight, the lane-coordination protocol in `docs/LANE_COORDINATION.md`, the 41-duty registry in `docs/agent/org-roster.json`, and the review-coverage ledger in `docs/agent/review-coverage.json`, which records what a named role actually read as distinct from what a gate asserts. Human accountability is not delegable to a lane, and the owner remains the accountable human for every agent action.
+This division exists because SignalGrid is built with substantial AI assistance and therefore needs AI to be an organizational function rather than a developer tool. NIST's AI Risk Management Framework calls for explicitly defined human roles for AI oversight; that is what these roles are. The important honesty here is stated once, plainly, and repeated in the coverage fields below: **the agent lanes that would be governed by this function are the same lanes that already execute this company's work, including writing this catalog.** The function does not create that arrangement — it formalizes it, under owner oversight, the lane-coordination protocol in `docs/LANE_COORDINATION.md`, the 42-duty registry in `docs/agent/org-roster.json`, and the review-coverage ledger in `docs/agent/review-coverage.json`, which records what a named role actually read as distinct from what a gate asserts. Human accountability is not delegable to a lane, and the owner remains the accountable human for every agent action.
 
 ### Head of AI & Automation
 
@@ -1629,7 +1631,7 @@ This division exists because SignalGrid is built with substantial AI assistance 
 | Outputs | Agent scope and boundary policy; model and provider selection records; evaluation policy; the lane registry; AI incident records |
 | KPIs | 100 percent of active lanes have a written scope, an escalation boundary, and a named accountable human; every model or provider change carries a decision record with a reversal path; review-coverage percentage reported on every run and trending up; zero agent-authored public claims that fail `check:false-claims` |
 | Activation trigger | Active now in substance — the founder performs it. Hire or formalize as a distinct human role when more than one human directs agent lanes, or when a lane is permitted to change a surface that no gate covers. |
-| Current coverage | Founder/CEO holds the accountability and the decision authority; the operating half is AI-covered via agent roster: `agent-ops-economics` lane, with `docs/agent/org-roster.json` as the enforcement registry of 41 agent duties and `docs/DECISION_RECORDS.md` as the decision trail. This is the self-referential part, stated plainly: the lanes operate under boundaries the founder set, and this function is the name for that arrangement. |
+| Current coverage | Founder/CEO holds the accountability and the decision authority; the operating half is AI-covered via agent roster: `agent-ops-economics` lane, with `docs/agent/org-roster.json` as the enforcement registry of 42 agent duties and `docs/DECISION_RECORDS.md` as the decision trail. This is the self-referential part, stated plainly: the lanes operate under boundaries the founder set, and this function is the name for that arrangement. |
 | Human / fractional / AI-supported | Human (founder today) with AI support |
 | Hiring priority | 10 |
 | Required competencies | Agent system design and boundary setting; model and provider evaluation; code review at volume; risk framing against NIST AI RMF; the judgment to refuse a capability that cannot be reviewed |
@@ -1650,7 +1652,7 @@ This division exists because SignalGrid is built with substantial AI assistance 
 | Outputs | Lane coordination records; the review-coverage ledger; tool-call and change audit trails; sim-request results with provenance; AI incident records |
 | KPIs | 100 percent of lane activations name a produced artifact; zero unresolved cross-lane collisions on shared surfaces per month; every sim request closed by a recorded result or an explicitly reported pending state, never by a silent skip; review-coverage percentage published on every run |
 | Activation trigger | Active now. This is the only role in this division performed continuously today. |
-| Current coverage | Partially self-referential, and named as such: the agent lanes govern themselves under the founder's oversight, the lane-coordination protocol in `docs/LANE_COORDINATION.md`, the 41-duty registry in `docs/agent/org-roster.json`, and the review-coverage ledger in `docs/agent/review-coverage.json`. Enforcement is mechanical rather than social — `check-lane-messages`, `check-sim-requests`, `check:false-claims`, and the guard registries report unresolved state and never pass silently. AI-covered via agent roster: `agent-ops-economics`, `program-manager`, and `mac-lane-steward` lanes. |
+| Current coverage | Partially self-referential, and named as such: the agent lanes govern themselves under the founder's oversight, the lane-coordination protocol in `docs/LANE_COORDINATION.md`, the same 42-duty registry in `docs/agent/org-roster.json`, and the review-coverage ledger in `docs/agent/review-coverage.json`. Enforcement is mechanical rather than social — `check-lane-messages`, `check-sim-requests`, `check:false-claims`, and the guard registries report unresolved state and never pass silently. AI-covered via agent roster: `agent-ops-economics`, `program-manager`, and `mac-lane-steward` lanes. |
 | Human / fractional / AI-supported | AI-supported with a named accountable human (the founder) |
 | Hiring priority | - |
 | Required competencies | Agent orchestration; change auditing; conflict resolution across parallel workers; provenance discipline; data-exposure judgment; writing down what actually happened including the parts that failed |
@@ -1880,7 +1882,7 @@ endorsement, resale agreement, or certification exists.
 | Outputs | Per-IdP wire-truth tables; the derivability record for each assertion; identity sections of reference architectures |
 | KPIs | Identity dimensions verified against a live IdP, as a count of the fifteen, with the unverified remainder stated; number of IdPs covered, currently one; assertions reclassified from assumed to absent after live testing |
 | Activation trigger | Active now via the agent lane. Converts to a human or fractional engagement when a scoped environment depends on an assertion no free or self-hostable IdP can reproduce — the Entra `amr` claim and Okta session APIs are the known cases — or when two concurrent pilots run different IdPs. |
-| Current coverage | AI-covered via agent roster: `iam-domain` lane, activated 2026-08-20, which drove fifteen dimensions against a live Keycloak 26.4 and found `amr` and `auth_time` absent from every channel and the session record carrying no device field at all. Ten dimensions remain unverified and only one IdP has been driven. |
+| Current coverage | AI-covered via agent roster: `iam-domain` lane, activated 2026-08-20, which drove five of the fifteen dimensions against a live Keycloak 26.4 and found `amr` and `auth_time` absent from every channel and the session record carrying no device field at all. Ten dimensions remain unverified and only one IdP has been driven (`docs/agent/org-roster.json`, `iam-domain` `nextAction`). |
 | Human / fractional / AI-supported | AI-supported today; human or fractional at trigger |
 | Hiring priority | - |
 | Required competencies | OIDC and SAML at the protocol level; Entra ID, Okta, and Keycloak administration; FIDO2 and passkey assurance mechanics; token introspection and session management; scepticism toward claims a console displays but a token does not carry |

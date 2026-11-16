@@ -135,6 +135,13 @@
 </style>
 </head>
 <body>
+<!-- UNPUBLISHED (2026-09-05). pages.yml deploys artifacts/signalgrid-web (the SPA) and takes only
+     site/CNAME from this directory; this page is NOT served at signalgrid.app. It is kept scanned by
+     scripts/check-launch-claims.mjs because it sits beside the CNAME that pins the public domain and is
+     one deploy-step edit from being served. Its copy is hedged to the same standard as the SPA. -->
+<div style="background:#3b2f0b;color:#f5e6b8;padding:.6rem 1rem;font:14px/1.4 -apple-system,system-ui,sans-serif;text-align:center">
+  Superseded page, not served — the live site is built from <code>artifacts/signalgrid-web</code>. Deferred families named below are design targets on the roadmap, not Limited GA.
+</div>
 
 <header class="nav">
   <div class="wrap">
@@ -206,9 +213,9 @@
     <p class="sub">Not a binary gate. SignalGrid grades the moment and routes it to the proportionate response.</p>
     <div class="grid g2">
       <div class="outcome allow"><h3><span class="dot d-allow"></span>Allow <span class="tag">low friction</span></h3><p>Identity, device, and context all clear for this workflow — proceed, and orchestrate the supporting actions automatically.</p></div>
-      <div class="outcome stepup"><h3><span class="dot d-stepup"></span>Step-up <span class="tag">re-verify</span></h3><p>Confidence is close but not enough — challenge for a passkey / badge tap, then continue once satisfied.</p></div>
+      <div class="outcome stepup"><h3><span class="dot d-stepup"></span>Step-up <span class="tag">re-verify</span></h3><p>Confidence is close but not enough — challenge for a passkey (a badge tap is a design target on the roadmap, not Limited GA), then continue once satisfied.</p></div>
       <div class="outcome restrict"><h3><span class="dot d-restrict"></span>Restrict <span class="tag">reduced scope</span></h3><p>Let the safe part of the workflow proceed while holding back the risky capability.</p></div>
-      <div class="outcome deny"><h3><span class="dot d-deny"></span>Deny <span class="tag">fail-closed</span></h3><p>A hard signal (custody lost, tamper, disabled account) blocks the action — with the reason on record.</p></div>
+      <div class="outcome deny"><h3><span class="dot d-deny"></span>Deny <span class="tag">fail-closed</span></h3><p>A hard signal (a disabled account today; custody lost or tamper on the roadmap, not Limited GA) blocks the action — with the reason on record.</p></div>
     </div>
     <div class="outcome assist" style="margin-top:1rem">
       <h3><span class="dot" style="background:var(--accent)"></span>Assist <span class="tag">human confirms</span></h3>
@@ -232,7 +239,7 @@
     <div class="card" style="margin-top:.8rem;border-left:4px solid var(--accent)">
       <div class="k">SignalGrid</div>
       <h3 style="font-size:1.05rem;margin:.35rem 0 .35rem">Decides runtime trust — per workflow, in context</h3>
-      <p style="color:var(--soft);font-size:.92rem">Identity says <em>who</em>. IGA says <em>what they may have</em>. UEM says <em>the device is healthy</em>. SignalGrid decides whether <em>this action, on this device, right now</em> should proceed — then orchestrates it, with a human on anything sensitive. <a href="https://github.com/DanFashauer/SignalGrid-Review-Hub/blob/SignalGrid_Alpha/docs/IGA_ADJACENCY.md" style="color:var(--accent);text-decoration:none">SignalGrid &amp; IGA →</a></p>
+      <p style="color:var(--soft);font-size:.92rem">Identity says <em>who</em>. IGA says <em>what they may have</em>. UEM says <em>the device is healthy</em>. SignalGrid decides whether <em>this action, on this device, right now</em> should proceed — then orchestrates it, with a human on anything sensitive. <a href="https://github.com/DanFashauer/SignalGrid-Review-Hub/blob/SignalGrid_Alpha/docs/POSITIONING.md" style="color:var(--accent);text-decoration:none">SignalGrid &amp; IGA →</a></p>
     </div>
   </div>
 </section>
@@ -242,10 +249,10 @@
   <div class="wrap">
     <p class="eyebrow">How it works · Trusted Room Entry</p>
     <h2 class="big">A nurse walks up to a room. Here's the moment.</h2>
-    <p class="sub">The flagship scenario — one of eight in the live demo — shows the full pipeline: signals in, decision out, orchestration planned, sensitive steps held.</p>
+    <p class="sub">The flagship scenario — one of the scenarios in the live demo — shows the full pipeline: signals in, decision out, orchestration planned, sensitive steps held.</p>
     <ol class="steps">
-      <li><b>Signals arrive.</b><p>Identity (badge-bound, enabled), device posture (managed, compliant, encrypted, baseline aligned), custody &amp; dock state, and workflow risk tier for what's about to happen.</p></li>
-      <li><b>The core evaluates.</b><p>Twelve signal categories become weighted evidence → a single decision with reason codes. Deterministic and explainable.</p></li>
+      <li><b>Signals arrive.</b><p>Identity (enabled), device posture (managed, compliant, encrypted, baseline aligned), and workflow risk tier for what's about to happen; badge binding, custody and dock state are design targets on the roadmap, not Limited GA.</p></li>
+      <li><b>The core evaluates.</b><p>The core's signal categories become weighted evidence → a single decision with reason codes. Deterministic and explainable.</p></li>
       <li><b>Orchestration is planned.</b><p>The decision becomes a plan of downstream actions — session start, environment, alert routing — each tagged auto, assist, step-up, or blocked.</p></li>
       <li><b>Sensitive steps wait for a human.</b><p>Opening a controlled-medication cabinet or activating a patient display is held with a <em>Confirm</em> button. The clinician stays in control; the audit trail captures it.</p></li>
     </ol>
@@ -317,7 +324,7 @@
   <div class="wrap">
     <p class="eyebrow">Core functionality</p>
     <h2 class="big">What actually goes into a decision.</h2>
-    <p class="sub">The signal categories and controls the core reasons over today — each explainable, each fixture-backed.</p>
+    <p class="sub">The signal categories the core reasons over today, and the roadmap inputs it is designed for — custody, dock, tamper and badge binding are design targets on the roadmap, not Limited GA. Each is explainable and fixture-backed.</p>
     <div class="chips">
       <span class="chip">Identity &amp; enablement</span>
       <span class="chip">Device management</span>
@@ -386,7 +393,7 @@
   <div class="wrap">
     <div class="band">
       <p class="eyebrow">See it move</p>
-      <h2 class="big" style="margin:0 auto;max-width:18ch">Eight scenarios. Every outcome. In your browser.</h2>
+      <h2 class="big" style="margin:0 auto;max-width:18ch">Every scenario. Every outcome. In your browser.</h2>
       <p>From a clean allow to a withdrawn badge, a tamper flag, and a disabled account — each producing a real decision and a matching orchestration plan. Nothing to install.</p>
       <div class="btns" style="justify-content:center">
         <a class="btn primary" href="./console.html">▶ Open the live console</a>
@@ -415,7 +422,7 @@
           <a class="btn ghost" href="https://www.linkedin.com/in/daniel-fashauer-a0148278">Connect on LinkedIn →</a>
           <a class="btn ghost" href="https://github.com/DanFashauer/SignalGrid-Review-Hub">View the code</a>
         </div>
-        <p class="note-syn" style="margin-top:1.4rem">SignalGrid is an independent project built on synthetic, public-safe data — not affiliated with, endorsed by, or connected to any current or past employer.</p>
+        <p class="note-syn" style="margin-top:1.4rem">SignalGrid is a founder-built project on synthetic, public-safe data — not affiliated with, endorsed by, or connected to any current or past employer.</p>
       </div>
       <div>
         <div class="card">

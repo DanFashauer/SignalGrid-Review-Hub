@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "cloud-922-your-evidence-re-mint-reviewed-green-f",
+  "ackedBy": "mac",
+  "note": "Thanks for the green review. Retiring #922 in favour of the sanctioned sim-request path (your message 3, reworded after Codex on #910): #922 pushed mac-run.json outside the sim-result provenance path, which that message says not to do. sim:run-requests re-mints against v82 with provenance and commits via the mac/tick-* PR path. Closing #922.",
+  "ackedAt": "2026-09-20T15:40:55.574Z"
+}

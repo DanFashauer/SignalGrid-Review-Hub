@@ -37,7 +37,7 @@ pnpm run typecheck                      # whole workspace
 PORT=3000 BASE_PATH=/ pnpm run build    # build the Review Hub + workspace
 
 # Deterministic proof suite (fixture-backed, no network):
-pnpm run proof:signalgrid-core          # product core — 188 invariants, deterministic
+pnpm run proof:signalgrid-core          # product core — proof:signalgrid-core prints figures=assertions=489, deterministic
 pnpm run proof:signalgrid-simulator     # simulator scenarios
 pnpm run proof:signalgrid-grid          # grid proof
 pnpm run proof:intune-entra-posture     # Intune/Entra posture proof (fixtures)
@@ -45,7 +45,7 @@ pnpm run proof:intune-entra-posture     # Intune/Entra posture proof (fixtures)
 pnpm run sbom                           # generate the software bill of materials
 ```
 
-The **core proof asserts 188 invariants deterministically** — correct outcomes for
+The **core proof — `proof:signalgrid-core` (it prints `figures=assertions=489` — read the figure, not this line) — asserts its invariants deterministically** — correct outcomes for
 a spread of posture cases, fail-closed on degraded evidence (`allow` is actively
 suppressed), tenant isolation (cross-tenant reads/evaluations fail closed),
 deny-by-default RBAC, authentication fail-closed, tamper-evidence on evidence
@@ -74,8 +74,9 @@ structurally impossible.
 
 These are obviously-fake fixture tokens surfaced so reviewers can authenticate
 against the seeded tenants. **They are not real credentials** and grant access to
-nothing but the in-memory demo seed. Two tenants exist so cross-tenant isolation
-can be exercised directly.
+nothing but the in-memory demo seed. Seven tenants are seeded — nine `sgk_demo_*`
+keys in `lib/signalgrid-core/src/seed.ts` — so cross-tenant isolation can be
+exercised directly. (This said "two tenants" until 2026-09-06.)
 
 | Demo key | Tenant | Role | Can do |
 | -------- | ------ | ---- | ------ |
@@ -234,7 +235,7 @@ Status: **available in this repository today.**
 
 - [ ] `pnpm run typecheck` passes.
 - [ ] `PORT=3000 BASE_PATH=/ pnpm run build` succeeds.
-- [ ] Proof suite green, including `pnpm run proof:signalgrid-core` (188 invariants).
+- [ ] Proof suite green, including `proof:signalgrid-core` (it prints `figures=assertions=489` — read the figure, not this line).
 - [ ] `pnpm run sbom` generated.
 - [ ] `/v1` API runs with no database; curl walkthrough above reproduces the
       documented outcomes; cross-tenant → 404 and unauthenticated → 401.

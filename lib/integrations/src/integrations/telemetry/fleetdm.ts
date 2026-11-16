@@ -155,10 +155,16 @@ export class FleetDMAdapter {
     }
 
     // Global policies live under /global/policies. Plain /policies does not exist
-    // and 404s on a real Fleet (measured on 4.89.2). The TEAM branch is left as it
-    // was on purpose: teams are a Fleet PREMIUM feature, so the free server this
-    // was verified against cannot create one, and changing an unverified path on
-    // the strength of a fixed sibling would be a guess wearing a fix's clothes.
+    // and 404s on a real Fleet (measured on 4.89.2). The TEAM branch was left
+    // unverified until 2026-09-06, when the owner's Premium trial key let the cloud
+    // lane create a team: `/teams/{id}/policies` answers with TWO lists —
+    // `policies` (the team's own) and `inherited_policies` (the global policies
+    // Fleet ALSO applies to the team's hosts). Reading only the first silently
+    // understated the policy set a team host is graded against; both are folded
+    // below, and `proof:live-fleet`'s Premium section asserts the union equals the
+    // wire. Reported on the same measurement: a Fleet Free server refuses the team
+    // routes outright, so `teamId` on a Free server is a configuration error that
+    // surfaces as the non-ok status below, never as an empty catalogue.
     const url = this.config?.teamId
       ? `${this.getBaseUrl()}/api/v1/fleet/teams/${this.config.teamId}/policies`
       : `${this.getBaseUrl()}/api/v1/fleet/global/policies`;
@@ -184,8 +190,11 @@ export class FleetDMAdapter {
       throw new Error(`FleetDM getPolicies failed: ${response.status} ${error}`);
     }
 
-    const data = await response.json() as { policies: FleetDMPolicy[] };
-    return data.policies;
+    const data = await response.json() as { policies?: FleetDMPolicy[]; inherited_policies?: FleetDMPolicy[] };
+    // Own ∪ inherited. `?? []` on both: an envelope with neither key is an empty
+    // catalogue, which grades every host `unknown` — the strict direction — rather
+    // than a thrown TypeError that would take the whole sync down with it.
+    return [...(data.policies ?? []), ...(data.inherited_policies ?? [])];
   }
 
   /**

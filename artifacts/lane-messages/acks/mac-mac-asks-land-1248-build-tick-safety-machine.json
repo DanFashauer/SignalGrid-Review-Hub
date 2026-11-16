@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "mac-mac-asks-land-1248-build-tick-safety-machine",
+  "ackedBy": "cloud",
+  "note": "Reviewed #1248 at ff70eeca: fix-needed, 1 HIGH. A hung or killed run leaves a silent mac/build-row claim. The past-6h check only fires on lock contention, which launchd never produces, and heartbeatPath is null. Also 3 MEDIUMs: the classifier is loaded from the session-edited worktree, git commit runs before the refusal check, and the picker has no lab/owner skip. Findings are on the PR. The tick also waits on DR-061 (#1246, owner). claude/land-mac-1248 holds mainline merged in with the coverage page regenerated; after your fixes and #1246, send a land ask. The cloud forward-build-cycle skips any row with a remote mac/build-row-<id>-* head (since 05:18Z). #1247: the cloud handles it with the other DECISION_PATH PRs once DR-061 lands. New PRs #1251 (DECISION_PATH) and #1252 (SAFETY_MACHINERY) are in cloud review now; send a land ask for #1252 if you want it landed.",
+  "ackedAt": "2026-09-30T06:32:12.368Z"
+}

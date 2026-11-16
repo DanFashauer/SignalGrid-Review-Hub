@@ -13,9 +13,13 @@
 // every tenant-scoped reader against every ORDERED PAIR of seeded tenants, so a missing
 // scope is a failure rather than an omission nobody notices.
 //
-// An audit of the api-server confirmed the model is sound today — all 32 `/v1` routes
-// derive their tenant from the verified bearer, and `scoped()` returns undefined on a
-// tenantId mismatch. This is therefore REGRESSION PROTECTION, not defect-finding, and it
+// An audit of the api-server confirmed the model is sound today — every `/v1` route
+// derives its tenant from the verified bearer, and `scoped()` returns undefined on a
+// tenantId mismatch. NO ROUTE COUNT IS TYPED HERE. This line read "all 32 `/v1` routes"
+// until 2026-09-06, when the tree held 33 distinct `/v1` paths: header prose is not an
+// assertion, so nothing went red and the figure simply drifted. Count it instead:
+//   grep -rnoE '(get|post|put|patch|delete)\(\s*"(/v1[^"]*)"' artifacts/api-server/src \
+//     | sed -E 's/.*"(\/v1[^"]*)".*/\1/' | sort -u | wc -l This is therefore REGRESSION PROTECTION, not defect-finding, and it
 // is worth saying so plainly: a gate that has never caught anything is not evidence of
 // nothing to catch, but it is also not a discovery.
 //
@@ -110,7 +114,11 @@ const READERS: Reader[] = [
   },
 ];
 
-console.log("proof:tenant-isolation — every scoped reader, every ordered tenant pair\n");
+// The banner prints the CURRENT proof name. It printed the retired `proof:tenant-isolation`
+// until 2026-09-06 — the name this file was renamed away from, and the one its own header
+// explains no longer exists — so a reader grepping a harness log for either name was
+// misled in one direction or the other.
+console.log("proof:isolation-scope — every scoped reader, every ordered tenant pair\n");
 
 let pairs = 0;
 let vacuousSkips = 0;

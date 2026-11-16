@@ -1,0 +1,90 @@
+{
+ "$comment": "Stage outputs of the intake rule (tool-evaluation-by-use §5b) for one owner-shared post. A: one self-scan acting as the resource (opus). B: two read-only confirmers (sonnet). C: the coordinating session's decision. Model output throughout: quoted by the intake row, never a fixture or a figure. The resource is a post with no source repository, so it was READ, not run; §4 and §5 do not apply.",
+ "date": "2026-11-11",
+ "resources": [
+  {
+   "name": "\"The 3-step AI playbook workflow\" post",
+   "upstream": "none named; pasted text",
+   "author": "not named",
+   "licence": "none stated; nothing copied",
+   "form": "post (read, not run)",
+   "pin": "none possible: no repository"
+  }
+ ],
+ "proposals": [
+  {
+   "what": "Interview until the requirements are clear and write them as a playbook; keep what the agent produces as persistent rules; give the agent a built-in checklist of what done looks like. It claims this avoids multi-agent overhead of about 4x to 15x and that GitHub Spec Kit already implements it.",
+   "alreadyHere": "Interview and specification skills exist (interview-me, grilling, grill-me, spec-driven-development, writing-plans, brainstorming); `ls .claude/skills | wc -l` printed 121 and `ls .claude/agents | wc -l` printed 15. A Stop hook (.claude/hooks/verify-done.sh, wired in .claude/settings.json) blocks a stop when loop:state fails, the tree is dirty, or HEAD is not on origin. GitHub Spec Kit already has an intake row dated 2026-09-23, adopted by reference with no files vendored.",
+   "trials": [
+    "The 4x to 15x figure has no source in the post and nothing in the tree measures it; it is recorded as the post's claim.",
+    "`git grep -n -i \"polling monitor\\|one push per review\\|review a head once\" -- CLAUDE.md docs .claude` found 0 matches: the solo-versus-workflow rule and the credit-saving rules are not written in the shared tree.",
+    "The clause 'never repeats the same work' has no gate; it is aspirational."
+   ],
+   "model": "opus",
+   "tasks": [
+    {
+     "id": "T1",
+     "title": "Write a solo-versus-workflow rule and the credit-saving rules into .claude/WORKFLOWS.md",
+     "evidence": "the grep above found 0 matches; WORKFLOWS.md 'When to run which' names only three passes",
+     "change": "add a short subsection",
+     "owner": "agent-platform-steward",
+     "risk": "WORKFLOWS.md says a change needs a decision record; the recorded default at the time was the opposite"
+    },
+    {
+     "id": "T2-row",
+     "title": "Add the resource-intake row for this post",
+     "evidence": "no row for it existed",
+     "change": "append one row",
+     "owner": "agent-platform-engineer",
+     "risk": "low; must not quote the 4x to 15x figure as fact"
+    }
+   ]
+  }
+ ],
+ "confirms": [
+  {
+   "perspective": "agent-plane",
+   "model": "sonnet",
+   "votes": [
+    {
+     "id": "T1",
+     "verdict": "amend",
+     "reason": "The counts reproduce and no skill duplicates it, but docs/agent/LOOP.md recorded the owner's default as workflows, the opposite of the proposed rule; WORKFLOWS.md is a pass table and needs a decision record."
+    },
+    {
+     "id": "T2-row",
+     "verdict": "confirm",
+     "reason": "The Spec Kit row and the named skills and hook cover steps 1 and 3; mark the 'never repeats work' clause partial and the figure unverifiable."
+    }
+   ],
+   "missing": "none measured"
+  },
+  {
+   "perspective": "fail-closed-and-claims",
+   "model": "sonnet",
+   "votes": [
+    {
+     "id": "T1",
+     "verdict": "amend",
+     "reason": "The gap is real. Any solo rule must say it never waives a review stage a decision record requires, and that a self-check by the same agent is not independent review."
+    },
+    {
+     "id": "T2-row",
+     "verdict": "confirm",
+     "reason": "121 skills, 15 agents and the Stop hook reproduce; the figure must be marked as the post's unsourced claim."
+    }
+   ],
+   "missing": "none measured"
+  }
+ ],
+ "decision": {
+  "T1": {
+   "outcome": "owner",
+   "where": "not written here: the same day the owner adopted a single-coordinator, sequential operating model for his local system in his own words; writing a shared rule from it is a decision-record change, not an intake row"
+  },
+  "T2-row": {
+   "outcome": "landed",
+   "where": "docs/agent/RESOURCE_INTAKE.md (2026-11-11 row)"
+  }
+ }
+}

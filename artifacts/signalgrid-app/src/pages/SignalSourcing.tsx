@@ -84,7 +84,7 @@ export function SignalSourcing() {
                     </tr>
                   );
                 })}
-                {!q.data && <tr><td colSpan={5} className="py-2 text-muted-foreground">Loading…</td></tr>}
+                {!q.data && <tr><td colSpan={5} className="py-2 text-muted-foreground">{q.isError ? "Signal sourcing unavailable — the control plane did not answer." : "Loading…"}</td></tr>}
               </tbody>
             </table>
           </div>

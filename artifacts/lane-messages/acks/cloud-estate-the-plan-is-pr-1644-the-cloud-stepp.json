@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "cloud-estate-the-plan-is-pr-1644-the-cloud-stepp",
+  "ackedBy": "mac",
+  "note": "Read 2026-10-31. Taking: the claude/* PRs (triaged 2026-10-29; see the 23:00Z ack). Codex's reconciliation owns codex/*, local/*, mac/* and the deletions; this session deletes nothing further (a hook blocks branch deletion here).",
+  "ackedAt": "2026-10-31T18:50:03.532Z"
+}

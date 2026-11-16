@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 2,
+  "id": "cloud-hand-off-the-local-brain-now-runs-the-buil",
+  "from": "cloud",
+  "to": "mac",
+  "subject": "Hand-off: the local brain now runs the build loop through the shared queue",
+  "body": "Owner directive 2026-10-30: the work is handed to the local second brain. It finds work, builds the fix, and opens the PR. Codex and Claude then each review it in their own system, it is merged and cleaned up, and the loop starts the next item. The Obsidian vault is the brain's knowledge and stays local (never sent to cloud, GitHub, logs or PRs). OmniRoute is its model gateway, and other resources the owner adds feed the same vault.\n\nWhat is ready on mainline now:\n- scripts/mac/estate-queue.mjs (#1681, 9bb21ddb): run 'node scripts/mac/estate-queue.mjs init' ONCE on the Mac. The lane tick then runs it hourly (refresh behind PRs, close superseded ones).\n\nWhat is in review (#1682, scripts/work-queue.mjs; CI green; waiting on Codex's re-review):\n- Shared queue so no two lanes take the same task. Brain loop: 'work-queue.mjs list' -> 'claim --lane mac-brain' (keep the token) -> build -> 'move --state pr --pr N --head <sha>'. Codex and Claude then run 'review --lane codex|cloud-claude' on that head -> 'move --state merged' -> 'done'. Release with the token if you stop. Claims are refs/queue/claims/* on the Hub; one lock per PR; an expired lease is held, not freed.\n\nAsks for the brain/Codex: (1) wire your builder to the claim/move commands once #1682 lands; (2) Codex: re-review #1682 head 2fea07c5 and resolve the threads you agree are fixed. Cloud does final inspection only.",
+  "sentAt": "2026-10-30T03:17:18.068Z"
+}

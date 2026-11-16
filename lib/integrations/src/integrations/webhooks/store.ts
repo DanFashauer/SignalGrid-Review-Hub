@@ -14,8 +14,11 @@ import {
   DeliveryLog,
   DeliveryLogSchema,
   DLQEntry,
+  DLQEntrySchema,
   CreateWebhookRequest,
+  CreateWebhookSchema,
   UpdateWebhookRequest,
+  UpdateWebhookSchema,
 } from './types';
 import { boundedText, VENDOR_BODY_TEXT_LIMIT, VENDOR_ERROR_TEXT_LIMIT } from '../adapters/bounded-text';
 
@@ -74,43 +77,43 @@ function now(): string {
 }
 
 /**
- * Create a new webhook.
+ * Create a new webhook. THE INPUT IS PARSED HERE, at the exported function.
  *
- * ⚠️ BEFORE YOU GIVE THIS FUNCTION A ROUTE, READ THIS.
+ * WHAT CHANGED, AND WHY THE ORIGINAL REASONING NO LONGER HOLDS. This note used to say
+ * the validation should wait for a write route, on the `lib/dual-control` precedent
+ * that a repair shipped into a path nothing calls is reachable by nothing. That rested
+ * on a measurement — "both functions have ZERO callers" — which was re-measured on
+ * 2026-09-18 and is false for this one: `createWebhook` has nine callers across
+ * `scripts/src/webhooks-proof.ts` and `scripts/src/emit-gate-proof.ts`, every one of
+ * them passing an object cast `as never`, and the `url` they pass is stored and then
+ * POSTed to by the delivery path. The boundary is live today.
  *
- * It takes a `CreateWebhookRequest` and never parses one. `CreateWebhookSchema` is a
- * TYPE SOURCE here, not a validator — nothing in the repository calls `.parse()` on it,
- * so `url: z.string().url()` is a URL in the type system and an arbitrary string at
- * runtime. The same is true of `updateWebhook` below. Today that costs nothing: both
- * functions have ZERO callers, and `artifacts/api-server` exposes only
- * `GET /v1/webhooks` and `GET /v1/webhooks/deliveries` — there is no write route, so
- * nothing untrusted can reach either one.
- *
- * The moment a POST/PATCH route exists, that changes shape completely: whatever the
- * route hands in lands in Redis unvalidated, and the delivery path then POSTs to the
- * stored `url`. That is the SSRF shape, latent behind a missing route rather than
- * behind a check.
- *
- * So the route and the validation are ONE change, not two:
- *   1. `CreateWebhookSchema.parse(input)` / `UpdateWebhookSchema.parse(input)` at the
- *      top of each function — the boundary is here, not in the handler, because an
- *      exported function cannot assume its only caller is the one you are writing.
- *   2. THEN `.strict()` on both schemas. Not before: a schema nobody parses cannot
- *      reject anything, so strictness added on its own is decorative. With a parse in
- *      place it is load-bearing, and it is the same asymmetry the `uem`/`nac` config
- *      schemas were tightened for — an operator writing `secrets` for `secret` gets an
- *      UNSIGNED webhook, and one writing `state` for `status` gets a webhook that stays
- *      ENABLED. Both silent, both in the permissive direction.
- *
- * Recorded rather than pre-fixed on the `lib/dual-control` precedent
- * (`scripts/check-package-reachability.mjs`): a repair shipped into a path nothing calls
- * is proven by a proof and reachable by nothing, and it makes the next reader believe
- * the boundary is defended when the boundary does not exist yet. See
+ * WHY THE ROUTE DID NOT COME WITH IT. `artifacts/api-server` serves `GET /v1/webhooks`
+ * from `core.listWebhookEndpoints` — `lib/signalgrid-core`'s webhook store, a DIFFERENT
+ * store from this one. A `POST /v1/webhooks` over this module would read and write
+ * different stores on one path; over the core's store it would not reach this function
+ * at all. So the route the old note imagined has no coherent home here, and choosing
+ * one is a product-surface decision (it also needs a launch-profile classification).
+ * The validation, which is reachable now, does not wait on it. See
  * `docs/BUILD_BACKLOG.md`.
+ *
+ * `.parse()` and `.strict()` land together, which is the half of the old note that was
+ * right: a schema nobody parses cannot reject anything, so strictness alone would be
+ * decorative. With the parse in place it is load-bearing, and it closes the same
+ * asymmetry the `uem`/`nac` config schemas were tightened for — an operator writing
+ * `secrets` for `secret` gets an UNSIGNED webhook, and one writing `state` for `status`
+ * gets a webhook that stays ENABLED. Both silent, both in the permissive direction.
+ *
+ * THE PARSE IS ON THE FUNCTION, not in a handler: an exported function cannot assume
+ * its only caller is the one you are writing, and a `Promise` that rejects is a far
+ * better answer than a webhook in Redis whose `url` is an arbitrary string.
  */
 export async function createWebhook(
   input: CreateWebhookRequest
 ): Promise<WebhookConfig> {
+  // Parse, do not trust the type: every caller in the tree reaches this through an
+  // `as never` cast, which is exactly how a type-system URL becomes a runtime string.
+  input = CreateWebhookSchema.parse(input);
   const r = getRedis();
   
   const id = generateId();
@@ -199,15 +202,21 @@ export async function getWebhooksForEvent(event: WebhookEventType): Promise<Webh
 /**
  * Update webhook.
  *
- * ⚠️ Unvalidated for the same reason as `createWebhook` — read the note there before
- * adding a route. `rotateSecret` is the field that makes this one worse than the create
- * path: a caller that misspells it gets a successful update and a secret that was NOT
- * rotated, while believing a compromised one has just been retired.
+ * PARSED, like `createWebhook` — read the note there. `rotateSecret` is the field that
+ * makes strictness matter more here than on the create path: a caller that misspells it
+ * used to get a successful update and a secret that was NOT rotated, while believing a
+ * compromised one had just been retired. Under `.strict()` that misspelling is a
+ * rejection instead of a silent no-op.
+ *
+ * The parse runs BEFORE the existence lookup: a malformed update must not depend on
+ * whether the id happens to exist, or `updateWebhook("nope", garbage)` answers `null`
+ * ("no such webhook") for an input that was never valid in the first place.
  */
 export async function updateWebhook(
   id: string,
   input: UpdateWebhookRequest
 ): Promise<WebhookConfig | null> {
+  input = UpdateWebhookSchema.parse(input);
   const existing = await getWebhook(id);
   if (!existing) return null;
   
@@ -333,21 +342,32 @@ export async function getDeliveryLogs(
 }
 
 /**
- * Add to DLQ
+ * Add to DLQ.
+ *
+ * `attempts` is the number of deliveries the caller ACTUALLY made, and it is
+ * required. This used to hardcode 6 ("after max retries") whatever the caller's
+ * `maxAttempts` was, so a dispatcher configured for four attempts dead-lettered a
+ * record claiming six — a number nobody counted, in the artefact an operator reads
+ * to reconstruct what happened. A non-integer or negative count is refused rather
+ * than written: this record is evidence, and the schema requires an integer.
  */
 export async function addToDLQ(
   webhookId: string,
   eventId: string,
   payload: unknown,
-  error: string
+  error: string,
+  attempts: number
 ): Promise<DLQEntry> {
+  if (!Number.isInteger(attempts) || attempts < 0) {
+    throw new Error(`addToDLQ: attempts must be the observed non-negative integer count, got ${String(attempts)}`);
+  }
   const r = getRedis();
   const entry: DLQEntry = {
     id: generateId(),
     webhookId,
     eventId,
     payload: payload as DLQEntry['payload'],
-    attempts: 6, // After max retries
+    attempts,
     lastError: boundedText(error, VENDOR_ERROR_TEXT_LIMIT),
     failedAt: now(),
   };
@@ -362,6 +382,24 @@ export async function addToDLQ(
   }
 
   return entry;
+}
+
+/**
+ * Read the DLQ, newest first. Read-only; exists so the record addToDLQ writes can
+ * be checked against what the dispatcher actually did, not merely written.
+ */
+export async function listDLQ(limit = 20): Promise<DLQEntry[]> {
+  // Same answer on both backends: `lrange(key, 0, -1)` would return EVERYTHING for a
+  // limit of 0 while the memory slice returns nothing.
+  if (!Number.isInteger(limit) || limit <= 0) return [];
+  const r = getRedis();
+
+  if (r) {
+    const entries = await r.lrange(DLQ_PREFIX, 0, limit - 1);
+    return entries.map(e => DLQEntrySchema.parse(JSON.parse(e)));
+  }
+
+  return memoryStore.dlq.slice(0, limit);
 }
 
 // Note: retryFromDLQ can be implemented if needed
@@ -394,7 +432,3 @@ function parseWebhookFromRedis(data: Record<string, string>): WebhookConfig {
   });
 }
 
-// Type for response that includes new secret
-export interface WebhookWithNewSecret extends Omit<WebhookConfig, '_newSecret'> {
-  _newSecret?: string;
-}

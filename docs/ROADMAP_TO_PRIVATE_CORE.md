@@ -8,7 +8,7 @@ Review Hub validates the public story and external feedback loop. The private Si
 2. Reviewers, advisors, or design partners test whether the problem, buyer, user, and workflow are clear.
 3. The concept is classified as validated, needs redesign, deferred, archived, or private/core only.
 4. Validated concepts are translated into private-core implementation plans.
-5. Protected implementation happens in `DanFashauer/SignalGrid`.
+5. Protected implementation happens in a private repository the owner names in a decision record — not `DanFashauer/SignalGrid`, which is legacy and retirement-pending (`docs/REPO_LAYOUT.md`, `docs/OWNER_ACTIONS.md` §2); this step pointed there until 2026-09-06.
 6. Sanitized outputs, diagrams, demos, or release notes may mirror back into Review Hub when safe.
 
 ## When public outputs should mirror private core

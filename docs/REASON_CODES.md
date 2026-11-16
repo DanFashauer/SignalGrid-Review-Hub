@@ -11,7 +11,7 @@ Under the embedded-UX law the verdict plus its reason codes ARE the product
 surface: the host app renders the worker's message from them, so this catalog
 is the contract a host-app developer builds against.
 
-**40 codes** the decision core can emit: 28 reachable
+**45 codes** the decision core can emit: 33 reachable
 through the launch evaluate surface, 5 only via the draft-policy
 test route, 7 only through deferred routes. Worker/operator
 language comes from the engine's own resolution descriptors; a code without a
@@ -36,12 +36,17 @@ falsify the contract for every tenant with a custom rule.
 | `BATTERY_CRITICAL` | step_up | auto_proposed | Battery is critically low — swap to a charged shared device, or dock this one before starting. | Direct the worker to a charged device; the low-battery device can keep charging in its bay. | — |
 | `BATTERY_FAILING` | restrict | manual_only | This device's battery can no longer hold a shift — charging will not fix it. Use a different device and hand this one in. | Pull the device for battery replacement; it will keep failing on charge. Do not clear this by re-docking. | — |
 | `BENCHMARK_SELECTION_MISFIT` | step_up | requires_approval | This device's hardening result was measured against the wrong benchmark. It needs a security owner — nothing you can do on the device changes it. | Assign the benchmark that matches this device's platform and this workflow's requirement, re-run the assessment, then re-evaluate. | `benchmark misfit → step-up (an 'aligned' answer from the wro` |
+| `CREDENTIAL_DOWNGRADE` | deny | *(none)* | *(no resolution descriptor — no step; the plan carries it in `unresolvedCodes` and escalates, see the note below)* | — | `legacy 125 kHz read for a STRONG-enrolled worker → deny (DR-` |
+| `CREDENTIAL_STRENGTH_UNKNOWN` | step_up | *(none)* | *(no resolution descriptor — no step; the plan carries it in `unresolvedCodes` and escalates, see the note below)* | — | `legacy 125 kHz read with an UNREADABLE enrollment → step-up ` |
 | `CRITICAL_WORKFLOW_UNTRUSTED_DEVICE` | deny | manual_only | This high-risk workflow requires a managed, trusted device — switch to one to continue. | Advise the worker to use a managed shared device; do not grant this workflow on an untrusted device. | — |
 | `CUSTODY_EXCEPTION` | restrict | requires_approval | A custody issue was flagged — an operator is reviewing the device's dock/bay status. | Review the custody exception (removed without a session?) and clear or route it. | — |
 | `CUSTODY_MAINTENANCE` | restrict | requires_approval | This device is in maintenance — use a different device; an operator can release it from maintenance. | Confirm the device has completed maintenance and release it (check it back in), then re-evaluate. | `custody maintenance → restrict` |
 | `CUSTODY_OVERDUE` | restrict | auto_proposed | Return the device to its dock or bay to check it back in, then retry. | Confirm the device is returned/checked in at its bay, then re-evaluate. | — |
+| `CUSTODY_REMOVED` | restrict | *(none)* | *(no resolution descriptor — no step; the plan carries it in `unresolvedCodes` and escalates, see the note below)* | — | `credential removed from its receiver → restrict (DR-043; the` |
+| `CUSTODY_UNKNOWN` | step_up | *(none)* | *(no resolution descriptor — no step; the plan carries it in `unresolvedCodes` and escalates, see the note below)* | — | `attach reading present but unreadable → step-up, never a gra` |
 | `DEVICE_NONCOMPLIANT` | restrict | requires_approval | Follow the on-device compliance prompt, or hand the device to IT to bring it back into compliance. | Approve a compliance remediation request to the device-management owner, then re-evaluate. | `non-compliant → restrict` |
 | `DEVICE_UNMANAGED` | restrict | requires_approval | Use a managed shared device for this task, or enrol this device via the company portal. | Approve an enrolment request, or direct the worker to a managed device. | — |
+| `DOCK_EVIDENCE_UNREADABLE` | step_up | *(none)* | *(no resolution descriptor — no step; the plan carries it in `unresolvedCodes` and escalates, see the note below)* | — | `tamper reading emitted but unreadable → step-up, never a gra` |
 | `DOCK_FAULTED` | restrict | requires_approval | The dock holding this device is faulted — an operator will move it to a healthy dock/bay before it can be used. | Move the device to a healthy SmartDock/bay to re-establish custody (and service the faulted dock), then re-evaluate. | `SmartDock faulted → restrict` |
 | `DOCK_OFFLINE` | step_up | auto_proposed | This dock is offline — return the device to an online dock/bay to refresh its custody state, then retry. | Confirm the device is on an online SmartDock/bay (or reconnect the dock), then re-evaluate. | `SmartDock offline → step-up` |
 | `ENCRYPTION_REQUIRED_FOR_WORKFLOW` | step_up | requires_approval | Wait for device encryption to be enforced before starting this workflow. | Approve an encryption-enforcement request for this device. | — |
@@ -93,7 +98,7 @@ them as launch surface.
 
 ## The descriptor gap, stated
 
-10 of 40 codes have no resolution descriptor, so
+15 of 45 codes have no resolution descriptor, so
 `buildResolutionPlan` has no STEP to offer for them. What changed on
 2026-09-02 (verdict-core finding V9) is that it no longer stays quiet about it.
 
@@ -149,12 +154,13 @@ trusting this table's age.
 
 The tables above are the **launch decision core** (`lib/signalgrid-core`). The
 **fixture simulator** surface — the engine `lib/signalgrid-simulator/src/decisionEngine.ts` plus the
-remediation-allow wrapper `lib/signalgrid-simulator/src/remediation-allow.ts` — is a second, separate
-decision path. Together they emit 25 reason codes. 2 of them the core also emits
-(`CUSTODY_EXCEPTION`, `POSTURE_STALE`); the other 23
+remediation-allow wrapper `lib/signalgrid-simulator/src/remediation-allow.ts` and the posture-allow
+wrapper `lib/signalgrid-simulator/src/posture-allow.ts` — is a second, separate
+decision path. Together they emit 31 reason codes. 2 of them the core also emits
+(`CUSTODY_EXCEPTION`, `POSTURE_STALE`); the other 29
 appear nowhere above. The lists are parsed from those files by this generator —
-the engine's emit sites and the wrapper's declared `REMEDIATION_ALLOW_REASONS` —
-not maintained by hand. Several of them name **deferred** families
+the engine's emit sites and each wrapper's declared reason array
+(`REMEDIATION_ALLOW_REASONS`, `POSTURE_ALLOW_REASONS`) — not maintained by hand. Several of them name **deferred** families
 (custody, dock, location) — the simulator is a fixture harness, so it models
 families the launch profile does not serve.
 
@@ -167,16 +173,18 @@ API vocabulary, and a host app must not build against them as if they were.
 They are also not renameable at will: `native/ios/EnterpriseShell/Services/DecisionEngine.swift`
 is a byte-faithful port of the simulator engine (CLAUDE.md golden rule 1), so the
 iOS app's reason codes ARE these spellings. Aligning them with the core's would
-break the parity the port exists to prove. The wrapper's eight codes have the same
+break the parity the port exists to prove. The wrapper's 8 codes have the same
 constraint by a different mechanism: `native/ios/EnterpriseShell/Services/RemediationAllow.swift`
 is held to the wrapper by the shared vector table and `scripts/check-remediation-allow-conformance.mjs`,
 so the spellings are a contract there too.
 
-The 23 the core never emits — none of them a launch
+The 29 the core never emits — none of them a launch
 surface, and the custody/dock/location ones name **deferred** families:
 - `ALLOW_REMOVED_DUE_TO_CUSTODY_FAILURE` — simulator/iOS only
 - `ALLOW_REMOVED_DUE_TO_HIGHER_RISK` — simulator/iOS only
 - `ALLOW_WITHHELD_CONCURRENT_FAILURE` — simulator/iOS only
+- `ALLOW_WITHHELD_POSTURE_ILLEGIBLE` — simulator/iOS only
+- `ALLOW_WITHHELD_POSTURE_UNAFFIRMED` — simulator/iOS only
 - `APPLE_DECLARED_STATE_TRUSTED` — simulator/iOS only
 - `BATTERY_WORKFLOW_RISK` — simulator/iOS only
 - `DEVICE_NON_COMPLIANT` — simulator/iOS only
@@ -187,6 +195,10 @@ surface, and the custody/dock/location ones name **deferred** families:
 - `INTEGRATION_ROUTE_DEGRADED` — simulator/iOS only
 - `LOCATION_EXCEPTION` — simulator/iOS only
 - `OPERATIONAL_HEALTH_DEGRADED` — simulator/iOS only
+- `POSTURE_ABSENT` — simulator/iOS only
+- `POSTURE_AFFIRMED` — simulator/iOS only
+- `POSTURE_ILLEGIBLE` — simulator/iOS only
+- `POSTURE_UNAFFIRMED` — simulator/iOS only
 - `REMEDIATION_ABSENT_WHERE_REQUIRED` — simulator/iOS only
 - `REMEDIATION_EVIDENCE_STALE` — simulator/iOS only
 - `REMEDIATION_NOT_REQUIRED` — simulator/iOS only

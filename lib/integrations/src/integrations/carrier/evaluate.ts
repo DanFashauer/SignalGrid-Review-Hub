@@ -102,7 +102,7 @@ export function evaluateReachability(
 // Build a verdict; when the underlying sighting is stale, degrade a would-be
 // "reachable" to "degraded" and surface STALE_LAST_SEEN so a decaying signal is
 // never reported as confidently current. An UNVERIFIABLE sighting (no
-// lastSeenAt, an unparseable one, or one claimed from the future) degrades the
+// lastSeenAt, or one claimed from the future; a present but unreadable one now grades stale) degrades the
 // same posture too (wedge #15, raised by Codex review on #221): `reachable` is
 // this family's strongest affirmative, and it must not rest on a timestamp
 // nobody can vouch for. `monitor`, not `locate` — a provably-STALE sighting is a

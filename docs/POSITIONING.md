@@ -33,7 +33,7 @@ Any document asserting a coined category label as SignalGrid's name is wrong
 and gets fixed to this rule. (The 2026-08 category name is superseded, DR-019 —
 named here only as the retired form this rule exists to catch.)
 
-## SignalGrid — buyer-legible positioning (Limited GA scope, launch-profile v5)
+## SignalGrid — buyer-legible positioning (Limited GA scope, launch-profile v7)
 
 Every claim below is checked against the `launch` class in scripts/launch-profile.mjs. Nothing deferred appears — which is why location, badges, custody, network, and threat signals are absent: they are real and proven in this repository, and they are not Limited GA.
 
@@ -44,9 +44,10 @@ Every claim below is checked against the `launch` class in scripts/launch-profil
 exactly how a canonical sentence drifts — the rule `check-product-framing.mjs`
 exists to enforce:
 
-> **SignalGrid connects the systems a building already runs - access control,
-> identity, device management, location, applications, ticketing - into one grid
-> that decides and acts on the person's behalf.**
+> **SignalGrid connects the systems a company already runs - access control,
+> identity, device management, location, applications, ticketing, the legacy ones
+> never built to talk to each other included - into one grid that decides and acts
+> on the person's behalf.**
 >
 > — `docs/PURPOSE.md` §2, verbatim
 
@@ -70,19 +71,19 @@ SignalGrid is an access-decision service embedded invisibly in the apps your sta
 
 ### 3. The boundary paragraph — what SignalGrid is NOT
 
-SignalGrid is not an MDM: it never enrolls, configures, locks, or wipes a device, and it cannot enforce anything on the device itself — no app can restrict other apps or make itself non-removable; enforcement on the device is your MDM's job on a supervised device, and Fleet, Intune, or Jamf remain your management plane. SignalGrid reads their evidence, read-only. It is not an IdP: it does not authenticate users, hold identities, or run MFA — when it returns step_up, your app satisfies it with your existing authenticator and identity provider; at Limited GA SignalGrid conducts no challenge itself. It is not an EDR or a SIEM: it detects nothing and investigates nothing. It sits downstream of systems like these and consumes their evidence rather than replacing them — and at Limited GA it consumes exactly one source: your device-management evidence. Domain safety — patient lookup, clinical rules — stays in the host application; SignalGrid answers only whether this device, in its current state, should proceed.
+SignalGrid is not an MDM: it never enrolls, configures, locks, or wipes a device, and it cannot enforce anything on the device itself — no app can restrict other apps or make itself non-removable; enforcement on the device is your MDM's job on a supervised device, and Fleet, Intune, or Jamf remain your management plane. SignalGrid reads their evidence, read-only. It is not an IdP: it does not authenticate users, hold identities, or run MFA — when it returns step_up, your app satisfies it with your existing authenticator and identity provider. Since launch-profile v6 SignalGrid can also VERIFY a step-up: your app runs a passkey gesture on the worker's own device and posts the assertion, SignalGrid checks it cryptographically against the credential enrolled for that identity and records the answer beside the decision. It still mints no identity, issues no credential, and runs no MFA of its own — and the decision is never rewritten. It is not an EDR or a SIEM: it detects nothing and investigates nothing. It sits downstream of systems like these and consumes their evidence rather than replacing them — and at Limited GA it consumes exactly one source: your device-management evidence. Domain safety — patient lookup, clinical rules — stays in the host application; SignalGrid answers only whether this device, in its current state, should proceed.
 
 ### Claim-to-proof trace
 
 | Claim | Grounding |
 |---|---|
-| "invisibly into the apps your staff already use" | docs/EMBEDDED_UX_PRINCIPLE.md:1-32 (design law); ios:EnterpriseShell is launch as the reference host app (launch-profile: `ios:EnterpriseShell` is `launch`) |
-| "allow, step up, restrict, deny" | lib/signalgrid-core/src/types.ts:374; lib/api-spec/v1-openapi.yaml:243; /v1/decisions/evaluate is launch (launch-profile: `/v1/decisions/evaluate` is `launch`) |
+| "invisibly into the apps your staff already use" | `docs/EMBEDDED_UX_PRINCIPLE.md:1-32` (design law); ios:EnterpriseShell is launch as the reference host app (launch-profile: `ios:EnterpriseShell` is `launch`) |
+| "allow, step up, restrict, deny" | `lib/signalgrid-core/src/types.ts:384` (`DecisionOutcome`); `lib/api-spec/v1-openapi.yaml:110` (`/v1/decisions/evaluate`); /v1/decisions/evaluate is launch (launch-profile: `/v1/decisions/evaluate` is `launch`) |
 | "device's compliance" | signal kind device_posture, launch (launch-profile: `device_posture` is `launch`); graph family launch (launch-profile: `graph` is `launch`) |
-| "how current that answer really is" | signal kind device_management_health, launch (:245-247); family reason: a stale 'compliant' is "the unearned affirmative in its purest form" (:162-168) |
-| "vouch for itself right now" | signal kind local_authority, launch (:249-251); family launch (:175-181) |
-| "tightens instead of waving through" / "never loosen" | lib/posture-composition/src/adapters.ts:543; enforced structurally by scripts/review-invariants.mjs:144-176, run in preflight (preflight.mjs:67) |
-| "reproducible evidence an operator can audit" | /v1/decisions/{id}/evidence launch (:317-321, "it is the claim"); operator console signalgrid-app launch (:444-451) |
+| "how current that answer really is" | signal kind device_management_health, launch (`scripts/launch-profile.mjs:263`); family reason: a stale 'compliant' is "the unearned affirmative in its purest form" (`scripts/launch-profile.mjs:180-185`) |
+| "vouch for itself right now" | signal kind local_authority, launch (`scripts/launch-profile.mjs:267`); family launch (`scripts/launch-profile.mjs:193-199`) |
+| "tightens instead of waving through" / "never loosen" | `lib/posture-composition/src/adapters.ts:543` (the unknown-widens-grant inversion, named and removed); enforced structurally by the fail-closed switch check `scripts/review-invariants.mjs:383-396`, run in preflight (`scripts/preflight.mjs:75`) |
+| "reproducible evidence an operator can audit" | /v1/decisions/{id}/evidence launch (`scripts/launch-profile.mjs:343-346`, "it is the claim"); operator console signalgrid-app launch (`scripts/launch-profile.mjs:470-476`) |
 | "read-only from your device-management source" | criterion string (launch-profile: `CRITERION`); no write route to any source system (scripts/launch-profile.mjs) |
-| "your app applies the verdict, including the step-up prompt" | GAPS step-up-answerability (:633-646): Limited GA is shadow mode — SignalGrid returns step_up, /v1/step-up/* is deferred; the host app's native authenticator answers it (EMBEDDED_UX_PRINCIPLE.md:34-37) |
+| "your app applies the verdict, including the step-up prompt" | The host app still runs the prompt and applies the verdict (`docs/EMBEDDED_UX_PRINCIPLE.md:34-37`); since launch-profile v6 SignalGrid VERIFIES the result — `POST /v1/decisions/{id}/step-up/challenge` and `POST /v1/decisions/{id}/step-up` are `launch` in `scripts/launch-profile.mjs` and on the GA fence in `artifacts/api-server/src/lib/profile.ts`. The `step-up-answerability` gap was closed, not reworded. |
 | Deliberately omitted: location | 'location' and 'location_certainty' are deferred signal kinds (launch-profile: `location` is `deferred`; launch-profile: `location_certainty` is `deferred`) — say it in the roadmap, never in the present tense |

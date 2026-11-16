@@ -48,7 +48,8 @@
 //    punishes writing the explanation down — which is the failure mode this
 //    repository has hit three times in one day.
 //
-import { readdirSync, readFileSync, existsSync } from "node:fs";
+import { readdirSync, readFileSync, existsSync, mkdtempSync, mkdirSync, writeFileSync, symlinkSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -130,17 +131,46 @@ function findPosedBoundReads(source, typesSource) {
 // prune, so SKIP is applied to each path rather than to the descent; a failed read
 // yields an empty list, which the FILE_FLOOR self-test then reports loudly rather
 // than passing off as a clean tree.
+// THE READ ERROR IS KEPT, not swallowed. This was `catch { return [] }`, and on
+// 2026-09-18 the Mac runner failed this gate with `only 0 files found under lib/`
+// and nothing else — a walk that COULD NOT LOOK was indistinguishable from a tree
+// that HAS NO FILES, so the reason existed only on a machine nobody could reach.
+// The floors are what stopped it becoming a silent green, and they did their job;
+// what they could not do is say why. Now the errno rides along and the self-test
+// prints it, so the next person diagnoses this from the CI log instead of needing
+// the hardware. (The same distinction this repo keeps having to relearn: see
+// check-ci-liveness's "could not look" vs "the sweep is dark".)
+export let walkError = null;
+// The walk PRUNES; it does not filter afterwards. Node's recursive readdir was
+// walking every node_modules under lib/ and dropping the paths later — and pnpm
+// links every workspace package into its dependants' node_modules, so a
+// workspace dependency cycle is an infinite symlink loop. On macOS the recursive
+// readdir follows those links and stops only at ENAMETOOLONG, which is how #819's
+// Mac run read "0 files under lib/" (2026-09-18) the moment that PR added a cycle.
+// So: a SKIP directory is never entered, and a symlink is never a directory —
+// the dirent's own type decides, and a link's type is "link".
 function sourceFiles(root) {
-  let entries;
-  try {
-    entries = readdirSync(root, { recursive: true, withFileTypes: true });
-  } catch {
-    return [];
-  }
-  return entries
-    .filter((e) => e.isFile() && SRC.test(e.name) && !DECL.test(e.name))
-    .map((e) => join(e.parentPath, e.name))
-    .filter((p) => !SKIP.test(p));
+  walkError = null; // this walk's verdict, never a previous one's
+  const out = [];
+  const walk = (dir) => {
+    let entries;
+    try {
+      entries = readdirSync(dir, { withFileTypes: true });
+    } catch (err) {
+      walkError = `${err.code ?? err.name}: ${err.message}`;
+      return;
+    }
+    for (const e of entries) {
+      const p = join(dir, e.name);
+      if (e.isDirectory()) {
+        if (!SKIP.test(p)) walk(p);
+      } else if (e.isFile() && SRC.test(e.name) && !DECL.test(e.name)) {
+        out.push(p);
+      }
+    }
+  };
+  walk(root);
+  return out;
 }
 
 /** The `./types` sibling a file imports, sanitized-input-ready (raw text). */
@@ -289,11 +319,59 @@ function runSelfTest() {
   );
   note(viaTypes.length === 1 && /\bnumber\b/.test(viaTypes[0]?.type ?? ""), "a type declared in ./types was not resolved");
 
+  // 5b. The walk's two ways of returning nothing must stay TELLABLE APART. Written
+  //     because the Mac runner reported `only 0 files found under lib/` and nothing
+  //     more, and the reason was unreachable from CI. Saves and restores the module's
+  //     `walkError` so probing with a bogus path cannot leak into the real verdict.
+  {
+    const saved = walkError;
+    walkError = null;
+    const gone = sourceFiles(join(repo, "lib-this-path-does-not-exist"));
+    note(gone.length === 0, "a bogus root did not return an empty list");
+    note(
+      typeof walkError === "string" && /ENOENT/.test(walkError),
+      "a FAILED directory read left no errno behind — 'could not look' is indistinguishable from 'found nothing', which is the defect this arm exists for",
+    );
+    walkError = null;
+    sourceFiles(join(repo, ROOT));
+    note(walkError === null, `the walk of ${ROOT}/ could not read a directory: ${walkError} — "could not look", so no verdict`);
+    walkError = saved;
+  }
+
+  // 5c. The walk must PRUNE, never follow, and never carry a stale error. A
+  //     fixture with a file under node_modules, a symlink loop through it, and a
+  //     self-link must yield exactly the one real file — and a walk that succeeds
+  //     must clear whatever the previous walk left in `walkError`.
+  {
+    const saved = walkError;
+    const tmp = mkdtempSync(join(tmpdir(), "posed-bounds-walk-"));
+    try {
+      mkdirSync(join(tmp, "pkg", "node_modules", "@workspace"), { recursive: true });
+      writeFileSync(join(tmp, "pkg", "evaluate-fixture.ts"), "export function evaluateFixture() { return 1; }\n");
+      writeFileSync(join(tmp, "pkg", "node_modules", "@workspace", "evaluate-hidden.ts"), "export function evaluateHidden() { return 1; }\n");
+      symlinkSync(join(tmp, "pkg"), join(tmp, "pkg", "node_modules", "@workspace", "loop"), "dir");
+      symlinkSync(join(tmp, "pkg"), join(tmp, "pkg", "self"), "dir");
+      walkError = "STALE: a previous walk's error";
+      const found = sourceFiles(tmp).map((p) => p.slice(tmp.length + 1));
+      note(walkError === null, `a SUCCESSFUL walk left a previous walk's error behind: ${walkError}`);
+      note(
+        found.length === 1 && found[0] === join("pkg", "evaluate-fixture.ts"),
+        `the symlink-cycle fixture walked to ${JSON.stringify(found)} — expected exactly pkg/evaluate-fixture.ts: node_modules must be pruned before descent and a symlink never entered`,
+      );
+    } finally {
+      rmSync(tmp, { recursive: true, force: true });
+      walkError = saved;
+    }
+  }
+
   // 6. Floors. A derivation that has quietly stopped resolving files reports a
   //    clean tree it never read.
   note(
     allFiles.length >= FILE_FLOOR,
-    `only ${allFiles.length} files found under ${ROOT}/ (floor ${FILE_FLOOR}) — the walk is not reaching the tree`,
+    `only ${allFiles.length} files found under ${ROOT}/ (floor ${FILE_FLOOR}) — the walk is not reaching the tree` +
+      (walkError
+        ? `; the directory read FAILED with ${walkError} — this is "could not look", not "looked and found nothing"`
+        : `; the directory read SUCCEEDED and returned ${allFiles.length} matching file(s), so the tree or the filters are what changed, not the read`),
   );
   note(
     scoped.length >= EVALUATOR_FLOOR,

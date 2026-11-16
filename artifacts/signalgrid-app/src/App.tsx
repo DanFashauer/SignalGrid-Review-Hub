@@ -35,6 +35,7 @@ const SignalSourcing = named(() => import("@/pages/SignalSourcing"), "SignalSour
 const GridConfig = named(() => import("@/pages/GridConfig"), "GridConfig");
 const GridOverview = named(() => import("@/pages/GridOverview"), "GridOverview");
 const SystemHealth = named(() => import("@/pages/SystemHealth"), "SystemHealth");
+const FacilityGraph = named(() => import("@/pages/FacilityGraph"), "FacilityGraph");
 
 const queryClient = new QueryClient();
 
@@ -79,6 +80,12 @@ const preview = (Page: ComponentType) => {
   }
   return PreviewPage;
 };
+// /overview is the fixture telemetry dashboard. It is NOT one of the launch
+// wireframe screens — its own header says "24H SYSTEM TELEMETRY (FIXTURE)" — so the
+// preview law above applies to it exactly as it applies to the demo surfaces below.
+// It sat unwrapped, which made the one screen a partner is most likely to be shown
+// first the one screen that never said it was a fixture.
+const DashboardPreview = preview(Dashboard);
 const IntegrationListPreview = preview(IntegrationList);
 const IntegrationDetailPreview = preview(IntegrationDetail);
 const PolicyCreatePreview = preview(PolicyCreate);
@@ -92,6 +99,7 @@ const SignalSourcingPreview = preview(SignalSourcing);
 const GridConfigPreview = preview(GridConfig);
 const GridOverviewPreview = preview(GridOverview);
 const SystemHealthPreview = preview(SystemHealth);
+const FacilityGraphPreview = preview(FacilityGraph);
 
 function Router() {
   return (
@@ -115,7 +123,6 @@ function Router() {
           <Route path="/decisions" component={SessionList} />
           <Route path="/decisions/:id" component={DecisionDetail} />
           <Route path="/settings" component={Settings} />
-          <Route path="/overview" component={Dashboard} />
           <Route path="/audit" component={Audit} />
           <Route path="/status" component={Status} />
           <Route path="/connectors/setup" component={ConnectorSetup} />
@@ -125,6 +132,7 @@ function Router() {
               changes ride the repository. The read pages above are launch. */}
           <Route path="/policies/:id" component={PolicyDetail} />
           {/* ── Everything below is preview — labelled, never launch UI ── */}
+          <Route path="/overview" component={DashboardPreview} />
           <Route path="/integrations" component={IntegrationListPreview} />
           <Route path="/integrations/:id" component={IntegrationDetailPreview} />
           <Route path="/signals" component={SignalListPreview} />
@@ -137,6 +145,7 @@ function Router() {
           <Route path="/grid-config" component={GridConfigPreview} />
           <Route path="/grid" component={GridOverviewPreview} />
           <Route path="/system-health" component={SystemHealthPreview} />
+          <Route path="/facility-graph" component={FacilityGraphPreview} />
           <Route component={NotFound} />
         </Switch>
       </Suspense>

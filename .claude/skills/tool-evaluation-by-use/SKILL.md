@@ -1,0 +1,141 @@
+---
+name: tool-evaluation-by-use
+description: Use when the owner shares a tool, plugin, CLI or repository and it has to be judged — before writing its docs/agent/RESOURCE_INTAKE.md row, before adopting or rejecting it, and before writing any sentence about what it does or what it costs.
+---
+
+# Evaluating an owner-shared tool BY USE
+
+A shared resource is answered with a measurement or a named blocker, never with a
+memo of reasons (`docs/agent/RESOURCE_INTAKE.md`, "Rules for a new row"; DR-021).
+The row is logged the day it arrives; the verdict lands after the tool has run.
+
+## 0 — Who runs this (DR-053, 2026-09-20)
+
+Steps 2–5 are run by a SEPARATE agent in its own context (Opus tier, DR-047): the
+resource and the tree are its inputs, the coordinator's current task is not. It
+returns facts, measurements, the one landing place, the one gap, and up to three
+candidate tasks with owning roles — and decides nothing. The coordinator then
+cross-confirms each candidate against the tree, the backlog, the decision records,
+prior intake rows and the Mac lane's evidence (CONFIRMED / DUPLICATE / REFUTED),
+and only then writes the disposition in step 6. The row names which stage each
+sentence came from.
+
+A resource that cannot be run — an article, a video, an image, a list — takes the
+same three stages with a different stage 1: the separate agent READS or WATCHES it
+(the article check in step 2; the `video-intake` skill for footage) and returns what
+was read — passages, timestamps, counts, the claims it makes and which of them the
+tree already answers. Steps 4 and 5 do not apply and the row says so; nothing is
+measured that was not there to measure.
+
+## 1 — Log the row first, evaluate second
+
+Append to the intake log in `docs/agent/RESOURCE_INTAKE.md`: Date | Resource |
+Directed by (the owner's own words) | Disposition | What it changed. A row reading
+"evaluated, not adopted" is legitimate only when it names what was actually run or
+read. Reasons alone are the failure mode that file exists to replace.
+
+## 2 — Identify and pin before anything executes
+
+- Resolve the real upstream, redirects included, and record both names.
+- Record licence, language, package name and published version, default branch,
+  and a **full commit sha**. Pin the sha. "Latest" is not a pin, and a pin that
+  cannot be fetched is a finding, not a detail.
+- When an article is the source, check the ARTICLE against upstream before the
+  tool: the 2026-09-12 listicle row refuted every command it printed, and two of
+  its four tools were already absorbed (DR-029 for the gateway).
+- Licence first if anything would be copied into this public tree —
+  `.claude/skills/VENDORED.md` states why absence of a licence grants nothing.
+
+## 3 — Read the source before running it
+
+Answer four questions from the source, each with a path:
+
+- what it READS;
+- what it WRITES, and whether any of it lands inside a checkout;
+- what it sends over the NETWORK, and to whom;
+- what it registers as a HOOK.
+
+A third-party binary auto-executed from a `PreToolUse` or post-commit hook is
+refused here whatever it measures (intake rule 3). So is anything that would put
+untracked output inside the tree: `provenance.workingTreeClean` in
+`artifacts/sim-results/` counts untracked files, so one stray output directory
+stamps every later result as minted from a dirty tree.
+
+## 4 — Run it in a sandbox, with no keys, against a COPY
+
+```bash
+git worktree add --detach <scratchpad>/eval-<tool> origin/SignalGrid_Alpha   # no branch: nothing persists in the repository
+pnpm install --frozen-lockfile          # in the new worktree, its own install
+# … the trial …
+git worktree remove --force <scratchpad>/eval-<tool>                             # always, as the last step; `git worktree list` must not show it afterwards
+```
+
+Then copy only the surface under test (for the 2026-09-12 Graphify run: `lib/` +
+`scripts/`, 956 files) into a scratch directory and point the tool at the copy.
+No API keys. No tenant data. No install into any session config. Nothing that
+edits `CLAUDE.md`, `.claude/settings.json` or `.claude/skills/`. **Every socket denied
+from the FIRST run** (a shim that refuses every connection): a tool that cannot run
+without the network is a NAMED BLOCKER, recorded as such, never a connected trial —
+this repository's workflow makes no live vendor or API call (AGENTS.md), and a
+connected run happens only in an explicitly authorized private context, elsewhere.
+
+## 5 — Measure. Do not quote the README
+
+Record, from output:
+
+- the real command, its exit code and its wall time;
+- what it emitted, in counts;
+- **offline behaviour** — the run above WAS socket-denied. A clean run means the tool
+  needs no network; a failed or degraded one means it does, and the row names that as
+  the blocker and who may authorize a connected trial outside this repository;
+- **determinism** — repeat over an UNCHANGED tree. Output that oscillates between
+  runs is not a pure function of the source (five forced rebuilds alternating
+  11,489 / 11,464 nodes is a fail, not noise);
+- **the headline claim, recomputed** — find the denominator yourself. The
+  "70x" figure was not in its README, and the tool's own benchmark printed 463.4x
+  because it wrote the word count to one path and read it from another.
+
+## 5b — The resource proposes, the roster confirms, the brain decides (owner rule, 2026-09-19)
+
+The owner's words: *"any resource that gets added or even all must run their own
+independent scan and evaluation to determine their tasks and what needs to be
+assigned, then everything else confirms if that is what is needed or added, and then
+you aka the 🧠 makes those choices based off all other resources and data."* Three
+stages, each with one durable output, so the next stage loads a file and not chat
+memory (the ICM clip absorbed the same day: "state in files, not chat"):
+
+| Stage | Who | Reads | Writes (exactly one thing) |
+| --- | --- | --- | --- |
+| A — self-scan | one agent acting AS the resource | the tree, §2–§5 trials | `proposal`: pin, trials, tasks `[{id, title, evidence path:line, change, owner, risk}]` |
+| B — confirm | one agent per roster perspective, read-only, in parallel | the proposal, the tree | `confirm.<perspective>`: per task `confirm \| amend \| reject` + reason grounded in the tree, plus one "missing" task |
+| C — decide | the coordinating session | A, B, and everything else it can see (lane mail, memory, MCP tools) | `decision`: per task `landed \| filed \| rejected \| owner` and where; the intake row (§6) quotes it |
+
+The three outputs live together in `docs/agent/resource-scans/<YYYY-MM-DD>-<resource>.json`
+(first instance: `2026-09-19-two-videos.json`) and land in the same PR as the
+changes. A task with no measured evidence is not proposed; a task nobody confirmed
+is not landed; a task the roster rejected on reproduction is recorded as rejected
+with the reproduction — the first run of this shape caught a miscount that way.
+Perspectives are picked for the resource (gates, fail-closed, agent plane, native,
+security, scribe are the usual six); every stage names its model tier (DR-047).
+
+## 6 — Disposition: one sentence, one landing place
+
+State adopted / adopted-by-reference / evaluated-not-adopted, the numbered reasons
+that came from the run, and the ONE place it would land if ever used, with its
+conditions. A tool that changes how green is certified needs a decision record
+before adoption (intake rule 3; DR-029 and DR-031 are the two shapes this has
+taken). Close the row with what changed in the tree — "Nothing of it is in the
+tree" is a complete answer.
+
+## Never
+
+- Never adopt, or reject, from a README or an article.
+- Never install a tool under evaluation into a session config or a git hook.
+- Never let it write inside the checkout, and never cite its output in a gate, a
+  proof, a doc figure, or anything on the decision path.
+- Never write "X does not exist" before `pnpm run check:absence <topic>` and
+  reading the matches yourself.
+- Never send repository content or owner data to an external service without
+  asking first (CLAUDE.md, "Ask before").
+- Never report a refused or blocked trial as a result. It is a named blocker,
+  and the row says who has to unblock it.

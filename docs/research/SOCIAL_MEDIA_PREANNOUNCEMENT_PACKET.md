@@ -1,5 +1,7 @@
 # Social Media Pre-Announcement Packet
 
+> **SUPERSEDED 2026-09-06 — do not post or send from this file.** Pre-DR-011 category-building copy that still carries the retired label (counted by the docs ceiling); the live outbound surface is `docs/outreach/` (claim-scanned on every push). Kept for provenance only; `scripts/check-send-copy-banner.mjs` holds the rule.
+
 This packet helps the founder begin public category-building for SignalGrid without treating the work as a product launch, partnership announcement, funding announcement, customer announcement, production-readiness claim, certification claim, or compliance claim.
 
 ## Messaging posture
@@ -46,7 +48,7 @@ Use the companion docs as the working packet:
 - [LinkedIn Post Drafts](LINKEDIN_POST_DRAFTS.md).
 - [Social Platform Message Variants](SOCIAL_PLATFORM_MESSAGE_VARIANTS.md).
 - [Social Visual Concepts](SOCIAL_VISUAL_CONCEPTS.md).
-- [Public Messaging Guardrails](PUBLIC_MESSAGING_GUARDRAILS.md).
+- [Public Messaging Guardrails](../PUBLIC_MESSAGING_GUARDRAILS.md).
 
 ## Two-week posting sequence
 

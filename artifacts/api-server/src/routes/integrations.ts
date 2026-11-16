@@ -513,7 +513,7 @@ const INTEGRATIONS = [
     signalsIngested24h: 8934,
     latencyMs: 61,
     apiDocsUrl: "https://techdocs.zebra.com/datawedge/",
-    description: "Zebra barcode scanner data capture middleware — DataWedge Intent API delivers scan events (barcode type, data, scanner ID, timestamp) to SignalGrid in real time. Badge barcode scans, medication barcode scans, and asset scan events serve as session context signals for custody verification and workflow authorization.",
+    description: "Zebra barcode scanner data capture middleware — DataWedge Intent API delivers scan events (barcode type, data, scanner ID, timestamp) to SignalGrid in real time. Badge barcode scans, medication barcode scans, and asset scan events serve as session context signals for custody verification and workflow authorization.", // deferred family — fixture catalog data, not Limited GA capability
   },
   {
     id: "soti-mobicontrol",
@@ -1048,7 +1048,7 @@ const INTEGRATIONS = [
     lastSync: new Date(Date.now() - 35_000).toISOString(),
     signalsIngested24h: 1841,
     latencyMs: 267,
-    apiDocsUrl: "https://genetec.com/resources/developer-zone",
+    apiDocsUrl: "https://genetec.com/resources/developer-zone", // deferred family — fixture catalog data, not Limited GA capability
     description: "Unified physical security platform — Security Center SDK provides access control, video surveillance, and ALPR events for unified physical/digital identity posture.",
   },
   {
@@ -1289,7 +1289,7 @@ const INTEGRATIONS = [
     signalsIngested24h: 7412,
     latencyMs: 52,
     apiDocsUrl: "https://developer.apple.com/wallet/",
-    description: "Apple Wallet employee badge — NFC tap access with Express Mode (no Face ID required), BLE proximity unlock, and corporate key provisioning. Integrates with HID, Gallagher, Brivo, Genetec, and SwiftConnect for building access signal correlation.",
+    description: "Apple Wallet employee badge — NFC tap access with Express Mode (no Face ID required), BLE proximity unlock, and corporate key provisioning. Integrates with HID, Gallagher, Brivo, Genetec, and SwiftConnect for building access signal correlation.", // deferred family — fixture catalog data, not Limited GA capability
   },
   {
     id: "google-wallet",

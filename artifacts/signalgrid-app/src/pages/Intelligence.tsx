@@ -82,7 +82,7 @@ export function Intelligence() {
                 </span>
               </div>
             ))}
-            {!cov && <div className="text-sm text-muted-foreground">Loading…</div>}
+            {!cov && <div className="text-sm text-muted-foreground">{covQ.isError ? "Coverage unavailable — the control plane did not answer." : "Loading…"}</div>}
           </div>
           <p className="text-[0.68rem] text-muted-foreground font-mono">
             Add a signal and the Grid sees more; add a workflow and it does more. Provisioning is simulated{prov ? ` (${prov.plan.requiresApproval} step${prov.plan.requiresApproval === 1 ? "" : "s"} would await approval)` : ""}; enforcement stays off until an owner enables it. Read live from <span className="text-muted-foreground">/cp/v1</span> — nothing is enforced.
@@ -97,7 +97,9 @@ export function Intelligence() {
             loading) the emerald branch is unreachable — a failed flow-health query
             must never read as a healthy grid. */}
         <Metric label="Flows healthy" value={grid ? `${grid.flowsHealthy}/${grid.flowsTotal}` : "-"} sub={!flows.data ? (flows.isError ? "unavailable" : "…") : attention.length ? `${attention.length} need attention` : "all clear"} accent={!flows.data ? undefined : attention.length ? "text-amber-400" : "text-emerald-400"} />
-        <Metric label="Recommendations" value={String(recList.length)} sub="ranked by confidence" />
+        {/* "-" until the read settles with data: `recList` defaults to [] so a failed
+            fetch used to render "Recommendations 0" beside neighbours showing "-". */}
+        <Metric label="Recommendations" value={recs.data ? String(recList.length) : "-"} sub={recs.data ? "ranked by confidence" : recs.isError ? "unavailable" : ""} />
         <Metric label="New signals" value={disc.data ? `${disc.data.summary.autoOnboardable}` : "-"} sub={disc.data ? `auto-onboardable · ${disc.data.summary.needsAdmin} need admin` : ""} />
       </div>
 
@@ -141,7 +143,10 @@ export function Intelligence() {
             </div>
           ))}
           {recs.data && recList.length === 0 && <div className="text-sm text-muted-foreground">No recommendations — nothing to change right now.</div>}
-          {!recs.data && <div className="text-sm text-muted-foreground">Loading…</div>}
+          {/* An error is not "loading": a control plane that did not answer must say so,
+              or the panel reads as pending forever and the absence of recommendations
+              reads as health. */}
+          {!recs.data && <div className="text-sm text-muted-foreground">{recs.isError ? "Recommendations unavailable — the control plane did not answer." : "Loading…"}</div>}
           <p className="text-[0.68rem] text-muted-foreground font-mono pt-1">Advisory only — an admin reviews and applies. The Grid changes nothing on its own.</p>
         </CardContent>
       </Card>
@@ -179,7 +184,7 @@ export function Intelligence() {
                     </td>
                   </tr>
                 ))}
-                {!disc.data && <tr><td colSpan={4} className="py-2 text-muted-foreground">Loading…</td></tr>}
+                {!disc.data && <tr><td colSpan={4} className="py-2 text-muted-foreground">{disc.isError ? "Discovery unavailable — the control plane did not answer." : "Loading…"}</td></tr>}
               </tbody>
             </table>
           </div>

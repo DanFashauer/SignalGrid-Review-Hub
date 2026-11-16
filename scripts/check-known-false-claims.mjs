@@ -31,6 +31,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { isMainModule } from "./lib/is-main.mjs";
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const REGISTRY = join(REPO, "docs/agent/FALSE_CLAIMS.json");
@@ -92,14 +93,37 @@ export function checkRefutation(c, root = REPO) {
   return { ok: true };
 }
 
+/**
+ * The corpus the re-assertion scan reads. This returned `[]` from a bare `catch` and
+ * nothing floored the result, so the half of this gate its own header calls "the whole
+ * point" could scan ZERO documents and still print the success sentence "no document
+ * re-states one" (fixed 2026-09-06). Reproduced: with git on PATH, "484 tracked
+ * document(s) scanned"; with git removed from PATH, "0 tracked document(s) scanned"
+ * followed by the same "check passed" line and exit 0. The previous version of this file
+ * was retired for exactly this shape — "coverage advertised, not delivered".
+ */
 const trackedDocs = () => {
   try {
     const out = execFileSync("git", ["ls-files", "--", "*.md", "*.markdown"], { cwd: REPO, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
-    return out ? out.trim().split("\n").filter(Boolean) : [];
-  } catch {
-    return [];
+    return { docs: out ? out.trim().split("\n").filter(Boolean) : [], failed: false, why: null };
+  } catch (err) {
+    return { docs: [], failed: true, why: `git ls-files could not run (${err && (err.code || `exit ${err.status}`)})` };
   }
 };
+
+/**
+ * The floor its sibling `check-documented-branches.mjs` already applies to the same
+ * corpus. Pure so both directions are self-tested: "could not enumerate" and "enumerated
+ * suspiciously few" are the two ways this scan goes green about nothing.
+ */
+export const DOC_FLOOR = 100;
+export function docCorpusVerdict({ count, failed, why }) {
+  if (failed) return `the document corpus could not be enumerated (${why}) — a scan that could not run is not a clean scan`;
+  if (count < DOC_FLOOR) {
+    return `only ${count} tracked document(s) found (floor ${DOC_FLOOR}) — the enumeration has drifted, and a re-assertion scan over a corpus that small proves nothing`;
+  }
+  return null;
+}
 
 function load() {
   if (!existsSync(REGISTRY)) {
@@ -164,8 +188,43 @@ function selfTest() {
     evidenceEntries(`${FULL}\n\n${HEADING_ONLY}`).complete.length === 1 &&
     evidenceEntries(`${FULL}\n\n${HEADING_ONLY}`).incomplete.length === 1]);
   checks.push(["an empty file yields no entries rather than throwing", evidenceEntries("").complete.length === 0]);
+  // The 2026-09-06 detector: a qualified field heading is the field; a different word is not.
+  const QUALIFIED = [
+    "## 2026-09-04 — a qualified record",
+    "Command (adversarial read of the whole surface):",
+    "Output (what each property was checked to hold):",
+    "Verdict:  **fixed and gated**",
+  ].join("\n");
+  checks.push(["a record whose fields carry a parenthesized qualifier COUNTS (19 real entries were miscounted before this)",
+    evidenceEntries(QUALIFIED).complete.length === 1]);
+  checks.push(["…but a DIFFERENT word sharing the prefix is not the field (Commander: is nothing)",
+    evidenceEntries(QUALIFIED.replace("Command (", "Commander (")).incomplete[0]?.missing.join() === "Command"]);
+  checks.push(["…and the qualifier may not contain a colon of its own (the field ends at the first colon)",
+    evidenceField("Output").test("Output (a: b):") === true && evidenceField("Output").test("Output (no terminator") === false]);
+  checks.push(["the incomplete-heading ratchet holds at the ceiling", incompleteVerdict(3, 3) === null]);
+  checks.push(["…and a RISE above the ceiling is a problem naming the new unverifiable entry",
+    (incompleteVerdict(4, 3) ?? "").includes("above the ceiling")]);
+  checks.push(["…and a count BELOW the ceiling is ALSO a problem — the ratchet must be lowered, not left as a fossil",
+    (incompleteVerdict(2, 3) ?? "").includes("BELOW the ceiling")]);
+  checks.push(["LIVE: the committed log sits exactly at the ceiling",
+    incompleteVerdict(evidenceEntries(readFileSync(resolve(REPO, "docs/agent/EVIDENCE.md"), "utf8")).incomplete.length) === null]);
   checks.push(["LIVE: the committed evidence log holds at least one complete record",
     evidenceEntries(readFileSync(resolve(REPO, "docs/agent/EVIDENCE.md"), "utf8")).complete.length > 0]);
+
+  // ── THE CORPUS THE SCAN READS (F4) ──────────────────────────────────────────
+  // The re-assertion half had no control on its own scope at all, which is how "484
+  // tracked document(s) scanned" and "0 tracked document(s) scanned" both printed the
+  // same passing sentence.
+  checks.push(["a corpus that could not be ENUMERATED is a problem, not a clean scan",
+    (docCorpusVerdict({ count: 0, failed: true, why: "test" }) ?? "").includes("could not be enumerated")]);
+  checks.push(["a corpus below the floor is a problem — a scan over a handful of docs proves nothing",
+    (docCorpusVerdict({ count: DOC_FLOOR - 1, failed: false }) ?? "").includes(`floor ${DOC_FLOOR}`)]);
+  checks.push(["a corpus at or above the floor is accepted", docCorpusVerdict({ count: DOC_FLOOR, failed: false }) === null]);
+  const live = trackedDocs();
+  checks.push([`LIVE: the tree enumerates at least ${DOC_FLOOR} tracked documents`,
+    live.failed === false && live.docs.length >= DOC_FLOOR]);
+  checks.push(["LIVE: the re-assertion scan is wired to that verdict, not merely to the count",
+    /docCorpusVerdict\(\{ count: docs\.length/.test(readFileSync(fileURLToPath(import.meta.url), "utf8"))]);
 
   const failed = checks.filter(([, ok]) => !ok);
   for (const [name, ok] of checks) console.log(`  ${ok ? "ok" : "FAIL"} — self-test: ${name}`);
@@ -192,6 +251,49 @@ function selfTest() {
  * A number that cannot tell a reproducible record from any dated heading is worse
  * than no number, because it reads as coverage.
  */
+/**
+ * The field detector. `^Command:` was the first shape and the only one recognized
+ * until 2026-09-06, while the audit-round entries written from 2026-09-04 on head
+ * their fields `Command (adversarial read of …):` and `Output (what was checked):` —
+ * the same three fields, with the qualifier the template invites. Nineteen of
+ * thirty-three dated headings were reported "NOT counted — missing Command/Output"
+ * while every one of them carried all three, and the reporter's number read as
+ * fourteen reproducible records in a log holding thirty-three. A qualifier in
+ * parentheses is still the field; a different word is not (`Commander:` is nothing).
+ */
+export function evidenceField(name) {
+  return new RegExp(`^${name}\\b[^:\\n]*:`, "m");
+}
+
+/**
+ * The incomplete-heading RATCHET. Reported-only meant a new entry could land
+ * without a command or a verdict and change nothing but a line of output nobody
+ * reads. The count of headings NOT counted may not rise above this ceiling, and —
+ * so the ceiling is a measurement and not a fossil — it may not sit below it
+ * either: when an entry is completed, lower the number here in the same change.
+ * Measured 2026-09-06 with the detector above: every dated heading in the log
+ * carries all three fields, so the ceiling starts at zero and may only be raised
+ * by a deliberate edit here — which is the review moment this exists to force.
+ */
+export const EVIDENCE_INCOMPLETE_CEILING = 0;
+
+/** Pure: null when the count sits exactly at the ceiling, else the problem to raise. */
+export function incompleteVerdict(count, ceiling = EVIDENCE_INCOMPLETE_CEILING) {
+  if (count > ceiling) {
+    return (
+      `docs/agent/EVIDENCE.md: ${count} dated heading(s) lack Command/Output/Verdict, above the ceiling of ${ceiling} — ` +
+      `a new entry landed without the three fields that make it re-checkable. Complete it; do not raise the ceiling.`
+    );
+  }
+  if (count < ceiling) {
+    return (
+      `docs/agent/EVIDENCE.md: ${count} incomplete heading(s), BELOW the ceiling of ${ceiling} — lower ` +
+      `EVIDENCE_INCOMPLETE_CEILING in scripts/check-known-false-claims.mjs to ${count} so the ratchet keeps the gain.`
+    );
+  }
+  return null;
+}
+
 export function evidenceEntries(text) {
   const complete = [];
   const incomplete = [];
@@ -199,9 +301,7 @@ export function evidenceEntries(text) {
   for (let i = 0; i < heads.length; i += 1) {
     const start = heads[i].index + heads[i][0].length;
     const body = text.slice(start, i + 1 < heads.length ? heads[i + 1].index : text.length);
-    const missing = ["Command", "Output", "Verdict"].filter(
-      (f) => !new RegExp(`^${f}:`, "m").test(body),
-    );
+    const missing = ["Command", "Output", "Verdict"].filter((f) => !evidenceField(f).test(body));
     const entry = { date: heads[i][1], title: heads[i][2], missing };
     if (missing.length === 0) complete.push(entry);
     else incomplete.push(entry);
@@ -209,7 +309,7 @@ export function evidenceEntries(text) {
   return { complete, incomplete };
 }
 
-const IS_ENTRY = process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+const IS_ENTRY = isMainModule(process.argv[1], import.meta.url);
 const argv = process.argv.slice(2);
 
 if (IS_ENTRY && argv.includes("--self-test")) process.exit(selfTest());
@@ -252,13 +352,19 @@ for (const c of claims) {
   }
 }
 
-const docs = trackedDocs();
+const { docs, failed: docsFailed, why: docsWhy } = trackedDocs();
+const corpusProblem = docCorpusVerdict({ count: docs.length, failed: docsFailed, why: docsWhy });
+if (corpusProblem) problems.push(corpusProblem);
 let reassertions = 0;
 for (const rel of docs) {
   let text;
   try {
     text = readFileSync(join(REPO, rel), "utf8");
-  } catch {
+  } catch (err) {
+    // An unreadable TRACKED document is not a document with nothing in it. Skipping it
+    // silently is the same fail-open one directory up: the scan would report a count
+    // that includes a file it never read.
+    problems.push(`${rel}: tracked but unreadable (${err && err.code}) — it was NOT scanned for re-assertions`);
     continue;
   }
   for (const c of claims) {
@@ -299,6 +405,11 @@ if (!existsSync(evidencePath)) {
     console.log(`  ⚠ ${incomplete.length} dated heading(s) NOT counted — missing ${"Command/Output/Verdict"}:`);
     for (const e of incomplete) console.log(`      ${e.date} — ${e.title.slice(0, 58)} (missing: ${e.missing.join(", ")})`);
   }
+  // GATED since 2026-09-06: the count may neither rise (an unverifiable entry landed)
+  // nor sit under the ceiling (a completed entry must lower it, or the ratchet is a fossil).
+  const ratchet = incompleteVerdict(incomplete.length);
+  if (ratchet) problems.push(ratchet);
+  else console.log(`  incomplete-heading ratchet: ${incomplete.length} = ceiling ${EVIDENCE_INCOMPLETE_CEILING} (held)`);
 }
 
 if (problems.length > 0) {

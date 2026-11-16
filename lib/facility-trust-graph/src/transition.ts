@@ -125,7 +125,9 @@ export function gradeZonePresence(graph: FacilityGraph, input: ZonePresenceInput
   if (input.exitBoundaryId !== undefined) {
     // The boundary must exist and CONTAIN the zone — a boundary beside the
     // zone would make "outside the boundary" meaningless for this zone.
-    if (graph.get(input.exitBoundaryId) === null) return unknownVerdict("EXIT_BOUNDARY_INVALID");
+    // A `graph.get(input.exitBoundaryId) === null` guard stood here and was SHADOWED: every
+    // entry in zonePath is a graph node, so an id the graph does not carry can never appear
+    // in it and the containment check below already refuses it as EXIT_BOUNDARY_INVALID.
     const zonePath = graph.path(input.zoneId).map((n) => n.spaceId);
     if (!zonePath.includes(input.exitBoundaryId)) return unknownVerdict("EXIT_BOUNDARY_INVALID");
   }

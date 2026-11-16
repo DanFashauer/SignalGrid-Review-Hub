@@ -154,9 +154,15 @@ check(
   "a coverage KPI computed from sourcing carries basis 'projected_from_sourcing' (a ceiling)",
   projected.basis === "projected_from_sourcing",
 );
+// UNCONDITIONAL, because the conditional form could not fail. This read
+// `!(projected.coveragePct === 100 && basis === "observed")`: the check four lines above
+// already pins `basis === "projected_from_sourcing"`, so the conjunction was false and
+// the negation true no matter what — and below 100% coverage it passed for a reason
+// unrelated to its own name. Stated plainly, it fails the moment a projection is labelled
+// as an observation, at ANY coverage figure.
 check(
-  "…and even at 100% it is NEVER labelled 'observed' — a green KPI cannot pose as the observation of an event",
-  !(projected.coveragePct === 100 && (projected.basis as string) === "observed"),
+  `…and it is NEVER labelled 'observed' — a green KPI cannot pose as the observation of an event (coverage=${projected.coveragePct}%)`,
+  (projected.basis as string) !== "observed",
 );
 // The other side: real observed states DO produce an observed basis, so the label tracks
 // reality rather than always saying 'projected'.

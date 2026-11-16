@@ -12,6 +12,13 @@
 
 import { deepFreeze, type AuditLayer, type ChecklistItem } from "./types";
 
+// Codepoint comparison for sorts that must be DETERMINISTIC on any machine.
+// `localeCompare` follows the process locale (sv_SE sorts "ä" after "z", de_DE
+// before it), so two hosts ordered the same input differently; ISO timestamps
+// and ids compare exactly as intended by codepoint. Gated by review:invariants.
+const cmpCodepoint = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
+
+
 /** The manifest body shape this module reads. Only the keys it cross-checks are
  *  named; extra keys are ignored. Deliberately a narrow structural type — the
  *  caller passes the parsed manifest body, this package does no I/O. */
@@ -121,7 +128,7 @@ export function deriveChecklist(
     remediationHint: it.remediationHint,
   }));
 
-  const all = [...declaredItems, ...gapItems].sort((a, b) => a.id.localeCompare(b.id));
+  const all = [...declaredItems, ...gapItems].sort((a, b) => cmpCodepoint(a.id, b.id));
   assertMergedUnique(all);
   return all.map((it) => deepFreeze(it));
 }

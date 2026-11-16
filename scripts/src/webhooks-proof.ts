@@ -39,7 +39,8 @@ import {
   WEBHOOK_URL_REFUSAL_REASONS,
 } from "@workspace/integrations/webhooks";
 import { SIGNING_SECRET_MISSING } from "@workspace/integrations/emit-gate/signing";
-import { createWebhook, getDeliveryLogs } from "@workspace/integrations/webhooks/store";
+import { addToDLQ, createWebhook, getDeliveryLogs, listDLQ, updateWebhook } from "@workspace/integrations/webhooks/store";
+import { MemoryStore, deliverEvent, fixedClock } from "@workspace/signalgrid-core";
 
 let passed = 0;
 const failures: string[] = [];
@@ -151,6 +152,93 @@ for (const [label, isLive] of [["live", true], ["suppressed", false]] as Readonl
   );
 }
 
+// 1b. THE IPv4-IN-IPv6 BYPASS -- an adversarial review found `validateWebhookUrl`
+//     compared the URL's LITERAL hostname against the rules above WITHOUT
+//     normalizing IPv4-mapped (`::ffff:a.b.c.d`) or IPv4-compatible (`::a.b.c.d`)
+//     IPv6 literals first, so every rule in 1. was evadable by respelling the SAME
+//     address: `https://[::ffff:127.0.0.1]/` (loopback), `https://[::ffff:169.254.169.254]/`
+//     (the cloud metadata endpoint) and `https://[::ffff:10.0.0.7]/` (RFC1918) all
+//     PASSED before this block existed to say otherwise. Reproduced against the
+//     pre-fix code (each of these `check`s failed) and pinned here so it cannot
+//     regress silently.
+//
+//     Every spelling below decodes to one of the SAME plain-IPv4 targets already
+//     refused in 1., so each assertion also names which one -- this is not a new
+//     rule, it is the existing rule made to see through six more spellings of an
+//     address it already refuses. One loop, not two nested ones, checks BOTH tiers
+//     per host so live and suppressed cannot silently diverge.
+for (const [host, decodesTo] of [
+  ["https://[::ffff:127.0.0.1]/hook", "127.0.0.1 (loopback)"],
+  ["https://[::ffff:169.254.169.254]/hook", "169.254.169.254 (cloud metadata)"],
+  ["https://[::ffff:10.0.0.7]/hook", "10.0.0.7 (RFC1918)"],
+  ["https://[::ffff:a9fe:a9fe]/hook", "169.254.169.254, hex-spelled mapped form"],
+  ["https://[::127.0.0.1]/hook", "127.0.0.1, IPv4-compatible (deprecated) form"],
+  ["https://[0:0:0:0:0:ffff:127.0.0.1]/hook", "127.0.0.1, fully expanded, no :: compression"],
+  ["https://[0000:0000:0000:0000:0000:FFFF:7F00:0001]/hook", "127.0.0.1, fully expanded hex, uppercase"],
+] as ReadonlyArray<readonly [string, string]>) {
+  check(
+    `live: ${host} (decodes to ${decodesTo}) is refused, not just its plain-IPv4 spelling`,
+    validateWebhookUrl(host, { live: true }).valid === false,
+  );
+  check(
+    `suppressed: ${host} (decodes to ${decodesTo}) is refused, not just its plain-IPv4 spelling`,
+    validateWebhookUrl(host, { live: false }).valid === false,
+  );
+}
+// NON-VACUITY, the same shape as 1.'s: a validator that refused every hostname
+// containing a colon (e.g. rejecting all IPv6 literals outright, or rejecting on
+// parse failure whenever hostname.includes(':')) would satisfy every refusal
+// above without actually decoding anything. A genuinely different, non-private
+// IPv6 literal must still be ACCEPTED, at both tiers.
+check(
+  "live: a public HTTPS target spelled as an unrelated global-unicast IPv6 literal is still accepted",
+  validateWebhookUrl("https://[2001:db8::1]/hook", { live: true }).valid === true,
+);
+check(
+  "suppressed: a public HTTPS target spelled as an unrelated global-unicast IPv6 literal is still accepted",
+  validateWebhookUrl("https://[2001:db8::1]/hook", { live: false }).valid === true,
+);
+// The decoded bypass and its plain-IPv4 twin fail for the SAME reason, not merely
+// both-fail-for-any-reason -- the fix reuses the EXISTING classification, it does not
+// bolt on a third, unclassified refusal path.
+check(
+  "the mapped-loopback bypass and plain 127.0.0.1 return the identical refusal reason",
+  validateWebhookUrl("https://[::ffff:127.0.0.1]/hook", { live: true }).error ===
+    validateWebhookUrl("https://127.0.0.1/hook", { live: true }).error,
+);
+check(
+  "the mapped-metadata bypass and plain 169.254.169.254 return the identical refusal reason",
+  validateWebhookUrl("https://[::ffff:169.254.169.254]/hook", { live: true }).error ===
+    validateWebhookUrl("https://169.254.169.254/hook", { live: true }).error,
+);
+check(
+  "the mapped-RFC1918 bypass and plain 10.0.0.7 return the identical refusal reason",
+  validateWebhookUrl("https://[::ffff:10.0.0.7]/hook", { live: true }).error ===
+    validateWebhookUrl("https://10.0.0.7/hook", { live: true }).error,
+);
+// Genuinely distinct IPv6 ranges the decode must NOT touch -- each still caught by
+// its OWN existing rule (privateRange for fe80/fc00, loopback for ::1), proving the
+// decode is scoped to the two zero-padded shapes and does not swallow real IPv6
+// address families.
+check(
+  "https://[fe80::1]/hook is still refused by its own existing rule, unaffected by the new decode",
+  validateWebhookUrl("https://[fe80::1]/hook", { live: true }).error === WEBHOOK_URL_REFUSALS.privateRange,
+);
+check(
+  "https://[fc00::1]/hook is still refused by its own existing rule, unaffected by the new decode",
+  validateWebhookUrl("https://[fc00::1]/hook", { live: true }).error === WEBHOOK_URL_REFUSALS.privateRange,
+);
+check(
+  "https://[::1]/hook is still refused by its own existing rule, unaffected by the new decode",
+  validateWebhookUrl("https://[::1]/hook", { live: true }).error === WEBHOOK_URL_REFUSALS.loopback,
+);
+// Fail closed: a zone id makes the literal unparseable for http/https, and an
+// unparseable hostname must be REFUSED, never allowed through.
+check(
+  "a zone-id-qualified IPv6 literal is refused as an invalid URL, not silently accepted",
+  validateWebhookUrl("https://[fe80::1%eth0]/hook", { live: true }).valid === false,
+);
+
 // 2. THE HTTPS RULE IS GATED ON LIVE DELIVERY, taken from the same resolution the
 //    delivery gate returns — not from a separate environment variable.
 check(
@@ -230,6 +318,66 @@ check(
   "not permanent: a 503 is still retried (the predicate is not always-true)",
   isPermanentDeliveryError({ success: false, statusCode: 503 }) === false,
 );
+
+// 5b-BOUNDARY. THE WRITE FUNCTIONS PARSE THEIR INPUT.
+//
+// `createWebhook`/`updateWebhook` took a typed argument and never parsed one, so
+// `url: z.string().url()` was a URL in the type system and an arbitrary string at
+// runtime — and whatever landed in the store is what the delivery path POSTs to. That
+// is the SSRF shape. It was left open on a measurement ("both functions have ZERO
+// callers"); re-measured, `createWebhook` has nine, every one of them casting `as
+// never`, which is precisely how a type-system URL becomes a runtime string.
+//
+// Both halves are asserted because either alone is half a boundary: the PARSE (a
+// non-URL is refused) and STRICTNESS (a misspelled key is refused rather than
+// silently stripped). The misspellings chosen are the two that matter — `secrets` for
+// `secret` is an unsigned webhook, `rotateSecret` misspelled is a compromised secret
+// still live.
+{
+  const savedRedis = process.env.REDIS_URL;
+  delete process.env.REDIS_URL; // in-memory store; no network, no database
+  const refuses = async (fn: () => Promise<unknown>): Promise<boolean> =>
+    fn().then(() => false).catch(() => true);
+  try {
+    check("createWebhook REFUSES a non-URL `url` — the type says URL, the runtime now agrees",
+      await refuses(() => createWebhook({ name: "bad", url: "not-a-url", events: ["badge.delete"] } as never)));
+    check("createWebhook REFUSES an empty `name`",
+      await refuses(() => createWebhook({ name: "", url: "https://hooks.example.test/x", events: ["badge.delete"] } as never)));
+    check("createWebhook REFUSES an empty `events` list — a webhook subscribed to nothing is a stored URL and no more",
+      await refuses(() => createWebhook({ name: "n", url: "https://hooks.example.test/x", events: [] } as never)));
+    check("createWebhook REFUSES `secrets` for `secret` — stripped, it would have minted an UNSIGNED webhook",
+      await refuses(() => createWebhook({
+        name: "n", url: "https://hooks.example.test/x", events: ["badge.delete"], secrets: "s".repeat(40),
+      } as never)));
+    // The positive control: a well-formed create still succeeds, so the four above are
+    // not passing because the function refuses everything.
+    // `badge.delete` is this block's own event type: the in-memory store is shared
+    // across blocks and `dispatchEvent` fans out to EVERY enabled subscriber, so a
+    // control hook left on someone else's event would silently change their counts.
+    const good = await createWebhook({ name: "boundary-control", url: "https://hooks.example.test/ok", events: ["badge.delete"] } as never);
+    check("...and a well-formed create still SUCCEEDS (the four refusals above are not vacuous)", typeof good?.id === "string");
+
+    check("updateWebhook REFUSES a misspelled `rotateSecret` — stripped, the operator believes a compromised secret was retired",
+      await refuses(() => updateWebhook(good.id, { rotateSecrets: true } as never)));
+    check("updateWebhook REFUSES `state` for `status` — stripped, a webhook the operator disabled stays ENABLED",
+      await refuses(() => updateWebhook(good.id, { state: "disabled" } as never)));
+    // A NON-URL, not a bad SCHEME: zod's `.url()` is `new URL()`, which accepts
+    // `javascript:` happily. The scheme is the delivery path's job and it does it —
+    // `validateWebhookUrl` refuses anything but https and is driven above — so this
+    // assertion stays on what the schema is actually for, and does not pretend the
+    // parse is a second URL guard it is not.
+    check("updateWebhook REFUSES a non-URL `url`",
+      await refuses(() => updateWebhook(good.id, { url: "not a url at all" } as never)));
+    // The parse runs BEFORE the existence lookup: a malformed update must not answer
+    // `null` ("no such webhook") for an input that was never valid.
+    check("updateWebhook parses BEFORE looking the webhook up — a malformed update on an unknown id REFUSES, it does not answer null",
+      await refuses(() => updateWebhook("no-such-webhook", { rotateSecrets: true } as never)));
+    const updated = await updateWebhook(good.id, { status: "disabled" });
+    check("...and a well-formed update still SUCCEEDS", updated?.status === "disabled");
+  } finally {
+    if (savedRedis === undefined) delete process.env.REDIS_URL; else process.env.REDIS_URL = savedRedis;
+  }
+}
 
 // 5c. END TO END at dev tier, against the real in-memory store. This is the
 //     before-state above, measured.
@@ -529,6 +677,53 @@ check(
         calls.length === 3 && calls.every((c) =>
           verifySignedWebhook(c.headers, c.body, SECRET,
             { toleranceMs: 300_000, now: Number(oneStamp) + 5_000 }).valid === true));
+
+      // 5f-DEAD-LETTER. GIVING UP IS A STATE, AND THE DELIVERY LOG NOW SAYS IT.
+      //
+      // `dead_letter` has been a member of `DeliveryStatusSchema` since the family
+      // was written and nothing ever wrote one: the last attempt recorded `failed`,
+      // byte-identical to every attempt before it, and only the DLQ — a separate
+      // list an operator has to know to open — carried the fact that we had stopped
+      // trying. The per-webhook delivery log, which is what an operator actually
+      // opens, could not distinguish "failed, will retry" from "failed, and nobody
+      // will try again". The retry loop now records a terminal row before the DLQ
+      // write.
+      //
+      // Driven off the three-attempt dispatch immediately above: every attempt threw
+      // at the transport, so the loop exhausted rather than returning permanent.
+      {
+        const dlLogs = await getDeliveryLogs(hook.id);
+        const terminal = dlLogs.filter((l) => l.status === "dead_letter");
+        check("an exhausted retry loop records a TERMINAL dead_letter delivery row, not a fourth indistinguishable `failed`",
+          terminal.length >= 1);
+        check("...and the terminal row carries the final error, so the log says WHY it was given up on",
+          (terminal[0]?.error ?? "").length > 0);
+        check("...and the newest row is the terminal one — an operator reading the top of the log sees the give-up",
+          dlLogs[0]?.status === "dead_letter");
+        check("...while the ATTEMPTS themselves are still recorded as `failed` (the terminal row is added, not a relabel)",
+          dlLogs.filter((l) => l.status === "failed").length >= 3);
+
+        // PLAN ROW 138: the DLQ record states the attempt count the dispatcher
+        // OBSERVED. addToDLQ hardcoded 6 whatever maxAttempts was, so this
+        // three-attempt dispatch dead-lettered a record claiming six.
+        const dlq = (await listDLQ(1000)).filter((e) => e.webhookId === hook.id);
+        check(`the DLQ entry records the attempts actually made (3 configured, spy fired ${calls.length}x, entry says ${dlq[0]?.attempts})`,
+          dlq.length >= 1 && dlq[0]?.attempts === calls.length && calls.length === 3);
+        let refused = false;
+        try { await addToDLQ(hook.id, "evt_probe", {}, "probe", Number.NaN); } catch { refused = true; }
+        check("...and addToDLQ refuses a count nobody observed (NaN) rather than writing it as evidence", refused);
+        // Distinguishes the OBSERVED count from the CONFIGURED one: with maxAttempts -1
+        // the loop makes zero deliveries, so a record of 0 is the truth and a record
+        // echoing the config (-1) is refused. A three-attempt run alone could not tell
+        // `attemptsMade` from `config.retry.maxAttempts` — they are both 3 there.
+        const before = (await listDLQ(1000)).filter((e) => e.webhookId === hook.id).length;
+        installSpy();
+        await dispatchEvent("siem.event", { probe: true },
+          { timeoutMs: 1000, retry: { maxAttempts: -1, baseDelayMs: 1, maxDelayMs: 1, jitterFactor: 0 } } as never).catch(() => undefined);
+        const after = (await listDLQ(1000)).filter((e) => e.webhookId === hook.id);
+        check(`a run that made ZERO deliveries dead-letters a record saying 0, not the configured ceiling (spy fired ${calls.length}x, new entries ${after.length - before}, newest says ${after[0]?.attempts})`,
+          calls.length === 0 && after.length === before + 1 && after[0]?.attempts === 0);
+      }
     } finally {
       delete process.env[ENV_KEY];
     }
@@ -907,6 +1102,27 @@ check(
       verifySignedWebhook(good, body, secret, { toleranceMs: 1.5, now: NOW }).valid === false);
   check("every refusal states a reason; the acceptance states none",
     verify(good, body, NOW).reason === undefined && stale.reason !== undefined && noTs.reason !== undefined);
+}
+
+// ── Dead-letter: the exhausted-retry arm exists and is reachable ─────────────
+// `attemptDelivery` initialises status to dead_letter and re-assigns it on the
+// last failed attempt; nothing ever drove an endpoint past maxAttempts, so the
+// arm was unproven (eighth verdict-core round, 2026-09-05).
+{
+  const store = new MemoryStore();
+  const clock = fixedClock("2026-07-13T15:00:00.000Z");
+  const base = { tenantId: "tenant_wh", url: "https://sink.demo.invalid/hook", events: ["decision.evaluated" as const], active: true };
+  store.putWebhookEndpoint({ ...base, id: "wh_dead", failuresBeforeSuccess: 5, maxAttempts: 3 });
+  store.putWebhookEndpoint({ ...base, id: "wh_late", failuresBeforeSuccess: 2, maxAttempts: 3 });
+  store.putWebhookEndpoint({ ...base, id: "wh_off", failuresBeforeSuccess: 0, maxAttempts: 3, active: false });
+  const deliveries = deliverEvent(store, clock, "tenant_wh", "dec_1", "decision.evaluated");
+  const dead = deliveries.find((d) => d.endpointId === "wh_dead");
+  const late = deliveries.find((d) => d.endpointId === "wh_late");
+  check("dead-letter: an endpoint that fails past maxAttempts is DEAD_LETTERED, with every attempt recorded", dead?.status === "dead_letter" && dead.attempts.length === 3 && dead.attempts.every((a) => a.status === "error"));
+  check("dead-letter: ...and its backoff schedule is exponential (1s, 2s, 4s)", dead?.attempts.map((a) => a.backoffSeconds).join(",") === "1,2,4");
+  check("dead-letter: an endpoint that succeeds on its last allowed attempt is DELIVERED (the assertion above can fail)", late?.status === "delivered" && late.attempts.length === 3 && late.attempts[2].status === "ok");
+  check("dead-letter: an inactive endpoint gets no delivery record at all", !deliveries.some((d) => d.endpointId === "wh_off"));
+  check("dead-letter: the delivery record is persisted and tenant-scoped", store.listWebhookDeliveries("tenant_wh").length === 2 && store.listWebhookDeliveries("tenant_other").length === 0);
 }
 
 const total = passed + failures.length;

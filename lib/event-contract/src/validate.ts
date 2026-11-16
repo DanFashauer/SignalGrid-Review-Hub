@@ -1,9 +1,11 @@
 import {
+  BADGE_AUTH_OUTCOMES,
   CARRIER_STATES,
   CHARGE_STATES,
   EVENT_TYPES,
   MDM_STATES,
   TAMPER_STATES,
+  type BadgeAuthOutcome,
   type CarrierConnectivityState,
   type ChargeState,
   type EventType,
@@ -61,6 +63,7 @@ export function validateEvent(input: unknown): ValidateResult {
   const carrierConnectivityState = enumField<CarrierConnectivityState>(raw, "carrierConnectivityState", CARRIER_STATES, errors, false);
   const tamperState = enumField<TamperState>(raw, "tamperState", TAMPER_STATES, errors, false);
   const chargeState = enumField<ChargeState>(raw, "chargeState", CHARGE_STATES, errors, false);
+  const badgeAuthOutcome = enumField<BadgeAuthOutcome>(raw, "badgeAuthOutcome", BADGE_AUTH_OUTCOMES, errors, false);
 
   // Battery percent 0–100.
   let batteryPercent: number | undefined;
@@ -99,6 +102,7 @@ export function validateEvent(input: unknown): ValidateResult {
   assign(event, "carrierConnectivityState", carrierConnectivityState);
   assign(event, "tamperState", tamperState);
   assign(event, "chargeState", chargeState);
+  assign(event, "badgeAuthOutcome", badgeAuthOutcome);
   assign(event, "lastSeenNetwork", lastSeenNetwork);
   assign(event, "policyVersion", policyVersion);
   assign(event, "incidentKey", incidentKey);

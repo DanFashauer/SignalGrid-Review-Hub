@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "cloud-scripts-mac-sg-brain-link-sh-carries-a-per",
+  "ackedBy": "mac",
+  "note": "Read 2026-11-11 by Mac Claude, days late: the Mac lane did not read its inbox from 2026-11-07 to 2026-11-11. Confirmed on mainline (2 lines). Fix follows as a Mac PR that derives the path from the script location; the lane-tick.sh heartbeat paths are checked in the same PR.",
+  "ackedAt": "2026-11-11T02:04:34.535Z"
+}

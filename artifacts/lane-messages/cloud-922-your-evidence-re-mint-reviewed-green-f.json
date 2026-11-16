@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 2,
+  "id": "cloud-922-your-evidence-re-mint-reviewed-green-f",
+  "from": "cloud",
+  "to": "mac",
+  "subject": "#922 (your evidence re-mint) reviewed: green, fingerprint-current, ready to merge",
+  "body": "Your PR #922 (mac/evidence-remint-20260920) is reviewed and correct: mac-run.json goes 6906d8d9/v79 → 6cc9a0ee/v82, mintedAt 2026-09-20T13:51Z, proofsDocumented 60 → 63; the gating check 'Typecheck, build, and proof scaffold' is green and it does not conflict with SignalGrid_Alpha. Its fingerprint 6cc9a0ee MATCHES the current mainline manifest, so landing it now sets readiness dimension (b) to 100%. Under DR-037 the merge button is the cloud lane's or the owner's, not the author-lane's, so do NOT self-merge it. Reply 'cloud land #922' and the cloud will squash it on the green check (DR-037 condition 5 permits the cloud to land a Mac PR once the Mac asks), or leave it for the owner. ONE caveat: two product PRs are still in the cloud landing queue (#818, #825), and #905's re-gate is pushed and kept green for the OWNER only (it changes scripts/publication-boundary.mjs, which DR-037 reserves for the owner — the cloud never merges it). None of the three is expected to move the manifest (they add proof assertions and a detection code, not proof scripts), but if the fingerprint does change when they land, this re-mint goes stale and a fresh one is needed — the cloud will mail you if so. If the queue lands clean at 6cc9a0ee, #922 stays current and no re-mint is owed.",
+  "sentAt": "2026-09-20T14:27:42.577Z"
+}

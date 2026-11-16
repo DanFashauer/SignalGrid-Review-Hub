@@ -1,7 +1,7 @@
 import { Link } from "wouter";
 
 const REPO = "https://github.com/DanFashauer/SignalGrid-Review-Hub";
-const DOCS = `${REPO}/tree/main/docs`;
+const DOCS = `${REPO}/tree/SignalGrid_Alpha/docs`;
 
 const FOOTER_LINKS = {
   Product: [
@@ -18,14 +18,14 @@ const FOOTER_LINKS = {
   ],
   Resources: [
     { label: "Documentation", href: DOCS },
-    { label: "API Reference", href: `${REPO}/blob/main/lib/api-spec/v1-openapi.yaml` },
+    { label: "API Reference", href: `${REPO}/blob/SignalGrid_Alpha/lib/api-spec/v1-openapi.yaml` },
     { label: "Downloads", href: "/downloads" },
-    { label: "Changelog", href: `${REPO}/commits/main` },
+    { label: "Changelog", href: `${REPO}/commits/SignalGrid_Alpha` },
   ],
   Company: [
     { label: "About", href: "/about" },
-    { label: "Launch plan", href: `${REPO}/blob/main/docs/REALISTIC_LAUNCH_PLAN.md` },
-    { label: "Security", href: `${REPO}/blob/main/SECURITY.md` },
+    { label: "Launch plan", href: `${REPO}/blob/SignalGrid_Alpha/docs/REALISTIC_LAUNCH_PLAN.md` },
+    { label: "Security", href: `${REPO}/blob/SignalGrid_Alpha/SECURITY.md` },
     { label: "Contact", href: REPO },
   ],
 };
@@ -74,7 +74,7 @@ export default function Footer() {
         <div className="pt-8 border-t border-border/40 flex flex-col md:flex-row items-center justify-between gap-4 text-xs text-muted-foreground">
           <div>&copy; {new Date().getFullYear()} Daniel Fashauer. All rights reserved.</div>
           <div className="flex gap-6">
-            <a href={`${REPO}/blob/main/docs/CI_AND_VALIDATION.md`} target="_blank" rel="noopener noreferrer" className="hover:text-foreground transition-colors">Validation &amp; proofs</a>
+            <a href={`${REPO}/blob/SignalGrid_Alpha/docs/CI_AND_VALIDATION.md`} target="_blank" rel="noopener noreferrer" className="hover:text-foreground transition-colors">Validation &amp; proofs</a>
             <Link href="/federal" className="hover:text-foreground transition-colors">FedRAMP</Link>
           </div>
         </div>

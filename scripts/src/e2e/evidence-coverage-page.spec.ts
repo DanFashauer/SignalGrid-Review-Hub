@@ -1,6 +1,7 @@
 import { test, expect, type Locator, type Page } from "@playwright/test";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { guardEgress } from "./egress-guard";
 
 /**
  * docs/evidence-coverage.html — the standalone, self-contained Evidence Coverage page.
@@ -25,17 +26,11 @@ import { fileURLToPath } from "node:url";
 const here = path.dirname(fileURLToPath(import.meta.url));
 const PAGE_URL = `file://${path.resolve(here, "../../../docs/evidence-coverage.html")}`;
 
-/** Every non-file request the page attempted. Must stay empty — see the first test. */
-let offPageRequests: string[] = [];
+// Only the file itself passes; every other request — localhost included — is off-page
+// and fails the test (the shared guard's afterEach; see the first test below).
+guardEgress(test, [], { serves: "file" });
 
 test.beforeEach(async ({ page }) => {
-  offPageRequests = [];
-  await page.route("**/*", (route) => {
-    const url = route.request().url();
-    if (url.startsWith("file://")) return route.continue();
-    offPageRequests.push(url);
-    return route.abort();
-  });
   await page.goto(PAGE_URL, { waitUntil: "domcontentloaded" });
 });
 
@@ -53,28 +48,30 @@ function statCard(page: Page, testId: string): Locator {
 }
 
 test("the page reaches nothing outside itself", async ({ page }) => {
-  // The route handler above aborts off-page requests, and the first version of this file
+  // The route handler aborts off-page requests, and the first version of this file
   // stopped there — which meant a page that grew a webfont, a logo or an analytics beacon
   // would be silently neutered by the test and ship green to a public marketing domain.
-  // Aborting is the setup; this assertion is the test.
-  await page.waitForTimeout(250);
-  expect(offPageRequests).toEqual([]);
+  // Aborting is the setup; the assertion is the test. It now lives in
+  // `egress-guard.ts` and runs after EVERY test here and in each spec that serves a page
+  // (plan row 147); this test keeps the load-only case named on its own.
+  await expect(page).toHaveURL(/^file:/);
 });
 
 test("the standalone page renders the real model, not an empty shell", async ({ page }) => {
   await expect(page).toHaveTitle("SignalGrid — Evidence Coverage");
 
-  // Eighteen axis rows and seven plane toggles prove the bundled model was linked in and
-  // iterated. A build that resolved the import to nothing produces a valid, blank page.
-  await expect(page.locator("tbody tr")).toHaveCount(18);
+  // The axis rows and plane toggles prove the bundled model was linked in and iterated;
+  // the two assertions below carry the counts. A build that resolved the import to
+  // nothing produces a valid, blank page.
+  await expect(page.locator("tbody tr")).toHaveCount(24);
   await expect(page.locator("button.p")).toHaveCount(7);
 
   // Opens on the wedge, with the figures pinned by equality in proof:evidence-coverage
   // and api.test.mjs. Three surfaces, one set of numbers.
-  expect(await stat(page, "stat-answerable")).toBe(10);
-  expect(await stat(page, "stat-dark")).toBe(6);
-  expect(await stat(page, "stat-not-sourced")).toBe(2);
-  expect(await stat(page, "stat-silent-holes")).toBe(6);
+  expect(await stat(page, "stat-answerable")).toBe(13);
+  expect(await stat(page, "stat-dark")).toBe(8);
+  expect(await stat(page, "stat-not-sourced")).toBe(3);
+  expect(await stat(page, "stat-silent-holes")).toBe(7);
 
   // Each value sits with ITS OWN caption. Swapping two captions leaves every number and
   // every test id correct and tells the reader "10 dark, 6 answerable".
@@ -83,10 +80,10 @@ test("the standalone page renders the real model, not an empty shell", async ({ 
   await expect(statCard(page, "stat-not-sourced")).toContainText("not sourced");
 
   // The denominator is tied to what is actually on screen, not to a literal: a hardcoded
-  // "18" here would print "10 + 7 + 2 = 18" the day a nineteenth axis is added.
+  // "21" here would print "12 + 7 + 3 = 21" the day a twenty-second axis is added.
   const rows = await page.locator("tbody tr").count();
   await expect(page.getByTestId("coverage-denominator")).toContainText(
-    `10 + 6 + 2 = ${rows} evidence axes`,
+    `13 + 8 + 3 = ${rows} evidence axes`,
   );
 
   // The toggles must agree with the report they produced.
@@ -100,7 +97,7 @@ test("the standalone page renders the real model, not an empty shell", async ({ 
 });
 
 test("the visible coverage labels say what the data attributes say", async ({ page }) => {
-  // Inverting COVERAGE_LABEL renders all 18 badges backwards and changes no attribute.
+  // Inverting COVERAGE_LABEL renders all 24 badges backwards and changes no attribute.
   for (const [coverage, label] of [
     ["answerable", "answerable"],
     ["needs_instrumentation", "dark"],
@@ -119,7 +116,7 @@ test("silent holes rank first, say what they are, and name what would answer the
   page,
 }) => {
   const holes = page.locator('tr[data-silent-hole="true"]');
-  await expect(holes).toHaveCount(6);
+  await expect(holes).toHaveCount(7);
   await expect(page.locator("tbody tr").first()).toHaveAttribute("data-silent-hole", "true");
   await expect(page.locator("tbody tr").last()).toHaveAttribute("data-coverage", "not_sourced");
   await expect(holes.first()).toContainText("the active rules grant when this is unknown");
@@ -142,7 +139,7 @@ test("silent holes rank first, say what they are, and name what would answer the
   );
 
   // The headline states the subset relation against the real dark count.
-  await expect(page.locator(".headline")).toContainText("silent holes — of the 6 dark axes");
+  await expect(page.locator(".headline")).toContainText("silent holes — of the 8 dark axes");
 
   // Posed by the calling app — must stay NOT SOURCED rather than inflating the gap count.
   const posed = page.locator('tr[data-axis="workflowRiskTier"]');
@@ -159,7 +156,7 @@ test("declaring and undeclaring planes moves the report, down to the empty estat
   await planeToggle(page, "Workforce Management").click();
   await expect(shift).toHaveAttribute("data-coverage", "answerable");
   await expect(planeToggle(page, "Workforce Management")).toHaveAttribute("aria-pressed", "true");
-  expect(await stat(page, "stat-silent-holes")).toBe(5);
+  expect(await stat(page, "stat-silent-holes")).toBe(6);
 
   // Strip the estate to nothing: the honest opening position, and proof the page cannot
   // flatter — the numbers only get worse as the estate thins.
@@ -167,10 +164,10 @@ test("declaring and undeclaring planes moves the report, down to the empty estat
     await planeToggle(page, plane).click();
   }
   expect(await stat(page, "stat-answerable")).toBe(0);
-  expect(await stat(page, "stat-silent-holes")).toBe(11);
-  expect(await stat(page, "stat-dark")).toBe(16);
+  expect(await stat(page, "stat-silent-holes")).toBe(15);
+  expect(await stat(page, "stat-dark")).toBe(21);
   await expect(page.getByTestId("coverage-denominator")).toContainText(
-    "0 + 16 + 2 = 18 evidence axes",
+    "0 + 21 + 3 = 24 evidence axes",
   );
 });
 

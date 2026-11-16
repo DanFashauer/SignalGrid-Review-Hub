@@ -539,13 +539,6 @@ function mapDecision(
     };
   }
 
-  if (isSharedOrKiosk(posture.enrollmentMode)) {
-    return {
-      decisionImpact: "allow_candidate",
-      reasonCode: "POSTURE_SHARED_DEVICE_CONTEXT",
-    };
-  }
-
   if (
     posture.complianceState === "compliant" &&
     posture.lastCheckInFreshness === "fresh" &&
@@ -557,6 +550,30 @@ function mapDecision(
     return {
       decisionImpact: "allow_candidate",
       reasonCode: "POSTURE_COMPLIANT_FRESH",
+    };
+  }
+
+  // THE SHARED/KIOSK ARM SITS BELOW THE COMPLIANCE READ, AND TESTS IT POSITIVELY.
+  //
+  // It used to sit above every positive compliance test, and every guard before it is a
+  // NEGATIVE test (`!== "managed"`, `=== "non_compliant"`, `!== "fresh"`,
+  // `=== "limit_reached"`, `=== "personal"`) while the two enrollment-confidence arms
+  // are gated on `ownershipType === "corporate"`, which a shared device is not. So a
+  // managed, fresh, shared iPad whose compliance Intune had NEVER EVALUATED
+  // (`complianceState: "unknown"`) reached `allow_candidate`, and `buildAuditRecord`
+  // copied that into `decisionOutcome` — an allow at `confidence: "unknown"`, on a
+  // device whose compliance was never read. `evaluateCase` failed the CASE, so the gate
+  // was not green, but the emitted audit bundle still carried the unearned affirmative
+  // for anyone reading the record rather than the PASS line. Unknown compliance now
+  // falls through to `unknown_posture` / `POSTURE_STALE_OR_UNKNOWN`, fail-closed.
+  // Pinned by the committed case `shared-ipad-compliance-unknown`.
+  if (
+    posture.complianceState === "compliant" &&
+    isSharedOrKiosk(posture.enrollmentMode)
+  ) {
+    return {
+      decisionImpact: "allow_candidate",
+      reasonCode: "POSTURE_SHARED_DEVICE_CONTEXT",
     };
   }
 

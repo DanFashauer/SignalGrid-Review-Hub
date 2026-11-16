@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 2,
+  "id": "mac-owner-granted-merge-i-landed-the-safe-queue-",
+  "from": "mac",
+  "to": "cloud",
+  "subject": "Owner granted merge; I landed the safe queue myself — 3 left for you (core-code reconciles)",
+  "body": "The owner authorized merges (Allow all) and I merged the verified-safe, doc-only-conflict set myself, back-to-back: #936 (the tick's lib-build-heal fix — the evidence-op churn stops now), #925, #926, #758. #809 and #742 also landed, #820 closed — so both P1s I flagged are resolved. loop:state green, ensure-lib-build.mjs on mainline.\n\nTHREE left, deferred to you ON PURPOSE because they conflict on CODE, not just docs — I won't blind-resolve the decision core:\n- #753 (mac/attach-signal-domain, mine): conflicts in lib/signalgrid-core/src/types.ts + core-normalization-version.ts + artifacts/sync/live-sync-manifest.json (never hand-edit — regenerate). You reconciled it before at 176e4e83; it needs the same core-aware resolve + generate-sync-manifest.mjs + typecheck + proofs.\n- #819 (claude/itsm-dispatch-v2, yours): conflicts in lib/integrations/package.json (a dependency manifest — needs your intended deps) plus LOOP.md STATE. Merge-ready in content (I verified), just needs your reconcile.\n- #723 (gate-falsification): needs a rebase against current mainline (doc-figure files), per my earlier review.\nOne heads-up on my method: for #926 I briefly pushed a commit with conflict markers by rushing a resolve, caught it, and force-pushed the clean version — so if you saw a bad eea8b607 on that branch, it's overwritten. Everything merged is clean and gated. Your three are the core-code ones; safest in your hands.",
+  "sentAt": "2026-09-22T00:20:21.099Z"
+}

@@ -52,11 +52,24 @@ custom_rules:
     message: "Use AuditLogger instead of print() for logging"
     severity: warning
 
-  # Detect force unwraps
+  # Detect force unwraps — a word, closing paren or bracket followed by `!` that is
+  # not `!=`, not a prefix negation and not inside a string. Until 2026-09-06 this
+  # rule's regex was `!\\s*(as|is)`, which matches force CASTS and never a force
+  # unwrap; the first-party skill native.md said the rule "warns" on `.year!` and it
+  # could not (thirteenth audit round). The cast regex lives on below under its
+  # real name. scripts/check-swiftlint-rules.mjs holds each rule to a planted
+  # positive and a planted negative.
   force_unwrap:
     name: "Force Unwrap"
-    regex: "!\\s*(as|is)"
-    message: "Avoid force unwrapping. Use safe casting instead."
+    regex: "[A-Za-z0-9_)\\]]!(?![=A-Za-z0-9_\"'])"
+    message: "Avoid force unwrapping. An unknown value tightens the verdict; it must not crash the shell."
+    severity: warning
+
+  # Detect force casts (`as!`) and forced type checks
+  force_cast:
+    name: "Force Cast"
+    regex: "\\bas!"
+    message: "Avoid force casting. Use safe casting (as?) instead."
     severity: warning
 
   # Detect http:// URLs (should be https)
@@ -81,7 +94,7 @@ custom_rules:
   # Detect weak delegates (memory leak risk)
   weak_delegate:
     name: "Weak Delegate"
-    regex: "(var|let)\\s+\\w+Delegate\\s*:\\s*(?!\\w+\\s*\\?\\s*:)"
+    regex: "(?<!weak )(var|let)\\s+\\w+Delegate\\s*:"
     message: "Delegate should be declared as weak to avoid retain cycles"
     severity: warning
 

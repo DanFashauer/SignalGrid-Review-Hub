@@ -34,10 +34,12 @@ export function GridConfig() {
       </div>
 
       {/* Validation banner */}
-      <Card className={data ? (data.valid ? "border-emerald-400/30" : "border-red-400/30") : "border-border"}>
+      {/* A settled error is not "Validating…": an unread config has no verdict, and a
+          pending word over a dead control plane reads as a check still running. */}
+      <Card className={data ? (data.valid ? "border-emerald-400/30" : "border-red-400/30") : q.isError ? "border-amber-400/30" : "border-border"}>
         <CardHeader className="pb-2">
-          <CardTitle className={`text-sm font-mono uppercase tracking-wider ${data ? (data.valid ? "text-emerald-400" : "text-red-400") : "text-muted-foreground"}`}>
-            {data ? (data.valid ? "Config valid · the pipeline would let this merge" : "Config invalid · the pipeline would block this") : "Validating…"}
+          <CardTitle className={`text-sm font-mono uppercase tracking-wider ${data ? (data.valid ? "text-emerald-400" : "text-red-400") : q.isError ? "text-amber-400" : "text-muted-foreground"}`}>
+            {data ? (data.valid ? "Config valid · the pipeline would let this merge" : "Config invalid · the pipeline would block this") : q.isError ? "Config unavailable — the control plane did not answer; no verdict" : "Validating…"}
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -82,7 +84,7 @@ export function GridConfig() {
               </span>
             </div>
           ))}
-          {!data && <div className="text-sm text-muted-foreground">Loading…</div>}
+          {!data && <div className="text-sm text-muted-foreground">{q.isError ? "Grid config unavailable — the control plane did not answer." : "Loading…"}</div>}
         </CardContent>
       </Card>
 

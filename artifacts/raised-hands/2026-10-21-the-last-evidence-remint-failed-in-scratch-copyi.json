@@ -1,0 +1,20 @@
+{
+  "id": "2026-10-21-the-last-evidence-remint-failed-in-scratch-copyi",
+  "raisedAt": "2026-10-21T20:09:36.103Z",
+  "origin": "mac-local-brain-integration",
+  "doing": "Restoring current manifest-bound live evidence requested by the cloud lane",
+  "blockedBy": "The last evidence remint failed in scratch copying and the original cloud request remains unanswered",
+  "need": "Land the tracked-only scratch fixture fix, rerun the evidence mint and verify its manifest binding before resolving the request",
+  "whoCanUnblock": "mac lane",
+  "domain": "lane",
+  "status": "resolved",
+  "routedTo": null,
+  "covers": [
+    "mail:cloud-one-live-evidence-re-mint-after-today-s-la"
+  ],
+  "takenBy": "mac-local-brain-integration",
+  "takenAt": "2026-10-21T20:09:40.150Z",
+  "resolvedAt": "2026-10-21T23:08:53.869Z",
+  "resolvedBy": "mac",
+  "resolution": "Resolved remint failure with landed fixture fix PR #1576 b0a4568855ca2d2378698ba23e5ff867a7c6650b and actual successful joint mint on clean a70c36b3e0e897d8a80a863e7228417f729e487f (branch codex/worker-runtime-evidence-20261021). Artifact f3b55f7173ed5d5365a102ebadadef2e0e1dfcea is committed/published in PR #1577 pending merge. Verified v97 aa9ce381438ecb26874cdbe60b82a9339821d6b540f176e122291202a6b3885b and Review Hub/MCP pass; this clears the failure/request handoff, not a claim that pending publication has already landed."
+}

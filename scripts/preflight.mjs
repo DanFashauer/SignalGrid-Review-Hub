@@ -5,17 +5,28 @@
 //
 //   node scripts/preflight.mjs          # full suite (what CI runs)
 //   node scripts/preflight.mjs --quick  # skip the heavy web/app builds
+//   node scripts/preflight.mjs --slice k/n --slice-record <file>   # ONE slice of the same list (a subset, never a verdict)
+//   node scripts/preflight.mjs --aggregate <dir> --slices n --jobs-result <ci result>   # judge n slice records as one run
+//   node scripts/preflight.mjs --slice-plan n                      # print who owns what, and stop
 //
 // Exits non-zero on the first failing gate and prints a compact report, so
 // "green preflight" means "CI will be green".
 import { spawnSync } from "node:child_process";
-import { resolve, dirname } from "node:path";
+import { readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { resolve, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { uncoveredLines } from "./lib/ci-jobs.mjs";
 import { nativeBuildExclusion } from "./lib/platform-native-build.mjs";
+import { classifyStep } from "./lib/preflight-verdict.mjs";
+import { aggregate, expectedSequence, parseSlice, planHash, planOf, roleOf, sliceRecord } from "./lib/preflight-slice.mjs";
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const quick = process.argv.includes("--quick");
+// SLICES (scripts/lib/preflight-slice.mjs). One hosted macOS runner cannot finish this list
+// inside the PR Mac check's work bound, so that check runs the SAME list as n slices on n
+// machines and one aggregate judges their union. Plain `node scripts/preflight.mjs` is unchanged.
+const argAfter = (flag) => { const i = process.argv.indexOf(flag); return i === -1 ? null : process.argv[i + 1] ?? ""; };
+const slice = process.argv.includes("--slice") ? parseSlice(argAfter("--slice")) : null;
 
 // Ordered gates — a complete mirror of the CI jobs that need NOTHING BUT NODE
 // (one honest exception: `proof:mobile-app-catalog` shells to python3, which is
@@ -45,7 +56,19 @@ const quick = process.argv.includes("--quick");
 // footer says what that leaves out, recomputed from `.github/workflows/` on
 // every run. `heavy` steps (full monorepo build) are skipped only under --quick.
 const STEPS = [
-  // FIRST, because it is the first thing CI does and the cheapest way to be told
+  // FIRST OF ALL: reap ORPHANED api-servers under THIS tree (DR-060, lesson L1 in
+  // docs/agent/LESSONS.md). A killed run leaves a server holding a fixed test port, and
+  // the next preflight fails at the OIDC middleware test with EADDRINUSE 127.0.0.1:5399.
+  // FREE_TEST_PORT_ORPHANS_ONLY limits the kill to servers whose parent is gone (ppid 1),
+  // so a live test:api, verify:breadth or tick evidence run in this checkout is reported
+  // and left alone. CEILING: it matches only an argv carrying the absolute path
+  // <tree>/artifacts/api-server/dist/index.mjs, so another worktree's orphan — L1's own
+  // case, orphans in a scratch worktree — is never touched, and neither is a relative
+  // `node ./dist/index.mjs`. The cross-tree case is covered by the orchestrator skill's
+  // rule (a read-only brief boots no server) and, at the root, by oidc.test.mjs moving off
+  // its fixed ports (docs/BUILD_BACKLOG.md, DR-060 section). Never fails.
+  { name: "Reap orphaned api-servers under this tree (ppid 1 only; live runs are left)", cmd: ["bash", "scripts/mac/free-test-port.sh"], env: { GITHUB_WORKSPACE: repo, FREE_TEST_PORT_ORPHANS_ONLY: "1" } },
+  // The first GATE, because it is the first thing CI does and the cheapest way to be told
   // this push cannot even install. It was missing, and that omission let preflight
   // print "Safe to push" over a lockfile that did not match its manifests — CI then
   // failed on `Install dependencies` before running a single gate.
@@ -66,24 +89,73 @@ const STEPS = [
   // even with an unwarmed store, exit 1 on a real mismatch. Both verified.
   { name: "Lockfile matches manifests (what CI installs with)", cmd: ["pnpm", "install", "--frozen-lockfile", "--lockfile-only"] },
   // Immediately after the lockfile gate, and for the same reason: the Docker-compose
-  // smoke is one of the three CI jobs this file does NOT mirror, so anything only a
-  // `docker build` can see is invisible here by construction. A root lifecycle hook
+  // smoke is one of the CI jobs this file does NOT mirror (the count is derived and
+  // printed with the verdict — it is not three, and this line used to say it was), so
+  // anything only a `docker build` can see is invisible here by construction. A root lifecycle hook
   // whose entrypoint the Dockerfile does not COPY is exactly that — every source-reading
   // gate stays green and the image build dies on `pnpm install`. Reads two text files.
   { name: "Docker carries every install-hook entrypoint", cmd: ["node", "scripts/check-docker-lifecycle-copy.mjs"] },
+  { name: "Branch-prune exact-tip regression (real CLI and name-only deletion mutants)", cmd: ["node", "scripts/check-pruner-exact-ref.mjs"] },
   { name: "Invariant review self-test (a default-less switch / stray clock read must fail)", cmd: ["node", "scripts/review-invariants.mjs", "--self-test"] },
   { name: "Invariant review (fail-closed / determinism / Assist / truth)", cmd: ["node", "scripts/review-invariants.mjs"] },
+  { name: "Clock-spelling matcher mutation guard (every listed mutant of the shared matcher must fail its self-test)", cmd: ["node", "scripts/clock-spellings-mutants.mjs"] },
   // Shell was the only language here with no static analysis: CodeQL takes JS/TS,
   // tsc takes types, gitleaks takes secrets, the proofs take behaviour. See
   // scripts/check-shell.mjs for why the floor is `warning` and why the Mac lane's
   // validate-sim-macos.sh is DEFERRED rather than excluded.
   { name: "Shell lint (the one language with no static analysis)", cmd: ["node", "scripts/check-shell.mjs"] },
+  { name: "Bash deny-list hook self-test (a wrapped `sh -c` payload and unreadable input must DENY)", cmd: ["node", "scripts/check-hook-denylist.mjs"] },
+  { name: "Bash deny-list gate self-test (a hung hook self-test must fail closed within the timeout and reap its descendant)", cmd: ["node", "scripts/check-hook-denylist.mjs", "--self-test"] },
   { name: "Docs-sanity self-test (a planted over-claim fails; empty scan roots fail via the floor)", cmd: ["node", "scripts/docs-sanity.mjs", "--self-test"] },
   { name: "Docs sanity (required docs + unsafe-claim scan)", cmd: ["node", "scripts/docs-sanity.mjs"] },
   { name: "Doc orphans (a new doc must be reachable from an index)", cmd: ["node", "scripts/check-doc-orphans.mjs"] },
   { name: "Doc-orphan self-test (a prose mention is not a route)", cmd: ["node", "scripts/check-doc-orphans.mjs", "--self-test"] },
+  // DR-060 rule 2: every incident a cycle hits is a row in docs/agent/LESSONS.md with a
+  // landing. Fatal on shape; a row pending past 14 days is REPORTED, never fatal.
+  { name: "Lessons ledger self-test (each malformed row shape must fail)", cmd: ["node", "scripts/check-lessons.mjs", "--self-test"] },
+  { name: "Lessons ledger (every incident has evidence and a landing)", cmd: ["node", "scripts/check-lessons.mjs"] },
+  // DR-060 rule 2 / lesson L2: the land-branch saved workflow may push only when the
+  // script-side gate says so; this proves the gate refuses a missing, non-zero or
+  // stale (previous-run, wrong-sha) sentinel.
+  { name: "Land-branch push gate self-test (a missing, non-zero or stale sentinel must refuse the push)", cmd: ["node", "scripts/lib/land-branch-gate.mjs", "--self-test"] },
+  { name: "Staged Mac worker self-test (triage, review, limits and transport)", cmd: ["node", "scripts/mac/build-tick-stages.mjs", "--self-test"] },
+  { name: "Local worker job-state proofs", cmd: ["node", "scripts/mac/local-brain/test/job-state.test.mjs"] },
+  { name: "Local worker task-selector proofs", cmd: ["node", "scripts/mac/local-brain/test/task-selector.test.mjs"] },
+  { name: "Local worker task-selector C0 regressions", cmd: ["node", "scripts/mac/local-brain/test/task-selector-control-scope.test.mjs"] },
+  { name: "Local worker task-selector C0 proof envelope", cmd: ["node", "scripts/check-local-worker-task-selector-proof.mjs"] },
+  { name: "Local worker proof-policy proofs", cmd: ["node", "scripts/mac/local-brain/test/proof-policy.test.mjs"] },
+  { name: "Local worker route-runner proofs (queue -> local LLM -> local sessions -> cloud, fail-closed)", cmd: ["node", "scripts/mac/local-brain/test/route-runner.test.mjs"] },
+  // DR-060 rule 3, first slice: docs/agent/mcp-roster.json names which lane or
+  // first-party skill may call which MCP server, with signalgrid-mcp's tool count
+  // DERIVED from artifacts/mcp-server/src/index.ts, never hand-typed.
+  { name: "MCP roster self-test (a drifted tool count, a ghost grant and an ungranted mcp__ call must fail)", cmd: ["node", "scripts/check-mcp-roster.mjs", "--self-test"] },
+  { name: "MCP roster (per-lane and per-skill grants; signalgrid-mcp tool count derived from the server source)", cmd: ["node", "scripts/check-mcp-roster.mjs"] },
+  // `pnpm run scan:estate` itself stays out of preflight and CI (CI has one checkout); only
+  // its locator and tally are proved here, with disk and git injected, so the proof is the
+  // same on a Mac with siblings and on a runner with none.
+  { name: "Estate scan self-test (an unreachable or misidentified sibling must read NOT SCANNED; only an archived repo's breaks are report-only)", cmd: ["node", "scripts/scan-estate-citations.mjs", "--self-test"] },
+  // Row 17's live-check ledger: every live check, its dimensions and the code it verified;
+  // the coverage counts are derived here, and check-derived-doc-figures holds the plan to them.
+  { name: "Wire-truth ledger self-test (an unknown dimension, an undeclared bound symbol and an uncited live record must fail)", cmd: ["node", "scripts/check-wire-truth-ledger.mjs", "--self-test"] },
+  { name: "Wire-truth ledger (live checks bound to real dimensions, tracked evidence and declared symbols; coverage counts derived)", cmd: ["node", "scripts/check-wire-truth-ledger.mjs"] },
   { name: "Index\u2194banner parity self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-index-banner-parity.mjs", "--self-test"] },
   { name: "Index\u2194banner parity (a bannered doc is not described alive in INDEX.md)", cmd: ["node", "scripts/check-index-banner-parity.mjs"] },
+  // One level wider than the line above: the index is not the only page that routes a
+  // reader to a dead document. A pitch pack listed three "do not send from this file"
+  // documents in the present tense while the index announced all three honestly.
+  { name: "Cross-doc banner parity self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-cross-doc-banner-parity.mjs", "--self-test"] },
+  { name: "Cross-doc banner parity (no live doc cites a bannered doc as live)", cmd: ["node", "scripts/check-cross-doc-banner-parity.mjs"] },
+  { name: "Published-page scope banner self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-published-page-scope-banner.mjs", "--self-test"] },
+  { name: "Published-page scope banner (every page pages.yml publishes states its deferred scope)", cmd: ["node", "scripts/check-published-page-scope-banner.mjs"] },
+  // REPORT, not a gate — it prints and exits 0 on what it finds, and exits 1 only when
+  // its own derivation breaks. docs/PURPOSE.md §2 owns the product sentence (DR-020);
+  // this counts how many other sentences in the corpus also define the product.
+  { name: "Product-sentence drift self-test (the detector must find the planted sentences)", cmd: ["node", "scripts/check-product-sentence-drift.mjs", "--self-test"] },
+  { name: "Product-sentence drift REPORT (never fatal on findings; fatal on a broken derivation)", cmd: ["node", "scripts/check-product-sentence-drift.mjs"] },
+  // Readiness figure (DR-036): three derived dimensions, headline = lowest; the number that gates
+  // outreach. REPORT — a low number is information; only a broken derivation is fatal.
+  { name: "Readiness figure self-test (the derivation must be able to fail)", cmd: ["node", "scripts/check-readiness-figure.mjs", "--self-test"] },
+  { name: "Readiness figure REPORT (never fatal on the number; fatal on a broken derivation)", cmd: ["node", "scripts/check-readiness-figure.mjs"] },
   // Re-registered 2026-08-31: the gate census found this invoked by NO lane
   // and NO workflow — it had silently drifted out after #213 hardened it.
   { name: "Postman collection tracks the /v1 spec (57 paths at registration)", cmd: ["node", "scripts/build-postman.mjs", "--check"] },
@@ -93,6 +165,7 @@ const STEPS = [
   { name: "Gate census (every gate runs somewhere; self-test proves it can fail)", cmd: ["node", "scripts/check-gate-census.mjs"] },
   { name: "Gate census self-test", cmd: ["node", "scripts/check-gate-census.mjs", "--self-test"] },
   { name: "Failure-diagnosis registry audit (evidence paths still exist)", cmd: ["node", "scripts/classify-failure.mjs", "--audit"] },
+  { name: "Failure classifier self-test (exit contract + evidence parser)", cmd: ["node", "scripts/classify-failure.mjs", "--self-test"] },
   { name: "Gap scan (blocking findings fail; degraded scan is blocking)", cmd: ["node", "scripts/scan-gaps.mjs"] },
   { name: "Gap scan self-test", cmd: ["node", "scripts/scan-gaps.mjs", "--self-test"] },
   // PURPOSE.md makes the Decision Envelope the atomic product object; that only
@@ -101,6 +174,7 @@ const STEPS = [
   // PURPOSE.md is canonical (DR-019); current-truth surfaces reference it rather
   // than paraphrase it. Historical records keep their terminology.
   { name: "Product framing (current-truth surfaces reference PURPOSE.md)", cmd: ["node", "scripts/check-product-framing.mjs"] },
+  { name: "Product-framing self-test (a permitted phrase may not match a retired pattern; a single positive is not a pass)", cmd: ["node", "scripts/check-product-framing.mjs", "--self-test"] },
   // Sibling of the docs↔proof figure guard, for the format that guard cannot read.
   // `docs/architecture.html` said "12 dimensions" against a 17-member union for as
   // long as nobody could date, because no gate in this repository read a docs HTML
@@ -112,7 +186,40 @@ const STEPS = [
   // request/folder counts, the proof-script count. All three were repaired by hand on
   // 2026-09-02 — a repair fixes the number and leaves the drift mechanism intact.
   { name: "Derived-doc-figure self-test (a planted drift in each live document must fail)", cmd: ["node", "scripts/check-derived-doc-figures.mjs", "--self-test"] },
+  // The `path (N)` line counts in the build plan's tier lists: measured once,
+  // quoted forever — 20 of 29 were wrong on 2026-09-05, three by 100+ lines.
+  { name: "Doc line-count self-test (a planted drift must fail; the real tree must be clean)", cmd: ["node", "scripts/check-doc-line-counts.mjs", "--self-test"] },
+  { name: "Doc line counts (every `path (N)` figure is within max(25 lines, 5%) of the file it names)", cmd: ["node", "scripts/check-doc-line-counts.mjs"] },
+  // The four capacity figures RELIABILITY_SLO.md owns, wherever a document restates
+  // them. `check-derived-doc-figures` sweeps tree-derived values and never read a bare
+  // `240` or `585`; COMPANY_BUILD_PLAN.md carried the superseded 5,128 for twelve days.
+  { name: "Performance-figure self-test (a drifted or undated restatement must fail)", cmd: ["node", "scripts/check-performance-figures.mjs", "--self-test"] },
+  { name: "Performance figures (every restatement matches RELIABILITY_SLO.md and carries its date)", cmd: ["node", "scripts/check-performance-figures.mjs"] },
+  // A sim result is an attestation; `provenance.commit` is the only thing tying it to
+  // code. One stamped a sha `git cat-file -e` could not resolve on Alpha.
+  { name: "Sim-result provenance self-test (an unresolvable sha is reported; a non-ancestor and later evidence must fail)", cmd: ["node", "scripts/check-sim-result-provenance.mjs", "--self-test"] },
+  { name: "Sim-result provenance (every result names a checkable commit and cites evidence no newer than itself)", cmd: ["node", "scripts/check-sim-result-provenance.mjs"] },
+  // A generated input validator nobody parses reads exactly like coverage. One of the
+  // thirteen in lib/api-zod is invoked; the rest are declared client/type-only.
+  { name: "api-zod wiring self-test (an orphan schema and a stale declaration must fail)", cmd: ["node", "scripts/check-api-zod-wiring.mjs", "--self-test"] },
+  { name: "api-zod wiring (every generated input schema is invoked or declared client/type-only)", cmd: ["node", "scripts/check-api-zod-wiring.mjs"] },
+  // The /api document against the fixtures it serves — `lastSync: null` against a
+  // `string`, `avgLatencyMs: 11.4` against an `integer`, both `limit` defaults crossed.
+  { name: "/api fixture-contract self-test (each of the four rules must be able to fail)", cmd: ["node", "scripts/check-api-fixture-contract.mjs", "--self-test"] },
+  { name: "/api fixture contract (the document describes what the fixtures answer)", cmd: ["node", "scripts/check-api-fixture-contract.mjs"] },
+  // The /v1 document against the refusals the served source returns: 401 was on no
+  // protected operation and 429 was nowhere, while every /v1 route can answer both.
+  { name: "/v1 refusal-coverage self-test (a missing 401/429/400/404 must fail; the floors must fire)", cmd: ["node", "scripts/check-v1-refusal-coverage.mjs", "--self-test"] },
+  { name: "/v1 refusal coverage (every refusal the server returns is documented)", cmd: ["node", "scripts/check-v1-refusal-coverage.mjs"] },
+  // docker-compose.prod.yml explained at length why `api` needs a healthcheck and
+  // added one — there. The review topology had none on any service.
+  { name: "Compose healthcheck self-test (a planted port without a healthcheck must fail)", cmd: ["node", "scripts/check-compose-healthchecks.mjs", "--self-test"] },
+  { name: "Compose healthchecks (every published port has a service that says whether it answers)", cmd: ["node", "scripts/check-compose-healthchecks.mjs"] },
   { name: "Derived doc figures (a stated count equals the artifact it describes)", cmd: ["node", "scripts/check-derived-doc-figures.mjs"] },
+  // DR-043 rule 4 (Puck 5): the hardware tally in docs/agent/DISCOVERY_LOG.md's
+  // Running tally (Rh/Ch/Ph) is derived from row marks, never typed by hand.
+  { name: "Discovery-log self-test (a planted hardware-tally drift must fail; a hardware-tagged row must move the count)", cmd: ["node", "scripts/check-discovery-log.mjs", "--self-test"] },
+  { name: "Discovery-log hardware tally (the typed Rh/Ch/Ph sentence matches the Running tally's marks)", cmd: ["node", "scripts/check-discovery-log.mjs"] },
   // Two documents stated the four tier branches as live after all four were pruned.
   // Offline by design: it compares prose to the tracked prune record, not to origin.
   { name: "Documented-branch self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-documented-branches.mjs", "--self-test"] },
@@ -122,6 +229,43 @@ const STEPS = [
   // citation that resolves to nothing reads as evidence and is not.
   { name: "Cited paths (a doc may not cite a file that does not exist)", cmd: ["node", "scripts/check-cited-paths.mjs"] },
   { name: "Cited-path self-test (the gate can actually fail)", cmd: ["node", "scripts/check-cited-paths.mjs", "--self-test"] },
+  // check-cited-paths only sees BACKTICKED paths; a re-measured stamp (dated 2026-10-08 on) that
+  // cites one in plain text passes it unchecked. Follow-up (d) of the PR #1456 review.
+  { name: "Stamp citations (a re-measured stamp must backtick the repo paths it cites)", cmd: ["node", "scripts/check-stamp-citations.mjs"] },
+  { name: "Stamp-citation self-test (the gate can actually fail)", cmd: ["node", "scripts/check-stamp-citations.mjs", "--self-test"] },
+  // A document that instructs `SIGNALGRID_X=…` names a control; if nothing reads X the
+  // control does not exist. SIGNALGRID_SANITIZE_OUTPUT was "required" in two documents
+  // and read by nothing, anywhere, for as long as the documents existed.
+  { name: "Env-doc readers (an instructed SIGNALGRID_* variable must be read by something)", cmd: ["node", "scripts/check-env-doc-readers.mjs"] },
+  { name: "Env-doc-reader self-test (the gate can actually fail)", cmd: ["node", "scripts/check-env-doc-readers.mjs", "--self-test"] },
+  // A browser follows `](FOO.md)` from the document's own directory and nowhere
+  // else. 41 documents moved to docs/research/ on 2026-08-10 and their sibling
+  // links pointed at nothing for four weeks — 35 dead links across the tree.
+  { name: "Markdown links (a relative link resolves from its own document to a tracked file)", cmd: ["node", "scripts/check-markdown-links.mjs"] },
+  { name: "Markdown-link self-test (the gate can actually fail)", cmd: ["node", "scripts/check-markdown-links.mjs", "--self-test"] },
+  // The Graph permission page told an administrator to grant two scopes while the
+  // connector read three (the third landed hours earlier and updated seven records,
+  // not this page). Tables ⇔ connector reads, both directions.
+  { name: "Graph permission boundary (the page names exactly what the connector reads)", cmd: ["node", "scripts/check-graph-permission-boundary.mjs"] },
+  { name: "Graph-permission-boundary self-test (the gate can actually fail)", cmd: ["node", "scripts/check-graph-permission-boundary.mjs", "--self-test"] },
+  // A `Subject:` line is a template; a template is claim-scanned (docs/outreach) or
+  // bannered do-not-send. One pitch pack was neither, with a retired label in its subject.
+  { name: "Send-copy banner (a send template is claim-scanned or bannered do-not-send)", cmd: ["node", "scripts/check-send-copy-banner.mjs"] },
+  { name: "Send-copy-banner self-test (the gate can actually fail)", cmd: ["node", "scripts/check-send-copy-banner.mjs", "--self-test"] },
+  // The positioning SVG drew Allow · Step-Up · Deny · Remediate · Record — restrict
+  // missing, a never-claim drawn in its place — and no gate opened an .svg.
+  { name: "SVG outcome ladder (a rendered decision ladder is allow · step_up · restrict · deny)", cmd: ["node", "scripts/check-svg-outcome-ladder.mjs"] },
+  { name: "SVG-outcome-ladder self-test (the gate can actually fail)", cmd: ["node", "scripts/check-svg-outcome-ladder.mjs", "--self-test"] },
+  // .swiftlint.yml's `force_unwrap` regex matched force CASTS and never a force
+  // unwrap; a first-party skill told every agent it "warns" on `.year!`.
+  { name: "SwiftLint custom rules (each regex fires on a planted positive, not on a planted negative)", cmd: ["node", "scripts/check-swiftlint-rules.mjs"] },
+  { name: "SwiftLint-rules self-test (the gate can actually fail)", cmd: ["node", "scripts/check-swiftlint-rules.mjs", "--self-test"] },
+  // Two role-catalog headings read "(engaged)" over tables saying nobody is.
+  { name: "Role headings carry no status word (status lives in the entry's table)", cmd: ["node", "scripts/check-role-heading-status.mjs"] },
+  { name: "Role-heading-status self-test (the gate can actually fail)", cmd: ["node", "scripts/check-role-heading-status.mjs", "--self-test"] },
+  // The Postman spec check was one-directional and path-only; a request the API
+  // does not serve produced no signal.
+  { name: "Postman coverage self-test (a planted orphan request must be reported)", cmd: ["node", "scripts/build-postman.mjs", "--self-test"] },
   // The MCP-ecosystem source-independence map: every externally-sourced connector
   // family must have a row in docs/research/MCP_ECOSYSTEM_SIGNAL_SOURCES.md (an MCP
   // server or an explicit gap marker), and the map may not name a family the tree
@@ -129,6 +273,14 @@ const STEPS = [
   { name: "MCP-ecosystem-map self-test (the gate can fail both directions)", cmd: ["node", "scripts/check-mcp-ecosystem-map.mjs", "--self-test"] },
   { name: "MCP-ecosystem map (every externally-sourced family has an ecosystem row or a stated gap)", cmd: ["node", "scripts/check-mcp-ecosystem-map.mjs"] },
   { name: "Absence-check self-test (a word in a disclaimer is not the thing existing)", cmd: ["node", "scripts/agent/absence-check.mjs", "--self-test"] },
+  { name: "Untracked-ignore self-test (verify-all: an untracked lockfile is source, scratch stays ignored)", cmd: ["node", "scripts/check-untracked-ignore.mjs", "--self-test"] },
+  // Brain cycle (DR-032). The live origin-diff is the cycle's STEP 0, not a per-push gate
+  // (a feature branch legitimately differs from origin); preflight runs only the self-tests,
+  // which prove each piece can fail in both directions.
+  { name: "Brain-freshness self-test (empty derivation + drift must fail; identical is clean)", cmd: ["node", "scripts/check-brain-freshness.mjs", "--self-test"] },
+  { name: "Brain-cycle decision self-test (ran:false=HARD NO, veto/owner-gated open nothing, consensus floor)", cmd: ["node", "scripts/brain-cycle-decide.mjs", "--self-test"] },
+  { name: "Brain-cycle spine self-test (readBoard+decide integrate; malformed lens = ran:false)", cmd: ["node", "scripts/brain-cycle.mjs", "--self-test"] },
+  { name: "Package reachability self-test (a comment naming a package is not an import)", cmd: ["node", "scripts/check-package-reachability.mjs", "--self-test"] },
   { name: "Package reachability (a library nobody ships is a library nobody runs)", cmd: ["node", "scripts/check-package-reachability.mjs"] },
   { name: "Core normalization-version (the provenance stamp must track the code it names)", cmd: ["node", "scripts/generate-core-normalization-version.mjs", "--check"] },
   // Same shape as the stamp above, one document over. docs/CLAIM_INVENTORY.md is
@@ -139,12 +291,48 @@ const STEPS = [
   // nothing about whether a claim is true (that is check-launch-claims.mjs).
   { name: "Claim-inventory drift (the derived Markdown matches its JSON source)", cmd: ["node", "scripts/gen-claim-inventory-md.mjs", "--check"] },
   { name: "Claim-inventory self-test (the drift check can actually fail)", cmd: ["node", "scripts/gen-claim-inventory-md.mjs", "--self-test"] },
+  // The inventory's quotations were never checked against their surfaces: 57 of the
+  // 58 README rows quoted a README rebuilt five days earlier and none was resolved.
+  { name: "Claim-inventory anchors (a quoted claim is still a quotation; absent is ratcheted)", cmd: ["node", "scripts/check-claim-inventory-anchors.mjs"] },
+  { name: "Claim-inventory anchors self-test (the check can actually fail)", cmd: ["node", "scripts/check-claim-inventory-anchors.mjs", "--self-test"] },
+  { name: "Cited symbols (a symbol named beside a code citation must still be in that file; missing is ratcheted)", cmd: ["node", "scripts/check-cited-symbols.mjs"] },
+  { name: "Cited symbols self-test (the check can actually fail)", cmd: ["node", "scripts/check-cited-symbols.mjs", "--self-test"] },
+  { name: "Inspiration catalog structure (a stated total, a row-wise URL claim, a constant column and a duplicate product, re-derived from the rows)", cmd: ["node", "scripts/check-inspiration-catalog-structure.mjs"] },
+  { name: "Inspiration catalog structure self-test (the check can actually fail)", cmd: ["node", "scripts/check-inspiration-catalog-structure.mjs", "--self-test"] },
+  { name: "Entry guards (a module's gate body runs only when it IS the entry, never on a filename match)", cmd: ["node", "scripts/check-entry-guards.mjs"] },
+  { name: "Entry-guard self-test (the suffix form is flagged, the exact form is not)", cmd: ["node", "scripts/check-entry-guards.mjs", "--self-test"] },
+  { name: "Container shipped-import model (every script a container ships alone has its relative imports shipped beside it)", cmd: ["node", "scripts/check-shipped-imports.mjs"] },
+  { name: "Shipped-import model self-test (an import the container does not ship is flagged)", cmd: ["node", "scripts/check-shipped-imports.mjs", "--self-test"] },
+  { name: "Plugin manifest (the signalgrid plugin's agent list equals the tracked agent files; skills and commands present; claude plugin validate passes when the CLI is on PATH)", cmd: ["node", "scripts/check-plugin-manifest.mjs"] },
+  { name: "Plugin-manifest self-test (a manifest missing or inventing an agent is flagged)", cmd: ["node", "scripts/check-plugin-manifest.mjs", "--self-test"] },
+  { name: "Rendered assets (a committed PNG must be a render of the committed HTML; unpinned PNGs reported)", cmd: ["node", "scripts/check-rendered-assets.mjs"] },
+  { name: "Rendered assets self-test (the check can actually fail)", cmd: ["node", "scripts/check-rendered-assets.mjs", "--self-test"] },
+  { name: "Skill instruction conflicts (no skill may prescribe a command the Bash deny-list hook refuses, unless VENDORED.md Overrides names the site)", cmd: ["node", "scripts/check-skill-instruction-conflicts.mjs"] },
+  { name: "Skill instruction conflicts self-test (the check can actually fail)", cmd: ["node", "scripts/check-skill-instruction-conflicts.mjs", "--self-test"] },
+  { name: "Gitignore producers (every path a vendored skill writes into the tree is ignored by the TRACKED ignore files)", cmd: ["node", "scripts/check-gitignore-producers.mjs"] },
+  { name: "Gitignore producers self-test (the check can actually fail)", cmd: ["node", "scripts/check-gitignore-producers.mjs", "--self-test"] },
+  { name: "Console error states (a settled query error may never render as a pending word)", cmd: ["node", "scripts/check-console-error-states.mjs"] },
+  { name: "Console error states self-test (the check can actually fail)", cmd: ["node", "scripts/check-console-error-states.mjs", "--self-test"] },
+  { name: "Console enum coverage (every IntegrationHealthStatus member is bucketed and badged)", cmd: ["node", "scripts/check-console-enum-coverage.mjs"] },
+  { name: "Console enum coverage self-test (the check can actually fail)", cmd: ["node", "scripts/check-console-enum-coverage.mjs", "--self-test"] },
+  { name: "Console routes reachable (every registered route is linked; every non-launch route is preview-wrapped)", cmd: ["node", "scripts/check-console-routes-reachable.mjs"] },
+  { name: "Console routes reachable self-test (the check can actually fail)", cmd: ["node", "scripts/check-console-routes-reachable.mjs", "--self-test"] },
+  { name: "Console launch families (LAUNCH_FAMILIES equals the launch connector families, both directions)", cmd: ["node", "scripts/check-console-launch-families.mjs"] },
+  { name: "Console launch families self-test (the check can actually fail)", cmd: ["node", "scripts/check-console-launch-families.mjs", "--self-test"] },
+  { name: "Cost figures (every currency amount resolves to docs/COST_MODEL.md's register; no owner-only billing figure is published as our own spend)", cmd: ["node", "scripts/check-cost-figures.mjs"] },
+  { name: "Cost figures self-test (the check can actually fail)", cmd: ["node", "scripts/check-cost-figures.mjs", "--self-test"] },
+  { name: "Decision-path purity (a verdict may not be fetched, spawned, or sampled from a model)", cmd: ["node", "scripts/check-decision-path-purity.mjs"] },
+  { name: "Decision-path purity self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-decision-path-purity.mjs", "--self-test"] },
   { name: "Guard-registry drift (coverage lists derived, not trusted)", cmd: ["node", "scripts/check-guard-registries.mjs"] },
   { name: "CI\u2194preflight drift (every proof runs in both places)", cmd: ["node", "scripts/check-ci-preflight-sync.mjs"] },
   // Pure static analysis of the Dockerfiles against pnpm-workspace.yaml — no
   // daemon needed, which is the point: the web image was unbuildable for months
   // because no gate ever built it.
   { name: "Container native base (a Dockerfile that cannot build is not a deploy path)", cmd: ["node", "scripts/check-container-native-base.mjs"] },
+  // Plan row 59 + backlog "grype || true": the corepack pnpm fetch is retried and
+  // pinned, the CVE-closing corepack-cache strip stays, grype cannot swallow a crash.
+  { name: "Image build hardening (retried corepack fetch, cache strip kept, grype can fail)", cmd: ["node", "scripts/check-image-build-hardening.mjs"] },
+  { name: "Image build hardening self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-image-build-hardening.mjs", "--self-test"] },
   { name: "Publication boundary (nothing reaches a public repo unclassified)", cmd: ["node", "scripts/check-publication-boundary.mjs"] },
   { name: "API collection (a committed request must name a served route)", cmd: ["node", "scripts/check-api-collection.mjs"] },
   { name: "Deployment runbook (the documented path must be the real one)", cmd: ["node", "scripts/check-deployment-runbook.mjs"] },
@@ -153,7 +341,11 @@ const STEPS = [
   { name: "Decision palette self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-decision-palette.mjs", "--self-test"] },
   { name: "Verdict tone source (a verdict may not pick its own colour inline)", cmd: ["node", "scripts/check-verdict-tone-source.mjs"] },
   { name: "Verdict tone source self-test (the gate can actually fail)", cmd: ["node", "scripts/check-verdict-tone-source.mjs", "--self-test"] },
+  { name: "PWA fixture labels (control-plane data on the PWA says it is a fixture)", cmd: ["node", "scripts/check-pwa-fixture-labels.mjs"] },
+  { name: "PWA fixture labels self-test (the gate can actually fail)", cmd: ["node", "scripts/check-pwa-fixture-labels.mjs", "--self-test"] },
   { name: "Decision palette (one palette, every tree, AA everywhere)", cmd: ["node", "scripts/check-decision-palette.mjs"] },
+  { name: "Web a11y basics self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-web-a11y-basics.mjs", "--self-test"] },
+  { name: "Web a11y basics (live regions on polling views, labelled icon buttons, reduced motion)", cmd: ["node", "scripts/check-web-a11y-basics.mjs"] },
   { name: "Reason codes self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-reason-codes.mjs", "--self-test"] },
   { name: "Reason codes (the engine's vocabulary is the catalog's and the contract's)", cmd: ["node", "scripts/check-reason-codes.mjs"] },
   { name: "Retention claims self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-retention-claims.mjs", "--self-test"] },
@@ -164,8 +356,22 @@ const STEPS = [
   { name: "iOS dead stored properties (a field nothing assigns makes every read of it dead)", cmd: ["node", "scripts/check-ios-dead-stored-properties.mjs"] },
   { name: "iOS policy defaults self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-ios-policy-defaults.mjs", "--self-test"] },
   { name: "iOS policy defaults (no managed-config default derived from the absence of policy)", cmd: ["node", "scripts/check-ios-policy-defaults.mjs"] },
+  { name: "Override parity self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-override-parity.mjs", "--self-test"] },
+  { name: "Override parity (a package.json version that the workspace override overrides is dead text)", cmd: ["node", "scripts/check-override-parity.mjs"] },
+  { name: "Console unknown-render self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-console-unknown-render.mjs", "--self-test"] },
+  { name: "Console unknown-render (no good-state render on unguarded query data)", cmd: ["node", "scripts/check-console-unknown-render.mjs"] },
+  { name: "iOS restriction defaults self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-ios-restriction-defaults.mjs", "--self-test"] },
+  { name: "iOS restriction defaults (a DLP restriction may not default to permitted on an unknown session)", cmd: ["node", "scripts/check-ios-restriction-defaults.mjs"] },
+  { name: "Shell backend paths self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-shell-backend-paths.mjs", "--self-test"] },
+  { name: "Shell backend paths (every path EnterpriseShell's control-plane client builds is a declared /v1 path — no silent device 404)", cmd: ["node", "scripts/check-shell-backend-paths.mjs"] },
+  { name: "Screen inventory self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-screen-inventory.mjs", "--self-test"] },
+  { name: "Screen inventory (every page file listed; every stated launch status is launch-profile.mjs's)", cmd: ["node", "scripts/check-screen-inventory.mjs"] },
   { name: "Sim-script self-check self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-sim-scripts-selfcheck.mjs", "--self-test"] },
   { name: "Sim-script self-check (a queued Mac operation must name a script that runs)", cmd: ["node", "scripts/check-sim-scripts-selfcheck.mjs"] },
+  { name: "Sim-request runner self-test (a result awaiting landing on a tick branch is never re-run; refused/unreadable stays pending)", cmd: ["node", "scripts/mac/run-requests.mjs", "--self-test"] },
+  { name: "Brain proposal-PR route self-test (review build only; governance, decision-path and non-applying patches refused; publish idempotent)", cmd: ["node", "scripts/mac/brain-proposal-pr.mjs", "--self-test"] },
+  { name: "Local-brain guard repairs self-test (stripped synthetic brain: --check fails, --apply restores and re-pins, drift refused; needs python3, FAILS without it)", cmd: ["python3", "scripts/mac/local-brain/repairs/guards.py", "--self-test"] },
+  { name: "Lane status line self-test (open hands and unread mail counted from a fixture tree; an unreadable part is left out, never zeroed)", cmd: ["bash", "scripts/mac/statusline.sh", "--self-test"] },
   { name: "Swift serious violations self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-swift-serious.mjs", "--self-test"] },
   { name: "Swift serious violations (the error-severity swiftlint rules, without a Swift toolchain)", cmd: ["node", "scripts/check-swift-serious.mjs"] },
   { name: "iOS demo flags (every simulator flag the shell reads is documented, and vice versa)", cmd: ["node", "scripts/check-demo-flags-documented.mjs"] },
@@ -185,6 +391,8 @@ const STEPS = [
   // a new rule fails this until a human classifies it — which is also one more
   // mechanical guard on the breadth freeze.
   { name: "Mutation sharding partitions the registry (the daily sweep loses no target)", cmd: ["node", "scripts/check-mutation-sharding.mjs"] },
+  { name: "Scratch-git hygiene self-test (it can actually fail)", cmd: ["node", "scripts/check-scratch-git-hygiene.mjs", "--self-test"] },
+  { name: "Scratch-repo self-tests spawn git through one hermetic helper", cmd: ["node", "scripts/check-scratch-git-hygiene.mjs"] },
   { name: "Backlog row citations name rows that exist", cmd: ["node", "scripts/check-row-citations.mjs"] },
   { name: "Row-citation gate self-test (it can actually fail)", cmd: ["node", "scripts/check-row-citations.mjs", "--self-test"] },
   { name: "IT-layer model (every refusal has an owner; nothing routes to a phantom)", cmd: ["node", "scripts/check-it-layer-model.mjs"] },
@@ -202,6 +410,7 @@ const STEPS = [
   // cases. It found two real Kotlin defects the day it was written.
   { name: "Assist conformance (every client answers the shared cases the same way)", cmd: ["node", "scripts/check-assist-conformance.mjs"] },
   { name: "Read-error swallowing (a failed lookup must not report \"nothing found\")", cmd: ["node", "scripts/check-read-error-swallowing.mjs"] },
+  { name: "Read-error swallowing self-test (detector + floors)", cmd: ["node", "scripts/check-read-error-swallowing.mjs", "--self-test"] },
   // Every other gate here checks what the text MEANS. This one checks that the text
   // is what it appears to be: no bidirectional control or invisible character may
   // make a tracked file render differently from how it executes (CVE-2021-42574).
@@ -216,6 +425,10 @@ const STEPS = [
   { name: "Assessor package (every link, command and path in it resolves)", cmd: ["node", "scripts/check-assessor-package.mjs"] },
   { name: "OpenAPI validity (the published contract parses as OpenAPI; self-tested)", cmd: ["node", "scripts/check-openapi-valid.mjs"] },
   { name: "Launch claims (buyer-facing copy asserts nothing deferred as current; self-tested)", cmd: ["node", "scripts/check-launch-claims.mjs"] },
+  { name: "Repo links self-test (a blob/main link must be caught)", cmd: ["node", "scripts/check-repo-links.mjs", "--self-test"] },
+  { name: "Repo links (every link into this repository names the default branch and a tracked path)", cmd: ["node", "scripts/check-repo-links.mjs"] },
+  { name: "Site figures self-test (a stale count must be caught)", cmd: ["node", "scripts/check-site-figures.mjs", "--self-test"] },
+  { name: "Site figures (a number on the site is bound to the artifact it counts)", cmd: ["node", "scripts/check-site-figures.mjs"] },
   { name: "Permission enforcement (no declared scope goes unrequired — DR-002; self-tested)", cmd: ["node", "scripts/check-permission-enforcement.mjs"] },
   { name: "Decision-record format (every call states how it gets undone; self-tested)", cmd: ["node", "scripts/check-decision-record-format.mjs"] },
   { name: "Test execution (a test no runner reaches is not coverage; self-tested)", cmd: ["node", "scripts/check-test-execution.mjs"] },
@@ -223,25 +436,54 @@ const STEPS = [
   { name: "Agent roster (DR-016 — tier, charter, disjoint write boundary, vendor drift; self-tested)", cmd: ["node", "scripts/check-agent-roster.mjs"] },
   { name: "Skill-plane conformance self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-skill-plane-conformance.mjs", "--self-test"] },
   { name: "Skill-plane conformance (every skill/agent carries the name+description the harness selects it by)", cmd: ["node", "scripts/check-skill-plane-conformance.mjs"] },
+  { name: "Agent raise-your-hand self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-agent-raise-hand.mjs", "--self-test"] },
+  { name: "Agent raise-your-hand (every subagent definition carries the surface-when-stuck contract)", cmd: ["node", "scripts/check-agent-raise-hand.mjs"] },
+  { name: "Gate self-tests run self-test (a gate's --self-test that no step runs is run by a gate)", cmd: ["node", "scripts/check-gate-self-tests-run.mjs", "--self-test"] },
+  { name: "Gate self-tests run (a flag-less gate names a control; an unregistered --self-test is spawned)", cmd: ["node", "scripts/check-gate-self-tests-run.mjs"] },
   { name: "Positioning trace (every ratified claim resolves by id in the launch profile; self-tested)", cmd: ["node", "scripts/check-positioning-trace.mjs"] },
   { name: "Module init order (a const read before it is initialised; self-tested)", cmd: ["node", "scripts/check-module-init-order.mjs"] },
   { name: "Walker-floor self-test (a floorless roots-array walk must fail)", cmd: ["node", "scripts/check-walker-floors.mjs", "--self-test"] },
   { name: "Walker floors (every ROOTS/roots-array walk declares a non-vacuity floor)", cmd: ["node", "scripts/check-walker-floors.mjs"] },
   { name: "NaN fail-open (an unparseable expiry must read as EXPIRED; self-tested)", cmd: ["node", "scripts/check-nan-fail-open.mjs"] },
+  { name: "Native-build attestation self-test (a VM-run step is recorded only when bound to this exact tree)", cmd: ["node", "scripts/lib/native-build-attestation.mjs", "--self-test"] },
   // Sibling of NaN fail-open: guards the BOUND, not the timestamp.
   { name: "Posed-bound self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-posed-bounds.mjs", "--self-test"] },
   { name: "Posed bounds (a caller-posed numeric bound is never read with ??)", cmd: ["node", "scripts/check-posed-bounds.mjs"] },
+  // A workspace dependency cycle is an infinite symlink loop on disk; the Mac's
+  // recursive readdir followed one until ENAMETOOLONG (#819). Refused at the manifest.
+  { name: "Workspace-cycles self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-workspace-cycles.mjs", "--self-test"] },
+  { name: "Workspace cycles (no workspace package depends on itself through any chain)", cmd: ["node", "scripts/check-workspace-cycles.mjs"] },
   // Third sibling: NaN fail-open guards the TIMESTAMP, posed-bounds guards the BOUND,
   // this one guards the RULE — that only one body decides whether a future sighting
   // is evidence of freshness, and that every copy that stays local says why.
   { name: "Freshness-divergence self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-freshness-divergence.mjs", "--self-test"] },
   { name: "Freshness divergence (one future/age rule, one body; exemptions REPORTED)", cmd: ["node", "scripts/check-freshness-divergence.mjs"] },
   { name: "CI liveness (a sweep that stops running must fail a build; self-tested)", cmd: ["node", "scripts/check-ci-liveness.mjs"] },
+  // Every `schedule:` workflow names what would notice it STOPPED, or carries a dated exemption
+  // with a reason (sre roster item; row 53's follow-on). Static: reads YAML + the registry only.
+  { name: "Scheduled-workflow liveness self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-scheduled-workflow-liveness.mjs", "--self-test"] },
+  { name: "Scheduled-workflow liveness (every scheduled workflow names its watcher or a dated exemption)", cmd: ["node", "scripts/check-scheduled-workflow-liveness.mjs"] },
   { name: "CI job timeouts (an unbounded job is an unbounded outage; self-tested)", cmd: ["node", "scripts/check-ci-job-timeouts.mjs"] },
+  { name: "CI shard aggregate (the required check cannot pass on a shard that did not; self-tested)", cmd: ["node", "scripts/check-ci-shard-aggregate.mjs"] },
+  { name: "Security controls matrix (every status in the legend; every Implemented row's paths + proof exist; self-tested)", cmd: ["node", "scripts/check-security-controls-matrix.mjs"] },
   { name: "Connector discipline (every family gated + proven, none acting on a device)", cmd: ["node", "scripts/check-connector-discipline.mjs"] },
   { name: "Launch profile (the declared product edge matches the real one)", cmd: ["node", "scripts/check-launch-profile.mjs"] },
+  // DR-036's named follow-up (2026-09-12): every launch item binds the proof:* scripts that
+  // certify it, and readiness dimension (b) divides by that set. A binding that names no
+  // proof, a phantom, an unregistered or a self-skipping proof is a hollow claim — fatal.
+  { name: "Launch-proof bindings self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-launch-proof-bindings.mjs", "--self-test"] },
+  { name: "Launch-proof bindings (every launch item names real, per-push proofs)", cmd: ["node", "scripts/check-launch-proof-bindings.mjs"] },
   { name: "Ungated-fetch self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-ungated-fetch.mjs", "--self-test"] },
   { name: "Ungated fetch (a health check is still a live call)", cmd: ["node", "scripts/check-ungated-fetch.mjs"] },
+  // Plan row 172: the connector-emulator smoke's evidence manifest used to TYPE six
+  // public-safety properties; it now emits this script's measurement, and this gate
+  // fails if the workflow ever types one again or a property stops holding.
+  { name: "Connector-emulator evidence self-test (a planted fetch, GUID or typed claim must fail)", cmd: ["node", "scripts/check-connector-emulator-evidence.mjs", "--self-test"] },
+  { name: "Connector-emulator evidence (the manifest asserts only what a step measured)", cmd: ["node", "scripts/check-connector-emulator-evidence.mjs"] },
+  // Plan row 171: the daily rot check (scheduled-verification.yml) runs THIS file whole
+  // instead of a hand-picked tenth of it; the gate fails if a named gate grows back there.
+  { name: "Scheduled-verification scope self-test (a hand-picked nightly gate must fail)", cmd: ["node", "scripts/check-scheduled-verification-scope.mjs", "--self-test"] },
+  { name: "Scheduled-verification scope (the daily rot check runs preflight whole)", cmd: ["node", "scripts/check-scheduled-verification-scope.mjs"] },
   // Sibling of the two assertions inside that gate. Ungated-fetch asks whether the call was
   // allowed and whether it is bounded; this asks whether it went out SIGNED. `if (secret)
   // { sign }` skipped the signature on an absent secret and reported 'sent' — a guard with
@@ -283,14 +525,24 @@ const STEPS = [
   // would have passed preflight and every PR check.
   { name: "Proof: isolation-scope (no tenant can read another's row)", cmd: ["pnpm", "run", "proof:isolation-scope"] },
   { name: "Proof: graph-wire (throttling, 5xx, auth and malformed bodies fail closed)", cmd: ["pnpm", "run", "proof:graph-wire"] },
+  { name: "Proof: estate-core (a customer estate boots a core; no allow on unread facts)", cmd: ["pnpm", "run", "proof:estate-core"] },
+  { name: "Proof: estate-refresh (a scheduled posture re-read re-decides, and fails closed)", cmd: ["pnpm", "run", "proof:estate-refresh"] },
+  { name: "Proof: secrets (one read site, fail-closed, and a rotation that actually rotates)", cmd: ["pnpm", "run", "proof:secrets"] },
+  { name: "Proof: data-lifecycle (retention, erasure and DSAR leave the audit chain verifiable)", cmd: ["pnpm", "run", "proof:data-lifecycle"] },
+  { name: "DMH domains exhaustive-by-construction self-test (a new field/member/raw key must fail tsc)", cmd: ["node", "scripts/check-dmh-domains-exhaustive.mjs"] },
   { name: "Figure-guard self-test (the baseline-age report must be able to fail)", cmd: ["node", "scripts/check-proof-figures.mjs", "--self-test"] },
   { name: "Docs\u2194proof FIGURE guard (a measured number must still be one)", cmd: ["node", "scripts/check-proof-figures.mjs"] },
   { name: "Proof-count self-test (a zeroed claim scan fails via the floor)", cmd: ["node", "scripts/check-proof-counts.mjs", "--self-test"] },
   { name: "Proof-count sync (documented check counts match their proofs)", cmd: ["node", "scripts/check-proof-counts.mjs"] },
   { name: "Live-sync manifest (external builders see current contracts)", cmd: ["node", "scripts/check-live-sync.mjs"] },
+  { name: "Live-sync evidence-kind self-test (unreadable is not hardware)", cmd: ["node", "scripts/check-live-sync.mjs", "--self-test"] },
   { name: "MCP surface self-test (coverage + resource parity must be able to fail)", cmd: ["node", "scripts/check-mcp-surface.mjs", "--self-test"] },
   { name: "MCP surface (chat connection must match the fabric)", cmd: ["node", "scripts/check-mcp-surface.mjs"] },
-  { name: "Typecheck (all packages)", cmd: ["pnpm", "run", "typecheck"] },
+  { name: "Lib-build heal self-test (an orphaned tsbuildinfo with no dist must be flagged)", cmd: ["node", "scripts/ensure-lib-build.mjs", "--self-test"] },
+  // prerequisiteForLater: `typecheck:libs` builds the composite workspace libraries, and proofs
+  // further down import them. A slice that owns a later step and not this one runs it first as a
+  // PRELUDE (printed and recorded as such, never counted as that slice's pass).
+  { name: "Typecheck (all packages)", cmd: ["pnpm", "run", "typecheck"], prerequisiteForLater: true },
   // needsNativeBuild: rollup/esbuild/lightningcss/oxide platform binaries. The
   // workspace strips every triple but linux-x64, so on other platforms this step
   // is structurally absent rather than failing — see scripts/lib/platform-native-build.mjs.
@@ -308,8 +560,16 @@ const STEPS = [
   // byte-faithful original of DecisionEngine.swift (golden rule 1) — so the rule
   // lives in a wrapper around it, and this pins the wrapper against the same shared
   // vectors the Swift twin will be ported to.
+  { name: "Proof: affected-audience (the blast radius is told, and silence is never reported as told)", cmd: ["pnpm", "run", "proof:affected-audience"] },
+  { name: "Proof: remediation-verification (an unobserved fix is not a cleared fix)", cmd: ["pnpm", "run", "proof:remediation-verification"] },
   { name: "Proof: remediation-allow (a recorded-but-unverified remediation never buys an allow)", cmd: ["pnpm", "run", "proof:remediation-allow"] },
   { name: "Remediation-allow conformance (the shared vectors bind the TS side; the native port is REPORTED)", cmd: ["node", "scripts/check-remediation-allow-conformance.mjs"] },
+  // The second guard around the engine (eighth verdict-core round): an UNKNOWN posture
+  // attribute matches none of the engine's bad literals, so the engine allows on it.
+  // Same lane order as remediation-allow — TS wrapper + vectors first, Swift twin second.
+  { name: "Proof: posture-allow (an unknown or illegible posture never buys an allow)", cmd: ["pnpm", "run", "proof:posture-allow"] },
+  { name: "Proof: device-registry (injective keys, an allowlist that opens only on an explicit false, freshness consulted)", cmd: ["pnpm", "run", "proof:device-registry"] },
+  { name: "Posture-allow conformance (the shared vectors bind the TS proof AND the Swift twin's XCTest)", cmd: ["node", "scripts/check-posture-allow-conformance.mjs"] },
   { name: "Proof: signalgrid-grid", cmd: ["pnpm", "run", "proof:signalgrid-grid"] },
   { name: "Proof: microsoft-graph-sandbox", cmd: ["pnpm", "run", "proof:microsoft-graph-sandbox"] },
   { name: "Proof: graph-connector (read-only, gated)", cmd: ["pnpm", "run", "proof:graph-connector"] },
@@ -323,6 +583,8 @@ const STEPS = [
   { name: "/v1 under concurrency (correctness gated; throughput and saturation reported, never asserted)", cmd: ["pnpm", "run", "test:load"], heavy: true },
   { name: "Simulation request loop (every result binds to a request; pending is reported, never silent)", cmd: ["node", "scripts/check-sim-requests.mjs"] },
   { name: "Simulation request loop self-test (the gate can actually fail)", cmd: ["node", "scripts/check-sim-requests.mjs", "--self-test"] },
+  { name: "Resource-scan binding (an intake row citing a scan file is backed by it)", cmd: ["node", "scripts/check-resource-scan-binding.mjs"] },
+  { name: "Resource-scan binding self-test (the gate can actually fail)", cmd: ["node", "scripts/check-resource-scan-binding.mjs", "--self-test"] },
   { name: "Known-false claims (a claim proven false once is not made twice)", cmd: ["node", "scripts/check-known-false-claims.mjs"] },
   { name: "Known-false-claim self-test (the gate can actually fail)", cmd: ["node", "scripts/check-known-false-claims.mjs", "--self-test"] },
   { name: "Memory freshness (an aging 'as of' claim is named; stale is reported, registry rot is fatal)", cmd: ["node", "scripts/check-memory-freshness.mjs"] },
@@ -331,22 +593,43 @@ const STEPS = [
   { name: "Action pinning self-test (the gate can actually fail)", cmd: ["node", "scripts/check-action-pinning.mjs", "--self-test"] },
   { name: "Scheduled routines self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-scheduled-routines.mjs", "--self-test"] },
   { name: "Scheduled routines (every always-on lane declared, authorized, scoped, evidenced)", cmd: ["node", "scripts/check-scheduled-routines.mjs"] },
+  { name: "Lane delivery (protected PR topics and one-attempt readback)", cmd: ["node", "scripts/check-lane-delivery.mjs"] },
+  { name: "Lane original push (raw terminal and strict refusal unit)", cmd: ["node", "scripts/check-lane-push.mjs"] },
+  { name: "Lane heartbeat mismatch (real uncertainty route, no refusal authority)", cmd: ["node", "scripts/check-lane-mismatch.mjs"] },
+  { name: "Lane fixture snapshot (exact filesystem descriptor binding)", cmd: ["node", "scripts/check-lane-lease-tree.mjs"] },
+  { name: "Lane repair (original uncertainty DATA and owned notification)", cmd: ["node", "scripts/check-lane-repair.mjs"] },
+  { name: "Lane repair callers (durable handoff and current tick ownership)", cmd: ["node", "scripts/check-lane-repair-callers.mjs"] },
+  { name: "Lane repair bounds (fair cursor and healthy hand suppression)", cmd: ["node", "scripts/check-lane-repair-bounds.mjs"] },
+  { name: "Lane readback (bounded cadence and exact durable observations)", cmd: ["node", "scripts/check-lane-readback.mjs"] },
+  { name: "Lane heartbeat self-refresh (own behind PR only, pinned head, verified)", cmd: ["node", "scripts/check-lane-heartbeat-refresh.mjs"] },
   { name: "Lab registry self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-lab-registry.mjs", "--self-test"] },
+  { name: "Lab source collections are declared, openable, read-only and parseable", cmd: ["node", "scripts/check-lab-collections.mjs"] },
   { name: "Lab registry (both halves agree; every deployment claim cites evidence on disk)", cmd: ["node", "scripts/check-lab-registry.mjs"] },
   { name: "Evidence sources self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-evidence-sources.mjs", "--self-test"] },
   { name: "Evidence sources (the contract's vocabulary matches what exists)", cmd: ["node", "scripts/check-evidence-sources.mjs"] },
   { name: "Org roster (a role nobody has ever run is named on every run)", cmd: ["node", "scripts/check-org-roster.mjs"] },
   { name: "Org roster self-test (the gate can actually fail)", cmd: ["node", "scripts/check-org-roster.mjs", "--self-test"] },
+  { name: "Task routing (each task kind -> model, effort, lane, role, validators; unknown kinds go to capability-gap)", cmd: ["node", "scripts/check-task-routing.mjs"] },
+  { name: "Task routing self-test (the gate can actually fail)", cmd: ["node", "scripts/check-task-routing.mjs", "--self-test"] },
   { name: "Backlog ownership (a row with work left in it names the role that owns it)", cmd: ["node", "scripts/check-backlog-ownership.mjs"] },
   { name: "Backlog ownership self-test (the gate can actually fail)", cmd: ["node", "scripts/check-backlog-ownership.mjs", "--self-test"] },
+  { name: "Loop-state seam self-test (squash-of-a-merge-tree, whitespace twin and same-name-ahead fixtures can fail)", cmd: ["node", "scripts/loop-state.mjs", "--self-test"] },
+  { name: "Raised-hands monitor self-test (DR-054 routing + gap detection must work)", cmd: ["node", "scripts/check-raised-hands.mjs", "--self-test"] },
+  { name: "Raised hands schema (every hand file has its fields, a valid status/unblocker, id == filename)", cmd: ["node", "scripts/check-raised-hands.mjs"] },
   { name: "Backlog evidence (a row that says DONE says how you'd check)", cmd: ["node", "scripts/check-backlog-evidence.mjs"] },
   { name: "Backlog evidence self-test (the gate can actually fail)", cmd: ["node", "scripts/check-backlog-evidence.mjs", "--self-test"] },
+  { name: "Row status drift (an open row still reading FIX PROPOSED for a merged PR; REPORTED, never fatal)", cmd: ["node", "scripts/check-row-status-drift.mjs"] },
+  { name: "Row status drift self-test (a planted stale row must be flagged)", cmd: ["node", "scripts/check-row-status-drift.mjs", "--self-test"] },
   { name: "Surface-ownership self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-surface-ownership.mjs", "--self-test"] },
   { name: "Surface ownership (every file is somebody's)", cmd: ["node", "scripts/check-surface-ownership.mjs"] },
   { name: "Role coverage (has each role read the portion it owns; ratcheted)", cmd: ["node", "scripts/check-role-coverage.mjs"] },
   { name: "Role-coverage self-test (the gate can actually fail)", cmd: ["node", "scripts/check-role-coverage.mjs", "--self-test"] },
   { name: "Owner-gated surfaces manifest (the autonomous-merge escalation line is non-empty and well-formed)", cmd: ["node", "scripts/check-owner-gated-surfaces.mjs"] },
   { name: "Owner-gated surfaces self-test (classify routes safety-machinery + owner-reserved diffs to the owner)", cmd: ["node", "scripts/check-owner-gated-surfaces.mjs", "--self-test"] },
+  { name: "PR gate-falsification (a green suite proves nothing if no gate can fail on the changed lines)", cmd: ["node", "scripts/check-pr-gate-falsification.mjs"] },
+  { name: "PR gate-falsification self-test (every fail-closed arm, both directions)", cmd: ["node", "scripts/check-pr-gate-falsification.mjs", "--self-test"] },
+  { name: "Brain-cycle merge authorizer (affirmative-green allowlist; an empty context is refused)", cmd: ["node", "scripts/brain-cycle-merge-decide.mjs"] },
+  { name: "Merge-authorizer self-test (every conjunct falsified in both directions)", cmd: ["node", "scripts/brain-cycle-merge-decide.mjs", "--self-test"] },
   { name: "Cited commands (a command a document promises must still exist)", cmd: ["node", "scripts/check-cited-commands.mjs"] },
   { name: "Cited-command self-test (the gate can actually fail)", cmd: ["node", "scripts/check-cited-commands.mjs", "--self-test"] },
   { name: "Review coverage (a green gate suite is not a reviewed codebase)", cmd: ["node", "scripts/check-review-coverage.mjs"] },
@@ -360,8 +643,18 @@ const STEPS = [
   { name: "Proof: lane-messages (the cloud↔Mac channel — identity is derived, and no lane acknowledges its own mail)", cmd: ["pnpm", "run", "proof:lane-messages"] },
   { name: "Lane messages (unread mail is named on every run; only the addressee can close one)", cmd: ["node", "scripts/check-lane-messages.mjs"] },
   { name: "Lane message self-test (the gate can actually fail)", cmd: ["node", "scripts/check-lane-messages.mjs", "--self-test"] },
+  // Raised hands (owner, 2026-09-23: "agents never raise their hand when they get stuck").
+  // Fails only when a stall is past 3x its limit with NO hand raised; overdue hands are reported.
+  { name: "Raised hands (nothing stuck past its limit without a hand raised)", cmd: ["node", "scripts/raised-hands.mjs", "--check"] },
+  { name: "Raised hands self-test (the gate can actually fail)", cmd: ["node", "scripts/raised-hands.mjs", "--self-test"] },
+  // Objective loop (DR-056 §5 pre-authorized; appended after #1019 landed, BUILD_BACKLOG row
+  // "Register objective-loop --check"). The committed shared task state must be well-formed,
+  // derived against the declared objective, and never stall silently (DR-054).
+  { name: "Objective loop state (well-formed, derived against the declared objective, every ranked task has a real executor, nothing stalls silently)", cmd: ["node", "scripts/objective-loop.mjs", "--check"] },
+  { name: "Objective loop self-test (every clause driven from the failing side)", cmd: ["node", "scripts/objective-loop.mjs", "--self-test"] },
   { name: "Proof: operating-method (the handbook is a gate — buckets, ladder, dispositions, links, roles)", cmd: ["pnpm", "run", "proof:operating-method"] },
   { name: "Proof: evidence-coverage (what can this estate actually answer)", cmd: ["pnpm", "run", "proof:evidence-coverage"] },
+  { name: "Proof: evidence observedAt ordering is host-timezone independent (TZ=UTC, New_York, Tokyo as child processes)", cmd: ["pnpm", "run", "proof:evidence-observedat-tz"] },
   { name: "Proof: device-resolver (read-only at the injection boundary)", cmd: ["pnpm", "run", "proof:device-resolver"] },
   { name: "Proof: config-scope (connector config keyed per tenant, never normalized)", cmd: ["pnpm", "run", "proof:config-scope"] },
   { name: "Proof: unsafe-claim (a disclaimer is not a claim)", cmd: ["pnpm", "run", "proof:unsafe-claim"] },
@@ -385,7 +678,11 @@ const STEPS = [
   { name: "Proof: fabric-evals (golden multi-signal decision quality)", cmd: ["pnpm", "run", "proof:fabric-evals"] },
   { name: "Proof: connector-emulator", cmd: ["pnpm", "run", "proof:connector-emulator"] },
   { name: "OpenAPI contract check (proof:api-contract)", cmd: ["pnpm", "run", "proof:api-contract"] },
+  { name: "Proof: api-client-react (the web client's fetch boundary refuses what it cannot vouch for)", cmd: ["pnpm", "run", "proof:api-client-react"] },
   { name: "API integration test (boots the server)", cmd: ["pnpm", "run", "test:api"] },
+  // The review console's own node:test suite (policy-test-set status, facility-graph layout);
+  // the test-execution gate refused these files while nothing reached them.
+  { name: "Console + PWA unit tests (policyTests, facilityGraphLayout, outcomeTone, signal-tone)", cmd: ["pnpm", "run", "test:console"] },
   // The MCP server's own node:test suite (wire-visible tool/resource contract +
   // read-only annotations, incl. the not-read-only bruno_collection_run). It sat
   // executed by no lane until 2026-09-02; wired here and in CI beside the
@@ -401,19 +698,38 @@ const STEPS = [
   { name: "Bruno collection live run (the committed contract, executed both profiles)", cmd: ["node", "scripts/run-bruno-collection.mjs"] },
   { name: "Proof: observability (metrics endpoint)", cmd: ["pnpm", "run", "proof:observability"] },
   { name: "Proof: enterprise-auth (OIDC/JWT)", cmd: ["pnpm", "run", "proof:enterprise-auth"] },
+  { name: "Proof: fixture-idp (the deploy-stack smoke's token source)", cmd: ["pnpm", "run", "test:fixture-idp"] },
   { name: "Proof: webauthn-verify", cmd: ["pnpm", "run", "proof:webauthn-verify"] },
+  { name: "Proof: webauthn-revocation (a revoked credential stays revoked; re-read before release)", cmd: ["pnpm", "run", "proof:webauthn-revocation"] },
   // Absorbed from the base lane. It SELF-SKIPS when DATABASE_URL is unset, which is
   // exactly why it belongs here rather than on the CI-only exempt list: preflight
   // stays deterministic and needs no Postgres, and an operator who HAS a database
   // gets the restore path exercised locally.
-  { name: "Proof: backup-restore (the restore path, exercised not assumed)", cmd: ["pnpm", "run", "proof:backup-restore"] },
+  //
+  // `selfSkipsWithout` is the CLASSIFICATION, and it is load-bearing. Without it the
+  // proof printed one line saying SKIPPED, exited 0, and this harness ticked it "ok"
+  // — a green row for a gate that never executed an assertion. The runner below turns
+  // that into the `skipped-db` status, which is printed WITH the verdict and never
+  // counted as a pass. `check-preflight-ci-parity.mjs` derives the self-skipping set
+  // from `scripts/src/*.ts` and fails if a proof here self-skips without this marker,
+  // or carries the marker without self-skipping.
+  {
+    name: "Proof: backup-restore (the restore path, exercised not assumed)",
+    cmd: ["pnpm", "run", "proof:backup-restore"],
+    selfSkipsWithout: "DATABASE_URL",
+  },
   // Same self-skip discipline: without DATABASE_URL it skips deterministically;
   // with one, the role split is proven locally in both directions.
-  { name: "Proof: db-role-split (the ledger append-only by privilege)", cmd: ["pnpm", "run", "proof:db-role-split"] },
+  {
+    name: "Proof: db-role-split (the ledger append-only by privilege)",
+    cmd: ["pnpm", "run", "proof:db-role-split"],
+    selfSkipsWithout: "DATABASE_URL",
+  },
   { name: "Proof: audit-ledger", cmd: ["pnpm", "run", "proof:audit-ledger"] },
   { name: "Proof: itsm-credential-crypto (a weak key is refused, not stretched)", cmd: ["pnpm", "run", "proof:itsm-credential-crypto"] },
   { name: "Proof: telemetry-posture-cache (stale posture is never served as current)", cmd: ["pnpm", "run", "proof:telemetry-posture-cache"] },
   { name: "Proof: itsm-template (evidence text cannot rewrite itself on the way into a ticket)", cmd: ["pnpm", "run", "proof:itsm-template"] },
+  { name: "Proof: itsm-dispatch (cascade join 1 — the mapper is total; every way the ticket fails to open refuses by name)", cmd: ["pnpm", "run", "proof:itsm-dispatch"] },
   { name: "Proof: session-store", cmd: ["pnpm", "run", "proof:session-store"] },
   { name: "Proof: orchestration", cmd: ["pnpm", "run", "proof:orchestration"] },
   { name: "Proof: room-sim", cmd: ["pnpm", "run", "proof:room-sim"] },
@@ -433,6 +749,7 @@ const STEPS = [
   { name: "Proof: signal-radar", cmd: ["pnpm", "run", "proof:signal-radar"] },
   { name: "Proof: control-plane", cmd: ["pnpm", "run", "proof:control-plane"] },
   { name: "Proof: edge-sync", cmd: ["pnpm", "run", "proof:edge-sync"] },
+  { name: "Proof: decision-cascade (the whole chain, and every refusal in it)", cmd: ["pnpm", "run", "proof:decision-cascade"] },
   { name: "Proof: decision-continuity (which decision wins across a partition)", cmd: ["pnpm", "run", "proof:decision-continuity"] },
   { name: "Safety gate (guardrails)", cmd: ["pnpm", "run", "safety:check"] },
   // Mirrors the CI "Postman collection is committed in sync" step: regenerate,
@@ -450,6 +767,11 @@ const STEPS = [
   // move one of the pinned figures. esbuild's output is byte-stable for a given input,
   // which is what makes the diff a usable gate rather than a flake.
   { name: "Evidence Coverage page committed in sync", cmd: ["bash", "-c", "git ls-files --error-unmatch docs/evidence-coverage.html >/dev/null && pnpm run build:evidence-coverage && git diff --exit-code -- docs/evidence-coverage.html"] },
+  // Same shape for the Room Entry console: it inlines the WHOLE decision core, so a
+  // stale committed copy ships old verdict logic to the public page. It sat stale for
+  // weeks before this gate — every core change since the last rebuild was invisible
+  // in the console. The build also runs the shell's sigClass vectors.
+  { name: "Room Entry console committed in sync (and its signal colours pass their vectors)", cmd: ["bash", "-c", "git ls-files --error-unmatch docs/room-entry-console.html >/dev/null && pnpm run build:room-console && git diff --exit-code -- docs/room-entry-console.html"] },
   // NOT a regenerate-and-diff gate, unlike the three above, and the difference is
   // load-bearing: docs/STATUS.md embeds the HEAD sha by design (its own staleness
   // tell), so the commit that adds it changes HEAD and it can never equal its own
@@ -470,10 +792,42 @@ const STEPS = [
   },
   // Mirrors the supply-chain job's "SBOM is committed and up to date" gate:
   // regenerate the CycloneDX SBOM and fail if it drifted (e.g. a new dependency
-  // was added but the committed SBOM wasn't regenerated).
-  { name: "CycloneDX SBOM committed in sync", cmd: ["bash", "-c", "pnpm run sbom && git diff --exit-code -- artifacts/sbom/cyclonedx.json"] },
+  // was added but the committed SBOM wasn't regenerated). `git ls-files --error-unmatch`
+  // FIRST, like the sync steps above and supply-chain.yml: `git diff --exit-code <path>`
+  // is silent for an untracked path. check-preflight-ci-parity.mjs enforces this for every
+  // such step (unguardedDiffSteps).
+  { name: "CycloneDX SBOM committed in sync", cmd: ["bash", "-c", "git ls-files --error-unmatch artifacts/sbom/cyclonedx.json >/dev/null && pnpm run sbom && git diff --exit-code -- artifacts/sbom/cyclonedx.json"] },
   { name: "Licence policy self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-licence-policy.mjs", "--self-test"] },
   { name: "Licence policy (every component's licence resolves to a declared class)", cmd: ["node", "scripts/check-licence-policy.mjs"] },
+  // BUILD_BACKLOG.md: "Vendor-doc drift is unwatched". Decided: a report-only
+  // watcher, cheaper than fetching every vendor page — pure date arithmetic
+  // against a committed manifest, no network call. REPORT-ONLY: the check
+  // itself always exits 0; only the self-test can fail (a broken comparison,
+  // never a stale link) a pull request.
+  { name: "Vendor-doc drift watch self-test (the comparison logic must actually work)", cmd: ["node", "scripts/check-vendor-doc-drift.mjs", "--self-test"] },
+  { name: "Vendor-doc drift watch (report-only — informational, never fails on a stale or unverified URL)", cmd: ["node", "scripts/check-vendor-doc-drift.mjs"] },
+  // Lesson L8 (DR-060): the Pages branch build was red on every mainline push for 34 days
+  // and no gate read a non-gating workflow's conclusion. REPORT-ONLY on a streak. An
+  // unclassified workflow file is a tree defect and stays fatal everywhere; every other own
+  // error (an HTTP error, an unresolved workflow, a malformed payload) is FATAL in CI and
+  // REPORTED, exit 0, here — a container or dev-shell token is frequently a git-proxy
+  // credential with no `actions: read` scope, and this step must not fail a preflight for
+  // that (check-ci-liveness.mjs's header: "FATAL IN CI, REPORTED LOCALLY"). It needs the
+  // Actions API, so without ANY GITHUB_TOKEN it prints SKIPPED and preflight classifies that
+  // as a self-skip, never a pass. GH_TOKEN is blanked so a gh-CLI token in a dev shell
+  // cannot turn the step into a live run the GITHUB_TOKEN classification does not expect.
+  // With the token set it still exits 0 on BOTH report-only outcomes, so neither is a bare
+  // "ok" (scripts/lib/preflight-verdict.mjs): `REPORTED — could not read …` is UNVERIFIED,
+  // and a line matching `surface` is a REPORTED finding, printed with the verdict. Declaring
+  // `surface` is what opts a step in — a step without one (the self-tests) is never UNVERIFIED.
+  { name: "Mainline workflow red streaks self-test (the verdict and its own-error paths must be able to fail)", cmd: ["node", "scripts/check-mainline-workflow-streaks.mjs", "--self-test"] },
+  {
+    name: "Mainline workflow red streaks (report-only — names every non-gating workflow red 3+ runs in a row; own errors REPORTED here, fatal only in CI)",
+    cmd: ["node", "scripts/check-mainline-workflow-streaks.mjs"],
+    selfSkipsWithout: "GITHUB_TOKEN",
+    env: { GH_TOKEN: "" },
+    surface: /red streak\(s\) of \d+\+ .* REPORTED, not fatal/,
+  },
 ];
 
 // Is the native web build structurally impossible here? Derived from the committed
@@ -485,9 +839,80 @@ if (nativeExclusion.excluded) {
   console.log(`ℹ native web build unavailable on ${nativeExclusion.target} — ${nativeExclusion.reason}\n`);
 }
 
+// The slice plan is the COMPLETE step list, every field (the `--list-steps` projection below is
+// a registration view and omits env, selfSkipsWithout and surface, so it is never the hash input).
+const slicePlan = slice || process.argv.includes("--aggregate") || process.argv.includes("--slice-plan") ? planOf(STEPS, repo) : null;
+const sliceRows = [];
+const gitHead = () => spawnSync("git", ["rev-parse", "HEAD"], { cwd: repo, encoding: "utf8" }).stdout.trim();
+// The CI run and attempt a slice or an aggregate belongs to ("<run id>.<attempt>"), null outside CI.
+const runAttempt = process.env.GITHUB_RUN_ID && process.env.GITHUB_RUN_ATTEMPT ? `${process.env.GITHUB_RUN_ID}.${process.env.GITHUB_RUN_ATTEMPT}` : null;
+if (slice && (quick || !argAfter("--slice-record"))) {
+  console.error("preflight: --slice needs --slice-record <file> and cannot be combined with --quick (a slice of a shortened list is not a slice of preflight).");
+  process.exit(2);
+}
+if (process.argv.includes("--slice-plan")) {
+  const count = parseSlice(`1/${argAfter("--slice-plan")}`).count;
+  const sequences = {};
+  for (let k = 1; k <= count; k += 1) sequences[k] = expectedSequence(slicePlan, { index: k, count });
+  await new Promise((done) => process.stdout.write(JSON.stringify({ plan: planHash(slicePlan), total: slicePlan.length, count, sequences }) + "\n", done));
+  process.exit(0);
+}
+if (process.argv.includes("--aggregate")) {
+  // The ONLY place a sliced run earns the verdict line. Every refusal is a problem line and exit 1.
+  const dir = argAfter("--aggregate");
+  const count = Number(argAfter("--slices"));
+  const jobResult = argAfter("--jobs-result");
+  let records = null;
+  try {
+    records = readdirSync(dir).filter((n) => /^preflight-slice-\d+\.json$/.test(n)).sort().map((n) => {
+      try { return JSON.parse(readFileSync(join(dir, n), "utf8")); } catch { return null; }
+    });
+  } catch { records = null; }
+  const verdict = aggregate({ records, plan: slicePlan, count, checkout: gitHead(), prHead: process.env.PREFLIGHT_PR_HEAD || null, attempt: runAttempt, jobResult: jobResult ?? "" });
+  console.log(`preflight aggregate: plan ${planHash(slicePlan).slice(0, 16)}… (${slicePlan.length} steps), ${count} slice(s), slice jobs: ${JSON.stringify(jobResult)}`);
+  if (!verdict.ok) {
+    for (const problem of verdict.problems) console.error(`  ✗ ${problem}`);
+    console.error(`\nPreflight FAILED at: the ${count}-slice aggregate (${verdict.problems.length} problem(s)). No slice set short of every step run exactly once is a pass.`);
+    process.exit(1);
+  }
+  const named = (status) => slicePlan.filter((_, index) => records.some((r) => r.steps.some((row) => row[0] === index && row[1] === "owned" && row[2] === status))).map((step) => step.name);
+  console.log(`  every one of the ${verdict.total} steps is accounted for exactly once across ${count} slices: ${Object.entries(verdict.counts).map(([k, v]) => `${v} ${k}`).join(", ")}`);
+  console.log(`\nPreflight PASSED — everything it runs is green (${count} slices, aggregated).`);
+  // The same caveats plain preflight prints WITH its verdict: a step that did not verify, did not
+  // run or could not run is named here, never folded into the green count.
+  for (const [status, label] of [["unverified", "exited 0 WITHOUT verifying what they check — nothing they check was verified by this run"], ["reported", "REPORTED a finding and exited 0 — report-only, not a clean result"], ["skipped-db", "SELF-SKIPPED — they exited 0 without running; nothing they prove was verified by this run"], ["unavailable", "did NOT run — unavailable on the slices' platform, not passed"]]) {
+    const names = named(status);
+    if (names.length > 0) { console.log(`\n  ${names.length} step(s) ${label}:`); for (const name of names) console.log(`    · ${name}`); }
+  }
+  console.log("\n  Each slice's own log carries the per-step lines and reasons. This aggregate ran no gate itself.");
+  console.log("\n  NOT covered by this harness (CI runs these; a green preflight says nothing about them):");
+  for (const j of uncoveredLines()) console.log(`    · ${j}`);
+  process.exit(0);
+}
+
+// `--list-steps` prints the list the loop below iterates, as one JSON line, and stops. The registration gate
+// (scripts/check-gate-self-tests-run.mjs) reads what is registered from HERE rather than parsing this file's source:
+// source can be written to look like a step without being one, the list the loop runs cannot. Keep this block
+// directly above the loop; the gate checks that it is.
+if (process.argv.includes("--list-steps")) {
+  // wait for the write to flush: process.exit() straight after a pipe write cuts the output at the 64 KiB pipe buffer
+  await new Promise((done) => process.stdout.write(JSON.stringify(STEPS.map((s) => ({ name: s.name, cmd: s.cmd, heavy: s.heavy === true, needsNativeBuild: s.needsNativeBuild === true }))) + "\n", done));
+  process.exit(0);
+}
+
 const results = [];
 let failed = null;
 for (const step of STEPS) {
+  const stepIndex = STEPS.indexOf(step);
+  const role = slice ? roleOf(stepIndex, slicePlan, slice) : "owned";
+  if (role === "other") continue;
+  if (role === "prelude" && step.needsNativeBuild && nativeExclusion.excluded) {
+    // A prerequisite this platform cannot run leaves later steps without what it sets up.
+    console.log(`▶ ${step.name} … FAILED (a prerequisite for this slice that this platform cannot run)`);
+    sliceRows.push([stepIndex, "prelude", "failed", 1]);
+    failed = step.name;
+    break;
+  }
   if (quick && step.heavy) { results.push({ name: step.name, status: "skipped" }); continue; }
   if (step.needsNativeBuild && nativeExclusion.excluded) {
     // NOT a pass. Recorded as absent, with the reason, and surfaced in the summary
@@ -503,14 +928,68 @@ for (const step of STEPS) {
     encoding: "utf8",
     env: { ...process.env, ...(step.env ?? {}) },
   });
-  if (r.status === 0) {
+  const combined = `${r.stdout ?? ""}${r.stderr ?? ""}`;
+  // Exit 0 is not evidence. A proof that SELF-SKIPS prints one line and exits 0; a report-only
+  // check that could not read its input, or found something it does not fail on, exits 0
+  // too. Classify each rather than tick it (scripts/lib/preflight-verdict.mjs).
+  const c = classifyStep({
+    status: r.status,
+    combined,
+    selfSkipsWithout: step.selfSkipsWithout,
+    envSet: Boolean(step.selfSkipsWithout && process.env[step.selfSkipsWithout]),
+    surface: step.surface,
+  });
+  if (role === "prelude") {
+    // Run for what it sets up, judged strictly (only a clean ok), and never counted here.
+    if (c.verdict === "ok") {
+      console.log(`ok — PRELUDE for slice ${slice.index}/${slice.count} (owned and counted by an earlier slice)`);
+      sliceRows.push([stepIndex, "prelude", "ok", 0]);
+      continue;
+    }
+    console.log("FAILED");
+    console.error(`\n─── ${step.name} (prelude) output (tail) ───\n${combined.trimEnd().split("\n").slice(-25).join("\n")}\n`);
+    sliceRows.push([stepIndex, "prelude", "failed", r.status ?? 1]);
+    failed = step.name;
+    break;
+  }
+  if (c.verdict === "skipped-env") {
+    console.log(`SELF-SKIPPED (${step.selfSkipsWithout} unset — not run, not passed)`);
+    results.push({ name: step.name, status: "skipped-db", env: step.selfSkipsWithout });
+    continue;
+  }
+  if (c.verdict === "unverified") {
+    console.log(`NOT VERIFIED — ${c.line}`);
+    results.push({ name: step.name, status: "unverified", line: c.line });
+    continue;
+  }
+  if (c.verdict === "reported") {
+    console.log(`ok — REPORTED: ${c.line}`);
+    results.push({ name: step.name, status: "reported", line: c.line });
+    continue;
+  }
+  if (c.verdict === "ok") {
     console.log("ok");
     results.push({ name: step.name, status: "ok" });
+  } else if (r.status === 0) {
+    // The declaration and the behaviour disagree: it exited 0 with its input unset and no
+    // SKIPPED. Either the proof stopped self-skipping (drop the marker) or it ran a real
+    // path with no database, which is worse. Fail rather than guess — an unexplained exit 0
+    // from a gate declared unable to run here is exactly the unearned green this classifies.
+    console.log("FAILED");
+    console.error(
+      `\n─── ${step.name} ───\n` +
+        `declared selfSkipsWithout: "${step.selfSkipsWithout}" (unset here) but exited 0 without printing SKIPPED.\n` +
+        `Either the proof no longer self-skips — remove the marker — or it ran without the input it needs.\n`,
+    );
+    sliceRows.push([stepIndex, "owned", "failed", 0]);
+    failed = step.name;
+    break;
   } else {
     console.log("FAILED");
     // Surface the tail of the failing output so the cause is visible inline.
-    const out = `${r.stdout ?? ""}${r.stderr ?? ""}`.trimEnd().split("\n").slice(-25).join("\n");
+    const out = combined.trimEnd().split("\n").slice(-25).join("\n");
     console.error(`\n─── ${step.name} output (tail) ───\n${out}\n`);
+    sliceRows.push([stepIndex, "owned", "failed", r.status ?? 1]);
     failed = step.name;
     break;
   }
@@ -518,20 +997,43 @@ for (const step of STEPS) {
 
 console.log("\n── preflight summary ──");
 for (const r of results) {
-  const mark = r.status === "ok" ? "✓" : "–";
+  const mark = r.status === "ok" || r.status === "reported" ? "✓" : "–";
   const note =
     r.status === "skipped" ? " (skipped)"
     : r.status === "unavailable" ? " (UNAVAILABLE on this platform — not run, not passed)"
+    : r.status === "skipped-db" ? ` (SELF-SKIPPED — ${r.env} unset; not run, not passed)`
+    : r.status === "unverified" ? ` (NOT VERIFIED — ${r.line})`
+    : r.status === "reported" ? ` (REPORTED — ${r.line})`
     : "";
   console.log(`  ${mark} ${r.name}${note}`);
 }
 
+if (slice) {
+  // A SLICE IS A SUBSET. It writes its record and stops here: the verdict line below is never
+  // reached in slice mode, pass or fail. Only `--aggregate` may say the list passed.
+  const indexOf = new Map(slicePlan.map((entry) => [entry.name, entry.index]));
+  for (const r of results) sliceRows.push([indexOf.get(r.name), "owned", r.status, 0]);
+  sliceRows.sort((a, b) => a[0] - b[0]);
+  writeFileSync(argAfter("--slice-record"), JSON.stringify(sliceRecord({ slice, checkout: gitHead(), prHead: process.env.PREFLIGHT_PR_HEAD || null, attempt: runAttempt, plan: slicePlan, steps: sliceRows })) + "\n");
+  const owned = sliceRows.filter((row) => row[1] === "owned").length;
+  if (failed) {
+    console.error(`\nPreflight slice ${slice.index}/${slice.count} FAILED at: ${failed}.`);
+    process.exit(1);
+  }
+  console.log(`\nPreflight slice ${slice.index}/${slice.count} complete: ${owned} owned step(s) run, none failed. This is a SUBSET of the list — not a preflight verdict. The aggregate judges all ${slice.count} slices.`);
+  process.exit(0);
+}
 if (failed) {
   console.error(`\nPreflight FAILED at: ${failed}. Fix before pushing.`);
   process.exit(1);
 }
-// "Safe to push" was an overstatement, and it was believed. This harness mirrors
-// THREE of the six CI jobs; the other three need external services it cannot start.
+// "Safe to push" was an overstatement, and it was believed. The sentence that used
+// to sit here said "This harness mirrors THREE of the six CI jobs; the other three
+// need external services it cannot start" — a hand-typed count in the one comment
+// block whose whole subject is a count going stale. The repo runs far more than six
+// CI jobs now; the true figures are DERIVED and printed by
+// `scripts/check-preflight-ci-parity.mjs` ("CI job coverage: …") and by the
+// `NOT covered by this harness` list below. No number is retyped here.
 // Twice now a green preflight was read as proof and the push went red anyway — once
 // on a lockfile CI could not install, once on a Docker image build. Both times the
 // header already said this. A caveat nobody reads at the moment of decision is not a
@@ -547,7 +1049,38 @@ const UNCOVERED = uncoveredLines();
 // could not run is UNAVAILABLE, never passed. Two different honesty problems — what CI
 // covers that preflight does not, and what preflight could not execute here.
 const unavailable = results.filter((r) => r.status === "unavailable");
+// Third honesty problem, and the one this harness got wrong for longest: a proof
+// that decides for itself that it cannot run, says SKIPPED, and exits 0. It was
+// indistinguishable from a pass in every line preflight printed.
+const selfSkipped = results.filter((r) => r.status === "skipped-db");
+// Fourth and fifth: a report-only check that exits 0 having read nothing (`unverified`), or
+// having found something it does not fail on (`reported`). Both used to print a bare "ok".
+const unverified = results.filter((r) => r.status === "unverified");
+const reported = results.filter((r) => r.status === "reported");
 console.log(`\nPreflight PASSED${quick ? " (quick — heavy builds skipped)" : ""} — everything it runs is green.`);
+if (unverified.length > 0) {
+  console.log(`\n  ${unverified.length} step(s) exited 0 WITHOUT verifying what they check — they could not read their input:`);
+  for (const r of unverified) console.log(`    · ${r.name}\n        ${r.line}`);
+  console.log("    Nothing they check was verified by this run. CI fails these on their own error.");
+}
+if (reported.length > 0) {
+  console.log(`\n  ${reported.length} step(s) REPORTED a finding and exited 0 — report-only, not a clean result:`);
+  for (const r of reported) console.log(`    · ${r.name}\n        ${r.line}`);
+}
+if (selfSkipped.length > 0) {
+  // WITH the verdict, for the same reason as the block below: the caveat has to be
+  // where the decision to push is made, not in a comment nobody opens.
+  console.log(`\n  ${selfSkipped.length} proof(s) SELF-SKIPPED — they exited 0 without running:`);
+  for (const r of selfSkipped) console.log(`    · ${r.name} (${r.env} unset)`);
+  console.log("    Nothing they prove was verified by this run.");
+  if (selfSkipped.some((r) => r.env === "DATABASE_URL")) {
+    console.log("    CI's durable-persistence job runs the DATABASE_URL ones against a real Postgres;");
+    console.log("    set DATABASE_URL to run them here.");
+  }
+  if (selfSkipped.some((r) => r.env === "GITHUB_TOKEN")) {
+    console.log("    CI's validation job runs the GITHUB_TOKEN one with the workflow token; set GITHUB_TOKEN to run it here.");
+  }
+}
 if (unavailable.length > 0) {
   // Stated WITH the verdict, not below it. "Everything it runs is green" is true
   // and also incomplete; a reader deciding whether to trust this run needs to know

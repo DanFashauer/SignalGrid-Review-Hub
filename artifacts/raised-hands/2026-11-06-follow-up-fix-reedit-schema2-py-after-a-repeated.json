@@ -1,0 +1,15 @@
+{
+  "id": "2026-11-06-follow-up-fix-reedit-schema2-py-after-a-repeated",
+  "raisedAt": "2026-11-06T14:19:20.158Z",
+  "origin": "mac",
+  "doing": "Closing the owner's hands-free loop on the local-brain leg. Build a6619d01 (leg-5 row) made the exact edit at step 3; after two identical refusals the 13:17Z guard dropped edit, but the 9B then re-read the same file five times (steps 6-10) and the 30-minute deadline cut step 11. The worktree holds the correct 1-file +1/-1 diff.",
+  "blockedBy": "Follow-up ~/fix_reedit_schema2.py (after a repeated refusal, one corrective re-read then check/finish only; transactional, re-pin, rollback) is written; the Mac classifier refuses to let Claude run it.",
+  "need": "Owner types two lines in the Mac session: ! python3 ~/fix_reedit_schema2.py   then   ! launchctl kickstart -k gui/$(id -u)/com.signalgrid.local-brain . Claude then requeues the leg-5 task and publishes it on review.",
+  "whoCanUnblock": "owner",
+  "domain": "local-brain",
+  "status": "resolved",
+  "routedTo": null,
+  "resolvedAt": "2026-11-06T16:20:11.110Z",
+  "resolvedBy": "mac",
+  "resolution": "Owner typed the two lines at 2026-11-06 15:25Z; fix_reedit_schema2.py applied (runtime cf49cc3c -> e39f2877, tests OK) and the brain restarted 15:27Z. The loop proof came from Codex build 125c1dd1 -> PR #1885 -> mainline 7472bc24."
+}

@@ -23,7 +23,146 @@ Sessions cannot read or message each other (cross-session triggers are
 disabled for this organization). The coordination bus is THIS FILE plus the
 git history — and the owner, who sees both chats.
 
-## Current handoff — read this first (updated 2026-08-12)
+## The loop as of 2026-09-05, second revision — read this first
+
+The first revision (below) fixed the cloud side: delivery on its own branch, an
+hourly steward, a wake channel. The owner's verdict later the same day was still
+"not working and causing delay". The evidence: six cloud→Mac messages unread for
+hours, no Mac commit since 09-03, a Swift twin the cloud had pinned with vectors
+and then WAITED for. Every one of those waits was on a **human opening a Claude
+session on the Mac**. The fix is to take the human-started session off the path
+of everything that does not need a physical Mac, and to give the physical Mac an
+automatic tick for what does.
+
+**Rule 1 — the cloud lane does anything CI's macOS runners can verify.** Swift
+twins against pinned vectors, `xcodebuild`s, `swift test`, shell-script fixes
+in Mac-owned files: `ios-ci.yml` compiles and tests every one of them on
+`macos-latest` on the PR, and `mac-lane.yml` runs the full harness on dispatch.
+Precedent, same day: `PostureAllow.swift` was written by the cloud lane and
+proven by CI in the batch that pinned its vectors (#456) — the remediation-allow
+twin had waited three days for the Mac. "Mac lane owns this file" now means the
+Mac lane is the reviewer of record, not the only author; the cloud announces the
+edit in the commit and the lane message, per protocol rule 2.
+
+**Rule 2 — what genuinely needs the physical Mac runs from a tick, unattended.**
+`scripts/mac/lane-tick.sh` runs every 5 minutes from launchd
+(`bash scripts/mac/install-launchd.sh`, once, on the Mac): fetch, refuse a dirty
+or non-Alpha checkout, run every pending sim request, push results on a
+`mac/tick-<stamp>` branch, and HEARTBEAT (the mac-lane-tick file under artifacts/agent-heartbeats,
+written through a protected lane/mac-mail-* PR) on every path — quiet, acted, skipped and why. See [Held deliveries](#held-deliveries-original-receipt-readback) for cadence, durable records and canonical readback. The cloud steward opens the PR for
+each `mac/tick-*` branch within the hour and, when that heartbeat is older than
+three hours, escalates to the owner once with the one install command: a Mac
+that has gone silent is a signal, not a mystery. Before merging a tick PR that
+carries the surface-review-coverage page, the steward checks whether mainline
+has moved a counted surface since the tick generated it — a green merge-ref
+run is not proof, because a counted file can land between that run and the
+merge (lesson L12 in `docs/agent/LESSONS.md`; `.claude/skills/landing-under-dr-037/SKILL.md`,
+"Order, when several land in a row").
+
+**Rule 3 — mail asks a person for judgment, never for a build.** A cloud→Mac
+message now carries only what a person must decide or physically do (enrol a
+device in Fleet, plug in the dock, approve a deletion). "Please build X",
+"please port Y", "please run the harness" are not mail: the first two are the
+cloud's, the third is a sim request the tick runs.
+
+**What the owner does, once:** on the Mac, `bash scripts/mac/install-launchd.sh`.
+Then nothing — `bash scripts/mac/install-launchd.sh --status` shows it running.
+
+**The build tick (DR-050 placement, DR-060 delegation; owner reaffirmed 2026-10-21).**
+The owner asked on October 21, 2026 to adapt and run the workers with available local,
+Codex and Claude resources. This worker authorization does not adopt the pending
+DR-061 proposal or widen decision-path merge authority.
+
+`SG_STAGE_RUNNER` optionally names one absolute executable on the host, outside the
+build clone and writable run directory. The helper pins its file identity and SHA256
+and checks both before each stage. It sends protocol-version-1 JSON on stdin, with
+stage, kind, requested tier, time/turn/budget limits, read-only flag, brief, paths,
+pinned base and verdict schema; no shell command or host path is stored in this tree.
+The host runner must enforce those restrictions, keep reviews in fresh sessions,
+retain the timeout process group, and return the existing result envelope with actual
+provider/model telemetry. Unsupported budgets or unavailable providers must refuse;
+unknown cost remains unknown. Native Claude arguments remain the default when the
+variable is unset. The path check and hash are drift checks, not an OS sandbox or
+atomic executable-file pin; the host must protect the runner and its dependencies.
+
+The lane tick
+never builds. A second launchd job, `scripts/mac/build-tick.sh`
+(`bash scripts/mac/install-build-tick.sh`, retrying every 5 minutes), does nothing at all
+while it is paused. Each run first pins mainline ONCE: it asks the real remote
+for SignalGrid_Alpha's sha (`git ls-remote`), and every later step (the re-exec of
+its own script, the build clone, the diff the reviewer reads, the changed-path and
+forbidden-path checks, the landing classifier, the is-ancestor check before the
+push) uses that sha, never a ref a session could repoint; a run that cannot ask
+the remote does nothing. Otherwise it first refreshes ONE dirty `mac/*` PR with
+mainline's PR-refresh script, once it lands (PR #1353, not on mainline yet; no
+model; under a wall-clock cap that kills the refresh's whole process group; a
+failure never stops the build;
+the owner's 2026-10-01 instruction covers re-merging mainline into his own open
+`mac/*` PR branches, never merging a PR). It then takes the objective loop's top
+`tasks[]` row that no remote branch or open PR names and runs it as staged tiers
+(`scripts/mac/build-tick-stages.mjs`; DR-047, DR-060): triage on Sonnet,
+read-only, decides done, blocked or build BEFORE the claim. A broken triage
+session (a logged-out CLI, a usage limit, no Keychain: its envelope names an API
+error, or there is no envelope and the exit is not 0 or the time cap) pauses the
+tick before any claim is pushed, so that row stays unclaimed; a triage that only
+hit its turn or time cap raises a hand. The branch and PR lists are re-read right
+before the claim, so a row taken while triage ran is skipped. Then the claim, an
+empty `mac/build-row-<id>-<stamp>`; then build on Haiku, Sonnet or Opus by the
+kind triage names (Haiku, the `mechanical` kind, is writer reruns and doc-only
+edits: the helper writes its commit message, and its PR title and body after the
+last session from the final diff, and a diff outside `docs/**` and the sync
+manifest is a hand), an Opus read-only review, at most one fix on the build's
+tier, and a second review. The build area is its own clone (`<repo>.build`, made
+with `git clone --reference`, its config rewritten and its tree reset to the
+pinned sha every run), so a session shares no refs, config or hooks with the
+person's checkout. A session that breaks after the claim pauses the tick too (so
+does a helper that fails or writes no verdict), and that row's claim branch stays
+for a person; a build or fix session that edited and then capped or broke is
+never committed (broken pauses, capped hands). A row
+triage finds already done is a one-line plan marker with no build session. No
+session has git or GitHub credentials; the script commits, runs preflight and
+breadth, and only on 0/0, each gate's exact verdict line present and a sentinel
+naming the commit, pushes that sha (from a clean tree, with git hooks off; CI's
+frozen-lockfile install is the lockfile guard) and opens the PR. Every PR body
+carries the reviews and a tiers-and-cost table (stage, tier asked, model that
+ran, turns, seconds, USD at list price; a figure the CLI did not print is
+`unknown` on its row and counts as 0 in the total), and each stage appends a line
+to ~/Library/Caches/signalgrid/build-tick/ledger.jsonl. Nothing in it merges; a
+stuck or red run raises a hand and keeps the claim for a person. Registry row:
+`mac-build-tick`.
+
+## The loop as of 2026-09-05, first revision (superseded above; kept for history)
+
+The owner's verdict on the loop below was "not working and causing delay". The
+evidence agreed, and none of it was about the Mac:
+
+- The cloud lane's acks and heartbeats rode its CODE branch, so they were held
+  whenever that branch carried an open pull request — mail waited behind a
+  ten-minute CI run it had nothing to do with, then behind the merge.
+- Nothing woke the cloud lane when Mac mail or a `mac/*` branch landed. It
+  looked every FOUR hours, then reviewed, then opened a PR, then waited for CI.
+- Messages carried no instant, so nobody could say how long one had waited.
+  "Delay" was a feeling; the gate could only say "unread".
+- Delivery was three commands after the write, and the third was the one that
+  got skipped.
+
+What changed, and what each lane does now:
+
+| | Mac lane | Cloud lane |
+| --- | --- | --- |
+| Write + deliver mail, an ack, a heartbeat | `pnpm run lane:deliver send\|ack\|heartbeat …` — published to **`lane/mac-mail-<stamp>-<nonce>`** from a throwaway worktree, then PR + auto-merge request using authenticated `gh`; your checkout is untouched. Required checks and landing conditions remain. Publication is pending until the PR merges; never direct-push canonical or resend a refused/uncertain push. | same protected PR route using **`lane/cloud-mail-<stamp>-<nonce>`**. Never the code branch. |
+| Wake the other lane now | after a delivery, `lane:deliver` comments on the **mailbox PR** (`docs/agent/lane-mailbox.json`, PR #439) if `gh` is on PATH, else prints its URL — one comment there, from any device, wakes the cloud session | subscribed to the mailbox PR every session start and every cycle |
+| A topic branch pushed for review | push `mac/<name>`; `lane:inbox` lists your branches mainline does not carry yet | **hourly** cycle opens a DRAFT PR for every unmerged `mac/*` branch at once (CI starts before the review), subscribes to it, reviews, lands or comments the blocker |
+| How long has this waited | `lane:inbox` shows it per message; `check-lane-messages` names it on every run; unread beyond 24h is STALE (reported, never fatal) — for EVERY message: a message with no `sentAt` ages by the commit that delivered it (since 2026-09-06; before that it could never be stale) | same |
+| Withdraw an instruction | `lane:deliver send "…" "…" --supersedes <id>` — the gate names the superseded message, the inbox prints it last under a banner; prose alone does not withdraw anything | same |
+
+Rules that did not change: the push is the delivery; only the addressee closes
+a message; unread is loud and never fatal; the sim-request loop still carries
+WORK and this channel carries KNOWLEDGE. The mailbox PR is **never merged and
+never closed** — it changes no files, so it never conflicts, and closing it
+removes the wake channel.
+
+## Current handoff — superseded 2026-09-05 by the section above (kept for history)
 
 **The owner is not a message bus.** They are phone-first and at the remote
 office only a few hours a day, so a lane that needs the other lane to know
@@ -160,6 +299,129 @@ target — the same reasoning behind that bench's own 6,000x floor headroom.
    What still hands back: a change that would alter a RATIFIED decision
    (docs/DECISION_RECORDS.md), widen the launch profile, or edit the byte-faithful
    Swift ports for behaviour. Those are boundary changes, not defect repairs.
+7. **The cloud lane merges its own green product PRs (DR-037, owner-directed
+   2026-09-12).** "Lanes open, owner merges" (DR-032) held six green PRs on the owner
+   overnight; he ended it: *"I didn't want that on me."* A product PR is mergeable by
+   the cloud lane only when the gating check has passed on its CURRENT head, preflight
+   and the breadth lane passed locally before the push that made it, every review
+   thread is closed, and it is not conflicted — and the lane never approves, never
+   merges a change to the launch profile / launch-claims gate / publication boundary,
+   and never deletes a branch. The Mac lane's landing PRs are merged by the cloud
+   only when the Mac asked for it in mail (as #653 did). The first landings under
+   this rule: #656, #657, #653, #649, #654 on 2026-09-12. DR-061 (owner-directed
+   2026-09-29) extends lane merges to DECISION_PATH PRs under two added conditions —
+   an adversarial Opus review by an agent that did not author the change, and an
+   executed counterexample quoted in the body; its rule 2 paths stay the owner's
+   merge. The landing skill carries the full text.
+8. **Evidence age is read from `mintedAt` inside the artifact, never from the file's git date (2026-10-15).** The re-mint of
+   `artifacts/live-evidence/mac-run.json` landed via tick PR #1522 with `mintedAt` 2026-10-15T16:33:53.511Z, read with
+   `node -e 'console.log(JSON.parse(require("fs").readFileSync("artifacts/live-evidence/mac-run.json","utf8")).mintedAt)'`.
+   Before that re-mint the blob read 2026-10-02T16:07:18.870Z, while the commit that carried it then (047dcfd93) is dated
+   2026-10-04 17:14:10 -04:00: a git date two days younger than the file's real age. Read the field, not the commit.
+9. **Regenerate `docs/agent/SURFACE_REVIEW_COVERAGE.md` only on a fully staged index (2026-10-15).** After a merge of mainline
+   into a branch, the index holds duplicate stages until the merge is resolved and staged, and the coverage gate then
+   reports a false STALE (seen on #1524's round 7, 2026-10-15). Resolve, `git add -A`, run
+   `node scripts/check-surface-review-coverage.mjs --write`, `git add -A`, then run the gate without `--write`.
+10. **A heartbeat's "since the last cycle" is what the first-parent log prints, measured (2026-10-15).** Measure the window with
+   `git log origin/SignalGrid_Alpha --first-parent --since=<prior heartbeat firedAt> --until=<this delivery>`, and the age at
+   delivery from the prior `firedAt` to this delivery's instant, never from what the session remembers. The 21:24Z steward record (#1528) named two cloud
+   landings; the window from the prior `firedAt` 2026-10-15T19:25:57.719Z to its delivery commit 5703c7585 (21:26:43Z)
+   holds nine first-parent commits: four PR merges (#1524 df4ea3b8, #1526 67ff76eb, #1527 9e7fc18b, #1468 760d5032) and five
+   Mac heartbeat commits. Its age at delivery was 2h00m45s. The 17:24Z record (#1523) claimed a keepalive "also due" at
+   1h57m; the age from the prior `firedAt` 2026-10-15T15:28:02.975Z to its delivery commit e7f03d2db (17:25:56Z) is
+   1h57m53s, under the 2-hour threshold, so the keepalive was not due (corrected in 4808841e).
+
+### How the cloud lane runs build work (2026-09-12)
+
+Orchestrator over workers, not one long session: the session model writes the spec
+(what changes, which check must fail without it, which gates must stay green),
+fans execution out to explicitly selected workers under DR-047/DR-060's stage
+table, each in its own worktree with its own `pnpm install`, reviews what comes
+back against the spec, sends it back with the
+exact defects until it is good, and only then runs the full gates and opens the PR.
+The loop closes on a check that fails without the fix, never on a description of
+one. First application: the mutation guard's pending brace-less families
+(BUILD_BACKLOG campaign row) — one worker per family, the orchestrator holds the
+census. Absorbed from an owner-shared practitioner clip (RESOURCE_INTAKE 2026-09-12);
+the vendored `subagent-driven-development` and `dispatching-parallel-agents` skills
+already describe the mechanics. `docs/agent/WORKER_BRIEF.md` carries the shared
+worker contract for local-model, Codex and Claude Code sessions. Provider
+availability changes dispatch; it grants no additional merge authority.
+
+### The lane session's status line (2026-10-08)
+
+Claude Code shows one line at the foot of the lane session, from
+`scripts/mac/statusline.sh` (the `statusLine` key in `.claude/settings.json`):
+`<branch> | <N> open hands | <M> unread for <lane> | <model>`. Claude Code re-runs
+it every 30 seconds (`refreshInterval` on that entry) as well as on its own events,
+because hands and mail change while the session is idle, and the entry starts it
+from the repository root of the directory Claude Code was launched in
+(`workspace.project_dir`, never the working directory, which moves), so a session in
+a subdirectory still gets the line and one that wanders into another repository
+never runs that repository's script. It reads only files in the checkout of the
+session's directory: the branch from `git symbolic-ref`, open hands from
+`artifacts/raised-hands/` (every hand not yet resolved), and unread mail from
+`artifacts/lane-messages/` (addressed to this lane, with no ack written by this
+lane). No fetch, no `gh`, no network, so the numbers are as fresh as the last pull
+and are a prompt to run `pnpm run hands` or `pnpm run lane:inbox`, not a replacement
+for either. A part it cannot read (not a git checkout, a file that does not parse, a lane
+message of a shape `pnpm run lane:inbox` would refuse, such as a misspelled `to`) is left
+out of the line instead of shown as a number. To turn it off, delete the
+`statusLine` key from `.claude/settings.json`, or override it in your own local
+settings file. `bash scripts/mac/statusline.sh --self-test` proves the counts on a
+fixture tree; preflight and CI run it.
+
+### Operating notes, 2026-10-16 (cloud lane)
+
+- The lane takes an artifact's own freshness — the live evidence's `mintedAt`, a tick's or a routine's last `firedAt` — from the artifact's field, never from the commit that carried it, while the keepalive's "age at delivery" runs from the prior heartbeat's `firedAt` to the instant the new heartbeat is delivered (the #1523 correction above), so a heartbeat committed after its own `firedAt` is classified by when it was delivered.
+- A new ask names and retires the earlier asks it supersedes in part, and leaves their other items standing.
+- The lane compares commit times in epoch seconds (`git log -1 --format=%ct`), never as ISO strings, because the Mac commits at -04:00 and a later instant reads as earlier.
+- The lane reads a heartbeat delivered under two hours after the prior one as a non-quiet delivery only, never as "also the keepalive".
+- The lane marks a draft PR ready only when it is prepared for another round, because marking it ready triggers a Codex review whose comments wake the branch worker.
+- Every landing refute re-runs the earlier heads' flagged plants on the new head before a ship, because a fix that widens a gate's recognition can silently re-open a fail-open case.
+
+### Operating notes, 2026-10-23 (owner directive: the local second brain runs everything; the cloud and Codex inspect and approve)
+
+> **Placement amended 2026-11-11.** The quote and the notes below are kept as the record of that day. Where they say the Mac runs every test and the cloud builds and dispatches nothing, the newer routing in "Operating notes, 2026-11-11" below governs.
+
+Owner, 2026-10-23 about 23:00Z, verbatim: *"Need to offload and let the local agent run everything and escalate to you or codex when it's needed for final inspection and approval for repo everything else is offloaded locally using second brain period …"* — the full text is in the `docs/agent/LOOP.md` STATE block of that day. It widens the 03:30Z local-first directive recorded there.
+
+- **The Mac's local second brain is the primary executor.** It runs every build round, review round, test, app build and company-site task itself, with whatever local tooling it needs, and decides what to work on from the objective state and the owner's inputs. Its runtime lives outside this tree (the 2026-10-22 intake row); it writes to this tree only through the Mac lane's registered channels — lane mail, hands, heartbeats, `mac/*` branches and PRs.
+- **The cloud lane and Codex are final inspection and approval for the repository.** The cloud builds nothing and dispatches nothing of its own. It acts on an escalation from the brain through one of three channels: (1) a lane message addressed to cloud — a comment on the mailbox PR (`docs/agent/lane-mailbox.json`) wakes it at once; (2) a raised hand with `whoCanUnblock: "cloud lane"`; (3) a sentence in a PR body asking the cloud to land it. On an escalation it reviews the exact head and lands under DR-037's five conditions, or returns its findings on the PR. `@codex review` on a PR requests Codex.
+- **What the cloud keeps running**, because the registry and the raised-hands gate expect them: the hourly steward cycle (reads Mac mail and branches, lands lane-mail and tick PRs, escalates a silent Mac to the owner), the 2-hourly forward-build heartbeat as a report of the pool with no refill, and the daily hygiene sweep.
+- **What does not change:** DR-037's five landing conditions and its owner-only surfaces (launch profile, launch-claims gate, publication boundary, decision records, `OWNER_RESERVED`); DR-054, a stuck unit raises a hand on either machine; claim discipline; the second-revision loop above for mail, acks and heartbeats. Authority for the brain's own writes is a registry row in `docs/agent/scheduled-routines.json` citing the owner's words, which the brain proposes and the cloud inspects; until it lands, the brain's deliveries ride the registered Mac lane identity, as they do today.
+
+### Operating notes, 2026-11-11 (owner routing correction: split the load across the lanes when the Mac is slow)
+
+Owner, 2026-11-11, as quoted by the Root (Codex) lane in a comment on the mailbox PR (`docs/agent/lane-mailbox.json`) on 2026-11-12 at 02:44Z: *"If it's taking to long for things to process on the Mac then need to find a way to split to load between all 4 lanes. Github -> Second Brain -> Mac LLM -> Claude Local Cloud Session -> Codex Local Cloud Session -> Claude Code Cloud Session -> Codex Cloud Session -> GitHub"*. The cloud lane did not receive these words first-hand; it records them as relayed, and the owner reads this file.
+
+This amends the 2026-10-23 placement above in one respect: the Mac is no longer the only place work and tests run. The 2026-10-23 quote stays as written.
+
+- **One ledger, one writer.** The second brain is the one coordinator ledger. Each task, and each full head of a branch, has one writer at a time; a lane takes a task by claiming it through the registered channels (lane mail, a raised hand, a `mac/build-row-<id>-*` head) before it writes.
+- **What stays on the Mac:** the local LLM, the private Obsidian vault and control data, and every physical-device or supervised-hardware check. Private notes and control data never leave it.
+- **The local Claude and Codex clients on the Mac** do bounded host integration and the cloud-model calls their plans include.
+- **The hosted Claude and Codex lanes** take assigned public-source implementation, review, and the checks that are portable — the ones that need no device, no vault and no Mac-only tool. Assigned means a lane message, a raised hand or a PR-body sentence names the task; a hosted lane does not pick up work the ledger gave to another writer.
+- **GitHub-hosted Linux and macOS CI** runs the required portable validation on the PR.
+- **A model or provider being reachable is neither permission nor evidence.** A check counts when its command ran on the stated head and its output is quoted.
+- **What this does not add:** no new agent, trigger, account, paid capacity, approval vote, wider cap or department.
+- **What does not change:** DR-037's five landing conditions and DR-064; the owner-only surfaces; full required validation on the exact head; genuine independent review; serial landing on the expected head; no branch deletion and no force-push; DR-054, a lane that cannot run something says so and raises a hand instead of waiting on the Mac or reporting work that did not run.
+- **DR-064 is not edited by this note.** It still records the 2026-10-23 placement (the brain as primary executor, cloud and Codex as final inspection). `docs/DECISION_RECORDS.md` is the owner's to change; until he amends it, this note is the operating reading of his newer words and DR-064's landing rules stand as written.
+- **Not every remote attachment works yet.** The weekly dependabot routine's fresh sessions cannot reach this repository (the `dependabot-queue-review-weekly` row in `docs/agent/scheduled-routines.json` is `awaiting-activation`); that is a separate open blocker and this note does not claim it is fixed.
+
+### Operating notes, 2026-11-13 (owner directive: the four-pass build pipeline, Bonsai first)
+
+The owner, in the cloud session at about 23:12Z: *"the full automation of local LLM second Brain using Bonsai as first pass and building everything with its usage and agents then passing and load balancing second and third passes and validations through local sessions between Claude and codex then final pass is done again load balances between models and usage of cloud sessions between Claude and Codex. Each pass will use the second brain for everything skills and agents plus knowledge of whole project and company plus all knowledge."* At about 00:00Z on 2026-11-14 the owner added: *"I need to run this and build as much as possible and provide as much proof as possible then will get into physical stage once the brain can fully build and complete this company."*
+
+This lane works to that shape from now on:
+
+1. **Pass 1, local, Bonsai.** The Mac's Bonsai 2 model, the interim default (RESOURCE_INTAKE row of 2026-11-13), does intake, a scoped plan and the first real implementation, using the accountable roster role and its skills and agents.
+2. **Pass 2, local review.** An admitted local Claude or Codex session, chosen by measured capacity, reviews the first artifact and records its findings.
+3. **Pass 3, local validation.** The next admitted local session runs the task's real checks and consumes pass 2's findings. A correction changes the head, and approvals on the older head no longer count.
+4. **Final pass, cloud.** An admitted cloud Claude or Codex session reviews the final head. This lane is a final-pass reviewer: it takes exact-head offers from Root's dispatcher, answers each with a `signalgrid-lane-result/v1` ACK and a separate result, and has no Mac access and no merge.
+
+Every pass retrieves the second brain's approved context (roster role, skills, agents, project and company knowledge) by bounded retrieval, not by copying the vault, and the private-content boundary of the publisher is unchanged. A pass is a review stage, never an approval: landing still needs the protected required checks, the local preflight and breadth receipt, and the owner's word on owner-gated surfaces. "Local session" names where a pass runs, not a separate credit pool, so lanes sharing one account are not counted twice when balancing usage. Unknown capacity stays unknown. A missing or failed pass is reported as missing or failed, never folded into a completion.
+
+Not yet shown when this note was written: Bonsai authoring a first code pass, the brain's default route on Bonsai, restart persistence, recovered disk and memory, a measured concurrency cap, and one fresh job carried through all four passes with its receipts. The dispatcher and router are Root's; the Mac host work is the Mac lane's.
 
 ## Collision log
 
@@ -248,3 +510,104 @@ needed. Both entries are real, both cost real time.
    If a future pair of lanes measures the same thing twice, rule 4 applies and
    one of them is redundant; if they measure different things, both stay AND
    each must name what it is not.
+
+
+## Held deliveries: original receipt readback
+
+Each unattended heartbeat, objective escalation and build hand records its parent
+intent before invoking the delivery child. The delivery writes an exclusive
+submission receipt before its sole topic push, containing the repository, base,
+unique topic, full head and exact changed Git blobs. Authentication is checked
+before a Mac push. A reset of tracked objective state or its old decision stamp
+does not remove the independent escalation attempts. The build-hand cause also
+has one attempt record; repeating the tick never resends an uncertain hand.
+
+Run this from any linked checkout sharing the original Git object store, using
+the absolute receipt path recorded in its local log:
+
+```sh
+node scripts/lane-deliver.mjs readback <original-submission-receipt>
+```
+
+This is GET/fetch only. It saves the raw response before parsing, verifies the
+PR repository/base and MERGED state, pins the exact current canonical SHA, and
+uses real Git objects to prove the merge and ORIGINAL topic commit are in
+canonical ancestry with every recorded payload blob unchanged. An estate/steward
+refresh may advance the PR head without changing that original commit or payload.
+Concurrent FETCH_HEAD changes, replacement refs and grafts are not proof.
+
+Exit 0 verifies that delivery; exit 4 means its open PR still has auto-merge
+pending; exit 3 means held. A due or changed heartbeat observation checks its
+original submission first; identical observations inside the keepalive window
+remain quiet. A verified canonical merge permits a new observation. Objective
+and build warnings identify their original consumed attempt; they are local
+warnings and do not certify that GitHub received new mail.
+
+Missing, malformed, edited or incompatible intent/log/terminal/submission
+evidence, a CLOSED/unmerged PR, disabled auto-merge or unavailable canonical
+proof stays readback-only. Preserve the original immutable evidence in the
+shared Git common-directory store; use the command above and hand the
+cause to a separate source/ownership/grant-qualified repair. Never erase its
+pointer, resend, infer cleanup from process-group defaults. A UTC day change does not renew an unknown
+attempt. Keep private logs and receipts local. Only actual canonical proof closes
+the original delivery.
+
+The shared store is `<git-common-dir>/signalgrid-lane-records`, pinned by a sibling
+identity marker. Before activating this source, preserve and inspect legacy
+heartbeat/objective records in every linked checkout and build-hand cache. After
+all owned attempts are terminal or separately held, initialize ONCE with
+`node scripts/lib/lane-attempt-store.mjs init <checkout>`. The live tick resolves
+the store with `ensure`: a store that does not exist at all (neither directory nor
+marker) is initialized by the tick itself, serialized across concurrent ticks by an
+O_EXCL `signalgrid-lane-records.init.lock` that names its creator (pid and process
+start time). It is taken over only when that creator is positively gone (ESRCH, or
+the PID now has another start time), never by age; a live creator is waited on, then
+held. An initializer unlinks only the lock inode it created.
+A directory without its marker, or a present but damaged marker, is never reset:
+it stays held and the error names the path. Never initialize to
+repair lost evidence, delete old receipts, or treat Generated content as authority.
+A fresh build-hand notification episode requires a regular independent parent
+exit0, original canonical merge proof and the exact hand now resolved in canonical
+with its resolution evidence. `readback <receipt> --resolved-hand <exact-id>` is
+GET/fetch-only and returns the cleared Git blob identity. That identity fences one
+new hand; old records remain immutable. Unknown, missing or unconfirmed attempts
+stay held across dates. Notification clearance never retries a coding task or
+renews its source, ownership, grant or model budget.
+
+
+### Shared tick serialization (L46)
+
+The one-time record-store initializer additionally creates tick.guard, its immutable identity marker and the initial ownership slot. A normal tick opens the guard read-only and retains its locked FD8; a missing or replaced guard is never recreated. A legacy tick.lock is renamed aside (`tick.lock.abandoned-<stamp>-<rand>`, kept as evidence) by the next tick that holds the kernel guard, but only when its recorded holder PID is positively dead (ESRCH); a live, missing or corrupt PID stays held.
+
+OPEN ownership is durably committed before work. Its exact token, caller, store and guard bind immutable opened/finalization records. The tick recovers on its own (owner order, 2026-11-01), liveness-checked: a free kernel guard is not proof of cleanup, because descendants need not hold FD8. The next tick that acquires the guard records an interrupted OPEN lifetime as `ABANDONED` only when the original shell PID is dead (ESRCH; alive or EPERM holds unless the PID now started strictly later than the owner record's `shellStart`, i.e. it was reused after a reboot; start times are read as `ps lstart` under `LC_ALL=C TZ=UTC0`, stored as a UTC instant and compared as epochs, so a TZ change cannot fake a reuse, an unparseable process-table line holds, and an unreadable recorded start degrades to PID-only liveness), no process started at or after that start time remains in the recorded process group (`pgid`), and no such process names the old token or runs in a lane-deliver worktree (`sg-lane-deliver-*`) orphaned with the original tick (its whole ancestry started after it; a live delivery of another session has an older living ancestor and does not hold). Without a recorded start, the OPEN slot's write time bounds that window. A liveness hold is not silent: the holding tick writes one `tick-hold-<sha256>` hand per held cause (naming the PID, group and start time) through the ordinary hand path (under `--dry-run` it only says what it would raise). Only the holding tick, which still owns the kernel guard, may raise it (`raise-hold` verifies its calling shell and that shell's locked FD8, and the delivery child inherits FD8), and the hold text names a surviving process only by pid, group, start time and program basename, never its arguments. A hold hand whose delivery published nothing (exit 1/2, or killed before its exit) is raised again under the shared retry rule below; an uncertain one stays readback-only. launchd's plist sets no AbandonProcessGroup, so its default (false) kills a finished job's whole group. It then CLOSES the slot (onto the tick's own CLOSED terminal, or an earlier recovery's ABANDONED terminal, if one was written before the slot), proceeds, and its heartbeat RESULT says `recovered: …`. Nothing is deleted; the opened record, when it was published, must still match. No shared guard pathname is deleted. The recorded exitTrapStatus is the status entering finalization, not an independent eventual-parent terminal or provider/delivery witness. Per-attempt no-replay fences remain unchanged.
+
+The operator correction has84 passing portable delivery controls and12 independent passing Mac subprocess cases with zero failures/skips. It does not initialize production state, activate the source, prove native coding or restore a heartbeat. Separately, each tick now refreshes its own delivered `lane/mac-mail-*` heartbeat PR when it is behind mainline (update-branch pinned to the head the tick recorded, verified by a second read; any doubt touches nothing), so the strict ruleset no longer leaves it waiting; that is a mechanism and not evidence of a restored heartbeat. Preserve legacy evidence, complete all current-head source/CI/protection requirements, then separately audit and activate before observing a natural canonical Mac heartbeat.
+
+
+### Startup and cleanup regression coverage (L47)
+
+The linked-checkout heartbeat tests execute the tick's actual startup RECORD_DIR assignment. A planted regression back to node_modules escaped the earlier fixture but now fails both linked-checkout and dependency-purge cases. The staged worker checks execute the actual Bash finalization function: release the host descriptor first, pass the exact owned token/root/status to tick-release, preserve known nonzero work status, and leave an interrupted OPEN lease unfinished. These tests do not certify an eventual parent exit or provider cleanup. The current delivery84 and staged267 checks pass; the earlier current-head full264/265 failure remains recorded. A new exact-head full/breadth and all protected publication/activation requirements still apply.
+
+
+### Mixed-producer publication and pending handoff (L48)
+
+Mac mutation entry now requires a fresh private receipt path before any Git access. An already-loaded receipt-less Bash producer is refused if its checkout later acquires the new transport. The receipt pathname is a caller contract, not an execution grant. Any existing exact submission receipt takes precedence over exit1/2: publication may already have been attempted, so the original remains readback-only. Malformed evidence and unknown parent terminals hold. Only a genuine prepublication1/2 with no receipt can permit a different observation.
+
+A pending original PR gets GET-only age/head/check diagnostics. A behind PR, terminal failed check or one-hour delay may produce one distinct durable Cloud hand, bound to the original attempt. The actual producing checkout and original FD8/token/store are rechecked before its intent and publication. Partial or unknown notifications never repeat; a notification whose lane-deliver exited 1 or 2 is retried on the next tick only after a readback proves nothing was published (see L51). This does not resend or close the original PR. Current source qualification:45 private cases,12 independent guard cases and96 portable delivery controls pass with zero failures/errors/skips. Protected landing and audited separate activation still precede natural heartbeat proof.
+
+
+### Original-evidence snapshot floor (L49)
+
+The test snapshot now refuses fewer than its five required original records before comparing preserved bytes. Real filesystem controls refuse two pointers alone and four records without the submission receipt, while accepting all five;3/3 pass. Delivery96 and the unchanged walker gate/self-test16 also pass. Runtime source and previous assertions are unchanged. The earlier01fc full failed at this missing non-vacuity check and remains failed; new-head full qualification is required.
+
+
+### Descriptor-bound fixture snapshots (L50)
+
+The regression helper reads each regular fixture file through one no-follow, nonblocking descriptor, checks opened identity against its original metadata, verifies identity after the read and closes that descriptor on every path. Directory ordering and existing symlink/hardlink metadata remain unchanged. Five real filesystem boundary controls and delivery96 pass, zero failures/errors/skips. This strengthens a controlled test snapshot; it is not a generic filesystem-containment claim. The corrected head still requires full qualification and CodeQL reevaluation.
+
+
+### Original push result and bounded refusal repair (L51)
+
+The producer writes exact original Git stdout/stderr bytes and its terminal result before decoding output. The result binds the submission receipt, committed producer source, original head and target. GET-only readback can classify a remote refusal only after a normal failed push and one exact successful observation that its original topic is absent. Partial, foreign, signaled or ambiguous evidence remains held. A failed GET remains consumed and unknown; no rejected push is retried.
+
+A qualified current tick owner may send one distinct Cloud repair hand bound to that original attempt. The same stable notification identity covers pending and refused observations; an unknown or unconfirmed (exit 3+, signal) hand remains readback-only. A refused attempt (lane-deliver exit 1 or 2) or a killed one (no `.exit`) is retried, pre-mutation-bound, through one shared rule (`setAsideRefusedAttempt`), used by build-tick, objective-loop, the tick heartbeat, lane-repair and the pending-heartbeat notice. lane-deliver writes its receipt, naming the random target branch, immediately before its one push, so no receipt means no push. With a receipt, `git ls-remote origin refs/heads/<target>` decides: the ref exists → the original published and is only read back, never resent; no ref → retry; the read fails or times out → held (a failed read is not absence). That `ls-remote` runs in its own process group and the whole group is killed at its limit (60 s). An attempt whose own push terminal (`.submission.json.push.json`) records a Git refusal hit a repository rule; resending cannot pass, so it keeps the readback → Cloud repair-hand path above. raise-hand's "<id> already exists" (exit 2) is done only while that hand is open (or still pending) in the ledger on `origin/SignalGrid_Alpha`; a resolved hand whose cause recurs is raised again as `<id>-again-<n>` (build hands and tick-hold hands; notices keep their fixed id and reach the cap). A delivered tick-hold hand is deduped the same way, on the Hub ledger rather than only on its local record. The readback stays `git ls-remote`: the unattended Mac has no GitHub GET without gh's JSON API. A retry never reuses the original's prefix: the original (and any repair DATA bound to it) stays in place byte-identical, `refused/<name>.retried` names its successor (`<kind>-sha256(<name>:retry)` for hands and escalations, the next attempt id for heartbeats), the new attempt records `retryOf`, and callers follow the chain. A marker whose successor has no attempt files is a retry that never started (interrupted after the marker); the next tick starts it. Notices are consumed by any file under their id, so a refused notice's files move to `refused/<id>.refused-<n>.*` and the same id is retried. That move is resumable: `refused/<id>.archiving` (listing the files and their destination) is written first and removed last, and every tick completes an interrupted one before any consumed-by-id check. After three retries of one cause the fourth refusal holds: `refused/<root>.capped` records the count, every heartbeat RESULT carries `refused:<root> x<n>`, and the held path queues the repair (DR-054). A heartbeat with a receipt whose ref is on origin but no `.exit` is read back like exit 3. Legacy locks are renamed aside by the next guard holder only when their holder PID is dead, never deleted. The tick's own `git fetch` runs with FD8 closed (`8<&-`), in its own session/process group; at its limit the whole group (ssh, credential helpers) gets TERM, then KILL after 2 s, and the fetch counts as failed (exit 124). Frozen31 and unchanged delivery96 pass, zero failures/errors/skips, under real network denial. Full changed-head qualification, protected review/CI/landing and a separate preservation audit/activation remain required.

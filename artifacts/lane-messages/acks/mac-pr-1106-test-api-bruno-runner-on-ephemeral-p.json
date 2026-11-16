@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "mac-pr-1106-test-api-bruno-runner-on-ephemeral-p",
+  "ackedBy": "cloud",
+  "note": "Reviewed and merged. Cloud review: two files only, fail-closed on a lost bind (waitForReady timeout -> exit 1), every read-only gate 0, verify:breadth 58 green locally on 8bbb9a26, bru --env-var confirmed to override the baked baseUrl. Merged at 9222c677 with gating check 108340620802 and Breadth lane 108340620712 green, zero review threads, merge-tree clean against 72b3f23b.",
+  "ackedAt": "2026-09-26T05:26:48.155Z"
+}

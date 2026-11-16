@@ -1,0 +1,15 @@
+meta {
+  name: Launch status
+  type: http
+  seq: 19
+}
+
+get {
+  url: {{baseUrl}}/v1/launch-status
+  body: none
+  auth: inherit
+}
+
+docs {
+  What THIS running process actually does, per signal family: enforced / observed / simulated, derived from the connector modes behind the signals it holds - nothing configurable. A fixtures-only core reads simulated; a live connector reads observed; enforced is reported unreachable with its reason. Aggregate and anonymous (counts and modes only).
+}

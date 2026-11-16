@@ -1,3 +1,4 @@
+<!-- cited-symbols: verbatim import, drift recorded in the preamble (KEY-REMOVAL DRIFT, measured 2026-09-06) -->
 <!--
   PROVENANCE / BOUNDARY PREAMBLE — added at filing time (intake ledger row 33).
 
@@ -33,11 +34,78 @@
   TIER-DRIFT WARNING (found by the row-33 intake audit): this document's
   workflow/action map matches lib/app-workflows/src/catalog.ts key-for-key
   (20 integrations, 77 actions), but its "Derived Risk Tier" column DISAGREES
-  with the canonical catalog in places — e.g. witness.cosign, alarm.silence,
-  log.edit and node.drain read "standard" here while catalog.ts grades them
-  critical. catalog.ts is the canonical source (this file's own repo-scan
+  with the canonical catalog in places. Measured 2026-09-06: seven rows are
+  UNDER-graded here — witness.cosign, alarm.silence, code.broadcast, log.edit
+  and node.drain read "standard" while catalog.ts grades them critical, and
+  door.request and physician.escalate read "standard" against elevated; the
+  other disagreements over-grade. catalog.ts is the canonical source (this file's own repo-scan
   sheet says so); the tiers below are a derived view and must never be
   back-imported into code.
+
+  KEY-REMOVAL DRIFT (measured 2026-09-06): 19 of the 38 "SignalGrid iOS" rows
+  in the configuration-key registry below — the SAML_*, MDM_*, MFA_*,
+  CUSTOM_AUTH_*, SEC_* and BACKEND_TIMEOUT keys — name environment reads that
+  commit 27e0e71 (PR #436, 2026-09-05) deleted from
+  native/ios/EnterpriseShell/Services/ProviderConfigurationService.swift as
+  dead configuration surface; 12 of them appear nowhere in the tracked tree
+  outside this catalog, and a 13th (SEC_RATE_LIMITING) survives only as a
+  fixture inside the self-test of scripts/check-cited-symbols.mjs (measured
+  2026-09-06 with `git grep -l -w` per key; the sentence said "13" without
+  naming that exclusion until then). The
+  BACKEND_BASE_URL, CERT_PINNING_ENABLED and CERT_HASHES rows are live but are
+  read by native/ios/EnterpriseShell/Services/BackendService.swift, not the
+  cited file. check-cited-paths.mjs cannot see this (the cited PATH exists;
+  only the named symbol is gone). The registry is a dated snapshot
+  (2026-08-01); read the code, not this table, for what the shell reads today.
+
+  IMPORT-SOURCE NOTES (measured 2026-09-06 over the filed rows; these are
+  findings about the SOURCE workbook, recorded here because the body below is
+  a verbatim import and its rows are not edited — fix them in the generator
+  before the next export):
+  1. IDENTITY LOST IN 204 ROWS. 204 of the 760 master rows (eco-0022 through
+     eco-0416, lines ~114-510) carry Vendor = "Unknown / Open ecosystem" AND
+     Product = "Unknown / Open ecosystem" while their own URL names the vendor
+     unambiguously (e.g. developer.jamf.com, Omnissa, Ivanti, MaaS360,
+     BlackBerry UEM, SOTI, Hexnode, Kandji, Fleet, Tanium, Nexthink, Intune
+     Graph, Apple DDM/MDA/Platform SSO); 134 of them carry such a URL, and the
+     App ID slug repeats the placeholder, so uniqueness comes only from the
+     counter. Any per-vendor rollup keyed on vendor or product collapses them
+     into one, and "423 candidate Ecosystem Surfaces" is not a count of 423
+     identifiable candidates. Fix: back-fill Vendor/Product from the URL host
+     and regenerate the slug.
+  2. ONE CONSTANT STRING ON ALL 156 PARTNER ROWS. Every "Official Microsoft
+     Intune protected partner app" row carries the identical Managed Config
+     Support text ("Intune App Protection Policy confirmed; advanced App
+     Configuration capability stated, exact vendor keys must be verified"),
+     while the 27 first-party Microsoft rows carry 19 distinct values. A
+     constant cannot be a per-vendor measurement; Microsoft's reference page
+     distinguishes App Configuration support from App Protection Policy only,
+     and that distinction was not carried through. All 183 Intune rows also
+     point BOTH URL columns at Microsoft's ref-protected-apps page, so no
+     vendor configuration schema is cited for any of them. Fix: carry
+     Microsoft's per-app capability column; blank the schema URL where none
+     was found so the emptiness is visible.
+  3. 195 ROWS WITH NO URL OF ANY KIND (46 of them also with a blank workflow
+     mapping — a row whose only content is a name), and DUPLICATED REPOSITORY
+     SLUGS: rows whose Product is a bare GitHub slug (apple/device-management,
+     CrowdStrike/falconpy, tenable/pyTenable, GitGuardian/ggshield,
+     thousandeyes/thousandeyes-sdk-python, fleetdm/fleet) repeat a repository
+     that is already linked properly in an earlier row (e.g. eco-0282 vs
+     eco-0348 for apple/device-management; eco-0341 vs the fleetdm/fleet slug
+     row). Fix: link the repo where the product IS a slug, drop the duplicate,
+     and move name-only rows to a research-queue sheet so they do not inflate
+     the candidate total.
+  4. ECOSYSTEM ASSIGNED BY VENDOR-NAME STRING MATCH. FleetDM (an MDM/osquery
+     platform) sits in "Warehouse / Logistics / Fleet" beside FleetSafer and
+     Fleet Complete; Wiz and Docker under "Retail / Commerce"; Copilot Studio
+     under "Manufacturing / OT / Facilities"; Bedrock Agents and LlamaIndex
+     under "Endpoint / Security Operations"; and all seven SignalGrid
+     repository rows (eco-0417 to eco-0423) under "Retail / Commerce" although
+     the later blocks use a dedicated "SignalGrid Product / Reference"
+     ecosystem. Fix: classify on product category, not vendor name.
+  Everything else in the catalog's fifteen totals re-derives exactly (760;
+  27/156/124/423/20/10; 101 keys; 8 templates; 12 repo-scan; 77 actions; 10
+  agent sources; 14 rules; 12 recorder entities; 10 gaps).
 -->
 
 # SignalGrid Mobile App & Managed Configuration Master Catalog
@@ -827,10 +895,10 @@ Broad best-effort seed covering confirmed protected mobile apps, major industry 
 | repo-workflow-018-compute-orchestration | IT / Data Center / Cloud | SignalGrid generic host-app model | Compute / orchestration | SignalGrid repository-defined generic app workflow | iOS / iPadOS / Android / web / desktop host app | Host app must expose configuration schema; SignalGrid config recorder can capture it | compute-ops | P2 | Generic model; map to exact customer/vendor mobile app and configuration schema | https://github.com/DanFashauer/SignalGrid-Review-Hub/blob/SignalGrid_Alpha/lib/app-workflows/src/catalog.ts | https://github.com/DanFashauer/SignalGrid-Review-Hub |
 | repo-workflow-019-benefits-case-management | Government / Public Safety | SignalGrid generic host-app model | Benefits / case management | SignalGrid repository-defined generic app workflow | iOS / iPadOS / Android / web / desktop host app | Host app must expose configuration schema; SignalGrid config recorder can capture it | gov-case-session | P2 | Generic model; map to exact customer/vendor mobile app and configuration schema | https://github.com/DanFashauer/SignalGrid-Review-Hub/blob/SignalGrid_Alpha/lib/app-workflows/src/catalog.ts | https://github.com/DanFashauer/SignalGrid-Review-Hub |
 | repo-workflow-020-secure-facility-access | Government / Public Safety | SignalGrid generic host-app model | Secure facility access | SignalGrid repository-defined generic app workflow | iOS / iPadOS / Android / web / desktop host app | Host app must expose configuration schema; SignalGrid config recorder can capture it | gov-facility-access | P2 | Generic model; map to exact customer/vendor mobile app and configuration schema | https://github.com/DanFashauer/SignalGrid-Review-Hub/blob/SignalGrid_Alpha/lib/app-workflows/src/catalog.ts | https://github.com/DanFashauer/SignalGrid-Review-Hub |
-| signalgrid-surface-01-signalgrid-operator-pwa | SignalGrid Product / Reference | SignalGrid | SignalGrid Operator PWA | SignalGrid repository application surface | iOS / Android PWA | SignalGrid-owned configuration contract; current repo varies by surface | Operator/support triage | P0 | Converge native and web surfaces around one supported pilot profile and API contract | https://github.com/DanFashauer/SignalGrid-Review-Hub/tree/SignalGrid_Alpha/signalgrid-mobile-pwa | https://github.com/DanFashauer/SignalGrid-Review-Hub |
-| signalgrid-surface-02-signalgrid-operator-console | SignalGrid Product / Reference | SignalGrid | SignalGrid Operator Console | SignalGrid repository application surface | Responsive web | SignalGrid-owned configuration contract; current repo varies by surface | Admin/operator console | P0 | Converge native and web surfaces around one supported pilot profile and API contract | https://github.com/DanFashauer/SignalGrid-Review-Hub/tree/SignalGrid_Alpha/signalgrid-app | https://github.com/DanFashauer/SignalGrid-Review-Hub |
-| signalgrid-surface-03-signalgrid-review-console | SignalGrid Product / Reference | SignalGrid | SignalGrid Review Console | SignalGrid repository application surface | Web | SignalGrid-owned configuration contract; current repo varies by surface | Core-driven reviewer/operator | P1 | Converge native and web surfaces around one supported pilot profile and API contract | https://github.com/DanFashauer/SignalGrid-Review-Hub/tree/SignalGrid_Alpha/signalgrid-review | https://github.com/DanFashauer/SignalGrid-Review-Hub |
-| signalgrid-surface-04-signalgrid-desktop-operator | SignalGrid Product / Reference | SignalGrid | SignalGrid Desktop Operator | SignalGrid repository application surface | macOS / Windows web shell | SignalGrid-owned configuration contract; current repo varies by surface | Desktop operator shell | P2 | Converge native and web surfaces around one supported pilot profile and API contract | https://github.com/DanFashauer/SignalGrid-Review-Hub/tree/SignalGrid_Alpha/signalgrid-desktop | https://github.com/DanFashauer/SignalGrid-Review-Hub |
+| signalgrid-surface-01-signalgrid-operator-pwa | SignalGrid Product / Reference | SignalGrid | SignalGrid Operator PWA | SignalGrid repository application surface | iOS / Android PWA | SignalGrid-owned configuration contract; current repo varies by surface | Operator/support triage | P0 | Converge native and web surfaces around one supported pilot profile and API contract | https://github.com/DanFashauer/SignalGrid-Review-Hub/tree/SignalGrid_Alpha/artifacts/signalgrid-mobile-pwa | https://github.com/DanFashauer/SignalGrid-Review-Hub |
+| signalgrid-surface-02-signalgrid-operator-console | SignalGrid Product / Reference | SignalGrid | SignalGrid Operator Console | SignalGrid repository application surface | Responsive web | SignalGrid-owned configuration contract; current repo varies by surface | Admin/operator console | P0 | Converge native and web surfaces around one supported pilot profile and API contract | https://github.com/DanFashauer/SignalGrid-Review-Hub/tree/SignalGrid_Alpha/artifacts/signalgrid-app | https://github.com/DanFashauer/SignalGrid-Review-Hub |
+| signalgrid-surface-03-signalgrid-review-console | SignalGrid Product / Reference | SignalGrid | SignalGrid Review Console | SignalGrid repository application surface | Web | SignalGrid-owned configuration contract; current repo varies by surface | Core-driven reviewer/operator | P1 | Converge native and web surfaces around one supported pilot profile and API contract | https://github.com/DanFashauer/SignalGrid-Review-Hub/tree/SignalGrid_Alpha/artifacts/signalgrid-review | https://github.com/DanFashauer/SignalGrid-Review-Hub |
+| signalgrid-surface-04-signalgrid-desktop-operator | SignalGrid Product / Reference | SignalGrid | SignalGrid Desktop Operator | SignalGrid repository application surface | macOS / Windows web shell | SignalGrid-owned configuration contract; current repo varies by surface | Desktop operator shell | P2 | Converge native and web surfaces around one supported pilot profile and API contract | https://github.com/DanFashauer/SignalGrid-Review-Hub/tree/SignalGrid_Alpha/artifacts/signalgrid-desktop | https://github.com/DanFashauer/SignalGrid-Review-Hub |
 | signalgrid-surface-05-signalgridmobilecore | SignalGrid Product / Reference | SignalGrid | SignalGridMobileCore | SignalGrid repository application surface | Swift Package / iOS core | SignalGrid-owned configuration contract; current repo varies by surface | Native shared API/model package | P1 | Converge native and web surfaces around one supported pilot profile and API contract | https://github.com/DanFashauer/SignalGrid-Review-Hub/tree/SignalGrid_Alpha/native/ios/SignalGridMobile | https://github.com/DanFashauer/SignalGrid-Review-Hub |
 | signalgrid-surface-06-signalgridoperator | SignalGrid Product / Reference | SignalGrid | SignalGridOperator | SignalGrid repository application surface | iOS/iPadOS | SignalGrid-owned configuration contract; current repo varies by surface | Native operator app | P1 | Converge native and web surfaces around one supported pilot profile and API contract | https://github.com/DanFashauer/SignalGrid-Review-Hub/tree/SignalGrid_Alpha/native/ios/SignalGridMobile | https://github.com/DanFashauer/SignalGrid-Review-Hub |
 | signalgrid-surface-07-wardlinkdemo | SignalGrid Product / Reference | SignalGrid | WardlinkDemo | SignalGrid repository application surface | iOS/iPadOS | SignalGrid-owned configuration contract; current repo varies by surface | Generic clinical host-app demo | P1 | Converge native and web surfaces around one supported pilot profile and API contract | https://github.com/DanFashauer/SignalGrid-Review-Hub/tree/SignalGrid_Alpha/native/ios/SignalGridMobile | https://github.com/DanFashauer/SignalGrid-Review-Hub |

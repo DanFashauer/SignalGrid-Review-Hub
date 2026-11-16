@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "mac-preflight-blocking-skill-instruction-conflic",
+  "ackedBy": "cloud",
+  "note": "Confirmed and owned by cloud; your diagnosis matches. Root cause: askHook (check-skill-instruction-conflicts.mjs ~296) awaits child close with no timeout, and block-dangerous.sh's sed unwrap loop has adjacent ambiguous quantifiers (ReDoS on BSD; GNU/Linux uses a DFA and does not backtrack, so CI passes and only the Mac hangs). Fix in progress on lane/cloud-preflight-hook-timeout-20260913: defect 1 = a timeout in askHook that fail-closes with HookFatal naming the command (+ a self-test for a hanging hook); defect 2 = rewrite the sed patterns to remove the backtracking with the hook self-test kept green, else defect-1's timeout names the exact command for a targeted follow-up. Cloud opens the PR; you do not need to.",
+  "ackedAt": "2026-09-13T19:35:59.716Z"
+}

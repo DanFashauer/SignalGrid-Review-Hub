@@ -58,16 +58,16 @@ Every figure in this section is published by `proof:launch-profile` and checked 
 docs↔proof figure guard on each run — stated here, beside the numbers, because scope
 is per-section and a proof named three sections away checks nothing.
 
-`scripts/launch-profile.mjs` classifies **180 classified items** across **4 profile
+`scripts/launch-profile.mjs` classifies **187 classified items** across **4 profile
 surfaces** — connector families, signal kinds, published API paths, and client/app
 surfaces. Every item carries exactly one status:
 
 | Status | Count | Meaning |
 |---|---|---|
-| `launch` | **23 launch items** | In the Limited GA surface. |
-| `deferred` | **134 deferred items** | Real, gated, proven, staying in the repository — not Limited GA. |
+| `launch` | **28 launch items** | In the Limited GA surface. |
+| `deferred` | **135 deferred items** | Real, gated, proven, staying in the repository — not Limited GA. |
 | `demo_only` | **8 demo-only items** | Exists to demonstrate or explain. Must never be presented as shipping product. |
-| `internal` | **15 internal items** | Harness, generator or evidence plumbing. Not a product surface at all. |
+| `internal` | **16 internal items** | Harness, generator or evidence plumbing. Not a product surface at all. |
 
 `deferred` is not a demotion. It is the freeze working.
 
@@ -146,7 +146,14 @@ and only a future decision record re-opens one.
 
 ## The gaps — read these before reading the launch set as readiness
 
-There are **4 declared gaps**: work a `launch` entry needs that does not exist yet.
+There are **2 declared gaps**: work a `launch` entry needs that does not exist yet.
+(It read **4** on the morning of 2026-09-18. Two were CLOSED rather than reworded:
+`step-up-answerability`, because the gate's `step_up` verdict now has a launch route
+that answers it — `POST /v1/decisions/{id}/step-up`, a verified WebAuthn assertion
+bound to one decision — and `runtime-launch-status`, because `GET /v1/launch-status`
+now reports enforced-vs-observed-vs-simulated per signal family from the connectors
+the core holds. Both `closedWhen` conditions are met in code, which is the only way
+this list ever loses an entry.)
 They are held as data in `GAPS`, not as prose, so the proof can count them and no
 document can quietly describe the launch set as complete — and since 2026-09-02
 `check-launch-profile.mjs` fails the build when this number and `GAPS.length`
@@ -216,6 +223,41 @@ that existed only because the two runs were asking different questions. It now
 derives from
 `git ls-files`, which is one reproducible answer everywhere and also the right
 question: a directory that is not in version control is output, not a surface.
+
+### Every launch item names the proofs that certify it
+
+Since 2026-09-12 (DR-036's named follow-up) every `launch` entry in
+`scripts/launch-profile.mjs` carries `proofs: ["proof:<name>", …]` — the `proof:*`
+scripts in `package.json` that certify it. A binding is a claim, so
+`scripts/check-launch-proof-bindings.mjs` (preflight and CI, self-tested) fails the
+build when a launch entry binds nothing, binds a name that is not a proof script,
+binds a proof that is not registered in `scripts/preflight.mjs` (launch coverage runs
+per push; the breadth lane refuses launch families), or binds a proof that skips
+itself when an env var is unset. Non-launch entries may not carry `proofs`. A binding
+is not a status: adding or changing one does not move the profile version.
+
+The bindings are what the readiness figure's dimension (b) divides by. Until this
+change (b) was binary — 100 while the last Mac evidence run was green, fresh and
+covered the current manifest, else 0 — because only 3 of the 23 launch ids happened
+to match a proof name. Now `node scripts/check-readiness-figure.mjs` reads the
+distinct proofs the launch items bind and reports the share that
+`artifacts/live-evidence/mac-run.json` records as passed (`proofs.passed`) against
+the manifest the tree carries. It is fail-closed on every side: a bound proof with no
+record is 0, a record bound to a manifest fingerprint the tree no longer carries is 0,
+and an evidence file with no per-proof results at all (minted before the emitter
+recorded them) is 0 of N — a missing field never raises the ratio. The numbers are
+derived, never typed here; run the command.
+
+A binding may also name a non-proof preflight step as `step:<name>`, but only a step
+listed in `STEP_SOURCES` in `scripts/check-launch-proof-bindings.mjs`, and never one
+preflight marks `selfSkipsWithout`. Each evidence record is an object
+`{ status, manifestFingerprint, sourceDigest }`, under `proofs.passed` for proofs and
+`proofs.steps` for steps. It counts only when its digest matches what the tree hashes to
+now, so a legacy string `"passed"` scores 0. (b) is the LOWER of the proof ratio and the
+launch-item ratio, and an item counts only when every name it binds is current. The
+per-item binding set is a ratchet, `docs/agent/launch-proof-bindings-record.json`:
+dropping a binding fails unless that file changes in the same diff, and a deleted record
+refuses rather than re-baselining, in CI's shallow clone too.
 
 `proof:launch-profile` publishes the figures quoted under **What the profile says**,
 and the docs↔proof figure guard fails the build if that section and the profile ever

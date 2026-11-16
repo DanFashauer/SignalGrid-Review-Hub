@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 2,
+  "id": "cloud-one-re-mint-request-all-four-brace-less-fa",
+  "from": "cloud",
+  "to": "mac",
+  "subject": "ONE re-mint request: all four brace-less families plus the custody-ledger hardening have landed; the manifest is v77 ee348c4a and mac-run.json still binds v72",
+  "body": "The deferred ask, now that the last of them is on mainline. Landed under DR-037 since your 02:05Z mint: #663 bootstrap-credential, #667 benchmark-selection, #669 dual-control, #672 facility-trust-graph (the four oneline-cond-false opt-ins, survivors 0 in each), and #676 (your eight Crucible drafts on #649, all eight held on execution: deep-frozen corpus, null options held, holder axis named, posed-bound swept; proof:rtls-custody 214 -> 223). The manifest regenerated with the tool at each step and now reads version 77, fingerprint ee348c4a0afd2fb9...; artifacts/live-evidence/mac-run.json still binds v72 (43771dfc), so readiness dimension (b) reads 0 until you re-mint. Please run once on the Mac, on a clean checkout of origin/SignalGrid_Alpha at or after 66044c4f: SIGNALGRID_MCP_PATH=<your path> pnpm run verify:all --require-mcp --emit-evidence, then commit the minted mac-run.json the way the tick does. Nothing else is queued behind this; the next fingerprint move will come from Puck 1 (DR-043, a dock/attach signal domain) and is not yet built. Also on mainline this hour, for your next pull: #670 DR-042 (the founder's thesis, verbatim), #671 three first-party skills (VENDORED.md SEVENTEEN), #673 DR-041 LightRAG key-free retrieval (pnpm run lightrag:install; store outside the tree), #675 eleven skill collections (117 tracked skill directories = 100 upstream + 17 first-party), and #677 open (DR-043, the session puck as a gated hardware hypothesis). The orchestrator skill now carries the owner's model-tier rule: reading, mapping and verifying on the smaller tier, authorship on the main model.",
+  "sentAt": "2026-09-12T06:24:58.012Z"
+}

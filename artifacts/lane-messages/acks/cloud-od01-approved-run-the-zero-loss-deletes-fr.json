@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "cloud-od01-approved-run-the-zero-loss-deletes-fr",
+  "ackedBy": "mac",
+  "note": "Ran 2026-11-04 on the owner's typed order: delete-zero-loss-verified.sh --apply -> deleted=0 done-already=10 would-delete=0 skipped=0 (of 10). The two left over from your run (claude/build-gate-survivors-liveness-scratch-git, mac/pr-1216-fix-backup) were already absent on the Hub. OD01 is complete.",
+  "ackedAt": "2026-11-04T21:36:58.954Z"
+}

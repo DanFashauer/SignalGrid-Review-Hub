@@ -11,11 +11,42 @@
  */
 import { spawn } from "node:child_process";
 import { createServer as netCreateServer } from "node:net";
+import { createServer as netCreateHttpServer } from "node:http";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 
-const PORT = 5310;
+// Every server this test boots binds an EPHEMERAL port. Fixed ports (5310, 5311, …)
+// collided on the build Mac when the launchd tick's evidence run and a self-hosted
+// runner job both ran this file at once (2026-09-25 20:4xZ: the tick's server lost the
+// bind and its fetch read ECONNREFUSED). The OS hands out a free port; nothing here
+// needs a known number.
+// `handedOut` is the run's own ledger: freePort never repeats a number within one run
+// (the OS may re-offer a just-closed probe port), and the port-hygiene check at the
+// end reads this ledger instead of scanning the file's text for constants.
+// The probe binds the WILDCARD address, the same one the server binds (`app.listen(port)`
+// is 0.0.0.0 / ::), never a fixed 127.0.0.1. A port can be free on loopback and taken on
+// the wildcard: an outbound connection from the box's own interface holds <eth0>:p, so
+// bind(127.0.0.1:p) succeeds while the server's bind(0.0.0.0:p) reads EADDRINUSE and the
+// test's fetch ECONNREFUSED. Measured 2026-10-02 23:0xZ on the cloud box: a sibling
+// process held 15,509 ESTABLISHED sockets (55% of the ephemeral range) and every
+// secondary server in this file lost its port in four runs out of four; probing the
+// wildcard made the same file pass 486/486.
+const handedOut = [];
+// freePort(host) probes on the host its consumer binds: no host (wildcard) for ports handed
+// to the api-server, "127.0.0.1" for the loopback Graph stubs. On a bindv6only host the two differ.
+const freePort = (host) => new Promise((resolvePort) => {
+  const probe = netCreateServer();
+  probe.listen(...(host ? [0, host] : [0]), () => {
+    const p = probe.address().port;
+    probe.close(() => {
+      if (handedOut.includes(p)) return resolvePort(freePort(host));
+      handedOut.push(p);
+      resolvePort(p);
+    });
+  });
+});
+const PORT = await freePort();
 const BASE = `http://localhost:${PORT}/api`;
 const here = dirname(fileURLToPath(import.meta.url));
 const serverEntry = resolve(here, "../dist/index.mjs");
@@ -178,6 +209,10 @@ async function run() {
     unknownPath.status === 404 && isEnvelope(unknownPath.json) && unknownPath.json.error === "not_found");
   check("…and the 404 carries x-request-id for correlation",
     typeof unknownPath.headers.get("x-request-id") === "string");
+  const unknownRoot = await fetch(`${BASE.replace(/\/api$/, "")}/zzz-definitely-not-a-root-route`);
+  const unknownRootBody = await unknownRoot.json().catch(() => null);
+  check("unknown ROOT path → 404 JSON envelope, not framework HTML",
+    unknownRoot.status === 404 && /application\/json/.test(unknownRoot.headers.get("content-type") ?? "") && isEnvelope(unknownRootBody) && unknownRootBody.error === "not_found");
 
   // Unknown path UNDER /v1, anonymous: auth answers FIRST, deliberately — a
   // 404-vs-401 difference would let an unauthenticated prober enumerate which
@@ -271,9 +306,119 @@ async function run() {
   check("controlled med room includes medication-cabinet action",
     (medRoom.json?.plan?.actions ?? []).some((a) => a.kind === "medication.cabinet.unlock"));
 
+  // ── the SERVED console's signal colouring (the page at / and /console) ────────
+  //
+  // WHY THIS IS AN HTTP TEST AND NOT A UNIT TEST. `sigClass` lives inside the inline
+  // <script> of `src/console-html.ts`; nothing imports it and no gate scanned it, so
+  // it painted `deviceCompliance: non_compliant` — the signal that CAUSED a restrict
+  // — in the ALLOW colour. The match was a substring scan over a positive vocabulary
+  // and "non_compliant" contains "compliant". A reviewer read a `restrict` verdict
+  // beside a green signal. The classifier is therefore extracted from the page THIS
+  // SERVER SERVES, between the markers the source carries for exactly this purpose,
+  // and run against the values the sim really emits. Same shape as
+  // `scripts/build-room-console.mjs`, which tests the twin page the same way.
+  {
+    const page = await fetch(`${BASE.replace(/\/api$/, "")}/console`);
+    const html = await page.text();
+    check("the demo console is served at /console (200, html)", page.status === 200 && html.includes("<!doctype html>"));
+    // ── the served COPY, which no claims gate could reach ────────────────────
+    // `check-launch-claims.mjs` derives its scan roots from Dockerfile.web; the
+    // api-server ships from Dockerfile.api, so this page — buyer-reachable at / and
+    // /console — sat outside every claims gate. Two lines named DEFERRED families
+    // (custody, badge binding) with no hedge on the line. THE FIX IS NEVER TO DELETE
+    // THE TRUE SENTENCE, so this asserts both halves: the families are still named,
+    // AND the line naming them carries the hedge the gate's HEDGES pattern reads.
+    const HEDGE = /deferred|fixture|simulated|design target/i;
+    const lead = /<p class="lead">([\s\S]*?)<\/p>/.exec(html)?.[1] ?? "";
+    check("served copy: the lead paragraph still names the custody and badge families (the fix is a hedge, never a deletion)",
+      /custody/i.test(lead) && /badge/i.test(lead));
+    check("served copy: and hedges them in line — deferred families, shown from fixtures",
+      HEDGE.test(lead) && /deferred/i.test(lead));
+    const stepUpLabel = /Complete step-up[^<]*/.exec(html)?.[0] ?? "";
+    check("served copy: the step-up button label hedges the badge tap it offers",
+      /badge tap/i.test(stepUpLabel) && HEDGE.test(stepUpLabel));
+
+    const sigSrc = /\/\*sigClass:start\*\/([\s\S]*?)\/\*sigClass:end\*\//.exec(html)?.[1] ?? null;
+    // FAIL-CLOSED ON THE PARSE. If the markers move, this block must go red rather
+    // than quietly assert nothing — a classifier test that found no classifier is
+    // green about nothing.
+    check("the served console exposes its signal classifier between the sigClass markers", typeof sigSrc === "string" && sigSrc.length > 200);
+    const sigClass = typeof sigSrc === "string" ? new Function(`${sigSrc}; return sigClass;`)() : () => "ok";
+
+    // Vectors. Every non-`ok` expectation is a value that MUST NOT render green.
+    const vectors = [
+      ["deviceCompliance", "compliant", "ok"],
+      ["deviceCompliance", "non_compliant", "bad"],
+      ["deviceCompliance", "unknown", "warn"],
+      ["badgeBinding", "present", "ok"],
+      ["badgeBinding", "removed", "bad"],
+      ["badgeBinding", "unknown", "warn"],
+      ["baselineCompliance", "drifted", "bad"],
+      ["baselineCompliance", "aligned", "ok"],
+      ["identityEnabled", false, "bad"],
+      ["identityEnabled", true, "ok"],
+      ["tamperState", "suspected", "warn"],
+      ["tamperState", "confirmed", "bad"],
+      ["managementHealthState", "broken", "bad"],
+      ["localAuthorityState", "withheld", "bad"],
+      ["shiftContext", "misfit", "bad"],
+      ["dockEvidenceFreshness", "missing", "warn"],
+      // Unrecognised in every shape: unknown value, unknown signal, blank, null.
+      ["deviceCompliance", "brand_new_value", "warn"],
+      ["aSignalNobodyHasAddedYet", "compliant", "warn"],
+      ["deviceCompliance", "", "warn"],
+      ["deviceCompliance", null, "warn"],
+    ];
+    const wrong = vectors.filter(([k, v, want]) => sigClass(k, v) !== want);
+    check(
+      `served console: every signal vector renders its true colour (${vectors.length} vectors, wrong=${wrong.length})`,
+      wrong.length === 0,
+    );
+    for (const [k, v, want] of wrong) console.error(`  sigClass(${k}, ${JSON.stringify(v)}) = ${sigClass(k, v)} (want ${want})`);
+    check(
+      "served console: NOTHING that is not a known-good value renders in the allow colour",
+      vectors.filter(([, , want]) => want !== "ok").every(([k, v]) => sigClass(k, v) !== "ok"),
+    );
+
+    // THE LIVE HALF: the scenario that caused the original defect, driven through the
+    // real endpoint, so this cannot pass on a vector table that has drifted from what
+    // the server emits. The signal VALUE is asserted first — without that, a scenario
+    // that stopped emitting `non_compliant` would leave the colour assertion vacuous.
+    const nonCompliant = await req("POST", "/sim/room-entry", { body: { scenarioId: "noncompliant-device" } });
+    const dc = nonCompliant.json?.signals?.deviceCompliance;
+    check("room-entry noncompliant-device still returns restrict with deviceCompliance=non_compliant",
+      nonCompliant.json?.decision?.outcome === "restrict" && dc === "non_compliant");
+    check("served console: the signal that CAUSED the restrict renders BAD, not the allow colour",
+      sigClass("deviceCompliance", dc) === "bad");
+
+    // Every distinct (signal, value) pair the whole scenario catalogue emits, classified.
+    // Floored on both the pair count and the scenario count, because every assertion
+    // below is an `.every()` over a derived set and an empty set satisfies all of them.
+    const pairs = new Map();
+    for (const sc of roomScenarios.json?.scenarios ?? []) {
+      const r = await req("POST", "/sim/room-entry", { body: { scenarioId: sc.id } });
+      for (const [k, v] of Object.entries(r.json?.signals ?? {})) pairs.set(`${k}=${JSON.stringify(v)}`, [k, v]);
+    }
+    const scenarioCount = (roomScenarios.json?.scenarios ?? []).length;
+    check(`served console: the classification sweep is not vacuous (${scenarioCount} scenarios, ${pairs.size} distinct signal values)`,
+      scenarioCount >= 15 && pairs.size >= 25);
+    const classes = [...pairs.values()].map(([k, v]) => [k, v, sigClass(k, v)]);
+    // The absent/negative vocabulary the old substring matcher rendered green or blank.
+    const NEVER_GREEN = /^(unknown|unverified|missing|not_assessed|removed|forced|withheld|misfit|drifted|broken|failing|suspected|overdue|exception|maintenance|faulted|offline|expired|non_compliant|false)$/;
+    const greenNegatives = classes.filter(([, v, c]) => c === "ok" && NEVER_GREEN.test(String(v).toLowerCase()));
+    for (const [k, v] of greenNegatives) console.error(`  rendered green: ${k}=${JSON.stringify(v)}`);
+    check("served console: no absent, withdrawn or negative value the sim emits renders in the allow colour",
+      greenNegatives.length === 0);
+    // POSITIVE CONTROL through the same predicate: a classifier that answered a
+    // constant would satisfy every assertion above. All three classes must appear.
+    const produced = new Set(classes.map(([, , c]) => c));
+    check("served console: the classifier is discriminating — the live values produce ok, warn AND bad",
+      produced.has("ok") && produced.has("warn") && produced.has("bad"));
+  }
+
   // ── Signal Radar: new-signal detection ───────────────────────────────────
   const catalog = await req("GET", "/signals/catalog");
-  check("signal catalog → 200 with 17 evaluated categories (15 + the two launch families the 2026-08-10 scan found unrepresented)", catalog.status === 200 && catalog.json?.evaluated?.length === 17);
+  check("signal catalog → 200 with 20 evaluated categories (15 + the two launch families the 2026-08-10 scan found unrepresented + the three DR-043 credential categories)", catalog.status === 200 && catalog.json?.evaluated?.length === 20);
   check(
     "signal catalog → shift_context is evaluated, not novel (the category the /v1 misfit rule reads)",
     (catalog.json?.evaluated ?? []).includes("shift_context"),
@@ -380,8 +525,17 @@ async function run() {
   check("radar → 200 flags the novel signal", radar.status === 200 && radar.json?.novel?.some((o) => o.category === "smart_bed_occupancy"));
   check("radar does not flag an evaluated signal as novel", !radar.json?.novel?.some((o) => o.category === "identity_state"));
   check("radar raises a first-seen alert for the novel signal", (radar.json?.alerts ?? []).some((a) => a.includes("smart_bed_occupancy")));
-  const emptyRadar = await req("POST", "/signals/radar", { body: {} });
-  check("radar with no signals → 200 empty report", emptyRadar.status === 200 && Array.isArray(emptyRadar.json?.observations) && emptyRadar.json.observations.length === 0);
+  // A body with NO signals array is malformed, not an empty scan: it used to be
+  // substituted with [] and answered "All observed signals are already evaluated".
+  const noSignals = await req("POST", "/signals/radar", { body: {} });
+  check("radar without a signals array → 400 (a dropped body is not a covered grid)", noSignals.status === 400 && noSignals.json?.error === "validation");
+  const stringSignals = await req("POST", "/signals/radar", { body: { signals: "all" } });
+  check("radar with a non-array signals field → 400", stringSignals.status === 400);
+  const emptyRadar = await req("POST", "/signals/radar", { body: { signals: [] } });
+  check("radar with an explicit empty batch → 200, scanned 0, and the summary says coverage is UNKNOWN, never 'already evaluated'",
+    emptyRadar.status === 200 && emptyRadar.json?.scanned === 0 && Array.isArray(emptyRadar.json?.observations) && emptyRadar.json.observations.length === 0
+    && typeof emptyRadar.json?.summary === "string" && emptyRadar.json.summary.includes("coverage unknown") && !emptyRadar.json.summary.includes("already evaluated"));
+  check("radar reports how many signals it scanned", radar.json?.scanned === 3);
 
   const scenarios = await req("GET", "/simulator/scenarios");
   check("simulator scenarios → 200", scenarios.status === 200 && Array.isArray(scenarios.json?.scenarios));
@@ -389,8 +543,44 @@ async function run() {
   check("simulator run → 200 with audit evidence", simRun.status === 200 && Array.isArray(simRun.json?.auditEvidence));
   const simBad = await req("POST", "/simulator/run", { body: {} });
   check("simulator run without scenarioId → 400", simBad.status === 400);
+  const simUnknown = await req("POST", "/simulator/run", { body: { scenarioId: "no-such-scenario" } });
+  check("simulator run with an unknown scenarioId → 404 not_found, decided by lookup (not by whatever the run threw)", simUnknown.status === 404 && simUnknown.json?.error === "not_found");
   const simReset = await req("POST", "/simulator/reset", { body: {} });
   check("simulator reset → 200", simReset.status === 200 && Array.isArray(simReset.json?.auditEvidence));
+
+  // ── Row 99: both demo routers speak the envelope's requestId — the SAME one ──
+  // the header carries. /api/simulator/* minted a fresh uuid per body (a caller's
+  // x-request-id echoed in the header, contradicted in the body) and /api/sim/*
+  // carried none at all while forwarding the room-sim library's raw error text.
+  {
+    const demoCall = async (method, path, body) => {
+      const r = await fetch(`${BASE}${path}`, {
+        method,
+        headers: { "x-request-id": "row99-caller-id", ...(body ? { "content-type": "application/json" } : {}) },
+        body: body ? JSON.stringify(body) : undefined,
+      });
+      return { status: r.status, header: r.headers.get("x-request-id"), json: await r.json().catch(() => null) };
+    };
+    const firstSim = (scenarios.json?.scenarios ?? [])[0]?.id;
+    const cases = [
+      ["GET", "/simulator/scenarios", undefined],
+      ["POST", "/simulator/run", { scenarioId: firstSim }],
+      ["POST", "/simulator/run", { scenarioId: "no-such-scenario" }],
+      ["GET", "/sim/room-entry/scenarios", undefined],
+      ["POST", "/sim/room-entry", { scenarioId: "compliant-bedside" }],
+      ["POST", "/sim/room-entry", { scenarioId: "does-not-exist" }],
+    ];
+    for (const [method, path, body] of cases) {
+      const r = await demoCall(method, path, body);
+      check(`demo envelope: ${method} ${path} (${r.status}) body requestId is the header's x-request-id`,
+        r.header === "row99-caller-id" && r.json?.requestId === "row99-caller-id");
+    }
+    const unknownRoom = await demoCall("POST", "/sim/room-entry", { scenarioId: "does-not-exist" });
+    check("demo envelope: an unknown room-entry scenario is a fixed not_found message, not the library's error string",
+      unknownRoom.status === 404 && unknownRoom.json?.error === "not_found" &&
+      unknownRoom.json?.message === "Room-entry scenario not found." &&
+      !String(unknownRoom.json?.message).includes("does-not-exist"));
+  }
 
   // ── auth fails closed ───────────────────────────────────────────────────
   const noAuth = await req("GET", "/v1/decisions");
@@ -452,6 +642,26 @@ async function run() {
   check("authorize with no token → 401", authzNoToken.status === 401);
   const authzBad = await req("POST", "/v1/authorize", { token: KEYS.operator, body: { identityRef: "x" } });
   check("authorize with a malformed body → 400 (same validation as evaluate)", authzBad.status === 400);
+
+  // The strict client parse landed (#1145): every Assist client (Kotlin, Rust, Swift)
+  // denies a 2xx whose decisionId is missing, not a string, or blank, or whose reasons
+  // is present but not a list of strings (absent reasons is accepted: allow-no-reasons)
+  // — native/shared/assist-wire-conformance.json is the shared vector file all three run
+  // against. A regression here would have every host app refuse its workers. The server
+  // emits both on every outcome, and this four-outcome assertion pins it. Inputs
+  // measured on a fresh demo core (tenant_northwind).
+  for (const [deviceRef, want] of [
+    ["ipad-ward-01", "allow"], ["ipad-ward-03", "step_up"], ["ipad-ward-02", "restrict"], ["ipad-badge-02", "deny"],
+  ]) {
+    const r = await req("POST", "/v1/authorize", {
+      token: KEYS.operator,
+      body: { identityRef: "nurse.compliant", deviceRef, workflowKey: "clinical-session" },
+    });
+    check(`authorize ${want}: a non-blank string decisionId and string-only reasons (what every Assist client requires)`,
+      r.status === 200 && r.json?.assist === want &&
+      typeof r.json?.decisionId === "string" && r.json.decisionId.trim() !== "" &&
+      Array.isArray(r.json?.reasons) && r.json.reasons.every((x) => typeof x === "string"));
+  }
 
   // ── evaluate: restrict + stale ──────────────────────────────────────────
   const restrict = await req("POST", "/v1/decisions/evaluate", {
@@ -672,6 +882,32 @@ async function run() {
   const badBody = await req("POST", "/v1/decisions/evaluate", { token: KEYS.operator, body: { identityRef: "x" } });
   check("missing fields → 400", badBody.status === 400);
 
+  // AN EMPTY BINDING IS NOT A BINDING, and it is refused AT THE BOUNDARY — not only
+  // by the core behind it. `parseEvaluate` used to accept `""` for all three refs on
+  // a `typeof === "string"` test; the core's validateRequest still 400'd, so this was
+  // never a live fail-open, but a boundary that accepts a shape it cannot bind to
+  // anything is one refactor away from being the only check that was there.
+  // Whitespace counts as empty — a ref of " " names no identity, device or workflow.
+  //
+  // The assertion is on the BOUNDARY's message, not merely on 400: the core's
+  // validateRequest refuses the same bodies with `Field "identityRef" is required…`,
+  // so a status-only check passes with the boundary guard deleted and proves nothing
+  // about the layer this row is about.
+  const BOUNDARY_REFUSAL = /required non-empty strings/;
+  for (const [label, body] of [
+    ["identityRef", { identityRef: "", deviceRef: "dev_ward_01", workflowKey: "ehr_access" }],
+    ["deviceRef", { identityRef: "user_nurse_01", deviceRef: "", workflowKey: "ehr_access" }],
+    ["workflowKey", { identityRef: "user_nurse_01", deviceRef: "dev_ward_01", workflowKey: "" }],
+    ["whitespace identityRef", { identityRef: "   ", deviceRef: "dev_ward_01", workflowKey: "ehr_access" }],
+  ]) {
+    const ev = await req("POST", "/v1/decisions/evaluate", { token: KEYS.operator, body });
+    check(`evaluate with an empty ${label} → 400 AT THE BOUNDARY (an empty binding is not a binding)`,
+      ev.status === 400 && ev.json?.error === "validation" && BOUNDARY_REFUSAL.test(ev.json?.message ?? ""));
+    const az = await req("POST", "/v1/authorize", { token: KEYS.operator, body });
+    check(`authorize with an empty ${label} → 400 — the SAME parse, so both routes refuse`,
+      az.status === 400 && az.json?.error === "validation" && BOUNDARY_REFUSAL.test(az.json?.message ?? ""));
+  }
+
   // ── evidence + integrity ────────────────────────────────────────────────
   const evidence = await req("GET", `/v1/decisions/${allowId}/evidence`, { token: KEYS.operator });
   check("evidence fetch → 200", evidence.status === 200);
@@ -879,6 +1115,17 @@ async function run() {
   check("atlas key cannot resolve northwind subjects (404)", atlasEval.status === 404);
 
   // ── DDM (macOS 27) — enforcement-currency fail-safe ──────────────────────
+  // Telemetry UP: an unreadable count is a malformed report, never a measured zero.
+  const telBad = await req("POST", "/cp/v1/telemetry", { body: { nodeId: "edge_nw_general", windowMins: 60, decisions: "many", allow: 1, stepUp: 0, restrict: 0, deny: 0 } });
+  check("telemetry with a non-numeric count → 400 naming the field (not ingested as zero)", telBad.status === 400 && /decisions/.test(telBad.json?.message ?? ""));
+  const telMissing = await req("POST", "/cp/v1/telemetry", { body: { nodeId: "edge_nw_general", windowMins: 60, decisions: 3, allow: 1, stepUp: 1, restrict: 1 } });
+  check("telemetry with a MISSING count → 400 naming the field", telMissing.status === 400 && /deny/.test(telMissing.json?.message ?? ""));
+  const telOk = await req("POST", "/cp/v1/telemetry", { body: { nodeId: "edge_nw_general", windowMins: 60, decisions: 3, allow: 1, stepUp: 1, restrict: 1, deny: 0 } });
+  check("telemetry with every count readable → 200 ingested (the two refusals above are not the route being closed)", telOk.status === 200 && telOk.json?.ingested !== undefined);
+  const telUnknown = await req("POST", "/cp/v1/telemetry", { body: { nodeId: "node-test", windowMins: 60, decisions: 3, allow: 1, stepUp: 1, restrict: 1, deny: 0 } });
+  check("telemetry from a nodeId that is not a seeded edge node → 404, not ingested", telUnknown.status === 404 && telUnknown.json?.error === "not_found");
+  const telHuge = await req("POST", "/cp/v1/telemetry", { body: { nodeId: "x".repeat(60000), windowMins: 60, decisions: 3, allow: 1, stepUp: 1, restrict: 1, deny: 0 } });
+  check("telemetry with a 60,000-character nodeId → 404 (no unbounded growth)", telHuge.status === 404);
   const ddm = await req("GET", "/cp/v1/ddm");
   check("ddm surfaces update-enforcement currency + a dead-enforcement count", ddm.status === 200 && typeof ddm.json?.summary?.enforcementDead === "number" && ddm.json.summary.enforcementDead >= 1);
   const deadEnf = (ddm.json?.signals ?? []).find((s) => s.enforcementCurrency === "dead");
@@ -943,8 +1190,8 @@ async function run() {
   // criticalSignalsPresent) have no source plane at all, so `answerable` can never
   // reach 18 for ANY input; the assertion could not fail even if silentHoles were
   // hardcoded to zero. Pin the real numbers against the engine instead.
-  check("evidence-coverage wedge pins the measured counts (10 answerable, 6 silent holes)", covWedge.json?.report?.answerable === 10 && covWedge.json?.report?.silentHoles === 6);
-  check("evidence-coverage empty estate pins the measured hole count (11)", covEmpty.json?.report?.silentHoles === 11);
+  check("evidence-coverage wedge pins the measured counts (13 answerable, 7 silent holes — 24 axes since the DR-043 attach/enrollment/read-method axes joined on 2026-09-23; 8 → 7 when owner call 4 made a silent read method beside a strong enrollment step up)", covWedge.json?.report?.answerable === 13 && covWedge.json?.report?.silentHoles === 7);
+  check("evidence-coverage empty estate pins the measured hole count (15 of 24 axes)", covEmpty.json?.report?.silentHoles === 15);
   // The `note` is prose the CLIENT receives, so a stale number in it is a published
   // contradiction, not an internal comment. It said "18" as a literal beside a
   // `totalAxes` that computes the same thing; a nineteenth axis would have shipped a
@@ -1017,6 +1264,17 @@ async function run() {
   // else — no enrollment, tampered signature, replayed challenge, request-body
   // flags, cross-tenant credentials — must hold or 403, never release.
   const authenticator = makeStepUpAuthenticator("localhost", "http://localhost:3000");
+
+  // Route-level audit rows are witnessed at /metrics (the ledger has no HTTP route; see
+  // "admin actions leave an audit trail" below). The webauthn lib's OWN rows are not
+  // counted there, so a delta in this counter is exactly the route's refusal rows.
+  const auditCount = async (eventType) => {
+    const text = await (await fetch(`${BASE.replace(/\/api$/, "")}/metrics`)).text();
+    // A plain prefix match, no regex built from the event name: nothing to escape.
+    const prefix = `signalgrid_audit_events_total{event_type="${eventType}"} `;
+    const line = text.split("\n").find((l) => l.startsWith(prefix));
+    return line ? Number(line.slice(prefix.length)) : 0;
+  };
   const suIdentity = "nurse.baseline_drift";
   const suDevice = "ipad-ward-06";
 
@@ -1066,6 +1324,84 @@ async function run() {
   });
   check("step-up enrollment verifies a genuine attestation", enrollVerify.status === 200 && enrollVerify.json?.enrolled === true);
   check("enrollment is attributed to the minting principal", enrollVerify.json?.enrolledByRef === "user_northwind_operator");
+  check("a first enrollment is not reported as alreadyEnrolled", enrollVerify.json?.alreadyEnrolled === false);
+  // Re-enrolling the SAME credential id: the ceremony verifies, the store keeps the
+  // existing key, and the route says so — `enrolled: false, alreadyEnrolled: true`
+  // rather than an unearned second "enrolled" (2026-09-05).
+  {
+    const opts2 = await req("POST", "/v1/step-up/enroll/options", { token: KEYS.operator, body: { identityRef: suIdentity } });
+    const again = await req("POST", "/v1/step-up/enroll/verify", {
+      token: KEYS.operator,
+      body: { identityRef: suIdentity, challengeId: opts2.json?.challengeId, response: authenticator.registration(opts2.json?.publicKey?.challenge) },
+    });
+    check("re-enrolling an already-enrolled credential id → 200 with enrolled:false, alreadyEnrolled:true", again.status === 200 && again.json?.enrolled === false && again.json?.alreadyEnrolled === true);
+  }
+
+  // ── revocation: the missing half of enrollment (BUILD_BACKLOG.md / security
+  // roster row 82) — its own identity, so revoking here cannot disturb suIdentity's
+  // credential, which the challenge/verify tests below still need enrolled.
+  {
+    const revokeIdentity = "nurse.revoke_target";
+    const rOpts = await req("POST", "/v1/step-up/enroll/options", { token: KEYS.operator, body: { identityRef: revokeIdentity } });
+    const rVerify = await req("POST", "/v1/step-up/enroll/verify", {
+      token: KEYS.operator,
+      body: { identityRef: revokeIdentity, challengeId: rOpts.json?.challengeId, response: authenticator.registration(rOpts.json?.publicKey?.challenge) },
+    });
+    const credentialId = rVerify.json?.credentialId;
+    check("revoke fixture enrolled a credential to revoke", rVerify.status === 200 && typeof credentialId === "string");
+
+    // NEGATIVE CONTROL (revocation RBAC): same privilege as enrolling — an auditor
+    // key must be refused before any store work happens.
+    const auditorRevoke = await req("POST", "/v1/step-up/enroll/revoke", {
+      token: KEYS.auditor, body: { identityRef: revokeIdentity, credentialId },
+    });
+    check("auditor key cannot revoke a step-up credential (403)", auditorRevoke.status === 403);
+
+    // Validation: both fields are required.
+    const missingField = await req("POST", "/v1/step-up/enroll/revoke", { token: KEYS.operator, body: { identityRef: revokeIdentity } });
+    check("revoke without credentialId → 400 (validation)", missingField.status === 400);
+
+    // Revoking a credential id that was never enrolled is fail-closed and idempotent:
+    // a normal 200 with revoked:false, never a 404 that would let a caller
+    // distinguish "wrong id" from "already revoked".
+    const unknownCred = await req("POST", "/v1/step-up/enroll/revoke", {
+      token: KEYS.operator, body: { identityRef: revokeIdentity, credentialId: "cred-never-enrolled" },
+    });
+    check("revoking an unknown credential id → 200 with revoked:false (fail-closed, not a 404 oracle)", unknownCred.status === 200 && unknownCred.json?.revoked === false);
+
+    // The real revoke.
+    const revoke = await req("POST", "/v1/step-up/enroll/revoke", {
+      token: KEYS.operator, body: { identityRef: revokeIdentity, credentialId },
+    });
+    check("revoking the enrolled credential → 200 with revoked:true", revoke.status === 200 && revoke.json?.revoked === true);
+
+    // Effect proven end to end: a step-up challenge for this identity now fails
+    // closed exactly like an identity that was never enrolled at all.
+    const challengeAfterRevoke = await req("POST", "/v1/step-up/challenge", {
+      token: KEYS.operator, body: { identityRef: revokeIdentity, integrationId: "bcma", deviceRef: suDevice, actionKey: "controlled.administer" },
+    });
+    check("step-up challenge after revocation → 409, same as never enrolled (fail closed)", challengeAfterRevoke.status === 409);
+
+    // Revoking the same credential a second time: nothing left to remove, still
+    // a fail-closed 200, never an error over an already-completed revocation.
+    const revokeAgain = await req("POST", "/v1/step-up/enroll/revoke", {
+      token: KEYS.operator, body: { identityRef: revokeIdentity, credentialId },
+    });
+    check("revoking an already-revoked credential id → 200 with revoked:false", revokeAgain.status === 200 && revokeAgain.json?.revoked === false);
+
+    // A revoked credential stays revoked (PR #1314): the SAME authenticator, brought back
+    // through a fresh enrolment ceremony, is refused — and the identity stays unenrolled.
+    const reOpts = await req("POST", "/v1/step-up/enroll/options", { token: KEYS.operator, body: { identityRef: revokeIdentity } });
+    const reEnrol = await req("POST", "/v1/step-up/enroll/verify", {
+      token: KEYS.operator,
+      body: { identityRef: revokeIdentity, challengeId: reOpts.json?.challengeId, response: authenticator.registration(reOpts.json?.publicKey?.challenge) },
+    });
+    check("re-enrolling a revoked credential through a fresh ceremony → 403 (it does not come back)", reEnrol.status === 403);
+    const challengeAfterReEnrol = await req("POST", "/v1/step-up/challenge", {
+      token: KEYS.operator, body: { identityRef: revokeIdentity, integrationId: "bcma", deviceRef: suDevice, actionKey: "controlled.administer" },
+    });
+    check("…and the identity is still unenrolled: a step-up challenge → 409", challengeAfterReEnrol.status === 409);
+  }
 
   // The evaluate route must NEVER release from a request flag, even enrolled.
   const flagSmuggled = await req("POST", "/v1/app-workflows/evaluate", {
@@ -1156,6 +1492,30 @@ async function run() {
   check("step-up challenge refuses a read-only auditor → 403 (no decision:evaluate)",
     auditorChallenge.status === 403 && auditorChallenge.json?.challengeId === undefined);
 
+  // AUTHORIZATION BEFORE WEBAUTHN on the COMPLETION route (backlog: "complete-step-up
+  // runs WebAuthn verification before the decision:evaluate authorization check").
+  // The mint sibling above refuses an auditor before touching WebAuthn; completion must
+  // run the SAME check first. An auditor (decision:read, no decision:evaluate) submits
+  // the legitimate holder's validly-signed assertion against the holder's pending
+  // challenge. It must be refused on authorization, and because verify fetches-and-
+  // deletes the challenge and advances the counter, the holder's own completion below
+  // (the SAME challenge and the SAME assertion) succeeding is the proof that WebAuthn
+  // was never reached. Before the fix the auditor's attempt consumed the challenge and
+  // the holder got "Unknown or expired".
+  const refusalsBeforeWorkflow = await auditCount("security.webauthn.step_up.failure");
+  const auditorComplete = await req("POST", "/v1/app-workflows/complete-step-up", {
+    token: KEYS.auditor,
+    body: {
+      integrationId: "bcma", identityRef: suIdentity, deviceRef: suDevice, actionKey: "controlled.administer",
+      challengeId: chalGood.json.challengeId, assertion: goodAssertion,
+    },
+  });
+  check("complete-step-up refuses a read-only auditor on decision:evaluate → 403, no plan",
+    auditorComplete.status === 403 && auditorComplete.json?.plan === undefined &&
+    /decision:evaluate/.test(auditorComplete.json?.message ?? ""));
+  check("...and the refused attempt is audited as a step-up FAILURE (refused, never success)",
+    (await auditCount("security.webauthn.step_up.failure")) === refusalsBeforeWorkflow + 1);
+
   const completed = await req("POST", "/v1/app-workflows/complete-step-up", {
     token: KEYS.operator,
     body: {
@@ -1163,6 +1523,8 @@ async function run() {
       challengeId: chalGood.json.challengeId, assertion: goodAssertion,
     },
   });
+  check("the holder's challenge SURVIVED the auditor's attempt (same challenge + assertion still complete → 200)",
+    completed.status === 200);
   check("verified assertion releases the BOUND action (no longer held)",
     completed.status === 200 && completed.json?.stepUp?.released === true &&
     completed.json?.stepUp?.actionKey === "controlled.administer" &&
@@ -1193,6 +1555,194 @@ async function run() {
   });
   check("step-up credentials are tenant-scoped (other tenant → 409)", stepUpCrossTenant.status === 409);
 
+  // ── RUNTIME launch status: what this process is actually doing ───────────
+  // Blocker 10 at runtime. The three labels lived only in scripts/launch-profile.mjs,
+  // so an operator could read the INTENT and never ask the server. These assertions
+  // pin the two properties that make the route worth serving: every field tracks the
+  // connectors the core holds, and `enforced` is reported unreachable rather than
+  // left to be inferred from an enum that lists it.
+  {
+    const ls = await req("GET", "/v1/launch-status", { token: KEYS.operator });
+    check("launch-status → 200 with per-family rows", ls.status === 200 && Array.isArray(ls.json?.families) && ls.json.families.length > 0);
+    check("launch-status: every family carries one of the three labels and a real count",
+      ls.json.families.every((f) => ["enforced", "observed", "simulated"].includes(f.status) &&
+        typeof f.category === "string" && Number.isInteger(f.signalsHeld) && f.signalsHeld > 0));
+    check("launch-status: on the fixture demo core EVERY family reads simulated — the label tracks the connectors, not a wish",
+      ls.json.families.every((f) => f.status === "simulated" && f.connectorModes.every((m) => m === "fixture")));
+    check("launch-status: the three LAUNCH families are among the ones reported (the report is not scanning nothing)",
+      ["device_compliance", "posture_freshness", "device_management_health"].every((c) => ls.json.families.some((f) => f.category === c)));
+    check("launch-status: `enforced` is reported UNREACHABLE, with the reason, rather than left to be inferred",
+      ls.json?.enforced?.reachable === false && typeof ls.json?.enforced?.because === "string" &&
+      ls.json.enforced.because.length > 40 && !ls.json.families.some((f) => f.status === "enforced"));
+    const lsCtx = await req("GET", "/v1/context", { token: KEYS.operator });
+    check("launch-status: it agrees with the assurance posture it is derived from",
+      ls.json?.process?.signalSource === lsCtx.json?.assurance?.signalSource &&
+      ls.json?.process?.verdictEffect === "advisory");
+    // AGGREGATE AND ANONYMOUS: no id, ref, subject or tenant may cross this surface.
+    const lsText = JSON.stringify(ls.json);
+    check("launch-status: the report carries no connector id, subject ref or tenant id",
+      !/conn_|tenant_|dev_|id_|ipad-ward|nurse\./.test(lsText));
+    // The permission is `connector:read`, which owner/operator/auditor/connector all
+    // hold — so this route is readable by every seeded role, deliberately: an
+    // auditor who cannot ask what the deployment is doing is an auditor who has to
+    // take the answer on trust. Asserted rather than assumed, because "authorized"
+    // with no assertion is indistinguishable from "unauthorized and nobody looked".
+    // The anonymous case is covered by the derived 401 sweep further down.
+    const lsAuditor = await req("GET", "/v1/launch-status", { token: KEYS.auditor });
+    check("launch-status is readable by a read-only auditor (connector:read) — the operability answer is not owner-only",
+      lsAuditor.status === 200 && Array.isArray(lsAuditor.json?.families));
+  }
+
+  // ── ANSWERING a step_up DECISION (the launch route, end to end) ──────────
+  // The gate returns four words; until 2026-09-18 only three could be acted on. This
+  // is the whole ceremony against the wire: evaluate → a step_up decision → a
+  // challenge BOUND to that decision → a genuinely-signed UV assertion → the answer
+  // recorded beside the decision. Every refusal below is asserted too, because the
+  // value of this route is entirely in what it will not accept.
+  {
+    const evalStepUp = await req("POST", "/v1/decisions/evaluate", {
+      token: KEYS.operator,
+      body: { identityRef: suIdentity, deviceRef: suDevice, workflowKey: "clinical-session" },
+    });
+    check("a seeded subject actually produces a step_up decision to answer (non-vacuity)",
+      evalStepUp.status === 200 && evalStepUp.json?.decision?.outcome === "step_up" && typeof evalStepUp.json?.decision?.decisionId === "string");
+    const stepUpDecisionId = evalStepUp.json?.decision?.decisionId;
+
+    // Before the answer: the decision detail says UNANSWERED, explicitly. A host app
+    // must be able to read "unresolved" rather than infer it from a missing key.
+    const before = await req("GET", `/v1/decisions/${stepUpDecisionId}`, { token: KEYS.operator });
+    check("an unanswered step_up decision reports stepUp: null (absent is not inferred)",
+      before.status === 200 && before.json?.stepUp === null);
+
+    // A decision that is NOT step_up has nothing to challenge — answering an allow
+    // would record a ceremony that released nothing.
+    const allowEval = await req("POST", "/v1/decisions/evaluate", {
+      token: KEYS.operator, body: { identityRef: "nurse.compliant", deviceRef: "ipad-ward-01", workflowKey: "clinical-session" },
+    });
+    const allowChallenge = await req("POST", `/v1/decisions/${allowEval.json?.decision?.decisionId}/step-up/challenge`, { token: KEYS.operator, body: {} });
+    check("a challenge for a non-step_up decision → 409 (nothing to answer)",
+      allowEval.json?.decision?.outcome === "allow" && allowChallenge.status === 409);
+
+    // A decision this tenant does not hold is the same 404 a nonexistent id gets.
+    const foreignChallenge = await req("POST", `/v1/decisions/${stepUpDecisionId}/step-up/challenge`, { token: KEYS.atlas, body: {} });
+    check("a challenge for another tenant's decision → 404 (same answer a nonexistent id gets)", foreignChallenge.status === 404);
+
+    // A read-only auditor holds decision:read but not decision:evaluate; minting is
+    // part of the release flow, so it must refuse BEFORE probing enrollment.
+    const auditorDecisionChallenge = await req("POST", `/v1/decisions/${stepUpDecisionId}/step-up/challenge`, { token: KEYS.auditor, body: {} });
+    check("a decision step-up challenge refuses a read-only auditor → 403",
+      auditorDecisionChallenge.status === 403 && auditorDecisionChallenge.json?.challengeId === undefined);
+
+    // An identity with no enrolled credential cannot be challenged — fail closed,
+    // never a weaker completion path.
+    const unenrolledEval = await req("POST", "/v1/decisions/evaluate", {
+      token: KEYS.operator, body: { identityRef: "nurse.stale", deviceRef: "ipad-ward-03", workflowKey: "clinical-session" },
+    });
+    if (unenrolledEval.json?.decision?.outcome === "step_up") {
+      const unenrolledChallenge = await req("POST", `/v1/decisions/${unenrolledEval.json.decision.decisionId}/step-up/challenge`, { token: KEYS.operator, body: {} });
+      check("a step_up decision whose identity has no enrolled credential → 409 (enroll first)", unenrolledChallenge.status === 409);
+    } else {
+      check("a step_up decision whose identity has no enrolled credential → 409 (enroll first)", false);
+    }
+
+    const decisionChallenge = await req("POST", `/v1/decisions/${stepUpDecisionId}/step-up/challenge`, { token: KEYS.operator, body: {} });
+    check("a decision step-up challenge → 200 with a challengeId and UV-required options",
+      decisionChallenge.status === 200 && typeof decisionChallenge.json?.challengeId === "string" &&
+      decisionChallenge.json?.publicKey?.userVerification === "required" &&
+      decisionChallenge.json?.decisionId === stepUpDecisionId);
+
+    // A challenge minted for THIS decision, answered against ANOTHER decision: the
+    // stored binding refuses before any cryptography runs, and leaves the challenge
+    // unconsumed (the legitimate answer below still succeeds).
+    const secondStepUp = await req("POST", "/v1/decisions/evaluate", {
+      token: KEYS.operator, body: { identityRef: suIdentity, deviceRef: suDevice, workflowKey: "clinical-session" },
+    });
+    const misbound = await req("POST", `/v1/decisions/${secondStepUp.json?.decision?.decisionId}/step-up`, {
+      token: KEYS.operator,
+      body: { challengeId: decisionChallenge.json.challengeId, assertion: authenticator.assertion(decisionChallenge.json.publicKey.challenge, { signCount: 40 }) },
+    });
+    check("a challenge minted for one decision cannot answer another → 403",
+      secondStepUp.json?.decision?.decisionId !== stepUpDecisionId && misbound.status === 403);
+
+    // An unknown challenge id is refused the same way an expired one is — the store
+    // cannot tell them apart and neither can the caller.
+    const unknownChallenge = await req("POST", `/v1/decisions/${stepUpDecisionId}/step-up`, {
+      token: KEYS.operator, body: { challengeId: "chal_nothing_here", assertion: authenticator.assertion("x") },
+    });
+    check("an unknown or expired challenge → 403 (fail closed, nothing recorded)", unknownChallenge.status === 403);
+
+    // A tampered signature: real challenge, real credential, one flipped byte.
+    const tamperedAnswer = await req("POST", `/v1/decisions/${stepUpDecisionId}/step-up`, {
+      token: KEYS.operator,
+      body: { challengeId: decisionChallenge.json.challengeId, assertion: authenticator.assertion(decisionChallenge.json.publicKey.challenge, { signCount: 41, tamper: true }) },
+    });
+    check("a tampered assertion → 403 and no answer is recorded", tamperedAnswer.status === 403);
+    const stillUnanswered = await req("GET", `/v1/decisions/${stepUpDecisionId}`, { token: KEYS.operator });
+    check("...and the decision is STILL unanswered after the refusal", stillUnanswered.json?.stepUp === null);
+
+    // THE ANSWER. A fresh challenge (the tampered attempt consumed the last one),
+    // a genuinely signed UV assertion.
+    const goodChallenge = await req("POST", `/v1/decisions/${stepUpDecisionId}/step-up/challenge`, { token: KEYS.operator, body: {} });
+    const goodDecisionAssertion = authenticator.assertion(goodChallenge.json.publicKey.challenge, { signCount: 50 });
+
+    // AUTHORIZATION BEFORE WEBAUTHN on the decision answer route, exactly as the mint
+    // sibling (/step-up/challenge) runs it. An auditor holds decision:read — enough to
+    // read the decision — but not decision:evaluate. Its attempt with the holder's
+    // validly-signed assertion must be refused BEFORE verify, so the holder's answer
+    // below (same challenge, same assertion) still succeeds; before the fix the auditor
+    // consumed the challenge, advanced the counter and left a success row in the ledger.
+    const refusalsBeforeDecision = await auditCount("security.webauthn.step_up.failure");
+    const successBeforeDecision = await auditCount("security.webauthn.step_up.success");
+    const auditorAnswer = await req("POST", `/v1/decisions/${stepUpDecisionId}/step-up`, {
+      token: KEYS.auditor,
+      body: { challengeId: goodChallenge.json.challengeId, assertion: goodDecisionAssertion },
+    });
+    check("decision step-up answer refuses a read-only auditor on decision:evaluate → 403, nothing recorded",
+      auditorAnswer.status === 403 && auditorAnswer.json?.stepUp === undefined &&
+      /decision:evaluate/.test(auditorAnswer.json?.message ?? ""));
+    check("...and the refused attempt is audited as a step-up FAILURE, with no success row",
+      (await auditCount("security.webauthn.step_up.failure")) === refusalsBeforeDecision + 1 &&
+      (await auditCount("security.webauthn.step_up.success")) === successBeforeDecision);
+    const unansweredAfterAuditor = await req("GET", `/v1/decisions/${stepUpDecisionId}`, { token: KEYS.operator });
+    check("...and the decision is STILL unanswered after the auditor's refusal", unansweredAfterAuditor.json?.stepUp === null);
+
+    const answered = await req("POST", `/v1/decisions/${stepUpDecisionId}/step-up`, {
+      token: KEYS.operator,
+      body: { challengeId: goodChallenge.json.challengeId, assertion: goodDecisionAssertion },
+    });
+    check("the holder's decision challenge SURVIVED the auditor's attempt (same challenge + assertion → 200)",
+      answered.status === 200);
+    check("a verified assertion ANSWERS the step_up → 200 with the recorded answer",
+      answered.status === 200 && answered.json?.stepUp?.decisionId === stepUpDecisionId &&
+      answered.json?.stepUp?.method === "webauthn" && typeof answered.json?.stepUp?.answeredAt === "string");
+    check("the answer carries a MASKED credential reference, never the credential",
+      typeof answered.json?.stepUp?.credentialReference === "string" &&
+      answered.json.stepUp.credentialReference.length < 16 &&
+      answered.json.stepUp.credentialReference !== authenticator.credIdStr);
+    check("the DECISION is not rewritten — a step_up stays a step_up",
+      answered.json?.decision?.outcome === "step_up");
+    const after = await req("GET", `/v1/decisions/${stepUpDecisionId}`, { token: KEYS.operator });
+    check("the decision detail now shows the step-up as answered",
+      after.json?.stepUp?.id === answered.json?.stepUp?.id && after.json?.stepUp?.decisionId === stepUpDecisionId);
+    check("the answer is about the identity the DECISION was about, not one the request named",
+      after.json?.stepUp?.identityId === after.json?.decision?.identityId);
+
+    // The audit chain carries it, and still verifies.
+    const auditAfter = await req("GET", "/v1/audit", { token: KEYS.auditor });
+    check("the audit chain records the step-up answer and still verifies",
+      auditAfter.json?.chain?.valid === true &&
+      (auditAfter.json?.events ?? []).some((e) => e.type === "decision.step_up_answered"));
+
+    // Replay, twice over: the challenge is single-use AND one answer per decision.
+    const replayedAnswer = await req("POST", `/v1/decisions/${stepUpDecisionId}/step-up`, {
+      token: KEYS.operator,
+      body: { challengeId: goodChallenge.json.challengeId, assertion: authenticator.assertion(goodChallenge.json.publicKey.challenge, { signCount: 51 }) },
+    });
+    check("replaying the same challenge → 403 (single-use)", replayedAnswer.status === 403);
+    const secondCeremony = await req("POST", `/v1/decisions/${stepUpDecisionId}/step-up/challenge`, { token: KEYS.operator, body: {} });
+    check("an already-answered decision cannot be challenged again → 409", secondCeremony.status === 409);
+  }
+
   // ── out-of-band enrollment authorization (secret-configured mode) ────────
   // The block above proved the DEMO mode honest. This proves the REAL mode closed:
   // with SIGNALGRID_ENROLLMENT_SECRET configured, a published demo owner token alone
@@ -1201,7 +1751,7 @@ async function run() {
   // independently. Runs against a second, short-lived server so the main server's
   // self-service coverage above is untouched.
   {
-    const PORT2 = 5311;
+    const PORT2 = await freePort();
     const BASE2 = `http://localhost:${PORT2}/api`;
     const SECRET = "test-out-of-band-enrollment-secret";
     const server2 = spawn("node", [serverEntry], {
@@ -1251,6 +1801,22 @@ async function run() {
       });
       const allowedHdrs = (preflight.headers.get("access-control-allow-headers") ?? "").toLowerCase();
       check("secret mode: CORS preflight permits x-enrollment-authorization for an allowed origin", preflight.headers.get("access-control-allow-origin") === "http://console.example" && allowedHdrs.includes("x-enrollment-authorization"));
+      // The same defect one header along, found in the same sweep. The server READS
+      // idempotency-key (middlewares/idempotency.ts) and lib/api-spec/v1-openapi.yaml
+      // documents it as the opt-in exactly-once mechanism for POST /v1 — but it was
+      // missing from allowedHeaders, so a browser had every retry-safe POST rejected at
+      // preflight, before the idempotency middleware could run. The documented safe way
+      // to retry was the one way a browser could not use it.
+      const preflightIdem = await fetch(`${BASE2}/v1/step-up/enroll/options`, {
+        method: "OPTIONS",
+        headers: {
+          origin: "http://console.example",
+          "access-control-request-method": "POST",
+          "access-control-request-headers": "authorization,content-type,idempotency-key",
+        },
+      });
+      const idemHdrs = (preflightIdem.headers.get("access-control-allow-headers") ?? "").toLowerCase();
+      check("CORS preflight permits idempotency-key for an allowed origin (the documented retry-safe POST)", preflightIdem.headers.get("access-control-allow-origin") === "http://console.example" && idemHdrs.includes("idempotency-key"));
     } finally {
       server2.kill("SIGTERM");
     }
@@ -1267,7 +1833,7 @@ async function run() {
   // credential set it could not actually observe. Third short-lived server so
   // the main (no-Redis) coverage above is untouched.
   {
-    const PORT3 = 5312;
+    const PORT3 = await freePort();
     const BASE3 = `http://localhost:${PORT3}/api`;
     const server3 = spawn("node", [serverEntry], {
       env: { ...process.env, PORT: String(PORT3), NODE_ENV: "production", LOG_LEVEL: "silent", REDIS_URL: "redis://127.0.0.1:1" },
@@ -1309,7 +1875,7 @@ async function run() {
   // Fourth short-lived server, in the gateway profile, so the demo coverage above is
   // untouched and both halves are proven in one run.
   {
-    const PORT4 = 5313;
+    const PORT4 = await freePort();
     const BASE4 = `http://localhost:${PORT4}/api`;
     const server4 = spawn("node", [serverEntry], {
       env: {
@@ -1415,23 +1981,93 @@ async function run() {
       });
       check("gateway DENIES the deferred POST /v1/decisions/reconcile (404)", gwReconcile.status === 404);
 
-      // The gateway half of the assurance assertion. /v1/context needs a credential,
-      // and under this profile the demo bearers are refused — so the posture is read
-      // from the 401 body's absence rather than guessed: what IS provable here without
-      // a real IdP is that the fence keeps the step-up routes out of the served set,
-      // which is exactly what stepUpAnswerable derives from.
+      // The gateway half of the assurance assertion, REWRITTEN 2026-09-18 when the
+      // `step-up-answerability` gap closed. It used to read "no served route can answer
+      // a step_up (shadow mode, 404)" and that is no longer true, so the assertion says
+      // what IS true and pins the boundary between the two ceremonies: the DECISION-scoped
+      // answer is served (not 404 — it needs a credential, which under this profile the
+      // demo bearers cannot supply, so 401 is the honest result), while the app-workflows
+      // variant stays deferred with the integration catalog it belongs to.
       const gwStepUp = await fetch(`${BASE4}/v1/step-up/challenge`, { method: "POST" });
-      check("gateway: no served route can answer a step_up (shadow mode, 404)", gwStepUp.status === 404);
+      check("gateway: the app-workflows step-up challenge stays deferred (404)", gwStepUp.status === 404);
+      const gwAnswer = await fetch(`${BASE4}/v1/decisions/dec_x/step-up`, {
+        method: "POST", headers: { "content-type": "application/json" }, body: "{}",
+      });
+      check("gateway: the DECISION step-up answer IS served — the gate's fourth verdict is actionable at launch (401, not 404)",
+        gwAnswer.status === 401);
 
       // The demo console is not served at the root either — it renders verdicts with
       // no enforced/observed label, which is Blocker 10 in rendered form.
       const gwConsole = await fetch(`http://localhost:${PORT4}/console`);
       check("gateway: the demo console is not served at the root (404)", gwConsole.status === 404);
+      const gwRoot = await fetch(`http://localhost:${PORT4}/`);
+      const gwRootBody = await gwRoot.json().catch(() => null);
+      check("gateway: GET / is a 404 JSON envelope, not Express's HTML page", gwRoot.status === 404 && /application\/json/.test(gwRoot.headers.get("content-type") ?? "") && gwRootBody?.error === "not_found");
 
       const gwDemoToken = await fetch(`${BASE4}/v1/context`, {
         headers: { authorization: `Bearer ${KEYS.owner}` },
       });
       check("gateway: a demo bearer is refused — no fallback to fixture credentials", gwDemoToken.status === 401);
+
+      // ── THE FENCE'S REACH, ASSERTED RATHER THAN ASSUMED ──────────────────────
+      //
+      // The allowlist is registered INSIDE the router (routes/index.ts) and that
+      // router is mounted at /api (app.ts), so its reach ends at /api — anything
+      // registered directly on the app above the mount never meets it. `GET /metrics`
+      // is one of those, is NOT in GA_ALLOWED_ROUTES, and is served under this
+      // profile. That is a decision (an orchestrator that cannot scrape a customer
+      // deployment is one nobody can operate; the endpoint is global-aggregate only,
+      // no tenant label, bearer-gatable via METRICS_TOKEN) and `launch-profile.mjs`
+      // records it as a gap — but nothing asserted it, and profile.ts's own comment
+      // claimed "everything outside it 404s" without qualification. Both halves are
+      // pinned here so neither the carve-out nor the fence can move unnoticed.
+      // THE UPTIME ASSERTION BELOW NEEDS THIS TO BE THE PROCESS'S FIRST SCRAPE, and
+      // it needs the process to be measurably old — so wait out the difference here
+      // rather than scraping twice. Scraping twice is what let the old defect pass:
+      // the second scrape of a lazily-started clock reads the gap between the two
+      // scrapes, which looks exactly like uptime.
+      while (Date.now() - start4 < 900) await new Promise((r) => setTimeout(r, 50));
+      const gwMetrics = await fetch(`http://localhost:${PORT4}/metrics`);
+      const gwMetricsBody = await gwMetrics.text();
+      check("gateway: /metrics is OUTSIDE the fence and is still served (200) — the allowlist governs /api",
+        gwMetrics.status === 200 && gwMetricsBody.includes("signalgrid_http_requests_total"));
+      const gwMetricsUnderApi = await fetch(`${BASE4}/metrics`);
+      check("gateway: /api/metrics — the same name UNDER the mount — is 404, so the fence's reach is exactly /api",
+        gwMetricsUnderApi.status === 404);
+
+      // ── the two metrics whose HELP text used to disagree with what they computed ──
+      // `signalgrid_up` was set at module IMPORT, so its only reachable value was 1:
+      // a green light wired to the switch rather than the circuit. It is now set from
+      // the listen callback, and this is the first scrape of this process.
+      check("metrics: signalgrid_up reads 1 on a process that is genuinely serving",
+        /^signalgrid_up 1$/m.test(gwMetricsBody));
+      // `signalgrid_process_uptime_seconds` started its clock on the FIRST SCRAPE, so
+      // it reported 0 on the first scrape of a process of any age, and measured
+      // time-since-a-scraper-arrived thereafter — an alert on
+      // `signalgrid_process_uptime_seconds < N`, the restart-loop alert this metric
+      // exists for, fired once per new scraper and never for an actual restart. The
+      // scrape read here is this process's FIRST, taken after it has demonstrably been
+      // alive for most of a second, so 0 is not a rounding error: it is the defect.
+      const uptime = Number(/^signalgrid_process_uptime_seconds ([0-9.]+)$/m.exec(gwMetricsBody)?.[1] ?? "-1");
+      check(`metrics: process uptime measures the PROCESS, not the scraper (first scrape of a >0.9s-old server read ${uptime}s)`,
+        uptime >= 0.7);
+
+      // ── Row 95: HEAD is served wherever GET is, and nowhere else ────────────
+      // Express answers HEAD from the GET handler, but the fence matched the verb
+      // literally and 404'd first — a healthy instance reporting 404 to a
+      // load-balancer probe that defaults to HEAD. Both halves, like the fence above.
+      const gwHeadHealth = await fetch(`${BASE4}/healthz`, { method: "HEAD" });
+      check(`gateway: HEAD /healthz is served as GET is (${gwHeadHealth.status}, was 404)`, gwHeadHealth.status === 200);
+      const gwHeadContext = await fetch(`${BASE4}/v1/context`, { method: "HEAD" });
+      check(`gateway: HEAD on the allowlisted GET /v1/context reaches the route and demands a credential (${gwHeadContext.status}, want 401)`,
+        gwHeadContext.status === 401);
+      const gwHeadKeys = await fetch(`${BASE4}/v1/keys`, { method: "HEAD" });
+      check("gateway: HEAD on an unlisted route is still fenced (404)", gwHeadKeys.status === 404);
+      // /v1/authorize is POST-only with no GET sibling pattern (unlike
+      // /v1/decisions/evaluate, which GET /v1/decisions/:id also matches).
+      const gwHeadAuthorize = await fetch(`${BASE4}/v1/authorize`, { method: "HEAD" });
+      check("gateway: HEAD on a POST-only launch route is still fenced (404) — only HEAD→GET is folded",
+        gwHeadAuthorize.status === 404);
 
       // NON-VACUITY. Every check above asserts an ABSENCE, and a server that failed to
       // boot, or a wrong base URL, would satisfy all of them. Something must still be
@@ -1466,7 +2102,7 @@ async function run() {
     // outage reported as a dead process would restart-loop a working server.
     // Readiness must go 503, in the same flat envelope as every other error:
     // fail-closed, not fail-quiet.
-    const PORT5 = 5314;
+    const PORT5 = await freePort();
     const BASE5 = `http://localhost:${PORT5}/api`;
     const server5 = spawn("node", [serverEntry], {
       env: {
@@ -1498,6 +2134,19 @@ async function run() {
       // the failed readiness probe — the 503 was a verdict, not a crash.
       const stillAlive = await fetch(`${BASE5}/healthz`);
       check("DB-loss: liveness still green after the failed readiness probe", stillAlive.status === 200);
+
+      // PROBE COALESCING (2026-09-05): /readyz is unauthenticated and exempt from
+      // both limiters, and each uncoalesced call cost seven database round-trips.
+      // N concurrent calls inside one TTL window must share ONE probe — observable
+      // as one `probedAt` instant across all of them — and a call after the window
+      // must probe again.
+      await new Promise((r) => setTimeout(r, 1100));
+      const burst = await Promise.all(Array.from({ length: 8 }, () => fetch(`${BASE5}/readyz`).then((x) => x.json().catch(() => null))));
+      const instants = new Set(burst.map((b) => b?.probedAt));
+      check("readyz: 8 concurrent calls share ONE probe (one probedAt across the burst)", burst.every((b) => typeof b?.probedAt === "string") && instants.size === 1);
+      await new Promise((r) => setTimeout(r, 1100));
+      const later = await fetch(`${BASE5}/readyz`).then((x) => x.json().catch(() => null));
+      check("readyz: after the TTL the probe runs again (a fresh probedAt) — coalescing is not caching forever", typeof later?.probedAt === "string" && !instants.has(later.probedAt));
     } finally {
       server5.kill("SIGTERM");
     }
@@ -1519,7 +2168,7 @@ async function run() {
     // Sixth short-lived server with a registry entry injected through the
     // operator env lever — deprecating GET /v1/audit for this process only,
     // nothing in source. The dates are fixed so the wire assertions are exact.
-    const PORT6 = 5315;
+    const PORT6 = await freePort();
     const BASE6 = `http://localhost:${PORT6}/api`;
     const server6 = spawn("node", [serverEntry], {
       env: {
@@ -1560,6 +2209,229 @@ async function run() {
         sibling.headers.get("deprecation") === null && sibling.headers.get("sunset") === null);
     } finally {
       server6.kill("SIGTERM");
+    }
+  }
+
+  // ── durable GET /v1/audit verifies the WHOLE chain (DR-025 item 3) ─────────
+  // The route's durable branch used verifyLedger()'s capped first-10,000-row
+  // read, so on a longer ledger chain.count froze at 10,000, chain.truncated
+  // went true and tampering past row 10,000 went unchecked — while DR-025 says
+  // "the chain is verified whole and the response says so". Two more short-lived
+  // servers: DATABASE_URL set, `pg` answered by test/fixtures/fake-pg (a resolve
+  // hook; `pg` is external in the bundle), seeded with CAP+1 rows minted by the
+  // real appendAuditRecord so every hash is genuine. The real
+  // PostgresAuditBackend and the real route run; only the wire is faked.
+  {
+    const { build: esbuildBuild } = await import("esbuild");
+    const { mkdtemp, rm, writeFile } = await import("node:fs/promises");
+    const { tmpdir } = await import("node:os");
+    const { spawnSync } = await import("node:child_process");
+    const { resolve: pathResolve } = await import("node:path"); // `resolve` is shadowed in this scope
+    const CAP = 10000; // verifyLedger()'s default limit — the cap this section must exceed
+    const SEEDED = CAP + 1;
+    const TENANT_ROWS = 11; // every 1000th row is northwind's: the tenant read view has rows to show
+    const work = await mkdtemp(pathResolve(tmpdir(), "sg-durable-audit-"));
+    const PORT7A = await freePort();
+    const BASE7A = `http://localhost:${PORT7A}/api`;
+    let server7a;
+    let server7b;
+    let server7c;
+    let server7d;
+    let server7e;
+    try {
+      // Mint the seed with the ONE implementation of the chain (@workspace/audit's
+      // appendAuditRecord over its in-memory backend), bundled on the fly so this
+      // .mjs suite needs no TypeScript runtime and no second hash definition.
+      const minter = pathResolve(work, "mint.mjs");
+      const seed = pathResolve(work, "seed.ndjson");
+      await esbuildBuild({
+        stdin: {
+          resolveDir: pathResolve(here, ".."),
+          loader: "ts",
+          contents: `
+            import { appendAuditRecord, getAuditRecords } from "@workspace/audit";
+            import { writeFileSync } from "node:fs";
+            const [n, out] = [Number(process.argv[2]), process.argv[3]];
+            for (let i = 0; i < n; i++) {
+              await appendAuditRecord("admin.access", { type: "system" }, {
+                meta: { i },
+                ...(i % 1000 === 0 ? { tenantId: "tenant_northwind" } : {}),
+              });
+            }
+            const rows = (await getAuditRecords(n + 1, 0)).map((r) => JSON.stringify({
+              id: r.id, ts: r.ts, request_id: r.requestId ?? null, actor: r.actor,
+              event_type: r.eventType, target: r.target ?? null, meta: r.meta ?? null,
+              tenant_id: r.tenantId ?? null, prev_hash: r.prevHash, hash: r.hash,
+            }));
+            writeFileSync(out, rows.join("\\n") + "\\n");
+          `,
+        },
+        bundle: true,
+        platform: "node",
+        format: "esm",
+        outfile: minter,
+        logLevel: "silent",
+      });
+      const { DATABASE_URL: _unset, ...mintEnv } = process.env;
+      const mint = spawnSync("node", [minter, String(SEEDED), seed], { env: mintEnv, stdio: ["ignore", "ignore", "inherit"] });
+      const seededLines = mint.status === 0 ? (await readFile(seed, "utf8")).split("\n").filter(Boolean).length : -1;
+      check("durable audit: the seed holds more rows than verifyLedger()'s 10,000 cap", seededLines === SEEDED);
+
+      const bootFakePg = async (port, seedFile, extraEnv = {}) => {
+        const child = spawn("node", ["--import", pathResolve(here, "fixtures/fake-pg/register.mjs"), serverEntry], {
+          env: {
+            ...process.env,
+            PORT: String(port),
+            NODE_ENV: "production",
+            LOG_LEVEL: "silent",
+            DATABASE_URL: "postgres://fake-pg@127.0.0.1:1/never-dialled",
+            SIGNALGRID_FAKE_PG_SEED: seedFile,
+            ...extraEnv,
+          },
+          stdio: ["ignore", "ignore", "inherit"],
+        });
+        let up = false;
+        const t0 = Date.now();
+        while (Date.now() - t0 < 15000) {
+          try { if ((await fetch(`http://localhost:${port}/api/healthz`)).ok) { up = true; break; } } catch { /* not up yet */ }
+          await new Promise((r) => setTimeout(r, 250));
+        }
+        return { child, up };
+      };
+      const booted = await bootFakePg(PORT7A, seed);
+      server7a = booted.child;
+      check("durable audit: the fake-pg server boots", booted.up === true);
+
+      const durable = await fetch(`${BASE7A}/v1/audit`, { headers: { authorization: `Bearer ${KEYS.owner}` } });
+      const durableBody = await durable.json().catch(() => null);
+      check("durable audit: GET /v1/audit → 200 from the DURABLE ledger",
+        durable.status === 200 && durableBody?.source === "durable" && durableBody?.chain?.scope === "global-ledger");
+      // THE ROW'S CHECK (docs/BUILD_BACKLOG.md, B67): red on the capped read
+      // (count 10,000, truncated true), green only on a whole-chain walk.
+      check("durable audit: chain.count equals the seeded total past the 10,000 cap (the whole chain was read)",
+        durableBody?.chain?.count === SEEDED);
+      check("durable audit: chain.truncated is false — nothing was left unverified",
+        durableBody?.chain?.truncated === false);
+      check("durable audit: the whole-chain verdict is intact, headed at the LAST seeded row",
+        durableBody?.chain?.ok === true && typeof durableBody?.chain?.headHash === "string" &&
+        durableBody.chain.headHash === JSON.parse((await readFile(seed, "utf8")).trim().split("\n").at(-1)).hash);
+      check("durable audit: the tenant view is still a READ slice of the one chain (northwind's rows only)",
+        Array.isArray(durableBody?.events) && durableBody.events.length === TENANT_ROWS &&
+        durableBody.events.every((e) => e.tenantId === "tenant_northwind"));
+      server7a.kill("SIGTERM");
+      server7a = undefined;
+
+      // Non-vacuity, and the reason the cap mattered: tamper with the ONE row
+      // past the cap (index 10,000). The capped read never saw it and answered
+      // ok:true; the whole-chain walk must localize it.
+      const lines = (await readFile(seed, "utf8")).trim().split("\n");
+      const last = JSON.parse(lines[CAP]);
+      lines[CAP] = JSON.stringify({ ...last, meta: { ...last.meta, i: -1 } });
+      const tampered = pathResolve(work, "tampered.ndjson");
+      await writeFile(tampered, lines.join("\n") + "\n");
+      const PORT7B = await freePort();
+      const bootedB = await bootFakePg(PORT7B, tampered);
+      server7b = bootedB.child;
+      const tamperedRes = await fetch(`http://localhost:${PORT7B}/api/v1/audit`, { headers: { authorization: `Bearer ${KEYS.owner}` } });
+      const tamperedBody = await tamperedRes.json().catch(() => null);
+      check("durable audit: a row tampered PAST the 10,000 cap fails the chain verdict, localized at its index",
+        bootedB.up === true && tamperedRes.status === 200 && tamperedBody?.chain?.ok === false &&
+        tamperedBody?.chain?.brokenAtIndex === CAP);
+      server7b.kill("SIGTERM");
+      server7b = undefined;
+
+      const getAudit = (port, init = {}) =>
+        fetch(`http://localhost:${port}/api/v1/audit`, { ...init, headers: { authorization: `Bearer ${KEYS.owner}` } });
+
+      // FAIL-CLOSED: the database errors mid-walk (a page past seq 5,000 throws).
+      // The verdict must be an error, never a chain at all — above all never an
+      // all-clear over the half that was read.
+      const PORT7C = await freePort();
+      const bootedC = await bootFakePg(PORT7C, seed, { SIGNALGRID_FAKE_PG_FAIL_AFTER_SEQ: "5000" });
+      server7c = bootedC.child;
+      const failedRes = await getAudit(PORT7C);
+      const failedBody = await failedRes.json().catch(() => null);
+      check("durable audit: a database error MID-WALK fails closed — a 5xx and no chain verdict, never ok:true",
+        bootedC.up === true && failedRes.status >= 500 && failedBody?.chain === undefined);
+      server7c.kill("SIGTERM");
+      server7c = undefined;
+
+      // ONE WALK FOR MANY CALLERS, and an abandoned walk stops. Each page now
+      // answers after 60ms (a walk takes ~0.7s) and is logged, so the number of
+      // walks the server ran is countable: 10,001 rows in pages of 1,000 is 11
+      // page reads per walk.
+      const PAGES_PER_WALK = 11;
+      const readLogFile = pathResolve(work, "reads.log");
+      await writeFile(readLogFile, "");
+      const pagesRead = async () => (await readFile(readLogFile, "utf8")).split("\n").filter(Boolean).length;
+      const PORT7D = await freePort();
+      const bootedD = await bootFakePg(PORT7D, seed, { SIGNALGRID_FAKE_PG_PAGE_DELAY_MS: "60", SIGNALGRID_FAKE_PG_READ_LOG: readLogFile });
+      server7d = bootedD.child;
+      const burst = await Promise.all(Array.from({ length: 6 }, () =>
+        getAudit(PORT7D).then(async (r) => ({ status: r.status, body: await r.json().catch(() => null) }))));
+      check("durable audit: 6 concurrent requests each get the whole-chain verdict",
+        bootedD.up === true && burst.every((b) => b.status === 200 && b.body?.chain?.ok === true && b.body.chain.count === SEEDED));
+      check("durable audit: …from ONE shared walk (11 page reads, not 66) — concurrent callers do not multiply the work",
+        (await pagesRead()) === PAGES_PER_WALK);
+
+      const beforeAbort = await pagesRead();
+      const ac = new AbortController();
+      const abandoned = getAudit(PORT7D, { signal: ac.signal }).catch(() => "aborted");
+      await new Promise((r) => setTimeout(r, 150));
+      ac.abort();
+      await abandoned;
+      await new Promise((r) => setTimeout(r, 1500)); // > a whole walk: an unaborted walk would have finished by now
+      const readByAbandoned = (await pagesRead()) - beforeAbort;
+      check("durable audit: a walk whose only client disconnected STOPS early (fewer pages than a whole walk)",
+        readByAbandoned >= 1 && readByAbandoned < PAGES_PER_WALK);
+      const afterAbortRes = await getAudit(PORT7D);
+      const afterAbortBody = await afterAbortRes.json().catch(() => null);
+      check("durable audit: the next request after an aborted walk gets a fresh, whole verdict",
+        afterAbortRes.status === 200 && afterAbortBody?.chain?.ok === true && afterAbortBody.chain.count === SEEDED);
+
+      // One waiter leaving must NOT abort a walk another waiter still needs: A starts
+      // the walk, B joins it, A disconnects mid-walk — B still gets the whole verdict.
+      const acA = new AbortController();
+      const waiterA = getAudit(PORT7D, { signal: acA.signal }).catch(() => "aborted");
+      await new Promise((r) => setTimeout(r, 100));
+      const waiterB = getAudit(PORT7D).then(async (r) => ({ status: r.status, body: await r.json().catch(() => null) }));
+      await new Promise((r) => setTimeout(r, 150));
+      acA.abort();
+      await waiterA;
+      const resultB = await waiterB;
+      check("durable audit: a walk survives one waiter disconnecting while another still waits",
+        resultB.status === 200 && resultB.body?.chain?.ok === true && resultB.body.chain.count === SEEDED);
+      server7d.kill("SIGTERM");
+      server7d = undefined;
+
+      // EARLY DISCONNECT: a client that leaves before the route reaches the walk (here,
+      // during a tenant read held for 400ms) must not start one — nobody would ever be
+      // left to abort it. Its request never joins, so no page is read at all.
+      const earlyLogFile = pathResolve(work, "reads-early.log");
+      await writeFile(earlyLogFile, "");
+      const PORT7E = await freePort();
+      const bootedE = await bootFakePg(PORT7E, seed, {
+        SIGNALGRID_FAKE_PG_PAGE_DELAY_MS: "60",
+        SIGNALGRID_FAKE_PG_TENANT_DELAY_MS: "400",
+        SIGNALGRID_FAKE_PG_READ_LOG: earlyLogFile,
+      });
+      server7e = bootedE.child;
+      const acEarly = new AbortController();
+      const early = getAudit(PORT7E, { signal: acEarly.signal }).catch(() => "aborted");
+      await new Promise((r) => setTimeout(r, 150));
+      acEarly.abort();
+      await early;
+      await new Promise((r) => setTimeout(r, 1500)); // past the tenant read and a whole walk
+      const earlyReads = (await readFile(earlyLogFile, "utf8")).split("\n").filter(Boolean).length;
+      check("durable audit: a client gone BEFORE the walk starts no walk (0 page reads)",
+        bootedE.up === true && earlyReads === 0);
+    } finally {
+      server7a?.kill("SIGTERM");
+      server7b?.kill("SIGTERM");
+      server7c?.kill("SIGTERM");
+      server7d?.kill("SIGTERM");
+      server7e?.kill("SIGTERM");
+      await rm(work, { recursive: true, force: true });
     }
   }
 
@@ -1700,8 +2572,21 @@ async function run() {
   check("session end → 200 and the session is no longer active", ended.status === 200 && ended.json?.session?.status !== "active");
   // The one that would actually hurt: an ended session must not be revivable, or
   // "end" is advisory rather than an control.
+  const refreshAuditCount = async () => {
+    const t = await (await fetch(`${BASE.replace(/\/api$/, "")}/metrics`)).text();
+    const m = t.match(/signalgrid_audit_events_total\{event_type="session\.refresh"\} (\d+)/);
+    return m ? Number(m[1]) : 0;
+  };
+  const refreshAuditBefore = await refreshAuditCount();
   const refreshAfterEnd = await req("POST", `/v1/sessions/${sessionId}/refresh`, { token: KEYS.operator, body: { ttlSeconds: 900 } });
-  check("an ENDED session cannot be refreshed back to active", !(refreshAfterEnd.status === 200 && refreshAfterEnd.json?.session?.status === "active"));
+  check("a refresh that did not happen appends no session.refresh audit row",
+    (await refreshAuditCount()) === refreshAuditBefore);
+  // 404, specifically — not merely "not a 200 with active". The store used to hand
+  // the ENDED session object back and the route answered 200 with status "ended"
+  // plus a session.refresh audit row for a refresh that never happened; the old
+  // assertion here accepted that.
+  check("an ENDED session cannot be refreshed: 404, no cheerful echo of the dead session",
+    refreshAfterEnd.status === 404 && refreshAfterEnd.json?.session === undefined);
 
   const sessionNoAuth = await req("POST", "/v1/sessions/start", { body: { identityRef: "nurse.compliant", deviceRef: "ipad-ward-01", workflowKey: "clinical-session" } });
   check("session start without a token → 401", sessionNoAuth.status === 401);
@@ -1728,6 +2613,64 @@ async function run() {
     check("audit trail: session.end appended", counted("session.end") >= 1);
     check("audit trail: policy.draft.created appended for the accepted draft above", counted("policy.draft.created") >= 1);
     check("audit trail: connector.sync.triggered appended", counted("connector.sync.triggered") >= 1);
+  }
+
+  // ── connector health and evidence freshness, derived from held state (plan row 33) ──
+  // The two series the lab-telemetry row named as missing. Each is read off what
+  // the core HOLDS at scrape time, never counted beside a route, so a re-sync moves
+  // the gauge. Every series is written on every scrape, zeros included: a series
+  // that is absent when nothing is unhealthy is one an alert cannot tell from a
+  // scrape that lost the metric. `unknown` folds any value outside the declared
+  // vocabulary and must be 0 on a clean tree.
+  {
+    const KINDS = ["microsoft-entra-intune", "dockbridge-custody", "wfm-shift", "unknown"];
+    const STATUSES = ["healthy", "degraded", "never_synced", "unknown"];
+    const FRESHNESS = ["fresh", "stale", "expired", "missing", "unknown"];
+    const scrape = async () => (await fetch(`${BASE.replace(/\/api$/, "")}/metrics`)).text();
+    const gauge = (text, name, labels) => {
+      const m = text.match(new RegExp(`^${name}\\{${labels.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\} (\\d+)$`, "m"));
+      return m ? Number(m[1]) : null;
+    };
+    const conn = (text, kind, status) => gauge(text, "signalgrid_connectors", `kind="${kind}",status="${status}"`);
+    const fresh = (text, f) => gauge(text, "signalgrid_evidence_signals", `freshness="${f}"`);
+
+    // The sync above already ran; read the status it actually produced rather than assuming healthy.
+    const mine = await req("GET", "/v1/connectors", { token: KEYS.owner });
+    const synced = (mine.json?.connectors ?? []).find((c) => c.id === "conn_tenant_northwind_entra_intune");
+    const text = await scrape();
+
+    check("connector-health: every kind x status series is present, zeros included",
+      KINDS.every((k) => STATUSES.every((s) => conn(text, k, s) !== null)));
+    check("evidence freshness: every freshness series is present, zeros included",
+      FRESHNESS.every((f) => fresh(text, f) !== null));
+    check("connector-health: the synced entra-intune connector is counted under the status the sync produced",
+      typeof synced?.status === "string" && (conn(text, "microsoft-entra-intune", synced.status) ?? 0) >= 1);
+    check("connector-health: every status=\"unknown\" series is 0 on the clean tree",
+      KINDS.every((k) => conn(text, k, "unknown") === 0) && STATUSES.every((s) => conn(text, "unknown", s) === 0));
+    check("evidence freshness: the freshness=\"unknown\" series is 0 on the clean tree",
+      fresh(text, "unknown") === 0);
+
+    // One owner key per seeded tenant. KEYS above omits meridian and civic, and a
+    // sum over KEYS alone undercounts what the process holds; a tenant added to the
+    // seed without a key here turns this red, which is the safe direction.
+    const OWNER_PER_TENANT = [KEYS.owner, KEYS.atlas, "sgk_demo_meridian_owner", KEYS.vero, KEYS.forge, KEYS.orion, "sgk_demo_civic_owner"];
+    let held = 0;
+    for (const key of OWNER_PER_TENANT) {
+      const listed = await req("GET", "/v1/connectors", { token: key });
+      held += (listed.json?.connectors ?? []).length;
+    }
+    let exported = 0;
+    for (const k of KINDS) for (const s of STATUSES) exported += conn(text, k, s) ?? 0;
+    check("connector-health: the status series total equals the connectors the core holds across the seeded tenants",
+      held > 0 && exported === held);
+    check("evidence freshness: the core holds signals, so the freshness series are not all zero",
+      FRESHNESS.reduce((n, f) => n + (fresh(text, f) ?? 0), 0) > 0);
+    // The demo seed holds stale and missing evidence. A core inventory that called
+    // every held signal fresh would zero these while the evidence is still held.
+    check("evidence freshness: the seeded stale and missing evidence reaches the gauge (not all fresh)",
+      (fresh(text, "stale") ?? 0) > 0 && (fresh(text, "missing") ?? 0) > 0);
+    check("/metrics still carries no tenant-shaped text after the two new series",
+      !text.includes("tenant"));
   }
 
   // ── OPERATIONAL PROBES MUST NOT BE THROTTLED (backlog row 94) ─────────────
@@ -1766,7 +2709,13 @@ async function run() {
       return seen;
     };
 
-    const PORT_OPEN = 5314;
+    // DISTINCT PORTS, and that is not tidiness: these two were 5314 and 5315, the
+    // ports server5 and server6 above bind. Neither of those is awaited on
+    // SIGTERM before the spawn below rebinds, so a slow shutdown would have this
+    // probe answering against a still-dying server. A flake, not a fail-open (the
+    // positive controls below would go red, not green) — and cheaper to remove
+    // than to reason about.
+    const PORT_OPEN = await freePort();
     const openServer = spawnLimited(PORT_OPEN, {});
     try {
       check("rate-limit probe server (no METRICS_TOKEN) becomes ready", (await waitReady(PORT_OPEN)) === true);
@@ -1786,7 +2735,7 @@ async function run() {
       openServer.kill("SIGTERM");
     }
 
-    const PORT_TOKEN = 5315;
+    const PORT_TOKEN = await freePort();
     const tokenServer = spawnLimited(PORT_TOKEN, { METRICS_TOKEN: "row94-probe-token" });
     try {
       check("rate-limit probe server (METRICS_TOKEN set) becomes ready", (await waitReady(PORT_TOKEN)) === true);
@@ -1798,11 +2747,63 @@ async function run() {
     }
   }
 
+  // ── the /v1 limiter buckets by CALLER, not by the rotatable bearer ───────
+  //
+  // The limiter runs upstream of authentication (it must — a 429 has to be
+  // answerable before a JWKS fetch), so it keys off the bearer itself. Keying the
+  // RAW bearer meant a refreshed OIDC JWT, or two tokens minted concurrently for the
+  // same subject, each got a brand-new bucket: the window reset on the caller's
+  // schedule and the limit did not limit.
+  //
+  // Driven over the wire, because the defect is invisible in a unit call: TWO
+  // DIFFERENT tokens carrying the SAME iss/sub must share one bucket, and
+  // `ratelimit-remaining` is what says whether they did. A fresh `sub` per run keeps
+  // this independent of every other request this file has made.
+  {
+    const seg = (o) => Buffer.from(JSON.stringify(o)).toString("base64url");
+    // Structurally a JWT, signed by nobody — it is REJECTED (401) by the auth
+    // middleware behind the limiter, which is the point: the bucket is charged
+    // before anyone knows whether the token is good.
+    const jwt = (claims) => `${seg({ alg: "RS256", typ: "JWT" })}.${seg(claims)}.${"c".repeat(16)}`;
+    const sub = `rate-probe-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+    const iss = "https://idp.example.test/";
+    const t1 = jwt({ iss, sub, iat: 1 });
+    const t2 = jwt({ iss, sub, iat: 2 });
+    check("the two probe tokens really are different bearers", t1 !== t2);
+    const r1 = await req("GET", "/v1/context", { token: t1 });
+    const r2 = await req("GET", "/v1/context", { token: t2 });
+    const rem1 = Number(r1.headers.get("ratelimit-remaining"));
+    const rem2 = Number(r2.headers.get("ratelimit-remaining"));
+    check("both probe requests are rejected by AUTH, behind the limiter (the limiter still charged them)", r1.status === 401 && r2.status === 401);
+    check("the limiter reports a remaining count for both (the assertion below is not vacuous)", Number.isFinite(rem1) && Number.isFinite(rem2));
+    check(
+      "a SECOND, different JWT with the same iss/sub counts against the SAME bucket — a token refresh does not reset the window",
+      rem2 === rem1 - 1,
+    );
+    // The other direction, so this cannot pass by bucketing everyone together: a
+    // DIFFERENT subject must get its own bucket, at the same remaining count t1 saw.
+    const other = await req("GET", "/v1/context", { token: jwt({ iss, sub: `${sub}-other`, iat: 1 }) });
+    check("a different subject gets its OWN bucket — per-caller, not one global bucket", Number(other.headers.get("ratelimit-remaining")) === rem1);
+  }
+
   // ── transport hygiene ───────────────────────────────────────────────────
   check("rate-limit headers present", allow.headers.get("ratelimit-limit") !== null);
   check("security header x-content-type-options set", allow.headers.get("x-content-type-options") === "nosniff");
   check("framework header x-powered-by is not disclosed", allow.headers.get("x-powered-by") === null);
   check("request id echoed", typeof allow.headers.get("x-request-id") === "string");
+  // The echo is bounded BY SHAPE (2026-09-05): the header is hashed into the audit
+  // chain as the row's provenance, so a free-form value let a caller choose the
+  // correlation id of a tamper-evident record. "Is a string" cannot see that.
+  {
+    const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+    const forged = "a".repeat(129);
+    const r1 = await fetch(`${BASE}/healthz`, { headers: { "x-request-id": forged } });
+    check("x-request-id over 128 chars is NOT echoed; a uuid is minted instead", r1.headers.get("x-request-id") !== forged && UUID.test(r1.headers.get("x-request-id") ?? ""));
+    const r2 = await fetch(`${BASE}/healthz`, { headers: { "x-request-id": "a b\tc" } });
+    check("x-request-id with whitespace is NOT echoed; a uuid is minted instead", r2.headers.get("x-request-id") !== "a b\tc" && UUID.test(r2.headers.get("x-request-id") ?? ""));
+    const r3 = await fetch(`${BASE}/healthz`, { headers: { "x-request-id": "trace-1.2_3" } });
+    check("a conforming x-request-id IS echoed (the boundary is a shape, not a refusal of correlation)", r3.headers.get("x-request-id") === "trace-1.2_3");
+  }
 
   // ── the five routes the coverage check found unexercised ─────────────────
   // Registered and documented, never called. Found by the check below rather than
@@ -1822,6 +2823,16 @@ async function run() {
     ctx.json?.assurance?.verdictEffect === "advisory");
   check("assurance: step_up IS answerable under review-demo (the step-up routes are mounted)",
     ctx.json?.assurance?.stepUpAnswerable === true);
+  // THE DERIVATION'S POSITIVE CONTROL. The assertion above used to be a decoration:
+  // `stepUpAnswerable` was the literal `true` under this profile, so renaming every
+  // /v1/step-up route (proven by planting exactly that) left the field claiming a
+  // capability the process did not have while the test stayed green. The field now
+  // derives from the routes THIS PROCESS MOUNTED, passed through the fence a request
+  // would meet — so the field and the wire must agree, and this probe is the wire.
+  // A 404 here would mean nothing is mounted to answer a step_up.
+  const stepUpProbe = await req("POST", "/v1/step-up/challenge", { token: KEYS.operator, body: {} });
+  check("assurance: stepUpAnswerable agrees with the WIRE — a step-up route is mounted and answers something other than 404",
+    stepUpProbe.status !== 404 && ctx.json?.assurance?.stepUpAnswerable === true);
   check("context → 200 with the caller's principal and tenant", ctx.status === 200 && typeof ctx.json?.tenant?.id === "string" && typeof ctx.json?.principal !== "undefined");
   const ctxNoAuth = await req("GET", "/v1/context", {});
   check("context without a token → 401", ctxNoAuth.status === 401);
@@ -1848,7 +2859,7 @@ async function run() {
   // `tier` is asserted first so the env is proven to have taken effect; without that
   // the second assertion would pass vacuously on a server that ignored the env.
   {
-    const PORT7 = 5316;
+    const PORT7 = await freePort();
     const BASE7 = `http://localhost:${PORT7}/api`;
     const server7 = spawn("node", [serverEntry], {
       env: { ...process.env, PORT: String(PORT7), NODE_ENV: "production", LOG_LEVEL: "silent",
@@ -1873,7 +2884,7 @@ async function run() {
   // (maxPerTenant === 3) BEFORE anything is concluded from `capped` — without that, a
   // server ignoring the env would pass vacuously.
   {
-    const PORT8 = 5317;
+    const PORT8 = await freePort();
     const BASE8 = `http://localhost:${PORT8}/api`;
     const server8 = spawn("node", [serverEntry], {
       env: { ...process.env, PORT: String(PORT8), NODE_ENV: "production", LOG_LEVEL: "silent",
@@ -1911,7 +2922,7 @@ async function run() {
   // ── Ninth short-lived server: an INVALID cap must refuse to boot ──────────────
   // Asserted by watching the process die, not by reading the code that says it would.
   {
-    const PORT9 = 5318;
+    const PORT9 = await freePort();
     const bad = spawn("node", [serverEntry], {
       env: { ...process.env, PORT: String(PORT9), NODE_ENV: "production", LOG_LEVEL: "silent",
         SIGNALGRID_MAX_DECISIONS_PER_TENANT: "0" },
@@ -1923,6 +2934,388 @@ async function run() {
     });
     check("invalid SIGNALGRID_MAX_DECISIONS_PER_TENANT refuses at boot (non-zero exit, never a silent default)",
       exitCode !== "still-running" && exitCode !== 0);
+  }
+
+  // ── Tenth short-lived server: a BLANK-BUT-SET METRICS_TOKEN must refuse to boot ──
+  //
+  // `process.env.METRICS_TOKEN?.trim()` used as a truthiness guard treats "" and "   "
+  // exactly like unset, so an operator who set the variable and got the quoting wrong
+  // believed /metrics was bearer-protected while it was served OPEN — an unusable
+  // configuration value LOOSENING the answer, which golden rule 2 forbids. Asserted by
+  // watching the process die, the same way the cap above is, and paired with a control
+  // that proves it is the BLANKNESS being refused and not the variable's presence.
+  {
+    const PORT10 = await freePort();
+    const startBlank = (value) => spawn("node", [serverEntry], {
+      env: { ...process.env, PORT: String(PORT10), NODE_ENV: "production", LOG_LEVEL: "silent", METRICS_TOKEN: value },
+      stdio: ["ignore", "ignore", "ignore"],
+    });
+    const exitOf = (child) => new Promise((resolveExit) => {
+      const timer = setTimeout(() => { child.kill("SIGKILL"); resolveExit("still-running"); }, 8000);
+      child.on("exit", (code) => { clearTimeout(timer); resolveExit(code); });
+    });
+    const blankExit = await exitOf(startBlank(""));
+    check("METRICS_TOKEN=\"\" refuses at boot (never a silently unauthenticated /metrics)",
+      blankExit !== "still-running" && blankExit !== 0);
+    const whitespaceExit = await exitOf(startBlank("   "));
+    check("METRICS_TOKEN=\"   \" refuses at boot too — the check is on the TRIMMED value",
+      whitespaceExit !== "still-running" && whitespaceExit !== 0);
+    // POSITIVE CONTROL: a real token boots. Without this, the two refusals above pass
+    // just as well on a server that cannot start for any reason at all.
+    const realToken = startBlank("row-f5-real-token");
+    try {
+      check("...and a NON-blank METRICS_TOKEN boots normally (so the refusals above are about blankness)",
+        await waitReady(PORT10));
+    } finally {
+      realToken.kill("SIGTERM");
+      await exitOf(realToken);
+    }
+
+    // ── THE ROTATION WINDOW, on the wire (DR-010 rule 4) ───────────────────
+    // `lib/secret-model` gives every secret a `_NEXT` successor, accepted alongside the
+    // current value while both are set. proof:secrets pins the accessor; this pins
+    // that a RUNNING server honours it, because a rotation window that exists only
+    // in a library is a rotation nobody can perform. The blank-but-set refusal above
+    // is asserted for the successor too — a blank _NEXT is as much a
+    // misconfiguration as a blank base variable, and a server that shrugged at one
+    // while refusing the other would teach an operator the wrong lesson.
+    {
+      const CURRENT = "rotation-current-token";
+      const SUCCESSOR = "rotation-successor-token";
+      const rotating = spawn("node", [serverEntry], {
+        env: { ...process.env, PORT: String(PORT10), NODE_ENV: "production", LOG_LEVEL: "silent",
+          METRICS_TOKEN: CURRENT, METRICS_TOKEN_NEXT: SUCCESSOR },
+        stdio: ["ignore", "ignore", "ignore"],
+      });
+      try {
+        check("a rotating server (METRICS_TOKEN + METRICS_TOKEN_NEXT) boots", await waitReady(PORT10));
+        const scrape = async (bearer) =>
+          (await fetch(`http://localhost:${PORT10}/metrics`, bearer === null ? {} : { headers: { authorization: `Bearer ${bearer}` } })).status;
+        check("mid-rotation the CURRENT metrics bearer still works", (await scrape(CURRENT)) === 200);
+        check("...and the SUCCESSOR works too — the window is open, so a scraper can move without an outage",
+          (await scrape(SUCCESSOR)) === 200);
+        check("...and a third value is still refused: the window widens to TWO, not to any",
+          (await scrape("rotation-some-other-token")) === 401 && (await scrape(null)) === 401);
+      } finally {
+        rotating.kill("SIGTERM");
+        await exitOf(rotating);
+      }
+      const blankNext = spawn("node", [serverEntry], {
+        env: { ...process.env, PORT: String(PORT10), NODE_ENV: "production", LOG_LEVEL: "silent",
+          METRICS_TOKEN: CURRENT, METRICS_TOKEN_NEXT: "   " },
+        stdio: ["ignore", "ignore", "ignore"],
+      });
+      const blankNextExit = await exitOf(blankNext);
+      check("a blank-but-set METRICS_TOKEN_NEXT refuses at boot, exactly as a blank METRICS_TOKEN does",
+        blankNextExit !== "still-running" && blankNextExit !== 0);
+    }
+  }
+
+  // ── Eleventh short-lived server: the boot seeder must SAY what it did ───────────
+  //
+  // The seed loop swallowed every failure in a bare `catch {}` and the module imported
+  // no logger, so all six seeds failing — or the demo operator key being absent
+  // entirely — was indistinguishable at runtime from a healthy boot: the console just
+  // started empty and nothing said why. It now emits one line after the loop, and this
+  // reads that line off the process's own stdout rather than trusting the source.
+  {
+    const PORT11 = await freePort();
+    const seedServer = spawn("node", [serverEntry], {
+      env: { ...process.env, PORT: String(PORT11), NODE_ENV: "production", LOG_LEVEL: "info" },
+      stdio: ["ignore", "pipe", "inherit"],
+    });
+    let bootLog = "";
+    seedServer.stdout.on("data", (chunk) => { bootLog += String(chunk); });
+    try {
+      check("boot-seed server came up", await waitReady(PORT11));
+      const seedLine = bootLog.split("\n").find((l) => l.includes("boot seed"));
+      const seedJson = (() => { try { return JSON.parse(seedLine ?? ""); } catch { return null; } })();
+      check("boot seed: the loop REPORTS what it minted instead of failing silently",
+        typeof seedLine === "string" && seedJson !== null);
+      check("boot seed: the report carries real counts and a healthy boot minted every seed",
+        seedJson?.total > 0 && seedJson?.minted === seedJson?.total && seedJson?.failed === 0);
+    } finally {
+      seedServer.kill("SIGTERM");
+    }
+  }
+
+  // ── Twelfth short-lived server: the ESTATE core and its posture refresh loop ──
+  //
+  // SIGNALGRID_CORE=estate builds the core around a deployment's own tenant, with
+  // posture read at boot through the read-only Graph posture connector. Everything
+  // here is asserted against a RUNNING server rather than the source that describes
+  // it: the estate core serves, it is NOT the demo core (no published demo bearers),
+  // the boot read left a real sync run, and the refresh knob refuses the two
+  // configurations that would leave an operator believing in a loop that never runs.
+  // What the loop then DOES on each pass is proven deterministically by
+  // `pnpm run proof:estate-refresh` — an interval this suite could only observe by
+  // sleeping past the 30s floor, and a gate that sleeps is a gate people switch off.
+  {
+    const PORT12 = await freePort();
+    const PORT13 = await freePort();
+    const STUB_PORT = await freePort("127.0.0.1");
+    const PORT14 = await freePort();
+    const GATED_STUB_PORT = await freePort("127.0.0.1");
+    const BASE12 = `http://localhost:${PORT12}/api`;
+    // What the live transport actually put on the wire, recorded by the stub below.
+    const graphStubSaw = [];
+    const graphStubAuth = [];
+    const ESTATE_OWNER = "estate-owner-token-for-the-api-suite";
+    const estateEnv = (extra = {}) => ({
+      ...process.env,
+      PORT: String(PORT12),
+      NODE_ENV: "production",
+      LOG_LEVEL: "info",
+      SIGNALGRID_CORE: "estate",
+      SIGNALGRID_ESTATE_TENANT: "suite-estate",
+      SIGNALGRID_ESTATE_OWNER_TOKEN: ESTATE_OWNER,
+      ...extra,
+    });
+    const exitOf = (child) => new Promise((resolveExit) => {
+      const timer = setTimeout(() => { child.kill("SIGKILL"); resolveExit("still-running"); }, 8000);
+      child.on("exit", (code) => { clearTimeout(timer); resolveExit(code); });
+    });
+
+    const estate = spawn("node", [serverEntry], {
+      env: estateEnv({ SIGNALGRID_ESTATE_REFRESH_SECONDS: "30" }),
+      stdio: ["ignore", "pipe", "inherit"],
+    });
+    let estateLog = "";
+    estate.stdout.on("data", (chunk) => { estateLog += String(chunk); });
+    try {
+      check("estate-core server came up", await waitReady(PORT12));
+      const asOwner = async (path) => {
+        const res = await fetch(`${BASE12}${path}`, { headers: { authorization: `Bearer ${ESTATE_OWNER}` } });
+        return { status: res.status, json: await res.json().catch(() => null) };
+      };
+      const ctx12 = await asOwner("/v1/context");
+      check("estate core: the deployment's OWN bearer authenticates (the token came from the environment, not a seed)",
+        ctx12.status === 200 && ctx12.json?.tenant?.slug === "suite-estate");
+      const keys12 = await fetch(`${BASE12}/v1/keys`);
+      const keysBody = await keys12.json().catch(() => null);
+      check("estate core: /v1/keys publishes NO bearers — demoApiKeys() is refused on a non-demo core",
+        Array.isArray(keysBody?.keys) && keysBody.keys.length === 0);
+      const connectors12 = await asOwner("/v1/connectors");
+      const estateConnector = connectors12.json?.connectors?.[0];
+      check("estate core: the boot read left one connector, recorded in fixture mode (no live gate opened)",
+        connectors12.status === 200 && connectors12.json?.connectors?.length === 1 && estateConnector?.mode === "fixture");
+      const runs12 = await asOwner(`/v1/connectors/${estateConnector?.id}/sync-runs`);
+      check("estate core: the boot posture read is recorded as a real sync run with normalized signals",
+        runs12.status === 200 && runs12.json?.syncRuns?.length === 1 && runs12.json.syncRuns[0].signalsNormalized > 0);
+      check("estate core: the refresh loop SAYS it started, with the interval it will use",
+        estateLog.split("\n").some((l) => l.includes("posture refresh loop started") && l.includes("30")));
+    } finally {
+      estate.kill("SIGTERM");
+      await exitOf(estate);
+    }
+
+    // ── The SAME server, reading LIVE, against a stub Graph ──────────────────
+    //
+    // Everything above runs the estate core in FIXTURE mode, so every launch-status
+    // family reads `simulated`. A label that can only ever print one word is a
+    // constant, and this repo has shipped one of those before (`stepUpAnswerable` was
+    // the literal `true`). So the other arm is exercised for real: the live transport
+    // in the BUILT image is pointed at a stub Graph on localhost — a genuine HTTP
+    // round trip through `GraphPostureConnector`'s own paging, auth header and
+    // normalization, with no tenant and nothing leaving the machine.
+    //
+    // It also proves the deployable image CAN run live at all: before this, the live
+    // path existed in lib/ and nothing asserted the bundle contained it.
+    const graphStub = netCreateHttpServer((httpReq, httpRes) => {
+      const url = new URL(httpReq.url, "http://localhost");
+      // The read-only guard is the connector's; this asserts the wire it produced.
+      graphStubSaw.push(`${httpReq.method} ${url.pathname}`);
+      graphStubAuth.push(httpReq.headers["authorization"] ?? "");
+      const body =
+        url.pathname === "/users"
+          ? { value: [
+              { id: "live-user-001", userPrincipalName: "live-user-001@stub.invalid", accountEnabled: true },
+              { id: "live-user-002", userPrincipalName: "live-user-002@stub.invalid", accountEnabled: false },
+            ] }
+          : url.pathname === "/deviceManagement/managedDevices"
+            ? { value: [
+                { id: "live-device-001", userId: "live-user-001", deviceName: "Stub 001", complianceState: "compliant",
+                  managementState: "managed", deviceRegistrationState: "registered", lastSyncDateTime: "2026-09-18T09:00:00.000Z" },
+                { id: "live-device-002", userId: "live-user-002", deviceName: "Stub 002", complianceState: "noncompliant",
+                  managementState: "managed", deviceRegistrationState: "registered", lastSyncDateTime: "2026-09-18T09:00:00.000Z" },
+              ] }
+            : url.pathname === "/identityProtection/riskyUsers"
+              ? { value: [] }
+              : null;
+      if (body === null) { httpRes.writeHead(404).end("{}"); return; }
+      httpRes.writeHead(200, { "content-type": "application/json" });
+      httpRes.end(JSON.stringify(body));
+    });
+    await new Promise((r) => graphStub.listen(STUB_PORT, "127.0.0.1", r));
+
+    const liveServer = spawn("node", [serverEntry], {
+      env: estateEnv({
+        PORT: String(PORT13),
+        SIGNALGRID_TIER: "beta",
+        SIGNALGRID_LIVE_INTEGRATIONS: "true",
+        GRAPH_ACCESS_TOKEN: "stub-graph-token-not-a-secret",
+        GRAPH_BASE_URL: `http://127.0.0.1:${STUB_PORT}`,
+      }),
+      stdio: ["ignore", "ignore", "inherit"],
+    });
+    try {
+      check("estate core reading LIVE through the built image came up", await waitReady(PORT13));
+      const asOwner13 = async (path) => {
+        const res = await fetch(`http://localhost:${PORT13}/api${path}`, { headers: { authorization: `Bearer ${ESTATE_OWNER}` } });
+        return { status: res.status, json: await res.json().catch(() => null) };
+      };
+      check("the deployable image ACTUALLY issued the live Graph reads (the transport is in the bundle, not just in lib/)",
+        graphStubSaw.includes("GET /users") && graphStubSaw.includes("GET /deviceManagement/managedDevices"));
+      check("every live Graph request was a GET — the connector is read-only on the wire, not only in its docstring",
+        graphStubSaw.length > 0 && graphStubSaw.every((r) => r.startsWith("GET ")));
+      check("the live reads carried the configured bearer",
+        graphStubAuth.length > 0 && graphStubAuth.every((a) => a === "Bearer stub-graph-token-not-a-secret"));
+      const liveConnectors = await asOwner13("/v1/connectors");
+      check("the connector RECORDS mode live — the mode is what the resolver decided, not what the env asked for",
+        liveConnectors.json?.connectors?.[0]?.mode === "live");
+      const liveCtx = await asOwner13("/v1/context");
+      check("assurance signalSource reads live, derived from the connector the core holds",
+        liveCtx.json?.assurance?.signalSource === "live");
+      const liveStatus = await asOwner13("/v1/launch-status");
+      check("launch-status: with a LIVE connector every family reads observed — the label tracks the connectors, so it is a measurement and not a constant",
+        liveStatus.status === 200 && liveStatus.json?.families?.length > 0 &&
+        liveStatus.json.families.every((f) => f.status === "observed" && f.connectorModes.includes("live")));
+      check("launch-status: `enforced` stays unreachable even on a live deployment — reading a real device is not enforcing on one",
+        liveStatus.json?.enforced?.reachable === false &&
+        !liveStatus.json.families.some((f) => f.status === "enforced"));
+    } finally {
+      liveServer.kill("SIGTERM");
+      await exitOf(liveServer);
+      await new Promise((r) => graphStub.close(r));
+    }
+
+    // ── The TIER GATE, asserted by a stub that must stay untouched ───────────
+    //
+    // The image can now read live. The other half of that sentence is what it will
+    // NOT do: live vendor calls are gated on tier beta/prod AND
+    // SIGNALGRID_LIVE_INTEGRATIONS=true AND a token — and the tier is the half nobody
+    // can set by accident. Here every live precondition is satisfied EXCEPT the tier,
+    // and the assertion is not merely that the connector records `fixture`: it is that
+    // the stub Graph recorded ZERO requests. A resolver that decided fixture AFTER
+    // calling out would pass a mode check and fail this one, and "no tenant was
+    // contacted" is the claim that actually matters to a customer.
+    {
+      const gatedSaw = [];
+      const gatedStub = netCreateHttpServer((httpReq, httpRes) => {
+        gatedSaw.push(`${httpReq.method} ${httpReq.url}`);
+        httpRes.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify({ value: [] }));
+      });
+      await new Promise((r) => gatedStub.listen(GATED_STUB_PORT, "127.0.0.1", r));
+      const gated = spawn("node", [serverEntry], {
+        env: estateEnv({
+          PORT: String(PORT14),
+          // SIGNALGRID_TIER left at its "dev" default — the one precondition missing.
+          SIGNALGRID_LIVE_INTEGRATIONS: "true",
+          GRAPH_ACCESS_TOKEN: "stub-graph-token-not-a-secret",
+          GRAPH_BASE_URL: `http://127.0.0.1:${GATED_STUB_PORT}`,
+        }),
+        stdio: ["ignore", "ignore", "inherit"],
+      });
+      try {
+        check("a below-beta estate server with every OTHER live precondition set still boots", await waitReady(PORT14));
+        const gatedConnectors = await fetch(`http://localhost:${PORT14}/api/v1/connectors`, {
+          headers: { authorization: `Bearer ${ESTATE_OWNER}` },
+        });
+        const gatedJson = await gatedConnectors.json().catch(() => null);
+        check("live mode is REFUSED without the tier gate — the connector records fixture, with a token and the live flag both set",
+          gatedJson?.connectors?.[0]?.mode === "fixture");
+        check("...and the tenant was never contacted: the stub Graph saw ZERO requests (the refusal happens before the wire, not after)",
+          gatedSaw.length === 0);
+        const gatedStatus = await fetch(`http://localhost:${PORT14}/api/v1/launch-status`, {
+          headers: { authorization: `Bearer ${ESTATE_OWNER}` },
+        });
+        const gatedStatusJson = await gatedStatus.json().catch(() => null);
+        check("...and launch-status says simulated, so the deployment cannot claim a posture the tier gate denied it",
+          gatedStatusJson?.families?.every((f) => f.status === "simulated") === true);
+      } finally {
+        gated.kill("SIGTERM");
+        await exitOf(gated);
+        await new Promise((r) => gatedStub.close(r));
+      }
+    }
+
+    // ── The BUILT ARTIFACT carries the live transport ────────────────────────
+    //
+    // The live Graph reads above prove it behaviourally. This reads the bundle itself,
+    // because the two failures are different: a bundle missing the transport would
+    // fail the block above loudly, while a bundle that kept the transport and lost the
+    // production ENDPOINT would pass it (the stub sets GRAPH_BASE_URL) and then address
+    // nothing in production. The default base URL has to be IN the artifact.
+    {
+      const bundle = await readFile(new URL("../dist/index.mjs", import.meta.url), "utf8");
+      check("the deployable bundle contains the production Graph endpoint as the connector's default base URL",
+        bundle.includes("https://graph.microsoft.com/v1.0"));
+      check("the deployable bundle contains the read-only Graph reads themselves (managedDevices, riskyUsers)",
+        bundle.includes("/deviceManagement/managedDevices") && bundle.includes("/identityProtection/riskyUsers"));
+      check("the deployable bundle contains the gated resolver, so live-vs-fixture is decided in the image and not around it",
+        bundle.includes("SIGNALGRID_LIVE_INTEGRATIONS") && bundle.includes("GRAPH_ACCESS_TOKEN"));
+    }
+
+    // Below the floor: a typo meant as minutes must not become a two-second hammer.
+    const tooFast = spawn("node", [serverEntry], {
+      env: estateEnv({ SIGNALGRID_ESTATE_REFRESH_SECONDS: "5" }),
+      stdio: ["ignore", "ignore", "ignore"],
+    });
+    const tooFastExit = await exitOf(tooFast);
+    check("estate refresh: an interval below the 30s floor refuses at boot",
+      tooFastExit !== "still-running" && tooFastExit !== 0);
+
+    // Above Node's timer ceiling: setInterval clamps a delay past 2^31-1 ms to 1ms, so a
+    // "monthly" 2592000 would have fired the refresh ~1000x a second. Refuse, never clamp.
+    for (const tooSlow of ["2592000", "2147484"]) {
+      const tooSlowChild = spawn("node", [serverEntry], {
+        env: estateEnv({ SIGNALGRID_ESTATE_REFRESH_SECONDS: tooSlow }),
+        stdio: ["ignore", "ignore", "ignore"],
+      });
+      const tooSlowExit = await exitOf(tooSlowChild);
+      check(`estate refresh: ${tooSlow}s is past setInterval's 2^31-1 ms ceiling and refuses at boot`,
+        tooSlowExit !== "still-running" && tooSlowExit !== 0);
+    }
+    // The ceiling itself (2147483s = 2147483000ms <= 2^31-1) is honoured, not refused.
+    const atCeiling = spawn("node", [serverEntry], {
+      env: estateEnv({ SIGNALGRID_ESTATE_REFRESH_SECONDS: "2147483" }),
+      stdio: ["ignore", "ignore", "ignore"],
+    });
+    try {
+      check("estate refresh: the largest interval Node can honour (2147483s) still boots",
+        await waitReady(PORT12));
+    } finally {
+      atCeiling.kill("SIGTERM");
+      await exitOf(atCeiling);
+    }
+
+    // Set on a DEMO core: there is no estate connector to refresh, so a server that
+    // booted anyway would report a loop that could never run.
+    const demoRefresh = spawn("node", [serverEntry], {
+      env: { ...process.env, PORT: String(PORT12), NODE_ENV: "production", LOG_LEVEL: "silent",
+        SIGNALGRID_ESTATE_REFRESH_SECONDS: "60" },
+      stdio: ["ignore", "ignore", "ignore"],
+    });
+    const demoRefreshExit = await exitOf(demoRefresh);
+    check("estate refresh: the knob set while SIGNALGRID_CORE is not estate refuses at boot (never a silent no-op loop)",
+      demoRefreshExit !== "still-running" && demoRefreshExit !== 0);
+  }
+
+  // ── every spawned server binds its OWN port ──────────────────────────────
+  // 5314 and 5315 were each used by TWO different spawned servers, and neither
+  // predecessor is awaited on SIGTERM before the successor rebinds. That is a flake,
+  // not a fail-open — but a flake in a gate is a gate people learn to re-run. Until
+  // 2026-09-26 this scanned the file's text for `PORT… = 53xx` constants; the ports
+  // are now handed out by the OS at run time (freePort, top of file), so the check
+  // reads the run's own ledger of what was handed out — a port added tomorrow is
+  // covered because it can only come from freePort.
+  {
+    const dupes = handedOut.filter((p, i) => handedOut.indexOf(p) !== i);
+    for (const d of new Set(dupes)) console.error(`  port bound by more than one spawned server: ${d}`);
+    // FLOOR FIRST: an empty ledger would report "no duplicates".
+    check(`port hygiene: the servers this run booted each got a port from the OS (${handedOut.length} ports handed out)`,
+      handedOut.length >= 12);
+    check("port hygiene: no two spawned servers are given the same port", dupes.length === 0);
   }
 
   // ── route coverage: every registered /v1 route must be exercised ─────────
@@ -2069,13 +3462,7 @@ async function run() {
     // built at import and the process exits before Express's async listen can
     // report anything. Measured: with the port held by another process, the dumper
     // still exited 0 and returned 81 routes. So there is no port race to retry.
-    const freePort = () => new Promise((resolvePort) => {
-      const probe = netCreateServer();
-      probe.listen(0, "127.0.0.1", () => {
-        const p = probe.address().port;
-        probe.close(() => resolvePort(p));
-      });
-    });
+    // freePort: the module-level helper (every server here boots on an ephemeral port).
     // `new URL`, not path.resolve: `resolve` is shadowed by a local const inside
     // run() (the same reason the coverage block above reads its file that way).
     const dumper = fileURLToPath(new URL("./route-stack-dump.mjs", import.meta.url));

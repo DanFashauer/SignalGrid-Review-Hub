@@ -156,9 +156,14 @@ const add = (f) => findings.push(f);
 
 // --- 6. Silenced tests -----------------------------------------------------
 {
-  // \\bxit( - an unanchored "xit(" also matches process.eXIT(, which is how this
-  // detector first reported 405 skipped tests in a repo that had one.
-  const out = sh("git", ["grep", "-nI", "-E", "(it|test|describe)\\.skip\\(|\\bxit\\(|@Ignore|#\\[ignore\\]", "--", "lib", "artifacts", "native", "firmware", "scripts"]);
+  // An unanchored "xit(" also matches process.eXIT(, which is how this detector first
+  // reported 405 skipped tests in a repo that had one — so the left edge must be a word
+  // boundary. It may NOT be spelled `\\b`: that is a GNU extension, and Apple git's
+  // POSIX ERE reads it as a literal `b`, so on macOS `\\bxit\\(` matched only text
+  // containing "bxit(" and this detector silently found NO skipped tests at all
+  // (measured 2026-09-09; the same defect made check-env-doc-readers.mjs invent 19
+  // failures on the Mac). An explicit class means the same thing in both dialects.
+  const out = sh("git", ["grep", "-nI", "-E", "(it|test|describe)\\.skip\\(|(^|[^A-Za-z0-9_])xit\\(|@Ignore|#\\[ignore\\]", "--", "lib", "artifacts", "native", "firmware", "scripts"]);
   const lines = out.split("\n").filter(Boolean)
     .filter((l) => /\.(test|spec)\.|\/tests?\//.test(l.split(":")[0]));
   if (lines.length) {

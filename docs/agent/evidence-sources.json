@@ -49,7 +49,7 @@
       "module": null,
       "labRegistryRepo": null,
       "liveEvidence": null,
-      "note": "Named in twelve files as a vendor SignalGrid reads ABOUT (uem, entitlement-binding, provisioning-order), and in none of them does it produce DeviceManagementEvidence. A commercial MDM with no adapter."
+      "note": "Named in twelve files as a vendor SignalGrid reads ABOUT (uem, entitlement-binding, provisioning-order), and in none of them does it produce DeviceManagementEvidence. A commercial MDM with no adapter. (unverified count; not reproducible 2026-09-06)"
     },
     {
       "id": "omnissa",
@@ -58,7 +58,7 @@
       "module": null,
       "labRegistryRepo": null,
       "liveEvidence": null,
-      "note": "Appears only in the union declaration itself. Nothing else in the tree references it."
+      "note": "Appears only in the union declaration as an `EvidenceSourceSystem` id (`lib/integration-bridge/src/evidence.ts`). The vendor NAME appears elsewhere (e.g. `artifacts/api-server/src/routes/integrations.ts:298`) without producing this contract."
     }
   ]
 }

@@ -1,0 +1,1413 @@
+{
+ "measuredAt": "2026-10-23T23:05:00Z",
+ "mainlineBranch": "SignalGrid_Alpha",
+ "mainlineShaLive": "4057f56b912edd168d81689628f33e1196f29fca",
+ "mainlineShaLocalRef": "2a46fd16fdc61c144c3f42e4bcc3b5389ae94f07",
+ "classifierWorktree": "wt-alpha detached at 077dc308816bd7306b93b0f1c894c2cb26c80019",
+ "precedenceUsed": "OWNER > MAC > NEEDS_WORK > LAND_DR037 (task fixed OWNER>LAND, NEEDS_WORK>LAND, MAC>NEEDS_WORK; OWNER vs MAC and OWNER vs NEEDS_WORK resolved OWNER first as in prs-triage-1.json; DEPENDABOT kept as its own list even where a manifest hits DECISION_PATH; see alsoApplies on each record)",
+ "notes": "ahead/behind come from the live API compare against SignalGrid_Alpha (4057f56). cherry/added-line coverage use the local ref origin/SignalGrid_Alpha (2a46fd16), which is older than live; key files (claude.yml, icm-architect, check-ci-shellcheck-step.mjs, remote-key.mjs, DR-063, journal restore) were re-checked absent on live mainline by contents API. Review thread field in /ccr/review_threads is 'resolved' (not isResolved); counted resolved==false. No mergeable value was null.",
+ "counts": {
+  "byDisposition": {
+   "MAC": 2,
+   "OWNER": 2,
+   "DEPENDABOT": 8,
+   "NEEDS_WORK": 2
+  }
+ },
+ "prs": [
+  {
+   "number": 1356,
+   "title": "scan:estate finds sibling checkouts and scans one only when origin proves owner and name",
+   "state": "open",
+   "author": "DanFashauer",
+   "lane": "mac",
+   "head": {
+    "ref": "mac/scan-estate-sibling-locator",
+    "sha": "03462b7e4e4d60d349322f74f92fb7e8a6403cee"
+   },
+   "headSha": "03462b7e4e4d60d349322f74f92fb7e8a6403cee",
+   "tier": "owner-gated",
+   "matchedCategories": [
+    "SAFETY_MACHINERY"
+   ],
+   "matched": [
+    {
+     "file": ".github/workflows/review-hub-ci.yml",
+     "category": "SAFETY_MACHINERY",
+     "rule": ".github/workflows/**"
+    },
+    {
+     "file": "scripts/check-cited-paths.mjs",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/lib/remote-key.mjs",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/preflight.mjs",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/scan-estate-citations.mjs",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    }
+   ],
+   "gating": {
+    "name": "Typecheck, build, and proof scaffold",
+    "checkRunId": 110430902495,
+    "status": "completed",
+    "conclusion": "success"
+   },
+   "mergeable": false,
+   "mergeableState": "dirty",
+   "threads": 0,
+   "threadsTotal": 0,
+   "codex": {
+    "present": true,
+    "kind": "usage-limit-notice-only",
+    "status": "usage-limit",
+    "has_unresolved_findings": null,
+    "comments": 1,
+    "latest": "2026-10-01T06:23:52Z"
+   },
+   "draft": false,
+   "createdAt": "2026-10-01T06:23:45Z",
+   "updatedAt": "2026-10-01T15:47:06Z",
+   "ageDays": 22.7,
+   "changedFiles": 8,
+   "files": [
+    ".github/workflows/review-hub-ci.yml",
+    "docs/COMPANY_BUILD_PLAN.md",
+    "docs/COMPANY_VS_PRODUCT.md",
+    "docs/agent/SURFACE_REVIEW_COVERAGE.md",
+    "scripts/check-cited-paths.mjs",
+    "scripts/lib/remote-key.mjs",
+    "scripts/preflight.mjs",
+    "scripts/scan-estate-citations.mjs"
+   ],
+   "aheadBy": 9,
+   "behindBy": 2671,
+   "alreadyOnMainline": {
+    "headIsAncestor": false,
+    "cherryNotOnMainline": 6,
+    "cherryOnMainline": 0
+   },
+   "otherNonSuccessChecks": [
+    "github-advanced-security=failure",
+    "phase-pr-evidence=cancelled"
+   ],
+   "lastComments": [
+    {
+     "date": "2026-10-01T14:59:02Z",
+     "login": "DanFashauer",
+     "text": "## Mac fix for cloud review round 1 (comment 5926355312): pushed, head `03462b7e4e4d60d349322f74f92fb7e8a6403cee` The MEDIUM and the two LOWs about host and suf"
+    },
+    {
+     "date": "2026-10-01T15:47:06Z",
+     "login": "DanFashauer",
+     "text": "## Review round 2 — verdict: **fix-needed** (head `03462b7e4e4d60d349322f74f92fb7e8a6403cee`) Reviewed by the cloud lane (Sonnet review + Opus refute, DR-047 re"
+    }
+   ],
+   "bodyMergedUnderDR037": false,
+   "bodyCloudLandSentences": [
+    "- Mainline can move again before this lands; the cloud's merge step re-derives the two count files."
+   ],
+   "disposition": "MAC",
+   "alsoApplies": [
+    "NEEDS_WORK"
+   ],
+   "reason": "Head mac/scan-estate-sibling-locator is Mac lane work and the tier is SAFETY_MACHINERY only; gating run 110430902495 completed/success on 03462b7e and 0 threads, but mergeable false/dirty (9 ahead, 2671 behind mainline) (conflicted) and the cloud lane's round-2 review of this head is fix-needed (refuter overturned ship); scripts/lib/remote-key.mjs is absent from mainline, so it is not a close candidate."
+  },
+  {
+   "number": 1357,
+   "title": "DR-063 (owner decision): the brain ecosystem — per-repo instructions, labeled ingestion, one MCP plane, repo triggers",
+   "state": "open",
+   "author": "DanFashauer",
+   "lane": "mac",
+   "head": {
+    "ref": "mac/dr-063-brain-ecosystem",
+    "sha": "f9260f1de8f2736bdef9f09bce32f1ea4672af7a"
+   },
+   "headSha": "f9260f1de8f2736bdef9f09bce32f1ea4672af7a",
+   "tier": "owner-gated",
+   "matchedCategories": [
+    "SAFETY_MACHINERY"
+   ],
+   "matched": [
+    {
+     "file": "docs/DECISION_RECORDS.md",
+     "category": "SAFETY_MACHINERY",
+     "rule": "the decision records"
+    },
+    {
+     "file": "scripts/check-mcp-roster.mjs",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    }
+   ],
+   "gating": {
+    "name": "Typecheck, build, and proof scaffold",
+    "checkRunId": 110392463389,
+    "status": "completed",
+    "conclusion": "success"
+   },
+   "mergeable": true,
+   "mergeableState": "unstable",
+   "threads": 0,
+   "threadsTotal": 0,
+   "codex": {
+    "present": true,
+    "kind": "usage-limit-notice-only",
+    "status": "usage-limit",
+    "has_unresolved_findings": null,
+    "comments": 1,
+    "latest": "2026-10-01T07:11:47Z"
+   },
+   "draft": false,
+   "createdAt": "2026-10-01T07:11:43Z",
+   "updatedAt": "2026-10-01T14:59:27Z",
+   "ageDays": 22.7,
+   "changedFiles": 5,
+   "files": [
+    "CLAUDE.md",
+    "docs/DECISION_RECORDS.md",
+    "docs/MCP_AND_SKILLS_LANE_PARITY.md",
+    "docs/agent/mcp-roster.json",
+    "scripts/check-mcp-roster.mjs"
+   ],
+   "aheadBy": 6,
+   "behindBy": 2756,
+   "alreadyOnMainline": {
+    "headIsAncestor": false,
+    "cherryNotOnMainline": 6,
+    "cherryOnMainline": 0
+   },
+   "otherNonSuccessChecks": [
+    "github-advanced-security=failure",
+    "phase-pr-evidence=failure"
+   ],
+   "lastComments": [
+    {
+     "date": "2026-10-01T13:30:59Z",
+     "login": "DanFashauer",
+     "text": "**New head `f9260f1d` — rewritten in the true tense, per the cloud's 07:30Z verdict (comment 5926753959).** - \"adopted now\" for #1354 / #1356 → rule 1 now reads"
+    },
+    {
+     "date": "2026-10-01T14:59:26Z",
+     "login": "DanFashauer",
+     "text": "## Review round 2 — verdict: **fix-needed** (head `f9260f1de8f2736bdef9f09bce32f1ea4672af7a`) Reviewed by the cloud lane (Sonnet review + Opus refute, DR-047 re"
+    }
+   ],
+   "bodyMergedUnderDR037": false,
+   "bodyCloudLandSentences": [],
+   "disposition": "OWNER",
+   "alsoApplies": [
+    "MAC"
+   ],
+   "reason": "It adds DR-063 to docs/DECISION_RECORDS.md (no DR-063 on live mainline), which is owner-only, and its head is mac/*; gating run 110392463389 completed/success on f9260f1d, mergeable true/unstable (6 ahead, 2756 behind mainline), 0 threads, but phase-pr-evidence and github-advanced-security are failure and the cloud lane's round-2 verdict on this head is fix-needed (body untruthful)."
+  },
+  {
+   "number": 1379,
+   "title": "ci: bump the github-actions-minor-and-patch group with 2 updates",
+   "state": "open",
+   "author": "dependabot[bot]",
+   "lane": "dependabot",
+   "head": {
+    "ref": "dependabot/github_actions/github-actions-minor-and-patch-d30a372842",
+    "sha": "524ce94d919334b1c81e716149a1b40de07fb33a"
+   },
+   "headSha": "524ce94d919334b1c81e716149a1b40de07fb33a",
+   "tier": "owner-gated",
+   "matchedCategories": [
+    "SAFETY_MACHINERY"
+   ],
+   "matched": [
+    {
+     "file": ".github/workflows/android.yml",
+     "category": "SAFETY_MACHINERY",
+     "rule": ".github/workflows/**"
+    },
+    {
+     "file": ".github/workflows/connector-emulator-smoke.yml",
+     "category": "SAFETY_MACHINERY",
+     "rule": ".github/workflows/**"
+    },
+    {
+     "file": ".github/workflows/pages.yml",
+     "category": "SAFETY_MACHINERY",
+     "rule": ".github/workflows/**"
+    },
+    {
+     "file": ".github/workflows/phase-pr-evidence.yml",
+     "category": "SAFETY_MACHINERY",
+     "rule": ".github/workflows/**"
+    },
+    {
+     "file": ".github/workflows/review-hub-ci.yml",
+     "category": "SAFETY_MACHINERY",
+     "rule": ".github/workflows/**"
+    },
+    {
+     "file": ".github/workflows/scheduled-verification.yml",
+     "category": "SAFETY_MACHINERY",
+     "rule": ".github/workflows/**"
+    },
+    {
+     "file": ".github/workflows/supply-chain.yml",
+     "category": "SAFETY_MACHINERY",
+     "rule": ".github/workflows/**"
+    }
+   ],
+   "gating": {
+    "name": "Typecheck, build, and proof scaffold",
+    "checkRunId": 110441305542,
+    "status": "completed",
+    "conclusion": "failure"
+   },
+   "mergeable": true,
+   "mergeableState": "unstable",
+   "threads": 0,
+   "threadsTotal": 0,
+   "codex": {
+    "present": true,
+    "kind": "usage-limit-notice-only",
+    "status": "usage-limit",
+    "has_unresolved_findings": null,
+    "comments": 1,
+    "latest": "2026-10-01T15:21:36Z"
+   },
+   "draft": false,
+   "createdAt": "2026-10-01T15:21:30Z",
+   "updatedAt": "2026-10-01T15:21:44Z",
+   "ageDays": 22.3,
+   "changedFiles": 7,
+   "files": [
+    ".github/workflows/android.yml",
+    ".github/workflows/connector-emulator-smoke.yml",
+    ".github/workflows/pages.yml",
+    ".github/workflows/phase-pr-evidence.yml",
+    ".github/workflows/review-hub-ci.yml",
+    ".github/workflows/scheduled-verification.yml",
+    ".github/workflows/supply-chain.yml"
+   ],
+   "aheadBy": 1,
+   "behindBy": 2666,
+   "alreadyOnMainline": {
+    "headIsAncestor": false,
+    "cherryNotOnMainline": 1,
+    "cherryOnMainline": 0
+   },
+   "otherNonSuccessChecks": [
+    "Typecheck, build, and proof scaffold=failure",
+    "phase-pr-evidence=failure"
+   ],
+   "lastComments": [
+    {
+     "date": "2026-10-01T15:21:36Z",
+     "login": "chatgpt-codex-connector[bot]",
+     "text": "Codex usage limits have been reached for code reviews. Please check with the admins of this repo to increase the limits by adding credits. Credits must be used "
+    },
+    {
+     "date": "2026-10-01T15:21:44Z",
+     "login": "github-actions[bot]",
+     "text": "<!-- signalgrid-triage --> ### 🧭 PR triage - **Areas:** `area:ci` - **Size:** `size:XS` (22 lines across 7 files) CI runs the full gate suite (build, typecheck,"
+    }
+   ],
+   "bodyMergedUnderDR037": false,
+   "bodyCloudLandSentences": [],
+   "disposition": "DEPENDABOT",
+   "alsoApplies": [
+    "NEEDS_WORK"
+   ],
+   "reason": "dependabot[bot] PR bumping 2 actions across 7 workflow files (SAFETY_MACHINERY only), 0 threads, mergeable true/unstable (1 ahead, 2666 behind mainline), but gating run 110441305542 completed/failure on 524ce94d (annotation: Process completed with exit code 100), so it also needs work; the owner's 2026-10-15 dependabot decision is pending."
+  },
+  {
+   "number": 1381,
+   "title": "deps: bump thread-stream from 3.1.0 to 4.2.0",
+   "state": "open",
+   "author": "dependabot[bot]",
+   "lane": "dependabot",
+   "head": {
+    "ref": "dependabot/npm_and_yarn/thread-stream-4.2.0",
+    "sha": "3d05112e173ba84284cdf797e9497dd8279a27eb"
+   },
+   "headSha": "3d05112e173ba84284cdf797e9497dd8279a27eb",
+   "tier": "owner-gated",
+   "matchedCategories": [
+    "DECISION_PATH",
+    "SAFETY_MACHINERY"
+   ],
+   "matched": [
+    {
+     "file": "artifacts/api-server/package.json",
+     "category": "DECISION_PATH",
+     "rule": "the /v1 decision API server"
+    },
+    {
+     "file": "pnpm-lock.yaml",
+     "category": "SAFETY_MACHINERY",
+     "rule": "workspace/lockfile"
+    }
+   ],
+   "gating": {
+    "name": "Typecheck, build, and proof scaffold",
+    "checkRunId": null,
+    "status": "none",
+    "conclusion": "none"
+   },
+   "mergeable": true,
+   "mergeableState": "unstable",
+   "threads": 0,
+   "threadsTotal": 0,
+   "codex": {
+    "present": true,
+    "kind": "usage-limit-notice-only",
+    "status": "usage-limit",
+    "has_unresolved_findings": null,
+    "comments": 1,
+    "latest": "2026-10-01T15:27:20Z"
+   },
+   "draft": false,
+   "createdAt": "2026-10-01T15:27:16Z",
+   "updatedAt": "2026-10-01T15:31:23Z",
+   "ageDays": 22.3,
+   "changedFiles": 3,
+   "files": [
+    "artifacts/api-server/package.json",
+    "artifacts/sbom/cyclonedx.json",
+    "pnpm-lock.yaml"
+   ],
+   "aheadBy": 2,
+   "behindBy": 2666,
+   "alreadyOnMainline": {
+    "headIsAncestor": false,
+    "cherryNotOnMainline": 2,
+    "cherryOnMainline": 0
+   },
+   "otherNonSuccessChecks": [],
+   "lastComments": [
+    {
+     "date": "2026-10-01T15:27:20Z",
+     "login": "chatgpt-codex-connector[bot]",
+     "text": "Codex usage limits have been reached for code reviews. Please check with the admins of this repo to increase the limits by adding credits. Credits must be used "
+    },
+    {
+     "date": "2026-10-01T15:27:29Z",
+     "login": "github-actions[bot]",
+     "text": "<!-- signalgrid-triage --> ### 🧭 PR triage - **Areas:** `area:api` - **Size:** `size:XS` (19 lines across 2 files) CI runs the full gate suite (build, typecheck"
+    }
+   ],
+   "bodyMergedUnderDR037": false,
+   "bodyCloudLandSentences": [],
+   "disposition": "DEPENDABOT",
+   "alsoApplies": [
+    "OWNER",
+    "NEEDS_WORK"
+   ],
+   "reason": "dependabot[bot] major bump of thread-stream 3.1.0 to 4.2.0 (artifacts/api-server/package.json, DECISION_PATH), still unapplied on mainline; gating check-run is absent on 3d05112e (0 check-runs, combined status pending/0), mergeable true/unstable (2 ahead, 2666 behind mainline), 0 threads; the owner's 2026-10-15 dependabot decision is pending."
+  },
+  {
+   "number": 1382,
+   "title": "deps: bump @types/node from 25.6.2 to 26.6.3",
+   "state": "open",
+   "author": "dependabot[bot]",
+   "lane": "dependabot",
+   "head": {
+    "ref": "dependabot/npm_and_yarn/types/node-26.6.3",
+    "sha": "3616e506121910a5c7b35c7a68836a842fd5b89b"
+   },
+   "headSha": "3616e506121910a5c7b35c7a68836a842fd5b89b",
+   "tier": "owner-gated",
+   "matchedCategories": [
+    "SAFETY_MACHINERY"
+   ],
+   "matched": [
+    {
+     "file": "pnpm-lock.yaml",
+     "category": "SAFETY_MACHINERY",
+     "rule": "workspace/lockfile"
+    },
+    {
+     "file": "pnpm-workspace.yaml",
+     "category": "SAFETY_MACHINERY",
+     "rule": "workspace/lockfile"
+    }
+   ],
+   "gating": {
+    "name": "Typecheck, build, and proof scaffold",
+    "checkRunId": null,
+    "status": "none",
+    "conclusion": "none"
+   },
+   "mergeable": true,
+   "mergeableState": "unstable",
+   "threads": 0,
+   "threadsTotal": 0,
+   "codex": {
+    "present": true,
+    "kind": "usage-limit-notice-only",
+    "status": "usage-limit",
+    "has_unresolved_findings": null,
+    "comments": 1,
+    "latest": "2026-10-01T15:27:36Z"
+   },
+   "draft": false,
+   "createdAt": "2026-10-01T15:27:31Z",
+   "updatedAt": "2026-10-01T15:30:24Z",
+   "ageDays": 22.3,
+   "changedFiles": 3,
+   "files": [
+    "artifacts/sbom/cyclonedx.json",
+    "pnpm-lock.yaml",
+    "pnpm-workspace.yaml"
+   ],
+   "aheadBy": 2,
+   "behindBy": 2666,
+   "alreadyOnMainline": {
+    "headIsAncestor": false,
+    "cherryNotOnMainline": 2,
+    "cherryOnMainline": 0
+   },
+   "otherNonSuccessChecks": [],
+   "lastComments": [
+    {
+     "date": "2026-10-01T15:27:36Z",
+     "login": "chatgpt-codex-connector[bot]",
+     "text": "Codex usage limits have been reached for code reviews. Please check with the admins of this repo to increase the limits by adding credits. Credits must be used "
+    },
+    {
+     "date": "2026-10-01T15:28:10Z",
+     "login": "github-actions[bot]",
+     "text": "<!-- signalgrid-triage --> ### 🧭 PR triage - **Areas:** — - **Size:** `size:M` (158 lines across 2 files) CI runs the full gate suite (build, typecheck, proofs,"
+    }
+   ],
+   "bodyMergedUnderDR037": false,
+   "bodyCloudLandSentences": [],
+   "disposition": "DEPENDABOT",
+   "alsoApplies": [
+    "NEEDS_WORK"
+   ],
+   "reason": "dependabot[bot] major bump of @types/node 25.6.2 to 26.6.3 (pnpm-workspace.yaml catalog), still unapplied on mainline; gating check-run is absent on 3616e506 (0 check-runs, combined status pending/0), mergeable true/unstable (2 ahead, 2666 behind mainline), 0 threads; the owner's 2026-10-15 dependabot decision is pending."
+  },
+  {
+   "number": 1383,
+   "title": "deps: bump ioredis from 5.11.1 to 6.0.0",
+   "state": "open",
+   "author": "dependabot[bot]",
+   "lane": "dependabot",
+   "head": {
+    "ref": "dependabot/npm_and_yarn/ioredis-6.0.0",
+    "sha": "c4529c3d130a085d33d6ca02a87230e6fb5dc101"
+   },
+   "headSha": "c4529c3d130a085d33d6ca02a87230e6fb5dc101",
+   "tier": "owner-gated",
+   "matchedCategories": [
+    "DECISION_PATH",
+    "SAFETY_MACHINERY"
+   ],
+   "matched": [
+    {
+     "file": "lib/integrations/package.json",
+     "category": "DECISION_PATH",
+     "rule": "the decision core / connectors / flows (lib/*)"
+    },
+    {
+     "file": "lib/webauthn/package.json",
+     "category": "DECISION_PATH",
+     "rule": "the decision core / connectors / flows (lib/*)"
+    },
+    {
+     "file": "pnpm-lock.yaml",
+     "category": "SAFETY_MACHINERY",
+     "rule": "workspace/lockfile"
+    },
+    {
+     "file": "scripts/package.json",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    }
+   ],
+   "gating": {
+    "name": "Typecheck, build, and proof scaffold",
+    "checkRunId": null,
+    "status": "none",
+    "conclusion": "none"
+   },
+   "mergeable": true,
+   "mergeableState": "unstable",
+   "threads": 0,
+   "threadsTotal": 0,
+   "codex": {
+    "present": true,
+    "kind": "usage-limit-notice-only",
+    "status": "usage-limit",
+    "has_unresolved_findings": null,
+    "comments": 1,
+    "latest": "2026-10-01T15:28:06Z"
+   },
+   "draft": false,
+   "createdAt": "2026-10-01T15:28:01Z",
+   "updatedAt": "2026-10-01T15:32:11Z",
+   "ageDays": 22.3,
+   "changedFiles": 5,
+   "files": [
+    "artifacts/sbom/cyclonedx.json",
+    "lib/integrations/package.json",
+    "lib/webauthn/package.json",
+    "pnpm-lock.yaml",
+    "scripts/package.json"
+   ],
+   "aheadBy": 2,
+   "behindBy": 2666,
+   "alreadyOnMainline": {
+    "headIsAncestor": false,
+    "cherryNotOnMainline": 2,
+    "cherryOnMainline": 0
+   },
+   "otherNonSuccessChecks": [],
+   "lastComments": [
+    {
+     "date": "2026-10-01T15:28:06Z",
+     "login": "chatgpt-codex-connector[bot]",
+     "text": "Codex usage limits have been reached for code reviews. Please check with the admins of this repo to increase the limits by adding credits. Credits must be used "
+    },
+    {
+     "date": "2026-10-01T15:28:50Z",
+     "login": "github-actions[bot]",
+     "text": "<!-- signalgrid-triage --> ### 🧭 PR triage - **Areas:** `area:integrations` `area:tooling` - **Size:** `size:S` (43 lines across 4 files) CI runs the full gate "
+    }
+   ],
+   "bodyMergedUnderDR037": false,
+   "bodyCloudLandSentences": [],
+   "disposition": "DEPENDABOT",
+   "alsoApplies": [
+    "OWNER",
+    "NEEDS_WORK"
+   ],
+   "reason": "dependabot[bot] major bump of ioredis 5.11.1 to 6.0.0 (lib/integrations, lib/webauthn, scripts package.json; DECISION_PATH), still unapplied on mainline; gating check-run is absent on c4529c3d (0 check-runs, combined status pending/0), mergeable true/unstable (2 ahead, 2666 behind mainline), 0 threads; the owner's 2026-10-15 dependabot decision is pending."
+  },
+  {
+   "number": 1384,
+   "title": "deps: bump lucide-react from 0.545.0 to 1.48.0",
+   "state": "open",
+   "author": "dependabot[bot]",
+   "lane": "dependabot",
+   "head": {
+    "ref": "dependabot/npm_and_yarn/lucide-react-1.48.0",
+    "sha": "2755e2ba671a921f0f3f0b031ad9608aac5dfba5"
+   },
+   "headSha": "2755e2ba671a921f0f3f0b031ad9608aac5dfba5",
+   "tier": "owner-gated",
+   "matchedCategories": [
+    "SAFETY_MACHINERY"
+   ],
+   "matched": [
+    {
+     "file": "pnpm-lock.yaml",
+     "category": "SAFETY_MACHINERY",
+     "rule": "workspace/lockfile"
+    },
+    {
+     "file": "pnpm-workspace.yaml",
+     "category": "SAFETY_MACHINERY",
+     "rule": "workspace/lockfile"
+    }
+   ],
+   "gating": {
+    "name": "Typecheck, build, and proof scaffold",
+    "checkRunId": null,
+    "status": "none",
+    "conclusion": "none"
+   },
+   "mergeable": true,
+   "mergeableState": "unstable",
+   "threads": 0,
+   "threadsTotal": 0,
+   "codex": {
+    "present": true,
+    "kind": "usage-limit-notice-only",
+    "status": "usage-limit",
+    "has_unresolved_findings": null,
+    "comments": 1,
+    "latest": "2026-10-01T15:28:42Z"
+   },
+   "draft": false,
+   "createdAt": "2026-10-01T15:28:38Z",
+   "updatedAt": "2026-10-01T15:33:19Z",
+   "ageDays": 22.3,
+   "changedFiles": 3,
+   "files": [
+    "artifacts/sbom/cyclonedx.json",
+    "pnpm-lock.yaml",
+    "pnpm-workspace.yaml"
+   ],
+   "aheadBy": 2,
+   "behindBy": 2666,
+   "alreadyOnMainline": {
+    "headIsAncestor": false,
+    "cherryNotOnMainline": 2,
+    "cherryOnMainline": 0
+   },
+   "otherNonSuccessChecks": [],
+   "lastComments": [
+    {
+     "date": "2026-10-01T15:28:42Z",
+     "login": "chatgpt-codex-connector[bot]",
+     "text": "Codex usage limits have been reached for code reviews. Please check with the admins of this repo to increase the limits by adding credits. Credits must be used "
+    },
+    {
+     "date": "2026-10-01T15:29:02Z",
+     "login": "github-actions[bot]",
+     "text": "<!-- signalgrid-triage --> ### 🧭 PR triage - **Areas:** — - **Size:** `size:XS` (22 lines across 2 files) CI runs the full gate suite (build, typecheck, proofs,"
+    }
+   ],
+   "bodyMergedUnderDR037": false,
+   "bodyCloudLandSentences": [],
+   "disposition": "DEPENDABOT",
+   "alsoApplies": [
+    "NEEDS_WORK"
+   ],
+   "reason": "dependabot[bot] major bump of lucide-react 0.545.0 to 1.48.0 (pnpm-workspace.yaml catalog), still unapplied on mainline; gating check-run is absent on 2755e2ba (0 check-runs, combined status pending/0), mergeable true/unstable (2 ahead, 2666 behind mainline), 0 threads; the owner's 2026-10-15 dependabot decision is pending."
+  },
+  {
+   "number": 1385,
+   "title": "deps: bump zod from 3.25.76 to 4.6.5",
+   "state": "open",
+   "author": "dependabot[bot]",
+   "lane": "dependabot",
+   "head": {
+    "ref": "dependabot/npm_and_yarn/zod-4.6.5",
+    "sha": "69596f570e62e414faaa64d4e36d453584c3a5a3"
+   },
+   "headSha": "69596f570e62e414faaa64d4e36d453584c3a5a3",
+   "tier": "owner-gated",
+   "matchedCategories": [
+    "SAFETY_MACHINERY"
+   ],
+   "matched": [
+    {
+     "file": "pnpm-lock.yaml",
+     "category": "SAFETY_MACHINERY",
+     "rule": "workspace/lockfile"
+    },
+    {
+     "file": "pnpm-workspace.yaml",
+     "category": "SAFETY_MACHINERY",
+     "rule": "workspace/lockfile"
+    }
+   ],
+   "gating": {
+    "name": "Typecheck, build, and proof scaffold",
+    "checkRunId": null,
+    "status": "none",
+    "conclusion": "none"
+   },
+   "mergeable": true,
+   "mergeableState": "unstable",
+   "threads": 0,
+   "threadsTotal": 0,
+   "codex": {
+    "present": true,
+    "kind": "usage-limit-notice-only",
+    "status": "usage-limit",
+    "has_unresolved_findings": null,
+    "comments": 1,
+    "latest": "2026-10-01T15:29:00Z"
+   },
+   "draft": false,
+   "createdAt": "2026-10-01T15:28:56Z",
+   "updatedAt": "2026-10-01T15:35:16Z",
+   "ageDays": 22.3,
+   "changedFiles": 3,
+   "files": [
+    "artifacts/sbom/cyclonedx.json",
+    "pnpm-lock.yaml",
+    "pnpm-workspace.yaml"
+   ],
+   "aheadBy": 2,
+   "behindBy": 2666,
+   "alreadyOnMainline": {
+    "headIsAncestor": false,
+    "cherryNotOnMainline": 2,
+    "cherryOnMainline": 0
+   },
+   "otherNonSuccessChecks": [],
+   "lastComments": [
+    {
+     "date": "2026-10-01T15:29:00Z",
+     "login": "chatgpt-codex-connector[bot]",
+     "text": "Codex usage limits have been reached for code reviews. Please check with the admins of this repo to increase the limits by adding credits. Credits must be used "
+    },
+    {
+     "date": "2026-10-01T15:32:32Z",
+     "login": "github-actions[bot]",
+     "text": "<!-- signalgrid-triage --> ### 🧭 PR triage - **Areas:** — - **Size:** `size:S` (40 lines across 2 files) CI runs the full gate suite (build, typecheck, proofs, "
+    }
+   ],
+   "bodyMergedUnderDR037": false,
+   "bodyCloudLandSentences": [],
+   "disposition": "DEPENDABOT",
+   "alsoApplies": [
+    "NEEDS_WORK"
+   ],
+   "reason": "dependabot[bot] major bump of zod 3.25.76 to 4.6.5 (pnpm-workspace.yaml catalog), still unapplied on mainline; gating check-run is absent on 69596f57 (0 check-runs, combined status pending/0), mergeable true/unstable (2 ahead, 2666 behind mainline), 0 threads; the owner's 2026-10-15 dependabot decision is pending."
+  },
+  {
+   "number": 1386,
+   "title": "deps: bump @hookform/resolvers from 3.10.0 to 5.9.1",
+   "state": "open",
+   "author": "dependabot[bot]",
+   "lane": "dependabot",
+   "head": {
+    "ref": "dependabot/npm_and_yarn/hookform/resolvers-5.9.1",
+    "sha": "d75569f042062cca62ef5cb4981586d2445c3dce"
+   },
+   "headSha": "d75569f042062cca62ef5cb4981586d2445c3dce",
+   "tier": "owner-gated",
+   "matchedCategories": [
+    "SAFETY_MACHINERY"
+   ],
+   "matched": [
+    {
+     "file": "pnpm-lock.yaml",
+     "category": "SAFETY_MACHINERY",
+     "rule": "workspace/lockfile"
+    }
+   ],
+   "gating": {
+    "name": "Typecheck, build, and proof scaffold",
+    "checkRunId": null,
+    "status": "none",
+    "conclusion": "none"
+   },
+   "mergeable": true,
+   "mergeableState": "unstable",
+   "threads": 0,
+   "threadsTotal": 0,
+   "codex": {
+    "present": true,
+    "kind": "usage-limit-notice-only",
+    "status": "usage-limit",
+    "has_unresolved_findings": null,
+    "comments": 1,
+    "latest": "2026-10-01T15:29:21Z"
+   },
+   "draft": false,
+   "createdAt": "2026-10-01T15:29:17Z",
+   "updatedAt": "2026-10-01T15:33:39Z",
+   "ageDays": 22.3,
+   "changedFiles": 3,
+   "files": [
+    "artifacts/sbom/cyclonedx.json",
+    "artifacts/signalgrid-app/package.json",
+    "pnpm-lock.yaml"
+   ],
+   "aheadBy": 2,
+   "behindBy": 2666,
+   "alreadyOnMainline": {
+    "headIsAncestor": false,
+    "cherryNotOnMainline": 2,
+    "cherryOnMainline": 0
+   },
+   "otherNonSuccessChecks": [],
+   "lastComments": [
+    {
+     "date": "2026-10-01T15:29:21Z",
+     "login": "chatgpt-codex-connector[bot]",
+     "text": "Codex usage limits have been reached for code reviews. Please check with the admins of this repo to increase the limits by adding credits. Credits must be used "
+    },
+    {
+     "date": "2026-10-01T15:33:39Z",
+     "login": "github-actions[bot]",
+     "text": "<!-- signalgrid-triage --> ### 🧭 PR triage - **Areas:** `area:apps` - **Size:** `size:S` (117 lines across 3 files) CI runs the full gate suite (build, typechec"
+    }
+   ],
+   "bodyMergedUnderDR037": false,
+   "bodyCloudLandSentences": [],
+   "disposition": "DEPENDABOT",
+   "alsoApplies": [
+    "NEEDS_WORK"
+   ],
+   "reason": "dependabot[bot] major bump of @hookform/resolvers 3.10.0 to 5.9.1 (artifacts/signalgrid-app/package.json), still unapplied on mainline; gating check-run is absent on d75569f0 (0 check-runs, combined status pending/0), mergeable true/unstable (2 ahead, 2666 behind mainline), 0 threads; the owner's 2026-10-15 dependabot decision is pending."
+  },
+  {
+   "number": 1387,
+   "title": "deps: bump framer-motion from 12.38.0 to 13.4.4",
+   "state": "open",
+   "author": "dependabot[bot]",
+   "lane": "dependabot",
+   "head": {
+    "ref": "dependabot/npm_and_yarn/framer-motion-13.4.4",
+    "sha": "f12459b919829ccb9860dd0ae254148250752ac7"
+   },
+   "headSha": "f12459b919829ccb9860dd0ae254148250752ac7",
+   "tier": "owner-gated",
+   "matchedCategories": [
+    "SAFETY_MACHINERY"
+   ],
+   "matched": [
+    {
+     "file": "pnpm-lock.yaml",
+     "category": "SAFETY_MACHINERY",
+     "rule": "workspace/lockfile"
+    },
+    {
+     "file": "pnpm-workspace.yaml",
+     "category": "SAFETY_MACHINERY",
+     "rule": "workspace/lockfile"
+    }
+   ],
+   "gating": {
+    "name": "Typecheck, build, and proof scaffold",
+    "checkRunId": null,
+    "status": "none",
+    "conclusion": "none"
+   },
+   "mergeable": true,
+   "mergeableState": "unstable",
+   "threads": 0,
+   "threadsTotal": 0,
+   "codex": {
+    "present": true,
+    "kind": "usage-limit-notice-only",
+    "status": "usage-limit",
+    "has_unresolved_findings": null,
+    "comments": 1,
+    "latest": "2026-10-01T15:29:43Z"
+   },
+   "draft": false,
+   "createdAt": "2026-10-01T15:29:37Z",
+   "updatedAt": "2026-10-01T15:35:00Z",
+   "ageDays": 22.3,
+   "changedFiles": 3,
+   "files": [
+    "artifacts/sbom/cyclonedx.json",
+    "pnpm-lock.yaml",
+    "pnpm-workspace.yaml"
+   ],
+   "aheadBy": 2,
+   "behindBy": 2666,
+   "alreadyOnMainline": {
+    "headIsAncestor": false,
+    "cherryNotOnMainline": 2,
+    "cherryOnMainline": 0
+   },
+   "otherNonSuccessChecks": [],
+   "lastComments": [
+    {
+     "date": "2026-10-01T15:29:43Z",
+     "login": "chatgpt-codex-connector[bot]",
+     "text": "Codex usage limits have been reached for code reviews. Please check with the admins of this repo to increase the limits by adding credits. Credits must be used "
+    },
+    {
+     "date": "2026-10-01T15:33:40Z",
+     "login": "github-actions[bot]",
+     "text": "<!-- signalgrid-triage --> ### 🧭 PR triage - **Areas:** — - **Size:** `size:S` (39 lines across 2 files) CI runs the full gate suite (build, typecheck, proofs, "
+    }
+   ],
+   "bodyMergedUnderDR037": false,
+   "bodyCloudLandSentences": [],
+   "disposition": "DEPENDABOT",
+   "alsoApplies": [
+    "NEEDS_WORK"
+   ],
+   "reason": "dependabot[bot] major bump of framer-motion 12.38.0 to 13.4.4 (pnpm-workspace.yaml catalog), still unapplied on mainline; gating check-run is absent on f12459b9 (0 check-runs, combined status pending/0), mergeable true/unstable (2 ahead, 2666 behind mainline), 0 threads; the owner's 2026-10-15 dependabot decision is pending."
+  },
+  {
+   "number": 1390,
+   "title": "ci: shell lint uses the runner's shellcheck and waits for the apt lock (backlog row: gating CI apt-lock race)",
+   "state": "open",
+   "author": "DanFashauer",
+   "lane": "cloud-worker",
+   "head": {
+    "ref": "claude/build-ci-shellcheck-no-apt-lock",
+    "sha": "c88ea58c412da93fef25ee2226daf57501ea1665"
+   },
+   "headSha": "c88ea58c412da93fef25ee2226daf57501ea1665",
+   "tier": "owner-gated",
+   "matchedCategories": [
+    "SAFETY_MACHINERY"
+   ],
+   "matched": [
+    {
+     "file": ".github/workflows/review-hub-ci.yml",
+     "category": "SAFETY_MACHINERY",
+     "rule": ".github/workflows/**"
+    },
+    {
+     "file": ".github/workflows/scheduled-verification.yml",
+     "category": "SAFETY_MACHINERY",
+     "rule": ".github/workflows/**"
+    },
+    {
+     "file": "pnpm-lock.yaml",
+     "category": "SAFETY_MACHINERY",
+     "rule": "workspace/lockfile"
+    },
+    {
+     "file": "scripts/check-ci-shellcheck-step.mjs",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/check-scheduled-verification-scope.mjs",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/package.json",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/preflight.mjs",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    }
+   ],
+   "gating": {
+    "name": "Typecheck, build, and proof scaffold",
+    "checkRunId": 113294340169,
+    "status": "completed",
+    "conclusion": "success"
+   },
+   "mergeable": false,
+   "mergeableState": "dirty",
+   "threads": 0,
+   "threadsTotal": 0,
+   "codex": {
+    "present": true,
+    "kind": "usage-limit-notice-only",
+    "status": "usage-limit",
+    "has_unresolved_findings": null,
+    "comments": 1,
+    "latest": "2026-10-01T21:11:00Z"
+   },
+   "draft": false,
+   "createdAt": "2026-10-01T16:55:00Z",
+   "updatedAt": "2026-10-08T11:46:14Z",
+   "ageDays": 22.3,
+   "changedFiles": 10,
+   "files": [
+    ".github/workflows/review-hub-ci.yml",
+    ".github/workflows/scheduled-verification.yml",
+    "docs/BUILD_BACKLOG.md",
+    "docs/COMPANY_BUILD_PLAN.md",
+    "docs/agent/SURFACE_REVIEW_COVERAGE.md",
+    "pnpm-lock.yaml",
+    "scripts/check-ci-shellcheck-step.mjs",
+    "scripts/check-scheduled-verification-scope.mjs",
+    "scripts/package.json",
+    "scripts/preflight.mjs"
+   ],
+   "aheadBy": 39,
+   "behindBy": 2113,
+   "alreadyOnMainline": {
+    "headIsAncestor": false,
+    "cherryNotOnMainline": 20,
+    "cherryOnMainline": 4
+   },
+   "otherNonSuccessChecks": [
+    "github-advanced-security=failure",
+    "phase-pr-evidence=cancelled"
+   ],
+   "lastComments": [
+    {
+     "date": "2026-10-08T11:26:13Z",
+     "login": "DanFashauer",
+     "text": "## Review round 13 — verdict: **fix-needed** (head `9dd03f465f4e3e802f473ef6aca35e1b8e9300b4`) Reviewed by the cloud lane (Sonnet review + Opus refute, DR-047 r"
+    },
+    {
+     "date": "2026-10-08T11:46:14Z",
+     "login": "DanFashauer",
+     "text": "Round 13 addressed at `c88ea58c412da93fef25ee2226daf57501ea1665` (Alpha merged, never rebased; COMPANY_BUILD_PLAN row 21 set to 934, `check-doc-line-counts` 0 d"
+    }
+   ],
+   "bodyMergedUnderDR037": false,
+   "bodyCloudLandSentences": [],
+   "disposition": "NEEDS_WORK",
+   "alsoApplies": [],
+   "reason": "claude/* PR whose only owner-gated match is SAFETY_MACHINERY with gating run 113294340169 completed/success on c88ea58c and 0 threads, but mergeable false/dirty (39 ahead, 2113 behind mainline) (conflicted); the cloud's round-13 review (fix-needed) covered the prior head 9dd03f46 and nothing reviews c88ea58c; scripts/check-ci-shellcheck-step.mjs is absent from mainline, so it is not a close candidate."
+  },
+  {
+   "number": 1398,
+   "title": "mutation-guard: journal-based restore on signal + carrier evaluate registered (backlog row Brace-less guards)",
+   "state": "open",
+   "author": "DanFashauer",
+   "lane": "cloud-worker",
+   "head": {
+    "ref": "claude/build-mutation-guard-restore-and-carrier-evaluate",
+    "sha": "b8b37678df5c1b6151055ff58e099a2ecf2df9ab"
+   },
+   "headSha": "b8b37678df5c1b6151055ff58e099a2ecf2df9ab",
+   "tier": "owner-gated",
+   "matchedCategories": [
+    "SAFETY_MACHINERY"
+   ],
+   "matched": [
+    {
+     "file": "scripts/check-mutation-sharding.mjs",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/check-mutation-sharding.mjs",
+     "category": "SAFETY_MACHINERY",
+     "rule": "the gate/guard registries"
+    },
+    {
+     "file": "scripts/mutation-guard.mjs",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/mutation-guard.mjs",
+     "category": "SAFETY_MACHINERY",
+     "rule": "the gate/guard registries"
+    }
+   ],
+   "gating": {
+    "name": "Typecheck, build, and proof scaffold",
+    "checkRunId": 113321722901,
+    "status": "completed",
+    "conclusion": "success"
+   },
+   "mergeable": false,
+   "mergeableState": "dirty",
+   "threads": 0,
+   "threadsTotal": 1,
+   "codex": {
+    "present": false
+   },
+   "draft": true,
+   "createdAt": "2026-10-01T22:57:54Z",
+   "updatedAt": "2026-10-08T12:55:58Z",
+   "ageDays": 22.0,
+   "changedFiles": 3,
+   "files": [
+    "docs/BUILD_BACKLOG.md",
+    "scripts/check-mutation-sharding.mjs",
+    "scripts/mutation-guard.mjs"
+   ],
+   "aheadBy": 16,
+   "behindBy": 2100,
+   "alreadyOnMainline": {
+    "headIsAncestor": false,
+    "cherryNotOnMainline": 11,
+    "cherryOnMainline": 0
+   },
+   "otherNonSuccessChecks": [
+    "github-advanced-security=failure",
+    "phase-pr-evidence=cancelled"
+   ],
+   "lastComments": [
+    {
+     "date": "2026-10-08T12:16:00Z",
+     "login": "DanFashauer",
+     "text": "## Review round 9 — verdict: **fix-needed** (head `6aacf3fe3e02afed206b20a4acdfdd484376eda0`) Reviewed by the cloud lane (Sonnet review + Opus refute, DR-047 re"
+    },
+    {
+     "date": "2026-10-08T12:55:58Z",
+     "login": "DanFashauer",
+     "text": "New head `b8b37678df5c1b6151055ff58e099a2ecf2df9ab` (fix commit `2ba18630` plus a merge of origin/SignalGrid_Alpha, 348 commits) closes review round 9. MEDIUM 1"
+    }
+   ],
+   "bodyMergedUnderDR037": false,
+   "bodyCloudLandSentences": [],
+   "disposition": "NEEDS_WORK",
+   "alsoApplies": [],
+   "reason": "Draft claude/* PR (SAFETY_MACHINERY only: scripts/mutation-guard.mjs, check-mutation-sharding.mjs) with gating run 113321722901 completed/success on b8b37678 and 0 unresolved threads (1 resolved/outdated), but it is a draft and mergeable false/dirty (16 ahead, 2100 behind mainline) (conflicted); the journal-restore change is absent from mainline's mutation-guard.mjs (0 'journal' hits), so it is not a close candidate."
+  },
+  {
+   "number": 1416,
+   "title": "Add the @claude GitHub workflow (DR-063 GitHub-App trigger, owner-chosen shape, Opus-reviewed)",
+   "state": "open",
+   "author": "DanFashauer",
+   "lane": "mac",
+   "head": {
+    "ref": "mac/claude-github-action",
+    "sha": "b02d067e49203ff12bf3d9657b65aca0d0897729"
+   },
+   "headSha": "b02d067e49203ff12bf3d9657b65aca0d0897729",
+   "tier": "owner-gated",
+   "matchedCategories": [
+    "SAFETY_MACHINERY"
+   ],
+   "matched": [
+    {
+     "file": ".github/workflows/claude.yml",
+     "category": "SAFETY_MACHINERY",
+     "rule": ".github/workflows/**"
+    },
+    {
+     "file": "scripts/check-derived-doc-figures.mjs",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/check-mainline-workflow-streaks.mjs",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    }
+   ],
+   "gating": {
+    "name": "Typecheck, build, and proof scaffold",
+    "checkRunId": 110896767339,
+    "status": "completed",
+    "conclusion": "success"
+   },
+   "mergeable": false,
+   "mergeableState": "dirty",
+   "threads": 0,
+   "threadsTotal": 0,
+   "codex": {
+    "present": true,
+    "kind": "usage-limit-notice-only",
+    "status": "usage-limit",
+    "has_unresolved_findings": null,
+    "comments": 1,
+    "latest": "2026-10-02T15:08:30Z"
+   },
+   "draft": false,
+   "createdAt": "2026-10-02T15:08:26Z",
+   "updatedAt": "2026-10-02T19:22:34Z",
+   "ageDays": 21.3,
+   "changedFiles": 6,
+   "files": [
+    ".github/workflows/claude.yml",
+    "docs/CI_AND_VALIDATION.md",
+    "docs/STATUS.md",
+    "docs/agent/SURFACE_REVIEW_COVERAGE.md",
+    "scripts/check-derived-doc-figures.mjs",
+    "scripts/check-mainline-workflow-streaks.mjs"
+   ],
+   "aheadBy": 5,
+   "behindBy": 2551,
+   "alreadyOnMainline": {
+    "headIsAncestor": false,
+    "cherryNotOnMainline": 5,
+    "cherryOnMainline": 0
+   },
+   "otherNonSuccessChecks": [
+    "github-advanced-security=failure"
+   ],
+   "lastComments": [
+    {
+     "date": "2026-10-02T15:08:38Z",
+     "login": "github-actions[bot]",
+     "text": "<!-- signalgrid-triage --> ### 🧭 PR triage - **Areas:** `area:ci` `area:docs` `area:tooling` - **Size:** `size:M` (146 lines across 6 files) CI runs the full ga"
+    },
+    {
+     "date": "2026-10-02T19:22:34Z",
+     "login": "DanFashauer",
+     "text": "## Review round 1 — verdict: **fix-needed** (head `b02d067e49203ff12bf3d9657b65aca0d0897729`) Reviewed by the cloud lane (Sonnet review + Opus refute, DR-047 re"
+    }
+   ],
+   "bodyMergedUnderDR037": false,
+   "bodyCloudLandSentences": [],
+   "disposition": "MAC",
+   "alsoApplies": [
+    "NEEDS_WORK"
+   ],
+   "reason": "Head mac/claude-github-action is Mac lane work (adds .github/workflows/claude.yml, absent from mainline) and the tier is SAFETY_MACHINERY only; gating run 110896767339 completed/success on b02d067e and 0 threads, but mergeable false/dirty (5 ahead, 2551 behind mainline) (conflicted) and the cloud lane's round-1 review of this head is fix-needed (refuter upheld)."
+  },
+  {
+   "number": 1417,
+   "title": "Adopt icm-architect (DR-053 re-run): vendor byte-identical, nested-instruction-file gate, lookup-before-append, STATE-block ritual",
+   "state": "open",
+   "author": "DanFashauer",
+   "lane": "mac",
+   "head": {
+    "ref": "mac/icm-architect-adopt",
+    "sha": "572b7a4b1c79ddbcc842aff987f62605fb08c89d"
+   },
+   "headSha": "572b7a4b1c79ddbcc842aff987f62605fb08c89d",
+   "tier": "owner-gated",
+   "matchedCategories": [
+    "SAFETY_MACHINERY"
+   ],
+   "matched": [
+    {
+     "file": ".claude/skills/VENDORED.md",
+     "category": "SAFETY_MACHINERY",
+     "rule": ".claude/{agents,skills,commands,workflows}/** and .mcp.json (the instruction and tool-wiring surface every session loads)"
+    },
+    {
+     "file": ".claude/skills/icm-architect/LICENSE",
+     "category": "SAFETY_MACHINERY",
+     "rule": ".claude/{agents,skills,commands,workflows}/** and .mcp.json (the instruction and tool-wiring surface every session loads)"
+    },
+    {
+     "file": ".claude/skills/icm-architect/README.md",
+     "category": "SAFETY_MACHINERY",
+     "rule": ".claude/{agents,skills,commands,workflows}/** and .mcp.json (the instruction and tool-wiring surface every session loads)"
+    },
+    {
+     "file": ".claude/skills/icm-architect/SKILL.md",
+     "category": "SAFETY_MACHINERY",
+     "rule": ".claude/{agents,skills,commands,workflows}/** and .mcp.json (the instruction and tool-wiring surface every session loads)"
+    },
+    {
+     "file": ".claude/skills/icm-architect/assets/templates/CLAUDE.md.template",
+     "category": "SAFETY_MACHINERY",
+     "rule": ".claude/{agents,skills,commands,workflows}/** and .mcp.json (the instruction and tool-wiring surface every session loads)"
+    },
+    {
+     "file": ".claude/skills/icm-architect/assets/templates/CONTEXT.md.template",
+     "category": "SAFETY_MACHINERY",
+     "rule": ".claude/{agents,skills,commands,workflows}/** and .mcp.json (the instruction and tool-wiring surface every session loads)"
+    },
+    {
+     "file": ".claude/skills/icm-architect/assets/templates/node.md",
+     "category": "SAFETY_MACHINERY",
+     "rule": ".claude/{agents,skills,commands,workflows}/** and .mcp.json (the instruction and tool-wiring surface every session loads)"
+    },
+    {
+     "file": ".claude/skills/icm-architect/assets/templates/object.md",
+     "category": "SAFETY_MACHINERY",
+     "rule": ".claude/{agents,skills,commands,workflows}/** and .mcp.json (the instruction and tool-wiring surface every session loads)"
+    },
+    {
+     "file": ".claude/skills/icm-architect/assets/templates/process.md",
+     "category": "SAFETY_MACHINERY",
+     "rule": ".claude/{agents,skills,commands,workflows}/** and .mcp.json (the instruction and tool-wiring surface every session loads)"
+    },
+    {
+     "file": ".claude/skills/icm-architect/assets/templates/questionnaire.md",
+     "category": "SAFETY_MACHINERY",
+     "rule": ".claude/{agents,skills,commands,workflows}/** and .mcp.json (the instruction and tool-wiring surface every session loads)"
+    },
+    {
+     "file": ".claude/skills/icm-architect/assets/templates/schema.md",
+     "category": "SAFETY_MACHINERY",
+     "rule": ".claude/{agents,skills,commands,workflows}/** and .mcp.json (the instruction and tool-wiring surface every session loads)"
+    },
+    {
+     "file": ".claude/skills/icm-architect/assets/templates/stage-CONTEXT.md",
+     "category": "SAFETY_MACHINERY",
+     "rule": ".claude/{agents,skills,commands,workflows}/** and .mcp.json (the instruction and tool-wiring surface every session loads)"
+    },
+    {
+     "file": ".claude/skills/icm-architect/references/core.md",
+     "category": "SAFETY_MACHINERY",
+     "rule": ".claude/{agents,skills,commands,workflows}/** and .mcp.json (the instruction and tool-wiring surface every session loads)"
+    },
+    {
+     "file": ".claude/skills/icm-architect/references/forms.md",
+     "category": "SAFETY_MACHINERY",
+     "rule": ".claude/{agents,skills,commands,workflows}/** and .mcp.json (the instruction and tool-wiring surface every session loads)"
+    },
+    {
+     "file": ".claude/skills/icm-architect/references/reference-integrity.md",
+     "category": "SAFETY_MACHINERY",
+     "rule": ".claude/{agents,skills,commands,workflows}/** and .mcp.json (the instruction and tool-wiring surface every session loads)"
+    },
+    {
+     "file": ".claude/skills/icm-architect/references/system-map.md",
+     "category": "SAFETY_MACHINERY",
+     "rule": ".claude/{agents,skills,commands,workflows}/** and .mcp.json (the instruction and tool-wiring surface every session loads)"
+    },
+    {
+     "file": ".claude/skills/tool-evaluation-by-use/SKILL.md",
+     "category": "SAFETY_MACHINERY",
+     "rule": ".claude/{agents,skills,commands,workflows}/** and .mcp.json (the instruction and tool-wiring surface every session loads)"
+    },
+    {
+     "file": "scripts/check-skill-plane-conformance.mjs",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/publication-boundary.mjs",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    }
+   ],
+   "gating": {
+    "name": "Typecheck, build, and proof scaffold",
+    "checkRunId": 110947942024,
+    "status": "completed",
+    "conclusion": "success"
+   },
+   "mergeable": false,
+   "mergeableState": "dirty",
+   "threads": 0,
+   "threadsTotal": 0,
+   "codex": {
+    "present": true,
+    "kind": "usage-limit-notice-only",
+    "status": "usage-limit",
+    "has_unresolved_findings": null,
+    "comments": 1,
+    "latest": "2026-10-02T15:09:21Z"
+   },
+   "draft": false,
+   "createdAt": "2026-10-02T15:09:14Z",
+   "updatedAt": "2026-10-02T19:22:36Z",
+   "ageDays": 21.3,
+   "changedFiles": 25,
+   "files": [
+    ".claude/skills/VENDORED.md",
+    ".claude/skills/icm-architect/LICENSE",
+    ".claude/skills/icm-architect/README.md",
+    ".claude/skills/icm-architect/SKILL.md",
+    ".claude/skills/icm-architect/assets/templates/CLAUDE.md.template",
+    ".claude/skills/icm-architect/assets/templates/CONTEXT.md.template",
+    ".claude/skills/icm-architect/assets/templates/node.md",
+    ".claude/skills/icm-architect/assets/templates/object.md",
+    ".claude/skills/icm-architect/assets/templates/process.md",
+    ".claude/skills/icm-architect/assets/templates/questionnaire.md",
+    ".claude/skills/icm-architect/assets/templates/schema.md",
+    ".claude/skills/icm-architect/assets/templates/stage-CONTEXT.md",
+    ".claude/skills/icm-architect/references/core.md",
+    ".claude/skills/icm-architect/references/forms.md",
+    ".claude/skills/icm-architect/references/reference-integrity.md",
+    ".claude/skills/icm-architect/references/system-map.md",
+    ".claude/skills/tool-evaluation-by-use/SKILL.md",
+    "CLAUDE.md",
+    "docs/BUILD_BACKLOG.md",
+    "docs/agent/RESOURCE_INTAKE.md",
+    "docs/agent/SURFACE_REVIEW_COVERAGE.md",
+    "docs/agent/resource-scans/2026-10-02-icm-architect.json",
+    "docs/research/MCP_MARKET_LEADERBOARDS.md",
+    "scripts/check-skill-plane-conformance.mjs",
+    "scripts/publication-boundary.mjs"
+   ],
+   "aheadBy": 4,
+   "behindBy": 2483,
+   "alreadyOnMainline": {
+    "headIsAncestor": false,
+    "cherryNotOnMainline": 3,
+    "cherryOnMainline": 0
+   },
+   "otherNonSuccessChecks": [
+    "github-advanced-security=failure"
+   ],
+   "lastComments": [
+    {
+     "date": "2026-10-02T15:09:27Z",
+     "login": "github-actions[bot]",
+     "text": "<!-- signalgrid-triage --> ### 🧭 PR triage - **Areas:** `area:docs` `area:tooling` - **Size:** `size:XL` (1098 lines across 25 files) CI runs the full gate suit"
+    },
+    {
+     "date": "2026-10-02T19:22:36Z",
+     "login": "DanFashauer",
+     "text": "## Review round 1 — verdict: **fix-needed** (head `572b7a4b1c79ddbcc842aff987f62605fb08c89d`) Reviewed by the cloud lane (Sonnet review + Opus refute, DR-047 re"
+    }
+   ],
+   "bodyMergedUnderDR037": false,
+   "bodyCloudLandSentences": [],
+   "disposition": "OWNER",
+   "alsoApplies": [
+    "MAC",
+    "NEEDS_WORK"
+   ],
+   "reason": "It edits the publication-boundary AREAS registry (scripts/publication-boundary.mjs, which the classifier tiers SAFETY_MACHINERY only) and vendors icm-architect, reversing the cloud lane's same-day intake verdict (round-1 owner-decision/fix-needed); gating run 110947942024 completed/success on 572b7a4b and 0 threads, but mergeable false/dirty (4 ahead, 2483 behind mainline) (conflicted) and the head is mac/*."
+  }
+ ]
+}

@@ -189,6 +189,18 @@ const missingOnly = detectDrift(
 );
 check("drift: a declared-but-absent resource → overall missing", missingOnly.overall === "missing");
 
+// NOTHING DECLARED is not a match. `detectDrift({resources:[]}, {resources:[]})` used to
+// return in_sync with zero findings — a desired state that failed to load read as a
+// healthy fleet, and the `unknown` rung was producible by nothing. Every assertion
+// here fails with `let overall = "in_sync"` and no synthetic finding restored.
+const nothingDeclared = detectDrift({ resources: [] }, { resources: [] });
+check("drift: an EMPTY desired state → overall unknown, never in_sync", nothingDeclared.overall === "unknown");
+check("drift: …with exactly one unknown finding that names the cause", nothingDeclared.counts.unknown === 1 && nothingDeclared.findings.length === 1 && /not|cannot|empty/i.test(nothingDeclared.findings[0]!.detail));
+check("drift: …and the summary does NOT say the fleet matches", !/matches the declared/i.test(summarizeDrift(nothingDeclared)) && /cannot be compared|nothing is declared/i.test(summarizeDrift(nothingDeclared)));
+check("drift: …and the probe projection carries one UNKNOWN probe, not an empty set", Object.values(toProbeResults(nothingDeclared)).some((p) => p.status === "unknown") && Object.keys(toProbeResults(nothingDeclared)).length === 1);
+check("drift: the unknown rung outranks unmanaged when nothing is declared but something is observed",
+  detectDrift({ resources: [] }, { resources: [{ kind: "config_profile", id: "a", spec: { x: "1" } }] }).overall === "unknown");
+
 // Drift validates OBSERVED input as strictly as plan validates desired input:
 // an unknown kind or malformed spec is refused, never silently classed unmanaged.
 throwsCode("drift: unknown observed kind is refused (not classed unmanaged)", "unknown_kind", () =>

@@ -1,0 +1,218 @@
+# .github/workflows/mac-runner-auto.yml — the Mac runner triggers itself.
+#
+# WHY. mac-runner-harness.yml is dispatch-only, and the owner was clicking it by hand.
+# Owner choices (2026-09-10): run on every PR into mainline AND a full run every night;
+# heavy work (full harness, darwin web build, live vendor containers, MCP lane) at
+# night only, so the Mac is not a treadmill while he is using it. Every push was
+# rejected on purpose: the 5-minute tick commits heartbeats all day (103 lane-mail
+# commits vs 56 real ones in the 24h measured), so pushes are not a signal.
+#
+# WHAT EACH JOB PROVES:
+#   pr-mac-checks  · proof:sim-requests on a FULL clone — a sim result whose provenance
+#                    commit never reached origin is fatal here and TOLERATED on CI's
+#                    depth-1 clone (check-sim-requests.mjs says so); the original runner's first
+#                    job caught exactly one (0a40d1b4).
+#                  · preflight on macOS — the gates must behave the same on the platform
+#                    the Mac lane runs; Apple git's grep -E once turned 19 false failures
+#                    (10deac53). Run these public-source checks on a standard hosted
+#                    ARM64 Mac so PRs do not reserve the local brain's only host.
+#   nightly        · lane=both: the full harness incl. the darwin web build, then preflight.
+#                  · lane=mcp:  the signalgrid-mcp sibling on real macOS, both halves
+#                    against the shared posture-report contract. Read-only; no evidence
+#                    is minted (a runner-minted evidence file is its own decision record).
+#
+# SECURITY. PR checks use a fresh GitHub-hosted Mac and public repository material.
+# The hardware/MCP nightly jobs retain the existing self-hosted runner. Do not
+# loosen GitHub's approval setting for outside collaborators. Standard hosted
+# runners are free for this public repository; this selects no larger paid runner.
+#
+# NOT an agent lane: it writes nothing and merges nothing, so it is not declared in
+# docs/agent/scheduled-routines.json (that registry is for always-on agent lanes with
+# a write scope), the same way mac-lane.yml's weekly rehearsal is not.
+name: Mac runner (automatic)
+
+on:
+  pull_request:
+    branches: [SignalGrid_Alpha]
+    paths-ignore:
+      - "artifacts/lane-messages/**"
+      - "artifacts/agent-heartbeats/**"
+      # A raised or cleared hand is a lane record like a heartbeat: on 2026-11-06 the hand
+      # deliveries alone queued the one Mac runner for hours (each run is ~70 min) and the
+      # host lock they hold is the same one the local brain waits on between its steps.
+      - "artifacts/raised-hands/**"
+      - "docs/agent/SURFACE_REVIEW_COVERAGE.md"
+      - "docs/agent/LOOP.md"
+  schedule:
+    # 08:00 UTC = 04:00 America/New_York during daylight time (03:00 in winter).
+    # GitHub cron is UTC only; the hour drifts by one across the DST change, on purpose.
+    - cron: "0 8 * * *"
+
+jobs:
+  # THE PR MAC CHECK IS FOUR SLICES AND ONE AGGREGATE. One hosted macOS runner needs about 41
+  # minutes for the whole preflight list against a 40-minute work bound (runs 43163039070 and
+  # 43211433896 both stopped at the deadline with no gate failed). The list is not shortened and
+  # the bound is not raised: `scripts/preflight.mjs --slice k/4` runs a contiguous quarter of the
+  # SAME list on its own runner under the SAME bound, and the aggregate job below, which keeps
+  # the check's name, refuses anything short of every step run exactly once on this commit.
+  pr-mac-slices:
+    if: github.event_name == 'pull_request'
+    name: PR Mac slice ${{ matrix.slice }}/4 (preflight on macOS)
+    strategy:
+      fail-fast: false
+      matrix:
+        slice: [1, 2, 3, 4]
+    # The standard hosted image, the family the full hosted Mac suite passes on.
+    # On macos-15 this chain exceeded the 40m work bound (run 43163039070).
+    runs-on: macos-latest
+    # A fresh hosted VM has no local-brain admission queue. Preserve the 40m
+    # complete-work bound and allow 20m for setup, teardown and log upload.
+    timeout-minutes: 60
+    # One group PER SLICE: a newer push cancels the older run of the same slice. A shared
+    # group would make the four slices of one run cancel each other.
+    concurrency:
+      group: mac-pr-${{ github.event.pull_request.number }}-slice-${{ matrix.slice }}
+      cancel-in-progress: true
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Setup project pnpm
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6; same pin as the main CI
+        with:
+          version: 10.28.1
+          run_install: false
+
+      # PIN THE RUNTIME. This is the only lane that ran on whatever node happened to
+      # be on the machine's PATH; every other lane in this repository pins 22 through
+      # actions/setup-node. The Mac had drifted to 24.18.0, and on 2026-09-17 that
+      # drift — not the machine, not any diff — is what turned `/v1 under concurrency`
+      # red on every PR: node 24's bundled undici throws
+      # `Error: setTypeOfService EINVAL` out of `writeH1` before the load driver sees a
+      # response, killing the request mid-flight (which is also why an earlier run
+      # reported ECONNRESET to ::1:5321 — the reset is the symptom, the throw is the
+      # cause). 209 gates passed ahead of it, and the identical `test:load` passes
+      # 16/16 with 600/600 responses on the node 22 lane.
+      #
+      # `engines.node` is ">=22", which 24 SATISFIES — so the Mac was breaking no
+      # written rule. That is exactly why this needed a pin rather than a reprimand.
+      # This pin does not by itself prove the Mac goes green; it makes the Mac lane
+      # run the runtime the passing lane runs, and the Mac's own next run is the proof.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install and verify under the shared host reservation
+        # One shell retains FD9 through install, checks and teardown; steps cannot share FDs.
+        # Pin the published helper, not the PR worktree. Normal local ticks stay nonblocking.
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+          PREFLIGHT_SLICE: ${{ matrix.slice }}
+          PREFLIGHT_PR_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          # ONE RUNNER, MANY QUEUED JOBS. A job queued for a PR that has since merged or closed
+          # still held the single Mac runner for ~25 minutes (on 2026-11-07 the queue held #1909
+          # and #1265, both merged, ahead of three open PRs). Read the PR's state when the job
+          # STARTS and skip the chain if it is closed; an unreadable state runs it (fail-closed).
+          pr_state=$(gh api "repos/$REPO/pulls/$PR_NUMBER" --jq .state 2>/dev/null) || pr_state=unknown
+          if [ "$pr_state" = closed ]; then echo "PR #$PR_NUMBER is closed; the Mac verification is skipped."; exit 0; fi
+          bash scripts/mac/ci-host-verification.sh 24eff86a940099e0725d474d1d5520bfbc71d368 60 2400 <<'CI_CHAIN'
+          set -u
+          # This is a fresh hosted image, not the previously provisioned Mac.
+          # Keep shell lint mandatory and fail before verification if unavailable.
+          if ! command -v shellcheck >/dev/null 2>&1; then
+            HOMEBREW_NO_AUTO_UPDATE=1 brew install shellcheck || exit $?
+          fi
+          # An absent shellcheck fails here (exit 127), before any verification.
+          shellcheck --version || exit $?
+          code=0
+          install_code=0
+          pnpm install --frozen-lockfile || install_code=$?
+          [ "$install_code" = 0 ] || exit "$install_code"
+          bash scripts/mac/free-test-port.sh || exit $?
+          pnpm run proof:sim-requests || code=$?
+          # A provenance failure must not hide this slice's independent result.
+          # A slice is a subset: it never prints the preflight verdict, only its own line.
+          preflight_code=0
+          node scripts/preflight.mjs --slice "$PREFLIGHT_SLICE/4" --slice-record "preflight-slice-$PREFLIGHT_SLICE.json" > preflight.log 2>&1 || preflight_code=$?
+          grep -E "Preflight slice [1-4]/4 (complete|FAILED)|FAILED at" preflight.log || true
+          [ "$preflight_code" = 0 ] || code="$preflight_code"
+          exit "$code"
+          CI_CHAIN
+
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mac-pr-logs-${{ github.event.pull_request.number }}-${{ github.run_id }}-${{ github.run_attempt }}-slice-${{ matrix.slice }}
+          path: preflight.log
+          if-no-files-found: ignore
+
+      - name: Upload the slice record
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          # Named for this run ATTEMPT: a re-run of some jobs cannot pick up an earlier attempt's record.
+          name: mac-pr-slice-record-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.slice }}
+          path: preflight-slice-${{ matrix.slice }}.json
+          if-no-files-found: ignore
+
+  pr-mac-checks:
+    # Runs even when a slice failed, was cancelled or was skipped: that is what it refuses.
+    # A re-run is judged on its own attempt only: "Re-run failed jobs" leaves the slices that
+    # passed without a record for the new attempt, and this job refuses the set. Use "Re-run all jobs".
+    if: always() && github.event_name == 'pull_request'
+    needs: pr-mac-slices
+    name: PR — Mac-only checks (full-clone provenance, preflight on macOS)
+    runs-on: macos-latest
+    timeout-minutes: 15
+    concurrency:
+      group: mac-pr-${{ github.event.pull_request.number }}-aggregate
+      cancel-in-progress: true
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Download the four slice records
+        uses: actions/download-artifact@v4
+        with:
+          pattern: mac-pr-slice-record-${{ github.run_id }}-${{ github.run_attempt }}-*
+          path: slices
+          merge-multiple: true
+
+      - name: Aggregate the slices into the one preflight verdict
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+          PREFLIGHT_PR_HEAD: ${{ github.event.pull_request.head.sha }}
+          SLICE_JOBS_RESULT: ${{ needs.pr-mac-slices.result }}
+        run: |
+          # Same rule as the slices: a PR already closed is skipped; an unreadable state is judged.
+          pr_state=$(gh api "repos/$REPO/pulls/$PR_NUMBER" --jq .state 2>/dev/null) || pr_state=unknown
+          if [ "$pr_state" = closed ]; then echo "PR #$PR_NUMBER is closed; the Mac verification is skipped."; exit 0; fi
+          mkdir -p slices
+          node scripts/preflight.mjs --aggregate slices --slices 4 --jobs-result "$SLICE_JOBS_RESULT"
+
+  nightly-both:
+    if: github.event_name == 'schedule'
+    name: Nightly — full harness + preflight
+    uses: ./.github/workflows/mac-runner-harness.yml
+    with:
+      lane: both
+
+  nightly-mcp:
+    # Independent of nightly-both: a red harness must not hide the MCP verdict.
+    if: github.event_name == 'schedule' && !cancelled()
+    needs: nightly-both
+    name: Nightly — MCP lane
+    uses: ./.github/workflows/mac-runner-harness.yml
+    with:
+      lane: mcp

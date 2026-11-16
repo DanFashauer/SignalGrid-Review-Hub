@@ -282,7 +282,13 @@ async function main(): Promise<void> {
       `single-core throughput ${singleRate.toFixed(2)}/sec is below the ${FLOOR_OPS_PER_SEC.toFixed(2)}/sec implied by the ${PILOT_GATE_P95_MS} ms p95 pilot gate`,
     );
   }
-  if (workerCount > 1 && aggregateRate <= singleRate) {
+  // The parallel-collapse gate is genuinely VACUOUS at one worker — there is no
+  // parallelism to collapse. That is fine; what was not fine is that the summary line
+  // below announced it as one of the gates unconditionally, so a single-core runner
+  // printed "no parallel collapse" for a property that had not been exercised. A check
+  // that did not run must never be reported as a check that passed.
+  const parallelCollapseExercised = workerCount > 1;
+  if (parallelCollapseExercised && aggregateRate <= singleRate) {
     failures.push(
       `no parallel gain: ${workerCount} workers sustained ${Math.round(aggregateRate)}/sec against ${Math.round(singleRate)}/sec on one core`,
     );
@@ -294,7 +300,13 @@ async function main(): Promise<void> {
     );
   }
 
-  console.log("Gates: throughput floor (from the 750 ms p95 pilot gate), no parallel collapse, determinism under concurrency.");
+  console.log(
+    "Gates: throughput floor (from the 750 ms p95 pilot gate), " +
+      (parallelCollapseExercised
+        ? `no parallel collapse (exercised at ${workerCount} workers)`
+        : "no parallel collapse: NOT EXERCISED — 1 worker on this machine, so the property was not tested") +
+      ", determinism under concurrency.",
+  );
   if (failures.length > 0) {
     for (const failure of failures) console.error(`FAIL: ${failure}.`);
     process.exitCode = 1;
@@ -302,7 +314,9 @@ async function main(): Promise<void> {
   }
   console.log(
     `PASS: ${Math.round(singleRate).toLocaleString("en-US")}/sec on one core (floor ${FLOOR_OPS_PER_SEC.toFixed(2)}/sec), ` +
-      `${(aggregateRate / singleRate).toFixed(2)}x under saturation, identical verdicts on all ${runs.length} workers.`,
+      `${(aggregateRate / singleRate).toFixed(2)}x under saturation` +
+      (parallelCollapseExercised ? "" : " (1 worker — scaling not exercised)") +
+      `, identical verdicts on all ${runs.length} workers.`,
   );
   console.log("Absolute rates are hardware-specific and report-only; the decision core alone, no HTTP/connector/database.");
 }

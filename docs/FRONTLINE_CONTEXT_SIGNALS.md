@@ -1,6 +1,16 @@
 # Frontline Context Signals Roadmap
 
-Frontline and healthcare shared-device workflows need more than identity and basic device compliance. SignalGrid should treat those additional signals as future context inputs after the Microsoft Intune / Entra posture proof is grounded.
+> **SUPERSEDED 2026-09-06 as a sequence — do not follow the order below.**
+> Last substantively written 2026-08-03. DR-012 (2026-08-22) made the proof stack
+> Fleet-first, and most of the "future" signal categories below exist in the tree as
+> fixture-proven connector families — deferred families, Beyond Limited GA, not shipping
+> capability — with registered proofs: `rtls-custody`, `location-services`, `platform-sso`,
+> `app-update` (all under `lib/integrations/src/integrations/`), `lib/ddm-connector`
+> (an `artifacts/api-server` dependency), and `badgeBinding` as a `DecisionEvidence`
+> field in `lib/signalgrid-core/src/types.ts`. The Sequence column and the guardrails are
+> kept as the dated record they are; `docs/INTEGRATION_CATALOG.md` is the current map.
+
+Frontline and healthcare shared-device workflows need more than identity and basic device compliance. SignalGrid should treat those additional signals as future context inputs after the Microsoft Intune / Entra posture proof is grounded. *(As written 2026-08-03; superseded by DR-012 and by the shipped families named in the banner.)*
 
 ## Sequence
 
@@ -31,6 +41,8 @@ Frontline and healthcare shared-device workflows need more than identity and bas
 | Badge / QR / NFC physical-context events                               | Badge tap, QR scan, NFC handoff, station identifier, timestamp, and device/session correlation.                                                                                | Correlate user, device, and physical handoff context before allowing shared-device workflow access.                                                                 | Future roadmap and operator mobile workflow.                                                          |
 
 ## Guardrails
+
+*(Dated 2026-08-03. The first three bullets are superseded: DR-012 puts Fleet first, and RTLS, location, badge and dock signals are simulated and fixture-proven today as deferred families (not Limited GA) — `proof:rtls-custody`, `proof:location-services`, `proof:live-location`, `proof:ddm-connector`. The remaining bullets stand.)*
 
 - Keep Intune / Entra posture as the first concrete proof.
 - Treat Jamf as the Apple-specific posture follow-on proof, then Fleet, Workspace ONE, and broader UEM paths as additional follow-on proofs.

@@ -49,9 +49,9 @@ SignalGrid's role would be to normalize RTLS, location, and staff-safety context
 
 ## First proof boundary
 
-The first Kontakt.io / RTLS proof should be deterministic and fixture-based. It should not call Kontakt.io APIs, use customer data, or depend on live hospital infrastructure.
+**Built (as of 2026-09-06).** The deterministic, fixture-based RTLS proof exists: `pnpm run proof:rtls-custody` (`package.json:179`) over the `rtls-custody` family (`lib/integrations/src/integrations/rtls-custody/`, which names Kontakt.io as a source shape at `lib/integrations/src/integrations/rtls-custody/index.ts:19`), alongside `pnpm run proof:location-services` (`package.json:148`). Both families are classified `deferred` in `scripts/launch-profile.mjs` connector-families — built and gated, not shipping. The proof calls no Kontakt.io API, uses no customer data and needs no live hospital infrastructure, which is the boundary this section set. (Until 2026-09-06 this section still described that proof as future work.)
 
-Future fixture scenarios could include:
+Where the fixture scenarios this note proposed now live (`lib/integrations/src/integrations/rtls-custody/evaluate.ts`): wrong-zone shared device → `OFF_ZONE` (`lib/integrations/src/integrations/rtls-custody/evaluate.ts:95`); stale or low-confidence location → `STALE_FIX` (`lib/integrations/src/integrations/rtls-custody/evaluate.ts:118`) and `ZONE_UNVERIFIED` (`lib/integrations/src/integrations/rtls-custody/evaluate.ts:105`). The rest of the list stays proposed:
 
 - Staff duress alert in an assigned unit.
 - Wrong-zone shared device event.
@@ -66,7 +66,7 @@ Each fixture should map to a SignalGrid decision candidate such as allow, review
 1. Microsoft Intune / Entra posture proof remains first.
 2. Jamf Apple-specific posture proof follows for Apple-heavy shared-device and frontline environments.
 3. Fleet / Workspace ONE / broader UEM proofs follow after the Microsoft and Jamf paths.
-4. Kontakt.io / RTLS fixture proof becomes a follow-on location and staff-safety signal proof.
+4. ~~Kontakt.io / RTLS fixture proof becomes a follow-on location and staff-safety signal proof.~~ Built — `proof:rtls-custody` and `proof:location-services` (see "First proof boundary"); the `rtls-custody` family stays `deferred`. Read this sequence as the order intended when it was written, not the order things landed in.
 5. DockBridge can pair dock/return-station events with RTLS location context after posture is grounded.
 6. Real Kontakt.io integration should be evaluated only after API/SDK access, data boundaries, privacy review, and partner-claim boundaries are validated.
 

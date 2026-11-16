@@ -44,9 +44,12 @@
 //
 //   see docs/FLEET_LIVE_INTEGRATION.md for the one-command stack
 //   FLEET_URL=http://127.0.0.1:8412 FLEET_TOKEN=... pnpm run proof:live-fleet
+//   + FLEET_LAB_WRITE_OK=true against a Premium-licensed lab for section 11 (teams,
+//     inherited policies, the unlocked transfer endpoint); it skips loudly otherwise.
 
 import { FleetDMAdapter, setFleetDMConfig } from "@workspace/integrations/telemetry";
 import { fleetDMToPostureDrafts } from "@workspace/integration-bridge";
+import * as fleetConnector from "@workspace/fleet-connector";
 
 const BASE = process.env.FLEET_URL?.replace(/\/$/, "");
 const TOKEN = process.env.FLEET_TOKEN ?? "";
@@ -321,8 +324,124 @@ async function main(): Promise<void> {
   await offAdapter.initialize();
   check("operator flag off: reads stop even in a live tier", !offAdapter.isEnabled() && (await offAdapter.getHosts()).length === 0);
 
+
+  // ── 11. Premium: teams, inherited policies, and the transfer endpoint ─────
+  // Everything above holds on Fleet Free. This section runs ONLY when the server
+  // reports a Premium licence (the owner's trial key, held out of tree and passed
+  // to the lab server as FLEET_LICENSE_KEY — see docs/FLEET_LIVE_INTEGRATION.md),
+  // and only against a lab the caller marked disposable, because it WRITES: a
+  // team, a team policy, and one host transfer. Without either it SKIPS loudly.
+  // A skip is printed and never counted; the summary line says which tier ran.
+  //
+  // Measured on 2026-09-06 (cloud lane, Fleet 4.89.2 + the trial key):
+  //   POST /fleet/teams                      200 (Free: refused — teams are Premium)
+  //   GET  /fleet/teams/{id}/policies        { policies, inherited_policies } — TWO keys
+  //   POST /fleet/hosts/transfer             200 (Free: 422, measured 2026-08-12)
+  // The adapter's team branch read `policies` only, so a team-scoped catalogue
+  // silently omitted every global policy the team INHERITS — fewer policies than
+  // Fleet actually applies to the host. Fixed to fold both; asserted below.
+  const cfgRes = await raw("/api/v1/fleet/config");
+  const cfgJson = JSON.parse(cfgRes.body) as { license?: { tier?: string; expiration?: string } };
+  const tier = cfgJson.license?.tier ?? "unknown";
+  let premiumRan = false;
+  if (tier !== "premium") {
+    console.log(`  ~ SKIPPED (reported, not counted): Fleet reports licence tier=${tier}; the Premium section needs FLEET_LICENSE_KEY on the lab server`);
+  } else if (process.env.FLEET_LAB_WRITE_OK !== "true") {
+    console.log("  ~ SKIPPED (reported, not counted): licence is Premium but FLEET_LAB_WRITE_OK=true is not set — this section creates a team and moves a host; point it only at a disposable lab");
+  } else {
+    premiumRan = true;
+    const expiry = Date.parse(cfgJson.license?.expiration ?? "");
+    check("premium: the licence carries a parseable expiry in the future (an expired key would be Free with a Premium label)",
+      Number.isFinite(expiry) && expiry > Date.now(), `expiration=${cfgJson.license?.expiration}`);
+
+    // A team, created if absent — Free refuses this call, which is the whole reason
+    // the branch below was unverifiable until the key existed.
+    const TEAM_NAME = "SG Clinical (proof:live-fleet)";
+    const teamsRes = await raw("/api/v1/fleet/teams");
+    const teams = (JSON.parse(teamsRes.body) as { teams?: Array<{ id: number; name: string }> }).teams ?? [];
+    let team = teams.find((t) => t.name === TEAM_NAME);
+    if (!team) {
+      const created = await raw("/api/v1/fleet/teams", { method: "POST", body: JSON.stringify({ name: TEAM_NAME }) });
+      check("premium: a team can be created (Free refuses; this is the control-plane capability the licence unlocks)", created.status === 200, `status=${created.status}`);
+      team = (JSON.parse(created.body) as { team?: { id: number; name: string } }).team;
+    }
+    check("premium: the team has a numeric id", typeof team?.id === "number", `team=${JSON.stringify(team)}`);
+    const teamId = team!.id;
+
+    // One team-scoped policy the LINUX agent can answer (and will answer `fail`:
+    // zero rows), so the team branch has something of its own to read.
+    const TEAM_POLICY = "Team policy (proof:live-fleet)";
+    const teamPolRes = await raw(`/api/v1/fleet/teams/${teamId}/policies`);
+    const teamPolJson = JSON.parse(teamPolRes.body) as { policies?: Array<{ id: number; name: string; team_id: number | null }>; inherited_policies?: Array<{ id: number; team_id: number | null }> };
+    // Wire fact (2026-09-06): a team with NO policies of its own answers with
+    // `inherited_policies` ONLY — the `policies` key is omitted, not `[]`. The
+    // adapter's `?? []` on that key is therefore load-bearing, not defensive.
+    check("premium: GET /teams/{id}/policies carries `inherited_policies` (and `policies` is absent or an array — Fleet omits it for a team with none of its own)",
+      teamPolRes.status === 200 && Array.isArray(teamPolJson.inherited_policies) &&
+        (teamPolJson.policies === undefined || Array.isArray(teamPolJson.policies)),
+      `status=${teamPolRes.status} keys=${Object.keys(teamPolJson).join(",")}`);
+    if (!teamPolJson.policies?.some((p) => p.name === TEAM_POLICY)) {
+      const mk = await raw(`/api/v1/fleet/teams/${teamId}/policies`, {
+        method: "POST",
+        body: JSON.stringify({ name: TEAM_POLICY, query: "SELECT 1 FROM osquery_info WHERE 0;", platform: "linux" }),
+      });
+      check("premium: a team-scoped policy can be created", mk.status === 200, `status=${mk.status}`);
+    }
+    const wireTeam = JSON.parse((await raw(`/api/v1/fleet/teams/${teamId}/policies`)).body) as { policies: Array<{ id: number; team_id: number | null }>; inherited_policies: Array<{ id: number; team_id: number | null }> };
+    check("premium: once the team owns a policy, BOTH keys are present arrays (the two-list shape the old branch half-read)",
+      Array.isArray(wireTeam.policies) && wireTeam.policies.length > 0 && Array.isArray(wireTeam.inherited_policies),
+      `keys=${Object.keys(wireTeam).join(",")}`);
+    check("premium: the team inherits at least one global policy on the wire (so dropping `inherited_policies` would lose something real)",
+      wireTeam.inherited_policies.length > 0, `inherited=${wireTeam.inherited_policies.length}`);
+
+    // THE BRANCH THAT WAS UNVERIFIED: the adapter configured with teamId.
+    await setFleetDMConfig({ enabled: true, baseUrl: FLEET_BASE, apiToken: TOKEN, syncIntervalMs: 300000, teamId });
+    const teamAdapter = new FleetDMAdapter();
+    await teamAdapter.initialize();
+    const teamPolicies = await teamAdapter.getPolicies();
+    const ownIds = new Set(wireTeam.policies.map((p) => p.id));
+    const inheritedIds = new Set(wireTeam.inherited_policies.map((p) => p.id));
+    check("premium: getPolicies() with teamId reads the team's OWN policies",
+      wireTeam.policies.every((p) => teamPolicies.some((q) => q.id === p.id)), `own=${[...ownIds].join(",")} got=${teamPolicies.map((p) => p.id).join(",")}`);
+    check("premium: …AND the policies the team INHERITS from global (the half the old branch dropped)",
+      wireTeam.inherited_policies.every((p) => teamPolicies.some((q) => q.id === p.id)), `inherited=${[...inheritedIds].join(",")} got=${teamPolicies.map((p) => p.id).join(",")}`);
+    check("premium: …and nothing else — the catalogue equals own ∪ inherited, no invented rows",
+      teamPolicies.length === ownIds.size + inheritedIds.size && teamPolicies.every((p) => ownIds.has(p.id) || inheritedIds.has(p.id)),
+      `count=${teamPolicies.length} expected=${ownIds.size + inheritedIds.size}`);
+
+    // The transfer endpoint: under Premium it SUCCEEDS. That is the stronger test
+    // of the product boundary — on Free the 422 could be mistaken for SignalGrid
+    // refusing; here Fleet says yes and SignalGrid still has no way to ask.
+    const moved = await raw("/api/v1/fleet/hosts/transfer", { method: "POST", body: JSON.stringify({ team_id: teamId, hosts: [liveAgent.id] }) });
+    check("premium: POST /hosts/transfer is 200 (on Free it is 422 — the endpoint is unlocked, so a refusal from here on is SignalGrid's, not Fleet's)",
+      moved.status === 200, `status=${moved.status} body=${moved.body.slice(0, 80)}`);
+    const afterMove = JSON.parse((await raw(`/api/v1/fleet/hosts/${liveAgent.id}`)).body) as { host?: { team_id: number | null } };
+    check("premium: the live host really is in the team afterwards", afterMove.host?.team_id === teamId, `team_id=${afterMove.host?.team_id}`);
+    const writeShaped = /transfer|move|assign|enforce|apply|remediat/i;
+    const adapterWrites = Object.getOwnPropertyNames(FleetDMAdapter.prototype).filter((n) => writeShaped.test(n));
+    const connectorWrites = Object.keys(fleetConnector).filter((n) => writeShaped.test(n));
+    check("premium: SignalGrid exposes NO path to that endpoint — neither the telemetry adapter nor @workspace/fleet-connector has a transfer/move/assign/enforce member",
+      adapterWrites.length === 0 && connectorWrites.length === 0, `adapter=${adapterWrites.join(",")} connector=${connectorWrites.join(",")}`);
+
+    // Fail-closed survives teams: a team-scoped policy the host answers `fail` (or
+    // has not answered) holds the host non-compliant through the team-configured
+    // adapter, exactly as a global one does.
+    const teamResults = await teamAdapter.getPolicyResultsForHost(liveAgent.uuid);
+    const teamRow = teamResults.find((r) => r.policy_name === TEAM_POLICY);
+    check("premium: the team-scoped policy appears in the host's live results", teamRow !== undefined, `names=${teamResults.map((r) => r.policy_name).join("|")}`);
+    check("premium: …graded fail or unknown, never pass (its query returns zero rows)", teamRow?.policy_response === "fail" || teamRow?.policy_response === "unknown", `response=${teamRow?.policy_response}`);
+    const teamPosture = await teamAdapter.getPostureForHost(liveAgent.uuid);
+    check("premium: the team-configured adapter holds the host NON-compliant on that policy", teamPosture?.compliant === false);
+
+    // Leave the lab as found for the next run: back to "no team".
+    const restored = await raw("/api/v1/fleet/hosts/transfer", { method: "POST", body: JSON.stringify({ team_id: null, hosts: [liveAgent.id] }) });
+    check("premium: the host is moved back out of the team (lab restored)", restored.status === 200, `status=${restored.status}`);
+    await setFleetDMConfig({ enabled: true, baseUrl: FLEET_BASE, apiToken: TOKEN, syncIntervalMs: 300000 });
+  }
+
   const total = passed + failures.length;
   console.log(`\nsummary=${failures.length === 0 ? "pass" : "FAIL"} (${passed}/${total})`);
+  console.log(`premium section: ${premiumRan ? "RAN" : "SKIPPED"} (server licence tier=${tier}); a skip is reported, never counted`);
   if (failures.length > 0) {
     console.error("failed:");
     for (const f of failures) console.error(`  - ${f}`);

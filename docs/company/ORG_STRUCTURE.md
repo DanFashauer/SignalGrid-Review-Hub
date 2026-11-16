@@ -126,7 +126,7 @@ rights are bound to roles in
 
 [`docs/agent/org-roster.json`](../agent/org-roster.json) (and its chart,
 [`docs/ORG_CHART.md`](../ORG_CHART.md)) is the **operating registry of the AI
-agent lanes** — the 41 agent duties that execute work today, each gated so an
+agent lanes** — the 42 agent duties that execute work today, each gated so an
 activation must name an artifact. This directory is the **company design**
 that sits above it: catalog roles say which agent lane covers them today, and
 the roster stays the enforcement surface for what the lanes actually did.

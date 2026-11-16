@@ -129,6 +129,24 @@ export function detectDrift(desired: DesiredState, observed: ObservedState): Dri
     acc[s] = 0;
     return acc;
   }, {} as Record<DriftStatus, number>);
+  // NOTHING DECLARED is not "everything matches". A desired state with zero
+  // resources is indistinguishable from one that failed to load, and the old
+  // `overall = "in_sync"` starting value made the empty/empty case a clean bill
+  // of health with an empty probe set — self-audit saw zero probes rather than
+  // one unknown. The `unknown` rung existed in the type and was producible by
+  // nothing. It is produced here: one finding, so counts, summary and the probe
+  // projection all carry it.
+  if (validated.resources.length === 0) {
+    sorted.push({
+      kind: "config_profile",
+      id: "(declared state)",
+      status: "unknown",
+      detail:
+        "No resources are declared: the desired state is empty or failed to load, so the fleet cannot be compared against it.",
+      changes: [],
+    });
+  }
+
   let overall: DriftStatus = "in_sync";
   for (const f of sorted) {
     counts[f.status] += 1;

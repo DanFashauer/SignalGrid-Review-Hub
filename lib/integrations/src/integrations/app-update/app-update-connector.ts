@@ -75,8 +75,10 @@ function hasUnrecognizedKey(report: object, known: readonly string[]): boolean {
       if (depth >= MAX_PROTOTYPE_DEPTH) return true;
       for (const k of Reflect.ownKeys(o)) {
         if (depth > 0) return true;
-        if (typeof k === "symbol") return true;
-        if (!known.includes(k)) return true;
+        // A symbol key needs no guard of its own: `known` holds strings, so `includes`
+        // is false for any symbol and the next line refuses it (the brace-less sweep
+        // showed the separate check could be deleted with nothing noticing).
+        if (!(known as readonly (string | symbol)[]).includes(k)) return true;
       }
       o = Object.getPrototypeOf(o) as object | null;
     }
@@ -94,7 +96,8 @@ const CHANNELS = ["managed", "unmanaged", "unknown"] as const;
 export function parseVersion(v: unknown): number[] | null {
   if (typeof v !== "string") return null;
   const s = v.trim().replace(/^v/i, "");
-  if (s.length === 0) return null;
+  // No separate empty-string guard: "" splits to [""], and an empty segment fails the
+  // digit test below (the brace-less sweep showed the guard could be deleted unseen).
   const parts = s.split(".");
   const nums: number[] = [];
   for (const p of parts) {

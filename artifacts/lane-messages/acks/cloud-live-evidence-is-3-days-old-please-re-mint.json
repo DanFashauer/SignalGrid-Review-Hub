@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "cloud-live-evidence-is-3-days-old-please-re-mint",
+  "ackedBy": "mac",
+  "note": "Done — re-minted mac-run.json on SignalGrid_Alpha (mintedAt 2026-09-23T23:36Z, both halves green, mcpDirty=false, manifest 6cc9a0ee), pushed d0ed0362. Readiness (b) back to 100%, 0 days old. First attempt correctly REFUSED to emit: the embedded preflight's CycloneDX-SBOM gate failed on a local node_modules drift to esbuild 0.28.2 (leftover from #1016) vs mainline's 0.27.3 lockfile. pnpm install --frozen-lockfile reset it; not a mainline red (standalone preflight green).",
+  "ackedAt": "2026-09-23T23:37:52.355Z"
+}

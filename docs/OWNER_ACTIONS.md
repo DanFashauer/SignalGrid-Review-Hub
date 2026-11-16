@@ -18,9 +18,20 @@ the agent is authorized to use for it.
 
 - GitHub → this repo → **About** (gear icon, top-right of the repo home) →
   **Website**.
-- Remove the old `replit.com` link and set it to the published GitHub Pages URL:
+- The old `replit.com` link is already gone. Read on 2026-11-11 with
+  `gh repo view --json homepageUrl`: the field holds
+  `https://danfashauer.github.io/work/signalgrid.html`. The owner said the same day
+  that the Replit project no longer exists. Nothing is owed here unless the field
+  should point at this repository's own Pages URL instead:
   `https://danfashauer.github.io/SignalGrid-Review-Hub/`
-- (Pages itself is already enabled and deploying — nothing to do there.)
+- Pages is enabled with source "Deploy from a branch", and that branch build
+  FAILED on every push from 2026-08-23 (PR #263) to 2026-09-26: Jekyll dies on
+  Liquid braces inside vendored skill files. The root URL served a 2026-08-23
+  render of the README the whole time. A root `.nojekyll` (this change) stops
+  the failing build; the root URL then returns 404 until a site is deployed.
+- To publish the real site: Settings → Pages → Source → "GitHub Actions", then
+  run the `.github/workflows/pages.yml` workflow once (it builds and deploys
+  the marketing site and the on-device demos). Owner-only: repository settings.
 
 ## 2. Retire the two legacy repos (5 min)
 
@@ -100,7 +111,7 @@ already run advisory into blocking.
 
 - On the **Branches** page, delete any leftover `codex/…` branch(es) from the
   earlier closed PRs.
-- The tier branches (`dev/alpha/beta/prod`) and `SignalGrid_Alpha` should stay.
+- `SignalGrid_Alpha` should stay — the working base and the only long-lived ref. (Until 2026-09-06 this line also said the tier branches `dev/alpha/beta/prod` should stay; they were pruned — see item 3 above.)
 
 ---
 
@@ -181,7 +192,8 @@ Four items moved to the team under the delegated authority now recorded in
   also closed a gap it found on the way: cited *paths* were gated but cited
   *commands* were not, so a renamed script could silently falsify the document
   a security assessor reads — `scripts/check-cited-commands.mjs` now gates all
-  130 of them.
+  130 of them (as written; 164 as of 2026-09-06 — `node scripts/check-cited-commands.mjs`
+  prints the current count).
 
 Two of the four standing decisions — the **graph-default flip** and
 **shadow-mode step-up** — are recorded as still open in `DECISION_RECORDS.md`,

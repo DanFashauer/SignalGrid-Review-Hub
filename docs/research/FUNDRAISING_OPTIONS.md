@@ -94,8 +94,8 @@ Before sending material to anyone — especially a company that could build this
 
 ## Companion material
 
-- `EXECUTIVE_ONE_PAGER.md` — the core story.
-- `INVESTOR_DESIGN_PARTNER_READINESS.md`, `LEVEL_10_COMPLETION_MATRIX.md` — honest stage.
-- `PARTNERSHIP_AND_ACQUISITION_PATHS.md`, `COMPANY_OPERATING_PACK.md` — founder-control + strategic paths.
-- `TARGET_BUYER_PARTNER_MATRIX.md`, `COMPETITIVE_BATTLECARD.md` — positioning vs. the landscape.
+- `docs/EXECUTIVE_ONE_PAGER.md` — the core story.
+- `docs/research/INVESTOR_DESIGN_PARTNER_READINESS.md`, `docs/LEVEL_10_COMPLETION_MATRIX.md` — honest stage.
+- `docs/research/PARTNERSHIP_AND_ACQUISITION_PATHS.md`, `docs/COMPANY_OPERATING_PACK.md` — founder-control + strategic paths.
+- `docs/research/TARGET_BUYER_PARTNER_MATRIX.md`, `docs/research/COMPETITIVE_BATTLECARD.md` — positioning vs. the landscape.
 - The live demos under `docs/*.html` — your strongest asset; lead with them.

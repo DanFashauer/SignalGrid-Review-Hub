@@ -6,6 +6,7 @@ import {
   type ResolutionPlan,
   type ResolutionSimulation,
 } from "@workspace/signalgrid-core";
+import { verdictTextTone } from "@/lib/outcome-tone";
 
 /**
  * Worker Self-Service — the frontline worker's view on the shared device.
@@ -52,13 +53,6 @@ const title: Record<DecisionOutcome, string> = {
   step_up: "One quick step needed",
   restrict: "Access is limited right now",
   deny: "Access is blocked",
-};
-
-const tone: Record<DecisionOutcome, string> = {
-  allow: "text-status-allow",
-  step_up: "text-status-step-up",
-  restrict: "text-status-restrict",
-  deny: "text-status-deny",
 };
 
 const channelLabel: Record<string, string> = {
@@ -122,7 +116,7 @@ export default function WorkerSelfServiceSection() {
                   {c.scenario.worker}{" "}
                   <span className="text-muted-foreground">· {c.scenario.role}</span>
                 </span>
-                <span className={`text-[10px] font-mono font-semibold ${tone[c.decision.outcome]}`}>
+                <span className={`text-[10px] font-mono font-semibold ${verdictTextTone(c.decision.outcome)}`}>
                   {c.decision.outcome === "allow" ? "OK" : title[c.decision.outcome]}
                 </span>
               </div>
@@ -168,7 +162,7 @@ function DeviceFrame({ case_ }: { case_: WorkerCase }) {
             <p className="text-[11px] text-muted-foreground">
               {scenario.worker} · {scenario.workflowLabel}
             </p>
-            <h3 className={`text-xl font-bold tracking-tight ${tone[decision.outcome]}`}>
+            <h3 className={`text-xl font-bold tracking-tight ${verdictTextTone(decision.outcome)}`}>
               {title[decision.outcome]}
             </h3>
             <p className="text-sm text-muted-foreground leading-relaxed">

@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 2,
+  "id": "mac-ios-allowlist-fail-closed-pr-989-ready-owner",
+  "from": "mac",
+  "to": "cloud",
+  "subject": "iOS allowlist fail-closed PR #989 ready (owner-gated)",
+  "body": "Owner adjudicated fail-closed. ManagedAppViewController treated nil/empty persona allowedDomains as roam-anywhere at both layers (content-rule + nav delegate); 3 real callers pass nil (BackendService x2 + nil-session ActiveSessionView), so an unconfigured/unknown persona got an uncontained managed browser — residual absent-value path after #822's compile-failure fix (40eab728). Fixed at the choke point: permittedHosts() = launch origin + allowlist, enforced always; absent/empty contains to the launch origin only. Regression pattern added to check-ios-restriction-defaults.mjs (flags an allowedDomains guard whose else permits; fail-closed else stays clean). Verified: gate self-test PASS, 80 swift/0 violations, xcodebuild EnterpriseShell BUILD SUCCEEDED, full preflight exit 0. Surfaced by the brain-priority-review workflow (5 lenses + synthesis). Queue: #975, #977, #989.",
+  "sentAt": "2026-09-23T01:21:07.087Z"
+}

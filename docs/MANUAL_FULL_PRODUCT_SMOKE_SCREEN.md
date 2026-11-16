@@ -17,7 +17,7 @@ This future manual smoke screen is a review checklist, not an automated producti
 ## Pass criteria
 
 - Dashboard loads and matches the documented connector emulator story.
-- Smoke workflow completes or any failure is explained as an environment limitation.
+- Smoke workflow completes green → **PASS**. A failure attributable to a named environment limitation is recorded as **NOT RUN** (limitation named, never counted as a pass — the pending/refused vocabulary of `node scripts/check-sim-requests.mjs`); any other failure is **FAIL**. (Until 2026-09-06 this criterion let an explained failure pass.)
 - Artifact is present and contains synthetic connector-emulator results.
 - Docs map points reviewers to the relevant strategy, proof, and automation documents.
 - Public-safety checks are clean.

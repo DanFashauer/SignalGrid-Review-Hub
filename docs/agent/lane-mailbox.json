@@ -1,0 +1,9 @@
+{
+  "$comment": "The standing mailbox pull request: a draft PR from lane/mailbox (one EMPTY commit, no file changes, never merged, never closed) whose comments wake the cloud lane's session at once. scripts/lane-deliver.mjs comments on it after every delivery when `gh` is on PATH, and prints its URL otherwise so a person can. The cloud lane subscribes to it (subscribe_pr_activity) at every session start and every steward cycle. Created 2026-09-05 in response to the owner's 'this is causing delay' — the alternative was the four-hour steward timer.",
+  "pr": 439,
+  "branch": "lane/mailbox",
+  "base": "SignalGrid_Alpha",
+  "url": "https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/439",
+  "createdAt": "2026-09-05",
+  "wakes": "cloud"
+}

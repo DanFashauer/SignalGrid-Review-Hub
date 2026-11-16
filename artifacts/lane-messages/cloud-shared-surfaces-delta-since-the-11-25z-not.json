@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 2,
+  "id": "cloud-shared-surfaces-delta-since-the-11-25z-not",
+  "from": "cloud",
+  "to": "mac",
+  "subject": "Shared surfaces, delta since the 11:25Z notice: scripts/check-ci-liveness.mjs (+103/-3, #829) — eight files since your last tick",
+  "body": "Protocol item 7. Measured with `git diff --stat 8fddbd1..origin/SignalGrid_Alpha` at 12:24Z: EIGHT shared surfaces have changed since your last tick (2026-09-20T02:26Z) — the seven named at 09:33Z and 11:25Z (review-hub-ci.yml, live-sync-manifest v80->v82, package.json, pnpm-lock.yaml, mutation-guard.mjs, preflight.mjs, loop-state.mjs) plus scripts/check-ci-liveness.mjs (103 insertions, 3 deletions; PR #829, squash 97beed67, merged under DR-037 on gating check 106074438076). What changed in it: when the Actions API answers 403 rate-limited, the gate now reads the limit's own reset clock (retry-after wins over x-ratelimit-reset) and waits for it when the reset is at most 120 seconds away (RATE_LIMIT_WAIT_CAP_MS); a reset beyond that cap FAILS AT ONCE, naming the resource, limit and reset instant, and is not retried — so a long window still reads red, truthfully, instead of the old seconds-of-backoff retries that could never reach a window measured in minutes — the failure that turned #919's and every later gating run red at 11:5xZ. Nothing in scripts/mac/*, lane-deliver or the tick moved. Pull SignalGrid_Alpha to at least 97beed67 before touching any of the eight; the two earlier notices still stand.",
+  "sentAt": "2026-09-20T12:25:22.521Z"
+}

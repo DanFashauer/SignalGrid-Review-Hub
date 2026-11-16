@@ -7,21 +7,25 @@ import Footer from "@/components/layout/Footer";
 // framework in its decision model, not certifications held or product
 // availability. Everything here is modeled on public-safe fixtures.
 const COMPLIANCE_STATUS = [
-  { framework: "DISA STIG", status: "in-progress", detail: "STIG-oriented base image · SCAP/XCCDF benchmark mapping · CAT I/II/III decision mapping", badge: "SIGNAL MAPPING" },
+  { framework: "DISA STIG", status: "in-progress", detail: "SCAP/XCCDF benchmark mapping · CAT I/II/III decision mapping (the images are stock node:22 — no hardened base image exists)", badge: "SIGNAL MAPPING" },
   { framework: "DoD IL2 – IL5", status: "in-progress", detail: "Air-gap-oriented architecture · no external data transmission by design · offline license model", badge: "DESIGN TARGET" },
   { framework: "CMMC 2.0 Level 3", status: "in-progress", detail: "NIST SP 800-171 controls mapped into the policy model across the practice domains", badge: "CONTROL MAPPING" },
   { framework: "FedRAMP Moderate", status: "planned", detail: "Authorization is a roadmap target that would require a separate, formal process — not claimed today", badge: "ROADMAP" },
   { framework: "FedRAMP High", status: "planned", detail: "Roadmap target following any Moderate authorization; air-gap deployment is the design path", badge: "PLANNED" },
-  { framework: "NIST SP 800-53 Rev 5", status: "in-progress", detail: "Control-mapping document in progress · controls mapped into the policy model", badge: "CONTROL MAPPING" },
-  { framework: "NIST SP 800-171", status: "in-progress", detail: "110-control baseline mapped · CUI handling modeled in the policy engine", badge: "CONTROL MAPPING" },
+  { framework: "NIST SP 800-53 Rev 5", status: "in-progress", detail: "Controls mapped into the policy model · no control-mapping document exists yet", badge: "CONTROL MAPPING" },
+  { framework: "NIST SP 800-171", status: "in-progress", detail: "Configuration-management controls mapped into the baseline dimension (SECURITY_BASELINE_ALIGNMENT.md) · the full 110-control baseline and CUI handling are design goals, not modeled", badge: "CONTROL MAPPING" },
   { framework: "ITAR / EAR", status: "in-progress", detail: "Air-gap deployment is designed to keep data domestic; export-control posture is a design goal", badge: "DESIGN TARGET" },
 ];
 
+// No `available` arm: nothing on this page is available, and a green arm that
+// no row uses is the shape that becomes a fail-open the day someone types a
+// status. An unrecognised status renders as `planned`, the most restrictive
+// reading, instead of throwing on `meta.icon` and blanking the page.
 const STATUS_META: Record<string, { color: string; icon: React.ComponentType<{className?: string}> }> = {
-  available: { color: "text-green-400 border-green-400/20 bg-green-400/5", icon: CheckCircle2 },
   "in-progress": { color: "text-yellow-400 border-yellow-400/20 bg-yellow-400/5", icon: Clock },
   planned: { color: "text-muted-foreground border-border bg-muted/10", icon: AlertCircle },
 };
+const statusMeta = (status: string) => STATUS_META[status] ?? STATUS_META.planned;
 
 const VEHICLES = [
   { name: "GSA Schedule 70", desc: "IT Products and Services · Not pursued yet — under consideration", status: "planned" },
@@ -32,10 +36,9 @@ const VEHICLES = [
 
 const DEPLOYMENT_FEATURES = [
   "Zero external network connectivity — classified-enclave-oriented design",
-  "Offline license model — no phone-home by design",
-  "DISA STIG-oriented Ubuntu or RHEL base image",
+  "Offline license model — design intent, not built",
   "SCAP 1.3 / XCCDF / OVAL benchmark mapping",
-  "FIPS 140-2-oriented cryptographic module design",
+  "FIPS 140-2-oriented cryptographic module — design target, no module selected",
   "Air-gap software update via signed bundle transfer (design intent)",
   "Tamper-evident hash-chained audit ledger with an independent paginating verifier and signed export",
   "CAC / PIV credential support (candidate PACS signal category)",
@@ -70,8 +73,8 @@ export default function Federal() {
                 ))}
               </div>
               <div className="flex gap-3">
-                <a href="https://github.com/DanFashauer/SignalGrid-Review-Hub/blob/main/docs/PARTNER_ONBOARDING.md" target="_blank" rel="noopener noreferrer" className="px-5 py-2.5 bg-primary text-primary-foreground rounded-md text-sm font-medium hover:bg-primary/90 transition-colors">Start with the fixture demo — zero install, zero accounts</a>
-                <a href="https://github.com/DanFashauer/SignalGrid-Review-Hub/tree/main/docs" target="_blank" rel="noopener noreferrer" className="px-5 py-2.5 border border-border rounded-md text-sm font-medium hover:border-primary/50 transition-colors">Read the approach</a>
+                <a href="https://github.com/DanFashauer/SignalGrid-Review-Hub/blob/SignalGrid_Alpha/docs/PARTNER_ONBOARDING.md" target="_blank" rel="noopener noreferrer" className="px-5 py-2.5 bg-primary text-primary-foreground rounded-md text-sm font-medium hover:bg-primary/90 transition-colors">Start with the fixture demo — zero install, zero accounts</a>
+                <a href="https://github.com/DanFashauer/SignalGrid-Review-Hub/tree/SignalGrid_Alpha/docs" target="_blank" rel="noopener noreferrer" className="px-5 py-2.5 border border-border rounded-md text-sm font-medium hover:border-primary/50 transition-colors">Read the approach</a>
               </div>
             </div>
           </div>
@@ -83,7 +86,7 @@ export default function Federal() {
             <h2 className="text-2xl font-bold tracking-tight mb-10">Compliance Status</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {COMPLIANCE_STATUS.map((item, idx) => {
-                const meta = STATUS_META[item.status];
+                const meta = statusMeta(item.status);
                 const Icon = meta.icon;
                 return (
                   <motion.div
@@ -136,10 +139,10 @@ export default function Federal() {
                     { label: "License Validation", value: "Offline · Signed bundle (design intent)", color: "text-primary" },
                     { label: "Update Path", value: "Signed air-gap transfer (design intent)", color: "text-primary" },
                     { label: "Audit Storage", value: "Hash-chained ledger · verified + signed export", color: "text-green-400" },
-                    { label: "Crypto Module", value: "FIPS 140-2-oriented", color: "text-primary" },
-                    { label: "OS Baseline", value: "DISA STIG-oriented", color: "text-primary" },
+                    { label: "Crypto Module", value: "FIPS 140-2-oriented (design target)", color: "text-primary" },
+                    { label: "OS Baseline", value: "Stock node:22 images (hardened baseline: design)", color: "text-primary" },
                     { label: "Container", value: "Podman rootless", color: "text-primary" },
-                    { label: "Auth", value: "CAC / PIV + LDAP", color: "text-primary" },
+                    { label: "Auth", value: "CAC / PIV — candidate PACS signal category (design)", color: "text-primary" },
                   ].map(row => (
                     <div key={row.label} className="flex justify-between border-b border-border/40 pb-2">
                       <span className="text-muted-foreground">{row.label}</span>
@@ -159,7 +162,7 @@ export default function Federal() {
             <p className="text-muted-foreground mb-8">No contract vehicle is held or in progress today — these are the paths under consideration.</p>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               {VEHICLES.map(v => {
-                const meta = STATUS_META[v.status];
+                const meta = statusMeta(v.status);
                 const Icon = meta.icon;
                 return (
                   <div key={v.name} className="bg-card border border-border rounded-lg p-5">

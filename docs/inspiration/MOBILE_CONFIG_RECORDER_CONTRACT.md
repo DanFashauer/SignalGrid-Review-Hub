@@ -19,10 +19,12 @@
     states. Any future consumer must fail-closed gate on them — recording an
     unproven rollback NEVER makes a deploy permissible (the
     provisioning-teardown `deployReady` and `@workspace/iac` apply doctrine).
-  - `evidence.recorderVersion` DEFERS to the queued normalization-version
-    stamping build (docs/BUILD_BACKLOG.md) as the canonical fabric
-    version-stamping surface; if that build lands first, this contract's field
-    aligns to it, not the reverse.
+  - `evidence.recorderVersion` DEFERS to normalization-version stamping, which
+    is BUILT (docs/BUILD_BACKLOG.md row 27a;
+    `scripts/generate-core-normalization-version.mjs`) and is the canonical
+    fabric version-stamping surface. Any future recorder aligns this field to
+    it, not the reverse. (This bullet posed the build as "queued … if that
+    build lands first" until 2026-09-06.)
   - Wall-clock fields (`capturedAt`, `assignedAt`, `receivedAt`, `verifiedAt`)
     are SUPPLIED evidence, never read from a clock inside a decision path
     (the `gradeSetupCompletion` firstUserSessionAt precedent).

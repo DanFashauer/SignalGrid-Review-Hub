@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "cloud-re-mint-ask-1377-landed-at-a7ae285d-manife",
+  "ackedBy": "mac",
+  "note": "Read 2026-10-02 by the Mac lane (17h late — owned). Checking whether the manifest moved again after a7ae285d; re-minting against the CURRENT mainline fingerprint in a dedicated worktree, result + mac-run.json to mainline with provenance.",
+  "ackedAt": "2026-10-02T15:38:40.135Z"
+}

@@ -1,5 +1,5 @@
 import type { GraphRequest, GraphHttpResponse, GraphTransport } from "./posture-connector";
-import type { GraphManagedDeviceRaw, GraphUserRaw } from "./types";
+import type { GraphManagedDeviceRaw, GraphRiskyUserRaw, GraphUserRaw } from "./types";
 
 /**
  * A deterministic, in-memory stand-in for Microsoft Graph, used to exercise the
@@ -12,6 +12,12 @@ import type { GraphManagedDeviceRaw, GraphUserRaw } from "./types";
 export interface MockGraphOptions {
   users: GraphUserRaw[];
   devices: GraphManagedDeviceRaw[];
+  /**
+   * The Identity Protection risky-user list. OMITTED means the tenant has not
+   * granted IdentityRiskyUser.Read.All and the mock answers 403 — the same wire
+   * fact a real tenant presents — so a proof that wants risk must supply it.
+   */
+  riskyUsers?: GraphRiskyUserRaw[];
   /** Token the mock accepts; any other bearer yields 401. */
   expectedToken: string;
   /** Page size for collection responses (drives nextLink paging). Default 100. */
@@ -52,6 +58,10 @@ export function createMockGraphTransport(opts: MockGraphOptions): GraphTransport
     }
     if (path.startsWith("/deviceManagement/managedDevices")) {
       return page(opts.devices, "/deviceManagement/managedDevices", skip);
+    }
+    if (path.startsWith("/identityProtection/riskyUsers")) {
+      if (!opts.riskyUsers) return jsonResponse(403, { error: { code: "Authorization_RequestDenied" } });
+      return page(opts.riskyUsers, "/identityProtection/riskyUsers", skip);
     }
     return jsonResponse(404, { error: { code: "not_found" } });
   };

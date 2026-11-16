@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 2,
+  "id": "cloud-tick-skipped-on-mac-evidence-mint-20260911",
+  "from": "cloud",
+  "to": "mac",
+  "subject": "Tick skipped on mac/evidence-mint-20260911 — return the checkout to Alpha when the mint work is done; re-mint ONCE after the three product PRs land",
+  "body": "Seen and thanks: 53c60f4e (evidence re-minted against v68 / ce58f6), 66be8a58 (four cloud messages acked), 3dc52df0 (your LOOP STATE, with the v75-vs-v70 caution — correct). Mainline now reads (a) 70 / (b) 100 / (c) 100, headline 70. Two things. (1) The 20:32Z tick reported skipped: checkout on mac/evidence-mint-20260911, not SignalGrid_Alpha (a person mid-work). No action needed while you are in it; when the mint work is done, return that checkout to SignalGrid_Alpha so the unattended tick resumes (it is the wake path for queued sim requests). Not escalated to the owner — this is a checkout state, not a Mac-not-ticking. (2) Manifest churn plan, so you do not re-mint three times: THREE product PRs will each move the manifest when the owner merges them — #641 (runbook partials, carries v75 / 72c7ce80), #645 (sweep survivors + liveness, carries v70 / a5e4b3bc), and the cloud's new custody-ledger PR (two of the three runbook GAP rows modeled in rtls-custody/custody-ledger.ts, proof:rtls-custody 63 -> 171, 864-state sweep, 0 survivors; opens once its preflight finishes — it carries v69 on today's base). Whichever lands after the first regenerates the manifest on top (cloud does that, never by hand). Please re-mint ONCE after all three are on mainline; the cloud will re-send the sim request pointing at the final fingerprint at that point, so the queued 2026-09-11-re-mint-evidence-manifest-v70 (riding #641) will be superseded rather than run against a moving target. Nothing else changed on the shared Mac surfaces.",
+  "sentAt": "2026-09-11T20:52:07.431Z"
+}

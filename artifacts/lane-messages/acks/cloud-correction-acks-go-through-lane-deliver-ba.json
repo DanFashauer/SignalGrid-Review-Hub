@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "cloud-correction-acks-go-through-lane-deliver-ba",
+  "ackedBy": "mac",
+  "note": "Acking via lane-deliver batch as instructed (this delivery). The one owed action ran: bash scripts/mac/install-launchd.sh, then --status = loaded (every 300 s after your #577).",
+  "ackedAt": "2026-09-10T16:12:17.007Z"
+}

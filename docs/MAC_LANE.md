@@ -110,9 +110,12 @@ history already dates it.
 gates only. This suite is no longer quite service-free — it now provisions Redis for
 `proof:enrollment-race` — but it still does not run `durable-persistence` (Postgres),
 `deploy-stack` (Docker compose) or `secret-scan` (gitleaks), which remain Linux-CI
-only. Nor does it run `phase-pr-evidence`, a job neither this lane nor `preflight`
-covers; the full CI job set is larger than the six previously enumerated, and deriving
-that list mechanically instead of maintaining it by hand is tracked work.
+only. Nor does it run `phase-pr-evidence`. The full CI job set is larger than the six
+previously enumerated; deriving that list mechanically instead of maintaining it by
+hand was tracked work and is done — `scripts/lib/ci-jobs.mjs` (`enumerateCiJobs`,
+`uncoveredLines`) derives it from `.github/workflows/`, and `scripts/preflight.mjs:627`
+reads it, its comment naming `phase-pr-evidence` among the jobs the derivation
+recovered.
 
 **Neither tier proves on-device enforcement.** An app cannot grant device access,
 restrict other apps, make itself non-removable, or self-kiosk. Those are MDM/OS
@@ -245,7 +248,7 @@ work deferred to nowhere. Checked rather than assumed:
 | Image builds (`Dockerfile.api`, `Dockerfile.web`) | **Cloud, under Podman** | both stages build; image runs and serves `/api/healthz` |
 | `signalgrid-mcp` test suite | **Cloud, on Linux** | **99 passed in 2.76s** — the macOS-only reads exercise their graceful-degradation paths, which is exactly what those tests are for |
 | iOS + iPadOS build and unit tests (EnterpriseShell, SignalGridMobile) | **GitHub `macos-latest` runners** | `ios-ci.yml`, real `xcodebuild` against an **iPhone and an iPad** simulator, on every push/PR touching `native/ios/**` |
-| macOS-native build + tests of the decision port | **GitHub `macos-latest` runners** | `ios-ci.yml` job `macos-native`: `swift test` over `native/ios/Package.swift` and `SignalGridMobileCore`. No simulator, so it also proves the port is genuinely pure Foundation |
+| macOS-native build + tests of the decision port | **GitHub `macos-latest` runners** | `ios-ci.yml` job `macos-native`: `swift test` over `native/ios/Package.swift` (the EnterpriseShell decision port) and over `native/ios/SignalGridMobile/SignalGridMobileCore/Package.swift` (`SignalGridMobileCore`). No simulator, so it also proves the port is genuinely pure Foundation |
 | Full macOS gate suite | **GitHub `macos-latest` runners** | `mac-lane.yml`, weekly + on dispatch |
 | Browser/E2E | **Cloud** | Chromium preinstalled at `/opt/pw-browsers` |
 
@@ -294,7 +297,9 @@ tested host, so nothing local was imposing 1024.
 (`vendor/go.podman.io/buildah/define/types.go`) *does* define
 `RLimitDefaultValue = uint64(1048576)`. So on a recent Podman the web image may build
 with no flag at all — the `--ulimit` below is a compatibility measure, harmless where
-the default is already high. **Not verified on 6.x**, only read in its source.
+the default is already high. The 6.2.0-dev vendored constant is **not verified**, only
+read in its source; the flagless build itself IS verified on 6.0.2 — the 2026-08-08
+`3a3bbbe051d0` build above.
 
 Two changes fix it, and both are now in the repo:
 

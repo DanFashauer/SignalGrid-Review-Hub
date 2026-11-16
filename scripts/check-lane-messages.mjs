@@ -49,6 +49,40 @@ function selfTest() {
   a = auditLaneMessages([{ id: "m1", __fileId: "different", from: "cloud", to: "mac", subject: "s", body: "b" }], []);
   checks.push(["an id that disagrees with its filename is caught", a.problems.some((p) => p.includes("does not match its filename"))]);
 
+  const T0 = Date.parse("2026-09-05T12:00:00Z");
+  a = auditLaneMessages([msg("m1", "cloud", "mac", { sentAt: "2026-09-05T10:00:00Z" })], [], T0);
+  checks.push(["a v2 message names how long it has waited", a.unread.length === 1 && /unread for 2\.0h$/.test(a.unread[0]) && a.stale.length === 0]);
+  a = auditLaneMessages([msg("m1", "cloud", "mac", { sentAt: "2026-09-03T10:00:00Z" })], [], T0);
+  checks.push(["unread beyond 24h is STALE — reported, and still not a failure", a.stale.includes("m1") && a.problems.length === 0]);
+  a = auditLaneMessages([msg("m1", "cloud", "mac", { sentAt: "not-a-date" })], [], T0);
+  checks.push(["an unparseable sentAt is reported as unknown age and treated as stale, never as fresh", /unknown age/.test(a.unread[0]) && a.stale.includes("m1")]);
+  // Until 2026-09-06 this case asserted the OPPOSITE — "a v1 message keeps its
+  // exact line … stale.length === 0" — and passed 12/12 with the defect present:
+  // the staleness clock was nested inside `if (m.sentAt !== undefined)`, so the
+  // oldest unread message in the tree (13 days, no sentAt) could never be stale
+  // while an unparseable sentAt correctly was. Absent evidence is never fresher
+  // than corrupt evidence.
+  a = auditLaneMessages([msg("m1", "cloud", "mac")], [], T0);
+  checks.push(["a v1 message with no sentAt and no commit date is STALE with an unknown age — absent is never fresh", /unknown age/.test(a.unread[0]) && a.stale.includes("m1")]);
+  a = auditLaneMessages([msg("m1", "cloud", "mac", { __addedAt: "2026-09-03T10:00:00Z" })], [], T0);
+  checks.push(["a v1 message ages by its commit date (the commit is the delivery) and says so", /unread for 2\.1d \(by its commit date/.test(a.unread[0]) && a.stale.includes("m1")]);
+  a = auditLaneMessages([msg("m1", "cloud", "mac", { __addedAt: "2026-09-05T11:00:00Z" })], [], T0);
+  checks.push(["…and one committed an hour ago is not stale", /unread for 1\.0h/.test(a.unread[0]) && a.stale.length === 0]);
+
+  // supersedes — a withdrawal the audit can read, not prose the reader must find.
+  a = auditLaneMessages([msg("m1", "cloud", "mac"), msg("m2", "cloud", "mac", { supersedes: "m1" })], [], T0);
+  checks.push(["a message that supersedes another marks it, and the superseded line says by whom", a.superseded.get("m1") === "m2" && /\[SUPERSEDED by m2\]$/.test(a.unread[0]) && a.problems.length === 0]);
+  a = auditLaneMessages([msg("m2", "cloud", "mac", { supersedes: ["ghost"] })], [], T0);
+  checks.push(["superseding a message that does not exist is FATAL — a withdrawal of nothing leaves the live order standing", a.problems.some((p) => p.includes('supersedes "ghost"'))]);
+  a = auditLaneMessages([msg("m2", "cloud", "mac", { supersedes: "m2" })], [], T0);
+  checks.push(["a message cannot supersede itself", a.problems.some((p) => p.includes("supersedes itself"))]);
+
+  // acks — a note is the evidence; a v1 ack without one is a record, a v2 one is a defect.
+  a = auditLaneMessages([msg("m1", "cloud", "mac", { sentAt: "2026-09-05T10:00:00Z" })], [{ __fileId: "m1", messageId: "m1", ackedBy: "mac", note: null, schemaVersion: 2, ackedAt: "2026-09-05T11:30:00Z" }], T0);
+  checks.push(["a schema-2 ack with no note is FATAL — 'I read it' is not 'I did it'", a.problems.some((p) => p.includes("no note"))]);
+  a = auditLaneMessages([msg("m1", "cloud", "mac", { sentAt: "2026-09-05T10:00:00Z" })], [{ __fileId: "m1", messageId: "m1", ackedBy: "mac", note: null, schemaVersion: 1, __addedAt: "2026-09-05T11:30:00Z" }], T0);
+  checks.push(["a schema-1 ack with no note is REPORTED, not fatal, and its round trip is measured from its commit date", a.problems.length === 0 && a.reported.some((p) => p.includes("carries no note")) && a.latency.get("m1") === 90 * 60_000]);
+
   const failed = checks.filter(([, ok]) => !ok);
   for (const [name, ok] of checks) console.log(`  ${ok ? "ok" : "FAIL"} — self-test: ${name}`);
   console.log(`\nself-test ${failed.length === 0 ? "passed" : "FAILED"} (${checks.length - failed.length}/${checks.length})`);
@@ -58,13 +92,53 @@ function selfTest() {
 if (process.argv.includes("--self-test")) process.exit(selfTest());
 
 const messages = loadMessages();
-const { problems, unread } = auditLaneMessages(messages, loadAcks());
+const { problems, reported, unread, stale, superseded } = auditLaneMessages(messages, loadAcks());
 
-console.log(`Lane messages — ${messages.length} sent, ${messages.length - unread.length} acknowledged`);
+// MACHINE-READABLE SUMMARY, for the unattended Mac tick.
+//
+// The tick reported `quiet` while five cloud->mac messages sat unread, the oldest
+// four days. That was true about the tick and SILENT about the mailbox: it runs sim
+// requests and heartbeats and does those correctly, but nothing in it reads the
+// inbox, so "nothing happened" and "nobody looked" produced the same word. This is
+// the smallest honest fix — the tick cannot ACKNOWLEDGE mail (an ack says what was
+// done, and a script has done nothing), but it can stop the state being invisible.
+//
+// COARSE ON PURPOSE. The age is whole days, not the 4.3d the prose carries, because
+// the tick throttles a heartbeat whose result is IDENTICAL to the last one. A figure
+// that ticks up continuously would differ on every run and push a heartbeat commit
+// to Alpha every five minutes — trading a silent mailbox for a flooded mainline.
+// Whole days change when something actually changes.
+if (process.argv.includes("--unread-summary")) {
+  const to = (process.argv[process.argv.indexOf("--unread-summary") + 1] ?? "").trim();
+  const mine = to === "" || to.startsWith("--") ? unread : unread.filter((u) => u.includes(`\u2192 ${to} `));
+  let oldestDays = 0;
+  for (const u of mine) {
+    // MINUTES, hours and days — the prose uses all three, and the first draft of
+    // this matched only [hd], so a message "unread for 50m" fell into the
+    // unknown-age arm and reported 99d. Caught by running it, not by reading it.
+    const m = /unread for ([0-9.]+)([mhd])/.exec(u);
+    if (!m) { oldestDays = Math.max(oldestDays, 99); continue; } // unknown age is never fresh
+    const perDay = { m: 1440, h: 24, d: 1 }[m[2]];
+    const days = Number(m[1]) / perDay;
+    if (Number.isFinite(days)) oldestDays = Math.max(oldestDays, Math.floor(days));
+  }
+  console.log(mine.length === 0 ? "unread=0" : `unread=${mine.length} oldest=${oldestDays}d`);
+  process.exit(0);
+}
+
+console.log(`Lane messages — ${messages.length} sent, ${messages.length - unread.length} acknowledged${superseded.size > 0 ? `, ${superseded.size} superseded by a later message` : ""}`);
+if (reported.length > 0) {
+  console.log("\n  REPORTED — accepted as records, not as evidence:");
+  for (const r of reported) console.log(`    · ${r}`);
+}
 if (unread.length > 0) {
   console.log("\n  UNREAD — sent, not yet acknowledged by the addressee:");
   for (const u of unread) console.log(`    · ${u}`);
   console.log("  The addressed lane reads them with:  pnpm run lane:inbox");
+}
+if (stale.length > 0) {
+  console.log(`\n  STALE — unread beyond 24h: ${stale.length}. Reported, never fatal: the addressee's machine may be asleep;`);
+  console.log("  if it is awake, the loop is broken — comment on the mailbox PR (docs/agent/lane-mailbox.json) to wake the cloud lane now.");
 }
 if (problems.length > 0) {
   console.error(`\nLane message check FAILED: ${problems.length} problem(s).`);

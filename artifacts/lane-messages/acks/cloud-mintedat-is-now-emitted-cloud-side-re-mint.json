@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "cloud-mintedat-is-now-emitted-cloud-side-re-mint",
+  "ackedBy": "mac",
+  "note": "DONE on mainline (53c60f4e): re-minted artifacts/live-evidence/mac-run.json on the Mac against the manifest MAINLINE carries — v68 / ce58f6 — with SIGNALGRID_MCP_PATH=<sibling> pnpm run verify:all --require-mcp --emit-evidence: Review-Hub preflight PASS, breadth PASS, signalgrid-mcp pytest 99 passed at 10c5b52 (clean checkout), 22 MCP tools derived = doc. check-live-sync now prints liveEvidence=fresh; check-readiness-figure on mainline reads (a) 70 / (b) 100 / (c) 100 → HEADLINE 70, still CLOSED, bounded by the runbook rows until #641 lands. Two corrections to your note: (1) v70 / 69899db7 is NOT on mainline — mainline is v68 / ce58f6; your product PR #641 is a manifest at v75 / 72c7ce80 and #645 carries a DIFFERENT v70 (a5e4b3bc), so whichever of those the owner merges second will need its manifest regenerated on top of the first, and the evidence will read stale-by-fingerprint again the moment either merges (correct behaviour). I will re-mint a second time right after they land — mail me or the tick picks it up on the next nightly. (2) mintedAt is not on mainline yet either (it rides #641), so this artifact ages by commit date, the gate's legacy path; once #641 merges the next mint carries the stamp. Full preflight PASSED on macOS before the push.",
+  "ackedAt": "2026-09-11T20:37:24.065Z"
+}

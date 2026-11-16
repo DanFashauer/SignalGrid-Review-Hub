@@ -19,6 +19,7 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { VENDOR_CALL_PATTERNS, scanForVendorCalls, vendorCallScanSelfTest } from "./lib/no-vendor-call.js";
 import { composeDeviceRisk, fromSessionReadiness } from "@workspace/posture-composition";
 import {
   evaluateSessionReadiness,
@@ -272,6 +273,28 @@ check(
   );
 }
 
+// Regression, 2026-09-06: an elapsed time that is PRESENT but unreadable (NaN) is
+// "the plane reported and could not say" — READINESS_UNKNOWN / step_up — never
+// READY. `NaN > threshold` is false, so the EXCEEDED branch stayed silent and, with
+// a budget posed, the UNPOSED fallback was skipped too (check-nan-fail-open rule 5).
+// Mutation record: with the Number.isFinite branch removed, this fails by name.
+{
+  const garbledElapsed = evaluateSessionReadiness({
+    sessionRef: "s",
+    appReadiness: "usable",
+    measurement: "measured",
+    sessionOrigin: "fresh",
+    workflowRisk: "routine",
+    elapsedToUsableSeconds: Number.NaN,
+    budget: { thresholdSeconds: 30 },
+    reportIntegrity: "intact",
+  });
+  check(
+    `an UNREADABLE elapsed time (NaN) under a posed budget is READINESS_UNKNOWN / step_up, never ready (${garbledElapsed.reasonCode})`,
+    garbledElapsed.reasonCode === "READINESS_UNKNOWN" && garbledElapsed.recommendedAction === "step_up",
+  );
+}
+
 // ── 3. AN OMITTED BUDGET CANNOT SUPPRESS ─────────────────────────────────────
 {
   const unposed = evaluateSessionReadinessFixture("measured-with-no-posed-budget")!;
@@ -456,12 +479,19 @@ check(
   const stripComments = (src: string): string =>
     src.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/(^|[^:])\/\/[^\n]*/g, "$1 ");
   const bodies = sources.map((f) => stripComments(readFileSync(join(familyDir, f), "utf8")));
-  const NET = /\bfetch\s*\(|require\(['"]https?['"]\)|from ['"]node:https?['"]|new XMLHttpRequest/;
   const CLOCK = /Date\.now\s*\(|new Date\s*\(\s*\)|performance\.now\s*\(/;
+  // The network half is the SHARED scanner (scripts/src/lib/no-vendor-call.ts, row 119):
+  // this family carried a sixth inline copy that caught `require("https")` while the
+  // other five did not. The shared list now carries it, and every other class.
+  const { files: scanned, offenders } = scanForVendorCalls(familyDir);
+  if (offenders.length) console.log(`      offenders: ${offenders.join(", ")}`);
   check(
-    `no network primitive in any of the ${sources.length} family sources`,
-    bodies.every((b) => !NET.test(b)),
+    `no network primitive in any session-readiness/ source (${scanned.length} files scanned recursively)`,
+    scanned.length > 0 && offenders.length === 0,
   );
+  const selfTest = vendorCallScanSelfTest();
+  check(`...and the network scan detects a planted vendor call of every pattern class${selfTest.length ? `: ${selfTest.join("; ")}` : ""}`,
+    selfTest.length === 0);
   check(
     "no clock read in any family source — a wall-clock read in a decision path breaks replay",
     bodies.every((b) => !CLOCK.test(b)),
@@ -470,7 +500,7 @@ check(
   // assertions prove only that the regexes compile.
   check(
     "NON-VACUITY: both scanners fire on a positive control",
-    NET.test("await fetch('https://x')") && CLOCK.test("const t = Date.now()"),
+    VENDOR_CALL_PATTERNS.some((re) => re.test("await fetch('https://x')")) && CLOCK.test("const t = Date.now()"),
   );
   // And the stripping is tested BOTH WAYS, or it could silently blind the scanner:
   // a clock read hidden in a comment must pass, a real one must still be caught.
@@ -478,8 +508,8 @@ check(
     "comment-stripping is two-way: a clock read in prose passes, a real one is still caught",
     !CLOCK.test(stripComments("// never write Date.now() here\nconst x = 1;")) &&
       CLOCK.test(stripComments("const t = Date.now(); // fine")) &&
-      !NET.test(stripComments("/* do not fetch('https://x') */")) &&
-      NET.test(stripComments("await fetch('https://x');")),
+      !VENDOR_CALL_PATTERNS.some((re) => re.test(stripComments("/* do not fetch('https://x') */"))) &&
+      VENDOR_CALL_PATTERNS.some((re) => re.test(stripComments("await fetch('https://x');"))),
   );
   // A URL in code must not be mistaken for a comment by the stripper.
   check(

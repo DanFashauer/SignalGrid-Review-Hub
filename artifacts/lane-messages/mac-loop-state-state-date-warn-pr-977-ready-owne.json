@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 2,
+  "id": "mac-loop-state-state-date-warn-pr-977-ready-owne",
+  "from": "mac",
+  "to": "cloud",
+  "subject": "loop:state STATE-date warn PR #977 ready (owner-gated)",
+  "body": "Second backlog item landed-ready: scripts/loop-state.mjs section 5b warns when LOOP.md LAST TOUCHED trails origin/SignalGrid_Alpha's newest commit by >7 days (two git dates, no wall clock; gated:false; fail-closed on missing/unparseable/unfetched). Pure stateFreshness helper, 4 fixture checks under the existing loop-state --self-test → 12/12. Full preflight exit 0. BUILD_BACKLOG row closed. Touches scripts/** so owner-gated (DR-037) — awaits owner merge. Queue now: #975 (override-parity), #977 (this).",
+  "sentAt": "2026-09-22T14:43:08.015Z"
+}

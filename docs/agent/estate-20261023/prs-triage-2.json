@@ -1,0 +1,1559 @@
+{
+ "measuredAt": "2026-10-23T23:05:00Z",
+ "repository": "DanFashauer/SignalGrid-Review-Hub",
+ "mainlineBranch": "SignalGrid_Alpha",
+ "mainlineShaLocalRef": "2a46fd16fdc61c144c3f42e4bcc3b5389ae94f07",
+ "mainlineShaAtRun": "4057f56b912edd168d81689628f33e1196f29fca",
+ "mainlineNote": "API mainline is one heartbeat-only commit (artifacts/agent-heartbeats/mac-lane-tick.json) past the local origin ref used for cherry/ancestor checks; no PR here touches that file.",
+ "classifierWorktree": "wt-alpha detached at 077dc308816bd7306b93b0f1c894c2cb26c80019",
+ "precedenceUsed": "OWNER > MAC > NEEDS_WORK > LAND_DR037 (the task fixed OWNER>LAND, NEEDS_WORK>LAND, MAC>NEEDS_WORK; OWNER vs MAC and OWNER vs NEEDS_WORK were unspecified and resolved OWNER first, as in prs-triage-1.json; CLOSE_CANDIDATE was applied to #1336 only where superseded evidence is shown). The OWNER list in the task also names launch-claims, the launch profile and docs/DECISION_RECORDS.md, which the classifier reports as SAFETY_MACHINERY only for #1337, #1338 and #1322; those were treated as OWNER on the task's rule. See alsoApplies on each record.",
+ "counts": {
+  "byDisposition": {
+   "OWNER": 10,
+   "MAC": 3,
+   "CLOSE_CANDIDATE": 1
+  }
+ },
+ "prs": [
+  {
+   "number": 1280,
+   "title": "core: registerVerifiedPrincipal refuses unknown roles (plan row 86; row 91 deferred)",
+   "state": "open",
+   "author": "DanFashauer",
+   "lane": "cloud-worker",
+   "head": {
+    "ref": "claude/build-core-principal-policy-guards",
+    "sha": "4c9cd27efad5aa9cca30c4740ea87aa257c8e9c3"
+   },
+   "headSha": "4c9cd27efad5aa9cca30c4740ea87aa257c8e9c3",
+   "tier": "owner-gated",
+   "matchedCategories": [
+    "DECISION_PATH",
+    "SAFETY_MACHINERY"
+   ],
+   "matched": [
+    {
+     "file": "lib/signalgrid-core/src/auth.ts",
+     "category": "DECISION_PATH",
+     "rule": "the decision core / connectors / flows (lib/*)"
+    },
+    {
+     "file": "lib/signalgrid-core/src/engine.ts",
+     "category": "DECISION_PATH",
+     "rule": "the decision core / connectors / flows (lib/*)"
+    },
+    {
+     "file": "scripts/src/signalgrid-core-proof.ts",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/src/signalgrid-core-proof.ts",
+     "category": "SAFETY_MACHINERY",
+     "rule": "any proof harness"
+    }
+   ],
+   "gating": {
+    "name": "Typecheck, build, and proof scaffold",
+    "checkRunId": 113669329979,
+    "status": "completed",
+    "conclusion": "success"
+   },
+   "mergeable": false,
+   "mergeableState": "dirty",
+   "threads": 0,
+   "threadsTotal": 0,
+   "codex": {
+    "present": false
+   },
+   "draft": true,
+   "createdAt": "2026-09-30T11:12:43Z",
+   "updatedAt": "2026-10-09T04:26:03Z",
+   "ageDays": 23.5,
+   "changedFiles": 9,
+   "files": [
+    "artifacts/raised-hands/2026-09-30-policytest-fixtures-are-pinned-per-policy-not-pe.json",
+    "docs/COMPANY_BUILD_PLAN.md",
+    "docs/PRIVATE_CORE_HANDOFF.md",
+    "docs/PRODUCT_CORE_FOUNDATION.md",
+    "docs/WHAT_SIGNALGRID_DOES_TODAY.md",
+    "docs/room-entry-console.html",
+    "lib/signalgrid-core/src/auth.ts",
+    "lib/signalgrid-core/src/engine.ts",
+    "scripts/src/signalgrid-core-proof.ts"
+   ],
+   "aheadBy": 9,
+   "behindBy": 1930,
+   "alreadyOnMainline": {
+    "headIsAncestor": false,
+    "cherryNotOnMainline": 7,
+    "cherryOnMainline": 0,
+    "addedLines": 61,
+    "addedLinesAlreadyOnMainline": 7
+   },
+   "otherNonSuccessChecks": [
+    "github-advanced-security=failure"
+   ],
+   "lastComments": [
+    {
+     "date": "2026-10-01T02:19:10Z",
+     "login": "DanFashauer",
+     "text": "**Round 4 — delta verdict: owner-decision (no defect; the owner merges).** Head `cd0da14179fb595cde12cff56dd291bdb2afb446`. The delta since round 3 (`7535fd6b`)"
+    },
+    {
+     "date": "2026-10-09T04:26:02Z",
+     "login": "DanFashauer",
+     "text": "Merged `SignalGrid_Alpha` @ e7a2db53 into the branch (merge commit 4c9cd27e, no rewrite) to clear a conflict. - **Conflict:** only `docs/COMPANY_BUILD_PLAN.md`,"
+    }
+   ],
+   "bodyMergedUnderDR037": false,
+   "bodyCloudLandSentences": [],
+   "bodyAsksCloudToMergeUnderDR037": [],
+   "disposition": "OWNER",
+   "alsoApplies": [
+    "NEEDS_WORK"
+   ],
+   "reason": "It edits lib/signalgrid-core auth.ts and engine.ts (DECISION_PATH) and the cloud round-4 verdict is owner-decision, and although gating run 113669329979 completed/success on 4c9cd27e with 0 unresolved threads, it is also a draft and conflicted (mergeable false/dirty, 9 ahead / 1930 behind mainline)."
+  },
+  {
+   "number": 1307,
+   "title": "web+auth: self-host fonts in review/desktop, pin blank OIDC_ISSUER (plan row 70 residual + backlog OIDC pin)",
+   "state": "open",
+   "author": "DanFashauer",
+   "lane": "cloud-worker",
+   "head": {
+    "ref": "claude/build-self-host-fonts-review-desktop",
+    "sha": "d46fd15600d5b2478f4efcc8ef83a88a41b8ebfd"
+   },
+   "headSha": "d46fd15600d5b2478f4efcc8ef83a88a41b8ebfd",
+   "tier": "owner-gated",
+   "matchedCategories": [
+    "OWNER_RESERVED",
+    "SAFETY_MACHINERY"
+   ],
+   "matched": [
+    {
+     "file": "artifacts/signalgrid-review/index.html",
+     "category": "OWNER_RESERVED",
+     "rule": "buyer-facing site & outreach"
+    },
+    {
+     "file": "artifacts/signalgrid-review/package.json",
+     "category": "OWNER_RESERVED",
+     "rule": "buyer-facing site & outreach"
+    },
+    {
+     "file": "artifacts/signalgrid-review/src/main.tsx",
+     "category": "OWNER_RESERVED",
+     "rule": "buyer-facing site & outreach"
+    },
+    {
+     "file": "pnpm-lock.yaml",
+     "category": "SAFETY_MACHINERY",
+     "rule": "workspace/lockfile"
+    },
+    {
+     "file": "scripts/review-invariants.mjs",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/src/enterprise-auth-proof.ts",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/src/enterprise-auth-proof.ts",
+     "category": "SAFETY_MACHINERY",
+     "rule": "any proof harness"
+    }
+   ],
+   "gating": {
+    "name": "Typecheck, build, and proof scaffold",
+    "checkRunId": 113916533762,
+    "status": "completed",
+    "conclusion": "success"
+   },
+   "mergeable": true,
+   "mergeableState": "clean",
+   "threads": 0,
+   "threadsTotal": 0,
+   "codex": {
+    "present": false
+   },
+   "draft": true,
+   "createdAt": "2026-09-30T14:51:34Z",
+   "updatedAt": "2026-10-09T16:25:06Z",
+   "ageDays": 23.3,
+   "changedFiles": 11,
+   "files": [
+    "artifacts/signalgrid-desktop/index.html",
+    "artifacts/signalgrid-desktop/package.json",
+    "artifacts/signalgrid-desktop/src/main.tsx",
+    "artifacts/signalgrid-review/index.html",
+    "artifacts/signalgrid-review/package.json",
+    "artifacts/signalgrid-review/src/main.tsx",
+    "docs/BUILD_BACKLOG.md",
+    "docs/COMPANY_BUILD_PLAN.md",
+    "pnpm-lock.yaml",
+    "scripts/review-invariants.mjs",
+    "scripts/src/enterprise-auth-proof.ts"
+   ],
+   "aheadBy": 5,
+   "behindBy": 1758,
+   "alreadyOnMainline": {
+    "headIsAncestor": false,
+    "cherryNotOnMainline": 4,
+    "cherryOnMainline": 0,
+    "addedLines": 85,
+    "addedLinesAlreadyOnMainline": 12
+   },
+   "otherNonSuccessChecks": [
+    "github-advanced-security=failure",
+    "phase-pr-evidence=cancelled"
+   ],
+   "lastComments": [
+    {
+     "date": "2026-09-30T14:53:13Z",
+     "login": "DanFashauer",
+     "text": "`github-advanced-security` (job 109944834229) is red because the Copilot autofind agent crashed inside its own runtime. The log ends in a stack trace in `copilo"
+    },
+    {
+     "date": "2026-09-30T16:44:40Z",
+     "login": "DanFashauer",
+     "text": "**Review verdict: owner-decision (no defect; the owner merges).** Reviewed at `aa49d29b2d9b23c10dc481e17d0438777f1ae14a` by an independent reviewer and an adver"
+    }
+   ],
+   "bodyMergedUnderDR037": false,
+   "bodyCloudLandSentences": [],
+   "bodyAsksCloudToMergeUnderDR037": [],
+   "disposition": "OWNER",
+   "alsoApplies": [
+    "NEEDS_WORK"
+   ],
+   "reason": "It edits the buyer-facing artifacts/signalgrid-review files (OWNER_RESERVED) and its body says it does not land under DR-037; gating run 113916533762 completed/success on d46fd156, mergeable true/clean, 5 ahead / 1758 behind mainline and 0 threads, but it is also a draft."
+  },
+  {
+   "number": 1309,
+   "title": "docs: retire the file-count fossil, date the completion-plan census, archive the orphan spec (plan row 73 residual, backlog rows census-figures + orphan-third-spec)",
+   "state": "open",
+   "author": "DanFashauer",
+   "lane": "cloud-worker",
+   "head": {
+    "ref": "claude/build-fossil-figures-orphan-spec",
+    "sha": "1f882fcc33fe4ac8bb6244f57aa443ffbf5bbd75"
+   },
+   "headSha": "1f882fcc33fe4ac8bb6244f57aa443ffbf5bbd75",
+   "tier": "owner-gated",
+   "matchedCategories": [
+    "DECISION_PATH",
+    "SAFETY_MACHINERY"
+   ],
+   "matched": [
+    {
+     "file": ".claude/skills/signalgrid/SKILL.md",
+     "category": "SAFETY_MACHINERY",
+     "rule": ".claude/{agents,skills,commands,workflows}/** and .mcp.json (the instruction and tool-wiring surface every session loads)"
+    },
+    {
+     "file": "lib/api-spec/product-openapi.json",
+     "category": "DECISION_PATH",
+     "rule": "the decision core / connectors / flows (lib/*)"
+    },
+    {
+     "file": "scripts/check-status-figures.mjs",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/src/api-contract-proof.ts",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/src/api-contract-proof.ts",
+     "category": "SAFETY_MACHINERY",
+     "rule": "any proof harness"
+    }
+   ],
+   "gating": {
+    "name": "Typecheck, build, and proof scaffold",
+    "checkRunId": 113569596940,
+    "status": "completed",
+    "conclusion": "success"
+   },
+   "mergeable": false,
+   "mergeableState": "dirty",
+   "threads": 0,
+   "threadsTotal": 1,
+   "codex": {
+    "present": false
+   },
+   "draft": true,
+   "createdAt": "2026-09-30T15:01:07Z",
+   "updatedAt": "2026-10-08T22:19:48Z",
+   "ageDays": 23.3,
+   "changedFiles": 10,
+   "files": [
+    ".claude/skills/signalgrid/SKILL.md",
+    "docs/BUILD_BACKLOG.md",
+    "docs/COMPANY_BUILD_PLAN.md",
+    "docs/PRODUCT_COMPLETION_PLAN.md",
+    "docs/agent/EVIDENCE.md",
+    "docs/agent/SURFACE_REVIEW_COVERAGE.json",
+    "docs/agent/SURFACE_REVIEW_COVERAGE.md",
+    "docs/archive/product-openapi.json",
+    "scripts/check-status-figures.mjs",
+    "scripts/src/api-contract-proof.ts"
+   ],
+   "aheadBy": 8,
+   "behindBy": 1994,
+   "alreadyOnMainline": {
+    "headIsAncestor": false,
+    "cherryNotOnMainline": 4,
+    "cherryOnMainline": 0,
+    "addedLines": 608,
+    "addedLinesAlreadyOnMainline": 9
+   },
+   "otherNonSuccessChecks": [
+    "github-advanced-security=failure"
+   ],
+   "lastComments": [
+    {
+     "date": "2026-09-30T19:22:46Z",
+     "login": "DanFashauer",
+     "text": "**Round-2 verdict: owner-decision (no defect; the owner merges).** Reviewed at `93509caa511289b6bb6be2908f7658629437cce8` by an independent reviewer and an adve"
+    },
+    {
+     "date": "2026-10-01T00:15:27Z",
+     "login": "DanFashauer",
+     "text": "**Delta verdict (head `a3abdfdc6cbc1639e64e856f26f1df17cf9d528e`): owner-decision unchanged (no defect; the owner merges).** Compared against the round-2 head `"
+    }
+   ],
+   "bodyMergedUnderDR037": false,
+   "bodyCloudLandSentences": [],
+   "bodyAsksCloudToMergeUnderDR037": [],
+   "disposition": "OWNER",
+   "alsoApplies": [
+    "NEEDS_WORK"
+   ],
+   "reason": "It moves lib/api-spec/product-openapi.json to docs/archive (DECISION_PATH) and the cloud delta verdict is owner-decision; gating run 113569596940 completed/success on 1f882fcc and 0 unresolved threads (its 1 thread is resolved), but it is also a draft and conflicted (mergeable false/dirty, 8 ahead / 1994 behind mainline)."
+  },
+  {
+   "number": 1314,
+   "title": "webauthn: a revoked step-up credential stays revoked (PR #1240 review gaps 1+2) — owner picks the gap-1 option",
+   "state": "open",
+   "author": "DanFashauer",
+   "lane": "cloud-worker",
+   "head": {
+    "ref": "claude/cool-curie-mgkzox",
+    "sha": "c16adf05ddeeffc4162621e1ea96580be4d52e35"
+   },
+   "headSha": "c16adf05ddeeffc4162621e1ea96580be4d52e35",
+   "tier": "owner-gated",
+   "matchedCategories": [
+    "DECISION_PATH",
+    "SAFETY_MACHINERY"
+   ],
+   "matched": [
+    {
+     "file": ".github/workflows/review-hub-ci.yml",
+     "category": "SAFETY_MACHINERY",
+     "rule": ".github/workflows/**"
+    },
+    {
+     "file": "artifacts/api-server/test/api.test.mjs",
+     "category": "DECISION_PATH",
+     "rule": "the /v1 decision API server"
+    },
+    {
+     "file": "lib/audit/src/types.ts",
+     "category": "DECISION_PATH",
+     "rule": "the decision core / connectors / flows (lib/*)"
+    },
+    {
+     "file": "lib/webauthn/src/webauthn/server.ts",
+     "category": "DECISION_PATH",
+     "rule": "the decision core / connectors / flows (lib/*)"
+    },
+    {
+     "file": "lib/webauthn/src/webauthn/store.ts",
+     "category": "DECISION_PATH",
+     "rule": "the decision core / connectors / flows (lib/*)"
+    },
+    {
+     "file": "scripts/check-derived-doc-figures.mjs",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/package.json",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/preflight.mjs",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/src/lib/webauthn-ceremony.ts",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/src/webauthn-enrollment-race-proof.ts",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/src/webauthn-enrollment-race-proof.ts",
+     "category": "SAFETY_MACHINERY",
+     "rule": "any proof harness"
+    },
+    {
+     "file": "scripts/src/webauthn-revocation-proof.ts",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/src/webauthn-revocation-proof.ts",
+     "category": "SAFETY_MACHINERY",
+     "rule": "any proof harness"
+    }
+   ],
+   "gating": {
+    "name": "Typecheck, build, and proof scaffold",
+    "checkRunId": 113447381485,
+    "status": "completed",
+    "conclusion": "success"
+   },
+   "mergeable": false,
+   "mergeableState": "dirty",
+   "threads": 0,
+   "threadsTotal": 0,
+   "codex": {
+    "present": false
+   },
+   "draft": true,
+   "createdAt": "2026-09-30T16:36:14Z",
+   "updatedAt": "2026-10-08T17:28:15Z",
+   "ageDays": 23.3,
+   "changedFiles": 18,
+   "files": [
+    ".github/workflows/review-hub-ci.yml",
+    "artifacts/api-server/test/api.test.mjs",
+    "docs/COMPANY_BUILD_PLAN.md",
+    "docs/STATUS.md",
+    "docs/ZERO_COST_LIVE_TEST_MATRIX.md",
+    "docs/agent/LOOP.md",
+    "docs/agent/SURFACE_REVIEW_COVERAGE.md",
+    "docs/company/INVESTOR_ONE_PAGER.md",
+    "lib/audit/src/types.ts",
+    "lib/webauthn/src/webauthn/server.ts",
+    "lib/webauthn/src/webauthn/store.ts",
+    "package.json",
+    "scripts/check-derived-doc-figures.mjs",
+    "scripts/package.json",
+    "scripts/preflight.mjs",
+    "scripts/src/lib/webauthn-ceremony.ts",
+    "scripts/src/webauthn-enrollment-race-proof.ts",
+    "scripts/src/webauthn-revocation-proof.ts"
+   ],
+   "aheadBy": 16,
+   "behindBy": 2049,
+   "alreadyOnMainline": {
+    "headIsAncestor": false,
+    "cherryNotOnMainline": 11,
+    "cherryOnMainline": 0,
+    "addedLines": 804,
+    "addedLinesAlreadyOnMainline": 34
+   },
+   "otherNonSuccessChecks": [
+    "github-advanced-security=failure",
+    "phase-pr-evidence=cancelled"
+   ],
+   "lastComments": [
+    {
+     "date": "2026-10-08T11:27:30Z",
+     "login": "DanFashauer",
+     "text": "## Review round 2 — verdict: **fix-needed** (head `b0333d0b2425e9d92ccbbba3d6d0fe238165f29b`) Reviewed by the cloud lane (Sonnet review + Opus refute, DR-047 re"
+    },
+    {
+     "date": "2026-10-08T12:02:19Z",
+     "login": "DanFashauer",
+     "text": "Review round 2 is addressed in `cc004697`. Fixes are in a9fb05b1; the merge with `SignalGrid_Alpha` b95f94f3 is cc004697. **MEDIUM: the re-read's fail-closed pa"
+    }
+   ],
+   "bodyMergedUnderDR037": false,
+   "bodyCloudLandSentences": [],
+   "bodyAsksCloudToMergeUnderDR037": [],
+   "disposition": "OWNER",
+   "alsoApplies": [
+    "NEEDS_WORK"
+   ],
+   "reason": "It changes lib/webauthn, lib/audit and the api-server test (DECISION_PATH) and the owner must pick the gap-1 option (B shipped, A on request); gating run 113447381485 completed/success on c16adf05 and 0 threads, but it is also a draft and conflicted (mergeable false/dirty, 16 ahead / 2049 behind mainline)."
+  },
+  {
+   "number": 1320,
+   "title": "simulator: drop constant status conjuncts, pin three unset attribute keys (plan rows 84, 85)",
+   "state": "open",
+   "author": "DanFashauer",
+   "lane": "cloud-worker",
+   "head": {
+    "ref": "claude/build-sim-status-constants-key-pins",
+    "sha": "2fc1035fe5b8f6ad4f57e9bcd2b8367993cbc8e8"
+   },
+   "headSha": "2fc1035fe5b8f6ad4f57e9bcd2b8367993cbc8e8",
+   "tier": "owner-gated",
+   "matchedCategories": [
+    "DECISION_PATH",
+    "SAFETY_MACHINERY"
+   ],
+   "matched": [
+    {
+     "file": "lib/signalgrid-simulator/src/decisionEngine.ts",
+     "category": "DECISION_PATH",
+     "rule": "the decision core / connectors / flows (lib/*)"
+    },
+    {
+     "file": "scripts/src/signalgrid-simulator-proof.ts",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/src/signalgrid-simulator-proof.ts",
+     "category": "SAFETY_MACHINERY",
+     "rule": "any proof harness"
+    }
+   ],
+   "gating": {
+    "name": "Typecheck, build, and proof scaffold",
+    "checkRunId": 110005357099,
+    "status": "completed",
+    "conclusion": "success"
+   },
+   "mergeable": false,
+   "mergeableState": "dirty",
+   "threads": 0,
+   "threadsTotal": 0,
+   "codex": {
+    "present": false
+   },
+   "draft": true,
+   "createdAt": "2026-09-30T17:13:21Z",
+   "updatedAt": "2026-09-30T18:55:04Z",
+   "ageDays": 23.2,
+   "changedFiles": 3,
+   "files": [
+    "docs/COMPANY_BUILD_PLAN.md",
+    "lib/signalgrid-simulator/src/decisionEngine.ts",
+    "scripts/src/signalgrid-simulator-proof.ts"
+   ],
+   "aheadBy": 2,
+   "behindBy": 2908,
+   "alreadyOnMainline": {
+    "headIsAncestor": false,
+    "cherryNotOnMainline": 2,
+    "cherryOnMainline": 0,
+    "addedLines": 56,
+    "addedLinesAlreadyOnMainline": 0
+   },
+   "otherNonSuccessChecks": [
+    "github-advanced-security=failure"
+   ],
+   "lastComments": [
+    {
+     "date": "2026-09-30T17:15:34Z",
+     "login": "github-actions[bot]",
+     "text": "<!-- signalgrid-triage --> ### 🧭 PR triage - **Areas:** `area:docs` `area:tooling` - **Size:** `size:S` (81 lines across 3 files) CI runs the full gate suite (b"
+    },
+    {
+     "date": "2026-09-30T18:54:23Z",
+     "login": "DanFashauer",
+     "text": "**Review verdict: owner-decision (no defect; the owner merges).** Reviewed at `2fc1035fe5b8f6ad4f57e9bcd2b8367993cbc8e8` by an independent reviewer and an adver"
+    }
+   ],
+   "bodyMergedUnderDR037": false,
+   "bodyCloudLandSentences": [],
+   "bodyAsksCloudToMergeUnderDR037": [],
+   "disposition": "OWNER",
+   "alsoApplies": [
+    "NEEDS_WORK"
+   ],
+   "reason": "It edits lib/signalgrid-simulator decisionEngine.ts (DECISION_PATH) and the review verdict is owner-decision; gating run 110005357099 completed/success on 2fc1035f and 0 threads, but it is also a draft and conflicted (mergeable false/dirty, 2 ahead / 2908 behind mainline)."
+  },
+  {
+   "number": 1321,
+   "title": "cli: signalgrid CLI harness, read-only by default (backlog row, DR-040)",
+   "state": "open",
+   "author": "DanFashauer",
+   "lane": "cloud-worker",
+   "head": {
+    "ref": "claude/build-signalgrid-cli-harness",
+    "sha": "d319889624c21bc33bc1f0152bd2bb9b6cffa328"
+   },
+   "headSha": "d319889624c21bc33bc1f0152bd2bb9b6cffa328",
+   "tier": "owner-gated",
+   "matchedCategories": [
+    "OWNER_RESERVED",
+    "SAFETY_MACHINERY"
+   ],
+   "matched": [
+    {
+     "file": ".claude/skills/cli-anything/SKILL.md",
+     "category": "SAFETY_MACHINERY",
+     "rule": ".claude/{agents,skills,commands,workflows}/** and .mcp.json (the instruction and tool-wiring surface every session loads)"
+    },
+    {
+     "file": ".claude/skills/cli-anything/signalgrid-cli/SKILL.md",
+     "category": "SAFETY_MACHINERY",
+     "rule": ".claude/{agents,skills,commands,workflows}/** and .mcp.json (the instruction and tool-wiring surface every session loads)"
+    },
+    {
+     "file": ".github/workflows/review-hub-ci.yml",
+     "category": "SAFETY_MACHINERY",
+     "rule": ".github/workflows/**"
+    },
+    {
+     "file": "docs/LAUNCH_PROFILE.md",
+     "category": "OWNER_RESERVED",
+     "rule": "the launch profile"
+    },
+    {
+     "file": "pnpm-lock.yaml",
+     "category": "SAFETY_MACHINERY",
+     "rule": "workspace/lockfile"
+    },
+    {
+     "file": "scripts/check-derived-doc-figures.mjs",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/launch-profile.mjs",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/package.json",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/preflight.mjs",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/src/signalgrid-cli-proof.ts",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/src/signalgrid-cli-proof.ts",
+     "category": "SAFETY_MACHINERY",
+     "rule": "any proof harness"
+    }
+   ],
+   "gating": {
+    "name": "Typecheck, build, and proof scaffold",
+    "checkRunId": 120239822196,
+    "status": "completed",
+    "conclusion": "success"
+   },
+   "mergeable": true,
+   "mergeableState": "clean",
+   "threads": 73,
+   "threadsTotal": 79,
+   "codex": {
+    "present": true,
+    "kind": "summary",
+    "status": "failed",
+    "has_unresolved_findings": true,
+    "has_any_findings": true,
+    "commitSha": "d319889624c21bc33bc1f0152bd2bb9b6cffa328",
+    "onCurrentHead": true,
+    "summaryUpdatedAt": "2026-10-23T04:25:25Z",
+    "usageLimitNotices": 15,
+    "latestNoticeAt": "2026-10-23T04:25:27Z"
+   },
+   "draft": false,
+   "createdAt": "2026-09-30T17:33:27Z",
+   "updatedAt": "2026-10-23T04:25:27Z",
+   "ageDays": 23.2,
+   "changedFiles": 27,
+   "files": [
+    ".claude/skills/cli-anything/SKILL.md",
+    ".claude/skills/cli-anything/signalgrid-cli/SKILL.md",
+    ".github/workflows/review-hub-ci.yml",
+    "artifacts/signalgrid-cli/bin/signalgrid.mjs",
+    "artifacts/signalgrid-cli/package.json",
+    "artifacts/signalgrid-cli/src/bin.ts",
+    "artifacts/signalgrid-cli/src/cli.ts",
+    "artifacts/signalgrid-cli/src/client.ts",
+    "artifacts/signalgrid-cli/src/session.ts",
+    "artifacts/signalgrid-cli/tsconfig.json",
+    "docs/BUILD_BACKLOG.md",
+    "docs/COMPANY_BUILD_PLAN.md",
+    "docs/LAUNCH_PROFILE.md",
+    "docs/STATUS.md",
+    "docs/ZERO_COST_LIVE_TEST_MATRIX.md",
+    "docs/agent/LOOP.md",
+    "docs/agent/SURFACE_REVIEW_COVERAGE.json",
+    "docs/agent/SURFACE_REVIEW_COVERAGE.md",
+    "docs/agent/org-roster.json",
+    "docs/company/INVESTOR_ONE_PAGER.md",
+    "package.json",
+    "pnpm-lock.yaml",
+    "scripts/check-derived-doc-figures.mjs",
+    "scripts/launch-profile.mjs",
+    "scripts/package.json",
+    "scripts/preflight.mjs",
+    "scripts/src/signalgrid-cli-proof.ts"
+   ],
+   "aheadBy": 61,
+   "behindBy": 158,
+   "alreadyOnMainline": {
+    "headIsAncestor": false,
+    "cherryNotOnMainline": 34,
+    "cherryOnMainline": 0,
+    "addedLines": 2070,
+    "addedLinesAlreadyOnMainline": 7
+   },
+   "otherNonSuccessChecks": [],
+   "lastComments": [
+    {
+     "date": "2026-10-17T19:04:33Z",
+     "login": "chatgpt-codex-connector[bot]",
+     "text": "You have reached your Codex usage limits for code reviews. You can see your limits in the [Codex usage dashboard](https://chatgpt.com/codex/cloud/settings/usage"
+    },
+    {
+     "date": "2026-10-23T04:25:27Z",
+     "login": "chatgpt-codex-connector[bot]",
+     "text": "You have reached your Codex usage limits for code reviews. You can see your limits in the [Codex usage dashboard](https://chatgpt.com/codex/cloud/settings/usage"
+    }
+   ],
+   "bodyMergedUnderDR037": false,
+   "bodyCloudLandSentences": [],
+   "bodyAsksCloudToMergeUnderDR037": [],
+   "disposition": "OWNER",
+   "alsoApplies": [
+    "NEEDS_WORK"
+   ],
+   "reason": "It edits docs/LAUNCH_PROFILE.md (OWNER_RESERVED) and its body says OWNER-MERGE, not DR-037; gating run 120239822196 completed/success on d3198896 and mergeable true/clean, 61 ahead / 158 behind mainline, but 73 of 79 review threads are unresolved, the Codex summary on the current head is failed with has_unresolved_findings true, and lane mail #1638 hands its two open decisions to the Mac lane."
+  },
+  {
+   "number": 1322,
+   "title": "DR-062 (owner decision): SignalGrid's scope is the whole company incl. legacy systems; fully automatic by default",
+   "state": "open",
+   "author": "DanFashauer",
+   "lane": "mac",
+   "head": {
+    "ref": "mac/dr-062-company-scope",
+    "sha": "a6ce6572d133362fc83e0a8de0f7146ebd2e2300"
+   },
+   "headSha": "a6ce6572d133362fc83e0a8de0f7146ebd2e2300",
+   "tier": "owner-gated",
+   "matchedCategories": [
+    "OWNER_RESERVED",
+    "SAFETY_MACHINERY"
+   ],
+   "matched": [
+    {
+     "file": "artifacts/signalgrid-web/index.html",
+     "category": "OWNER_RESERVED",
+     "rule": "buyer-facing site & outreach"
+    },
+    {
+     "file": "docs/DECISION_RECORDS.md",
+     "category": "SAFETY_MACHINERY",
+     "rule": "the decision records"
+    },
+    {
+     "file": "docs/POSITIONING.md",
+     "category": "OWNER_RESERVED",
+     "rule": "pricing & positioning"
+    },
+    {
+     "file": "scripts/check-product-framing.mjs",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    }
+   ],
+   "gating": {
+    "name": "Typecheck, build, and proof scaffold",
+    "checkRunId": 110014367225,
+    "status": "completed",
+    "conclusion": "failure"
+   },
+   "mergeable": true,
+   "mergeableState": "unstable",
+   "threads": 0,
+   "threadsTotal": 0,
+   "codex": {
+    "present": true,
+    "kind": "usage-limit-notice-only",
+    "status": "usage-limit",
+    "has_unresolved_findings": null,
+    "usageLimitNotices": 1,
+    "latestNoticeAt": "2026-09-30T17:35:38Z"
+   },
+   "draft": false,
+   "createdAt": "2026-09-30T17:35:33Z",
+   "updatedAt": "2026-09-30T17:35:46Z",
+   "ageDays": 23.2,
+   "changedFiles": 15,
+   "files": [
+    "CLAUDE.md",
+    "artifacts/signalgrid-web/index.html",
+    "docs/DECISION_RECORDS.md",
+    "docs/OPERATIONAL_HEALTH_DEX_LAYER_STRATEGY.md",
+    "docs/POSITIONING.md",
+    "docs/PURPOSE.md",
+    "docs/SIGNAL_SOURCE_CATALOG.md",
+    "docs/research/APPLE_OPEN_SOURCE_PLATFORM_STRATEGY.md",
+    "docs/research/BUYER_PARTNER_READINESS_PACK.md",
+    "docs/research/FOUNDER_CONTROL_REQUIREMENTS.md",
+    "docs/research/FOUNDER_STRATEGIC_OPTIONS.md",
+    "docs/research/INVESTOR_DESIGN_PARTNER_READINESS.md",
+    "docs/research/PRODUCT_REALITY_CHECKLIST.md",
+    "docs/research/SIGNALGRID_V0_2_READINESS_PLAN.md",
+    "scripts/check-product-framing.mjs"
+   ],
+   "aheadBy": 3,
+   "behindBy": 2930,
+   "alreadyOnMainline": {
+    "headIsAncestor": false,
+    "cherryNotOnMainline": 3,
+    "cherryOnMainline": 0,
+    "addedLines": 49,
+    "addedLinesAlreadyOnMainline": 1
+   },
+   "otherNonSuccessChecks": [
+    "github-advanced-security=failure",
+    "Typecheck, build, and proof scaffold=failure",
+    "phase-pr-evidence=failure"
+   ],
+   "lastComments": [
+    {
+     "date": "2026-09-30T17:35:38Z",
+     "login": "chatgpt-codex-connector[bot]",
+     "text": "You have reached your Codex usage limits for code reviews. You can see your limits in the [Codex usage dashboard](https://chatgpt.com/codex/cloud/settings/usage"
+    },
+    {
+     "date": "2026-09-30T17:35:46Z",
+     "login": "github-actions[bot]",
+     "text": "<!-- signalgrid-triage --> ### 🧭 PR triage - **Areas:** `area:apps` `area:docs` `area:tooling` - **Size:** `size:S` (84 lines across 15 files) CI runs the full "
+    }
+   ],
+   "bodyMergedUnderDR037": false,
+   "bodyCloudLandSentences": [],
+   "bodyAsksCloudToMergeUnderDR037": [],
+   "disposition": "OWNER",
+   "alsoApplies": [
+    "MAC",
+    "NEEDS_WORK"
+   ],
+   "reason": "It records DR-062 in docs/DECISION_RECORDS.md and edits docs/POSITIONING.md and the buyer site (OWNER_RESERVED), and its body says only the owner merges; the gating run 110014367225 is completed/failure on a6ce6572 and the PR is mergeable true/unstable, 3 ahead / 2930 behind mainline with phase-pr-evidence also red."
+  },
+  {
+   "number": 1323,
+   "title": "Live demo: pnpm run demo:live plays signal → decision → ticket → notice → verified restore on your phone (BUILD_BACKLOG: one-command live demo)",
+   "state": "open",
+   "author": "DanFashauer",
+   "lane": "mac",
+   "head": {
+    "ref": "mac/demo-live",
+    "sha": "7994535480bd8d3478d7ffbc53146bf970cbe5e2"
+   },
+   "headSha": "7994535480bd8d3478d7ffbc53146bf970cbe5e2",
+   "tier": "owner-gated",
+   "matchedCategories": [
+    "SAFETY_MACHINERY"
+   ],
+   "matched": [
+    {
+     "file": ".github/workflows/review-hub-ci.yml",
+     "category": "SAFETY_MACHINERY",
+     "rule": ".github/workflows/**"
+    },
+    {
+     "file": "scripts/check-derived-doc-figures.mjs",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/package.json",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/preflight.mjs",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/src/demo-live-proof.ts",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/src/demo-live-proof.ts",
+     "category": "SAFETY_MACHINERY",
+     "rule": "any proof harness"
+    },
+    {
+     "file": "scripts/src/demo-live.ts",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    }
+   ],
+   "gating": {
+    "name": "Typecheck, build, and proof scaffold",
+    "checkRunId": 110234300580,
+    "status": "completed",
+    "conclusion": "success"
+   },
+   "mergeable": false,
+   "mergeableState": "dirty",
+   "threads": 1,
+   "threadsTotal": 1,
+   "codex": {
+    "present": true,
+    "kind": "usage-limit-notice-only",
+    "status": "usage-limit",
+    "has_unresolved_findings": null,
+    "usageLimitNotices": 1,
+    "latestNoticeAt": "2026-09-30T18:08:52Z"
+   },
+   "draft": false,
+   "createdAt": "2026-09-30T18:08:46Z",
+   "updatedAt": "2026-10-01T05:33:21Z",
+   "ageDays": 23.2,
+   "changedFiles": 13,
+   "files": [
+    ".github/workflows/review-hub-ci.yml",
+    "docs/COMPANY_BUILD_PLAN.md",
+    "docs/STATUS.md",
+    "docs/ZERO_COST_LIVE_TEST_MATRIX.md",
+    "docs/agent/LOOP.md",
+    "docs/agent/SURFACE_REVIEW_COVERAGE.md",
+    "docs/company/INVESTOR_ONE_PAGER.md",
+    "package.json",
+    "scripts/check-derived-doc-figures.mjs",
+    "scripts/package.json",
+    "scripts/preflight.mjs",
+    "scripts/src/demo-live-proof.ts",
+    "scripts/src/demo-live.ts"
+   ],
+   "aheadBy": 7,
+   "behindBy": 2764,
+   "alreadyOnMainline": {
+    "headIsAncestor": false,
+    "cherryNotOnMainline": 5,
+    "cherryOnMainline": 0,
+    "addedLines": 1172,
+    "addedLinesAlreadyOnMainline": 0
+   },
+   "otherNonSuccessChecks": [
+    "CodeQL=failure",
+    "github-advanced-security=None",
+    "phase-pr-evidence=failure"
+   ],
+   "lastComments": [
+    {
+     "date": "2026-09-30T18:52:23Z",
+     "login": "DanFashauer",
+     "text": "**Review verdict: fix-needed** (independent reviewer + adversarial refuter, upheld) at `1bfb7e732a1f39e98f84513ded855b223ccf9eeb`. Tier SAFETY_MACHINERY; gating"
+    },
+    {
+     "date": "2026-10-01T05:33:12Z",
+     "login": "DanFashauer",
+     "text": "**New head `79945354` — mainline merged in (Mac merge step).** Conflicts were only in derived files (`docs/COMPANY_BUILD_PLAN.md` line figure, `docs/agent/SURFA"
+    }
+   ],
+   "bodyMergedUnderDR037": false,
+   "bodyCloudLandSentences": [],
+   "bodyAsksCloudToMergeUnderDR037": [
+    "Owner decision needed: none — SAFETY_MACHINERY (scripts/ + registrations + derived doc figures; no lib/** change); the cloud lane may merge under DR-037 once CI is green."
+   ],
+   "disposition": "MAC",
+   "alsoApplies": [
+    "NEEDS_WORK"
+   ],
+   "reason": "Head mac/demo-live is Mac lane work (tier SAFETY_MACHINERY only) and gating run 110234300580 completed/success on 79945354, but it is conflicted (mergeable false/dirty, 7 ahead / 2764 behind mainline) with 1 unresolved thread, CodeQL failing and phase-pr-evidence failing, although its body says the cloud lane may merge under DR-037 once CI is green."
+  },
+  {
+   "number": 1330,
+   "title": "handoff-sim: keep every hold on a task, not just the last (backlog row ReleaseLedger.holds)",
+   "state": "open",
+   "author": "DanFashauer",
+   "lane": "cloud-worker",
+   "head": {
+    "ref": "claude/build-handoff-sim-same-task-holds",
+    "sha": "151299936353e11c5c1aaca68156fbff2bbfd0f7"
+   },
+   "headSha": "151299936353e11c5c1aaca68156fbff2bbfd0f7",
+   "tier": "owner-gated",
+   "matchedCategories": [
+    "DECISION_PATH",
+    "SAFETY_MACHINERY"
+   ],
+   "matched": [
+    {
+     "file": "lib/handoff-sim/src/release.ts",
+     "category": "DECISION_PATH",
+     "rule": "the decision core / connectors / flows (lib/*)"
+    },
+    {
+     "file": "lib/handoff-sim/src/simulate.ts",
+     "category": "DECISION_PATH",
+     "rule": "the decision core / connectors / flows (lib/*)"
+    },
+    {
+     "file": "lib/handoff-sim/src/types.ts",
+     "category": "DECISION_PATH",
+     "rule": "the decision core / connectors / flows (lib/*)"
+    },
+    {
+     "file": "scripts/src/handoff-sim-proof.ts",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/src/handoff-sim-proof.ts",
+     "category": "SAFETY_MACHINERY",
+     "rule": "any proof harness"
+    }
+   ],
+   "gating": {
+    "name": "Typecheck, build, and proof scaffold",
+    "checkRunId": 113744501213,
+    "status": "completed",
+    "conclusion": "success"
+   },
+   "mergeable": false,
+   "mergeableState": "dirty",
+   "threads": 0,
+   "threadsTotal": 1,
+   "codex": {
+    "present": true,
+    "kind": "summary-table-no-state-block",
+    "status": "completed",
+    "has_unresolved_findings": "unknown (summary has no codex-review-state block)",
+    "commitSha": "bb3b99f",
+    "onCurrentHead": false,
+    "summaryUpdatedAt": "2026-10-09T08:25:48Z",
+    "usageLimitNotices": 0,
+    "latestNoticeAt": null
+   },
+   "draft": false,
+   "createdAt": "2026-09-30T19:30:13Z",
+   "updatedAt": "2026-10-09T08:51:18Z",
+   "ageDays": 23.1,
+   "changedFiles": 7,
+   "files": [
+    "artifacts/sync/live-sync-manifest.json",
+    "docs/BUILD_BACKLOG.md",
+    "docs/HANDOFF_SIMULATION.md",
+    "lib/handoff-sim/src/release.ts",
+    "lib/handoff-sim/src/simulate.ts",
+    "lib/handoff-sim/src/types.ts",
+    "scripts/src/handoff-sim-proof.ts"
+   ],
+   "aheadBy": 17,
+   "behindBy": 1884,
+   "alreadyOnMainline": {
+    "headIsAncestor": false,
+    "cherryNotOnMainline": 11,
+    "cherryOnMainline": 0,
+    "addedLines": 199,
+    "addedLinesAlreadyOnMainline": 10
+   },
+   "otherNonSuccessChecks": [
+    "github-advanced-security=failure"
+   ],
+   "lastComments": [
+    {
+     "date": "2026-10-02T21:31:04Z",
+     "login": "DanFashauer",
+     "text": "Refreshed by the cloud lane (steward) for the owner's merge: head 8be71fbbedfddf9f07a611b39ce1cc6e2c9cc110 = branch + SignalGrid_Alpha merged after #1376 landed"
+    },
+    {
+     "date": "2026-10-08T14:14:00Z",
+     "login": "chatgpt-codex-connector[bot]",
+     "text": "<!-- codex-pull-request-review-summary --> ## Codex Review Summary This comment shows the latest Codex review activity on this pull request. | Review | Status |"
+    }
+   ],
+   "bodyMergedUnderDR037": false,
+   "bodyCloudLandSentences": [],
+   "bodyAsksCloudToMergeUnderDR037": [],
+   "disposition": "OWNER",
+   "alsoApplies": [
+    "NEEDS_WORK"
+   ],
+   "reason": "It edits lib/handoff-sim release.ts, simulate.ts and types.ts (DECISION_PATH) and its body says the owner merges; gating run 113744501213 completed/success on 15129993 and 0 unresolved threads (its 1 thread is resolved), but it is conflicted (mergeable false/dirty, 17 ahead / 1884 behind mainline)."
+  },
+  {
+   "number": 1336,
+   "title": "Mac tick 20260930T204503Z: sim results (0 request(s)); objective loop: escalate",
+   "state": "open",
+   "author": "DanFashauer",
+   "lane": "mac",
+   "head": {
+    "ref": "mac/tick-20260930T204503Z",
+    "sha": "8388d0ba4bafa2f4a832bcb29949238017e77366"
+   },
+   "headSha": "8388d0ba4bafa2f4a832bcb29949238017e77366",
+   "tier": "autonomous",
+   "matchedCategories": [],
+   "matched": [],
+   "gating": {
+    "name": "Typecheck, build, and proof scaffold",
+    "checkRunId": 110090030031,
+    "status": "completed",
+    "conclusion": "failure"
+   },
+   "mergeable": false,
+   "mergeableState": "dirty",
+   "threads": 0,
+   "threadsTotal": 0,
+   "codex": {
+    "present": true,
+    "kind": "usage-limit-notice-only",
+    "status": "usage-limit",
+    "has_unresolved_findings": null,
+    "usageLimitNotices": 1,
+    "latestNoticeAt": "2026-09-30T20:45:18Z"
+   },
+   "draft": false,
+   "createdAt": "2026-09-30T20:45:13Z",
+   "updatedAt": "2026-09-30T21:25:27Z",
+   "ageDays": 23.1,
+   "changedFiles": 3,
+   "files": [
+    "artifacts/sim-requests/objective-loop-evidence-fresh-2026-09-30-4.json",
+    "docs/agent/SURFACE_REVIEW_COVERAGE.md",
+    "docs/agent/objective-state.json"
+   ],
+   "aheadBy": 1,
+   "behindBy": 2858,
+   "alreadyOnMainline": {
+    "headIsAncestor": false,
+    "cherryNotOnMainline": 1,
+    "cherryOnMainline": 0,
+    "addedLines": 26,
+    "addedLinesAlreadyOnMainline": 2
+   },
+   "otherNonSuccessChecks": [
+    "Typecheck, build, and proof scaffold=failure",
+    "github-advanced-security=failure",
+    "PR — Mac-only checks (full-clone provenance, preflight on macOS)=failure"
+   ],
+   "lastComments": [
+    {
+     "date": "2026-09-30T20:45:24Z",
+     "login": "github-actions[bot]",
+     "text": "<!-- signalgrid-triage --> ### 🧭 PR triage - **Areas:** `area:docs` `area:lanes` - **Size:** `size:S` (51 lines across 3 files) CI runs the full gate suite (bui"
+    },
+    {
+     "date": "2026-09-30T21:25:27Z",
+     "login": "DanFashauer",
+     "text": "Not landed (cloud lane, steward 21:24Z cycle): the gating check on the CI merge commit (job 110090030031) fails at `node scripts/objective-loop.mjs --check` — `"
+    }
+   ],
+   "bodyMergedUnderDR037": false,
+   "bodyCloudLandSentences": [],
+   "bodyAsksCloudToMergeUnderDR037": [],
+   "disposition": "CLOSE_CANDIDATE",
+   "alsoApplies": [
+    "MAC",
+    "NEEDS_WORK"
+   ],
+   "reason": "Its generated docs/agent/objective-state.json (derived 2026-09-30T20:45Z) is superseded by mainline's derivation of 2026-10-23T00:27Z and by the newer open tick PR #1569 (same objective-state.json and coverage page, plus result objective-loop-evidence-fresh-2026-10-17-2), and its own gating run 110090030031 is failure at objective-loop --check on a conflicted PR (mergeable false/dirty, 1 ahead / 2858 behind mainline).",
+   "closeEvidence": {
+    "supersededBy": [
+     1569,
+     "mainline objective-state.json derivedAt 2026-10-23T00:27:33Z (commit 9f2990ae) vs this PR's 2026-09-30T20:45:07Z (commit c09705c2)"
+    ],
+    "pr1569Files": [
+     "artifacts/live-evidence/mac-run.json",
+     "artifacts/sim-results/objective-loop-evidence-fresh-2026-10-17-2.json",
+     "docs/agent/SURFACE_REVIEW_COVERAGE.md",
+     "docs/agent/objective-state.json"
+    ],
+    "olderOpenTickPrsAlsoTouchingObjectiveState": [
+     1509,
+     1510,
+     1511
+    ],
+    "ownComment": "2026-09-30T21:25:27Z Not landed (cloud lane, steward 21:24Z cycle): gating fails at objective-loop --check (decisionAddress mismatch); the next tick derivation on current Alpha supersedes this PR.",
+    "caveat": "The one file not on mainline is the sim request artifacts/sim-requests/objective-loop-evidence-fresh-2026-09-30-4.json; mainline already holds completed evidence-fresh results through 2026-10-17-2, so the request is stale. #1569 and #1509-#1511 are themselves conflicted (dirty) open tick PRs. Mac-authored (mac/*): the Mac lane or the owner closes it."
+   }
+  },
+  {
+   "number": 1337,
+   "title": "gates: an unreadable scanned file fails launch-claims + proof-bindings, only ENOENT skips (backlog DR-054 sweep #7, fifth site)",
+   "state": "open",
+   "author": "DanFashauer",
+   "lane": "cloud-worker",
+   "head": {
+    "ref": "claude/build-gate-unreadable-scan-siblings",
+    "sha": "64e0ddcf5371e3773157f6a4d1c6e9fe44016c7d"
+   },
+   "headSha": "64e0ddcf5371e3773157f6a4d1c6e9fe44016c7d",
+   "tier": "owner-gated",
+   "matchedCategories": [
+    "SAFETY_MACHINERY"
+   ],
+   "matched": [
+    {
+     "file": "scripts/check-launch-claims.mjs",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/check-launch-proof-bindings.mjs",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/check-launch-proof-bindings.mjs",
+     "category": "SAFETY_MACHINERY",
+     "rule": "any proof harness"
+    }
+   ],
+   "gating": {
+    "name": "Typecheck, build, and proof scaffold",
+    "checkRunId": 113374587547,
+    "status": "completed",
+    "conclusion": "success"
+   },
+   "mergeable": true,
+   "mergeableState": "clean",
+   "threads": 0,
+   "threadsTotal": 1,
+   "codex": {
+    "present": true,
+    "kind": "summary-table-no-state-block",
+    "status": "completed",
+    "has_unresolved_findings": "unknown (summary has no codex-review-state block)",
+    "commitSha": "9d29dfa",
+    "onCurrentHead": false,
+    "summaryUpdatedAt": "2026-10-08T14:16:47Z",
+    "usageLimitNotices": 1,
+    "latestNoticeAt": "2026-10-08T14:50:19Z"
+   },
+   "draft": false,
+   "createdAt": "2026-09-30T20:47:02Z",
+   "updatedAt": "2026-10-08T14:51:02Z",
+   "ageDays": 23.1,
+   "changedFiles": 3,
+   "files": [
+    "docs/BUILD_BACKLOG.md",
+    "scripts/check-launch-claims.mjs",
+    "scripts/check-launch-proof-bindings.mjs"
+   ],
+   "aheadBy": 6,
+   "behindBy": 2094,
+   "alreadyOnMainline": {
+    "headIsAncestor": false,
+    "cherryNotOnMainline": 5,
+    "cherryOnMainline": 0,
+    "addedLines": 108,
+    "addedLinesAlreadyOnMainline": 6
+   },
+   "otherNonSuccessChecks": [
+    "github-advanced-security=failure",
+    "phase-pr-evidence=cancelled"
+   ],
+   "lastComments": [
+    {
+     "date": "2026-10-08T14:14:02Z",
+     "login": "chatgpt-codex-connector[bot]",
+     "text": "<!-- codex-pull-request-review-summary --> ## Codex Review Summary This comment shows the latest Codex review activity on this pull request. | Review | Status |"
+    },
+    {
+     "date": "2026-10-08T14:50:19Z",
+     "login": "chatgpt-codex-connector[bot]",
+     "text": "You have reached your Codex usage limits for code reviews. You can see your limits in the [Codex usage dashboard](https://chatgpt.com/codex/cloud/settings/usage"
+    }
+   ],
+   "bodyMergedUnderDR037": false,
+   "bodyCloudLandSentences": [],
+   "bodyAsksCloudToMergeUnderDR037": [],
+   "disposition": "OWNER",
+   "alsoApplies": [],
+   "reason": "It edits scripts/check-launch-claims.mjs (the launch-claims gate; the classifier says SAFETY_MACHINERY only but the body says owner merges) plus check-launch-proof-bindings.mjs; gating run 113374587547 completed/success on 64e0ddcf, mergeable true/clean, 6 ahead / 2094 behind mainline, 0 unresolved threads, and the Codex summary is completed only on the older 9d29dfa."
+  },
+  {
+   "number": 1338,
+   "title": "gates: derive the Assist-wire vector figure and self-test the dir closedWhen branch (plan row 29 residuals a, b)",
+   "state": "open",
+   "author": "DanFashauer",
+   "lane": "cloud-worker",
+   "head": {
+    "ref": "claude/build-launch-profile-dir-closedwhen-vector-figure",
+    "sha": "a26aab070bae5a87ff4c9d39d6f8d42e1a9c8586"
+   },
+   "headSha": "a26aab070bae5a87ff4c9d39d6f8d42e1a9c8586",
+   "tier": "owner-gated",
+   "matchedCategories": [
+    "DECISION_PATH",
+    "SAFETY_MACHINERY"
+   ],
+   "matched": [
+    {
+     "file": ".claude/skills/stack-reference/native.md",
+     "category": "SAFETY_MACHINERY",
+     "rule": ".claude/{agents,skills,commands,workflows}/** and .mcp.json (the instruction and tool-wiring surface every session loads)"
+    },
+    {
+     "file": "artifacts/api-server/src/routes/v1.ts",
+     "category": "DECISION_PATH",
+     "rule": "the /v1 decision API server"
+    },
+    {
+     "file": "lib/api-spec/v1-openapi.yaml",
+     "category": "DECISION_PATH",
+     "rule": "the decision core / connectors / flows (lib/*)"
+    },
+    {
+     "file": "scripts/check-derived-doc-figures.mjs",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    },
+    {
+     "file": "scripts/check-launch-profile.mjs",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    }
+   ],
+   "gating": {
+    "name": "Typecheck, build, and proof scaffold",
+    "checkRunId": 113372083040,
+    "status": "completed",
+    "conclusion": "success"
+   },
+   "mergeable": false,
+   "mergeableState": "dirty",
+   "threads": 0,
+   "threadsTotal": 0,
+   "codex": {
+    "present": true,
+    "kind": "summary-table-no-state-block",
+    "status": "completed",
+    "has_unresolved_findings": "unknown (summary has no codex-review-state block)",
+    "commitSha": "d854398",
+    "onCurrentHead": false,
+    "summaryUpdatedAt": "2026-10-08T14:16:02Z",
+    "usageLimitNotices": 1,
+    "latestNoticeAt": "2026-10-08T14:45:00Z"
+   },
+   "draft": false,
+   "createdAt": "2026-09-30T20:48:56Z",
+   "updatedAt": "2026-10-08T14:45:07Z",
+   "ageDays": 23.1,
+   "changedFiles": 6,
+   "files": [
+    ".claude/skills/stack-reference/native.md",
+    "artifacts/api-server/src/routes/v1.ts",
+    "docs/COMPANY_BUILD_PLAN.md",
+    "lib/api-spec/v1-openapi.yaml",
+    "scripts/check-derived-doc-figures.mjs",
+    "scripts/check-launch-profile.mjs"
+   ],
+   "aheadBy": 6,
+   "behindBy": 2094,
+   "alreadyOnMainline": {
+    "headIsAncestor": false,
+    "cherryNotOnMainline": 5,
+    "cherryOnMainline": 0,
+    "addedLines": 71,
+    "addedLinesAlreadyOnMainline": 0
+   },
+   "otherNonSuccessChecks": [
+    "github-advanced-security=failure"
+   ],
+   "lastComments": [
+    {
+     "date": "2026-10-08T14:44:59Z",
+     "login": "DanFashauer",
+     "text": "This branch had fallen behind `SignalGrid_Alpha` and no longer merged cleanly. a26aab07 merges the base in with a merge commit; nothing was rebased. **The confl"
+    },
+    {
+     "date": "2026-10-08T14:45:00Z",
+     "login": "chatgpt-codex-connector[bot]",
+     "text": "You have reached your Codex usage limits for code reviews. You can see your limits in the [Codex usage dashboard](https://chatgpt.com/codex/cloud/settings/usage"
+    }
+   ],
+   "bodyMergedUnderDR037": false,
+   "bodyCloudLandSentences": [],
+   "bodyAsksCloudToMergeUnderDR037": [],
+   "disposition": "OWNER",
+   "alsoApplies": [
+    "NEEDS_WORK"
+   ],
+   "reason": "It edits artifacts/api-server routes/v1.ts and lib/api-spec/v1-openapi.yaml (DECISION_PATH) and scripts/check-launch-profile.mjs (the launch profile), and its body says the owner merges; gating run 113372083040 completed/success on a26aab07 and 0 threads, but it is conflicted (mergeable false/dirty, 6 ahead / 2094 behind mainline)."
+  },
+  {
+   "number": 1353,
+   "title": "pr-refresh: a no-model bot that re-merges mainline into dirty Mac PRs and regenerates derived files",
+   "state": "open",
+   "author": "DanFashauer",
+   "lane": "mac",
+   "head": {
+    "ref": "mac/pr-refresh",
+    "sha": "cb62b1bde15feeb70203ea44d77d09bccf6e09c0"
+   },
+   "headSha": "cb62b1bde15feeb70203ea44d77d09bccf6e09c0",
+   "tier": "owner-gated",
+   "matchedCategories": [
+    "SAFETY_MACHINERY"
+   ],
+   "matched": [
+    {
+     "file": "scripts/mac/pr-refresh.mjs",
+     "category": "SAFETY_MACHINERY",
+     "rule": "scripts/**"
+    }
+   ],
+   "gating": {
+    "name": "Typecheck, build, and proof scaffold",
+    "checkRunId": 110239541864,
+    "status": "completed",
+    "conclusion": "success"
+   },
+   "mergeable": false,
+   "mergeableState": "dirty",
+   "threads": 2,
+   "threadsTotal": 2,
+   "codex": {
+    "present": true,
+    "kind": "usage-limit-notice-only",
+    "status": "usage-limit",
+    "has_unresolved_findings": null,
+    "usageLimitNotices": 1,
+    "latestNoticeAt": "2026-10-01T05:54:41Z"
+   },
+   "draft": false,
+   "createdAt": "2026-10-01T05:54:37Z",
+   "updatedAt": "2026-10-01T06:24:38Z",
+   "ageDays": 22.7,
+   "changedFiles": 2,
+   "files": [
+    "docs/agent/SURFACE_REVIEW_COVERAGE.md",
+    "scripts/mac/pr-refresh.mjs"
+   ],
+   "aheadBy": 5,
+   "behindBy": 2758,
+   "alreadyOnMainline": {
+    "headIsAncestor": false,
+    "cherryNotOnMainline": 4,
+    "cherryOnMainline": 0,
+    "addedLines": 901,
+    "addedLinesAlreadyOnMainline": 0
+   },
+   "otherNonSuccessChecks": [
+    "CodeQL=failure",
+    "github-advanced-security=failure",
+    "phase-pr-evidence=failure"
+   ],
+   "lastComments": [
+    {
+     "date": "2026-10-01T05:54:47Z",
+     "login": "github-actions[bot]",
+     "text": "<!-- signalgrid-triage --> ### 🧭 PR triage - **Areas:** `area:docs` `area:tooling` - **Size:** `size:XL` (1108 lines across 2 files) CI runs the full gate suite"
+    },
+    {
+     "date": "2026-10-01T06:24:38Z",
+     "login": "DanFashauer",
+     "text": "## Cloud review round 1 — verdict: **fix-needed** (head `cb62b1bde15feeb70203ea44d77d09bccf6e09c0`) Reviewed by the cloud lane (Sonnet review + Opus refute) bec"
+    }
+   ],
+   "bodyMergedUnderDR037": false,
+   "bodyCloudLandSentences": [],
+   "bodyAsksCloudToMergeUnderDR037": [
+    "Owner decision needed: none — SAFETY_MACHINERY; the cloud lane may merge under DR-037 once CI is green."
+   ],
+   "disposition": "MAC",
+   "alsoApplies": [
+    "NEEDS_WORK"
+   ],
+   "reason": "Head mac/pr-refresh is Mac lane work (tier SAFETY_MACHINERY only) and gating run 110239541864 completed/success on cb62b1bd, but it is conflicted (mergeable false/dirty, 5 ahead / 2758 behind mainline) with 2 unresolved CodeQL threads, CodeQL failing and a fix-needed cloud round-1 review, although its body says the cloud lane may merge under DR-037 once CI is green."
+  },
+  {
+   "number": 1354,
+   "title": "docs: RESOURCE_INTAKE row for the Cole Medin team-brain video (proposed, not adopted)",
+   "state": "open",
+   "author": "DanFashauer",
+   "lane": "mac",
+   "head": {
+    "ref": "mac/intake-row-cole-medin-team-brain",
+    "sha": "1c857ef174b9c7ea4b2ab09680edb4988c1ec67b"
+   },
+   "headSha": "1c857ef174b9c7ea4b2ab09680edb4988c1ec67b",
+   "tier": "autonomous",
+   "matchedCategories": [],
+   "matched": [],
+   "gating": {
+    "name": "Typecheck, build, and proof scaffold",
+    "checkRunId": 110242829040,
+    "status": "completed",
+    "conclusion": "success"
+   },
+   "mergeable": true,
+   "mergeableState": "clean",
+   "threads": 0,
+   "threadsTotal": 0,
+   "codex": {
+    "present": true,
+    "kind": "usage-limit-notice-only",
+    "status": "usage-limit",
+    "has_unresolved_findings": null,
+    "usageLimitNotices": 1,
+    "latestNoticeAt": "2026-10-01T06:07:30Z"
+   },
+   "draft": false,
+   "createdAt": "2026-10-01T06:07:26Z",
+   "updatedAt": "2026-10-22T18:54:28Z",
+   "ageDays": 22.7,
+   "changedFiles": 1,
+   "files": [
+    "docs/agent/RESOURCE_INTAKE.md"
+   ],
+   "aheadBy": 4,
+   "behindBy": 2757,
+   "alreadyOnMainline": {
+    "headIsAncestor": false,
+    "cherryNotOnMainline": 3,
+    "cherryOnMainline": 0,
+    "addedLines": 1,
+    "addedLinesAlreadyOnMainline": 0
+   },
+   "otherNonSuccessChecks": [
+    "github-advanced-security=failure",
+    "phase-pr-evidence=failure"
+   ],
+   "lastComments": [
+    {
+     "date": "2026-10-01T06:08:13Z",
+     "login": "github-actions[bot]",
+     "text": "<!-- signalgrid-triage --> ### 🧭 PR triage - **Areas:** `area:docs` - **Size:** `size:XS` (1 lines across 1 files) CI runs the full gate suite (build, typecheck"
+    },
+    {
+     "date": "2026-10-01T06:28:16Z",
+     "login": "DanFashauer",
+     "text": "## Cloud review round 1 — verdict: **fix-needed** (head `1c857ef174b9c7ea4b2ab09680edb4988c1ec67b`) Sonnet review only, per DR-047 routing (docs-only, autonomou"
+    }
+   ],
+   "bodyMergedUnderDR037": false,
+   "bodyCloudLandSentences": [],
+   "bodyAsksCloudToMergeUnderDR037": [],
+   "disposition": "MAC",
+   "alsoApplies": [],
+   "reason": "Head mac/intake-row-cole-medin-team-brain is Mac-owned (mainline lane mail of 2026-10-23T20:03Z says keep #1354 and its branch exclusive to the Mac while it repairs the two documentation findings); the tier is autonomous and gating run 110242829040 completed/success on 1c857ef1, mergeable true/clean, 4 ahead / 2757 behind mainline with 0 threads, but phase-pr-evidence is red and the cloud round-1 review is fix-needed."
+  }
+ ]
+}

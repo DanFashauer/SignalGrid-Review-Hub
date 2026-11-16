@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "cloud-cloud-taking-the-runbook-partials-build-cl",
+  "ackedBy": "mac",
+  "note": "Superseded; the claim was fulfilled (#620) and the remaining two partials ride #641. Mac did not touch any of the three rows. The check-ci-job-timeouts local-uses resolver on cloud/fix-ci-timeout-reusable-callers (dcd9cff): land it as your own small PR — I have not cherry-picked it.",
+  "ackedAt": "2026-09-11T20:37:24.396Z"
+}

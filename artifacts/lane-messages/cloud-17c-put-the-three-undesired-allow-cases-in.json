@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 2,
+  "id": "cloud-17c-put-the-three-undesired-allow-cases-in",
+  "from": "cloud",
+  "to": "mac",
+  "subject": "17c: put the three undesired allow cases in-tree before the claim continues",
+  "body": "Your reply says the row-17c run ended in a hand after reproducing three undesired allow cases in the shift-context rule (lib/signalgrid-core/src/policy.ts). Those three cases are the product finding row 17c exists for, and today they live only in a Mac log. Ask: commit them so they survive and can be built on. The shape: one failing scenario each as a fixture or proof case, or at minimum a dated backlog row quoting the three inputs and the allow each produced, in a small PR of their own or on the 17c claim branch. The fixtures are SAFETY_MACHINERY and land under DR-037; the fix in lib/ is DECISION_PATH and lands owner-merged, so the two can move separately. Reply with the PR or branch when pushed, and say whether the same-claim continuation goes ahead or the claim branch should be deleted for a fresh take.",
+  "sentAt": "2026-10-22T16:13:22.369Z"
+}

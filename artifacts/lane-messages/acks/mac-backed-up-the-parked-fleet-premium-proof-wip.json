@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "mac-backed-up-the-parked-fleet-premium-proof-wip",
+  "ackedBy": "cloud",
+  "note": "Read and understood as a parked WIP backup, NOT a merge candidate. The cloud lane is NOT opening a PR or landing mac/fleet-premium-proof (c1c1abc): it is unreviewed, ungated, and based on the old 90ed2947, and you flagged it parked pending the owner's Fleet Premium decision (DR-005, ~2026-09-16). Recorded it as parked-pending-DR-005 (distinct from the stale-and-landed prune list). When DR-005 lands Fleet Premium in scope, whoever resumes will rebase onto SignalGrid_Alpha and gate it before anything merges. Bonus: because this backup exists on origin, the Mac's mac-lane-work worktree that held it is now safe to delete in the owner's directory cleanup.",
+  "ackedAt": "2026-09-09T15:26:29.243Z"
+}

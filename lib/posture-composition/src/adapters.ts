@@ -1,3 +1,4 @@
+import { deriveFreshness, parseSightingInstant } from "@workspace/integrations/utils/freshness";
 import type { ReachabilityVerdict } from "@workspace/integrations/carrier";
 import type { LocationVerdict } from "@workspace/integrations/location-services";
 import type { VulnVerdict } from "@workspace/integrations/vuln-scan";
@@ -25,6 +26,7 @@ import type { PolicyBindingVerdict } from "@workspace/integrations/policy-bindin
 import type { BenchmarkSelectionVerdict } from "@workspace/integrations/benchmark-selection";
 import type { ShiftContextVerdict } from "@workspace/integrations/shift-context";
 import type { ChangeWindowVerdict } from "@workspace/integrations/change-window";
+import type { AppProtectionVerdict } from "@workspace/integrations/app-protection";
 import type { BootstrapCredentialVerdict } from "@workspace/integrations/bootstrap-credential";
 import type { ChallengeCapabilityVerdict } from "@workspace/integrations/challenge-capability";
 import type { SseEgressVerdict } from "@workspace/integrations/sse-egress";
@@ -312,6 +314,21 @@ export function fromChangeWindow(v: ChangeWindowVerdict): ComposableSignal {
   return { kind: "change_window", posture: v.posture, action: v.recommendedAction as UnifiedAction, reason: v.reasonCode };
 }
 
+export function fromAppProtection(v: AppProtectionVerdict): ComposableSignal {
+  // App-protection / MAM — is a mobile-application-management protection policy
+  // applied, clean and current for the app the worker is using? The management plane
+  // (Intune App Protection, Graph managedAppRegistrations) is the system of record; a
+  // missing or flagged policy on a SENSITIVE app restricts (corporate data with no
+  // MAM containment, the same class the connector emulator scripts as
+  // MISSING_MAM_POLICY_SENSITIVE_APP), everything else that fails steps up, and an
+  // app affirmatively out of MAM scope grants `none`.
+  //
+  // NOTE THE ASYMMETRY, which is the whole design: this adapter can only RAISE. There
+  // is no "a policy is applied, so relax" rung, and there is no wipe — selective wipe
+  // is a deliberate non-feature, kept out of the tree by construction.
+  return { kind: "app_protection", posture: v.posture, action: v.recommendedAction as UnifiedAction, reason: v.reasonCode };
+}
+
 export function fromBootstrapCredential(v: BootstrapCredentialVerdict): ComposableSignal {
   // Credential provenance — did a TEMPORARY bootstrap pass open this session,
   // and is it being used the only way a bootstrap pass may be used
@@ -522,6 +539,15 @@ export function fromDetection(d: Detection): ComposableSignal {
 }
 
 /**
+ * How stale an MDM posture record may be before the grant it supports is no longer
+ * current. Seven days: an Intune-managed device syncs far more often than that under
+ * any default policy, so a week without a sync is a device that has dropped out of
+ * management's view rather than one that merely missed a check-in. The
+ * microsoft-graph sandbox proof has modelled the same seven days since it was written.
+ */
+const DEVICE_POSTURE_STALE_AFTER_MS = 7 * 24 * 60 * 60 * 1000;
+
+/**
  * Device posture (Graph/MDM) → unified action. Fail-safe and ORDER-PROOF: every
  * matching condition contributes a candidate action, and the STRONGEST (highest
  * rank on the unified ladder) wins — so a severe concern is never diluted by a
@@ -551,6 +577,19 @@ export function fromDetection(d: Detection): ComposableSignal {
  * compliant"), and `macos-posture/types.ts` states it in the type itself: "null =
  * enrollment state could not be determined (unknown, not 'unmanaged')". This adapter
  * now matches. After the fix only the three fully-confirmed states grant.
+ *
+ * `deviceLastSeenAt` IS NOW ONE OF THOSE INPUTS. It was the last field on the signal
+ * that this function did not read — carried from `lastSyncDateTime` by the connector,
+ * normalized, and consulted by nothing — so a device whose MDM record was last synced
+ * years ago, still stating compliant/managed/registered, composed to `COMPLIANT_MANAGED`
+ * and action `none`. Every other field was confirmed; the one that says WHEN they were
+ * confirmed was not. That is the same "a grant requires positive confirmation of every
+ * input" rule this note already states, applied to the input it had missed.
+ *
+ * NO CLOCK IS READ. The signal carries its own `observedAt` — the instant the connector
+ * made the read — so the age is entirely internal to the record and this function stays
+ * pure and deterministic. `deriveFreshness` is the shared body, so a sighting dated
+ * AFTER the read resolves to `unknown` (which raises) rather than to maximally fresh.
  */
 export function fromDevicePosture(s: GraphPostureSignal): ComposableSignal {
   const candidates: Array<{ action: UnifiedAction; reason: string }> = [];
@@ -573,6 +612,16 @@ export function fromDevicePosture(s: GraphPostureSignal): ComposableSignal {
   if (s.deviceComplianceState === "unknown") candidates.push({ action: "step_up", reason: "COMPLIANCE_STATE_UNKNOWN" });
   if (s.deviceManagementState === "unknown") candidates.push({ action: "step_up", reason: "MANAGEMENT_STATE_UNKNOWN" });
   if (s.deviceRegistrationState === "unknown") candidates.push({ action: "step_up", reason: "REGISTRATION_STATE_UNKNOWN" });
+  // STALE and UNKNOWN are separate reasons on purpose: "the record is old" and "the
+  // record does not say when it was current" are different things for whoever reads the
+  // evidence, and collapsing them would hide which one happened. Both `step_up`, both
+  // for the same reason as every other unconfirmed input above — an unread freshness is
+  // not bad news, but it is not the good news a grant needs either.
+  {
+    const seen = deriveFreshness(s.deviceLastSeenAt, parseSightingInstant(s.observedAt), DEVICE_POSTURE_STALE_AFTER_MS);
+    if (seen === "stale") candidates.push({ action: "step_up", reason: "DEVICE_POSTURE_STALE" });
+    if (seen === "unknown") candidates.push({ action: "step_up", reason: "DEVICE_LAST_SEEN_UNKNOWN" });
+  }
 
   const winner = candidates.reduce<{ action: UnifiedAction; reason: string }>(
     (max, c) => (ACTION_RANK[c.action] > ACTION_RANK[max.action] ? c : max),

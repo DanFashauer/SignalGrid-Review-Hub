@@ -82,7 +82,7 @@
 <div class="deck">
 
   <!-- 1 — Title -->
-  <div style="max-width:70rem;margin:0 auto;padding:.75rem 1rem;background:#3b2f0b;color:#f5e6b8;border-bottom:1px solid #6b5a1f;font:14px/1.5 system-ui,sans-serif"><strong>Scope:</strong> this deck describes the product vision, and it demonstrates signal families that are <strong>deferred &mdash; proven in the public repository, not shipping at Limited GA</strong>. What ships today is three signals: device compliance, how current that answer is, and whether the device can vouch for itself right now (see <a href="https://github.com/DanFashauer/SignalGrid-Review-Hub/blob/main/docs/POSITIONING.md" style="color:#ffd97a">POSITIONING.md</a>). Nothing here is a claim of current capability.</div>
+  <div style="max-width:70rem;margin:0 auto;padding:.75rem 1rem;background:#3b2f0b;color:#f5e6b8;border-bottom:1px solid #6b5a1f;font:14px/1.5 system-ui,sans-serif"><strong>Scope:</strong> this deck describes the product vision, and it demonstrates signal families that are <strong>deferred &mdash; proven in the public repository, not shipping at Limited GA</strong>. What ships today is three signals: device compliance, how current that answer is, and whether the device can vouch for itself right now (see <a href="https://github.com/DanFashauer/SignalGrid-Review-Hub/blob/SignalGrid_Alpha/docs/POSITIONING.md" style="color:#ffd97a">POSITIONING.md</a>). Nothing here is a claim of current capability.</div>
 
   <section>
     <span class="num">01 / 11</span>
@@ -131,6 +131,11 @@
     <span class="num">05 / 11</span>
     <div class="kicker">See it — the demos do the talking</div>
     <h2>Live, clickable, public-safe.</h2>
+    <!-- These hrefs are the paths .github/workflows/pages.yml PUBLISHES, not the source filenames in docs/:
+         docs/embedded-host-app-demo.html -> embedded-demo.html, docs/embedded-desktop-demo.html -> desktop-demo.html,
+         docs/room-entry-console.html -> console.html (the workflow renames on copy into _site/). They resolve on
+         signalgrid.app and 404 from a clone or a raw GitHub view. Renaming a source file without updating pages.yml
+         AND this deck breaks them silently; nothing gates that coupling (recorded 2026-09-06). -->
     <div class="demos">
       <a class="demo" href="embedded-demo.html" target="_blank" rel="noopener"><span class="dot"></span><span><span class="t">The invisible flow (mobile clinical app)</span><br><span class="d">Open a chart friction-free; a controlled med order is held for a native gesture.</span></span><span class="go">open →</span></a>
       <a class="demo" href="desktop-demo.html" target="_blank" rel="noopener"><span class="dot"></span><span><span class="t">Cross-platform parity (macOS / Windows)</span><br><span class="d">The same flow in a NOC desktop app — a config push held for step-up, then confirm.</span></span><span class="go">open →</span></a>

@@ -1,0 +1,432 @@
+{
+  "$comment": "Stage outputs of the 2026-09-19 intake rule (tool-evaluation-by-use \u00a75b): A proposal per resource, B one confirm per roster perspective, C the brain decision. Model output throughout: quoted by the intake row, never a fixture or a figure. Written from the Workflow journal of run wf_35530675-304 on the Mac. Model per stage (F2, cloud Codex review of #903): confirm stages ran pinned sonnet; the self-scan stage set no explicit tier and inherited the coordinator \u2014 a process gap recorded honestly, not backfilled, and \u00a75b now requires each stage to name its tier so future records carry it at write time.",
+  "date": "2026-09-19",
+  "resources": [
+    "TikTok @vegasaiguys \u2014 ICM, Interpretable Context Methodology (62 s)",
+    "TikTok, five weekend LLM-ops projects (93 s; speaker not named)"
+  ],
+  "proposals": [
+    {
+      "what": "A 93 s TikTok lead magnet listing five weekend LLM-ops projects (cost router, semantic cache, prompt-regression CI, pipeline forensics, self-healing docs) that ends by asking viewers to comment for a PDF; no guide was obtained and every claim in it is the speaker's. In SignalGrid the five map to the AGENT plane, not the product: DR-047 model tiering (docs/DECISION_RECORDS.md:3115), the no-LLM-in-the-decision-path boundary (DR-029, :1610), the proof suite plus the shape-only skill gates, sim-result provenance plus the brain-cycle board, and the derived-figure/cited-symbol doc gates.",
+      "alreadyHere": "(1) Cost routing \u2014 ALREADY HERE as doctrine: DR-047 (docs/DECISION_RECORDS.md:3115-3136) fixes the tier per spawn, fail-UP on an unknown tier, and usage-limit-as-pending; .claude/WORKFLOWS.md:32-38 applies it per pass; 13/13 .claude/agents/*.md carry model: (1 haiku, 6 sonnet, 6 opus). PARTLY on enforcement: scripts/check-agent-roster.mjs has 0 mentions of model and DR-047's own Consequences paragraph says the gate is a follow-up. The video's 'continuously validating routing decisions' is MISSING (0 of 16 ~/.claude/jobs/*/timeline.jsonl record a model) and deliberately not proposed \u2014 scoring output quality per tier needs a model judge, and no model decides here. (2) Semantic cache \u2014 NOTHING TO CACHE: the narrow SDK/endpoint grep over lib/ and artifacts/ returns no match, check:absence 'semantic cache' is CORROBORATED, explain_decision (artifacts/mcp-server/src/index.ts:569) is a catalog lookup, and DR-029 (docs/DECISION_RECORDS.md:1610) keeps every model out of the decision path; the AirLLM intake (origin/claude/intake-airllm, row dated 2026-09-17) is inference hosting for the agent plane, not a product call. (3) Regression detection \u2014 ALREADY HERE for code (the proof suite, validate-sim-macos.sh, preflight); PARTLY for prompts: scripts/check-skill-plane-conformance.mjs (117 skills, 13 agents) and check-agent-roster.mjs gate SHAPE only; .claude/skills/VENDORED.md pins upstream content; no behavioural eval exists (check:absence 'prompt regression' CORROBORATED; the 4 evals/evals.json under vendored NVIDIA skills are run by nothing). (4) Failure forensics \u2014 ALREADY HERE in two shapes: artifacts/sim-results/*.json (21) carry provenance sampled before the run plus per-operation status/exitCode/durationMs/tail; the brain-cycle board (docs/agent/BRAIN_CYCLE_DESIGN.md:16-17, scripts/brain-cycle.mjs, absent lens = HARD NO, self-tests at scripts/preflight.mjs:201-203) is the multi-step trace design \u2014 PARTLY, because artifacts/brain-cycle does not exist yet (Slice 2, DR-032, not the video's idea). (5) Self-healing docs \u2014 ALREADY HERE for the detect half: check-derived-doc-figures.mjs (34 figures/19 docs), check-doc-line-counts.mjs (31 figures), check-cited-paths.mjs, check-cited-symbols.mjs (110 pairs), and 8 --write writers regenerate what is derivable; prose is never auto-rewritten by design (.claude/skills/video-intake/SKILL.md:111-112: the doc changes only after the claim is checked). Vendor-doc drift is already the open row docs/BUILD_BACKLOG.md:1688. Net: projects 2, 4 and 5 resolve to 'logged, nothing changed'.",
+      "trials": [
+        {
+          "command": "grep -l '^model:' .claude/agents/*.md | wc -l; ls .claude/agents/*.md | wc -l; grep -h '^model:' .claude/agents/*.md | sort | uniq -c",
+          "keyOutput": "13 / 13 \u2014 1 haiku, 6 opus, 6 sonnet (every registered agent names its tier in frontmatter, DR-047 rule 1)"
+        },
+        {
+          "command": "grep -c model scripts/check-agent-roster.mjs; node scripts/check-agent-roster.mjs | tail -1",
+          "keyOutput": "0 \u2014 'Agent-roster gate passed \u2014 every agent has a tier, a charter, and a boundary' (its 'tier' is docs/agent/agent-tiers.json write-power, scripts/check-agent-roster.mjs:43; the model tier is not derived by any gate, which DR-047's Consequences paragraph at docs/DECISION_RECORDS.md:3136 already states)"
+        },
+        {
+          "command": "grep -l '\"model\"' ~/.claude/jobs/*/timeline.jsonl | wc -l; ls ~/.claude/jobs | wc -l",
+          "keyOutput": "0 of 16 workflow job journals record a model field \u2014 routing decisions are made, not measured"
+        },
+        {
+          "command": "grep -rnEi \"from ['\\\"](@anthropic-ai|openai|ollama)|api\\.anthropic\\.com|api\\.openai\\.com|/v1/(chat/)?completions|messages\\.create\\(\" lib artifacts --include='*.ts' --include='*.mjs' --include='*.js' | grep -v node_modules | grep -v /dist/",
+          "keyOutput": "no matches \u2014 no LLM SDK or endpoint in lib/* or artifacts/*; artifacts/mcp-server/src/index.ts:569 explain_decision is a reason-code catalog lookup"
+        },
+        {
+          "command": "pnpm run -s check:absence \"semantic cache\"",
+          "keyOutput": "CORROBORATED across 4 differently-shaped probes"
+        },
+        {
+          "command": "git show origin/claude/intake-airllm:docs/agent/RESOURCE_INTAKE.md | grep -i airllm | head -1; grep -ci airllm docs/agent/RESOURCE_INTAKE.md",
+          "keyOutput": "AirLLM row dated 2026-09-17 exists only on origin/claude/intake-airllm(-v2) and worktree mac/intake-airllm; 0 on this checkout \u2014 an inference-hosting intake, not a product LLM call"
+        },
+        {
+          "command": "node scripts/check-skill-plane-conformance.mjs | tail -3; sed -n 22,30p scripts/check-skill-plane-conformance.mjs",
+          "keyOutput": "'117 skill(s), 13 agent(s) walked \u2026 passed' \u2014 WHAT IS GATED is frontmatter name/description/dir-name (shape), never behaviour; scripts/scan-agent-plane.mjs:1-30 is a report-only out-of-repo listing"
+        },
+        {
+          "command": "find . -path ./node_modules -prune -o -name evals -type d -print | grep -v worktrees; grep -rn 'evals.json\\|evals/' scripts .github package.json",
+          "keyOutput": "4 vendored NVIDIA skills carry evals/evals.json (own format, 1 case each); the only script hit is scripts/src/fabric-evals-proof.ts:47 (a fixture for the fabric, not a prompt eval) \u2014 nothing runs them"
+        },
+        {
+          "command": "pnpm run -s check:absence \"prompt regression\"; claude plugin eval --help | head -4",
+          "keyOutput": "CORROBORATED absent in the repo; the installed CLI has `claude plugin eval` (cases as <eval dir>/**/case.yaml or prompt.md + graders/*.md, with a no-plugin baseline arm)"
+        },
+        {
+          "command": "python3 -c \"import json;d=json.load(open('artifacts/sim-results/2026-08-12-fleet-lab-real-source.json'));print(list(d['provenance'].keys()));print(list(d['runs'][0].keys()))\"; ls artifacts/sim-results | wc -l",
+          "keyOutput": "provenance: platform, arch, nodeVersion, macosVersion, commit, branch, workingTreeClean; per run: operation, status, exitCode, durationMs, tail \u2014 21 committed results"
+        },
+        {
+          "command": "ls artifacts/brain-cycle; grep -n brain scripts/preflight.mjs | head -3; node scripts/check-brain-freshness.mjs | tail -1",
+          "keyOutput": "artifacts/brain-cycle: No such file or directory (no cycle has landed a board on mainline); preflight.mjs:201-203 run the freshness/decide/spine self-tests; the freshness gate itself REFUSED in this sandbox ('could not fetch \u2026 refusing; the cycle must not audit on an unverifiable brain') \u2014 ssh key unreadable inside the sandbox, not a regression"
+        },
+        {
+          "command": "node scripts/check-derived-doc-figures.mjs | tail -1; node scripts/check-doc-line-counts.mjs | tail -1; node scripts/check-cited-symbols.mjs | tail -1; grep -l -- '--write' scripts/*.mjs | wc -l",
+          "keyOutput": "34 figure(s) across 19 document(s) match; 31 line-count figures, 0 drifted; 110 cited-symbol pair(s) hold, missing held at 0; 8 scripts carry a --write writer"
+        },
+        {
+          "command": "sed -n 1688p docs/BUILD_BACKLOG.md | cut -c1-200",
+          "keyOutput": "'Vendor-doc drift is unwatched \u2014 decide whether a report-only watcher is worth its operator machine' \u2014 2,209 external URLs / 996 hosts, already an open row"
+        },
+        {
+          "command": "grep -n -i 'DR-047\\|plugin eval\\|skill eval\\|brain-cycle' docs/BUILD_BACKLOG.md | wc -l",
+          "keyOutput": "0 \u2014 no backlog row yet for the DR-047 tier gate or for a prompt eval"
+        }
+      ],
+      "tasks": [
+        {
+          "id": "V-1",
+          "title": "Gate the DR-047 model tier per agent (the follow-up DR-047 itself names)",
+          "evidence": "docs/DECISION_RECORDS.md:3136 \u2014 'until it exists, rules 1\u20135 are operating doctrine backed by review, not yet by a script'; grep -c model scripts/check-agent-roster.mjs \u2192 0; 13/13 agents already carry model: \u2208 {haiku, sonnet, opus}; grep -n 'DR-047' docs/BUILD_BACKLOG.md \u2192 0 rows.",
+          "change": "Add rule 4 to scripts/check-skill-plane-conformance.mjs (the gate that already walks .claude/agents/*.md frontmatter): every agent's `model:` is present and one of haiku|sonnet|opus; an agent naming fable/mythos or omitting it fails; extend --self-test with the omitted-field case. No new script \u2014 reuse the walker at scripts/check-skill-plane-conformance.mjs; it lands green because the convention already holds.",
+          "owner": "gate-and-proof-engineer",
+          "risk": "Low: shape check on 13 files; the only debate is whether an ad-hoc spawn's `model:` argument (DR-047 rule 1, second half) can be gated at all \u2014 it cannot from a script, so the row says so and gates only the registered roles.",
+          "landing": "BUILD_BACKLOG"
+        },
+        {
+          "id": "V-2",
+          "title": "Decide whether a report-only `claude plugin eval` run belongs beside the shape gates for first-party skills",
+          "evidence": "check:absence 'prompt regression' CORROBORATED; scripts/check-skill-plane-conformance.mjs:22-30 gates name/description only; the CLI already ships `claude plugin eval` (case.yaml or prompt.md + graders/*.md, no-plugin baseline arm); 4 vendored evals/evals.json are in a different format and run by nothing (grep -rn 'evals/' scripts .github \u2192 only scripts/src/fabric-evals-proof.ts:47).",
+          "change": "A row phrased as the check that fails without it: one evals/ case for each of the 17 first-party skills' highest-stakes behaviour (start with video-intake \u2014 'a transcript is model output, never a fixture' \u2014 and signalgrid-reviewer), run BY HAND on the Mac when that SKILL.md changes, results reported never gated: it needs a model, so intake rule 3 (no hook, no auto-execution) and CI's no-model runner both keep it off preflight. The row's real question is the DR-039 one \u2014 whether a token-spending eval is worth it for prompts that change a few times a month.",
+          "owner": "agent-platform-steward",
+          "risk": "Medium: graders are model output (a flaky grader becomes a flaky gate, which gets switched off); `claude plugin eval` runs the suite as the operator with tool grants \u2014 scope --allow-tools to none and keep it report-only; cost is real tokens per run.",
+          "landing": "BUILD_BACKLOG"
+        },
+        {
+          "id": "V-3",
+          "title": "Intake row for the clip \u2014 logged; projects 2, 4, 5 change nothing",
+          "evidence": "docs/agent/RESOURCE_INTAKE.md:60-64 rule 1 ('log the resource the day it arrives'); the measurements above: no LLM call in the product (grep, check:absence CORROBORATED), forensics already in artifacts/sim-results provenance + brain-cycle board, doc drift already gated by 4 scripts and open at docs/BUILD_BACKLOG.md:1688.",
+          "change": "One row in docs/agent/RESOURCE_INTAKE.md, disposition 'logged; two backlog rows (V-1, V-2); nothing else changed': TikTok clip, 93 s, five weekend LLM-ops projects; speaker not named (a private individual); no guide obtained; transcript quoted only in the row's 'What it changed' cell, never as a fixture or figure. Two 'why this lands interviews' PDF frames are the speaker's marketing and do not enter the tree.",
+          "owner": "records-archivist",
+          "risk": "None beyond the row itself; the only failure mode is letting the speaker's 'continuously validating routing decisions' become a capability sentence \u2014 it does not (0 of 16 job journals record a model, and no judge may score a tier).",
+          "landing": "change-in-this-PR"
+        }
+      ],
+      "model": "inherited-coordinator"
+    },
+    {
+      "what": "A 62 s TikTok explainer of \"ICM\": numbered stage folders, a per-stage contract (inputs \u2192 process \u2192 exactly one durable output file), a human review gate between stages, and \"state in files, not chat\" so the next stage loads what a session cannot remember. In SignalGrid it maps onto surfaces that already do this by gate (sim-requests\u2192sim-results bound by `scripts/check-sim-requests.mjs`, lane mail with addressee-only acks, LOOP.md STATE read by the SessionStart/Stop hooks, the SDD brief\u2192report\u2192ledger files) and onto three places where a stage boundary still crosses through chat: the brain-cycle dispatch stage (a board format is designed, none has ever been written), the 2026-09-19 intake rule (self-scan \u2192 roster confirm \u2192 brain decides) whose per-stage outputs live only in row prose, and Workflow/dispatch runs whose worker output is a chat return.",
+      "alreadyHere": "Most of ICM is already gated here, not merely practised. (1) Stage contract with a binding check: artifacts/sim-requests/<id>.json \u2192 artifacts/sim-results/<id>.json, enforced by scripts/check-sim-requests.mjs (preflight.mjs:440-441): a result must bind to a request, may report only what was asked, and an unrun request is reported pending, never green. (2) Cross-lane handoff by file with an addressee-only, note-bearing ack: artifacts/lane-messages/*.json + acks/, scripts/lane-message.mjs:160-170, 136 messages on disk. (3) Session state in a file the harness loads: docs/agent/LOOP.md:47 STATE block printed by .claude/hooks/session-start.sh:121-131 and checked against reality by scripts/loop-state.mjs at Stop (verify-done.sh:27); docs/agent/CONTINUITY.md is the scribe's between-session buffer. (4) The brain cycle's decide stage: scripts/brain-cycle.mjs reads one <lens>.<lane>.json per lens plus _manifest.json (expected lenses) and writes exactly one decision.json; a missing/empty/unparsable manifest throws, a malformed lens reads as ran:false (brain-cycle.mjs:50-78); self-tested in preflight.mjs:201-203 and review-hub-ci.yml:697-701; the human gate is auto-OPEN draft only (brain-cycle-config.json autoMergeGreenSwitch:false). (5) Worker handoff by file: subagent-driven-development brief \u2192 report \u2192 progress.md ledger (SKILL.md:141-150, 258-266) with scripts/sdd-workspace, task-brief, review-package. (6) The video-intake skill's own Steps 1-4 (SKILL.md:41-84) and tool-evaluation-by-use \u00a71 'Log the row first' (SKILL.md:12-18) are staged handoffs whose one durable output is the intake row landed by PR. Absence claims checked: `check:absence \"stage contract\"` CORROBORATED, `check:absence \"self-scan\"` CORROBORATED on mainline (present only on unmerged 7a28e26a, rows 103-104), `check:absence \"review gate\"` INCONCLUSIVE \u2014 the one match (docs/company/ROLE_CATALOG.md:761) is a catalogue sentence, read.",
+      "trials": [
+        {
+          "command": "git ls-files artifacts/brain-cycle | wc -l; git log --oneline --all -- artifacts/brain-cycle | head -5",
+          "keyOutput": "0 (no output from git log) \u2014 the blackboard directory the design mandates (docs/agent/BRAIN_CYCLE_DESIGN.md:99 'One committed directory per cycle: artifacts/brain-cycle/<cycle-id>/') has never held a board on any ref."
+        },
+        {
+          "command": "grep -l -i \"write .*\\.json\\|output file\\|board file\\|artifacts/brain-cycle\" .claude/agents/*.md | wc -l; ls .claude/agents | wc -l",
+          "keyOutput": "0 of 13 agents on mainline carry an output-file contract; branch mac/context7-self-scan (unmerged, 7a28e26a) adds one in prose: .claude/agents/gate-and-proof-engineer.md:53-54 'MODE: audit \u2026 Your only output is one board file, artifacts/brain-cycle/<sha>/gate-and-proof-engineer.<lane>.json'."
+        },
+        {
+          "command": "node -e \"const j=require('./docs/agent/scheduled-routines.json');const r=(j.routines||Object.values(j).flat()).find(x=>x&&x.id==='brain-cycle');console.log(r.status)\"",
+          "keyOutput": "awaiting-activation \u2014 awaitingReason: 'Re-activation follows the design order: land this row active on Alpha, prove a Slice-2 dry run, THEN create_trigger'. A Slice-2 dry run needs a board a session wrote; nothing writes one."
+        },
+        {
+          "command": "pnpm run --silent check:absence \"self-scan\"",
+          "keyOutput": "\u2713 CORROBORATED across 4 differently-shaped probes (on SignalGrid_Alpha at 8fddbd16). But: git grep -n -i -e \"self.scan\" mac/context7-self-scan -- docs/agent/RESOURCE_INTAKE.md \u2192 rows 103 (Context7) and 104 (prompt-master) dated 2026-09-19, unmerged commit 7a28e26a 'Two resources under the new intake rule (self-scan, roster confirms, brain decides)'. grep -rln -i \"roster confirm\\|resource proposes\\|brain decides\" .claude/skills .claude/agents .claude/commands \u2192 0 files: no skill encodes the rule."
+        },
+        {
+          "command": "pnpm run --silent check:absence \"stage contract\"; pnpm run --silent check:absence \"review gate\"",
+          "keyOutput": "'stage contract' \u2192 \u2713 CORROBORATED absent. 'review gate' \u2192 ? INCONCLUSIVE, one match read: docs/company/ROLE_CATALOG.md:761 'absorbed by \u2026 the repository's existing review gates' \u2014 a catalogue sentence, not a between-stage gate artifact."
+        },
+        {
+          "command": "sed -n 1,25p scripts/check-sim-requests.mjs; grep -n \"check-sim-requests\" scripts/preflight.mjs",
+          "keyOutput": "'Every result binds to a request that exists, and reports rows ONLY for operations that request asked for \u2026 An unrun request is PENDING and REPORTED \u2014 never green, never silent.' Wired at scripts/preflight.mjs:440-441 (gate + self-test). This is the repo's one fully-gated stage contract; the template to copy."
+        },
+        {
+          "command": "grep -n \"ackedBy\\|blank\" scripts/lane-message.mjs | head; ls artifacts/lane-messages | wc -l",
+          "keyOutput": "scripts/lane-message.mjs:160-161 an ack by anyone but the addressee is a problem; :169 a schema-2 ack with no note is a problem (\"I read it\" \u2260 \"I did it\"); 136 message files on disk. Lane mail already crosses the lane boundary by file with a review-gate-shaped ack."
+        },
+        {
+          "command": "grep -n \"LOOP\\|loop:state\" .claude/hooks/session-start.sh .claude/hooks/verify-done.sh | head; grep -rn \"LAST TOUCHED\" scripts/*.mjs .claude/hooks/*.sh",
+          "keyOutput": "session-start.sh:121-131 prints the STATE block and runs loop:state; verify-done.sh:27 GATE_CMD=\"pnpm run loop:state\" at Stop. LAST TOUCHED appears only in scripts/check-derived-doc-figures.mjs:664 (a comment) \u2014 no gate reads the STATE block's date; loop-end/SKILL.md:18 'Update the STATE block \u2026 LAST' is discipline. LOOP.md:1268-1270 records a prior two-day contradiction between STATE and body."
+        },
+        {
+          "command": "sed -n 258,266p .claude/skills/subagent-driven-development/SKILL.md; grep -n superpowers .gitignore; sed -n 110,113p .claude/skills/dispatching-parallel-agents/SKILL.md",
+          "keyOutput": "SDD: 'brief \u2026/task-N-brief.md \u2192 report \u2026/task-N-report.md \u2026 The implementer writes the full report there and returns only status' and a ledger progress.md (SKILL.md:141) \u2014 file handoffs, but .gitignore:121 '.superpowers/' so they survive a session, not a machine. dispatching-parallel-agents:112 'Return: Summary of what you found and what you fixed.' \u2014 the handoff is the chat return."
+        },
+        {
+          "command": "git worktree list; git log --oneline SignalGrid_Alpha..mac/video-intake-icm-and-five-projects | head",
+          "keyOutput": ".claude/worktrees/vid at 8fddbd16 [mac/video-intake-icm-and-five-projects], 0 commits ahead: this Workflow run's stage outputs (frames, transcript, per-video findings) exist only under the scratchpad and in returned text until the coordinator writes the intake row."
+        },
+        {
+          "command": "sed -n 41,84p .claude/skills/video-intake/SKILL.md",
+          "keyOutput": "Steps 1-4 already form a staged contract: frames (scratch) \u2192 transcript file ('wrote <path> duration=\u2026 segments=\u2026', read in full) \u2192 'Step 3 \u2014 answer and absorb: a row in docs/agent/RESOURCE_INTAKE.md \u2026 and the change itself \u2026 in the same PR' \u2192 Step 4 leave nothing behind. One durable output per clip, the PR is the human gate."
+        }
+      ],
+      "tasks": [
+        {
+          "id": "ICM-1",
+          "title": "Brain-cycle dispatch stage: a lens-file writer contract and a stale-input guard, so a board can exist",
+          "evidence": "`git ls-files artifacts/brain-cycle | wc -l` \u2192 0 and `git log --all -- artifacts/brain-cycle` \u2192 empty, against BRAIN_CYCLE_DESIGN.md:99 'One committed directory per cycle'. `grep -l \u2026 .claude/agents/*.md | wc -l` \u2192 0 of 13 agents name a board file (branch 7a28e26a adds prose to one: gate-and-proof-engineer.md:53-54). scheduled-routines.json brain-cycle awaitingReason: activation waits on 'a proven Slice-2 dry run' \u2014 impossible while nothing writes the stage-2 output. brain-cycle.mjs:57-78 reads the board but never checks a lens's auditedSha against the cycle.",
+          "change": "Two small pieces, no new folder cosmetics. (a) _manifest.json gains `cycle` (the audited sha) and readBoard() treats a lens whose `auditedSha` !== manifest.cycle as ran:false \u2014 the ICM 'next stage loads only what belongs to it' guard; extend the existing --self-test with a planted stale lens (must open nothing). (b) One shared paragraph, identical in every lens agent (.claude/agents/code-reviewer.md, security-reviewer.md, fail-closed-auditor.md, verdict-core-reader.md, gate-and-proof-engineer.md): 'MODE: audit \u2014 write exactly artifacts/brain-cycle/<sha>/<lens>.<lane>.json in the BRAIN_CYCLE_DESIGN.md \u00a75 shape, provenance sampled before you read anything, evidence = quoted command output; return only the path.' Check that fails without it: `node scripts/brain-cycle.mjs --board artifacts/brain-cycle/<sha>` on a session-written board \u2014 today no such board can be produced, and a stale lens would currently count.",
+          "owner": "agent-platform-steward (agents) + gate-and-proof-engineer (readBoard guard; scripts/** is SAFETY_MACHINERY \u2192 owner-reviewed PR)",
+          "risk": "Low for (b); (a) touches scripts/brain-cycle.mjs, an owner-gated surface \u2014 lands by normal reviewed PR, never via the cycle itself. Coordinate with the cloud lane: 7a28e26a already edits gate-and-proof-engineer.md.",
+          "landing": "BUILD_BACKLOG"
+        },
+        {
+          "id": "ICM-2",
+          "title": "Encode the 2026-09-19 intake rule as a three-stage contract in tool-evaluation-by-use, with one file per stage",
+          "evidence": "`pnpm run check:absence \"self-scan\"` \u2192 CORROBORATED absent on mainline; the rule exists only in the session memory file resource-intake-self-scan-then-confirm.md and in two rows on unmerged 7a28e26a (RESOURCE_INTAKE.md:103-104). `grep -rln -i \"roster confirm\\|resource proposes\\|brain decides\" .claude/skills .claude/agents .claude/commands` \u2192 0. In row 103 the stage outputs ('eleven live query-docs checks', 'Five roster perspectives \u2026 confirmed or amended every task') are prose; the proposal list and each perspective's verdict were chat returns.",
+          "change": "Add '\u00a75b \u2014 Under the 2026-09-19 rule' to .claude/skills/tool-evaluation-by-use/SKILL.md between \u00a75 and \u00a76, as a stage contract: Stage A (agent AS the resource) \u2192 artifacts/resource-scans/<YYYY-MM-DD>-<resource>/proposal.json {resource, pin, tasks:[{id, change, files, checkThatFails}]}; Stage B (each roster perspective, read-only) \u2192 confirm.<perspective>.json {taskId \u2192 confirm|amend|reject, reason, evidence}; Stage C (the brain) \u2192 decision.json {taskId \u2192 landed|filed|rejected, where} and the intake row citing the directory. Human gate = the PR that lands the row. Quote the owner's sentence once, in the skill, so it stops living in memory.",
+          "owner": "agent-platform-steward (skill text); signalgrid-scribe (row wording)",
+          "risk": "Low. .claude/skills is a shared surface the sandbox blocks for writes \u2014 lands from a worktree by PR. Do not vendor a hook or auto-run (intake rule 3).",
+          "landing": "operating-note"
+        },
+        {
+          "id": "ICM-3",
+          "title": "Gate: a 'Self-scan' intake row must bind to its scan directory (the sim-requests contract, copied)",
+          "evidence": "scripts/check-sim-requests.mjs:1-25 already states the exact invariant needed ('Every result binds to a request that exists \u2026 reports rows ONLY for operations that request asked for'), wired at preflight.mjs:440-441. Nothing equivalent reads RESOURCE_INTAKE.md: row 103 claims 'five of the six tasks \u2026 landed' with no file a gate could count.",
+          "change": "scripts/check-resource-scans.mjs (+ --self-test, + preflight and CI rows, parity-gated): for every RESOURCE_INTAKE.md row whose Disposition contains 'Self-scan', require the named artifacts/resource-scans/<dir>/ to hold proposal.json, \u22651 confirm.*.json and decision.json; every decision taskId \u2286 proposal task ids; a decision 'landed' must name a path that exists. Fails without it: a row claiming N confirmed tasks with zero confirm files. Reads no clock.",
+          "owner": "gate-and-proof-engineer",
+          "risk": "Medium: adds a preflight + CI gate (parity check must pass both directions); depends on ICM-2 landing first or it fails on the two existing rows \u2014 land ICM-2 and backfill the two 7a28e26a directories in the same PR.",
+          "landing": "BUILD_BACKLOG"
+        },
+        {
+          "id": "ICM-4",
+          "title": "Orchestrator spec rule: every worker/Workflow stage names its report file; the coordinator reads the file, not the return",
+          "evidence": "dispatching-parallel-agents/SKILL.md:112 and :127 'Return: Summary \u2026' \u2014 chat return is the handoff. subagent-driven-development/SKILL.md:264-266 already does it by file (task-N-report.md) but .gitignore:121 ignores .superpowers/. This run: `git log SignalGrid_Alpha..mac/video-intake-icm-and-five-projects` \u2192 0 commits while the worktree .claude/worktrees/vid is the landing; per-video findings exist only under the scratchpad. orchestrator-over-workers/SKILL.md:15-24 lists four spec items and none is an output file.",
+          "change": "One bullet added to orchestrator-over-workers \u00a71 ('Write the spec before anyone starts'): '**where the result lands** \u2014 one file path per worker under the run's scratch or worktree; the worker returns the path and a one-line status, the orchestrator reads the file'. Plus one VENDORED.md override row for dispatching-parallel-agents:112/127 ('Return: Summary' \u2192 return the report path). No new gate: a prose rule about the shape of a prompt has no mechanical check, and inventing one would be speculative.",
+          "owner": "agent-platform-steward",
+          "risk": "Low. Vendored skills are not edited; the override row is the sanctioned mechanism (.claude/skills/VENDORED.md:195-210 already carry such rows).",
+          "landing": "operating-note"
+        },
+        {
+          "id": "ICM-5",
+          "title": "loop:state row: the LOOP.md STATE date must not trail mainline's newest commit by more than a week",
+          "evidence": "`grep -rn \"LAST TOUCHED\" scripts/*.mjs .claude/hooks/*.sh` \u2192 only a comment at check-derived-doc-figures.mjs:664; scripts/loop-state.mjs has no STATE-block row (add() calls at :66-393 cover Hub, branches, README, discovery, readiness, coverage). loop-end/SKILL.md:18 leaves the update to discipline; LOOP.md:1268-1270 records a two-day STATE-vs-body contradiction that no gate read.",
+          "change": "One add() in scripts/loop-state.mjs: parse the LAST TOUCHED date from the STATE block and compare it to `git log -1 --format=%cI origin/SignalGrid_Alpha`; warn (not fail \u2014 a warn row, gated=false like Discovery at :337) when the gap exceeds 7 days. Two git dates, no wall clock. Self-test: a fixture STATE block dated before a fixture commit date must produce the warn row.",
+          "owner": "signalgrid-scribe (owns LOOP.md) with gate-and-proof-engineer",
+          "risk": "Low; scripts/loop-state.mjs is read-only by design and the row is advisory. Ponytail note: lowest value of the five \u2014 STATE was touched 2026-09-19 01:00Z; file it, do not rush it.",
+          "landing": "BUILD_BACKLOG"
+        }
+      ],
+      "model": "inherited-coordinator"
+    }
+  ],
+  "confirms": [
+    {
+      "perspective": "agent-platform-steward",
+      "votes": [
+        {
+          "id": "ICM-1",
+          "verdict": "confirm",
+          "reason": "Evidence checks out: `git ls-files artifacts/brain-cycle | wc -l` \u2192 0, `git log --all -- artifacts/brain-cycle` \u2192 empty, BRAIN_CYCLE_DESIGN.md:99 does say 'One committed directory per cycle', 0 of 13 .claude/agents/*.md name a board file, and scheduled-routines.json's brain-cycle awaitingReason literally names 'a proven Slice-2 dry run' as the blocker. Read brain-cycle.mjs:57-78 myself (readBoard()) \u2014 it parses _manifest.json's `expected` array and never compares a lens's own sha against the cycle it's being read into, so a stale lens would silently count today, exactly as claimed. Landing is right: this is code (a manifest field + a readBoard guard + agent-prompt prose), so BUILD_BACKLOG is correct, not a doc destination. No hand-maintained figure introduced. The scripts/brain-cycle.mjs piece is correctly flagged as an owner-gated PR, not something the cycle can land on itself."
+        },
+        {
+          "id": "ICM-2",
+          "verdict": "confirm",
+          "reason": "`pnpm run check:absence \"self-scan\"` \u2192 CORROBORATED, confirmed by running it myself. `grep -rln -i \"roster confirm|resource proposes|brain decides\"` \u2192 0, confirmed. tool-evaluation-by-use/SKILL.md has \u00a75 'Measure. Do not quote the README' at line 58 and \u00a76 'Disposition: one sentence, one landing place' at line 74, so inserting a \u00a75b between them is structurally sound. Landing is correct per the video-intake skill's own taxonomy ('A working practice \u2192 an operating note in ... the relevant skill'). This task is also the meta-legitimate move: it's asking to codify, as the skill's stage contract, the exact confirm/amend/reject process this very review is running under."
+        },
+        {
+          "id": "ICM-3",
+          "verdict": "confirm",
+          "reason": "Read scripts/check-sim-requests.mjs:1-25 and preflight.mjs's sim-requests rows myself \u2014 the binding invariant ('every result binds to a request... reports rows ONLY for operations that request asked for') is exactly as quoted, and it is wired into preflight. RESOURCE_INTAKE.md's row-103 claim ('five of six tasks landed') indeed has no artifact a gate could count, on mainline. Landing BUILD_BACKLOG is correct (it's a new gate script). The declared dependency on ICM-2 landing first is honest and necessary \u2014 the gate is meaningless without ICM-2's stage-file contract to check against."
+        },
+        {
+          "id": "ICM-4",
+          "verdict": "confirm",
+          "reason": "dispatching-parallel-agents/SKILL.md does say 'Return: Summary of what you found and what you fixed.' (chat-return handoff). subagent-driven-development/SKILL.md:258-268 already writes report-by-file. .gitignore does ignore `.superpowers/` right where cited. orchestrator-over-workers/SKILL.md's \u00a71 spec list (lines 15-24) is confirmed to have four items and none is an output-file path. `git log SignalGrid_Alpha..HEAD` \u2192 0 commits on this worktree branch, matching the claim that this run's own findings sit only in scratchpad with no report-file convention. Landing (operating-note, one bullet + a VENDORED.md override row) is correct and deliberately avoids inventing a mechanical check for a prose convention \u2014 right call, since a spec-shape rule has no clean falsifying test."
+        },
+        {
+          "id": "ICM-5",
+          "verdict": "confirm",
+          "reason": "`grep -n \"LAST TOUCHED\" scripts/*.mjs .claude/hooks/*.sh` \u2192 only the comment at check-derived-doc-figures.mjs:664, confirmed. scripts/loop-state.mjs's add() calls (checked all of them) cover Hub reachability, branches, README framing, Discovery, readiness, review coverage \u2014 none compares STATE's date to mainline's newest commit. LOOP.md:1268-1270 does record exactly the two-day STATE-vs-body contradiction cited. This is the right shape for this repo: derived from two git dates, not a typed figure, which is exactly what the scribe's own rule 2 ('No figure that will drift... derive it from a run') demands. Warn-not-fail is consistent with how Discovery is already handled in the same file. Landing BUILD_BACKLOG is correct."
+        },
+        {
+          "id": "V-1",
+          "verdict": "amend",
+          "reason": "Evidence is solid: `grep -c model scripts/check-agent-roster.mjs` \u2192 0, confirmed; 13/13 agent files do carry `model:` in {haiku,sonnet,opus}; DR-047:3136 does name the follow-up gate. But the proposed target file is wrong. I read check-skill-plane-conformance.mjs's own header: it explicitly disclaims re-checking what its siblings own \u2014 'write scopes and vendor drift are check-agent-roster.mjs... It owns exactly the front-matter shape those three assume and none of them assert.' check-agent-roster.mjs is titled 'hiring is autonomous; the SHAPE of a hire is not (DR-016)' and already derives capability from frontmatter \u2014 model tier is squarely 'shape of a hire,' not name/description addressability. DR-047's own consequences paragraph also names check-agent-roster.mjs's shape, not check-skill-plane-conformance.mjs's. Amend: add the model: check to scripts/check-agent-roster.mjs instead, to respect the boundary check-skill-plane-conformance.mjs draws around itself and to match what DR-047 actually pointed at."
+        },
+        {
+          "id": "V-2",
+          "verdict": "confirm",
+          "reason": "`pnpm run check:absence \"prompt regression\"` \u2192 CORROBORATED, confirmed. Found exactly the 4 vendored evals/evals.json files claimed (nemo-rl-session-memory, nvidia-skill-finder, mcore-split-pr, doca-hardware-safety) and confirmed scripts/src/fabric-evals-proof.ts:47 is the only scripts/.github reference to 'evals/' \u2014 none of the four vendored eval sets are run by anything. `claude plugin eval --help` confirms the CLI subcommand exists as described. Landing BUILD_BACKLOG matches the repo's established pattern for an owner-gated open question filed as a backlog row (same shape as the iLOQ intake row's 'three questions a record would have to settle'). Correctly scoped as report-only, off preflight/CI, per intake rule 3 and the fail-open-grader risk it names itself."
+        },
+        {
+          "id": "V-3",
+          "verdict": "confirm",
+          "reason": "RESOURCE_INTAKE.md rule 1 ('Log the resource the day it arrives, before evaluating it') is at line 62, matching the cited range. `pnpm run check:absence \"semantic cache\"` \u2192 CORROBORATED, confirmed. Checked `~/.claude/jobs/*/timeline.jsonl` myself: found 4 files (not the cited 16) and 0 of them mention a model field \u2014 the direction of the claim (0 of N record a model) holds even though the exact count I see now differs, plausibly because job logs get created/pruned between when the video was scanned and now; this is local session data, never committed, so it isn't a repo fossil-figure risk. The row correctly declines to let the speaker's 'continuously validating routing decisions' become a capability sentence, since scoring would need a model judge and the decision path stays model-free. Landing (the RESOURCE_INTAKE.md row itself, referencing V-1/V-2) is the correct Step-3 requirement regardless of the other three landing buckets."
+        }
+      ],
+      "missing": "None found as a gap in ICM or V's own scope, but one thing worth flagging for the brain to weigh: no task in either list addresses that this review itself \u2014 five roster perspectives voting confirm/amend/reject on a JSON task list \u2014 has nowhere durable to land under the current tree. ICM-2 proposes the *stage contract* (proposal.json / confirm.<perspective>.json / decision.json) for future runs, but nothing here writes today's actual vote as one of those files, so this vote will itself be a chat return unless the orchestrator captures it by hand \u2014 the exact anti-pattern ICM-4 is about. Not a new task to add (ICM-2, once landed, covers the mechanism); flagging so the brain doesn't let this run's own output evaporate the way ICM-4's evidence shows past runs did.",
+      "model": "sonnet"
+    },
+    {
+      "perspective": "fail-closed-auditor",
+      "votes": [
+        {
+          "id": "ICM-1",
+          "verdict": "amend",
+          "reason": "Part (a) is fine \u2014 scripts/brain-cycle.mjs, correctly handed to gate-and-proof-engineer as a SAFETY_MACHINERY owner-reviewed PR (verified: scripts/check-owner-gated-surfaces.mjs SAFETY_MACHINERY self-tests scripts/ paths). Part (b) as written breaks on two grounded points. First: code-reviewer.md, security-reviewer.md, fail-closed-auditor.md all carry `tools: Read, Grep, Glob, Bash` and verdict-core-reader.md carries `tools: Read, Grep, Glob` \u2014 none has Write or Edit. scripts/check-agent-roster.mjs derives write power via `WRITE_TOOLS = /\\b(Write|Edit|NotebookEdit|MultiEdit)\\b/` (check-agent-roster.mjs:48) \u2014 Bash does not count. Instructing these four to \"write exactly artifacts/brain-cycle/<sha>/<lens>.<lane>.json\" either relies on an undeclared Bash-based write the roster gate can't see (the exact blind spot this steward role exists to catch), or needs tools:+writeScope changes into artifacts/brain-cycle/** that ICM-1 doesn't propose. Second: gate-and-proof-engineer is the design's remediation role, not a voting lens (BRAIN_CYCLE_DESIGN.md:133 'any scripts/ \u2192 gate-and-proof-engineer (remediation, not a vote)'; :146 'auditors are behaviourally read-only and never fix what they found') \u2014 and the unmerged branch 7a28e26a already wrote it a more careful two-mode paragraph ('MODE: audit' / 'MODE: remediate', gate-and-proof-engineer.md:53-54 on that branch, verified by `git show 7a28e26a:.claude/agents/gate-and-proof-engineer.md`) that the identical-shared-paragraph plan would clobber. Meanwhile the design's real expected panel (BRAIN_CYCLE_DESIGN.md:134) includes signalgrid-reviewer, which is a SKILL not an agent file and is absent from ICM-1(b)'s five-file list \u2014 so a manifest built from the design's actual panel would still show a missing lens.",
+          "amendment": "Target code-reviewer.md, security-reviewer.md, fail-closed-auditor.md, verdict-core-reader.md, and .claude/skills/signalgrid-reviewer/SKILL.md for the shared audit paragraph \u2014 not gate-and-proof-engineer.md, which keeps (and reconciles with) the two-mode paragraph 7a28e26a already began. Pair the paragraph with an explicit write-power decision: add Write to the four agents' tools: plus a writeScope row in docs/agent/agent-tiers.json for artifacts/brain-cycle/**, or state plainly that the write goes through Bash and extend check-agent-roster.mjs's WRITE_TOOLS derivation to recognize that shape \u2014 either way, name it, don't leave it implicit."
+        },
+        {
+          "id": "ICM-2",
+          "verdict": "confirm",
+          "reason": "Verified: .claude/skills/tool-evaluation-by-use/SKILL.md has ## 5 \u2014 Measure (line 58) and ## 6 \u2014 Disposition (line 74), so a '\u00a75b' insertion point is real and won't collide with either. `pnpm run check:absence \"self-scan\"` \u2192 CORROBORATED absent (4/4 probes empty), matching the evidence claim exactly. Owner field signalgrid-scribe resolves (docs/agent/org-roster.json, executor: skill:signalgrid-scribe; also a real skill dir). No hook proposed \u2014 stages are read/confirm/decide, run by a session, never auto-executed."
+        },
+        {
+          "id": "ICM-3",
+          "verdict": "confirm",
+          "reason": "Outside my write surface (a scripts/ gate, correctly owned by gate-and-proof-engineer) but does not misplace anything into .claude/skills or .claude/agents, contradicts nothing I found, and registers no hook. scripts/check-sim-requests.mjs:1-25 does state the bind-a-result-to-a-request invariant the task copies as precedent (verified by reading the file header). Its own risk field correctly flags the ICM-2 landing-order dependency."
+        },
+        {
+          "id": "ICM-4",
+          "verdict": "confirm",
+          "reason": "Verified dispatching-parallel-agents/SKILL.md:112 ('Return: Summary of what you found and what you fixed.') and :127 (the 'Return summary of root cause and changes' bullet) are literal chat-return instructions, distinct in substance from the existing VENDORED.md override row for :71-73,:95-112 (which is about not weakening tests, not about where the result lands). subagent-driven-development/SKILL.md already does report-by-file (task-N-report.md, verified at lines ~250-260) so orchestrator-over-workers borrowing that shape as a spec bullet is consistent with an existing skill rather than inventing one. VENDORED.md is the sanctioned mechanism for divergence from a vendored skill (confirmed: it already carries comparable override rows) \u2014 no vendored file is edited in place."
+        },
+        {
+          "id": "ICM-5",
+          "verdict": "confirm",
+          "reason": "scripts/loop-state.mjs is not under .claude/, correctly owned by signalgrid-scribe (resolves, org-roster.json) with gate-and-proof-engineer. Advisory-only (gated=false), two git dates, no wall clock \u2014 consistent with the repo's own 'never claim from memory' discipline. Nothing here touches or contradicts a skill or agent file."
+        },
+        {
+          "id": "V-1",
+          "verdict": "confirm",
+          "reason": "Verified `grep -c model scripts/check-agent-roster.mjs` \u2192 0 and all 13/13 .claude/agents/*.md carry `model:` \u2208 {haiku, sonnet, opus} (grep confirms). Placement in scripts/check-skill-plane-conformance.mjs is defensible on the gate's own terms: its header states it owns 'exactly the front-matter shape [the sibling gates] assume and none of them assert,' and `model:` is front-matter shape, not write scope (which stays check-agent-roster.mjs's job per that same header). DR-047:3136's 'in the shape of check-agent-roster.mjs' reads as a style reference, not a file mandate, so V-1 doesn't contradict the decision record."
+        },
+        {
+          "id": "V-2",
+          "verdict": "amend",
+          "reason": "`claude plugin eval` is a real, verified CLI subcommand matching the task's description (case.yaml/prompt.md+graders, --ablation with-without baseline, --allow-tools operator grant, --trust-plugin). 4 vendored evals/evals.json files confirmed present (doca-hardware-safety, nvidia-skill-finder, nemo-rl-session-memory, mcore-split-pr) and run by nothing (grep confirms only fabric-evals-proof.ts references 'evals/'). No hook proposed \u2014 explicitly hand-run, report-only, honoring intake rule 3. Belongs on my surface (skill-plane evaluation) and the owner field (agent-platform-steward) is correct.",
+          "amendment": "New evals/ subdirectories under .claude/skills/<skill>/ land inside a tree docs/agent/RESOURCE_INTAKE.md says is classified by scripts/check-publication-boundary.mjs section E (cited for the vendored superpowers intake). Before the row promises the layout, run that gate over a probe evals/ directory to confirm it's expected/classified there \u2014 an unclassified new file shape under .claude/skills is exactly the kind of drift this steward role exists to catch before it ships, not after."
+        },
+        {
+          "id": "V-3",
+          "verdict": "confirm",
+          "reason": "records-archivist resolves to a real roster role: docs/agent/org-roster.json:532-537 defines it with charter 'The intake ledger, decision records and provenance discipline...' and executor 'skill:signalgrid-scribe' \u2014 not a name that resolves to nothing. The row's own claims check out against golden rules: no LLM call in the product path (grep + check:absence CORROBORATED per the video's own evidence), transcript quoted only in a cell not made a fixture/figure, no hook, no auto-execution, and the routing-validation gap is honestly logged as MISSING rather than proposed."
+        }
+      ],
+      "missing": "One task neither list proposes, precondition for ICM-1 to work at all: a write-power/writeScope decision for the lens agents. ICM-1(b) has the four true lens agents write a board file into artifacts/brain-cycle/**, but none of their tools: frontmatter grants Write/Edit (verified), check-agent-roster.mjs derives write power only from Write/Edit/NotebookEdit/MultiEdit in tools: (not Bash), and artifacts/** is already registered to build-error-resolver's scope per this role's own charter. Until something names who gets write power into artifacts/brain-cycle/** and how it's declared, no board can legally be produced even after ICM-1(a)+(b) land as proposed \u2014 filed as the amendment on ICM-1, but it is also a standalone missing task: a docs/agent/agent-tiers.json writeScope row (or equivalent roster amendment) for whichever agents/skills the brain-cycle panel ends up being, owned by agent-platform-steward jointly with gate-and-proof-engineer since it touches both .claude/agents and the roster the latter's gate reads.",
+      "model": "sonnet"
+    },
+    {
+      "perspective": "gate-and-proof-engineer",
+      "votes": [
+        {
+          "id": "ICM-1",
+          "verdict": "amend",
+          "reason": "Verified: `artifacts/brain-cycle` has 0 tracked files (`git ls-files artifacts/brain-cycle | wc -l` -> 0, `git log --all -- artifacts/brain-cycle` empty); `scripts/brain-cycle.mjs` readBoard() (lines 57-73) parses `_manifest.json.expected` but never references `auditedSha` or a `cycle` field (`grep -n 'auditedSha|manifest.cycle' scripts/brain-cycle.mjs scripts/brain-cycle-decide.mjs` hits only the design-doc comment and the existing self-test plumbing). `grep -l 'board|brain-cycle' .claude/agents/*.md | wc -l` -> 0. `docs/agent/scheduled-routines.json:91` confirms brain-cycle activation awaits 'a proven Slice-2 dry run'. I also confirmed `brain-cycle-decide.mjs`'s existing HARD-NO arm (an expected lens not explicitly `ran:true` -> hardNo, lines 135-147) already gives the stale-lens-as-ran:false plan its 'must open nothing' outcome for free -- the wiring is sound. But charter rule 1 requires planting the defect and watching it fail ON THE REAL TREE: with zero files under `artifacts/brain-cycle`, there is no real board to plant a stale lens into today, so this can only self-test against a fixture until a writer exists (Slice 2 / ICM-1's own dependency). The row should say so explicitly rather than imply an on-tree proof.",
+          "amendment": "State in the row that (a)'s self-test is fixture-only until a real board writer lands, and sequence (b) with-or-before (a) as already drafted -- do not claim the stale-lens guard is provable against a live board yet."
+        },
+        {
+          "id": "ICM-2",
+          "verdict": "confirm",
+          "reason": "`pnpm run check:absence \"self-scan\"` -> CORROBORATED (4/4 empty probes) confirmed live. `grep -rln -i 'roster confirm|resource proposes|brain decides' .claude/skills .claude/agents .claude/commands` -> 0 matches, confirmed. `.claude/skills/tool-evaluation-by-use/SKILL.md` sections are `## 5 -- Measure...` (line 58) and `## 6 -- Disposition...` (line 74), so a '\u00a75b' insertion point exists exactly where claimed. `docs/agent/RESOURCE_INTAKE.md` is 102 lines on mainline (no self-scan row present); the two rows cited live only on unmerged `7a28e26a`. This is a skill-text change, not a gate -- correctly scoped as an operating-note, and it's the honest prerequisite ICM-3 needs."
+        },
+        {
+          "id": "ICM-3",
+          "verdict": "amend",
+          "reason": "The core mechanism (copy check-sim-requests.mjs's request<->result binding shape) is sound and correctly scoped: no network/LLM call, preflight+CI parity achievable. But two problems, one of which is the honest-writing failure mode this charter exists to prevent. First, factually: `git ls-files artifacts/resource-scans | wc -l` -> 0, and `git show 7a28e26a --stat | grep -i resource-scan` -> no hits -- there is nothing under `7a28e26a` to 'backfill'; that commit only edited RESOURCE_INTAKE.md prose, so the stated remediation path doesn't exist. Second, and more important: keying the gate on the substring 'Self-scan' inside a hand-written Disposition cell means a row that truthfully narrates a chat-only self-scan (no durable artifact directory was ever produced, which is exactly what happened on 7a28e26a) gets flagged for telling the truth -- the precise pattern CLAUDE.md names as the failure mode to never repeat. It also collides with V-3: if the archivist's honest row says 'self-scan' without citing a directory (V-3 proposes exactly a prose row), ICM-3 as written demands a directory that was never promised.",
+          "amendment": "Invert the trigger to what can be checked mechanically and honestly: GATE only a row that CITES an `artifacts/resource-scans/<dir>` path -- require that directory to hold `proposal.json`, >=1 `confirm.*.json`, and `decision.json`, with decision taskIds subset of proposal taskIds and every 'landed' path existing (mirrors `check-cited-paths.mjs`'s existing discipline). REPORT (non-fatal) any row whose Disposition describes a self-scan but cites no directory. This makes ICM-2 a soft dependency (needed for future rows to have somewhere to point) rather than a hard one requiring retroactive, unverifiable reconstruction of a chat-only run."
+        },
+        {
+          "id": "ICM-4",
+          "verdict": "confirm",
+          "reason": "Substance confirmed: `.claude/skills/orchestrator-over-workers/SKILL.md` \u00a71 'Write the spec before anyone starts' lists exactly four bullets (what changes / which check must fail / which gates stay green / which files may be touched) and none is an output-file location. `.claude/skills/dispatching-parallel-agents/SKILL.md` does instruct 'Return: Summary of what you found and what you fixed' as its example output shape (the cited :112/:127 line numbers are approximate -- I found the text nearby, not at those exact lines, so treat the refs as unverified precision on an otherwise-verified claim). `.claude/skills/VENDORED.md` already carries a precedented override row for this exact file (`dispatching-parallel-agents/SKILL.md:71-73, :95-112`), confirming the proposed mechanism (a new VENDORED.md row, no new script) is the sanctioned, already-used pattern. No gate is invented where a prose rule would need one -- appropriately scoped as an operating-note with no mechanical check claimed."
+        },
+        {
+          "id": "ICM-5",
+          "verdict": "confirm",
+          "reason": "`grep -rn \"LAST TOUCHED\" scripts/*.mjs .claude/hooks/*.sh` -> only the doc-figure-gate's comment, confirming no script currently reads it. `docs/agent/LOOP.md:47` is the STATE header, `:55` the LAST TOUCHED line ('2026-09-19 01:00Z'), matching the row's citations. `scripts/loop-state.mjs` has 23 `add(...)` calls and an existing `add(\"warn\", \"Discovery\", ..., false)` pattern at line ~337 that this proposal would mirror exactly (gated=false, advisory). `grep -n \"loop-state\" scripts/preflight.mjs .github/workflows/*.yml` -> no hits: `loop-state.mjs` is session-ritual tooling (`pnpm run loop:state`), not itself a registered preflight/CI gate, so rule 5 (register in both) doesn't apply here -- consistent with the Discovery row's own precedent. One correction to the row's own framing: 'reads no clock' is true for the new comparison specifically (two git commit dates), but the file already calls `Date.now()` elsewhere (line 334, Discovery's day count) -- the real justification for confirming is that this matches an established in-file pattern, not that the script is clock-free overall."
+        },
+        {
+          "id": "V-1",
+          "verdict": "confirm",
+          "reason": "Exact match on every cited number: `grep -c model scripts/check-agent-roster.mjs` -> 0 (confirmed the roster gate, which derives write-scope tiers 0-3 from `tools:` frontmatter, not model), and all 13 `.claude/agents/*.md` carry `model:` in {haiku, sonnet, opus} -- counted directly: 1 haiku (doc-updater), 6 sonnet (build-error-resolver, code-reviewer, e2e-runner, refactor-cleaner, security-reviewer, tdd-guide), 6 opus (agent-platform-steward, architect, fail-closed-auditor, gate-and-proof-engineer, planner, verdict-core-reader) -- matching the row's own tally and DR-047's text verbatim (docs/DECISION_RECORDS.md:3120). `scripts/check-skill-plane-conformance.mjs`'s `frontmatter()` (line 65) is a generic key:value YAML parser already walking `.claude/agents/*.md` (lines 122-135) -- trivially extensible to check `model:`. This gate is already wired in both preflight (:330-331) and CI (review-hub-ci.yml:391,393), confirmed by `node scripts/check-preflight-ci-parity.mjs` reporting 0 unwired -- so the new rule needs no separate registration. Strongest of the eight: falsifiable (an omitted or fable/mythos model fails), self-testable, and correctly scoped to the registered-role surface only (honestly declines to gate ad-hoc spawns from a script)."
+        },
+        {
+          "id": "V-2",
+          "verdict": "confirm",
+          "reason": "I ran `claude plugin eval --help` directly rather than trusting the task text's claim that the subcommand exists (DR-015). It is real and matches the description precisely: '<eval dir>/**/case.yaml or prompt.md + graders/*.md', a `--ablation with-without` no-plugin baseline arm, `--allow-tools` operator grants, and explicit untrusted-plugin confirmation. Separately confirmed `pnpm run check:absence \"prompt regression\"` -> CORROBORATED (4/4), and the 4 vendored `evals/evals.json` files (nvidia-skill-finder, nemo-rl-session-memory, doca-hardware-safety, mcore-split-pr) are run by nothing in scripts/CI (`grep -rn 'evals/' scripts .github` -> only an unrelated fixtures path in fabric-evals-proof.ts:47). The proposal is explicitly report-only, run by hand, never in preflight/CI -- it clears the network/LLM rejection criterion by design, and correctly frames itself as a policy decision (worth it or not) rather than overclaiming a gate."
+        },
+        {
+          "id": "V-3",
+          "verdict": "confirm",
+          "reason": "Matches `docs/agent/RESOURCE_INTAKE.md`'s own stated row rule (line 60 '## Rules for a new row', line ~9 'Every resource gets a row here'). A pure intake row naming what changed (V-1, V-2) and what didn't (no LLM in the product path, forensics/doc-drift already covered) is the correct, honest disposition -- it doesn't overclaim a gate and doesn't let the speaker's 'continuously validating routing decisions' become a capability sentence, consistent with golden rule 2 and DR-029."
+        }
+      ],
+      "missing": "V-1 gates only that `model:` is present and in {haiku, sonnet, opus} -- it does not gate that DR-047 rule 2's ASSIGNMENT (which tier a given role should carry) holds. Today `fail-closed-auditor` could be silently changed from `opus` to `haiku` in a PR and V-1's gate would pass clean, since any valid enum value satisfies it. `docs/agent/agent-tiers.json`'s own header comment states the file's purpose is to supply 'the part that cannot be derived' -- currently just `writeScope` -- alongside tier/write-capability that scripts/check-agent-roster.mjs DOES derive mechanically. An `expectedModel` field per agent in that same file, checked by the same walker used for V-1, would be the same shape of undeclarable-policy-made-checkable as `writeScope` already is, and would close the gap DR-047's own Consequences paragraph names as the follow-up. I did not turn this into a full task (effort/owner/risk unassessed) -- flagging it as the missing row rather than confirming it outright.",
+      "model": "sonnet"
+    },
+    {
+      "perspective": "signalgrid-scribe",
+      "votes": [
+        {
+          "id": "ICM-1",
+          "verdict": "amend",
+          "reason": "Evidence reproduces: `git ls-files artifacts/brain-cycle | wc -l` = 0, `git log --all --oneline -- artifacts/brain-cycle` = empty; docs/agent/BRAIN_CYCLE_DESIGN.md:99 reads '**One committed directory per cycle:** `artifacts/brain-cycle/<cycle-id>/`...' verbatim; `grep -l board .claude/agents/*.md` = 0 of 13 on mainline; scripts/brain-cycle.mjs:57-78 is exactly readBoard(), which reads `_manifest.json`'s `expected` array and per-lens JSON but never reads or compares any `cycle`/`auditedSha` field \u2014 the gap is real. Commit 7a28e26a (branch mac/context7-self-scan, NOT mac/video-intake-icm-and-five-projects as the video-intake branch name might suggest) does add 'MODE: audit ... your only output is one board file, artifacts/brain-cycle/<sha>/gate-and-proof-engineer.<lane>.json' at gate-and-proof-engineer.md around lines 53-54, confirmed by `git show 7a28e26a:.claude/agents/gate-and-proof-engineer.md`. BUT the proposed fix itself has a fail-open: `auditedSha !== manifest.cycle` is JS-truthy-comparison logic where `undefined !== undefined` evaluates to `false` \u2014 so a manifest missing `cycle` together with a lens missing `auditedSha` (the exact state of every lens file today, since no agent writes either field yet) reads as MATCHING and the stale/never-audited lens counts as fresh. This is charter shape #2 ('guards that skip on unknown') in the guard being proposed to fix a different instance of the same shape. The existing code already has the right idiom two lines above (`if (expected.length === 0) throw`) that this should mirror.",
+          "amendment": "Require `manifest.cycle` to be a non-empty string or throw (mirroring the existing `expected.length === 0` throw at brain-cycle.mjs), and treat an absent/empty `lens.auditedSha` as ran:false by absence, never solely by `!==` comparison against `manifest.cycle`. The self-test must assert the *reason* a stale lens is rejected (it lands as ran:false/UNVERIFIED in decision.json) \u2014 asserting only 'opens nothing' is satisfied identically by the pre-existing missing-manifest throw and would not distinguish the fix from the bug, per the agent's own 'assertions that cannot fail' rule."
+        },
+        {
+          "id": "ICM-2",
+          "verdict": "confirm",
+          "reason": "`pnpm run check:absence \"self-scan\"` reproduced live: CORROBORATED across all 4 probes (empty file/dir, empty extension, empty CI workflow, empty word-in-source). `grep -rln -i \"roster confirm|resource proposes|brain decides\" .claude/skills .claude/agents .claude/commands` = 0, confirmed. The rule as described does exist, in prose form, on unmerged commit 7a28e26a's docs/agent/RESOURCE_INTAKE.md rows (verified via `git show 7a28e26a:docs/agent/RESOURCE_INTAKE.md`, the Context7 and prompt-master rows match the description closely, including 'five of the six tasks ... landed' and 'five confirmed, one rejected'). The proposed change is a doc-only addition to tool-evaluation-by-use/SKILL.md with no gate \u2014 it does not loosen anything; it just names a contract for a later gate (ICM-3) to enforce."
+        },
+        {
+          "id": "ICM-3",
+          "verdict": "amend",
+          "reason": "scripts/check-sim-requests.mjs:1-25 (comment header) does state the invariant quoted \u2014 'a result... reports rows ONLY for operations that request asked for', 'an unrun request is PENDING and REPORTED \u2014 never green, never silent' \u2014 and preflight.mjs:440-441 wires exactly the two check-sim-requests.mjs rows named. The proposed analog is directionally correct doctrine. But: on mainline today `git log`/`git show HEAD:docs/agent/RESOURCE_INTAKE.md` has zero rows with a 'Self-scan' disposition \u2014 the two cited rows exist only on unmerged 7a28e26a. A brand-new check-resource-scans.mjs walking mainline would find nothing to check and exit green, having audited zero rows. Charter shape #3 ('empty collections... has proven nothing') applies directly to the gate itself, not just the surface it audits. V-1 avoids this because it reuses check-skill-plane-conformance.mjs's existing FLOORS mechanism (verified at scripts/check-skill-plane-conformance.mjs:18-32, rule 4: 'A walk that silently reaches nothing is the fail-open this whole gate...'); ICM-3's new walker inherits no such floor.",
+          "amendment": "Add a floor (a minimum expected row count once ICM-2/backfill lands) or an explicit reported distinction between '0 rows, nothing tagged Self-scan yet' and '0 rows because the binder failed to match.' Separately: the binding key is the literal substring 'Self-scan' inside a free-text Disposition cell \u2014 confirm it appears verbatim in both target rows before landing, and note in the gate's own header that a prose-word match is a fossil the day someone rewords the cell (the same caution the charter gives scope lists)."
+        },
+        {
+          "id": "ICM-4",
+          "verdict": "confirm",
+          "reason": "dispatching-parallel-agents/SKILL.md around line 112 reads 'Return: Summary of what you found and what you fixed.' confirmed by direct read. subagent-driven-development/SKILL.md:258-266 already specifies a report-file contract ('Report file: name the implementer's report file after the brief... returns only status, commits, a one-line test summary'), confirmed \u2014 matches the claim that this skill already does it by file. orchestrator-over-workers/SKILL.md:15-24 lists four spec bullets (what changes, which check must FAIL, which gates stay green, which files may be touched) and none is an output-file location, confirmed by direct read. .gitignore:121 is exactly `.superpowers/`, confirmed. The proposed change is a one-bullet prose addition plus a VENDORED.md override row, explicitly declines to add a new gate ('a prose rule about the shape of a prompt has no mechanical check, and inventing one would be speculative') \u2014 this is itself the correct fail-closed-doctrine move (not manufacturing a gate that can't distinguish signal from noise), no loosening."
+        },
+        {
+          "id": "ICM-5",
+          "verdict": "confirm",
+          "reason": "`grep -n \"LAST TOUCHED\" scripts/*.mjs .claude/hooks/*.sh` returns exactly one hit, a comment at scripts/check-derived-doc-figures.mjs:664, confirmed verbatim. scripts/loop-state.mjs has add() calls at lines 66, 81, 269, 271, 286, 304, 309, 314, 316, 337, 342, 352, 358, 361, 370, 373, 389, 393 \u2014 none compares a LOOP.md STATE date to a commit date, confirming the gap. loop-state.mjs already carries the right idiom for absent/unparseable input elsewhere (line 66: 'could not list the Hub's branches... unknown is not clean'; line 342: 'unparseable \"Experiment started\" date... fail'), so the proposed warn row has local precedent to follow.",
+          "amendment": "State explicitly (the task description doesn't) that an unparseable STATE date or a failed/unfetched `origin/SignalGrid_Alpha` read must itself produce the warn row, not skip the check silently \u2014 mirroring loop-state.mjs:66 and :342, which already treat 'could not determine' as reportable rather than passable."
+        },
+        {
+          "id": "V-1",
+          "verdict": "confirm",
+          "reason": "docs/DECISION_RECORDS.md's DR-047 Consequences paragraph (around line 3136) reads verbatim '...until it exists, rules 1\u20135 are operating doctrine backed by review, not yet by a script...', confirmed by direct read \u2014 matches the claim exactly. `grep -c model scripts/check-agent-roster.mjs` = 0, confirmed. `grep -h \"^model:\" .claude/agents/*.md | sort | uniq -c` = 1 haiku + 6 opus + 6 sonnet = 13, matching '13/13 agents already carry model: \u2208 {haiku, sonnet, opus}', and `ls .claude/agents/*.md | wc -l` = 13. The change reuses the existing conformance walker (already floor-gated per V-1's own note) and fails an agent that omits `model:` or names an unsanctioned tier (fable/mythos) \u2014 this tightens, does not loosen: an unknown/absent tier now fails rather than silently passing."
+        },
+        {
+          "id": "V-2",
+          "verdict": "amend",
+          "reason": "`pnpm run check:absence \"prompt regression\"` reproduced live: CORROBORATED across all 4 probes. check-skill-plane-conformance.mjs:18-32 gates only name/description presence-and-match plus walk floors \u2014 no behavioral content, confirmed. `find . -iname evals.json` on mainline finds exactly 4 vendored files (doca-hardware-safety, nvidia-skill-finder, nemo-rl-session-memory, mcore-split-pr), matching '4 vendored evals/evals.json'. `grep -rn \"evals/\" scripts .github` returns exactly one hit, scripts/src/fabric-evals-proof.ts:47, confirming nothing in scripts/ or CI runs those vendored eval files. The task is careful to keep this report-only and off CI/preflight (correctly citing that a flaky model-graded eval becomes a flaky gate that gets switched off) \u2014 but it names the operating-loop risk in its own risk field ('a flaky grader becomes a flaky gate') without closing the companion risk: a report-only eval that silently never gets run reads identically to one that ran clean, unless the row states so.",
+          "amendment": "Add one sentence: the row must name where the eval result lands, and an absent/not-run result must be reported as 'not evaluated,' never allowed to read as 'no regression found' by omission \u2014 the same 'absent evidence read as good evidence' shape this repo's own charter names."
+        },
+        {
+          "id": "V-3",
+          "verdict": "confirm",
+          "reason": "docs/agent/RESOURCE_INTAKE.md's rule 1 ('Log the resource the day it arrives, before evaluating it') confirmed near line 63. `pnpm run check:absence \"semantic cache\"` reproduced live: CORROBORATED across all 4 probes. `ls ~/.claude/jobs | wc -l` = 16 and `grep -l '\"model\"' ~/.claude/jobs/*/timeline.jsonl | wc -l` = 0, directly confirming '0 of 16 job journals record a model' \u2014 the strongest single check against the 'continuously validating routing decisions' claim becoming a capability sentence. DR-029 (docs/DECISION_RECORDS.md, OmniRoute section near line 1613) confirms no model enters the decision path. The row correctly logs and declines to build; nothing loosens."
+        }
+      ],
+      "missing": "Missing task: nothing derives or gates `_manifest.json`'s own `expected` list. scripts/brain-cycle.mjs:57-78 (readBoard) trusts whatever array the manifest declares as the set of lenses that were supposed to run, with no independent check against it \u2014 yet docs/agent/BRAIN_CYCLE_DESIGN.md:102 says membership should be \"derived the way `verify-breadth` membership is derived\", i.e. from the filesystem/a manifest, never hand-written. As written, ICM-1 adds a `cycle` field to that same manifest but never touches who writes `expected`; a manifest that silently drops one lens from `expected` produces a board that goes green with one fewer reviewer, and nothing in this task set would catch it \u2014 this is the charter's own \"a scope list written by hand is a fossil\" rule, applied to a JSON array instead of a doc. Runner-up, same family: ICM-1(b) tells five lens agents (code-reviewer.md, security-reviewer.md, fail-closed-auditor.md, verdict-core-reader.md, gate-and-proof-engineer.md) to declare \"MODE: audit \u2014 do not call Write or Edit,\" but their YAML frontmatter still grants Write/Edit tools (confirmed for gate-and-proof-engineer.md, which is what makes the fail-closed-auditor's own \"Bash can write\" self-limit note relevant) \u2014 the read-only-during-audit boundary stays prose, not mechanism, the same gap this agent's own charter names about itself.\n\nSeparate correction, not a task: the ICM \"alreadyHere\" narrative's claim that `check:absence \"review gate\"` returns \"the one match (docs/company/ROLE_CATALOG.md:761)\" is a miscount. Reproduced live: it returns INCONCLUSIVE (verdict correct) but with 5 tracked-source matches, not 1 \u2014 .claude/skills/brainstorming/SKILL.md, .claude/skills/clinical-decision-support/assets/decision_logic_traceability_template.json, docs/PILOT_SCOPE_SKELETON.md, docs/company/ROLE_ACTIVATION_MATRIX.md, and docs/company/ROLE_CATALOG.md. The ROLE_CATALOG.md line itself (confirmed near line 761, \"the repository's existing review gates, which is sufficient for one design contributor\") is indeed a catalogue sentence as claimed, but the other 4 matches were not read or reported \u2014 exactly the \"measurement never validated\" failure mode this agent's own charter names as the dominant error class in this codebase's history.",
+      "model": "sonnet"
+    }
+  ],
+  "decision": {
+    "V-1": {
+      "outcome": "landed",
+      "where": "scripts/check-skill-plane-conformance.mjs: `model` present and in haiku|sonnet|opus, two self-test cases"
+    },
+    "V-2": {
+      "outcome": "filed",
+      "where": "docs/BUILD_BACKLOG.md (claude plugin eval for first-party skills; not-run reads as not evaluated, never as no regression)"
+    },
+    "V-3": {
+      "outcome": "landed",
+      "where": "docs/agent/RESOURCE_INTAKE.md row 2026-09-19 (five weekend projects)"
+    },
+    "ICM-1": {
+      "outcome": "filed",
+      "where": "docs/BUILD_BACKLOG.md (brain-cycle lens writer contract + stale-input guard; write scope for lens agents is the precondition)"
+    },
+    "ICM-2": {
+      "outcome": "landed",
+      "where": ".claude/skills/tool-evaluation-by-use/SKILL.md \u00a75b + this file"
+    },
+    "ICM-3": {
+      "outcome": "filed",
+      "where": "docs/BUILD_BACKLOG.md (bind a Self-scan row to its scan file; trigger inverted to rows that cite a scan file)"
+    },
+    "ICM-4": {
+      "outcome": "landed",
+      "where": ".claude/skills/orchestrator-over-workers/SKILL.md \u00a71 bullet + VENDORED.md override for dispatching-parallel-agents:112/:127"
+    },
+    "ICM-5": {
+      "outcome": "filed",
+      "where": "docs/BUILD_BACKLOG.md (loop:state warn row when the STATE date trails mainline by >7 days; unparseable \u2192 warn)"
+    }
+  }
+}

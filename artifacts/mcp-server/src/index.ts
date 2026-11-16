@@ -37,7 +37,12 @@ const demoKeys = core.demoApiKeys();
 // under their own tenant (cross-tenant evaluation is refused by design).
 function tokenForTenant(tenantId: string): string {
   const preferred = demoKeys.find((k) => k.tenantId === tenantId && (k.role === "operator" || k.role === "owner"));
-  return (preferred ?? demoKeys.find((k) => k.tenantId === tenantId))?.token ?? "";
+  const token = (preferred ?? demoKeys.find((k) => k.tenantId === tenantId))?.token;
+  // No demo key for the tenant is a configuration fault, not an empty credential to
+  // hand the core: an empty token used to travel into runRoomEntry and surface as an
+  // authentication refusal that read like the caller's mistake.
+  if (!token) throw new Error("no demo API key is seeded for the scenario's tenant; the demo core cannot evaluate it");
+  return token;
 }
 
 const asText = (data: unknown) => ({ content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }] });
@@ -493,6 +498,13 @@ const HARNESS_RUN = { readOnlyHint: false, openWorldHint: false } as const;
 
 const INSPECTION_ONLY = "Evidence collection / inspection only — grants nothing.";
 
+// TENANCY, stated plainly (eighth audit round, 2026-09-05): the tenant every read
+// tool acts on comes from the MODEL'S ARGUMENTS, checked against nothing — stdio
+// MCP has no session tenant to check it against, and every reachable tenant is
+// the public-safe demo seed, so today this is a choice of fixture, not an access
+// decision. It becomes an authorization hole the moment this server is fronted by
+// a multi-tenant transport: at that point the tenant must come from the caller's
+// verified principal, never from the tool arguments.
 const DEFAULT_TENANT = "tenant_northwind";
 const DEMO_TENANT_IDS = [...new Set(demoKeys.map((k) => k.tenantId))].sort();
 const tenantParam = z

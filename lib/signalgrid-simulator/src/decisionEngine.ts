@@ -49,19 +49,21 @@ export function runScenario(scenario: SimulatorScenario): SimulatorRunResult {
   // A verdict that cannot fail is a decoration, and this one sat on the
   // simulator's own definition of "did the scenario behave".
   //
-  // Both halves are now falsifiable. Expectations must EXIST — a scenario that
-  // asserts nothing is a FAIL, not a pass, because there is nothing it could
-  // have got wrong. And the evidence must actually COVER what was routed: every
-  // routed action id has to appear in the routing trace's references, which
-  // diverges the moment routing and evidence disagree.
-  const routedIds = new Set(routedActions.map((action) => action.id));
-  const evidenceReferences = new Set(auditEvidence.flatMap((record) => record.references));
-  const evidenceCoversRouting = [...routedIds].every((id) => evidenceReferences.has(id));
+  // The expectations half is now falsifiable: they must EXIST — a scenario that
+  // asserts nothing is a FAIL, not a pass, because there is nothing it could have
+  // got wrong — and every one must be met.
+  //
+  // The evidence half was DELETED, not repaired (plan row 85). It checked that the
+  // audit records referenced the decision id and every routed action id, and this
+  // comment claimed that "diverges the moment routing and evidence disagree". It
+  // cannot: `createAuditEvidence` (./audit.ts) builds the decision trace from
+  // `decision.id` and the routing trace from this same `routedActions` array, so
+  // both conjuncts were true for every input — a sweep of all 2^10 outcome subsets
+  // found zero falses. Evidence coverage is asserted from OUTSIDE, against the
+  // real records, in scripts/src/signalgrid-simulator-proof.ts.
   const status =
     scenario.expectedOutcomes.length > 0 &&
-    scenario.expectedOutcomes.every((outcome) => decision.outcomes.includes(outcome)) &&
-    evidenceReferences.has(decision.id) &&
-    evidenceCoversRouting
+    scenario.expectedOutcomes.every((outcome) => decision.outcomes.includes(outcome))
       ? "PASS"
       : "FAIL";
 
@@ -136,8 +138,28 @@ function evaluateScenario(
       signal.attributes["requiredApproval"] === "missing" ||
       signal.attributes["escalationDestination"] === "unavailable",
   );
+  /**
+   * UNAUTHORIZED REMOVAL — the "key pulled from the ignition" case (DR-043's
+   * removal-suspends-the-session function, and the one custody transition this engine
+   * did not hold). A device physically removed from its dock while NOTHING asserts an
+   * active session owns it is a custody exception, not a normal shift handoff.
+   *
+   * Fail-closed on ABSENCE, per golden rule 2: the lack of an active-session assertion
+   * is not permission. An undock that no session claims strips an allow. An undock WITH
+   * an active session (`active: true`) is the ordinary handoff and is untouched — the
+   * companion scenarios prove BOTH directions, so this can never be "fixed" into a rule
+   * that either never fires or fires on every legitimate checkout.
+   *
+   * Removal is observed here, never commanded: SignalGrid correlates the dock's event,
+   * it does not actuate the dock (DR-043 — the dock is a source of evidence, never the
+   * policy engine).
+   */
+  const hasUnauthorizedRemoval =
+    hasType("dock.device_undocked") &&
+    !signals.some((signal) => signal.attributes["active"] === true);
   const hasActiveCustodyIntegrityFailure =
     hasCustodyFailure ||
+    hasUnauthorizedRemoval ||
     hasType("dock.device_missing") ||
     hasType("dock.wrong_slot_return") ||
     hasType("rtls.wrong_zone") ||
@@ -165,7 +187,12 @@ function evaluateScenario(
     reasonCodes.push("STATE_FRESHNESS_FAILURE");
   }
 
-  if (hasCustodyFailure) {
+  // Unauthorized removal routes the SAME cascade as any other custody exception — it
+  // must not merely strip an allow further down, or a device pulled with nobody owning
+  // it would produce an empty decision: no ticket, no operator, no owner. The reason
+  // code is the existing CUSTODY_EXCEPTION, not a new one: this is that exception
+  // observed at the dock rather than inferred from an overdue timer.
+  if (hasCustodyFailure || hasUnauthorizedRemoval) {
     outcomes.add("create_ticket");
     outcomes.add("alert_operator");
     outcomes.add("route_to_owner");

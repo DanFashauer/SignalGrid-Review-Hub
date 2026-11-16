@@ -9,7 +9,7 @@ Use this checklist to keep v0.2 focused on product foundation instead of more pi
 - [ ] One Microsoft connector path is designed as read-only, sandbox/mock first, and credential-free in public.
 - [ ] One secure tenant model is defined and tested before customer-like data exists.
 - [ ] One pilot/customer story has success criteria and explicit boundaries.
-- [ ] One investor narrative explains the operational trust control plane without production, compliance, partnership, valuation, or replacement claims.
+- [ ] One investor narrative explains what SignalGrid decides (`docs/PURPOSE.md` §2: one grid across the systems a company already runs, legacy ones included that decides and acts on the person's behalf; no category label is ratified — DR-019/DR-020) without production, compliance, partnership, valuation, or replacement claims.
 
 ## Policy and decision requirements
 
@@ -20,7 +20,7 @@ Use this checklist to keep v0.2 focused on product foundation instead of more pi
 - Matched rules captured on decisions.
 - Decision evidence snapshots.
 - Replay/simulate support.
-- Configurable fail-open/fail-closed behavior with conservative defaults for high-risk paths.
+- Fail-closed on every path: an unknown, unreachable or unverified input raises assurance and never lowers it. There is no fail-open mode to configure (CLAUDE.md golden rule 2; this line said "configurable fail-open/fail-closed" from 2026-07-08 to 2026-09-06 and described a switch the code has never had).
 - Approval before risky policy activation.
 
 ## Operator app requirements

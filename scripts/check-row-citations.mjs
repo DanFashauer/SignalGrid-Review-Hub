@@ -48,7 +48,12 @@ export function danglingCitations(text) {
   return citedRows(text).filter((c) => !defined.has(c.row));
 }
 
-if (process.argv[2] === "--self-test") {
+// `includes`, not `argv[2]`. It was positional, and this is the only gate of the ~104
+// carrying a `--self-test` that read it that way: any argument ahead of the flag —
+// `pnpm run … -- --self-test` appending after another, a runner adding `--quiet` —
+// silently ran the ORDINARY gate instead, which exits 0 on a clean tree. A self-test
+// that can be skipped by argument order reports green without running.
+if (process.argv.includes("--self-test")) {
   let passed = 0;
   const failures = [];
   const check = (name, ok) => { if (ok) { passed += 1; console.log(`  ok — ${name}`); } else { failures.push(name); console.error(`  FAIL — ${name}`); } };

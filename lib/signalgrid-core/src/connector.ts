@@ -1,6 +1,6 @@
 import type { MemoryStore } from "./store";
 import type { Clock } from "./util";
-import { classifyFreshness, deterministicId } from "./util";
+import { classifyFreshness, deterministicId, FRESH_WINDOW_HOURS, STALE_WINDOW_HOURS } from "./util";
 import {
   CoreError,
   type BaselineState,
@@ -14,8 +14,7 @@ import {
 } from "./types";
 
 /** Freshness windows (hours) applied when normalizing posture signals. */
-export const FRESH_WINDOW_HOURS = 24;
-export const STALE_WINDOW_HOURS = 72;
+export { FRESH_WINDOW_HOURS, STALE_WINDOW_HOURS } from "./util";
 
 /**
  * A fixture posture record. This is the shape a read-only Microsoft
@@ -29,8 +28,15 @@ export interface FixturePostureRecord {
   identityEnabled: boolean;
   managed: boolean;
   compliance: "compliant" | "non_compliant" | "unknown";
-  encrypted: boolean;
-  osSupported: boolean;
+  /**
+   * Optional: a source that did not read encryption (Graph's managedDevices list
+   * without `isEncrypted`) leaves it ABSENT, and an absent signal evaluates as
+   * "unknown" — `criticalSignalsPresent` then fails closed, so allow can never
+   * fire on a fact nobody read. Never default it to true or false.
+   */
+  encrypted?: boolean;
+  /** Optional, same rule as `encrypted`. */
+  osSupported?: boolean;
   /** Last Intune sync time; drives posture freshness. */
   lastSyncAt: string | null;
   /**
@@ -73,10 +79,41 @@ export function runFixtureSync(
       503,
     );
   }
+  return runPostureSync(store, clock, connector, records);
+}
+
+/**
+ * Apply already-fetched posture records to the store, in either mode. The
+ * records are the caller's: a fixture connector's committed dataset, or what an
+ * estate deployment read from its real source BEFORE constructing the core. The
+ * core performs no I/O here either way — same normalization, same freshness
+ * windows, same skip-and-count rule for an unknown subject.
+ */
+export function runPostureSync(
+  store: MemoryStore,
+  clock: Clock,
+  connector: Connector,
+  records: FixturePostureRecord[],
+): ConnectorSyncRun {
 
   const startedAt = clock.now().toISOString();
   const nowIso = startedAt;
   let signalsNormalized = 0;
+  // A record whose subject the store does not know is SKIPPED, and a skip is
+  // counted: a run that applied nothing reports "partial", not "success", and the
+  // connector is "degraded", not "healthy" (eighth-round verdict-core finding,
+  // 2026-09-05 — every record skipped used to read as a clean sync).
+  let recordsSkipped = 0;
+  // RETRACTION (DR-059). A sync after this connector's FIRST is a refresh. On a
+  // refresh, a fact the source stopped reporting — or a device it stopped listing
+  // — is retracted: the category is re-put with value null at this instant, which
+  // every evidence reader folds to "unknown". Before this, the upsert kept the last
+  // affirmative forever (a refresh with `encrypted` omitted still allowed; a device
+  // dropped from the feed kept its verdict; `[]` was a healthy success). Boot has
+  // no prior run and retracts nothing, so the pinned first-sync snapshots stand.
+  const isRefresh = store.listSyncRuns(connector.tenantId, connector.id).length > 0;
+  const emittedByDevice = new Map<string, Set<SignalCategory>>();
+  let retracted = 0;
 
   for (const record of records) {
     const device = store.findDeviceByRef(connector.tenantId, record.deviceRef);
@@ -86,6 +123,7 @@ export function runFixtureSync(
     );
     if (!device || !identity) {
       // A record referencing an unknown subject is skipped, not trusted.
+      recordsSkipped += 1;
       continue;
     }
 
@@ -102,10 +140,18 @@ export function runFixtureSync(
     }> = [
       { category: "device_compliance", value: record.compliance },
       { category: "device_management", value: record.managed },
-      { category: "device_encryption", value: record.encrypted },
-      { category: "os_support", value: record.osSupported },
-      { category: "posture_freshness", value: postureFreshness },
     ];
+    // A fact the source did not read is NOT emitted: evidence reads the absent
+    // category as "unknown" and the allow path refuses on it. Emission ORDER is
+    // part of the snapshot digest the migration proof pins, so the two optional
+    // facts keep their original slots between management and freshness.
+    if (record.encrypted !== undefined) {
+      deviceSignals.push({ category: "device_encryption", value: record.encrypted });
+    }
+    if (record.osSupported !== undefined) {
+      deviceSignals.push({ category: "os_support", value: record.osSupported });
+    }
+    deviceSignals.push({ category: "posture_freshness", value: postureFreshness });
 
     // Security-baseline (CIS/hardening) alignment, when the source reports it.
     if (record.baseline !== undefined) {
@@ -131,6 +177,7 @@ export function runFixtureSync(
       });
     }
 
+    emittedByDevice.set(device.id, new Set(deviceSignals.map((s) => s.category)));
     for (const spec of deviceSignals) {
       store.putSignal(
         buildSignal(
@@ -164,6 +211,23 @@ export function runFixtureSync(
     signalsNormalized += 1;
   }
 
+  if (isRefresh) {
+    for (const device of store.listDevices(connector.tenantId)) {
+      const emitted = emittedByDevice.get(device.id) ?? new Set<SignalCategory>();
+      const prior = store
+        .listSignalsForSubject(connector.tenantId, "device", device.id)
+        .filter((s) => s.connectorId === connector.id && s.value !== null && !emitted.has(s.category));
+      for (const s of prior) {
+        store.putSignal(buildSignal(connector, "device", device.id, s.category, null, nowIso, "unknown", s.sourceReference));
+        retracted += 1;
+      }
+    }
+  }
+  // A refresh that carries no records confirms nothing: it is a partial run on a
+  // degraded connector, never a healthy success that re-affirms the old answers.
+  const confirmedNothing = isRefresh && records.length === 0;
+  const clean = recordsSkipped === 0 && !confirmedNothing;
+
   const completedAt = clock.now().toISOString();
   const run: ConnectorSyncRun = {
     id: deterministicId("sync", connector.id, startedAt),
@@ -171,16 +235,21 @@ export function runFixtureSync(
     connectorId: connector.id,
     startedAt,
     completedAt,
-    status: "success",
-    recordsProcessed: records.length,
+    status: clean ? "success" : "partial",
+    recordsProcessed: records.length - recordsSkipped,
     signalsNormalized,
-    note: "Fixture sync: synthetic posture only, read-only, no Graph call.",
+    note:
+      (recordsSkipped === 0
+        ? "Fixture sync: synthetic posture only, read-only, no Graph call."
+        : `Fixture sync: synthetic posture only, read-only, no Graph call. ${recordsSkipped} of ${records.length} record(s) named a device or identity this tenant does not hold and were skipped.`) +
+      (confirmedNothing ? " The refresh carried no records: nothing was confirmed." : "") +
+      (retracted > 0 ? ` ${retracted} previously reported fact(s) the source no longer reports were retracted to unknown.` : ""),
   };
   store.putSyncRun(run);
 
   store.putConnector({
     ...connector,
-    status: "healthy",
+    status: clean ? "healthy" : "degraded",
     lastSyncAt: completedAt,
   });
 

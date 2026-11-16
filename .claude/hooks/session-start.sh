@@ -75,15 +75,50 @@ else
 fi
 
 # 3. The two loops CLAUDE.md says to read first.
+#    Lane identity is DERIVED the way proof:lane-messages derives it
+#    (scripts/lib/lane-identity.mjs: darwin ⇒ mac, else cloud, SIGNALGRID_LANE
+#    overrides). Until 2026-09-05 this line grepped a hardcoded "→ cloud (from
+#    mac)", so on the Mac lane it was structurally incapable of reporting mail,
+#    and a node failure (2>/dev/null) printed the same reassuring "none". Now an
+#    unreadable mailbox is reported as UNKNOWN, never as empty.
 if [ -f scripts/check-lane-messages.mjs ]; then
-  node scripts/check-lane-messages.mjs 2>/dev/null \
-    | grep -cE '→ cloud \(from mac\)' \
-    | awk '{ if ($1 > 0) print "  lane mail   " $1 " message(s) addressed to this lane — pnpm run lane:inbox"; else print "  lane mail   none addressed to this lane" }'
+  LANE="$(node --input-type=module -e "import('./scripts/lib/lane-identity.mjs').then(m => process.stdout.write(m.currentLane()))" 2>/dev/null)"
+  if [ -z "$LANE" ]; then LANE=cloud; [ "$(uname -s 2>/dev/null)" = "Darwin" ] && LANE=mac; fi
+  OTHER=mac; [ "$LANE" = "mac" ] && OTHER=cloud
+  if MAIL_OUT="$(node scripts/check-lane-messages.mjs 2>/dev/null)"; then
+    MAIL_N="$(printf '%s\n' "$MAIL_OUT" | grep -cE "→ ${LANE} \(from ${OTHER}\)")"
+    if [ "$MAIL_N" -gt 0 ]; then
+      echo "  lane mail   ${MAIL_N} message(s) addressed to this lane (${LANE}) — pnpm run lane:inbox"
+    else
+      echo "  lane mail   none addressed to this lane (${LANE})"
+    fi
+  else
+    echo "  lane mail   UNKNOWN — check-lane-messages.mjs failed; run pnpm run lane:inbox yourself"
+  fi
+fi
+if [ -f scripts/raised-hands.mjs ]; then
+  # Raised hands first-class at session start (owner, 2026-09-23): what is stuck,
+  # and for whom, before any other work is picked up.
+  if HANDS_OUT="$(node scripts/raised-hands.mjs 2>/dev/null)"; then
+    echo "  hands       $(printf '%s\n' "$HANDS_OUT" | head -1 | sed 's/^Raised hands — //') — pnpm run hands"
+  else
+    echo "  hands       UNKNOWN — raised-hands.mjs failed; run pnpm run hands yourself"
+  fi
 fi
 if [ -f scripts/check-sim-requests.mjs ]; then
-  node scripts/check-sim-requests.mjs 2>/dev/null \
-    | grep -A 2 'PENDING' | grep -oE '· [0-9a-z-]+' | head -3 \
-    | sed 's/^· /  sim pending /' || true
+  # Every pending id is counted; the first three are shown and the rest are
+  # said out loud. The old `grep -A 2 | head -3` capped the listing at two rows
+  # with no "and N more", so five pending requests read as two.
+  if SIM_OUT="$(node scripts/check-sim-requests.mjs 2>/dev/null)"; then
+    SIM_IDS="$(printf '%s\n' "$SIM_OUT" | sed -n '/PENDING/,/^$/p' | grep -oE '· [0-9a-z-]+' | sed 's/^· //')"
+    SIM_N="$(printf '%s\n' "$SIM_IDS" | grep -c .)"
+    if [ "$SIM_N" -gt 0 ]; then
+      printf '%s\n' "$SIM_IDS" | head -3 | sed 's/^/  sim pending /'
+      [ "$SIM_N" -gt 3 ] && echo "  sim pending …and $((SIM_N - 3)) more — node scripts/check-sim-requests.mjs"
+    fi
+  else
+    echo "  sim pending UNKNOWN — check-sim-requests.mjs failed; run it yourself"
+  fi
 fi
 
 # 4. The operating loop (2026-08-28 handoff Task 4b, merged under DR-021 —
@@ -97,7 +132,12 @@ if [ -f docs/agent/LOOP.md ]; then
   sed -n '/^PHASE:/,/^NEXT ACTION:/p' docs/agent/LOOP.md | sed 's/^/              /'
 fi
 if node -e "process.exit(((require('./package.json').scripts)||{})['loop:state']?0:1)" 2>/dev/null; then
-  pnpm run --silent loop:state 2>/dev/null | tail -n +1 | sed 's/^/  loop:state  /' | head -12 || echo "  loop:state  (failed — run pnpm run loop:state yourself)"
+  # The `||` used to bind to the PIPELINE, whose status is `head`'s — so a failing
+  # loop:state printed nothing and read as clean (the same never-fires shape
+  # verify-done.sh had). Capture the exit status of loop:state itself.
+  loop_out=$(pnpm run --silent loop:state 2>/dev/null); loop_rc=$?
+  printf '%s\n' "$loop_out" | sed 's/^/  loop:state  /' | head -12
+  [ "$loop_rc" -eq 0 ] || echo "  loop:state  (exit ${loop_rc} — a repo seam is failing; run pnpm run loop:state yourself)"
 fi
 echo "─────────────────────────────────────────────────────────────────────────"
 exit 0

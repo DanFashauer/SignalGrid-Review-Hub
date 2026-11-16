@@ -5,10 +5,12 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
+    "./action-ladder": "./src/integrations/action-ladder.ts",
     "./access-governance": "./src/integrations/access-governance/index.ts",
     "./adapters/types": "./src/integrations/adapters/types.ts",
     "./agent-behavior": "./src/integrations/agent-behavior/index.ts",
     "./agent-identity": "./src/integrations/agent-identity/index.ts",
+    "./app-protection": "./src/integrations/app-protection/index.ts",
     "./app-update": "./src/integrations/app-update/index.ts",
     "./benchmark-selection": "./src/integrations/benchmark-selection/index.ts",
     "./bootstrap-credential": "./src/integrations/bootstrap-credential/index.ts",
@@ -74,9 +76,10 @@
     "./adapters/payload-fields": "./src/integrations/adapters/payload-fields.ts"
   },
   "dependencies": {
+    "@workspace/audit": "workspace:*",
+    "@workspace/signalgrid-core": "workspace:*",
     "ioredis": "^5.4.1",
-    "zod": "catalog:",
-    "@workspace/audit": "workspace:*"
+    "zod": "catalog:"
   },
   "devDependencies": {
     "@types/node": "catalog:"

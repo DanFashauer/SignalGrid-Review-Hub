@@ -17,7 +17,7 @@ Share by tier: **Public** = fine to send anyone; **Feedback** = warm contacts;
 | Investor / accelerator one-pager | shareable link (Artifacts) + file | Public | ✅ built |
 | Tailored one-pager (per contact) | private file, founder-sent | Feedback | ✅ built (Claire version) |
 | Pitch deck | `docs/pitch-deck.html` (shareable) | Public | ✅ built |
-| Live demos | signalgrid.app/{embedded,desktop,console}.html | Public | ✅ built |
+| Live demos | signalgrid.app/embedded-demo.html, /desktop-demo.html, /console.html (the first two are the paths `.github/workflows/pages.yml` writes) | Public | ✅ built |
 | Fundraising map + IP checklist | `docs/research/FUNDRAISING_OPTIONS.md` | Public | ✅ built |
 | Executive one-pager (narrative) | `docs/EXECUTIVE_ONE_PAGER.md` | Public | ✅ exists |
 | Honest readiness / stage | `docs/research/INVESTOR_DESIGN_PARTNER_READINESS.md`, `docs/LEVEL_10_COMPLETION_MATRIX.md` | Feedback | ✅ exists |
@@ -46,8 +46,9 @@ Sequenced so each step unlocks the next. Rough order, not rigid.
       parallel with the patent.
 - [ ] **Archive the old repo** — `DanFashauer/SignalGrid` (PR #1 merged): Settings →
       General → Archive this repository.
-- [ ] **Create the `signalgrid-mcp` repo** (empty, private) so the vetted macOS
-      device-signals MCP can be pushed. (Agent is ready to push the moment it exists.)
+- [x] **Create the `signalgrid-mcp` repo** — done: `DanFashauer/signalgrid-mcp` is public
+      and released at v1.0.2 (`docs/API_ACCESS_AND_CONNECTORS.md`, `docs/ESTATE_SYNC_REPORT.md`
+      §2.1; corroborated in-tree, not re-fetched on 2026-09-06). Left unticked here until 2026-09-06.
 
 ### 🥈 Set up the company (needed before you can take investment)
 - [ ] **Incorporate** — a Delaware C-corp is the standard for US venture funding.
@@ -99,6 +100,6 @@ Sequenced so each step unlocks the next. Rough order, not rigid.
 - 🔄 A full multi-agent best-practices review of the monorepo (report + safe fixes).
 - 🔄 On request: financial model, data-room index, accelerator application drafts,
       the outreach email to send alongside a one-pager.
-- ⏳ Ready-to-push the vetted `signalgrid-mcp` the moment you create the repo.
+- ✅ `signalgrid-mcp` pushed and released (v1.0.2 — see the ticked item above).
 
 _Check `docs/WHAT_NEEDS_DAN.md` for the always-current short list of what's waiting on you._

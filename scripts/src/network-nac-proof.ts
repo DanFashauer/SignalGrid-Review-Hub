@@ -156,6 +156,10 @@ for (const s of fixture.sessions) {
   check("a policy with NO reported segment forecloses rather than assuming it is fine",
     evaluateNetwork(on(null), NOW_MS, { segmentPolicy: POLICY }).reasonCode ===
       "SEGMENT_UNREPORTED_UNDER_POLICY");
+  // An empty expected list is no policy EVEN WHEN a restricted list is given: the restricted check
+  // applies only beside a non-empty expected list, before and after the stale return alike.
+  check("an EMPTY expected list with a restricted list naming the segment is still no policy, not a restriction",
+    evaluateNetwork(on("VLAN60"), NOW_MS, { segmentPolicy: { expected: [], restricted: ["VLAN60"] } }).recommendedAction !== "restrict");
   check("...and an EMPTY expected list is treated as no policy, not as 'nothing is allowed'",
     evaluateNetwork(on("VLAN40"), NOW_MS, { segmentPolicy: { expected: [] } }).reasonCode ===
       "AUTHENTICATED_SEGMENT_UNVERIFIED");
@@ -314,13 +318,15 @@ check("far-future makes the trusted device stale → step_up", evaluateNetwork(b
   check("NEGATIVE CONTROL: declaring unreported compliance clean is CAUGHT (mismatches > 0)",
     wrongPredicate.mismatches > 0 && typeof wrongPredicate.firstMismatch === "string");
 
-  // The unparseable-date sentinel behaves exactly like unreported — pinned so a
-  // future NaN path cannot quietly become fresh.
-  check("an unparseable lastAuthAt grades identically to an unreported one, on every axis combination",
+  // The unparseable-date sentinel behaves exactly like a STALE auth — pinned so a
+  // future NaN path cannot quietly become fresh, nor fall below stale to the milder
+  // unreported grading (deriveFreshness reserves `unknown` for an ABSENT stamp; a
+  // present but unreadable one cannot show the auth recent).
+  check("an unparseable lastAuthAt grades identically to a stale one, on every axis combination",
     ["authenticated", "unauthenticated", "quarantined", "unknown"].every((a) =>
       COMPLIANT.every((nc) => SEGMENT.every((seg) => {
         const va = evaluateNetwork(buildSignal({ authState: a, nacCompliant: nc, lastAuthAt: "not-a-date", segment: seg }), NOW, { segmentPolicy: POLICY });
-        const vb = evaluateNetwork(buildSignal({ authState: a, nacCompliant: nc, lastAuthAt: null, segment: seg }), NOW, { segmentPolicy: POLICY });
+        const vb = evaluateNetwork(buildSignal({ authState: a, nacCompliant: nc, lastAuthAt: STALE_ISO, segment: seg }), NOW, { segmentPolicy: POLICY });
         return va.reasonCode === vb.reasonCode && va.recommendedAction === vb.recommendedAction;
       }))));
 }
@@ -378,6 +384,23 @@ await checkCollectionRefusals({
   codeOf: (e) => (e instanceof NetworkConnectorError ? e.code : undefined),
 });
 
+
+// MOCK TRANSPORT GUARDS (wave 10, 2026-10-09): the offline fake the proof drives the connector through
+// has a non-GET -> 405 guard and an unknown-path -> 404 guard; both survived mutation (`if (false)`)
+// because no check drove the mock outside the happy path. Driven directly with a VALID token so the
+// token guard cannot be what answers.
+{
+  const mockUrl = (path: string): string => `${BASE_URL}${path}`;
+  const auth = { authorization: `Bearer ${fixture.accessToken}` };
+  const post = await transport({ method: "POST", url: mockUrl("/sessions"), headers: auth } as never);
+  check("mock transport: a non-GET request is refused 405 (valid token)", post.status === 405 && post.ok === false);
+  const unknown = await transport({ method: "GET", url: mockUrl("/not-a-real-path"), headers: auth });
+  check("mock transport: a valid-token request to an unknown path is refused 404", unknown.status === 404 && unknown.ok === false);
+  const bad = await transport({ method: "GET", url: mockUrl("/sessions"), headers: { authorization: "Bearer wrong" } });
+  check("mock transport: a bad token is refused 401", bad.status === 401);
+  const good = await transport({ method: "GET", url: mockUrl("/sessions"), headers: auth });
+  check("mock transport: a valid GET on the served path is 200", good.status === 200 && good.ok === true);
+}
 
 const total = passed + failures.length;
 console.log(`summary=${failures.length === 0 ? "pass" : "fail"} (${passed}/${total})`);

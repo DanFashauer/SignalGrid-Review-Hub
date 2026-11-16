@@ -151,11 +151,14 @@ export const ITSM_LAYERS = [
 ];
 
 /**
- * The bridge between the two taxonomies — SEVEN rows, declared once, rather than an
- * ITSM layer written onto each of the thirty-one reason codes.
+ * The bridge between the two taxonomies — one row per IT layer, declared once, rather
+ * than an ITSM layer written onto every row of `REASON_CODE_LAYERS` below.
  *
- * Declaring it per code would be thirty-one chances to disagree with the IT layer
- * already recorded above. One bridge cannot disagree with itself.
+ * Declaring it per code would be as many chances to disagree with the IT layer already
+ * recorded above as there are codes. One bridge cannot disagree with itself.
+ *
+ * No count is typed here on purpose: this sentence said "thirty-one reason codes" twice
+ * while `REASON_CODE_LAYERS` held 33. The arrays are the count; prose about them rots.
  */
 export const IT_TO_ITSM_LAYER = [
   { itLayer: "strategic_it_management", itsmLayer: "governance_security" },
@@ -270,11 +273,24 @@ export const REASON_CODE_LAYERS = [
   { code: "BATTERY_FAILING", layer: "it_operations", domain: "IT Asset Management", systemOfRecord: "dock telemetry", evidenceType: "battery health", owner: "facilities_operations_owner" },
   { code: "DOCK_FAULTED", layer: "it_operations", domain: "IT Monitoring & Maintenance", systemOfRecord: "SmartDock", evidenceType: "dock health", owner: "facilities_operations_owner" },
   { code: "DOCK_OFFLINE", layer: "it_operations", domain: "IT Monitoring & Maintenance", systemOfRecord: "SmartDock", evidenceType: "dock reachability", owner: "facilities_operations_owner" },
+  // DR-065: an emitted dock-family reading nothing could be read from is a feed
+  // fault on the dock plane (no accusation), so it routes with DOCK_OFFLINE.
+  { code: "DOCK_EVIDENCE_UNREADABLE", layer: "it_operations", domain: "IT Monitoring & Maintenance", systemOfRecord: "SmartDock", evidenceType: "dock-family reading legibility", owner: "facilities_operations_owner" },
   { code: "BADGE_REMOVED", layer: "it_security_risk_management", domain: "Identity & Access Management", systemOfRecord: "badge reader case", evidenceType: "physical credential binding", owner: "facilities_operations_owner" },
   // Forced removal is a security INCIDENT, not a custody hiccup — different owner on
   // purpose. This is the one pair in the table where two neighbouring codes route to
   // different desks, and it is the clearest illustration of why the model is useful.
   { code: "BADGE_FORCED_REMOVAL", layer: "it_security_risk_management", domain: "Threat Detection & Response", systemOfRecord: "badge reader case", evidenceType: "duress / forced-removal event", owner: "security_operations_owner" },
+  // DR-043: the credential's own seat, and its strength. Removed/unknown follow
+  // BADGE_REMOVED's routing (a physical binding question); a downgrade is a
+  // suspected clone, so it routes with the forced removal to security operations.
+  { code: "CUSTODY_REMOVED", layer: "it_security_risk_management", domain: "Identity & Access Management", systemOfRecord: "credential receiver / dock", evidenceType: "credential attach state", owner: "facilities_operations_owner" },
+  { code: "CUSTODY_UNKNOWN", layer: "it_security_risk_management", domain: "Identity & Access Management", systemOfRecord: "credential receiver / dock", evidenceType: "credential attach state", owner: "facilities_operations_owner" },
+  { code: "CREDENTIAL_DOWNGRADE", layer: "it_security_risk_management", domain: "Threat Detection & Response", systemOfRecord: "credential reader + IdP enrollment", evidenceType: "credential read method vs enrollment strength", owner: "security_operations_owner" },
+  // Owner call 4: the step-up when a downgrade cannot be ruled out is a feed gap
+  // (enrollment or read method unreadable or silent), not a suspected clone, so it
+  // routes with the identity plane rather than with the downgrade's deny.
+  { code: "CREDENTIAL_STRENGTH_UNKNOWN", layer: "it_security_risk_management", domain: "Identity & Access Management", systemOfRecord: "credential reader + IdP enrollment", evidenceType: "credential read method vs enrollment strength", owner: "identity_platform_owner" },
 
   // ── Business / labour plane ───────────────────────────────────────────────
   { code: "SHIFT_CONTEXT_MISFIT", layer: "software_development_applications", domain: "Enterprise Applications", systemOfRecord: "workforce management", evidenceType: "shift / punch state", owner: "application_owner" },
@@ -330,6 +346,7 @@ export const FAMILY_LAYERS = [
   { family: "vuln-scan", layer: "it_security_risk_management", domain: "IT Risk Assessment", systemOfRecord: "vulnerability scanner", evidenceType: "device risk posture", owner: "security_operations_owner" },
   { family: "benchmark-selection", layer: "it_security_risk_management", domain: "IT Risk Assessment", systemOfRecord: "benchmark catalog", evidenceType: "benchmark applicability + currency", owner: "security_operations_owner" },
   { family: "data-protection", layer: "it_security_risk_management", domain: "Cybersecurity", systemOfRecord: "DLP", evidenceType: "data-protection posture", owner: "security_operations_owner" },
+  { family: "app-protection", layer: "it_security_risk_management", domain: "Cybersecurity", systemOfRecord: "MAM / app-protection plane (Intune App Protection, Jamf, Workspace ONE)", evidenceType: "app-protection policy state + registration compliance", owner: "endpoint_operations_owner" },
   { family: "peripheral-control", layer: "it_security_risk_management", domain: "Cybersecurity", systemOfRecord: "peripheral control", evidenceType: "removable-media posture", owner: "security_operations_owner" },
   { family: "device-attestation", layer: "it_security_risk_management", domain: "Cybersecurity", systemOfRecord: "hardware root of trust", evidenceType: "attestation verdict", owner: "security_operations_owner" },
   { family: "break-glass", layer: "it_security_risk_management", domain: "IT Risk Assessment", systemOfRecord: "host application override log", evidenceType: "override accountability", owner: "it_governance_owner" },

@@ -61,6 +61,21 @@ export function evaluateNetwork(
 
   // 4. Authenticated + compliant — but a stale auth is not proof of current state.
   if (signal.authState === "authenticated") {
+    // A device on a RESTRICTED segment is contained whatever the age of its auth. This check used to come only
+    // after the stale return below, so a device that reached the management VLAN with a stale, garbled or
+    // offset-less `lastAuthAt` stepped up instead of being restricted: the weaker answer won because the auth's
+    // age was looked at first (review F2, 2026-11-07). It is now the only restricted-segment check.
+    const containment = options.segmentPolicy;
+    if (
+      containment &&
+      containment.expected.length > 0 &&
+      // No separate null test: includesSegment matches nothing for a null segment, so the last
+      // conjunct is false and an unreported segment falls through to SEGMENT_UNREPORTED_UNDER_POLICY.
+      !includesSegment(containment.expected, signal.segment) &&
+      includesSegment(containment.restricted ?? [], signal.segment)
+    ) {
+      return v("on_unexpected_segment", "SEGMENT_RESTRICTED", "restrict", loc);
+    }
     if (freshness === "stale") {
       return v("network_unknown", "STALE_NETWORK_STATE", "step_up", loc);
     }
@@ -95,13 +110,10 @@ export function evaluateNetwork(
       // an unreported segment is not evidence of an expected one.
       return v("network_unknown", "SEGMENT_UNREPORTED_UNDER_POLICY", "step_up", loc);
     }
+    // A restricted segment (management / security / OT: lateral movement into the control plane,
+    // not a misconfiguration) was already answered `restrict` above, before the stale return, under
+    // the identical condition. Only an ordinary unexpected segment can reach this point.
     const expected = includesSegment(policy.expected, signal.segment);
-    if (!expected && includesSegment(policy.restricted ?? [], signal.segment)) {
-      // Reached a management / security / OT segment it has no business on. This is
-      // lateral movement into the control plane, not a misconfiguration, so it
-      // outranks an ordinary unexpected segment.
-      return v("on_unexpected_segment", "SEGMENT_RESTRICTED", "restrict", loc);
-    }
     if (!expected) {
       return v("on_unexpected_segment", "SEGMENT_UNEXPECTED", "step_up", loc);
     }

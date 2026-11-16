@@ -1,4 +1,5 @@
 import { canonicalJson, digest } from "./util";
+import { evidenceWorlds } from "./evidence";
 import {
   CoreError,
   type DecisionOutcome,
@@ -86,6 +87,7 @@ const IN_FIELDS: Record<string, ReadonlySet<string>> = {
     "exception",
     "maintenance",
     "unknown",
+    "unreadable",
   ]),
   chargeState: new Set([
     "charging",
@@ -94,14 +96,16 @@ const IN_FIELDS: Record<string, ReadonlySet<string>> = {
     "critical",
     "not_present",
     "unknown",
+    "unreadable",
   ]),
-  batteryHealth: new Set(["healthy", "degraded", "failing", "unknown"]),
+  batteryHealth: new Set(["healthy", "degraded", "failing", "unknown", "unreadable"]),
   tamperState: new Set([
     "none",
     "suspected",
     "confirmed",
     "sensor_unavailable",
     "unknown",
+    "unreadable",
   ]),
   dockState: new Set([
     "occupied",
@@ -110,6 +114,7 @@ const IN_FIELDS: Record<string, ReadonlySet<string>> = {
     "faulted",
     "offline",
     "unknown",
+    "unreadable",
   ]),
   baselineState: new Set([
     "aligned",
@@ -134,6 +139,7 @@ const IN_FIELDS: Record<string, ReadonlySet<string>> = {
     "forced",
     "absent",
     "unknown",
+    "unreadable",
   ]),
   managementHealthState: new Set([
     "healthy",
@@ -146,6 +152,9 @@ const IN_FIELDS: Record<string, ReadonlySet<string>> = {
     "withheld",
     "unverified",
   ]),
+  attachState: new Set(["attached", "removed", "unknown", "not_applicable"]),
+  enrollmentStrength: new Set(["strong", "legacy_125khz", "unknown", "not_applicable"]),
+  credentialReadMethod: new Set(["strong", "legacy_125khz", "unknown", "not_applicable"]),
 };
 
 function reject(message: string): never {
@@ -284,8 +293,76 @@ export function validatePolicyRules(input: unknown): PolicyRuleSpec[] {
  *  3. Fail-closed: if critical evidence is missing/degraded, `allow` can never
  *     be the outcome — it is suppressed in favour of step-up or higher.
  *  4. If no rule fires, the default is step-up (never a silent allow).
+ *  5. KEEP BOTH (owner decision (a), 2026-11-06): when the evidence retains more than
+ *     one accusation for a family (`retainedAccusations`), the policy is evaluated
+ *     on every combination and the most restrictive outcome stands. When no other
+ *     combination is stricter than the evidence as built, that evaluation is returned
+ *     unchanged (same reasons); otherwise the reason codes and matched rules are those
+ *     of every combination that reached the stricter outcome. Evidence with no retained
+ *     accusations takes the single-world path, byte-identical to before.
  */
 export function evaluatePolicy(
+  version: PolicyVersion,
+  evidence: DecisionEvidence,
+): PolicyEvaluation {
+  const { worlds, truncated } = evidenceWorlds(evidence);
+  if (worlds.length === 1 && !truncated) {
+    return evaluateWorld(version, worlds[0] as DecisionEvidence);
+  }
+  if (truncated) {
+    return boundAcrossWorlds(version, worlds);
+  }
+  const evaluations = worlds.map((world) => evaluateWorld(version, world));
+  const outcome = mostRestrictive(evaluations.map((e) => e.outcome));
+  // The evidence as built is the first world. When no other combination is stricter, ITS evaluation is the
+  // answer, reasons and all, exactly as before: a retained accusation changes the result only when the active
+  // policy treats it more harshly than the member the shipped tiers chose.
+  const base = evaluations[0] as PolicyEvaluation;
+  if (!truncated && outcome === base.outcome) {
+    return base;
+  }
+  // Every code here was already emitted by a single-world evaluation, so the merge adds no code of its own.
+  const reaching = evaluations.filter((e) => e.outcome === outcome);
+  const reasonCodes: string[] = [...new Set(reaching.flatMap((e) => e.reasonCodes))];
+  const matchedRules: MatchedRule[] = [];
+  for (const e of reaching) {
+    for (const rule of e.matchedRules) if (!matchedRules.some((m) => m.ruleId === rule.ruleId)) matchedRules.push(rule);
+  }
+  return { outcome, reasonCodes, matchedRules, explanation: explain(outcome, reasonCodes) };
+}
+
+/**
+ * Too many combinations to enumerate (`evidenceWorlds` truncated): bound the strictest one instead of sampling.
+ * A rule counts when EACH of its conditions holds in some world; every condition reads a single field and the
+ * worlds include every value each field can take (and the failed backstop), so any rule that matches in any
+ * combination counts. The answer is the most restrictive counted rule, never below step_up (the default and the
+ * backstop are at most step_up in any combination). It can be stricter than the true strictest combination; it
+ * is never milder (Codex P1s (b) and (f), 2026-11-07).
+ */
+function boundAcrossWorlds(version: PolicyVersion, worlds: DecisionEvidence[]): PolicyEvaluation {
+  const matchedRules: MatchedRule[] = [];
+  for (const rule of version.rules) {
+    if (!Array.isArray(rule.match) || rule.match.length === 0) continue;
+    if (rule.match.every((condition) => worlds.some((world) => matches(condition, world)))) {
+      matchedRules.push({ ruleId: rule.id, reasonCode: rule.reasonCode, outcome: rule.outcome, severity: rule.severity });
+    }
+  }
+  const counted = matchedRules.map((rule) => rule.outcome);
+  let outcome: DecisionOutcome = counted.length === 0 ? "step_up" : mostRestrictive(counted);
+  const reaching = matchedRules.filter((rule) => rule.outcome === outcome);
+  const reasonCodes: string[] = [...new Set(reaching.map((rule) => rule.reasonCode))];
+  if (OUTCOME_RANK[outcome] < OUTCOME_RANK.step_up) {
+    outcome = "step_up";
+    reasonCodes.push("ALLOW_SUPPRESSED_DEGRADED_EVIDENCE");
+  }
+  if (counted.length === 0) {
+    reasonCodes.push("NO_RULE_MATCHED_DEFAULT_STEP_UP");
+  }
+  return { outcome, reasonCodes, matchedRules: matchedRules.filter((rule) => rule.outcome === outcome), explanation: explain(outcome, reasonCodes) };
+}
+
+/** One single-valued evidence world against the policy: the original evaluator, unchanged. */
+function evaluateWorld(
   version: PolicyVersion,
   evidence: DecisionEvidence,
 ): PolicyEvaluation {
@@ -383,6 +460,12 @@ function matches(condition: RuleCondition, evidence: DecisionEvidence): boolean 
       return condition.in.includes(evidence.managementHealthState);
     case "localAuthorityState":
       return condition.in.includes(evidence.localAuthorityState);
+    case "attachState":
+      return condition.in.includes(evidence.attachState);
+    case "enrollmentStrength":
+      return condition.in.includes(evidence.enrollmentStrength);
+    case "credentialReadMethod":
+      return condition.in.includes(evidence.credentialReadMethod);
     default: {
       // Exhaustiveness guard at compile time; fail-closed at runtime so an
       // unknown/malformed condition (e.g. from an authored draft) never matches.
@@ -628,6 +711,70 @@ export const SHARED_DEVICE_RULES_V1: PolicyRuleSpec[] = [
     reasonCode: "BADGE_REMOVED",
     severity: "high",
   },
+  // ── DR-065 (PROPOSED): an EMITTED dock-family reading that cannot be read ──
+  // Owner decision 2026-11-03 (raised hand 2026-09-25-policy-ts-v1-stays-silent-
+  // on-an-emitted-present-, option a). Day-one-quiet covers SILENCE: a family no
+  // connector emits reads "unknown" and matches nothing here, so a tenant without
+  // dock hardware is not stepped up. A reading that WAS emitted but is outside its
+  // domain (or is only a good value whose clock stamp cannot be ordered) reads
+  // "unreadable" and steps up — the same treatment `attach-unknown` and
+  // `credential-read-unknown` give the DR-043 fields. Step-up, not restrict: the
+  // reading accuses nothing, it only fails to vouch. One reason code across the
+  // six families; the matched rule id names which family spoke unreadably.
+  {
+    id: "custody-unreadable",
+    description:
+      "A custody state reading was emitted but could not be read, so nothing it says can vouch for the shared device. That raises the bar and never grants.",
+    match: [{ field: "custodyState", in: ["unreadable"] }],
+    outcome: "step_up",
+    reasonCode: "DOCK_EVIDENCE_UNREADABLE",
+    severity: "medium",
+  },
+  {
+    id: "charge-unreadable",
+    description:
+      "A charge state reading was emitted but could not be read, so nothing it says can vouch for the shared device. That raises the bar and never grants.",
+    match: [{ field: "chargeState", in: ["unreadable"] }],
+    outcome: "step_up",
+    reasonCode: "DOCK_EVIDENCE_UNREADABLE",
+    severity: "medium",
+  },
+  {
+    id: "battery-health-unreadable",
+    description:
+      "A battery health reading was emitted but could not be read, so nothing it says can vouch for the shared device. That raises the bar and never grants.",
+    match: [{ field: "batteryHealth", in: ["unreadable"] }],
+    outcome: "step_up",
+    reasonCode: "DOCK_EVIDENCE_UNREADABLE",
+    severity: "medium",
+  },
+  {
+    id: "tamper-unreadable",
+    description:
+      "A tamper state reading was emitted but could not be read, so nothing it says can vouch for the shared device. That raises the bar and never grants.",
+    match: [{ field: "tamperState", in: ["unreadable"] }],
+    outcome: "step_up",
+    reasonCode: "DOCK_EVIDENCE_UNREADABLE",
+    severity: "medium",
+  },
+  {
+    id: "dock-unreadable",
+    description:
+      "A dock state reading was emitted but could not be read, so nothing it says can vouch for the shared device. That raises the bar and never grants.",
+    match: [{ field: "dockState", in: ["unreadable"] }],
+    outcome: "step_up",
+    reasonCode: "DOCK_EVIDENCE_UNREADABLE",
+    severity: "medium",
+  },
+  {
+    id: "badge-unreadable",
+    description:
+      "A badge binding reading was emitted but could not be read, so nothing it says can vouch for the shared device. That raises the bar and never grants.",
+    match: [{ field: "badgeState", in: ["unreadable"] }],
+    outcome: "step_up",
+    reasonCode: "DOCK_EVIDENCE_UNREADABLE",
+    severity: "medium",
+  },
   {
     id: "baseline-drifted",
     description:
@@ -686,6 +833,89 @@ export const SHARED_DEVICE_RULES_V1: PolicyRuleSpec[] = [
     outcome: "restrict",
     reasonCode: "LOCAL_AUTHORITY_WITHHELD",
     severity: "high",
+  },
+  // ── DR-043: the attach matrix's live rows ─────────────────────────────────
+  // Same verdicts and reason codes as `puckVerdict` in attach.ts; the core proof
+  // asserts the two matrices agree on every overlapping row, because two
+  // unconnected matrices is how they drift. An absent attach state
+  // (`not_applicable`) matches nothing — a tenant with no pucks is not stepped up
+  // on day one — but an EMITTED unknown attach state steps up, unlike badge/dock
+  // unknown. Enrollment and read method both absent is quiet too; one absent while
+  // the other speaks is not always (the credential-strength rows below).
+  {
+    id: "credential-downgrade",
+    description:
+      "A worker enrolled on a strong credential was read over a cloneable 125 kHz path. The strong enrollment is why that path should be unnecessary; its use is the signature of a clone. Deny, not step-up.",
+    match: [
+      { field: "enrollmentStrength", in: ["strong"] },
+      { field: "credentialReadMethod", in: ["legacy_125khz"] },
+    ],
+    outcome: "deny",
+    reasonCode: "CREDENTIAL_DOWNGRADE",
+    severity: "critical",
+  },
+  // Resolution note (Puck 6): this live row has NO resolution descriptor, so every
+  // `removed` it matches escalates — including a planned end-of-shift return, which the
+  // live evidence cannot yet tell from a walk-away. `puckVerdict` (attach.ts) already
+  // grades a holder-bound return as CUSTODY_RETURNED (closed, nothing to escalate); the
+  // live gate gains the same distinction only when a release/return evidence field
+  // exists for it to match on. Until then this row is deliberately the stricter reading.
+  {
+    id: "attach-removed",
+    description:
+      "The credential left the receiver it was seated in — the key is out of the ignition, so the session it authorized is restricted.",
+    match: [{ field: "attachState", in: ["removed"] }],
+    outcome: "restrict",
+    reasonCode: "CUSTODY_REMOVED",
+    severity: "high",
+  },
+  {
+    id: "attach-unknown",
+    description:
+      "An attach reading was present but unreadable, so whether the credential is still seated is unknown. That raises the bar and never grants.",
+    match: [{ field: "attachState", in: ["unknown"] }],
+    outcome: "step_up",
+    reasonCode: "CUSTODY_UNKNOWN",
+    severity: "medium",
+  },
+  // Golden rule 2 on the downgrade row: enrollment and read method come from
+  // different planes, so either can be unreadable or silent while the other speaks.
+  // Where a strong→legacy downgrade cannot be RULED OUT, step up. Three rectangles
+  // cover the eight cells (enrollment × read): any × unknown; {unknown, n/a} ×
+  // legacy; {strong, unknown} × n/a. Allowed: any × strong, legacy × legacy,
+  // legacy × n/a, n/a × n/a (a tenant with no credential-strength feed sees nothing).
+  {
+    id: "credential-read-unknown",
+    description:
+      "The read method was present but unreadable, so nothing rules out a cloneable 125 kHz read. That raises the bar and never grants.",
+    match: [{ field: "credentialReadMethod", in: ["unknown"] }],
+    outcome: "step_up",
+    reasonCode: "CREDENTIAL_STRENGTH_UNKNOWN",
+    severity: "medium",
+  },
+  {
+    id: "credential-legacy-read-enrollment-unestablished",
+    description:
+      "A 125 kHz read arrived and nothing establishes that the worker was enrolled on a legacy credential, so a strong-to-legacy downgrade cannot be ruled out.",
+    match: [
+      { field: "enrollmentStrength", in: ["unknown", "not_applicable"] },
+      { field: "credentialReadMethod", in: ["legacy_125khz"] },
+    ],
+    outcome: "step_up",
+    reasonCode: "CREDENTIAL_STRENGTH_UNKNOWN",
+    severity: "medium",
+  },
+  {
+    id: "credential-read-silent-enrollment-may-be-strong",
+    description:
+      "The worker is (or may be) enrolled on a strong credential and no read method arrived, so a 125 kHz read cannot be ruled out.",
+    match: [
+      { field: "enrollmentStrength", in: ["strong", "unknown"] },
+      { field: "credentialReadMethod", in: ["not_applicable"] },
+    ],
+    outcome: "step_up",
+    reasonCode: "CREDENTIAL_STRENGTH_UNKNOWN",
+    severity: "medium",
   },
   {
     id: "healthy-allow",

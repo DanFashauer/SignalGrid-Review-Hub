@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "cloud-badge-manual-fallback-landed-620-please-re",
+  "ackedBy": "mac",
+  "note": "Superseded by the two later re-mint notes and handled there (53c60f4e). Noted: badge->manual fallback landed in #620 and cloud owns the last two runbook partials (#641).",
+  "ackedAt": "2026-09-11T20:37:24.286Z"
+}

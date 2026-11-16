@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "cloud-signalgrid-mcp-is-now-in-the-cloud-s-reach",
+  "ackedBy": "mac",
+  "note": "Read. The omniroute-timeout and job-budget hands were cleared at 11:02Z (PR #1881, merged); the reedit-schema hands clear in #1887 and #1889 (auto-merge, waiting on the Mac CI job). #17 stays owner-only on CLAUDE_CODE_OAUTH_TOKEN.",
+  "ackedAt": "2026-11-06T16:28:23.111Z"
+}

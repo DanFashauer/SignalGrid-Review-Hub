@@ -33,13 +33,16 @@
 // history: a refusal message that repeated its argument reflected a pasted JWT
 // verbatim; the same defect is designed out here rather than fixed later).
 //
+// A task may be held by more than one exception; release clears ONE hold per call
+// and the task goes active only when the last hold on it is released.
+//
 // On success the task moves held→active and the exception entry is removed via
 // the REAL `resolveException` door — not a hand-rolled filter — so the removal
 // demands its resolution ref, sweeps it for credential smells, advances
 // `contextVersion` exactly once, and returns a deep-frozen context with
 // everything else carried.
 
-import { ACTION_RANK } from "@workspace/posture-composition";
+import { ACTION_RANK, rankOf } from "@workspace/posture-composition";
 import { resolveException, type PortableWorkContext } from "@workspace/work-context";
 import { HandoffSimError, type ReleaseLedger } from "./types";
 
@@ -75,7 +78,12 @@ export function releaseHeldTask(
   // resolved+verified exception freed an UNRELATED held task whose own blocker
   // was still open. A release names both halves; the ledger's hold linkage is
   // what makes that naming checkable rather than decorative.
-  if (ledger.holds[taskRef] !== exceptionRef) {
+  // A LIST per task, read fail-closed: anything that is not an array naming this
+  // exception (a missing key, a bare string from an untyped caller) refuses.
+  // Own properties only: a hand-built ledger is often a plain `{}`, whose inherited
+  // members ("constructor", "toString") are not holds.
+  const taskHolds: unknown = Object.hasOwn(ledger.holds, taskRef) ? ledger.holds[taskRef] : undefined;
+  if (!Array.isArray(taskHolds) || !taskHolds.includes(exceptionRef)) {
     throw new HandoffSimError(
       "exception_does_not_hold_task",
       "cannot release: the named exception is not the one holding the named task — a hold is released by resolving ITS exception, not any exception (values withheld from this message by design).",
@@ -126,15 +134,30 @@ export function releaseHeldTask(
 
   // (4) the device in the person's hands right now must not itself be judged
   // restrict-or-worse by its own composition.
+  //     POSITIVELY evaluated, too: a decision composed from zero signals is a device
+  //     the fabric knows nothing about — every connector unreachable, not onboarded, a
+  //     misrouted id — which is the `decision === null` case wearing a decision object.
+  //     And the rank is read through the composer's guarded lookup, so an off-ladder
+  //     action (which the composer ranks ABOVE every real rung and tiers `blocked`)
+  //     refuses here instead of `undefined >= 6` reading as false.
   const decision = ledger.currentDeviceDecision;
-  if (decision === null || ACTION_RANK[decision.deviceAction] >= ACTION_RANK.restrict) {
+  if (decision === null || decision.drivers.length === 0 || rankOf(decision.deviceAction) >= ACTION_RANK.restrict) {
     throw new HandoffSimError(
       "device_not_trusted_for_release",
-      "cannot release: the current device's own composition is restrict-grade or worse (or no device has been evaluated) — held work is not released into a device the fabric is currently restricting.",
+      "cannot release: the current device's own composition is restrict-grade or worse, or rests on no signals at all, or no device has been evaluated — held work is not released into a device the fabric is restricting or cannot see.",
     );
   }
 
-  // Success. Move the task held→active on a plain structural copy, then let the
+  // Success for THIS hold. The task itself moves held→active only when no OTHER
+  // entry holding it is still carried unresolved: the row-48 second-pass audit
+  // found a second hold-grade exception on the same task overwriting the first, so
+  // releasing the survivor freed the task with the first still open. Releasing one
+  // of several holds removes that entry and leaves the task held.
+  const stillHeld = taskHolds.some(
+    (entry) => entry !== exceptionRef && context.work.unresolvedExceptionRefs.includes(entry as string),
+  );
+
+  // Move the task held→active (unless still held) on a plain structural copy, then let the
   // REAL resolveException door remove the exception entry: it re-validates the
   // resolution ref, refuses an entry this context does not carry, deep-copies,
   // deep-freezes, and advances contextVersion exactly once for the whole release.
@@ -142,8 +165,8 @@ export function releaseHeldTask(
     subject: { ...context.subject },
     work: {
       workflowKey: context.work.workflowKey,
-      activeTaskRefs: [...context.work.activeTaskRefs, taskRef],
-      heldTaskRefs: context.work.heldTaskRefs.filter((r) => r !== taskRef),
+      activeTaskRefs: stillHeld ? [...context.work.activeTaskRefs] : [...context.work.activeTaskRefs, taskRef],
+      heldTaskRefs: stillHeld ? [...context.work.heldTaskRefs] : context.work.heldTaskRefs.filter((r) => r !== taskRef),
       unresolvedExceptionRefs: [...context.work.unresolvedExceptionRefs],
       appCatalogKeys: [...context.work.appCatalogKeys],
     },

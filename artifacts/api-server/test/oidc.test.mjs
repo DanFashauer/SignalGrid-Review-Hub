@@ -22,12 +22,32 @@
 //      expired, unmapped tenant, unmapped role, unsigned/`alg:none`.
 import { spawn } from "node:child_process";
 import { createServer } from "node:http";
+import { createServer as netCreateServer } from "node:net";
 import { generateKeyPairSync, createSign, randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const serverEntry = resolve(here, "..", "dist", "index.mjs");
+
+// Every port this test hands out is OS-assigned, as `api.test.mjs` (#1106) does —
+// a fixed port here collides with the SAME fixed port bound by another tree or
+// tick on the same host. `handedOut` stops one run from reusing a number it just
+// released to itself (the OS may re-offer a just-closed probe port).
+const handedOut = [];
+// Probe on the same host the consumer binds: no host (wildcard) for ports handed to the
+// api-server, "127.0.0.1" for the loopback JWKS stub. On a bindv6only host the two differ.
+const freePort = (host) => new Promise((resolvePort) => {
+  const probe = netCreateServer();
+  probe.listen(...(host ? [0, host] : [0]), () => {
+    const p = probe.address().port;
+    probe.close(() => {
+      if (handedOut.includes(p)) return resolvePort(freePort(host));
+      handedOut.push(p);
+      resolvePort(p);
+    });
+  });
+});
 
 let passed = 0;
 let failed = 0;
@@ -51,7 +71,7 @@ function sign(claims, { alg = "RS256", kid = KID } = {}) {
   return `${header}.${payload}.${signer.sign(privateKey).toString("base64url")}`;
 }
 
-const JWKS_PORT = 5399;
+const JWKS_PORT = await freePort("127.0.0.1");
 const ISSUER = `http://127.0.0.1:${JWKS_PORT}`;
 const AUDIENCE = "signalgrid-api-test";
 const IDP_TENANT = "idp-tenant-abc";
@@ -63,7 +83,7 @@ const jwksServer = createServer((req, res) => {
 });
 await new Promise((r) => jwksServer.listen(JWKS_PORT, "127.0.0.1", r));
 
-const PORT = 5398;
+const PORT = await freePort();
 const BASE = `http://localhost:${PORT}/api`;
 const now = () => Math.floor(Date.now() / 1000);
 const baseClaims = (over = {}) => ({
@@ -126,17 +146,80 @@ try {
   // 1b — the integration constraint that is easy to get wrong, and that nothing
   // exercised before this file. registerVerifiedPrincipal calls requireTenant:
   // "an OIDC identity cannot conjure one". So OIDC_TENANT_MAP must point at a
-  // tenant that ALREADY EXISTS, and a map naming an absent tenant produces a
-  // 401 that looks exactly like a bad token. That cost a debugging round here;
-  // it should cost an operator a log line instead.
-  const unknownTenant = await get(sign(baseClaims({ tid: "idp-tenant-abc" }), {}));
-  check(
-    "a mapped-but-nonexistent internal tenant is refused, not conjured",
-    // proven by the negative below: the map only carries IDP_TENANT -> INTERNAL_TENANT,
-    // so any other idp tenant is unmapped, and an internal tenant that does not
-    // exist cannot be reached at all through this path.
-    unknownTenant.status === 200 || unknownTenant.status === 401,
-  );
+  // tenant that ALREADY EXISTS.
+  //
+  // WHAT IT ACTUALLY ANSWERS, MEASURED (2026-09-06). This comment used to say the
+  // map naming an absent tenant "produces a 401 that looks exactly like a bad
+  // token". It does not: `requireTenant` (signalgrid-core/engine.ts) throws
+  // CoreError("not_found", 404), so the wire answer is 404 `not_found` with a
+  // message naming the tenant — which is the operator log line the old prose wished
+  // for, and the prose had never been run. Both answers refuse; only one is true, so
+  // the assertion pins the true one. The property that matters is unchanged: an OIDC
+  // identity whose mapped internal tenant does not exist is REFUSED, never conjured.
+  //
+  // THIS PROBE USED TO SEND THE WRONG TOKEN AND ACCEPT BOTH ANSWERS. It signed
+  // `tid: "idp-tenant-abc"` — byte-identical to IDP_TENANT, i.e. the MAPPED,
+  // EXISTING tenant, the same token as the passing positive case above — and then
+  // accepted `200 || 401`, so it never constructed the condition its name describes
+  // and could not have failed either way. The condition needs a SERVER whose map
+  // names an internal tenant the seed does not create, so one is spawned here, and
+  // the only accepted answer is 401.
+  {
+    const ABSENT_PORT = await freePort();
+    const ABSENT_BASE = `http://localhost:${ABSENT_PORT}/api`;
+    const ABSENT_TENANT = "tenant_that_the_seed_never_creates";
+    const absentServer = spawn("node", [serverEntry], {
+      env: {
+        ...process.env,
+        PORT: String(ABSENT_PORT),
+        LOG_LEVEL: "silent",
+        OIDC_ISSUER: ISSUER,
+        OIDC_AUDIENCE: AUDIENCE,
+        OIDC_JWKS_URI: `${ISSUER}/jwks`,
+        OIDC_TENANT_MAP: JSON.stringify({ [IDP_TENANT]: ABSENT_TENANT }),
+        OIDC_ROLE_MAP: JSON.stringify({ "sg-operator": "operator" }),
+      },
+      stdio: ["ignore", "ignore", "inherit"],
+    });
+    try {
+      let absentReady = false;
+      const absentStart = Date.now();
+      while (Date.now() - absentStart < 20000) {
+        try { if ((await fetch(`${ABSENT_BASE}/healthz`)).ok) { absentReady = true; break; } } catch { /* not up */ }
+        await new Promise((r) => setTimeout(r, 250));
+      }
+      // NON-VACUITY. The assertion below is a refusal, and a server that never
+      // booted refuses everything — including for reasons that have nothing to do
+      // with tenant mapping.
+      check("the absent-tenant server becomes ready (so its 401 is a refusal, not a dead port)", absentReady === true);
+
+      const token = sign(baseClaims());
+      const absent = await fetch(`${ABSENT_BASE}/v1/context`, { headers: { authorization: `Bearer ${token}` } });
+      const absentBody = await absent.json().catch(() => null);
+      check(
+        "a mapped-but-nonexistent internal tenant is REFUSED, not conjured (404 not_found from requireTenant)",
+        absent.status === 404 && absentBody?.error === "not_found",
+        `got ${absent.status} ${JSON.stringify(absentBody?.error ?? null)}`,
+      );
+      check(
+        "...and the refusal names the absent tenant, so an operator reads the misconfiguration instead of debugging a token",
+        typeof absentBody?.message === "string" && absentBody.message.includes(ABSENT_TENANT),
+        `message was ${JSON.stringify(absentBody?.message ?? null)}`,
+      );
+      // POSITIVE CONTROL, and it is the whole reason the two servers share one
+      // issuer, one key and one set of claims: the SAME token authenticates against
+      // the server whose map names a tenant that exists. So the 401 above is the
+      // absent tenant and nothing else about the token.
+      const sameTokenElsewhere = await get(token);
+      check(
+        "...and that identical token is accepted where the map names a REAL tenant (so the 401 is the tenant, not the token)",
+        sameTokenElsewhere.status === 200,
+        `got ${sameTokenElsewhere.status}`,
+      );
+    } finally {
+      absentServer.kill("SIGTERM");
+    }
+  }
 
   // 2 — no fallback to a weaker credential
   const demo = await get("demo-owner-key");
@@ -161,6 +244,113 @@ try {
 } finally {
   server.kill("SIGTERM");
   jwksServer.close();
+}
+
+// 4 — A BROKEN OIDC CONFIG MUST REFUSE TO BOOT, NOT FALL BACK TO DEMO KEYS.
+//
+// `loadEnterpriseAuthConfig` returns `invalid` ONLY when some OIDC variable is
+// non-blank (every OIDC_* unset or blank is `disabled`, the untouched demo
+// default), so `invalid` always
+// means an operator reached for enterprise auth and got part of it wrong. That
+// used to log at WARN and return null, which under the DEFAULT profile accepts
+// the published `sgk_demo_*` bearers and lets `/v1/keys` hand them to anonymous
+// callers — an unusable configuration value LOOSENING the answer, which golden
+// rule 2 forbids, while `/readyz` still reported ready because its auth-config
+// check is gated on `!demoSurfacesEnabled()`.
+//
+// The first two shapes below are asserted because they fail for different
+// reasons and an earlier reading of this code assumed only the first existed: a
+// MISSING audience/JWKS, and a COMPLETE config whose tenant map is empty `{}` —
+// every variable set, nothing that can ever match. The third is the owner's
+// 2026-11-06 decision ("Refuse to start"): a whitespace-only OIDC_ISSUER beside
+// a set audience + JWKS used to resolve to `disabled` and so served demo keys;
+// it is now `invalid` like any other half-configured OIDC.
+for (const [label, extraEnv, mustName] of [
+  ["missing audience and JWKS URI", { OIDC_ISSUER: ISSUER }],
+  [
+    "whitespace-only issuer beside audience + JWKS",
+    { OIDC_ISSUER: " \t ", OIDC_AUDIENCE: AUDIENCE, OIDC_JWKS_URI: `${ISSUER}/jwks` },
+    ["OIDC_AUDIENCE", "OIDC_JWKS_URI"],
+  ],
+  [
+    "complete config with an EMPTY tenant map",
+    {
+      OIDC_ISSUER: ISSUER,
+      OIDC_AUDIENCE: AUDIENCE,
+      OIDC_JWKS_URI: `${ISSUER}/jwks`,
+      OIDC_TENANT_MAP: "{}",
+      OIDC_ROLE_MAP: JSON.stringify({ "sg-operator": "operator" }),
+    },
+  ],
+]) {
+  // A fixed offset from PORT is no guarantee of freeness once PORT itself is
+  // OS-assigned — each broken-config case gets its own freePort() call.
+  const brokenPort = await freePort();
+  const env = { ...process.env, PORT: String(brokenPort), LOG_LEVEL: "silent" };
+  // Start from a clean slate so a variable set in the ambient environment cannot
+  // accidentally COMPLETE the config this case needs to be broken.
+  for (const k of [
+    "OIDC_ISSUER", "OIDC_AUDIENCE", "OIDC_JWKS_URI", "OIDC_TENANT_MAP", "OIDC_ROLE_MAP",
+    "OIDC_TENANT_CLAIM", "OIDC_ROLE_CLAIM", "OIDC_SUBJECT_CLAIM", "OIDC_CLOCK_TOLERANCE_SEC",
+  ]) {
+    delete env[k];
+  }
+  Object.assign(env, extraEnv);
+
+  const broken = spawn("node", [serverEntry], { env, stdio: ["ignore", "ignore", "pipe"] });
+  let stderr = "";
+  broken.stderr.on("data", (chunk) => { stderr += chunk; });
+
+  // Wait for the process to exit, but DO NOT kill it on timeout yet — the probe
+  // below has to run while it is still alive, or it can only ever observe a dead
+  // port and would pass whatever the server did. (It did exactly that in the
+  // first draft of this test: the SIGKILL ran first, so the credential assertion
+  // was green against the unfixed code. An assertion that cannot fail is worse
+  // than no assertion, because it reads as coverage.)
+  let exitCode = await new Promise((resolve) => {
+    let settled = false;
+    broken.on("exit", (code) => { if (!settled) { settled = true; resolve(code); } });
+    setTimeout(() => { if (!settled) { settled = true; resolve(undefined); } }, 15000);
+  });
+  const stillRunning = exitCode === undefined;
+
+  // The property that actually matters, probed while the process is STILL UP if
+  // it refused to exit: had it fallen back to demo auth, /v1/keys would publish a
+  // tenant-owner bearer to an anonymous caller.
+  let served = null;
+  let servedBody = "";
+  try {
+    const res = await fetch(`http://localhost:${brokenPort}/api/v1/keys`, {
+      signal: AbortSignal.timeout(3000),
+    });
+    served = res.status;
+    servedBody = (await res.text()).slice(0, 120);
+  } catch { /* nothing listening — the expected outcome */ }
+
+  if (stillRunning) {
+    broken.kill("SIGKILL");
+    await new Promise((r) => broken.on("exit", r));
+  }
+
+  check(
+    `a broken OIDC config (${label}) refuses to start instead of serving demo keys`,
+    !stillRunning && exitCode !== 0,
+    stillRunning ? "it kept running — it is serving something" : `exited ${exitCode}`,
+  );
+  check(
+    `a broken OIDC config (${label}) publishes NO demo credential`,
+    served === null,
+    `/v1/keys answered ${served}: ${servedBody}`,
+  );
+  if (mustName) {
+    // The operator has to be told WHICH settings made it a misconfiguration —
+    // by name only: a value can be a tenant-identifying audience or URL.
+    check(
+      `a broken OIDC config (${label}) names ${mustName.join(" + ")} in the refusal, without their values`,
+      mustName.every((name) => stderr.includes(name)) && !stderr.includes(AUDIENCE) && !stderr.includes(`${ISSUER}/jwks`),
+      stderr.slice(0, 400),
+    );
+  }
 }
 
 console.log(`\nOIDC middleware test: ${passed}/${passed + failed} assertions passed`);

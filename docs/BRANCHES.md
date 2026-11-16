@@ -8,14 +8,23 @@ sure what is current — the same reason the docs here carry drift gates.
 
 ## Load-bearing branches
 
+> **Dated record — the table was written 2026-08-03 and re-checked against
+> `git ls-remote --heads origin` on 2026-09-06 (27 heads).** Four rows named branches
+> that are no longer on the remote; each is annotated in place rather than rewritten, and
+> the live lanes that had no row are added below the table. Re-run the command before
+> trusting any row; `scripts/check-documented-branches.mjs` only checks this page against
+> the prune record, not against origin.
+
 | Branch | Role |
 | --- | --- |
 | `SignalGrid_Alpha` | Default branch and base. Everything merges here through a reviewed, CI-gated PR. |
-| `fix/ios-enterpriseshell-build-and-run` | The owner's Mac lane: iOS EnterpriseShell/SignalGridMobile, Fleet MDM loop, full-stack E2E, real-hardware validation (PR #107). |
+| `fix/ios-enterpriseshell-build-and-run` | **Pruned** — not on origin as of 2026-09-06; recorded at `artifacts/sync/merged-branches-to-prune.txt:64`. Was the owner's Mac lane: iOS EnterpriseShell/SignalGridMobile, Fleet MDM loop, full-stack E2E, real-hardware validation (PR #107). The Mac lane now works on `mac/*` branches (see below). |
 | `claude/signalgrid-launch-plan-emxm01` | The cloud lane: connectors, proofs, docs, and gates built in Claude Code sessions (PR #137 and predecessors). |
-| `codex/add-signalgrid-autopilot-evidence-bot` | Deliberately preserved although its PR #36 closed unmerged — Issue #136 sequence step 2 queues that work for revival. Do not delete. |
+| `codex/add-signalgrid-autopilot-evidence-bot` | **Deleted and archived** — the owner closed the open item and deleted the branch (`docs/BRANCH_HYGIENE.md:160`); its tip survives as the tag `archive/codex/add-signalgrid-autopilot-evidence-bot` (`git ls-remote --tags origin \| grep archive`, 2026-09-06). This row said "Do not delete" until 2026-09-06; the revival work Issue #136 queued is recoverable from the tag. |
 | `dependabot/*` | Open dependency PRs; deleted automatically when their PR closes. |
-| `alpha` / `beta` / `dev` / `prod` | Environment lanes from the monorepo consolidation. As of 2026-07-27 they sit 96 commits behind the base and carry no unique commits; the owner decides whether to re-point them at promotion time or remove them. Until then, treat them as historical markers, not as what runs anywhere. |
+| `alpha` / `beta` / `dev` / `prod` | **Pruned** — all four are in `artifacts/sync/merged-branches-to-prune.txt` (lines 4, 5, 63, 65) and none is on origin as of 2026-09-06; `docs/BRANCHING_AND_ENVIRONMENTS.md` marks each *pruned*. Historical: environment lanes from the monorepo consolidation that as of 2026-07-27 sat 96 commits behind the base with no unique commits. |
+| `mac/*` | The owner's Mac lane today: `mac/ios-shell-swiftui-phase1..3`, `mac/native-ledger-2026-09-02`, `mac/remediation-allow-swift-twin`, `mac/session-expiry-hardening` and `mac-sim-2026-08-20` were on origin on 2026-09-06 (`docs/MAC_LANE.md`). |
+| `lane/mailbox`, `lane/cloud-mail-<stamp>`, `claude/steward-heartbeat-*` | Lane-coordination delivery branches (`docs/LANE_COORDINATION.md`); the `lane/cloud-mail-*` branches are short-lived and close with their PR. |
 
 ## The rule
 

@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "id": "2026-09-18-evidence-remint-after-customer-path",
+  "requestedAt": "2026-09-18T22:55:00Z",
+  "requestedBy": "cloud lane",
+  "reason": "The distance-to-customer sweep added three proofs (estate-refresh 15, secrets 28, data-lifecycle 31) that are part of the live-sync manifest, so the manifest moved to v81 (998718c814aa72) on this branch. The committed Mac evidence was minted against v79; once this lands, DR-036 dimension (b) reads the evidence as stale until the Mac re-mints it against the manifest mainline then holds. This request puts the re-mint on the channel the tick executes unattended.",
+  "runs": [
+    "evidence"
+  ],
+  "notes": [
+    "evidence (macOS-only): verify:all --require-mcp --emit-evidence, exactly as the 2026-09-18-evidence-remint-readiness-zero request ran it earlier today.",
+    "If the api-security sweep's request (2026-09-18-evidence-remint-after-webhooks-proof) already re-minted against a manifest that includes this branch, this run is the same operation against the same tree and settles both; the fingerprint is read from the tree, not from this file.",
+    "The tick commits results on a mac/tick-<stamp> branch; the cloud steward opens the PR within the hour."
+  ]
+}

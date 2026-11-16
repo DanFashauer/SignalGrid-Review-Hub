@@ -18,9 +18,22 @@
 > certification, or NDA (e.g. Kisi's controlled SDK access, ProdataKey's partner API
 > program, ASSA ABLOY Aperio's NDA-based integration path, DoorBird's
 > selected-partner Cloud API).
+>
+> Edit record (2026-09-06; the body is otherwise the verbatim markdown export):
+> the Wiegand standards row lost its "Official URL", which was the SIA OSDP page —
+> the protocol Wiegand is contrasted against, not a Wiegand specification (there is
+> no open Wiegand specification body); the Ubiquiti UniFi Access row's access class
+> was corrected from "No public detailed reference" to match the row's own evidence
+> (an official getting-started article plus a detailed reference served from the
+> local controller); and the totals line below records that the vendor table's 13
+> P1 rows and the owner's 12-row P1 sequencing disagree by one (Avigilon Alta
+> Access), which is recorded rather than reconciled.
 
 Catalog totals: 61 vendor/API entries · 24 GitHub/open-source resources · 10
-standards · 13 SignalGrid P1 vendor targets. Access classification per entry:
+standards · 13 SignalGrid P1 vendor targets in the vendor table (the owner's
+sequencing table below lists 12 — Avigilon Alta Access is P1 in the vendor table
+and absent from the sequencing; measured 2026-09-06, left for the owner to
+reconcile). Access classification per entry:
 public docs / public docs with gated credentials / advertised API with gated
 reference / partner-NDA-licensed / no detailed public contract located.
 
@@ -60,7 +73,7 @@ reference / partner-NDA-licensed / no detailed public contract located.
 |Integrated Control Technology (ICT)|Protege GX integration interfaces|On-prem PACS / building automation|No public detailed reference|HLI; BACnet; SDK/vendor integrations; database synchronization|https://ict.co/products-solutions/our-integrations/||P3|Strong integration ecosystem; implementation is typically app-note/version specific.|
 |PACOM|Unison / VIGIL CORE integrations|Unified security / PACS|No public detailed reference|PIAM integration; imports/exports; superior-system interfaces|https://pacom.com/products/unison/||P3|Treat as partner discovery until a current integration contract is provided.|
 |Paxton|Net2 SDK / Net2 Web API|On-prem PACS|No public detailed reference|.NET SDK/local API; REST JSON; Swagger|https://www.paxton-access.com/integrate/net2/||P1|Good candidate for a local/on-prem bridge; version and Web API installation requirements apply.|
-|Ubiquiti|UniFi Access API|On-prem / appliance PACS|No public detailed reference|Local REST JSON; WebSocket/events|https://help.ui.com/hc/en-us/articles/30022926810135-Getting-Started-with-the-Official-UniFi-API|https://github.com/keshavdv/aiounifiaccess|P1|Official detailed Access API docs are exposed from the local controller; community libraries are useful but not vendor-supported.|
+|Ubiquiti|UniFi Access API|On-prem / appliance PACS|Public docs (getting-started) + product-local detailed reference|Local REST JSON; WebSocket/events|https://help.ui.com/hc/en-us/articles/30022926810135-Getting-Started-with-the-Official-UniFi-API|https://github.com/keshavdv/aiounifiaccess|P1|Official detailed Access API docs are exposed from the local controller; community libraries are useful but not vendor-supported. (Access class read "No public detailed reference" until 2026-09-06, contradicting the official article cited in this row and this note.)|
 |Axis Communications|VAPIX Physical Access Control APIs|Edge/on-prem access control|Public docs|HTTP/JSON/XML VAPIX services; event stream|https://developer.axis.com/vapix/physical-access-control/||P1|Direct edge-controller integration; account for device firmware/API-version differences.|
 |2N|Access Commander REST API|On-prem access management / intercom|Public docs|REST JSON; Swagger in Access Commander|https://wiki.2n.com/acc/latest/en/4-api||P2|Confirm Access Commander edition/version and API enablement.|
 |Control iD|Access API|On-prem biometric/access controllers|Public docs|REST JSON|https://www.controlid.com.br/docs/access-api-en/||P2|Biometric payload handling can be sensitive; SignalGrid should consume evaluated events, not retain templates.|
@@ -130,7 +143,7 @@ reference / partner-NDA-licensed / no detailed public contract located.
 |SIA OSDP|Reader-controller protocol|Open Supervised Device Protocol for secure, bidirectional reader-to-controller communication.|Public standard; implementation available|https://www.securityindustry.org/industry-standards/open-supervised-device-protocol/|Prefer OSDP Secure Channel over legacy Wiegand for new deployments.|
 |PSIA PLAI|Logical access interoperability|Physical-Logical Access Interoperability for identity and access information exchange across systems.|Public industry specification|https://psialliance.org/specifications/plai/|Useful for PIAM/PACS identity synchronization.|
 |CSA Aliro|Mobile access credential standard|Emerging standard for interoperable mobile credentials and readers using modern device wallets.|Standards ecosystem; implementation maturity varies|https://csa-iot.org/all-solutions/aliro/|Verify current final-spec and certification status before product commitments.|
-|Wiegand|Legacy reader-controller interface|Widely deployed unidirectional credential bitstream interface.|Legacy de facto interface|https://www.securityindustry.org/industry-standards/open-supervised-device-protocol/|No native encryption or bidirectional supervision; model as lower-assurance evidence.|
+|Wiegand|Legacy reader-controller interface|Widely deployed unidirectional credential bitstream interface.|Legacy de facto interface; no open specification body, so no official URL (until 2026-09-06 this row carried the SIA OSDP page, which documents the protocol Wiegand is contrasted against)||No native encryption or bidirectional supervision; model as lower-assurance evidence.|
 |BACnet|Building automation integration|Building automation protocol often used to expose or consume access-control and building states.|Public standard ecosystem|https://bacnet.org/|Not a PACS identity API; useful for room/building operational signals.|
 |SCIM 2.0|Identity provisioning|Standard REST protocol for provisioning users and groups into cloud PACS platforms.|Public IETF standard|https://www.rfc-editor.org/rfc/rfc7644|Common for IdP-to-PACS user lifecycle; not door/event control.|
 

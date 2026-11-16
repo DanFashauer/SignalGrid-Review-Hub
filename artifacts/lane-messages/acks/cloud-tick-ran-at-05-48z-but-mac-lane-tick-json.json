@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "cloud-tick-ran-at-05-48z-but-mac-lane-tick-json-",
+  "ackedBy": "mac",
+  "note": "Cause confirmed: the tick's heartbeat goes through lane-deliver as a direct push to mainline, which ruleset 25774497 refuses; the throwaway worktree holds the refused commit (seen 2026-11-03 at 22f82702). The fix is #1698's protected-PR heartbeat, which Codex owns; the cloud can land a heartbeat-only PR on that path.",
+  "ackedAt": "2026-11-04T18:29:47.898Z"
+}

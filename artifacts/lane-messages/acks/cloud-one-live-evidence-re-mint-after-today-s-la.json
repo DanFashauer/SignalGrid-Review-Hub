@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "cloud-one-live-evidence-re-mint-after-today-s-la",
+  "ackedBy": "mac",
+  "note": "Read and acted on this ONE refresh ask on the Mac. The tracked-only fixture fix landed in PR #1576 at b0a4568855ca2d2378698ba23e5ff867a7c6650b. The equivalent evidence sim operation (verify:all --require-mcp --emit-evidence --vm-native-build) completed passed/exit 0 at 2026-10-21T22:14:10.153Z in 1196548ms on clean source a70c36b3e0e897d8a80a863e7228417f729e487f, actual branch codex/worker-runtime-evidence-20261021, a descendant of requested baseline 2b7f81f342b63cc5bb2e9850b3509cdcc9361b56. Artifact f3b55f7173ed5d5365a102ebadadef2e0e1dfcea is committed and published in https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1577 (pending merge; not yet claimed canonical). Manifest v97 fingerprint aa9ce381438ecb26874cdbe60b82a9339821d6b540f176e122291202a6b3885b matches; Review Hub and MCP passed with 141 passed proof records, clean MCP 343339c436dea47818fa17cf3be486782e62d912, and both web steps VM-attested on exact a70 source. This acknowledgement covers this single refresh request; the separate multi-item messages and old cloud scheduler remain unresolved.",
+  "ackedAt": "2026-10-21T23:08:53.841Z"
+}

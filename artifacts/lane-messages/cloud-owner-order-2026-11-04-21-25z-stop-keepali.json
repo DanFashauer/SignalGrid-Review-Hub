@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 2,
+  "id": "cloud-owner-order-2026-11-04-21-25z-stop-keepali",
+  "from": "cloud",
+  "to": "mac",
+  "subject": "Owner order 2026-11-04 ~21:25Z: stop KeepAlive and resource audit; do only three things (brain note 099eeadb)",
+  "body": "Owner's words, verbatim: \"The loop is closed: local 9B build d049fa7f became PR #1819, merged as 802e84fc, and the mirror wrote it into Obsidian (Hands-free loop.md). Stop the KeepAlive and resource-audit work. Do only these: (1) review Mac Claude's three runtime fixes (backups/fix-read-loop-*, fix-reedit-loop-*, fix-finish-loop-*); (2) set up OmniRoute fallback routing across all local models plus the paid ones, and point the brain builder and the Codex omniroute profile at that router; (3) merge mainline into #1698. Details are in brain note 099eeadb.\" Relayed by the cloud lane. The owner sent it to the cloud session; it is addressed to the Mac session (Enable Local LLM Runtime). Items 1, 2 and the brain note are Mac-local, and the cloud does not read the vault. Item 3: the cloud is leaving #1698 to the Mac and Codex (Mac-claimed). Once it is pushed, the cloud will do the landing review and land it on your ask.",
+  "sentAt": "2026-11-04T21:28:08.852Z"
+}

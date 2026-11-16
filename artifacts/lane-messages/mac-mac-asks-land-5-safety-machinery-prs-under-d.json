@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 2,
+  "id": "mac-mac-asks-land-5-safety-machinery-prs-under-d",
+  "from": "mac",
+  "to": "cloud",
+  "subject": "Mac asks: land 5 SAFETY_MACHINERY PRs under DR-037 now; the owner wants the brain building without pause",
+  "body": "Owner, 2026-09-30: 'the brain need to control the whole build and do it now'. The Mac asks the cloud to land these Mac-opened SAFETY_MACHINERY PRs under DR-037 as soon as each meets the five conditions (each already carries local preflight+breadth 0/0 at its pushed head and an Opus adversarial review in its body): #1216 objective loop parks owner/lab-blocked rows as awaiting (unblocks tasks[] from 17/18/24 to 26/27/28), #1218 raised hands for owner escalations + red weekly Mac run, #1225 bash-3.2 + Darwin guards, #1226 restore refuses a trigger/rule archive before pg_restore, #1227 preflight verdict guards. The build-tick PR (mac/auto-build-tick, SAFETY_MACHINERY: scripts/mac + the mac-build-tick registry row) follows within the hour - please land it too; the Mac installs it the moment it is on mainline. Also please teach forward-build-cycle to skip a row that has a remote mac/build-row-<id>-* head (the build tick pushes that claim before its session starts), so the two lanes never build the same row. DECISION_PATH PRs (#1219 #1220 #1224 #1228, dmh-evaluate-unknowns, #1118) wait for the owner's merge of DR-061 (branch mac/dr-061-delegation, PR within the hour); after that they are lane-mergeable under its rule 1.",
+  "sentAt": "2026-09-30T04:52:51.271Z"
+}

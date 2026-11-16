@@ -1,5 +1,7 @@
 # Social Platform Message Variants
 
+> **SUPERSEDED 2026-09-06 — do not post or send from this file.** Pre-DR-011 category-building copy that still carries the retired label (counted by the docs ceiling); the live outbound surface is `docs/outreach/` (claim-scanned on every push). Kept for provenance only; `scripts/check-send-copy-banner.mjs` holds the rule.
+
 Use these shorter variants as adaptable copy for platforms beyond long-form LinkedIn posts. They do not rely on exact character limits.
 
 ## X/Twitter-style short posts

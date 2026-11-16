@@ -37,7 +37,11 @@ export function IntegrationStatusBadge({ status }: { status: string }) {
       return <Badge variant="outline" className="bg-signal-nominal border-transparent font-mono uppercase">Connected</Badge>;
     case "degraded":
       return <Badge variant="outline" className="bg-signal-anomalous border-transparent font-mono uppercase">Degraded</Badge>;
+    // `disconnected` is a configured integration that is DOWN — its own label in
+    // the danger tone. It used to share "Not Configured", so an outage read as
+    // never-set-up.
     case "disconnected":
+      return <Badge variant="outline" className="bg-signal-critical border-transparent font-mono uppercase">Disconnected</Badge>;
     case "not-configured":
       return <Badge variant="outline" className="bg-signal-unknown border-transparent font-mono uppercase">Not Configured</Badge>;
     default:

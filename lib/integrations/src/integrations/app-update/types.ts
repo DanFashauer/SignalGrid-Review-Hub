@@ -21,6 +21,8 @@
 // posture. It takes no action of its own: distribution and enforcement stay with
 // MDM; SignalGrid gates.
 
+import type { FamilyAction } from "../action-ladder";
+
 /** Where the installed app came from, as REPORTED BY MDM (never self-measured by
  *  the app — an app attesting to its own provenance proves nothing). `managed` =
  *  installed through the managed channel (MDM InstallApplication / ABM). */
@@ -71,7 +73,11 @@ export interface AppUpdateReportRaw {
   [k: string]: unknown;
 }
 
-export const APP_UPDATE_REPORT_KEYS = [
+/** FROZEN: this is the allowlist `hasUnrecognizedKey` reads. `readonly` is compile-time only,
+ *  and a JavaScript caller that pushed a key onto it would turn an unrecognized assertion
+ *  into a clean one (found by the namespace-wide freeze check in proof:app-update on
+ *  2026-09-11, the same hole the two new modules had just closed). */
+export const APP_UPDATE_REPORT_KEYS = Object.freeze([
   "installed_version",
   "latest_version",
   "min_version",
@@ -79,7 +85,7 @@ export const APP_UPDATE_REPORT_KEYS = [
   "channel",
   "crash_count",
   "stability_window_hours",
-] as const;
+] as const);
 
 export interface NormalizedAppUpdate {
   sourceSystem: "app-update";
@@ -108,7 +114,7 @@ export type AppUpdatePosture =
   | "version_unknown" // currency could not be positively established
   | "unverified"; // malformed / unreadable report
 
-export type AppUpdateAction = "none" | "monitor" | "step_up" | "alert" | "restrict" | "escalate";
+export type AppUpdateAction = FamilyAction;
 
 export type AppUpdateReasonCode =
   | "CURRENT_MANAGED"

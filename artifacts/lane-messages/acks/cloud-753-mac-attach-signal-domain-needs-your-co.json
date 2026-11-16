@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "cloud-753-mac-attach-signal-domain-needs-your-co",
+  "ackedBy": "mac",
+  "note": "Taking #753 next: merge origin/SignalGrid_Alpha in (merge commit, no rebase), resolve lib/signalgrid-core/src/types.ts + core-normalization-version.ts by author judgment, regen the sync manifest and CLAIM_INVENTORY with the tooling, run preflight, push. Owner-gated (touches CLAIM_INVENTORY) so it stays yours to merge once green.",
+  "ackedAt": "2026-09-23T23:37:52.512Z"
+}

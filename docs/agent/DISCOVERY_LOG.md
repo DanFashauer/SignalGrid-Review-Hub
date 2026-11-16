@@ -1,11 +1,14 @@
 # Customer discovery — the log
 
-**State: Customer Discovery.** Repository engineering is **not** stopped — DR-021
-(2026-08-31) lifted the engineering freeze in full, and this line said "stopped"
-until 2026-09-02. What the line was reaching for is still true and is the point of
-this log: **no amount of engineering moves the number below.** The next evidence
-that can materially change `docs/PURPOSE.md`, the P0 wedge, or the product
-hierarchy must come from outside the repo.
+**State: Build / execution (past Customer Discovery — DR-033, 2026-09-10).** The company
+is no longer in the Customer Discovery phase, and this log no longer sets the operating
+phase or gates the loop. It stays because discovery evidence is still a valuable **input**:
+the evidence that can materially change `docs/PURPOSE.md`, the P0 wedge, or the product
+hierarchy still comes from outside the repo. Repository engineering is not stopped (DR-021,
+2026-08-31, lifted the freeze in full). A day without a new conversation is no longer a
+failing state — it is a note. Near-term objective (DR-033): a working core product that
+does what it claims — something real in hand for partners/collaborators before
+GTM/execution.
 
 `PURPOSE.md` closes on this test:
 
@@ -145,15 +148,30 @@ profile, their answer counts.
 
 ## Running tally
 
-| # | Date | Role | S | I | P | R | Rt | **C** |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | | | | | | | | |
+| # | Date | Role | S | I | P | R | Rt | **C** | Rh | Ch | Ph |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | | | | | | | | | | | |
 
 *S ubstitute · I ndifference · P roblem · R equirement · R(ou)t(ing) ·
-**C ommitment***
+**C ommitment*** · **Rh** hardware REQUIREMENT · **Ch** hardware COMMITMENT · **Ph** hardware PROBLEM — each requires the base column (R / C / P) marked too, and never the reverse (DR-043). Mark a hardware cell with `X` only; any other nonempty value (a `?`, "pending", "no") FAILS the gate rather than being silently counted or silently ignored (`scripts/check-discovery-log.mjs`).
 
 **Experiment started: 2026-08-27**
 **Conversations logged: 0 of 15 · Commitments: 0**
+
+**Hardware (DR-043) — Rh: 0 of 15 · Ch: 0 of 15 · Ph: 0 of 15.** Rh counts
+REQUIREMENT rows also marked hardware-specific — a requirement that maps
+specifically to faster or stronger physical session authentication or the
+deferred design-target custody mechanism; Ch counts COMMITMENT rows also
+marked hardware-specific (willingness to scope and test that workflow); Ph
+counts PROBLEM rows also marked hardware-specific, read together with Ch
+(PROBLEM with COMMITMENT = 0 is the no-go signal). Derived by
+`node scripts/check-discovery-log.mjs` from the
+marks in the table above — never typed by hand — and read by name, not by
+value, in [`docs/SESSION_PUCK_HARDWARE_HYPOTHESIS.md`](../SESSION_PUCK_HARDWARE_HYPOTHESIS.md)'s
+go/no-go table (DR-043 rule 4, `docs/BUILD_BACKLOG.md` "Puck 5"). Nobody has
+tagged a row hardware-specific yet, so all three read zero — the honest
+boundary below applies here exactly as it does to every other cell in this
+table: this sentence cannot be advanced by editing it.
 
 ---
 
@@ -162,3 +180,51 @@ profile, their answer counts.
 Nothing in this file, the repository, the doctrine, the gates or the diagrams
 can produce a single row in that table. This phase cannot be prepared for
 further — it can only be done.
+
+---
+
+## Hardware follow-up prompts (DR-043, DR-055)
+
+Asked only after Phase 1 has been answered in full and Phase 2 has been asked — never as
+an opener and never after a demo. They come from the owner's 2026-09-23 puck flow (DR-055)
+and exist so that a hardware-specific answer is recognised when it arrives. They change no
+count and no threshold: an answer earns a hardware mark only under the Running tally's own
+rules, and a prompt that was asked is not evidence of anything.
+
+- **Badge or puck.** *"When someone picks up a shared phone today, what do they tap or
+  present to get into it?"*
+- **The badge on its own.** *"Does your staff ever need their badge while the shared phone
+  is somewhere else — doors, parking, the time clock?"*
+- **Charging.** *"How do your shared devices charge between shifts — cables, cradles,
+  trays or wireless pads?"*
+- **Cleaning.** *"Who cleans a returned device, with what, and does anyone sign that it was
+  done?"*
+- **Check-out and return today.** *"What already handles check-out and return of shared
+  devices, and where does it fall short?"* Log the product they name verbatim; if it is a
+  badge-tap mobile access management product, ask what it misses rather than whether it is
+  good.
+- **Alarm continuity.** *"If a shared phone were locked or signed out in the middle of a
+  shift, what would happen to the alarms and calls routed to it?"*
+
+Added 2026-09-24 from the owner's assigned-device note (DR-055 item 6), for a buyer whose
+knowledge workers or executives have their own PC and phone. Same rules as above: asked after
+Phase 1 and Phase 2, no count, no threshold. An answer that a Windows Hello for Business,
+Platform Credential, passkey, Wallet badge or badge-integrated key would also satisfy is not puck
+evidence; only an answer that needs the phone-mounted form factor can earn a hardware mark.
+
+- **Why a puck at all.** *"Why a puck when the phone is already a passkey and a badge?"*
+- **Against what they already have.** *"Why a key mounted on the phone rather than Windows Hello
+  for Business or Platform Credential on the assigned PC or Mac, an attested passkey on the
+  phone, a Wallet badge, or a keyring or badge FIDO2 key?"*
+- **Local logon today.** *"Do your executives' PCs restrict local sign-in to that person today,
+  or can any employee sign in?"*
+- **Who changes the record.** *"Who can change which user a device is assigned to, and would you
+  notice?"*
+- **Lost phones.** *"When an executive's phone is lost, how fast does IT hear, and is the phone
+  supervised?"*
+- **Delegation.** *"How do assistants act for executives today — delegation or shared
+  credentials?"*
+- **Wireless charging.** *"Do people charge their phones wirelessly?"*
+- **Shared or assigned.** *"Are hot desks and meeting-room PCs shared or assigned?"*
+- **Phone present.** *"Is 'my phone must be with me to unlock my PC' wanted?"* Windows trusted
+  signal unlock already does this without a puck; log whether they knew.

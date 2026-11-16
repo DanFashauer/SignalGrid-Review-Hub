@@ -554,7 +554,7 @@ const STEPS = [
   { name: "Proof: live-idp (real OIDC provider, real DPoP)", cmd: ["pnpm", "run", "proof:live-idp"] },
   // Drives the built bundles, so it inherits the same platform constraint.
   { name: "E2E port allocator self-test (distinct free ports; an explicit or busy port is never reused)", cmd: ["node", "scripts/lib/e2e-ports.mjs", "--self-test"] },
-  { name: "Browser E2E (review console, website, admin)", cmd: ["pnpm", "run", "test:e2e"], heavy: true, needsNativeBuild: true, freeE2ePorts: true },
+  { name: "Browser E2E (review console, website, admin)", cmd: ["pnpm", "run", "test:e2e"], heavy: true, needsNativeBuild: true, freeE2ePorts: true, env: { E2E_FRESH_SERVERS: "1" } },
   { name: "Proof: signalgrid-simulator", cmd: ["pnpm", "run", "proof:signalgrid-simulator"] },
   // Sibling of the proof above, one layer OUT. The simulator engine's remediation
   // branch grants `allow` without the `outcomes.size === 0` guard the base-trust

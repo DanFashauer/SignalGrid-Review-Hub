@@ -6,7 +6,14 @@
 // report green for code it never served. Picking free ports for every E2E_*_PORT the caller
 // did not set gives each run its own servers. An explicit E2E_*_PORT is always respected.
 import net from "node:net";
+import http from "node:http";
+import { execFile } from "node:child_process";
+import { existsSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { isMainModule } from "./is-main.mjs";
+
+const SCRIPTS = join(dirname(fileURLToPath(import.meta.url)), "..");
 
 export const E2E_PORT_VARS = ["E2E_REVIEW_PORT", "E2E_WEB_PORT", "E2E_API_PORT", "E2E_ADMIN_PORT", "E2E_DESKTOP_PORT", "E2E_PWA_PORT"];
 
@@ -49,6 +56,25 @@ async function selfTest() {
   check(!("E2E_API_PORT" in partial) && Object.keys(partial).length === E2E_PORT_VARS.length - 1, "an explicitly set port is respected, never replaced");
   const second = await freeE2ePorts({});
   check(Object.keys(second).length === E2E_PORT_VARS.length, "a second allocation also succeeds");
+  // The consumer half: a server another tree left on a PINNED port must make a qualification run
+  // fail, never stand in for this tree's build. Occupy a free port, pin the review server to it, and
+  // let Playwright's own webServer setup decide; no test runs and nothing is built.
+  const pw = join(SCRIPTS, "node_modules", ".bin", "playwright");
+  if (!existsSync(pw)) { check(false, `playwright binary present at ${pw} (run pnpm install)`); }
+  else {
+    const port = Number((await freeE2ePorts({})).E2E_REVIEW_PORT);
+    const foreign = await new Promise((resolve) => { const s = http.createServer((_q, r) => r.end("another tree")); s.listen(port, "127.0.0.1", () => resolve(s)); });
+    const run = (extra) => new Promise((resolve) => {
+      const env = { ...process.env, E2E_REVIEW_PORT: String(port), ...extra };
+      delete env.CI; if (!("E2E_FRESH_SERVERS" in extra)) delete env.E2E_FRESH_SERVERS;
+      execFile(pw, ["test", "--config", "playwright.config.ts", "--grep", "@@no-such-test@@"], { cwd: SCRIPTS, env, timeout: 120000 }, (_e, out, err) => resolve(`${out}${err}`));
+    });
+    const fresh = await run({ E2E_FRESH_SERVERS: "1" });
+    const dev = await run({});
+    await new Promise((done) => foreign.close(() => done()));
+    check(/already used/.test(fresh), "qualification (E2E_FRESH_SERVERS=1): a foreign server on a pinned port is refused, not reused");
+    check(!/already used/.test(dev), "control: ordinary local development still reuses it (proves the refusal comes from the flag)");
+  }
   if (failed) { console.error(`e2e-ports self-test: ${failed} failed`); process.exit(1); }
   console.log("e2e-ports self-test passed");
 }

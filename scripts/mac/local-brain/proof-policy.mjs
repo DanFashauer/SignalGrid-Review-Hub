@@ -13,11 +13,16 @@
  */
 
 const SAFE_PATH_RE = /^(?:[a-zA-Z0-9_\-\.]+\/)*[a-zA-Z0-9_\-\.]+$/;
+// The public agent definitions (#2182). Only this leading `.claude` component is exempt from the
+// dot-directory refusal, and only when the next segment names one of these trees: bare `.claude`,
+// its other entries, other hidden roots and every hidden descendant stay refused. Review only.
+const PUBLIC_AGENT_TREES = new Set(['agents', 'skills', 'commands']);
 
 function isSafePath(path) {
   if (typeof path !== 'string' || !path.trim()) return false;
   const parts = path.split('/');
-  for (const part of parts) {
+  for (const [i, part] of parts.entries()) {
+    if (i === 0 && part === '.claude' && PUBLIC_AGENT_TREES.has(parts[1])) continue;
     if (!part || part === '.' || part.startsWith('..') || part.startsWith('.') && part.length > 1) {
       return false;
     }

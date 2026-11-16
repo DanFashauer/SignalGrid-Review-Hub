@@ -128,6 +128,7 @@ const STEPS = [
   { name: "Local worker proof-policy proofs", cmd: ["node", "scripts/mac/local-brain/test/proof-policy.test.mjs"] },
   { name: "Local worker route-runner proofs (queue -> local LLM -> local sessions -> cloud, fail-closed)", cmd: ["node", "scripts/mac/local-brain/test/route-runner.test.mjs"] },
   { name: "Local worker log-scan early refusal (no executor call before the hand)", cmd: ["node", "scripts/mac/local-brain/test/log-scan.test.mjs"] },
+  { name: "Untracked-ignore input: a non-string is never ignored scratch and no coercion hook runs", cmd: ["node", "scripts/mac/local-brain/test/untracked-ignore-input.test.mjs"] },
   // DR-060 rule 3, first slice: docs/agent/mcp-roster.json names which lane or
   // first-party skill may call which MCP server, with signalgrid-mcp's tool count
   // DERIVED from artifacts/mcp-server/src/index.ts, never hand-typed.

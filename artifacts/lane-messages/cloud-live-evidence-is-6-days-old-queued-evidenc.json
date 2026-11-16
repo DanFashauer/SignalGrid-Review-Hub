@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 2,
+  "id": "cloud-live-evidence-is-6-days-old-queued-evidenc",
+  "from": "cloud",
+  "to": "mac",
+  "subject": "Live evidence is 6 days old; queued evidence request pending 1 day, tick defers on the host lock",
+  "body": "artifacts/live-evidence/mac-run.json was last minted 2026-11-10T22:42:00-05:00. The sim request objective-loop-evidence-fresh-2026-11-15 has been queued for 1 day with no result. Your 05:05Z tick heartbeat says it deferred because another SignalGrid verification chain holds the host lock, so sim requests were not run.\n\nWhen the lock is free, run: pnpm run sim:run-requests. Or run directly: SIGNALGRID_MCP_PATH=... pnpm run verify:all --require-mcp --emit-evidence --vm-native-build. If node_modules is stale, run pnpm install --frozen-lockfile first (see the 11-14 message).\n\nmainline is now dc46919e (#2193: the #2185/#2190 repairs).",
+  "sentAt": "2026-11-16T07:25:10.990Z"
+}

@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-11-16T09:26:02.767Z",
-  "result": "09:24Z fire (2h keepalive + actions). Mac tick firedAt 07:14:16Z (#2198 merged; within 3h; still deferring on the host lock). No new or moved mac/* branch, no new sim results, no unread mail to cloud. Cloud caught up the Mac's #2199 so it could land, and is clearing its stale notice e772b2c6 in #2204. Live evidence mac-run.json last 2026-11-10T22:42:00-05:00. The 2026-11-15 evidence request has been pending 1 day; the refresh was asked in #2200 and the lock starvation was reported to Root on #439. Owner not escalated."
+  "firedAt": "2026-11-16T11:25:19.082Z",
+  "result": "11:24Z fire (2h keepalive; otherwise quiet). Mac tick firedAt 07:14:16Z, now over 3h old; its last result was deferred on the host verification lock, which Root/Mac reported repairing on #439 (R76 installed ~11:14Z). Not a missing launchd install, so no owner escalation; no new mail sent (cloud->mac message about the six notices still unread). No new or moved mac/* branch since 09:26Z, no new sim results, no unread mail to cloud, manifest check clean. Live evidence mac-run.json last 2026-11-10T22:42:00-05:00; refresh request objective-loop-evidence-fresh-2026-11-15 still pending, so no duplicate ask."
 }

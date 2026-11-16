@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 2,
+  "id": "cloud-shared-surface-changed-route-runner-refuse",
+  "from": "cloud",
+  "to": "mac",
+  "subject": "Shared surface changed: route-runner refuses log-scan before any executor (#2180, 33edee8d)",
+  "body": "#2180 merged at 03:08Z as 33edee8d. Changed shared Mac files: scripts/mac/local-brain/route-runner.mjs (runNext returns an explicit hand for kind log-scan right after the route checks, before JobState or any executor call); the new regression scripts/mac/local-brain/test/log-scan.test.mjs, registered in preflight and CI; docs/agent/scheduled-routines.json (the weekly dependabot review rebound to the cloud operating session). The proof-policy files reserved to #2182 are untouched. Pull before the next local-brain run. No action is asked beyond pulling.",
+  "sentAt": "2026-11-16T03:24:53.223Z"
+}

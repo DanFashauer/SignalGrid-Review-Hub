@@ -49,6 +49,12 @@ const chromiumPath =
   process.env.E2E_CHROMIUM_PATH ??
   (fs.existsSync(PREINSTALLED_CHROMIUM) ? PREINSTALLED_CHROMIUM : undefined);
 
+// Reuse a server already on the port only in ordinary local development. CI never reuses, and
+// neither does a QUALIFICATION run (preflight sets E2E_FRESH_SERVERS=1): a server another tree
+// started must make the run fail on the busy port, never stand in for this tree's build, whether
+// the port was picked freshly or pinned by the caller.
+export const REUSE_SERVERS = !process.env.CI && !process.env.E2E_FRESH_SERVERS;
+
 export default defineConfig({
   testDir: "./src/e2e",
   fullyParallel: true,
@@ -73,7 +79,7 @@ export default defineConfig({
       cwd: repoRoot,
       env: { PORT: String(PORTS.review) },
       url: `http://localhost:${PORTS.review}/`,
-      reuseExistingServer: !process.env.CI,
+      reuseExistingServer: REUSE_SERVERS,
       timeout: 180_000,
       stdout: "ignore",
       stderr: "pipe",
@@ -85,7 +91,7 @@ export default defineConfig({
       cwd: repoRoot,
       env: { PORT: String(PORTS.web) },
       url: `http://localhost:${PORTS.web}/`,
-      reuseExistingServer: !process.env.CI,
+      reuseExistingServer: REUSE_SERVERS,
       timeout: 180_000,
       stdout: "ignore",
       stderr: "pipe",
@@ -106,7 +112,7 @@ export default defineConfig({
         WEBAUTHN_ORIGIN: `http://localhost:${PORTS.admin}`,
       },
       url: `http://localhost:${PORTS.api}/api/healthz`,
-      reuseExistingServer: !process.env.CI,
+      reuseExistingServer: REUSE_SERVERS,
       timeout: 180_000,
       stdout: "ignore",
       stderr: "pipe",
@@ -123,7 +129,7 @@ export default defineConfig({
         API_PROXY_TARGET: `http://localhost:${PORTS.api}`,
       },
       url: `http://localhost:${PORTS.admin}/`,
-      reuseExistingServer: !process.env.CI,
+      reuseExistingServer: REUSE_SERVERS,
       timeout: 180_000,
       stdout: "ignore",
       stderr: "pipe",
@@ -140,7 +146,7 @@ export default defineConfig({
         API_PROXY_TARGET: `http://localhost:${PORTS.api}`,
       },
       url: `http://localhost:${PORTS.desktop}/`,
-      reuseExistingServer: !process.env.CI,
+      reuseExistingServer: REUSE_SERVERS,
       timeout: 180_000,
       stdout: "ignore",
       stderr: "pipe",
@@ -156,7 +162,7 @@ export default defineConfig({
         API_PROXY_TARGET: `http://localhost:${PORTS.api}`,
       },
       url: `http://localhost:${PORTS.pwa}/`,
-      reuseExistingServer: !process.env.CI,
+      reuseExistingServer: REUSE_SERVERS,
       timeout: 180_000,
       stdout: "ignore",
       stderr: "pipe",

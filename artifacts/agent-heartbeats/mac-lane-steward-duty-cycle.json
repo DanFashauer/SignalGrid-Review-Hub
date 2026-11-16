@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-11-16T03:24:51.946Z",
-  "result": "03:24Z fire, non-quiet: a shared surface changed (#2180 route-runner and its new test), so the Mac was mailed. Mac tick firedAt 02:34:51Z (within 3h). Mac lane-mail PRs #2181 and #2183 are open and the Mac's own. No new or moved mac/* branch; no sim results; no mail to cloud; manifest clean. Live evidence mac-run.json last 2026-11-10T22:42:00-05:00; refresh asked, not acked. Owner not escalated."
+  "firedAt": "2026-11-16T05:24:53.339Z",
+  "result": "05:24Z fire: keepalive (the last heartbeat at 03:24Z reaches the 2h mark). Quiet otherwise. Mac tick firedAt 05:05:28Z (within 3h). No new or moved mac/* branch, no sim results, no mail to cloud, manifest clean. Live evidence mac-run.json last 2026-11-10T22:42:00-05:00; refresh asked, not acked. Owner not escalated."
 }

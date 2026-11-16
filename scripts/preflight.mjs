@@ -12,6 +12,7 @@
 // Exits non-zero on the first failing gate and prints a compact report, so
 // "green preflight" means "CI will be green".
 import { spawnSync } from "node:child_process";
+import { freeE2ePorts } from "./lib/e2e-ports.mjs";
 import { readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { resolve, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -553,7 +554,8 @@ const STEPS = [
   { name: "Proof: signalgrid-core", cmd: ["pnpm", "run", "proof:signalgrid-core"] },
   { name: "Proof: live-idp (real OIDC provider, real DPoP)", cmd: ["pnpm", "run", "proof:live-idp"] },
   // Drives the built bundles, so it inherits the same platform constraint.
-  { name: "Browser E2E (review console, website, admin)", cmd: ["pnpm", "run", "test:e2e"], heavy: true, needsNativeBuild: true },
+  { name: "E2E port allocator self-test (distinct free ports; an explicit or busy port is never reused)", cmd: ["node", "scripts/lib/e2e-ports.mjs", "--self-test"] },
+  { name: "Browser E2E (review console, website, admin)", cmd: ["pnpm", "run", "test:e2e"], heavy: true, needsNativeBuild: true, freeE2ePorts: true, env: { E2E_FRESH_SERVERS: "1" } },
   { name: "Proof: signalgrid-simulator", cmd: ["pnpm", "run", "proof:signalgrid-simulator"] },
   // Sibling of the proof above, one layer OUT. The simulator engine's remediation
   // branch grants `allow` without the `outcomes.size === 0` guard the base-trust
@@ -925,10 +927,13 @@ for (const step of STEPS) {
   }
   process.stdout.write(`▶ ${step.name} … `);
   const [bin, ...args] = step.cmd;
+  // Off CI, playwright.config.ts reuses any server already on its port, so a concurrent preflight would test the
+  // other tree's build. Each E2E run gets its own free ports unless the caller pinned them (scripts/lib/e2e-ports.mjs).
+  const portEnv = step.freeE2ePorts ? await freeE2ePorts(process.env) : {};
   const r = spawnSync(bin, args, {
     cwd: repo,
     encoding: "utf8",
-    env: { ...process.env, ...(step.env ?? {}) },
+    env: { ...process.env, ...portEnv, ...(step.env ?? {}) },
   });
   const combined = `${r.stdout ?? ""}${r.stderr ?? ""}`;
   // Exit 0 is not evidence. A proof that SELF-SKIPS prints one line and exits 0; a report-only

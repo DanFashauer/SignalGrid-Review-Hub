@@ -18,7 +18,7 @@ import { createHash } from "node:crypto";
 export const RECORD_VERSION = 1;
 /** Every field a STEPS entry may carry. An unknown field is refused, not silently left out of
  *  the hash: a field that changes what runs or how it is judged must change the plan. */
-const STEP_FIELDS = new Set(["name", "cmd", "env", "heavy", "needsNativeBuild", "selfSkipsWithout", "surface", "prerequisiteForLater"]);
+const STEP_FIELDS = new Set(["name", "cmd", "env", "heavy", "needsNativeBuild", "selfSkipsWithout", "surface", "prerequisiteForLater", "freeE2ePorts"]);
 /** A non-pass is accepted only where the STEP'S OWN DECLARATION allows it, exactly as plain
  *  preflight can only produce it there (scripts/lib/preflight-verdict.mjs and the runner's two
  *  skips). A record cannot talk an ordinary gate into "unavailable" or "self-skipped".
@@ -78,7 +78,7 @@ export function planOf(steps, repo) {
     }
     return {
       index, name, cmd: step.cmd.map((part, i) => text(part, `step ${index} argv[${i}]`)), env,
-      heavy: flag("heavy"), needsNativeBuild: flag("needsNativeBuild"), prerequisiteForLater: flag("prerequisiteForLater"),
+      heavy: flag("heavy"), needsNativeBuild: flag("needsNativeBuild"), prerequisiteForLater: flag("prerequisiteForLater"), freeE2ePorts: flag("freeE2ePorts"),
       selfSkipsWithout: step.selfSkipsWithout === undefined ? null : text(step.selfSkipsWithout, `step ${index} selfSkipsWithout`),
       surface,
     };

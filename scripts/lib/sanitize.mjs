@@ -48,7 +48,8 @@ export function sanitize(text) {
       i += 1;
       while (i < text.length) {
         if (text[i] === "\\") {
-          out += "  ";
+          // Mask the escape but keep a newline it escapes (a line continuation), so line numbers stay true.
+          out += keepNewlines(text.slice(i, i + 2));
           i += 2;
           continue;
         }

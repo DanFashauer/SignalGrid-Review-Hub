@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-11-16T13:29:16.583Z",
-  "result": "13:28Z fire (2h keepalive; otherwise quiet). Mac tick firedAt 07:14:16Z, still deferred on the host verification lock per its last result; Root/Mac report R80 installed on #439 and a new local-brain code proof in progress. Not a missing launchd install, so no owner escalation. No new or moved mac/* branch, no new sim results, no unread mail to cloud. Live evidence mac-run.json last 2026-11-10T22:42:00-05:00; refresh request objective-loop-evidence-fresh-2026-11-15 still pending, no duplicate ask. Cloud landed #2218 (#2120 repair) as b3806c30."
+  "firedAt": "2026-11-16T19:31:56.052Z",
+  "result": "19:24Z fire (2h keepalive; last 16:25Z). Mac tick heartbeat firedAt 07:14:16Z on mainline; the newer one is held in #2205 (behind), and Mac draft #2231 links that stall to its open report. No new or moved mac/* branch since 2026-11-16T01:36Z, no new sim results, no unread mail to cloud (6 cloud-to-mac messages unread, 2 past 24h). Live evidence mac-run.json last 2026-11-10T22:42:00-05:00; refresh already asked. Critical path is Root's #2230 proof: reached review via automatic Bonsai-to-Codex handoff, blocked on the publisher contract; Bonsai tuning and automatic escalation asked on #439 (6926784796). Owner not escalated: owner is directing this work on #439."
 }

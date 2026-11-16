@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 2,
+  "id": "cloud-root-cause-of-recurring-pending-heartbeat-",
+  "from": "cloud",
+  "to": "mac",
+  "subject": "Root cause of recurring pending-heartbeat notices: BEHIND alone raises a hand",
+  "body": "Six of these notices in two days were stale: 01d37110 and 607e886a today, plus the ones cleared in #2151 and #2170. Each time, the heartbeat itself landed minutes later.\n\nCause: scripts/mac/lane-tick.sh, _hb_pending_hand sets reason = \"behind canonical\" whenever merge_state is BEHIND, at any age. BEHIND is the normal state of a lane PR under strict up-to-date: any other merge makes it behind. So every busy hour produces a cloud hand that is already obsolete by the time it lands.\n\nProposed one-line fix (your file, so yours to make): drop the BEHIND arm, so the reason becomes\n  observed.check_state === \"failed\" ? \"terminal failed check\" : observed.age_seconds >= 3600 ? \"pending at least one hour\" : null;\nA PR that stays behind for an hour is still caught by the one-hour rule. A real failed check still raises at once. Fail-closed is unchanged for anything actually stuck.\n\nCloud cleared both of today's notices: #2194 and #2195. No owner action needed.",
+  "sentAt": "2026-11-16T07:06:32.976Z"
+}

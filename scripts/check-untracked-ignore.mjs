@@ -29,10 +29,29 @@ const noNodeModules = new RegExp(IGNORED_UNTRACKED.source.replace("node_modules|
 const m1 = failures((p) => lockArm.test(p));
 const m2 = failures((p) => noNodeModules.test(p));
 
+// Malformed input (a separate check; the string fixtures above are unchanged): a non-string
+// is never ignored, and no coercion hook runs. An object mimicking a scratch path would be
+// ignored if the predicate coerced it.
+let hookCalls = 0;
+const hostile = {
+  toString() { hookCalls++; throw new Error("toString invoked"); },
+  valueOf() { hookCalls++; throw new Error("valueOf invoked"); },
+  [Symbol.toPrimitive]() { hookCalls++; throw new Error("toPrimitive invoked"); },
+};
+const MALFORMED = [undefined, null, 0, true, 12n, Symbol("node_modules"), ["node_modules/a.js"], { toString: () => "node_modules/hidden.js" }, new String("node_modules/hidden.js"), hostile];
+const malformed = [];
+for (const v of MALFORMED) {
+  let out;
+  try { out = isIgnoredUntracked(v); } catch (e) { out = `threw ${e?.name ?? "value"}`; }
+  if (out !== false) malformed.push(`${typeof v} → ${String(out)}`);
+}
+if (hookCalls !== 0) malformed.push(`coercion hook invoked ${hookCalls}x`);
+
 const checks = [
   ["real predicate: lockfiles and new source count, scratch is ignored", real.length === 0, real],
   ["mutant 1 (\\.lock$ arm present) turns red", m1.length > 0, m1],
   ["mutant 2 (node_modules arm dropped) turns red", m2.length > 0, m2],
+  ["malformed input: every non-string is not ignored and no coercion hook runs", malformed.length === 0, malformed],
 ];
 let bad = 0;
 for (const [name, ok, detail] of checks) {

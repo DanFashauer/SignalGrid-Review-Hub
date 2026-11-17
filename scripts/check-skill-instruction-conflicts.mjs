@@ -128,8 +128,7 @@
 // those numbers anywhere — the summary line prints the current ones.
 
 import { execFileSync, spawn, spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
-import { Socket } from "node:net";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -321,171 +320,45 @@ const RETRYABLE_TRANSPORT = new Set(["EPIPE", "EAGAIN"]);
  *  reads this before exiting (#2267 review finding 2). */
 const OWNED_CALLS = new Map();
 
-/** Exit fence: stop every still-owned call (its own process group only) and wait,
- *  bounded, for each to close. Returns the calls that still have not closed, so the
- *  caller can REPORT them instead of exiting as if cleanup were done. */
-export async function drainOwned(boundMs = CLOSE_GRACE_MS) {
-  const pending = [...OWNED_CALLS.entries()];
-  for (const [pid] of pending) {
+/** Exit fence: stop every still-owned call (its own process group only) and wait for
+ *  each to ACTUALLY close. There is no bound that authorizes exit: after each grace the
+ *  fence REPORTS what is still pending (via `onPending`) and keeps waiting. A run whose
+ *  owned call never closes never exits — the caller's own supervision (the Mac
+ *  guardian's session census, a job timeout) sees it, because every hook stays in this
+ *  process's session (#2267 review, supported-path design). Returns how many calls
+ *  were ever reported pending. */
+export async function drainOwned({ graceMs = CLOSE_GRACE_MS, onPending = () => {} } = {}) {
+  let reported = 0;
+  for (const [pid] of OWNED_CALLS) {
     try { process.kill(-pid, "SIGKILL"); } catch { /* group already gone */ }
   }
-  await Promise.all(pending.map(([, call]) => Promise.race([call.closed, new Promise((r) => setTimeout(r, boundMs))])));
-  return [...OWNED_CALLS.entries()].map(([pid, call]) => ({ pid, command: call.command, child: call.child }));
-}
-
-// ── cleanup custody (#2267 review finding 2, second round) ───────────────────
-// A call that has not closed by exit is NOT released. Its only closure evidence is EOF
-// on the stdout/stderr pipes this process reads — a descendant that escaped the call's
-// process group can hold them open, and no pid census can see it. So at exit the READ
-// ENDS of those pipes are handed to a detached custodian process (`--custodian`),
-// which keeps ownership until each pipe actually reaches EOF and records that in a
-// durable custody record. The caller's release check is `--cleanup-status`: exit 0
-// only when every record says CLOSED; an open record, or a custodian that died
-// without recording close, is a failure. A log line is never the handoff.
-
-/** Where custody records live: per checkout, inside the git dir (never in the working
- *  tree, so they cannot dirty provenance), or $SIGNALGRID_HOOK_CUSTODY_DIR. */
-function custodyDir() {
-  if (process.env.SIGNALGRID_HOOK_CUSTODY_DIR) return resolve(process.env.SIGNALGRID_HOOK_CUSTODY_DIR);
-  const gitDir = execFileSync("git", ["rev-parse", "--absolute-git-dir"], { cwd: repo, encoding: "utf8" }).trim();
-  return resolve(gitDir, "signalgrid-hook-custody");
-}
-
-function writeRecord(path, record) {
-  const tmp = `${path}.${process.pid}.tmp`;
-  writeFileSync(tmp, `${JSON.stringify(record, null, 2)}\n`);
-  renameSync(tmp, path);
-}
-
-/** Hand every still-open call's pipe read ends to a detached custodian. Returns the
- *  record path and custodian pid; the record says "unknown" if no custodian started.
- *  OWNERSHIP IS MONOTONIC: this process writes the record exactly once, BEFORE the
- *  custodian exists; from spawn on, only the custodian writes it (its own pid first,
- *  then each close). A parent write after spawn could overwrite a CLOSED the custodian
- *  already recorded (Codex-cloud on #2267). Until the custodian stamps its pid the
- *  record reads UNKNOWN — refusal, never release. `afterSpawn` is a test seam at the
- *  exact point a parent publication would sit. */
-async function handOffCustody(openCalls, { dir: dirOverride, afterSpawn, custodianArgv, ackTimeoutMs = 5000 } = {}) {
-  const dir = dirOverride ?? custodyDir();
-  mkdirSync(dir, { recursive: true });
-  const path = resolve(dir, `${process.pid}-${Date.now()}.json`);
-  const streams = [];
-  const calls = openCalls.map((c) => {
-    const fds = [];
-    for (const [name, stream] of [["stdout", c.child.stdout], ["stderr", c.child.stderr]]) {
-      if (stream && !stream.destroyed) { fds.push({ name, fd: 3 + streams.length, closed: false }); streams.push(stream); }
+  while (OWNED_CALLS.size > 0) {
+    const open = [...OWNED_CALLS.values()].map((c) => c.closed);
+    const graceUp = await Promise.race([Promise.all(open).then(() => false), new Promise((r) => setTimeout(() => r(true), graceMs))]);
+    if (graceUp && OWNED_CALLS.size > 0) {
+      reported = Math.max(reported, OWNED_CALLS.size);
+      onPending([...OWNED_CALLS.entries()].map(([pid, call]) => ({ pid, command: call.command })));
     }
-    return { pid: c.pid, command: c.command, pipes: fds };
-  });
-  const record = { schema: 1, gatePid: process.pid, createdAt: new Date().toISOString(), status: "open", handoff: "pending", custodianPid: null, calls };
-  writeRecord(path, record);
-  let custodian;
-  try {
-    custodian = spawn(process.execPath, custodianArgv ?? [fileURLToPath(import.meta.url), "--custodian", path], {
-      detached: true, stdio: ["ignore", "ignore", "ignore", ...streams],
-    });
-  } catch { custodian = null; }
-  if (!custodian || custodian.pid === undefined) {
-    // No custodian exists, so this process is still the only writer.
-    writeRecord(path, { ...record, status: "unknown", reason: "no custodian could be started; the pipes are unobserved" });
-    return { path, custodianPid: null, acknowledged: false };
   }
-  custodian.unref();
-  if (afterSpawn) await afterSpawn(path);
-  // A returned pid is NOT a transfer. Custody counts as handed over only once the
-  // custodian itself acknowledges — handoff "ready" with ITS pid, written after it
-  // holds every pipe. READ-ONLY here: this process never writes the record again.
-  let acknowledged = false;
-  for (let waited = 0; waited <= ackTimeoutMs; waited += 50) {
-    let rec = null;
-    try { rec = JSON.parse(readFileSync(path, "utf8")); } catch { rec = null; }
-    if (rec?.handoff === "ready" && rec.custodianPid === custodian.pid) { acknowledged = true; break; }
-    await new Promise((r) => setTimeout(r, 50));
-  }
-  // Our duplicates of the read ends go either way; without an acknowledgement the
-  // record never stamps and reads UNKNOWN — refusal, never release.
-  for (const st of streams) { try { st.destroy(); } catch { /* already closed */ } }
-  return { path, custodianPid: custodian.pid, acknowledged };
+  return reported;
 }
 
-/** --custodian <record>: hold each handed-over pipe until EOF; record every close. */
-async function runCustodian(path) {
-  const record = JSON.parse(readFileSync(path, "utf8"));
-  // The parent wrote once and handed over; from here this process is the sole writer.
-  const pipes = record.calls.flatMap((c) => c.pipes.map((p) => ({ call: c, pipe: p })));
-  const socks = pipes.map(({ pipe }) => {
-    try { return new Socket({ fd: pipe.fd, readable: true, writable: false }); }
-    catch { pipe.closed = "unknown"; return null; }
-  });
-  // Acknowledge ONLY once every handed pipe is actually held (synchronously, before
-  // any 'end' can be delivered). A pipe we could not take makes the handoff failed.
-  record.custodianPid = process.pid;
-  record.handoff = socks.every(Boolean) ? "ready" : "failed";
-  writeRecord(path, record);
-  await Promise.all(pipes.map(({ pipe }, i) => new Promise((done) => {
-    const sock = socks[i];
-    if (!sock) { done(); return; }
-    sock.on("data", () => { /* drain */ });
-    sock.on("end", () => { pipe.closed = true; pipe.closedAt = new Date().toISOString(); writeRecord(path, record); done(); });
-    sock.on("error", () => { pipe.closed = "unknown"; writeRecord(path, record); done(); });
-  })));
-  const allClosed = record.handoff === "ready" && pipes.every(({ pipe }) => pipe.closed === true);
-  // What this proves, and no more: every handed pipe's writers closed (EOF). A process
-  // can close its pipes and keep running — this is NOT whole-process quiescence.
-  record.status = allClosed ? "closed" : "unknown";
-  if (allClosed) { record.closureEvidence = "pipe-eof"; record.closedAt = new Date().toISOString(); }
-  writeRecord(path, record);
-  return allClosed ? 0 : 2;
+/** Every way out of the CLI before the fence is a thrown GateExit, never a direct
+ *  process.exit — a hard exit would skip the fence and leave owned calls running
+ *  (#2267 review). The file's only process.exit is after the fence. */
+class GateExit extends Error {
+  constructor(code) { super(`gate exit ${code}`); this.code = code; }
 }
 
-/** --cleanup-status [dir]: the caller's release check. Exit 0 only when every custody
- *  record is CLOSED. "open" with a live custodian is still owned; a record whose
- *  custodian is gone (or unknowable) without recording close is UNKNOWN. */
-function cleanupStatus(dir) {
-  const target = dir ? resolve(dir) : custodyDir();
-  let files = [];
-  try { files = readdirSync(target).filter((n) => n.endsWith(".json")); }
-  catch (e) {
-    // Absent = nothing was ever handed off. Any OTHER read failure (not a directory,
-    // unreadable) is an inspection that did not happen — never certified as clean.
-    if (e?.code !== "ENOENT") {
-      console.log(`UNKNOWN  ${target}  custody directory unreadable (${e?.code ?? e?.message ?? "error"})`);
-      console.log("cleanup-status: custody directory could not be inspected");
-      return 1;
-    }
-    files = [];
-  }
-  let bad = 0;
-  for (const name of files) {
-    let rec;
-    try { rec = JSON.parse(readFileSync(resolve(target, name), "utf8")); } catch { console.log(`UNKNOWN  ${name}  unreadable record`); bad += 1; continue; }
-    // Only the custodian's own evidence counts: an acknowledged handoff whose every pipe
-    // reached EOF. A generic "closed" without that evidence is UNKNOWN.
-    if (rec.status === "closed" && rec.handoff === "ready" && rec.closureEvidence === "pipe-eof" &&
-        Array.isArray(rec.calls) && rec.calls.every((c) => Array.isArray(c.pipes) && c.pipes.every((pp) => pp.closed === true))) {
-      console.log(`pipe-eof ${name}`);
-      continue;
-    }
-    const holder = rec.custodianPid ? pidState(rec.custodianPid) : "dead";
-    const label = rec.status === "open" && holder === "alive" ? "OPEN    " : "UNKNOWN ";
-    console.log(`${label} ${name}  custodian=${rec.custodianPid ?? "none"} (${holder})  calls=${rec.calls.map((c) => JSON.stringify(c.command)).join(", ")}`);
-    bad += 1;
-  }
-  console.log(`cleanup-status: ${files.length} record(s), ${bad} not closed`);
-  console.log("  scope: pipe-eof proves each handed pipe's writers closed; it is NOT proof that every descendant process has exited.");
-  return bad === 0 ? 0 : 1;
-}
+/** The supported launcher (#2267 review): each hook call runs in ITS OWN process group
+ *  — so a hung descendant is stopped with it — while staying in THIS process's session,
+ *  so supervision that censuses the session still sees every descendant. Node's
+ *  `detached` would call setsid() and leave the session, so the group is made by a
+ *  fixed perl launcher: setpgrp(0,0), then exec bash with the hook path as a literal
+ *  argv. perl is on stock macOS and on every Linux toolchain this repo runs; if it is
+ *  missing the spawn fails and the call is FATAL, never run unconfined. */
+const LAUNCHER = ["perl", ["-e", 'setpgrp(0,0) or die "setpgrp: $!\n"; exec {"bash"} "bash", $ARGV[0] or die "exec: $!\n"']];
 
-/** Three-valued pid census shared by the release check and the self-test. */
-function pidState(pid) {
-  const r = spawnSync("ps", ["-o", "stat=", "-p", String(pid)], { encoding: "utf8" });
-  if (r.error) return "unknown";
-  const out = (r.stdout ?? "").trim();
-  const err = (r.stderr ?? "").trim();
-  if (r.status === 0 && out !== "") return out.startsWith("Z") ? "dead" : "alive";
-  if (r.status === 1 && out === "" && err === "") return "dead";
-  return "unknown";
-}
 /** A call stopped because ANOTHER call in the same pool failed first. It is still a
  *  HookFatal (an unanswered call is never an allow), but judgeAll never rethrows it:
  *  the first genuine failure is the one reported. */
@@ -513,9 +386,10 @@ function askHook(hookPath, command, timeoutMs = HOOK_TIMEOUT_MS, { signal, close
       reject(new HookCancelled(`${hookPath} was not asked about ${JSON.stringify(command)}: the pool had already failed.`));
       return;
     }
-    // detached:true makes the child its own process-group leader, so a hung
-    // DESCENDANT (the BSD sed in the deny hook, Codex #716) can be killed with it.
-    const child = spawn("bash", [hookPath], { cwd: repo, stdio: ["pipe", "pipe", "pipe"], detached: true });
+    // The launcher makes the call its own process-group leader (so a hung DESCENDANT —
+    // the BSD sed in the deny hook, Codex #716 — is killed with it) WITHOUT leaving this
+    // process's session.
+    const child = spawn(LAUNCHER[0], [...LAUNCHER[1], hookPath], { cwd: repo, stdio: ["pipe", "pipe", "pipe"] });
     if (child.pid !== undefined) {
       const pid = child.pid;
       OWNED_CALLS.set(pid, { command, child, closed: new Promise((r) => child.once("close", r)) });
@@ -750,14 +624,14 @@ async function run() {
   const hookPath = resolve(repo, HOOK);
   if (!existsSync(hookPath)) {
     console.error(`✗ ${HOOK} is missing — there is no deny list to hold the skills to, which is the loosest state this can be in.`);
-    process.exit(1);
+    throw new GateExit(1);
   }
   await proveHookWorks(hookPath);
 
   const paths = trackedSkillFiles();
   if (paths.length < FILE_FLOOR) {
     console.error(`✗ only ${paths.length} tracked files under ${SKILLS_DIR}/ (floor ${FILE_FLOOR}) — the derivation drifted; refusing to report a clean scan of almost nothing.`);
-    process.exit(1);
+    throw new GateExit(1);
   }
   const files = paths.map((p) => ({ path: p, text: readFileSync(resolve(repo, p), "utf8") }));
 
@@ -765,7 +639,7 @@ async function run() {
   const judgeable = allCandidates.filter((c) => !c.mention);
   if (judgeable.length < CANDIDATE_FLOOR) {
     console.error(`✗ only ${judgeable.length} candidate invocations found (floor ${CANDIDATE_FLOOR}) across ${paths.length} files — the fence/inline parse drifted; refusing to conclude.`);
-    process.exit(1);
+    throw new GateExit(1);
   }
 
   const vendoredPath = resolve(repo, VENDORED);
@@ -792,7 +666,7 @@ async function run() {
   console.log(`  ${plant.ok ? "✓" : "✗"} planting one denied step into a real skill adds exactly one finding (${plant.before} → ${plant.after})`);
   if (!plant.ok) {
     console.error("✗ the real-tree plant proof failed — a denied step planted into a real skill was not reported as exactly one new finding; this scan cannot be trusted to see one.");
-    process.exit(1);
+    throw new GateExit(1);
   }
 
   for (const h of overriddenHits) {
@@ -813,7 +687,7 @@ async function run() {
     console.error(`  Fix the skill, or add a row to the \`## Overrides\` table in ${VENDORED}`);
     console.error(`  whose first cell is the backticked path:line (path relative to ${SKILLS_DIR}/) and`);
     console.error(`  whose remaining cells say why the conflict is acceptable.`);
-    process.exit(1);
+    throw new GateExit(1);
   }
   console.log("✓ no tracked skill instructs a command the deny list refuses.");
 }
@@ -833,7 +707,7 @@ async function selfTest() {
 
   if (!existsSync(hookPath)) {
     console.error(`  ✗ ${HOOK} is missing; the self-test cannot run against the real hook.`);
-    process.exit(1);
+    throw new GateExit(1);
   }
 
   const BAD = PLANTED_DENIED;
@@ -1224,12 +1098,13 @@ async function selfTest() {
   );
 
   // 7j. CLI-level exit fence: the real CLI path, run as its own process against a stub
-  //     whose peer cannot close (a holder keeps its stdout open past every bound). The
-  //     CLI must exit non-zero and NAME the still-open owned call — and the process
-  //     holding it must really still be alive when the CLI has exited. Nothing is
-  //     cleaned up until after those observations.
-  const fFile = lifeFile("fence-pids");
-  const fStub = lifeFile("fence.sh");
+  //     whose peer cannot close within the grace (a holder outside the call's group
+  //     keeps its stdout open for 4s). The CLI must report the call PENDING and must not
+  //     exit until the holder has actually closed — the negative control is that no
+  //     recorded process is alive when the CLI exits. Nothing is reaped before that.
+  const fenceStub = (tag) => {
+  const fFile = lifeFile(`${tag}-pids`);
+  const fStub = lifeFile(`${tag}.sh`);
   writeFileSync(fStub, [
     "cmd=$(cat)",
     'case "$cmd" in',
@@ -1245,132 +1120,70 @@ async function selfTest() {
     "wait",
     "",
   ].join("\n"));
-  const custodyAt = resolve(lifeDir, "custody");
+  return fStub;
+  };
+  const fStub = fenceStub("fence");
   const self = fileURLToPath(import.meta.url);
-  const probe = spawnSync(process.execPath, [self, "--fence-probe", fStub], {
-    encoding: "utf8", timeout: 20000, env: { ...process.env, SIGNALGRID_HOOK_CUSTODY_DIR: custodyAt },
-  });
+  const probeStart = process.hrtime.bigint();
+  const probe = spawnSync(process.execPath, [self, "--fence-probe", fStub], { encoding: "utf8", timeout: 30000 });
+  const probeMs = Number((process.hrtime.bigint() - probeStart) / 1000000n);
   const fPids = pidsIn("fence-pids");
-  const fAliveAtExit = fPids.map((p) => [p, liveness(p)]);
-  const fenceLine = (probe.stderr ?? "").split("\n").find((l) => l.includes("cleanup custody")) ?? "";
-  const holderStillAlive = fAliveAtExit.some(([, st]) => st === "alive");
-  // The custodian stamps its own pid as its first write; wait (bounded) for it.
-  for (let i = 0; i < 50; i += 1) {
-    let ok = false;
-    try { ok = readdirSync(custodyAt).some((n) => n.endsWith(".json") && JSON.parse(readFileSync(resolve(custodyAt, n), "utf8")).custodianPid); } catch { ok = false; }
-    if (ok) break;
-    await new Promise((r) => setTimeout(r, 50));
-  }
-  const ackLine = (probe.stderr ?? "").split("\n").find((l) => l.includes("pipe custody")) ?? "";
-  // NEGATIVE CONTROL, before anything is reaped: while the recorded holder is alive, the
-  // caller's release check must REFUSE (exit 1, the record OPEN with a live custodian).
-  const statusWhileLive = spawnSync(process.execPath, [self, "--cleanup-status", custodyAt], { encoding: "utf8", timeout: 10000 });
-  const holderAliveAtStatus = fPids.some((p) => liveness(p) === "alive");
-  let records = [];
-  try { records = readdirSync(custodyAt).filter((n) => n.endsWith(".json")); } catch { records = []; }
-  const rec0 = records.length === 1 ? JSON.parse(readFileSync(resolve(custodyAt, records[0]), "utf8")) : null;
-  const custodianAtStart = rec0?.custodianPid ? liveness(rec0.custodianPid) : "none";
+  const fAtExit = fPids.map((p) => [p, liveness(p)]);
+  const errLines = (probe.stderr ?? "").split("\n");
+  const pendingLine = errLines.find((l) => l.includes("pending:")) ?? "";
+  const lateLine = errLines.find((l) => l.includes("cleanup was late")) ?? "";
   check(
-    "the CLI never exits as if cleanup were done: it fails, NAMES the open owned call, and leaves ONE durable custody record held by a live custodian (#2267)",
-    probe.status === 1 && /cleanup custody: 1 owned hook call\(s\) did not close before exit/.test(fenceLine) &&
-      fenceLine.includes(JSON.stringify("stuck-peer")) && holderStillAlive && fPids.length === 3 &&
-      records.length === 1 && rec0?.status === "open" && rec0?.handoff === "ready" && custodianAtStart === "alive" && /pipe custody ACKNOWLEDGED/.test(ackLine),
-    `status=${probe.status} fence=${JSON.stringify(fenceLine.slice(0, 160))} census=${JSON.stringify(fAliveAtExit)} records=${records.length} custodian=${custodianAtStart}`,
-  );
-  check(
-    "NEGATIVE CONTROL: while the recorded owned process is alive, --cleanup-status refuses release (exit 1, OPEN) (#2267)",
-    statusWhileLive.status === 1 && /^OPEN /m.test(statusWhileLive.stdout ?? "") && holderAliveAtStatus,
-    `status=${statusWhileLive.status} holderAlive=${holderAliveAtStatus} out=${JSON.stringify((statusWhileLive.stdout ?? "").slice(0, 200))}`,
-  );
-  // Nothing is killed: the holder exits on its own (4000ms), its pipe reaches EOF, and the
-  // custodian — not the test — records the close. Only then may release succeed.
-  let statusAfter = null;
-  for (let i = 0; i < 200; i += 1) {
-    statusAfter = spawnSync(process.execPath, [self, "--cleanup-status", custodyAt], { encoding: "utf8", timeout: 10000 });
-    if (statusAfter.status === 0) break;
-    await new Promise((r) => setTimeout(r, 100));
-  }
-  const rec1 = rec0 ? JSON.parse(readFileSync(resolve(custodyAt, records[0]), "utf8")) : null;
-  let custodianGone = "unknown";
-  for (let i = 0; i < 50 && rec1?.custodianPid; i += 1) {
-    custodianGone = liveness(rec1.custodianPid);
-    if (custodianGone === "dead") break;
-    await new Promise((r) => setTimeout(r, 100));
-  }
-  check(
-    "release succeeds only after the custodian itself observes EOF on every handed pipe and records CLOSED (#2267)",
-    statusAfter?.status === 0 && rec1?.status === "closed" && rec1?.closureEvidence === "pipe-eof" && rec1.calls.every((c) => c.pipes.every((p) => p.closed === true)) && custodianGone === "dead",
-    `status=${statusAfter?.status} record=${rec1?.status} custodian=${custodianGone}`,
-  );
-  // A record whose custodian is gone without recording close is UNKNOWN, never released.
-  const orphanDir = resolve(lifeDir, "custody-orphan");
-  mkdirSync(orphanDir, { recursive: true });
-  const deadPid = spawnSync("sh", ["-c", "echo $$"], { encoding: "utf8" }).stdout.trim();
-  writeFileSync(resolve(orphanDir, "orphan.json"), JSON.stringify({ schema: 1, gatePid: 1, status: "open", custodianPid: Number(deadPid), calls: [{ pid: 1, command: "x", pipes: [] }] }));
-  const orphan = spawnSync(process.execPath, [self, "--cleanup-status", orphanDir], { encoding: "utf8", timeout: 10000 });
-  check(
-    "an open record whose custodian is gone reads UNKNOWN and refuses release (exit 1) (#2267)",
-    orphan.status === 1 && /^UNKNOWN /m.test(orphan.stdout ?? ""),
-    `status=${orphan.status} out=${JSON.stringify((orphan.stdout ?? "").slice(0, 200))}`,
-  );
-  // Ordering control (Codex-cloud on #2267): the custodian observes EOF and records
-  // CLOSED BEFORE the parent reaches its post-spawn point. Nothing the parent does after
-  // spawn may undo that — the record must still read closed and release must pass.
-  const raceDir = resolve(lifeDir, "custody-race");
-  const shortChild = spawn("sh", ["-c", "sleep 0.3"], { stdio: ["ignore", "pipe", "pipe"] });
-  const readRec = (pth) => { try { return JSON.parse(readFileSync(pth, "utf8")); } catch { return null; } };
-  let closedBeforeReturn = false;
-  const race = await handOffCustody([{ pid: shortChild.pid, command: "race-child", child: shortChild }], {
-    dir: raceDir,
-    afterSpawn: async (pth) => {
-      for (let i = 0; i < 100 && readRec(pth)?.status !== "closed"; i += 1) await new Promise((r) => setTimeout(r, 50));
-      closedBeforeReturn = readRec(pth)?.status === "closed";
-    },
-  });
-  const raceRec = readRec(race.path);
-  const raceStatus = spawnSync(process.execPath, [self, "--cleanup-status", raceDir], { encoding: "utf8", timeout: 10000 });
-  check(
-    "a custodian that records CLOSED before the parent's post-spawn point stays CLOSED: the parent never republishes, and release passes (#2267)",
-    closedBeforeReturn && raceRec?.status === "closed" && raceRec.calls[0].pipes.every((pp) => pp.closed === true) && raceStatus.status === 0,
-    `closedBeforeReturn=${closedBeforeReturn} record=${raceRec?.status} release=${raceStatus.status}`,
-  );
-  // A spawned pid is not a transfer: a "custodian" that starts and never acknowledges
-  // leaves the handoff UNACKNOWLEDGED and the record UNKNOWN (release refused).
-  const noAckDir = resolve(lifeDir, "custody-noack");
-  const noAckChild = spawn("sh", ["-c", "sleep 0.3"], { stdio: ["ignore", "pipe", "pipe"] });
-  const noAck = await handOffCustody([{ pid: noAckChild.pid, command: "noack-child", child: noAckChild }], {
-    dir: noAckDir, custodianArgv: ["-e", "setTimeout(() => {}, 200)"], ackTimeoutMs: 600,
-  });
-  const noAckStatus = spawnSync(process.execPath, [self, "--cleanup-status", noAckDir], { encoding: "utf8", timeout: 10000 });
-  check(
-    "a custodian launch that returns a pid but never acknowledges is NOT transferred custody: unacknowledged, and release refuses UNKNOWN (#2267)",
-    noAck.custodianPid && noAck.acknowledged === false && noAckStatus.status === 1 && /^UNKNOWN /m.test(noAckStatus.stdout ?? ""),
-    `pid=${noAck.custodianPid} ack=${noAck.acknowledged} release=${noAckStatus.status} out=${JSON.stringify((noAckStatus.stdout ?? "").slice(0, 160))}`,
-  );
-  // A generic "closed" record without the custodian's evidence is never a release.
-  const forgedDir = resolve(lifeDir, "custody-forged");
-  mkdirSync(forgedDir, { recursive: true });
-  writeFileSync(resolve(forgedDir, "forged.json"), JSON.stringify({ schema: 1, status: "closed", custodianPid: null, calls: [{ pid: 1, command: "x", pipes: [{ name: "stdout", closed: true }] }] }));
-  const forged = spawnSync(process.execPath, [self, "--cleanup-status", forgedDir], { encoding: "utf8", timeout: 10000 });
-  check(
-    "a bare status:closed record without an acknowledged handoff and pipe-eof evidence reads UNKNOWN and refuses release (#2267)",
-    forged.status === 1 && /^UNKNOWN /m.test(forged.stdout ?? ""),
-    `status=${forged.status} out=${JSON.stringify((forged.stdout ?? "").slice(0, 160))}`,
-  );
-  // An inspection that fails is never a release: a path that is not a readable
-  // directory refuses; only a genuinely absent directory means nothing was handed off.
-  const notDir = spawnSync(process.execPath, [self, "--cleanup-status", fStub], { encoding: "utf8", timeout: 10000 });
-  const loopA = resolve(lifeDir, "loop-a");
-  symlinkSync(resolve(lifeDir, "loop-b"), loopA);
-  symlinkSync(loopA, resolve(lifeDir, "loop-b"));
-  const loopStatus = spawnSync(process.execPath, [self, "--cleanup-status", loopA], { encoding: "utf8", timeout: 10000 });
-  const absent = spawnSync(process.execPath, [self, "--cleanup-status", resolve(lifeDir, "never-created")], { encoding: "utf8", timeout: 10000 });
-  check(
-    "--cleanup-status fails closed when the custody path cannot be inspected (a file; a symlink loop), and passes only for a truly absent one (#2267)",
-    notDir.status === 1 && /^UNKNOWN /m.test(notDir.stdout ?? "") && loopStatus.status === 1 && /ELOOP/.test(loopStatus.stdout ?? "") && absent.status === 0,
-    `notDir=${notDir.status} loop=${loopStatus.status} absent=${absent.status} out=${JSON.stringify((notDir.stdout ?? "").slice(0, 160))}`,
+    "the CLI does not exit while an owned call is open: it reports it PENDING by name and exits only after the holder has actually closed — nothing recorded is alive at exit (#2267)",
+    probe.status === 1 && pendingLine.includes(JSON.stringify("stuck-peer")) && /cleanup was late: 1 owned hook call/.test(lateLine) &&
+      fPids.length === 3 && fAtExit.every(([, st]) => st === "dead") && probeMs >= 3500,
+    `status=${probe.status} ms=${probeMs} pending=${JSON.stringify(pendingLine.slice(0, 140))} late=${JSON.stringify(lateLine.slice(0, 100))} census=${JSON.stringify(fAtExit)}`,
   );
   reapRecorded(fPids);
+
+  // 7k. A SIGTERM does not skip the fence: delivered while the call is pending, the CLI
+  //     still exits only after its owned call has closed.
+  const sStub = fenceStub("sigterm");
+  const sigChild = spawn(process.execPath, [self, "--fence-probe", sStub], { stdio: ["ignore", "ignore", "pipe"] });
+  let sigErr = "";
+  sigChild.stderr.on("data", (d) => { sigErr += d; });
+  const sigClosed = new Promise((r) => sigChild.once("close", (code, signalName) => r({ code, signalName })));
+  for (let i = 0; i < 200 && !sigErr.includes("pending:"); i += 1) await new Promise((r) => setTimeout(r, 50));
+  const holderAliveAtSignal = pidsIn("sigterm-pids").some((p) => liveness(p) === "alive");
+  sigChild.kill("SIGTERM");
+  const sigEnd = await sigClosed;
+  const sAtExit = pidsIn("sigterm-pids").map((p) => [p, liveness(p)]);
+  check(
+    "a SIGTERM while a call is pending does not skip the fence: the CLI exits 1 by itself, only after the owned call closed (#2267)",
+    holderAliveAtSignal && sigEnd.code === 1 && sigEnd.signalName === null && /SIGTERM received/.test(sigErr) && sAtExit.length === 3 && sAtExit.every(([, st]) => st === "dead"),
+    `aliveAtSignal=${holderAliveAtSignal} end=${JSON.stringify(sigEnd)} census=${JSON.stringify(sAtExit)}`,
+  );
+  reapRecorded(pidsIn("sigterm-pids"));
+
+  // 7l. The supported launcher: each call leads ITS OWN process group but is NOT a
+  //     session leader — it stays in this process's session, where supervision that
+  //     censuses the session can see it (Node's detached would setsid). `ps -o stat`
+  //     marks a session leader with "s" on both Linux and macOS.
+  const pgFile = lifeFile("pg-out");
+  const pgStub = lifeFile("pg.sh");
+  writeFileSync(pgStub, ["cat >/dev/null", `ps -o pid=,pgid=,stat= -p $$ > ${JSON.stringify(pgFile)}`, ""].join("\n"));
+  await askHook(pgStub, "launcher-probe", 5000);
+  const [hPid, hPgid, hStat = ""] = readFileSync(pgFile, "utf8").trim().split(/\s+/);
+  const myPgid = spawnSync("ps", ["-o", "pgid=", "-p", String(process.pid)], { encoding: "utf8" }).stdout.trim();
+  check(
+    "each hook call leads its own process group without leaving this process's session (supported launcher, not setsid) (#2267)",
+    hPid !== undefined && hPid === hPgid && hPgid !== myPgid && !hStat.includes("s"),
+    `pid=${hPid} pgid=${hPgid} stat=${hStat} ourPgid=${myPgid}`,
+  );
+
+  // 7m. No hard exit can bypass the fence: the only process.exit in this file is the
+  //     one after it; every earlier way out is a thrown GateExit.
+  const ownSource = readFileSync(self, "utf8");
+  const exitSites = ownSource.split("\n").filter((l) => /^\s*[^/\s*].*\bprocess\.exit\(/.test(l));
+  check(
+    "every pre-fence exit is a thrown GateExit: exactly one process.exit call, after the fence (#2267)",
+    exitSites.length === 1 && ownSource.indexOf(exitSites[0]) > ownSource.indexOf("const everPending = await drainOwned("),
+    `sites=${JSON.stringify(exitSites)}`,
+  );
   try { rmSync(lifeDir, { recursive: true, force: true }); } catch { /* best-effort */ }
 
   // 8. the plant proof itself, both directions, on a fixture tree. The REAL-tree run of the
@@ -1415,7 +1228,7 @@ async function selfTest() {
 
   const failed = results.filter((r) => !r.ok).length;
   console.log(`self-test: ${results.length - failed} passed, ${failed} failed`);
-  if (failed > 0) process.exit(1);
+  if (failed > 0) throw new GateExit(1);
 }
 
 // --fence-probe <stub> exists ONLY for the self-test's CLI-level control of the exit
@@ -1426,21 +1239,27 @@ async function fenceProbe(stub) {
   throw new HookFatal("fence probe: the pool unexpectedly succeeded");
 }
 
-const custodianAt = process.argv.indexOf("--custodian");
-if (custodianAt !== -1) process.exit(await runCustodian(resolve(process.argv[custodianAt + 1] ?? "")));
-const statusAt = process.argv.indexOf("--cleanup-status");
-if (statusAt !== -1) process.exit(cleanupStatus(process.argv[statusAt + 1]));
-
 const isSelfTest = process.argv.includes("--self-test");
 const probeAt = process.argv.indexOf("--fence-probe");
 let exitCode = 0;
 let unexpected = null;
+// A SIGTERM/SIGINT does not skip the fence: it stops this run's own calls, and the
+// process stays until they have actually closed.
+for (const sig of ["SIGTERM", "SIGINT"]) {
+  process.on(sig, () => {
+    console.error(`✗ ${sig} received — stopping this run's own hook calls; exiting only after they close.`);
+    exitCode = 1;
+    for (const [pid] of OWNED_CALLS) { try { process.kill(-pid, "SIGKILL"); } catch { /* gone */ } }
+  });
+}
 try {
   if (probeAt !== -1) await fenceProbe(resolve(process.argv[probeAt + 1] ?? ""));
   else if (isSelfTest) await selfTest();
   else await run();
 } catch (e) {
-  if (e instanceof HookFatal) {
+  if (e instanceof GateExit) {
+    exitCode = e.code;
+  } else if (e instanceof HookFatal) {
     console.error(`✗ FATAL — ${e.message}`);
     console.error("  This gate judges by asking the hook; an unusable hook is a failure, never a skip.");
     exitCode = 1;
@@ -1448,19 +1267,16 @@ try {
     unexpected = e;
   }
 }
-// EXIT FENCE (#2267 review finding 2): never leave as if cleanup were done. Every call
-// this process started and has not seen close is stopped (own group) and awaited,
-// bounded. Any still open is NOT released: custody of its pipes passes to a detached
-// custodian with a durable record, and the exit is a failure that names the record.
-const stillOpen = await drainOwned(probeAt !== -1 ? 300 : CLOSE_GRACE_MS);
-if (stillOpen.length > 0) {
-  const custody = await handOffCustody(stillOpen);
-  console.error(`✗ cleanup custody: ${stillOpen.length} owned hook call(s) did not close before exit — ${stillOpen.map((c) => `pid ${c.pid} ${JSON.stringify(c.command)}`).join("; ")}`);
-  console.error(custody.acknowledged
-    ? `  pipe custody ACKNOWLEDGED by custodian pid ${custody.custodianPid}; record ${custody.path}`
-    : `  pipe custody NOT acknowledged (custodian pid ${custody.custodianPid ?? "none"} never confirmed); record ${custody.path} reads UNKNOWN`);
-  console.error("  Do not treat this run as cleaned up until `node scripts/check-skill-instruction-conflicts.mjs --cleanup-status` exits 0.");
-  exitCode = 1;
+// EXIT FENCE (#2267): never leave while a call this process started is still open.
+// Every owned call is stopped (its own group only) and awaited until it ACTUALLY
+// closes; the grace only reports pending — it never authorizes the exit.
+const everPending = await drainOwned({
+  graceMs: probeAt !== -1 ? 300 : CLOSE_GRACE_MS,
+  onPending: (calls) => console.error(`… pending: ${calls.length} owned hook call(s) still open — ${calls.map((c) => `pid ${c.pid} ${JSON.stringify(c.command)}`).join("; ")} — waiting for actual close; this run is not done.`),
+});
+if (everPending > 0) {
+  console.error(`✗ cleanup was late: ${everPending} owned hook call(s) outlived the close grace; all have now closed.`);
+  exitCode = exitCode || 1;
 }
 if (unexpected) throw unexpected;
 if (exitCode !== 0) process.exit(exitCode);

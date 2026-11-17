@@ -10,9 +10,9 @@
     {
       "id": "readiness-floor",
       "scope": "machine",
-      "state": "unmet",
+      "state": "met",
       "measured": {
-        "headline": 0,
+        "headline": 100,
         "floor": 80
       },
       "source": "scripts/check-readiness-figure.mjs --json (headline, floor)"
@@ -20,10 +20,10 @@
     {
       "id": "evidence-fresh",
       "scope": "machine",
-      "state": "unmet",
+      "state": "met",
       "measured": {
-        "pct": 0,
-        "reason": "0/20 bound proofs/steps current — evidence covers manifest e892a94fd5c4, tree is 66e2c11f2042; refresh on the Mac; launch items fully current 0/28"
+        "pct": 100,
+        "reason": "20/20 bound proofs/steps current (passed, matching manifest fingerprint and, for proofs, source digest) — green on both halves, 0 day(s) old, manifest 66e2c11f2042; launch items fully current 28/28"
       },
       "source": "scripts/check-readiness-figure.mjs --json (.details.evidence)"
     },
@@ -50,8 +50,6 @@
     }
   ],
   "unmet": [
-    "readiness-floor",
-    "evidence-fresh",
     "owner-real-in-hand"
   ],
   "unknown": [],
@@ -110,7 +108,7 @@
       "rowId": "18",
       "title": "Make iOS port parity behavioral, not textual",
       "kind": "owner",
-      "blocker": "the ruling was given 2026-09-29 as DR-061 in #1246; still owner-only: the #1246 merge and the #1118 unsafe-allow repair shape, asked in the 2026-09-28 hand",
+      "blocker": "the ruling was given 2026-09-29 as DR-061 in #1246; still owner-only: the #1118 unsafe-allow repair shape, asked in the 2026-09-28 hand",
       "markedAt": "2026-11-15"
     },
     {
@@ -159,7 +157,7 @@
     {
       "id": "awaiting-owner-row-18",
       "clears": "owner",
-      "asks": "row 18 (\"Make iOS port parity behavioral, not textual\") in docs/COMPANY_BUILD_PLAN.md is parked, not ranked, because only the owner or a lab can unblock it: owner (the ruling was given 2026-09-29 as DR-061 in #1246; still owner-only: the #1246 merge and the #1118 unsafe-allow repair shape, asked in the 2026-09-28 hand), checked 2026-11-15. Clear the blocker, or remove its marker once cleared",
+      "asks": "row 18 (\"Make iOS port parity behavioral, not textual\") in docs/COMPANY_BUILD_PLAN.md is parked, not ranked, because only the owner or a lab can unblock it: owner (the ruling was given 2026-09-29 as DR-061 in #1246; still owner-only: the #1118 unsafe-allow repair shape, asked in the 2026-09-28 hand), checked 2026-11-15. Clear the blocker, or remove its marker once cleared",
       "since": "2026-11-15T21:07:52.770Z"
     },
     {
@@ -193,32 +191,16 @@
       "since": "2026-11-15T21:07:52.770Z"
     },
     {
-      "id": "readiness-floor-no-clearing-op",
-      "clears": "mac",
-      "asks": "readiness fell below the DR-036 floor — read the dimension that fell and re-mint or repair it",
-      "since": "2026-11-07T00:57:27.470Z"
-    },
-    {
       "id": "owner-real-in-hand",
       "clears": "owner",
       "asks": "Owner decision: is something real in hand for partners/collaborators (DR-033)? If yes, add a decision record carrying the attestation token and point attestedIn at it; if no, the loop keeps building the ranked queue.",
       "since": "2026-09-24T14:47:57.548Z"
     }
   ],
-  "queue": [
-    {
-      "criterionId": "evidence-fresh",
-      "op": "evidence",
-      "clears": "artifacts/live-evidence/mac-run.json",
-      "id": "objective-loop-evidence-fresh-2026-11-16",
-      "queuedAs": "working tree (objective-loop-evidence-fresh-2026-11-15.json)"
-    }
-  ],
+  "queue": [],
   "probeErrors": [],
   "report": {
-    "pendingSimRequests": [
-      "objective-loop-evidence-fresh-2026-11-15"
-    ],
+    "pendingSimRequests": [],
     "badRequestFiles": [],
     "needsExecutorCount": 0,
     "unmeasuredCount": 0,
@@ -227,8 +209,8 @@
     "partialRows": 5
   },
   "staleAfterHours": 3,
-  "derivedAt": "2026-11-16T00:41:51.023Z",
-  "derivedAtCommit": "8305c3772825da54c9cb5a682dbdb39def79c1d2",
+  "derivedAt": "2026-11-16T23:08:22.722Z",
+  "derivedAtCommit": "b2687881d7cdfd842970fc1a4cf176313ec10ef2",
   "workingTreeCleanAtEntry": true,
-  "decisionAddress": "99996c29bf501ab78fe159fd947a49afa96cb8bf040254061f0c6f31851a9801"
+  "decisionAddress": "2854ab88226d59141fb1f45b3baae5a7027206b41d710db7172f2b704a6a47df"
 }

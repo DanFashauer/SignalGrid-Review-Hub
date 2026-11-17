@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-11-17T08:12:04.335Z",
-  "result": "08:11Z fire, quiet by owner priority (6934034939). No workers dispatched; in flight H/S/O = 0/0/0. Cloud is the single writer for #2264 (skill-gate hook lifecycle repair Root assigned in 6941566240): local head cbebc60d5, self-test 23/0 (original code 18/5), full preflight+breadth running before push. #2249 publication stays blocked on that gate. Sub-brains: none spawned. Owner queue: none new."
+  "firedAt": "2026-11-17T14:13:22.951Z",
+  "result": "12:14Z fire, delivered after the delivery window released (12:26Z, material-failure condition). Acted: landed Mac #2270 (b13c160a) and #2271 (364f5143); landed #2267 landing record #2274 (1b089d8a). Dispatched none: owner priority makes independent Mac operation the exclusive critical path; repair queue deferred. In flight H/S/O = 0/0/0. Sub-brains: none spawned. Owner queue: none new. #2249 publication held by the Mac's own privacy refusal (Root, #439 6949964076); independent operation unverified."
 }

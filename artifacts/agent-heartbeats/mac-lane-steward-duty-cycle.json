@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-11-17T09:31:32.519Z",
-  "result": "09:35Z keepalive (prior 06:12Z). Mac tick heartbeat on mainline firedAt 2026-11-17T08:11:59Z (quiet; objective escalate; brain publication disabled or unavailable). Live evidence last changed 2026-11-16 22:14Z. No mail addressed to cloud unread; 7 cloud->mac unread (5 past 24h), reported only. No new or moved mac/* branch since the prior cycle (newest origin/mac/tick-20261117T002138Z). Sync manifest --check clean; sim-request loop passes. Cloud is sole writer of #2264 checker repair: PR #2267 head 54f2932b (same-session/own-process-group launcher, custody removed; self-test 31/0) awaiting Root review, CI and final full run; #2249 stays blocked on it. Owner not escalated."
+  "firedAt": "2026-11-17T14:13:22.951Z",
+  "result": "13:25Z keepalive (prior 09:31Z, held under the window). Mac tick heartbeat on mainline firedAt 2026-11-17T13:22:46Z. Live evidence last changed 2026-11-16 22:14Z. No mail addressed to cloud unread. No new or moved mac/* branch since the prior cycle. Slice-4 'silent 10.2h' traced to a stale local origin/SignalGrid_Alpha in the producer (Root confirmed 6948209436); Root repaired the tracking-ref refresh. Owner not escalated."
 }

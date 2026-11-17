@@ -88,9 +88,9 @@ export function rosterRoleIds() {
 /** Resolve the OWNER of one raised hand: a validated role, an explicit human/lane/tool
  *  target, or a capability GAP. Pure (roles injected) so the self-test needs no roster. */
 export function routeHand(hand, roleIds) {
-  const who = String(hand.whoCanUnblock ?? "").toLowerCase();
+  const who = String(hand.whoCanUnblock ?? "").trim().toLowerCase();
   if (/^(owner|dan)(\b|$)/.test(who)) return { owner: "owner", kind: "human" };
-  if (who.includes("lane")) return { owner: who, kind: "lane" };
+  if (LANE_WHO.test(who)) return { owner: who, kind: "lane" };
   if (who.startsWith("tool:")) return { owner: who, kind: "tool" };
   // A role named as the unblocker ("security-engineer (the fix)") IS the route; without this the
   // writer and schema accept it while the hands page labels it a capability GAP.
@@ -210,6 +210,28 @@ function selfTest() {
   // validateHand: one planted defect per rule; removing the rule makes its line go FAIL.
   const good = { __file: "h.json", id: "h", raisedAt: "2026-09-23T00:00:00Z", doing: "d", blockedBy: "b", need: "n", whoCanUnblock: "owner", status: "open" };
   const bad = (over, needle) => validateHand({ ...good, ...over }, roles).some((p) => p.includes(needle));
+  // Every accepted explicit unblocker keeps its route, including whitespace and prose.
+  const routingRoles = new Set([...roles, "mac-lane-steward"]);
+  for (const [who, kind, owner] of [
+    [" owner ", "human", "owner"],
+    ["\tDaN (founder) ", "human", "owner"],
+    [" product-manager (ranks it) ", "role", "product-manager"],
+    ["tool:plane", "tool", "tool:plane"],
+    [" tool:lane-monitor ", "tool", "tool:lane-monitor"],
+    ["mac-lane-steward", "role", "mac-lane-steward"],
+    ["product-manager (coordinates with the mac lane)", "role", "product-manager"],
+    [" the mac lane (checks) ", "lane", "the mac lane (checks)"],
+    ["CLOUD LANE", "lane", "cloud lane"],
+  ]) {
+    const hand = { ...good, whoCanUnblock: who };
+    const routed = routeHand(hand, routingRoles);
+    t(`route: valid ${JSON.stringify(who)} keeps its explicit ${kind} responder`,
+      validateHand(hand, routingRoles).length === 0 && routed.kind === kind && routed.owner === owner);
+  }
+  for (const who of ["airplane", "not a lane"]) {
+    t(`route: invalid ${JSON.stringify(who)} is not mistaken for a lane`,
+      !whoIsValid(who, routingRoles) && routeHand({ whoCanUnblock: who }, routingRoles).kind === "gap");
+  }
   t("validate: a well-formed hand has no problems", validateHand(good, roles).length === 0);
   t("validate: a role-prefixed whoCanUnblock with prose is valid", validateHand({ ...good, whoCanUnblock: "product-manager (ranks it) with principal-engineer" }, roles).length === 0);
   t("validate: lanes are valid unblockers", validateHand({ ...good, whoCanUnblock: "mac lane" }, roles).length === 0 && validateHand({ ...good, whoCanUnblock: "cloud lane" }, roles).length === 0);

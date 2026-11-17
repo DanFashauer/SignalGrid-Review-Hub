@@ -5582,3 +5582,18 @@ a933370be315b3abd23bb9feff4d29a1bdb0319b
 Verdict: #2267 is on `SignalGrid_Alpha` as `1d8b068580aff3800a8d48a15aa83e02e1308fb8`, and its tree equals the reviewed head's tree.
 
 **Journal state.** `journal_pending`. This entry was held on a branch under the delivery window (Root, #439 6946006729). The window released at 12:26Z under its material-failure condition (#439 6947988311), not because #2249 merged. #2249's automatic publication stopped at slice 4 on a false `heartbeat:mac-lane-tick` stall. Root confirmed (6948209436) that the cause was a stale local `origin/SignalGrid_Alpha` in the producer (`5a70cd70`, tick `02:06:07Z`), while the canonical tip carried the `10:16:50Z` heartbeat. #2249 has not merged, and independent operation remains unverified. The ordinary per-product journal for #2267 is still owed and is not completed by this entry.
+
+## 2026-11-17 — #2267 public journal closeout (product #2267, head a0648ffd, merge 1d8b0685)
+
+This is the public journal closeout for the cloud-owned landing of #2267, which Root asked for on #439 (6953906198). It does not replace the #2274 entry above. That entry recorded `journal_pending` truthfully at the time, and it is kept unchanged. This is also **not** a private `merged_journal_complete` seal. Root reports that the private native-assignment writer has an empty queue, and no native assignment or completion seal exists or is claimed for this landing.
+
+Command: three unauthenticated GitHub REST GETs run by the cloud lane at 2026-11-17T16:20:54Z, `pulls/2267`, `git/ref/heads/SignalGrid_Alpha` and `compare/1d8b068580aff3800a8d48a15aa83e02e1308fb8...SignalGrid_Alpha`, each reduced to the fields shown.
+Output, verbatim:
+
+```
+{"number":2267,"state":"closed","merged":true,"merged_at":"2026-11-17T11:08:19Z","merge_commit_sha":"1d8b068580aff3800a8d48a15aa83e02e1308fb8","head":"a0648ffd6ae0ce897fee067cb68508983ec5922b","base":"SignalGrid_Alpha"}
+{"ref":"refs/heads/SignalGrid_Alpha","sha":"de0b9b7bdb1e91eb21940c27a0c9637d8e8bb629"}
+{"status":"ahead","ahead_by":24,"behind_by":0,"merge_base":"1d8b068580aff3800a8d48a15aa83e02e1308fb8"}
+```
+
+Verdict: product #2267 merged from exact head `a0648ffd6ae0ce897fee067cb68508983ec5922b` as `1d8b068580aff3800a8d48a15aa83e02e1308fb8`. That merge is an ancestor of canonical `SignalGrid_Alpha` (`de0b9b7b` at read time). It is the compare merge-base, with `behind_by` 0. The public journal for #2267 is closed by this entry. The private journal stays Root-owned and is not asserted here. Independent operation remains unverified.

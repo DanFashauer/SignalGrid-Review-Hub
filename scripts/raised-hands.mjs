@@ -158,9 +158,9 @@ export function auditHands(records) {
 export function groupOf(h, route) {
   if (route.kind === "human") return { group: "owner", label: "owner" };
   if (route.kind === "lane") {
-    const who = String(h.whoCanUnblock ?? "").toLowerCase();
+    const who = String(h.whoCanUnblock ?? "").trim().toLowerCase();
     const origin = String(h.origin ?? "").toLowerCase();
-    const l = who.includes("mac") ? "mac" : who.includes("cloud") ? "cloud" : origin.includes("mac") ? "cloud" : "mac"; // "the other lane"
+    const l = /^(?:the )?(mac|cloud) lane\b/.exec(who)?.[1] ?? (origin.includes("mac") ? "cloud" : "mac"); // "the other lane"
     return { group: l, label: l };
   }
   if (route.kind === "tool") return { group: "tool", label: route.owner };
@@ -478,6 +478,31 @@ async function selfTest() {
   checks.push(["a resolved hand with no resolution is fatal", auditHands([hand({ status: "resolved", resolvedAt: ago(0) })]).some((p) => p.includes("no resolution"))]);
   checks.push(["duplicate ids are fatal", auditHands([hand(), hand()]).some((p) => p.includes("duplicate"))]);
   checks.push(["'the other lane' raised by the Mac is the cloud's", groupOf(hand({ whoCanUnblock: "the other lane", origin: "mac-lane" }), { kind: "lane" }).group === "cloud"]);
+  const { routeHand: actualRouteHand, validateHand: actualValidateHand } = await import("./check-raised-hands.mjs");
+  const laneRoles = new Set();
+  const routeActualLane = (h) => actualRouteHand(h, laneRoles);
+  for (const [who, origin, expected] of [
+    ["cloud lane (coordinates with the mac lane)", "mac", "cloud"],
+    [" mac lane (coordinates with the cloud lane) ", "cloud", "mac"],
+    [" mac lane ", "mac", "mac"],
+    [" THE CLOUD LANE (MAC review) ", "mac", "cloud"],
+    [" the other lane (mac input) ", "mac-lane", "cloud"],
+    ["the other lane (cloud input)", "cloud", "mac"],
+    ["other lane (cloud coordination for mac)", "mac", "cloud"],
+    ["the other lane", "mac-lane", "cloud"],
+    ["the other lane", "cloud-lane", "mac"],
+  ]) {
+    const h = hand({ whoCanUnblock: who, origin });
+    const routed = routeActualLane(h);
+    const grouped = groupOf(h, routed);
+    checks.push([`valid lane ${JSON.stringify(who)} from ${origin} stays in ${expected}`,
+      actualValidateHand(h, laneRoles).length === 0 && routed.kind === "lane"
+        && grouped.group === expected && grouped.label === expected]);
+  }
+  const cloudAt30 = evaluate([hand({ whoCanUnblock: "cloud lane (coordinates with the mac lane)", origin: "mac", raisedAt: ago(30) })], [], T, routeActualLane).open[0];
+  checks.push(["a cloud-lane hand mentioning Mac is overdue after 30h under the cloud window", cloudAt30.group === "cloud" && cloudAt30.overdue === true]);
+  const macAt30 = evaluate([hand({ whoCanUnblock: "the other lane (cloud input)", origin: "cloud", raisedAt: ago(30) })], [], T, routeActualLane).open[0];
+  checks.push(["an other-lane hand from cloud keeps the Mac window and is not overdue after 30h", macAt30.group === "mac" && macAt30.overdue === false]);
 
   const msg = (h, extra = {}) => ({ id: "m1", from: "cloud", to: "mac", subject: "s", sentAt: ago(h), ...extra });
   let a = autoHands({ messages: [msg(10)] }, T);

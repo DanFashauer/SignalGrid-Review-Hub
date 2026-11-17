@@ -297,47 +297,93 @@ export function isOverridden(entries, relPathFromSkills, line) {
 // ── asking the hook (impure, fail-closed) ────────────────────────────────────
 
 class HookFatal extends Error {}
+/** A call stopped because ANOTHER call in the same pool failed first. It is still a
+ *  HookFatal (an unanswered call is never an allow), but judgeAll never rethrows it:
+ *  the first genuine failure is the one reported. */
+class HookCancelled extends HookFatal {}
+
+// After a call is stopped (timeout, cancellation, delivery error) its rejection waits
+// for the child's 'close' — the point at which the bash and every descendant still
+// holding its stdio are gone. If 'close' does not come within this grace, the call
+// rejects anyway, SAYING it did not close: fail-closed, never a hang. Not a verdict
+// budget — the per-call deadline is still HOOK_TIMEOUT_MS.
+const CLOSE_GRACE_MS = 5000;
 
 /** One PreToolUse call, shaped exactly as Claude Code sends it.
  *  @param {number} [timeoutMs] override for the self-test only; the real default
  *    is HOOK_TIMEOUT_MS. A hook that does not close within it is killed and the
- *    call rejects fail-closed, naming the command — never hangs, never allows. */
-function askHook(hookPath, command, timeoutMs = HOOK_TIMEOUT_MS) {
+ *    call rejects fail-closed, naming the command — never hangs, never allows.
+ *  @param {{signal?: AbortSignal, closeGraceMs?: number}} [opts] `signal` cancels
+ *    the call (judgeAll aborts the pool on its first failure). Every outcome — a
+ *    verdict, a timeout, a cancellation, a delivery error — settles only after this
+ *    call's child has CLOSED, or after the bounded close grace says it did not
+ *    (#2264). */
+function askHook(hookPath, command, timeoutMs = HOOK_TIMEOUT_MS, { signal, closeGraceMs = CLOSE_GRACE_MS } = {}) {
   return new Promise((resolvePromise, reject) => {
+    if (signal?.aborted) {
+      reject(new HookCancelled(`${hookPath} was not asked about ${JSON.stringify(command)}: the pool had already failed.`));
+      return;
+    }
     // detached:true makes the child its own process-group leader, so a hung
     // DESCENDANT (the BSD sed in the deny hook, Codex #716) can be killed with it.
     const child = spawn("bash", [hookPath], { cwd: repo, stdio: ["pipe", "pipe", "pipe"], detached: true });
     let stdout = "";
     let stderr = "";
-    // Whichever of {timeout, error, EPIPE, close} fires FIRST settles the Promise;
-    // the rest must be no-ops — a killed child still emits 'close' after the timeout
-    // already rejected, and a double-settle would either throw or resolve an
-    // already-failed call to allow.
+    // `failure` is the first reason this call cannot produce a verdict. Recording it
+    // does NOT settle the Promise: settlement waits for 'close' (or the close grace),
+    // so no caller — the pool, the retry — acts while this call's processes live.
+    let failure = null;
     let settled = false;
+    let graceTimer = null;
     const settle = (fn, arg) => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
+      clearTimeout(graceTimer);
+      signal?.removeEventListener("abort", onAbort);
       fn(arg);
     };
-    const timer = setTimeout(() => {
-      // Kill the whole process group (negative pid), not just the bash we spawned —
-      // otherwise a hung descendant (the BSD sed, Codex #716) is orphaned and keeps
-      // consuming CPU. Fall back to the child alone if the group is already gone.
+    // Kill the whole process group (negative pid), not just the bash we spawned —
+    // otherwise a hung descendant (the BSD sed, Codex #716) is orphaned and keeps
+    // consuming CPU. Fall back to the child alone if the group is already gone.
+    // Only THIS call's own group is targeted: ownership is the pid we spawned.
+    const killOwnGroup = () => {
       try { process.kill(-child.pid, "SIGKILL"); }
       catch { try { child.kill("SIGKILL"); } catch { /* already exited */ } }
-      settle(reject, new HookFatal(`${hookPath} did not answer within ${timeoutMs}ms judging ${JSON.stringify(command)} — it hung (fail-closed).`));
+    };
+    const stop = (err) => {
+      if (failure || settled) return;
+      failure = err;
+      if (child.pid !== undefined) killOwnGroup();
+      graceTimer = setTimeout(() => {
+        settle(reject, new HookFatal(`${err.message} The call did not close within ${closeGraceMs}ms of being stopped.`));
+      }, closeGraceMs);
+    };
+    const timer = setTimeout(() => {
+      stop(new HookFatal(`${hookPath} did not answer within ${timeoutMs}ms judging ${JSON.stringify(command)} — it hung (fail-closed).`));
     }, timeoutMs);
+    const onAbort = () => stop(new HookCancelled(`${hookPath} call for ${JSON.stringify(command)} was cancelled because another call in the pool failed.`));
+    signal?.addEventListener("abort", onAbort, { once: true });
     child.stdout.on("data", (d) => { stdout += d; });
     child.stderr.on("data", (d) => { stderr += d; });
-    child.on("error", (e) => settle(reject, new HookFatal(`could not execute ${hookPath}: ${e.message}`)));
+    child.on("error", (e) => {
+      const err = new HookFatal(`could not execute ${hookPath}: ${e.message}`);
+      // No pid: nothing was started, so there is nothing to wait for.
+      if (child.pid === undefined) settle(reject, err);
+      else stop(err);
+    });
     // The write below can fail (EPIPE) when the child is gone before the payload lands —
     // seen 2026-09-12 under three parallel preflights, where it surfaced as an UNHANDLED
     // 'error' event that crashed the self-test instead of a gate verdict. An unasked hook
-    // is a hook that could not be executed: FATAL, fail-closed, never an allow.
-    child.stdin.on("error", (e) => settle(reject, new HookFatal(`could not deliver the call to ${hookPath}: ${e.code ?? e.message}`)));
+    // is a hook that could not be executed: FATAL, fail-closed, never an allow. The
+    // rejection still waits for this call to close, so a retry never overlaps it.
+    child.stdin.on("error", (e) => stop(new HookFatal(`could not deliver the call to ${hookPath}: ${e.code ?? e.message}`)));
     child.on("close", (code) => {
       if (settled) return;
+      if (failure) {
+        settle(reject, failure);
+        return;
+      }
       if (code !== 0) {
         settle(reject, new HookFatal(`${hookPath} exited ${code} judging ${JSON.stringify(command)} — stderr: ${stderr.trim()}`));
         return;
@@ -364,31 +410,50 @@ function askHook(hookPath, command, timeoutMs = HOOK_TIMEOUT_MS) {
 }
 
 /** One retry for the transient delivery failures a loaded box produces (EPIPE, EAGAIN);
- *  a second failure, or any other HookFatal, stays fatal. */
-async function askHookRetrying(hookPath, command) {
+ *  a second failure, or any other HookFatal, stays fatal. askHook settles only after
+ *  the original call has closed, so the retry never overlaps it (#2264). A cancelled
+ *  call is never retried. */
+async function askHookRetrying(hookPath, command, signal) {
   try {
-    return await askHook(hookPath, command);
+    return await askHook(hookPath, command, HOOK_TIMEOUT_MS, { signal });
   } catch (e) {
-    if (!(e instanceof HookFatal) || !/EPIPE|EAGAIN/.test(e.message)) throw e;
+    if (!(e instanceof HookFatal) || e instanceof HookCancelled || !/EPIPE|EAGAIN/.test(e.message)) throw e;
+    if (signal?.aborted) throw e;
     await new Promise((r) => setTimeout(r, 250));
-    return askHook(hookPath, command);
+    return askHook(hookPath, command, HOOK_TIMEOUT_MS, { signal });
   }
 }
 
-/** Judge many commands, deduplicated, with a small pool. Map<command, boolean>. */
+/** Judge many commands, deduplicated, with a small pool. Map<command, boolean>.
+ *  On the FIRST failure the pool stops scheduling, cancels every running peer
+ *  through one shared signal (each peer kills only its own process group), and
+ *  JOINS every worker before rethrowing that first failure — it never returns while
+ *  a call it started is still running (#2264). */
 export async function judgeAll(hookPath, commands) {
   const unique = [...new Set(commands)];
   const verdict = new Map();
+  const controller = new AbortController();
+  let firstFailure = null;
   let next = 0;
   const worker = async () => {
     for (;;) {
+      if (firstFailure) return;
       const i = next;
       next += 1;
       if (i >= unique.length) return;
-      verdict.set(unique[i], await askHookRetrying(hookPath, unique[i]));
+      try {
+        verdict.set(unique[i], await askHookRetrying(hookPath, unique[i], controller.signal));
+      } catch (e) {
+        if (!firstFailure) {
+          firstFailure = e;
+          controller.abort();
+        }
+        return;
+      }
     }
   };
-  await Promise.all(Array.from({ length: Math.min(CONCURRENCY, unique.length || 1) }, worker));
+  await Promise.allSettled(Array.from({ length: Math.min(CONCURRENCY, unique.length || 1) }, worker));
+  if (firstFailure) throw firstFailure;
   return verdict;
 }
 
@@ -729,6 +794,115 @@ async function selfTest() {
     pgrepUsable ? descendantReaped : true,
     pgrepUsable ? `reaped=${descendantReaped}` : "pgrep unavailable — descendant check skipped",
   );
+
+  // 7c–7e. LIFECYCLE (#2264): a call's result — a verdict, a timeout, a delivery error,
+  //     a pool's first failure — is used only AFTER every child this process owns for
+  //     it has CLOSED. Before this, the first fatal call rejected the pool while its
+  //     detached peers were still running, a timeout rejected before the killed child
+  //     closed, and a delivery-error retry started before the original call closed.
+  //     Ownership is POSITIVE: each stub records its own pid and its children's pids in
+  //     a private mkdtemp directory, and liveness is read for exactly those pids with
+  //     `ps -o stat= -p <pid>` (a zombie counts as dead). Nothing is matched by name.
+  //     A "holder" is a grandchild in its OWN process group that keeps the call's
+  //     stdout open for a fixed time after the group is killed, so "waited for close"
+  //     is a measurable delay rather than a race.
+  const lifeDir = mkdtempSync(resolve(tmpdir(), "sg-hook-life-"));
+  const lifeFile = (name) => resolve(lifeDir, name);
+  const pidsIn = (name) => {
+    try { return readFileSync(lifeFile(name), "utf8").split("\n").map(Number).filter((n) => Number.isInteger(n) && n > 0); }
+    catch { return []; }
+  };
+  const isAlive = (pid) => {
+    try {
+      const stat = execFileSync("ps", ["-o", "stat=", "-p", String(pid)], { encoding: "utf8" }).trim();
+      return stat !== "" && !stat.startsWith("Z");
+    } catch { return false; }
+  };
+  // Cleanup kills ONLY pids this test recorded, so a red run leaves nothing behind.
+  const reapRecorded = (pids) => { for (const p of pids) { try { process.kill(p, "SIGKILL"); } catch { /* gone */ } } };
+  const holder = (ms, file) =>
+    `${JSON.stringify(process.execPath)} -e 'const c=require("child_process").spawn(process.execPath,["-e","setTimeout(()=>{},${ms})"],{detached:true,stdio:["ignore",1,2]});require("fs").appendFileSync(${JSON.stringify(file)},c.pid+"\\n");c.unref()'`;
+
+  // 7c. fatal-first pool: one call fails while three peers are running.
+  const peersFile = lifeFile("peers");
+  const poolStub = lifeFile("pool.sh");
+  writeFileSync(poolStub, [
+    "cmd=$(cat)",
+    'case "$cmd" in',
+    "  *FAIL-NOW*)",
+    "    i=0",
+    `    while [ "$(( $(cat ${JSON.stringify(peersFile)} 2>/dev/null | wc -l) ))" -lt 6 ] && [ "$i" -lt 200 ]; do sleep 0.05; i=$((i+1)); done`,
+    "    exit 3 ;;",
+    "esac",
+    `echo $$ >> ${JSON.stringify(peersFile)}`,
+    "sleep 30 &",
+    `echo $! >> ${JSON.stringify(peersFile)}`,
+    "wait",
+    "",
+  ].join("\n"));
+  let poolErr = null;
+  try { await judgeAll(poolStub, ["slow-a", "slow-b", "slow-c", "FAIL-NOW"]); } catch (e) { poolErr = e; }
+  const peerPids = pidsIn("peers");
+  const peerSurvivors = peerPids.filter(isAlive);
+  reapRecorded(peerPids);
+  check(
+    "a pool whose first call fails cancels and JOINS every running peer before it rejects, and rethrows that first failure (#2264)",
+    poolErr instanceof HookFatal && poolErr.message.includes(JSON.stringify("FAIL-NOW")) && poolErr.message.includes("exited 3") &&
+      peerPids.length === 6 && peerSurvivors.length === 0,
+    `fatal=${poolErr instanceof HookFatal} message=${JSON.stringify(poolErr?.message?.slice(0, 120))} recorded=${peerPids.length} alive-at-reject=${peerSurvivors.length}`,
+  );
+
+  // 7d. a timeout rejects only after the killed call has CLOSED.
+  const tFile = lifeFile("timeout-pids");
+  const tStub = lifeFile("timeout.sh");
+  writeFileSync(tStub, [
+    `echo $$ >> ${JSON.stringify(tFile)}`,
+    holder(1500, tFile),
+    "sleep 300 &",
+    `echo $! >> ${JSON.stringify(tFile)}`,
+    "wait",
+    "",
+  ].join("\n"));
+  let tErr = null;
+  const tStart = Date.now();
+  try { await askHook(tStub, "echo timeout-close-probe", 800); } catch (e) { tErr = e; }
+  const tElapsed = Date.now() - tStart;
+  const tPids = pidsIn("timeout-pids");
+  const tSurvivors = tPids.filter(isAlive);
+  reapRecorded(tPids);
+  check(
+    "a timed-out call rejects only after the killed call has CLOSED — no owned process outlives the rejection (#2264)",
+    tErr instanceof HookFatal && tErr.message.includes("did not answer within 800ms") &&
+      tElapsed >= 1300 && tPids.length === 3 && tSurvivors.length === 0,
+    `fatal=${tErr instanceof HookFatal} elapsed=${tElapsed}ms recorded=${tPids.length} alive-at-reject=${tSurvivors.length}`,
+  );
+
+  // 7e. a delivery error (EPIPE) rejects only after the original call has closed, so the
+  //     one permitted retry starts after it; the retry's own failure stays fatal.
+  const eFile = lifeFile("epipe-pids");
+  const eStub = lifeFile("epipe.sh");
+  // stdin is closed only AFTER the holder exists, so the EPIPE (and with it any kill)
+  // can never land before the holder is recorded — the delay is guaranteed, not raced.
+  writeFileSync(eStub, [
+    `echo $$ >> ${JSON.stringify(eFile)}`,
+    holder(1200, eFile),
+    "exec 0<&-",
+    "exit 0",
+    "",
+  ].join("\n"));
+  let eErr = null;
+  const eStart = Date.now();
+  try { await askHookRetrying(eStub, `echo ${"x".repeat(2_000_000)}`); } catch (e) { eErr = e; }
+  const eElapsed = Date.now() - eStart;
+  const ePids = pidsIn("epipe-pids");
+  const eSurvivors = ePids.filter(isAlive);
+  reapRecorded(ePids);
+  check(
+    "a delivery error rejects only after the original call has CLOSED, so the single retry starts after it and its failure stays fatal (#2264)",
+    eErr instanceof HookFatal && /EPIPE/.test(eErr.message) && eElapsed >= 2200 && ePids.length === 4 && eSurvivors.length === 0,
+    `fatal=${eErr instanceof HookFatal} message=${JSON.stringify(eErr?.message?.slice(0, 120))} elapsed=${eElapsed}ms recorded=${ePids.length} alive-at-reject=${eSurvivors.length}`,
+  );
+  try { rmSync(lifeDir, { recursive: true, force: true }); } catch { /* best-effort */ }
 
   // 8. the plant proof itself, both directions, on a fixture tree. The REAL-tree run of the
   //    same proof is in the gate (run()), where the real answers already exist; here the

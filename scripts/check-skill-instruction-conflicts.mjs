@@ -358,9 +358,15 @@ function writeRecord(path, record) {
 }
 
 /** Hand every still-open call's pipe read ends to a detached custodian. Returns the
- *  record path and custodian pid; the record says "unknown" if no custodian started. */
-function handOffCustody(openCalls) {
-  const dir = custodyDir();
+ *  record path and custodian pid; the record says "unknown" if no custodian started.
+ *  OWNERSHIP IS MONOTONIC: this process writes the record exactly once, BEFORE the
+ *  custodian exists; from spawn on, only the custodian writes it (its own pid first,
+ *  then each close). A parent write after spawn could overwrite a CLOSED the custodian
+ *  already recorded (Codex-cloud on #2267). Until the custodian stamps its pid the
+ *  record reads UNKNOWN — refusal, never release. `afterSpawn` is a test seam at the
+ *  exact point a parent publication would sit. */
+async function handOffCustody(openCalls, { dir: dirOverride, afterSpawn } = {}) {
+  const dir = dirOverride ?? custodyDir();
   mkdirSync(dir, { recursive: true });
   const path = resolve(dir, `${process.pid}-${Date.now()}.json`);
   const streams = [];
@@ -380,11 +386,12 @@ function handOffCustody(openCalls) {
     });
   } catch { custodian = null; }
   if (!custodian || custodian.pid === undefined) {
+    // No custodian exists, so this process is still the only writer.
     writeRecord(path, { ...record, status: "unknown", reason: "no custodian could be started; the pipes are unobserved" });
     return { path, custodianPid: null };
   }
-  writeRecord(path, { ...record, custodianPid: custodian.pid });
   custodian.unref();
+  if (afterSpawn) await afterSpawn(path);
   // The custodian now holds duplicates of the read ends; ours can go.
   for (const st of streams) { try { st.destroy(); } catch { /* already closed */ } }
   return { path, custodianPid: custodian.pid };
@@ -393,6 +400,9 @@ function handOffCustody(openCalls) {
 /** --custodian <record>: hold each handed-over pipe until EOF; record every close. */
 async function runCustodian(path) {
   const record = JSON.parse(readFileSync(path, "utf8"));
+  // The parent wrote once and handed over; from here this process is the sole writer.
+  record.custodianPid = process.pid;
+  writeRecord(path, record);
   const pipes = record.calls.flatMap((c) => c.pipes.map((p) => ({ call: c, pipe: p })));
   await Promise.all(pipes.map(({ pipe }) => new Promise((done) => {
     let sock;
@@ -1218,6 +1228,13 @@ async function selfTest() {
   const fAliveAtExit = fPids.map((p) => [p, liveness(p)]);
   const fenceLine = (probe.stderr ?? "").split("\n").find((l) => l.includes("cleanup custody")) ?? "";
   const holderStillAlive = fAliveAtExit.some(([, st]) => st === "alive");
+  // The custodian stamps its own pid as its first write; wait (bounded) for it.
+  for (let i = 0; i < 50; i += 1) {
+    let ok = false;
+    try { ok = readdirSync(custodyAt).some((n) => n.endsWith(".json") && JSON.parse(readFileSync(resolve(custodyAt, n), "utf8")).custodianPid); } catch { ok = false; }
+    if (ok) break;
+    await new Promise((r) => setTimeout(r, 50));
+  }
   // NEGATIVE CONTROL, before anything is reaped: while the recorded holder is alive, the
   // caller's release check must REFUSE (exit 1, the record OPEN with a live custodian).
   const statusWhileLive = spawnSync(process.execPath, [self, "--cleanup-status", custodyAt], { encoding: "utf8", timeout: 10000 });
@@ -1268,6 +1285,27 @@ async function selfTest() {
     "an open record whose custodian is gone reads UNKNOWN and refuses release (exit 1) (#2267)",
     orphan.status === 1 && /^UNKNOWN /m.test(orphan.stdout ?? ""),
     `status=${orphan.status} out=${JSON.stringify((orphan.stdout ?? "").slice(0, 200))}`,
+  );
+  // Ordering control (Codex-cloud on #2267): the custodian observes EOF and records
+  // CLOSED BEFORE the parent reaches its post-spawn point. Nothing the parent does after
+  // spawn may undo that — the record must still read closed and release must pass.
+  const raceDir = resolve(lifeDir, "custody-race");
+  const shortChild = spawn("sh", ["-c", "sleep 0.3"], { stdio: ["ignore", "pipe", "pipe"] });
+  const readRec = (pth) => { try { return JSON.parse(readFileSync(pth, "utf8")); } catch { return null; } };
+  let closedBeforeReturn = false;
+  const race = await handOffCustody([{ pid: shortChild.pid, command: "race-child", child: shortChild }], {
+    dir: raceDir,
+    afterSpawn: async (pth) => {
+      for (let i = 0; i < 100 && readRec(pth)?.status !== "closed"; i += 1) await new Promise((r) => setTimeout(r, 50));
+      closedBeforeReturn = readRec(pth)?.status === "closed";
+    },
+  });
+  const raceRec = readRec(race.path);
+  const raceStatus = spawnSync(process.execPath, [self, "--cleanup-status", raceDir], { encoding: "utf8", timeout: 10000 });
+  check(
+    "a custodian that records CLOSED before the parent's post-spawn point stays CLOSED: the parent never republishes, and release passes (#2267)",
+    closedBeforeReturn && raceRec?.status === "closed" && raceRec.calls[0].pipes.every((pp) => pp.closed === true) && raceStatus.status === 0,
+    `closedBeforeReturn=${closedBeforeReturn} record=${raceRec?.status} release=${raceStatus.status}`,
   );
   // An inspection that fails is never a release: a path that is not a readable
   // directory refuses; only a genuinely absent directory means nothing was handed off.
@@ -1362,7 +1400,7 @@ try {
 // custodian with a durable record, and the exit is a failure that names the record.
 const stillOpen = await drainOwned(probeAt !== -1 ? 300 : CLOSE_GRACE_MS);
 if (stillOpen.length > 0) {
-  const custody = handOffCustody(stillOpen);
+  const custody = await handOffCustody(stillOpen);
   console.error(`✗ cleanup custody: ${stillOpen.length} owned hook call(s) did not close before exit — ${stillOpen.map((c) => `pid ${c.pid} ${JSON.stringify(c.command)}`).join("; ")}`);
   console.error(`  custody passed to custodian pid ${custody.custodianPid ?? "NONE (record says unknown)"}; record ${custody.path}`);
   console.error("  Do not treat this run as cleaned up until `node scripts/check-skill-instruction-conflicts.mjs --cleanup-status` exits 0.");

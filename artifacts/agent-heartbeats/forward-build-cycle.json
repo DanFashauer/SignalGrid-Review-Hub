@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-11-17T16:13:46.834Z",
-  "result": "16:13Z fire. Acted since 14:14Z: landed Mac #2273 (7842f4a9) and cloud #2275 (bd73d41e); refreshed Mac #2277 (merged 16:07Z). Dispatched none: owner priority keeps independent Mac operation the exclusive critical path; repair queue deferred. In flight H/S/O = 0/0/0. Sub-brains: none spawned. Owner queue: none new. Independent operation unverified: #2249 consumed by the Mac's privacy refusal; Root building the ready-issue-to-intake bridge (6951963191). Pending-heartbeat hand mapping offered to Root (6952954080), none cleared."
+  "firedAt": "2026-11-17T18:11:24.414Z",
+  "result": "18:11Z fire. Acted since 16:13Z: landed #2279, #2281 (heartbeats), #2280 (six evidenced pending-heartbeat clears, c8790427); opened #2284 (#2267 public journal closeout, pf 0/br 0 local; Mac aggregate re-attempt pending after two slices never got a hosted runner); closed #2003 as superseded with Root's verification; tick readback fix 059be940 (owner-approved, RED 181/1 -> GREEN 182/0) queued as its own PR after #2284. Dispatched none: owner priority keeps independent Mac operation the exclusive critical path. In flight H/S/O = 0/0/0. Sub-brains: none spawned. Owner queue: none new. Independent operation unverified: #2278 and #2282 builds consumed (guard false positive; no admitted coding backend), #2283 queued."
 }

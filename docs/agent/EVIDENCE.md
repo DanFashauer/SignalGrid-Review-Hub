@@ -5546,3 +5546,27 @@ Verdict: both are on `SignalGrid_Alpha`.
 **Local qualification of #2037.** One full Linux run on its earlier head `6bbc24ef` gave the same counts: 436 steps, 433 ok, 2 skipped-db, 1 unverified, and breadth 58. It is comment 6861599458. Its landed head `5e397b4f` was qualified by Root under the owner's metadata-only reuse; this lane does not claim a full run on `5e397b4f`.
 
 **Not verified.** The two database proofs that skip themselves and the one unverified step, in every run. Native Darwin was not run by this lane. Whether an unattended build now publishes a new application-source file end to end: #2038 widens the allowlist, and no unattended publication has yet been observed.
+
+## 2026-11-17 — #2267 (1d8b0685) landed under DR-037: the skill gate closes every hook call before its result is used (#2264)
+
+**Merge.** `merge_pull_request(method=merge, expectedHeadSha=a0648ffd6ae0ce897fee067cb68508983ec5922b)` returned `1d8b068580aff3800a8d48a15aa83e02e1308fb8`. Its parents are `5929a123` (mainline) and `a0648ffd` (reviewed head), and its tree `a933370b` equals the head's tree. The first call was refused (`405 Required status check "phase-pr-evidence" is in progress`), because a PR-body correction had re-triggered that check. The retry used the same expected head after run 133997074127 succeeded. The checker blob on mainline is `7518f09f801e8df44df6aec161fa8dd6ec223a8d`, the blob Root qualified on the Mac.
+
+**Required checks on a0648ffd.**
+- Gating check `Typecheck, build, and proof scaffold`: check-run 133992104184 (run 44067818265), with all three shards `success`.
+- Mac aggregate: job 133996348303 (run 44067818084, attempt 1), `PREFLIGHT_PR_HEAD a0648ffd`, `Preflight PASSED`. Each of 447 steps was accounted for exactly once: 443 ok, 2 unavailable on darwin, 2 self-skipped DB proofs. Log sha256 `edaf65dad42ac4787c7fb7997fd23f09003aad566a85f5f1d98f3b4f8046f49c`.
+
+**Local validation.** Run on the frozen code `63b57caa361422f342e5a8d1a489986b2d6a101e`, in a clean worktree, from 09:39:53Z to 10:28:13Z:
+- `Preflight PASSED`: 444 ok, `PF_EXIT=0`.
+- `Breadth lane PASSED — 58 breadth proofs green`: `BR_EXIT=0`.
+
+Between 63b57caa and a0648ffd, only two heartbeat files changed: `mac-lane-steward-duty-cycle.json` (#2268) and `mac-lane-tick.json` (#2269). Under the owner's metadata-only rule, this run is the evidence for the unchanged content; this lane does not claim a full local run on a0648ffd itself.
+
+**Design that landed.**
+- Launcher: a fixed perl launcher runs `setpgrp(0,0)` then execs bash. Each call gets its own process group and keeps the caller's session.
+- Calls settle on close.
+- Stops signal the call's own group and pid, then re-signal its group until it closes.
+- The CLI exits only after its calls have actually closed. A termination latch is checked at the spawn point, and the CLI never calls `process.exit`.
+
+The detached-custody design from earlier commits was removed. Root qualified the blob on the Mac with the real guardian (6944829327). Self-test: 32/0.
+
+**Journal state.** `journal_pending`. This entry is held on a branch under the delivery window (Root, #439 6946006729) and lands only after #2249's resulting CODE PR merges, or when the window releases.

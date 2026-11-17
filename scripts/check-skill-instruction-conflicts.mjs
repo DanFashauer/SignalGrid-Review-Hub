@@ -127,7 +127,7 @@
 // 73 files, 1066 judged, 1527 further inline spans read as mentions. Do not retype
 // those numbers anywhere — the summary line prints the current ones.
 
-import { execFileSync, spawn } from "node:child_process";
+import { execFileSync, spawn, spawnSync } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, resolve } from "node:path";
@@ -302,10 +302,34 @@ export function isOverridden(entries, relPathFromSkills, line) {
  *  close grace ran out without a close event — cleanup UNCONFIRMED (#2264). An
  *  unconfirmed failure forbids any retry and any new work. */
 class HookFatal extends Error {
-  constructor(message, { closeConfirmed = true } = {}) {
+  constructor(message, { closeConfirmed = true, transportCode = null } = {}) {
     super(message);
     this.closeConfirmed = closeConfirmed;
+    // The errno of a DELIVERY failure (writing the call to the hook's stdin), taken
+    // from the error object itself — never searched for in message text, which also
+    // carries the judged command and the hook's stderr (#2267 review finding 1).
+    this.transportCode = transportCode;
   }
+}
+/** The delivery errnos a loaded box produces that permit ONE retry. */
+const RETRYABLE_TRANSPORT = new Set(["EPIPE", "EAGAIN"]);
+
+/** Every hook call this process has started and not yet seen CLOSE, keyed by the pid
+ *  it spawned. A call that settles without a close (its grace expired) stays here:
+ *  settling a promise is not releasing ownership. The CLI's exit fence (drainOwned)
+ *  reads this before exiting (#2267 review finding 2). */
+const OWNED_CALLS = new Map();
+
+/** Exit fence: stop every still-owned call (its own process group only) and wait,
+ *  bounded, for each to close. Returns the calls that still have not closed, so the
+ *  caller can REPORT them instead of exiting as if cleanup were done. */
+export async function drainOwned(boundMs = CLOSE_GRACE_MS) {
+  const pending = [...OWNED_CALLS.entries()];
+  for (const [pid] of pending) {
+    try { process.kill(-pid, "SIGKILL"); } catch { /* group already gone */ }
+  }
+  await Promise.all(pending.map(([, call]) => Promise.race([call.closed, new Promise((r) => setTimeout(r, boundMs))])));
+  return [...OWNED_CALLS.entries()].map(([pid, call]) => ({ pid, command: call.command }));
 }
 /** A call stopped because ANOTHER call in the same pool failed first. It is still a
  *  HookFatal (an unanswered call is never an allow), but judgeAll never rethrows it:
@@ -337,6 +361,11 @@ function askHook(hookPath, command, timeoutMs = HOOK_TIMEOUT_MS, { signal, close
     // detached:true makes the child its own process-group leader, so a hung
     // DESCENDANT (the BSD sed in the deny hook, Codex #716) can be killed with it.
     const child = spawn("bash", [hookPath], { cwd: repo, stdio: ["pipe", "pipe", "pipe"], detached: true });
+    if (child.pid !== undefined) {
+      const pid = child.pid;
+      OWNED_CALLS.set(pid, { command, closed: new Promise((r) => child.once("close", r)) });
+      child.once("close", () => OWNED_CALLS.delete(pid));
+    }
     let stdout = "";
     let stderr = "";
     // `failure` is the first reason this call cannot produce a verdict. Recording it
@@ -367,7 +396,7 @@ function askHook(hookPath, command, timeoutMs = HOOK_TIMEOUT_MS, { signal, close
       if (child.pid !== undefined) killOwnGroup();
       graceTimer = setTimeout(() => {
         // A grace expiring is NOT a close event: the result says so in structure.
-        settle(reject, new HookFatal(`${err.message} The call did not close within ${closeGraceMs}ms of being stopped — cleanup unconfirmed.`, { closeConfirmed: false }));
+        settle(reject, new HookFatal(`${err.message} The call did not close within ${closeGraceMs}ms of being stopped — cleanup unconfirmed.`, { closeConfirmed: false, transportCode: err.transportCode ?? null }));
       }, closeGraceMs);
     };
     const timer = setTimeout(() => {
@@ -388,7 +417,7 @@ function askHook(hookPath, command, timeoutMs = HOOK_TIMEOUT_MS, { signal, close
     // 'error' event that crashed the self-test instead of a gate verdict. An unasked hook
     // is a hook that could not be executed: FATAL, fail-closed, never an allow. The
     // rejection still waits for this call to close, so a retry never overlaps it.
-    child.stdin.on("error", (e) => stop(new HookFatal(`could not deliver the call to ${hookPath}: ${e.code ?? e.message}`)));
+    child.stdin.on("error", (e) => stop(new HookFatal(`could not deliver the call to ${hookPath}: ${e.code ?? e.message}`, { transportCode: e.code ?? null })));
     child.on("close", (code) => {
       if (settled) return;
       if (failure) {
@@ -429,7 +458,8 @@ async function askHookRetrying(hookPath, command, signal, { timeoutMs = HOOK_TIM
   try {
     return await ask();
   } catch (e) {
-    if (!(e instanceof HookFatal) || e instanceof HookCancelled || !/EPIPE|EAGAIN/.test(e.message)) throw e;
+    // Retry ONLY on a structured delivery errno — never on text in the message.
+    if (!(e instanceof HookFatal) || e instanceof HookCancelled || !RETRYABLE_TRANSPORT.has(e.transportCode)) throw e;
     // The retry is permitted ONLY on positive evidence that the original call closed.
     if (e.closeConfirmed !== true || signal?.aborted) throw e;
     await new Promise((r) => setTimeout(r, 250));
@@ -836,12 +866,35 @@ async function selfTest() {
     try { return readFileSync(lifeFile(name), "utf8").split("\n").map(Number).filter((n) => Number.isInteger(n) && n > 0); }
     catch { return []; }
   };
-  const isAlive = (pid) => {
-    try {
-      const stat = execFileSync("ps", ["-o", "stat=", "-p", String(pid)], { encoding: "utf8" }).trim();
-      return stat !== "" && !stat.startsWith("Z");
-    } catch { return false; }
+  // Liveness is THREE-valued (#2267 review finding 3): "alive", "dead" (no such pid, or a
+  // zombie), or "unknown" (ps could not answer). Only "dead" counts as gone; an unknown
+  // census is never proof that nothing survived.
+  const liveness = (pid) => {
+    const r = spawnSync("ps", ["-o", "stat=", "-p", String(pid)], { encoding: "utf8" });
+    if (r.error) return "unknown";
+    const out = (r.stdout ?? "").trim();
+    const err = (r.stderr ?? "").trim();
+    if (r.status === 0 && out !== "") return out.startsWith("Z") ? "dead" : "alive";
+    if (r.status === 1 && out === "" && err === "") return "dead";
+    return "unknown";
   };
+  const notDead = (pid) => liveness(pid) !== "dead";
+
+  // The census itself must be able to say all three things before any lifecycle
+  // control trusts it: this process is alive, a child is alive then dead after it
+  // exits, and a malformed query is UNKNOWN — not dead.
+  const censusChild = spawn("sleep", ["30"], { stdio: "ignore" });
+  await new Promise((r) => setTimeout(r, 100));
+  const childAlive = liveness(censusChild.pid);
+  const exited = new Promise((r) => censusChild.once("exit", r));
+  censusChild.kill("SIGKILL");
+  await exited;
+  const childDead = liveness(censusChild.pid);
+  check(
+    "the liveness census detects a living pid, a dead pid, and reports an unanswerable query as UNKNOWN (#2267)",
+    liveness(process.pid) === "alive" && childAlive === "alive" && childDead === "dead" && liveness("not-a-pid") === "unknown",
+    `self=${liveness(process.pid)} child-before=${childAlive} child-after=${childDead} malformed=${liveness("not-a-pid")}`,
+  );
   // Cleanup kills ONLY pids this test recorded, so a red run leaves nothing behind.
   const reapRecorded = (pids) => { for (const p of pids) { try { process.kill(p, "SIGKILL"); } catch { /* gone */ } } };
   // The holder's JavaScript is a FIXED string: the record file and the hold time reach
@@ -874,7 +927,7 @@ async function selfTest() {
   let poolErr = null;
   try { await judgeAll(poolStub, ["slow-a", "slow-b", "slow-c", "FAIL-NOW"]); } catch (e) { poolErr = e; }
   const peerPids = pidsIn("peers");
-  const peerSurvivors = peerPids.filter(isAlive);
+  const peerSurvivors = peerPids.filter(notDead);
   reapRecorded(peerPids);
   check(
     "a pool whose first call fails cancels and JOINS every running peer before it rejects, and rethrows that first failure (#2264)",
@@ -899,7 +952,7 @@ async function selfTest() {
   try { await askHook(tStub, "echo timeout-close-probe", 800); } catch (e) { tErr = e; }
   const tElapsed = Date.now() - tStart;
   const tPids = pidsIn("timeout-pids");
-  const tSurvivors = tPids.filter(isAlive);
+  const tSurvivors = tPids.filter(notDead);
   reapRecorded(tPids);
   check(
     "a timed-out call rejects only after the killed call has CLOSED — no owned process outlives the rejection (#2264)",
@@ -922,16 +975,18 @@ async function selfTest() {
     "",
   ].join("\n"));
   let eErr = null;
+  let eCalls = 0;
   const eStart = Date.now();
-  try { await askHookRetrying(eStub, `echo ${"x".repeat(2_000_000)}`); } catch (e) { eErr = e; }
+  try { await askHookRetrying(eStub, `echo ${"x".repeat(2_000_000)}`, undefined, { onCall: () => { eCalls += 1; } }); } catch (e) { eErr = e; }
   const eElapsed = Date.now() - eStart;
   const ePids = pidsIn("epipe-pids");
-  const eSurvivors = ePids.filter(isAlive);
+  const eSurvivors = ePids.filter(notDead);
   reapRecorded(ePids);
   check(
     "a delivery error rejects only after the original call has CLOSED, so the single retry starts after it and its failure stays fatal (#2264)",
-    eErr instanceof HookFatal && /EPIPE/.test(eErr.message) && eElapsed >= 2200 && ePids.length === 4 && eSurvivors.length === 0,
-    `fatal=${eErr instanceof HookFatal} message=${JSON.stringify(eErr?.message?.slice(0, 120))} elapsed=${eElapsed}ms recorded=${ePids.length} alive-at-reject=${eSurvivors.length}`,
+    eErr instanceof HookFatal && eErr.transportCode === "EPIPE" && eErr.closeConfirmed === true && eCalls === 2 &&
+      eElapsed >= 2200 && ePids.length === 4 && eSurvivors.length === 0,
+    `fatal=${eErr instanceof HookFatal} transportCode=${eErr?.transportCode} calls=${eCalls} message=${JSON.stringify(eErr?.message?.slice(0, 120))} elapsed=${eElapsed}ms recorded=${ePids.length} alive-at-reject=${eSurvivors.length}`,
   );
   // 7f. cleanup confirmation is STRUCTURED: a close grace that runs out is not a close
   //     event. The result carries closeConfirmed=false, and an EPIPE whose original
@@ -990,6 +1045,63 @@ async function selfTest() {
       qErr.message.includes(JSON.stringify("stuck-peer")) && qErr.message.includes("exited 3") && qPids.length === 3,
     `fatal=${qErr instanceof HookFatal} closeConfirmed=${qErr?.closeConfirmed} recorded=${qPids.length} message=${JSON.stringify(qErr?.message?.slice(0, 200))}`,
   );
+  // 7h. TEXT is not transport: a timeout on a command whose text says EPIPE, and a
+  //     hook that exits non-zero with EAGAIN in its stderr, are each asked ONCE.
+  const hangStub2 = lifeFile("hang2.sh");
+  writeFileSync(hangStub2, "exec sleep 30\n");
+  let txtTimeoutErr = null;
+  let txtTimeoutCalls = 0;
+  try {
+    await askHookRetrying(hangStub2, "echo EPIPE EAGAIN in the command text", undefined, { timeoutMs: 400, onCall: () => { txtTimeoutCalls += 1; } });
+  } catch (e) { txtTimeoutErr = e; }
+  const exitStub = lifeFile("exit-eagain.sh");
+  writeFileSync(exitStub, "cat >/dev/null\necho 'write failed: EAGAIN; EPIPE' >&2\nexit 2\n");
+  let txtExitErr = null;
+  let txtExitCalls = 0;
+  try {
+    await askHookRetrying(exitStub, "echo ok", undefined, { onCall: () => { txtExitCalls += 1; } });
+  } catch (e) { txtExitErr = e; }
+  check(
+    "EPIPE/EAGAIN appearing only in message TEXT (command or stderr) never triggers the retry — only a structured delivery errno does (#2267)",
+    txtTimeoutErr instanceof HookFatal && txtTimeoutErr.transportCode === null && /did not answer within 400ms/.test(txtTimeoutErr.message) && txtTimeoutCalls === 1 &&
+      txtExitErr instanceof HookFatal && txtExitErr.transportCode === null && /exited 2/.test(txtExitErr.message) && txtExitCalls === 1,
+    `timeout: calls=${txtTimeoutCalls} code=${txtTimeoutErr?.transportCode}; exit: calls=${txtExitCalls} code=${txtExitErr?.transportCode} msg=${JSON.stringify(txtExitErr?.message?.slice(0, 120))}`,
+  );
+
+  // 7j. CLI-level exit fence: the real CLI path, run as its own process against a stub
+  //     whose peer cannot close (a holder keeps its stdout open past every bound). The
+  //     CLI must exit non-zero and NAME the still-open owned call — and the process
+  //     holding it must really still be alive when the CLI has exited. Nothing is
+  //     cleaned up until after those observations.
+  const fFile = lifeFile("fence-pids");
+  const fStub = lifeFile("fence.sh");
+  writeFileSync(fStub, [
+    "cmd=$(cat)",
+    'case "$cmd" in',
+    "  *FAIL-NOW*)",
+    "    i=0",
+    `    while [ "$(( $(cat ${JSON.stringify(fFile)} 2>/dev/null | wc -l) ))" -lt 3 ] && [ "$i" -lt 200 ]; do sleep 0.05; i=$((i+1)); done`,
+    "    exit 3 ;;",
+    "esac",
+    `echo $$ >> ${JSON.stringify(fFile)}`,
+    holder(4000, fFile),
+    "sleep 30 &",
+    `echo $! >> ${JSON.stringify(fFile)}`,
+    "wait",
+    "",
+  ].join("\n"));
+  const probe = spawnSync(process.execPath, [fileURLToPath(import.meta.url), "--fence-probe", fStub], { encoding: "utf8", timeout: 20000 });
+  const fPids = pidsIn("fence-pids");
+  const fAliveAtExit = fPids.map((p) => [p, liveness(p)]);
+  const fenceLine = (probe.stderr ?? "").split("\n").find((l) => l.includes("cleanup fence")) ?? "";
+  const holderStillAlive = fAliveAtExit.some(([, st]) => st === "alive");
+  reapRecorded(fPids);
+  check(
+    "the CLI never exits as if cleanup were done: it fails and NAMES each owned call still open, and that call's holder is really alive at exit (#2267)",
+    probe.status === 1 && /cleanup fence: 1 owned hook call\(s\) did not close before exit/.test(fenceLine) &&
+      fenceLine.includes(JSON.stringify("stuck-peer")) && holderStillAlive && fPids.length === 3,
+    `status=${probe.status} fence=${JSON.stringify(fenceLine.slice(0, 160))} census=${JSON.stringify(fAliveAtExit)}`,
+  );
   try { rmSync(lifeDir, { recursive: true, force: true }); } catch { /* best-effort */ }
 
   // 8. the plant proof itself, both directions, on a fixture tree. The REAL-tree run of the
@@ -1037,15 +1149,38 @@ async function selfTest() {
   if (failed > 0) process.exit(1);
 }
 
+// --fence-probe <stub> exists ONLY for the self-test's CLI-level control of the exit
+// fence: it drives a pool against the given stub and then takes the SAME exit path the
+// gate takes. It judges nothing and can never exit 0, so it cannot stand in for the gate.
+async function fenceProbe(stub) {
+  await judgeAll(stub, ["stuck-peer", "FAIL-NOW"], { closeGraceMs: 300 });
+  throw new HookFatal("fence probe: the pool unexpectedly succeeded");
+}
+
 const isSelfTest = process.argv.includes("--self-test");
+const probeAt = process.argv.indexOf("--fence-probe");
+let exitCode = 0;
+let unexpected = null;
 try {
-  if (isSelfTest) await selfTest();
+  if (probeAt !== -1) await fenceProbe(resolve(process.argv[probeAt + 1] ?? ""));
+  else if (isSelfTest) await selfTest();
   else await run();
 } catch (e) {
   if (e instanceof HookFatal) {
     console.error(`✗ FATAL — ${e.message}`);
     console.error("  This gate judges by asking the hook; an unusable hook is a failure, never a skip.");
-    process.exit(1);
+    exitCode = 1;
+  } else {
+    unexpected = e;
   }
-  throw e;
 }
+// EXIT FENCE (#2267 review finding 2): never leave as if cleanup were done. Every call
+// this process started and has not seen close is stopped (own group) and awaited,
+// bounded; any that still have not closed are NAMED and the exit is a failure.
+const stillOpen = await drainOwned(probeAt !== -1 ? 300 : CLOSE_GRACE_MS);
+if (stillOpen.length > 0) {
+  console.error(`✗ cleanup fence: ${stillOpen.length} owned hook call(s) did not close before exit — ${stillOpen.map((c) => `pid ${c.pid} ${JSON.stringify(c.command)}`).join("; ")}`);
+  exitCode = 1;
+}
+if (unexpected) throw unexpected;
+if (exitCode !== 0) process.exit(exitCode);

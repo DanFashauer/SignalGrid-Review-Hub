@@ -844,8 +844,15 @@ async function selfTest() {
   };
   // Cleanup kills ONLY pids this test recorded, so a red run leaves nothing behind.
   const reapRecorded = (pids) => { for (const p of pids) { try { process.kill(p, "SIGKILL"); } catch { /* gone */ } } };
+  // The holder's JavaScript is a FIXED string: the record file and the hold time reach
+  // it as argv, never interpolated into code (CodeQL js/bad-code-sanitization, #2267).
+  // Shell words are single-quoted; the fixed code contains no single quote.
+  const shellWord = (s) => `'${String(s).replace(/'/g, `'\\''`)}'`;
+  const HOLDER_JS =
+    'const c=require("child_process").spawn(process.execPath,["-e","setTimeout(()=>{},Number(process.argv[1]))",process.argv[2]],{detached:true,stdio:["ignore",1,2]});' +
+    'require("fs").appendFileSync(process.argv[1],c.pid+"\\n");c.unref()';
   const holder = (ms, file) =>
-    `${JSON.stringify(process.execPath)} -e 'const c=require("child_process").spawn(process.execPath,["-e","setTimeout(()=>{},${ms})"],{detached:true,stdio:["ignore",1,2]});require("fs").appendFileSync(${JSON.stringify(file)},c.pid+"\\n");c.unref()'`;
+    [shellWord(process.execPath), "-e", shellWord(HOLDER_JS), shellWord(file), shellWord(Number(ms))].join(" ");
 
   // 7c. fatal-first pool: one call fails while three peers are running.
   const peersFile = lifeFile("peers");

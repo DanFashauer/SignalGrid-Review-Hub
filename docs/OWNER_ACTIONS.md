@@ -7,7 +7,8 @@ backlog itself lives in `docs/BUILD_BACKLOG.md` and its Now section says what
 is done versus held; this file used to open by claiming the backlog was
 finished, which stopped being true the moment new work was filed.)
 
-Order doesn't matter much; #1 and #2 are the ones worth doing soon.
+Order doesn't matter much; #1 is the one worth doing soon. #2 and #4 are done
+(verified 2026-11-17) and are kept below as a record.
 
 ---
 
@@ -33,19 +34,15 @@ the agent is authorized to use for it.
   run the `.github/workflows/pages.yml` workflow once (it builds and deploys
   the marketing site and the on-device demos). Owner-only: repository settings.
 
-## 2. Retire the two legacy repos (5 min)
+## 2. Retire the two legacy repos — DONE (verified 2026-11-17)
 
-**Why you:** merging a PR in another repo and archiving a repo are owner actions.
+No further merge or archive action is owed. Keep both repositories and their
+history as they are. A GitHub API read on 2026-11-17 showed:
 
-Two legacy-retirement PRs are already open (they prepend a "legacy / pre-dev
-concept — superseded by SignalGrid-Review-Hub" banner):
-
-- **DEV** repo → PR **#110** → review + **Merge**.
-- **SignalGrid** repo → PR **#1** → review + **Merge**.
-
-Then, for each of those two repos: **Settings → General → Danger Zone →
-Archive this repository.** Archiving makes them read-only so nobody mistakes
-them for the live codebase, without deleting any history.
+- **DEV**: PR **#110** merged 2026-08-20 as `7952a982`, and the repo is
+  `archived: true`.
+- **SignalGrid**: PR **#1** merged 2026-07-19 as `c0dd5da6`, and the repo is
+  `archived: true`.
 
 > VaultLens is a separate side project — leave it as-is.
 
@@ -96,14 +93,15 @@ That makes this a decision about the *pipeline*, not just a label. Pick under
 
 After a change, update branch-protection to match (below).
 
-## 4. (Recommended) Turn on branch protection for the default branch (3 min)
+## 4. Branch protection for the default branch — ACTIVE (verified 2026-11-17)
 
-**Why you:** protection rules require admin.
-
-**Settings → Branches → Add rule** for the default branch: require the
-`Typecheck, build, and proof scaffold`, `CodeQL`, and `Secret scan (gitleaks)`
-checks to pass before merging, and require a PR. That makes the guardrails that
-already run advisory into blocking.
+No protection setup and no bypass is requested. A GitHub API read on 2026-11-17
+showed ruleset `25774497` ("Brain canonical CI and approval gate") as
+`active`, scoped to `refs/heads/SignalGrid_Alpha`. It requires a pull request
+and ten status checks in strict (up-to-date) mode, and it blocks deletion and
+non-fast-forward pushes. The rules endpoint for the branch lists exactly those
+rule types from that ruleset. Any future change to this policy still needs your
+explicit word, a genuine source review and every DR-037 condition.
 
 ## 5. Delete stale/merged branches (1 min)
 

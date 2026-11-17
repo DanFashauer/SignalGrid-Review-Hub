@@ -5569,4 +5569,4 @@ Between 63b57caa and a0648ffd, only two heartbeat files changed: `mac-lane-stewa
 
 The detached-custody design from earlier commits was removed. Root qualified the blob on the Mac with the real guardian (6944829327). Self-test: 32/0.
 
-**Journal state.** `journal_pending`. This entry is held on a branch under the delivery window (Root, #439 6946006729) and lands only after #2249's resulting CODE PR merges, or when the window releases.
+**Journal state.** `journal_pending`. This entry was held on a branch under the delivery window (Root, #439 6946006729). The window released at 12:26Z under its material-failure condition (#439 6947988311), not because #2249 merged. #2249's automatic publication stopped at slice 4 on a false `heartbeat:mac-lane-tick` stall. Root confirmed (6948209436) that the cause was a stale local `origin/SignalGrid_Alpha` in the producer (`5a70cd70`, tick `02:06:07Z`), while the canonical tip carried the `10:16:50Z` heartbeat. #2249 has not merged, and independent operation remains unverified. The ordinary per-product journal for #2267 is still owed and is not completed by this entry.

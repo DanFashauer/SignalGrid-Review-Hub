@@ -320,6 +320,12 @@ const RETRYABLE_TRANSPORT = new Set(["EPIPE", "EAGAIN"]);
  *  reads this before exiting (#2267 review finding 2). */
 const OWNED_CALLS = new Map();
 
+/** Termination latch (#2267, Root 6944143773). Once a SIGTERM/SIGINT is received no
+ *  NEW hook call is ever spawned — checked at the spawn point itself, so a delayed
+ *  transport retry or any other call dispatched in a no-live-call interval is refused,
+ *  not started. Calls already started are still stopped and joined as before. */
+const TERMINATION = { latched: false, reason: null };
+
 /** Exit fence: stop every still-owned call (its own process group only) and wait for
  *  each to ACTUALLY close. There is no bound that authorizes exit: after each grace the
  *  fence REPORTS what is still pending (via `onPending`) and keeps waiting. A run whose
@@ -345,7 +351,8 @@ export async function drainOwned({ graceMs = CLOSE_GRACE_MS, onPending = () => {
 
 /** Every way out of the CLI before the fence is a thrown GateExit, never a direct
  *  process.exit — a hard exit would skip the fence and leave owned calls running
- *  (#2267 review). The file's only process.exit is after the fence. */
+ *  (#2267 review). The file calls process.exit nowhere; the exit code is set after
+ *  the fence and the process ends when its event loop drains. */
 class GateExit extends Error {
   constructor(code) { super(`gate exit ${code}`); this.code = code; }
 }
@@ -384,6 +391,10 @@ function askHook(hookPath, command, timeoutMs = HOOK_TIMEOUT_MS, { signal, close
   return new Promise((resolvePromise, reject) => {
     if (signal?.aborted) {
       reject(new HookCancelled(`${hookPath} was not asked about ${JSON.stringify(command)}: the pool had already failed.`));
+      return;
+    }
+    if (TERMINATION.latched) {
+      reject(new HookCancelled(`${hookPath} was not asked about ${JSON.stringify(command)}: this run is terminating (${TERMINATION.reason}) — no new hook call is started.`));
       return;
     }
     // The launcher makes the call its own process-group leader (so a hung DESCENDANT —
@@ -489,7 +500,7 @@ function askHook(hookPath, command, timeoutMs = HOOK_TIMEOUT_MS, { signal, close
  *  a second failure, or any other HookFatal, stays fatal. askHook settles only after
  *  the original call has closed, so the retry never overlaps it (#2264). A cancelled
  *  call is never retried. */
-async function askHookRetrying(hookPath, command, signal, { timeoutMs = HOOK_TIMEOUT_MS, closeGraceMs = CLOSE_GRACE_MS, onCall } = {}) {
+async function askHookRetrying(hookPath, command, signal, { timeoutMs = HOOK_TIMEOUT_MS, closeGraceMs = CLOSE_GRACE_MS, onCall, onRetryWait } = {}) {
   const ask = () => { onCall?.(); return askHook(hookPath, command, timeoutMs, { signal, closeGraceMs }); };
   try {
     return await ask();
@@ -498,6 +509,7 @@ async function askHookRetrying(hookPath, command, signal, { timeoutMs = HOOK_TIM
     if (!(e instanceof HookFatal) || e instanceof HookCancelled || !RETRYABLE_TRANSPORT.has(e.transportCode)) throw e;
     // The retry is permitted ONLY on positive evidence that the original call closed.
     if (e.closeConfirmed !== true || signal?.aborted) throw e;
+    onRetryWait?.();
     await new Promise((r) => setTimeout(r, 250));
     return ask();
   }
@@ -1240,13 +1252,36 @@ async function selfTest() {
   );
   reapRecorded(earlyPids);
 
-  // 7m. No hard exit can bypass the fence: the only process.exit in this file is the
-  //     one after it; every earlier way out is a thrown GateExit.
+  // 7p. Termination latch: a SIGTERM delivered in the transport-retry delay — when no
+  //     call is live — must stop the delayed retry from ever starting. Real CLI.
+  const rFile = lifeFile("retry-pids");
+  const rStub = lifeFile("retry.sh");
+  writeFileSync(rStub, [`echo $$ >> ${JSON.stringify(rFile)}`, "exec 0<&-", "exit 0", ""].join("\n"));
+  const rChild = spawn(process.execPath, [self, "--retry-probe", rStub], { stdio: ["ignore", "ignore", "pipe"] });
+  let rErr = "";
+  rChild.stderr.on("data", (d) => { rErr += d; });
+  const rClosed = new Promise((r) => rChild.once("close", (code, signalName) => r({ code, signalName })));
+  for (let i = 0; i < 400 && !rErr.includes("retry-window-open"); i += 1) await new Promise((r) => setTimeout(r, 10));
+  const windowSeen = rErr.includes("retry-window-open");
+  rChild.kill("SIGTERM");
+  const rEnd = await rClosed;
+  await new Promise((r) => setTimeout(r, 500));
+  const rPids = pidsIn("retry-pids");
+  check(
+    "a SIGTERM in the retry delay (no live call) latches termination: the delayed retry never starts, the CLI fails, everything it started is closed (#2267)",
+    windowSeen && rEnd.code === 1 && rEnd.signalName === null && /SIGTERM received/.test(rErr) &&
+      rPids.length === 1 && rPids.every((p) => liveness(p) === "dead") && /no new hook call is started/.test(rErr),
+    `window=${windowSeen} end=${JSON.stringify(rEnd)} hookStarts=${rPids.length} dead=${rPids.map((p) => liveness(p)).join(",")} sigterm=${/SIGTERM received/.test(rErr)} latch=${/no new hook call is started/.test(rErr)} errBytes=${rErr.length}`,
+  );
+  reapRecorded(rPids);
+
+  // 7m. No hard exit can bypass the fence: this file calls process.exit nowhere — every
+  //     early way out is a thrown GateExit, and the code is set after the fence.
   const ownSource = readFileSync(self, "utf8");
   const exitSites = ownSource.split("\n").filter((l) => /^\s*[^/\s*].*\bprocess\.exit\(/.test(l));
   check(
-    "every pre-fence exit is a thrown GateExit: exactly one process.exit call, after the fence (#2267)",
-    exitSites.length === 1 && ownSource.indexOf(exitSites[0]) > ownSource.indexOf("const everPending = await drainOwned("),
+    "every pre-fence exit is a thrown GateExit: no process.exit anywhere; the exit code is set after the fence (#2267)",
+    exitSites.length === 0 && ownSource.lastIndexOf("process.exitCode = exitCode;") > ownSource.indexOf("const everPending = await drainOwned("),
     `sites=${JSON.stringify(exitSites)}`,
   );
   try { rmSync(lifeDir, { recursive: true, force: true }); } catch { /* best-effort */ }
@@ -1299,6 +1334,15 @@ async function selfTest() {
 // --fence-probe <stub> exists ONLY for the self-test's CLI-level control of the exit
 // fence: it drives a pool against the given stub and then takes the SAME exit path the
 // gate takes. It judges nothing and can never exit 0, so it cannot stand in for the gate.
+// --retry-probe <stub>: likewise self-test only. One call whose delivery fails with a
+// typed EPIPE after a confirmed close, so the single retry is due; it marks the start
+// of the retry delay on stderr — a window in which no call is live — and can never
+// exit 0.
+async function retryProbe(stub) {
+  await askHookRetrying(stub, `echo ${"x".repeat(2_000_000)}`, undefined, { onRetryWait: () => console.error("retry-window-open") });
+  throw new HookFatal("retry probe: the call unexpectedly succeeded");
+}
+
 async function fenceProbe(stub) {
   await judgeAll(stub, ["stuck-peer", "FAIL-NOW"], { closeGraceMs: 300 });
   throw new HookFatal("fence probe: the pool unexpectedly succeeded");
@@ -1306,6 +1350,7 @@ async function fenceProbe(stub) {
 
 const isSelfTest = process.argv.includes("--self-test");
 const probeAt = process.argv.indexOf("--fence-probe");
+const retryProbeAt = process.argv.indexOf("--retry-probe");
 let exitCode = 0;
 let unexpected = null;
 // A SIGTERM/SIGINT does not skip the fence: it stops this run's own calls, and the
@@ -1314,11 +1359,14 @@ for (const sig of ["SIGTERM", "SIGINT"]) {
   process.on(sig, () => {
     console.error(`✗ ${sig} received — stopping this run's own hook calls; exiting only after they close.`);
     exitCode = 1;
+    TERMINATION.latched = true;
+    TERMINATION.reason = TERMINATION.reason ?? sig;
     for (const [pid] of OWNED_CALLS) { try { process.kill(-pid, "SIGKILL"); } catch { /* gone */ } }
   });
 }
 try {
   if (probeAt !== -1) await fenceProbe(resolve(process.argv[probeAt + 1] ?? ""));
+  else if (retryProbeAt !== -1) await retryProbe(resolve(process.argv[retryProbeAt + 1] ?? ""));
   else if (isSelfTest) await selfTest();
   else await run();
 } catch (e) {
@@ -1344,4 +1392,7 @@ if (everPending > 0) {
   exitCode = exitCode || 1;
 }
 if (unexpected) throw unexpected;
-if (exitCode !== 0) process.exit(exitCode);
+// No process.exit: it would cut off stderr still buffered for a pipe (a long FATAL line
+// arrived truncated at 146 KB in the 7p control). Setting the code and letting the event
+// loop drain flushes every write; nothing is left running — the fence emptied OWNED_CALLS.
+process.exitCode = exitCode;

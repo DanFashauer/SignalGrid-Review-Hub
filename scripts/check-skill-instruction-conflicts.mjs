@@ -296,7 +296,17 @@ export function isOverridden(entries, relPathFromSkills, line) {
 
 // ── asking the hook (impure, fail-closed) ────────────────────────────────────
 
-class HookFatal extends Error {}
+/** Every hook failure. `closeConfirmed` is STRUCTURED cleanup state, never inferred
+ *  from a message or a clock: true when this call's child was positively observed to
+ *  CLOSE (or no child was ever started); false when the call was stopped and its
+ *  close grace ran out without a close event — cleanup UNCONFIRMED (#2264). An
+ *  unconfirmed failure forbids any retry and any new work. */
+class HookFatal extends Error {
+  constructor(message, { closeConfirmed = true } = {}) {
+    super(message);
+    this.closeConfirmed = closeConfirmed;
+  }
+}
 /** A call stopped because ANOTHER call in the same pool failed first. It is still a
  *  HookFatal (an unanswered call is never an allow), but judgeAll never rethrows it:
  *  the first genuine failure is the one reported. */
@@ -356,7 +366,8 @@ function askHook(hookPath, command, timeoutMs = HOOK_TIMEOUT_MS, { signal, close
       failure = err;
       if (child.pid !== undefined) killOwnGroup();
       graceTimer = setTimeout(() => {
-        settle(reject, new HookFatal(`${err.message} The call did not close within ${closeGraceMs}ms of being stopped.`));
+        // A grace expiring is NOT a close event: the result says so in structure.
+        settle(reject, new HookFatal(`${err.message} The call did not close within ${closeGraceMs}ms of being stopped — cleanup unconfirmed.`, { closeConfirmed: false }));
       }, closeGraceMs);
     };
     const timer = setTimeout(() => {
@@ -413,14 +424,16 @@ function askHook(hookPath, command, timeoutMs = HOOK_TIMEOUT_MS, { signal, close
  *  a second failure, or any other HookFatal, stays fatal. askHook settles only after
  *  the original call has closed, so the retry never overlaps it (#2264). A cancelled
  *  call is never retried. */
-async function askHookRetrying(hookPath, command, signal) {
+async function askHookRetrying(hookPath, command, signal, { timeoutMs = HOOK_TIMEOUT_MS, closeGraceMs = CLOSE_GRACE_MS, onCall } = {}) {
+  const ask = () => { onCall?.(); return askHook(hookPath, command, timeoutMs, { signal, closeGraceMs }); };
   try {
-    return await askHook(hookPath, command, HOOK_TIMEOUT_MS, { signal });
+    return await ask();
   } catch (e) {
     if (!(e instanceof HookFatal) || e instanceof HookCancelled || !/EPIPE|EAGAIN/.test(e.message)) throw e;
-    if (signal?.aborted) throw e;
+    // The retry is permitted ONLY on positive evidence that the original call closed.
+    if (e.closeConfirmed !== true || signal?.aborted) throw e;
     await new Promise((r) => setTimeout(r, 250));
-    return askHook(hookPath, command, HOOK_TIMEOUT_MS, { signal });
+    return ask();
   }
 }
 
@@ -429,11 +442,14 @@ async function askHookRetrying(hookPath, command, signal) {
  *  through one shared signal (each peer kills only its own process group), and
  *  JOINS every worker before rethrowing that first failure — it never returns while
  *  a call it started is still running (#2264). */
-export async function judgeAll(hookPath, commands) {
+export async function judgeAll(hookPath, commands, { closeGraceMs = CLOSE_GRACE_MS } = {}) {
   const unique = [...new Set(commands)];
   const verdict = new Map();
   const controller = new AbortController();
   let firstFailure = null;
+  // Started calls whose cleanup could NOT be confirmed. allSettled only proves every
+  // worker's promise settled; this list is what says whether every call CLOSED.
+  const unconfirmed = [];
   let next = 0;
   const worker = async () => {
     for (;;) {
@@ -442,8 +458,9 @@ export async function judgeAll(hookPath, commands) {
       next += 1;
       if (i >= unique.length) return;
       try {
-        verdict.set(unique[i], await askHookRetrying(hookPath, unique[i], controller.signal));
+        verdict.set(unique[i], await askHookRetrying(hookPath, unique[i], controller.signal, { closeGraceMs }));
       } catch (e) {
+        if (e instanceof HookFatal && e.closeConfirmed === false) unconfirmed.push(unique[i]);
         if (!firstFailure) {
           firstFailure = e;
           controller.abort();
@@ -453,6 +470,13 @@ export async function judgeAll(hookPath, commands) {
     }
   };
   await Promise.allSettled(Array.from({ length: Math.min(CONCURRENCY, unique.length || 1) }, worker));
+  if (unconfirmed.length > 0) {
+    // Never report an all-closed pool when it is not: quiescence stays UNVERIFIED.
+    throw new HookFatal(
+      `${firstFailure.message} | quiescence UNVERIFIED: ${unconfirmed.length} started call(s) did not confirm close (${unconfirmed.map((c) => JSON.stringify(c)).join(", ")}).`,
+      { closeConfirmed: false },
+    );
+  }
   if (firstFailure) throw firstFailure;
   return verdict;
 }
@@ -901,6 +925,63 @@ async function selfTest() {
     "a delivery error rejects only after the original call has CLOSED, so the single retry starts after it and its failure stays fatal (#2264)",
     eErr instanceof HookFatal && /EPIPE/.test(eErr.message) && eElapsed >= 2200 && ePids.length === 4 && eSurvivors.length === 0,
     `fatal=${eErr instanceof HookFatal} message=${JSON.stringify(eErr?.message?.slice(0, 120))} elapsed=${eElapsed}ms recorded=${ePids.length} alive-at-reject=${eSurvivors.length}`,
+  );
+  // 7f. cleanup confirmation is STRUCTURED: a close grace that runs out is not a close
+  //     event. The result carries closeConfirmed=false, and an EPIPE whose original
+  //     call did not confirm close is NOT retried (the hook is asked exactly once).
+  const uFile = lifeFile("unconfirmed-pids");
+  const uStub = lifeFile("unconfirmed.sh");
+  writeFileSync(uStub, [
+    `echo $$ >> ${JSON.stringify(uFile)}`,
+    holder(2500, uFile),
+    "exec 0<&-",
+    "exit 0",
+    "",
+  ].join("\n"));
+  let uErr = null;
+  let uCalls = 0;
+  const uStart = Date.now();
+  try {
+    await askHookRetrying(uStub, `echo ${"y".repeat(2_000_000)}`, undefined, { closeGraceMs: 400, onCall: () => { uCalls += 1; } });
+  } catch (e) { uErr = e; }
+  const uElapsed = Date.now() - uStart;
+  const uPids = pidsIn("unconfirmed-pids");
+  reapRecorded(uPids);
+  check(
+    "a close grace that expires yields closeConfirmed=false (never inferred from a message or a clock) and FORBIDS the retry (#2264)",
+    uErr instanceof HookFatal && uErr.closeConfirmed === false && /EPIPE/.test(uErr.message) && /cleanup unconfirmed/.test(uErr.message) &&
+      uCalls === 1 && uPids.length === 2 && uElapsed < 2000,
+    `fatal=${uErr instanceof HookFatal} closeConfirmed=${uErr?.closeConfirmed} calls=${uCalls} recorded=${uPids.length} elapsed=${uElapsed}ms message=${JSON.stringify(uErr?.message?.slice(0, 160))}`,
+  );
+
+  // 7g. a pool that cannot confirm every started call closed reports quiescence as
+  //     UNVERIFIED, naming the call — it never reports an all-closed pool it cannot prove.
+  const qFile = lifeFile("quiescence-pids");
+  const qStub = lifeFile("quiescence.sh");
+  writeFileSync(qStub, [
+    "cmd=$(cat)",
+    'case "$cmd" in',
+    "  *FAIL-NOW*)",
+    "    i=0",
+    `    while [ "$(( $(cat ${JSON.stringify(qFile)} 2>/dev/null | wc -l) ))" -lt 3 ] && [ "$i" -lt 200 ]; do sleep 0.05; i=$((i+1)); done`,
+    "    exit 3 ;;",
+    "esac",
+    `echo $$ >> ${JSON.stringify(qFile)}`,
+    holder(2500, qFile),
+    "sleep 30 &",
+    `echo $! >> ${JSON.stringify(qFile)}`,
+    "wait",
+    "",
+  ].join("\n"));
+  let qErr = null;
+  try { await judgeAll(qStub, ["stuck-peer", "FAIL-NOW"], { closeGraceMs: 400 }); } catch (e) { qErr = e; }
+  const qPids = pidsIn("quiescence-pids");
+  reapRecorded(qPids);
+  check(
+    "a pool with a started call that never confirms close reports quiescence UNVERIFIED, naming it, alongside the first failure (#2264)",
+    qErr instanceof HookFatal && qErr.closeConfirmed === false && qErr.message.includes("quiescence UNVERIFIED") &&
+      qErr.message.includes(JSON.stringify("stuck-peer")) && qErr.message.includes("exited 3") && qPids.length === 3,
+    `fatal=${qErr instanceof HookFatal} closeConfirmed=${qErr?.closeConfirmed} recorded=${qPids.length} message=${JSON.stringify(qErr?.message?.slice(0, 200))}`,
   );
   try { rmSync(lifeDir, { recursive: true, force: true }); } catch { /* best-effort */ }
 

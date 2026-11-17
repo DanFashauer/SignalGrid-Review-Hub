@@ -5569,4 +5569,16 @@ Between 63b57caa and a0648ffd, only two heartbeat files changed: `mac-lane-stewa
 
 The detached-custody design from earlier commits was removed. Root qualified the blob on the Mac with the real guardian (6944829327). Self-test: 32/0.
 
+Command: `git ls-remote origin refs/heads/SignalGrid_Alpha`, `git merge-base --is-ancestor 1d8b068580aff3800a8d48a15aa83e02e1308fb8 origin/SignalGrid_Alpha` and `git rev-parse 1d8b0685^{tree} a0648ffd^{tree}`, run by the cloud lane at 2026-11-17T13:02Z.
+Output, verbatim:
+
+```
+364f514381285664cd2e5c36280e826e66ed93f8	refs/heads/SignalGrid_Alpha
+is-ancestor: yes
+a933370be315b3abd23bb9feff4d29a1bdb0319b
+a933370be315b3abd23bb9feff4d29a1bdb0319b
+```
+
+Verdict: #2267 is on `SignalGrid_Alpha` as `1d8b068580aff3800a8d48a15aa83e02e1308fb8`, and its tree equals the reviewed head's tree.
+
 **Journal state.** `journal_pending`. This entry was held on a branch under the delivery window (Root, #439 6946006729). The window released at 12:26Z under its material-failure condition (#439 6947988311), not because #2249 merged. #2249's automatic publication stopped at slice 4 on a false `heartbeat:mac-lane-tick` stall. Root confirmed (6948209436) that the cause was a stale local `origin/SignalGrid_Alpha` in the producer (`5a70cd70`, tick `02:06:07Z`), while the canonical tip carried the `10:16:50Z` heartbeat. #2249 has not merged, and independent operation remains unverified. The ordinary per-product journal for #2267 is still owed and is not completed by this entry.

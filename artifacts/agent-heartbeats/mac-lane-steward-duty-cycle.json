@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-11-17T03:26:09.130Z",
-  "result": "03:25Z fire (non-quiet; 2h keepalive also due). Cloud serial landing per Root's request 6936671394: Mac tick PR #2247 refreshed from 40b6f476 to 03f8bea4, Codex clean, required CI green, merged as d821b4d3 at 03:13Z (tree equal to head, branch kept). Inspected Mac hand pending-heartbeat-9ab59a1e: heartbeat PR #2256 is one-file, no failed checks, read-only report on #439. Live proof #2249 (R100) still has no PR; cloud lane free for it. Mac tick heartbeat firedAt 2026-11-17T02:48:20Z on mainline (03:03:47Z pending in #2256). Live evidence last changed 2026-11-16 22:14Z. No mail addressed to cloud unread. Owner not escalated."
+  "firedAt": "2026-11-17T06:12:37.960Z",
+  "result": "06:12Z keepalive (prior 03:26Z). Correction to the 03:25Z entry: #2247's final-head Mac aggregate job 133794283906 logged 'PR #2247 is closed; the Mac verification is skipped' at 03:24Z (after the 03:13Z merge), so 'required CI green' overstated it; the four final-head Mac slices ran, the aggregate did not. Mac heartbeat-uncertainty hand df95edd8 inspected read-only: #2261 is one file, no failed checks. Mac tick heartbeat on mainline firedAt 2026-11-17T05:28:52Z (06:05:48Z deferred on host lock pending in #2261). Live evidence last changed 2026-11-16 22:14Z. No mail addressed to cloud unread. Owner not escalated."
 }

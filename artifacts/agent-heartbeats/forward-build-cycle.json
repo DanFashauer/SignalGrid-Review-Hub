@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-11-17T04:10:51.545Z",
-  "result": "04:10Z fire, quiet by owner priority (6934034939: independent Mac delivery is exclusive; other work parked). No workers dispatched; in flight H/S/O = 0/0/0. Landed via the serial lane since last fire: #2247 (d821b4d3). Live proof #2249 (R100) has no PR yet; cloud lane free for it. Sub-brains: none spawned. Owner queue: none new."
+  "firedAt": "2026-11-17T06:12:37.960Z",
+  "result": "06:11Z fire, quiet by owner priority (6934034939: independent Mac delivery is exclusive). No workers dispatched; in flight H/S/O = 0/0/0. No PRs landed since 04:10Z. Live proof #2249 failed real canonical preflight slice 1 at 05:28Z on a citation-line ratchet (README claim via CLAIM_INVENTORY.md:911 -> preflight.mjs:630 moved to 642); Root is re-placing the two proof rows at the end of STEPS. Cloud read-only check: STEPS closes at line 839, highest cited preflight line is 784. Sub-brains: none spawned. Owner queue: none new."
 }

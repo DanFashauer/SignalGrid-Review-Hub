@@ -380,7 +380,7 @@ const CLOSE_GRACE_MS = 5000;
  *    verdict, a timeout, a cancellation, a delivery error — settles only after this
  *    call's child has CLOSED, or after the bounded close grace says it did not
  *    (#2264). */
-function askHook(hookPath, command, timeoutMs = HOOK_TIMEOUT_MS, { signal, closeGraceMs = CLOSE_GRACE_MS } = {}) {
+function askHook(hookPath, command, timeoutMs = HOOK_TIMEOUT_MS, { signal, closeGraceMs = CLOSE_GRACE_MS, launcher = LAUNCHER } = {}) {
   return new Promise((resolvePromise, reject) => {
     if (signal?.aborted) {
       reject(new HookCancelled(`${hookPath} was not asked about ${JSON.stringify(command)}: the pool had already failed.`));
@@ -389,7 +389,7 @@ function askHook(hookPath, command, timeoutMs = HOOK_TIMEOUT_MS, { signal, close
     // The launcher makes the call its own process-group leader (so a hung DESCENDANT —
     // the BSD sed in the deny hook, Codex #716 — is killed with it) WITHOUT leaving this
     // process's session.
-    const child = spawn(LAUNCHER[0], [...LAUNCHER[1], hookPath], { cwd: repo, stdio: ["pipe", "pipe", "pipe"] });
+    const child = spawn(launcher[0], [...launcher[1], hookPath], { cwd: repo, stdio: ["pipe", "pipe", "pipe"] });
     if (child.pid !== undefined) {
       const pid = child.pid;
       OWNED_CALLS.set(pid, { command, child, closed: new Promise((r) => child.once("close", r)) });
@@ -415,14 +415,21 @@ function askHook(hookPath, command, timeoutMs = HOOK_TIMEOUT_MS, { signal, close
     // otherwise a hung descendant (the BSD sed, Codex #716) is orphaned and keeps
     // consuming CPU. Fall back to the child alone if the group is already gone.
     // Only THIS call's own group is targeted: ownership is the pid we spawned.
+    // Signal BOTH the group and the pid: before the launcher's setpgrp() the group does
+    // not exist yet (ESRCH), and the pid alone is the whole call.
     const killOwnGroup = () => {
-      try { process.kill(-child.pid, "SIGKILL"); }
-      catch { try { child.kill("SIGKILL"); } catch { /* already exited */ } }
+      try { process.kill(-child.pid, "SIGKILL"); } catch { /* group not formed yet, or gone */ }
+      try { child.kill("SIGKILL"); } catch { /* already exited */ }
     };
+    // Cancellation can land BEFORE the launcher has made its group; a group formed after
+    // that first signal would escape it. So once stopped, the call's OWN group is
+    // re-signalled until the call closes — never any other group, never the session.
+    let rekill = null;
+    child.once("close", () => clearInterval(rekill));
     const stop = (err) => {
       if (failure || settled) return;
       failure = err;
-      if (child.pid !== undefined) killOwnGroup();
+      if (child.pid !== undefined) { killOwnGroup(); rekill = setInterval(killOwnGroup, 100); }
       graceTimer = setTimeout(() => {
         // A grace expiring is NOT a close event: the result says so in structure.
         settle(reject, new HookFatal(`${err.message} The call did not close within ${closeGraceMs}ms of being stopped — cleanup unconfirmed.`, { closeConfirmed: false, transportCode: err.transportCode ?? null }));
@@ -1165,15 +1172,73 @@ async function selfTest() {
   //     marks a session leader with "s" on both Linux and macOS.
   const pgFile = lifeFile("pg-out");
   const pgStub = lifeFile("pg.sh");
-  writeFileSync(pgStub, ["cat >/dev/null", `ps -o pid=,pgid=,stat= -p $$ > ${JSON.stringify(pgFile)}`, ""].join("\n"));
+  const sidFile = lifeFile("sid-out");
+  writeFileSync(pgStub, ["cat >/dev/null", `ps -o pid=,pgid=,stat= -p $$ > ${JSON.stringify(pgFile)}`, `ps -o sid= -p $$ > ${JSON.stringify(sidFile)} 2>/dev/null || :`, ""].join("\n"));
   await askHook(pgStub, "launcher-probe", 5000);
   const [hPid, hPgid, hStat = ""] = readFileSync(pgFile, "utf8").trim().split(/\s+/);
   const myPgid = spawnSync("ps", ["-o", "pgid=", "-p", String(process.pid)], { encoding: "utf8" }).stdout.trim();
+  // Where ps reports a session id (Linux procps), compare it directly; where it does not
+  // (macOS ps has no sid keyword), "not a session leader" in a child of ours is the same
+  // fact — setpgrp() never changes the session, so it is inherited.
+  const mySidRun = spawnSync("ps", ["-o", "sid=", "-p", String(process.pid)], { encoding: "utf8" });
+  const mySid = mySidRun.status === 0 ? mySidRun.stdout.trim() : "";
+  let hookSid = "";
+  try { hookSid = readFileSync(sidFile, "utf8").trim(); } catch { hookSid = ""; }
+  const sidOk = /^\d+$/.test(mySid) ? hookSid === mySid : true;
   check(
     "each hook call leads its own process group without leaving this process's session (supported launcher, not setsid) (#2267)",
-    hPid !== undefined && hPid === hPgid && hPgid !== myPgid && !hStat.includes("s"),
-    `pid=${hPid} pgid=${hPgid} stat=${hStat} ourPgid=${myPgid}`,
+    hPid !== undefined && hPid === hPgid && hPgid !== myPgid && !hStat.includes("s") && sidOk,
+    `pid=${hPid} pgid=${hPgid} stat=${hStat} ourPgid=${myPgid} hookSid=${hookSid || "n/a"} ourSid=${mySid || "n/a"}`,
   );
+
+  // 7n. Cancellation at every moment around group formation: a call cancelled 0–9ms
+  //     after spawn (before, during and after the launcher's setpgrp) must reject only
+  //     after close, and leave NOTHING it started alive — including a sleeper its hook
+  //     forked the instant it ran.
+  const cFile = lifeFile("cancel-pids");
+  const cStub = lifeFile("cancel.sh");
+  writeFileSync(cStub, [`echo $$ >> ${JSON.stringify(cFile)}`, "sleep 30 &", `echo $! >> ${JSON.stringify(cFile)}`, "wait", ""].join("\n"));
+  let cancelOk = 0;
+  const cancelBad = [];
+  for (let i = 0; i < 30; i += 1) {
+    const ac = new AbortController();
+    const call = askHook(cStub, `cancel-${i}`, 5000, { signal: ac.signal, closeGraceMs: 3000 }).then(() => "resolved", (e) => e);
+    if (i % 10 === 0) ac.abort(); else setTimeout(() => ac.abort(), i % 10);
+    const outcome = await call;
+    if (outcome instanceof HookFatal && outcome.closeConfirmed !== false) cancelOk += 1;
+    else cancelBad.push(`${i}:${outcome?.message ?? outcome}`);
+  }
+  await new Promise((r) => setTimeout(r, 200));
+  const cPids = pidsIn("cancel-pids");
+  const cAlive = cPids.filter((p) => liveness(p) !== "dead");
+  check(
+    "a call cancelled at any moment around its group's formation rejects only after close and leaves nothing it started alive (30 cancels at 0–9ms) (#2267)",
+    cancelOk === 30 && cAlive.length === 0 && OWNED_CALLS.size === 0,
+    `ok=${cancelOk} bad=${JSON.stringify(cancelBad.slice(0, 3))} recorded=${cPids.length} alive=${JSON.stringify(cAlive)} owned=${OWNED_CALLS.size}`,
+  );
+  reapRecorded(cPids);
+
+  // 7o. Cancellation BEFORE the group exists, deterministically: a test-only launcher
+  //     pauses 300ms before setpgrp(); the call is cancelled 50ms in. The pid-level
+  //     signal must stop it there — the hook never runs, nothing is left — and the
+  //     rejection comes only after close. (A group-only signal would miss the
+  //     not-yet-formed group; the periodic own-group re-signal is the second layer.)
+  const slowLauncher = ["perl", ["-e", 'select(undef, undef, undef, 0.3); setpgrp(0,0) or die "setpgrp: $!\\n"; exec {"bash"} "bash", $ARGV[0] or die "exec: $!\\n"']];
+  const earlyFile = lifeFile("early-pids");
+  const earlyStub = lifeFile("early.sh");
+  writeFileSync(earlyStub, [`echo $$ >> ${JSON.stringify(earlyFile)}`, "sleep 30 &", `echo $! >> ${JSON.stringify(earlyFile)}`, "wait", ""].join("\n"));
+  const earlyAc = new AbortController();
+  const earlyCall = askHook(earlyStub, "early-cancel", 5000, { signal: earlyAc.signal, closeGraceMs: 3000, launcher: slowLauncher }).then(() => "resolved", (e) => e);
+  setTimeout(() => earlyAc.abort(), 50);
+  const earlyOut = await earlyCall;
+  await new Promise((r) => setTimeout(r, 600));
+  const earlyPids = pidsIn("early-pids");
+  check(
+    "a call cancelled before its launcher has formed the group is stopped there: the hook never runs, nothing is left, rejection after close (#2267)",
+    earlyOut instanceof HookCancelled && earlyOut.closeConfirmed !== false && earlyPids.length === 0 && OWNED_CALLS.size === 0,
+    `outcome=${earlyOut?.constructor?.name ?? earlyOut} closeConfirmed=${earlyOut?.closeConfirmed} hookRan=${earlyPids.length} owned=${OWNED_CALLS.size}`,
+  );
+  reapRecorded(earlyPids);
 
   // 7m. No hard exit can bypass the fence: the only process.exit in this file is the
   //     one after it; every earlier way out is a thrown GateExit.

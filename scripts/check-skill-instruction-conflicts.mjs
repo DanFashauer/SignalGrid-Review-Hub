@@ -128,7 +128,8 @@
 // those numbers anywhere — the summary line prints the current ones.
 
 import { execFileSync, spawn, spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { Socket } from "node:net";
 import { tmpdir } from "node:os";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -329,7 +330,115 @@ export async function drainOwned(boundMs = CLOSE_GRACE_MS) {
     try { process.kill(-pid, "SIGKILL"); } catch { /* group already gone */ }
   }
   await Promise.all(pending.map(([, call]) => Promise.race([call.closed, new Promise((r) => setTimeout(r, boundMs))])));
-  return [...OWNED_CALLS.entries()].map(([pid, call]) => ({ pid, command: call.command }));
+  return [...OWNED_CALLS.entries()].map(([pid, call]) => ({ pid, command: call.command, child: call.child }));
+}
+
+// ── cleanup custody (#2267 review finding 2, second round) ───────────────────
+// A call that has not closed by exit is NOT released. Its only closure evidence is EOF
+// on the stdout/stderr pipes this process reads — a descendant that escaped the call's
+// process group can hold them open, and no pid census can see it. So at exit the READ
+// ENDS of those pipes are handed to a detached custodian process (`--custodian`),
+// which keeps ownership until each pipe actually reaches EOF and records that in a
+// durable custody record. The caller's release check is `--cleanup-status`: exit 0
+// only when every record says CLOSED; an open record, or a custodian that died
+// without recording close, is a failure. A log line is never the handoff.
+
+/** Where custody records live: per checkout, inside the git dir (never in the working
+ *  tree, so they cannot dirty provenance), or $SIGNALGRID_HOOK_CUSTODY_DIR. */
+function custodyDir() {
+  if (process.env.SIGNALGRID_HOOK_CUSTODY_DIR) return resolve(process.env.SIGNALGRID_HOOK_CUSTODY_DIR);
+  const gitDir = execFileSync("git", ["rev-parse", "--absolute-git-dir"], { cwd: repo, encoding: "utf8" }).trim();
+  return resolve(gitDir, "signalgrid-hook-custody");
+}
+
+function writeRecord(path, record) {
+  const tmp = `${path}.${process.pid}.tmp`;
+  writeFileSync(tmp, `${JSON.stringify(record, null, 2)}\n`);
+  renameSync(tmp, path);
+}
+
+/** Hand every still-open call's pipe read ends to a detached custodian. Returns the
+ *  record path and custodian pid; the record says "unknown" if no custodian started. */
+function handOffCustody(openCalls) {
+  const dir = custodyDir();
+  mkdirSync(dir, { recursive: true });
+  const path = resolve(dir, `${process.pid}-${Date.now()}.json`);
+  const streams = [];
+  const calls = openCalls.map((c) => {
+    const fds = [];
+    for (const [name, stream] of [["stdout", c.child.stdout], ["stderr", c.child.stderr]]) {
+      if (stream && !stream.destroyed) { fds.push({ name, fd: 3 + streams.length, closed: false }); streams.push(stream); }
+    }
+    return { pid: c.pid, command: c.command, pipes: fds };
+  });
+  const record = { schema: 1, gatePid: process.pid, createdAt: new Date().toISOString(), status: "open", custodianPid: null, calls };
+  writeRecord(path, record);
+  let custodian;
+  try {
+    custodian = spawn(process.execPath, [fileURLToPath(import.meta.url), "--custodian", path], {
+      detached: true, stdio: ["ignore", "ignore", "ignore", ...streams],
+    });
+  } catch { custodian = null; }
+  if (!custodian || custodian.pid === undefined) {
+    writeRecord(path, { ...record, status: "unknown", reason: "no custodian could be started; the pipes are unobserved" });
+    return { path, custodianPid: null };
+  }
+  writeRecord(path, { ...record, custodianPid: custodian.pid });
+  custodian.unref();
+  // The custodian now holds duplicates of the read ends; ours can go.
+  for (const st of streams) { try { st.destroy(); } catch { /* already closed */ } }
+  return { path, custodianPid: custodian.pid };
+}
+
+/** --custodian <record>: hold each handed-over pipe until EOF; record every close. */
+async function runCustodian(path) {
+  const record = JSON.parse(readFileSync(path, "utf8"));
+  const pipes = record.calls.flatMap((c) => c.pipes.map((p) => ({ call: c, pipe: p })));
+  await Promise.all(pipes.map(({ pipe }) => new Promise((done) => {
+    let sock;
+    try { sock = new Socket({ fd: pipe.fd, readable: true, writable: false }); }
+    catch { pipe.closed = "unknown"; done(); return; }
+    sock.on("data", () => { /* drain */ });
+    sock.on("end", () => { pipe.closed = true; pipe.closedAt = new Date().toISOString(); writeRecord(path, record); done(); });
+    sock.on("error", () => { pipe.closed = "unknown"; writeRecord(path, record); done(); });
+  })));
+  const allClosed = pipes.every(({ pipe }) => pipe.closed === true);
+  record.status = allClosed ? "closed" : "unknown";
+  if (allClosed) record.closedAt = new Date().toISOString();
+  writeRecord(path, record);
+  return allClosed ? 0 : 2;
+}
+
+/** --cleanup-status [dir]: the caller's release check. Exit 0 only when every custody
+ *  record is CLOSED. "open" with a live custodian is still owned; a record whose
+ *  custodian is gone (or unknowable) without recording close is UNKNOWN. */
+function cleanupStatus(dir) {
+  const target = dir ? resolve(dir) : custodyDir();
+  let files = [];
+  try { files = readdirSync(target).filter((n) => n.endsWith(".json")); } catch { files = []; }
+  let bad = 0;
+  for (const name of files) {
+    let rec;
+    try { rec = JSON.parse(readFileSync(resolve(target, name), "utf8")); } catch { console.log(`UNKNOWN  ${name}  unreadable record`); bad += 1; continue; }
+    if (rec.status === "closed") { console.log(`closed   ${name}`); continue; }
+    const holder = rec.custodianPid ? pidState(rec.custodianPid) : "dead";
+    const label = rec.status === "open" && holder === "alive" ? "OPEN    " : "UNKNOWN ";
+    console.log(`${label} ${name}  custodian=${rec.custodianPid ?? "none"} (${holder})  calls=${rec.calls.map((c) => JSON.stringify(c.command)).join(", ")}`);
+    bad += 1;
+  }
+  console.log(`cleanup-status: ${files.length} record(s), ${bad} not closed`);
+  return bad === 0 ? 0 : 1;
+}
+
+/** Three-valued pid census shared by the release check and the self-test. */
+function pidState(pid) {
+  const r = spawnSync("ps", ["-o", "stat=", "-p", String(pid)], { encoding: "utf8" });
+  if (r.error) return "unknown";
+  const out = (r.stdout ?? "").trim();
+  const err = (r.stderr ?? "").trim();
+  if (r.status === 0 && out !== "") return out.startsWith("Z") ? "dead" : "alive";
+  if (r.status === 1 && out === "" && err === "") return "dead";
+  return "unknown";
 }
 /** A call stopped because ANOTHER call in the same pool failed first. It is still a
  *  HookFatal (an unanswered call is never an allow), but judgeAll never rethrows it:
@@ -363,7 +472,7 @@ function askHook(hookPath, command, timeoutMs = HOOK_TIMEOUT_MS, { signal, close
     const child = spawn("bash", [hookPath], { cwd: repo, stdio: ["pipe", "pipe", "pipe"], detached: true });
     if (child.pid !== undefined) {
       const pid = child.pid;
-      OWNED_CALLS.set(pid, { command, closed: new Promise((r) => child.once("close", r)) });
+      OWNED_CALLS.set(pid, { command, child, closed: new Promise((r) => child.once("close", r)) });
       child.once("close", () => OWNED_CALLS.delete(pid));
     }
     let stdout = "";
@@ -1090,18 +1199,67 @@ async function selfTest() {
     "wait",
     "",
   ].join("\n"));
-  const probe = spawnSync(process.execPath, [fileURLToPath(import.meta.url), "--fence-probe", fStub], { encoding: "utf8", timeout: 20000 });
+  const custodyAt = resolve(lifeDir, "custody");
+  const self = fileURLToPath(import.meta.url);
+  const probe = spawnSync(process.execPath, [self, "--fence-probe", fStub], {
+    encoding: "utf8", timeout: 20000, env: { ...process.env, SIGNALGRID_HOOK_CUSTODY_DIR: custodyAt },
+  });
   const fPids = pidsIn("fence-pids");
   const fAliveAtExit = fPids.map((p) => [p, liveness(p)]);
-  const fenceLine = (probe.stderr ?? "").split("\n").find((l) => l.includes("cleanup fence")) ?? "";
+  const fenceLine = (probe.stderr ?? "").split("\n").find((l) => l.includes("cleanup custody")) ?? "";
   const holderStillAlive = fAliveAtExit.some(([, st]) => st === "alive");
-  reapRecorded(fPids);
+  // NEGATIVE CONTROL, before anything is reaped: while the recorded holder is alive, the
+  // caller's release check must REFUSE (exit 1, the record OPEN with a live custodian).
+  const statusWhileLive = spawnSync(process.execPath, [self, "--cleanup-status", custodyAt], { encoding: "utf8", timeout: 10000 });
+  const holderAliveAtStatus = fPids.some((p) => liveness(p) === "alive");
+  let records = [];
+  try { records = readdirSync(custodyAt).filter((n) => n.endsWith(".json")); } catch { records = []; }
+  const rec0 = records.length === 1 ? JSON.parse(readFileSync(resolve(custodyAt, records[0]), "utf8")) : null;
+  const custodianAtStart = rec0?.custodianPid ? liveness(rec0.custodianPid) : "none";
   check(
-    "the CLI never exits as if cleanup were done: it fails and NAMES each owned call still open, and that call's holder is really alive at exit (#2267)",
-    probe.status === 1 && /cleanup fence: 1 owned hook call\(s\) did not close before exit/.test(fenceLine) &&
-      fenceLine.includes(JSON.stringify("stuck-peer")) && holderStillAlive && fPids.length === 3,
-    `status=${probe.status} fence=${JSON.stringify(fenceLine.slice(0, 160))} census=${JSON.stringify(fAliveAtExit)}`,
+    "the CLI never exits as if cleanup were done: it fails, NAMES the open owned call, and leaves ONE durable custody record held by a live custodian (#2267)",
+    probe.status === 1 && /cleanup custody: 1 owned hook call\(s\) did not close before exit/.test(fenceLine) &&
+      fenceLine.includes(JSON.stringify("stuck-peer")) && holderStillAlive && fPids.length === 3 &&
+      records.length === 1 && rec0?.status === "open" && custodianAtStart === "alive",
+    `status=${probe.status} fence=${JSON.stringify(fenceLine.slice(0, 160))} census=${JSON.stringify(fAliveAtExit)} records=${records.length} custodian=${custodianAtStart}`,
   );
+  check(
+    "NEGATIVE CONTROL: while the recorded owned process is alive, --cleanup-status refuses release (exit 1, OPEN) (#2267)",
+    statusWhileLive.status === 1 && /^OPEN /m.test(statusWhileLive.stdout ?? "") && holderAliveAtStatus,
+    `status=${statusWhileLive.status} holderAlive=${holderAliveAtStatus} out=${JSON.stringify((statusWhileLive.stdout ?? "").slice(0, 200))}`,
+  );
+  // Nothing is killed: the holder exits on its own (4000ms), its pipe reaches EOF, and the
+  // custodian — not the test — records the close. Only then may release succeed.
+  let statusAfter = null;
+  for (let i = 0; i < 200; i += 1) {
+    statusAfter = spawnSync(process.execPath, [self, "--cleanup-status", custodyAt], { encoding: "utf8", timeout: 10000 });
+    if (statusAfter.status === 0) break;
+    await new Promise((r) => setTimeout(r, 100));
+  }
+  const rec1 = rec0 ? JSON.parse(readFileSync(resolve(custodyAt, records[0]), "utf8")) : null;
+  let custodianGone = "unknown";
+  for (let i = 0; i < 50 && rec1?.custodianPid; i += 1) {
+    custodianGone = liveness(rec1.custodianPid);
+    if (custodianGone === "dead") break;
+    await new Promise((r) => setTimeout(r, 100));
+  }
+  check(
+    "release succeeds only after the custodian itself observes EOF on every handed pipe and records CLOSED (#2267)",
+    statusAfter?.status === 0 && rec1?.status === "closed" && rec1.calls.every((c) => c.pipes.every((p) => p.closed === true)) && custodianGone === "dead",
+    `status=${statusAfter?.status} record=${rec1?.status} custodian=${custodianGone}`,
+  );
+  // A record whose custodian is gone without recording close is UNKNOWN, never released.
+  const orphanDir = resolve(lifeDir, "custody-orphan");
+  mkdirSync(orphanDir, { recursive: true });
+  const deadPid = spawnSync("sh", ["-c", "echo $$"], { encoding: "utf8" }).stdout.trim();
+  writeFileSync(resolve(orphanDir, "orphan.json"), JSON.stringify({ schema: 1, gatePid: 1, status: "open", custodianPid: Number(deadPid), calls: [{ pid: 1, command: "x", pipes: [] }] }));
+  const orphan = spawnSync(process.execPath, [self, "--cleanup-status", orphanDir], { encoding: "utf8", timeout: 10000 });
+  check(
+    "an open record whose custodian is gone reads UNKNOWN and refuses release (exit 1) (#2267)",
+    orphan.status === 1 && /^UNKNOWN /m.test(orphan.stdout ?? ""),
+    `status=${orphan.status} out=${JSON.stringify((orphan.stdout ?? "").slice(0, 200))}`,
+  );
+  reapRecorded(fPids);
   try { rmSync(lifeDir, { recursive: true, force: true }); } catch { /* best-effort */ }
 
   // 8. the plant proof itself, both directions, on a fixture tree. The REAL-tree run of the
@@ -1157,6 +1315,11 @@ async function fenceProbe(stub) {
   throw new HookFatal("fence probe: the pool unexpectedly succeeded");
 }
 
+const custodianAt = process.argv.indexOf("--custodian");
+if (custodianAt !== -1) process.exit(await runCustodian(resolve(process.argv[custodianAt + 1] ?? "")));
+const statusAt = process.argv.indexOf("--cleanup-status");
+if (statusAt !== -1) process.exit(cleanupStatus(process.argv[statusAt + 1]));
+
 const isSelfTest = process.argv.includes("--self-test");
 const probeAt = process.argv.indexOf("--fence-probe");
 let exitCode = 0;
@@ -1176,10 +1339,14 @@ try {
 }
 // EXIT FENCE (#2267 review finding 2): never leave as if cleanup were done. Every call
 // this process started and has not seen close is stopped (own group) and awaited,
-// bounded; any that still have not closed are NAMED and the exit is a failure.
+// bounded. Any still open is NOT released: custody of its pipes passes to a detached
+// custodian with a durable record, and the exit is a failure that names the record.
 const stillOpen = await drainOwned(probeAt !== -1 ? 300 : CLOSE_GRACE_MS);
 if (stillOpen.length > 0) {
-  console.error(`✗ cleanup fence: ${stillOpen.length} owned hook call(s) did not close before exit — ${stillOpen.map((c) => `pid ${c.pid} ${JSON.stringify(c.command)}`).join("; ")}`);
+  const custody = handOffCustody(stillOpen);
+  console.error(`✗ cleanup custody: ${stillOpen.length} owned hook call(s) did not close before exit — ${stillOpen.map((c) => `pid ${c.pid} ${JSON.stringify(c.command)}`).join("; ")}`);
+  console.error(`  custody passed to custodian pid ${custody.custodianPid ?? "NONE (record says unknown)"}; record ${custody.path}`);
+  console.error("  Do not treat this run as cleaned up until `node scripts/check-skill-instruction-conflicts.mjs --cleanup-status` exits 0.");
   exitCode = 1;
 }
 if (unexpected) throw unexpected;

@@ -415,7 +415,17 @@ async function runCustodian(path) {
 function cleanupStatus(dir) {
   const target = dir ? resolve(dir) : custodyDir();
   let files = [];
-  try { files = readdirSync(target).filter((n) => n.endsWith(".json")); } catch { files = []; }
+  try { files = readdirSync(target).filter((n) => n.endsWith(".json")); }
+  catch (e) {
+    // Absent = nothing was ever handed off. Any OTHER read failure (not a directory,
+    // unreadable) is an inspection that did not happen — never certified as clean.
+    if (e?.code !== "ENOENT") {
+      console.log(`UNKNOWN  ${target}  custody directory unreadable (${e?.code ?? e?.message ?? "error"})`);
+      console.log("cleanup-status: custody directory could not be inspected");
+      return 1;
+    }
+    files = [];
+  }
   let bad = 0;
   for (const name of files) {
     let rec;
@@ -1258,6 +1268,15 @@ async function selfTest() {
     "an open record whose custodian is gone reads UNKNOWN and refuses release (exit 1) (#2267)",
     orphan.status === 1 && /^UNKNOWN /m.test(orphan.stdout ?? ""),
     `status=${orphan.status} out=${JSON.stringify((orphan.stdout ?? "").slice(0, 200))}`,
+  );
+  // An inspection that fails is never a release: a path that is not a readable
+  // directory refuses; only a genuinely absent directory means nothing was handed off.
+  const notDir = spawnSync(process.execPath, [self, "--cleanup-status", fStub], { encoding: "utf8", timeout: 10000 });
+  const absent = spawnSync(process.execPath, [self, "--cleanup-status", resolve(lifeDir, "never-created")], { encoding: "utf8", timeout: 10000 });
+  check(
+    "--cleanup-status fails closed when the custody path cannot be inspected (a file, not a directory), and passes only for a truly absent one (#2267)",
+    notDir.status === 1 && /^UNKNOWN /m.test(notDir.stdout ?? "") && absent.status === 0,
+    `notDir=${notDir.status} absent=${absent.status} out=${JSON.stringify((notDir.stdout ?? "").slice(0, 160))}`,
   );
   reapRecorded(fPids);
   try { rmSync(lifeDir, { recursive: true, force: true }); } catch { /* best-effort */ }

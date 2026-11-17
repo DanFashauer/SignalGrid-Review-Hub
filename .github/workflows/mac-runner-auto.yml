@@ -168,7 +168,12 @@ jobs:
     if: always() && github.event_name == 'pull_request'
     needs: pr-mac-slices
     name: PR — Mac-only checks (full-clone provenance, preflight on macOS)
-    runs-on: macos-latest
+    # The aggregate runs no gate: it reads the four slice records and judges them. The plan it
+    # hashes is the static STEPS registry with the checkout path normalised, so it is the same
+    # plan on Linux. It runs on a Linux runner so that a hosted macOS capacity shortage (runs
+    # 44136784505 and 44158128722: "not acquired by Runner of type hosted") cannot also hold the
+    # verdict. Every slice still runs on macOS and a missing or cancelled slice is still refused.
+    runs-on: ubuntu-latest
     timeout-minutes: 15
     concurrency:
       group: mac-pr-${{ github.event.pull_request.number }}-aggregate

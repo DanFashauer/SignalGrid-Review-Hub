@@ -2052,6 +2052,10 @@ git() {
       && agg.includes("\n    needs: pr-mac-slices\n") && agg.includes("SLICE_JOBS_RESULT: ${{ needs.pr-mac-slices.result }}")
       && agg.includes('node scripts/preflight.mjs --aggregate slices --slices 4 --jobs-result "$SLICE_JOBS_RESULT"') && agg.includes("PREFLIGHT_PR_HEAD: ${{ github.event.pull_request.head.sha }}")
       && !agg.includes("ci-host-verification") && !/--slice /.test(agg) && (workflow.match(/name: PR — Mac-only checks/g) ?? []).length === 1);
+    ok("slices: every slice executes on macOS; only the gate-free aggregate runs on Linux",
+      /\n    runs-on: macos-latest\n/.test(slices) && !/runs-on: ubuntu/.test(slices)
+      && /\n    runs-on: ubuntu-latest\n/.test(agg) && !/runs-on: macos/.test(agg)
+      && !/pnpm (install|run)|validate-sim-macos|xcodebuild|xcrun/.test(agg));
   });
 
   guard2(ok, "shared host verification lock", () => {

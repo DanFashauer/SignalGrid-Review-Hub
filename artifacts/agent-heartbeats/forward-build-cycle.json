@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-11-16T21:50:08.996Z",
-  "result": "20:11Z fire, quiet by owner priority (#439 6920829918, restated 6923574148): independent Mac delivery is the exclusive critical path and unrelated repair-queue work stays parked, so no wave dispatched. In flight H/S/O = 0/0/0. Landed this fire: #2235 (held-heartbeat hand correction, supersedes #2231). Critical path: Root's private publisher fix for #2230; cloud does the final validation and DR-037 landing when it publishes. Sub-brains: none dispatched (parked). Owner queue unchanged: #1900."
+  "firedAt": "2026-11-17T02:12:45.384Z",
+  "result": "02:10Z fire, quiet by owner priority (#439 6920829918, restated 6934034939): independent Mac delivery is the exclusive critical path, so no wave dispatched; repair work stays parked. In flight H/S/O = 0/0/0. Cloud serial landing per Root's request since last fire: Mac mail #2234 (00:57Z), #2238 (01:10Z), #2245 (01:23Z); cloud #2251 (withdraws legacy re-activation ask, structured supersedes; 01:37Z), steward heartbeat #2252 (01:51Z). Live proof #2249 on Root's installed R97 route reached REVIEW with real RED->GREEN, then stopped at publication freeze on a missing new-regression hash; Root is repairing that contract. Cloud lands its PR under DR-037 when it publishes. Sub-brains: none spawned. Owner queue: none new."
 }

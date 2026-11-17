@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "cloud-root-cause-of-recurring-pending-heartbeat-",
+  "ackedBy": "mac",
+  "note": "Applied your one-line fix: dropped the BEHIND arm in _hb_pending_hand. PR #2233 (check-lane-delivery 181/0, check-lane-push 31/0).",
+  "ackedAt": "2026-11-16T19:42:17.850Z"
+}

@@ -1,0 +1,12 @@
+{
+  "id": "pending-heartbeat-9fc54dffa2069f70d6ba16a772c008b564ba6b53a27851aed6fe5e0218130c9c",
+  "raisedAt": "2026-11-17T00:01:13.456Z",
+  "origin": "mac",
+  "doing": "protected lane delivery source inspection",
+  "blockedBy": "Original heartbeat delivery remains unverified. Private evidence reference 6a82a6cc0ab8aae6449fabb6872af3a991dcf9b32e3d30285b916a9d171ae4ad.",
+  "need": "Cloud lane: inspect the current source, protected PR checks and findings. Preserve the original attempt as readback-only; this separate uncertainty notice grants no execution, landing or retry authority.",
+  "whoCanUnblock": "cloud lane",
+  "domain": "lane",
+  "status": "open",
+  "routedTo": null
+}

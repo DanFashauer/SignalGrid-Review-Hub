@@ -95,7 +95,14 @@
     }
   ],
   "needsExecutor": [],
-  "unmeasured": [],
+  "unmeasured": [
+    {
+      "rowId": "168",
+      "title": "The palette gate cannot see a verdict painted with the WRONG ratified token.",
+      "measuredAt": "2026-11-03",
+      "reason": "stamp 2026-11-03 is older than 14 days"
+    }
+  ],
   "awaiting": [
     {
       "rowId": "17",
@@ -148,6 +155,12 @@
     }
   ],
   "escalations": [
+    {
+      "id": "plan-rows-unmeasured",
+      "clears": "cloud",
+      "asks": "1 open row(s) in docs/COMPANY_BUILD_PLAN.md carry no `re-measured YYYY-MM-DD` stamp within 14 days and were ranked from nothing — a row nobody measured against the tree is an unknown input: 168. Measure each against the tree; close it, or restamp it with what was measured (a row whose AWAITING OWNER / BLOCKED ON LAB marker is expired or future-dated needs the blocker re-checked and the marker re-dated or removed — restamping alone does not rank it)",
+      "since": "2026-11-17T00:21:41.137Z"
+    },
     {
       "id": "awaiting-owner-row-17",
       "clears": "owner",
@@ -203,14 +216,14 @@
     "pendingSimRequests": [],
     "badRequestFiles": [],
     "needsExecutorCount": 0,
-    "unmeasuredCount": 0,
+    "unmeasuredCount": 1,
     "awaitingCount": 7,
     "openRows": 39,
     "partialRows": 5
   },
   "staleAfterHours": 3,
-  "derivedAt": "2026-11-16T23:08:22.722Z",
-  "derivedAtCommit": "b2687881d7cdfd842970fc1a4cf176313ec10ef2",
+  "derivedAt": "2026-11-17T00:21:41.137Z",
+  "derivedAtCommit": "b6f2b9a892aeb2a3f1242e0ddb68743ec3ae37ff",
   "workingTreeCleanAtEntry": true,
-  "decisionAddress": "2854ab88226d59141fb1f45b3baae5a7027206b41d710db7172f2b704a6a47df"
+  "decisionAddress": "9dfbca0e2468839724699edf642aa764ff9041906f06dd04cf405ee86869df85"
 }

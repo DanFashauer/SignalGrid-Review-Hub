@@ -413,8 +413,8 @@ heartbeat() {
         typeof observed.pr_head !== "string" || !/^[a-f0-9]{40}$/.test(observed.pr_head) || !Number.isInteger(observed.pr_number) || observed.pr_number <= 0 ||
         !Number.isFinite(created) || !Number.isFinite(at) || created > at || at > Date.now() || Date.now() - at > 300000 ||
         !Number.isInteger(observed.age_seconds) || observed.age_seconds < 0 || observed.age_seconds !== Math.floor((at - created) / 1000) ||
-        !["BEHIND", "BLOCKED", "CLEAN", "DIRTY", "DRAFT", "HAS_HOOKS", "UNSTABLE"].includes(observed.merge_state) ||
-        !["failed", "pending", "success"].includes(observed.check_state) || observed.auto_merge_requested !== true) throw Error("pending metadata missing, stale or foreign");
+        !["BEHIND", "BLOCKED", "CLEAN", "DIRTY", "DRAFT", "HAS_HOOKS", "UNKNOWN", "UNSTABLE"].includes(observed.merge_state) ||
+        !["failed", "pending", "success", "unknown"].includes(observed.check_state) || observed.auto_merge_requested !== true) throw Error("pending metadata missing, stale or foreign");
     reason = observed.check_state === "failed" ? "terminal failed check" : observed.age_seconds >= 3600 ? "pending at least one hour" : null;
     }
     if (!reason) { console.log("pending heartbeat metadata is current; no new notification needed"); process.exit(0); }

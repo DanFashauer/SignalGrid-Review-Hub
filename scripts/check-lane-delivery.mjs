@@ -1507,5 +1507,27 @@ for(const [mode,want] of [['absent',true],['present',false],['fail',false]]){
  } catch(e){failed++;console.error('FAIL '+label+': '+e.message);}
  finally{rmSync(root,{recursive:true,force:true});}
 }
+{
+ // The tick's pending-heartbeat notifier must accept every merge_state and check_state the
+ // readback can emit for a healthy young PR. GitHub reports a just-opened PR as
+ // mergeStateStatus UNKNOWN with an empty check rollup (check_state "unknown"); the
+ // notifier rejected both, threw "pending metadata missing, stale or foreign", and the
+ // tick raised a cloud hand five minutes after every heartbeat (#439 6952954080).
+ const label='the tick pending notifier accepts every merge/check state the readback emits';
+ try {
+  const deliver=readFileSync(join(ROOT,'scripts/lane-deliver.mjs'),'utf8'),tick=readFileSync(join(ROOT,'scripts/mac/lane-tick.sh'),'utf8');
+  const arr=(src,re,what)=>{const m=re.exec(src);assert.ok(m,what+' list not found');return JSON.parse(m[1]);};
+  const emittedMerge=arr(deliver,/const mergeState = (\[[^\]]*\])\.includes\(pr\.mergeStateStatus\)/,'readback merge_state');
+  const emittedCheck=['failed','unknown','pending','success'];
+  assert.ok(/const checkState = states\.includes\("failed"\) \? "failed" : states\.includes\("unknown"\) \|\| !states\.length \? "unknown" : states\.includes\("pending"\) \? "pending" : "success";/.test(deliver),'readback check_state derivation changed: update emittedCheck');
+  const acceptedMerge=arr(tick,/!(\["BEHIND"[^\]]*\])\.includes\(observed\.merge_state\)/,'tick merge_state');
+  const acceptedCheck=arr(tick,/!(\["failed"[^\]]*\])\.includes\(observed\.check_state\)/,'tick check_state');
+  assert.deepEqual(emittedMerge.filter(v=>!acceptedMerge.includes(v)),[],'merge_state values the readback emits but the tick rejects');
+  assert.deepEqual(emittedCheck.filter(v=>!acceptedCheck.includes(v)),[],'check_state values the readback emits but the tick rejects');
+  // A failed check still raises at once and a PR pending an hour still raises: the reason rule is unchanged.
+  assert.ok(tick.includes('reason = observed.check_state === "failed" ? "terminal failed check" : observed.age_seconds >= 3600 ? "pending at least one hour" : null;'),'pending reason rule changed');
+  passed++;console.log('PASS '+label);
+ } catch(e){failed++;console.error('FAIL '+label+': '+e.message);}
+}
 console.log(`lane-delivery regression: ${passed} passed, ${failed} failed, 0 skipped`);
 process.exitCode = failed ? 1 : 0;

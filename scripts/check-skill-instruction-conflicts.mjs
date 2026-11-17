@@ -128,7 +128,7 @@
 // those numbers anywhere — the summary line prints the current ones.
 
 import { execFileSync, spawn, spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { Socket } from "node:net";
 import { tmpdir } from "node:os";
 import { dirname, resolve } from "node:path";
@@ -365,7 +365,7 @@ function writeRecord(path, record) {
  *  already recorded (Codex-cloud on #2267). Until the custodian stamps its pid the
  *  record reads UNKNOWN — refusal, never release. `afterSpawn` is a test seam at the
  *  exact point a parent publication would sit. */
-async function handOffCustody(openCalls, { dir: dirOverride, afterSpawn } = {}) {
+async function handOffCustody(openCalls, { dir: dirOverride, afterSpawn, custodianArgv, ackTimeoutMs = 5000 } = {}) {
   const dir = dirOverride ?? custodyDir();
   mkdirSync(dir, { recursive: true });
   const path = resolve(dir, `${process.pid}-${Date.now()}.json`);
@@ -377,44 +377,63 @@ async function handOffCustody(openCalls, { dir: dirOverride, afterSpawn } = {}) 
     }
     return { pid: c.pid, command: c.command, pipes: fds };
   });
-  const record = { schema: 1, gatePid: process.pid, createdAt: new Date().toISOString(), status: "open", custodianPid: null, calls };
+  const record = { schema: 1, gatePid: process.pid, createdAt: new Date().toISOString(), status: "open", handoff: "pending", custodianPid: null, calls };
   writeRecord(path, record);
   let custodian;
   try {
-    custodian = spawn(process.execPath, [fileURLToPath(import.meta.url), "--custodian", path], {
+    custodian = spawn(process.execPath, custodianArgv ?? [fileURLToPath(import.meta.url), "--custodian", path], {
       detached: true, stdio: ["ignore", "ignore", "ignore", ...streams],
     });
   } catch { custodian = null; }
   if (!custodian || custodian.pid === undefined) {
     // No custodian exists, so this process is still the only writer.
     writeRecord(path, { ...record, status: "unknown", reason: "no custodian could be started; the pipes are unobserved" });
-    return { path, custodianPid: null };
+    return { path, custodianPid: null, acknowledged: false };
   }
   custodian.unref();
   if (afterSpawn) await afterSpawn(path);
-  // The custodian now holds duplicates of the read ends; ours can go.
+  // A returned pid is NOT a transfer. Custody counts as handed over only once the
+  // custodian itself acknowledges — handoff "ready" with ITS pid, written after it
+  // holds every pipe. READ-ONLY here: this process never writes the record again.
+  let acknowledged = false;
+  for (let waited = 0; waited <= ackTimeoutMs; waited += 50) {
+    let rec = null;
+    try { rec = JSON.parse(readFileSync(path, "utf8")); } catch { rec = null; }
+    if (rec?.handoff === "ready" && rec.custodianPid === custodian.pid) { acknowledged = true; break; }
+    await new Promise((r) => setTimeout(r, 50));
+  }
+  // Our duplicates of the read ends go either way; without an acknowledgement the
+  // record never stamps and reads UNKNOWN — refusal, never release.
   for (const st of streams) { try { st.destroy(); } catch { /* already closed */ } }
-  return { path, custodianPid: custodian.pid };
+  return { path, custodianPid: custodian.pid, acknowledged };
 }
 
 /** --custodian <record>: hold each handed-over pipe until EOF; record every close. */
 async function runCustodian(path) {
   const record = JSON.parse(readFileSync(path, "utf8"));
   // The parent wrote once and handed over; from here this process is the sole writer.
-  record.custodianPid = process.pid;
-  writeRecord(path, record);
   const pipes = record.calls.flatMap((c) => c.pipes.map((p) => ({ call: c, pipe: p })));
-  await Promise.all(pipes.map(({ pipe }) => new Promise((done) => {
-    let sock;
-    try { sock = new Socket({ fd: pipe.fd, readable: true, writable: false }); }
-    catch { pipe.closed = "unknown"; done(); return; }
+  const socks = pipes.map(({ pipe }) => {
+    try { return new Socket({ fd: pipe.fd, readable: true, writable: false }); }
+    catch { pipe.closed = "unknown"; return null; }
+  });
+  // Acknowledge ONLY once every handed pipe is actually held (synchronously, before
+  // any 'end' can be delivered). A pipe we could not take makes the handoff failed.
+  record.custodianPid = process.pid;
+  record.handoff = socks.every(Boolean) ? "ready" : "failed";
+  writeRecord(path, record);
+  await Promise.all(pipes.map(({ pipe }, i) => new Promise((done) => {
+    const sock = socks[i];
+    if (!sock) { done(); return; }
     sock.on("data", () => { /* drain */ });
     sock.on("end", () => { pipe.closed = true; pipe.closedAt = new Date().toISOString(); writeRecord(path, record); done(); });
     sock.on("error", () => { pipe.closed = "unknown"; writeRecord(path, record); done(); });
   })));
-  const allClosed = pipes.every(({ pipe }) => pipe.closed === true);
+  const allClosed = record.handoff === "ready" && pipes.every(({ pipe }) => pipe.closed === true);
+  // What this proves, and no more: every handed pipe's writers closed (EOF). A process
+  // can close its pipes and keep running — this is NOT whole-process quiescence.
   record.status = allClosed ? "closed" : "unknown";
-  if (allClosed) record.closedAt = new Date().toISOString();
+  if (allClosed) { record.closureEvidence = "pipe-eof"; record.closedAt = new Date().toISOString(); }
   writeRecord(path, record);
   return allClosed ? 0 : 2;
 }
@@ -440,13 +459,20 @@ function cleanupStatus(dir) {
   for (const name of files) {
     let rec;
     try { rec = JSON.parse(readFileSync(resolve(target, name), "utf8")); } catch { console.log(`UNKNOWN  ${name}  unreadable record`); bad += 1; continue; }
-    if (rec.status === "closed") { console.log(`closed   ${name}`); continue; }
+    // Only the custodian's own evidence counts: an acknowledged handoff whose every pipe
+    // reached EOF. A generic "closed" without that evidence is UNKNOWN.
+    if (rec.status === "closed" && rec.handoff === "ready" && rec.closureEvidence === "pipe-eof" &&
+        Array.isArray(rec.calls) && rec.calls.every((c) => Array.isArray(c.pipes) && c.pipes.every((pp) => pp.closed === true))) {
+      console.log(`pipe-eof ${name}`);
+      continue;
+    }
     const holder = rec.custodianPid ? pidState(rec.custodianPid) : "dead";
     const label = rec.status === "open" && holder === "alive" ? "OPEN    " : "UNKNOWN ";
     console.log(`${label} ${name}  custodian=${rec.custodianPid ?? "none"} (${holder})  calls=${rec.calls.map((c) => JSON.stringify(c.command)).join(", ")}`);
     bad += 1;
   }
   console.log(`cleanup-status: ${files.length} record(s), ${bad} not closed`);
+  console.log("  scope: pipe-eof proves each handed pipe's writers closed; it is NOT proof that every descendant process has exited.");
   return bad === 0 ? 0 : 1;
 }
 
@@ -1235,6 +1261,7 @@ async function selfTest() {
     if (ok) break;
     await new Promise((r) => setTimeout(r, 50));
   }
+  const ackLine = (probe.stderr ?? "").split("\n").find((l) => l.includes("pipe custody")) ?? "";
   // NEGATIVE CONTROL, before anything is reaped: while the recorded holder is alive, the
   // caller's release check must REFUSE (exit 1, the record OPEN with a live custodian).
   const statusWhileLive = spawnSync(process.execPath, [self, "--cleanup-status", custodyAt], { encoding: "utf8", timeout: 10000 });
@@ -1247,7 +1274,7 @@ async function selfTest() {
     "the CLI never exits as if cleanup were done: it fails, NAMES the open owned call, and leaves ONE durable custody record held by a live custodian (#2267)",
     probe.status === 1 && /cleanup custody: 1 owned hook call\(s\) did not close before exit/.test(fenceLine) &&
       fenceLine.includes(JSON.stringify("stuck-peer")) && holderStillAlive && fPids.length === 3 &&
-      records.length === 1 && rec0?.status === "open" && custodianAtStart === "alive",
+      records.length === 1 && rec0?.status === "open" && rec0?.handoff === "ready" && custodianAtStart === "alive" && /pipe custody ACKNOWLEDGED/.test(ackLine),
     `status=${probe.status} fence=${JSON.stringify(fenceLine.slice(0, 160))} census=${JSON.stringify(fAliveAtExit)} records=${records.length} custodian=${custodianAtStart}`,
   );
   check(
@@ -1272,7 +1299,7 @@ async function selfTest() {
   }
   check(
     "release succeeds only after the custodian itself observes EOF on every handed pipe and records CLOSED (#2267)",
-    statusAfter?.status === 0 && rec1?.status === "closed" && rec1.calls.every((c) => c.pipes.every((p) => p.closed === true)) && custodianGone === "dead",
+    statusAfter?.status === 0 && rec1?.status === "closed" && rec1?.closureEvidence === "pipe-eof" && rec1.calls.every((c) => c.pipes.every((p) => p.closed === true)) && custodianGone === "dead",
     `status=${statusAfter?.status} record=${rec1?.status} custodian=${custodianGone}`,
   );
   // A record whose custodian is gone without recording close is UNKNOWN, never released.
@@ -1307,14 +1334,41 @@ async function selfTest() {
     closedBeforeReturn && raceRec?.status === "closed" && raceRec.calls[0].pipes.every((pp) => pp.closed === true) && raceStatus.status === 0,
     `closedBeforeReturn=${closedBeforeReturn} record=${raceRec?.status} release=${raceStatus.status}`,
   );
+  // A spawned pid is not a transfer: a "custodian" that starts and never acknowledges
+  // leaves the handoff UNACKNOWLEDGED and the record UNKNOWN (release refused).
+  const noAckDir = resolve(lifeDir, "custody-noack");
+  const noAckChild = spawn("sh", ["-c", "sleep 0.3"], { stdio: ["ignore", "pipe", "pipe"] });
+  const noAck = await handOffCustody([{ pid: noAckChild.pid, command: "noack-child", child: noAckChild }], {
+    dir: noAckDir, custodianArgv: ["-e", "setTimeout(() => {}, 200)"], ackTimeoutMs: 600,
+  });
+  const noAckStatus = spawnSync(process.execPath, [self, "--cleanup-status", noAckDir], { encoding: "utf8", timeout: 10000 });
+  check(
+    "a custodian launch that returns a pid but never acknowledges is NOT transferred custody: unacknowledged, and release refuses UNKNOWN (#2267)",
+    noAck.custodianPid && noAck.acknowledged === false && noAckStatus.status === 1 && /^UNKNOWN /m.test(noAckStatus.stdout ?? ""),
+    `pid=${noAck.custodianPid} ack=${noAck.acknowledged} release=${noAckStatus.status} out=${JSON.stringify((noAckStatus.stdout ?? "").slice(0, 160))}`,
+  );
+  // A generic "closed" record without the custodian's evidence is never a release.
+  const forgedDir = resolve(lifeDir, "custody-forged");
+  mkdirSync(forgedDir, { recursive: true });
+  writeFileSync(resolve(forgedDir, "forged.json"), JSON.stringify({ schema: 1, status: "closed", custodianPid: null, calls: [{ pid: 1, command: "x", pipes: [{ name: "stdout", closed: true }] }] }));
+  const forged = spawnSync(process.execPath, [self, "--cleanup-status", forgedDir], { encoding: "utf8", timeout: 10000 });
+  check(
+    "a bare status:closed record without an acknowledged handoff and pipe-eof evidence reads UNKNOWN and refuses release (#2267)",
+    forged.status === 1 && /^UNKNOWN /m.test(forged.stdout ?? ""),
+    `status=${forged.status} out=${JSON.stringify((forged.stdout ?? "").slice(0, 160))}`,
+  );
   // An inspection that fails is never a release: a path that is not a readable
   // directory refuses; only a genuinely absent directory means nothing was handed off.
   const notDir = spawnSync(process.execPath, [self, "--cleanup-status", fStub], { encoding: "utf8", timeout: 10000 });
+  const loopA = resolve(lifeDir, "loop-a");
+  symlinkSync(resolve(lifeDir, "loop-b"), loopA);
+  symlinkSync(loopA, resolve(lifeDir, "loop-b"));
+  const loopStatus = spawnSync(process.execPath, [self, "--cleanup-status", loopA], { encoding: "utf8", timeout: 10000 });
   const absent = spawnSync(process.execPath, [self, "--cleanup-status", resolve(lifeDir, "never-created")], { encoding: "utf8", timeout: 10000 });
   check(
-    "--cleanup-status fails closed when the custody path cannot be inspected (a file, not a directory), and passes only for a truly absent one (#2267)",
-    notDir.status === 1 && /^UNKNOWN /m.test(notDir.stdout ?? "") && absent.status === 0,
-    `notDir=${notDir.status} absent=${absent.status} out=${JSON.stringify((notDir.stdout ?? "").slice(0, 160))}`,
+    "--cleanup-status fails closed when the custody path cannot be inspected (a file; a symlink loop), and passes only for a truly absent one (#2267)",
+    notDir.status === 1 && /^UNKNOWN /m.test(notDir.stdout ?? "") && loopStatus.status === 1 && /ELOOP/.test(loopStatus.stdout ?? "") && absent.status === 0,
+    `notDir=${notDir.status} loop=${loopStatus.status} absent=${absent.status} out=${JSON.stringify((notDir.stdout ?? "").slice(0, 160))}`,
   );
   reapRecorded(fPids);
   try { rmSync(lifeDir, { recursive: true, force: true }); } catch { /* best-effort */ }
@@ -1402,7 +1456,9 @@ const stillOpen = await drainOwned(probeAt !== -1 ? 300 : CLOSE_GRACE_MS);
 if (stillOpen.length > 0) {
   const custody = await handOffCustody(stillOpen);
   console.error(`✗ cleanup custody: ${stillOpen.length} owned hook call(s) did not close before exit — ${stillOpen.map((c) => `pid ${c.pid} ${JSON.stringify(c.command)}`).join("; ")}`);
-  console.error(`  custody passed to custodian pid ${custody.custodianPid ?? "NONE (record says unknown)"}; record ${custody.path}`);
+  console.error(custody.acknowledged
+    ? `  pipe custody ACKNOWLEDGED by custodian pid ${custody.custodianPid}; record ${custody.path}`
+    : `  pipe custody NOT acknowledged (custodian pid ${custody.custodianPid ?? "none"} never confirmed); record ${custody.path} reads UNKNOWN`);
   console.error("  Do not treat this run as cleaned up until `node scripts/check-skill-instruction-conflicts.mjs --cleanup-status` exits 0.");
   exitCode = 1;
 }

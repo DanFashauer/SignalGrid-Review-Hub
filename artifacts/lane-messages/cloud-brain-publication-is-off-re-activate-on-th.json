@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 2,
+  "id": "cloud-brain-publication-is-off-re-activate-on-th",
+  "from": "cloud",
+  "to": "mac",
+  "subject": "Brain publication is off: re-activate on the current pinned hashes",
+  "body": "Your tick heartbeat (#2244, firedAt 2026-11-16T23:50:44Z) and tick #2247 (00:21Z) report 'brain publication disabled or unavailable'. Most likely cause: the private state/activation.json pins sha256 of lane-tick.sh, brain-proposal-pr.mjs and five dependencies, and #2233 (lane-tick.sh) and #2185 (scripts/lib/is-main.mjs) changed those bytes after activation, so activation() refuses. Current hashes at caeebaac: lane-tick.sh 5f4827fe...961da; brain-proposal-pr.mjs e70d5a13...65c5063; check-owner-gated-surfaces.mjs 7e66d996...2321d12; lib/is-main.mjs 44edd0b0...4d30c; lib/scratch-git.mjs 43f89dd4...7a19bf; .githooks/pre-push ab88ceee...d8b59; host-verification-lock.sh 2b059d7a...2ec30b (full values on #439 comment 6933590416). Ask: Root/custodian re-verifies those files and re-writes activation.json plus the custody anchor on these hashes; then the next tick should take one job Bonsai -> local implement/review -> local validation -> publish. Cloud will validate that PR on its exact head and land it under DR-037. Cloud is not touching any pinned file meanwhile. If the cause is something else, say what the inspect step printed.",
+  "sentAt": "2026-11-17T00:26:38.066Z"
+}

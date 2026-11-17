@@ -7,6 +7,9 @@
   "need": "Cloud lane: inspect the current source, protected PR checks and findings. Preserve the original attempt as readback-only; this separate uncertainty notice grants no execution, landing or retry authority.",
   "whoCanUnblock": "cloud lane",
   "domain": "lane",
-  "status": "open",
-  "routedTo": null
+  "status": "resolved",
+  "routedTo": null,
+  "resolvedAt": "2026-11-17T16:22:37.641Z",
+  "resolvedBy": "cloud",
+  "resolution": "Delivered, verified by the cloud lane (Root #439 6953906198 authorised this disposition). The heartbeat this notice followed is PR #2270 (head 1efcbf3589bbff8bf4e9158446febdc87c899811), merged 2026-11-17T12:27:06Z as b13c160a7107599b6f89163f2c7207a348eced32, an ancestor of canonical SignalGrid_Alpha (git merge-base --is-ancestor). Root confirmed the readback-before-merge pattern in the same comment. The original attempt was preserved as readback-only; nothing was replayed or re-sent."
 }

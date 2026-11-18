@@ -5618,3 +5618,21 @@ Output, verbatim:
 ```
 
 Verdict: #2284 merged from exact head `aebd7008f019aeefe738375a80f1199437ae097e` as `ab7e8cf29f490b086ed8ad9f24a71f1829acb5be`, an ancestor of canonical with behind_by 0. #2293 merged from exact head `399b5e7b3cab10baf11b5e2627b92c154faed5a3` as `b51757d282df4dfae17ef8a53ed0736b694886ac`, which was canonical at read time (`identical`). Both public journals are closed by this entry. Private journals stay Root-owned and are not asserted here. Independent operation is still unverified: Mac build 802's automatic PR, its protected delivery and a later ordinary cycle are all still to happen.
+
+## 2026-11-18 — #2300 landing closeout (merge 0a406e66)
+
+This is the public journal closeout for #2300, which Root asked for on #439 (6966096223). #2300 is the local lane's change that freezes the shared raised-hand stall policy exports, in `scripts/lib/raised-hand-kinds.mjs` and `scripts/raised-hands.mjs`. Its owner merged it, not Cloud. The full validation timing, the named skips and the source review are recorded in the merged PR body and are not repeated here. Current-head CI on `b79d6858`: gating check `134486002396` success, four macOS slices success, and the `pr-mac-checks` aggregate `134490867784` success on Linux in run `44208800789`, attempt 1. No private `merged_journal_complete` seal is claimed.
+
+Command: GitHub REST GETs run by the cloud lane at 2026-11-18T01:22:32Z, reduced to the fields shown: `pulls/2300`, `git/ref/heads/SignalGrid_Alpha`, `compare/0a406e66a95f6ced21fa75c00f723e67234aaab3...SignalGrid_Alpha`, `commits/0a406e66…`, and `check-runs/134486002396` and `check-runs/134490867784`.
+Output, verbatim:
+
+```
+{"number":2300,"state":"closed","merged":true,"merged_at":"2026-11-18T00:55:25Z","merge_commit_sha":"0a406e66a95f6ced21fa75c00f723e67234aaab3","head":"b79d68587d3ef8a85506d540ae2c3f730f8b3720","base":"SignalGrid_Alpha"}
+{"ref":"refs/heads/SignalGrid_Alpha","sha":"c45c0e5b7e6bc1f8cc6e83fcbce75c1346fb3ad6"}
+{"status":"ahead","ahead_by":3,"behind_by":0,"merge_base":"0a406e66a95f6ced21fa75c00f723e67234aaab3"}
+{"sha":"0a406e66a95f6ced21fa75c00f723e67234aaab3","parents":["aab5f85f4a9f00ca38b036fe541b1e6f069d3f8c","b79d68587d3ef8a85506d540ae2c3f730f8b3720"],"tree":"a62a1cda7e6f8ae27c9ff1cac17cae31873aea47"}
+{"id":134486002396,"name":"Typecheck, build, and proof scaffold","head_sha":"b79d68587d3ef8a85506d540ae2c3f730f8b3720","conclusion":"success"}
+{"id":134490867784,"name":"PR — Mac-only checks (full-clone provenance, preflight on macOS)","head_sha":"b79d68587d3ef8a85506d540ae2c3f730f8b3720","conclusion":"success"}
+```
+
+Verdict: #2300 merged from exact head `b79d68587d3ef8a85506d540ae2c3f730f8b3720` as `0a406e66a95f6ced21fa75c00f723e67234aaab3`, with parents `aab5f85f` and that head and tree `a62a1cda`. That merge is an ancestor of canonical `c45c0e5b` with behind_by 0. Both named check runs succeeded on the exact head. The public journal for #2300 is closed by this entry. The private journal stays Root-owned and is not asserted here. Independent operation remains unverified.

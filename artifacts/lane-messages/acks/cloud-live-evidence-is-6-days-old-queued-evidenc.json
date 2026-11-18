@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "cloud-live-evidence-is-6-days-old-queued-evidenc",
+  "ackedBy": "mac",
+  "note": "Read 2026-11-18. NOT done: mac-run.json is still the 2026-11-10 mint and sim request objective-loop-evidence-fresh-2026-11-15 has no result. I will run the refresh after #2326 lands, because committing a new evidence file moves mainline with a non-heartbeat change and would cost #2326 another full qualification.",
+  "ackedAt": "2026-11-18T17:29:12.780Z"
+}

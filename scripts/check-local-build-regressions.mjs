@@ -33,7 +33,7 @@
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
-  closeSync, constants as fsConstants, fstatSync, lstatSync, mkdirSync, mkdtempSync, openSync,
+  closeSync, constants as fsConstants, existsSync, fstatSync, lstatSync, mkdirSync, mkdtempSync, openSync,
   readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -145,6 +145,40 @@ function judge(parsed, expectedCases, rel) {
   return null;
 }
 
+const SUPERVISOR_GRACE_MS = 10_000;
+const SUP_EXIT = { timeout: 124, overflow: 125, signal: 126, spawn: 127 };
+// Runs as `node -e`: argv = [timeoutMs, maxBytes, rel]. Stdout is forwarded byte for byte (it is the TAP).
+const SUPERVISOR_SRC = `
+"use strict";
+const { spawn } = require("node:child_process");
+const [t, m, rel] = process.argv.slice(1);
+const timeoutMs = Number(t), maxBytes = Number(m);
+let bytes = 0, verdict = null;
+const child = spawn(process.execPath, ["--test", "--test-reporter=tap", rel], {
+  detached: process.platform !== "win32", stdio: ["ignore", "pipe", "pipe"], env: process.env,
+});
+const killGroup = () => {
+  try { if (process.platform !== "win32") process.kill(-child.pid, "SIGKILL"); else child.kill("SIGKILL"); } catch {}
+};
+const fwd = (out) => (d) => {
+  if (verdict) return;
+  bytes += d.length;
+  if (bytes > maxBytes) { verdict = 125; killGroup(); return; }
+  out.write(d);
+};
+child.stdout.on("data", fwd(process.stdout));
+child.stderr.on("data", fwd(process.stderr));
+const timer = setTimeout(() => { if (!verdict) verdict = 124; killGroup(); }, timeoutMs);
+child.on("error", () => { verdict = verdict ?? 127; killGroup(); });
+child.on("close", (code, sig) => {
+  clearTimeout(timer);
+  killGroup(); // a passing run may still have left a grandchild behind
+  if (verdict) process.exit(verdict);
+  if (sig) { process.stderr.write("SG_LBR_SIGNAL " + sig + "\\n"); process.exit(126); }
+  process.exit(code ?? 1);
+});
+`;
+
 /**
  * Run one target. Returns {ok:true, record} or {ok:false, reason}.
  * opts: root, rel, sha256 (required), cases (optional), mode label, timeoutMs, maxBytes.
@@ -166,16 +200,24 @@ export function runTarget(opts) {
 
   const env = { ...process.env };
   delete env.NODE_TEST_CONTEXT; // an outer `node --test` would otherwise change the child's reporter
-  const r = spawnSync(process.execPath, ["--test", "--test-reporter=tap", rel], {
-    cwd: root, env, shell: false, encoding: "utf8", timeout: timeoutMs, killSignal: "SIGKILL",
-    maxBuffer: maxBytes, stdio: ["ignore", "pipe", "pipe"],
+  // `node --test` runs each file in a grandchild. Killing only the coordinator on a timeout left that
+  // grandchild running and free to write into the tree after the FAIL was printed. The supervisor puts
+  // the run in its own process group, enforces the timeout and the output cap itself, and kills the
+  // whole group on every exit path. The outer spawnSync timeout is only a backstop for the supervisor.
+  const r = spawnSync(process.execPath, ["-e", SUPERVISOR_SRC, "--", String(timeoutMs), String(maxBytes), rel], {
+    cwd: root, env, shell: false, encoding: "utf8", timeout: timeoutMs + SUPERVISOR_GRACE_MS, killSignal: "SIGKILL",
+    maxBuffer: maxBytes + 4096, stdio: ["ignore", "pipe", "pipe"],
   });
   if (r.error) {
-    if (r.error.code === "ETIMEDOUT") return bad(`timed out after ${timeoutMs} ms`);
+    if (r.error.code === "ETIMEDOUT") return bad(`supervisor timed out after ${timeoutMs + SUPERVISOR_GRACE_MS} ms`);
     if (r.error.code === "ENOBUFS") return bad(`output exceeded the ${maxBytes}-byte cap`);
     return bad(`spawn error: ${r.error.code ?? r.error.message}`);
   }
   if (r.signal) return bad(`terminated by signal ${r.signal}`);
+  if (r.status === SUP_EXIT.timeout) return bad(`timed out after ${timeoutMs} ms`);
+  if (r.status === SUP_EXIT.overflow) return bad(`output exceeded the ${maxBytes}-byte cap`);
+  if (r.status === SUP_EXIT.signal) return bad(`terminated by signal ${(/SG_LBR_SIGNAL (\w+)/.exec(r.stderr ?? "") ?? [])[1] ?? "unknown"}`);
+  if (r.status === SUP_EXIT.spawn) return bad("spawn error in supervisor");
   if (r.status !== 0) return bad(`exit status ${r.status}`);
 
   const after = hashTarget(root, rel);
@@ -396,6 +438,13 @@ function selfTest({ minAllowlisted }) {
     const shaH = mk(root, "scripts/hang.test.mjs", `import test from "node:test";\ntest("a",async()=>{await new Promise(()=>setInterval(()=>{},1000));});\n`);
     r = run({ rel: "scripts/hang.test.mjs", sha256: shaH, cases: 1, timeoutMs: 1500 });
     check("timeout fails", !r.ok && /timed out/.test(r.reason), r.reason);
+    // 10b the timed-out test process itself is gone: it would write the marker 2 s after the kill
+    const mark = join(tmp, "orphan-mark");
+    const shaO = mk(root, "scripts/orphan.test.mjs", `import test from "node:test";import {writeFileSync} from "node:fs";\ntest("a",async()=>{setTimeout(()=>writeFileSync(${JSON.stringify(mark)},"alive"),3500);await new Promise(()=>setInterval(()=>{},1000));});\n`);
+    r = run({ rel: "scripts/orphan.test.mjs", sha256: shaO, cases: 1, timeoutMs: 1500 });
+    check("orphan run times out", !r.ok && /timed out after 1500 ms/.test(r.reason), r.reason);
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 3000);
+    check("timed-out test process does not survive the kill", !existsSync(mark), "marker written after the timeout");
     const shaB = mk(root, "scripts/big.test.mjs", `import test from "node:test";\ntest("a",()=>{process.stdout.write("x".repeat(400000)+"\\n");});\n`);
     r = run({ rel: "scripts/big.test.mjs", sha256: shaB, cases: 1, maxBytes: 65536 });
     check("oversized output fails", !r.ok && /output exceeded/.test(r.reason), r.reason);

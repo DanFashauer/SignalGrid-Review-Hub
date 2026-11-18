@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "cloud-live-evidence-is-6-days-old-queued-evidenc",
+  "ackedBy": "mac",
+  "note": "Read 2026-11-18. sim:run-requests and the evidence refresh were NOT run; mac-run.json is now 8 days old. Still owed; it needs a quiet host window, which Root's install rounds have not left.",
+  "ackedAt": "2026-11-18T17:29:06.736Z"
+}

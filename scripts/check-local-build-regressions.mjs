@@ -161,16 +161,27 @@ export function groupState(pgid, fs, platform) {
   try { names = fs.readdirSync("/proc"); } catch { return "unknown:proc-unreadable"; }
   let live = 0;
   let seen = 0;
+  let unreadable = null;
   for (const n of names) {
     if (!/^[0-9]+$/.test(n)) continue;
     let st;
-    try { st = fs.readFileSync("/proc/" + n + "/stat", "utf8"); } catch { continue; }
+    try { st = fs.readFileSync("/proc/" + n + "/stat", "utf8"); }
+    catch (e) {
+      // A process that exited between readdir and read is gone (ENOENT/ESRCH). Any other failure
+      // (EACCES, EIO, ...) leaves that entry's group and liveness unknown, so "empty" is unprovable.
+      const code = e && e.code;
+      if (code === "ENOENT" || code === "ESRCH") continue;
+      unreadable = unreadable || String(code || "error");
+      continue;
+    }
     const rest = st.slice(st.lastIndexOf(")") + 2).split(" ");
     if (Number(rest[2]) !== pgid) continue;
     seen++;
     if (rest[0] !== "Z" && rest[0] !== "X") live++;
   }
-  if (live > 0 || seen === 0) return "alive";
+  if (live > 0) return "alive";
+  if (unreadable) return "unknown:proc-stat-" + unreadable;
+  if (seen === 0) return "alive";
   return "empty";
 }
 
@@ -565,6 +576,19 @@ function selfTest({ minAllowlisted }) {
       check("groupState: unreadable /proc is unknown, never empty", groupState(pgid, { readdirSync: () => { throw new Error("EACCES"); }, readFileSync: () => "" }, "linux").startsWith("unknown"));
       check("groupState: kill answers but /proc shows no member reads alive (fail closed)", groupState(pgid, fake({}), "linux") === "alive");
       check("groupState: no group id is unknown", groupState(0, fake({}), "linux").startsWith("unknown"));
+      // a partial /proc read: one readable zombie of the group plus one entry that cannot be read
+      const failing = (lines, bad, code) => ({
+        readdirSync: () => [...Object.keys(lines), bad],
+        readFileSync: (f) => { const k = f.split("/")[2]; if (k === bad) { const e = new Error(code); e.code = code; throw e; } return lines[k]; },
+      });
+      const zOnly = { [pgid]: stat(pgid, "node", "Z", pgid) };
+      for (const code of ["EACCES", "EIO", "EPERM"]) {
+        check(`groupState: zombie + unreadable stat (${code}) is unknown, never empty`, groupState(pgid, failing(zOnly, "4242", code), "linux").startsWith("unknown"));
+      }
+      for (const code of ["ENOENT", "ESRCH"]) {
+        check(`groupState: zombie + a process that vanished (${code}) still reads empty`, groupState(pgid, failing(zOnly, "4242", code), "linux") === "empty");
+      }
+      check("groupState: a live member wins over an unreadable entry (alive)", groupState(pgid, failing({ [pgid]: stat(pgid, "node", "S", pgid) }, "4242", "EACCES"), "linux") === "alive");
       try { process.kill(-pgid, "SIGKILL"); } catch {}
     }
     // 10e the supervisor itself dies after creating the target group: the runner must still close

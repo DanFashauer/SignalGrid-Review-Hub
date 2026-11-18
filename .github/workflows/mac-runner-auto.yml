@@ -15,7 +15,12 @@
 #                  · preflight on macOS — the gates must behave the same on the platform
 #                    the Mac lane runs; Apple git's grep -E once turned 19 false failures
 #                    (10deac53). Run these public-source checks on a standard hosted
-#                    ARM64 Mac so PRs do not reserve the local brain's only host.
+#                    Mac so PRs do not reserve the local brain's only host. The slices
+#                    run on standard hosted INTEL macOS (macos-26-intel): hosted ARM64
+#                    repeatedly failed to acquire a runner ("not acquired by Runner of
+#                    type hosted", #2326 runs 44366045936 and 44384337802), so this
+#                    check proves preflight on macOS/x64. Physical ARM64 evidence is the
+#                    Mac lane's own harness receipt, not this job.
 #   nightly        · lane=both: the full harness incl. the darwin web build, then preflight.
 #                  · lane=mcp:  the signalgrid-mcp sibling on real macOS, both halves
 #                    against the shared posture-report contract. Read-only; no evidence
@@ -62,9 +67,10 @@ jobs:
       fail-fast: false
       matrix:
         slice: [1, 2, 3, 4]
-    # The standard hosted image, the family the full hosted Mac suite passes on.
-    # On macos-15 this chain exceeded the 40m work bound (run 43163039070).
-    runs-on: macos-latest
+    # Standard hosted Intel macOS: hosted ARM64 capacity repeatedly left slices unstarted
+    # (runner none, zero steps, cancelled at 15 min). On macos-15 this chain exceeded the 40m
+    # work bound (run 43163039070); the bound is unchanged here and a slice that overruns fails.
+    runs-on: macos-26-intel
     # A fresh hosted VM has no local-brain admission queue. Preserve the 40m
     # complete-work bound and allow 20m for setup, teardown and log upload.
     timeout-minutes: 60

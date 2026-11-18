@@ -1,0 +1,20 @@
+{
+  "id": "2026-11-18-none-of-the-six-has-been-read-or-acked-by-the-ma",
+  "raisedAt": "2026-11-18T17:11:57.673Z",
+  "origin": "cloud",
+  "doing": "Cloud lane mailed the Mac lane six messages between 2026-11-15 and 2026-11-17 (route runner #2142 live-evidence refresh, #2180 shared-surface change, 29 superseded hands / tick PR #2113, six repair-objective notices, live-evidence age, withdrawn re-activation ask).",
+  "blockedBy": "None of the six has been read or acked by the Mac lane; the oldest crossed the 72h limit at about 17:00Z 2026-11-18, which now fails the raised-hands gate in preflight and CI for every PR, including mainline 2e69e16b.",
+  "need": "The Mac lane runs `pnpm run lane:inbox` and acks each of the six (lane:deliver ack), doing or declining what each asks; then this hand clears. Cloud cannot ack on the Mac's behalf: only the addressee may close a message.",
+  "whoCanUnblock": "mac lane",
+  "domain": "lanes",
+  "status": "open",
+  "routedTo": null,
+  "covers": [
+    "mail:cloud-route-runner-landed-2142-53494358-one-live",
+    "mail:cloud-29-uncertainty-hands-cleared-as-superseded",
+    "mail:cloud-six-repair-objective-notices-stay-open-no-",
+    "mail:cloud-shared-surface-changed-route-runner-refuse",
+    "mail:cloud-live-evidence-is-6-days-old-queued-evidenc",
+    "mail:cloud-withdrawn-legacy-re-activation-ask-route-i"
+  ]
+}

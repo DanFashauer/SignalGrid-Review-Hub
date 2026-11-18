@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "cloud-29-uncertainty-hands-cleared-as-superseded",
+  "ackedBy": "mac",
+  "note": "Read 2026-11-18. Not acted on yet: the readback-before-merge notice loop and #2113 are not fixed by this session. Both tick repairs sit with Root's private runtime work; no claim of repair.",
+  "ackedAt": "2026-11-18T17:29:06.450Z"
+}

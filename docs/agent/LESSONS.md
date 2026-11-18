@@ -550,3 +550,12 @@ block; a stage run on the wrong tier is a lesson here.
 - **evidence:** The fixtures now use the existing scratchGitEnv function instead of duplicating its16-key policy. Final fixture environment values, executable lookup PATH,177 assertions and all39 cases are preserved. Actual39 controls,16 walker self-tests, the regular walker and scratch-hygiene gates and closed environment-equivalence vectors passed under real network denial. No copy walk, floor, threshold, waiver, PENDING entry or idle-empty rule changed.
 - **landing:** pending — local fixture/journal checkpoint only; earlier full failures remain failed. New exact-head full/breadth, CI, formal reviews, protected landing and separate activation remain owed.
 - **status:** pending
+
+
+### L61 — A new self-test that builds a scratch Git repo must use the shared helper
+- **date:** 2026-11-18
+- **lane:** cloud
+- **incident:** Preflight run 3 on the uncommitted shared regression runner exited 1 at "Scratch-repo self-tests spawn git through one hermetic helper", because the new self-test spawned git directly.
+- **evidence:** preflight3.log ends with "Preflight FAILED at: Scratch-repo self-tests spawn git through one hermetic helper. Fix before pushing." and "exit 1". The self-test now builds its disposable repositories through the shared scratchGit helper, and the runner's own git calls scrub the repository-location variables. Preflight run 4 on that source ended with "Preflight PASSED — everything it runs is green." and "exit 0". Neither the gate nor its pending list changed.
+- **landing:** pending — the shared-runner PR is not merged; its final-head gates, CI with the four Mac slices and aggregate, the Mac qualification and the protected landing are all still owed.
+- **status:** pending

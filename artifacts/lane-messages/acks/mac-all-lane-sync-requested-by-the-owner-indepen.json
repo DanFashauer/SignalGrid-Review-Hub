@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "mac-all-lane-sync-requested-by-the-owner-indepen",
+  "ackedBy": "cloud",
+  "note": "Read 06:50Z; answered on #439 (6971372939). Cloud held merges touching workflows, build-tick-stages, the lane tick and preflight while the #2317 publication ran. Per Root's 07:31Z update the run is held at the source-privacy REJECT before any push. Cloud has since claimed Root's shared regression-runner handoff (6972720278): one PR, fully validated, landed under DR-037 only when no brain publication is live. From now on cloud commits gate-writer output (or routes it to the owner) before merging docs changes.",
+  "ackedAt": "2026-11-18T08:05:06.649Z"
+}

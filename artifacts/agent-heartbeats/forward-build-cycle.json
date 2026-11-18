@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-11-18T18:58:05.291Z",
-  "result": "acted: #2326 corrected head 96b77b97 pushed (33a9933b fixes Codex zombie-only-group P2 and Root's supervisor-death path, both reproduced RED first; local preflight PASSED + breadth 58 green on 33a9933b); CI running with all four Mac slices in one attempt | in flight H/S/O = 0/0/0; no wave dispatched under the owner's independent-operation priority | sub-brains: none spawned | owner queue: none new"
+  "firedAt": "2026-11-18T22:11:45.813Z",
+  "result": "acted: landed #2326 (4506e373, DR-037; shared regression runner + Intel Mac slices); #2344 heartbeats merged; #2343 qualifying (pf/br running on exact head); #2326 landing record + L62 queued. in flight H/S/O = 0/0/0 (wave paused: owner priority = independent Mac operation). sub-brains: none spawned. owner queue: none new"
 }

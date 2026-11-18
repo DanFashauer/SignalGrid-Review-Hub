@@ -475,20 +475,25 @@ function selfTest({ minAllowlisted }) {
     check("timeout fails", !r.ok && /timed out/.test(r.reason), r.reason);
     // 10b the timed-out test process itself is gone: it would write the marker 2 s after the kill
     const mark = join(tmp, "orphan-mark");
-    const shaO = mk(root, "scripts/orphan.test.mjs", `import test from "node:test";import {writeFileSync} from "node:fs";\ntest("a",async()=>{setTimeout(()=>writeFileSync(${JSON.stringify(mark)},"alive"),3500);await new Promise(()=>setInterval(()=>{},1000));});\n`);
+    // Fixture source is constant: no path is ever spliced into code. Each fixture finds its marker
+    // from its own location (<tmp>/tree/scripts/x.test.mjs -> <tmp>/<name>-mark).
+    const MARK_AT = (name) => `const MARK=new URL("../../${name}-mark",import.meta.url);`;
+    const shaO = mk(root, "scripts/orphan.test.mjs", `import test from "node:test";import {writeFileSync} from "node:fs";${MARK_AT("orphan")}\ntest("a",async()=>{setTimeout(()=>writeFileSync(MARK,"alive"),3500);await new Promise(()=>setInterval(()=>{},1000));});\n`);
     r = run({ rel: "scripts/orphan.test.mjs", sha256: shaO, cases: 1, timeoutMs: 1500 });
     check("orphan run times out", !r.ok && /timed out after 1500 ms/.test(r.reason), r.reason);
     Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 3000);
     check("timed-out test process does not survive the kill", !existsSync(mark), "marker written after the timeout");
     // 10c a PASSING test that leaves a descendant behind fails, and the descendant is gone afterwards
-    const spawnLate = (m) => `spawn(process.execPath,["-e",${JSON.stringify(`setTimeout(()=>require("node:fs").writeFileSync(${JSON.stringify(m)},"alive"),3500);setInterval(()=>{},1000)`)}],{stdio:"ignore"}).unref();`;
+    // The descendant's code is a constant; the marker path reaches it as an argument, never as code.
+    const LATE = `spawn(process.execPath,["-e",'setTimeout(()=>require("node:fs").writeFileSync(process.argv[1],"alive"),3500);setInterval(()=>{},1000)',fileURLToPath(MARK)],{stdio:"ignore"}).unref();`;
+    const LATE_IMPORTS = `import test from "node:test";import {spawn} from "node:child_process";import {fileURLToPath} from "node:url";`;
     const mark2 = join(tmp, "survivor-mark");
-    const shaSv = mk(root, "scripts/survivor.test.mjs", `import test from "node:test";import {spawn} from "node:child_process";\ntest("a",()=>{${spawnLate(mark2)}});\n`);
+    const shaSv = mk(root, "scripts/survivor.test.mjs", `${LATE_IMPORTS}${MARK_AT("survivor")}\ntest("a",()=>{${LATE}});\n`);
     r = run({ rel: "scripts/survivor.test.mjs", sha256: shaSv, cases: 1 });
     check("passing test that leaves a process running fails", !r.ok && /left a process running/.test(r.reason), r.reason);
     // 10d output overflow also closes the owned tree
     const mark3 = join(tmp, "overflow-mark");
-    const shaV = mk(root, "scripts/overflow.test.mjs", `import test from "node:test";import {spawn} from "node:child_process";\ntest("a",async()=>{${spawnLate(mark3)}process.stdout.write("x".repeat(400000)+"\\n");await new Promise(()=>setInterval(()=>{},1000));});\n`);
+    const shaV = mk(root, "scripts/overflow.test.mjs", `${LATE_IMPORTS}${MARK_AT("overflow")}\ntest("a",async()=>{${LATE}process.stdout.write("x".repeat(400000)+"\\n");await new Promise(()=>setInterval(()=>{},1000));});\n`);
     r = run({ rel: "scripts/overflow.test.mjs", sha256: shaV, cases: 1, maxBytes: 65536 });
     check("overflow with a live descendant fails as overflow", !r.ok && /output exceeded/.test(r.reason), r.reason);
     Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 4000);

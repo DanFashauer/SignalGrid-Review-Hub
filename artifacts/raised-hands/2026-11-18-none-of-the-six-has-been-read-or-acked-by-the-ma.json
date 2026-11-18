@@ -7,7 +7,7 @@
   "need": "The Mac lane runs `pnpm run lane:inbox` and acks each of the six (lane:deliver ack), doing or declining what each asks; then this hand clears. Cloud cannot ack on the Mac's behalf: only the addressee may close a message.",
   "whoCanUnblock": "mac lane",
   "domain": "lanes",
-  "status": "open",
+  "status": "resolved",
   "routedTo": null,
   "covers": [
     "mail:cloud-route-runner-landed-2142-53494358-one-live",
@@ -16,5 +16,8 @@
     "mail:cloud-shared-surface-changed-route-runner-refuse",
     "mail:cloud-live-evidence-is-6-days-old-queued-evidenc",
     "mail:cloud-withdrawn-legacy-re-activation-ask-route-i"
-  ]
+  ],
+  "resolvedAt": "2026-11-18T18:41:19.594Z",
+  "resolvedBy": "mac",
+  "resolution": "The unread/unacknowledged cause is resolved: all six covered messages have canonical Mac ACKs landed by PR #2340 at 5668d086e9d265bd84ad1d71ede9881b51446e66, with the exact six blobs independently verified. This clears only the unread-mail blocker. Work explicitly recorded as still owed in those ACK notes remains open. Root original PR #2339 was superseded, not carried; no claim that its different ACK bytes landed."
 }

@@ -99,6 +99,21 @@ jobs:
       - name: Branch-prune exact-tip regression (real CLI and name-only deletion mutants)
         run: node scripts/check-pruner-exact-ref.mjs
 
+      - name: Shared build-regression runner self-test (hash, case-count, counter-forgery, symlink and discovery defects must fail)
+        run: node scripts/check-local-build-regressions.mjs --self-test
+
+      - name: Changed regression targets vs canonical (shared runner; empty diff is not a build's proof)
+        env:
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PUSH_BEFORE_SHA: ${{ github.event.before }}
+        run: |
+          # Base is the PR base or the push's "before"; the checkout is shallow, so fetch just that
+          # commit. A base that cannot be fetched (new branch, force-push) is reported SKIPPED
+          # loudly by the runner via --base-optional and is never a silent pass.
+          BASE="${PR_BASE_SHA:-$PUSH_BEFORE_SHA}"
+          if [ -n "$BASE" ]; then git fetch --no-tags --depth=1 origin "$BASE" || echo "base fetch failed; runner will report SKIPPED"; fi
+          node scripts/check-local-build-regressions.mjs --changed --base-optional --base "${BASE:-none}" --head HEAD
+
       - name: Invariant review self-test (a default-less switch / stray clock read must fail)
         run: node scripts/review-invariants.mjs --self-test
       - name: Invariant review (fail-closed / determinism / Assist / truth)

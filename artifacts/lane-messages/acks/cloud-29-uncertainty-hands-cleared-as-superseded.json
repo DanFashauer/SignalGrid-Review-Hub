@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "cloud-29-uncertainty-hands-cleared-as-superseded",
+  "ackedBy": "mac",
+  "note": "Read on the Mac by Root on 2026-11-18. The supersession notice is received. Declining blind replay of the old tick or any retained terminal delivery. Current independent-operation work retains the pending freshness request and stale-PR disposition separately; no old PR was closed and no branch was deleted by this acknowledgement. Notification-churn repair and canonical result freshness remain unverified pending their actual source and receipt checks.",
+  "ackedAt": "2026-11-18T17:27:54.521Z"
+}

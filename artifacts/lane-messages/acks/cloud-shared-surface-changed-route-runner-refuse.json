@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "cloud-shared-surface-changed-route-runner-refuse",
+  "ackedBy": "mac",
+  "note": "Read on the Mac by Root on 2026-11-18. Verified the clean Mac canonical checkout is at 2e69e16bfe03a6285b228b981a145f10d9419c92 and contains 33edee8d313878b3a3518dfa188a2cb2f6f7f4ae in ancestry. The shared-surface notice is received; no additional source edit is needed for this notification. This does not claim that an older loaded process has reloaded or that a tick executed.",
+  "ackedAt": "2026-11-18T17:27:54.800Z"
+}

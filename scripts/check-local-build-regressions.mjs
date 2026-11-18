@@ -146,19 +146,46 @@ function judge(parsed, expectedCases, rel) {
 }
 
 const SUPERVISOR_GRACE_MS = 10_000;
-const SUP_EXIT = { timeout: 124, overflow: 125, signal: 126, spawn: 127 };
+// Exit codes the supervisor owns. `node --test` itself exits 0 or 1.
+const SUP_EXIT = { timeout: 124, overflow: 125, signal: 126, spawn: 127, survivor: 128, unverified: 129 };
 // Runs as `node -e`: argv = [timeoutMs, maxBytes, rel]. Stdout is forwarded byte for byte (it is the TAP).
+// The target runs in a process group the supervisor owns (pgid = the coordinator's pid). On EVERY exit
+// path the supervisor proves that group is empty with kill(-pgid, 0) === ESRCH:
+//   - after a normal finish, any member still alive is a SURVIVOR: it is killed, and the run FAILS
+//     (a passing test that leaves a process behind is not a clean pass, and nothing is hidden);
+//   - after a timeout or an output overflow, the whole group is SIGKILLed and must reach empty;
+//   - a probe that answers anything but ESRCH/alive (EPERM, no group support) is UNVERIFIED and fails.
+// Only the group it created is ever signalled, and never pid 0 (its own group). A descendant that
+// leaves the group on purpose (setsid / detached) is outside what a group probe can see; that limit
+// is stated here, not papered over.
 const SUPERVISOR_SRC = `
 "use strict";
 const { spawn } = require("node:child_process");
 const [t, m, rel] = process.argv.slice(1);
 const timeoutMs = Number(t), maxBytes = Number(m);
+const QUIESCE_MS = 3000;
+const say = (tag, detail) => process.stderr.write("SG_LBR_" + tag + (detail ? " " + detail : "") + "\\n");
+if (process.platform === "win32") { say("UNVERIFIED", "no process-group probe on win32"); process.exit(129); }
 let bytes = 0, verdict = null;
 const child = spawn(process.execPath, ["--test", "--test-reporter=tap", rel], {
-  detached: process.platform !== "win32", stdio: ["ignore", "pipe", "pipe"], env: process.env,
+  detached: true, stdio: ["ignore", "pipe", "pipe"], env: process.env,
 });
-const killGroup = () => {
-  try { if (process.platform !== "win32") process.kill(-child.pid, "SIGKILL"); else child.kill("SIGKILL"); } catch {}
+const pgid = child.pid;
+const probe = () => {
+  if (!(pgid > 0)) return "unknown";
+  try { process.kill(-pgid, 0); return "alive"; }
+  catch (e) { return e && e.code === "ESRCH" ? "empty" : "unknown:" + (e && e.code); }
+};
+const killGroup = () => { if (pgid > 0) { try { process.kill(-pgid, "SIGKILL"); } catch {} } };
+const sleep = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+const quiesce = () => {
+  for (let waited = 0; ; waited += 25) {
+    const s = probe();
+    if (s !== "alive") return s;
+    if (waited >= QUIESCE_MS) return "alive";
+    killGroup();
+    sleep(25);
+  }
 };
 const fwd = (out) => (d) => {
   if (verdict) return;
@@ -169,13 +196,18 @@ const fwd = (out) => (d) => {
 child.stdout.on("data", fwd(process.stdout));
 child.stderr.on("data", fwd(process.stderr));
 const timer = setTimeout(() => { if (!verdict) verdict = 124; killGroup(); }, timeoutMs);
-child.on("error", () => { verdict = verdict ?? 127; killGroup(); });
+child.on("error", (e) => { verdict = verdict || 127; say("SPAWN", e && e.code); killGroup(); });
 child.on("close", (code, sig) => {
   clearTimeout(timer);
-  killGroup(); // a passing run may still have left a grandchild behind
+  let s = probe();
+  if (s === "alive") {
+    if (!verdict) { verdict = 128; say("SURVIVOR", "process group " + pgid + " still had members after the test finished; killed"); }
+    s = quiesce();
+  }
+  if (s !== "empty") { say("UNVERIFIED", "process group " + pgid + " is " + s + " after cleanup"); process.exit(129); }
   if (verdict) process.exit(verdict);
-  if (sig) { process.stderr.write("SG_LBR_SIGNAL " + sig + "\\n"); process.exit(126); }
-  process.exit(code ?? 1);
+  if (sig) { say("SIGNAL", sig); process.exit(126); }
+  process.exit(code === null ? 1 : code);
 });
 `;
 
@@ -216,8 +248,11 @@ export function runTarget(opts) {
   if (r.signal) return bad(`terminated by signal ${r.signal}`);
   if (r.status === SUP_EXIT.timeout) return bad(`timed out after ${timeoutMs} ms`);
   if (r.status === SUP_EXIT.overflow) return bad(`output exceeded the ${maxBytes}-byte cap`);
-  if (r.status === SUP_EXIT.signal) return bad(`terminated by signal ${(/SG_LBR_SIGNAL (\w+)/.exec(r.stderr ?? "") ?? [])[1] ?? "unknown"}`);
-  if (r.status === SUP_EXIT.spawn) return bad("spawn error in supervisor");
+  const tag = (name) => (new RegExp(`SG_LBR_${name} ?([^\\n]*)`).exec(r.stderr ?? "") ?? [])[1] || "unknown";
+  if (r.status === SUP_EXIT.signal) return bad(`terminated by signal ${tag("SIGNAL")}`);
+  if (r.status === SUP_EXIT.spawn) return bad(`spawn error: ${tag("SPAWN")}`);
+  if (r.status === SUP_EXIT.survivor) return bad(`left a process running after the test finished (${tag("SURVIVOR")})`);
+  if (r.status === SUP_EXIT.unverified) return bad(`process cleanup could not be verified (${tag("UNVERIFIED")})`);
   if (r.status !== 0) return bad(`exit status ${r.status}`);
 
   const after = hashTarget(root, rel);
@@ -445,6 +480,20 @@ function selfTest({ minAllowlisted }) {
     check("orphan run times out", !r.ok && /timed out after 1500 ms/.test(r.reason), r.reason);
     Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 3000);
     check("timed-out test process does not survive the kill", !existsSync(mark), "marker written after the timeout");
+    // 10c a PASSING test that leaves a descendant behind fails, and the descendant is gone afterwards
+    const spawnLate = (m) => `spawn(process.execPath,["-e",${JSON.stringify(`setTimeout(()=>require("node:fs").writeFileSync(${JSON.stringify(m)},"alive"),3500);setInterval(()=>{},1000)`)}],{stdio:"ignore"}).unref();`;
+    const mark2 = join(tmp, "survivor-mark");
+    const shaSv = mk(root, "scripts/survivor.test.mjs", `import test from "node:test";import {spawn} from "node:child_process";\ntest("a",()=>{${spawnLate(mark2)}});\n`);
+    r = run({ rel: "scripts/survivor.test.mjs", sha256: shaSv, cases: 1 });
+    check("passing test that leaves a process running fails", !r.ok && /left a process running/.test(r.reason), r.reason);
+    // 10d output overflow also closes the owned tree
+    const mark3 = join(tmp, "overflow-mark");
+    const shaV = mk(root, "scripts/overflow.test.mjs", `import test from "node:test";import {spawn} from "node:child_process";\ntest("a",async()=>{${spawnLate(mark3)}process.stdout.write("x".repeat(400000)+"\\n");await new Promise(()=>setInterval(()=>{},1000));});\n`);
+    r = run({ rel: "scripts/overflow.test.mjs", sha256: shaV, cases: 1, maxBytes: 65536 });
+    check("overflow with a live descendant fails as overflow", !r.ok && /output exceeded/.test(r.reason), r.reason);
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 4000);
+    check("no descendant survives a passing-test cleanup", !existsSync(mark2), "survivor marker written");
+    check("no descendant survives an overflow kill", !existsSync(mark3), "overflow marker written");
     const shaB = mk(root, "scripts/big.test.mjs", `import test from "node:test";\ntest("a",()=>{process.stdout.write("x".repeat(400000)+"\\n");});\n`);
     r = run({ rel: "scripts/big.test.mjs", sha256: shaB, cases: 1, maxBytes: 65536 });
     check("oversized output fails", !r.ok && /output exceeded/.test(r.reason), r.reason);

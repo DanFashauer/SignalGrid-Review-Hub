@@ -103,6 +103,7 @@ const REQUIRED = ["tests", "pass", "fail", "cancelled", "skipped", "todo"];
 export function parseTap(text) {
   const seen = Object.fromEntries(COUNTERS.map((c) => [c, []]));
   let okLines = 0;
+  let allOk = 0;
   let notOk = 0;
   const okNames = [];
   for (const line of String(text).split(/\r?\n/)) {
@@ -110,6 +111,8 @@ export function parseTap(text) {
     if (m) seen[m[1]].push(Number(m[2]));
     const ok = /^ok \d+(?: - (.*))?$/.exec(line);
     if (ok) { okLines++; okNames.push(ok[1] ?? ""); }
+    // Nested subtests and suite members are indented; Node counts them in # tests / # suites.
+    if (/^\s*ok \d+\b/.test(line)) allOk++;
     if (/^\s*not ok\b/.test(line)) notOk++;
   }
   const counters = {};
@@ -121,13 +124,13 @@ export function parseTap(text) {
   for (const c of Object.keys(counters)) {
     if (!Number.isSafeInteger(counters[c])) return { reason: `counter '${c}' is not a safe integer` };
   }
-  return { counters, okLines, notOk, okNames };
+  return { counters, okLines, allOk, notOk, okNames };
 }
 
 /** Validate parsed TAP. expectedCases === undefined means discovery mode (tests > 0). */
 function judge(parsed, expectedCases, rel) {
   if (parsed.reason) return parsed.reason;
-  const { counters: c, okLines, notOk } = parsed;
+  const { counters: c, okLines, allOk, notOk } = parsed;
   if (notOk > 0) return `${notOk} 'not ok' line(s) in TAP output`;
   if (c.tests < 1) return "empty run: 0 tests executed";
   // Node reports a file that registers no test() as ONE passing test named after the file itself.
@@ -136,8 +139,9 @@ function judge(parsed, expectedCases, rel) {
   for (const k of ["fail", "cancelled", "skipped", "todo"]) if (c[k] !== 0) return `${k} counter is ${c[k]}, must be 0`;
   if (expectedCases !== undefined && c.tests !== expectedCases) return `case count ${c.tests} !== expected ${expectedCases}`;
   if (okLines < 1) return "no top-level 'ok' line in TAP output";
-  if (okLines > c.tests) return `top-level ok lines (${okLines}) exceed tests counter (${c.tests})`;
-  if ((c.suites ?? 0) === 0 && okLines !== c.tests) return `top-level ok lines (${okLines}) !== tests (${c.tests}) with no suites`;
+  // Every passing test and every passing suite prints one ok line at its own depth.
+  const expectedOk = c.tests + (c.suites ?? 0);
+  if (allOk !== expectedOk) return `ok lines at all depths (${allOk}) !== tests + suites (${expectedOk})`;
   return null;
 }
 
@@ -348,6 +352,12 @@ function selfTest({ minAllowlisted }) {
     check("parser: nonzero skipped fails", judge(parseTap(good.replace("# skipped 0", "# skipped 1")), 1) !== null);
     check("parser: nonzero cancelled fails", judge(parseTap(good.replace("# cancelled 0", "# cancelled 1")), 1) !== null);
     check("parser: nonzero todo fails", judge(parseTap(good.replace("# todo 0", "# todo 1")), 1) !== null);
+    const nested = "    ok 1 - child\nok 1 - parent\n1..1\n# tests 2\n# suites 0\n# pass 2\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n";
+    check("parser: nested subtests (await t.test) accepted", judge(parseTap(nested), 2) === null, String(judge(parseTap(nested), 2)));
+    const suite = "    ok 1 - a\n    ok 2 - b\n        ok 1 - c\n    ok 3 - inner\nok 1 - s\n1..1\n# tests 3\n# suites 2\n# pass 3\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n";
+    check("parser: describe/it suites accepted", judge(parseTap(suite), 3) === null, String(judge(parseTap(suite), 3)));
+    check("parser: nested run with a missing child ok line fails", judge(parseTap(nested.replace("    ok 1 - child\n", "")), 2) !== null);
+    check("parser: forged extra nested ok line fails", judge(parseTap("    ok 2 - ghost\n" + nested), 2) !== null);
     check("parser: discovery mode (no expected count) accepts", judge(parseTap(good), undefined) === null);
     check("parser: huge counter rejected as unsafe", judge(parseTap(good.replace("# fail 0", "# fail 99999999999999999999")), 1) !== null);
     // 8 path safety

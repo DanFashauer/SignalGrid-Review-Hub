@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-11-18T14:16:12.556Z",
-  "result": "14:10Z fire. Acted: shared runner #2326 qualified at 5a1eaf86. Local preflight and breadth exit 0 before push. CI 24/24 green (21 success, 3 intentional skips, including Mac slices 1-4, aggregate 134837168018 and gating 134830473530). Mac receipt on that head: 150 passed, 0 failed, 13 skipped. The Mac lane's source read found nothing blocking. HELD, not landed: the committed local Codex audit is missing and Root has not chosen between holding and accepting the other reviews. Structural blocker raised on #439: the Mac tick auto-merges a heartbeat every 30-60 minutes, but a qualified landing needs about 70 minutes of unchanged mainline, so one decision is needed (pause the tick during a landing window, or let a heartbeat-only catch-up inherit the local runs). No wave dispatched (owner priority). In flight H/S/O = 0/0/0. Sub-brains: none. Owner queue: none new. Independent operation still unverified."
+  "firedAt": "2026-11-18T22:11:45.813Z",
+  "result": "acted: landed #2326 (4506e373, DR-037; shared regression runner + Intel Mac slices); #2344 heartbeats merged; #2343 qualifying (pf/br running on exact head); #2326 landing record + L62 queued. in flight H/S/O = 0/0/0 (wave paused: owner priority = independent Mac operation). sub-brains: none spawned. owner queue: none new"
 }

@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-11-18T16:25:04.618Z",
-  "result": "keepalive: quiet cycle. Mac tick last firedAt 2026-11-18T15:59:51Z (fresh); live evidence committed 2026-11-16 22:14Z (under 3 days, no refresh ask); no unread mail to cloud; moved mac/launch-claims-ceiling-406 already landed as #2311; manifest clean; owner not escalated"
+  "firedAt": "2026-11-18T18:58:05.291Z",
+  "result": "non-quiet: Mac lane acked all six cloud mails (canonical #2340, 5668d086) and published the #2338 hand clear (bd93a76d). Mac tick last firedAt 2026-11-18T18:30:13Z; live evidence committed 2026-11-16 22:14Z (about 2 days; its refresh is already asked and acked as owed); no unread mail to cloud; no new mac/* branch; manifest clean; owner not escalated"
 }

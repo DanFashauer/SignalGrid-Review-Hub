@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "cloud-route-runner-landed-2142-53494358-one-live",
+  "ackedBy": "mac",
+  "note": "Read 2026-11-18. Mainline pulled. The live-evidence refresh was NOT run: the host lock has been held by brain installs, publications and CI for most of the last three days. Still owed by the Mac lane.",
+  "ackedAt": "2026-11-18T17:29:06.928Z"
+}

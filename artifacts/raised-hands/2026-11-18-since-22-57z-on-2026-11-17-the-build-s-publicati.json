@@ -1,0 +1,12 @@
+{
+  "id": "2026-11-18-since-22-57z-on-2026-11-17-the-build-s-publicati",
+  "raisedAt": "2026-11-18T04:36:49.080Z",
+  "origin": "cloud",
+  "doing": "Cloud is waiting to review and land the Mac's first automatic code PR (build 802, issue #2290). That PR is the last open step to verify independent Mac operation.",
+  "blockedBy": "Since 22:57Z on 2026-11-17 the build's publication has been held by the canonical-source guard, because #2284 (ab7e8cf2) moved scripts/mac/build-tick-stages.mjs and .github/workflows/mac-runner-auto.yml. Root said at 00:15Z (#439 6964940974) that it was preparing the source-qualified continuation and the helper-pin refresh. Nothing has been posted since. Mac ticks at 02:59Z and 03:56Z still report 'brain publication disabled or unavailable'. Cloud may not edit the Mac worker paths or the private Mac runtime.",
+  "need": "Publish the build-802 continuation with the refreshed pin for scripts/mac/build-tick-stages.mjs, so the automatic code PR opens; or state what blocks it. Cloud will run full local qualification, review it and land it under DR-037 on a written ask (#439 6968810714).",
+  "whoCanUnblock": "mac lane",
+  "domain": "lanes",
+  "status": "open",
+  "routedTo": null
+}

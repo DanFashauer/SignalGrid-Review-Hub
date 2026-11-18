@@ -5597,3 +5597,42 @@ Output, verbatim:
 ```
 
 Verdict: product #2267 merged from exact head `a0648ffd6ae0ce897fee067cb68508983ec5922b` as `1d8b068580aff3800a8d48a15aa83e02e1308fb8`. That merge is an ancestor of canonical `SignalGrid_Alpha` (`de0b9b7b` at read time). It is the compare merge-base, with `behind_by` 0. The public journal for #2267 is closed by this entry. The private journal stays Root-owned and is not asserted here. Independent operation remains unverified.
+
+## 2026-11-17 — #2284 and #2293 landing closeout (merges ab7e8cf2 and b51757d2)
+
+This is the public journal closeout for two landings on 2026-11-17, which Root asked for on #439 (6964222454). No private `merged_journal_complete` seal is claimed for either one.
+
+**#2284** (cloud-owned, under DR-037) is the `pr-mac-checks` aggregate moved to a Linux runner, the owner-approved tick pending-PR readback fix, and the #2267 journal closeout. Pre-push basis: on `5ef720adfcf58e67ad7761741b6f2b7862e71c4d`, `node scripts/preflight.mjs` printed `Preflight PASSED — everything it runs is green.` (PF_EXIT=0, 444 ✓, 20:02:40Z–20:41:38Z) and `pnpm run verify:breadth` printed `Breadth lane PASSED — 58 breadth proofs green` (BR_EXIT=0, 20:43:07Z). The delta from that commit to the merged head `aebd7008` is only `artifacts/agent-heartbeats/mac-lane-tick.json`. Fresh metadata checks on it all exited 0: `check-lane-heartbeat-refresh` 29/0, `check-lane-messages`, `raised-hands --check`, `check-scheduled-routines`. Current-head CI on `aebd7008`: gating check `134361838541` success; macOS slices `134354748559`, `134354748887`, `134354749131` and `134354748893` success; the `pr-mac-checks` aggregate `134370538977` succeeded on Linux, its first real run there. Codex had no findings.
+
+**#2293** (owned by the local lane and merged by that owner, not by Cloud) is the raised-hand routing and lane grouping repair. Its pre-push basis is as Root recorded it: full qualification `4944` on `1b538448` came first. The owner-approved local evidence reuse then covered a delta of only three heartbeat files, plus fresh generators, metadata, source and harness checks on `399b5e7b` and current CI. The full current-head preflight and breadth run `73979` finished with exit 0 **after** the merge, observed at 23:29Z. It is supplemental same-head verification, not retroactive pre-push proof. Its harness result was 150 passed / 0 failed / 13 skipped, with preflight 0, breadth 58 green and diff 0. The aggregate job `134447442817` read plan `757844e2f0673510…`, 447 steps: 443 ok, 2 unavailable, 2 skipped-db. Those four unrun steps keep their caveats.
+
+Command: GitHub REST GETs run by the cloud lane at 2026-11-17T23:37:17Z, reduced to the fields shown: `pulls/2284`, `pulls/2293`, `git/ref/heads/SignalGrid_Alpha`, `compare/ab7e8cf29f490b086ed8ad9f24a71f1829acb5be...SignalGrid_Alpha` and `compare/b51757d282df4dfae17ef8a53ed0736b694886ac...SignalGrid_Alpha`.
+Output, verbatim:
+
+```
+{"number":2284,"state":"closed","merged":true,"merged_at":"2026-11-17T21:10:54Z","merge_commit_sha":"ab7e8cf29f490b086ed8ad9f24a71f1829acb5be","head":"aebd7008f019aeefe738375a80f1199437ae097e","base":"SignalGrid_Alpha"}
+{"number":2293,"state":"closed","merged":true,"merged_at":"2026-11-17T23:25:19Z","merge_commit_sha":"b51757d282df4dfae17ef8a53ed0736b694886ac","head":"399b5e7b3cab10baf11b5e2627b92c154faed5a3","base":"SignalGrid_Alpha"}
+{"ref":"refs/heads/SignalGrid_Alpha","sha":"b51757d282df4dfae17ef8a53ed0736b694886ac"}
+{"status":"ahead","ahead_by":11,"behind_by":0,"merge_base":"ab7e8cf29f490b086ed8ad9f24a71f1829acb5be"}
+{"status":"identical","ahead_by":0,"behind_by":0,"merge_base":"b51757d282df4dfae17ef8a53ed0736b694886ac"}
+```
+
+Verdict: #2284 merged from exact head `aebd7008f019aeefe738375a80f1199437ae097e` as `ab7e8cf29f490b086ed8ad9f24a71f1829acb5be`, an ancestor of canonical with behind_by 0. #2293 merged from exact head `399b5e7b3cab10baf11b5e2627b92c154faed5a3` as `b51757d282df4dfae17ef8a53ed0736b694886ac`, which was canonical at read time (`identical`). Both public journals are closed by this entry. Private journals stay Root-owned and are not asserted here. Independent operation is still unverified: Mac build 802's automatic PR, its protected delivery and a later ordinary cycle are all still to happen.
+
+## 2026-11-18 — #2300 landing closeout (merge 0a406e66)
+
+This is the public journal closeout for #2300, which Root asked for on #439 (6966096223). #2300 is the local lane's change that freezes the shared raised-hand stall policy exports, in `scripts/lib/raised-hand-kinds.mjs` and `scripts/raised-hands.mjs`. Its owner merged it, not Cloud. The full validation timing, the named skips and the source review are recorded in the merged PR body and are not repeated here. Current-head CI on `b79d6858`: gating check `134486002396` success, four macOS slices success, and the `pr-mac-checks` aggregate `134490867784` success on Linux in run `44208800789`, attempt 1. No private `merged_journal_complete` seal is claimed.
+
+Command: GitHub REST GETs run by the cloud lane at 2026-11-18T01:22:32Z, reduced to the fields shown: `pulls/2300`, `git/ref/heads/SignalGrid_Alpha`, `compare/0a406e66a95f6ced21fa75c00f723e67234aaab3...SignalGrid_Alpha`, `commits/0a406e66…`, and `check-runs/134486002396` and `check-runs/134490867784`.
+Output, verbatim:
+
+```
+{"number":2300,"state":"closed","merged":true,"merged_at":"2026-11-18T00:55:25Z","merge_commit_sha":"0a406e66a95f6ced21fa75c00f723e67234aaab3","head":"b79d68587d3ef8a85506d540ae2c3f730f8b3720","base":"SignalGrid_Alpha"}
+{"ref":"refs/heads/SignalGrid_Alpha","sha":"c45c0e5b7e6bc1f8cc6e83fcbce75c1346fb3ad6"}
+{"status":"ahead","ahead_by":3,"behind_by":0,"merge_base":"0a406e66a95f6ced21fa75c00f723e67234aaab3"}
+{"sha":"0a406e66a95f6ced21fa75c00f723e67234aaab3","parents":["aab5f85f4a9f00ca38b036fe541b1e6f069d3f8c","b79d68587d3ef8a85506d540ae2c3f730f8b3720"],"tree":"a62a1cda7e6f8ae27c9ff1cac17cae31873aea47"}
+{"id":134486002396,"name":"Typecheck, build, and proof scaffold","head_sha":"b79d68587d3ef8a85506d540ae2c3f730f8b3720","conclusion":"success"}
+{"id":134490867784,"name":"PR — Mac-only checks (full-clone provenance, preflight on macOS)","head_sha":"b79d68587d3ef8a85506d540ae2c3f730f8b3720","conclusion":"success"}
+```
+
+Verdict: #2300 merged from exact head `b79d68587d3ef8a85506d540ae2c3f730f8b3720` as `0a406e66a95f6ced21fa75c00f723e67234aaab3`, with parents `aab5f85f` and that head and tree `a62a1cda`. That merge is an ancestor of canonical `c45c0e5b` with behind_by 0. Both named check runs succeeded on the exact head. The public journal for #2300 is closed by this entry. The private journal stays Root-owned and is not asserted here. Independent operation remains unverified.

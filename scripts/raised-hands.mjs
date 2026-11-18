@@ -104,12 +104,11 @@ const H = 3_600_000;
 export const SIM_UNREADABLE = "UNREADABLE-check-sim-requests-printed-nothing";
 
 /** Soft limit per source: past it the hand is on the list; past HARD_MULTIPLE× it the gate fails unless covered. */
-export { SOFT_LIMIT_H } from "./lib/raised-hand-kinds.mjs"; // in a leaf module so check-raised-hands.mjs can validate `covers` without importing this file (a cycle deadlocks its top-level await)
-import { SOFT_LIMIT_H } from "./lib/raised-hand-kinds.mjs";
+export { SOFT_LIMIT_H, AUTO_KINDS } from "./lib/raised-hand-kinds.mjs"; // leaf policy avoids a cycle with the hand schema
+import { SOFT_LIMIT_H, AUTO_KINDS } from "./lib/raised-hand-kinds.mjs";
 import { isMainModule } from "./lib/is-main.mjs";
 export const HARD_MULTIPLE = 3;
 /** Every auto-hand kind, plus the two routes every explicit hand falls into. Each needs a responder. */
-export const AUTO_KINDS = Object.keys(SOFT_LIMIT_H);
 export const REQUIRED_ROUTES = [...AUTO_KINDS, "owner", "capability-gap"];
 /** A lane hand nobody has taken (`hand:take`) for this long is reported as unanswered. */
 export const UNTAKEN_LIMIT_H = 2;
@@ -478,7 +477,7 @@ async function selfTest() {
   checks.push(["a resolved hand with no resolution is fatal", auditHands([hand({ status: "resolved", resolvedAt: ago(0) })]).some((p) => p.includes("no resolution"))]);
   checks.push(["duplicate ids are fatal", auditHands([hand(), hand()]).some((p) => p.includes("duplicate"))]);
   checks.push(["'the other lane' raised by the Mac is the cloud's", groupOf(hand({ whoCanUnblock: "the other lane", origin: "mac-lane" }), { kind: "lane" }).group === "cloud"]);
-  const { routeHand: actualRouteHand, validateHand: actualValidateHand } = await import("./check-raised-hands.mjs");
+  const { routeHand: actualRouteHand, validateHand: actualValidateHand, coverProblem: actualCoverProblem } = await import("./check-raised-hands.mjs");
   const laneRoles = new Set();
   const routeActualLane = (h) => actualRouteHand(h, laneRoles);
   for (const [who, origin, expected] of [
@@ -503,6 +502,45 @@ async function selfTest() {
   checks.push(["a cloud-lane hand mentioning Mac is overdue after 30h under the cloud window", cloudAt30.group === "cloud" && cloudAt30.overdue === true]);
   const macAt30 = evaluate([hand({ whoCanUnblock: "the other lane (cloud input)", origin: "cloud", raisedAt: ago(30) })], [], T, routeActualLane).open[0];
   checks.push(["an other-lane hand from cloud keeps the Mac window and is not overdue after 30h", macAt30.group === "mac" && macAt30.overdue === false]);
+
+  // Importers cannot silence a real stall or change which covers the schema accepts.
+  for (const [name, mutate] of [
+    ["assignment", () => Reflect.set(SOFT_LIMIT_H, "sim", Infinity)],
+    ["deletion", () => Reflect.deleteProperty(SOFT_LIMIT_H, "sim")],
+  ]) {
+    const before = Object.getOwnPropertyDescriptors(SOFT_LIMIT_H);
+    try {
+      mutate();
+      const pending = autoHands({ simPending: [{ id: "immutable-policy", ageDays: 4 }] }, T);
+      const overdue = evaluate([], autoHands({ simPending: [{ id: "immutable-policy", ageDays: 7 }] }, T), T);
+      checks.push([`threshold ${name} cannot hide a four-day sim stall or its later hard failure`,
+        pending.some((h) => h.id === "sim:immutable-policy") && overdue.fatal.some((h) => h.startsWith("sim:immutable-policy"))]);
+    } finally {
+      for (const key of Object.keys(SOFT_LIMIT_H)) Reflect.deleteProperty(SOFT_LIMIT_H, key);
+      Object.defineProperties(SOFT_LIMIT_H, before);
+    }
+  }
+  const { AUTO_KINDS: schemaKinds } = await import("./lib/raised-hand-kinds.mjs");
+  for (const [entry, kinds] of [["leaf", schemaKinds], ["reporter", AUTO_KINDS]]) {
+    for (const [name, mutate] of [
+      ["append", () => kinds.push("mial")],
+      ["replace", () => Reflect.set(kinds, 0, "mial")],
+      ["truncate", () => Reflect.set(kinds, "length", 0)],
+    ]) {
+      const before = [...kinds];
+      try {
+        try { mutate(); } catch (error) { if (!(error instanceof TypeError)) throw error; }
+        const unknown = staleHands([{ id: "unsupported", covers: ["mial:x"], ageH: 100 }], []);
+        const known = staleHands([{ id: "supported", covers: ["mail:x"], ageH: 100 }], []);
+        checks.push([`${entry} kinds ${name} cannot make an unsupported covers kind valid`,
+          actualCoverProblem("mial:x") !== null && unknown.unknown.length === 1]);
+        checks.push([`${entry} kinds ${name} cannot remove the supported mail kind`,
+          actualCoverProblem("mail:x") === null && known.unknown.length === 0]);
+      } finally {
+        if (kinds.length !== before.length || kinds.some((kind, i) => kind !== before[i])) kinds.splice(0, kinds.length, ...before);
+      }
+    }
+  }
 
   const msg = (h, extra = {}) => ({ id: "m1", from: "cloud", to: "mac", subject: "s", sentAt: ago(h), ...extra });
   let a = autoHands({ messages: [msg(10)] }, T);

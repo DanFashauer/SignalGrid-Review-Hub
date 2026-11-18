@@ -836,6 +836,8 @@ const STEPS = [
     env: { GH_TOKEN: "" },
     surface: /red streak\(s\) of \d+\+ .* REPORTED, not fatal/,
   },
+  { name: "Shared build-regression runner self-test (hash, case-count, counter-forgery, symlink and discovery defects must fail)", cmd: ["node", "scripts/check-local-build-regressions.mjs", "--self-test"] },
+  { name: "Changed regression targets vs canonical (shared runner; an empty diff is not proof a build's regression ran)", cmd: ["node", "scripts/check-local-build-regressions.mjs", "--changed", "--base-optional"] },
 ];
 
 // Is the native web build structurally impossible here? Derived from the committed

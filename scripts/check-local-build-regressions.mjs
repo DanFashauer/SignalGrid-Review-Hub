@@ -30,10 +30,10 @@
 // glob metacharacter, no leading `-`), the path is relative, and no `node_modules` segment is allowed.
 //
 // EXIT: 0 pass; 1 a regression/contract failure (one-line reason on stderr); 2 usage/refusal.
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
-  closeSync, constants as fsConstants, existsSync, fstatSync, lstatSync, mkdirSync, mkdtempSync, openSync,
+  closeSync, constants as fsConstants, existsSync, fstatSync, lstatSync, mkdirSync, mkdtempSync, openSync, readdirSync,
   readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -145,6 +145,35 @@ function judge(parsed, expectedCases, rel) {
   return null;
 }
 
+/**
+ * State of an owned process group: "empty" | "alive" | "unknown:<why>". Shared verbatim by the
+ * supervisor (injected as source) and by runTarget's outer check, so both read a group the same way.
+ * Linux: kill(-pgid, 0) also succeeds for a group holding only zombies, and a container PID 1 that
+ * never reaps leaves them forever (Codex P2 on #2326, reproduced as PID 1 of a new PID namespace:
+ * 67/72). Zombies run nothing, so only members not in state Z/X count as alive. A group that answers
+ * kill but shows no member in /proc reads "alive" (fail closed: the caller retries, then refuses).
+ */
+export function groupState(pgid, fs, platform) {
+  if (!(Number.isSafeInteger(pgid) && pgid > 1)) return "unknown:no-group-id";
+  try { process.kill(-pgid, 0); } catch (e) { return e && e.code === "ESRCH" ? "empty" : "unknown:" + (e && e.code); }
+  if (platform !== "linux") return "alive";
+  let names;
+  try { names = fs.readdirSync("/proc"); } catch { return "unknown:proc-unreadable"; }
+  let live = 0;
+  let seen = 0;
+  for (const n of names) {
+    if (!/^[0-9]+$/.test(n)) continue;
+    let st;
+    try { st = fs.readFileSync("/proc/" + n + "/stat", "utf8"); } catch { continue; }
+    const rest = st.slice(st.lastIndexOf(")") + 2).split(" ");
+    if (Number(rest[2]) !== pgid) continue;
+    seen++;
+    if (rest[0] !== "Z" && rest[0] !== "X") live++;
+  }
+  if (live > 0 || seen === 0) return "alive";
+  return "empty";
+}
+
 const SUPERVISOR_GRACE_MS = 10_000;
 // Exit codes the supervisor owns. `node --test` itself exits 0 or 1.
 const SUP_EXIT = { timeout: 124, overflow: 125, signal: 126, spawn: 127, survivor: 128, unverified: 129 };
@@ -171,11 +200,11 @@ const child = spawn(process.execPath, ["--test", "--test-reporter=tap", rel], {
   detached: true, stdio: ["ignore", "pipe", "pipe"], env: process.env,
 });
 const pgid = child.pid;
-const probe = () => {
-  if (!(pgid > 0)) return "unknown";
-  try { process.kill(-pgid, 0); return "alive"; }
-  catch (e) { return e && e.code === "ESRCH" ? "empty" : "unknown:" + (e && e.code); }
-};
+// First stderr line, written synchronously before any test output can be forwarded: the outer runner
+// reads only a PGID line at offset 0, so a test cannot forge the group it will clean.
+if (pgid > 0) require("node:fs").writeSync(2, "SG_LBR_PGID " + pgid + "\\n");
+${groupState.toString()}
+const probe = () => groupState(pgid, require("node:fs"), process.platform);
 const killGroup = () => { if (pgid > 0) { try { process.kill(-pgid, "SIGKILL"); } catch {} } };
 const sleep = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 const quiesce = () => {
@@ -240,12 +269,33 @@ export function runTarget(opts) {
     cwd: root, env, shell: false, encoding: "utf8", timeout: timeoutMs + SUPERVISOR_GRACE_MS, killSignal: "SIGKILL",
     maxBuffer: maxBytes + 4096, stdio: ["ignore", "pipe", "pipe"],
   });
+  // Whatever happened to the supervisor, its target group must be empty now. If the supervisor died
+  // (backstop timeout, buffer cap, a signal, a crash) its own cleanup never ran: close the group here.
+  const pg = /^SG_LBR_PGID ([0-9]+)\n/.exec(r.stderr ?? "");
+  const spawnFailed = r.status === SUP_EXIT.spawn || (r.status === SUP_EXIT.unverified && /^SG_LBR_UNVERIFIED no process-group probe/.test(r.stderr ?? ""));
+  if (!pg && !spawnFailed) {
+    return bad(`supervisor ended without naming its target process group (status ${r.status}, signal ${r.signal ?? "none"}): cleanup debt, nothing verified`);
+  }
+  if (pg) {
+    const pgid = Number(pg[1]);
+    const fsApi = { readdirSync, readFileSync };
+    let st = groupState(pgid, fsApi, process.platform);
+    if (st === "alive") {
+      for (let waited = 0; st === "alive" && waited < 3000; waited += 25) {
+        try { process.kill(-pgid, "SIGKILL"); } catch {}
+        Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 25);
+        st = groupState(pgid, fsApi, process.platform);
+      }
+      if (st === "empty") return bad(`target process group ${pgid} outlived its supervisor (status ${r.status}, signal ${r.signal ?? "none"}); the group was killed and is now empty`);
+    }
+    if (st !== "empty") return bad(`process cleanup could not be verified after the supervisor ended (group ${pgid} is ${st})`);
+  }
   if (r.error) {
     if (r.error.code === "ETIMEDOUT") return bad(`supervisor timed out after ${timeoutMs + SUPERVISOR_GRACE_MS} ms`);
     if (r.error.code === "ENOBUFS") return bad(`output exceeded the ${maxBytes}-byte cap`);
     return bad(`spawn error: ${r.error.code ?? r.error.message}`);
   }
-  if (r.signal) return bad(`terminated by signal ${r.signal}`);
+  if (r.signal) return bad(`supervisor terminated by signal ${r.signal}`);
   if (r.status === SUP_EXIT.timeout) return bad(`timed out after ${timeoutMs} ms`);
   if (r.status === SUP_EXIT.overflow) return bad(`output exceeded the ${maxBytes}-byte cap`);
   const tag = (name) => (new RegExp(`SG_LBR_${name} ?([^\\n]*)`).exec(r.stderr ?? "") ?? [])[1] || "unknown";
@@ -499,6 +549,36 @@ function selfTest({ minAllowlisted }) {
     Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 4000);
     check("no descendant survives a passing-test cleanup", !existsSync(mark2), "survivor marker written");
     check("no descendant survives an overflow kill", !existsSync(mark3), "overflow marker written");
+    // 10f groupState reads /proc the zombie-aware way, deterministically on any host: a real detached
+    // group (so kill(-pgid, 0) answers) and a fake /proc that says what its members are.
+    {
+      const g = spawn(process.execPath, ["-e", "setInterval(()=>{},1000)"], { detached: true, stdio: "ignore" });
+      const pgid = g.pid;
+      const fake = (lines) => ({
+        readdirSync: () => Object.keys(lines),
+        readFileSync: (f) => { const k = f.split("/")[2]; if (!(k in lines)) throw new Error("gone"); return lines[k]; },
+      });
+      const stat = (pid, comm, state, grp) => `${pid} (${comm}) ${state} 1 ${grp} ${grp} 0 -1`;
+      check("groupState: zombie-only group reads empty", groupState(pgid, fake({ [pgid]: stat(pgid, "node", "Z", pgid), 77: stat(77, "x", "R", 5) }), "linux") === "empty");
+      check("groupState: a live member reads alive", groupState(pgid, fake({ [pgid]: stat(pgid, "node", "Z", pgid), 88: stat(88, "a) S 1 2 (b", "S", pgid) }), "linux") === "alive");
+      check("groupState: comm with ') ' cannot spoof the group field", groupState(pgid, fake({ 99: stat(99, `x) Z 1 ${pgid} (y`, "R", 5) }), "linux") === "alive");
+      check("groupState: unreadable /proc is unknown, never empty", groupState(pgid, { readdirSync: () => { throw new Error("EACCES"); }, readFileSync: () => "" }, "linux").startsWith("unknown"));
+      check("groupState: kill answers but /proc shows no member reads alive (fail closed)", groupState(pgid, fake({}), "linux") === "alive");
+      check("groupState: no group id is unknown", groupState(0, fake({}), "linux").startsWith("unknown"));
+      try { process.kill(-pgid, "SIGKILL"); } catch {}
+    }
+    // 10e the supervisor itself dies after creating the target group: the runner must still close
+    // that group. The fixture kills ONLY its own supervisor, positively identified as the parent of
+    // its node --test coordinator whose command line carries the supervisor's SG_LBR_ marker.
+    const mark4 = join(tmp, "supdeath-mark");
+    const shaD = mk(root, "scripts/supdeath.test.mjs", `import test from "node:test";import {execFileSync} from "node:child_process";import {writeFileSync} from "node:fs";${MARK_AT("supdeath")}
+const ps=(f,p)=>execFileSync("ps",["-ww","-o",f+"=","-p",String(p)],{encoding:"utf8"}).trim();
+test("a",async()=>{const sup=Number(ps("ppid",process.ppid));if(!(sup>1)||!ps("args",sup).includes("SG_LBR_"))throw new Error("supervisor not positively identified");setTimeout(()=>writeFileSync(MARK,"alive"),3500);process.kill(sup,"SIGKILL");await new Promise(()=>setInterval(()=>{},1000));});
+`);
+    r = run({ rel: "scripts/supdeath.test.mjs", sha256: shaD, cases: 1, timeoutMs: 20000 });
+    check("supervisor death fails the run", !r.ok && /supervisor/.test(r.reason ?? ""), r.reason);
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 4000);
+    check("no target process survives its supervisor's death", !existsSync(mark4), "supervisor-death marker written");
     const shaB = mk(root, "scripts/big.test.mjs", `import test from "node:test";\ntest("a",()=>{process.stdout.write("x".repeat(400000)+"\\n");});\n`);
     r = run({ rel: "scripts/big.test.mjs", sha256: shaB, cases: 1, maxBytes: 65536 });
     check("oversized output fails", !r.ok && /output exceeded/.test(r.reason), r.reason);

@@ -7,6 +7,9 @@
   "need": "Publish the build-802 continuation with the refreshed pin for scripts/mac/build-tick-stages.mjs, so the automatic code PR opens; or state what blocks it. Cloud will run full local qualification, review it and land it under DR-037 on a written ask (#439 6968810714).",
   "whoCanUnblock": "mac lane",
   "domain": "lanes",
-  "status": "open",
-  "routedTo": null
+  "status": "resolved",
+  "routedTo": null,
+  "resolvedAt": "2026-11-18T06:39:25.295Z",
+  "resolvedBy": "cloud",
+  "resolution": "Superseded by the Mac status 6969427128 (04:52Z): the build-tick-stages.mjs pin repair and the continuation are installed, so no further pin repair is needed. The remaining generated-output hold (launch-claims ceiling 407->406) landed as #2311 (71e89b33, owner merge, 05:04Z). Independent operation is still unverified: it waits on the automatic code PR, its protected landing and a later ordinary cycle."
 }

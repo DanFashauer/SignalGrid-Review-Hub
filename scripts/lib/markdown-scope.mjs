@@ -329,12 +329,17 @@ function containerRun(lines, interrupted, outer = []) {
       const continuing = paraOpen && !opened;
       if (indent >= 4) {
         if (continuing) { result = "continue"; break; }
+        // New code keeps only the containers this line matched or opened; an ended inner item must not match the
+        // next line again (Root on ca1986be: `- 12345. <div>`, then six-space `<!--` is code in the outer item).
+        stack.length = depth;
         leaf = { kind: "code" };
         result = null;
         break;
       }
       const body = rest.slice(indent);
-      if (THEMATIC_BREAK.test(body)) { leaf = { kind: "none" }; result = "own"; break; }
+      // A thematic break closes the containers this line did not match, as a heading does, so later lines are read
+      // against the containers still open (Codex on ca1986be: `- a`, `***`, then `    <!--` is top-level code).
+      if (THEMATIC_BREAK.test(body)) { stack.length = depth; leaf = { kind: "none" }; result = "own"; break; }
       if (body.startsWith(">")) {
         stack.length = depth;
         stack.push({ quote: true });

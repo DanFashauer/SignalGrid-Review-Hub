@@ -1449,3 +1449,86 @@ test('a paragraph opened inside an enclosing item ends at the item boundary, as 
   }
   assert.equal(checked, 3 * 3 * 3 * 4 * 6 * 2 * 2);
 });
+
+// 33. Codex on ca1986be (#2368). A thematic break closes the containers its line did not match, as a heading does, so
+//     later lines are read against the containers still open rather than a list item that has already ended. Exact
+//     literal first, then a bounded family of breaks after lists and quotes followed by indented and HTML openers,
+//     judged against markdown-it 14 in both directions; both fence options; shape checked.
+for (const treatUnclosedAsFence of [true, false]) {
+  test(`Codex ca1986be literal: a thematic break ends the list, so an indented comment opener after it is code (treatUnclosedAsFence=${treatUnclosedAsFence})`, () => {
+    const input = '- a\n***\n    <!--\n  [V](docs/V.md)\n';
+    const out = maskNonProse(input, { treatUnclosedAsFence });
+    assertShape(input, out);
+    assert.equal(out.includes('docs/V.md'), true, `route lost: ${JSON.stringify(out)}`);
+  });
+}
+test('a thematic break closes unmatched containers before the next lines are classified, as markdown-it reads it', async () => {
+  const { default: MarkdownIt } = await import('markdown-it');
+  const md = new MarkdownIt('commonmark');
+  const docs = [];
+  for (const open of ['- a', '1. a', '> a', '- > a', '- - a']) for (const brk of ['***', '* * *', '___', '  ***', '- - -']) {
+    for (const next of ['    <!--', '    `', '  <span>', '  <!--', '<!--', '   <div>']) {
+      const close = next.includes('`') ? '`' : next.includes('<!--') ? '-->' : '';
+      docs.push(`${open}\n${brk}\n${next}\n  [R](docs/R.md)\n${close ? `  ${close}\n[R](docs/R.md)\n` : ''}`);
+    }
+  }
+  let checked = 0;
+  for (const input of docs) {
+    const links = md.render(input).split('href="docs/R.md"').length - 1;
+    for (const treatUnclosedAsFence of [true, false]) {
+      const out = maskNonProse(input, { treatUnclosedAsFence });
+      assertShape(input, out);
+      const kept = out.split('docs/R.md').length - 1;
+      assert.ok(kept <= links, `route kept that markdown-it does not render (${kept} > ${links}): ${JSON.stringify(input)}`);
+      assert.ok(kept >= links, `rendered route masked (${kept} < ${links}): ${JSON.stringify(input)}`);
+      checked += 1;
+    }
+  }
+  assert.equal(checked, 5 * 5 * 6 * 2);
+});
+
+// 34. Root on ca1986be (#2368). New indented code keeps only the containers its line matched or opened, as fences,
+//     raw HTML, headings and thematic breaks already did, so an ended inner item cannot match a later line again;
+//     lazy paragraph continuation is unchanged. Marker-only lines are covered as controls (no change was needed).
+//     Exact literal first, then a bounded family of nested items with varied padding and leaves followed by dedented
+//     code, plus marker-only lines inside nested items, judged against markdown-it 14 in both directions; both fence
+//     options; shape checked.
+for (const treatUnclosedAsFence of [true, false]) {
+  test(`Root ca1986be literal: dedented code inside the outer item ends the inner item, so a comment in it hides its route (treatUnclosedAsFence=${treatUnclosedAsFence})`, () => {
+    const input = '- 12345. <div>\n      <!--\n         [H](docs/H.md)\n      -->\n';
+    const out = maskNonProse(input, { treatUnclosedAsFence });
+    assertShape(input, out);
+    assert.equal(out.includes('docs/H.md'), false, `route leaked: ${JSON.stringify(out)}`);
+  });
+}
+test('a leaf start closes the containers its line did not match, for code and marker-only lines, as markdown-it reads it', async () => {
+  const { default: MarkdownIt } = await import('markdown-it');
+  const md = new MarkdownIt('commonmark');
+  const docs = [];
+  for (const outer of ['- ', '1. ', '> ']) for (const inner of ['12345. ', '1. ', '- ', '10) ']) for (const leaf of ['<div>', '```', 'text', '<!-- x -->']) {
+    for (const extra of [4, 5, 6]) {
+      const q = outer === '> ' ? '> ' : '';
+      const base = outer === '> ' ? 0 : outer.length;
+      const code = q + ' '.repeat(base + extra);
+      const deep = q + ' '.repeat(base + inner.length + 1);
+      docs.push(`${outer}${inner}${leaf}\n${code}<!--\n${deep}[R](docs/R.md)\n${code}-->\n[R](docs/R.md)\n`);
+    }
+  }
+  for (const outer of ['- ', '> ']) for (const inner of ['- ', '1. ']) for (const mk of ['-', '>', '1.']) {
+    const p = outer === '> ' ? '> ' : '  ';
+    docs.push(`${outer}${inner}a \`\n${p}${mk}\n${p}  [R](docs/R.md) \`\n`);
+  }
+  let checked = 0;
+  for (const input of docs) {
+    const links = md.render(input).split('href="docs/R.md"').length - 1;
+    for (const treatUnclosedAsFence of [true, false]) {
+      const out = maskNonProse(input, { treatUnclosedAsFence });
+      assertShape(input, out);
+      const kept = out.split('docs/R.md').length - 1;
+      assert.ok(kept <= links, `route kept that markdown-it does not render (${kept} > ${links}): ${JSON.stringify(input)}`);
+      assert.ok(kept >= links, `rendered route masked (${kept} < ${links}): ${JSON.stringify(input)}`);
+      checked += 1;
+    }
+  }
+  assert.equal(checked, (3 * 4 * 4 * 3 + 2 * 2 * 3) * 2);
+});

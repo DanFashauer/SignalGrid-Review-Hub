@@ -38,8 +38,8 @@
 // THE KEY. A build worker writes "FIX PROPOSED <date> (branch <X>, …)" into
 // the row ON branch X, in the same commit or series as the fix. So the
 // annotation text is a tracer. Per ROW, not per string: `git log -L` follows
-// the annotation's own lines back to the oldest commit whose added text
-// carries it (a second row carrying the same string has its own history, so
+// the annotation's own lines back to the commit that introduced it (the newest
+// fresh addition of its text) (a second row carrying the same string has its own history, so
 // a copy pasted or moved there later by another PR is attributed to THAT PR).
 // The first first-parent commit of the tip descending from it is the commit
 // that landed it: `Merge pull request #N`, a custom-titled merge, or a squash commit `… (#N)`,
@@ -94,18 +94,13 @@
 //     box, is CLOSED-RESIDUE, not STALE.
 //   - CEILING, not caught: a fix that landed and was later reverted reads
 //     STALE. A regression is a different question; the re-read owns it.
-//   - CEILING, both directions: an identical annotation removed and later
-//     re-added is credited to its EARLIER adding commit (the oldest match in
-//     the line history). That over-reports when the earlier addition landed
-//     via a PR (an in-flight re-add can read STALE), and under-reports,
-//     silently, when it did not: a re-add that then lands via a PR still reads
-//     not landed via a PR. Backlog row "credits a removed-then-re-added
-//     identical annotation" tracks the fix.
-//   - CEILING, never hidden: a cited root-level or extensionless path the
-//     landing DELETES is neither in the landing's tree nor in slash-and-
-//     extension form, so it cannot corroborate; the annotation reads READ
-//     (read by hand). Backlog row "a cited root-level or extensionless path
-//     the landing deletes" tracks the fix.
+//   - A removed-then-re-added identical annotation is credited to the RE-ADD
+//     (the newest commit whose added text carries the key while its removed
+//     text did not), not the earlier commit. CEILING: a re-add made by a merge
+//     commit's own edit, or in the same hunk as a removal of the key, reads
+//     as the earlier addition (the oldest match is kept as the fallback).
+//   - A cited root-level or extensionless path the landing DELETES corroborates:
+//     the landing's own diff (--diff-filter=D) counts alongside its tree.
 //
 // FAIL-CLOSED, IN THE DIRECTION A REPORTER CAN BE: a shallow clone (CI's
 // default checkout) cannot walk history, so the real-tree run prints NOT
@@ -291,17 +286,28 @@ export function findAnnotations(file, text) {
   return out;
 }
 
-/** Oldest commit in THIS row's line history whose added text carries the annotation. */
+/**
+ * The commit in THIS row's line history that INTRODUCED the annotation: the most recent commit
+ * whose added text carries the key while its removed text did not (a fresh addition, so a key that
+ * was deleted and written again is credited to the re-add, not the earlier commit). A commit that
+ * removes and re-adds the key in one hunk (a rewrap, an edit elsewhere on the line) keeps the
+ * earlier credit. If no commit reads as a fresh addition, the oldest adding commit is kept.
+ */
 function introOf(cwd, a) {
   const log = git(cwd, ["log", "--format=C %H", `-L${a.line},${a.lastLine}:${a.file}`, "HEAD"]);
-  let cur = null, added = [], found = null;
-  const flush = () => { if (cur && norm(added.join("\n")).includes(a.key)) found = cur; };
+  let cur = null, added = [], removed = [], fresh = null, oldest = null;
+  const flush = () => {
+    if (!cur || !norm(added.join("\n")).includes(a.key)) return;
+    oldest = cur; // log is newest-first, so the last match is the oldest
+    if (fresh === null && !norm(removed.join("\n")).includes(a.key)) fresh = cur; // the first fresh match is the newest
+  };
   for (const l of log.split("\n")) {
-    if (l.startsWith("C ")) { flush(); cur = l.slice(2); added = []; continue; }
+    if (l.startsWith("C ")) { flush(); cur = l.slice(2); added = []; removed = []; continue; }
     if (l.startsWith("+") && !l.startsWith("+++")) added.push(l.slice(1));
+    else if (l.startsWith("-") && !l.startsWith("---")) removed.push(l.slice(1));
   }
   flush();
-  return found; // log is newest-first, so the last match is the oldest
+  return fresh ?? oldest;
 }
 
 const fpCache = new Map();
@@ -345,7 +351,9 @@ const treeCache = new Map();
 function citedAt(cwd, a, land) {
   if (!treeCache.has(land)) treeCache.set(land, new Set(git(cwd, ["ls-tree", "-r", "--name-only", land]).split("\n")));
   const tree = treeCache.get(land);
-  return [...a.cited, ...a.tokens.filter((t) => tree.has(t))];
+  // A path the landing itself deletes is absent from its tree but is still what it changed.
+  const gone = new Set(git(cwd, ["diff", "--name-only", "--no-renames", "--diff-filter=D", `${land}^1`, land]).split("\n").filter(Boolean));
+  return [...a.cited, ...a.tokens.filter((t) => tree.has(t) || gone.has(t))];
 }
 
 /** Offline evidence of which branch a landing PR came from: "match" | "mismatch" | "unknown". */
@@ -642,13 +650,14 @@ function selfTest() {
     if (how === "squash") { g("merge", "-q", "--squash", branch); g("add", "-A"); gAs(["GitHub", "noreply@github.com"], "commit", "-qm", `squash ${branch} (#${n})`); }
     else gAs(GH, "merge", "-q", "--no-ff", "-m", how === "default" ? `Merge pull request #${n} from o/${branch}` : `Merge pull request #${n}: ${branch}`, branch);
   };
-  const ids = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "30", "31", "32", "33", "34", "35", "36", "37", "38", "39", "40", "41", "42", "43", "44", "45", "46", "47", "48", "49", "50", "51", "52", "53", "54", "55", "57", "58", "59", "60", "61", "62", "63"];
+  const ids = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "30", "31", "32", "33", "34", "35", "36", "37", "38", "39", "40", "41", "42", "43", "44", "45", "46", "47", "48", "49", "50", "51", "52", "53", "54", "55", "57", "58", "59", "60", "61", "62", "63", "64", "65"];
   const checks = [];
   try {
     g("init", "-q", "-b", "main");
     write(plan, "## Global backlog\n\n" + ids.map((n) => row(n)).join("\n") + "\n\n## Owner hands\n\nNotes.\n");
     write(backlog, "Intro prose.\n- [x] **Done** — closed.\n- [x] **Parent** — closed.\n  - [ ] **Child** — open.\n- [x] **Closed parent** — closed.\n- [ ] Plain open box — open.\n- [ ] **Box P** — open.\n- [ ] **Box Q** — open.\n");
     for (const f of ["a", "b", "c", "d", "z", "old"]) write(`scripts/${f}.mjs`, `0 ${f}\n`);
+    write("Makefile", "all:\n");
     commit("base");
     const baseSha = g("rev-parse", "HEAD");
     // 1: annotation + fix on the branch, merged as a PR — STALE. Also lands the closed box's residue.
@@ -807,6 +816,12 @@ function selfTest() {
       edit(backlog, "Intro prose.", "Intro prose." + ann("claude/r19", "scripts/a.mjs"));
       write("scripts/a.mjs", "60\n"); rmSync(join(dir, "scripts/z.mjs")); g("mv", "scripts/old.mjs", "scripts/new.mjs");
     });
+    // 64: an annotation lands via PR #61, a docs-only PR #62 deletes it, and the worker re-adds the identical
+    // text in flight (below): the re-add is the introducing commit, so the row is NOT-VIA-PR, never PR #61's STALE.
+    pr("claude/readd-first", 61, () => { edit(plan, row(64), row(64) + ann("claude/readd", "scripts/d.mjs")); write("scripts/d.mjs", "64\n"); });
+    pr("claude/readd-delete", 62, () => edit(plan, row(64) + ann("claude/readd", "scripts/d.mjs"), row(64)));
+    // 65: the landing deletes a cited root-level file (no slash-and-extension form, absent from the landing's tree) — STALE.
+    pr("claude/del-root", 63, () => { edit(plan, row(65), row(65) + ann("claude/del-root", "Makefile")); rmSync(join(dir, "Makefile")); });
     // 10: the worker's branch merged mainline in (a sync merge) before its PR landed — STALE via the PR.
     g("checkout", "-qb", "claude/fix-j"); edit(plan, row(10), row(10) + ann("claude/fix-j", "scripts/d.mjs")); write("scripts/d.mjs", "10\n"); commit("fix j");
     g("checkout", "-q", "main"); write("scripts/other.mjs", "x\n"); commit("unrelated mainline commit");
@@ -826,6 +841,7 @@ function selfTest() {
     edit(plan, row(30), row(30) + " FIX PROPOSED 2026-10-08 (PR #17): `scripts/a.mjs`.");
     // 57's second annotation, in flight on this branch: its own occurrence, not the landed first one.
     edit(plan, row(57) + ann("claude/twice", "scripts/a.mjs"), row(57) + ann("claude/twice", "scripts/a.mjs") + ann("claude/twice", "scripts/a.mjs"));
+    edit(plan, row(64), row(64) + ann("claude/readd", "scripts/d.mjs"));
     commit("fix 4 (#99)");
 
     const all = measure(dir);
@@ -878,6 +894,8 @@ function selfTest() {
     checks.push(["…stops at the next plan row: that row's path does not corroborate — READ", is("row 46", "LANDED-UNCORROBORATED", (r) => r.hit.length === 0)]);
     checks.push(["…stops at the next backlog box: that box's path does not corroborate — READ", is('"Box P"', "LANDED-UNCORROBORATED", (r) => r.hit.length === 0)]);
     checks.push(["a sha after a check-run id and prose, far into the clause, is still read — READ", is("row 48", "LANDED-UNCORROBORATED", (r) => r.claimSha === baseSha && notIn(r))]);
+    checks.push(["an annotation landed, deleted, then re-added in flight is credited to the RE-ADD — NOT-VIA-PR", is("row 64", "NOT-VIA-PR")]);
+    checks.push(["a cited root-level file the landing deletes corroborates (deleted in the landing's own diff) — STALE", is("row 65", "STALE", (r) => r.pr === 63 && r.hit.includes("Makefile"))]);
     for (const [k, path] of [["row 49", "package.json"], ["row 50", "Dockerfile"], ["row 51", ".githooks/pre-push"]]) {
       checks.push([`a cited ${path} tracked at the landing corroborates — STALE`, is(k, "STALE", (r) => r.pr === 50 && r.hit.includes(path))]);
     }
@@ -897,7 +915,7 @@ function selfTest() {
     checks.push(["a dated FIX PROPOSED in prose above the first backlog box is NOT MEASURED, not an open row", all.some((r) => r.file === backlog && r.row === "(no row)" && r.status === "NO-HISTORY" && /outside any ledger row/.test(r.why))]);
     checks.push(["a digits-only number in the clause (\"check run 1234567890\") is not read as a sha — STALE", is("row 35", "STALE", (r) => r.pr === 23 && r.claimSha === undefined)]);
     checks.push(["a PR-named row whose PR reached the worker's HEAD only through a sync merge is STALE", is("row 30", "STALE", (r) => r.pr === 17)]);
-    checks.push(["exactly the planted stale rows are flagged", JSON.stringify(stale) === JSON.stringify(['"Child"', '"Plain open box"', "row 1", "row 10", "row 11", "row 16", "row 19", "row 28", "row 30", "row 31", "row 32", "row 33", "row 35", "row 39", "row 43", "row 49", "row 5", "row 50", "row 51", "row 61", "row 62", "row 63", "row 7"])]);
+    checks.push(["exactly the planted stale rows are flagged", JSON.stringify(stale) === JSON.stringify(['"Child"', '"Plain open box"', "row 1", "row 10", "row 11", "row 16", "row 19", "row 28", "row 30", "row 31", "row 32", "row 33", "row 35", "row 39", "row 43", "row 49", "row 5", "row 50", "row 51", "row 61", "row 62", "row 63", "row 65", "row 7"])]);
     // The REPORTED line counts every bucket: one result of each kind gives a 1 in each place, 2 not measured.
     const kinds = ["STALE", "LANDED-UNCORROBORATED", "CLOSED-RESIDUE", "NOT-VIA-PR", "NO-HISTORY", "NO-LEDGER"];
     // Two more STALE results, one sharing r0's row: 3 stale annotations across 2 distinct rows.
@@ -1293,7 +1311,7 @@ function selfTest() {
   let failed = 0;
   for (const [name, ok] of checks) { console.log(`  ${ok ? "ok  " : "FAIL"} ${name}`); if (!ok) failed++; }
   console.log(`row-status-drift self-test: ${checks.length - failed}/${checks.length} passed`);
-  return failed === 0 && checks.length === 128;
+  return failed === 0 && checks.length === 130;
 }
 
 const isMain = isMainModule(process.argv[1], import.meta.url);

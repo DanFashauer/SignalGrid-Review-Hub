@@ -825,3 +825,34 @@ for (const treatUnclosedAsFence of [true, false]) {
     });
   }
 }
+
+// 18. Root on 50bde160 (4628234136): the block tag sets follow cmark-gfm 0.29 too. `source` is type 6 there and may
+//     interrupt an open paragraph, so H under it is hidden through the blank line; `search` is not (it is 0.31.2's),
+//     so inside a paragraph it is only an inline tag and V stays. Type 1 is pre/script/style only: a `<textarea>`
+//     line is type 7, which ends at a blank line, not at `</textarea>`, and cannot interrupt a paragraph.
+for (const treatUnclosedAsFence of [true, false]) {
+  for (const [name, input] of [
+    ['`<source>` interrupting a paragraph', 'intro\n<source>\n[H](docs/H.md)\n\n[V](docs/V.md)\n'],
+    ['`</SOURCE>` (closing, upper case) interrupting a paragraph', 'intro\n</SOURCE>\n[H](docs/H.md)\n\n[V](docs/V.md)\n'],
+    ['`<Source src="x">` interrupting a paragraph', 'intro\n<Source src="x">\n[H](docs/H.md)\n\n[V](docs/V.md)\n'],
+    ['a `<textarea>` type 7 block that runs past `</textarea>`', '<textarea>\n</textarea>\n[H](docs/H.md)\n\n[V](docs/V.md)\n'],
+  ]) {
+    test(`GFM tag sets: ${name} hides H, keeps V (treatUnclosedAsFence=${treatUnclosedAsFence})`, () => {
+      const out = maskNonProse(input, { treatUnclosedAsFence });
+      assertShape(input, out);
+      assert.ok(!out.includes('docs/H.md'), `hidden route kept: ${JSON.stringify(out)}`);
+      assert.ok(out.includes('[V](docs/V.md)'), `route lost: ${JSON.stringify(out)}`);
+    });
+  }
+  for (const [name, input] of [
+    ['`<search>` inside a paragraph', 'intro\n<search>\n[V](docs/V.md)\n'],
+    ['`</Search>` inside a paragraph', 'intro\n</Search>\n[V](docs/V.md)\n'],
+    ['`<textarea>` inside a paragraph', 'intro\n<textarea>\n[V](docs/V.md)\n'],
+  ]) {
+    test(`GFM tag sets control: ${name} is not a block, V kept (treatUnclosedAsFence=${treatUnclosedAsFence})`, () => {
+      const out = maskNonProse(input, { treatUnclosedAsFence });
+      assertShape(input, out);
+      assert.ok(out.includes('[V](docs/V.md)'), `route lost: ${JSON.stringify(out)}`);
+    });
+  }
+}

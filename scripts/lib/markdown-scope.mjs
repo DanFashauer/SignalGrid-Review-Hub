@@ -97,11 +97,13 @@ export function fencedLineFlags(lines, { treatUnclosedAsFence = true } = {}) {
   return flags;
 }
 
-// CommonMark 0.31.2 §4.6 HTML block start conditions, tested on a line after its 0–3 space indent.
+// HTML block start conditions (§4.6), tested on a line after its 0–3 space indent, in cmark-gfm 0.29's forms — the
+// grammar this module targets (scanners.re at 0.29.0.gfm.0 and .13): type 1 is pre/script/style only (`textarea`
+// joined in CommonMark 0.30), and the type 6 set has `source` and not `search` (0.31.2 swapped them). Root on #2368.
 const HTML_TYPE6_TAGS = new Set(
   ("address article aside base basefont blockquote body caption center col colgroup dd details dialog dir div dl dt " +
     "fieldset figcaption figure footer form frame frameset h1 h2 h3 h4 h5 h6 head header hr html iframe legend li " +
-    "link main menu menuitem nav noframes ol optgroup option p param search section summary table tbody td tfoot th " +
+    "link main menu menuitem nav noframes ol optgroup option p param section source summary table tbody td tfoot th " +
     "thead title tr track ul").split(" "),
 );
 // Separators inside a block-start tag follow cmark-gfm 0.29's `spacechar` (space, tab, VT, FF; scanners.re), the
@@ -353,7 +355,7 @@ function htmlBlockStart(line, inParagraph) {
   if (!m) return null;
   const rest = m[1];
   const col = line.length - rest.length;
-  if (/^<(?:pre|script|style|textarea)(?:[ \t\v\f>]|$)/i.test(rest)) return { type: 1, col, end: /<\/(?:pre|script|style|textarea)>/i };
+  if (/^<(?:pre|script|style)(?:[ \t\v\f>]|$)/i.test(rest)) return { type: 1, col, end: /<\/(?:pre|script|style)>/i };
   if (rest.startsWith("<!--")) return { type: 2, col, end: "-->" };
   if (rest.startsWith("<?")) return { type: 3, col, end: "?>" };
   if (/^<![A-Z]/.test(rest)) return { type: 4, col, end: ">" };
@@ -362,7 +364,7 @@ function htmlBlockStart(line, inParagraph) {
   if (t6 && HTML_TYPE6_TAGS.has(t6[1].toLowerCase())) return { type: 6, col };
   if (!inParagraph) {
     const t7 = TYPE7_OPEN.exec(rest) || TYPE7_CLOSE.exec(rest);
-    if (t7 && !/^(?:pre|script|style|textarea)$/i.test(t7[1])) return { type: 7, col };
+    if (t7 && !/^(?:pre|script|style)$/i.test(t7[1])) return { type: 7, col };
   }
   return null;
 }

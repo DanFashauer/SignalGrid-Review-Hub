@@ -114,6 +114,9 @@ jobs:
           if [ -n "$BASE" ]; then git fetch --no-tags --depth=1 origin "$BASE" || echo "base fetch failed; runner will report SKIPPED"; fi
           node scripts/check-local-build-regressions.mjs --changed --base-optional --base "${BASE:-none}" --head HEAD
 
+      - name: Local-brain regression suite (shared runner; every tracked build regression keeps running after it lands)
+        run: node scripts/check-local-build-regressions.mjs --suite scripts/mac/local-brain/test
+
       - name: Invariant review self-test (a default-less switch / stray clock read must fail)
         run: node scripts/review-invariants.mjs --self-test
       - name: Invariant review (fail-closed / determinism / Assist / truth)

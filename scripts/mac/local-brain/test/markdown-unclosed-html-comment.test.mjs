@@ -979,3 +979,39 @@ for (const treatUnclosedAsFence of [true, false]) {
     });
   }
 }
+
+// 23. Root on 2201bb6a: the whole class of paragraph-interrupting container starts, with positive controls for
+//     genuine same-paragraph spans, lazy continuation and markers that cannot interrupt. Each expectation was
+//     checked against markdown-it 14 (commonmark); under both fence options, shape checked.
+for (const treatUnclosedAsFence of [true, false]) {
+  for (const [name, input] of [
+    ['a `*` bullet interrupting', '`\n* item\n[V](docs/V.md)\n`\n'],
+    ['a `+` bullet interrupting', '`\n+ item\n[V](docs/V.md)\n`\n'],
+    ['a `1)` ordered item interrupting', '`\n1) item\n[V](docs/V.md)\n`\n'],
+    ['a block quote indented three spaces', '`\n   > quote\n[V](docs/V.md)\n`\n'],
+    ['a block quote with no space after `>`', '`\n>quote\n[V](docs/V.md)\n`\n'],
+    ['a code span closed inside the interrupting item', '`a\n- `b` [V](docs/V.md)\n'],
+  ]) {
+    test(`interrupting container: ${name} keeps V (treatUnclosedAsFence=${treatUnclosedAsFence})`, () => {
+      const out = maskNonProse(input, { treatUnclosedAsFence });
+      assertShape(input, out);
+      assert.ok(out.includes('[V](docs/V.md)'), `route lost: ${JSON.stringify(out)}`);
+    });
+  }
+  for (const [name, input] of [
+    ['a code span across two lines of one plain paragraph', '`a\n[H](docs/H.md)`\n'],
+    ['a code span across two block-quote lines', '> `a\n[H](docs/H.md)`\n'],
+    ['a code span across a lazy continuation line', '> `a\nlazy [H](docs/H.md)`\n'],
+    ['an ordered `10.` item (cannot interrupt)', '`\n10. item\n[H](docs/H.md)\n`\n'],
+    ['a dash with no space (not a list marker)', '`\n-x\n[H](docs/H.md)\n`\n'],
+    ['a block quote indented four spaces (continuation)', '`\n    > quote\n[H](docs/H.md)\n`\n'],
+    ['an empty ordered item `1.` (cannot interrupt)', '`\n1.\n[H](docs/H.md)\n`\n'],
+    ['a comment across two list-item lines', '- <!-- a\n  [H](docs/H.md) -->\n'],
+  ]) {
+    test(`non-interrupting control: ${name} hides H (treatUnclosedAsFence=${treatUnclosedAsFence})`, () => {
+      const out = maskNonProse(input, { treatUnclosedAsFence });
+      assertShape(input, out);
+      assert.ok(!out.includes('docs/H.md'), `hidden route kept: ${JSON.stringify(out)}`);
+    });
+  }
+}

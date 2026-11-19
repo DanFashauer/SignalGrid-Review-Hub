@@ -102,6 +102,9 @@ const TYPE7_OPEN = new RegExp(String.raw`^<([A-Za-z][A-Za-z0-9-]*)${ATTR}*[ \t]*
 const TYPE7_CLOSE = /^<\/([A-Za-z][A-Za-z0-9-]*)[ \t]*>[ \t]*$/;
 // A thematic break (§4.1) and a setext underline (§4.3) end a paragraph, so a type 7 block may start after one.
 const THEMATIC_BREAK = /^ {0,3}(?:(?:\*[ \t]*){3,}|(?:-[ \t]*){3,}|(?:_[ \t]*){3,})$/;
+// An inline comment (§6.6) is `<!-->`, `<!--->`, or `<!--` … `-->`. A browser also ends a comment at `--!>`, so the
+// mask stops there too: text a reader may see is never hidden from the gates (fail-closed: mask less, not more).
+const INLINE_COMMENT = /<!--(?:-?>|[\s\S]*?--!?>)/g;
 const SETEXT_UNDERLINE = /^ {0,3}(?:=+|-+)[ \t]*$/;
 
 /**
@@ -253,7 +256,7 @@ export function maskNonProse(text, { treatUnclosedAsFence = true } = {}) {
     let j = i;
     while (j + 1 < lines.length && segment[j + 1] === segment[i] && segment[i] >= 0) j += 1;
     let chunk = lines.slice(i, j + 1).join("\n");
-    if (segment[i] >= 0) chunk = chunk.replace(/<!--[\s\S]*?-->/g, blank);
+    if (segment[i] >= 0) chunk = chunk.replace(INLINE_COMMENT, blank);
     masked.push(chunk);
     i = j + 1;
   }

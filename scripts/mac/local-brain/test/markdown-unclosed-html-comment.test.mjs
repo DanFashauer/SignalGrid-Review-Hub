@@ -395,3 +395,24 @@ test('control: a CR is a line ending, but an NBSP line is still not blank', () =
   const lines = out.split('\n');
   assert.equal(lines[lines.length - 2], '[visible](docs/V.md)', `route lost: ${JSON.stringify(out)}`);
 });
+
+// 3. Inline comments: `<!-->` and `<!--->` are complete (empty) comments, and `--!>` ends a comment in a browser.
+for (const [name, input, expectVisible] of [
+  ['an empty <!--> comment', 'Lead <!--> [visible](docs/V.md) <!-- hidden -->\n', '[visible](docs/V.md)'],
+  ['an empty <!---> comment', 'Lead <!---> [visible](docs/V.md) <!-- hidden -->\n', '[visible](docs/V.md)'],
+  ['a comment closed by --!>', 'Lead <!-- hidden --!> [visible](docs/V.md) -->\n', '[visible](docs/V.md)'],
+]) {
+  test(`inline: text after ${name} stays visible`, () => {
+    const out = maskNonProse(input);
+    assertShape(input, out);
+    assert.ok(out.includes(expectVisible), `route lost: ${JSON.stringify(out)}`);
+    assert.ok(!out.includes('hidden'), `comment body leaked: ${JSON.stringify(out)}`);
+  });
+}
+
+test('control: an ordinary inline <!-- … --> and a <!----> comment are still masked whole', () => {
+  const input = 'Lead <!-- hidden --> and <!----> [visible](docs/V.md)\n';
+  const out = maskNonProse(input);
+  assertShape(input, out);
+  assert.ok(out.includes('[visible](docs/V.md)') && !out.includes('hidden'), JSON.stringify(out));
+});

@@ -1,0 +1,15 @@
+{
+  "id": "2026-11-19-no-hosted-macos-26-intel-runner-is-being-assigne",
+  "raisedAt": "2026-11-19T21:37:14.579Z",
+  "origin": "cloud",
+  "doing": "Landing #2404 (bench barrier), #2401 (proof-count diagnostic) and #2368 (parser) under DR-037; each needs a real OPEN Mac aggregate on its exact head",
+  "blockedBy": "No hosted macos-26-intel runner is being assigned: at ~21:40Z mac-runner-auto.yml had 0 runs in_progress and 7 queued (oldest 44595771543 since 19:11Z; #2404 run 44611490523 since 20:43Z). Mac jobs did run earlier today (#2390 success 20:29Z). Cause not visible from the public API.",
+  "need": "Owner checks GitHub Settings → Billing → Actions usage (macOS minutes / spending limit / concurrency) and githubstatus.com for a macOS runner incident, then restores hosted macOS capacity",
+  "whoCanUnblock": "owner",
+  "domain": "ci",
+  "status": "resolved",
+  "routedTo": null,
+  "resolvedAt": "2026-11-19T21:57:50.493Z",
+  "resolvedBy": "cloud",
+  "resolution": "Withdrawn as written, by the cloud lane that raised it: the premise was wrong. Job-level GETs at 2026-11-19T21:57:16Z show hosted macos-26-intel runners WERE being assigned throughout, at low concurrency (about two slices at a time), not zero. Run 44595771543 (#2393) slices started 19:36:18Z, 21:16:08Z, 21:23:34Z, 21:43:59Z; run 44579263422 (#2389, attempt 3) slices started 20:58:32Z, 21:16:44Z, 21:27:38Z, 21:40:22Z, each on a GitHub Actions runner. The original text also gave an approximate observation time (~21:40Z) later than the hand's own raisedAt (21:37:14Z) and a seven-run count that omitted one listed run; both are corrected here and the original record is kept. At 21:57:16Z, 2 runs were in_progress and 6 PR-era runs plus stale 43096690821 were queued; #2368's 44619503429 has four queued slices. The low concurrency's cause is not established from the public API and no owner action is claimed or requested. Nothing was cancelled or re-run."
+}

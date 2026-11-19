@@ -425,7 +425,7 @@ export const MUTANTS = [
   ["external --from is not reported", "scripts/lib/shipped-imports.mjs", "res.dropped.push(`COPY --from=${op.fromStage} (not an earlier stage of this Dockerfile)`);", "void 0;"],
   ["ADD ignored", "scripts/lib/shipped-imports.mjs", "if (ins === \"COPY\" || ins === \"ADD\") {", "if (ins === \"COPY\") {"],
   ["instructions case-sensitive", "scripts/lib/shipped-imports.mjs", "const ins = m[1].toUpperCase();", "const ins = m[1];"],
-  ["backslash continuations not joined", "scripts/lib/shipped-imports.mjs", "const joinContinuations = (text) => text.replace(/\\\\[ \\t]*\\r?\\n/g, \" \");", "const joinContinuations = (text) => text;"],
+  ["backslash continuations not joined", "scripts/lib/shipped-imports.mjs", "    .replace(/\\\\[ \\t]*\\r?\\n/g, \" \");", "    .replace(/(?!)/g, \" \");"],
   ["globs not expanded", "scripts/lib/shipped-imports.mjs", "if (/[*?]/.test(s)) {", "if (false) {"],
   ["comments joined into continuations (SI-3)", "scripts/lib/shipped-imports.mjs", '    .filter((l) => !l.trim().startsWith("#"))\n', ""],
   ["non-string JSON COPY element unchecked (SI-1)", "scripts/lib/shipped-imports.mjs", 'parts.some((p) => typeof p !== "string")', "false"],

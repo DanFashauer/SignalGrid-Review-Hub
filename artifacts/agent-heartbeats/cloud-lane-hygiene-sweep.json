@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-11-18T09:44:33.684Z",
-  "result": "09:41Z keepalive (prior 2026-11-16 09:54Z). pnpm store prune removed 1 package/60 files; 2.4G free (94% of allowance). Deleting node_modules in day-old scratch clones was refused by this session's permission classifier and not retried; free space stays above the 1GB escalation bound, so no owner message."
+  "firedAt": "2026-11-19T09:46:01.189Z",
+  "result": "09:41Z sweep freed ~2.1G: 20 clean worktrees of landed work removed (git worktree remove, no force), 173 day-old scratch files, pnpm store prune 1 package/60 files; 368M -> 2.5G free."
 }

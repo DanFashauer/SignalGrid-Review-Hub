@@ -124,7 +124,8 @@ function verdictSignature(core: Core, w: Workload): string {
 
 /**
  * Fingerprint the verdicts, then warm the loop up. Untimed, and done BEFORE a worker reports ready, so the
- * barrier below releases warmed workers and every timed window starts at the release (the header's contract;
+ * barrier below releases warmed workers and each timed window starts following the release, with its skew measured
+ * and reported (the header's contract;
  * before 2026-11-19 the warm-up ran after the release, so each worker's window started whenever its own
  * warm-up ended — #2387).
  */
@@ -217,7 +218,8 @@ async function runWorker(durationMs: number): Promise<void> {
   const core = workload.SignalGridCore.demo();
   const port = parentPort;
   if (!port) throw new Error("worker started without a parent port");
-  // Warm before reporting ready: the release must start every timed window, not a staggered warm-up.
+  // Warm before reporting ready, so each timed window starts following the release (skew measured), not after a
+  // staggered warm-up.
   const signature = prepare(core, workload);
 
   port.on("message", (message: string) => {

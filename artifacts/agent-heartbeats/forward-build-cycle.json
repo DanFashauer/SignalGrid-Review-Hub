@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-11-19T18:11:17.337Z",
-  "result": "acted: wave harvest 6 PRs up (#2388 B1 H, #2389 B6 S, #2390 B7 S, #2391 B3 S, #2392 B8 S, #2393 B2 S); Sonnet review LAND x5, FIX x1 (#2390 posted); Opus refute running on the 5 landers; no refill (no slot freed: none landed yet); in flight H/S/O = 0/1/1 building (B4 S, B5 O) + 6 PRs in review; landed 0 this fire; parser #2368 successor 599e27ed in source review; sub-brains: not read this fire (no other-repo API in this session); owner queue: B5 JWT/JWKS PR when it opens"
+  "firedAt": "2026-11-19T20:13:14.525Z",
+  "result": "20:10Z fire. acted: published proof-count diagnostic as #2401 (full chain passed 25bf37ec, heartbeat catch-up 4c196dce, Root source close rebound); parser 72ba00cd source-closed by Root; bench final base 89321e04 captured, full chain running. Wave: 8 workers idle in flight (H/S/O = 1/6/1), 0 landed, 0 to owner this fire; all 8 PRs (#2388-#2394, #2396) green on the scaffold gate and WAITING-MAC (slices queued/in progress; #2396 slice 1 cancelled). No refill: 8/8 slots held. sub-brains: not read (other repositories not in this session's scope). owner queue: #2396 (auth path, owner merge after Mac)."
 }

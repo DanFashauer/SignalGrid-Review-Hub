@@ -435,6 +435,11 @@ if (process.argv.includes("--self-test")) {
   const failed = checks.filter(([, k]) => !k);
   for (const [n, k] of checks) console.log(`  ${k ? "ok" : "FAIL"} — self-test: ${n}`);
   console.log(`\nself-test ${failed.length === 0 ? "passed" : "FAILED"} (${checks.length - failed.length}/${checks.length})`);
+  // Wait for the writes above to drain BEFORE exiting: with stdout a pipe, process.exit() straight after
+  // hundreds of console.log lines can drop the tail, including the pass line the CI wrapper and
+  // preflight require (measured: a 2000-line child lost it 4/15 under spawnSync pipes). The body
+  // below must not run after a self-test, so this cannot become a bare exitCode-and-continue.
+  await new Promise((done) => process.stdout.write("", done));
   process.exit(failed.length === 0 ? 0 : 1);
 }
 

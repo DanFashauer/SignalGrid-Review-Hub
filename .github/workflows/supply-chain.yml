@@ -78,7 +78,7 @@ jobs:
       - name: Generate SBOM
         run: pnpm run sbom
       - name: Licence policy self-test (the gate must be able to fail)
-        run: node scripts/check-licence-policy.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-licence-policy.mjs --self-test
       - name: Licence policy (every component's licence resolves to a declared class)
         run: node scripts/check-licence-policy.mjs
 

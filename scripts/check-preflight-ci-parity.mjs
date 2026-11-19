@@ -768,11 +768,10 @@ if (ciJobs.length < CI_JOB_FLOOR) {
 // ── Every review-hub-ci self-test step asserts its pass line ─────────────────
 // preflight fails a `--self-test` step that exits 0 without printing its pass line (classifyStep's
 // `expect`); the CI twin is scripts/lib/expect-output.mjs. A bare `node … --self-test` line passes CI
-// on exit code alone, so it is reported here, in the one workflow that carries the self-test steps.
+// on exit code alone, so it is reported here for the two workflows that run node self-test steps (python/tsx steps in ios-ci and phase-pr-evidence are not covered).
 {
-  const hubCi = readFileSync(join(WORKFLOW_DIR, "review-hub-ci.yml"), "utf8");
-  for (const bare of unwrappedSelfTests(hubCi)) {
-    console.error(`  ✗ review-hub-ci.yml runs \`${bare}\` on exit code alone — prefix it with \`node scripts/lib/expect-output.mjs\` so exit 0 without the pass line fails the step.`);
+  for (const wf of ["review-hub-ci.yml", "supply-chain.yml"]) for (const bare of unwrappedSelfTests(readFileSync(join(WORKFLOW_DIR, wf), "utf8"))) {
+    console.error(`  ✗ ${wf} runs \`${bare}\` on exit code alone — prefix it with \`node scripts/lib/expect-output.mjs\` so exit 0 without the pass line fails the step.`);
     problems += 1;
   }
 }

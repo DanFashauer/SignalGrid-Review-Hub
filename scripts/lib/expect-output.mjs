@@ -11,6 +11,9 @@
 //   node scripts/lib/expect-output.mjs --self-test    runs the wrapper's own fixtures.
 
 import { spawnSync } from "node:child_process";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { isMainModule } from "./is-main.mjs";
 import { expectFor } from "./preflight-verdict.mjs";
 
@@ -36,6 +39,23 @@ function selfTest() {
     ["a signal kill fails", judge({ cmd, status: null, signal: "SIGKILL", combined: "" }).code === 1],
     ["a command with no declared expectation is refused", judge({ cmd: ["node", "scripts/x.mjs"], status: 0, combined: "ok" }).code === 2],
   ];
+  // A child that prints a lot and then exits must still deliver its pass line through a pipe. The old
+  // shape (console.log × N, then a bare process.exit) loses the tail intermittently on a pipe, so it
+  // is not asserted RED here (a flaky RED is not a check); the flushed shape is asserted 20/20, and the
+  // gate that had the old shape (review-invariants) is pinned to the flushed one.
+  const dir = mkdtempSync(join(tmpdir(), "expect-output-"));
+  try {
+    const flushed = join(dir, "flushed.mjs");
+    writeFileSync(flushed, 'for (let i = 0; i < 2000; i++) console.log("  ok — line " + i + " ".repeat(60));\nconsole.log("big self-test passed (2000/2000)");\nawait new Promise((d) => process.stdout.write("", d));\nprocess.exit(0);\n');
+    let lost = 0;
+    for (let i = 0; i < 20; i++) {
+      const r = spawnSync("node", [flushed, "--self-test"], { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+      if (judge({ cmd: ["node", flushed, "--self-test"], status: r.status, signal: r.signal, error: r.error, combined: `${r.stdout}${r.stderr}` }).code !== 0) lost += 1;
+    }
+    checks.push(["a flushed 2000-line child delivers its pass line 20/20 through the wrapper's pipe", lost === 0]);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+  const ri = readFileSync(new URL("../review-invariants.mjs", import.meta.url), "utf8");
+  checks.push(["review-invariants flushes stdout before its self-test exit (no bare process.exit after the verdict line)", /self-test \$\{failed[^\n]*\n\s*(?:\/\/[^\n]*\n\s*)*await new Promise\(\(done\) => process\.stdout\.write\(""[^\n]*\n\s*process\.exit\(failed/.test(ri)]);
   const bad = checks.filter(([, ok]) => !ok);
   for (const [name, ok] of checks) console.log(`  ${ok ? "✓" : "✗"} ${name}`);
   if (bad.length) { console.error(`expect-output self-test: ${bad.length} FAILED`); process.exit(1); }

@@ -267,10 +267,12 @@ const FENCE_OPEN = /^(?:`{3,}(?!.*`)|~{3,})/;
  */
 function containerRun(lines, interrupted, outer = []) {
   const out = [];
-  // { quote: true } or { col } (a list item's content column). `outer` holds the content columns of the top-level
+  // { quote: true } or { col } (a list item's content column, counted from where its enclosing containers' content
+  // starts, so a quote marker indented differently on a later line still finds it; Codex on 35ecaec9: `  > - a`
+  // then `>   ~~~` puts the fence in the item). `outer` holds the content columns of the top-level
   // list items already open where the run starts, outermost first, so a later line that leaves them closes the leaf
   // they hold (Codex on da64fc4a: `- a`, a blank line, `  > <?x`, then `> [L]` at column 0 is a new quote).
-  const stack = outer.map((col) => ({ col }));
+  const stack = outer.map((col, k) => ({ col: col - (k ? outer[k - 1] : 0) }));
   // When a container interrupts a top-level paragraph, that paragraph is still open (id -1, the caller's segment).
   let leaf = interrupted ? { kind: "para", depth: 0, id: -1 } : { kind: "none" };
   let nextId = 0;
@@ -286,8 +288,9 @@ function containerRun(lines, interrupted, outer = []) {
         pos += m[0].length;
         if (text[pos] === " ") pos += 1;
       } else {
-        if (text.length < c.col || /[^ ]/.test(text.slice(pos, c.col))) break;
-        pos = c.col;
+        const need = pos + c.col;
+        if (text.length < need || /[^ ]/.test(text.slice(pos, need))) break;
+        pos = need;
       }
     }
     const allMatched = matched === stack.length;
@@ -355,7 +358,7 @@ function containerRun(lines, interrupted, outer = []) {
           const markerEnd = pos + indent + lm[0].length;
           const col = empty || pad >= 5 ? markerEnd + 1 : markerEnd + pad;
           stack.length = depth;
-          stack.push({ col });
+          stack.push({ col: col - pos });
           depth += 1;
           opened = true;
           pos = Math.min(col, text.length);
@@ -691,6 +694,12 @@ function blockRanges(lines, treatUnclosedAsFence, judgeDefinitions) {
         const fo = hm ? null : fenceOpener(first);
         if (hm && !(hm.end && endAfter(first, hm.end, hm.col + (hm.type === 2 ? 2 : 1)) >= 0)) markerLeaf = { kind: "html", end: hm.end, col: pos, start: i + 1 };
         else if (fo) markerLeaf = { kind: "fence", ch: fo.char, len: fo.len, col: pos, start: i + 1 };
+        // A marker line whose content is raw HTML or a fence holds no paragraph, so nothing after it continues one
+        // lazily or keeps its item open (Codex on 35ecaec9: `- <div>`, `x`, then a column-0 comment is top level).
+        if (hm || fo) {
+          inParagraph = false;
+          continue;
+        }
       }
     } else {
       itemCol[i] = items.length ? items[items.length - 1] : 0;
@@ -770,7 +779,9 @@ function blockRanges(lines, treatUnclosedAsFence, judgeDefinitions) {
       !(judgeDefinitions && allReferenceDefinitions(lines.slice(paraStart, i)))
     )
       inParagraph = false;
-    else if (!inParagraph && indentColumns(text) >= 4) inParagraph = false;
+    // Inside a list item the four columns count from its content column (Codex on 35ecaec9: `- # hi` then
+    // `    text` is a paragraph two columns into the item, not code).
+    else if (!inParagraph && indentColumns(text0) - (inItem ? itemCol[i] : 0) >= 4) inParagraph = false;
     else {
       if (!inParagraph) {
         paraStart = i;

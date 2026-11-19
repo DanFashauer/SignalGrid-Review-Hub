@@ -1319,3 +1319,55 @@ test('empty markers, marker-line blocks with blank lines, and container thematic
   }
   assert.equal(checked, (2 * 6 * 2 + 2 * 3 * 3 + 3 * 5 * 2 * 2 + 4 * 5 * 2 + 4 * 4 * 3 * 4 + 8 * 3) * 2);
 });
+
+// 30. Codex on 35ecaec9 (#2368). A list item's content column is counted from where its enclosing quote's content
+//     starts, so a quote marker indented differently on a later line still finds the item. A marker line whose
+//     content is raw HTML or a fence holds no paragraph, so a following column-0 line does not continue one lazily
+//     or keep the item open. Inside a list item the indented-code threshold counts from the item's content column.
+//     Exact literals first, then bounded families judged against markdown-it 14 in both directions; both fence
+//     options; shape checked.
+for (const treatUnclosedAsFence of [true, false]) {
+  for (const [name, input, route, kept] of [
+    ['a fence under a re-indented quote marker stays in the list item, so the route after it is visible', '  > - a\n>   ~~~\n> [V](docs/V.md)\n', 'docs/V.md', true],
+    ['a marker-line HTML block holds no paragraph, so a column-0 comment after lazy-looking text is top level', '- <div>\nx\n  <!--\n[H](docs/H.md)\n-->\n', 'docs/H.md', false],
+    ['text two columns into an item after a heading is a paragraph, so a type 7 tag does not start a block', '- # hi\n    text\n  <span>\n  [V](docs/V.md)\n', 'docs/V.md', true],
+  ]) {
+    test(`Codex 35ecaec9 literal: ${name} (treatUnclosedAsFence=${treatUnclosedAsFence})`, () => {
+      const out = maskNonProse(input, { treatUnclosedAsFence });
+      assertShape(input, out);
+      assert.equal(out.includes(route), kept, `route ${kept ? 'lost' : 'leaked'}: ${JSON.stringify(out)}`);
+    });
+  }
+}
+test('re-indented quote markers, marker-line blocks before column-0 text, and item-relative code agree with markdown-it', async () => {
+  const { default: MarkdownIt } = await import('markdown-it');
+  const md = new MarkdownIt('commonmark');
+  const docs = [];
+  // A list item inside a quote whose marker moves between lines.
+  for (const q1 of ['  > ', ' > ', '   > ', '> ']) for (const q2 of ['>', '> ', ' > ', '  > ']) for (const mk of ['- ', '1. ']) {
+    const c = ' '.repeat(mk.length);
+    for (const block of ['~~~', '<div>', 'text `']) docs.push(`${q1}${mk}a\n${q2}${c}${block}\n${q2}[R](docs/R.md)\n${q2}\`\n`);
+  }
+  // A marker line holding raw HTML or a fence, then a column-0 line, then a comment at two indents.
+  for (const mk of ['- ', '1. ', '* ']) for (const open of ['<div>', '<table>', '<span>', '<!-- a -->', '<script>x</script>', '```\n   ```']) {
+    for (const mid of ['x', 'x y']) for (const ind of ['', '  ']) docs.push(`${mk}${open}\n${mid}\n${ind}<!--\n[R](docs/R.md)\n-->\n[R](docs/R.md)\n`);
+  }
+  // A heading on the marker line, then a paragraph zero to three columns into the item, then a type 7 tag.
+  for (const mk of ['- ', '1. ', '* ']) for (const lead of ['# hi', '## x', '<!-- c -->']) for (const rel of [0, 1, 2, 3]) {
+    const c = ' '.repeat(mk.length);
+    for (const block of ['<span>', '</p>']) docs.push(`${mk}${lead}\n${c}${' '.repeat(rel)}text\n${c}${block}\n${c}[R](docs/R.md)\n`);
+  }
+  let checked = 0;
+  for (const input of docs) {
+    const links = md.render(input).split('href="docs/R.md"').length - 1;
+    for (const treatUnclosedAsFence of [true, false]) {
+      const out = maskNonProse(input, { treatUnclosedAsFence });
+      assertShape(input, out);
+      const kept = out.split('docs/R.md').length - 1;
+      assert.ok(kept <= links, `route kept that markdown-it does not render (${kept} > ${links}): ${JSON.stringify(input)}`);
+      assert.ok(kept >= links, `rendered route masked (${kept} < ${links}): ${JSON.stringify(input)}`);
+      checked += 1;
+    }
+  }
+  assert.equal(checked, (4 * 4 * 2 * 3 + 3 * 6 * 2 * 2 + 3 * 3 * 4 * 2) * 2);
+});

@@ -5654,3 +5654,32 @@ Output, verbatim:
 ```
 
 Verdict: #2326 merged from exact head `f2672f41` as `4506e3730144dfe792714bc570a9191786369084`, with parents `fb5e5a2d` and that head. The merge's tree `37cec42a` equals the head's tree. Both named check runs succeeded on the exact head. Follow-ups, not done here: the aggregate's partial-rerun defect; showing a discovery SKIPPED as distinct from ok; scrubbing the environment for test children; and a check-then-run window in the runner. Root's private adapter, an ordinary automatic publication and a later default cycle are still owed. Independent operation remains unverified.
+
+## 2026-11-19 — #2359 (6cbf8db3) landed under DR-037: the build-regression suite keeps landed tests running; public journal closeout
+
+Cloud merged #2359 under DR-037 at 06:22:25Z with `expectedHeadSha` `773491644dc6bd4681ab8234d3b1505262673598`, after re-reading the head. #2359 adds `--suite` to `scripts/check-local-build-regressions.mjs`, so tests under `scripts/mac/local-brain/test` keep running after they land. `scripts/check-test-execution.mjs` now credits a `--suite` registration only when preflight's real step list runs it. Preflight and the main CI workflow each gain the suite row. In preflight, the loop-state seam self-test and seven Lane proofs move to other Mac slices; no step itself changes. Root selected the repair on #439 (6996602497).
+
+**Preparation journal.** These records were made before the merge:
+- Local `node scripts/preflight.mjs` and `pnpm run verify:breadth` ran on the exact head in a clean worktree with frozen inputs, 05:16:27Z–05:49:33Z, and both exited 0 (PF_EXIT=0, 447 of 450 ok; BR_EXIT=0, 58 breadth proofs). The three steps that did not pass are named: two proofs self-skipped because `DATABASE_URL` is unset (`backup-restore` and `db-role-split`), and the mainline red-streaks check was NOT VERIFIED because the Actions API returned 401 locally. That check is fatal in CI. Receipt: #2359 comment 7000988822; log SHA-256 `559f5dbb…e20c` (preflight) and `7f428c37…bf1d` (breadth).
+- The complete public patch from `219268c7` was posted in #2359 comment 7000491844. Root's actual-head source review found no remaining selected-scope defect (review 5969984554). That review is a COMMENT, not an approval.
+- The physical ARM64 receipt for the exact head came from the Mac lane: harness 150 passed, 0 failed, 13 named skips; runner 95/95; suite 11 targets with 0 failures; test reachability 0 problems; tick stages 354/354 (#2359 comment 7001373393).
+- Codex reported no findings on `7734916`. The PR had 0 review threads.
+- Earlier heads are kept with their own outcomes. `219268c7` passed locally, but its Mac run 44453949390 failed: slice 3 reached the 1-hour job limit. `be7b9493` was interrupted and produced no result. `3de7dc28` failed preflight at "Claim-inventory anchors".
+
+Command: GitHub REST GETs run by the cloud lane at 2026-11-19T06:45:31Z, reduced to the fields shown: `pulls/2359`, `git/ref/heads/SignalGrid_Alpha`, `git/commits/6cbf8db3…`, `compare/6cbf8db3…...SignalGrid_Alpha`, `check-runs/135374124056` and `check-runs/135381967940`.
+Output, verbatim:
+
+```
+{"number":2359,"state":"closed","merged":true,"merged_at":"2026-11-19T06:22:25Z","merge_commit_sha":"6cbf8db328982d834e22f2fa4344a1c6c5791bb1","head":"773491644dc6bd4681ab8234d3b1505262673598","base":"SignalGrid_Alpha"}
+{"ref":"refs/heads/SignalGrid_Alpha","sha":"8e4d2aec2e3e105e6705f165cfce243871d700b8"}
+{"parents":["e3a310e90f6eaf904a7f35eeb2d0ce404a849b99","773491644dc6bd4681ab8234d3b1505262673598"],"sha":"6cbf8db328982d834e22f2fa4344a1c6c5791bb1","tree":"f41319ed8443f76cbb256883380e05e1506dae8b"}
+{"status":"ahead","ahead_by":2,"behind_by":0,"merge_base":"6cbf8db328982d834e22f2fa4344a1c6c5791bb1"}
+{"id":135374124056,"name":"Typecheck, build, and proof scaffold","head_sha":"773491644dc6bd4681ab8234d3b1505262673598","status":"completed","conclusion":"success","completed_at":"2026-11-19T06:01:32Z"}
+{"id":135381967940,"name":"PR — Mac-only checks (full-clone provenance, preflight on macOS)","head_sha":"773491644dc6bd4681ab8234d3b1505262673598","status":"completed","conclusion":"success","completed_at":"2026-11-19T06:21:29Z"}
+```
+
+**Postmerge journal.** The aggregate check `135381967940` completed at 06:21:29Z, before the 06:22:25Z merge, while the PR was open. Its four slice records in run 44467842512, attempt 1, bind the same head and tree `f41319ed`. Together they cover all 450 owned indices: 446 ok, two unavailable on darwin-x64 (Build 278 and Browser E2E 283, which current Linux CI ran and passed), and two DB self-skips. Slice 3, which had timed out on `219268c7`, completed at 06:07:53Z. The merge commit's tree equals the head's tree, and canonical `8e4d2aec` contains the merge (compare: merge base `6cbf8db3`, behind_by 0). The two later commits on canonical are a heartbeat (#2365).
+
+**Journal state.** The public journal for #2359 is closed by this entry once it is on `SignalGrid_Alpha`; until then this record is still in delivery. No private `merged_journal_complete` seal is claimed: the private journal stays Root-owned and is not asserted here.
+
+Verdict: #2359 merged from exact head `773491644dc6bd4681ab8234d3b1505262673598` as `6cbf8db328982d834e22f2fa4344a1c6c5791bb1`, with parents `e3a310e9` and that head, and tree `f41319ed` equal to the head's. Both named check runs succeeded on the exact head before the merge. This is one qualified landing. It is not independent operation: a fresh ordinary Mac task's automatic publication, its protected delivery and a later ordinary cycle are still owed. The Mac timeout repair #2364 landed afterwards, at 08:17:59Z, as `d60bc676a33dada4ef4563bc64eb72dd7bcf8f19`. The first fresh proof build after it, for #2370, stopped at 08:37:40Z before tests or publication: the supervisor refused an edit whose source plus test exceeded its 16,000-byte bound.

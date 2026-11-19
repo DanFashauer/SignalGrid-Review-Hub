@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-11-19T08:18:55.902Z",
-  "result": "acted (08:11Z fire): landed #2364 (d60bc676, DR-037, Mac's ask, aggregate 135430081990 green); #2368 candidate 1963c18d after three source-review rounds, awaiting its full run; #2359 record a982ed12 pending delivery. In flight H/S/O = 0/0/0 (wave deferred under owner priority: independent Mac operation). Sub-brains: none. Owner queue: none new."
+  "firedAt": "2026-11-19T10:11:48.618Z",
+  "result": "acted (10:11Z fire): #2368 took three more review rounds (CodeQL 276, Codex P2 x2, Root x2) -> candidate ca93a80b (123/123), awaiting the original 32c2efad full run then its own; hygiene #2372 merged (freed 2.1G at 368M free); #2359 record 20cb7a94 waits behind #2368. In flight H/S/O = 0/0/0 (wave deferred under owner priority: independent Mac operation; Root's #2370 repair qualification running). Sub-brains: signalgrid-mcp #17 open (owner-held workflow add), no new work. Owner queue: none new."
 }

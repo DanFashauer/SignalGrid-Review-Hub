@@ -50,13 +50,38 @@ fi
 # shellcheck source=/dev/null
 . "$SCRATCH/lock.sh" || exit 2
 
+# Custody of the host reservation (FD 9), phase by phase:
+#   readiness  bounded. Until the child reports its own session, no GROUP is ever signalled:
+#              only the one child pid is killed, and an unreaped child is handed to the custodian.
+#   work       bounded by the caller's seconds (124) or ended by a signal.
+#   reap       bounded. An unreaped leader still shows in the inspection below.
+#   verify     bounded. The owned group is KILLed again only when inspection POSITIVELY shows
+#              live members; a failed or slow inspection is uncertainty, never an empty group.
+#   custody    if the group is still live or unknown after the window, a detached custodian
+#              inherits this same FD 9 (same open file, same lock inode) and holds it until
+#              inspection positively reports the group empty. The supervisor then returns, so
+#              the step ends and its logs upload, while no other host chain can be admitted.
+#              If the custodian cannot be started, the supervisor keeps the reservation itself.
 ci_capped() {
-  exec perl -MPOSIX=setsid,WNOHANG -MTime::HiRes=time,sleep -e '
+  exec perl -MPOSIX=setsid,WNOHANG,strftime -MTime::HiRes=time,sleep -e '
     my $seconds = shift @ARGV;
+    my $verify_seconds = 30;
+    my ($t0, $what) = (time(), $ARGV[-1]); $what =~ s{.*/}{};
+    my $mark = sub { printf STDERR "ci-host-verification: %s +%ds %s: %s\n", strftime("%Y-%m-%dT%H:%M:%SZ", gmtime), time() - $t0, $what, $_[0] };
     my $signal = 0;
     $SIG{INT} = sub { $signal = 130 };
     $SIG{TERM} = sub { $signal = 143 };
     $SIG{HUP} = sub { $signal = 129 };
+    # Hold FD 9 in a detached process until $gone->() is positively true; returns its pid or 0.
+    my $custody = sub {
+      my ($gone, $again) = @_;
+      my $keeper = fork(); return 0 unless defined $keeper;
+      return $keeper if $keeper;
+      $SIG{INT} = $SIG{TERM} = $SIG{HUP} = "IGNORE";
+      setsid();
+      open(STDIN, "<", "/dev/null"); open(STDOUT, ">", "/dev/null"); open(STDERR, ">", "/dev/null");
+      while (1) { my $state = $gone->(); exit 0 if defined($state) && $state; $again->() if defined($state); sleep 0.5 }
+    };
     pipe(my $ready, my $notify) or die "readiness pipe: $!";
     my $pid = fork(); defined($pid) or die "fork: $!";
     if (!$pid) {
@@ -68,10 +93,22 @@ ci_capped() {
       exec { $ARGV[0] } @ARGV; exit 127;
     }
     close $notify;
-    my $started = <$ready>; close $ready;
+    my $started; { my $bits = ""; vec($bits, fileno($ready), 1) = 1; $started = <$ready> if select($bits, undef, undef, 10) > 0 } close $ready;
     if (!defined($started) || $started ne "ready\n") {
-      kill "KILL", $pid; waitpid($pid, 0); exit 125;
+      # No session handshake: this is one pid in OUR group, so never a group signal.
+      $mark->("readiness not established; ending the one child");
+      kill "KILL", $pid;
+      my $until = time() + 5; my $done = 0;
+      while (time() < $until) { if (waitpid($pid, WNOHANG) == $pid) { $done = 1; last } sleep 0.05 }
+      if (!$done) {
+        print STDERR "ci-host-verification: cleanup unconfirmed; retaining host reservation\n";
+        my $keeper = $custody->(sub { kill(0, $pid) ? 0 : 1 }, sub { kill "KILL", $pid });
+        waitpid($pid, 0) unless $keeper;
+        $mark->("reservation retained by custodian pid $keeper") if $keeper;
+      }
+      exit 125;
     }
+    $mark->("started, bound ${seconds}s");
     my $deadline = time() + $seconds;
     my ($code, $reaped) = (0, 0);
     while (1) {
@@ -81,27 +118,46 @@ ci_capped() {
       if (time() >= $deadline) { print STDERR "ci-host-verification: work/cleanup deadline exceeded\n"; $code = 124; last }
       sleep 0.05;
     }
+    $mark->("ended with $code; ending the owned group");
     # Parent exit is not group exit: reap redirected descendants on every outcome.
+    # 1 = live members, 0 = positively none, undef = the inspection failed or stalled.
     my $live = sub {
-      open(my $ps, "-|", "/bin/ps", "-axo", "pid=,pgid=,state=") or return undef;
+      my $ps_pid = open(my $ps, "-|", "/bin/ps", "-axo", "pid=,pgid=,state=") or return undef;
       my $found = 0;
-      while (<$ps>) { $found = 1 if /^\s*(\d+)\s+(\d+)\s+(\S+)/ && $2 == $pid && $3 !~ /^Z/ }
+      my $read = eval {
+        local $SIG{ALRM} = sub { die "slow\n" }; alarm 10;
+        while (<$ps>) { $found = 1 if /^\s*(\d+)\s+(\d+)\s+(\S+)/ && $2 == $pid && $3 !~ /^Z/ }
+        alarm 0; 1;
+      };
+      alarm 0;
+      kill "KILL", $ps_pid unless $read;
       close($ps) or return undef;
-      return $found;
+      return $read ? $found : undef;
     };
     kill "TERM", -$pid;
     my $grace = time() + 1;
     while (time() < $grace) { my $active = $live->(); last if defined($active) && !$active; sleep 0.05 }
     kill "KILL", -$pid;
-    waitpid($pid, 0) unless $reaped;
-    my $warned = 0;
+    my $reap_until = time() + 5;
+    while (!$reaped && time() < $reap_until) { if (waitpid($pid, WNOHANG) == $pid) { $reaped = 1 } else { sleep 0.05 } }
+    my $verify_until = time() + $verify_seconds;
+    my $confirmed = 0;
     while (1) {
-      my $active = $live->(); last if defined($active) && !$active;
-      # Keep FD 9 held on cleanup uncertainty; the outer job remains bounded.
-      print STDERR "ci-host-verification: cleanup unconfirmed; retaining host reservation\n" unless $warned++;
-      kill "KILL", -$pid; sleep 0.2;
+      my $active = $live->();
+      if (defined($active) && !$active) { $confirmed = 1; last }
+      last if time() >= $verify_until;
+      kill "KILL", -$pid if $active; sleep 0.2;
     }
-    exit $code;
+    if ($confirmed) { $mark->("cleanup confirmed: owned group empty"); exit $code }
+    print STDERR "ci-host-verification: cleanup unconfirmed; retaining host reservation\n";
+    my $keeper = $custody->(sub { my $active = $live->(); defined($active) ? !$active : undef }, sub { kill "KILL", -$pid });
+    if (!$keeper) {
+      # No custodian: keep the reservation here, as before. The outer job remains bounded.
+      while (1) { my $active = $live->(); last if defined($active) && !$active; kill "KILL", -$pid if $active; sleep 0.2 }
+      exit $code;
+    }
+    $mark->("reservation retained by custodian pid $keeper until the owned group is confirmed empty");
+    exit($code || 70);
   ' "$@"
 }
 

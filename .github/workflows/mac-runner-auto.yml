@@ -128,6 +128,14 @@ jobs:
           if [ "$pr_state" = closed ]; then echo "PR #$PR_NUMBER is closed; the Mac verification is skipped."; exit 0; fi
           bash scripts/mac/ci-host-verification.sh 24eff86a940099e0725d474d1d5520bfbc71d368 60 2400 <<'CI_CHAIN'
           set -u
+          # EVIDENCE BEFORE THE BOUND. Run 44453949390 lost slice 3 at the job limit with no log and
+          # no artifact, so nothing said which step was slow. Each command boundary now prints a UTC
+          # time, the seconds since the chain started and the real exit status, and every preflight
+          # step is echoed to this live log the moment it STARTS. Names and numbers only.
+          # Budget: 60 s admission + 2400 s work + at most ~100 s cleanup verification and teardown
+          # (ci-host-verification.sh) leaves over 15 of the 60 minutes for the two uploads below.
+          ci_mark() { printf 'ci-chain: %s +%ss %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$SECONDS" "$*"; }
+          ci_mark "start slice $PREFLIGHT_SLICE/4"
           # This is a fresh hosted image, not the previously provisioned Mac.
           # Keep shell lint mandatory and fail before verification if unavailable.
           if ! command -v shellcheck >/dev/null 2>&1; then
@@ -135,18 +143,40 @@ jobs:
           fi
           # An absent shellcheck fails here (exit 127), before any verification.
           shellcheck --version || exit $?
+          ci_mark "shellcheck ready"
           code=0
           install_code=0
           pnpm install --frozen-lockfile || install_code=$?
+          ci_mark "install exit $install_code"
           [ "$install_code" = 0 ] || exit "$install_code"
           bash scripts/mac/free-test-port.sh || exit $?
+          ci_mark "free-test-port exit 0"
           pnpm run proof:sim-requests || code=$?
+          ci_mark "proof:sim-requests exit $code"
           # A provenance failure must not hide this slice's independent result.
           # A slice is a subset: it never prints the preflight verdict, only its own line.
-          preflight_code=0
-          node scripts/preflight.mjs --slice "$PREFLIGHT_SLICE/4" --slice-record "preflight-slice-$PREFLIGHT_SLICE.json" > preflight.log 2>&1 || preflight_code=$?
+          # Every log line gets "[UTC +seconds]" when its FIRST byte arrives; a step line is also
+          # echoed here at once, and its result when it comes. A step that never returns is then
+          # the last "start" line in this log. The exit status is preflight's own (PIPESTATUS).
+          node scripts/preflight.mjs --slice "$PREFLIGHT_SLICE/4" --slice-record "preflight-slice-$PREFLIGHT_SLICE.json" 2>&1 | perl -MPOSIX=strftime -e '
+            open(my $log, ">", shift) or die "log: $!"; select((select($log), $| = 1)[0]); $| = 1;
+            my ($t0, $bol, $step) = (time, 1, 0);
+            while (sysread(STDIN, my $buf, 65536)) {
+              for my $part (split /(?<=\n)/, $buf) {
+                my $stamp = sprintf("[%s +%ds] ", strftime("%H:%M:%SZ", gmtime), time - $t0);
+                if ($bol) { $step = $part =~ /^\xe2\x96\xb6/; print {$log} $stamp; print "$stamp", "start ", $part, ($part =~ /\n\z/ ? "" : "\n") if $step }
+                elsif ($step) { print "$stamp", "      ", $part }
+                print {$log} $part; $bol = $part =~ /\n\z/;
+              }
+            }' preflight.log
+          pipe_codes=("${PIPESTATUS[@]}")
+          preflight_code="${pipe_codes[0]}"
+          # A broken log writer must not turn a slice green.
+          [ "$preflight_code" != 0 ] || preflight_code="${pipe_codes[1]}"
+          ci_mark "preflight slice $PREFLIGHT_SLICE/4 exit $preflight_code"
           grep -E "Preflight slice [1-4]/4 (complete|FAILED)|FAILED at" preflight.log || true
           [ "$preflight_code" = 0 ] || code="$preflight_code"
+          ci_mark "chain exit $code"
           exit "$code"
           CI_CHAIN
 

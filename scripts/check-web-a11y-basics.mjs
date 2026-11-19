@@ -974,8 +974,23 @@ function importAliasOrigins(code) {
 export function checkUnannouncedQueries(rel, code, isHook, defaultPolls, shellSpoken = new Set(), carriers = new Set(), timerOpens = new Set()) {
   // A call polls when the tree's defaults poll, its own arguments set refetchInterval,
   // it IS a polling carrier (an imported polling wrapper), or its arguments pass one.
-  const polled = (callee, args) => defaultPolls || /\brefetchInterval\b/.test(args) || carriers.has(callee) ||
-    [...carriers].some((n) => new RegExp(`(?<![\\w$.])${escapeRegExp(n)}(?![\\w$])`).test(args));
+  // An options argument passed as a bare identifier (`useQuery(options)`) is read through
+  // its same-file `const` initializer; one the gate cannot resolve (a parameter, an import,
+  // a `let`, a computed value, a spread) could carry `refetchInterval`, so it counts as polled.
+  const resolveArgs = (args) => {
+    const id = /^\(\s*([A-Za-z_$][\w$]*)\s*(?:,[\s\S]*)?\)$/.exec(args.trim())?.[1];
+    if (!id || id === "undefined") return { text: args, opaque: false };
+    const decls = [...code.matchAll(new RegExp(`(?<![\\w$.])const\\s+${escapeRegExp(id)}\\s*(?::[^=]+)?=\\s*`, "g"))];
+    if (decls.length !== 1) return { text: args, opaque: true };
+    const init = expressionFrom(code, decls[0].index + decls[0][0].length);
+    if (!init.startsWith("{") || /\.\.\./.test(init)) return { text: init, opaque: !init.startsWith("{") || !/\brefetchInterval\b/.test(init) };
+    return { text: init, opaque: false };
+  };
+  const polled = (callee, args) => {
+    const r = resolveArgs(args);
+    return defaultPolls || r.opaque || /\brefetchInterval\b/.test(args) || /\brefetchInterval\b/.test(r.text) || carriers.has(callee) ||
+      [...carriers].some((n) => new RegExp(`(?<![\\w$.])${escapeRegExp(n)}(?![\\w$])`).test(args));
+  };
   const tags = [];
   for (const m of code.matchAll(/<LiveRegion\b/g)) {
     const t = openingTag(code, m.index);
@@ -1113,6 +1128,46 @@ function attrExpression(tag, name) {
 }
 
 /**
+ * The `{...expr}` spread attributes of a JSX opening tag, as [{ expr, index }]: only
+ * those at attribute level, never a brace nested inside another attribute's value.
+ */
+function tagSpreads(tag) {
+  const out = [];
+  for (let i = 0, depth = 0; i < tag.length; i++) {
+    const ch = tag[i];
+    if (depth === 0 && ch === "{") {
+      const at = i;
+      let d = 0;
+      for (; i < tag.length; i++) { if (tag[i] === "{") d++; else if (tag[i] === "}" && --d === 0) break; }
+      const body = tag.slice(at + 1, i).trim();
+      if (body.startsWith("...")) out.push({ expr: body.slice(3).trim(), index: at });
+    } else if (ch === "{") depth++;
+    else if (ch === "}") depth--;
+  }
+  return out;
+}
+
+/**
+ * Why a spread on a <LiveRegion> may override its announcement, or null when it cannot.
+ * Only a spread of a same-file `const` object literal whose keys are plain identifiers
+ * other than `message`/`alert` is provably harmless; anything else (a prop bag, an
+ * import, a call, a computed or quoted key, a nested spread) fails closed.
+ */
+function spreadOverrideRisk(src, expr) {
+  if (!/^[A-Za-z_$][\w$]*$/.test(expr)) return "its keys cannot be read";
+  const decls = [...src.matchAll(new RegExp(`(?<![\\w$.])const\\s+${escapeRegExp(expr)}\\s*(?::[^=]+)?=\\s*`, "g"))];
+  if (decls.length !== 1) return "its keys cannot be read";
+  const init = expressionFrom(src, decls[0].index + decls[0][0].length).replace(/\s+as\s+const$/, "");
+  if (!init.startsWith("{") || !init.endsWith("}")) return "its keys cannot be read";
+  for (const part of splitTop(init.slice(1, -1), ",").map((x) => x.trim()).filter(Boolean)) {
+    const key = /^([A-Za-z_$][\w$]*)\s*(?::|$|\()/.exec(part)?.[1];
+    if (!key) return "its keys cannot be read";
+    if (key === "message" || key === "alert") return `it carries \`${key}\``;
+  }
+  return null;
+}
+
+/**
  * What a <LiveRegion> says, over one file. A query keeps its last `data` when a
  * refetch fails, so an `alert` gated on that data being absent (`error && !data`)
  * goes silent for every outage after the first load. And a `message` naming the
@@ -1128,6 +1183,14 @@ export function checkLiveRegionText(rel, raw) {
     const alert = tag === null ? null : attrExpression(tag, "alert");
     const message = tag === null ? null : attrExpression(tag, "message");
     if (alert === null || message === null) { failures.push(`${rel}:${line}: <LiveRegion> could not be parsed — failing closed`); continue; }
+    // A spread AFTER the announcement attributes (or with none) can overwrite `message`/`alert`
+    // with text the checks below never read: fail unless it provably carries neither.
+    const firstAttr = Math.min(...["message", "alert"].map((n) => { const x = new RegExp(`(?<![\\w-])${n}\\s*=`).exec(tag); return x ? x.index : Infinity; }));
+    for (const sp of tagSpreads(tag)) {
+      if (sp.index < firstAttr) continue;
+      const why = spreadOverrideRisk(src, sp.expr);
+      if (why) failures.push(`${rel}:${line}: <LiveRegion> spreads \`{...${sp.expr}}\` after its announcement attributes, and ${why} — it can override message/alert, so what is announced is unverified (failing closed, WCAG 4.1.3)`);
+    }
     // `!data`, `!v1Decisions`, `!metrics.data` — a missing VALUE, not a flag (`!isLoading`)
     // or a member test (`!data.chain.valid`).
     if (/&&\s*!\s*(?:(?!(?:is|has)[A-Z])[\w$]+|[\w$.?]+\??\.data)(?![\w$?.(])/.test(alert)) failures.push(`${rel}:${line}: <LiveRegion> alert is suppressed while cached data remains (\`&& !…\`) — a failed refetch after the first load is silent (WCAG 4.1.3)`);
@@ -1667,7 +1730,13 @@ function expressionFrom(src, i) {
 }
 
 // A `matchMedia` read of the user's motion preference: `.matches` of the `reduce` query.
-const MOTION_MEDIA_READ = /matchMedia\s*\(\s*(["'`])[^"'`]*prefers-reduced-motion\s*:\s*reduce[^"'`]*\1\s*\)\s*\??\.matches/;
+const MEDIA_READ_SRC = String.raw`(?:(?:window|globalThis|self)\s*\??\.\s*)?matchMedia\s*\(\s*(["'\`])[^"'\`]*prefers-reduced-motion\s*:\s*reduce[^"'\`]*\1\s*\)\s*\??\.matches`;
+// The WHOLE expression must be the read: an operator around it (`=== false`, `!`, `&&`, `||`,
+// `??`, a comparison) can invert or mask its polarity, so anything but the bare read fails.
+const MOTION_MEDIA_READ = new RegExp(`^\\(?\\s*${MEDIA_READ_SRC}\\s*\\)?$`);
+// A same-file wrapper function whose body does nothing but return the bare read.
+const MEDIA_GUARD = String.raw`(?:if\s*\(\s*typeof\s+(?:window\s*\.\s*)?matchMedia\s*!==\s*["']function["']\s*\)\s*return\s+true\s*;\s*)?`;
+const MOTION_MEDIA_WRAPPER = new RegExp(`^\\{\\s*${MEDIA_GUARD}return\\s+\\(?\\s*${MEDIA_READ_SRC}\\s*\\)?\\s*;?\\s*\\}$`);
 
 /**
  * Does `name` provably hold (or return) the user's reduced-motion preference? Only
@@ -1703,7 +1772,7 @@ function tracesToMotionPreference(src, name) {
     const open = src.indexOf("{", d.index);
     let j = open, depth = 0;
     for (; j >= 0 && j < src.length; j++) { if (src[j] === "{") depth++; else if (src[j] === "}" && --depth === 0) break; }
-    if (open < 0 || !MOTION_MEDIA_READ.test(src.slice(open, j + 1))) return false;
+    if (open < 0 || !MOTION_MEDIA_WRAPPER.test(src.slice(open, j + 1).trim())) return false;
   }
   return found > 0;
 }
@@ -1738,7 +1807,7 @@ export function checkScrollMotion(rel, raw) {
     // The test must read the preference, traced to a verified source: a name that merely
     // contains "reduce" (`const reduced = false`) proves nothing.
     const cond = t ? t[2].replace(/\(\s*\)$/, "").trim() : "";
-    const traced = t && (MOTION_MEDIA_READ.test(t[2]) || (/^[A-Za-z_$][\w$]*$/.test(cond) && tracesToMotionPreference(src, cond)));
+    const traced = t && (MOTION_MEDIA_READ.test(t[2].trim()) || (/^[A-Za-z_$][\w$]*$/.test(cond) && tracesToMotionPreference(src, cond)));
     const fromPreference = t && traced && (t[1] ? t[6] !== "smooth" : t[4] !== "smooth");
     if (!fromPreference) failures.push(`${rel}:${lineOf(m.index)}: scroll behavior \`${value}\` is not chosen from prefers-reduced-motion — the gate cannot trace its condition to a reduced-motion hook or matchMedia read, so cannot prove reduced-motion users get "auto" (failing closed, WCAG 2.3.3)`);
   }
@@ -1830,8 +1899,14 @@ export function checkReducedMotion(rel, raw, { requireUniversal = true } = {}) {
             if (!motion.filter((d) => !MOTION_NEUTRAL.has(d[1])).every((d) => /!\s*important\s*$/.test(d[2].trim()))) { unimportant = true; return false; }
             return ["animation", "transition", "scroll"].every((f) => own.has(f));
           });
-        if (conditionalAt(m.index)) { if (damping.length) conditional++; }
-        else for (const r of damping) for (const sel of r[1].split(",")) if (universalOf(sel)) covered.add(universalOf(sel));
+        // Tested at each damping rule's own position: a condition between the
+        // reduced-motion query and the rule (`@media (min-width: 768px) { * { … } }`) leaves
+        // it applying to some reduced-motion users only.
+        const base = m.index + m[0].length;
+        for (const r of damping) {
+          if (conditionalAt(m.index) || conditionalAt(base + r.index + r[0].search(/\S/))) conditional++;
+          else for (const sel of r[1].split(",")) if (universalOf(sel)) covered.add(universalOf(sel));
+        }
         blocks.push([m.index, i + 1]);
         // Every block's motion declarations must damp: a later block that re-enables
         // motion (`.spinner { animation: spin 2s infinite !important }`) reverses the first.
@@ -2445,6 +2520,47 @@ function selfTest() {
           !run('import { state } from "../lib/other"; return <div>{state}</div>;') &&
           run('import { state } from "../lib/poll"; return <div>{state}</div>;') &&
           run('import * as P from "../lib/poll"; return <div>{P.state}</div>;');
+      })()],
+    ["a LiveRegion spread after its announcement attributes must provably exclude message/alert",
+      (() => {
+        const lr = (spread, decl = "") => `${decl}\nreturn <LiveRegion message={data?.id} alert={isError ? "Feed could not be loaded." : ""} ${spread} />;`;
+        const bad = [lr("{...muted}", "const muted = { message: '', alert: '' };"), lr("{...muted}", "const muted = { alert: '' };"), lr("{...props}"), lr("{...cfg.live}"), lr("{...muted}", "const muted = { ...other };"), lr("{...muted}", "const muted = { 'message': '' };")];
+        const good = [lr("{...rest}", "const rest = { className: 'live' };"), lr(""), lr("{...rest}", "const rest = { className: 'a', id: 'b' } as const;")];
+        return bad.every((c) => checkLiveRegionText("x.tsx", c).length === 1) && good.every((c) => checkLiveRegionText("x.tsx", c).length === 0) &&
+          checkLiveRegionText("x.tsx", '<LiveRegion {...props} message={d?.id} alert={e ? "x" : ""} />').length === 0;
+      })()],
+    ["a motion-preference read must be the bare matchMedia read, not an inverted or combined one",
+      ['const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches === false;',
+        'const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches !== true;',
+        'const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches && false;',
+        'const reduced = !window.matchMedia("(prefers-reduced-motion: reduce)").matches;',
+        'const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? false : true;'].every((d) => checkScrollMotion("x.tsx", `${d}\nwindow.scrollTo({ behavior: reduced ? "auto" : "smooth" });`).length === 1) &&
+      ['const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;',
+        'const reduced = (window.matchMedia("(prefers-reduced-motion: reduce)").matches);',
+        'const reduced = matchMedia("(prefers-reduced-motion: reduce)")?.matches'
+      ].every((d) => checkScrollMotion("x.tsx", `${d}\nwindow.scrollTo({ behavior: reduced ? "auto" : "smooth" });`).length === 0) &&
+      checkScrollMotion("x.tsx", 'function isReduced() { return window.matchMedia("(prefers-reduced-motion: reduce)").matches; }\nwindow.scrollTo({ behavior: isReduced() ? "auto" : "smooth" });').length === 0 &&
+      checkScrollMotion("x.tsx", 'function isReduced() { const m = window.matchMedia("(prefers-reduced-motion: reduce)").matches; return !m; }\nwindow.scrollTo({ behavior: isReduced() ? "auto" : "smooth" });').length === 1 &&
+      checkScrollMotion("x.tsx", 'window.scrollTo({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches === false ? "auto" : "smooth" });').length === 1],
+    ["polling options passed through a local variable are read like inline options",
+      (() => {
+        const page = (opts, call = "useQuery(options)") => view("t/src/pages/P.tsx", `import { useQuery } from "@tanstack/react-query";\nexport function P() { ${opts}\nconst q = ${call};\nreturn <LiveRegion message="Ready" alert="" />; }`);
+        const run = (f) => checkLiveRegions([f], false).failures.length;
+        const read = "{ queryKey: ['feed'], queryFn: readFeed, refetchInterval: 5000 }";
+        return run(page(`const options = ${read};`)) > 0 && run(page("", `useQuery(${read})`)) > 0 &&
+          run(page(`let options = ${read};`)) > 0 &&
+          run(page(`const options = { ...base, ${read.slice(2)};`)) > 0 &&
+          run(page("const options = { queryKey: ['feed'], queryFn: readFeed };")) === 0;
+      })()],
+    ["a width condition between the reduced-motion query and the damper leaves it conditional",
+      (() => {
+        const damper = "*, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }";
+        const rm = "@media (prefers-reduced-motion: reduce)";
+        return checkReducedMotion("a.css", `${rm} { @media (min-width: 768px) { ${damper} } }`).length === 1 &&
+          checkReducedMotion("a.css", `${rm} { @supports (display: grid) { ${damper} } }`).length === 1 &&
+          checkReducedMotion("a.css", `${rm} { @media (min-width: 768px) { .x { color: red } } ${damper} }`).length === 0 &&
+          checkReducedMotion("a.css", `@layer base { ${rm} { ${damper} } }`).length === 0 &&
+          checkReducedMotion("a.css", `${rm} { ${damper} }`).length === 0;
       })()],
     ["a count-based announcement names a record (id or time)",
       checkLiveRegionText("x.tsx", '<LiveRegion message={d ? `${d.length} decisions shown.` : ""} />').length === 1 &&

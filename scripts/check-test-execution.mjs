@@ -53,7 +53,7 @@
 // SELF-TEST: the corpus must be non-trivial, a known-reached file must resolve
 // as reached, and a synthetic unreached file must be flagged. A gate that cannot
 // fail proves nothing.
-import { existsSync, mkdtempSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -367,9 +367,33 @@ const staleKeys = (files, decls) => {
     unusedArray: runnerSrc([OTHER_STEP], `const UNUSED = [\n${SUITE_STEP}\n];\nvoid UNUSED;`),
   };
   // Each dead-source control must carry the exact live-looking line on its own and pass the shape
-  // guard, so the refusal is the listing's, not an accident of the fixture.
-  const deadControlsBite = Object.values(DEAD).every((src) => src.split("\n").includes(SUITE_STEP) && runnerShapeOk(src));
-  const PF = listingOf(runnerSrc([OTHER_STEP, SUITE_STEP]));
+  // guard, so the refusal is the listing's, not an accident of the fixture. Every runner is listed
+  // inside the try; the finally removes ONLY the directory this invocation's mkdtemp returned.
+  let deadControlsBite = false;
+  let PF = "";
+  let runnerNegative = false;
+  try {
+    deadControlsBite = Object.values(DEAD).every((src) => src.split("\n").includes(SUITE_STEP) && runnerShapeOk(src));
+    PF = listingOf(runnerSrc([OTHER_STEP, SUITE_STEP]));
+    runnerNegative =
+      dirsOfRunner(DEAD.blockComment).length === 0 &&
+      dirsOfRunner(DEAD.template).length === 0 &&
+      dirsOfRunner(DEAD.unusedArray).length === 0 &&
+      dirsOfRunner(runnerSrc([OTHER_STEP, `  // ${SUITE_STEP.trim()}`])).length === 0 &&
+      dirsOfRunner(runnerSrc([OTHER_STEP, '  { name: "s", cmd: ["node", "scripts/check-local-build-regressions.mjs", "--suite", "scripts/x/test", "x"] },'])).length === 0 &&
+      dirsOfRunner(runnerSrc([OTHER_STEP, '  { name: "s", cmd: ["node", "scripts/check-local-build-regressions.mjs", "--suite", "../etc"] },'])).length === 0 &&
+      dirsOfRunner(runnerSrc([OTHER_STEP, '  { name: "s", cmd: ["node", "scripts/check-local-build-regressions.mjs", "--suite"] },'])).length === 0 &&
+      dirsOfRunner(runnerSrc([OTHER_STEP, '  { name: "s", heavy: true, cmd: ["node", "scripts/check-local-build-regressions.mjs", "--suite", "scripts/x/test"] },'])).length === 0 &&
+      dirsOfRunner(runnerSrc([OTHER_STEP, '  { name: "s", needsNativeBuild: true, cmd: ["node", "scripts/check-local-build-regressions.mjs", "--suite", "scripts/x/test"] },'])).length === 0 &&
+      // shape guard: the step is live but the runner has no listing block before its loop
+      dirsOfRunner(runnerSrc([OTHER_STEP, SUITE_STEP], "", "")).length === 0 &&
+      // shape guard: the listing names the step, but the loop then runs a different list
+      dirsOfRunner(runnerSrc([OTHER_STEP, SUITE_STEP], "", LIST_BLOCK_SRC, "STEPS.length = 0;\n")).length === 0 &&
+      // a runner that prints something other than one JSON array of steps
+      dirsOfRunner(runnerSrc([OTHER_STEP, SUITE_STEP], "", LIST_BLOCK_SRC.replace("JSON.stringify(STEPS.map", "String(STEPS.map"))).length === 0;
+  } finally {
+    rmSync(scratch, { recursive: true, force: true });
+  }
   const WF = "jobs:\n  a:\n    steps:\n      - name: s\n        run: node scripts/check-local-build-regressions.mjs --suite scripts/y/test\n";
   const wf = (line) => `jobs:\n  a:\n    steps:\n      - name: s\n        ${line}\n`;
   const sd = suiteDirsFrom({ listing: PF, workflows: [WF] });
@@ -390,21 +414,7 @@ const staleKeys = (files, decls) => {
     none({ workflows: [wf('run: node scripts/check-local-build-regressions.mjs --suite "scripts/x/test"')] }) &&
     none({ workflows: [wf("run: node scripts/other.mjs --suite scripts/x/test")] }) &&
     deadControlsBite &&
-    dirsOfRunner(DEAD.blockComment).length === 0 &&
-    dirsOfRunner(DEAD.template).length === 0 &&
-    dirsOfRunner(DEAD.unusedArray).length === 0 &&
-    dirsOfRunner(runnerSrc([OTHER_STEP, `  // ${SUITE_STEP.trim()}`])).length === 0 &&
-    dirsOfRunner(runnerSrc([OTHER_STEP, '  { name: "s", cmd: ["node", "scripts/check-local-build-regressions.mjs", "--suite", "scripts/x/test", "x"] },'])).length === 0 &&
-    dirsOfRunner(runnerSrc([OTHER_STEP, '  { name: "s", cmd: ["node", "scripts/check-local-build-regressions.mjs", "--suite", "../etc"] },'])).length === 0 &&
-    dirsOfRunner(runnerSrc([OTHER_STEP, '  { name: "s", cmd: ["node", "scripts/check-local-build-regressions.mjs", "--suite"] },'])).length === 0 &&
-    dirsOfRunner(runnerSrc([OTHER_STEP, '  { name: "s", heavy: true, cmd: ["node", "scripts/check-local-build-regressions.mjs", "--suite", "scripts/x/test"] },'])).length === 0 &&
-    dirsOfRunner(runnerSrc([OTHER_STEP, '  { name: "s", needsNativeBuild: true, cmd: ["node", "scripts/check-local-build-regressions.mjs", "--suite", "scripts/x/test"] },'])).length === 0 &&
-    // shape guard: the step is live but the runner has no listing block before its loop
-    dirsOfRunner(runnerSrc([OTHER_STEP, SUITE_STEP], "", "")).length === 0 &&
-    // shape guard: the listing names the step, but the loop then runs a different list
-    dirsOfRunner(runnerSrc([OTHER_STEP, SUITE_STEP], "", LIST_BLOCK_SRC, "STEPS.length = 0;\n")).length === 0 &&
-    // a runner that prints something other than one JSON array of steps
-    dirsOfRunner(runnerSrc([OTHER_STEP, SUITE_STEP], "", LIST_BLOCK_SRC.replace("JSON.stringify(STEPS.map", "String(STEPS.map"))).length === 0 &&
+    runnerNegative &&
     suiteDirsFrom({ listing: "not json" }).length === 0 &&
     suiteDirsFrom({ listing: "[]" }).length === 0 &&
     none({}) &&

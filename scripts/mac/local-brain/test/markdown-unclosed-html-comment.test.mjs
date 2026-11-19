@@ -180,3 +180,51 @@ test('a closed inline comment spanning lines inside one paragraph is still maske
   assertShape(input, out);
   assert.equal(out, 'a       \n      b [l](docs/L.md)\n');
 });
+
+// ---- The whole §4.6 family (Root on #2368): every non-comment HTML block kind keeps an opener inside it from
+// starting a comment block, each by its own end condition. Each case is RED on d0ce429d and 8da48f7a, which
+// masked the visible link; the original helper kept it.
+const VISIBLE = '[visible](docs/V.md)';
+const RAW_BLOCKS = {
+  'type 1 <pre>': '<pre>\n<!--\n</pre>',
+  'type 1 <style>': '<style>\n<!--\n</style>',
+  'type 1 <textarea>': '<textarea>\n<!--\n</textarea>',
+  'type 1 upper-case <SCRIPT>': '<SCRIPT>\n<!--\n</SCRIPT>',
+  'type 3 processing instruction': '<?php\n<!--\n?>',
+  'type 4 declaration': '<!DOCTYPE html\n<!--\n>',
+  'type 5 CDATA': '<![CDATA[\n<!--\n]]>',
+  'type 6 block tag': '<table>\n<!--\n</table>',
+  'type 6 closing block tag': '</div>\n<!--',
+  'type 7 custom tag at block start': '<my-tag>\n<!--\n</my-tag>',
+};
+for (const [name, block] of Object.entries(RAW_BLOCKS)) {
+  test(`${name}: an opener inside it is raw text, and the link after the blank line stays visible`, () => {
+    const input = `${block}\n\n${VISIBLE}\n`;
+    const out = maskNonProse(input);
+    assertShape(input, out);
+    const lines = out.split('\n');
+    assert.equal(lines[lines.length - 2], VISIBLE, `link lost: ${JSON.stringify(out)}`);
+  });
+}
+
+test('a fence marker inside a type 7 block does not open a fence that swallows later prose', () => {
+  const input = `<Bad>\n\`\`\`\n\n${VISIBLE}\n`;
+  const out = maskNonProse(input);
+  assertShape(input, out);
+  assert.equal(out.split('\n')[3], VISIBLE, `link lost: ${JSON.stringify(out)}`);
+});
+
+// Positive controls: once a raw HTML block has ended, a real unclosed comment block still hides the rest.
+test('control: a raw block closed on its own line, then a real unclosed comment, still masks to end of input', () => {
+  const input = '<script> x </script>\n<!--\n[h](docs/H.md)\n';
+  const out = maskNonProse(input);
+  assertShape(input, out);
+  assert.ok(!out.includes('docs/H.md'), `hidden link leaked: ${JSON.stringify(out)}`);
+});
+
+test('control: a type 6 block ended by a blank line, then a real unclosed comment, still masks to end of input', () => {
+  const input = '<div>\nx\n</div>\n\n<!--\n[h](docs/H.md)\n';
+  const out = maskNonProse(input);
+  assertShape(input, out);
+  assert.ok(!out.includes('docs/H.md'), `hidden link leaked: ${JSON.stringify(out)}`);
+});

@@ -1105,3 +1105,33 @@ test('opaque interrupting container: prose after a closed fence in a list item k
   assertShape(input, out);
   assert.ok(out.includes('[V](docs/V.md)'), `route lost: ${JSON.stringify(out)}`);
 });
+
+// 26. The exact inputs Root reported on #2368 (7013882526, 7014478567, 7014623355, 7014961714), kept verbatim as
+//     literal regressions so a generalised matrix can never stand in for them. Each expectation is markdown-it 14's
+//     commonmark rendering; both fence options; shape checked.
+for (const treatUnclosedAsFence of [true, false]) {
+  for (const [comment, input] of [
+    ['7013882526', '`\n-     [H](docs/H.md)\n`\n'],
+    ['7013882526', '`\n- <script>\n  [H](docs/H.md)\n`\n'],
+    ['7014478567', '`\n- <span>\n  [H](docs/H.md)\n`\n'],
+  ]) {
+    test(`Root ${comment} literal hides H: ${JSON.stringify(input)} (treatUnclosedAsFence=${treatUnclosedAsFence})`, () => {
+      const out = maskNonProse(input, { treatUnclosedAsFence });
+      assertShape(input, out);
+      assert.ok(!out.includes('docs/H.md'), `hidden route kept: ${JSON.stringify(out)}`);
+    });
+  }
+  for (const [comment, input] of [
+    ['7014478567', '`\n-    [V](docs/V.md)\n`\n'],
+    ['7014623355', '`\n-\t[V](docs/V.md)\n`\n'],
+    ['7014623355', '`\n01. item\n[V](docs/V.md)\n`\n'],
+    ['7014623355', '`\n-  \n[V](docs/V.md)\n`\n'],
+    ['7014961714', '`\n- <script>\n  </script> [V](docs/V.md)\n`\n'],
+  ]) {
+    test(`Root ${comment} literal keeps V: ${JSON.stringify(input)} (treatUnclosedAsFence=${treatUnclosedAsFence})`, () => {
+      const out = maskNonProse(input, { treatUnclosedAsFence });
+      assertShape(input, out);
+      assert.ok(out.includes('[V](docs/V.md)'), `route lost: ${JSON.stringify(out)}`);
+    });
+  }
+}

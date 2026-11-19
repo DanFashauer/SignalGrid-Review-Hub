@@ -2,6 +2,7 @@
 //
 //   node scripts/check-local-build-regressions.mjs --target <path> --sha256 <64hex> --cases <N>
 //   node scripts/check-local-build-regressions.mjs --changed [--base <rev>] [--head <rev>] [--base-optional]
+//   node scripts/check-local-build-regressions.mjs --suite <dir under scripts/ or lib/>
 //   node scripts/check-local-build-regressions.mjs --self-test
 //
 // WHY: a publication candidate used to carry its own newly generated runner, CI rows and journal
@@ -426,6 +427,35 @@ export function discover(opts) {
   return { code: 0 };
 }
 
+/**
+ * Suite mode: run EVERY tracked allowlisted test under one directory, every time. This is what keeps
+ * a landed build regression running after its PR: --changed only sees a test while it is in a diff.
+ * Fail-closed: a directory outside scripts/** or lib/**, a git failure, or a directory with no
+ * tracked allowlisted test is a refusal, never a pass over nothing.
+ */
+export function runSuite(opts) {
+  const { root, dir } = opts;
+  const out = (s) => process.stdout.write(`${s}\n`);
+  if (typeof dir !== "string" || !/^(?:scripts|lib)(?:\/[A-Za-z0-9_][A-Za-z0-9._-]*)*$/.test(dir) || dir.split("/").some((s) => s === ".." || s === ".")) {
+    return { code: 2, reason: `--suite needs a relative directory under scripts/ or lib/ (got ${JSON.stringify(dir)})` };
+  }
+  const g = git(root, ["ls-files", "-z", "--", `${dir}/`]);
+  if (!g.ok) return { code: 2, reason: `git ls-files failed: ${g.err}` };
+  const targets = g.out.toString("utf8").split("\0").filter((p) => p && allowlistRefusal(p) === null).sort();
+  if (targets.length === 0) return { code: 1, reason: `suite ${dir}: no tracked allowlisted test found (refusing rather than passing over nothing)` };
+  const failures = [];
+  for (const rel of targets) {
+    const h = hashTarget(root, rel);
+    const r = h.refusal
+      ? { ok: false, reason: `${rel}: ${h.refusal}` }
+      : runTarget({ root, rel, mode: "suite-target", timeoutMs: opts.timeoutMs, maxBytes: opts.maxBytes });
+    if (r.ok) out(JSON.stringify(r.record)); else failures.push(r.reason);
+  }
+  out(JSON.stringify({ mode: "suite", dir, targets: targets.length, failed: failures.length, result: failures.length ? "fail" : "pass" }));
+  if (failures.length) return { code: 1, reason: failures.join(" | ") };
+  return { code: 0 };
+}
+
 /** How many tracked files the allowlist matches in a git tree (derived, never listed). */
 export function countAllowlisted(root) {
   const g = git(root, ["ls-files", "-z"]);
@@ -675,6 +705,24 @@ test("a",async()=>{const sup=Number(ps("ppid",process.ppid));if(!(sup>1)||!ps("a
     d = capture(() => discover({ root: repo }));
     check("discovery: no origin/SignalGrid_Alpha and no --base refuses (exit 2)", d.code === 2 && /pass --base/.test(d.reason ?? ""), JSON.stringify(d));
 
+    // 12b suite mode on the same repo: every TRACKED allowlisted test under the directory, every time
+    rmSync(join(repo, "scripts/untracked.test.mjs"));
+    let sres = capture(() => runSuite({ root: repo, dir: "scripts" }));
+    text = captured.join("");
+    check("suite: runs every tracked test under the directory and passes", sres.code === 0 && /"mode":"suite","dir":"scripts","targets":3,"failed":0,"result":"pass"/.test(text) && /"mode":"suite-target","path":"scripts\/add\.test\.mjs"/.test(text), `${sres.code} ${sres.reason ?? ""} ${text}`);
+    mk(repo, "scripts/bad.test.mjs", `${HEAD}test("x",()=>assert.equal(1,2));\n`);
+    G("add", "scripts/bad.test.mjs");
+    sres = capture(() => runSuite({ root: repo, dir: "scripts" }));
+    check("suite: one failing tracked test fails the suite", sres.code === 1 && /bad\.test\.mjs/.test(sres.reason ?? ""), sres.reason);
+    G("rm", "-q", "-f", "scripts/bad.test.mjs");
+    mk(repo, "scripts/empty/README.md", "x\n"); G("add", "-A");
+    sres = capture(() => runSuite({ root: repo, dir: "scripts/empty" }));
+    check("suite: a directory with no tracked test refuses (exit 1), never passes over nothing", sres.code === 1 && /no tracked allowlisted test/.test(sres.reason ?? ""), JSON.stringify(sres));
+    sres = capture(() => runSuite({ root: repo, dir: "../etc" }));
+    check("suite: a directory outside scripts/ or lib/ is refused (exit 2)", sres.code === 2, JSON.stringify(sres));
+    sres = capture(() => runSuite({ root: repo, dir: "scripts/../docs" }));
+    check("suite: a '..' segment is refused (exit 2)", sres.code === 2, JSON.stringify(sres));
+
     // 13 CLI exit codes through a real child process
     const cli = (args) => spawnSync(process.execPath, [fileURLToPath(import.meta.url), "--root", root, ...args], { encoding: "utf8", env: { ...process.env, NODE_TEST_CONTEXT: "" } });
     let c = cli(["--target", rel, "--sha256", sha, "--cases", "3"]);
@@ -707,7 +755,7 @@ test("a",async()=>{const sup=Number(ps("ppid",process.ppid));if(!(sup>1)||!ps("a
 
 // ---------- CLI ----------
 
-const VALUE_FLAGS = new Set(["--target", "--sha256", "--cases", "--base", "--head", "--root", "--timeout-ms", "--max-output-bytes", "--min-allowlisted"]);
+const VALUE_FLAGS = new Set(["--suite", "--target", "--sha256", "--cases", "--base", "--head", "--root", "--timeout-ms", "--max-output-bytes", "--min-allowlisted"]);
 const BOOL_FLAGS = new Set(["--changed", "--base-optional", "--self-test"]);
 
 function parseArgs(argv) {
@@ -742,8 +790,8 @@ function main(argv) {
     if (a["--cases"] !== undefined) cases = intArg(a["--cases"], "--cases", 1, 1_000_000);
   } catch (e) { return usage(e.message); }
   if (minAllow < 1) return usage("--min-allowlisted floor must be >= 1 (a floor of 0 would let a scan that finds nothing pass)");
-  const modes = ["--self-test", "--changed", "--target"].filter((m) => a[m] !== undefined);
-  if (modes.length !== 1) return usage("choose exactly one of --target, --changed, --self-test");
+  const modes = ["--self-test", "--changed", "--target", "--suite"].filter((m) => a[m] !== undefined);
+  if (modes.length !== 1) return usage("choose exactly one of --target, --changed, --suite, --self-test");
   const root = a["--root"] ? resolve(a["--root"]) : REPO_ROOT;
   try { realpathSync(root); } catch { return usage("repository root unreadable"); }
 
@@ -753,6 +801,12 @@ function main(argv) {
     const d = discover({ root, base: a["--base"], head: a["--head"], baseOptional: !!a["--base-optional"], timeoutMs, maxBytes });
     if (d.code !== 0) process.stderr.write(`FAIL: ${d.reason}\n`);
     return d.code;
+  }
+  if (a["--suite"] !== undefined) {
+    if (a["--sha256"] || a["--cases"] || a["--base"] || a["--head"] || a["--base-optional"]) return usage("--suite takes no --sha256/--cases/--base/--head/--base-optional");
+    const r = runSuite({ root, dir: a["--suite"], timeoutMs, maxBytes });
+    if (r.code !== 0) process.stderr.write(`FAIL: ${r.reason}\n`);
+    return r.code;
   }
   if (a["--sha256"] === undefined || cases === undefined) return usage("--target needs --sha256 and --cases");
   if (a["--base"] || a["--head"] || a["--base-optional"]) return usage("--target takes no --base/--head/--base-optional");

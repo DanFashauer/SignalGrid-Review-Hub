@@ -838,6 +838,7 @@ const STEPS = [
   },
   { name: "Shared build-regression runner self-test (hash, case-count, counter-forgery, symlink and discovery defects must fail)", cmd: ["node", "scripts/check-local-build-regressions.mjs", "--self-test"] },
   { name: "Changed regression targets vs canonical (shared runner; an empty diff is not proof a build's regression ran)", cmd: ["node", "scripts/check-local-build-regressions.mjs", "--changed", "--base-optional"] },
+  { name: "Local-brain regression suite (shared runner; every tracked build regression keeps running after it lands)", cmd: ["node", "scripts/check-local-build-regressions.mjs", "--suite", "scripts/mac/local-brain/test"] },
 ];
 
 // Is the native web build structurally impossible here? Derived from the committed

@@ -55,6 +55,8 @@
 // fail proves nothing.
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
+import { spawnSync } from "node:child_process";
+import { allowlistRefusal } from "./check-local-build-regressions.mjs";
 
 const ENTRY_FILES = ["scripts/preflight.mjs", "validate-sim-macos.sh"];
 const WORKFLOW_DIR = ".github/workflows";
@@ -175,6 +177,27 @@ for (const cfg of ["playwright.config.ts", "scripts/playwright.config.ts"]) {
   }
 }
 
+// The shared build-regression runner's --suite mode runs EVERY tracked allowlisted test under one
+// directory on every invocation (scripts/check-local-build-regressions.mjs). A directory a reached
+// runner text names that way contributes its allowlisted files, the same way Playwright's testDir
+// does. Only files the runner would actually execute count: its own allowlist decides, imported
+// rather than restated, so the two can never drift apart.
+const suiteDirsIn = (text) => {
+  const dirs = new Set();
+  for (const m of text.matchAll(/check-local-build-regressions\.mjs["',\s]+--suite["',\s]+((?:scripts|lib)(?:\/[A-Za-z0-9_][A-Za-z0-9._-]*)*)/g)) dirs.add(m[1]);
+  return [...dirs];
+};
+// The suite runs TRACKED files only (`git ls-files`), so only tracked files are credited: an
+// untracked test on disk is not something the permanent suite would execute. If git cannot answer,
+// nothing is credited through --suite (fail-closed: unknown never means reached).
+const trackedFiles = (() => {
+  const r = spawnSync("git", ["ls-files", "-z"], { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+  return r.status === 0 && !r.error ? new Set(r.stdout.split("\0").filter(Boolean)) : new Set();
+})();
+const suiteReaches = (file, dirs, tracked = trackedFiles) =>
+  dirs.some((d) => file.startsWith(`${d}/`)) && allowlistRefusal(file) === null && tracked.has(file);
+const suiteDirs = suiteDirsIn(CORPUS);
+
 // ── enumerate test-shaped files ──────────────────────────────────────────────
 const testFiles = [];
 const walkTests = (d) => {
@@ -197,6 +220,7 @@ function reaches(file) {
     if (rel !== base && CORPUS.includes(rel)) return `package-relative path (${rel})`;
   }
   for (const dir of playwrightDirs) if (file.startsWith(dir.replace(/^\.\//, ""))) return "playwright testDir";
+  if (suiteReaches(file, suiteDirs)) return "shared runner --suite directory";
   if (CORPUS.includes(base)) return `basename (${base})`;
   return null;
 }
@@ -252,6 +276,19 @@ const staleKeys = (files, decls) => {
   // precisely the state this check was added to end.
   const stalePositive = staleKeys(["a/b.test.ts"], new Map([["gone/", "r"]])).join() === "gone/";
   const staleNegative = staleKeys(["a/b.test.ts"], new Map([["a/", "r"]])).length === 0;
+  // The --suite contribution, both ways: a runner line naming a directory reaches an allowlisted test
+  // inside it, and nothing else (a sibling directory, a .ts file the runner would never execute, a
+  // prefix that is not a path boundary, a line that does not invoke the runner).
+  const sd = suiteDirsIn('cmd: ["node", "scripts/check-local-build-regressions.mjs", "--suite", "scripts/x/test"] },');
+  const tr = new Set(["scripts/x/test/a.test.mjs", "scripts/x/other/a.test.mjs", "scripts/x/test/a.test.ts", "scripts/x/testing/a.test.mjs"]);
+  const suitePositive = sd.join() === "scripts/x/test" && suiteReaches("scripts/x/test/a.test.mjs", sd, tr);
+  const suiteNegative =
+    !suiteReaches("scripts/x/test/untracked.test.mjs", sd, tr) &&
+    suiteDirsIn("").length === 0 &&
+    !suiteReaches("scripts/x/other/a.test.mjs", sd, tr) &&
+    !suiteReaches("scripts/x/test/a.test.ts", sd, tr) &&
+    !suiteReaches("scripts/x/testing/a.test.mjs", sd, tr) &&
+    suiteDirsIn("node scripts/other.mjs --suite scripts/x/test").length === 0;
   if (
     testFiles.length < FILE_FLOOR ||
     reachedScriptNames.size < SCRIPT_FLOOR ||
@@ -259,13 +296,16 @@ const staleKeys = (files, decls) => {
     !positive ||
     !negative ||
     !stalePositive ||
-    !staleNegative
+    !staleNegative ||
+    !suitePositive ||
+    !suiteNegative
   ) {
     console.error(
       "✗ SELF-TEST FAILED — " +
         `testFiles=${testFiles.length} (floor ${FILE_FLOOR}), reachedScripts=${reachedScriptNames.size} ` +
         `(floor ${SCRIPT_FLOOR}), knownReached=${knownReached ?? "(none found)"}, positive=${positive}, ` +
-        `negative=${negative}, stalePositive=${stalePositive}, staleNegative=${staleNegative}. ` +
+        `negative=${negative}, stalePositive=${stalePositive}, staleNegative=${staleNegative}, ` +
+        `suitePositive=${suitePositive}, suiteNegative=${suiteNegative}. ` +
         "The reachability derivation has drifted from how this repo invokes tests; " +
         "a gate that resolves nothing is green about nothing.",
     );

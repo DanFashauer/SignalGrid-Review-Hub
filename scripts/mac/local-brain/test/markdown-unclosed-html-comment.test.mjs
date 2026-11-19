@@ -1015,3 +1015,38 @@ for (const treatUnclosedAsFence of [true, false]) {
     });
   }
 }
+
+// 24. Root on 0b035116: an interrupting container whose content is opaque (indented code, a fence, or raw HTML of
+//     types 1-6, including a later line of that container) must not be unmasked by the split, while genuine
+//     interruption links and lazy continuations stay readable. Each expectation was checked against
+//     markdown-it 14 (commonmark); under both fence options, shape checked.
+for (const treatUnclosedAsFence of [true, false]) {
+  for (const [name, input] of [
+    ['indented code inside an interrupting bullet', '`\n-     [H](docs/H.md)\n`\n'],
+    ['indented code inside an interrupting block quote', '`\n>     [H](docs/H.md)\n`\n'],
+    ['tab-indented code inside an interrupting bullet', '`\n-\t\t[H](docs/H.md)\n`\n'],
+    ['a fence opened inside an interrupting bullet', '`\n- ```\n  [H](docs/H.md)\n`\n'],
+    ['raw HTML (script) inside an interrupting bullet', '`\n- <script>\n  [H](docs/H.md)\n`\n'],
+    ['raw HTML (script) continuing on a second block-quote line', '`\n> <script>\n> [H](docs/H.md)\n`\n'],
+    ['raw HTML (div) on a continuation line of an interrupting bullet', '`\n- item\n  <div>\n  [H](docs/H.md)\n`\n'],
+    ['raw HTML (script) on a continuation line of an ordered item', '`\n1.  item\n    <script>\n    [H](docs/H.md)\n`\n'],
+  ]) {
+    test(`opaque interrupting container: ${name} hides H (treatUnclosedAsFence=${treatUnclosedAsFence})`, () => {
+      const out = maskNonProse(input, { treatUnclosedAsFence });
+      assertShape(input, out);
+      assert.ok(!out.includes('docs/H.md'), `hidden route kept: ${JSON.stringify(out)}`);
+    });
+  }
+  for (const [name, input] of [
+    ['a block quote, then a lazy line', '`\n> quote\n[V](docs/V.md)\n`\n'],
+    ['a bullet, then a lazy line', '`\n- item\n[V](docs/V.md)\n`\n'],
+    ['an ordered item, then a lazy line', '`\n1. item\n[V](docs/V.md)\n`\n'],
+    ['inline HTML (type 7) inside a bullet, then a lazy line', '`\n- <span>\n[V](docs/V.md)\n`\n'],
+  ]) {
+    test(`genuine interruption control: ${name} keeps V (treatUnclosedAsFence=${treatUnclosedAsFence})`, () => {
+      const out = maskNonProse(input, { treatUnclosedAsFence });
+      assertShape(input, out);
+      assert.ok(out.includes('[V](docs/V.md)'), `route lost: ${JSON.stringify(out)}`);
+    });
+  }
+}

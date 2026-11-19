@@ -238,10 +238,34 @@ function indentColumns(line) {
 const ATX_HEADING = /^ {0,3}#{1,6}(?:[ \t]|$)/;
 // One or more list-item or block-quote markers, then up to three spaces, then a comment opener.
 const CONTAINER_START = /^ {0,3}(?:>|[-+*](?:[ \t]|$)|\d{1,9}[.)](?:[ \t]|$))/;
-// A container start that certainly interrupts an open paragraph (CommonMark §5.1, §5.2): a block-quote marker,
-// or a list marker with content, ordered only when it starts at 1. Anything else, such as `2.`, an empty item or a
-// leading zero, is left in the paragraph, which can only mask more, never less.
+// A container start that interrupts an open paragraph (CommonMark §5.1, §5.2): a block-quote marker, or a list
+// marker with content, ordered only when it starts at 1. A start that cannot interrupt (`2.`, an empty item) stays in
+// the paragraph. `01.` does interrupt under the pinned engine (start number 1) but is conservatively not split here;
+// leaving it joined can only mask more, never less.
 const PARAGRAPH_INTERRUPT = /^ {0,3}(?:>|[-+*][ \t]+\S|1[.)][ \t]+\S)/;
+
+/**
+ * Whether a line, once its leading container markers are removed, could open an opaque block inside a container:
+ * indented code (four or more columns, or any tab, after the last marker), a fence, or a raw HTML block of types
+ * 1–6. Containers are not modelled, so a split before such a line could expose code or raw HTML as prose (Root on
+ * 2201bb6a); the paragraph is then left joined. Over-detection only keeps lines joined, which masks more.
+ */
+function opensOpaqueInContainer(line) {
+  let rest = content(line);
+  let afterMarker = false;
+  for (;;) {
+    const m = /^[ \t]*(?:>|[-+*](?=[ \t]|$)|\d{1,9}[.)](?=[ \t]|$))/.exec(rest);
+    if (!m) break;
+    rest = rest.slice(m[0].length);
+    afterMarker = true;
+  }
+  const lead = /^[ \t]*/.exec(rest)[0];
+  if (afterMarker && (lead.includes("\t") || lead.length >= 4) && rest.length > lead.length) return true;
+  const body = rest.slice(lead.length);
+  if (/^(?:`{3,}|~{3,})/.test(body)) return true;
+  const block = htmlBlockStart(body, true);
+  return block !== null && block.type !== 7;
+}
 const CONTAINER_COMMENT = /^((?: {0,3}(?:[-+*]|\d{1,9}[.)])[ \t]+| {0,3}>[ \t]?)+)( {0,3})<!--/;
 const SETEXT_UNDERLINE = /^ {0,3}(?:=+|-+)[ \t]*$/;
 
@@ -572,7 +596,14 @@ export function maskNonProse(text, { treatUnclosedAsFence = true } = {}) {
       // A list item or block quote interrupting a plain paragraph ends it, so an inline comment or code span
       // cannot pair across that boundary (Codex on 1f3ff8aa). A paragraph that already began in a container keeps
       // its lines together: containers are not modelled, so its extent is not split further.
-      const interrupts = inPara && !paraBoxed && PARAGRAPH_INTERRUPT.test(text);
+      let interrupts = inPara && !paraBoxed && PARAGRAPH_INTERRUPT.test(text);
+      // Look over the lines the new segment would take: if any could open code or raw HTML inside the container,
+      // stay joined, and box the paragraph so a later marker line inside that container (still opaque) cannot split.
+      let opaque = false;
+      for (let k = i; interrupts && k < lines.length && segment[k] === -1 && !isBlank(content(lines[k])); k += 1) {
+        if (opensOpaqueInContainer(lines[k])) { interrupts = false; opaque = true; }
+      }
+      if (opaque) paraBoxed = true;
       if (!inPara || interrupts) {
         paraStart = i;
         paraBoxed = CONTAINER_START.test(text);

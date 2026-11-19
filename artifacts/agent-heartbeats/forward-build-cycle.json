@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-11-18T22:11:45.813Z",
-  "result": "acted: landed #2326 (4506e373, DR-037; shared regression runner + Intel Mac slices); #2344 heartbeats merged; #2343 qualifying (pf/br running on exact head); #2326 landing record + L62 queued. in flight H/S/O = 0/0/0 (wave paused: owner priority = independent Mac operation). sub-brains: none spawned. owner queue: none new"
+  "firedAt": "2026-11-19T00:11:24.536Z",
+  "result": "acted: #2343 landed 41ffd3a6 (protections; canonical readback posted); #2326 landing record + L62 published as #2353 (pf/br 0/0), awaiting CI. in flight H/S/O = 0/0/0 (wave paused: owner priority = independent Mac operation). sub-brains: none spawned. owner queue: none new"
 }

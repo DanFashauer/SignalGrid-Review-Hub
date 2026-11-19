@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-11-19T14:30:07.505Z",
-  "result": "quiet: wave deferred under the owner's independent-operation priority. Acted: #2378 at head 0cfb1e74 (heartbeat-only delta), Linux green, Mac slices running; parser #2368 candidate 6199b240 and Mac CI setup receipt 4cc408e4 cleared source review, both waiting on #2378 landing. In flight H/S/O = 0/0/0. Heartbeat merge deferred per #439 window (until #2378 lands or 15:24:50Z). sub-brains: none. Owner queue: Mac daily model-call limit raise (Root applying)."
+  "firedAt": "2026-11-19T16:15:47.833Z",
+  "result": "acted: wave held under owner priority (independent Mac operation is the exclusive path); in flight H/S/O = 0/0/0; cloud writer on the critical path: setup receipt c5c6f8ee source-cleared (Root 7014446159), its one full chain running since 16:02:38Z; parser #2368 candidate d73a2ac3 exposed for source review (7014860572); #2374 ordinary build in automatic qualification, no PR yet | sub-brains: none spawned (held) | owner queue: none new"
 }

@@ -372,7 +372,19 @@ const staleKeys = (files, decls) => {
   let deadControlsBite = false;
   let PF = "";
   let runnerNegative = false;
+  let exitControlBites = false;
   try {
+    // Exit status: the listing is valid JSON naming the suite step, but the runner exits 3 from an
+    // exit handler (the same negative control scripts/check-gate-self-tests-run.mjs uses). The raw
+    // spawn proves the output alone would credit it, so the refusal is the status check's.
+    const EXIT3 = runnerSrc([OTHER_STEP, SUITE_STEP], 'process.on("exit", () => { process.exitCode = 3; });');
+    const exitFile = join(scratch, "runner-exit3.mjs");
+    writeFileSync(exitFile, EXIT3);
+    const raw = spawnSync(process.execPath, [exitFile, "--list-steps"], { cwd: scratch, encoding: "utf8", timeout: 60_000, killSignal: "SIGKILL" });
+    exitControlBites =
+      runnerShapeOk(EXIT3) && raw.status === 3 &&
+      suiteDirsFromListing(raw.stdout).join() === "scripts/x/test" &&
+      listRunner(exitFile, scratch) === "";
     deadControlsBite = Object.values(DEAD).every((src) => src.split("\n").includes(SUITE_STEP) && runnerShapeOk(src));
     PF = listingOf(runnerSrc([OTHER_STEP, SUITE_STEP]));
     runnerNegative =
@@ -414,6 +426,7 @@ const staleKeys = (files, decls) => {
     none({ workflows: [wf('run: node scripts/check-local-build-regressions.mjs --suite "scripts/x/test"')] }) &&
     none({ workflows: [wf("run: node scripts/other.mjs --suite scripts/x/test")] }) &&
     deadControlsBite &&
+    exitControlBites &&
     runnerNegative &&
     suiteDirsFrom({ listing: "not json" }).length === 0 &&
     suiteDirsFrom({ listing: "[]" }).length === 0 &&

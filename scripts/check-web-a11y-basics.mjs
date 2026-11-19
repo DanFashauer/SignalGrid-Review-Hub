@@ -514,6 +514,41 @@ export function opaqueHookExports(code) {
  * a polling file exports — by its exported name, by an `import { X as Y }`
  * alias, or as the default import of a polling module. Iterated to a fixpoint.
  */
+/** TanStack hooks whose FIRST argument is the options object (and so may carry `refetchInterval`). */
+const OPTIONS_HOOKS = /^(?:useQuery|useInfiniteQuery|useSuspenseQuery|useSuspenseInfiniteQuery)$/;
+
+/**
+ * What a query hook call's options say, from its argument text `args` (parens included):
+ * `{ text, opaque }`. An inline object is read as written. A bare identifier is read through
+ * its single same-file `const` object initializer. Anything the gate cannot establish (an
+ * unresolved or non-`const` identifier, a spread, and — for the options-taking TanStack hooks —
+ * a member, call or other non-object first argument) is `opaque`: it could carry
+ * `refetchInterval`, so the call counts as possibly polling.
+ */
+function queryOptionsRead(code, args, callee) {
+  const first = splitTop(args.trim().replace(/^\(/, "").replace(/\)$/, ""), ",")[0]?.trim() ?? "";
+  const id = /^[A-Za-z_$][\w$]*$/.exec(first)?.[0];
+  if (!id || id === "undefined") {
+    if (first.startsWith("{") || first === "" || !OPTIONS_HOOKS.test(callee ?? "")) return { text: args, opaque: false };
+    return { text: args, opaque: id !== "undefined" };
+  }
+  const decls = [...code.matchAll(new RegExp(`(?<![\\w$.])const\\s+${escapeRegExp(id)}\\s*(?::[^=]+)?=\\s*`, "g"))];
+  if (decls.length !== 1) return { text: args, opaque: true };
+  const init = expressionFrom(code, decls[0].index + decls[0][0].length);
+  if (!init.startsWith("{")) return { text: init, opaque: true };
+  return { text: init, opaque: /\.\.\./.test(init) && !/\brefetchInterval\b/.test(init) };
+}
+
+/** A file calls an options-taking TanStack hook with options the gate cannot read. */
+function hasOpaqueQueryOptions(code) {
+  for (const m of code.matchAll(/(?<![\w$.])(useQuery|useInfiniteQuery|useSuspenseQuery|useSuspenseInfiniteQuery)\s*(?:<[^()]*>)?\s*\(/g)) {
+    const open = m.index + m[0].length - 1;
+    const { spans } = callSpans(code.slice(open), /\(/g);
+    if (spans.length && queryOptionsRead(code, code.slice(open).slice(spans[0][0], spans[0][1]), m[1]).opaque) return true;
+  }
+  return false;
+}
+
 export function checkLiveRegions(files, defaultPolls, generated = new Set()) {
   const failures = [];
   // Only the LiveRegion component itself is exempt. App.tsx is read like any
@@ -573,7 +608,7 @@ export function checkLiveRegions(files, defaultPolls, generated = new Set()) {
       if (polls.has(f.rel)) continue;
       // A timer driving a refetch on a recurring schedule polls (timerPolls).
       const intervalRefetch = timerPolls(f.code);
-      if (/\brefetchInterval\b/.test(f.code) || intervalRefetch || (defaultPolls && callsQueryHook(f.code, generated)) || usesPolling(f)) {
+      if (/\brefetchInterval\b/.test(f.code) || intervalRefetch || hasOpaqueQueryOptions(f.code) || (defaultPolls && callsQueryHook(f.code, generated)) || usesPolling(f)) {
         polls.add(f.rel);
         // A component renders its own live region, so it does not carry polling
         // to the file rendering it. Only a PascalCase name (upper then lower
@@ -977,17 +1012,9 @@ export function checkUnannouncedQueries(rel, code, isHook, defaultPolls, shellSp
   // An options argument passed as a bare identifier (`useQuery(options)`) is read through
   // its same-file `const` initializer; one the gate cannot resolve (a parameter, an import,
   // a `let`, a computed value, a spread) could carry `refetchInterval`, so it counts as polled.
-  const resolveArgs = (args) => {
-    const id = /^\(\s*([A-Za-z_$][\w$]*)\s*(?:,[\s\S]*)?\)$/.exec(args.trim())?.[1];
-    if (!id || id === "undefined") return { text: args, opaque: false };
-    const decls = [...code.matchAll(new RegExp(`(?<![\\w$.])const\\s+${escapeRegExp(id)}\\s*(?::[^=]+)?=\\s*`, "g"))];
-    if (decls.length !== 1) return { text: args, opaque: true };
-    const init = expressionFrom(code, decls[0].index + decls[0][0].length);
-    if (!init.startsWith("{") || /\.\.\./.test(init)) return { text: init, opaque: !init.startsWith("{") || !/\brefetchInterval\b/.test(init) };
-    return { text: init, opaque: false };
-  };
+  const resolveArgs = (args, callee) => queryOptionsRead(code, args, callee);
   const polled = (callee, args) => {
-    const r = resolveArgs(args);
+    const r = resolveArgs(args, callee);
     return defaultPolls || r.opaque || /\brefetchInterval\b/.test(args) || /\brefetchInterval\b/.test(r.text) || carriers.has(callee) ||
       [...carriers].some((n) => new RegExp(`(?<![\\w$.])${escapeRegExp(n)}(?![\\w$])`).test(args));
   };
@@ -2549,6 +2576,9 @@ function selfTest() {
         const read = "{ queryKey: ['feed'], queryFn: readFeed, refetchInterval: 5000 }";
         return run(page(`const options = ${read};`)) > 0 && run(page("", `useQuery(${read})`)) > 0 &&
           run(page(`let options = ${read};`)) > 0 &&
+          // A file with no `refetchInterval` of its own is still read when a query's options cannot be:
+          ["const q = useQuery(props.options);", "const q = useQuery(opts);", "const options = makeOpts(); const q = useQuery(options);"].every((c) => run(page("", c)) > 0) &&
+          run(page("const o = { queryKey: ['a'], queryFn: f };", "useQuery(o)")) === 0 && run(page("", "useQuery({ queryKey: ['a'], queryFn: f })")) === 0 &&
           run(page(`const options = { ...base, ${read.slice(2)};`)) > 0 &&
           run(page("const options = { queryKey: ['feed'], queryFn: readFeed };")) === 0;
       })()],

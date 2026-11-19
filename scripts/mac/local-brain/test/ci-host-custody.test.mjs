@@ -330,3 +330,115 @@ test("workflow pipeline: the slice's code is preflight's own, and a failed log w
   assert.notEqual(run(0, true), "0", "preflight passed but the log could not be written");
   assert.ok(!workflow.includes("node scripts/preflight.mjs >"), "the unbounded redirect form stays out");
 });
+
+// ---- the early setup identity receipt: partial, nonqualifying, and never a slice record ----
+// Root on #439 (7011292797): two slices lost their runner with no log and no record. The receipt is
+// uploaded before the long step so the slice's identity survives; it must never count as a result.
+const receiptWriter = (/node --input-type=module - <<'SETUP_RECEIPT'\n([\s\S]*?)\n {10}SETUP_RECEIPT\n/.exec(workflow) || [])[1]?.replace(/^ {10}/gm, "") ?? "";
+const RECEIPT_KEYS = ["kind", "receiptVersion", "status", "qualifying", "note", "capturedAt", "prHead", "checkout", "tree", "runId", "runAttempt", "slice",
+  "osName", "osProductVersion", "osBuildVersion", "machineArch", "runnerArch", "imageOs", "imageVersion", "runnerVersion",
+  "nodeVersion", "pnpmVersion", "gitVersion", "unknown"];
+
+/** Run the workflow's own receipt writer in a scratch repo; returns { status, receipt, files, stdout }. */
+function writeReceipt(extraEnv) {
+  const repo = mkdtempSync(join(tmpdir(), "ci-receipt-"));
+  try {
+    writeFileSync(join(repo, "a.txt"), "a\n");
+    scratchGitOk(repo, ["init", "-q", "-b", "SignalGrid_Alpha"]);
+    scratchGitOk(repo, ["add", "-A"]);
+    scratchGitOk(repo, ["commit", "-q", "-m", "a"]);
+    const out = join(repo, "out");
+    mkdirSync(out);
+    const run = spawnSync(process.execPath, ["--input-type=module", "-"], {
+      cwd: repo, input: receiptWriter, encoding: "utf8",
+      env: { PATH: process.env.PATH, HOME: repo, RECEIPT_DIR: out, ...extraEnv },
+    });
+    const files = existsSync(out) ? spawnSync("ls", [out], { encoding: "utf8" }).stdout.trim().split("\n").filter(Boolean) : [];
+    const receipt = files.length === 1 ? JSON.parse(readFileSync(join(out, files[0]), "utf8")) : null;
+    return { status: run.status, receipt, files, stdout: run.stdout, head: scratchGitOk(repo, ["rev-parse", "HEAD"]).trim() };
+  } finally { rmSync(repo, { recursive: true, force: true }); }
+}
+
+test("setup receipt: the workflow's writer emits only allowlisted, validated identity facts and says it is nonqualifying", () => {
+  assert.ok(receiptWriter.length > 0, "the workflow carries the receipt writer");
+  const r = writeReceipt({
+    RECEIPT_SLICE: "3", RECEIPT_PR_HEAD: "a".repeat(40), RECEIPT_RUN_ID: "44535901298", RECEIPT_RUN_ATTEMPT: "1",
+    RECEIPT_RUNNER_OS: "macOS", RECEIPT_RUNNER_ARCH: "X64", ImageOS: "macos26", ImageVersion: "20260824.0517.1",
+    SECRET_PLANTED: "do-not-copy-this-value",
+  });
+  assert.equal(r.status, 0);
+  assert.deepEqual(r.files, ["mac-pr-setup-receipt-slice-3.json"]);
+  const x = r.receipt;
+  assert.deepEqual(Object.keys(x), RECEIPT_KEYS, "exactly the allowlisted keys, in order");
+  assert.equal(x.kind, "mac-pr-setup-receipt");
+  assert.equal(x.status, "PARTIAL_NONQUALIFYING");
+  assert.equal(x.qualifying, false);
+  assert.equal(x.prHead, "a".repeat(40));
+  assert.equal(x.checkout, r.head, "the checkout is read from git, not from the event");
+  assert.match(x.tree, /^[0-9a-f]{40}$/);
+  assert.equal(x.runId, "44535901298");
+  assert.equal(x.runAttempt, "1");
+  assert.equal(x.slice, 3);
+  assert.equal(x.imageOs, "macos26");
+  assert.equal(x.imageVersion, "20260824.0517.1");
+  assert.equal(x.runnerVersion, null, "no runner version is guessed");
+  assert.match(x.capturedAt, /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/);
+  assert.deepEqual(x.unknown, RECEIPT_KEYS.filter((k) => x[k] === null), "every null fact is listed as unknown");
+  assert.ok(x.unknown.includes("runnerVersion"));
+  assert.ok(!JSON.stringify(x).includes("do-not-copy-this-value"), "no other environment value is copied");
+  assert.ok(!("v" in x), "no slice-record version field: a receipt can never look like a versioned slice record");
+  const claims = Object.entries(x).filter(([k]) => k !== "note");
+  assert.ok(!claims.some(([k, v]) => /admission|cleanup|result|pass|success|exit/i.test(k) || /^(?:ok|passed|success)$/i.test(String(v))), "no admission, cleanup or result claim");
+});
+
+test("setup receipt: malformed identity values are recorded as unknown, never passed through", () => {
+  const r = writeReceipt({
+    RECEIPT_SLICE: "9", RECEIPT_PR_HEAD: "not-a-sha", RECEIPT_RUN_ID: "12x", RECEIPT_RUN_ATTEMPT: "0",
+    RECEIPT_RUNNER_OS: "mac\nOS", ImageOS: "x".repeat(101),
+  });
+  assert.equal(r.status, 0);
+  assert.deepEqual(r.files, ["mac-pr-setup-receipt-slice-unknown.json"]);
+  for (const k of ["slice", "prHead", "runId", "runAttempt", "osName", "imageOs", "imageVersion", "runnerArch"]) {
+    assert.equal(r.receipt[k], null, k);
+    assert.ok(r.receipt.unknown.includes(k), `${k} is listed as unknown`);
+  }
+});
+
+test("setup receipt: written and uploaded before the long step, outside the checkout and outside the slice-record namespace", () => {
+  const steps = [...workflow.matchAll(/^ {6}- (?:name: (.+)|uses: (.+))$/gm)].map((m) => m[1] ?? m[2]);
+  const write = steps.indexOf("Write the setup identity receipt (partial, nonqualifying)");
+  const upload = steps.indexOf("Upload the setup identity receipt (partial, nonqualifying)");
+  const verify = steps.indexOf("Install and verify under the shared host reservation");
+  assert.ok(write >= 0 && upload === write + 1 && verify === upload + 1, `step order: ${JSON.stringify(steps)}`);
+  const block = workflow.slice(workflow.indexOf("- name: Upload the setup identity receipt"), workflow.indexOf("- name: Install and verify"));
+  assert.match(block, /if: always\(\)/);
+  const name = (/^\s+name: (mac-pr-setup-receipt-.+)$/m.exec(block) || [])[1];
+  assert.ok(name, "the receipt artifact has its own name");
+  assert.ok(!name.startsWith("mac-pr-slice-record-"), "the receipt artifact is outside the slice-record namespace");
+  const pattern = (/pattern: (.+)$/m.exec(workflow) || [])[1];
+  assert.equal(pattern, "mac-pr-slice-record-${{ github.run_id }}-${{ github.run_attempt }}-*", "the aggregate's download pattern is unchanged");
+  const asRegex = new RegExp("^" + pattern.replace(/\$\{\{[^}]*\}\}/g, "X").replace(/[.+?^$()|[\]\\]/g, "\\$&").replace(/\*/g, ".*") + "$");
+  assert.ok(!asRegex.test(name.replace(/\$\{\{[^}]*\}\}/g, "X")), "the aggregate's pattern never matches the receipt");
+  assert.match(block, /path: \$\{\{ runner\.temp \}\}\/mac-pr-setup-receipt\//, "the receipt is uploaded from outside the checkout");
+});
+
+test("setup receipt: the aggregate refuses it as a slice record, by file name and by record shape", async () => {
+  const { aggregate, planOf } = await import("../../../lib/preflight-slice.mjs");
+  const plan = planOf([{ name: "one", cmd: ["true"] }, { name: "two", cmd: ["true"] }], "/repo");
+  // The receipt as the workflow writes it, given every identity field a slice record would carry.
+  const receipt = { ...writeReceipt({ RECEIPT_SLICE: "1", RECEIPT_RUN_ATTEMPT: "1" }).receipt, count: 2, checkout: "b".repeat(40), prHead: null, attempt: null };
+  const verdict = aggregate({ records: [receipt, { ...receipt, slice: 2 }], plan, count: 2, checkout: "b".repeat(40), prHead: null, attempt: null, jobResult: "success" });
+  assert.equal(verdict.ok, false);
+  assert.ok(verdict.problems.some((p) => /is not a version-\d+ slice record/.test(p)), JSON.stringify(verdict.problems));
+  assert.ok(verdict.problems.some((p) => /slice 1\/2 left no record/.test(p)), JSON.stringify(verdict.problems));
+  // The aggregate reads only preflight-slice-N.json names; a receipt file in its directory is never read.
+  const dir = mkdtempSync(join(tmpdir(), "ci-receipt-agg-"));
+  try {
+    for (const k of [1, 2, 3, 4]) writeFileSync(join(dir, `mac-pr-setup-receipt-slice-${k}.json`), JSON.stringify({ ...receipt, slice: k, count: 4 }));
+    const root = join(MAC, "..", "..");
+    const run = spawnSync(process.execPath, [join(root, "scripts", "preflight.mjs"), "--aggregate", dir, "--slices", "4", "--jobs-result", "success"], { cwd: root, encoding: "utf8", env: { PATH: process.env.PATH, HOME: process.env.HOME ?? dir } });
+    assert.equal(run.status, 1, run.stdout + run.stderr);
+    assert.match(run.stderr + run.stdout, /slice 1\/4 left no record/);
+    assert.doesNotMatch(run.stdout, /Preflight PASSED/);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});

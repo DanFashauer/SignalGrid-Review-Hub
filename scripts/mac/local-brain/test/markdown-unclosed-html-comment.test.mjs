@@ -916,3 +916,37 @@ for (const treatUnclosedAsFence of [true, false]) {
     });
   }
 }
+
+// 21. Root on 0c2cc161. A reference definition is consumed before the rest of its paragraph is inline-parsed
+//     (cmark-gfm blocks.c), so each definition is its own segment and its title, which is metadata and never a
+//     link, is blanked: a route inside a title is not credited, closed comment or not, and an opener or a backtick
+//     in a title cannot pair with prose below. Labels and destinations stay readable, and a line that is not a
+//     valid definition stays prose, its real links kept. Each under both fence options, shape checked.
+for (const treatUnclosedAsFence of [true, false]) {
+  for (const [name, input] of [
+    ['a closed comment in a same-line title', '[r]: /url "<!-- [H](docs/H.md) -->"\n[V](docs/V.md)\n'],
+    ['a closed comment in a next-line title', "[r]: /url\n'<!-- [H](docs/H.md) -->'\n[V](docs/V.md)\n"],
+    ['a closed comment across a two-line title', '[r]: /url "<!--\n[H](docs/H.md) -->"\n[V](docs/V.md)\n'],
+    ['a closed comment in the second of two definitions', '[a]: /x\n[b]: /y "<!-- [H](docs/H.md) -->"\n[V](docs/V.md)\n'],
+    ['a route in a plain title', '[r]: /url "[H](docs/H.md)"\n[V](docs/V.md)\n'],
+  ]) {
+    test(`Root 0c2cc161: ${name} hides H, keeps V (treatUnclosedAsFence=${treatUnclosedAsFence})`, () => {
+      const out = maskNonProse(input, { treatUnclosedAsFence });
+      assertShape(input, out);
+      assert.ok(!out.includes('docs/H.md'), `hidden route kept: ${JSON.stringify(out)}`);
+      assert.ok(out.includes('[V](docs/V.md)'), `route lost: ${JSON.stringify(out)}`);
+    });
+  }
+  for (const [name, input, kept] of [
+    ['a genuine definition destination', '[r]: docs/R.md\n[V](docs/V.md)\n', '[r]: docs/R.md'],
+    ['an opener in one title cannot reach the next definition', '[a]: /x "<!--"\n[r]: docs/R.md "-->"\n[V](docs/V.md)\n', '[r]: docs/R.md'],
+    ['a real link on a line that is not a definition', '[a]: /x "<!--"\n[b]: a(b) ([K](docs/K.md))\n-->[V](docs/V.md)\n', '[K](docs/K.md)'],
+  ]) {
+    test(`Root 0c2cc161: ${name} keeps it and V (treatUnclosedAsFence=${treatUnclosedAsFence})`, () => {
+      const out = maskNonProse(input, { treatUnclosedAsFence });
+      assertShape(input, out);
+      assert.ok(out.includes(kept), `definition lost: ${JSON.stringify(out)}`);
+      assert.ok(out.includes('[V](docs/V.md)'), `route lost: ${JSON.stringify(out)}`);
+    });
+  }
+}

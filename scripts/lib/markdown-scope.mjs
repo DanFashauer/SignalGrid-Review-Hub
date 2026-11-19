@@ -260,20 +260,32 @@ function allReferenceDefinitions(paraLines) {
  * #2368: a backtick in a definition's title must not pair with one in the prose after it).
  */
 function referenceDefinitionLines(paraLines) {
+  const spans = referenceDefinitionSpans(paraLines);
+  return spans.length === 0 ? 0 : spans[spans.length - 1];
+}
+
+/**
+ * The same recognizer, reporting where each successive definition ends: entry n is the number of lines consumed
+ * by the first n + 1 definitions. Empty when none is recognized or the paragraph is not judged. `titles[n]` is the
+ * [start, end) offset of definition n's title, delimiters included, in the CR-stripped lines joined by LF, or null.
+ */
+function referenceDefinitionSpans(paraLines) {
   const text = paraLines.map(content).join("\n");
   // A backslash before anything but ASCII punctuation is read differently by different renderers inside a
   // destination (markdown-it 14.3.0 consumes `\ ` as a pair); not judged, so the underline stands.
-  if (/\\(?![!-\/:-@[-`{-~])/.test(text)) return 0;
+  if (/\\(?![!-\/:-@[-`{-~])/.test(text)) return [];
   // A CR left after each line's CRLF ending is stripped is a line ending to cmark-gfm (blocks.c splits on it before
   // block parsing), never label or destination text; this recognizer does not model CR-only lines, so any residual
   // CR means "not judged" and the underline stands (Root on c28a38ca).
-  if (text.includes("\r")) return 0;
+  if (text.includes("\r")) return [];
   let at = 0;
   const ws = () => {
     while (at < text.length && (text[at] === " " || text[at] === "\t")) at += 1;
   };
+  let title = null;
   // One definition from `at`; returns the index after it (at a line end or end of text), or -1.
   const definition = () => {
+    title = null;
     let p = at;
     let n = 0;
     while (text[p] === " " && n < 3) (p += 1), (n += 1);
@@ -348,23 +360,29 @@ function referenceDefinitionLines(paraLines) {
         q += 1;
       }
       if (ok) {
+        const opened = at;
         at = q + 1;
         ws();
-        if (at >= text.length || text[at] === "\n") return at;
+        if (at >= text.length || text[at] === "\n") {
+          title = [opened, q + 1];
+          return at;
+        }
       }
     }
     // No valid title: the definition ends at its destination line, which must hold nothing else.
     if (destLineEnds) return afterDest + (text.slice(afterDest).match(/^[ \t]*/)[0].length);
     return -1;
   };
-  let consumed = 0;
+  const spans = [];
+  spans.titles = [];
   while (at < text.length) {
     const end = definition();
     if (end < 0) break;
-    consumed = end;
+    spans.push(text.slice(0, end).split("\n").length);
+    spans.titles.push(title);
     at = end < text.length ? end + 1 : end;
   }
-  return consumed === 0 ? 0 : text.slice(0, consumed).split("\n").length;
+  return spans;
 }
 
 /**
@@ -551,22 +569,49 @@ export function maskNonProse(text, { treatUnclosedAsFence = true } = {}) {
       inPara = true;
     }
   }
-  // Leading lines of a paragraph that are wholly reference definitions are not inline-parsed (§4.7), so they join
-  // no inline segment: a backtick or `<!--` in a definition's title cannot pair with prose below it. With a lone
-  // CR in the document the definitions are not judged, and the paragraph stays one segment, as before.
+  // Leading lines of a paragraph that are wholly reference definitions are consumed before the rest is inline-parsed
+  // (§4.7; cmark-gfm blocks.c removes the definition prefix first), so each definition becomes its own segment: a
+  // backtick or `<!--` in a definition's title cannot pair with prose below it or with another definition, while a
+  // comment closed inside one title is still masked as before (Root on 0c2cc161: `[r]: /url "<!-- [H](docs/H.md)
+  // -->"` must not credit H). With a lone CR in the document the definitions are not judged, and the paragraph
+  // stays one segment, as before.
   if (judgeDefinitions) {
     for (let i = 0; i < lines.length; ) {
       let j = i;
       while (j + 1 < lines.length && segment[j + 1] === segment[i] && segment[i] >= 0) j += 1;
       if (segment[i] >= 0 && !tail.has(i)) {
-        const defs = referenceDefinitionLines(source.slice(i, j + 1));
+        const spans = referenceDefinitionSpans(source.slice(i, j + 1));
+        const defs = spans.length === 0 ? 0 : spans[spans.length - 1];
         // A list-item or block-quote line further down means the paragraph's real extent is unknown here
         // (containers are not modelled), so the segment is left as it was.
         const boxedBelow = source.slice(i + defs, j + 1).some((l) => CONTAINER_START.test(content(l)));
         // So does a paragraph whose start is not certain: only one at the top, after a blank line or after an ATX
         // heading is judged; after anything else a container may have ended where this scan does not know.
         const certainStart = i === 0 || isBlank(source[i - 1]) || ATX_HEADING.test(content(source[i - 1]));
-        if (!boxedBelow && certainStart) for (let k = i; k < i + defs; k += 1) segment[k] = -2;
+        if (!boxedBelow && certainStart) {
+          let from = i;
+          for (const end of spans) {
+            const id = nextSegment++;
+            for (let k = from; k < i + end; k += 1) segment[k] = id;
+            from = i + end;
+          }
+          // A title is metadata, never a link a reader can click, so it is blanked whole: a route written in it is
+          // not credited, whatever comment or backtick pairing the published helper would have reached across
+          // segments (Root on 0c2cc161). Labels and destinations are left as they were.
+          let offset = 0;
+          const starts = [];
+          for (let k = i; k < i + defs; k += 1) (starts.push(offset), (offset += content(lines[k]).length + 1));
+          for (const range of spans.titles ?? []) {
+            if (!range) continue;
+            for (let k = i; k < i + defs; k += 1) {
+              const lineStart = starts[k - i];
+              const body = content(lines[k]);
+              const a = Math.max(range[0] - lineStart, 0);
+              const b = Math.min(range[1] - lineStart, body.length);
+              if (a < b) lines[k] = body.slice(0, a) + blank(body.slice(a, b)) + lines[k].slice(b);
+            }
+          }
+        }
       }
       i = j + 1;
     }

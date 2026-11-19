@@ -190,7 +190,7 @@ function blockRanges(lines, treatUnclosedAsFence) {
 }
 
 /**
- * Mask fenced blocks, HTML comments and inline code spans, preserving every offset.
+ * Mask fenced blocks, raw HTML blocks, HTML comments and inline code spans, preserving every offset.
  * Inline code spans are matched WITHIN a line only: a span that wraps a newline is rare
  * enough, and a greedy multi-line match that met a stray backtick would blank real prose.
  *

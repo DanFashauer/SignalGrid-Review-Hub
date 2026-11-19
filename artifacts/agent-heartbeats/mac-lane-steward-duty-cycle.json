@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-11-19T00:36:59.982Z",
-  "result": "keepalive 00:37Z (held from 00:24Z so #2353's CI was not restarted): quiet. Mac tick last firedAt 2026-11-18T23:36:20.410Z; live evidence 2026-11-16 (under 3d); no unread mail to cloud; no new or moved mac/* branch; owner not escalated. Cloud landed #2353 (7e28ef53)."
+  "firedAt": "2026-11-19T03:25:27.413Z",
+  "result": "03:25Z keepalive (prior 00:37Z). Quiet: Mac tick heartbeat on mainline firedAt 2026-11-19T02:15:44.721Z; live evidence last committed 2026-11-16 17:14 -0500 (under 3 days); no new or moved mac/* branch; no unread mail to cloud; sim requests all bound; manifest no drift. Owner not escalated by this routine. Context: #2359 final head under full local validation before push."
 }

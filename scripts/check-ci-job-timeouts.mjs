@@ -85,7 +85,14 @@ function jobsIn(text) {
     const usesTarget = usesMatch ? usesMatch[1].replace(/^(["'])(.*)\1$/, "$2") : null;
     const localCallee = usesTarget && /^\.\/.+\.ya?ml$/.test(usesTarget) ? usesTarget.replace(/^\.\//, "") : null;
     const remoteUses = Boolean(usesTarget) && !localCallee;
-    return { name: k.name, hasJobTimeout, localCallee, remoteUses };
+    // For the REPORTED margin comparison below: the job's display name (API job names are
+    // the `name:` field, not the key) and its numeric bound. An expression bound
+    // (`${{ … }}`) has no number to compare, so it reads null → "bound unreadable".
+    const nameMatch = /^ {4}name:\s*(.+?)\s*$/m.exec(block);
+    const displayName = nameMatch ? nameMatch[1].replace(/^(["'])(.*)\1$/, "$2") : null;
+    const boundMatch = /^ {4}timeout-minutes:\s*(\d+(?:\.\d+)?)\s*(?:#.*)?$/m.exec(block);
+    const timeoutMinutes = boundMatch ? Number(boundMatch[1]) : null;
+    return { name: k.name, displayName, timeoutMinutes, hasJobTimeout, localCallee, remoteUses };
   });
 }
 
@@ -119,6 +126,160 @@ function jobsForFile(relPath) {
   return jobs;
 }
 const resolveLocal = (relPath) => jobsForFile(relPath);
+
+// ── REPORTED margin comparison: a bound against the job's longest recent run ──
+// The header's "two to three times observed runtime" was prose; a bound 14 seconds above
+// its job's longest green run (validation: 20 minutes against 19m46s, 1.01x) passed this
+// gate while that bound cancelled runs in which no step had failed. This compares the two.
+// REPORTED, NEVER FATAL: a latency threshold on a shared runner is a flaky gate and a flaky
+// gate gets switched off. What it must never do is read clean over history it could not
+// read — unreadable history is NOT-SCANNED, said aloud, never "0 below the floor".
+const MARGIN_RATIO = 2;
+const RUNS_PER_WORKFLOW = 5;
+const HISTORY_LISTING_SIZE = 100;
+const REPO = process.env.GITHUB_REPOSITORY || "DanFashauer/SignalGrid-Review-Hub";
+
+/** The below-the-floor test. Pure; the self-test's mutant swaps this out. */
+const belowFloor = (boundSeconds, longestSeconds, ratio) => boundSeconds < ratio * longestSeconds;
+
+const fmtDur = (sec) => `${Math.floor(sec / 60)}m${String(Math.round(sec % 60)).padStart(2, "0")}s`;
+
+/** Does an API job name belong to this parsed job? Exact, matrix (`name (x)`), or reusable (`caller / name`). */
+function jobNameMatches(apiName, job) {
+  const names = new Set([job.name]);
+  if (job.displayName) names.add(job.displayName.split("${{")[0].trim());
+  for (const n of names) {
+    if (!n) continue;
+    if (apiName === n || apiName.startsWith(`${n} (`) || apiName.endsWith(` / ${n}`)) return true;
+  }
+  return false;
+}
+
+/**
+ * observations: [{ workflow: "x.yml", jobName, seconds, conclusion }]. Counts the longest
+ * completed green run, or a mid-step kill (cancelled) at its kill time — whichever is
+ * longer. Any other conclusion (an early failure) proves nothing about duration.
+ */
+export function evaluateMargins({ workflows, observations, ratio = MARGIN_RATIO, below = belowFloor }) {
+  const listed = [];
+  let compared = 0;
+  let noRuns = 0;
+  let noBound = 0;
+  for (const { file, jobs } of workflows) {
+    for (const job of jobs) {
+      if (job.timeoutMinutes === null) { noBound += 1; continue; } // callers / expression bounds
+      const seen = observations.filter(
+        (o) => o.workflow === file && jobNameMatches(String(o.jobName), job) &&
+          Number.isFinite(o.seconds) && (o.conclusion === "success" || o.conclusion === "cancelled"),
+      );
+      if (seen.length === 0) { noRuns += 1; continue; }
+      compared += 1;
+      const longest = Math.max(...seen.map((o) => o.seconds));
+      const bound = job.timeoutMinutes * 60;
+      if (below(bound, longest, ratio)) listed.push({ key: `${file}:${job.name}`, boundMin: job.timeoutMinutes, longest, times: bound / longest });
+    }
+  }
+  return { listed, compared, noRuns, noBound };
+}
+
+/** Normalise one run's jobs payload (Actions API shape) into observations. Pure. */
+export function observationsFromRun(workflow, jobsPayload) {
+  const out = [];
+  for (const j of jobsPayload?.jobs ?? []) {
+    const a = Date.parse(j.started_at);
+    const b = Date.parse(j.completed_at);
+    if (!Number.isFinite(a) || !Number.isFinite(b) || b < a) continue; // unreadable timing is not evidence
+    out.push({ workflow, jobName: j.name, seconds: (b - a) / 1000, conclusion: j.conclusion });
+  }
+  return out;
+}
+
+/**
+ * Read history. Returns { ok, reason, observations }. Injectable: `file` (JSON of
+ * { observations } or { unreadable: "why" }) or `fetchJson`. No token → NOT-scanned: the
+ * liveness gate refuses an unauthenticated call in CI for the same reason (60/hour budget).
+ */
+export async function readHistory({ file, token, fetchJson }) {
+  if (file) {
+    try {
+      const j = JSON.parse(readFileSync(file, "utf8"));
+      if (j.unreadable) return { ok: false, reason: String(j.unreadable), observations: [] };
+      if (!Array.isArray(j.observations)) return { ok: false, reason: `${file} has no observations array`, observations: [] };
+      return { ok: true, reason: null, observations: j.observations };
+    } catch (e) {
+      return { ok: false, reason: `history file unreadable: ${e.message}`, observations: [] };
+    }
+  }
+  if (!token) return { ok: false, reason: "no GITHUB_TOKEN/GH_TOKEN in the environment", observations: [] };
+  try {
+    const listing = await fetchJson(`/repos/${REPO}/actions/runs?status=completed&per_page=${HISTORY_LISTING_SIZE}`);
+    const perWorkflow = new Map();
+    for (const run of listing.workflow_runs ?? []) {
+      const wf = String(run.path ?? "").replace(/^\.github\/workflows\//, "").replace(/@.*$/, "");
+      if (!wf) continue;
+      perWorkflow.set(wf, [...(perWorkflow.get(wf) ?? []), run]);
+    }
+    if (perWorkflow.size === 0) return { ok: false, reason: "the runs listing returned no completed runs", observations: [] };
+    const observations = [];
+    for (const [wf, runs] of perWorkflow) {
+      for (const run of runs.slice(0, RUNS_PER_WORKFLOW)) {
+        observations.push(...observationsFromRun(wf, await fetchJson(`/repos/${REPO}/actions/runs/${run.id}/jobs?per_page=100&filter=all`)));
+      }
+    }
+    return { ok: true, reason: null, observations };
+  } catch (e) {
+    return { ok: false, reason: `Actions API read failed: ${e.message}`, observations: [] };
+  }
+}
+
+async function githubJson(path) {
+  const token = process.env.GITHUB_TOKEN || process.env.GH_TOKEN || "";
+  const res = await fetch(`https://api.github.com${path}`, {
+    headers: { Accept: "application/vnd.github+json", "User-Agent": "signalgrid-ci-job-timeouts", Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error(`GET ${path} -> ${res.status} ${res.statusText}`);
+  return res.json();
+}
+
+/** The report lines for a history result. Pure, so the self-test can read them. */
+export function renderMarginReport(history, result) {
+  if (!history.ok) {
+    return [`  margin vs longest run: NOT-SCANNED — ${history.reason}. Unreadable history is not a clean bill; no job was compared.`];
+  }
+  const lines = result.listed.map(
+    (r) => `  ⚠ ${r.key}: bound ${r.boundMin}m is ${r.times.toFixed(2)}x its longest recent run (${fmtDur(r.longest)}), below the ${MARGIN_RATIO}x floor`,
+  );
+  lines.push(
+    `  margin vs longest run (REPORTED, not fatal): ${result.listed.length} below ${MARGIN_RATIO}x of ${result.compared} compared; ` +
+      `${result.noRuns} with no recent run, ${result.noBound} with no numeric bound (callers/expressions) not compared`,
+  );
+  return lines;
+}
+
+// ── self-test for the margin comparison ──────────────────────────────────────
+{
+  const wf = [{ file: "ci.yml", jobs: jobsIn("jobs:\n  validation:\n    name: Validation (x)\n    timeout-minutes: 20\n    runs-on: x\n  roomy:\n    timeout-minutes: 45\n    runs-on: x\n") }];
+  const obs = [
+    { workflow: "ci.yml", jobName: "Validation (x)", seconds: 19 * 60 + 46, conclusion: "success" },
+    { workflow: "ci.yml", jobName: "roomy", seconds: 20 * 60, conclusion: "success" },
+    { workflow: "ci.yml", jobName: "roomy", seconds: 3600, conclusion: "failure" }, // early failure: not evidence
+  ];
+  const real = evaluateMargins({ workflows: wf, observations: obs });
+  const mutant = evaluateMargins({ workflows: wf, observations: obs, below: () => false }); // the comparison deleted
+  const unread = renderMarginReport({ ok: false, reason: "no GITHUB_TOKEN/GH_TOKEN in the environment" }, { listed: [], compared: 0 });
+  const killObs = evaluateMargins({ workflows: wf, observations: [{ workflow: "ci.yml", jobName: "roomy", seconds: 30 * 60, conclusion: "cancelled" }] });
+  const checks = {
+    flagsTightBound: real.listed.length === 1 && real.listed[0].key === "ci.yml:validation" && real.listed[0].times < 1.02,
+    doesNotFlagRoomyBound: !real.listed.some((r) => r.key === "ci.yml:roomy"),
+    killTimeCounts: killObs.listed.length === 1 && killObs.listed[0].key === "ci.yml:roomy",
+    mutantIsCaught: mutant.listed.length === 0, // the assertion above (flagsTightBound) would fail on it
+    unreadableIsNotScanned: unread.length === 1 && /NOT-SCANNED/.test(unread[0]) && !/0 below/.test(unread[0]),
+  };
+  if (!Object.values(checks).every(Boolean)) {
+    console.error(`✗ SELF-TEST FAILED (margin comparison) — ${JSON.stringify(checks)}`);
+    process.exit(1);
+  }
+}
 
 // ── self-test ────────────────────────────────────────────────────────────────
 {
@@ -237,6 +398,17 @@ for (const f of readdirSync(DIR).filter((e) => /\.ya?ml$/.test(e)).sort()) {
 if (total < JOB_FLOOR) {
   console.error(`✗ only ${total} jobs found (floor ${JOB_FLOOR}) — the parse has drifted; refusing to report green.`);
   process.exit(1);
+}
+
+// The margin comparison is REPORTED and never changes the exit code.
+{
+  const workflows = readdirSync(DIR).filter((e) => /\.ya?ml$/.test(e)).sort()
+    .map((f) => ({ file: f, jobs: jobsIn(readFileSync(join(DIR, f), "utf8")) }));
+  const token = process.env.GITHUB_TOKEN || process.env.GH_TOKEN || "";
+  const history = await readHistory({ file: process.env.CI_JOB_RUN_HISTORY_FILE, token, fetchJson: githubJson });
+  const result = history.ok ? evaluateMargins({ workflows, observations: history.observations }) : null;
+  console.log("");
+  for (const line of renderMarginReport(history, result)) console.log(line);
 }
 
 console.log(`\nci-job-timeouts: ${total} jobs, ${problems} unbounded; self-test green`);

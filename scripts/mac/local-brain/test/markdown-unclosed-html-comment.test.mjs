@@ -701,3 +701,70 @@ test('raw HTML positive: a URI autolink is kept as text, not blanked', () => {
   const input = 'see <https://example.com/a> here\n';
   assert.equal(maskNonProse(input), input);
 });
+
+// 16. Codex on 50bde160: a paragraph made only of link reference definitions has no content (§4.7), so a `===` or
+//     `--` line after it is not a setext underline (§4.3) — it starts a paragraph, and a type 7 tag after that cannot
+//     open an HTML block. The visible route must survive; with real text before the underline it is a heading, the
+//     tag opens a block, and the route stays masked.
+for (const [name, input] of [
+  ['the reported case', '[r]: /url\n===\n<span>\n[visible](docs/V.md)\n'],
+  ['a `--` underline', '[r]: /url\n--\n<span>\n[visible](docs/V.md)\n'],
+  ['a destination on the next line', '[r]:\n/url\n===\n<span>\n[visible](docs/V.md)\n'],
+  ['a title on the next line', "[r]: /url\n'title'\n===\n<span>\n[visible](docs/V.md)\n"],
+  ['a title across two lines', "[r]: /url 'ti\ntle'\n===\n<span>\n[visible](docs/V.md)\n"],
+  ['two definitions', '[a]: <x y> "t"\n [b]: a(b) (t)\n===\n<span>\n[visible](docs/V.md)\n'],
+]) {
+  test(`reference definitions supply no setext heading: ${name} keeps the route`, () => {
+    const out = maskNonProse(input);
+    assertShape(input, out);
+    assert.ok(out.includes('[visible](docs/V.md)'), `route lost: ${JSON.stringify(out)}`);
+  });
+}
+
+for (const [name, input] of [
+  ['text after the definition', '[r]: /url\ntext\n===\n<span>\n[hidden](docs/H.md)\n'],
+  ['a thematic break', '[r]: /url\n---\n<span>\n[hidden](docs/H.md)\n'],
+  ['junk after a same-line title', "[r]: /url 't' x\n===\n<span>\n[hidden](docs/H.md)\n"],
+  ['a backslash before a space in the destination', "[r]: [r\\ 't'\n===\n<span>\n[hidden](docs/H.md)\n"],
+  ['an empty label', '[]: /url\n===\n<span>\n[hidden](docs/H.md)\n'],
+]) {
+  test(`control: ${name} leaves a real setext heading, so the tag opens a block and the route is masked`, () => {
+    const out = maskNonProse(input);
+    assertShape(input, out);
+    assert.ok(!out.includes('docs/H.md'), `hidden route kept: ${JSON.stringify(out)}`);
+  });
+}
+
+test('differential: definition-only paragraphs before an underline agree with markdown-it, never crediting a hidden route', async () => {
+  const { default: MarkdownIt } = await import('markdown-it');
+  const md = new MarkdownIt('commonmark');
+  const heads = ['[r]:', '[r]: ', ' [r]:', '   [r]:', '    [r]:', '\t[r]:', '[]:', '[ ]:', '[a\\]b]:', '[a]b]:', '[r] :',
+    '[r]:<', '[\\[]:', '[r\\', '[a\nb]:', '[<!--]:', '[`]:'];
+  const dests = ['/url', ' /url', '<a b>', '<>', '<a\nb>', '\n/url', '\n\n/url', 'a(b)', 'a(b', 'a)b', 'a\\)b', '', ' ',
+    '<a>b', 'x\ty', '/u\\ x', '<a\\>b>', '((((a))))', 'a b', '<a<b>'];
+  const titles = ['', " 't'", ' "t"', ' (t)', "\n't'", '\n"t"', " 't", "\n't", " 't' x", "\n't' x", "'t'", " 't\nu'",
+    " 't\n\nu'", ' (t(u))', " 't' ", ' x', '\nx', ' "a\\"b"', "\t't'", ' (a\\)b)', "\n   't'", "\n    't'"];
+  const unders = ['===', '--', '=', '  ==', '== x', '-- ', '=\t'];
+  let a = 20261119;
+  const rnd = (n) => {
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) % n;
+  };
+  const pick = (xs) => xs[rnd(xs.length)];
+  const link = '[visible](docs/V.md)';
+  const falseCredits = [];
+  let shownKept = 0;
+  for (let k = 0; k < 20000 && falseCredits.length < 3; k += 1) {
+    const defs = [];
+    for (let n = 1 + rnd(3); n > 0; n -= 1) defs.push(rnd(8) === 0 ? pick(['text', 'x <!-- y', '[r]', '']) : pick(heads) + pick(dests) + pick(titles));
+    const input = `${defs.join('\n')}\n${pick(unders)}\n<span>\n${link}\n`;
+    const shown = md.render(input).includes('<a href="docs/V.md">visible</a>');
+    const kept = maskNonProse(input).includes(link);
+    if (shown && kept) shownKept += 1;
+    if (!shown && kept) falseCredits.push(input);
+  }
+  assert.ok(shownKept > 1000, `too few visible routes kept (${shownKept}): the definition check no longer fires`);
+  assert.deepEqual(falseCredits, [], `hidden routes credited: ${JSON.stringify(falseCredits)}`);
+});

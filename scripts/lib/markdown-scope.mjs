@@ -233,6 +233,115 @@ const ATX_HEADING = /^ {0,3}#{1,6}(?:[ \t]|$)/;
 const SETEXT_UNDERLINE = /^ {0,3}(?:=+|-+)[ \t]*$/;
 
 /**
+ * True only when `paraLines` (an open paragraph's lines, in order) are wholly consumed as link reference definitions
+ * (§4.7). Such a "paragraph" has no content, so a following `===` or `--` line is not a setext underline (§4.3: the
+ * heading content may not be reference definitions) and starts a paragraph instead — after which a type 7 tag cannot
+ * open an HTML block (Codex on #2368). Strict on purpose: anything this does not recognise as a definition (a tab
+ * indent, a label across lines, nested parens past 32, a backslash before a non-punctuation character) returns false, and the line stays an underline. That keeps the
+ * error on the conservative side: a link masked that a reader could click, never one credited that they cannot.
+ */
+function allReferenceDefinitions(paraLines) {
+  const text = paraLines.map(content).join("\n");
+  // A backslash before anything but ASCII punctuation is read differently by different renderers inside a
+  // destination (markdown-it 14.3.0 consumes `\ ` as a pair); not judged, so the underline stands.
+  if (/\\(?![!-\/:-@[-`{-~])/.test(text)) return false;
+  let at = 0;
+  const ws = () => {
+    while (at < text.length && (text[at] === " " || text[at] === "\t")) at += 1;
+  };
+  // One definition from `at`; returns the index after it (at a line end or end of text), or -1.
+  const definition = () => {
+    let p = at;
+    let n = 0;
+    while (text[p] === " " && n < 3) (p += 1), (n += 1);
+    if (text[p] !== "[") return -1;
+    p += 1;
+    let label = "";
+    while (p < text.length && text[p] !== "]") {
+      if (text[p] === "[" || text[p] === "\n") return -1;
+      if (text[p] === "\\" && p + 1 < text.length && text[p + 1] !== "\n") (label += text[p] + text[p + 1]), (p += 2);
+      else (label += text[p]), (p += 1);
+    }
+    if (text[p] !== "]" || !/[^ \t]/.test(label) || label.length > 999) return -1;
+    p += 1;
+    if (text[p] !== ":") return -1;
+    p += 1;
+    at = p;
+    ws();
+    if (text[at] === "\n") (at += 1), ws();
+    // Destination (§6.3 link destination).
+    if (text[at] === "<") {
+      at += 1;
+      while (at < text.length && text[at] !== ">") {
+        if (text[at] === "\n" || text[at] === "<") return -1;
+        at += text[at] === "\\" && at + 1 < text.length && text[at + 1] !== "\n" ? 2 : 1;
+      }
+      if (text[at] !== ">") return -1;
+      at += 1;
+    } else {
+      const start = at;
+      let depth = 0;
+      while (at < text.length && !/[\x00-\x20\x7f]/.test(text[at])) {
+        if (text[at] === "\\" && at + 1 < text.length && /[!-\/:-@[-`{-~]/.test(text[at + 1])) {
+          at += 2;
+          continue;
+        }
+        if (text[at] === "(") depth += 1;
+        else if (text[at] === ")") {
+          if (depth === 0) break;
+          depth -= 1;
+        }
+        if (depth > 32) return -1;
+        at += 1;
+      }
+      if (at === start || depth !== 0) return -1;
+    }
+    const afterDest = at;
+    ws();
+    const destLineEnds = at >= text.length || text[at] === "\n";
+    const sameLineGap = at > afterDest;
+    // Optional title, separated by whitespace (same line) or a line ending.
+    let titleStart = at;
+    if (destLineEnds && at < text.length) (titleStart = at + 1), (at = titleStart), ws();
+    else if (!destLineEnds && !sameLineGap) return -1;
+    const open = text[at];
+    const close = open === '"' ? '"' : open === "'" ? "'" : open === "(" ? ")" : null;
+    if (close && (at > titleStart || destLineEnds || sameLineGap)) {
+      let q = at + 1;
+      let ok = false;
+      while (q < text.length) {
+        if (text[q] === "\\" && q + 1 < text.length) {
+          q += 2;
+          continue;
+        }
+        if (text[q] === close) {
+          ok = true;
+          break;
+        }
+        if (open === "(" && text[q] === "(") break;
+        if (text[q] === "\n" && /^[ \t]*(?:\n|$)/.test(text.slice(q + 1))) break;
+        q += 1;
+      }
+      if (ok) {
+        at = q + 1;
+        ws();
+        if (at >= text.length || text[at] === "\n") return at;
+      }
+    }
+    // No valid title: the definition ends at its destination line, which must hold nothing else.
+    if (destLineEnds) return afterDest + (text.slice(afterDest).match(/^[ \t]*/)[0].length);
+    return -1;
+  };
+  if (!text.length) return false;
+  while (at < text.length) {
+    const end = definition();
+    if (end < 0) return false;
+    at = end < text.length ? end + 1 : end;
+  }
+  return true;
+}
+
+/**
  * Which HTML block (§4.6) starts on `line`, if any: its type and, for types 1–5, the end marker. `inParagraph`
  * matters only for type 7, the one kind that cannot interrupt a paragraph.
  */
@@ -285,6 +394,7 @@ function endAfter(text, end, from) {
 function blockRanges(lines, treatUnclosedAsFence) {
   const out = [];
   let inParagraph = false;
+  let paraStart = -1;
   for (let i = 0; i < lines.length; i += 1) {
     const h = htmlBlockStart(content(lines[i]), inParagraph);
     if (h && h.type <= 5) {
@@ -332,9 +442,12 @@ function blockRanges(lines, treatUnclosedAsFence) {
     // open paragraph it is only a lazy continuation. Anything else non-blank continues or starts one.
     const text = content(lines[i]);
     if (isBlank(text) || ATX_HEADING.test(text) || THEMATIC_BREAK.test(text)) inParagraph = false;
-    else if (inParagraph && SETEXT_UNDERLINE.test(text)) inParagraph = false;
+    else if (inParagraph && SETEXT_UNDERLINE.test(text) && !allReferenceDefinitions(lines.slice(paraStart, i))) inParagraph = false;
     else if (!inParagraph && indentColumns(text) >= 4) inParagraph = false;
-    else inParagraph = true;
+    else {
+      if (!inParagraph) paraStart = i;
+      inParagraph = true;
+    }
   }
   return out;
 }
@@ -350,6 +463,7 @@ function blockRanges(lines, treatUnclosedAsFence) {
  */
 export function maskNonProse(text, { treatUnclosedAsFence = true } = {}) {
   const lines = text.split("\n");
+  const source = lines.slice();
   // Fences and raw HTML blocks are masked whole: markdown link syntax inside either is not a link a reader can
   // click (§4.6: an HTML block's lines are raw HTML, not parsed as Markdown). Each remaining non-blank line joins a
   // paragraph segment, and inline HTML comments are matched within one paragraph, never across a block boundary or
@@ -375,6 +489,7 @@ export function maskNonProse(text, { treatUnclosedAsFence = true } = {}) {
   // Paragraph segments follow the same boundaries as blockRanges: an inline comment never spans a heading, a
   // thematic break, a setext underline or an indented code line, because CommonMark never lets a paragraph do so.
   let inPara = false;
+  let paraStart = -1;
   for (let i = 0; i < lines.length; i += 1) {
     if (segment[i] !== -1) {
       inPara = false;
@@ -392,12 +507,13 @@ export function maskNonProse(text, { treatUnclosedAsFence = true } = {}) {
     } else if (
       ATX_HEADING.test(text) ||
       THEMATIC_BREAK.test(text) ||
-      (inPara && SETEXT_UNDERLINE.test(text)) ||
+      (inPara && SETEXT_UNDERLINE.test(text) && !allReferenceDefinitions(source.slice(paraStart, i))) ||
       (!inPara && indentColumns(text) >= 4)
     ) {
       segment[i] = nextSegment++;
       inPara = false;
     } else {
+      if (!inPara) paraStart = i;
       segment[i] = inPara ? segment[i - 1] : nextSegment++;
       inPara = true;
     }

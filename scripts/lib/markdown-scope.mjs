@@ -16,6 +16,11 @@
 // MASKING, NOT DELETING. Every helper here replaces non-prose with spaces and keeps
 // newlines, so byte offsets and 1-based line numbers survive. A gate that reported the
 // wrong line number would be worse than one that reported nothing.
+//
+// FAIL-CLOSED DIRECTION. Masking too much hides a real route from the gates; masking too little only shows them an
+// extra string. So where renderers disagree (cmark-gfm on GitHub follows the 0.29 inline-comment rule, markdown-it the
+// 0.31.2 one), the narrower reading wins. Not modelled: container blocks (block quotes, list items) and link reference
+// definitions. The markdown-unclosed-html-comment test holds a seeded differential check against markdown-it 14.3.0.
 
 /** Replace every character with a space, keeping newlines so offsets and lines survive. */
 const blank = (s) => s.replace(/[^\n]/g, " ");
@@ -102,9 +107,105 @@ const TYPE7_OPEN = new RegExp(String.raw`^<([A-Za-z][A-Za-z0-9-]*)${ATTR}*[ \t]*
 const TYPE7_CLOSE = /^<\/([A-Za-z][A-Za-z0-9-]*)[ \t]*>[ \t]*$/;
 // A thematic break (§4.1) and a setext underline (§4.3) end a paragraph, so a type 7 block may start after one.
 const THEMATIC_BREAK = /^ {0,3}(?:(?:\*[ \t]*){3,}|(?:-[ \t]*){3,}|(?:_[ \t]*){3,})$/;
-// An inline comment (§6.6) is `<!-->`, `<!--->`, or `<!--` … `-->`. A browser also ends a comment at `--!>`, so the
-// mask stops there too: text a reader may see is never hidden from the gates (fail-closed: mask less, not more).
-const INLINE_COMMENT = /<!--(?:-?>|[\s\S]*?--!?>)/g;
+// Inline constructs that bind as tightly as a comment (§6). Each is tried at its own position, leftmost first, so a
+// `<!--` inside an earlier code span, autolink, tag, processing instruction, declaration, CDATA section or link tail is
+// part of that construct and never opens a comment.
+const ESCAPABLE = /[!-\/:-@[-`{-~]/;
+const INLINE_RAW = [
+  /^<[A-Za-z][A-Za-z0-9+.-]{1,31}:[^\s<>]*>/, // URI autolink
+  /^<[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*>/, // email autolink
+  /^<[A-Za-z][A-Za-z0-9-]*(?:\s+[A-Za-z_:][A-Za-z0-9_.:-]*(?:\s*=\s*(?:[^\s"'=<>`]+|'[^']*'|"[^"]*"))?)*\s*\/?>/, // open tag
+  /^<\/[A-Za-z][A-Za-z0-9-]*\s*>/, // closing tag
+  /^<\?[\s\S]*?\?>/, // processing instruction
+  /^<![A-Za-z][^>]*>/, // declaration
+  /^<!\[CDATA\[[\s\S]*?\]\]>/, // CDATA
+];
+// An inline link's tail after `]`: destination and optional title. Skipping one that is not really a link only ever
+// masks less.
+const LINK_TAIL = /^\(\s*(?:<[^<>\n]*>|[^\s()<]*(?:\([^\s()]*\)[^\s()<]*)*)(?:\s+(?:"[^"]*"|'[^']*'|\([^()]*\)))?\s*\)/;
+
+// The inline comment both renderer generations agree is hidden. CommonMark 0.31.2 (§6.6, markdown-it here) also
+// accepts `<!-->`, `<!--->` and text holding `--`; cmark-gfm (GitHub, the 0.29 rule) shows those literally. The mask
+// takes the narrower rule, so it never hides what either renderer shows: text not starting with `>` or `->`, holding
+// no `--` and not ending in `-`. That also rules out `--!>` (a browser's comment end) inside a masked span.
+const INLINE_COMMENT = /^<!--(?!-?>)(?:[^-]|-(?!-))*-->/;
+
+/**
+ * Blank every inline comment (§6.6) in one paragraph's text, as INLINE_COMMENT defines it; anything else that starts
+ * `<!--` is literal text and stays visible. Backslash escapes, code spans, autolinks, raw HTML and link tails are
+ * skipped whole, leftmost first, so a `<!--` inside one of them never opens a comment.
+ */
+function maskInlineComments(text, blank) {
+  let out = "";
+  let i = 0;
+  while (i < text.length) {
+    const ch = text[i];
+    if (ch === "\\" && i + 1 < text.length && ESCAPABLE.test(text[i + 1])) {
+      out += text.slice(i, i + 2);
+      i += 2;
+      continue;
+    }
+    if (ch === "`") {
+      let n = 1;
+      while (text[i + n] === "`") n += 1;
+      const run = "`".repeat(n);
+      let k = i + n;
+      let close = -1;
+      while ((k = text.indexOf(run, k)) >= 0) {
+        if (text[k + n] !== "`" && text[k - 1] !== "`") {
+          close = k;
+          break;
+        }
+        while (text[k] === "`") k += 1;
+      }
+      const end = close >= 0 ? close + n : i + n;
+      out += text.slice(i, end);
+      i = end;
+      continue;
+    }
+    if (ch === "]" && text[i + 1] === "(") {
+      const m = LINK_TAIL.exec(text.slice(i + 1));
+      if (m) {
+        out += text.slice(i, i + 1 + m[0].length);
+        i += 1 + m[0].length;
+        continue;
+      }
+    }
+    if (ch === "<") {
+      const rest = text.slice(i);
+      if (rest.startsWith("<!--")) {
+        const m = INLINE_COMMENT.exec(rest);
+        if (m) {
+          out += blank(m[0]);
+          i += m[0].length;
+          continue;
+        }
+      } else {
+        const m = INLINE_RAW.map((re) => re.exec(rest)).find(Boolean);
+        if (m) {
+          out += m[0];
+          i += m[0].length;
+          continue;
+        }
+      }
+    }
+    out += ch;
+    i += 1;
+  }
+  return out;
+}
+/** Columns of leading ASCII space/tab, with tab stops of 4 (§2.2). */
+function indentColumns(line) {
+  let col = 0;
+  for (const ch of line) {
+    if (ch === " ") col += 1;
+    else if (ch === "\t") col += 4 - (col % 4);
+    else break;
+  }
+  return col;
+}
+
+const ATX_HEADING = /^ {0,3}#{1,6}(?:[ \t]|$)/;
 const SETEXT_UNDERLINE = /^ {0,3}(?:=+|-+)[ \t]*$/;
 
 /**
@@ -119,7 +220,7 @@ function htmlBlockStart(line, inParagraph) {
   if (/^<(?:pre|script|style|textarea)(?:[ \t>]|$)/i.test(rest)) return { type: 1, col, end: /<\/(?:pre|script|style|textarea)>/i };
   if (rest.startsWith("<!--")) return { type: 2, col, end: "-->" };
   if (rest.startsWith("<?")) return { type: 3, col, end: "?>" };
-  if (/^<![A-Za-z]/.test(rest)) return { type: 4, col, end: ">" };
+  if (/^<![A-Z]/.test(rest)) return { type: 4, col, end: ">" };
   if (rest.startsWith("<![CDATA[")) return { type: 5, col, end: "]]>" };
   const t6 = /^<\/?([A-Za-z][A-Za-z0-9]*)(?:[ \t]|\/?>|$)/.exec(rest);
   if (t6 && HTML_TYPE6_TAGS.has(t6[1].toLowerCase())) return { type: 6, col };
@@ -203,10 +304,12 @@ function blockRanges(lines, treatUnclosedAsFence) {
       }
     }
     // An ATX heading, a thematic break or a setext underline ends the paragraph (the underline only while one is
-    // open); a blank line does too. Anything else non-blank continues or starts one.
+    // open); a blank line does too. An indented code line (four columns or more, §4.4) cannot start one — inside an
+    // open paragraph it is only a lazy continuation. Anything else non-blank continues or starts one.
     const text = content(lines[i]);
-    if (isBlank(text) || /^ {0,3}#{1,6}(?:[ \t]|$)/.test(text) || THEMATIC_BREAK.test(text)) inParagraph = false;
+    if (isBlank(text) || ATX_HEADING.test(text) || THEMATIC_BREAK.test(text)) inParagraph = false;
     else if (inParagraph && SETEXT_UNDERLINE.test(text)) inParagraph = false;
+    else if (!inParagraph && indentColumns(text) >= 4) inParagraph = false;
     else inParagraph = true;
   }
   return out;
@@ -228,12 +331,14 @@ export function maskNonProse(text, { treatUnclosedAsFence = true } = {}) {
   // paragraph segment, and inline HTML comments are matched within one paragraph, never across a block boundary or
   // a blank line, as CommonMark's inline parse is per block.
   const segment = new Array(lines.length).fill(-1);
+  const tail = new Set();
   let nextSegment = 0;
   for (const b of blockRanges(lines, treatUnclosedAsFence)) {
     for (let i = b.start; i <= b.end; i += 1) {
       // The text after a closed comment block's `-->` stays visible, as before; it is left unassigned so the
       // paragraph pass below still masks any further comment in it (Root on #2368).
       segment[i] = b.kind === "comment" && b.closed && i === b.end ? -1 : -2;
+      if (segment[i] === -1) tail.add(i);
       if (b.kind !== "comment") {
         lines[i] = blank(lines[i]);
         continue;
@@ -243,20 +348,42 @@ export function maskNonProse(text, { treatUnclosedAsFence = true } = {}) {
       lines[i] = lines[i].slice(0, from) + blank(lines[i].slice(from, to)) + lines[i].slice(to);
     }
   }
+  // Paragraph segments follow the same boundaries as blockRanges: an inline comment never spans a heading, a
+  // thematic break, a setext underline or an indented code line, because CommonMark never lets a paragraph do so.
+  let inPara = false;
   for (let i = 0; i < lines.length; i += 1) {
-    if (segment[i] !== -1) continue;
-    if (isBlank(lines[i])) {
-      segment[i] = -2;
+    if (segment[i] !== -1) {
+      inPara = false;
       continue;
     }
-    segment[i] = i > 0 && segment[i - 1] >= 0 ? segment[i - 1] : nextSegment++;
+    const text = content(lines[i]);
+    if (isBlank(text)) {
+      segment[i] = -2;
+      inPara = false;
+    } else if (tail.has(i)) {
+      // The rest of a comment block's closing line still belongs to that HTML block (§4.6): it is its own segment,
+      // joins no paragraph above it, and the next line starts a new one.
+      segment[i] = nextSegment++;
+      inPara = false;
+    } else if (
+      ATX_HEADING.test(text) ||
+      THEMATIC_BREAK.test(text) ||
+      (inPara && SETEXT_UNDERLINE.test(text)) ||
+      (!inPara && indentColumns(text) >= 4)
+    ) {
+      segment[i] = nextSegment++;
+      inPara = false;
+    } else {
+      segment[i] = inPara ? segment[i - 1] : nextSegment++;
+      inPara = true;
+    }
   }
   const masked = [];
   for (let i = 0; i < lines.length; ) {
     let j = i;
     while (j + 1 < lines.length && segment[j + 1] === segment[i] && segment[i] >= 0) j += 1;
     let chunk = lines.slice(i, j + 1).join("\n");
-    if (segment[i] >= 0) chunk = chunk.replace(INLINE_COMMENT, blank);
+    if (segment[i] >= 0) chunk = maskInlineComments(chunk, blank);
     masked.push(chunk);
     i = j + 1;
   }

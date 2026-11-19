@@ -396,11 +396,10 @@ test('control: a CR is a line ending, but an NBSP line is still not blank', () =
   assert.equal(lines[lines.length - 2], '[visible](docs/V.md)', `route lost: ${JSON.stringify(out)}`);
 });
 
-// 3. Inline comments: `<!-->` and `<!--->` are complete (empty) comments, and `--!>` ends a comment in a browser.
+// 3. Inline comments: an empty `<!-->` or `<!--->` never swallows the prose after it.
 for (const [name, input, expectVisible] of [
   ['an empty <!--> comment', 'Lead <!--> [visible](docs/V.md) <!-- hidden -->\n', '[visible](docs/V.md)'],
   ['an empty <!---> comment', 'Lead <!---> [visible](docs/V.md) <!-- hidden -->\n', '[visible](docs/V.md)'],
-  ['a comment closed by --!>', 'Lead <!-- hidden --!> [visible](docs/V.md) -->\n', '[visible](docs/V.md)'],
 ]) {
   test(`inline: text after ${name} stays visible`, () => {
     const out = maskNonProse(input);
@@ -415,4 +414,143 @@ test('control: an ordinary inline <!-- … --> and a <!----> comment are still m
   const out = maskNonProse(input);
   assertShape(input, out);
   assert.ok(out.includes('[visible](docs/V.md)') && !out.includes('hidden'), JSON.stringify(out));
+});
+
+// 4. Codex on 34d22b5a: a type 4 declaration needs an uppercase letter, and indented code cannot open a paragraph.
+for (const [name, input] of [
+  ['a lowercase <!foo is prose, not a declaration block', '<!foo\n[visible](docs/V.md)\n'],
+  ['indented code cannot supply the paragraph a setext underline needs', '    code\n===\n<span>\n[visible](docs/V.md)\n'],
+  ['a tab-indented code line likewise', '\tcode\n===\n<span>\n[visible](docs/V.md)\n'],
+]) {
+  test(name, () => {
+    const out = maskNonProse(input);
+    assertShape(input, out);
+    assert.ok(out.includes('[visible](docs/V.md)'), `route lost: ${JSON.stringify(out)}`);
+  });
+}
+
+for (const [name, input] of [
+  ['control: an uppercase <!DOCTYPE still starts a declaration block', '<!DOCTYPE\n[hidden](docs/H.md)\n'],
+  ['control: an indented line inside an open paragraph is a lazy continuation, so === is still a setext underline', 'para\n    lazy\n===\n<span>\n[hidden](docs/H.md)\n'],
+  ['control: a three-space line still opens a paragraph', '   para\n===\n<span>\n[hidden](docs/H.md)\n'],
+]) {
+  test(name, () => {
+    const out = maskNonProse(input);
+    assertShape(input, out);
+    assert.ok(!out.includes('hidden'), `raw HTML leaked: ${JSON.stringify(out)}`);
+  });
+}
+
+test('inline: a --!> with no later --> is not a comment at all, so nothing is masked', () => {
+  const input = 'a <!-- b\n[visible](docs/V.md)\n--!>\n';
+  const out = maskNonProse(input);
+  assertShape(input, out);
+  assert.ok(out.includes('[visible](docs/V.md)') && out.includes('<!-- b'), JSON.stringify(out));
+});
+
+// 5. Inline comments stay inside one paragraph: CommonMark never lets a paragraph cross these boundaries.
+for (const [name, input] of [
+  ['a thematic break', 'a <!-- b\n***\n[visible](docs/V.md)\n-->\n'],
+  ['a setext underline', 'a <!-- b\n===\n[visible](docs/V.md)\n-->\n'],
+  ['an ATX heading', 'a <!-- b\n# h\n[visible](docs/V.md)\n-->\n'],
+  ['an indented code line after a heading', '# a <!-- b\n    code\n[visible](docs/V.md)\nc --> d\n'],
+]) {
+  test(`inline: an open <!-- does not reach across ${name}`, () => {
+    const out = maskNonProse(input);
+    assertShape(input, out);
+    assert.ok(out.includes('[visible](docs/V.md)'), `route lost: ${JSON.stringify(out)}`);
+  });
+}
+
+test('control: a lazy continuation line keeps one paragraph, so its comment is still masked', () => {
+  const input = 'a <!-- b\n    lazy [hidden](docs/H.md)\n-->\n';
+  const out = maskNonProse(input);
+  assertShape(input, out);
+  assert.ok(!out.includes('hidden'), JSON.stringify(out));
+});
+
+// 6. Leftmost inline construct wins (§6): a `<!--` inside an earlier code span, escape, tag, autolink or link tail
+//    never opens a comment, so prose after it stays visible.
+for (const [name, input] of [
+  ['a code span', '`a <!--` [visible](docs/V.md) -->\n'],
+  ['a double-backtick code span', '``a <!--`` [visible](docs/V.md) --> `\n'],
+  ['a backslash escape', '\\<!-- [visible](docs/V.md) -->\n'],
+  ['a tag attribute', '<a title="<!--">[visible](docs/V.md) -->\n'],
+  ['a link title', '[a](b "<!--") [visible](docs/V.md) -->\n'],
+  ['an inline declaration', 'x <!foo <!-- b> [visible](docs/V.md) -->\n'],
+]) {
+  test(`inline: a <!-- inside ${name} opens no comment`, () => {
+    const out = maskNonProse(input);
+    assertShape(input, out);
+    assert.ok(out.includes('[visible](docs/V.md)'), `route lost: ${JSON.stringify(out)}`);
+  });
+}
+
+test('control: an unmatched backtick is literal, so a following comment is still masked', () => {
+  const input = 'a ` b <!-- [hidden](docs/H.md) -->\n';
+  const out = maskNonProse(input);
+  assertShape(input, out);
+  assert.ok(!out.includes('hidden'), JSON.stringify(out));
+});
+
+// 7. Renderers disagree on `--` inside an inline comment (0.31.2 hides it, cmark-gfm 0.29 shows it), so it stays visible.
+for (const [name, input] of [
+  ['holds --', 'a <!-- b -- [visible](docs/V.md) --> d\n'],
+  ['holds --!>', 'Lead <!-- b --!> [visible](docs/V.md) -->\n'],
+  ['ends in -', 'a <!-- [visible](docs/V.md) ---> d\n'],
+]) {
+  test(`inline: a comment whose text ${name} is shown by one renderer, so it is not masked`, () => {
+    const out = maskNonProse(input);
+    assertShape(input, out);
+    assert.ok(out.includes('[visible](docs/V.md)'), `route lost: ${JSON.stringify(out)}`);
+  });
+}
+
+// 8. The rest of a comment block's closing line belongs to that block: it joins no paragraph, so a comment opened in
+//    the paragraph above (or in the tail) cannot reach a later block's tail and swallow the prose between.
+test('a closed comment block tail is its own segment, so prose between two blocks stays visible', () => {
+  const input = 'a <!-- b\n<!---> a <!-- b\n[visible](docs/V.md)\n<!---> -->\n';
+  const out = maskNonProse(input);
+  assertShape(input, out);
+  assert.ok(out.includes('[visible](docs/V.md)'), `route lost: ${JSON.stringify(out)}`);
+});
+
+test('control: a comment wholly inside one closed-block tail is still masked', () => {
+  const input = '<!-- a --> x <!-- [hidden](docs/H.md) -->\n';
+  const out = maskNonProse(input);
+  assertShape(input, out);
+  assert.ok(!out.includes('hidden') && out.includes(' x '), JSON.stringify(out));
+});
+
+// 9. Differential property against the pinned CommonMark renderer (markdown-it 14.3.0, scripts/package.json): for
+//    seeded random documents built from the constructs above, every link the renderer turns into a clickable anchor
+//    must survive the mask. A failure prints the smallest input it found. `</pre>` is left out on purpose: markdown-it
+//    opens a type 7 block on it, which §4.6 forbids, and cmark-gfm follows the spec.
+test('differential: no link markdown-it renders as clickable is masked', async () => {
+  const { default: MarkdownIt } = await import('markdown-it');
+  const md = new MarkdownIt('commonmark');
+  const parts = ['para', '    code', '\tcode', '===', '---', '***', '', '<span>', '<div>', '</div>', '<!-- c', '-->',
+    '<!-->', '<!--->', '--!>', '<!foo', '<!DOCTYPE x>', '<?p', '?>', '```', '~~~', '# h', '  <x-box>', '<pre>',
+    '<script>', '</div >', '<x-y a="1">', 'a <!-- b', 'c --> d', '   para', '<![CDATA[', ']]>', '`a <!--`', '` x',
+    '``', '\\<!-- e', '<a title="<!--">', '[a](b "<!--")', 'x <!foo', 'b> y', '<http://a.b/<!--> z', 'q <?p',
+    'r ?> s', '<x <!-- y>'];
+  let a = 20261119;
+  const rnd = (n) => {
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) % n;
+  };
+  const pick = () => parts[rnd(parts.length)];
+  const link = '[visible](docs/V.md)';
+  const failures = [];
+  for (let k = 0; k < 20000 && failures.length < 3; k += 1) {
+    const lines = [];
+    for (let n = 1 + rnd(5); n > 0; n -= 1) lines.push(rnd(3) === 0 ? `${pick()} ${pick()}` : pick());
+    lines.splice(rnd(lines.length + 1), 0, link);
+    const input = `${lines.join('\n')}\n`;
+    if (!md.render(input).includes('<a href="docs/V.md">visible</a>')) continue;
+    if (!maskNonProse(input).includes(link)) failures.push(input);
+  }
+  assert.deepEqual(failures, [], `visible links masked: ${JSON.stringify(failures)}`);
 });

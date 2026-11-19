@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-11-19T10:28:48.722Z",
-  "result": "10:25Z keepalive (prior 08:18:55Z). Quiet: no new or moved mac/* branches, no mail to cloud (the one stale unread is cloud->mac, superseded), manifest no drift. Mac tick 08:47:42Z; live evidence 2026-11-16 22:14Z (under 3 days). Owner not escalated."
+  "firedAt": "2026-11-19T13:28:34.614Z",
+  "result": "keepalive (quiet cycle, last steward heartbeat 10:28Z): Mac tick last fired 2026-11-19T13:12:00Z; live evidence 2026-11-16 22:14Z (2.6 days, under the 3-day ask threshold); no new or moved mac/* branches; no unread mail to cloud; owner not escalated"
 }

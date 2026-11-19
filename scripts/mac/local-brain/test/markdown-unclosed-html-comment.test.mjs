@@ -1159,6 +1159,7 @@ for (const treatUnclosedAsFence of [true, false]) {
     ['the same with tab indents', '\t<!--\n\t[H](docs/H.md)\n\t-->\n'],
     ['raw HTML at an item content column of four', '- - item\n\n    <div>\n    [H](docs/H.md)\n'],
     ['raw HTML at column 0 closes the item (not lazy), so later indented HTML is top-level', '- a\n<div>\n\n  <div>\n[H](docs/H.md)\n'],
+    ['a closed comment across indented code with an internal blank line (Root 7017628008)', '    <!--\n\n    [H](docs/H.md)\n    -->\n'],
   ]) {
     test(`Codex da64fc4a literal hides H: ${name} (treatUnclosedAsFence=${treatUnclosedAsFence})`, () => {
       const out = maskNonProse(input, { treatUnclosedAsFence });
@@ -1178,6 +1179,13 @@ test('list, quote and code boundaries agree with markdown-it for hidden and visi
   }
   for (const q of ['>', '> ', '>  ']) for (const st of ['<div>', '<table>', '<span>', '<p>']) docs.push(`> ${st}\n${q}\n> [R](docs/R.md)\n`);
   for (const pre of ['', 'text\n\n', '- a\n\n  ']) for (const ind of ['    ', '\t']) docs.push(`${pre}${ind}<!--\n${ind}[R](docs/R.md)\n${ind}-->\n`);
+  // Indented code with blank lines inside it (empty, spaces, a tab) is still one block, so the comment still pairs;
+  // a following column-0 line after the code keeps its route.
+  for (const ind of ['    ', '\t']) for (const gap of ['\n', '  \n', '\t\n', '\n\n']) {
+    docs.push(`${ind}<!--\n${gap}${ind}[R](docs/R.md)\n${ind}-->\n`);
+    docs.push(`${ind}<!--\n${ind}x\n${gap}${ind}-->\n[R](docs/R.md)\n`);
+    docs.push(`${ind}code\n${gap}[R](docs/R.md)\n`);
+  }
   let checked = 0;
   for (const input of docs) {
     const links = md.render(input).split('href="docs/R.md"').length - 1;
@@ -1190,5 +1198,5 @@ test('list, quote and code boundaries agree with markdown-it for hidden and visi
       checked += 1;
     }
   }
-  assert.equal(checked, (4 * 10 * 2 * 4 + 3 * 4 + 3 * 2) * 2);
+  assert.equal(checked, (4 * 10 * 2 * 4 + 3 * 4 + 3 * 2 + 2 * 4 * 3) * 2);
 });

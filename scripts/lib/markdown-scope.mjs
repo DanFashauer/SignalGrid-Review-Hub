@@ -767,7 +767,8 @@ export function maskNonProse(text, { treatUnclosedAsFence = true } = {}) {
   let inPara = false;
   let paraStart = -1;
   let paraBoxed = false;
-  let codeRun = -2; // the last line taken as indented code, so the next one can join its segment
+  let codeRun = -2; // the last line of the current indented-code run (a code line, or a blank line inside one)
+  let codeSeg = -1; // that run's segment
   for (let i = 0; i < lines.length; i += 1) {
     if (segment[i] !== -1) {
       inPara = false;
@@ -777,6 +778,10 @@ export function maskNonProse(text, { treatUnclosedAsFence = true } = {}) {
     if (isBlank(text)) {
       segment[i] = -2;
       inPara = false;
+      // A blank line inside indented code belongs to the code block (§4.4): it joins the run's segment, so a comment
+      // that spans it still pairs (Root 7017628008). If no code line follows, it is a blank line in a segment of its
+      // own run and changes nothing.
+      if (codeRun === i - 1) (codeRun = i), (segment[i] = codeSeg);
     } else if (tail.has(i)) {
       // The rest of a comment block's closing line still belongs to that HTML block (§4.6): it is its own segment,
       // joins no paragraph above it, and the next line starts a new one.
@@ -786,8 +791,8 @@ export function maskNonProse(text, { treatUnclosedAsFence = true } = {}) {
       // Indented code (§4.4), counted from the list item's content column when the line sits in one. Consecutive
       // code lines share one segment, so a comment that spans them is still paired and masked as it was before
       // segments existed; split, each line kept half a comment and a link it hides was credited (Codex on da64fc4a).
-      const prev = i - 1;
-      segment[i] = codeRun === prev ? segment[prev] : nextSegment++;
+      if (codeRun !== i - 1) codeSeg = nextSegment++;
+      segment[i] = codeSeg;
       codeRun = i;
       inPara = false;
     } else if (

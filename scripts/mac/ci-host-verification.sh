@@ -60,7 +60,9 @@ fi
 #   reap       bounded. An unreaped leader still shows in the inspection below.
 #   inspect    one bound covers the inspector's whole life: output, exit and reap. The inspector
 #              never holds FD 9. Anything but a completed, successful listing is "unknown",
-#              and unknown is never an empty group.
+#              and unknown is never an empty group. An inspector that was killed but is not yet
+#              reaped stays on its parent's list; no cleanup is confirmed, and no handoff made,
+#              until that parent has reaped every one of them.
 #   verify     bounded. The owned group is KILLed again only when inspection POSITIVELY shows
 #              live members.
 #   custody    if the group is still live or unknown after the window, a detached custodian
@@ -69,11 +71,15 @@ fi
 #              nothing. The supervisor returns only after the custodian acknowledges that it is
 #              detached, so the step ends and its logs upload while no other host chain can be
 #              admitted. Without that acknowledgment the supervisor keeps the reservation itself.
+#   Three holds are deliberately UNBOUNDED, because only this process can prove the closure:
+#   the reap after a failed handshake, the reap of its own killed inspectors, and the hold
+#   when no custodian acknowledged. Each keeps FD 9 and ends at the outer job limit.
 ci_capped() {
   exec perl -MPOSIX=setsid,WNOHANG,strftime -MTime::HiRes=time,sleep -e '
     my $seconds = shift @ARGV;
     my $ready_seconds = 10;
     my $inspect_seconds = 10;
+    my $inspector_reap_seconds = 2;
     my $verify_seconds = 30;
     my ($t0, $what) = (time(), $ARGV[-1]); $what =~ s{.*/}{};
     my $mark = sub { printf STDERR "ci-host-verification: %s +%ds %s: %s\n", strftime("%Y-%m-%dT%H:%M:%SZ", gmtime), time() - $t0, $what, $_[0] };
@@ -124,6 +130,12 @@ ci_capped() {
     $mark->("ended with $code; ending the owned group");
     # Parent exit is not group exit: reap redirected descendants on every outcome.
     # 1 = live members, 0 = positively none, undef = the inspection failed, stalled or never finished.
+    # Inspectors this process forked, killed and has not yet reaped. They hold no reservation and
+    # are outside the work group, so an empty work group says nothing about them: cleanup is
+    # confirmed only once this list is empty. Only their parent can reap them, so they are
+    # never handed to another process.
+    my @unfinished; my $deferred = 0;
+    my $settled = sub { @unfinished = grep { my $got = waitpid($_, WNOHANG); $got != $_ && $got != -1 } @unfinished; return !@unfinished };
     my $live = sub {
       my @inspector = ("/bin/ps", "-axo", "pid=,pgid=,state=");
       pipe(my $out_read, my $out_write) or return undef;
@@ -155,8 +167,9 @@ ci_capped() {
       close $out_read;
       if (!defined $status) {
         kill "KILL", $inspector_pid; # our own unreaped child
-        my $reap_until = time() + 2;
-        while (time() < $reap_until) { last if waitpid($inspector_pid, WNOHANG) == $inspector_pid; sleep 0.02 }
+        my $reap_until = time() + $inspector_reap_seconds;
+        while (time() < $reap_until) { return undef if waitpid($inspector_pid, WNOHANG) == $inspector_pid; sleep 0.02 }
+        push @unfinished, $inspector_pid; $deferred++;
         return undef;
       }
       return undef if $status != 0;
@@ -176,7 +189,14 @@ ci_capped() {
         POSIX::_exit(1) unless defined($sid) && $sid >= 0
           && open(STDIN, "<", "/dev/null") && open(STDOUT, ">", "/dev/null") && open(STDERR, ">", "/dev/null");
         print {$held_write} "held\n"; close $held_write;
-        while (1) { my $active = $live->(); POSIX::_exit(0) if defined($active) && !$active; sleep 0.5 }
+        @unfinished = (); # the supervisor settled its own before the handoff; from here on the list holds only inspectors forked by the custodian
+        while (1) {
+          my $active = $live->();
+          # Its own unreaped inspectors are still its unreaped children, so their pids are its own.
+          kill "KILL", @unfinished if @unfinished;
+          POSIX::_exit(0) if $settled->() && defined($active) && !$active;
+          sleep 0.5;
+        }
       }
       close $held_write;
       my $held = $line_within->($held_read, 5); close $held_read;
@@ -198,12 +218,24 @@ ci_capped() {
       last if time() >= $verify_until;
       kill "KILL", -$pid if $active; sleep 0.2;
     }
+    # Ownership hold, deliberately unbounded: this process is the only one that can reap its own
+    # killed inspectors, so it keeps the reservation until every one of them is reaped.
+    if (!$settled->()) {
+      $mark->(scalar(@unfinished) . " unfinished inspector(s); holding the reservation until they are reaped");
+      until ($settled->()) { kill "KILL", @unfinished; sleep 0.1 }
+    }
+    $mark->("inspectors settled: $deferred killed inspector(s) reaped after their window") if $deferred;
     if ($confirmed) { $mark->("cleanup confirmed: owned group empty"); exit $code }
     print STDERR "ci-host-verification: cleanup unconfirmed; retaining host reservation\n";
     my $keeper = $custody->();
     if (!$keeper) {
       # No acknowledged custodian: keep the reservation here, as before. The outer job remains bounded.
-      while (1) { my $active = $live->(); last if defined($active) && !$active; kill "KILL", -$pid if $active; sleep 0.2 }
+      while (1) {
+        my $active = $live->();
+        kill "KILL", @unfinished if @unfinished;
+        last if $settled->() && defined($active) && !$active;
+        kill "KILL", -$pid if $active; sleep 0.2;
+      }
       exit $code;
     }
     $mark->("reservation retained by custodian pid $keeper until the owned group is confirmed empty");

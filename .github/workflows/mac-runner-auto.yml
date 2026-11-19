@@ -132,8 +132,10 @@ jobs:
           # no artifact, so nothing said which step was slow. Each command boundary now prints a UTC
           # time, the seconds since the chain started and the real exit status, and every preflight
           # step is echoed to this live log the moment it STARTS. Names and numbers only.
-          # Budget: 60 s admission + 2400 s work + at most ~100 s cleanup verification and teardown
-          # (ci-host-verification.sh) leaves over 15 of the 60 minutes for the two uploads below.
+          # Budget: 60 s admission + 2400 s work, then cleanup verification and teardown, normally
+          # under ~100 s, which leaves over 15 of the 60 minutes for the two uploads below. The
+          # wrapper's ownership holds (see its header) are deliberately unbounded and end at the
+          # job limit; the live lines above are then the evidence.
           ci_mark() { printf 'ci-chain: %s +%ss %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$SECONDS" "$*"; }
           ci_mark "start slice $PREFLIGHT_SLICE/4"
           # This is a fresh hosted image, not the previously provisioned Mac.

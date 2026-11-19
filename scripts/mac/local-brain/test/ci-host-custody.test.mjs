@@ -10,8 +10,14 @@
 // Fixtures only: every process signalled here is one this test started. Survivors, failed and
 // stalled inspection, and a failed readiness handshake are simulated in a COPY of the wrapper in
 // which named tokens are substituted (each token must occur exactly once, asserted). Normal
-// completion, a clean timeout and cancellation run the real, unmodified wrapper. A fixture is
-// removed only after its lock is positively free again; otherwise it is left and the test fails.
+// completion, a clean timeout and cancellation run the real, unmodified wrapper.
+//
+// Cohort lifetime: every wrapper is started with a "lifeline" pipe on FD 3, which every process
+// it starts inherits (work, inspectors, custodians). The pipe reaches end-of-file only when the
+// last of them has exited, so the test can JOIN the whole cohort without knowing or signalling
+// any pid. Cleanup signals only through live child handles (a child this process has not yet
+// reaped, so its pid is still ours). A fixture is removed only after every lifeline has closed
+// and its lock is free; otherwise it is left in place and the test fails.
 import test from "node:test";
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
@@ -50,8 +56,8 @@ function fixture() {
   const events = join(dir, "events");
   writeFileSync(events, "");
   const env = { PATH: process.env.PATH, HOME: home, RUNNER_TEMP: dir, SG_CI_EVENTS: events, SG_CI_BRAIN_URL: `file://${idle}` };
-  // The owned cohort: everything this fixture started and must see ended before it is removed.
-  return { dir, repo, lock, sha, events, env, inode: statSync(lock).ino, ctl: join(dir, "ps-mode"), pgfile: join(dir, "work-pgid"), wrappers: [], extras: [] };
+  // The owned cohort: live handles and lifelines for everything this fixture started.
+  return { dir, repo, lock, sha, events, env, inode: statSync(lock).ino, ctl: join(dir, "ps-mode"), pgfile: join(dir, "work-pgid"), handles: [], lifelines: [] };
 }
 
 /** 0 when the host lock can be taken right now, 75 when another holder has it. */
@@ -59,14 +65,17 @@ function probeLock(f) {
   return spawnSync("/bin/bash", ["-c", '. "$1"; sg_host_verify_acquire "$2"', "probe", HELPER, f.lock], { env: f.env, encoding: "utf8" }).status;
 }
 
-/** End the whole owned cohort on every outcome; remove the fixture only once its lock is free. */
+const unreaped = (child) => child.exitCode === null && child.signalCode === null;
+const settles = (promise, ms) => Promise.race([promise.then(() => true), sleepMs(ms).then(() => false)]);
+
+/** Join the whole owned cohort on every outcome; remove the fixture only once that is proven. */
 async function finish(f) {
   writeFileSync(f.ctl, "real"); // inspection is real again, so any custodian can confirm and exit
-  for (const child of [...f.wrappers, ...f.extras]) { try { process.kill(child.pid, "SIGKILL"); } catch { /* gone */ } }
-  for (const child of f.wrappers) { try { process.kill(-child.pid, "SIGKILL"); } catch { /* gone */ } }
-  if (existsSync(f.pgfile)) { try { process.kill(-Number(readFileSync(f.pgfile, "utf8")), "SIGKILL"); } catch { /* gone */ } }
-  const free = await until(() => probeLock(f) === 0, 20000);
-  assert.ok(free, `a fixture process still holds ${f.lock}; the fixture is left in place`);
+  // Only a child this process has not reaped is signalled: its pid cannot have been reused.
+  for (const child of f.handles) { if (unreaped(child)) child.kill("SIGKILL"); }
+  const joined = await settles(Promise.all(f.lifelines), 45000);
+  assert.ok(joined, `fixture processes are still running; ${f.dir} is left in place`);
+  assert.equal(probeLock(f), 0, `the fixture lock is still held; ${f.dir} is left in place`);
   rmSync(f.dir, { recursive: true, force: true });
 }
 
@@ -74,13 +83,15 @@ async function finish(f) {
 function runWrapper(f, wrapper, body, { wait = 2, work = 4, limitMs = 20000, onSpawn } = {}) {
   return new Promise((resolve) => {
     const started = Date.now();
-    const child = spawn("/bin/bash", [wrapper, f.sha, String(wait), String(work)], { cwd: f.repo, env: f.env, detached: true, stdio: ["pipe", "pipe", "pipe"] });
-    f.wrappers.push(child);
+    const child = spawn("/bin/bash", [wrapper, f.sha, String(wait), String(work)], { cwd: f.repo, env: f.env, detached: true, stdio: ["pipe", "pipe", "pipe", "pipe"] });
+    f.handles.push(child);
+    f.lifelines.push(new Promise((closed) => { child.stdio[3].on("close", closed); child.stdio[3].resume(); }));
     let stdout = "", stderr = "", timedOut = false;
     child.stdout.on("data", (d) => { stdout += d; });
     child.stderr.on("data", (d) => { stderr += d; });
     child.stdin.end(body);
-    const timer = setTimeout(() => { timedOut = true; try { process.kill(-child.pid, "SIGKILL"); } catch { /* already gone */ } }, limitMs);
+    // The leader is still unreaped here, so its process group id is still this fixture's.
+    const timer = setTimeout(() => { timedOut = true; if (unreaped(child)) { try { process.kill(-child.pid, "SIGKILL"); } catch { /* already gone */ } } }, limitMs);
     if (onSpawn) onSpawn(child);
     child.on("exit", (code, signal) => { clearTimeout(timer); resolve({ code, signal, stdout, stderr, ms: Date.now() - started, timedOut }); });
   });
@@ -108,6 +119,7 @@ case "$mode" in
   fail) exit 2;;
   eofhang) exec 1>&-; exec /bin/sleep 30;;
   stall) exec /bin/sleep 30;;
+  stall-twice) echo x >> ${JSON.stringify(join(f.dir, "ps-calls"))}; if [ "$(wc -l < ${JSON.stringify(join(f.dir, "ps-calls"))})" -le 2 ]; then exec /bin/sleep 30; fi; exec /bin/ps "$@";;
   *) exec /bin/ps "$@";;
 esac
 `);
@@ -156,7 +168,7 @@ for (const [mode, what] of [
       writeFileSync(f.ctl, mode);
       // A sentinel this test owns, outside the work group: nothing may signal it.
       const sentinel = spawn("/bin/sleep", ["90"], { stdio: "ignore" });
-      f.extras.push(sentinel);
+      f.handles.push(sentinel);
       const r = await runWrapper(f, copy, `echo $$ > ${JSON.stringify(f.pgfile)}\nsleep 30\n`, { work: 1, limitMs: 45000 });
       assert.equal(r.timedOut, false, `the wrapper did not return: ${r.stderr}`);
       assert.equal(r.code, 124, r.stderr);
@@ -178,6 +190,24 @@ for (const [mode, what] of [
     } finally { await finish(f); }
   });
 }
+
+test("an inspector that is not yet reaped is accounted for before an empty group is believed", async () => {
+  const f = fixture();
+  try {
+    // Two inspections stall and, with a zero reap window, are still unreaped when the next (real)
+    // listing shows the work group empty. Cleanup may be confirmed only after they are reaped.
+    const copy = derive(f, [...standInPs(f), ["my $inspector_reap_seconds = 2;", "my $inspector_reap_seconds = 0;"]]);
+    writeFileSync(f.ctl, "stall-twice");
+    const r = await runWrapper(f, copy, "sleep 30\n", { work: 1, limitMs: 45000 });
+    assert.equal(r.timedOut, false, r.stderr);
+    assert.equal(r.code, 124, r.stderr);
+    assert.match(r.stderr, /inspectors settled: [12] killed inspector\(s\) reaped after their window/);
+    const settled = r.stderr.indexOf("inspectors settled"), confirmed = r.stderr.indexOf("cleanup confirmed: owned group empty");
+    assert.ok(settled >= 0 && confirmed > settled, `the inspectors are settled before cleanup is confirmed: ${r.stderr}`);
+    assert.doesNotMatch(r.stderr, /custodian pid/);
+    assert.equal(probeLock(f), 0);
+  } finally { await finish(f); }
+});
 
 test("failed readiness: the child is never released, user work never starts, exit 125, and no detached process is left to signal a pid", async () => {
   const f = fixture();

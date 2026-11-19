@@ -193,8 +193,10 @@ for (const [mode, what] of [
       assert.ok(alive(sentinel.pid), "a process outside the owned group was not signalled");
       // Inspection becomes real again: the owned group IS empty, so custody ends by itself.
       writeFileSync(f.ctl, "real");
-      assert.ok(await until(() => keepers.every((pid) => !alive(pid)), 12000), "every custodian exits once the group is confirmed empty");
-      assert.ok(await until(() => probeLock(f) === 0, 5000), "the lock is free after custody ends");
+      // Custody ending is read from the lock, not from the pid: where the init process does not reap
+      // orphans an exited custodian stays a zombie, which still answers a liveness probe. A free lock
+      // means every custodian closed FD 9; finish() then joins them through the lifeline.
+      assert.ok(await until(() => probeLock(f) === 0, 17000), "the lock is free once the group is confirmed empty");
       assert.equal(statSync(f.lock).ino, f.inode);
       assert.ok(alive(sentinel.pid));
     } finally { await finish(f); }

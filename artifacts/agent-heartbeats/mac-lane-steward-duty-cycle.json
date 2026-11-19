@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-11-19T13:28:34.614Z",
-  "result": "keepalive (quiet cycle, last steward heartbeat 10:28Z): Mac tick last fired 2026-11-19T13:12:00Z; live evidence 2026-11-16 22:14Z (2.6 days, under the 3-day ask threshold); no new or moved mac/* branches; no unread mail to cloud; owner not escalated"
+  "firedAt": "2026-11-19T18:25:17.001Z",
+  "result": "18:24Z cycle, 2h keepalive. Quiet Mac side: no new or moved origin/mac/* branch since 16:00Z, no mail addressed to cloud (one cloud->mac message unread 2.7d, superseded), sim loop passes (45 clean operations). Tick heartbeat firedAt 2026-11-19T16:30:04Z (about 1h55m, within 3h). Live evidence committed 2026-11-16 17:14 -0500 (just over 3 days): refresh request deliberately HELD this cycle because the Mac host is reserved for Root's publication-fix installer awaiting ordinary admission; an evidence run would compete for it. Owner not escalated. Cloud items on the Mac lane: #2387 setup-receipt Mac run attempt 1 slice 4 failed the throughput bench (cause unknown), one full rerun planned after the run completes."
 }

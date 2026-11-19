@@ -768,3 +768,60 @@ test('differential: definition-only paragraphs before an underline agree with ma
   assert.ok(shownKept > 1000, `too few visible routes kept (${shownKept}): the definition check no longer fires`);
   assert.deepEqual(falseCredits, [], `hidden routes credited: ${JSON.stringify(falseCredits)}`);
 });
+
+// 16b. Root on 50bde160 (4628112709): the reported input under both fence options, and the controls that must keep
+//      a real heading — definition-shaped text inside an open paragraph, a definition with no destination of its
+//      own, and a complete multi-line definition followed by prose.
+for (const treatUnclosedAsFence of [true, false]) {
+  test(`reference definitions: the reported input keeps the route (treatUnclosedAsFence=${treatUnclosedAsFence})`, () => {
+    const input = '[r]: /url\n===\n<span>\n[visible](docs/V.md)\n';
+    const out = maskNonProse(input, { treatUnclosedAsFence });
+    assertShape(input, out);
+    assert.ok(out.includes('[visible](docs/V.md)'), `route lost: ${JSON.stringify(out)}`);
+  });
+  for (const [name, input] of [
+    ['definition-shaped text inside an open paragraph', 'text\n[r]: /url\n===\n<span>\n[hidden](docs/H.md)\n'],
+    ['a definition with no destination before the underline', '[r]:\n===\n<span>\n[hidden](docs/H.md)\n'],
+    ['a complete multi-line definition followed by prose', "[r]:\n/url\n'title'\nprose\n===\n<span>\n[hidden](docs/H.md)\n"],
+  ]) {
+    test(`reference definitions control: ${name} stays a heading, route masked (treatUnclosedAsFence=${treatUnclosedAsFence})`, () => {
+      const out = maskNonProse(input, { treatUnclosedAsFence });
+      assertShape(input, out);
+      assert.ok(!out.includes('docs/H.md'), `hidden route kept: ${JSON.stringify(out)}`);
+    });
+  }
+}
+
+// 17. Root on 50bde160 (4628196374): block-start tags take cmark-gfm 0.29's `spacechar` separators (VT and FF as
+//     well as space and tab), so these lines open raw HTML blocks there: H under them is hidden through the blank
+//     line and must be masked, while V after the blank line stays. NBSP is not a separator, a type 7 tag cannot
+//     interrupt an open paragraph, and a VT after a completed type 7 tag does not make a block.
+for (const treatUnclosedAsFence of [true, false]) {
+  for (const [name, opener] of [
+    ['a VT between a type 7 tag name and its attribute', '<span\vtitle="x">'],
+    ['an FF between a type 7 tag name and its attribute', '<span\ftitle="x">'],
+    ['a VT inside a type 7 closing tag', '</span\v>'],
+    ['an FF after a completed type 7 tag', '<span>\f'],
+    ['a VT after a type 1 tag name', '<script\vtype="x">'],
+    ['an FF after a type 6 tag name', '<div\fclass="x">'],
+  ]) {
+    test(`GFM block start: ${name} hides H, keeps V (treatUnclosedAsFence=${treatUnclosedAsFence})`, () => {
+      const input = `${opener}\n[H](docs/H.md)\n\n[V](docs/V.md)\n`;
+      const out = maskNonProse(input, { treatUnclosedAsFence });
+      assertShape(input, out);
+      assert.ok(!out.includes('docs/H.md'), `hidden route kept: ${JSON.stringify(out)}`);
+      if (!opener.startsWith('<script')) assert.ok(out.includes('[V](docs/V.md)'), `route lost: ${JSON.stringify(out)}`);
+    });
+  }
+  for (const [name, input] of [
+    ['an NBSP separator (not a block)', '<span title="x">\n[V](docs/V.md)\n'],
+    ['a VT after a completed type 7 tag (not a block)', '<span>\v\n[V](docs/V.md)\n'],
+    ['a VT-separated type 7 tag inside an open paragraph', 'para\n<span\vtitle="x">\n[V](docs/V.md)\n'],
+  ]) {
+    test(`GFM block start control: ${name} keeps V (treatUnclosedAsFence=${treatUnclosedAsFence})`, () => {
+      const out = maskNonProse(input, { treatUnclosedAsFence });
+      assertShape(input, out);
+      assert.ok(out.includes('[V](docs/V.md)'), `route lost: ${JSON.stringify(out)}`);
+    });
+  }
+}

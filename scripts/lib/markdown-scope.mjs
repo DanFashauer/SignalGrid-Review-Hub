@@ -104,11 +104,14 @@ const HTML_TYPE6_TAGS = new Set(
     "link main menu menuitem nav noframes ol optgroup option p param search section summary table tbody td tfoot th " +
     "thead title tr track ul").split(" "),
 );
-// Whitespace in these start conditions is ASCII space or tab only (§2.1); `\s` would also accept NBSP and other
-// Unicode spaces and change which block owns a line.
-const ATTR = String.raw`(?:[ \t]+[A-Za-z_:][A-Za-z0-9_.:-]*(?:[ \t]*=[ \t]*(?:[^ \t\n"'=<>\x60]+|'[^']*'|"[^"]*"))?)`;
-const TYPE7_OPEN = new RegExp(String.raw`^<([A-Za-z][A-Za-z0-9-]*)${ATTR}*[ \t]*\/?>[ \t]*$`);
-const TYPE7_CLOSE = /^<\/([A-Za-z][A-Za-z0-9-]*)[ \t]*>[ \t]*$/;
+// Separators inside a block-start tag follow cmark-gfm 0.29's `spacechar` (space, tab, VT, FF; scanners.re), the
+// grammar this module targets: a `<span\vtitle="x">` line opens a type 7 block there, so a route under it is hidden
+// and must be masked (Root on #2368). After a completed type 7 tag only space, tab and FF may follow (VT may not).
+// `\s` would also accept NBSP and other Unicode spaces and change which block owns a line, so it is never used.
+const SP = String.raw`[ \t\v\f]`;
+const ATTR = String.raw`(?:${SP}+[A-Za-z_:][A-Za-z0-9_.:-]*(?:${SP}*=${SP}*(?:[^ \t\n\v\f\r"'=<>\x60]+|'[^']*'|"[^"]*"))?)`;
+const TYPE7_OPEN = new RegExp(String.raw`^<([A-Za-z][A-Za-z0-9-]*)${ATTR}*${SP}*\/?>[ \t\f]*$`);
+const TYPE7_CLOSE = new RegExp(String.raw`^<\/([A-Za-z][A-Za-z0-9-]*)${SP}*>[ \t\f]*$`);
 // A thematic break (§4.1) and a setext underline (§4.3) end a paragraph, so a type 7 block may start after one.
 const THEMATIC_BREAK = /^ {0,3}(?:(?:\*[ \t]*){3,}|(?:-[ \t]*){3,}|(?:_[ \t]*){3,})$/;
 // Inline constructs that bind as tightly as a comment (§6), in cmark-gfm's 0.29 forms. Each is tried at its own
@@ -350,12 +353,12 @@ function htmlBlockStart(line, inParagraph) {
   if (!m) return null;
   const rest = m[1];
   const col = line.length - rest.length;
-  if (/^<(?:pre|script|style|textarea)(?:[ \t>]|$)/i.test(rest)) return { type: 1, col, end: /<\/(?:pre|script|style|textarea)>/i };
+  if (/^<(?:pre|script|style|textarea)(?:[ \t\v\f>]|$)/i.test(rest)) return { type: 1, col, end: /<\/(?:pre|script|style|textarea)>/i };
   if (rest.startsWith("<!--")) return { type: 2, col, end: "-->" };
   if (rest.startsWith("<?")) return { type: 3, col, end: "?>" };
   if (/^<![A-Z]/.test(rest)) return { type: 4, col, end: ">" };
   if (rest.startsWith("<![CDATA[")) return { type: 5, col, end: "]]>" };
-  const t6 = /^<\/?([A-Za-z][A-Za-z0-9]*)(?:[ \t]|\/?>|$)/.exec(rest);
+  const t6 = /^<\/?([A-Za-z][A-Za-z0-9]*)(?:[ \t\v\f]|\/?>|$)/.exec(rest);
   if (t6 && HTML_TYPE6_TAGS.has(t6[1].toLowerCase())) return { type: 6, col };
   if (!inParagraph) {
     const t7 = TYPE7_OPEN.exec(rest) || TYPE7_CLOSE.exec(rest);

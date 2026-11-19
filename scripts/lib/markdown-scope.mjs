@@ -870,9 +870,11 @@ export function maskNonProse(text, { treatUnclosedAsFence = true } = {}) {
     } else if (
       ATX_HEADING.test(text) ||
       THEMATIC_BREAK.test(text) ||
-      (inPara && SETEXT_UNDERLINE.test(text) && !(judgeDefinitions && allReferenceDefinitions(source.slice(paraStart, i)))) ||
-      (!inPara && indentColumns(text) >= 4)
+      (inPara && SETEXT_UNDERLINE.test(text) && !(judgeDefinitions && allReferenceDefinitions(source.slice(paraStart, i))))
     ) {
+      // No document-margin code test here: the branch above already applies the four-column threshold from the
+      // item's content column, so a line two columns into an item after a blank is paragraph text and pairs with
+      // the rest of its paragraph (Root on 0a98d95f: `- # hi`, blank, `    a <!--`, then `  -->`).
       segment[i] = nextSegment++;
       inPara = false;
     } else {

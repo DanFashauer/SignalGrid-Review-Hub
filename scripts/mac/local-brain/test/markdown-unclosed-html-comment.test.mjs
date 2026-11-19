@@ -228,3 +228,50 @@ test('control: a type 6 block ended by a blank line, then a real unclosed commen
   assertShape(input, out);
   assert.ok(!out.includes('docs/H.md'), `hidden link leaked: ${JSON.stringify(out)}`);
 });
+
+// ---- Root's source-derived counterexamples on 8da48f7a (#2368 comment 7003077802), verbatim prefixes. Each
+// enclosing non-comment block ends before the appended route, so its inner line-start `<!--` must not own the
+// rest of the document, under either treatUnclosedAsFence value. The quoted-attribute cases keep the
+// comment-looking text inside an attribute value.
+const ROOT_PREFIXES = {
+  'type 1 <script>': '<script>\n<!--\n</script>',
+  'type 1 <style>': '<style>\n<!--\n</style>',
+  'type 1 <textarea>': '<textarea>\n<!--\n</textarea>',
+  'type 1 <pre> with a quoted attribute': '<pre title="\n<!--\n">\n</pre>',
+  'type 1 end tag that need not match the opener': '<pre>\n<!--\n</SCRIPT>',
+  'type 3 <?x': '<?x\n<!--\n?>',
+  'type 4 <!A': '<!A\n<!--\n>',
+  'type 5 CDATA': '<![CDATA[\n<!--\n]]>',
+  'type 6 <div> with a quoted attribute': '<div title="\n<!--\n">',
+  'type 7 <x-box> then a quoted attribute': '<x-box>\n<i title="\n<!--\n">',
+};
+for (const [name, prefix] of Object.entries(ROOT_PREFIXES)) {
+  for (const treatUnclosedAsFence of [true, false]) {
+    test(`Root counterexample, ${name}, treatUnclosedAsFence:${treatUnclosedAsFence}: the route after the block stays visible`, () => {
+      const input = `${prefix}\n\n[visible](docs/V.md)\n`;
+      const out = maskNonProse(input, {treatUnclosedAsFence});
+      assertShape(input, out);
+      const lines = out.split('\n');
+      assert.equal(lines[lines.length - 2], '[visible](docs/V.md)', `route lost: ${JSON.stringify(out)}`);
+    });
+  }
+}
+
+// Controls: a real standalone unclosed comment still hides the rest, and starts that are malformed or do not
+// match an HTML block kind do not shield it.
+const STANDALONE_CONTROLS = {
+  'a standalone unclosed comment after a paragraph': 'x\n\n<!--\n[h](docs/H.md)\n',
+  'a closed processing instruction, then a real opener': '<?x ?>\n<!--\n[h](docs/H.md)\n',
+  'an incomplete <divx start (no HTML block), then a real opener': '<divx\n<!--\n[h](docs/H.md)\n',
+  'a four-space indented <pre> (indented code, no HTML block), then a real opener': '    <pre>\n<!--\n[h](docs/H.md)\n',
+  '<scriptx> is not type 1: its type 7 block ends at the blank line, then a real opener': '<scriptx>\n\n<!--\n[h](docs/H.md)\n',
+};
+for (const [name, input] of Object.entries(STANDALONE_CONTROLS)) {
+  for (const treatUnclosedAsFence of [true, false]) {
+    test(`control, ${name}, treatUnclosedAsFence:${treatUnclosedAsFence}: the hidden route stays masked`, () => {
+      const out = maskNonProse(input, {treatUnclosedAsFence});
+      assertShape(input, out);
+      assert.ok(!out.includes('docs/H.md'), `hidden route leaked: ${JSON.stringify(out)}`);
+    });
+  }
+}

@@ -950,3 +950,32 @@ for (const treatUnclosedAsFence of [true, false]) {
     });
   }
 }
+
+// 22. Codex on 1f3ff8aa. A block quote, or a list item with content (ordered only from 1), interrupts a plain
+//     paragraph, so an inline code span or comment cannot pair across that boundary. A line that cannot interrupt
+//     (`2.`, an empty item) stays in the paragraph, and a paragraph that began in a container is not split further.
+for (const treatUnclosedAsFence of [true, false]) {
+  for (const [name, input] of [
+    ['a block quote interrupting a paragraph', '`\n> quote\n[V](docs/V.md)\n`\n'],
+    ['a bullet item interrupting a paragraph', '`\n- item\n[V](docs/V.md)\n`\n'],
+    ['an ordered item from 1 interrupting a paragraph', '`\n1. item\n[V](docs/V.md)\n`\n'],
+    ['a comment opener before an interrupting block quote', 'text <!--\n> [V](docs/V.md) -->\n'],
+  ]) {
+    test(`Codex 1f3ff8aa: ${name} keeps V (treatUnclosedAsFence=${treatUnclosedAsFence})`, () => {
+      const out = maskNonProse(input, { treatUnclosedAsFence });
+      assertShape(input, out);
+      assert.ok(out.includes('[V](docs/V.md)'), `route lost: ${JSON.stringify(out)}`);
+    });
+  }
+  for (const [name, input] of [
+    ['an ordered item from 2 (not an interruption)', '`\n2. item\n[H](docs/H.md)\n`\n'],
+    ['a comment across two block-quote lines', '> <!-- a\n> [H](docs/H.md) -->\n'],
+    ['a code span across two list-item lines', '- `a\n  [H](docs/H.md)`\n'],
+  ]) {
+    test(`Codex 1f3ff8aa control: ${name} hides H (treatUnclosedAsFence=${treatUnclosedAsFence})`, () => {
+      const out = maskNonProse(input, { treatUnclosedAsFence });
+      assertShape(input, out);
+      assert.ok(!out.includes('docs/H.md'), `hidden route kept: ${JSON.stringify(out)}`);
+    });
+  }
+}

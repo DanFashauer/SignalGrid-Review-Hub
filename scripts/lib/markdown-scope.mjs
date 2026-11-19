@@ -238,6 +238,10 @@ function indentColumns(line) {
 const ATX_HEADING = /^ {0,3}#{1,6}(?:[ \t]|$)/;
 // One or more list-item or block-quote markers, then up to three spaces, then a comment opener.
 const CONTAINER_START = /^ {0,3}(?:>|[-+*](?:[ \t]|$)|\d{1,9}[.)](?:[ \t]|$))/;
+// A container start that certainly interrupts an open paragraph (CommonMark §5.1, §5.2): a block-quote marker,
+// or a list marker with content, ordered only when it starts at 1. Anything else, such as `2.`, an empty item or a
+// leading zero, is left in the paragraph, which can only mask more, never less.
+const PARAGRAPH_INTERRUPT = /^ {0,3}(?:>|[-+*][ \t]+\S|1[.)][ \t]+\S)/;
 const CONTAINER_COMMENT = /^((?: {0,3}(?:[-+*]|\d{1,9}[.)])[ \t]+| {0,3}>[ \t]?)+)( {0,3})<!--/;
 const SETEXT_UNDERLINE = /^ {0,3}(?:=+|-+)[ \t]*$/;
 
@@ -541,6 +545,7 @@ export function maskNonProse(text, { treatUnclosedAsFence = true } = {}) {
   // thematic break, a setext underline or an indented code line, because CommonMark never lets a paragraph do so.
   let inPara = false;
   let paraStart = -1;
+  let paraBoxed = false;
   for (let i = 0; i < lines.length; i += 1) {
     if (segment[i] !== -1) {
       inPara = false;
@@ -564,8 +569,15 @@ export function maskNonProse(text, { treatUnclosedAsFence = true } = {}) {
       segment[i] = nextSegment++;
       inPara = false;
     } else {
-      if (!inPara) paraStart = i;
-      segment[i] = inPara ? segment[i - 1] : nextSegment++;
+      // A list item or block quote interrupting a plain paragraph ends it, so an inline comment or code span
+      // cannot pair across that boundary (Codex on 1f3ff8aa). A paragraph that already began in a container keeps
+      // its lines together: containers are not modelled, so its extent is not split further.
+      const interrupts = inPara && !paraBoxed && PARAGRAPH_INTERRUPT.test(text);
+      if (!inPara || interrupts) {
+        paraStart = i;
+        paraBoxed = CONTAINER_START.test(text);
+        segment[i] = nextSegment++;
+      } else segment[i] = segment[i - 1];
       inPara = true;
     }
   }

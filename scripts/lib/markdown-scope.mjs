@@ -21,8 +21,8 @@
 // them credit a route no reader can see (a false pass, the worse one). So the mask follows what a reader of the
 // document is actually shown, and where renderers disagree it follows cmark-gfm, the renderer GitHub uses (0.29
 // rules: a type 4 declaration needs an uppercase letter; an inline comment holds no `--`, does not start with `>` or
-// `->`, and does not end in `-`). Link reference definitions are read only to decide which brackets are links. Not
-// modelled: container blocks (block quotes, list items). The markdown-unclosed-html-comment test holds seeded
+// `->`, and does not end in `-`). Not modelled: link syntax (a `<!--` inside a link title opens a comment, which can
+// only mask more) and container blocks (block quotes, list items). The markdown-unclosed-html-comment test holds seeded
 // differential checks against markdown-it 14.3.0 in both directions, and names where that oracle departs from the
 // spec.
 
@@ -111,9 +111,10 @@ const TYPE7_OPEN = new RegExp(String.raw`^<([A-Za-z][A-Za-z0-9-]*)${ATTR}*[ \t]*
 const TYPE7_CLOSE = /^<\/([A-Za-z][A-Za-z0-9-]*)[ \t]*>[ \t]*$/;
 // A thematic break (§4.1) and a setext underline (§4.3) end a paragraph, so a type 7 block may start after one.
 const THEMATIC_BREAK = /^ {0,3}(?:(?:\*[ \t]*){3,}|(?:-[ \t]*){3,}|(?:_[ \t]*){3,})$/;
-// Inline constructs that bind as tightly as a comment (§6). Each is tried at its own position, leftmost first, so a
-// `<!--` inside an earlier code span, autolink, tag, processing instruction, declaration, CDATA section or link tail is
-// part of that construct and never opens a comment.
+// Inline constructs that bind as tightly as a comment (§6), in cmark-gfm's 0.29 forms. Each is tried at its own
+// position, leftmost first, so a `<!--` inside an earlier code span, autolink, tag, processing instruction,
+// declaration or CDATA section is part of that construct and never opens a comment. Each form here is no wider than
+// GitHub's: a form wider than the renderer's would swallow a real comment and leave its link to be credited.
 const ESCAPABLE = /[!-\/:-@[-`{-~]/;
 const INLINE_RAW = [
   /^<[A-Za-z][A-Za-z0-9+.-]{1,31}:[^\s<>]*>/, // URI autolink
@@ -121,11 +122,9 @@ const INLINE_RAW = [
   /^<[A-Za-z][A-Za-z0-9-]*(?:\s+[A-Za-z_:][A-Za-z0-9_.:-]*(?:\s*=\s*(?:[^\s"'=<>`]+|'[^']*'|"[^"]*"))?)*\s*\/?>/, // open tag
   /^<\/[A-Za-z][A-Za-z0-9-]*\s*>/, // closing tag
   /^<\?[\s\S]*?\?>/, // processing instruction
-  /^<![A-Za-z][^>]*>/, // declaration
+  /^<![A-Z]+\s[^>]*>/, // declaration: cmark-gfm's 0.29 form, uppercase name then whitespace
   /^<!\[CDATA\[[\s\S]*?\]\]>/, // CDATA
 ];
-// An inline link's tail after the `]` that closes a link text: destination and optional title.
-const LINK_TAIL = /^\(\s*(?:<[^<>\n]*>|[^\s()<]*(?:\([^\s()]*\)[^\s()<]*)*)(?:\s+(?:"[^"]*"|'[^']*'|\([^()]*\)))?\s*\)/;
 
 // The inline comment GitHub hides. CommonMark 0.31.2 (§6.6, markdown-it here) also accepts `<!-->`, `<!--->` and text
 // holding `--`; cmark-gfm (GitHub, the 0.29 rule) shows those literally, links and all, so the mask leaves them as
@@ -135,15 +134,18 @@ const INLINE_COMMENT = /^<!--(?!-?>)(?:[^-]|-(?!-))*-->/;
 
 /**
  * Blank every inline comment (§6.6) in one paragraph's text, as INLINE_COMMENT defines it; anything else that starts
- * `<!--` is literal text and stays visible. Backslash escapes, code spans, autolinks, raw HTML and link tails are
- * skipped whole, leftmost first, so a `<!--` inside one of them never opens a comment.
+ * `<!--` is literal text and stays visible. Backslash escapes, autolinks and raw HTML are skipped whole and code spans
+ * are blanked whole, leftmost first, so a `<!--` inside one of them never opens a comment.
+ *
+ * LINKS ARE NOT PARSED, ON PURPOSE. Link destinations and titles, reference definitions and bracket nesting are left
+ * to the comment rule: a `<!--` inside a link title still opens a comment when a `-->` follows in the paragraph. That
+ * can only mask MORE than a renderer hides, so the worst outcome is a route the gates report as unreachable (loud and
+ * fixable), never a hidden route they credit. Every attempt to skip link syntax opened a false-credit path (Root on
+ * 32c2efad, 16340f4c and ca93a80b on #2368: unmatched `](`, inner links, images, fenced definitions, case folding).
  */
-function maskInlineComments(text, blank, labels = new Set()) {
+function maskInlineComments(text, blank) {
   let out = "";
   let i = 0;
-  // Open link-text brackets, innermost last (§6.3, "look for link or image"). A recognized link makes every earlier
-  // `[` inactive, since a link cannot contain a link; an image does not.
-  const openers = [];
   while (i < text.length) {
     const ch = text[i];
     if (ch === "\\" && i + 1 < text.length && ESCAPABLE.test(text[i + 1])) {
@@ -175,29 +177,6 @@ function maskInlineComments(text, blank, labels = new Set()) {
         i += n;
       }
       continue;
-    }
-    if (ch === "[") openers.push({ at: i, image: text[i - 1] === "!" });
-    if (ch === "]" && openers.length > 0) {
-      // Only a `]` that closes an ACTIVE `[` can start an inline link tail; an unmatched or deactivated `](` is
-      // literal text, and skipping it would leave a comment inside it unmasked (Root on 32c2efad and 16340f4c).
-      const opener = openers.pop();
-      const tail = text[i + 1] === "(" ? LINK_TAIL.exec(text.slice(i + 1)) : null;
-      const ref = text[i + 1] === "[" ? /^\[([^\[\]]*)\]/.exec(text.slice(i + 1)) : null;
-      const label = ref && ref[1].trim() !== "" ? ref[1] : text.slice(opener.at + 1, i);
-      // A reference link counts only when its label is defined in this document; a full reference's `[label]` is
-      // consumed with it. Either kind of link deactivates every earlier opener.
-      const isLink = Boolean(tail) || labels.has(normalizeLabel(label));
-      if (isLink && !opener.image) openers.length = 0;
-      if (tail) {
-        out += text.slice(i, i + 1 + tail[0].length);
-        i += 1 + tail[0].length;
-        continue;
-      }
-      if (ref && isLink) {
-        out += text.slice(i, i + 1 + ref[0].length);
-        i += 1 + ref[0].length;
-        continue;
-      }
     }
     if (ch === "<") {
       const rest = text.slice(i);
@@ -234,11 +213,6 @@ function indentColumns(line) {
 }
 
 const ATX_HEADING = /^ {0,3}#{1,6}(?:[ \t]|$)/;
-/** A link label as §4.7 matches it: trimmed, inner whitespace collapsed, case-folded. */
-function normalizeLabel(label) {
-  return label.trim().replace(/[ \t\r\n]+/g, " ").toLowerCase();
-}
-
 const SETEXT_UNDERLINE = /^ {0,3}(?:=+|-+)[ \t]*$/;
 
 /**
@@ -359,13 +333,6 @@ function blockRanges(lines, treatUnclosedAsFence) {
  */
 export function maskNonProse(text, { treatUnclosedAsFence = true } = {}) {
   const lines = text.split("\n");
-  // Link reference definitions (§4.7) decide whether `[x]`, `[x][]` and `[x][y]` are links. Counting one that sits
-  // inside code only makes more brackets count as links, which masks more, never less.
-  const labels = new Set();
-  for (const line of lines) {
-    const def = /^ {0,3}\[([^\[\]]+)\]:/.exec(line);
-    if (def) labels.add(normalizeLabel(def[1]));
-  }
   // Fences and raw HTML blocks are masked whole: markdown link syntax inside either is not a link a reader can
   // click (§4.6: an HTML block's lines are raw HTML, not parsed as Markdown). Each remaining non-blank line joins a
   // paragraph segment, and inline HTML comments are matched within one paragraph, never across a block boundary or
@@ -423,7 +390,7 @@ export function maskNonProse(text, { treatUnclosedAsFence = true } = {}) {
     let j = i;
     while (j + 1 < lines.length && segment[j + 1] === segment[i] && segment[i] >= 0) j += 1;
     let chunk = lines.slice(i, j + 1).join("\n");
-    if (segment[i] >= 0) chunk = maskInlineComments(chunk, blank, labels);
+    if (segment[i] >= 0) chunk = maskInlineComments(chunk, blank);
     masked.push(chunk);
     i = j + 1;
   }

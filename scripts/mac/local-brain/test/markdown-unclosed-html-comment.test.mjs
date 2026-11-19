@@ -469,15 +469,14 @@ test('control: a lazy continuation line keeps one paragraph, so its comment is s
   assert.ok(!out.includes('hidden'), JSON.stringify(out));
 });
 
-// 6. Leftmost inline construct wins (§6): a `<!--` inside an earlier code span, escape, tag, autolink or link tail
-//    never opens a comment, so prose after it stays visible.
+// 6. Leftmost inline construct wins (§6): a `<!--` inside an earlier code span, escape, tag, autolink or (uppercase,
+//    cmark-gfm 0.29) declaration never opens a comment, so prose after it stays visible.
 for (const [name, input] of [
   ['a code span', '`a <!--` [visible](docs/V.md) -->\n'],
   ['a double-backtick code span', '``a <!--`` [visible](docs/V.md) --> `\n'],
   ['a backslash escape', '\\<!-- [visible](docs/V.md) -->\n'],
   ['a tag attribute', '<a title="<!--">[visible](docs/V.md) -->\n'],
-  ['a link title', '[a](b "<!--") [visible](docs/V.md) -->\n'],
-  ['an inline declaration', 'x <!foo <!-- b> [visible](docs/V.md) -->\n'],
+  ['an uppercase inline declaration', 'x <!FOO <!-- b> [visible](docs/V.md) -->\n'],
 ]) {
   test(`inline: a <!-- inside ${name} opens no comment`, () => {
     const out = maskNonProse(input);
@@ -524,15 +523,16 @@ test('control: a comment wholly inside one closed-block tail is still masked', (
 
 // 9. Differential property against the pinned CommonMark renderer (markdown-it 14.3.0, scripts/package.json): for
 //    seeded random documents built from the constructs above, every link the renderer turns into a clickable anchor
-//    must survive the mask. A failure prints the smallest input it found. `</pre>` is left out on purpose: markdown-it
-//    opens a type 7 block on it, which §4.6 forbids, and cmark-gfm follows the spec.
+//    must survive the mask. A failure prints the smallest input it found. Left out on purpose: `</pre>` (markdown-it
+//    opens a type 7 block on it, which §4.6 forbids), a lowercase `<!foo` (a declaration for markdown-it's 0.31.2,
+//    not for cmark-gfm's 0.29), and link titles holding `<!--` (the documented conservative mask, section 14).
 test('differential: no link markdown-it renders as clickable is masked', async () => {
   const { default: MarkdownIt } = await import('markdown-it');
   const md = new MarkdownIt('commonmark');
   const parts = ['para', '    code', '\tcode', '===', '---', '***', '', '<span>', '<div>', '</div>', '<!-- c', '-->',
-    '<!-->', '<!--->', '--!>', '<!foo', '<!DOCTYPE x>', '<?p', '?>', '```', '~~~', '# h', '  <x-box>', '<pre>',
+    '<!-->', '<!--->', '--!>', '<!FOO x', '<!DOCTYPE x>', '<?p', '?>', '```', '~~~', '# h', '  <x-box>', '<pre>',
     '<script>', '</div >', '<x-y a="1">', 'a <!-- b', 'c --> d', '   para', '<![CDATA[', ']]>', '`a <!--`', '` x',
-    '``', '\\<!-- e', '<a title="<!--">', '[a](b "<!--")', 'x <!foo', 'b> y', '<http://a.b/<!--> z', 'q <?p',
+    '``', '\\<!-- e', '<a title="<!--">', 'x <!FOO', 'b> y', '<http://a.b/<!--> z', 'q <?p',
     'r ?> s', '<x <!-- y>'];
   let a = 20261119;
   const rnd = (n) => {
@@ -565,17 +565,12 @@ test('an unmatched ]( does not shield a comment: the hidden link is masked, the 
   assert.ok(out.includes('[visible](docs/V.md)'), `route lost: ${JSON.stringify(out)}`);
 });
 
-for (const [name, input] of [
-  ['a real link title', '[a](b "<!--") [visible](docs/V.md) -->\n'],
-  ['a real angle destination', '[a](<!-- x -->) [visible](docs/V.md) -->\n'],
-  ['a nested bracket in the link text', '[a [b] c](d "<!--") [visible](docs/V.md) -->\n'],
-]) {
-  test(`control: a link tail after ${name} is still skipped whole`, () => {
-    const out = maskNonProse(input);
-    assertShape(input, out);
-    assert.ok(out.includes('[visible](docs/V.md)'), `route lost: ${JSON.stringify(out)}`);
-  });
-}
+test('control: a comment inside a real angle destination is masked and the link after it kept', () => {
+  const input = '[a](<!-- x -->) [visible](docs/V.md) -->\n';
+  const out = maskNonProse(input);
+  assertShape(input, out);
+  assert.ok(out.includes('[visible](docs/V.md)'), `route lost: ${JSON.stringify(out)}`);
+});
 
 // 11. The other direction: a link markdown-it puts inside an inline comment GitHub also hides (the 0.29 rule), or
 //     inside a code span, must be masked, or the gates would credit a route no reader can click. A comment token that
@@ -585,7 +580,7 @@ test('differential: no link hidden inside an inline comment or a code span survi
   const { default: MarkdownIt } = await import('markdown-it');
   const md = new MarkdownIt('commonmark');
   const parts = ['para', '    code', '===', '', '<div>', '<!-- c', '-->', '<!-->', 'a <!-- b', 'c --> d', '\\<!-- e',
-    '<a title="<!--">', '[a](b "<!--")', '](', ')', '[', ']', 'x <!foo', 'b> y', '# h', '***', 'prefix ](<', ' >)',
+    '<a title="<!--">', '[a](b "<!--")', '](', ')', '[', ']', 'x <!foo', 'b> y', '# h', '***', 'prefix ](<', 'x >)',
     'prefix ](', '[a](<', 'q <?p', 'r ?> s', '`a <!--`', '` x', '``', '[outer [in](x)](<', '[in]', '[in]: x'];
   const GITHUB_COMMENT = /^<!--(?!-?>)(?:[^-]|-(?!-))*-->$/;
   let a = 7;
@@ -634,16 +629,32 @@ for (const [name, input] of [
   });
 }
 
-test('control: an UNDEFINED inner [b] is not a link, so the outer link tail is still skipped', () => {
-  const input = '[a [b] c](d "<!--") [visible](docs/V.md) -->\n';
-  const out = maskNonProse(input);
-  assertShape(input, out);
-  assert.ok(out.includes('[visible](docs/V.md)'), `route lost: ${JSON.stringify(out)}`);
-});
+// 13. Root on ca93a80b. Link syntax is NOT parsed (see maskInlineComments): a fenced "definition" and Unicode case
+//     folding therefore cannot unshield a comment, and both fence options mask H.
+for (const [name, input] of [
+  ['a fenced line that looks like a reference definition', '[a][<!--] [hidden](docs/H.md) -->\n\n```\n[<!--]: x\n```\n'],
+  ['a case-folded reference label (ß / SS)', '[outer [ß]](<!-- [hidden](docs/H.md) -->) [visible](docs/V.md)\n\n[SS]: x\n'],
+  ['a lowercase "declaration" (not one under cmark-gfm 0.29)', 'x <!foo <!-- [hidden](docs/H.md) --> y\n'],
+]) {
+  for (const treatUnclosedAsFence of [true, false]) {
+    test(`hidden route masked behind ${name} (treatUnclosedAsFence=${treatUnclosedAsFence})`, () => {
+      const out = maskNonProse(input, { treatUnclosedAsFence });
+      assertShape(input, out);
+      assert.equal(out.length, input.length);
+      assert.ok(!out.includes('docs/H.md'), `hidden route kept: ${JSON.stringify(out)}`);
+    });
+  }
+}
 
-test('control: an inner image does not deactivate the outer link', () => {
-  const input = '[a ![i](x) c](d "<!--") [visible](docs/V.md) -->\n';
-  const out = maskNonProse(input);
-  assertShape(input, out);
-  assert.ok(out.includes('[visible](docs/V.md)'), `route lost: ${JSON.stringify(out)}`);
-});
+// 14. The documented conservative direction: a `<!--` inside a link or image TITLE still opens a comment when a `-->`
+//     follows, so a later route can be masked. That is a false orphan the gates report loudly, never a false pass.
+for (const [name, input] of [
+  ['a link title', '[a](b "<!--") [visible](docs/V.md) -->\n'],
+  ['an image title around an inner link', '![outer [inner](x)](y "<!--") [visible](docs/V.md) -->\n'],
+]) {
+  test(`conservative: a <!-- in ${name} masks through its -->`, () => {
+    const out = maskNonProse(input);
+    assertShape(input, out);
+    assert.ok(!out.includes('docs/V.md'), `expected the conservative mask: ${JSON.stringify(out)}`);
+  });
+}

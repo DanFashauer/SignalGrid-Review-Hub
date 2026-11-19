@@ -21,9 +21,10 @@
 // them credit a route no reader can see (a false pass, the worse one). So the mask follows what a reader of the
 // document is actually shown, and where renderers disagree it follows cmark-gfm, the renderer GitHub uses (0.29
 // rules: a type 4 declaration needs an uppercase letter; an inline comment holds no `--`, does not start with `>` or
-// `->`, and does not end in `-`). Not modelled: container blocks (block quotes, list items) and link reference
-// definitions. The markdown-unclosed-html-comment test holds seeded differential checks against markdown-it 14.3.0 in
-// both directions.
+// `->`, and does not end in `-`). Link reference definitions are read only to decide which brackets are links. Not
+// modelled: container blocks (block quotes, list items). The markdown-unclosed-html-comment test holds seeded
+// differential checks against markdown-it 14.3.0 in both directions, and names where that oracle departs from the
+// spec.
 
 /** Replace every character with a space, keeping newlines so offsets and lines survive. */
 const blank = (s) => s.replace(/[^\n]/g, " ");
@@ -137,10 +138,12 @@ const INLINE_COMMENT = /^<!--(?!-?>)(?:[^-]|-(?!-))*-->/;
  * `<!--` is literal text and stays visible. Backslash escapes, code spans, autolinks, raw HTML and link tails are
  * skipped whole, leftmost first, so a `<!--` inside one of them never opens a comment.
  */
-function maskInlineComments(text, blank) {
+function maskInlineComments(text, blank, labels = new Set()) {
   let out = "";
   let i = 0;
-  let opens = 0;
+  // Open link-text brackets, innermost last (§6.3, "look for link or image"). A recognized link makes every earlier
+  // `[` inactive, since a link cannot contain a link; an image does not.
+  const openers = [];
   while (i < text.length) {
     const ch = text[i];
     if (ch === "\\" && i + 1 < text.length && ESCAPABLE.test(text[i + 1])) {
@@ -161,20 +164,38 @@ function maskInlineComments(text, blank) {
         }
         while (text[k] === "`") k += 1;
       }
-      const end = close >= 0 ? close + n : i + n;
-      out += text.slice(i, end);
-      i = end;
+      // A code span is code, not prose: it is blanked whole, across a line break too, since its exact-length closer
+      // is what CommonMark pairs it with (§6.1); nothing inside it is a link or a comment. An unmatched run is
+      // literal backticks.
+      if (close >= 0) {
+        out += blank(text.slice(i, close + n));
+        i = close + n;
+      } else {
+        out += text.slice(i, i + n);
+        i += n;
+      }
       continue;
     }
-    if (ch === "[") opens += 1;
-    if (ch === "]" && opens > 0) {
-      // Only a `]` that closes a real `[` can start an inline link tail; an unmatched `](` is literal text, and
-      // skipping it would leave a comment inside it unmasked (Root on 32c2efad).
-      opens -= 1;
-      const m = text[i + 1] === "(" ? LINK_TAIL.exec(text.slice(i + 1)) : null;
-      if (m) {
-        out += text.slice(i, i + 1 + m[0].length);
-        i += 1 + m[0].length;
+    if (ch === "[") openers.push({ at: i, image: text[i - 1] === "!" });
+    if (ch === "]" && openers.length > 0) {
+      // Only a `]` that closes an ACTIVE `[` can start an inline link tail; an unmatched or deactivated `](` is
+      // literal text, and skipping it would leave a comment inside it unmasked (Root on 32c2efad and 16340f4c).
+      const opener = openers.pop();
+      const tail = text[i + 1] === "(" ? LINK_TAIL.exec(text.slice(i + 1)) : null;
+      const ref = text[i + 1] === "[" ? /^\[([^\[\]]*)\]/.exec(text.slice(i + 1)) : null;
+      const label = ref && ref[1].trim() !== "" ? ref[1] : text.slice(opener.at + 1, i);
+      // A reference link counts only when its label is defined in this document; a full reference's `[label]` is
+      // consumed with it. Either kind of link deactivates every earlier opener.
+      const isLink = Boolean(tail) || labels.has(normalizeLabel(label));
+      if (isLink && !opener.image) openers.length = 0;
+      if (tail) {
+        out += text.slice(i, i + 1 + tail[0].length);
+        i += 1 + tail[0].length;
+        continue;
+      }
+      if (ref && isLink) {
+        out += text.slice(i, i + 1 + ref[0].length);
+        i += 1 + ref[0].length;
         continue;
       }
     }
@@ -213,6 +234,11 @@ function indentColumns(line) {
 }
 
 const ATX_HEADING = /^ {0,3}#{1,6}(?:[ \t]|$)/;
+/** A link label as §4.7 matches it: trimmed, inner whitespace collapsed, case-folded. */
+function normalizeLabel(label) {
+  return label.trim().replace(/[ \t\r\n]+/g, " ").toLowerCase();
+}
+
 const SETEXT_UNDERLINE = /^ {0,3}(?:=+|-+)[ \t]*$/;
 
 /**
@@ -324,8 +350,8 @@ function blockRanges(lines, treatUnclosedAsFence) {
 
 /**
  * Mask fenced blocks, raw HTML blocks, HTML comments and inline code spans, preserving every offset.
- * Inline code spans are matched WITHIN a line only: a span that wraps a newline is rare
- * enough, and a greedy multi-line match that met a stray backtick would blank real prose.
+ * Inside a paragraph, code spans are paired the way §6.1 pairs them (exact-length backtick runs, leftmost first) and
+ * blanked whole, across line breaks too; a final per-line pass also blanks same-line spans outside paragraphs.
  *
  * Comment BLOCKS (an opener at the start of a line) are masked from `<!--` to their `-->`, or to end of input when
  * they never close (CommonMark 0.31.2 §4.6, type 2). A comment that opens mid-line is not a block: it is masked only
@@ -333,6 +359,13 @@ function blockRanges(lines, treatUnclosedAsFence) {
  */
 export function maskNonProse(text, { treatUnclosedAsFence = true } = {}) {
   const lines = text.split("\n");
+  // Link reference definitions (§4.7) decide whether `[x]`, `[x][]` and `[x][y]` are links. Counting one that sits
+  // inside code only makes more brackets count as links, which masks more, never less.
+  const labels = new Set();
+  for (const line of lines) {
+    const def = /^ {0,3}\[([^\[\]]+)\]:/.exec(line);
+    if (def) labels.add(normalizeLabel(def[1]));
+  }
   // Fences and raw HTML blocks are masked whole: markdown link syntax inside either is not a link a reader can
   // click (§4.6: an HTML block's lines are raw HTML, not parsed as Markdown). Each remaining non-blank line joins a
   // paragraph segment, and inline HTML comments are matched within one paragraph, never across a block boundary or
@@ -390,7 +423,7 @@ export function maskNonProse(text, { treatUnclosedAsFence = true } = {}) {
     let j = i;
     while (j + 1 < lines.length && segment[j + 1] === segment[i] && segment[i] >= 0) j += 1;
     let chunk = lines.slice(i, j + 1).join("\n");
-    if (segment[i] >= 0) chunk = maskInlineComments(chunk, blank);
+    if (segment[i] >= 0) chunk = maskInlineComments(chunk, blank, labels);
     masked.push(chunk);
     i = j + 1;
   }

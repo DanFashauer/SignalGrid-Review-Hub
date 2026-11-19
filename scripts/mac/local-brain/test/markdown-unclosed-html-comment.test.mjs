@@ -577,15 +577,16 @@ for (const [name, input] of [
   });
 }
 
-// 11. The other direction: a link markdown-it puts inside an inline comment GitHub also hides (the 0.29 rule) must be
-//     masked, or the gates would credit a route no reader can see. Backticks are left out: a code span that wraps a
-//     line is a documented limit of maskNonProse (masked within a line only), not part of the comment family.
-test('differential: no link hidden inside an inline comment survives the mask', async () => {
+// 11. The other direction: a link markdown-it puts inside an inline comment GitHub also hides (the 0.29 rule), or
+//     inside a code span, must be masked, or the gates would credit a route no reader can click. A comment token that
+//     swallows a backtick is not judged: markdown-it 14.3.0 lets a later `<!--` take the closing backtick of a code
+//     span that opened first, which the spec's leftmost rule (example 344) and cmark-gfm do not.
+test('differential: no link hidden inside an inline comment or a code span survives the mask', async () => {
   const { default: MarkdownIt } = await import('markdown-it');
   const md = new MarkdownIt('commonmark');
   const parts = ['para', '    code', '===', '', '<div>', '<!-- c', '-->', '<!-->', 'a <!-- b', 'c --> d', '\\<!-- e',
     '<a title="<!--">', '[a](b "<!--")', '](', ')', '[', ']', 'x <!foo', 'b> y', '# h', '***', 'prefix ](<', ' >)',
-    'prefix ](', '[a](<', 'q <?p', 'r ?> s'];
+    'prefix ](', '[a](<', 'q <?p', 'r ?> s', '`a <!--`', '` x', '``', '[outer [in](x)](<', '[in]', '[in]: x'];
   const GITHUB_COMMENT = /^<!--(?!-?>)(?:[^-]|-(?!-))*-->$/;
   let a = 7;
   const rnd = (n) => {
@@ -605,11 +606,44 @@ test('differential: no link hidden inside an inline comment survives the mask', 
     lines.splice(at, 0, `${rnd(2) ? `${pick()} ` : ''}${hidden}${rnd(2) ? ` ${pick()}` : ''}`);
     const input = `${lines.join('\n')}\n`;
     const inComment = md.parse(input, {}).some((t) => t.type === 'inline'
-      && t.children.some((c) => c.type === 'html_inline' && c.content.includes(hidden) && GITHUB_COMMENT.test(c.content)));
+      && t.children.some((c) => c.content.includes('docs/H.md')
+        && ((c.type === 'html_inline' && GITHUB_COMMENT.test(c.content) && !c.content.includes('`'))
+          || c.type === 'code_inline')));
     if (!inComment) continue;
     judged += 1;
     if (maskNonProse(input).includes('docs/H.md')) failures.push(input);
   }
   assert.ok(judged > 100, `too few judged cases (${judged}): the generator no longer exercises comments`);
   assert.deepEqual(failures, [], `hidden routes kept: ${JSON.stringify(failures)}`);
+});
+
+// 12. Root on 16340f4c: (1) a recognized inner link deactivates the outer `[`, so the outer "tail" is text and its
+//     comment is masked; a defined reference link does the same, an undefined one does not. (2) A code span that
+//     wraps a line is code: a comment-and-link inside it is blanked, never credited.
+for (const [name, input] of [
+  ['an inner inline link', '[outer [inner](x)](<!-- [hidden](docs/H.md) -->) [visible](docs/V.md)\n'],
+  ['an inner defined shortcut reference', '[outer [inner]](<!-- [hidden](docs/H.md) -->) [visible](docs/V.md)\n\n[inner]: x\n'],
+  ['an inner defined full reference', '[outer [a][Inner  Ref]](<!-- [hidden](docs/H.md) -->) [visible](docs/V.md)\n\n[inner ref]: x\n'],
+  ['a multi-line code span', '`code\nx <!-- [hidden](docs/H.md) -->`\n[visible](docs/V.md)\n'],
+]) {
+  test(`hidden route masked behind ${name}, visible route kept`, () => {
+    const out = maskNonProse(input);
+    assertShape(input, out);
+    assert.ok(!out.includes('docs/H.md'), `hidden route kept: ${JSON.stringify(out)}`);
+    assert.ok(out.includes('[visible](docs/V.md)'), `route lost: ${JSON.stringify(out)}`);
+  });
+}
+
+test('control: an UNDEFINED inner [b] is not a link, so the outer link tail is still skipped', () => {
+  const input = '[a [b] c](d "<!--") [visible](docs/V.md) -->\n';
+  const out = maskNonProse(input);
+  assertShape(input, out);
+  assert.ok(out.includes('[visible](docs/V.md)'), `route lost: ${JSON.stringify(out)}`);
+});
+
+test('control: an inner image does not deactivate the outer link', () => {
+  const input = '[a ![i](x) c](d "<!--") [visible](docs/V.md) -->\n';
+  const out = maskNonProse(input);
+  assertShape(input, out);
+  assert.ok(out.includes('[visible](docs/V.md)'), `route lost: ${JSON.stringify(out)}`);
 });

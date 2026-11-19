@@ -7,6 +7,9 @@
   "need": "Owner checks GitHub Settings → Billing → Actions usage (macOS minutes / spending limit / concurrency) and githubstatus.com for a macOS runner incident, then restores hosted macOS capacity",
   "whoCanUnblock": "owner",
   "domain": "ci",
-  "status": "open",
-  "routedTo": null
+  "status": "resolved",
+  "routedTo": null,
+  "resolvedAt": "2026-11-19T21:57:50.493Z",
+  "resolvedBy": "cloud",
+  "resolution": "Withdrawn as written, by the cloud lane that raised it: the premise was wrong. Job-level GETs at 2026-11-19T21:57:16Z show hosted macos-26-intel runners WERE being assigned throughout, at low concurrency (about two slices at a time), not zero. Run 44595771543 (#2393) slices started 19:36:18Z, 21:16:08Z, 21:23:34Z, 21:43:59Z; run 44579263422 (#2389, attempt 3) slices started 20:58:32Z, 21:16:44Z, 21:27:38Z, 21:40:22Z, each on a GitHub Actions runner. The original text also gave an approximate observation time (~21:40Z) later than the hand's own raisedAt (21:37:14Z) and a seven-run count that omitted one listed run; both are corrected here and the original record is kept. At 21:57:16Z, 2 runs were in_progress and 6 PR-era runs plus stale 43096690821 were queued; #2368's 44619503429 has four queued slices. The low concurrency's cause is not established from the public API and no owner action is claimed or requested. Nothing was cancelled or re-run."
 }

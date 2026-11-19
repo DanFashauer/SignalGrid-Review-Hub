@@ -5683,3 +5683,93 @@ Output, verbatim:
 **Journal state.** The public journal for #2359 is closed by this entry once it is on `SignalGrid_Alpha`; until then this record is still in delivery. No private `merged_journal_complete` seal is claimed: the private journal stays Root-owned and is not asserted here.
 
 Verdict: #2359 merged from exact head `773491644dc6bd4681ab8234d3b1505262673598` as `6cbf8db328982d834e22f2fa4344a1c6c5791bb1`, with parents `e3a310e9` and that head, and tree `f41319ed` equal to the head's. Both named check runs succeeded on the exact head before the merge. This is one qualified landing. It is not independent operation: a fresh ordinary Mac task's automatic publication, its protected delivery and a later ordinary cycle are still owed. The Mac timeout repair #2364 landed afterwards, at 08:17:59Z, as `d60bc676a33dada4ef4563bc64eb72dd7bcf8f19`. The first fresh proof build after it, for #2370, stopped at 08:37:40Z before tests or publication: the supervisor refused an edit whose source plus test exceeded its 16,000-byte bound.
+
+## 2026-11-19 — #2364 (d60bc676) landed under DR-037: the Mac CI wrapper's bounded cleanup keeps the host reservation; timed step evidence
+
+Cloud merged #2364 under DR-037 at 08:17:59Z with `expectedHeadSha` `f9b5e792c489170f3b8f36f6458dbc819427d3ac`, after re-reading the head. The PR was written by the Mac lane and changes three files:
+- `scripts/mac/ci-host-verification.sh`: cleanup that ends a step without giving up the host reservation.
+- `.github/workflows/mac-runner-auto.yml`: timed evidence inside the existing PR Mac slice step.
+- `scripts/mac/local-brain/test/ci-host-custody.test.mjs`: the regression test.
+
+These limits are unchanged: the 60-minute job limit, 60 s admission, the 2,400 s work bound, four slices, every proof run once, slice records, the aggregate, and lock helper pin `24eff86a`. This entry is the separate record owed for #2364. A mention inside the #2359 record does not count as one.
+
+**Preparation journal.** These records were made before the merge:
+- **Full local qualification on the exact final head** `f9b5e792` (tree `9360b473`), by the Mac lane on its host under ordinary same-inode admission, 07:36:55Z–08:11:44Z (#2364 comment 7003537641):
+  - `pnpm install --frozen-lockfile`: exit 0.
+  - `node scripts/preflight.mjs`: exit 0. 450 step lines, 0 FAILED.
+  - `pnpm run verify:breadth`: exit 0. 58 green.
+  - `./validate-sim-macos.sh`: `150 passed, 0 failed, 13 skipped`.
+  - Head, tree, porcelain and source hashes were identical before and after.
+  - Named non-passes:
+    - `Build (all packages)` and `Browser E2E`: unavailable on that platform.
+    - `backup-restore`, `db-role-split` and the mainline red-streaks check: self-skipped without their input.
+    - The harness's usual 13 skips.
+- **Focused custody test at the final head:** 13/13. The test was written first in each of four rounds. RED/GREEN per round: 1/4 → 5/5, 4/7 → 11/11, 11/1 → 12/12, 12/1 → 13/13. Receipts are in the PR body.
+- **Root's source reviews.** Root's findings on `4742ec00` (7000936961) were corrected across rounds 2–4: inspector bounds, detached-pid reuse, a two-way readiness acknowledgment, detachment proof, logger I/O and fixture cleanup. Round 5 answered a Codex P2 about a zombie custodian failing a pid probe.
+- **Earlier heads keep their own outcomes:**
+  - The obsolete Mac run 44466794964 on `4742ec00` was cancelled by one normal request at Root's selection.
+  - The obsolete run 44479408535 on `1eaf2429` was likewise selected for one normal cancellation.
+  - `a313a04b` passed its own full local run and hosted CI (7002613648). That is dated `a313` evidence, not `f9b5`.
+- **On the final head:** all four PR Mac slices passed, including slice 4's `Decision-throughput saturation gate (bench)`. Codex left no unresolved findings on the final head.
+
+Command: GitHub REST GETs and local git, run by the cloud lane, reduced to the fields shown: `pulls/2364`, `git log -1 --format='%H %T %P %cI' d60bc676`, `rev-parse f9b5e792^{tree}`, `check-runs` for the head (the two required checks).
+Output, verbatim (fields reduced):
+
+```
+{"number":2364,"state":"closed","merged":true,"merged_at":"2026-11-19T08:17:59Z","head":"f9b5e792c489170f3b8f36f6458dbc819427d3ac","base":"SignalGrid_Alpha"}
+d60bc676a33dada4ef4563bc64eb72dd7bcf8f19 9360b473e740fb1f8a7e9eced9bf8536f4a018b8 b0d4204cb9e7b5d2f0a009d6eef59e629817f982 f9b5e792c489170f3b8f36f6458dbc819427d3ac 2026-11-19T03:17:58-05:00
+9360b473e740fb1f8a7e9eced9bf8536f4a018b8
+{"id":135418971951,"name":"Typecheck, build, and proof scaffold","status":"completed","conclusion":"success","completed_at":"2026-11-19T07:51:31Z"}
+{"id":135430081990,"name":"PR — Mac-only checks (full-clone provenance, preflight on macOS)","status":"completed","conclusion":"success","completed_at":"2026-11-19T08:16:27Z"}
+```
+
+The merge commit's tree equals the head tree (`9360b473`). Its parents are canonical `b0d4204c` and head `f9b5e792`.
+
+**Ancestry.** Command: `GET compare/d60bc676a33dada4ef4563bc64eb72dd7bcf8f19...52c6d6bb9e65ceb9dfc24b4dc575d275e7a81308?per_page=1`, run by the cloud lane at 2026-11-19T23:58Z. Root's facilitator independently ran the same GETs at 23:56Z (#439 comment 7023042736) and got the same values.
+Output, verbatim (fields reduced):
+
+```
+status=ahead ahead=73 behind=0 base=d60bc676a33dada4ef4563bc64eb72dd7bcf8f19
+```
+
+`d60bc676` is therefore an ancestor of the #2401 merge `52c6d6bb`. The bounded compare page supplies ancestry metadata, not a complete file-diff audit. The local, Mac and CI results above are attributed historical results on `f9b5e792`, not new executions, and no result transfers to a later head. This records public CI custody and wall-time work. It supplies no owner-hardware evidence, new live-evidence mint, readiness change, private completion seal or independent-operation proof.
+
+Verdict: holds for the merge and ancestry claim. #2364 merged at exact `f9b5e792` as `d60bc676a33dada4ef4563bc64eb72dd7bcf8f19`, and that merge is an ancestor of `52c6d6bb`. No private merged_journal_complete seal is claimed. Independent operation remains unverified.
+
+## 2026-11-19 — #2401 (52c6d6bb) landed under DR-037: check-proof-counts names the failing child without hiding either stream
+
+Cloud merged #2401 under DR-037 at 23:42:52Z with `expectedHeadSha` `e467daaee5de1c5c104dbfb66b85fdd916eb057c`, after re-reading the head. Only `scripts/check-proof-counts.mjs` changes (blob `4e5f4f6c027de9f48756b1e990bfa473fa005ade`):
+- a proof that prints no summary line is now described;
+- stdout and stderr are tailed separately, so one stream cannot erase the other;
+- a failed run ends with a bounded fault recap.
+
+Counts, the floor, the 120000 ms bound, summary acceptance and every exit rule are unchanged. A failing proof still fails.
+
+**Preparation journal.** These records were made before the merge:
+- **Full local qualification on `25bf37ec0c5e19f0040749f1f2576b08d5e375ab`** (tree `4ee4915e`), clean checkout with dirty 0 at start and end, 19:10:09Z–19:56:02Z:
+  - `pnpm install --frozen-lockfile`: exit 0.
+  - `node scripts/preflight.mjs`: exit 0, 447 steps ok. Three named non-passes: `backup-restore` and `db-role-split` self-skipped (`DATABASE_URL` unset), and the mainline red-streaks check was NOT VERIFIED (local Actions API 401).
+  - `pnpm run verify:breadth`: exit 0, 58 breadth proofs.
+  - This local result is dated to `25bf37ec`. Later heads `4c196dce`, `9fd614e2` and `e467daae` were catch-ups whose canonical deltas were heartbeat JSONs plus, on `9fd614e2`, the resolved raised-hand ledger input. That ledger file is an input, not a heartbeat, and the gates that read it passed on the merged tree.
+- **Self-test:** 21/21. One case floods both streams at once; it killed surviving mutants M1 and M5.
+- **Source review:** bounded review on #439 (7017214093, final-base rebind 7019524350), and same-head source COMMENTs 5982373344 and 5984901570. A COMMENT is not a vote.
+- **On the exact head `e467daae`:** all 10 strict required contexts succeeded, including gating check `135955035845`. CodeQL `135949960757` and Analyze `135948964935` succeeded, with 0 open code-scanning alerts and 0 review threads.
+- **Real OPEN Mac aggregate `135967804684`** succeeded at 23:42:21Z (run 44634368004, attempt 1; slices `135948966930`, `135948966875`, `135948966919`, `135948966504`). Per the independent audit (#2401 comment 7025438708), it covers 450 owned indices exactly once: 446 ok, two deliberately unavailable on Darwin (Build and Browser E2E) and two DB self-skips. All four non-passes were not run and not passed. All four owned-chain and free-port groups closed normally. The audit records no separate numeric listener-zero measurement, and capture-time limits apply.
+- **Earlier heads keep their own outcomes:**
+  - Run 44603579790 on `25bf37ec` was cancelled with no admission.
+  - Aggregate 135941844036 on `4c196dce` succeeded (#2401 comment 7024511827).
+  - Run 44632600968 on `9fd614e2` admitted zero work. Its four slice jobs were cancelled and its aggregate failed when the `e467daae` push superseded it (7024820238).
+  - The automated Codex summary is dated to `9fd614e2`.
+- **Hold.** The cloud's heartbeat PR #2409 merged during the hold window although auto-merge had been armed before it; that was corrected on #439 (7024690164). The Mac lane released its heartbeat hold at 23:42:58Z when its watcher read the merge, with zero deferred and nothing to restore (7025421234).
+
+Command: GitHub REST GETs and local git, run by the cloud lane at 2026-11-19T23:43Z and 23:58Z, reduced to the fields shown: `pulls/2401`, `git ls-remote origin refs/heads/SignalGrid_Alpha`, `git log -1 --format='%H %P %cI' 52c6d6bb`, and `rev-parse` of both trees.
+Output, verbatim (fields reduced):
+
+```
+state=closed merged=true merged_at=2026-11-19T23:42:52Z head=e467daaee5de1c5c104dbfb66b85fdd916eb057c merge=52c6d6bb9e65ceb9dfc24b4dc575d275e7a81308
+52c6d6bb9e65ceb9dfc24b4dc575d275e7a81308	refs/heads/SignalGrid_Alpha
+52c6d6bb9e65ceb9dfc24b4dc575d275e7a81308 56ed086f8b9b5f9bad6f86952481bdc12aad379a e467daaee5de1c5c104dbfb66b85fdd916eb057c 2026-11-19T18:42:52-05:00
+tree 08c4e7f52333f663f4ebb4684144d3fd4a75e088 head-tree 08c4e7f52333f663f4ebb4684144d3fd4a75e088
+```
+
+Verdict: holds for the merge, tree, ancestry and receipt claims. #2401 merged from exact head `e467daae` as `52c6d6bb9e65ceb9dfc24b4dc575d275e7a81308`, with parents `56ed086f` and that head, and tree `08c4e7f5` equal to the head's. No cross-head qualification is transferred. No owner-hardware evidence, private completion seal, readiness change or independent-operation proof is asserted. The ordinary task #2399 is a separate, unfinished workflow.

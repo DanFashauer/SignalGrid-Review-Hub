@@ -157,18 +157,35 @@ jobs:
           # A slice is a subset: it never prints the preflight verdict, only its own line.
           # Every log line gets "[UTC +seconds]" when its FIRST byte arrives; a step line is also
           # echoed here at once, and its result when it comes. A step that never returns is then
-          # the last "start" line in this log. The exit status is preflight's own (PIPESTATUS).
+          # the last "start" line in this log. The exit status is preflight's own (PIPESTATUS),
+          # and the stamper exits nonzero on any failed read, write or close.
           node scripts/preflight.mjs --slice "$PREFLIGHT_SLICE/4" --slice-record "preflight-slice-$PREFLIGHT_SLICE.json" 2>&1 | perl -MPOSIX=strftime -e '
-            open(my $log, ">", shift) or die "log: $!"; select((select($log), $| = 1)[0]); $| = 1;
-            my ($t0, $bol, $step) = (time, 1, 0);
-            while (sysread(STDIN, my $buf, 65536)) {
+            open(my $log, ">", shift) or die "log open: $!\n"; select((select($log), $| = 1)[0]); $| = 1;
+            my $emit = sub { my $to = shift; print {$to} @_ or die "log write: $!\n" };
+            my ($t0, $bol, $step, $stamp, $head) = (time, 1, undef, "", "");
+            while (1) {
+              my $count = sysread(STDIN, my $buf, 65536);
+              die "log read: $!\n" unless defined $count;
+              last unless $count;
               for my $part (split /(?<=\n)/, $buf) {
-                my $stamp = sprintf("[%s +%ds] ", strftime("%H:%M:%SZ", gmtime), time - $t0);
-                if ($bol) { $step = $part =~ /^\xe2\x96\xb6/; print {$log} $stamp; print "$stamp", "start ", $part, ($part =~ /\n\z/ ? "" : "\n") if $step }
-                elsif ($step) { print "$stamp", "      ", $part }
-                print {$log} $part; $bol = $part =~ /\n\z/;
+                my $now = sprintf("[%s +%ds] ", strftime("%H:%M:%SZ", gmtime), time - $t0);
+                if ($bol) { ($stamp, $head, $step, $bol) = ($now, "", undef, 0); $emit->($log, $stamp) }
+                $emit->($log, $part);
+                my $ended = $part =~ /\n\z/;
+                if (defined $step) { $emit->(\*STDOUT, $now, "      ", $part) if $step }
+                else {
+                  # The three-byte step marker may arrive split across reads: decide once it is whole
+                  # and at least one byte of the step name has followed it.
+                  $head .= $part;
+                  if (length($head) > 3 || $ended) {
+                    $step = $head =~ /^\xe2\x96\xb6/ ? 1 : 0;
+                    $emit->(\*STDOUT, $stamp, "start ", $head, ($ended ? "" : "\n")) if $step;
+                  }
+                }
+                $bol = 1 if $ended;
               }
-            }' preflight.log
+            }
+            close($log) or die "log close: $!\n"; close(STDOUT) or die "log close: $!\n";' preflight.log
           pipe_codes=("${PIPESTATUS[@]}")
           preflight_code="${pipe_codes[0]}"
           # A broken log writer must not turn a slice green.

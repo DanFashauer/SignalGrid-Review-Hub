@@ -51,20 +51,29 @@ fi
 . "$SCRATCH/lock.sh" || exit 2
 
 # Custody of the host reservation (FD 9), phase by phase:
-#   readiness  bounded. Until the child reports its own session, no GROUP is ever signalled:
-#              only the one child pid is killed, and an unreaped child is handed to the custodian.
+#   readiness  bounded. The child reports its own session and then WAITS for the supervisor's
+#              "go"; without it the child exits and never starts work. A failed handshake is
+#              therefore one process that never ran the chain: the supervisor, still its parent
+#              (so the pid cannot have been reused), kills that one pid and waits for it while
+#              holding the reservation itself. No group is signalled and nothing is detached.
 #   work       bounded by the caller's seconds (124) or ended by a signal.
 #   reap       bounded. An unreaped leader still shows in the inspection below.
+#   inspect    one bound covers the inspector's whole life: output, exit and reap. The inspector
+#              never holds FD 9. Anything but a completed, successful listing is "unknown",
+#              and unknown is never an empty group.
 #   verify     bounded. The owned group is KILLed again only when inspection POSITIVELY shows
-#              live members; a failed or slow inspection is uncertainty, never an empty group.
+#              live members.
 #   custody    if the group is still live or unknown after the window, a detached custodian
 #              inherits this same FD 9 (same open file, same lock inode) and holds it until
-#              inspection positively reports the group empty. The supervisor then returns, so
-#              the step ends and its logs upload, while no other host chain can be admitted.
-#              If the custodian cannot be started, the supervisor keeps the reservation itself.
+#              inspection positively reports the group empty. It only watches: it signals
+#              nothing. The supervisor returns only after the custodian acknowledges that it is
+#              detached, so the step ends and its logs upload while no other host chain can be
+#              admitted. Without that acknowledgment the supervisor keeps the reservation itself.
 ci_capped() {
   exec perl -MPOSIX=setsid,WNOHANG,strftime -MTime::HiRes=time,sleep -e '
     my $seconds = shift @ARGV;
+    my $ready_seconds = 10;
+    my $inspect_seconds = 10;
     my $verify_seconds = 30;
     my ($t0, $what) = (time(), $ARGV[-1]); $what =~ s{.*/}{};
     my $mark = sub { printf STDERR "ci-host-verification: %s +%ds %s: %s\n", strftime("%Y-%m-%dT%H:%M:%SZ", gmtime), time() - $t0, $what, $_[0] };
@@ -72,42 +81,36 @@ ci_capped() {
     $SIG{INT} = sub { $signal = 130 };
     $SIG{TERM} = sub { $signal = 143 };
     $SIG{HUP} = sub { $signal = 129 };
-    # Hold FD 9 in a detached process until $gone->() is positively true; returns its pid or 0.
-    my $custody = sub {
-      my ($gone, $again) = @_;
-      my $keeper = fork(); return 0 unless defined $keeper;
-      return $keeper if $keeper;
-      $SIG{INT} = $SIG{TERM} = $SIG{HUP} = "IGNORE";
-      setsid();
-      open(STDIN, "<", "/dev/null"); open(STDOUT, ">", "/dev/null"); open(STDERR, ">", "/dev/null");
-      while (1) { my $state = $gone->(); exit 0 if defined($state) && $state; $again->() if defined($state); sleep 0.5 }
+    # One line from a pipe within a bound, or undef.
+    my $line_within = sub {
+      my ($fh, $limit) = @_; my $bits = ""; vec($bits, fileno($fh), 1) = 1;
+      return select($bits, undef, undef, $limit) > 0 ? scalar(<$fh>) : undef;
     };
     pipe(my $ready, my $notify) or die "readiness pipe: $!";
+    pipe(my $go_read, my $go_write) or die "release pipe: $!";
     my $pid = fork(); defined($pid) or die "fork: $!";
     if (!$pid) {
-      close $ready;
+      close $ready; close $go_write;
       POSIX::close(9); # Only the guardian/supervisor owns the reservation.
       $SIG{INT} = $SIG{TERM} = $SIG{HUP} = "DEFAULT";
       my $sid = setsid(); defined($sid) && $sid >= 0 && getpgrp() == $$ or die "setsid: $!";
       print {$notify} "ready\n"; close $notify;
+      # No work before the supervisor acknowledges this session: a late or unseen "ready" never runs the chain.
+      my $go = <$go_read>; POSIX::_exit(126) unless defined($go) && $go eq "go\n";
+      close $go_read;
       exec { $ARGV[0] } @ARGV; exit 127;
     }
-    close $notify;
-    my $started; { my $bits = ""; vec($bits, fileno($ready), 1) = 1; $started = <$ready> if select($bits, undef, undef, 10) > 0 } close $ready;
+    close $notify; close $go_read;
+    $SIG{PIPE} = "IGNORE";
+    my $started = $line_within->($ready, $ready_seconds); close $ready;
     if (!defined($started) || $started ne "ready\n") {
-      # No session handshake: this is one pid in OUR group, so never a group signal.
-      $mark->("readiness not established; ending the one child");
-      kill "KILL", $pid;
-      my $until = time() + 5; my $done = 0;
-      while (time() < $until) { if (waitpid($pid, WNOHANG) == $pid) { $done = 1; last } sleep 0.05 }
-      if (!$done) {
-        print STDERR "ci-host-verification: cleanup unconfirmed; retaining host reservation\n";
-        my $keeper = $custody->(sub { kill(0, $pid) ? 0 : 1 }, sub { kill "KILL", $pid });
-        waitpid($pid, 0) unless $keeper;
-        $mark->("reservation retained by custodian pid $keeper") if $keeper;
-      }
+      close $go_write; # never released: this child cannot start work or have descendants
+      $mark->("readiness not established; the child was never released to start work");
+      kill "KILL", $pid; # still our unreaped child, so this pid is the one we forked
+      waitpid($pid, 0);  # the reservation stays with this supervisor until it is reaped
       exit 125;
     }
+    print {$go_write} "go\n"; close $go_write;
     $mark->("started, bound ${seconds}s");
     my $deadline = time() + $seconds;
     my ($code, $reaped) = (0, 0);
@@ -120,19 +123,66 @@ ci_capped() {
     }
     $mark->("ended with $code; ending the owned group");
     # Parent exit is not group exit: reap redirected descendants on every outcome.
-    # 1 = live members, 0 = positively none, undef = the inspection failed or stalled.
+    # 1 = live members, 0 = positively none, undef = the inspection failed, stalled or never finished.
     my $live = sub {
-      my $ps_pid = open(my $ps, "-|", "/bin/ps", "-axo", "pid=,pgid=,state=") or return undef;
-      my $found = 0;
-      my $read = eval {
-        local $SIG{ALRM} = sub { die "slow\n" }; alarm 10;
-        while (<$ps>) { $found = 1 if /^\s*(\d+)\s+(\d+)\s+(\S+)/ && $2 == $pid && $3 !~ /^Z/ }
-        alarm 0; 1;
-      };
-      alarm 0;
-      kill "KILL", $ps_pid unless $read;
-      close($ps) or return undef;
-      return $read ? $found : undef;
+      my @inspector = ("/bin/ps", "-axo", "pid=,pgid=,state=");
+      pipe(my $out_read, my $out_write) or return undef;
+      my $inspector_pid = fork();
+      if (!defined $inspector_pid) { close $out_read; close $out_write; return undef }
+      if (!$inspector_pid) {
+        close $out_read;
+        POSIX::close(9); # An inspector must never hold the reservation.
+        $SIG{INT} = $SIG{TERM} = $SIG{HUP} = $SIG{PIPE} = "DEFAULT";
+        open(STDOUT, ">&", $out_write) or POSIX::_exit(126);
+        close $out_write;
+        exec { $inspector[0] } @inspector; POSIX::_exit(127);
+      }
+      close $out_write;
+      my $until = time() + $inspect_seconds;
+      my ($listing, $eof, $status) = ("", 0, undef);
+      while (time() < $until) {
+        if (!$eof) {
+          my $bits = ""; vec($bits, fileno($out_read), 1) = 1;
+          next unless select($bits, undef, undef, 0.05) > 0;
+          my $count = sysread($out_read, my $chunk, 65536);
+          if (!defined $count) { next if $!{EINTR}; last }
+          if ($count) { $listing .= $chunk } else { $eof = 1 }
+          next;
+        }
+        if (waitpid($inspector_pid, WNOHANG) == $inspector_pid) { $status = $?; last }
+        sleep 0.02;
+      }
+      close $out_read;
+      if (!defined $status) {
+        kill "KILL", $inspector_pid; # our own unreaped child
+        my $reap_until = time() + 2;
+        while (time() < $reap_until) { last if waitpid($inspector_pid, WNOHANG) == $inspector_pid; sleep 0.02 }
+        return undef;
+      }
+      return undef if $status != 0;
+      for (split /\n/, $listing) { return 1 if /^\s*(\d+)\s+(\d+)\s+(\S+)/ && $2 == $pid && $3 !~ /^Z/ }
+      return 0;
+    };
+    # A detached, watch-only holder of FD 9. Returns its pid only after it has acknowledged
+    # that it is in its own session with its output detached; otherwise 0.
+    my $custody = sub {
+      pipe(my $held_read, my $held_write) or return 0;
+      my $keeper = fork();
+      if (!defined $keeper) { close $held_read; close $held_write; return 0 }
+      if (!$keeper) {
+        close $held_read;
+        $SIG{INT} = $SIG{TERM} = $SIG{HUP} = "IGNORE";
+        my $sid = setsid();
+        POSIX::_exit(1) unless defined($sid) && $sid >= 0
+          && open(STDIN, "<", "/dev/null") && open(STDOUT, ">", "/dev/null") && open(STDERR, ">", "/dev/null");
+        print {$held_write} "held\n"; close $held_write;
+        while (1) { my $active = $live->(); POSIX::_exit(0) if defined($active) && !$active; sleep 0.5 }
+      }
+      close $held_write;
+      my $held = $line_within->($held_read, 5); close $held_read;
+      return $keeper if defined($held) && $held eq "held\n";
+      kill "KILL", $keeper; waitpid($keeper, 0); # our own unreaped child
+      return 0;
     };
     kill "TERM", -$pid;
     my $grace = time() + 1;
@@ -150,9 +200,9 @@ ci_capped() {
     }
     if ($confirmed) { $mark->("cleanup confirmed: owned group empty"); exit $code }
     print STDERR "ci-host-verification: cleanup unconfirmed; retaining host reservation\n";
-    my $keeper = $custody->(sub { my $active = $live->(); defined($active) ? !$active : undef }, sub { kill "KILL", -$pid });
+    my $keeper = $custody->();
     if (!$keeper) {
-      # No custodian: keep the reservation here, as before. The outer job remains bounded.
+      # No acknowledged custodian: keep the reservation here, as before. The outer job remains bounded.
       while (1) { my $active = $live->(); last if defined($active) && !$active; kill "KILL", -$pid if $active; sleep 0.2 }
       exit $code;
     }

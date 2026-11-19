@@ -275,3 +275,77 @@ for (const [name, input] of Object.entries(STANDALONE_CONTROLS)) {
     });
   }
 }
+
+// ---- Root's review of c262ee8e (#2368 comment 7003384467): three preservation/precedence cases.
+const NBSP = ' ';
+
+// 1. A thematic break or a setext underline is a real block boundary, so a type 7 block may start right after it.
+for (const [name, boundary] of Object.entries({
+  'a *** thematic break': '***',
+  'a - - - thematic break': '- - -',
+  'a setext === underline': 'Title\n===',
+  'a setext --- underline': 'Title\n---',
+})) {
+  test(`type 7 right after ${name} still owns its lines, so its inner opener does not hide the route`, () => {
+    const input = `${boundary}\n<x-box>\n<!--\n\n[visible](docs/V.md)\n`;
+    const out = maskNonProse(input);
+    assertShape(input, out);
+    const lines = out.split('\n');
+    assert.equal(lines[lines.length - 2], '[visible](docs/V.md)', `route lost: ${JSON.stringify(out)}`);
+  });
+}
+
+test('control: inside a real paragraph a type 7 tag cannot start a block, so the next line-start opener masks', () => {
+  const input = 'para\n<x-box>\n<!--\n[h](docs/H.md)\n';
+  const out = maskNonProse(input);
+  assertShape(input, out);
+  assert.ok(!out.includes('docs/H.md'), `hidden route leaked: ${JSON.stringify(out)}`);
+});
+
+// 2. Only ASCII space and tab count as whitespace in start conditions and blank lines; NBSP does not.
+test('an NBSP after <script is not a type 1 start, so a standalone unclosed comment still masks to end of input', () => {
+  const input = `<script${NBSP}>\n<!--\n</script>\n\n[visible](docs/V.md)\n`;
+  const out = maskNonProse(input);
+  assertShape(input, out);
+  assert.ok(!out.includes('docs/V.md'), `the real comment was shielded: ${JSON.stringify(out)}`);
+});
+
+test('a line holding only an NBSP is not blank, so it does not close the enclosing type 6 block', () => {
+  const input = `<div title="\n${NBSP}\n<!--\n">\n\n[visible](docs/V.md)\n`;
+  const out = maskNonProse(input);
+  assertShape(input, out);
+  const lines = out.split('\n');
+  assert.equal(lines[lines.length - 2], '[visible](docs/V.md)', `route lost: ${JSON.stringify(out)}`);
+});
+
+test('a tab after <script is a type 1 start, so its inner opener does not hide the route', () => {
+  const input = '<script\t>\n<!--\n</script>\n\n[visible](docs/V.md)\n';
+  const out = maskNonProse(input);
+  assertShape(input, out);
+  assert.equal(out.split('\n')[4], '[visible](docs/V.md)', `route lost: ${JSON.stringify(out)}`);
+});
+
+test('a line of only spaces and tabs is blank: it closes a type 6 block, and a real opener after it masks', () => {
+  const input = '<div>\n \t \n<!--\n[h](docs/H.md)\n';
+  const out = maskNonProse(input);
+  assertShape(input, out);
+  assert.ok(!out.includes('docs/H.md'), `hidden route leaked: ${JSON.stringify(out)}`);
+});
+
+// 3. The text after a closed comment block's `-->` stays visible, and any further comment in it is masked.
+test('a second comment in the tail after a block comment is masked; the rest of the tail stays visible', () => {
+  const input = '<!-- first --> tail <!-- [hidden](docs/H.md) --> [visible](docs/V.md)\n';
+  const out = maskNonProse(input);
+  assertShape(input, out);
+  assert.ok(!out.includes('docs/H.md'), `second comment leaked: ${JSON.stringify(out)}`);
+  assert.ok(out.includes(' tail '), `visible tail lost: ${JSON.stringify(out)}`);
+  assert.ok(out.endsWith(' [visible](docs/V.md)\n'), `visible route lost: ${JSON.stringify(out)}`);
+});
+
+test('the same holds when the first comment spans lines', () => {
+  const input = '<!-- first\nstill --> tail <!-- [hidden](docs/H.md) --> [visible](docs/V.md)\n';
+  const out = maskNonProse(input);
+  assertShape(input, out);
+  assert.ok(!out.includes('docs/H.md'), `second comment leaked: ${JSON.stringify(out)}`);
+  assert.ok(out.endsWith(' tail ' + ' '.repeat('<!-- [hidden](docs/H.md) -->'.length) + ' [visible](docs/V.md)\n'), `tail mangled: ${JSON.stringify(out)}`);
+});

@@ -20,6 +20,9 @@
 /** Replace every character with a space, keeping newlines so offsets and lines survive. */
 const blank = (s) => s.replace(/[^\n]/g, " ");
 
+/** A blank line in CommonMark's sense: only spaces (U+0020) and tabs (U+0009). An NBSP is not blank. */
+const isBlank = (line) => /^[ \t]*$/.test(line);
+
 /** A fence opener: 0–3 spaces, then 3+ backticks or tildes; a backtick fence's info string has no backtick. */
 function fenceOpener(line) {
   const m = /^ {0,3}(`{3,}|~{3,})(.*)$/.exec(line);
@@ -32,7 +35,7 @@ function fenceOpener(line) {
 /** Whether `line` closes the fence `open`: same character, at least as long, nothing after it. */
 function closesFence(line, open) {
   const m = /^ {0,3}(`{3,}|~{3,})(.*)$/.exec(line);
-  return Boolean(m && m[1][0] === open.char && m[1].length >= open.len && m[2].trim() === "");
+  return Boolean(m && m[1][0] === open.char && m[1].length >= open.len && isBlank(m[2]));
 }
 
 /**
@@ -85,9 +88,14 @@ const HTML_TYPE6_TAGS = new Set(
     "link main menu menuitem nav noframes ol optgroup option p param search section summary table tbody td tfoot th " +
     "thead title tr track ul").split(" "),
 );
-const ATTR = String.raw`(?:\s+[A-Za-z_:][\w.:-]*(?:\s*=\s*(?:[^\s"'=<>\x60]+|'[^']*'|"[^"]*"))?)`;
-const TYPE7_OPEN = new RegExp(String.raw`^<([A-Za-z][A-Za-z0-9-]*)${ATTR}*\s*\/?>\s*$`);
-const TYPE7_CLOSE = /^<\/([A-Za-z][A-Za-z0-9-]*)\s*>\s*$/;
+// Whitespace in these start conditions is ASCII space or tab only (§2.1); `\s` would also accept NBSP and other
+// Unicode spaces and change which block owns a line.
+const ATTR = String.raw`(?:[ \t]+[A-Za-z_:][A-Za-z0-9_.:-]*(?:[ \t]*=[ \t]*(?:[^ \t\n"'=<>\x60]+|'[^']*'|"[^"]*"))?)`;
+const TYPE7_OPEN = new RegExp(String.raw`^<([A-Za-z][A-Za-z0-9-]*)${ATTR}*[ \t]*\/?>[ \t]*$`);
+const TYPE7_CLOSE = /^<\/([A-Za-z][A-Za-z0-9-]*)[ \t]*>[ \t]*$/;
+// A thematic break (§4.1) and a setext underline (§4.3) end a paragraph, so a type 7 block may start after one.
+const THEMATIC_BREAK = /^ {0,3}(?:(?:\*[ \t]*){3,}|(?:-[ \t]*){3,}|(?:_[ \t]*){3,})$/;
+const SETEXT_UNDERLINE = /^ {0,3}(?:=+|-+)[ \t]*$/;
 
 /**
  * Which HTML block (§4.6) starts on `line`, if any: its type and, for types 1–5, the end marker. `inParagraph`
@@ -98,12 +106,12 @@ function htmlBlockStart(line, inParagraph) {
   if (!m) return null;
   const rest = m[1];
   const col = line.length - rest.length;
-  if (/^<(?:pre|script|style|textarea)(?:[\s>]|$)/i.test(rest)) return { type: 1, col, end: /<\/(?:pre|script|style|textarea)>/i };
+  if (/^<(?:pre|script|style|textarea)(?:[ \t>]|$)/i.test(rest)) return { type: 1, col, end: /<\/(?:pre|script|style|textarea)>/i };
   if (rest.startsWith("<!--")) return { type: 2, col, end: "-->" };
   if (rest.startsWith("<?")) return { type: 3, col, end: "?>" };
   if (/^<![A-Za-z]/.test(rest)) return { type: 4, col, end: ">" };
   if (rest.startsWith("<![CDATA[")) return { type: 5, col, end: "]]>" };
-  const t6 = /^<\/?([A-Za-z][A-Za-z0-9]*)(?:\s|\/?>|$)/.exec(rest);
+  const t6 = /^<\/?([A-Za-z][A-Za-z0-9]*)(?:[ \t]|\/?>|$)/.exec(rest);
   if (t6 && HTML_TYPE6_TAGS.has(t6[1].toLowerCase())) return { type: 6, col };
   if (!inParagraph) {
     const t7 = TYPE7_OPEN.exec(rest) || TYPE7_CLOSE.exec(rest);
@@ -163,7 +171,7 @@ function blockRanges(lines, treatUnclosedAsFence) {
     }
     if (h) {
       let j = i;
-      while (j + 1 < lines.length && lines[j + 1].trim() !== "") j += 1;
+      while (j + 1 < lines.length && !isBlank(lines[j + 1])) j += 1;
       out.push({ kind: "html", start: i, end: j, closed: true, col: h.col });
       i = j;
       inParagraph = false;
@@ -184,7 +192,11 @@ function blockRanges(lines, treatUnclosedAsFence) {
         break;
       }
     }
-    inParagraph = lines[i].trim() !== "" && !/^ {0,3}#{1,6}(?:\s|$)/.test(lines[i]);
+    // An ATX heading, a thematic break or a setext underline ends the paragraph (the underline only while one is
+    // open); a blank line does too. Anything else non-blank continues or starts one.
+    if (isBlank(lines[i]) || /^ {0,3}#{1,6}(?:[ \t]|$)/.test(lines[i]) || THEMATIC_BREAK.test(lines[i])) inParagraph = false;
+    else if (inParagraph && SETEXT_UNDERLINE.test(lines[i])) inParagraph = false;
+    else inParagraph = true;
   }
   return out;
 }
@@ -208,7 +220,9 @@ export function maskNonProse(text, { treatUnclosedAsFence = true } = {}) {
   let nextSegment = 0;
   for (const b of blockRanges(lines, treatUnclosedAsFence)) {
     for (let i = b.start; i <= b.end; i += 1) {
-      segment[i] = -2;
+      // The text after a closed comment block's `-->` stays visible, as before; it is left unassigned so the
+      // paragraph pass below still masks any further comment in it (Root on #2368).
+      segment[i] = b.kind === "comment" && b.closed && i === b.end ? -1 : -2;
       if (b.kind !== "comment") {
         lines[i] = blank(lines[i]);
         continue;
@@ -220,7 +234,7 @@ export function maskNonProse(text, { treatUnclosedAsFence = true } = {}) {
   }
   for (let i = 0; i < lines.length; i += 1) {
     if (segment[i] !== -1) continue;
-    if (lines[i].trim() === "") {
+    if (isBlank(lines[i])) {
       segment[i] = -2;
       continue;
     }

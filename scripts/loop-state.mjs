@@ -4938,6 +4938,10 @@ exit 1
     if (callerAdvice === undefined) delete process.env.GIT_ADVICE; else process.env.GIT_ADVICE = callerAdvice;
     try { rmSync(root, { recursive: true, force: true }); } catch { /* temp dir */ }
   }
+  // ROUND 35 (R35-linux-skip). R34-linux-probe guards only the probes it lists, so a skippable case with its own probe still skipped silently on Linux (one probe false: 318/318 passed, one skip line).
+  // On Linux the kernel offers every behaviour a skippable case needs, so ANY skipped case is a failure of its own, naming each skipped case. Added after every case ran, so it sees every skip. Other platforms unchanged.
+  if (process.platform === "linux") check("on Linux no case is SKIPPED: the kernel offers every behaviour a skippable case needs, so a skip is a regression or a masked /proc or /dev, never a platform without it (R35-linux-skip)",
+    skipped.length === 0, () => `${skipped.length} skipped: ${skipped.map(([n, w]) => `${n.slice(0, 80)} [${w}]`).join(" | ")}`);
   const failedCases = checks.filter(([, ok]) => !ok);
   const failed = failedCases.length;
   // THE SUMMARY, last, so a short tail of the output names what failed (round 26: the Mac job's tail was the last thirty lines of a flood of git hints and named nothing). One line per failed case, one per

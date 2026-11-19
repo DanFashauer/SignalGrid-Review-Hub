@@ -1135,3 +1135,60 @@ for (const treatUnclosedAsFence of [true, false]) {
     });
   }
 }
+
+// 27. Codex on da64fc4a (#2368 review 5980371902): three boundaries the helper crossed. Raw HTML that starts inside a
+//     list item ends where the item does (only a paragraph continues lazily); a line holding only block-quote markers
+//     is blank content and ends a type 6 or 7 block; consecutive indented code lines keep one segment, so a comment
+//     spanning them is still paired. The exact literals first, then a bounded family around each boundary, judged
+//     against markdown-it 14's commonmark rendering in both directions; both fence options; shape checked.
+for (const treatUnclosedAsFence of [true, false]) {
+  for (const [name, input] of [
+    ['raw HTML in a list continuation, then a column-0 line (4632806024)', '- item\n  <div>\n[V](docs/V.md)\n'],
+    ['a type 6 block in a quote, then a lone `>` (4632806033)', '> <div>\n>\n> [V](docs/V.md)\n'],
+    ['a quote opened in a list item, then a column-0 quote', '- a\n\n  > <?x\n> [V](docs/V.md)\n'],
+    ['a lazy line keeps the item open, so its raw HTML ends at the column-0 line', '- a\nlazy\n  <div>\n[V](docs/V.md)\n'],
+  ]) {
+    test(`Codex da64fc4a literal keeps V: ${name} (treatUnclosedAsFence=${treatUnclosedAsFence})`, () => {
+      const out = maskNonProse(input, { treatUnclosedAsFence });
+      assertShape(input, out);
+      assert.ok(out.includes('[V](docs/V.md)'), `route lost: ${JSON.stringify(out)}`);
+    });
+  }
+  for (const [name, input] of [
+    ['a closed comment across indented code lines (4632806047)', '    <!--\n    [H](docs/H.md)\n    -->\n'],
+    ['the same with tab indents', '\t<!--\n\t[H](docs/H.md)\n\t-->\n'],
+    ['raw HTML at an item content column of four', '- - item\n\n    <div>\n    [H](docs/H.md)\n'],
+    ['raw HTML at column 0 closes the item (not lazy), so later indented HTML is top-level', '- a\n<div>\n\n  <div>\n[H](docs/H.md)\n'],
+  ]) {
+    test(`Codex da64fc4a literal hides H: ${name} (treatUnclosedAsFence=${treatUnclosedAsFence})`, () => {
+      const out = maskNonProse(input, { treatUnclosedAsFence });
+      assertShape(input, out);
+      assert.ok(!out.includes('docs/H.md'), `hidden route kept: ${JSON.stringify(out)}`);
+    });
+  }
+}
+test('list, quote and code boundaries agree with markdown-it for hidden and visible routes', async () => {
+  const { default: MarkdownIt } = await import('markdown-it');
+  const md = new MarkdownIt('commonmark');
+  const docs = [];
+  const items = [['- item', '  '], ['1. item', '   '], ['- - item', '    '], ['-   item', '    ']];
+  const starts = ['<div>', '<table>', '<span>', '<script>', '<pre>', '<style>', '<!-- c', '<?x', '<!X', '<![CDATA['];
+  for (const [m, ind] of items) for (const st of starts) for (const g of ['', '\n']) {
+    for (const t of ['[R](docs/R.md)', '> [R](docs/R.md)', '- [R](docs/R.md)', ind + '[R](docs/R.md)']) docs.push(`${m}\n${g}${ind}${st}\n${t}\n`);
+  }
+  for (const q of ['>', '> ', '>  ']) for (const st of ['<div>', '<table>', '<span>', '<p>']) docs.push(`> ${st}\n${q}\n> [R](docs/R.md)\n`);
+  for (const pre of ['', 'text\n\n', '- a\n\n  ']) for (const ind of ['    ', '\t']) docs.push(`${pre}${ind}<!--\n${ind}[R](docs/R.md)\n${ind}-->\n`);
+  let checked = 0;
+  for (const input of docs) {
+    const links = md.render(input).split('href="docs/R.md"').length - 1;
+    for (const treatUnclosedAsFence of [true, false]) {
+      const out = maskNonProse(input, { treatUnclosedAsFence });
+      assertShape(input, out);
+      const kept = out.split('docs/R.md').length - 1;
+      assert.ok(kept <= links, `route kept that markdown-it does not render (${kept} > ${links}): ${JSON.stringify(input)}`);
+      assert.ok(kept >= links, `rendered route masked (${kept} < ${links}): ${JSON.stringify(input)}`);
+      checked += 1;
+    }
+  }
+  assert.equal(checked, (4 * 10 * 2 * 4 + 3 * 4 + 3 * 2) * 2);
+});

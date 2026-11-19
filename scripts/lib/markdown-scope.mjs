@@ -265,9 +265,12 @@ const FENCE_OPEN = /^(?:`{3,}(?!.*`)|~{3,})/;
  * raw HTML: masked whole) or a paragraph id, so inline masking pairs nothing across a container or opaque boundary
  * (Root on 2201bb6a and 90e772ce: classification and segmentation share one source of boundaries).
  */
-function containerRun(lines, interrupted) {
+function containerRun(lines, interrupted, outer = []) {
   const out = [];
-  const stack = []; // { quote: true } or { col } (a list item's content column)
+  // { quote: true } or { col } (a list item's content column). `outer` holds the content columns of the top-level
+  // list items already open where the run starts, outermost first, so a later line that leaves them closes the leaf
+  // they hold (Codex on da64fc4a: `- a`, a blank line, `  > <?x`, then `> [L]` at column 0 is a new quote).
+  const stack = outer.map((col) => ({ col }));
   // When a container interrupts a top-level paragraph, that paragraph is still open (id -1, the caller's segment).
   let leaf = interrupted ? { kind: "para", depth: 0, id: -1 } : { kind: "none" };
   let nextId = 0;
@@ -296,6 +299,13 @@ function containerRun(lines, interrupted) {
       continue;
     }
     if (allMatched && leaf.kind === "html") {
+      // A type 6 or 7 block ends at a blank line; inside containers that is a line blank after its markers (a lone
+      // `>`), which belongs to no block (Codex on da64fc4a).
+      if (!leaf.end && /^ *$/.test(text.slice(pos))) {
+        leaf = { kind: "none" };
+        out.push(nextId++);
+        continue;
+      }
       if (leaf.end && endAfter(text.slice(pos), leaf.end, 0) >= 0) leaf = { kind: "none" };
       out.push(null);
       continue;
@@ -364,7 +374,7 @@ function containerRun(lines, interrupted) {
         result = null;
         break;
       }
-      if (body === "") { result = "own"; break; }
+      if (body === "") { leaf = { kind: "none" }; result = "own"; break; }
       if (ATX_HEADING.test(body)) { stack.length = depth; leaf = { kind: "none" }; result = "own"; break; }
       if (continuing && /^(?:=+|-+) *$/.test(body) && allMatched) { leaf = { kind: "none" }; result = "own"; break; }
       result = continuing ? "continue" : "new";
@@ -566,6 +576,17 @@ function endAfter(text, end, from) {
   return hit ? hit.index + hit[0].length : -1;
 }
 
+/** True when a line, read inside an open paragraph, would continue it lazily rather than start a block (§5.1–5.2). */
+function lazyLine(text) {
+  const body = text.slice(Math.min(indentColumns(text), 3));
+  if (indentColumns(text) >= 4) return true;
+  if (/^>/.test(body) || THEMATIC_BREAK.test(text) || ATX_HEADING.test(text) || fenceOpener(text)) return false;
+  if (htmlBlockStart(text, true)) return false;
+  const lm = LIST_MARKER.exec(body);
+  if (lm && !/^ *$/.test(body.slice(lm[0].length)) && (lm[1] !== undefined || Number(lm[2]) === 1)) return false;
+  return true;
+}
+
 /**
  * Block-level structure in source order, the way CommonMark reads it: at each line outside a block, a fence or an
  * HTML block (§4.6, all seven start conditions) may start, and whichever starts FIRST owns its lines. A fence marker
@@ -583,21 +604,81 @@ function endAfter(text, end, from) {
  */
 function blockRanges(lines, treatUnclosedAsFence, judgeDefinitions) {
   const out = [];
+  // The content column of each open top-level list item, innermost last, and per line the innermost one that line
+  // sits in (0 outside any item). An HTML block that starts inside an item ends where the item does, at the first
+  // later non-blank line indented less than the item's content column, since only a paragraph continues lazily
+  // (CommonMark §5.2; Codex on da64fc4a). Lines inside block quotes start with `>` and are never block starts here.
+  const items = [];
+  const itemCol = new Array(lines.length).fill(0);
+  const itemStack = new Array(lines.length).fill(null);
+  out.itemCol = itemCol;
+  out.itemStack = itemStack;
   let inParagraph = false;
   let paraStart = -1;
+  const leaves = (start, col) => (k) => col > 0 && !isBlank(lines[k]) && indentColumns(expandTabs(content(lines[k]))) < col;
   for (let i = 0; i < lines.length; i += 1) {
-    const h = htmlBlockStart(content(lines[i]), inParagraph);
+    const text0 = expandTabs(content(lines[i]));
+    if (!isBlank(text0)) {
+      const indent = indentColumns(text0);
+      let matched = 0;
+      while (matched < items.length && indent >= items[matched]) matched += 1;
+      if (matched < items.length && !(inParagraph && lazyLine(text0))) items.length = matched;
+      itemCol[i] = items.length ? items[items.length - 1] : 0;
+      itemStack[i] = items.slice();
+      // New items opened on this line, outermost first (`- - x` opens two).
+      let pos = 0;
+      for (;;) {
+        const base = items.length ? items[items.length - 1] : 0;
+        const rest = text0.slice(pos);
+        const ind = indentColumns(rest);
+        if (pos + ind - base >= 4 && pos + ind >= base) break;
+        const lm = LIST_MARKER.exec(rest.slice(ind));
+        if (!lm) break;
+        const after = rest.slice(ind + lm[0].length);
+        const empty = /^ *$/.test(after);
+        if (inParagraph && pos === 0 && (empty || (lm[2] !== undefined && Number(lm[2]) !== 1))) break;
+        const pad = indentColumns(after);
+        const markerEnd = pos + ind + lm[0].length;
+        const col = empty || pad >= 5 ? markerEnd + 1 : markerEnd + pad;
+        if (pos === 0) items.length = Math.min(items.length, matched);
+        items.push(col);
+        pos = col;
+        if (empty) break;
+      }
+    } else {
+      itemCol[i] = items.length ? items[items.length - 1] : 0;
+      itemStack[i] = items.slice();
+    }
+    // Inside an item, a block start is read from the item's content column (up to three more columns of indent), so
+    // `    <div>` in an item whose content starts at column 4 is raw HTML, not code. Columns are read with tabs
+    // expanded; the block's `col` is the character offset of its `<` in the line, after the leading whitespace.
+    const inItem = itemCol[i] > 0 && indentColumns(text0) >= itemCol[i];
+    const raw = content(lines[i]);
+    let h = htmlBlockStart(raw, inParagraph);
+    if (!h && inItem) {
+      const r = htmlBlockStart(text0.slice(itemCol[i]), inParagraph);
+      if (r) h = { ...r, col: /^[ \t]*/.exec(raw)[0].length };
+    }
+    const col = h && inItem ? itemCol[i] : 0;
+    const exits = leaves(i, col);
     if (h && h.type <= 5) {
       let j = i;
       let at = endAfter(lines[i], h.end, h.col + (h.type === 2 ? 2 : 1));
-      while (at < 0 && j + 1 < lines.length) {
+      while (at < 0 && j + 1 < lines.length && !exits(j + 1)) {
         j += 1;
         at = endAfter(lines[j], h.end, 0);
       }
       const kind = h.type === 2 ? "comment" : "html";
-      if (at < 0) {
+      if (at < 0 && j + 1 >= lines.length) {
         out.push({ kind, start: i, end: lines.length - 1, closed: false, col: h.col });
         break;
+      }
+      if (at < 0) {
+        // Ended by leaving the item: everything from the start to here is the block, unclosed.
+        out.push({ kind, start: i, end: j, closed: false, col: h.col });
+        i = j;
+        inParagraph = false;
+        continue;
       }
       out.push({ kind, start: i, end: j, closed: true, col: h.col, endCol: at });
       i = j;
@@ -606,7 +687,7 @@ function blockRanges(lines, treatUnclosedAsFence, judgeDefinitions) {
     }
     if (h) {
       let j = i;
-      while (j + 1 < lines.length && !isBlank(lines[j + 1])) j += 1;
+      while (j + 1 < lines.length && !isBlank(lines[j + 1]) && !exits(j + 1)) j += 1;
       out.push({ kind: "html", start: i, end: j, closed: true, col: h.col });
       i = j;
       inParagraph = false;
@@ -665,7 +746,8 @@ export function maskNonProse(text, { treatUnclosedAsFence = true } = {}) {
   // starts (an indented-code line split in two, say). Lines are not modelled that way here, so with one anywhere in
   // the document the reference-definition exception is not applied and every underline stands, as before it existed.
   const judgeDefinitions = !/\r(?!\n|$)/.test(text);
-  for (const b of blockRanges(lines, treatUnclosedAsFence, judgeDefinitions)) {
+  const blocks = blockRanges(lines, treatUnclosedAsFence, judgeDefinitions);
+  for (const b of blocks) {
     for (let i = b.start; i <= b.end; i += 1) {
       // The text after a closed comment block's `-->` stays visible, as before; it is left unassigned so the
       // paragraph pass below still masks any further comment in it (Root on #2368).
@@ -685,6 +767,7 @@ export function maskNonProse(text, { treatUnclosedAsFence = true } = {}) {
   let inPara = false;
   let paraStart = -1;
   let paraBoxed = false;
+  let codeRun = -2; // the last line taken as indented code, so the next one can join its segment
   for (let i = 0; i < lines.length; i += 1) {
     if (segment[i] !== -1) {
       inPara = false;
@@ -698,6 +781,14 @@ export function maskNonProse(text, { treatUnclosedAsFence = true } = {}) {
       // The rest of a comment block's closing line still belongs to that HTML block (§4.6): it is its own segment,
       // joins no paragraph above it, and the next line starts a new one.
       segment[i] = nextSegment++;
+      inPara = false;
+    } else if (!inPara && indentColumns(expandTabs(text)) - blocks.itemCol[i] >= 4) {
+      // Indented code (§4.4), counted from the list item's content column when the line sits in one. Consecutive
+      // code lines share one segment, so a comment that spans them is still paired and masked as it was before
+      // segments existed; split, each line kept half a comment and a link it hides was credited (Codex on da64fc4a).
+      const prev = i - 1;
+      segment[i] = codeRun === prev ? segment[prev] : nextSegment++;
+      codeRun = i;
       inPara = false;
     } else if (
       ATX_HEADING.test(text) ||
@@ -717,7 +808,7 @@ export function maskNonProse(text, { treatUnclosedAsFence = true } = {}) {
       if (interrupted || (!inPara && CONTAINER_START.test(text))) {
         let r = i;
         while (r + 1 < lines.length && segment[r + 1] === -1 && !isBlank(content(lines[r + 1]))) r += 1;
-        const ids = containerRun(source.slice(i, r + 1), interrupted);
+        const ids = containerRun(source.slice(i, r + 1), interrupted, blocks.itemStack[i] ?? []);
         const base = nextSegment;
         let top = -1;
         for (let k = i; k <= r; k += 1) {

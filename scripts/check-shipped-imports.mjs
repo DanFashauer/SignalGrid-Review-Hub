@@ -17,11 +17,11 @@
 // compose `profiles` and `configs:`; compose `secrets:`; the container's `command`, `entrypoint` and node flags (a
 // volume over the directory an entry file lives in hides it, and a `--import` loader is not read); services merged
 // across ALL tracked compose files rather than per `-f` combination; bind-mount sources read relative to the repo
-// root, not to the compose file's own directory; compose files and Dockerfiles found by filename only
-// (`compose*.yml`/`.yaml`, `Dockerfile*`, `Containerfile*`), so one named otherwise, or one only a script's `docker
+// root, not to the compose file's own directory; compose files and Dockerfiles found by base name only
+// (a base name containing `compose` and ending `.yml`/`.yaml`; a base name containing `dockerfile` or `containerfile`, any case), so one named otherwise, or one only a script's `docker
 // run -v` or `docker build` line names, is not read; a Dockerfile no compose service builds, read with its own
 // directory as the build context; `$VAR`/`$ARG` in a COPY/ADD source, destination or WORKDIR and `..` sources leaving
-// the repo (reported as a "not modelled" note); heredoc COPY (a note); COPY --from an external image (a note); COPY
+// the repo (reported as a "not modelled" note); heredoc COPY (a note); `ONBUILD COPY`/`ADD` (a note: the trigger ships files into a CHILD image) and compose `develop.watch` sync actions (a note: they copy files into the running container); COPY --from an external image (a note); COPY
 // flags other than --from, --chown, --chmod and --link (NOT scanned); ADD of a URL, a git source or a local archive,
 // recognised by extension rather than by content (NOT scanned); `.dockerignore`; files and directories present only
 // in a base image (a destination that only the base image holds as a directory is read as a file path); every
@@ -31,7 +31,7 @@
 // NOT-scanned problems, never a pass: compose `extends`, `volumes_from` and `dockerfile_inline`; `volumes:` that is
 // not a list; a volume or tmpfs target that is not a literal absolute path or holds a `$`; a short volume entry that
 // does not parse; a dynamic import whose argument is not a plain string literal; a specifier written with an escape;
-// a local COPY/ADD source that is no tracked path or a wildcard that matches nothing. A COPY --from source that
+// a JSON-array COPY/ADD holding a non-string element; a local COPY/ADD source that is no tracked path or a wildcard that matches nothing. A COPY --from source that
 // matches nothing in the modelled stage is a note, because a RUN may create it. A shape the model does not read at
 // all is in this list and is a silent pass.
 //
@@ -41,7 +41,7 @@ import { mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFile
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { importsOf, makeTree, parseCompose, shippedImportProblems } from "./lib/shipped-imports.mjs";
+import { importsOf, makeTree, parseCompose, parseDockerfile, shippedImportProblems } from "./lib/shipped-imports.mjs";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const GATE = "scripts/check-shipped-imports.mjs";
@@ -221,6 +221,12 @@ async function selfTest() {
   checks.push(["R5-C a build Dockerfile the tree lists but cannot read is a problem naming the reason", shippedImportProblems({ composes: [{ name: "c.yml", text: compose("  idp:\n    build:\n      dockerfile: bad.build\n") }], dockerfiles: [], tree: makeTree({ files: ["bad.build"], read: () => { throw Object.assign(new Error("x"), { code: "EISDIR" }); } }) }).problems.some((x) => x.includes("unreadable (EISDIR)"))]);
   checks.push(["R5-C FROM <Base> and target: <Runtime> match stage names case-insensitively; COPY --from=<index> resolves", n(ship([compose("  idp:\n    build:\n      dockerfile: D0\n      target: Runtime\n")], ["FROM node AS base\nWORKDIR /app\nCOPY scripts/lib/ ./lib/\nFROM Base AS runtime\nCOPY scripts/a.mjs ./\n"], treeOf({}, SLIM))) === 0 && (() => { const r = dock("FROM node\nWORKDIR /app\nCOPY scripts/a.mjs ./\nCOPY scripts/lib/ ./lib/\nFROM node\nCOPY --from=0 /app/ /srv/\n", treeOf({}, SLIM)); return r.problems.length === 0 && r.dropped.length === 0 && r.shippedScripts === 6; })()]);
   checks.push(["R5-C heredoc COPY, WORKDIR $VAR and dockerfile_inline are reported as not modelled; a Dockerfile with no FROM is a problem", ship([], ["FROM node\nCOPY <<EOF /x\nhi\nEOF\n"]).dropped.some((x) => x.includes("heredoc")) && ship([], ["FROM node\nWORKDIR $X\n"]).dropped.some((x) => x.includes("WORKDIR $X")) && ship([compose("  idp:\n    build:\n      dockerfile_inline: |\n        FROM node\n")]).problems.some((x) => x.includes("dockerfile_inline") && x.includes("NOT scanned")) && ship([], ["COPY a b\n"]).problems.some((x) => x.includes("no FROM"))]);
+  // SI: the four gaps of the BUILD_BACKLOG "shipped-imports model crashes" row
+  const parseNoThrow = (text) => { try { return parseDockerfile("D0", text); } catch { return null; } };
+  checks.push(["SI-1 a JSON-array COPY holding a non-string does not throw and is a NOT-scanned problem naming the Dockerfile", (() => { const r = parseNoThrow('FROM node\nCOPY ["a.mjs", 1, "/x/"]\n'); const p = r ? r.stages.flatMap((st) => st.problems) : []; return r !== null && p.length === 1 && p[0].includes("D0") && p[0].includes("NOT scanned") && r.stages[0].ops.length === 0; })() && dock('FROM node\nCOPY ["scripts/a.mjs", null, "/x/"]\n').problems.some((x) => x.includes("non-string") && x.includes("NOT scanned"))]);
+  checks.push(["SI-2 ONBUILD COPY/ADD and compose develop.watch sync are reported as not modelled, never silent", dock("FROM node\nONBUILD COPY scripts/a.mjs /x/\n").dropped.some((x) => x.includes("ONBUILD COPY")) && dock("FROM node\nONBUILD ADD scripts/a.mjs /x/\n").dropped.some((x) => x.includes("ONBUILD ADD")) && !dock("FROM node\nONBUILD RUN echo hi\n").dropped.length && ship([compose("  idp:\n    develop:\n      watch:\n        - action: sync\n          path: ./scripts/a.mjs\n          target: /app/a.mjs\n")]).dropped.some((x) => x.includes("develop.watch sync") && x.includes("/app/a.mjs")) && !ship([compose("  idp:\n    develop:\n      watch:\n        - action: rebuild\n          path: ./scripts/a.mjs\n")]).dropped.length]);
+  checks.push(["SI-3 a comment line inside a backslash continuation is dropped before joining (sources a.mjs, destination /x/)", (() => { const op = parseDockerfile("D0", "FROM node\nCOPY a.mjs \\\n# comment b.mjs\n /x/\n").stages[0].ops[0]; return op.srcs.length === 1 && op.srcs[0] === "a.mjs" && op.dest === "/x"; })()]);
+  checks.push(["SI-4 the filename wording in the headers matches COMPOSE_NAME / DOCKERFILE_NAME", COMPOSE_NAME.test("docker-compose.override.yml") && !COMPOSE_NAME.test("compose.txt") && DOCKERFILE_NAME.test("idp.Dockerfile") && DOCKERFILE_NAME.test("Containerfile.dev") && readFileSync(join(repoRoot, GATE), "utf8").includes("base name containing `compose`")]);
   // the LIVE computation behind the fixture-IdP floor, and a dropped read problem, through the same path the CLI uses
   const liveAll = deployFiles().all;
   const liveRead = (f) => readFileSync(join(repoRoot, f), "utf8");
@@ -421,6 +427,10 @@ export const MUTANTS = [
   ["instructions case-sensitive", "scripts/lib/shipped-imports.mjs", "const ins = m[1].toUpperCase();", "const ins = m[1];"],
   ["backslash continuations not joined", "scripts/lib/shipped-imports.mjs", "const joinContinuations = (text) => text.replace(/\\\\[ \\t]*\\r?\\n/g, \" \");", "const joinContinuations = (text) => text;"],
   ["globs not expanded", "scripts/lib/shipped-imports.mjs", "if (/[*?]/.test(s)) {", "if (false) {"],
+  ["comments joined into continuations (SI-3)", "scripts/lib/shipped-imports.mjs", '    .filter((l) => !l.trim().startsWith("#"))\n', ""],
+  ["non-string JSON COPY element unchecked (SI-1)", "scripts/lib/shipped-imports.mjs", 'parts.some((p) => typeof p !== "string")', "false"],
+  ["ONBUILD COPY is silent (SI-2)", "scripts/lib/shipped-imports.mjs", "cur.dropped.push(`ONBUILD ${rest} (a trigger", "void (`ONBUILD ${rest} (a trigger"],
+  ["develop.watch sync is silent (SI-2)", "scripts/lib/shipped-imports.mjs", "!/^rebuild$|^restart$/.test(w.action)", "false"],
   ["heredoc COPY is silent", "scripts/lib/shipped-imports.mjs", "cur.dropped.push(`${ins} heredoc ${rest}`);", "void 0;"],
   ["WORKDIR with a variable is silent", "scripts/lib/shipped-imports.mjs", "cur.dropped.push(`WORKDIR ${rest}`);", "void 0;"],
   ["a Dockerfile with no FROM is silent", "scripts/lib/shipped-imports.mjs", "if (stages.length === 0) problems.push(", "if (false) problems.push("],

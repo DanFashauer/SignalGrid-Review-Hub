@@ -855,3 +855,31 @@ for (const treatUnclosedAsFence of [true, false]) {
     });
   }
 }
+
+// 19. Root on c28a38ca (7008497439): a CR left inside a line is a line ending to cmark-gfm, so it can never make an
+//     invalid definition valid. Both inputs keep a real setext heading: H is masked, V kept. Valid CRLF definitions
+//     still supply no heading, so their route survives.
+for (const treatUnclosedAsFence of [true, false]) {
+  for (const [name, input] of [
+    ['a CR-only label', '[\r]: /url\n===\n<span>\n[H](docs/H.md)\n\n[V](docs/V.md)\n'],
+    ['a CR inside an angle destination', '[r]: <a\rb>\n===\n<span>\n[H](docs/H.md)\n\n[V](docs/V.md)\n'],
+    ['a lone CR in an indented-code line before a definition-only paragraph', '    x\rb> y\n[r]: /url\n===\n<span>\n[H](docs/H.md)\n\n[V](docs/V.md)\n'],
+  ]) {
+    test(`reference definitions: ${name} is not a definition, H masked, V kept (treatUnclosedAsFence=${treatUnclosedAsFence})`, () => {
+      const out = maskNonProse(input, { treatUnclosedAsFence });
+      assertShape(input, out);
+      assert.ok(!out.includes('docs/H.md'), `hidden route kept: ${JSON.stringify(out)}`);
+      assert.ok(out.includes('[V](docs/V.md)'), `route lost: ${JSON.stringify(out)}`);
+    });
+  }
+  for (const [name, input] of [
+    ['a CRLF definition', '[r]: /url\r\n===\r\n<span>\r\n[visible](docs/V.md)\r\n'],
+    ['a CRLF definition with its title on the next line', "[r]: /url\r\n'title'\r\n===\r\n<span>\r\n[visible](docs/V.md)\r\n"],
+  ]) {
+    test(`reference definitions positive: ${name} keeps the route (treatUnclosedAsFence=${treatUnclosedAsFence})`, () => {
+      const out = maskNonProse(input, { treatUnclosedAsFence });
+      assertShape(input, out);
+      assert.ok(out.includes('[visible](docs/V.md)'), `route lost: ${JSON.stringify(out)}`);
+    });
+  }
+}

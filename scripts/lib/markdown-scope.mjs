@@ -243,7 +243,8 @@ const SETEXT_UNDERLINE = /^ {0,3}(?:=+|-+)[ \t]*$/;
  * (§4.7). Such a "paragraph" has no content, so a following `===` or `--` line is not a setext underline (§4.3: the
  * heading content may not be reference definitions) and starts a paragraph instead — after which a type 7 tag cannot
  * open an HTML block (Codex on #2368). Strict on purpose: anything this does not recognise as a definition (a tab
- * indent, a label across lines, nested parens past 32, a backslash before a non-punctuation character) returns false, and the line stays an underline. That keeps the
+ * indent, a label across lines, nested parens past 32, a backslash before a non-punctuation character, a residual
+ * CR) returns false, and the line stays an underline. That keeps the
  * error on the conservative side: a link masked that a reader could click, never one credited that they cannot.
  */
 function allReferenceDefinitions(paraLines) {
@@ -251,6 +252,10 @@ function allReferenceDefinitions(paraLines) {
   // A backslash before anything but ASCII punctuation is read differently by different renderers inside a
   // destination (markdown-it 14.3.0 consumes `\ ` as a pair); not judged, so the underline stands.
   if (/\\(?![!-\/:-@[-`{-~])/.test(text)) return false;
+  // A CR left after each line's CRLF ending is stripped is a line ending to cmark-gfm (blocks.c splits on it before
+  // block parsing), never label or destination text; this recognizer does not model CR-only lines, so any residual
+  // CR means "not judged" and the underline stands (Root on c28a38ca).
+  if (text.includes("\r")) return false;
   let at = 0;
   const ws = () => {
     while (at < text.length && (text[at] === " " || text[at] === "\t")) at += 1;
@@ -268,7 +273,9 @@ function allReferenceDefinitions(paraLines) {
       if (text[p] === "\\" && p + 1 < text.length && text[p + 1] !== "\n") (label += text[p] + text[p + 1]), (p += 2);
       else (label += text[p]), (p += 1);
     }
-    if (text[p] !== "]" || !/[^ \t]/.test(label) || label.length > 999) return -1;
+    // Renderers disagree on which characters leave a label empty (cmark-gfm's cmark_isspace excludes VT and FF;
+    // markdown-it trims every Unicode space): a label counts here only with a character no renderer trims.
+    if (text[p] !== "]" || !/[^\s\x00-\x1f\x7f]/.test(label) || label.length > 999) return -1;
     p += 1;
     if (text[p] !== ":") return -1;
     p += 1;
@@ -397,7 +404,7 @@ function endAfter(text, end, from) {
  *
  * @returns {{kind:"fence"|"comment"|"html",start:number,end:number,closed:boolean,col?:number,endCol?:number}[]}
  */
-function blockRanges(lines, treatUnclosedAsFence) {
+function blockRanges(lines, treatUnclosedAsFence, judgeDefinitions) {
   const out = [];
   let inParagraph = false;
   let paraStart = -1;
@@ -448,7 +455,7 @@ function blockRanges(lines, treatUnclosedAsFence) {
     // open paragraph it is only a lazy continuation. Anything else non-blank continues or starts one.
     const text = content(lines[i]);
     if (isBlank(text) || ATX_HEADING.test(text) || THEMATIC_BREAK.test(text)) inParagraph = false;
-    else if (inParagraph && SETEXT_UNDERLINE.test(text) && !allReferenceDefinitions(lines.slice(paraStart, i))) inParagraph = false;
+    else if (inParagraph && SETEXT_UNDERLINE.test(text) && !(judgeDefinitions && allReferenceDefinitions(lines.slice(paraStart, i)))) inParagraph = false;
     else if (!inParagraph && indentColumns(text) >= 4) inParagraph = false;
     else {
       if (!inParagraph) paraStart = i;
@@ -477,7 +484,11 @@ export function maskNonProse(text, { treatUnclosedAsFence = true } = {}) {
   const segment = new Array(lines.length).fill(-1);
   const tail = new Set();
   let nextSegment = 0;
-  for (const b of blockRanges(lines, treatUnclosedAsFence)) {
+  // A CR that does not end a CRLF line is a line ending to cmark-gfm (blocks.c), so it can move where a paragraph
+  // starts (an indented-code line split in two, say). Lines are not modelled that way here, so with one anywhere in
+  // the document the reference-definition exception is not applied and every underline stands, as before it existed.
+  const judgeDefinitions = !/\r(?!\n|$)/.test(text);
+  for (const b of blockRanges(lines, treatUnclosedAsFence, judgeDefinitions)) {
     for (let i = b.start; i <= b.end; i += 1) {
       // The text after a closed comment block's `-->` stays visible, as before; it is left unassigned so the
       // paragraph pass below still masks any further comment in it (Root on #2368).
@@ -513,7 +524,7 @@ export function maskNonProse(text, { treatUnclosedAsFence = true } = {}) {
     } else if (
       ATX_HEADING.test(text) ||
       THEMATIC_BREAK.test(text) ||
-      (inPara && SETEXT_UNDERLINE.test(text) && !allReferenceDefinitions(source.slice(paraStart, i))) ||
+      (inPara && SETEXT_UNDERLINE.test(text) && !(judgeDefinitions && allReferenceDefinitions(source.slice(paraStart, i)))) ||
       (!inPara && indentColumns(text) >= 4)
     ) {
       segment[i] = nextSegment++;

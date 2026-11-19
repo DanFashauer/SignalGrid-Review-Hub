@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-11-19T00:36:59.982Z",
-  "result": "keepalive 00:37Z (held from 00:24Z so #2353's CI was not restarted): quiet. Mac tick last firedAt 2026-11-18T23:36:20.410Z; live evidence 2026-11-16 (under 3d); no unread mail to cloud; no new or moved mac/* branch; owner not escalated. Cloud landed #2353 (7e28ef53)."
+  "firedAt": "2026-11-19T08:18:55.902Z",
+  "result": "08:2xZ keepalive (quiet). Mac tick last firedAt 2026-11-19T06:39:28.334Z. Live evidence 2026-11-16T22:14Z (~2.6d, under 3d). #2364 (Mac CI-host custody repair) landed d60bc676 under DR-037 on the Mac's ask; no other new/moved mac/* branch. No mail to cloud unread. Sim requests bound. Manifest no drift. Supersedes held #2366 (06:24Z). Owner not escalated."
 }

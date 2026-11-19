@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-11-19T06:23:40.406Z",
-  "result": "acted: landed #2359 (6cbf8db3, DR-037, Mac aggregate 135381967940 green, all 4 slices); released steward heartbeat #2362 (auto-merge); rebuilt #2355 repair on 6cbf8db3 (d0ce429d), full pf/br running; in flight H/S/O = 0/0/0 (wave deferred under owner priority: independent Mac operation); sub-brains: none; owner queue: none new"
+  "firedAt": "2026-11-19T08:18:55.902Z",
+  "result": "acted (08:11Z fire): landed #2364 (d60bc676, DR-037, Mac's ask, aggregate 135430081990 green); #2368 candidate 1963c18d after three source-review rounds, awaiting its full run; #2359 record a982ed12 pending delivery. In flight H/S/O = 0/0/0 (wave deferred under owner priority: independent Mac operation). Sub-brains: none. Owner queue: none new."
 }

@@ -36,6 +36,9 @@ const PATTERN = /proof:([a-z0-9-]+)`?\s*\((\d+)\s+checks/g;
 // scan is broken, not that the docs stopped documenting proof counts.
 const CLAIM_FLOOR = 20;
 
+// The per-proof bound, unchanged; named so the failure diagnostic can report it.
+const PROOF_CEILING_MS = 120_000;
+
 /** Parse "(N checks)" claims from a corpus of `[relPath, text]` docs. Pure so
  *  the self-test can feed it synthetic input without touching the filesystem. */
 export function parseClaims(docs) {
@@ -53,6 +56,79 @@ export function parseClaims(docs) {
     }
   }
   return { claims, disagreements };
+}
+
+// When a proof prints no summary line the gate fails, and the reason must survive the outer preflight's
+// 25-line tail capture: the child's exit status, signal, error code, elapsed time and the end of its output
+// (#2387: a macOS run reported only "could not read a summary line", so the cause could not be told apart
+// from a timeout, a startup error or an assertion). Bounded on purpose: at most TAIL_LINES lines of at most
+// TAIL_WIDTH characters each, so one failing proof cannot push the verdict out of the capture.
+const TAIL_LINES = 10;
+const TAIL_WIDTH = 200;
+
+/** Shorten a line to at most `width` characters, keeping BOTH ends: the start names the step, the end often
+ *  carries the error. Cutting from one side only discarded whichever half held the cause. */
+export function elide(line, width = TAIL_WIDTH) {
+  if (line.length <= width) return line;
+  const head = Math.ceil((width - 1) / 2);
+  return `${line.slice(0, head)}…${line.slice(line.length - (width - 1 - head))}`;
+}
+
+const nonBlank = (text) => String(text ?? "").split(/\r?\n/).filter((l) => l.trim() !== "");
+
+/** Describe a child run that produced no summary line. Pure: takes spawnSync's result and the elapsed time.
+ *  stdout and stderr are tailed SEPARATELY and labelled, so a flood on one stream cannot erase the other
+ *  (Root on 59f8a3eb: 400 unterminated stdout characters fused with the stderr error and truncated it away).
+ *  Together they never exceed TAIL_LINES; when both streams have output each is guaranteed half. */
+export function describeChildFailure(run, elapsedMs, ceilingMs) {
+  const code = run?.error?.code ?? null;
+  const timedOut = code === "ETIMEDOUT";
+  const out = nonBlank(run?.stdout);
+  const err = nonBlank(run?.stderr);
+  let errShow = Math.min(err.length, out.length ? Math.floor(TAIL_LINES / 2) : TAIL_LINES);
+  const outShow = Math.min(out.length, TAIL_LINES - errShow);
+  errShow = Math.min(err.length, TAIL_LINES - outShow);
+  const tail = [
+    ...out.slice(out.length - outShow).map((l) => `      | out ${elide(l)}`),
+    ...err.slice(err.length - errShow).map((l) => `      | err ${elide(l)}`),
+  ];
+  const head =
+    `    child: status=${run?.status ?? "null"} signal=${run?.signal ?? "null"} error=${code ?? "none"}` +
+    ` elapsed=${Math.round(elapsedMs)}ms ceiling=${ceilingMs}ms${timedOut ? " (TIMED OUT at the ceiling)" : ""}`;
+  const body = tail.length
+    ? [`    last ${outShow} of ${out.length} stdout line(s), last ${errShow} of ${err.length} stderr line(s):`, ...tail]
+    : ["    the child printed no output"];
+  return [head, ...body];
+}
+
+const STDERR_IN_RECAP = 120;
+
+/** One line naming a no-summary child's outcome, for the final recap. It carries the child's last stderr line
+ *  (elided to STDERR_IN_RECAP characters), because the recap is the part that always survives the capture. */
+export function childOutcome(run, elapsedMs, ceilingMs) {
+  const code = run?.error?.code ?? null;
+  const lastErr = nonBlank(run?.stderr).at(-1);
+  return `no summary line; status=${run?.status ?? "null"} signal=${run?.signal ?? "null"} error=${code ?? "none"}` +
+    ` elapsed=${Math.round(elapsedMs)}ms${code === "ETIMEDOUT" ? ` (TIMED OUT at the ${ceilingMs}ms ceiling)` : ""}` +
+    (lastErr ? `; last stderr: ${elide(lastErr, STDERR_IN_RECAP)}` : "");
+}
+
+// Per-proof detail blocks can push each other out of preflight's 25-line capture when more than one proof
+// fails (Root on e4b54aa6). The run therefore ENDS with a recap that always fits: one line per fault, naming
+// the proof and its outcome, at most RECAP_MAX of them plus an explicit omission count, then the verdict.
+const RECAP_MAX = 10;
+
+/** The closing lines of a failed run: a bounded fault recap, a blank line and the verdict. */
+export function finalReport(faults) {
+  const shown = faults.slice(0, RECAP_MAX);
+  const lines = [`Proof-count faults (${faults.length}), each detailed above:`, ...shown.map((f) => `  ✗ proof:${f.name} — ${f.outcome}`)];
+  if (faults.length > shown.length) lines.push(`  … and ${faults.length - shown.length} more fault(s) not listed here (see above)`);
+  return [...lines, "", `Proof-count check FAILED: ${faults.length} proof(s) failed the count check.`];
+}
+
+/** What preflight keeps of a failed step: stdout then stderr, trimmed, last 25 lines (scripts/preflight.mjs). */
+export function preflightTail(stdout, stderr) {
+  return `${stdout}${stderr}`.trimEnd().split("\n").slice(-25);
 }
 
 function readDocs() {
@@ -87,6 +163,75 @@ function selfTest() {
   checks.push(["zero documented claims is below the floor (RED)", 0 < CLAIM_FLOOR]);
   checks.push([`the floor is a real bar (${CLAIM_FLOOR} > 0)`, CLAIM_FLOOR > 0]);
 
+  // A proof with no summary line is described, not just counted: status, signal, error code, elapsed time and a
+  // bounded output tail (#2387). Each synthetic case below has no summary, so it stays a failure.
+  const SUMMARY = /summary=(pass|fail) \((\d+)\/(\d+)\)/;
+  const timeout = { status: null, signal: "SIGTERM", error: { code: "ETIMEDOUT" }, stdout: "  ok — a\n  ok — b\n", stderr: "" };
+  const t = describeChildFailure(timeout, 120004, 120000);
+  checks.push(["a timed-out child is reported as a timeout with its signal and elapsed time",
+    t[0].includes("signal=SIGTERM") && t[0].includes("error=ETIMEDOUT") && t[0].includes("TIMED OUT") && t[0].includes("elapsed=120004ms") &&
+    t.some((l) => l.includes("ok — b")) && !SUMMARY.test(`${timeout.stdout}`)]);
+  const crash = { status: 1, signal: null, error: undefined, stdout: "", stderr: "Error: Cannot find module 'x'\n    at load\n" };
+  const c = describeChildFailure(crash, 812, 120000);
+  checks.push(["a child that exits 1 with no summary keeps its status and the end of stderr",
+    c[0].includes("status=1") && c[0].includes("error=none") && !c[0].includes("TIMED OUT") && c.some((l) => l.includes("Cannot find module"))]);
+  const enoent = { status: null, signal: null, error: { code: "ENOENT" }, stdout: null, stderr: null };
+  const e = describeChildFailure(enoent, 3, 120000);
+  checks.push(["a child that could not start reports its error code and says it printed nothing",
+    e[0].includes("error=ENOENT") && e.includes("    the child printed no output")]);
+  const flood = { status: 1, signal: null, stdout: Array.from({ length: 500 }, (_, i) => `line ${i} ${"x".repeat(400)}`).join("\n"), stderr: "" };
+  const f = describeChildFailure(flood, 5, 120000);
+  checks.push([`a flooding child is bounded to ${TAIL_LINES} tail lines of at most ${TAIL_WIDTH} characters`,
+    f.length === 2 + TAIL_LINES && f.slice(2).every((l) => l.length <= "      | out ".length + TAIL_WIDTH) && f[f.length - 1].includes("line 499")]);
+  // MIXED STREAMS (Root 7017093282, the exact literal): an unterminated stdout flood must not erase stderr.
+  const dmh = { status: 1, signal: null, error: undefined, stdout: "x".repeat(400), stderr: "Error: Cannot find module 'dmh'\n" };
+  const d = describeChildFailure(dmh, 700, 120000);
+  checks.push(["a 400-character unterminated stdout does not erase the stderr error (streams tailed apart)",
+    d.includes("      | err Error: Cannot find module 'dmh'") && d.some((l) => l.startsWith("      | out x")) && d.length === 4]);
+  checks.push(["a no-summary outcome in the recap carries the last stderr line",
+    childOutcome(dmh, 700, 120000).endsWith("; last stderr: Error: Cannot find module 'dmh'")]);
+  const longErr = `${"y".repeat(300)} Error: the real cause`;
+  checks.push(["an over-long line keeps both ends (the cause at the end is not cut off)",
+    elide(longErr).length === TAIL_WIDTH && elide(longErr).startsWith("yyy") && elide(longErr).endsWith("Error: the real cause")]);
+  const errFlood = { status: 1, signal: null, stdout: "  ok — first\n  ok — last stdout\n", stderr: Array.from({ length: 40 }, (_, i) => `trace ${i}`).join("\n") };
+  const ef = describeChildFailure(errFlood, 5, 120000);
+  checks.push(["a stderr flood cannot erase stdout either, and the pair stays within the tail bound",
+    ef.includes("      | out   ok — last stdout") && ef.includes("      | err trace 39") && ef.length <= 2 + TAIL_LINES]);
+  const both = { status: 1, signal: null, stdout: Array.from({ length: 40 }, (_, i) => `out ${i}`).join("\n"), stderr: Array.from({ length: 40 }, (_, i) => `err ${i}`).join("\n") };
+  const bf = describeChildFailure(both, 5, 120000);
+  checks.push([`when both streams flood, each keeps exactly half of the ${TAIL_LINES}-line tail, ending at its own last line`,
+    bf.length === 2 + TAIL_LINES && bf.filter((l) => l.startsWith("      | out ")).length === TAIL_LINES / 2 &&
+    bf.filter((l) => l.startsWith("      | err ")).length === TAIL_LINES / 2 && bf.includes("      | out out 39") && bf.at(-1) === "      | err err 39"]);
+  // THROUGH THE REAL CAPTURE: build the gate's stdout and stderr exactly as the main loop emits them and keep
+  // what preflight keeps. Every fault's proof name and outcome must survive, whatever came before the recap.
+  const okLines = Array.from({ length: 63 }, (_, i) => `  ✓ proof:p${i} — 10 checks, matches docs`).join("\n") + "\n";
+  const tenLine = { status: 1, signal: null, stdout: Array.from({ length: 30 }, (_, i) => `  ok — step ${i}`).join("\n"), stderr: "" };
+  const detail = (name, run) => [`✗ proof:${name} — could not read a summary line (did the proof fail to run?)`, ...describeChildFailure(run, 9000, 120000)];
+  const emit = (blocks, faultList) => [...blocks.flat(), "", ...finalReport(faultList)].join("\n") + "\n";
+  const survives = (tail, faultList) => faultList.slice(0, RECAP_MAX).every((f) => tail.includes(`  ✗ proof:${f.name} — ${f.outcome}`)) &&
+    tail[tail.length - 1].startsWith(`Proof-count check FAILED: ${faultList.length} proof(s)`);
+  const twoFaults = [{ name: "alpha", outcome: childOutcome(timeout, 120004, 120000) }, { name: "beta", outcome: childOutcome(tenLine, 9000, 120000) }];
+  const twoTail = preflightTail(okLines, emit([detail("alpha", timeout), detail("beta", tenLine)], twoFaults));
+  checks.push(["two no-summary failures: both proof names and outcomes survive preflight's 25-line capture", survives(twoTail, twoFaults) &&
+    twoTail.some((l) => l.includes("proof:alpha — no summary line") && l.includes("TIMED OUT"))]);
+  const mism = Array.from({ length: 13 }, (_, i) => ({ name: `m${i}`, outcome: `docs say 10 checks, proof reports 11` }));
+  const mixFaults = [{ name: "alpha", outcome: childOutcome(timeout, 120004, 120000) }, ...mism];
+  const mixTail = preflightTail(okLines, emit([detail("alpha", timeout), ...mism.map((m) => [`✗ proof:${m.name} — docs say 10 checks, proof reports 11 (update: a.md)`])], mixFaults));
+  checks.push(["a no-summary failure followed by 13 count mismatches keeps the first fault named, with an explicit omission count",
+    survives(mixTail, mixFaults) && mixTail.some((l) => l.includes("proof:alpha — no summary line")) && mixTail.some((l) => l.includes("… and 4 more fault(s)"))]);
+  const dmhFaults = [{ name: "alpha", outcome: childOutcome(dmh, 700, 120000) }, { name: "beta", outcome: childOutcome(tenLine, 9000, 120000) }];
+  const dmhTail = preflightTail(okLines, emit([detail("alpha", dmh), detail("beta", tenLine)], dmhFaults));
+  checks.push(["the mixed-stream error survives preflight's capture even when a second failure follows it",
+    survives(dmhTail, dmhFaults) && dmhTail.some((l) => l.includes("proof:alpha") && l.includes("Cannot find module 'dmh'"))]);
+  checks.push(["the recap and verdict alone always fit the capture", finalReport(Array.from({ length: 99 }, (_, i) => ({ name: `x${i}`, outcome: "o" }))).length <= 25]);
+  // WIRING: the gate's own no-summary branch prints this diagnostic; a helper nobody calls proves nothing.
+  const own = readFileSync(fileURLToPath(import.meta.url), "utf8");
+  const branch = own.slice(own.lastIndexOf("could not read a summary line (did the proof fail to run?)"));
+  checks.push(["the no-summary branch prints describeChildFailure before counting the failure",
+    /^[^\n]*\n\s*for \(const line of describeChildFailure\(run, elapsed, PROOF_CEILING_MS\)\) console\.error\(line\);\n\s*faults\.push\(\{ name, outcome: childOutcome\(run, elapsed, PROOF_CEILING_MS\) \}\);/.test(branch)]);
+  checks.push(["a failed run ends with finalReport (the recap and the verdict are the last lines it prints)",
+    /if \(faults\.length > 0\) \{\n\s*console\.error\(""\);\n\s*for \(const line of finalReport\(faults\)\) console\.error\(line\);\n\s*process\.exit\(1\);\n\}/.test(own)]);
+
   // LIVE: the real docset must clear the floor, or the parser has drifted.
   const live = parseClaims(readDocs());
   checks.push([`LIVE: the real docset has ${live.claims.size} documented proof counts (floor ${CLAIM_FLOOR})`, live.claims.size >= CLAIM_FLOOR]);
@@ -114,25 +259,28 @@ if (claims.size < CLAIM_FLOOR) {
   process.exit(1);
 }
 
-let failures = 0;
+const faults = [];
 for (const [name, { count, files }] of [...claims].sort()) {
+  const started = performance.now();
   const run = spawnSync("pnpm", ["run", `proof:${name}`], {
     cwd: repoRoot,
     encoding: "utf8",
     // Proofs are offline and fast; a generous per-proof ceiling still bounds the gate.
-    timeout: 120_000,
+    timeout: PROOF_CEILING_MS,
   });
+  const elapsed = performance.now() - started;
   const output = `${run.stdout ?? ""}${run.stderr ?? ""}`;
   const summary = output.match(/summary=(pass|fail) \((\d+)\/(\d+)\)/);
   if (!summary) {
     console.error(`✗ proof:${name} — could not read a summary line (did the proof fail to run?)`);
-    failures += 1;
+    for (const line of describeChildFailure(run, elapsed, PROOF_CEILING_MS)) console.error(line);
+    faults.push({ name, outcome: childOutcome(run, elapsed, PROOF_CEILING_MS) });
     continue;
   }
   const [, verdict, passed, total] = summary;
   if (verdict !== "pass") {
     console.error(`✗ proof:${name} — proof itself is failing (${passed}/${total})`);
-    failures += 1;
+    faults.push({ name, outcome: `proof itself is failing (${passed}/${total})` });
     continue;
   }
   if (Number(total) !== count) {
@@ -140,14 +288,15 @@ for (const [name, { count, files }] of [...claims].sort()) {
       `✗ proof:${name} — docs say ${count} checks, proof reports ${total}` +
         ` (update: ${[...files].join(", ")})`,
     );
-    failures += 1;
+    faults.push({ name, outcome: `docs say ${count} checks, proof reports ${total}` });
   } else {
     console.log(`  ✓ proof:${name} — ${total} checks, matches docs`);
   }
 }
 
-if (failures > 0) {
-  console.error(`\nProof-count check FAILED: ${failures} documented count(s) out of sync.`);
+if (faults.length > 0) {
+  console.error("");
+  for (const line of finalReport(faults)) console.error(line);
   process.exit(1);
 }
 console.log(`\nProof-count check passed — all ${claims.size} documented counts match their proofs.`);

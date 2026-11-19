@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-11-19T10:11:48.618Z",
-  "result": "acted (10:11Z fire): #2368 took three more review rounds (CodeQL 276, Codex P2 x2, Root x2) -> candidate ca93a80b (123/123), awaiting the original 32c2efad full run then its own; hygiene #2372 merged (freed 2.1G at 368M free); #2359 record 20cb7a94 waits behind #2368. In flight H/S/O = 0/0/0 (wave deferred under owner priority: independent Mac operation; Root's #2370 repair qualification running). Sub-brains: signalgrid-mcp #17 open (owner-held workflow add), no new work. Owner queue: none new."
+  "firedAt": "2026-11-19T12:13:16.593Z",
+  "result": "quiet: wave deferred under owner priority (independent Mac operation is the critical path); in flight H/S/O = 0/0/0; cloud writer on #2368 (markdown-scope candidate a8917bfc frozen for Root source review, full run in progress) and #2359 record c39a5854 (full run in progress); #2374 brain build offered, waiting on the Mac's daily model-call budget; sub-brains: none spawned"
 }

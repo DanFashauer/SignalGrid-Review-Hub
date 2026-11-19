@@ -77,6 +77,15 @@ export function maskNonProse(text, { treatUnclosedAsFence = true } = {}) {
   const fenced = fencedLineFlags(lines, { treatUnclosedAsFence });
   let out = lines.map((l, i) => (fenced[i] ? blank(l) : l)).join("\n");
   out = out.replace(/<!--[\s\S]*?-->/g, blank);
+  // CommonMark HTML block type 2: a comment block opened at the start of a line (0–3
+  // spaces) ends at its closer OR at the end of the document. Every closed comment is
+  // already blanked above, so an opener still visible here has no closer after it: its
+  // hidden text runs to end of input. A mid-line opener is not a block and is left alone.
+  const unclosed = /(^|\n) {0,3}<!--/.exec(out);
+  if (unclosed) {
+    const at = unclosed.index + unclosed[1].length;
+    out = out.slice(0, at) + blank(out.slice(at));
+  }
   out = out
     .split("\n")
     .map((l) => l.replace(/(`+)[^`\n]*?\1/g, blank))

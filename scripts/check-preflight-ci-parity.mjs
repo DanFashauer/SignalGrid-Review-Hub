@@ -54,7 +54,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { MIRRORED, NOT_A_GATE, classifyCiJobs, enumerateCiJobs, readCiWorkflows } from "./lib/ci-jobs.mjs";
-import { classifyStep } from "./lib/preflight-verdict.mjs";
+import { classifyStep, expectFor } from "./lib/preflight-verdict.mjs";
 import { ENV, SEP, gateWiredIn, maskQuoted, runCommands, runSteps, stripYamlComments } from "./lib/workflow-invocation.mjs";
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -344,6 +344,22 @@ export function breadthLaneWiredIn(rawWorkflowText, aliasMap = new Map()) {
   return gateWiredIn("scripts/verify-breadth.mjs", rawWorkflowText, aliasMap);
 }
 
+/** Pure: the `node scripts/<x>.mjs … --self-test` run commands in a workflow that are NOT behind
+ *  scripts/lib/expect-output.mjs — each one passes CI on exit code alone, so a module that skips
+ *  its own body (exits 0, prints nothing) goes green. The wrapper's own self-test is exempt: it is
+ *  the thing doing the asserting. Comments and quoted text are stripped, as gateWiredIn does. */
+export function unwrappedSelfTests(rawWorkflowText) {
+  const commands = runCommands(stripYamlComments(rawWorkflowText)).map(maskQuoted).join("\n");
+  const re = new RegExp(`${SEP}${ENV}(node[ \\t]+scripts/[^\\s;&|()]+\\.mjs)((?:[ \\t]+[^\\s;&|()]+)*)`, "gm");
+  const out = [];
+  for (const m of commands.matchAll(re)) {
+    if (!m[2].split(/\s+/).includes("--self-test")) continue;
+    if (m[1].endsWith("scripts/lib/expect-output.mjs")) continue;
+    out.push(`${m[1]}${m[2]}`.replace(/\s+/g, " "));
+  }
+  return out;
+}
+
 /** Gates whose CI run line must carry a flag, or the run is a different (weaker) check.
  *  A flag is a claim the gate checks about its own checkout; remove or misspell it on the
  *  run line and every other gate stays green (measured 2026-10-08), so the run line is
@@ -504,6 +520,19 @@ function selfTest() {
     gateWiredIn("scripts/mac/x.sh --self-test", "  - run: bash scripts/mac/x.sh --self-test\n") === true &&
       gateWiredIn("scripts/mac/x.sh", "  - run: bash scripts/mac/x.sh --self-test\n") === false,
   ]);
+  // ── per-step `expect`: exit 0 without the pass line is not a pass (BUILD_BACKLOG "Self-test steps pass on exit code alone") ──
+  const stCmd = ["node", "scripts/check-x.mjs", "--self-test"];
+  const stExpect = expectFor(stCmd);
+  checks.push(["a `--self-test` step has a default expect; a plain gate has none", stExpect instanceof RegExp && expectFor(["node", "scripts/check-x.mjs"]) === null]);
+  checks.push(["SYNTHETIC VIOLATION: a self-test step exiting 0 with NO output classifies 'failed' (missing-expect)", (() => { const v = classifyStep({ status: 0, combined: "", envSet: false, expect: stExpect }); return v.verdict === "failed" && v.reason === "missing-expect"; })()]);
+  checks.push(["a self-test step exiting 0 that only names itself in a banner classifies 'failed'", classifyStep({ status: 0, combined: "check-x --self-test: running\n", envSet: false, expect: stExpect }).verdict === "failed"]);
+  checks.push(["a self-test step exiting 0 and printing `self-test passed (3/3)` classifies 'ok'", classifyStep({ status: 0, combined: "x self-test passed (3/3)\n", envSet: false, expect: stExpect }).verdict === "ok"]);
+  checks.push(["every self-test pass-line shape in use classifies 'ok' (PASS / N/N passed / OK: N/N self-test cases)", ["PASS  self-test — fine", "19/19 passed", "OK: 7/7 self-test cases behaved as declared.", "x self-test: 5/5"].every((c) => classifyStep({ status: 0, combined: c, envSet: false, expect: stExpect }).verdict === "ok")]);
+  checks.push(["a non-zero exit is still 'failed' with the pass line printed", classifyStep({ status: 1, combined: "self-test passed (1/1)", envSet: false, expect: stExpect }).verdict === "failed"]);
+  checks.push(["MUTANT: classifyStep with its expect check deleted is caught by the synthetic violation above", (() => { const src = readFileSync(join(repo, "scripts/lib/preflight-verdict.mjs"), "utf8"); const mutated = src.replace(/  if \(expect && combined\.search\(expect\) === -1\) return [^\n]*\n/, ""); if (mutated === src) return false; const mod = new Function(`${mutated.replace(/^export /gm, "")}\nreturn classifyStep;`)(); return mod({ status: 0, combined: "", envSet: false, expect: stExpect }).verdict !== "failed"; })()]);
+  const wrapped = "  - run: node scripts/lib/expect-output.mjs node scripts/check-x.mjs --self-test\n";
+  checks.push(["the CI expect wrapper still credits the wrapped self-test step", gateWiredIn(`${"scripts/check-x.mjs"} --self-test`, wrapped) === true && gateWiredIn("scripts/check-x.mjs", wrapped) === false]);
+  checks.push(["a bare `node … --self-test` CI run is reported unwrapped; the wrapped form and a plain gate are not", unwrappedSelfTests("  - run: node scripts/check-x.mjs --self-test\n").length === 1 && unwrappedSelfTests(wrapped).length === 0 && unwrappedSelfTests("  - run: node scripts/check-x.mjs\n").length === 0 && unwrappedSelfTests("  - run: node scripts/lib/expect-output.mjs --self-test\n").length === 0]);
   // ── command position (Codex on PR #1450, 2026-10-08): a path that is merely NAMED in a
   // step is not a step that RUNS it. Each case marked [old: true] returned true under the
   // anywhere-after-whitespace matcher and must now be false.
@@ -736,6 +765,18 @@ if (ciJobs.length < CI_JOB_FLOOR) {
 // Both directions are checked: an unclassified self-skipping proof fails, and a
 // classification for a proof that no longer self-skips fails too (a stale exemption
 // re-permits the gap it was granted for — the same rule LOCAL_ONLY follows above).
+// ── Every review-hub-ci self-test step asserts its pass line ─────────────────
+// preflight fails a `--self-test` step that exits 0 without printing its pass line (classifyStep's
+// `expect`); the CI twin is scripts/lib/expect-output.mjs. A bare `node … --self-test` line passes CI
+// on exit code alone, so it is reported here, in the one workflow that carries the self-test steps.
+{
+  const hubCi = readFileSync(join(WORKFLOW_DIR, "review-hub-ci.yml"), "utf8");
+  for (const bare of unwrappedSelfTests(hubCi)) {
+    console.error(`  ✗ review-hub-ci.yml runs \`${bare}\` on exit code alone — prefix it with \`node scripts/lib/expect-output.mjs\` so exit 0 without the pass line fails the step.`);
+    problems += 1;
+  }
+}
+
 const selfSkipping = liveSelfSkippingProofs();
 const problemsBeforeSelfSkip = problems;
 // FLOOR. Zero derived is a broken parse, not a clean tree: the five sources are in

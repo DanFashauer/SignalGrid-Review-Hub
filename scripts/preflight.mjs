@@ -18,7 +18,7 @@ import { resolve, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { uncoveredLines } from "./lib/ci-jobs.mjs";
 import { nativeBuildExclusion } from "./lib/platform-native-build.mjs";
-import { classifyStep } from "./lib/preflight-verdict.mjs";
+import { classifyStep, expectFor } from "./lib/preflight-verdict.mjs";
 import { aggregate, expectedSequence, parseSlice, planHash, planOf, roleOf, sliceRecord } from "./lib/preflight-slice.mjs";
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -429,6 +429,7 @@ const STEPS = [
   // default branch in Dockerfile.web, where it broke the web image outright.
   { name: "Merge markers (no unresolved conflict may be committed)", cmd: ["node", "scripts/check-merge-markers.mjs"] },
   { name: "Proof: mcp-server (the published plugin path boots and serves its declared tools)", cmd: ["pnpm", "run", "proof:mcp-server"] },
+  { name: "Expect-output wrapper self-test (exit 0 without the pass line must fail the CI step, as it fails preflight)", cmd: ["node", "scripts/lib/expect-output.mjs", "--self-test"] },
   { name: "Preflight↔CI parity self-test (a comment mention is not a run)", cmd: ["node", "scripts/check-preflight-ci-parity.mjs", "--self-test"] },
   { name: "Preflight↔CI parity (a gate that runs only locally is not a gate)", cmd: ["node", "scripts/check-preflight-ci-parity.mjs"] },
   { name: "Assessor package (every link, command and path in it resolves)", cmd: ["node", "scripts/check-assessor-package.mjs"] },
@@ -952,6 +953,7 @@ for (const step of STEPS) {
     selfSkipsWithout: step.selfSkipsWithout,
     envSet: Boolean(step.selfSkipsWithout && process.env[step.selfSkipsWithout]),
     surface: step.surface,
+    expect: expectFor(step.cmd, step.expect),
   });
   if (role === "prelude") {
     // Run for what it sets up, judged strictly (only a clean ok), and never counted here.
@@ -984,6 +986,18 @@ for (const step of STEPS) {
   if (c.verdict === "ok") {
     console.log("ok");
     results.push({ name: step.name, status: "ok" });
+  } else if (r.status === 0 && c.reason === "missing-expect") {
+    // Exit 0 without the pass line the step must print: a module that skipped its own body.
+    console.log("FAILED");
+    console.error(
+      `\n─── ${step.name} ───\n` +
+        `exited 0 but its output never matched the expected pass line ${expectFor(step.cmd, step.expect)}.\n` +
+        `A self-test that prints nothing has not run; exit 0 alone is not evidence.\n` +
+        `─── output (tail) ───\n${combined.trimEnd().split("\n").slice(-25).join("\n")}\n`,
+    );
+    sliceRows.push([stepIndex, "owned", "failed", 0]);
+    failed = step.name;
+    break;
   } else if (r.status === 0) {
     // The declaration and the behaviour disagree: it exited 0 with its input unset and no
     // SKIPPED. Either the proof stopped self-skipping (drop the marker) or it ran a real

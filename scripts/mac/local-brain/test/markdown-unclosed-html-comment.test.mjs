@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {maskNonProse} from '../../../lib/markdown-scope.mjs';
+import {fenceRanges, fencedLineFlags, maskNonProse} from '../../../lib/markdown-scope.mjs';
 
 // maskNonProse feeds the doc-orphan and index-banner link parses. CommonMark 0.31.2 §4.6, HTML block type 2: a
 // comment block opened at the start of a line (after zero to three spaces) ends at its closer OR at the end of the
@@ -348,4 +348,50 @@ test('the same holds when the first comment spans lines', () => {
   assertShape(input, out);
   assert.ok(!out.includes('docs/H.md'), `second comment leaked: ${JSON.stringify(out)}`);
   assert.ok(out.endsWith(' tail ' + ' '.repeat('<!-- [hidden](docs/H.md) -->'.length) + ' [visible](docs/V.md)\n'), `tail mangled: ${JSON.stringify(out)}`);
+});
+
+// ---- Root's review of 1963c18d (#2368 comment 7003762100): one shared-whitespace preservation bundle.
+
+// 1. The exported fence functions keep their original closer contract, separate from the strict HTML blank test:
+// a closer followed by an NBSP still closes, exactly as on the original helper (6cbf8db3).
+test('fenceRanges / fencedLineFlags keep the original closer contract for a closer followed by an NBSP', () => {
+  const lines = ['```', 'body', '```\u00a0', '[visible](docs/V.md)'];
+  assert.deepEqual(fenceRanges(lines), [{start: 0, end: 2, closed: true}]);
+  assert.deepEqual(fencedLineFlags(lines), [true, true, true, false]);
+  assert.deepEqual(fencedLineFlags(lines, {treatUnclosedAsFence: false}), [true, true, true, false]);
+  const input = lines.join('\n');
+  for (const treatUnclosedAsFence of [true, false]) {
+    const out = maskNonProse(input, {treatUnclosedAsFence});
+    assertShape(input, out);
+    assert.equal(out.split('\n')[3], '[visible](docs/V.md)', `route lost: ${JSON.stringify(out)}`);
+  }
+});
+
+// 2. A CRLF line's trailing CR is its line ending, so a CR-only line is blank and ends a type 6 or type 7 block.
+for (const [name, prefix] of Object.entries({
+  'type 6 <div> with a quoted attribute': '<div title="\n<!--\n">',
+  'type 7 <x-box>': '<x-box>\n<!--',
+})) {
+  test(`a CRLF blank line after an LF ${name} ends the block, so the route stays visible`, () => {
+    const input = `${prefix}\n\r\n[visible](docs/V.md)\n`;
+    const out = maskNonProse(input);
+    assertShape(input, out);
+    const lines = out.split('\n');
+    assert.equal(lines[lines.length - 2], '[visible](docs/V.md)', `route lost: ${JSON.stringify(out)}`);
+  });
+}
+
+test('control: an ASCII space/tab blank line ends the type 6 block the same way', () => {
+  const input = '<div title="\n<!--\n">\n \t\n[visible](docs/V.md)\n';
+  const out = maskNonProse(input);
+  assertShape(input, out);
+  assert.equal(out.split('\n')[4], '[visible](docs/V.md)', `route lost: ${JSON.stringify(out)}`);
+});
+
+test('control: a CR is a line ending, but an NBSP line is still not blank', () => {
+  const input = '<div title="\n\u00a0\r\n<!--\n">\n\n[visible](docs/V.md)\n';
+  const out = maskNonProse(input);
+  assertShape(input, out);
+  const lines = out.split('\n');
+  assert.equal(lines[lines.length - 2], '[visible](docs/V.md)', `route lost: ${JSON.stringify(out)}`);
 });

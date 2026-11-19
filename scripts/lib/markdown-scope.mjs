@@ -20,8 +20,15 @@
 /** Replace every character with a space, keeping newlines so offsets and lines survive. */
 const blank = (s) => s.replace(/[^\n]/g, " ");
 
-/** A blank line in CommonMark's sense: only spaces (U+0020) and tabs (U+0009). An NBSP is not blank. */
-const isBlank = (line) => /^[ \t]*$/.test(line);
+/**
+ * A line's content without its line ending. The text is split on LF, so a CRLF line keeps a trailing CR that is
+ * part of its line ending (§2.1), not content. Used by the HTML block and paragraph tests only; the fence
+ * predicates keep their original contract unchanged.
+ */
+const content = (line) => (line.endsWith("\r") ? line.slice(0, -1) : line);
+
+/** A blank line in CommonMark's sense: only spaces (U+0020) and tabs (U+0009) before the line ending. An NBSP is not blank. */
+const isBlank = (line) => /^[ \t]*$/.test(content(line));
 
 /** A fence opener: 0–3 spaces, then 3+ backticks or tildes; a backtick fence's info string has no backtick. */
 function fenceOpener(line) {
@@ -35,7 +42,7 @@ function fenceOpener(line) {
 /** Whether `line` closes the fence `open`: same character, at least as long, nothing after it. */
 function closesFence(line, open) {
   const m = /^ {0,3}(`{3,}|~{3,})(.*)$/.exec(line);
-  return Boolean(m && m[1][0] === open.char && m[1].length >= open.len && isBlank(m[2]));
+  return Boolean(m && m[1][0] === open.char && m[1].length >= open.len && m[2].trim() === "");
 }
 
 /**
@@ -151,7 +158,7 @@ function blockRanges(lines, treatUnclosedAsFence) {
   const out = [];
   let inParagraph = false;
   for (let i = 0; i < lines.length; i += 1) {
-    const h = htmlBlockStart(lines[i], inParagraph);
+    const h = htmlBlockStart(content(lines[i]), inParagraph);
     if (h && h.type <= 5) {
       let j = i;
       let at = endAfter(lines[i], h.end, h.col + (h.type === 2 ? 2 : 1));
@@ -194,8 +201,9 @@ function blockRanges(lines, treatUnclosedAsFence) {
     }
     // An ATX heading, a thematic break or a setext underline ends the paragraph (the underline only while one is
     // open); a blank line does too. Anything else non-blank continues or starts one.
-    if (isBlank(lines[i]) || /^ {0,3}#{1,6}(?:[ \t]|$)/.test(lines[i]) || THEMATIC_BREAK.test(lines[i])) inParagraph = false;
-    else if (inParagraph && SETEXT_UNDERLINE.test(lines[i])) inParagraph = false;
+    const text = content(lines[i]);
+    if (isBlank(text) || /^ {0,3}#{1,6}(?:[ \t]|$)/.test(text) || THEMATIC_BREAK.test(text)) inParagraph = false;
+    else if (inParagraph && SETEXT_UNDERLINE.test(text)) inParagraph = false;
     else inParagraph = true;
   }
   return out;

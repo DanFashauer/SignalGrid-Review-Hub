@@ -1048,6 +1048,7 @@ for (const treatUnclosedAsFence of [true, false]) {
     ['one tab after a bullet (three columns of padding)', '`\n-\t[V](docs/V.md)\n`\n'],
     ['a zero-padded ordered start `01.` interrupting', '`\n01. [V](docs/V.md)\n`\n'],
     ['NBSP content after a bullet (not blank, so it interrupts)', '`\n- \u00a0[V](docs/V.md)\n`\n'],
+    ['an item holding only an NBSP, then a lazy line', '`\n- \u00a0\n[V](docs/V.md)\n`\n'],
     ['prose in a list item after its indented code', '`\n-     code\n  [V](docs/V.md)\n`\n'],
   ]) {
     test(`genuine interruption control: ${name} keeps V (treatUnclosedAsFence=${treatUnclosedAsFence})`, () => {
@@ -1060,7 +1061,7 @@ for (const treatUnclosedAsFence of [true, false]) {
 
 // 25. Root on 0b035116: a bounded cross-product of container boundaries (bullets, ordered items from 1, block quotes,
 //     and nested quote/list pairs) with contained content (indented code, tab code, both fences, HTML block types
-//     1-7 and prose) and continuation shapes, between an opening backtick line and a closing one. For every
+//     1-7, prose and an NBSP) and continuation shapes, between an opening backtick line and a closing one. For every
 //     input, no route may survive the mask more often than the pinned CommonMark renderer (markdown-it 14) renders
 //     it as a link, and no route markdown-it renders may be masked. Inputs without a closing backtick are included.
 //     Both fence options; shape checked.
@@ -1069,7 +1070,7 @@ test('cross-product: container boundaries agree with markdown-it for hidden and 
   const md = new MarkdownIt('commonmark');
   const markers = ['- ', '* ', '+ ', '1. ', '1) ', '> ', '   > ', '>', '- > ', '> - ', '1. > '];
   const contents = ['    [H](docs/H.md)', '\t[H](docs/H.md)', '```', '~~~', '<script>', '<pre>', '<style>', '<!-- c', '<?x', '<!X',
-    '<![CDATA[', '<div>', '<table>', '<span>', 'item'];
+    '<![CDATA[', '<div>', '<table>', '<span>', 'item', '\u00a0'];
   const pres = ['`\n', 'text `\n', '`a\n'];
   const posts = ['`\n', 'b`\n', ''];
   let checked = 0;
@@ -1093,7 +1094,7 @@ test('cross-product: container boundaries agree with markdown-it for hidden and 
       }
     }
   }
-  assert.equal(checked, 11 * 15 * 7 * 3 * 3 * 2 * 2);
+  assert.equal(checked, 11 * 16 * 7 * 3 * 3 * 2 * 2);
 });
 // The same container model keeps prose after a fence that closes inside a list item. Only without the unclosed-fence
 // option: with it, the top-level fence scan (unchanged here, as on canonical 7672128b) reads the item's two fence

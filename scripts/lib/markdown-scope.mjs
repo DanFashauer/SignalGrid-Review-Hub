@@ -283,7 +283,7 @@ function containerRun(lines, interrupted) {
         pos += m[0].length;
         if (text[pos] === " ") pos += 1;
       } else {
-        if (text.length - pos < c.col - pos || text.slice(pos, c.col).trim() !== "") break;
+        if (text.length < c.col || /[^ ]/.test(text.slice(pos, c.col))) break;
         pos = c.col;
       }
     }
@@ -335,7 +335,8 @@ function containerRun(lines, interrupted) {
       if (lm) {
         const after = body.slice(lm[0].length);
         const pad = indentColumns(after);
-        const empty = after.trim() === "";
+        // Blank is spaces and tabs only (an NBSP is content), as for blank lines.
+        const empty = /^ *$/.test(after);
         const canInterrupt = !empty && (lm[1] !== undefined || Number(lm[2]) === 1);
         if (!(continuing && !canInterrupt)) {
           const markerEnd = pos + indent + lm[0].length;

@@ -11,7 +11,7 @@
 //   node scripts/lib/expect-output.mjs --self-test    runs the wrapper's own fixtures.
 
 import { spawnSync } from "node:child_process";
-import { fileURLToPath } from "node:url";
+import { isMainModule } from "./is-main.mjs";
 import { expectFor } from "./preflight-verdict.mjs";
 
 /** Pure: judge a finished command. Returns { code, message? }. */
@@ -42,7 +42,7 @@ function selfTest() {
   console.log(`expect-output self-test passed (${checks.length}/${checks.length})`);
 }
 
-if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+if (isMainModule(process.argv[1], import.meta.url)) {
   const cmd = process.argv.slice(2);
   if (cmd.length === 1 && cmd[0] === "--self-test") selfTest();
   else if (cmd.length === 0) { console.error("expect-output: usage: expect-output.mjs <command…>"); process.exit(2); }

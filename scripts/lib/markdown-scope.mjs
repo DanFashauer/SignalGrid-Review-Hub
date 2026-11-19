@@ -116,13 +116,23 @@ const THEMATIC_BREAK = /^ {0,3}(?:(?:\*[ \t]*){3,}|(?:-[ \t]*){3,}|(?:_[ \t]*){3
 // declaration or CDATA section is part of that construct and never opens a comment. Each form here is no wider than
 // GitHub's: a form wider than the renderer's would swallow a real comment and leave its link to be credited.
 const ESCAPABLE = /[!-\/:-@[-`{-~]/;
-const INLINE_RAW = [
-  /^<[A-Za-z][A-Za-z0-9+.-]{1,31}:[^\s<>]*>/, // URI autolink
+// cmark-gfm's whitespace (spec "whitespace character"): space, tab, LF, VT, FF, CR. JavaScript `\s` also takes NBSP
+// and other Unicode spaces, which would accept a token GitHub does not, and let it swallow a real comment.
+const WS = "[ \\t\\n\\v\\f\\r]";
+const NOT_WS = " \\t\\n\\v\\f\\r";
+// Autolinks stay as text (a reader sees and can follow them); every other raw-HTML token is markup, never prose, and
+// is blanked whole, so nothing inside an attribute, instruction, declaration or CDATA section can be credited.
+const AUTOLINKS = [
+  new RegExp(`^<[A-Za-z][A-Za-z0-9+.-]{1,31}:[^<>${NOT_WS}\\x00-\\x1f]*>`), // URI autolink
   /^<[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*>/, // email autolink
-  /^<[A-Za-z][A-Za-z0-9-]*(?:\s+[A-Za-z_:][A-Za-z0-9_.:-]*(?:\s*=\s*(?:[^\s"'=<>`]+|'[^']*'|"[^"]*"))?)*\s*\/?>/, // open tag
-  /^<\/[A-Za-z][A-Za-z0-9-]*\s*>/, // closing tag
+];
+const RAW_HTML = [
+  new RegExp(
+    `^<[A-Za-z][A-Za-z0-9-]*(?:${WS}+[A-Za-z_:][A-Za-z0-9_.:-]*(?:${WS}*=${WS}*(?:[^"'=<>\`${NOT_WS}]+|'[^']*'|"[^"]*"))?)*${WS}*/?>`,
+  ), // open tag
+  new RegExp(`^</[A-Za-z][A-Za-z0-9-]*${WS}*>`), // closing tag
   /^<\?[\s\S]*?\?>/, // processing instruction
-  /^<![A-Z]+\s[^>]*>/, // declaration: cmark-gfm's 0.29 form, uppercase name then whitespace
+  new RegExp(`^<![A-Z]+${WS}[^>]*>`), // declaration: cmark-gfm's 0.29 form, uppercase name then whitespace
   /^<!\[CDATA\[[\s\S]*?\]\]>/, // CDATA
 ];
 
@@ -134,8 +144,9 @@ const INLINE_COMMENT = /^<!--(?!-?>)(?:[^-]|-(?!-))*-->/;
 
 /**
  * Blank every inline comment (§6.6) in one paragraph's text, as INLINE_COMMENT defines it; anything else that starts
- * `<!--` is literal text and stays visible. Backslash escapes, autolinks and raw HTML are skipped whole and code spans
- * are blanked whole, leftmost first, so a `<!--` inside one of them never opens a comment.
+ * `<!--` is literal text and stays visible. Backslash escapes and autolinks are kept; code spans and every other
+ * raw-HTML token (tag, processing instruction, declaration, CDATA) are blanked whole, leftmost first. A `<!--` inside
+ * any of them never opens a comment, and nothing inside a blanked token can be credited as a route (Root on 16c45cff).
  *
  * LINKS ARE NOT PARSED, ON PURPOSE. Link destinations and titles, reference definitions and bracket nesting are left
  * to the comment rule: a `<!--` inside a link title still opens a comment when a `-->` follows in the paragraph. That
@@ -188,10 +199,16 @@ function maskInlineComments(text, blank) {
           continue;
         }
       } else {
-        const m = INLINE_RAW.map((re) => re.exec(rest)).find(Boolean);
-        if (m) {
-          out += m[0];
-          i += m[0].length;
+        const link = AUTOLINKS.map((re) => re.exec(rest)).find(Boolean);
+        if (link) {
+          out += link[0];
+          i += link[0].length;
+          continue;
+        }
+        const raw = RAW_HTML.map((re) => re.exec(rest)).find(Boolean);
+        if (raw) {
+          out += blank(raw[0]);
+          i += raw[0].length;
           continue;
         }
       }

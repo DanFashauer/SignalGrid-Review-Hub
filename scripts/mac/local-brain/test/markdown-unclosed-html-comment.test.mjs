@@ -171,7 +171,8 @@ test('an inline tag alone on a line cannot interrupt a paragraph (type 7), so th
   const input = 'para [a](docs/A.md)\n<span>\n[b](docs/B.md)\n';
   const out = maskNonProse(input);
   assertShape(input, out);
-  assert.equal(out, input);
+  // Both routes stay prose; the inline tag itself is markup and is blanked (Root on 16c45cff).
+  assert.equal(out, 'para [a](docs/A.md)\n      \n[b](docs/B.md)\n');
 });
 
 test('a closed inline comment spanning lines inside one paragraph is still masked', () => {
@@ -658,3 +659,45 @@ for (const [name, input] of [
     assert.ok(!out.includes('docs/V.md'), `expected the conservative mask: ${JSON.stringify(out)}`);
   });
 }
+
+// 15. Root on 16c45cff. (1) A recognized raw-HTML token is markup, never prose: it is blanked whole, so a comment or
+//     route inside a tag attribute, processing instruction, declaration or CDATA section is never credited, while the
+//     genuine route beside it stays. (2) cmark-gfm's whitespace is ASCII only: an NBSP does not make `<!FOO` a
+//     declaration, so the comment after it is masked.
+for (const [name, input] of [
+  ['a tag attribute', 'x <span title="<!-- [hidden](docs/H.md) -->"> [visible](docs/V.md)\n'],
+  ['a closing-tag neighbour', 'x </span> <!-- [hidden](docs/H.md) --> [visible](docs/V.md)\n'],
+  ['a processing instruction', 'x <?p <!-- [hidden](docs/H.md) --> ?> [visible](docs/V.md)\n'],
+  ['a declaration', 'x <!FOO a <!-- [hidden](docs/H.md) --> > [visible](docs/V.md)\n'],
+  ['a CDATA section', 'x <![CDATA[ <!-- [hidden](docs/H.md) --> ]]> [visible](docs/V.md)\n'],
+  ['an NBSP that does not make a declaration', 'x <!FOO <!-- [hidden](docs/H.md) --> [visible](docs/V.md)\n'],
+  ['an NBSP that does not make a tag attribute', 'x <span a="<!-- [hidden](docs/H.md) -->"> [visible](docs/V.md)\n'],
+  ['a route inside a tag attribute with no comment', 'x <span title="[hidden](docs/H.md)"> [visible](docs/V.md)\n'],
+]) {
+  for (const treatUnclosedAsFence of [true, false]) {
+    test(`raw HTML: hidden route masked inside ${name}, visible route kept (treatUnclosedAsFence=${treatUnclosedAsFence})`, () => {
+      const out = maskNonProse(input, { treatUnclosedAsFence });
+      assertShape(input, out);
+      assert.equal(out.length, input.length);
+      assert.ok(!out.includes('docs/H.md'), `hidden route kept: ${JSON.stringify(out)}`);
+      assert.ok(out.includes('[visible](docs/V.md)'), `route lost: ${JSON.stringify(out)}`);
+    });
+  }
+}
+
+for (const [name, input] of [
+  ['an ASCII-tab declaration', 'x <!FOO\tbar> [visible](docs/V.md)\n'],
+  ['a tag with an attribute split over a line', 'x <span\n  title="t"> [visible](docs/V.md)\n'],
+  ['a URI autolink', 'x <https://example.com/a> [visible](docs/V.md)\n'],
+]) {
+  test(`raw HTML positive: ${name} keeps the route beside it`, () => {
+    const out = maskNonProse(input);
+    assertShape(input, out);
+    assert.ok(out.includes('[visible](docs/V.md)'), `route lost: ${JSON.stringify(out)}`);
+  });
+}
+
+test('raw HTML positive: a URI autolink is kept as text, not blanked', () => {
+  const input = 'see <https://example.com/a> here\n';
+  assert.equal(maskNonProse(input), input);
+});

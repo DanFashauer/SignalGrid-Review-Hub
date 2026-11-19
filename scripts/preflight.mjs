@@ -97,6 +97,11 @@ const STEPS = [
   // gate stays green and the image build dies on `pnpm install`. Reads two text files.
   { name: "Docker carries every install-hook entrypoint", cmd: ["node", "scripts/check-docker-lifecycle-copy.mjs"] },
   { name: "Branch-prune exact-tip regression (real CLI and name-only deletion mutants)", cmd: ["node", "scripts/check-pruner-exact-ref.mjs"] },
+  { name: "Loop-state seam self-test (squash-of-a-merge-tree, whitespace twin and same-name-ahead fixtures can fail)", cmd: ["node", "scripts/loop-state.mjs", "--self-test"] },
+  { name: "Lane delivery (protected PR topics and one-attempt readback)", cmd: ["node", "scripts/check-lane-delivery.mjs"] },
+  { name: "Lane original push (raw terminal and strict refusal unit)", cmd: ["node", "scripts/check-lane-push.mjs"] },
+  { name: "Lane heartbeat mismatch (real uncertainty route, no refusal authority)", cmd: ["node", "scripts/check-lane-mismatch.mjs"] },
+  { name: "Lane readback (bounded cadence and exact durable observations)", cmd: ["node", "scripts/check-lane-readback.mjs"] },
   { name: "Invariant review self-test (a default-less switch / stray clock read must fail)", cmd: ["node", "scripts/review-invariants.mjs", "--self-test"] },
   { name: "Invariant review (fail-closed / determinism / Assist / truth)", cmd: ["node", "scripts/review-invariants.mjs"] },
   { name: "Clock-spelling matcher mutation guard (every listed mutant of the shared matcher must fail its self-test)", cmd: ["node", "scripts/clock-spellings-mutants.mjs"] },
@@ -598,14 +603,7 @@ const STEPS = [
   { name: "Action pinning self-test (the gate can actually fail)", cmd: ["node", "scripts/check-action-pinning.mjs", "--self-test"] },
   { name: "Scheduled routines self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-scheduled-routines.mjs", "--self-test"] },
   { name: "Scheduled routines (every always-on lane declared, authorized, scoped, evidenced)", cmd: ["node", "scripts/check-scheduled-routines.mjs"] },
-  { name: "Lane delivery (protected PR topics and one-attempt readback)", cmd: ["node", "scripts/check-lane-delivery.mjs"] },
-  { name: "Lane original push (raw terminal and strict refusal unit)", cmd: ["node", "scripts/check-lane-push.mjs"] },
-  { name: "Lane heartbeat mismatch (real uncertainty route, no refusal authority)", cmd: ["node", "scripts/check-lane-mismatch.mjs"] },
   { name: "Lane fixture snapshot (exact filesystem descriptor binding)", cmd: ["node", "scripts/check-lane-lease-tree.mjs"] },
-  { name: "Lane repair (original uncertainty DATA and owned notification)", cmd: ["node", "scripts/check-lane-repair.mjs"] },
-  { name: "Lane repair callers (durable handoff and current tick ownership)", cmd: ["node", "scripts/check-lane-repair-callers.mjs"] },
-  { name: "Lane repair bounds (fair cursor and healthy hand suppression)", cmd: ["node", "scripts/check-lane-repair-bounds.mjs"] },
-  { name: "Lane readback (bounded cadence and exact durable observations)", cmd: ["node", "scripts/check-lane-readback.mjs"] },
   { name: "Lane heartbeat self-refresh (own behind PR only, pinned head, verified)", cmd: ["node", "scripts/check-lane-heartbeat-refresh.mjs"] },
   { name: "Lab registry self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-lab-registry.mjs", "--self-test"] },
   { name: "Lab source collections are declared, openable, read-only and parseable", cmd: ["node", "scripts/check-lab-collections.mjs"] },
@@ -618,7 +616,6 @@ const STEPS = [
   { name: "Task routing self-test (the gate can actually fail)", cmd: ["node", "scripts/check-task-routing.mjs", "--self-test"] },
   { name: "Backlog ownership (a row with work left in it names the role that owns it)", cmd: ["node", "scripts/check-backlog-ownership.mjs"] },
   { name: "Backlog ownership self-test (the gate can actually fail)", cmd: ["node", "scripts/check-backlog-ownership.mjs", "--self-test"] },
-  { name: "Loop-state seam self-test (squash-of-a-merge-tree, whitespace twin and same-name-ahead fixtures can fail)", cmd: ["node", "scripts/loop-state.mjs", "--self-test"] },
   { name: "Raised-hands monitor self-test (DR-054 routing + gap detection must work)", cmd: ["node", "scripts/check-raised-hands.mjs", "--self-test"] },
   { name: "Raised hands schema (every hand file has its fields, a valid status/unblocker, id == filename)", cmd: ["node", "scripts/check-raised-hands.mjs"] },
   { name: "Backlog evidence (a row that says DONE says how you'd check)", cmd: ["node", "scripts/check-backlog-evidence.mjs"] },
@@ -688,6 +685,9 @@ const STEPS = [
   { name: "OpenAPI contract check (proof:api-contract)", cmd: ["pnpm", "run", "proof:api-contract"] },
   { name: "Proof: api-client-react (the web client's fetch boundary refuses what it cannot vouch for)", cmd: ["pnpm", "run", "proof:api-client-react"] },
   { name: "API integration test (boots the server)", cmd: ["pnpm", "run", "test:api"] },
+  { name: "Lane repair (original uncertainty DATA and owned notification)", cmd: ["node", "scripts/check-lane-repair.mjs"] },
+  { name: "Lane repair callers (durable handoff and current tick ownership)", cmd: ["node", "scripts/check-lane-repair-callers.mjs"] },
+  { name: "Lane repair bounds (fair cursor and healthy hand suppression)", cmd: ["node", "scripts/check-lane-repair-bounds.mjs"] },
   // The review console's own node:test suite (policy-test-set status, facility-graph layout);
   // the test-execution gate refused these files while nothing reached them.
   { name: "Console + PWA unit tests (policyTests, facilityGraphLayout, outcomeTone, signal-tone)", cmd: ["pnpm", "run", "test:console"] },
@@ -838,6 +838,7 @@ const STEPS = [
   },
   { name: "Shared build-regression runner self-test (hash, case-count, counter-forgery, symlink and discovery defects must fail)", cmd: ["node", "scripts/check-local-build-regressions.mjs", "--self-test"] },
   { name: "Changed regression targets vs canonical (shared runner; an empty diff is not proof a build's regression ran)", cmd: ["node", "scripts/check-local-build-regressions.mjs", "--changed", "--base-optional"] },
+  { name: "Local-brain regression suite (shared runner; every tracked build regression keeps running after it lands)", cmd: ["node", "scripts/check-local-build-regressions.mjs", "--suite", "scripts/mac/local-brain/test"] },
 ];
 
 // Is the native web build structurally impossible here? Derived from the committed

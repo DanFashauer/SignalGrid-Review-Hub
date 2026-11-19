@@ -1249,3 +1249,73 @@ test('lazy underlines, outside lists and marker-line blocks agree with markdown-
   }
   assert.equal(checked, (4 * 5 * 3 + 2 * 5 + 5 * 5 * 3) * 2);
 });
+
+// 29. Root on 9b440af2 (#2368, 7019712976), plus a case differential fuzzing found beside them. An empty list marker
+//     or an ordered list off 1 interrupts a paragraph only inside the paragraph's own container; outside it the
+//     paragraph has already ended. A block opened on a marker line owns the item's later lines through internal
+//     blank lines until its end marker (types 6 and 7 end at the blank). A container line holding only a thematic
+//     break or a heading (`* ---`, `> ---`) holds no paragraph. Exact literals first, then bounded families judged
+//     against markdown-it 14 in both directions; both fence options; shape checked.
+for (const treatUnclosedAsFence of [true, false]) {
+  for (const [name, input, route, kept] of [
+    ['an empty `2.` outside a quoted paragraph starts a list, so the backtick pair does not span it', '> `\n> [V](docs/V.md)\n2.\n`\n', 'docs/V.md', true],
+    ['a comment inside a fence opened on a marker line stays hidden across blank lines', '- ```\n\n  <!--\n\n  [H](docs/H.md)\n  -->\n  ```\n', 'docs/H.md', false],
+    ['a thematic break in a list item or quote holds no paragraph, so `3)` cannot interrupt the next one', '* ---\n>  ---\n`\n3) <script>\n    [L](docs/L.md)\n', 'docs/L.md', true],
+  ]) {
+    test(`Root 9b440af2 literal: ${name} (treatUnclosedAsFence=${treatUnclosedAsFence})`, () => {
+      const out = maskNonProse(input, { treatUnclosedAsFence });
+      assertShape(input, out);
+      assert.equal(out.includes(route), kept, `route ${kept ? 'lost' : 'leaked'}: ${JSON.stringify(out)}`);
+    });
+  }
+}
+test('empty markers, marker-line blocks with blank lines, and container thematic breaks agree with markdown-it', async () => {
+  const { default: MarkdownIt } = await import('markdown-it');
+  const md = new MarkdownIt('commonmark');
+  const docs = [];
+  // Inside and outside a quoted paragraph, then inside and outside an item's paragraph.
+  for (const q of ['> `\n> [R](docs/R.md)\n', '> a `\n> [R](docs/R.md)\n']) for (const m of ['2.', '-', '1.', '*', '3)', '2. x']) for (const inside of [false, true]) {
+    docs.push({ input: `${q}${inside ? '> ' : ''}${m}\n${inside ? '> ' : ''}\`\n` });
+  }
+  for (const p of ['- a `\n  [R](docs/R.md)\n', '1. a `\n   [R](docs/R.md)\n']) for (const m of ['2.', '-', '1.']) for (const ind of ['', '  ', '   ']) {
+    docs.push({ input: `${p}${ind}${m}\n${ind}\`\n` });
+  }
+  // A block opened on a marker line, with and without internal blank lines.
+  for (const mk of ['- ', '1. ', '-\t']) for (const open of ['```', '~~~', '<script>', '<pre>', '<!--']) {
+    const c = mk === '1. ' ? '   ' : mk === '-\t' ? '    ' : '  ';
+    const close = open === '```' ? '```' : open === '~~~' ? '~~~' : open === '<!--' ? '-->' : `</${open.slice(1)}`;
+    for (const gap of ['\n', '\n\n']) for (const inner of ['<!--', '[R](docs/R.md)']) {
+      docs.push({ input: `${mk}${open}${gap}${c}${inner}${gap}${c}[R](docs/R.md)\n${c}${inner === '<!--' ? '-->\n' : ''}${c}${close}\n[R](docs/R.md)\n` });
+    }
+  }
+  // Types 6 and 7 opened on a marker line end at the first blank line.
+  for (const mk of ['- ', '1. ', '-\t', '* ']) for (const open of ['<div>', '<table>', '<span>', '<a href="x">', '</p>']) {
+    const c = mk === '1. ' ? '   ' : mk === '-\t' ? '    ' : '  ';
+    for (const mid of ['', `${c}text\n`]) docs.push({ input: `${mk}${open}\n${mid}\n${c}[R](docs/R.md)\n${c}<!--\n\n${c}[R](docs/R.md)\n` });
+  }
+  // A marker that cannot interrupt inside its paragraph's container opens an item outside it.
+  for (const q of ['> a', '> a `', '- a', '1. a']) for (const m of ['2.', '-', '3)', '*']) for (const [same, ind] of [[true, ''], [false, '   '], [false, '    ']]) {
+    for (const block of ['<div>', '<!--', '```', '<script>']) {
+      // With the unclosed-fence option the top-level fence scan reads an item's lone ``` as an unclosed opener and
+      // masks the rest, as on canonical: more masked, never less, so only the leak direction is held there.
+      docs.push({ input: `${q}\n${m}${same ? ' ' : `\n${ind}`}${block}\n   [R](docs/R.md)\n\n[R](docs/R.md)\n`, fenceOnlyLeak: block === '```' });
+    }
+  }
+  // A container line holding only a thematic break or a heading.
+  for (const lead of ['* ---', '> ---', '>  ---', '- ***', '1. ___', '- # h', '> # h', '* ---\n> ---']) {
+    for (const tail of ['`\n3) <script>\n    [R](docs/R.md)\n', '`\n2. <div>\n[R](docs/R.md)\n', 'a `\n10. <pre>\n[R](docs/R.md)\n`\n']) docs.push({ input: `${lead}\n${tail}` });
+  }
+  let checked = 0;
+  for (const { input, fenceOnlyLeak } of docs) {
+    const links = md.render(input).split('href="docs/R.md"').length - 1;
+    for (const treatUnclosedAsFence of [true, false]) {
+      const out = maskNonProse(input, { treatUnclosedAsFence });
+      assertShape(input, out);
+      const kept = out.split('docs/R.md').length - 1;
+      assert.ok(kept <= links, `route kept that markdown-it does not render (${kept} > ${links}): ${JSON.stringify(input)}`);
+      if (!(fenceOnlyLeak && treatUnclosedAsFence)) assert.ok(kept >= links, `rendered route masked (${kept} < ${links}): ${JSON.stringify(input)}`);
+      checked += 1;
+    }
+  }
+  assert.equal(checked, (2 * 6 * 2 + 2 * 3 * 3 + 3 * 5 * 2 * 2 + 4 * 5 * 2 + 4 * 4 * 3 * 4 + 8 * 3) * 2);
+});

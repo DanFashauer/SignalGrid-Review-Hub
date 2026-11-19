@@ -350,7 +350,7 @@ function containerRun(lines, interrupted, outer = []) {
         // Only a list inside the paragraph's own container must start at 1 to interrupt it; once a container
         // has failed to match, the paragraph is not in the matched container and any start number opens a list
         // (cmark-gfm blocks.c tests the last matched container; Codex on 41cf68c6).
-        const canInterrupt = !empty && (lm[1] !== undefined || Number(lm[2]) === 1 || !allMatched);
+        const canInterrupt = !allMatched || (!empty && (lm[1] !== undefined || Number(lm[2]) === 1));
         if (!(continuing && !canInterrupt)) {
           const markerEnd = pos + indent + lm[0].length;
           const col = empty || pad >= 5 ? markerEnd + 1 : markerEnd + pad;
@@ -633,19 +633,26 @@ function blockRanges(lines, treatUnclosedAsFence, judgeDefinitions) {
     const text0 = expandTabs(content(lines[i]));
     let contentAt = 0; // column after any list markers opened on this line
     if (markerLeaf) {
-      if (isBlank(text0)) {
-        if (markerLeaf.kind === "html" && !markerLeaf.end) markerLeaf = null;
-      } else if (indentColumns(text0) < markerLeaf.col) markerLeaf = null;
+      // Its lines are claimed here as opaque, blank lines inside it included, so a comment or route inside the
+      // block is masked even when the container model's run would stop at a blank (Root on 9b440af2).
+      const close = (end) => {
+        if (end >= markerLeaf.start) out.push({ kind: "html", start: markerLeaf.start, end, closed: true, col: 0 });
+        markerLeaf = null;
+      };
+      if (isBlank(text0) && markerLeaf.kind === "html" && !markerLeaf.end) close(i - 1);
+      else if (!isBlank(text0) && indentColumns(text0) < markerLeaf.col) close(i - 1);
       else {
         const inside = text0.slice(markerLeaf.col);
         const ends =
-          markerLeaf.kind === "html"
+          !isBlank(text0) &&
+          (markerLeaf.kind === "html"
             ? Boolean(markerLeaf.end) && endAfter(inside, markerLeaf.end, 0) >= 0
-            : closesFence(inside, { char: markerLeaf.ch, len: markerLeaf.len });
-        if (ends) markerLeaf = null;
+            : closesFence(inside, { char: markerLeaf.ch, len: markerLeaf.len }));
         itemCol[i] = items.length ? items[items.length - 1] : 0;
         itemStack[i] = items.slice();
         inParagraph = false;
+        if (ends) close(i);
+        else if (i === lines.length - 1) close(i);
         continue;
       }
     }
@@ -668,7 +675,7 @@ function blockRanges(lines, treatUnclosedAsFence, judgeDefinitions) {
         const after = rest.slice(ind + lm[0].length);
         const empty = /^ *$/.test(after);
         const outside = paraQuote || (paraItemCol > 0 && indent < paraItemCol);
-        if (inParagraph && pos === 0 && (empty || (lm[2] !== undefined && Number(lm[2]) !== 1 && !outside))) break;
+        if (inParagraph && pos === 0 && !outside && (empty || (lm[2] !== undefined && Number(lm[2]) !== 1))) break;
         const pad = indentColumns(after);
         const markerEnd = pos + ind + lm[0].length;
         const col = empty || pad >= 5 ? markerEnd + 1 : markerEnd + pad;
@@ -682,8 +689,8 @@ function blockRanges(lines, treatUnclosedAsFence, judgeDefinitions) {
         const first = text0.slice(pos);
         const hm = htmlBlockStart(first, false);
         const fo = hm ? null : fenceOpener(first);
-        if (hm && !(hm.end && endAfter(first, hm.end, hm.col + (hm.type === 2 ? 2 : 1)) >= 0)) markerLeaf = { kind: "html", end: hm.end, col: pos };
-        else if (fo) markerLeaf = { kind: "fence", ch: fo.char, len: fo.len, col: pos };
+        if (hm && !(hm.end && endAfter(first, hm.end, hm.col + (hm.type === 2 ? 2 : 1)) >= 0)) markerLeaf = { kind: "html", end: hm.end, col: pos, start: i + 1 };
+        else if (fo) markerLeaf = { kind: "fence", ch: fo.char, len: fo.len, col: pos, start: i + 1 };
       }
     } else {
       itemCol[i] = items.length ? items[items.length - 1] : 0;
@@ -752,7 +759,10 @@ function blockRanges(lines, treatUnclosedAsFence, judgeDefinitions) {
     // open); a blank line does too. An indented code line (four columns or more, §4.4) cannot start one — inside an
     // open paragraph it is only a lazy continuation. Anything else non-blank continues or starts one.
     const text = content(lines[i]);
-    if (isBlank(text) || ATX_HEADING.test(text) || THEMATIC_BREAK.test(text)) inParagraph = false;
+    // Read past this line's list markers and block-quote markers too: `* ---` and `> ---` hold a thematic break,
+    // not paragraph text, so a following line starts a fresh paragraph outside them (differential fuzzing).
+    const inner = text0.slice(contentAt).replace(/^(?: {0,3}> ?)+/, "");
+    if (isBlank(text) || ATX_HEADING.test(text) || THEMATIC_BREAK.test(text) || THEMATIC_BREAK.test(inner) || ATX_HEADING.test(inner)) inParagraph = false;
     else if (
       inParagraph &&
       SETEXT_UNDERLINE.test(text) &&

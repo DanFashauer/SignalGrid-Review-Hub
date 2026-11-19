@@ -884,7 +884,11 @@ export function maskNonProse(text, { treatUnclosedAsFence = true } = {}) {
       const interrupted = inPara && !paraBoxed && PARAGRAPH_INTERRUPT.test(text);
       // A paragraph that begins in a container is modelled the same way from its first line (Root on 1f3ff8aa: a
       // later container line ends it as surely as one that interrupts a plain paragraph).
-      if (interrupted || (!inPara && CONTAINER_START.test(text))) {
+      // So is one that begins inside a list item already open above it, with no marker of its own (Root on
+      // 8af77af2: `- # hi`, blank, `    a \``, then a dedented `2. b` is outside that paragraph's item, so the
+      // backtick cannot pair across it).
+      const enclosed = !inPara && (blocks.itemStack[i]?.length ?? 0) > 0;
+      if (interrupted || (!inPara && CONTAINER_START.test(text)) || enclosed) {
         let r = i;
         while (r + 1 < lines.length && segment[r + 1] === -1 && !isBlank(content(lines[r + 1]))) r += 1;
         const ids = containerRun(source.slice(i, r + 1), interrupted, blocks.itemStack[i] ?? []);

@@ -89,3 +89,46 @@ test('preserved: closed backtick and tilde fences, closed comments, single-backt
   const plain = 'no opener here [l](docs/L.md)\nsecond line\n';
   assert.equal(maskNonProse(plain), plain);
 });
+
+// ---- Block precedence (Codex on #2368): whichever of an HTML comment block or a fence starts FIRST owns its
+// lines, decided on the original input. Masking fences first erased a closed comment's `-->` and made it look
+// unclosed, which blanked every later link.
+
+test('a closed comment holding a fence marker, then a real fence, leaves the later link visible (Codex P2)', () => {
+  const input = '<!--\n~~~~\n-->\n~~~\nexample\n~~~~\n[visible](docs/V.md)\n';
+  const out = maskNonProse(input);
+  assertShape(input, out);
+  const lines = out.split('\n');
+  assert.equal(lines[6], '[visible](docs/V.md)', `link lost: ${JSON.stringify(out)}`);
+  assert.equal(lines.slice(0, 6).join('').trim(), '', `comment or fence leaked: ${JSON.stringify(out)}`);
+});
+
+test('a closed comment holding an unpaired fence marker does not open a fence that swallows later prose', () => {
+  const input = '<!--\n```\n-->\n[link](docs/L.md)\n';
+  const out = maskNonProse(input);
+  assertShape(input, out);
+  assert.equal(out.split('\n')[3], '[link](docs/L.md)', `link lost: ${JSON.stringify(out)}`);
+});
+
+test('a single-line <!--> and <!---> are closed comment blocks', () => {
+  for (const opener of ['<!-->', '<!--->']) {
+    const input = `${opener}\n[l](docs/L.md)\n`;
+    const out = maskNonProse(input);
+    assertShape(input, out);
+    assert.equal(out.split('\n')[1], '[l](docs/L.md)', `${opener}: link lost: ${JSON.stringify(out)}`);
+  }
+});
+
+test('text after a block comment closer on its last line stays visible', () => {
+  const input = '<!-- a\nb --> tail [t](docs/T.md)\n';
+  const out = maskNonProse(input);
+  assertShape(input, out);
+  assert.equal(out, ' '.repeat(6) + '\n' + ' '.repeat(5) + ' tail [t](docs/T.md)\n');
+});
+
+test('treatUnclosedAsFence:false: a stray unclosed fence does not hide a later unclosed comment block', () => {
+  const input = 'a\n```\n<!-- x\n[l](docs/A.md)\n';
+  const out = maskNonProse(input, {treatUnclosedAsFence: false});
+  assertShape(input, out);
+  assert.ok(!out.includes('docs/A.md'), `hidden link leaked: ${JSON.stringify(out)}`);
+});

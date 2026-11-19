@@ -559,3 +559,12 @@ block; a stage run on the wrong tier is a lesson here.
 - **evidence:** preflight3.log ends with "Preflight FAILED at: Scratch-repo self-tests spawn git through one hermetic helper. Fix before pushing." and "exit 1". The self-test now builds its disposable repositories through the shared scratchGit helper, and the runner's own git calls scrub the repository-location variables. Preflight run 4 on that source ended with "Preflight PASSED — everything it runs is green." and "exit 0". Neither the gate nor its pending list changed.
 - **landing:** pending — the shared-runner PR is not merged; its final-head gates, CI with the four Mac slices and aggregate, the Mac qualification and the protected landing are all still owed.
 - **status:** pending
+
+
+### L62 — Bind publisher preparation to the original task scope
+- **date:** 2026-11-18
+- **lane:** mac
+- **incident:** #2317 reached review, but initial publisher preparation added executable code, CI wiring and global journals beyond the original code/test scope. Genuine source privacy rejected the preparation before any push.
+- **evidence:** #439 comment 6971551694 records the refusal; #2326 and canonical merge 4506e3730144dfe792714bc570a9191786369084 record the shared regression runner that replaces those per-job additions.
+- **landing:** pending — the shared helper is canonical; separately qualify the future adapter repair and verify ordinary automatic publication, complete current-head CI, protected delivery and a later default cycle.
+- **status:** pending

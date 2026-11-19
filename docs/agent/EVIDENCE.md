@@ -5636,3 +5636,21 @@ Output, verbatim:
 ```
 
 Verdict: #2300 merged from exact head `b79d68587d3ef8a85506d540ae2c3f730f8b3720` as `0a406e66a95f6ced21fa75c00f723e67234aaab3`, with parents `aab5f85f` and that head and tree `a62a1cda`. That merge is an ancestor of canonical `c45c0e5b` with behind_by 0. Both named check runs succeeded on the exact head. The public journal for #2300 is closed by this entry. The private journal stays Root-owned and is not asserted here. Independent operation remains unverified.
+
+## 2026-11-18 — #2326 (4506e373) landed under DR-037: shared local-build regression runner and Intel Mac slices
+
+Cloud merged #2326 under DR-037 at 21:50:11Z with `expectedHeadSha` `f2672f41590c4422022c8dcb35b5aec07d8f1c7d`, after re-reading the head. Before the merge: all 25 current check runs had completed and none had failed; all 4 review threads were resolved; mergeable state was clean; and the branch contained canonical `fb5e5a2d`. Local `node scripts/preflight.mjs` and `pnpm run verify:breadth` ran on code head `315c3cf269340fbb860cb99c3fd8af4b109273dd` and both exited 0 (PF_EXIT=0, 446 ok; BR_EXIT=0). The only change from that head to `f2672f41` was a merge of mainline that brought in a heartbeat timestamp (#439 comment 6991625110). The owner's allowance (6984031076) covers that heartbeat-only catch-up. The four Mac slices ran on `macos-26-intel` in run 44397749988, attempt 1. The physical ARM64 receipt for this head came from the Mac lane: 150 passed, 0 failed, 13 skipped; helper 86/86; tick-stages 354/354 (#439 comment 6991829127). With the slices on Intel, that Mac-lane receipt is the only ARM64 run of a PR head.
+
+Command: GitHub REST GETs run by the cloud lane at 2026-11-18T21:56:18Z, reduced to the fields shown: `pulls/2326`, `git/ref/heads/SignalGrid_Alpha`, `commits/4506e373…`, `commits/f2672f41…`, `check-runs/135139565366` and `check-runs/135156586976`.
+Output, verbatim:
+
+```
+{"base":"SignalGrid_Alpha","head":"f2672f41590c4422022c8dcb35b5aec07d8f1c7d","merge_commit_sha":"4506e3730144dfe792714bc570a9191786369084","merged":true,"merged_at":"2026-11-18T21:50:11Z","number":2326,"state":"closed"}
+{"ref":"refs/heads/SignalGrid_Alpha","sha":"4506e3730144dfe792714bc570a9191786369084"}
+{"parents":["fb5e5a2d09f881c23c567e9809498c3fe5baf5cf","f2672f41590c4422022c8dcb35b5aec07d8f1c7d"],"sha":"4506e3730144dfe792714bc570a9191786369084","tree":"37cec42abc3a37443de7b2f64e689bdcc1b47613"}
+{"sha":"f2672f41590c4422022c8dcb35b5aec07d8f1c7d","tree":"37cec42abc3a37443de7b2f64e689bdcc1b47613"}
+{"conclusion":"success","head_sha":"f2672f41590c4422022c8dcb35b5aec07d8f1c7d","id":135139565366,"name":"Typecheck, build, and proof scaffold"}
+{"conclusion":"success","head_sha":"f2672f41590c4422022c8dcb35b5aec07d8f1c7d","id":135156586976,"name":"PR — Mac-only checks (full-clone provenance, preflight on macOS)"}
+```
+
+Verdict: #2326 merged from exact head `f2672f41` as `4506e3730144dfe792714bc570a9191786369084`, with parents `fb5e5a2d` and that head. The merge's tree `37cec42a` equals the head's tree. Both named check runs succeeded on the exact head. Follow-ups, not done here: the aggregate's partial-rerun defect; showing a discovery SKIPPED as distinct from ok; scrubbing the environment for test children; and a check-then-run window in the runner. Root's private adapter, an ordinary automatic publication and a later default cycle are still owed. Independent operation remains unverified.

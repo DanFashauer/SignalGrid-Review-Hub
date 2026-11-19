@@ -347,7 +347,10 @@ function containerRun(lines, interrupted, outer = []) {
         const pad = indentColumns(after);
         // Blank is spaces and tabs only (an NBSP is content), as for blank lines.
         const empty = /^ *$/.test(after);
-        const canInterrupt = !empty && (lm[1] !== undefined || Number(lm[2]) === 1);
+        // Only a list inside the paragraph's own container must start at 1 to interrupt it; once a container
+        // has failed to match, the paragraph is not in the matched container and any start number opens a list
+        // (cmark-gfm blocks.c tests the last matched container; Codex on 41cf68c6).
+        const canInterrupt = !empty && (lm[1] !== undefined || Number(lm[2]) === 1 || !allMatched);
         if (!(continuing && !canInterrupt)) {
           const markerEnd = pos + indent + lm[0].length;
           const col = empty || pad >= 5 ? markerEnd + 1 : markerEnd + pad;
@@ -615,9 +618,37 @@ function blockRanges(lines, treatUnclosedAsFence, judgeDefinitions) {
   out.itemStack = itemStack;
   let inParagraph = false;
   let paraStart = -1;
+  // The container the open paragraph began in: a block quote, or the content column of its innermost list item.
+  // A line outside that container can only continue the paragraph lazily, so it is never a setext underline
+  // (`- a` then `===` is paragraph text; Codex on 41cf68c6) and an ordered list on it may start at any number.
+  let paraQuote = false;
+  let paraItemCol = 0;
   const leaves = (start, col) => (k) => col > 0 && !isBlank(lines[k]) && indentColumns(expandTabs(content(lines[k]))) < col;
+  // An HTML block or fence opened on a list item's own marker line (`1.<tab><script>`, `- \`\`\``). Its later lines
+  // inside the item are that block's content, so nothing in them starts a new block here; the container model
+  // below masks them. It ends at its end marker, a blank line (types 6 and 7), or the item's end (Codex-class
+  // case found by differential fuzzing on 41cf68c6).
+  let markerLeaf = null;
   for (let i = 0; i < lines.length; i += 1) {
     const text0 = expandTabs(content(lines[i]));
+    let contentAt = 0; // column after any list markers opened on this line
+    if (markerLeaf) {
+      if (isBlank(text0)) {
+        if (markerLeaf.kind === "html" && !markerLeaf.end) markerLeaf = null;
+      } else if (indentColumns(text0) < markerLeaf.col) markerLeaf = null;
+      else {
+        const inside = text0.slice(markerLeaf.col);
+        const ends =
+          markerLeaf.kind === "html"
+            ? Boolean(markerLeaf.end) && endAfter(inside, markerLeaf.end, 0) >= 0
+            : closesFence(inside, { char: markerLeaf.ch, len: markerLeaf.len });
+        if (ends) markerLeaf = null;
+        itemCol[i] = items.length ? items[items.length - 1] : 0;
+        itemStack[i] = items.slice();
+        inParagraph = false;
+        continue;
+      }
+    }
     if (!isBlank(text0)) {
       const indent = indentColumns(text0);
       let matched = 0;
@@ -636,7 +667,8 @@ function blockRanges(lines, treatUnclosedAsFence, judgeDefinitions) {
         if (!lm) break;
         const after = rest.slice(ind + lm[0].length);
         const empty = /^ *$/.test(after);
-        if (inParagraph && pos === 0 && (empty || (lm[2] !== undefined && Number(lm[2]) !== 1))) break;
+        const outside = paraQuote || (paraItemCol > 0 && indent < paraItemCol);
+        if (inParagraph && pos === 0 && (empty || (lm[2] !== undefined && Number(lm[2]) !== 1 && !outside))) break;
         const pad = indentColumns(after);
         const markerEnd = pos + ind + lm[0].length;
         const col = empty || pad >= 5 ? markerEnd + 1 : markerEnd + pad;
@@ -644,6 +676,14 @@ function blockRanges(lines, treatUnclosedAsFence, judgeDefinitions) {
         items.push(col);
         pos = col;
         if (empty) break;
+      }
+      contentAt = pos;
+      if (pos > 0) {
+        const first = text0.slice(pos);
+        const hm = htmlBlockStart(first, false);
+        const fo = hm ? null : fenceOpener(first);
+        if (hm && !(hm.end && endAfter(first, hm.end, hm.col + (hm.type === 2 ? 2 : 1)) >= 0)) markerLeaf = { kind: "html", end: hm.end, col: pos };
+        else if (fo) markerLeaf = { kind: "fence", ch: fo.char, len: fo.len, col: pos };
       }
     } else {
       itemCol[i] = items.length ? items[items.length - 1] : 0;
@@ -713,10 +753,21 @@ function blockRanges(lines, treatUnclosedAsFence, judgeDefinitions) {
     // open paragraph it is only a lazy continuation. Anything else non-blank continues or starts one.
     const text = content(lines[i]);
     if (isBlank(text) || ATX_HEADING.test(text) || THEMATIC_BREAK.test(text)) inParagraph = false;
-    else if (inParagraph && SETEXT_UNDERLINE.test(text) && !(judgeDefinitions && allReferenceDefinitions(lines.slice(paraStart, i)))) inParagraph = false;
+    else if (
+      inParagraph &&
+      SETEXT_UNDERLINE.test(text) &&
+      !(paraQuote || (paraItemCol > 0 && indentColumns(expandTabs(text)) < paraItemCol)) &&
+      !(judgeDefinitions && allReferenceDefinitions(lines.slice(paraStart, i)))
+    )
+      inParagraph = false;
     else if (!inParagraph && indentColumns(text) >= 4) inParagraph = false;
     else {
-      if (!inParagraph) paraStart = i;
+      if (!inParagraph) {
+        paraStart = i;
+        // A quote opened after this line's list markers (`- > a`) also holds the paragraph.
+        paraQuote = /^ {0,3}>/.test(text) || /^ {0,3}>/.test(text0.slice(contentAt));
+        paraItemCol = items.length ? items[items.length - 1] : 0;
+      }
       inParagraph = true;
     }
   }

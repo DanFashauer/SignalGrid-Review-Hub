@@ -1200,3 +1200,52 @@ test('list, quote and code boundaries agree with markdown-it for hidden and visi
   }
   assert.equal(checked, (4 * 10 * 2 * 4 + 3 * 4 + 3 * 2 + 2 * 4 * 3) * 2);
 });
+
+// 28. Codex on 41cf68c6 (#2368 review 5981550142), plus a case differential fuzzing found beside them. A line outside
+//     the paragraph's container only continues it lazily: an unindented `===` after `- a` is paragraph text, not a
+//     setext underline, and an ordered list outside a quote may start at any number. A block opened on a list
+//     item's own marker line (`1.<tab><script>`) owns the item's later lines until it ends. Exact literals first,
+//     then a bounded family judged against markdown-it 14 in both directions; both fence options; shape checked.
+for (const treatUnclosedAsFence of [true, false]) {
+  for (const [name, input] of [
+    ['a lazy `===` after a list item does not end its paragraph (4633725280)', '- a\n===\n<span>\n[V](docs/V.md)\n'],
+    ['an ordered list at 2 after a quote ends the quoted paragraph (4633725287)', '> `\n> [V](docs/V.md)\n2. a\n`\n'],
+    ['a block opened on a tab-padded marker line owns the item, so a later `<?x` starts nothing', '1.\t<script>\n\t<?x\n    </script>\n    [V](docs/V.md)\n'],
+  ]) {
+    test(`Codex 41cf68c6 literal keeps V: ${name} (treatUnclosedAsFence=${treatUnclosedAsFence})`, () => {
+      const out = maskNonProse(input, { treatUnclosedAsFence });
+      assertShape(input, out);
+      assert.ok(out.includes('[V](docs/V.md)'), `route lost: ${JSON.stringify(out)}`);
+    });
+  }
+}
+test('lazy underlines, outside lists and marker-line blocks agree with markdown-it for hidden and visible routes', async () => {
+  const { default: MarkdownIt } = await import('markdown-it');
+  const md = new MarkdownIt('commonmark');
+  const docs = [];
+  for (const open of ['- a', '1. a', '> a', '- > a']) for (const under of ['===', '---', '  ===', '> ===', '==']) {
+    for (const next of ['<span>', '<div>', 'text']) docs.push(`${open}\n${under}\n${next}\n[R](docs/R.md)\n`);
+  }
+  for (const quoted of ['> `\n> [R](docs/R.md)\n', '> `\n']) for (const list of ['2. a', '3) a', '1. a', '- a', '10. a']) {
+    docs.push(`${quoted}${list}\n\`\n${quoted.includes('[R]') ? '' : '[R](docs/R.md)\n'}`);
+  }
+  for (const marker of ['1.\t', '-\t', '- ', '1.  ', '-   ']) for (const block of ['<script>', '<pre>', '<!--', '```', '<div>']) {
+    const close = block === '```' ? '```' : block === '<!--' ? '-->' : block === '<div>' ? '' : `</${block.slice(1)}`;
+    for (const inner of ['\t<?x', '    <!--', '    x']) {
+      docs.push(`${marker}${block}\n${inner}\n${close ? `    ${close}\n` : '\n'}    [R](docs/R.md)\n`);
+    }
+  }
+  let checked = 0;
+  for (const input of docs) {
+    const links = md.render(input).split('href="docs/R.md"').length - 1;
+    for (const treatUnclosedAsFence of [true, false]) {
+      const out = maskNonProse(input, { treatUnclosedAsFence });
+      assertShape(input, out);
+      const kept = out.split('docs/R.md').length - 1;
+      assert.ok(kept <= links, `route kept that markdown-it does not render (${kept} > ${links}): ${JSON.stringify(input)}`);
+      assert.ok(kept >= links, `rendered route masked (${kept} < ${links}): ${JSON.stringify(input)}`);
+      checked += 1;
+    }
+  }
+  assert.equal(checked, (4 * 5 * 3 + 2 * 5 + 5 * 5 * 3) * 2);
+});

@@ -132,3 +132,51 @@ test('treatUnclosedAsFence:false: a stray unclosed fence does not hide a later u
   assertShape(input, out);
   assert.ok(!out.includes('docs/A.md'), `hidden link leaked: ${JSON.stringify(out)}`);
 });
+
+// ---- Raw HTML blocks (Codex on #2368, second round): CommonMark §4.6 has seven HTML block kinds. A `<!--` or a
+// fence marker inside an open one is that block's raw text, not a new comment block or fence, and markdown link
+// syntax inside a raw HTML block is not a link.
+
+test('a line-start opener inside a <script> block does not hide the link after it (Codex P2)', () => {
+  const input = '<script>\n<!--\n</script>\n\n[visible](docs/V.md)\n';
+  const out = maskNonProse(input);
+  assertShape(input, out);
+  assert.equal(out.split('\n')[4], '[visible](docs/V.md)', `link lost: ${JSON.stringify(out)}`);
+});
+
+test('a line-start opener inside a <div> block ends with that block at the blank line', () => {
+  const input = '<div>\n<!--\n</div>\n\n[visible](docs/V.md)\n';
+  const out = maskNonProse(input);
+  assertShape(input, out);
+  assert.equal(out.split('\n')[4], '[visible](docs/V.md)', `link lost: ${JSON.stringify(out)}`);
+});
+
+test('a stray opener in a raw HTML block cannot pair with a later comment and swallow the prose between', () => {
+  const input = '<script>\n<!--\n</script>\n\n[link](docs/L.md)\n\n<!-- c -->\n';
+  const out = maskNonProse(input);
+  assertShape(input, out);
+  assert.equal(out.split('\n')[4], '[link](docs/L.md)', `link lost: ${JSON.stringify(out)}`);
+  assert.equal(out.split('\n')[6].trim(), '', 'the closed comment must still be masked');
+});
+
+test('markdown link syntax inside a raw HTML block is not a route; after the blank line it is', () => {
+  const input = '<details>\n[inside](docs/IN.md)\n\n[outside](docs/OUT.md)\n';
+  const out = maskNonProse(input);
+  assertShape(input, out);
+  assert.ok(!out.includes('docs/IN.md'), `raw HTML text read as prose: ${JSON.stringify(out)}`);
+  assert.equal(out.split('\n')[3], '[outside](docs/OUT.md)');
+});
+
+test('an inline tag alone on a line cannot interrupt a paragraph (type 7), so the paragraph stays prose', () => {
+  const input = 'para [a](docs/A.md)\n<span>\n[b](docs/B.md)\n';
+  const out = maskNonProse(input);
+  assertShape(input, out);
+  assert.equal(out, input);
+});
+
+test('a closed inline comment spanning lines inside one paragraph is still masked', () => {
+  const input = 'a <!-- x\ny --> b [l](docs/L.md)\n';
+  const out = maskNonProse(input);
+  assertShape(input, out);
+  assert.equal(out, 'a       \n      b [l](docs/L.md)\n');
+});

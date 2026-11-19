@@ -17,10 +17,13 @@
 // newlines, so byte offsets and 1-based line numbers survive. A gate that reported the
 // wrong line number would be worse than one that reported nothing.
 //
-// FAIL-CLOSED DIRECTION. Masking too much hides a real route from the gates; masking too little only shows them an
-// extra string. So where renderers disagree (cmark-gfm on GitHub follows the 0.29 inline-comment rule, markdown-it the
-// 0.31.2 one), the narrower reading wins. Not modelled: container blocks (block quotes, list items) and link reference
-// definitions. The markdown-unclosed-html-comment test holds a seeded differential check against markdown-it 14.3.0.
+// BOTH DIRECTIONS FAIL. Masking too much hides a real route from the gates (a false orphan); masking too little lets
+// them credit a route no reader can see (a false pass, the worse one). So the mask follows what a reader of the
+// document is actually shown, and where renderers disagree it follows cmark-gfm, the renderer GitHub uses (0.29
+// rules: a type 4 declaration needs an uppercase letter; an inline comment holds no `--`, does not start with `>` or
+// `->`, and does not end in `-`). Not modelled: container blocks (block quotes, list items) and link reference
+// definitions. The markdown-unclosed-html-comment test holds seeded differential checks against markdown-it 14.3.0 in
+// both directions.
 
 /** Replace every character with a space, keeping newlines so offsets and lines survive. */
 const blank = (s) => s.replace(/[^\n]/g, " ");
@@ -120,14 +123,13 @@ const INLINE_RAW = [
   /^<![A-Za-z][^>]*>/, // declaration
   /^<!\[CDATA\[[\s\S]*?\]\]>/, // CDATA
 ];
-// An inline link's tail after `]`: destination and optional title. Skipping one that is not really a link only ever
-// masks less.
+// An inline link's tail after the `]` that closes a link text: destination and optional title.
 const LINK_TAIL = /^\(\s*(?:<[^<>\n]*>|[^\s()<]*(?:\([^\s()]*\)[^\s()<]*)*)(?:\s+(?:"[^"]*"|'[^']*'|\([^()]*\)))?\s*\)/;
 
-// The inline comment both renderer generations agree is hidden. CommonMark 0.31.2 (§6.6, markdown-it here) also
-// accepts `<!-->`, `<!--->` and text holding `--`; cmark-gfm (GitHub, the 0.29 rule) shows those literally. The mask
-// takes the narrower rule, so it never hides what either renderer shows: text not starting with `>` or `->`, holding
-// no `--` and not ending in `-`. That also rules out `--!>` (a browser's comment end) inside a masked span.
+// The inline comment GitHub hides. CommonMark 0.31.2 (§6.6, markdown-it here) also accepts `<!-->`, `<!--->` and text
+// holding `--`; cmark-gfm (GitHub, the 0.29 rule) shows those literally, links and all, so the mask leaves them as
+// prose: text not starting with `>` or `->`, holding no `--` and not ending in `-`. That also rules out `--!>` (a
+// browser's comment end) inside a masked span.
 const INLINE_COMMENT = /^<!--(?!-?>)(?:[^-]|-(?!-))*-->/;
 
 /**
@@ -138,6 +140,7 @@ const INLINE_COMMENT = /^<!--(?!-?>)(?:[^-]|-(?!-))*-->/;
 function maskInlineComments(text, blank) {
   let out = "";
   let i = 0;
+  let opens = 0;
   while (i < text.length) {
     const ch = text[i];
     if (ch === "\\" && i + 1 < text.length && ESCAPABLE.test(text[i + 1])) {
@@ -163,8 +166,12 @@ function maskInlineComments(text, blank) {
       i = end;
       continue;
     }
-    if (ch === "]" && text[i + 1] === "(") {
-      const m = LINK_TAIL.exec(text.slice(i + 1));
+    if (ch === "[") opens += 1;
+    if (ch === "]" && opens > 0) {
+      // Only a `]` that closes a real `[` can start an inline link tail; an unmatched `](` is literal text, and
+      // skipping it would leave a comment inside it unmasked (Root on 32c2efad).
+      opens -= 1;
+      const m = text[i + 1] === "(" ? LINK_TAIL.exec(text.slice(i + 1)) : null;
       if (m) {
         out += text.slice(i, i + 1 + m[0].length);
         i += 1 + m[0].length;

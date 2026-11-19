@@ -554,3 +554,62 @@ test('differential: no link markdown-it renders as clickable is masked', async (
   }
   assert.deepEqual(failures, [], `visible links masked: ${JSON.stringify(failures)}`);
 });
+
+// 10. Root on 32c2efad: only a `]` that closes a real `[` starts a link tail. An unmatched `](` is literal, so a
+//     comment after it is still a comment and its link is masked.
+test('an unmatched ]( does not shield a comment: the hidden link is masked, the visible one kept', () => {
+  const input = 'prefix ](<!-- [hidden](docs/H.md) -->) [visible](docs/V.md)\n';
+  const out = maskNonProse(input);
+  assertShape(input, out);
+  assert.ok(!out.includes('docs/H.md'), `hidden route kept: ${JSON.stringify(out)}`);
+  assert.ok(out.includes('[visible](docs/V.md)'), `route lost: ${JSON.stringify(out)}`);
+});
+
+for (const [name, input] of [
+  ['a real link title', '[a](b "<!--") [visible](docs/V.md) -->\n'],
+  ['a real angle destination', '[a](<!-- x -->) [visible](docs/V.md) -->\n'],
+  ['a nested bracket in the link text', '[a [b] c](d "<!--") [visible](docs/V.md) -->\n'],
+]) {
+  test(`control: a link tail after ${name} is still skipped whole`, () => {
+    const out = maskNonProse(input);
+    assertShape(input, out);
+    assert.ok(out.includes('[visible](docs/V.md)'), `route lost: ${JSON.stringify(out)}`);
+  });
+}
+
+// 11. The other direction: a link markdown-it puts inside an inline comment GitHub also hides (the 0.29 rule) must be
+//     masked, or the gates would credit a route no reader can see. Backticks are left out: a code span that wraps a
+//     line is a documented limit of maskNonProse (masked within a line only), not part of the comment family.
+test('differential: no link hidden inside an inline comment survives the mask', async () => {
+  const { default: MarkdownIt } = await import('markdown-it');
+  const md = new MarkdownIt('commonmark');
+  const parts = ['para', '    code', '===', '', '<div>', '<!-- c', '-->', '<!-->', 'a <!-- b', 'c --> d', '\\<!-- e',
+    '<a title="<!--">', '[a](b "<!--")', '](', ')', '[', ']', 'x <!foo', 'b> y', '# h', '***', 'prefix ](<', ' >)',
+    'prefix ](', '[a](<', 'q <?p', 'r ?> s'];
+  const GITHUB_COMMENT = /^<!--(?!-?>)(?:[^-]|-(?!-))*-->$/;
+  let a = 7;
+  const rnd = (n) => {
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) % n;
+  };
+  const pick = () => parts[rnd(parts.length)];
+  const hidden = '[hidden](docs/H.md)';
+  const failures = [];
+  let judged = 0;
+  for (let k = 0; k < 40000 && failures.length < 3; k += 1) {
+    const lines = [];
+    for (let n = 1 + rnd(4); n > 0; n -= 1) lines.push(rnd(2) ? `${pick()} ${pick()}` : pick());
+    const at = rnd(lines.length + 1);
+    lines.splice(at, 0, `${rnd(2) ? `${pick()} ` : ''}${hidden}${rnd(2) ? ` ${pick()}` : ''}`);
+    const input = `${lines.join('\n')}\n`;
+    const inComment = md.parse(input, {}).some((t) => t.type === 'inline'
+      && t.children.some((c) => c.type === 'html_inline' && c.content.includes(hidden) && GITHUB_COMMENT.test(c.content)));
+    if (!inComment) continue;
+    judged += 1;
+    if (maskNonProse(input).includes('docs/H.md')) failures.push(input);
+  }
+  assert.ok(judged > 100, `too few judged cases (${judged}): the generator no longer exercises comments`);
+  assert.deepEqual(failures, [], `hidden routes kept: ${JSON.stringify(failures)}`);
+});

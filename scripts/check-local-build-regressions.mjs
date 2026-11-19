@@ -87,7 +87,8 @@ function hashTarget(root, rel) {
   const abs = join(root, rel);
   let fd;
   try {
-    fd = openSync(abs, fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW);
+    // O_NONBLOCK: a path swapped for a FIFO after the component check must not block this open.
+    fd = openSync(abs, fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW | fsConstants.O_NONBLOCK);
     if (!fstatSync(fd).isFile()) return { refusal: "target is not a regular file" };
     return { sha: sha256Hex(readFileSync(fd)) };
   } catch (e) {
@@ -414,10 +415,9 @@ export function discover(opts) {
   const { targets, deleted, ignored } = classify(entries);
   const failures = [];
   for (const rel of targets) {
-    const h = hashTarget(root, rel);
-    const r = h.refusal
-      ? { ok: false, reason: `${rel}: ${h.refusal}` }
-      : runTarget({ root, rel, mode: "changed-target", timeoutMs: opts.timeoutMs, maxBytes: opts.maxBytes });
+    // No parent-side read before runTarget: it applies the allowlist, the per-component symlink and
+    // regular-file refusal, and only then hashes (a FIFO or an intermediate symlink is refused unread).
+    const r = runTarget({ root, rel, mode: "changed-target", timeoutMs: opts.timeoutMs, maxBytes: opts.maxBytes });
     if (r.ok) out(JSON.stringify(r.record)); else failures.push(r.reason);
   }
   for (const p of deleted) out(JSON.stringify({ mode: "changed-deleted", path: p, result: "reported-not-executed" }));
@@ -445,10 +445,7 @@ export function runSuite(opts) {
   if (targets.length === 0) return { code: 1, reason: `suite ${dir}: no tracked allowlisted test found (refusing rather than passing over nothing)` };
   const failures = [];
   for (const rel of targets) {
-    const h = hashTarget(root, rel);
-    const r = h.refusal
-      ? { ok: false, reason: `${rel}: ${h.refusal}` }
-      : runTarget({ root, rel, mode: "suite-target", timeoutMs: opts.timeoutMs, maxBytes: opts.maxBytes });
+    const r = runTarget({ root, rel, mode: "suite-target", timeoutMs: opts.timeoutMs, maxBytes: opts.maxBytes });
     if (r.ok) out(JSON.stringify(r.record)); else failures.push(r.reason);
   }
   out(JSON.stringify({ mode: "suite", dir, targets: targets.length, failed: failures.length, result: failures.length ? "fail" : "pass" }));
@@ -722,6 +719,45 @@ test("a",async()=>{const sup=Number(ps("ppid",process.ppid));if(!(sup>1)||!ps("a
     check("suite: a directory outside scripts/ or lib/ is refused (exit 2)", sres.code === 2, JSON.stringify(sres));
     sres = capture(() => runSuite({ root: repo, dir: "scripts/../docs" }));
     check("suite: a '..' segment is refused (exit 2)", sres.code === 2, JSON.stringify(sres));
+    // A tracked target swapped for a FIFO, or reached through an intermediate symlink, is refused by
+    // runTarget's component check with no parent-side read first; both runs return promptly.
+    mkdirSync(join(repo, "scripts/sub"), { recursive: true });
+    mk(repo, "scripts/sub/fifo.test.mjs", T(1));
+    mk(repo, "scripts/sub2/via.test.mjs", T(1));
+    G("add", "-A"); G("commit", "-q", "-m", "subs");
+    rmSync(join(repo, "scripts/sub/fifo.test.mjs"));
+    const mf = spawnSync("mkfifo", [join(repo, "scripts/sub/fifo.test.mjs")]);
+    if (mf.status === 0) {
+      const t0 = process.hrtime.bigint();
+      sres = capture(() => runSuite({ root: repo, dir: "scripts/sub", timeoutMs: 5000 }));
+      const ms = Number(process.hrtime.bigint() - t0) / 1e6;
+      check("suite: a tracked target swapped for a FIFO is refused unread, promptly", sres.code === 1 && /not a regular file/.test(sres.reason ?? "") && ms < 4000, `${ms}ms ${JSON.stringify(sres)}`);
+      d = capture(() => discover({ root: repo, base: c2 }));
+      check("discovery: a changed target that is a FIFO is refused unread", d.code === 1 && /fifo\.test\.mjs[^|]*not a regular file/.test(d.reason ?? ""), JSON.stringify(d));
+      rmSync(join(repo, "scripts/sub/fifo.test.mjs"));
+    } else {
+      check("suite: mkfifo available for the FIFO control", false, String(mf.stderr ?? mf.error));
+    }
+    const outside = join(tmp, "outside-sub2");
+    mkdirSync(outside, { recursive: true });
+    writeFileSync(join(outside, "via.test.mjs"), T(1));
+    rmSync(join(repo, "scripts/sub2"), { recursive: true, force: true });
+    symlinkSync(outside, join(repo, "scripts/sub2"));
+    sres = capture(() => runSuite({ root: repo, dir: "scripts/sub2" }));
+    check("suite: a tracked target behind an intermediate symlink is refused, never read", sres.code === 1 && /symlink at path component scripts\/sub2/.test(sres.reason ?? ""), JSON.stringify(sres));
+    rmSync(join(repo, "scripts/sub2"));
+    G("checkout", "-q", "--", "scripts/sub", "scripts/sub2");
+    // Structural: the only parent-side reads of a target are runTarget's before/after hashes, which run
+    // after its component check. A FIFO/symlink control cannot observe a read that has no effect, so the
+    // source itself is held: exactly two hashTarget(root, rel) call sites, both inside runTarget.
+    {
+      const src = readFileSync(fileURLToPath(import.meta.url), "utf8");
+      const body = (name) => { const i = src.indexOf(`export function ${name}(`); const j = src.indexOf("\n}\n", i); return i < 0 || j < 0 ? "" : src.slice(i, j); };
+      const needle = "hashTarget(" + "root, rel);";
+      const total = src.split(needle).length - 1;
+      const inRunTarget = body("runTarget").split(needle).length - 1;
+      check("structure: targets are hashed only inside runTarget, after its component check", total === 2 && inRunTarget === 2 && !body("runSuite").includes("hashTarget(") && !body("discover").includes("hashTarget("), `total=${total} inRunTarget=${inRunTarget}`);
+    }
 
     // 13 CLI exit codes through a real child process
     const cli = (args) => spawnSync(process.execPath, [fileURLToPath(import.meta.url), "--root", root, ...args], { encoding: "utf8", env: { ...process.env, NODE_TEST_CONTEXT: "" } });

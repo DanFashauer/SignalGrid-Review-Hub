@@ -263,8 +263,9 @@ function opensOpaqueInContainer(line) {
   if (afterMarker && (lead.includes("\t") || lead.length >= 4) && rest.length > lead.length) return true;
   const body = rest.slice(lead.length);
   if (/^(?:`{3,}|~{3,})/.test(body)) return true;
-  const block = htmlBlockStart(body, true);
-  return block !== null && block.type !== 7;
+  // Right after a marker the content starts a new block, where any HTML block type (7 included) can open; on a
+  // continuation line it would sit inside the container's paragraph, where type 7 cannot interrupt.
+  return htmlBlockStart(body, !afterMarker) !== null;
 }
 const CONTAINER_COMMENT = /^((?: {0,3}(?:[-+*]|\d{1,9}[.)])[ \t]+| {0,3}>[ \t]?)+)( {0,3})<!--/;
 const SETEXT_UNDERLINE = /^ {0,3}(?:=+|-+)[ \t]*$/;

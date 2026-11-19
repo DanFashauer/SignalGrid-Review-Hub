@@ -1016,8 +1016,8 @@ for (const treatUnclosedAsFence of [true, false]) {
   }
 }
 
-// 24. Root on 0b035116: an interrupting container whose content is opaque (indented code, a fence, or raw HTML of
-//     types 1-6, including a later line of that container) must not be unmasked by the split, while genuine
+// 24. Root on 0b035116: an interrupting container whose content is opaque (indented code, a fence, raw HTML of
+//     types 1-6 anywhere in it, or a type-7 tag right after its marker, where it starts a block) must not be unmasked by the split, while genuine
 //     interruption links and lazy continuations stay readable. Each expectation was checked against
 //     markdown-it 14 (commonmark); under both fence options, shape checked.
 for (const treatUnclosedAsFence of [true, false]) {
@@ -1030,6 +1030,8 @@ for (const treatUnclosedAsFence of [true, false]) {
     ['raw HTML (script) continuing on a second block-quote line', '`\n> <script>\n> [H](docs/H.md)\n`\n'],
     ['raw HTML (div) on a continuation line of an interrupting bullet', '`\n- item\n  <div>\n  [H](docs/H.md)\n`\n'],
     ['raw HTML (script) on a continuation line of an ordered item', '`\n1.  item\n    <script>\n    [H](docs/H.md)\n`\n'],
+    ['a type-7 tag opening an HTML block right after a bullet', '`\n- <span>\n  [H](docs/H.md)\n`\n'],
+    ['a type-7 tag opening an HTML block right after a block-quote marker', '`\n> <span>\n> [H](docs/H.md)\n`\n'],
   ]) {
     test(`opaque interrupting container: ${name} hides H (treatUnclosedAsFence=${treatUnclosedAsFence})`, () => {
       const out = maskNonProse(input, { treatUnclosedAsFence });
@@ -1041,7 +1043,6 @@ for (const treatUnclosedAsFence of [true, false]) {
     ['a block quote, then a lazy line', '`\n> quote\n[V](docs/V.md)\n`\n'],
     ['a bullet, then a lazy line', '`\n- item\n[V](docs/V.md)\n`\n'],
     ['an ordered item, then a lazy line', '`\n1. item\n[V](docs/V.md)\n`\n'],
-    ['inline HTML (type 7) inside a bullet, then a lazy line', '`\n- <span>\n[V](docs/V.md)\n`\n'],
   ]) {
     test(`genuine interruption control: ${name} keeps V (treatUnclosedAsFence=${treatUnclosedAsFence})`, () => {
       const out = maskNonProse(input, { treatUnclosedAsFence });
@@ -1049,4 +1050,46 @@ for (const treatUnclosedAsFence of [true, false]) {
       assert.ok(out.includes('[V](docs/V.md)'), `route lost: ${JSON.stringify(out)}`);
     });
   }
+  // Known conservative over-mask, kept deliberately: `- <span>` opens a type-7 HTML block that a column-0 line
+  // closes, so markdown-it renders V. The paragraph stays joined because the item's content is opaque, and V is
+  // masked, as 1f3ff8aa also masks it. Masking more is allowed; this pins it so a change is a visible decision.
+  test(`opaque interrupting container: a type-7 block then a column-0 line masks V conservatively (treatUnclosedAsFence=${treatUnclosedAsFence})`, () => {
+    const input = '`\n- <span>\n[V](docs/V.md)\n`\n';
+    const out = maskNonProse(input, { treatUnclosedAsFence });
+    assertShape(input, out);
+    assert.ok(!out.includes('docs/V.md'), `expected the conservative mask: ${JSON.stringify(out)}`);
+  });
 }
+
+// 25. Root on 0b035116: a bounded cross-product of container boundaries (bullets, ordered items from 1, block quotes,
+//     and nested quote/list pairs) with contained content (indented code, tab code, both fences, HTML block types
+//     1-7 and prose) and continuation shapes, between an opening backtick line and a closing one. For every
+//     input, no route may survive the mask more often than the pinned CommonMark renderer (markdown-it 14) renders
+//     it as a link: masking more is allowed, never less. Both fence options; shape checked.
+test('cross-product: a contained opaque or prose block between backtick lines never keeps a route markdown-it does not render', async () => {
+  const { default: MarkdownIt } = await import('markdown-it');
+  const md = new MarkdownIt('commonmark');
+  const markers = ['- ', '* ', '+ ', '1. ', '1) ', '> ', '   > ', '>', '- > ', '> - ', '1. > '];
+  const contents = ['    [H](docs/H.md)', '\t[H](docs/H.md)', '```', '~~~', '<script>', '<pre>', '<style>', '<!-- c', '<?x', '<!X',
+    '<![CDATA[', '<div>', '<table>', '<span>', 'item'];
+  const pres = ['`\n', 'text `\n', '`a\n'];
+  const posts = ['`\n', 'b`\n'];
+  let checked = 0;
+  for (const m of markers) for (const c of contents) {
+    const conts = ['', '  [H](docs/H.md)', '   [H](docs/H.md)', '    [H](docs/H.md)', '> [H](docs/H.md)', '[H](docs/H.md)',
+      m.replace(/\S/g, ' ') + '[H](docs/H.md)'];
+    for (const k of conts) for (const p of pres) for (const q of posts) {
+      const line = m + c + (c.startsWith('    ') || c.startsWith('\t') || k !== '' ? '' : ' [H](docs/H.md)');
+      const input = p + line + '\n' + (k ? k + '\n' : '') + q;
+      const links = (md.render(input).match(/href="docs\/H\.md"/g) || []).length;
+      for (const treatUnclosedAsFence of [true, false]) {
+        const out = maskNonProse(input, { treatUnclosedAsFence });
+        assertShape(input, out);
+        const kept = (out.match(/docs\/H\.md/g) || []).length;
+        assert.ok(kept <= links, `route kept that markdown-it does not render (${kept} > ${links}): ${JSON.stringify(input)}`);
+        checked += 1;
+      }
+    }
+  }
+  assert.equal(checked, 11 * 15 * 7 * 3 * 2 * 2);
+});

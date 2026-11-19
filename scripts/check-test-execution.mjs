@@ -57,6 +57,7 @@ import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { allowlistRefusal } from "./check-local-build-regressions.mjs";
+import { SEP, ENV, maskQuoted, runCommands, stripYamlComments } from "./lib/workflow-invocation.mjs";
 
 const ENTRY_FILES = ["scripts/preflight.mjs", "validate-sim-macos.sh"];
 const WORKFLOW_DIR = ".github/workflows";
@@ -178,15 +179,37 @@ for (const cfg of ["playwright.config.ts", "scripts/playwright.config.ts"]) {
 }
 
 // The shared build-regression runner's --suite mode runs EVERY tracked allowlisted test under one
-// directory on every invocation (scripts/check-local-build-regressions.mjs). A directory a reached
-// runner text names that way contributes its allowlisted files, the same way Playwright's testDir
-// does. Only files the runner would actually execute count: its own allowlist decides, imported
-// rather than restated, so the two can never drift apart.
-const suiteDirsIn = (text) => {
+// directory on every invocation (scripts/check-local-build-regressions.mjs). A directory contributes
+// its allowlisted files ONLY through an actual executable registration, never through prose:
+//   * a live `scripts/preflight.mjs` step whose cmd array is exactly
+//     ["node", "scripts/check-local-build-regressions.mjs", "--suite", "<dir>"] (a `//` line is dead);
+//   * a workflow `run:` command, judged by the SAME matcher the parity gates use
+//     (lib/workflow-invocation.mjs: comments stripped, quotes masked, command position only, so a
+//     `# comment`, an `echo node …`, a `name:` label or a continue-on-error step credits nothing),
+//     whose argument list is exactly `--suite <dir>`.
+// The operand must be one well-formed directory under scripts/ or lib/; a missing, extra, quoted or
+// malformed operand credits nothing. Only files the runner would execute count: its own allowlist
+// decides, imported rather than restated.
+const SUITE_RUNNER = "scripts/check-local-build-regressions.mjs";
+const SUITE_DIR_RE = /^(?:scripts|lib)(?:\/[A-Za-z0-9_][A-Za-z0-9._-]*)*$/;
+const suiteDirsFromPreflight = (text) => {
   const dirs = new Set();
-  for (const m of text.matchAll(/check-local-build-regressions\.mjs["',\s]+--suite["',\s]+((?:scripts|lib)(?:\/[A-Za-z0-9_][A-Za-z0-9._-]*)*)/g)) dirs.add(m[1]);
+  const re = /^[ \t]*\{[^\n]*?\bcmd:[ \t]*\[[ \t]*"node"[ \t]*,[ \t]*"scripts\/check-local-build-regressions\.mjs"[ \t]*,[ \t]*"--suite"[ \t]*,[ \t]*"([^"\n]*)"[ \t]*\]/gm;
+  for (const m of text.matchAll(re)) if (SUITE_DIR_RE.test(m[1])) dirs.add(m[1]);
   return [...dirs];
 };
+const suiteDirsFromWorkflow = (rawText) => {
+  const dirs = new Set();
+  const commands = runCommands(stripYamlComments(rawText)).map(maskQuoted).join("\n");
+  const re = new RegExp(`${SEP}${ENV}node[ \\t]+${SUITE_RUNNER.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}((?:[ \\t]+[^\\s;&|()]+)*)`, "gm");
+  for (const m of commands.matchAll(re)) {
+    const args = m[1].split(/\s+/).filter(Boolean);
+    if (args.length === 2 && args[0] === "--suite" && SUITE_DIR_RE.test(args[1])) dirs.add(args[1]);
+  }
+  return [...dirs];
+};
+const suiteDirsFrom = ({ preflight = "", workflows = [] }) =>
+  [...new Set([...suiteDirsFromPreflight(preflight), ...workflows.flatMap(suiteDirsFromWorkflow)])];
 // The suite runs TRACKED files only (`git ls-files`), so only tracked files are credited: an
 // untracked test on disk is not something the permanent suite would execute. If git cannot answer,
 // nothing is credited through --suite (fail-closed: unknown never means reached).
@@ -196,7 +219,10 @@ const trackedFiles = (() => {
 })();
 const suiteReaches = (file, dirs, tracked = trackedFiles) =>
   dirs.some((d) => file.startsWith(`${d}/`)) && allowlistRefusal(file) === null && tracked.has(file);
-const suiteDirs = suiteDirsIn(CORPUS);
+const workflowTexts = existsSync(WORKFLOW_DIR)
+  ? readdirSync(WORKFLOW_DIR).filter((e) => /\.ya?ml$/.test(e)).map((e) => readIfExists(join(WORKFLOW_DIR, e)))
+  : [];
+const suiteDirs = suiteDirsFrom({ preflight: readIfExists("scripts/preflight.mjs"), workflows: workflowTexts });
 
 // ── enumerate test-shaped files ──────────────────────────────────────────────
 const testFiles = [];
@@ -276,19 +302,41 @@ const staleKeys = (files, decls) => {
   // precisely the state this check was added to end.
   const stalePositive = staleKeys(["a/b.test.ts"], new Map([["gone/", "r"]])).join() === "gone/";
   const staleNegative = staleKeys(["a/b.test.ts"], new Map([["a/", "r"]])).length === 0;
-  // The --suite contribution, both ways: a runner line naming a directory reaches an allowlisted test
-  // inside it, and nothing else (a sibling directory, a .ts file the runner would never execute, a
-  // prefix that is not a path boundary, a line that does not invoke the runner).
-  const sd = suiteDirsIn('cmd: ["node", "scripts/check-local-build-regressions.mjs", "--suite", "scripts/x/test"] },');
-  const tr = new Set(["scripts/x/test/a.test.mjs", "scripts/x/other/a.test.mjs", "scripts/x/test/a.test.ts", "scripts/x/testing/a.test.mjs"]);
-  const suitePositive = sd.join() === "scripts/x/test" && suiteReaches("scripts/x/test/a.test.mjs", sd, tr);
+  // The --suite contribution, both ways. Positive: a live preflight cmd and a workflow `run:` each
+  // register their directory, and a tracked allowlisted file under it is reached. Negative: nothing
+  // that does not EXECUTE the suite registers anything (comment, echo, name label, dead `//` preflight
+  // line, other script), a missing/extra/quoted/malformed operand registers nothing, and inside a
+  // registered directory a sibling, a .ts file, a non-boundary prefix and an untracked file stay unreached.
+  const PF = '  { name: "s", cmd: ["node", "scripts/check-local-build-regressions.mjs", "--suite", "scripts/x/test"] },';
+  const WF = "jobs:\n  a:\n    steps:\n      - name: s\n        run: node scripts/check-local-build-regressions.mjs --suite scripts/y/test\n";
+  const wf = (line) => `jobs:\n  a:\n    steps:\n      - name: s\n        ${line}\n`;
+  const sd = suiteDirsFrom({ preflight: PF, workflows: [WF] });
+  const tr = new Set(["scripts/x/test/a.test.mjs", "scripts/y/test/b.test.mjs", "scripts/x/other/a.test.mjs", "scripts/x/test/a.test.ts", "scripts/x/testing/a.test.mjs"]);
+  const suitePositive =
+    sd.slice().sort().join() === "scripts/x/test,scripts/y/test" &&
+    suiteReaches("scripts/x/test/a.test.mjs", sd, tr) &&
+    suiteReaches("scripts/y/test/b.test.mjs", sd, tr);
+  const none = (o) => suiteDirsFrom(o).length === 0;
   const suiteNegative =
+    none({ workflows: [wf("# run: node scripts/check-local-build-regressions.mjs --suite scripts/x/test")] }) &&
+    none({ workflows: [wf("run: echo node scripts/check-local-build-regressions.mjs --suite scripts/x/test")] }) &&
+    none({ workflows: [wf("run: true # node scripts/check-local-build-regressions.mjs --suite scripts/x/test")] }) &&
+    none({ workflows: ["jobs:\n  a:\n    steps:\n      - name: node scripts/check-local-build-regressions.mjs --suite scripts/x/test\n        run: true\n"] }) &&
+    none({ workflows: [wf("run: node scripts/check-local-build-regressions.mjs --suite")] }) &&
+    none({ workflows: [wf("run: node scripts/check-local-build-regressions.mjs --suite scripts/x/test extra")] }) &&
+    none({ workflows: [wf("run: node scripts/check-local-build-regressions.mjs --suite ../x/test")] }) &&
+    none({ workflows: [wf('run: node scripts/check-local-build-regressions.mjs --suite "scripts/x/test"')] }) &&
+    none({ workflows: [wf("run: node scripts/other.mjs --suite scripts/x/test")] }) &&
+    none({ preflight: '  // { name: "s", cmd: ["node", "scripts/check-local-build-regressions.mjs", "--suite", "scripts/x/test"] },' }) &&
+    none({ preflight: '  { name: "s", cmd: ["node", "scripts/check-local-build-regressions.mjs", "--suite", "scripts/x/test", "x"] },' }) &&
+    none({ preflight: '  { name: "s", cmd: ["node", "scripts/check-local-build-regressions.mjs", "--suite", "../etc"] },' }) &&
+    none({ preflight: '  { name: "s", cmd: ["node", "scripts/check-local-build-regressions.mjs", "--suite"] },' }) &&
+    none({ preflight: '  // node scripts/check-local-build-regressions.mjs --suite scripts/x/test' }) &&
+    none({}) &&
     !suiteReaches("scripts/x/test/untracked.test.mjs", sd, tr) &&
-    suiteDirsIn("").length === 0 &&
     !suiteReaches("scripts/x/other/a.test.mjs", sd, tr) &&
     !suiteReaches("scripts/x/test/a.test.ts", sd, tr) &&
-    !suiteReaches("scripts/x/testing/a.test.mjs", sd, tr) &&
-    suiteDirsIn("node scripts/other.mjs --suite scripts/x/test").length === 0;
+    !suiteReaches("scripts/x/testing/a.test.mjs", sd, tr);
   if (
     testFiles.length < FILE_FLOOR ||
     reachedScriptNames.size < SCRIPT_FLOOR ||

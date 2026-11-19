@@ -239,33 +239,146 @@ const ATX_HEADING = /^ {0,3}#{1,6}(?:[ \t]|$)/;
 // One or more list-item or block-quote markers, then up to three spaces, then a comment opener.
 const CONTAINER_START = /^ {0,3}(?:>|[-+*](?:[ \t]|$)|\d{1,9}[.)](?:[ \t]|$))/;
 // A container start that interrupts an open paragraph (CommonMark §5.1, §5.2): a block-quote marker, or a list
-// marker with content, ordered only when it starts at 1. A start that cannot interrupt (`2.`, an empty item) stays in
-// the paragraph. `01.` does interrupt under the pinned engine (start number 1) but is conservatively not split here;
-// leaving it joined can only mask more, never less.
-const PARAGRAPH_INTERRUPT = /^ {0,3}(?:>|[-+*][ \t]+\S|1[.)][ \t]+\S)/;
+// marker with content, ordered only when its start number is 1 (`1.`, `01.`, up to nine digits, as the pinned engine
+// parses it). A start that cannot interrupt (`2.`, an empty item) stays in the paragraph. Content is anything but a
+// space or tab, so an NBSP counts as content, as it does for blank-line detection.
+const PARAGRAPH_INTERRUPT = /^ {0,3}(?:>|[-+*][ \t]+[^ \t]|0{0,8}1[.)][ \t]+[^ \t])/;
+
+/** A line with tabs expanded to the next multiple of four columns, so offsets below are columns. */
+function expandTabs(line) {
+  let out = "";
+  for (const ch of line) out += ch === "\t" ? " ".repeat(4 - (out.length % 4)) : ch;
+  return out;
+}
+
+const LIST_MARKER = /^(?:([-+*])|(\d{1,9})[.)])(?= |$)/;
+const FENCE_OPEN = /^(?:`{3,}(?!.*`)|~{3,})/;
 
 /**
- * Whether a line, once its leading container markers are removed, could open an opaque block inside a container:
- * indented code (four or more columns, or any tab, after the last marker), a fence, or a raw HTML block of types
- * 1–6. Containers are not modelled, so a split before such a line could expose code or raw HTML as prose (Root on
- * 2201bb6a); the paragraph is then left joined. Over-detection only keeps lines joined, which masks more.
+ * The block structure of a run of non-blank lines that begins where a list item or block quote interrupts a
+ * top-level paragraph, under the pinned engine's container rules (CommonMark 0.29 §5.1–5.2; cmark-gfm blocks.c):
+ * block quotes and list items are matched line by line with their real content columns (one to four columns of
+ * padding after a list marker, one column of code padding plus code when there are five or more, one optional
+ * column after `>`), and each line's leaf is classified as paragraph text, indented code, a fence, a raw HTML block
+ * (types 1–7, type 7 only where it does not interrupt a paragraph), a heading or a thematic break. Lazy continuation
+ * keeps a paragraph line in its paragraph. The result gives, for each line, null when it is opaque (code, a fence or
+ * raw HTML: masked whole) or a paragraph id, so inline masking pairs nothing across a container or opaque boundary
+ * (Root on 2201bb6a and 90e772ce: classification and segmentation share one source of boundaries).
  */
-function opensOpaqueInContainer(line) {
-  let rest = content(line);
-  let afterMarker = false;
-  for (;;) {
-    const m = /^[ \t]*(?:>|[-+*](?=[ \t]|$)|\d{1,9}[.)](?=[ \t]|$))/.exec(rest);
-    if (!m) break;
-    rest = rest.slice(m[0].length);
-    afterMarker = true;
+function containerRun(lines, interrupted) {
+  const out = [];
+  const stack = []; // { quote: true } or { col } (a list item's content column)
+  // When a container interrupts a top-level paragraph, that paragraph is still open (id -1, the caller's segment).
+  let leaf = interrupted ? { kind: "para", depth: 0, id: -1 } : { kind: "none" };
+  let nextId = 0;
+  for (const raw of lines) {
+    const text = expandTabs(content(raw));
+    let pos = 0;
+    let matched = 0;
+    for (; matched < stack.length; matched += 1) {
+      const c = stack[matched];
+      if (c.quote) {
+        const m = /^ {0,3}>/.exec(text.slice(pos));
+        if (!m) break;
+        pos += m[0].length;
+        if (text[pos] === " ") pos += 1;
+      } else {
+        if (text.length - pos < c.col - pos || text.slice(pos, c.col).trim() !== "") break;
+        pos = c.col;
+      }
+    }
+    const allMatched = matched === stack.length;
+    // An open leaf continues only when every container matched (a lazy line may continue a paragraph alone).
+    if (allMatched && leaf.kind === "fence") {
+      const close = new RegExp(`^ {0,3}${leaf.ch === "`" ? "`" : "~"}{${leaf.len},} *$`);
+      if (close.test(text.slice(pos))) leaf = { kind: "none" };
+      out.push(null);
+      continue;
+    }
+    if (allMatched && leaf.kind === "html") {
+      if (leaf.end && endAfter(text.slice(pos), leaf.end, 0) >= 0) leaf = { kind: "none" };
+      out.push(null);
+      continue;
+    }
+    if (allMatched && leaf.kind === "code" && indentColumns(text.slice(pos)) >= 4) {
+      out.push(null);
+      continue;
+    }
+    const paraOpen = leaf.kind === "para";
+    // Open new containers and find the leaf on what remains.
+    let depth = matched;
+    let opened = false;
+    let result;
+    for (;;) {
+      const rest = text.slice(pos);
+      const indent = indentColumns(rest);
+      // A paragraph is continued (in place, or lazily) unless a block start that may interrupt it appears.
+      const continuing = paraOpen && !opened;
+      if (indent >= 4) {
+        if (continuing) { result = "continue"; break; }
+        leaf = { kind: "code" };
+        result = null;
+        break;
+      }
+      const body = rest.slice(indent);
+      if (THEMATIC_BREAK.test(body)) { leaf = { kind: "none" }; result = "own"; break; }
+      if (body.startsWith(">")) {
+        stack.length = depth;
+        stack.push({ quote: true });
+        depth += 1;
+        opened = true;
+        pos += indent + 1;
+        if (text[pos] === " ") pos += 1;
+        continue;
+      }
+      const lm = LIST_MARKER.exec(body);
+      if (lm) {
+        const after = body.slice(lm[0].length);
+        const pad = indentColumns(after);
+        const empty = after.trim() === "";
+        const canInterrupt = !empty && (lm[1] !== undefined || Number(lm[2]) === 1);
+        if (!(continuing && !canInterrupt)) {
+          const markerEnd = pos + indent + lm[0].length;
+          const col = empty || pad >= 5 ? markerEnd + 1 : markerEnd + pad;
+          stack.length = depth;
+          stack.push({ col });
+          depth += 1;
+          opened = true;
+          pos = Math.min(col, text.length);
+          continue;
+        }
+      }
+      if (FENCE_OPEN.test(body)) {
+        const f = FENCE_OPEN.exec(body)[0];
+        stack.length = depth;
+        leaf = { kind: "fence", ch: f[0], len: f.length };
+        result = null;
+        break;
+      }
+      const html = htmlBlockStart(body, continuing);
+      if (html) {
+        stack.length = depth;
+        leaf = { kind: "html", end: html.end };
+        if (html.end && endAfter(body, html.end, 0) >= 0) leaf = { kind: "none" };
+        result = null;
+        break;
+      }
+      if (body === "") { result = "own"; break; }
+      if (ATX_HEADING.test(body)) { stack.length = depth; leaf = { kind: "none" }; result = "own"; break; }
+      if (continuing && /^(?:=+|-+) *$/.test(body) && allMatched) { leaf = { kind: "none" }; result = "own"; break; }
+      result = continuing ? "continue" : "new";
+      break;
+    }
+    if (result === null) out.push(null);
+    else if (result === "own") out.push(nextId++);
+    else if (result === "continue") out.push(leaf.id);
+    else {
+      stack.length = depth;
+      leaf = { kind: "para", depth, id: nextId++ };
+      out.push(leaf.id);
+    }
   }
-  const lead = /^[ \t]*/.exec(rest)[0];
-  if (afterMarker && (lead.includes("\t") || lead.length >= 4) && rest.length > lead.length) return true;
-  const body = rest.slice(lead.length);
-  if (/^(?:`{3,}|~{3,})/.test(body)) return true;
-  // Right after a marker the content starts a new block, where any HTML block type (7 included) can open; on a
-  // continuation line it would sit inside the container's paragraph, where type 7 cannot interrupt.
-  return htmlBlockStart(body, !afterMarker) !== null;
+  return out;
 }
 const CONTAINER_COMMENT = /^((?: {0,3}(?:[-+*]|\d{1,9}[.)])[ \t]+| {0,3}>[ \t]?)+)( {0,3})<!--/;
 const SETEXT_UNDERLINE = /^ {0,3}(?:=+|-+)[ \t]*$/;
@@ -594,18 +707,36 @@ export function maskNonProse(text, { treatUnclosedAsFence = true } = {}) {
       segment[i] = nextSegment++;
       inPara = false;
     } else {
-      // A list item or block quote interrupting a plain paragraph ends it, so an inline comment or code span
-      // cannot pair across that boundary (Codex on 1f3ff8aa). A paragraph that already began in a container keeps
-      // its lines together: containers are not modelled, so its extent is not split further.
-      let interrupts = inPara && !paraBoxed && PARAGRAPH_INTERRUPT.test(text);
-      // Look over the lines the new segment would take: if any could open code or raw HTML inside the container,
-      // stay joined, and box the paragraph so a later marker line inside that container (still opaque) cannot split.
-      let opaque = false;
-      for (let k = i; interrupts && k < lines.length && segment[k] === -1 && !isBlank(content(lines[k])); k += 1) {
-        if (opensOpaqueInContainer(lines[k])) { interrupts = false; opaque = true; }
+      // A list item or block quote interrupting a plain paragraph ends it (Codex on 1f3ff8aa). The run from here to
+      // the next block boundary is classified with its containers modelled, so an inline comment or code span cannot
+      // pair across a container or opaque boundary and code or raw HTML inside the container is masked whole.
+      const interrupted = inPara && !paraBoxed && PARAGRAPH_INTERRUPT.test(text);
+      // A paragraph that begins in a container is modelled the same way from its first line (Root on 1f3ff8aa: a
+      // later container line ends it as surely as one that interrupts a plain paragraph).
+      if (interrupted || (!inPara && CONTAINER_START.test(text))) {
+        let r = i;
+        while (r + 1 < lines.length && segment[r + 1] === -1 && !isBlank(content(lines[r + 1]))) r += 1;
+        const ids = containerRun(source.slice(i, r + 1), interrupted);
+        const base = nextSegment;
+        let top = -1;
+        for (let k = i; k <= r; k += 1) {
+          const id = ids[k - i];
+          if (id === null) {
+            segment[k] = -2;
+            // A comment opened right after the markers keeps its `<!--` so the container-comment pass below can
+            // still mask from it through the first `-->`, across blank lines (Codex on 43e53ab5).
+            const boxed = CONTAINER_COMMENT.exec(content(source[k]));
+            const col = boxed ? boxed[1].length + boxed[2].length : -1;
+            lines[k] = boxed ? blank(lines[k].slice(0, col)) + "<!--" + blank(lines[k].slice(col + 4)) : blank(lines[k]);
+          } else if (id < 0) segment[k] = segment[paraStart];
+          else (segment[k] = base + id), (top = Math.max(top, id));
+        }
+        nextSegment = base + top + 1;
+        i = r;
+        inPara = false;
+        continue;
       }
-      if (opaque) paraBoxed = true;
-      if (!inPara || interrupts) {
+      if (!inPara) {
         paraStart = i;
         paraBoxed = CONTAINER_START.test(text);
         segment[i] = nextSegment++;

@@ -883,3 +883,36 @@ for (const treatUnclosedAsFence of [true, false]) {
     });
   }
 }
+
+// 20. Codex on 43e53ab5. (1) Under the declared scanner a type 7 start has no tag-name exclusion: a closing
+//     `</script>` (or an opening `<script/>`, which type 1 does not take) opens a type 7 block, so a `<!--` inside
+//     it is raw text, not a comment block. (2) A closed comment opened after list or block-quote markers stays
+//     masked across blank lines. (3) Leading reference-definition lines are not inline-parsed: a backtick in a
+//     title cannot pair with prose below. Each under both fence options, with length and LF offsets checked.
+for (const treatUnclosedAsFence of [true, false]) {
+  for (const [name, input] of [
+    ['a `</script>` type 7 block holding `<!--`', '</script>\n<i title="\n<!--\n">\n\n[visible](docs/V.md)\n'],
+    ['a backtick in a definition title', '[r]: /url "`"\n[visible](docs/V.md) `\n'],
+    ['a `<!--` in a definition title', '[r]: /url "<!--"\n[visible](docs/V.md) -->\n'],
+    ['an unclosed comment after a list marker (left to paragraph rules)', '- <!-- x\n\n[visible](docs/V.md)\n'],
+  ]) {
+    test(`Codex 43e53ab5: ${name} keeps the route (treatUnclosedAsFence=${treatUnclosedAsFence})`, () => {
+      const out = maskNonProse(input, { treatUnclosedAsFence });
+      assertShape(input, out);
+      assert.ok(out.includes('[visible](docs/V.md)'), `route lost: ${JSON.stringify(out)}`);
+    });
+  }
+  for (const [name, input] of [
+    ['a `<script/>` type 7 block', '<script/>\n[hidden](docs/H.md)\n\n[visible](docs/V.md)\n'],
+    ['a closed comment in a list item across a blank line', '- <!--\n\n  [hidden](docs/H.md)\n  -->\n\n[visible](docs/V.md)\n'],
+    ['a closed comment in a block quote across a blank line', '> <!--\n>\n> [hidden](docs/H.md)\n> -->\n\n[visible](docs/V.md)\n'],
+    ['a closed comment in an ordered item', '1. <!--\n\n   [hidden](docs/H.md) -->\n\n[visible](docs/V.md)\n'],
+  ]) {
+    test(`Codex 43e53ab5: ${name} hides H, keeps V (treatUnclosedAsFence=${treatUnclosedAsFence})`, () => {
+      const out = maskNonProse(input, { treatUnclosedAsFence });
+      assertShape(input, out);
+      assert.ok(!out.includes('docs/H.md'), `hidden route kept: ${JSON.stringify(out)}`);
+      assert.ok(out.includes('[visible](docs/V.md)'), `route lost: ${JSON.stringify(out)}`);
+    });
+  }
+}

@@ -236,6 +236,9 @@ function indentColumns(line) {
 }
 
 const ATX_HEADING = /^ {0,3}#{1,6}(?:[ \t]|$)/;
+// One or more list-item or block-quote markers, then up to three spaces, then a comment opener.
+const CONTAINER_START = /^ {0,3}(?:>|[-+*](?:[ \t]|$)|\d{1,9}[.)](?:[ \t]|$))/;
+const CONTAINER_COMMENT = /^((?: {0,3}(?:[-+*]|\d{1,9}[.)])[ \t]+| {0,3}>[ \t]?)+)( {0,3})<!--/;
 const SETEXT_UNDERLINE = /^ {0,3}(?:=+|-+)[ \t]*$/;
 
 /**
@@ -248,14 +251,23 @@ const SETEXT_UNDERLINE = /^ {0,3}(?:=+|-+)[ \t]*$/;
  * error on the conservative side: a link masked that a reader could click, never one credited that they cannot.
  */
 function allReferenceDefinitions(paraLines) {
+  return paraLines.length > 0 && referenceDefinitionLines(paraLines) === paraLines.length;
+}
+
+/**
+ * How many leading lines of an open paragraph are wholly consumed as link reference definitions (§4.7), under the
+ * same strict recognizer: 0 when the first one is not recognised. Those lines are never inline-parsed (Codex on
+ * #2368: a backtick in a definition's title must not pair with one in the prose after it).
+ */
+function referenceDefinitionLines(paraLines) {
   const text = paraLines.map(content).join("\n");
   // A backslash before anything but ASCII punctuation is read differently by different renderers inside a
   // destination (markdown-it 14.3.0 consumes `\ ` as a pair); not judged, so the underline stands.
-  if (/\\(?![!-\/:-@[-`{-~])/.test(text)) return false;
+  if (/\\(?![!-\/:-@[-`{-~])/.test(text)) return 0;
   // A CR left after each line's CRLF ending is stripped is a line ending to cmark-gfm (blocks.c splits on it before
   // block parsing), never label or destination text; this recognizer does not model CR-only lines, so any residual
   // CR means "not judged" and the underline stands (Root on c28a38ca).
-  if (text.includes("\r")) return false;
+  if (text.includes("\r")) return 0;
   let at = 0;
   const ws = () => {
     while (at < text.length && (text[at] === " " || text[at] === "\t")) at += 1;
@@ -345,13 +357,14 @@ function allReferenceDefinitions(paraLines) {
     if (destLineEnds) return afterDest + (text.slice(afterDest).match(/^[ \t]*/)[0].length);
     return -1;
   };
-  if (!text.length) return false;
+  let consumed = 0;
   while (at < text.length) {
     const end = definition();
-    if (end < 0) return false;
+    if (end < 0) break;
+    consumed = end;
     at = end < text.length ? end + 1 : end;
   }
-  return true;
+  return consumed === 0 ? 0 : text.slice(0, consumed).split("\n").length;
 }
 
 /**
@@ -372,7 +385,10 @@ function htmlBlockStart(line, inParagraph) {
   if (t6 && HTML_TYPE6_TAGS.has(t6[1].toLowerCase())) return { type: 6, col };
   if (!inParagraph) {
     const t7 = TYPE7_OPEN.exec(rest) || TYPE7_CLOSE.exec(rest);
-    if (t7 && !/^(?:pre|script|style|textarea)$/i.test(t7[1])) return { type: 7, col };
+    // No tag-name exclusion: the declared scanner's type 7 condition has none, and type 1 is tried first, so only a
+    // `<script`/`<pre`/`<style`/`<textarea` not followed by a separator, `>` or end of line (`<script/>`, say) and
+    // every closing tag such as `</script>` reach this line (Codex on #2368).
+    if (t7) return { type: 7, col };
   }
   return null;
 }
@@ -535,6 +551,26 @@ export function maskNonProse(text, { treatUnclosedAsFence = true } = {}) {
       inPara = true;
     }
   }
+  // Leading lines of a paragraph that are wholly reference definitions are not inline-parsed (§4.7), so they join
+  // no inline segment: a backtick or `<!--` in a definition's title cannot pair with prose below it. With a lone
+  // CR in the document the definitions are not judged, and the paragraph stays one segment, as before.
+  if (judgeDefinitions) {
+    for (let i = 0; i < lines.length; ) {
+      let j = i;
+      while (j + 1 < lines.length && segment[j + 1] === segment[i] && segment[i] >= 0) j += 1;
+      if (segment[i] >= 0 && !tail.has(i)) {
+        const defs = referenceDefinitionLines(source.slice(i, j + 1));
+        // A list-item or block-quote line further down means the paragraph's real extent is unknown here
+        // (containers are not modelled), so the segment is left as it was.
+        const boxedBelow = source.slice(i + defs, j + 1).some((l) => CONTAINER_START.test(content(l)));
+        // So does a paragraph whose start is not certain: only one at the top, after a blank line or after an ATX
+        // heading is judged; after anything else a container may have ended where this scan does not know.
+        const certainStart = i === 0 || isBlank(source[i - 1]) || ATX_HEADING.test(content(source[i - 1]));
+        if (!boxedBelow && certainStart) for (let k = i; k < i + defs; k += 1) segment[k] = -2;
+      }
+      i = j + 1;
+    }
+  }
   const masked = [];
   for (let i = 0; i < lines.length; ) {
     let j = i;
@@ -544,9 +580,32 @@ export function maskNonProse(text, { treatUnclosedAsFence = true } = {}) {
     masked.push(chunk);
     i = j + 1;
   }
-  return masked
+  const outLines = masked
     .join("\n")
     .split("\n")
-    .map((l) => l.replace(/(`+)[^`\n]*?\1/g, blank))
-    .join("\n");
+    .map((l) => l.replace(/(`+)[^`\n]*?\1/g, blank));
+  // A comment opened right after list-item or block-quote markers is a type 2 block inside that container.
+  // Containers are not modelled, so it is masked only when it closes, from `<!--` through the first `-->` below
+  // it (blank lines included), as the masking before this helper did. This pass only ever adds masking on top of
+  // the block scan above, which it leaves untouched, so it can hide more than a renderer would, never less
+  // (Codex on #2368: `- <!--\n\n  [hidden](x)\n  -->` must stay hidden).
+  for (let i = 0; i < source.length; i += 1) {
+    const boxed = CONTAINER_COMMENT.exec(content(source[i]));
+    if (!boxed) continue;
+    const col = boxed[1].length + boxed[2].length;
+    if (outLines[i].slice(col, col + 4) !== "<!--") continue;
+    let j = i;
+    let at = endAfter(source[i], "-->", col + 2);
+    while (at < 0 && j + 1 < source.length) {
+      j += 1;
+      at = endAfter(source[j], "-->", 0);
+    }
+    if (at < 0) continue;
+    for (let k = i; k <= j; k += 1) {
+      const from = k === i ? col : 0;
+      const to = k === j ? at : outLines[k].length;
+      outLines[k] = outLines[k].slice(0, from) + blank(outLines[k].slice(from, to)) + outLines[k].slice(to);
+    }
+  }
+  return outLines.join("\n");
 }

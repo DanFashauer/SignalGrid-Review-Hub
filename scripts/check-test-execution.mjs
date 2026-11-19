@@ -53,13 +53,15 @@
 // SELF-TEST: the corpus must be non-trivial, a known-reached file must resolve
 // as reached, and a synthetic unreached file must be flagged. A gate that cannot
 // fail proves nothing.
-import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 import { allowlistRefusal } from "./check-local-build-regressions.mjs";
 import { SCRATCH_GIT_SCRUB } from "./lib/scratch-git.mjs";
 import { SEP, ENV, maskQuoted, runCommands, stripYamlComments } from "./lib/workflow-invocation.mjs";
+import { runnerShapeOk } from "./check-gate-self-tests-run.mjs";
 
 const ENTRY_FILES = ["scripts/preflight.mjs", "validate-sim-macos.sh"];
 const WORKFLOW_DIR = ".github/workflows";
@@ -183,8 +185,14 @@ for (const cfg of ["playwright.config.ts", "scripts/playwright.config.ts"]) {
 // The shared build-regression runner's --suite mode runs EVERY tracked allowlisted test under one
 // directory on every invocation (scripts/check-local-build-regressions.mjs). A directory contributes
 // its allowlisted files ONLY through an actual executable registration, never through prose:
-//   * a live `scripts/preflight.mjs` step whose cmd array is exactly
-//     ["node", "scripts/check-local-build-regressions.mjs", "--suite", "<dir>"] (a `//` line is dead);
+//   * a step in the list `scripts/preflight.mjs` ITERATES whose cmd array is exactly
+//     ["node", "scripts/check-local-build-regressions.mjs", "--suite", "<dir>"]. The list is read
+//     from the runner (`--list-steps`), never parsed out of its source, so a block comment, a
+//     template string or an unused array that merely looks like a step credits nothing — the same
+//     rule, and the same structural guard (runnerShapeOk), as scripts/check-gate-self-tests-run.mjs.
+//     A runner that fails that guard, does not answer, or prints anything but a non-empty JSON array
+//     of { cmd: string[] } steps credits nothing (fail-closed). A heavy or needsNativeBuild step is
+//     skippable by preflight and credits nothing;
 //   * a workflow `run:` command, judged by the SAME matcher the parity gates use
 //     (lib/workflow-invocation.mjs: comments stripped, quotes masked, command position only, so a
 //     `# comment`, an `echo node …`, a `name:` label or a continue-on-error step credits nothing),
@@ -194,11 +202,28 @@ for (const cfg of ["playwright.config.ts", "scripts/playwright.config.ts"]) {
 // decides, imported rather than restated.
 const SUITE_RUNNER = "scripts/check-local-build-regressions.mjs";
 const SUITE_DIR_RE = /^(?:scripts|lib)(?:\/[A-Za-z0-9_][A-Za-z0-9._-]*)*$/;
-const suiteDirsFromPreflight = (text) => {
+const suiteDirsFromListing = (stdout) => {
   const dirs = new Set();
-  const re = /^[ \t]*\{[^\n]*?\bcmd:[ \t]*\[[ \t]*"node"[ \t]*,[ \t]*"scripts\/check-local-build-regressions\.mjs"[ \t]*,[ \t]*"--suite"[ \t]*,[ \t]*"([^"\n]*)"[ \t]*\]/gm;
-  for (const m of text.matchAll(re)) if (SUITE_DIR_RE.test(m[1])) dirs.add(m[1]);
+  const line = String(stdout ?? "").split("\n").filter((l) => l.trim() !== "").pop() ?? "";
+  let list;
+  try { list = JSON.parse(line); } catch { return []; }
+  if (!Array.isArray(list) || list.length === 0 ||
+      !list.every((st) => st && typeof st === "object" && Array.isArray(st.cmd) && st.cmd.every((x) => typeof x === "string"))) return [];
+  for (const st of list) {
+    if (st.heavy === true || st.needsNativeBuild === true) continue;
+    const c = st.cmd;
+    if (c.length === 4 && c[0] === "node" && c[1] === SUITE_RUNNER && c[2] === "--suite" && SUITE_DIR_RE.test(c[3])) dirs.add(c[3]);
+  }
   return [...dirs];
+};
+// The runner's own listing, under the shape guard. `runnerPath` is a preflight-shaped file; its
+// source must pass runnerShapeOk or nothing is listed.
+const listRunner = (runnerPath, cwd) => {
+  let source;
+  try { source = readFileSync(runnerPath, "utf8"); } catch { return ""; }
+  if (!runnerShapeOk(source)) return "";
+  const r = spawnSync(process.execPath, [runnerPath, "--list-steps"], { cwd, encoding: "utf8", timeout: 60_000, killSignal: "SIGKILL", maxBuffer: 64 * 1024 * 1024 });
+  return r.status === 0 && !r.error ? r.stdout ?? "" : "";
 };
 const suiteDirsFromWorkflow = (rawText) => {
   const dirs = new Set();
@@ -210,8 +235,8 @@ const suiteDirsFromWorkflow = (rawText) => {
   }
   return [...dirs];
 };
-const suiteDirsFrom = ({ preflight = "", workflows = [] }) =>
-  [...new Set([...suiteDirsFromPreflight(preflight), ...workflows.flatMap(suiteDirsFromWorkflow)])];
+const suiteDirsFrom = ({ listing = "", workflows = [] }) =>
+  [...new Set([...suiteDirsFromListing(listing), ...workflows.flatMap(suiteDirsFromWorkflow)])];
 // The suite runs TRACKED files only, enumerated by the runner's own git(root, args): cwd = the repo
 // root, every SCRATCH_GIT_SCRUB key removed. This checker enumerates under the SAME custody, so an
 // inherited GIT_DIR / GIT_INDEX_FILE / GIT_WORK_TREE cannot credit a file from another repository or
@@ -230,7 +255,8 @@ const suiteReaches = (file, dirs, tracked = trackedFiles) =>
 const workflowTexts = existsSync(WORKFLOW_DIR)
   ? readdirSync(WORKFLOW_DIR).filter((e) => /\.ya?ml$/.test(e)).map((e) => readIfExists(join(WORKFLOW_DIR, e)))
   : [];
-const suiteDirs = suiteDirsFrom({ preflight: readIfExists("scripts/preflight.mjs"), workflows: workflowTexts });
+const preflightListing = listRunner(join(REPO_ROOT, "scripts/preflight.mjs"), REPO_ROOT);
+const suiteDirs = suiteDirsFrom({ listing: preflightListing, workflows: workflowTexts });
 
 // ── enumerate test-shaped files ──────────────────────────────────────────────
 const testFiles = [];
@@ -310,15 +336,43 @@ const staleKeys = (files, decls) => {
   // precisely the state this check was added to end.
   const stalePositive = staleKeys(["a/b.test.ts"], new Map([["gone/", "r"]])).join() === "gone/";
   const staleNegative = staleKeys(["a/b.test.ts"], new Map([["a/", "r"]])).length === 0;
-  // The --suite contribution, both ways. Positive: a live preflight cmd and a workflow `run:` each
-  // register their directory, and a tracked allowlisted file under it is reached. Negative: nothing
-  // that does not EXECUTE the suite registers anything (comment, echo, name label, dead `//` preflight
-  // line, other script), a missing/extra/quoted/malformed operand registers nothing, and inside a
-  // registered directory a sibling, a .ts file, a non-boundary prefix and an untracked file stay unreached.
-  const PF = '  { name: "s", cmd: ["node", "scripts/check-local-build-regressions.mjs", "--suite", "scripts/x/test"] },';
+  // The --suite contribution, both ways. Positive: a step the runner ITERATES and a workflow `run:`
+  // each register their directory, and a tracked allowlisted file under it is reached. Negative:
+  // nothing that does not EXECUTE the suite registers anything (comment, echo, name label, other
+  // script; in a preflight-shaped runner: a line inside a multiline block comment, a multiline
+  // template string, an unused array, a heavy or native-build step, a runner failing the shape
+  // guard), a missing/extra/quoted/malformed operand registers nothing, and inside a registered
+  // directory a sibling, a .ts file, a non-boundary prefix and an untracked file stay unreached.
+  // The synthetic runners are real files run with `--list-steps`, outside the checkout.
+  const SUITE_STEP = '  { name: "s", cmd: ["node", "scripts/check-local-build-regressions.mjs", "--suite", "scripts/x/test"] },';
+  const OTHER_STEP = '  { name: "o", cmd: ["node", "scripts/other.mjs"] },';
+  const LIST_BLOCK_SRC =
+    'if (process.argv.includes("--list-steps")) {\n' +
+    '  await new Promise((done) => process.stdout.write(JSON.stringify(STEPS.map((s) => ({ name: s.name, cmd: s.cmd, heavy: s.heavy === true, needsNativeBuild: s.needsNativeBuild === true }))) + "\\n", done));\n' +
+    '  process.exit(0);\n}\n';
+  const runnerSrc = (steps, extra = "", block = LIST_BLOCK_SRC, between = "") =>
+    `const STEPS = [\n${steps.join("\n")}\n];\n${extra}\n${block}${between}for (const step of STEPS) { void step; }\n`;
+  const scratch = mkdtempSync(join(tmpdir(), "test-execution-runner-"));
+  let runnerN = 0;
+  const listingOf = (source) => {
+    const f = join(scratch, `runner-${(runnerN += 1)}.mjs`);
+    writeFileSync(f, source);
+    return listRunner(f, scratch);
+  };
+  const dirsOfRunner = (source) => suiteDirsFrom({ listing: listingOf(source) });
+  const BT = "`";
+  const DEAD = {
+    blockComment: runnerSrc([OTHER_STEP], `/*\n${SUITE_STEP}\n*/`),
+    template: runnerSrc([OTHER_STEP], `const T = ${BT}\n${SUITE_STEP}\n${BT};\nvoid T;`),
+    unusedArray: runnerSrc([OTHER_STEP], `const UNUSED = [\n${SUITE_STEP}\n];\nvoid UNUSED;`),
+  };
+  // Each dead-source control must carry the exact live-looking line on its own and pass the shape
+  // guard, so the refusal is the listing's, not an accident of the fixture.
+  const deadControlsBite = Object.values(DEAD).every((src) => src.split("\n").includes(SUITE_STEP) && runnerShapeOk(src));
+  const PF = listingOf(runnerSrc([OTHER_STEP, SUITE_STEP]));
   const WF = "jobs:\n  a:\n    steps:\n      - name: s\n        run: node scripts/check-local-build-regressions.mjs --suite scripts/y/test\n";
   const wf = (line) => `jobs:\n  a:\n    steps:\n      - name: s\n        ${line}\n`;
-  const sd = suiteDirsFrom({ preflight: PF, workflows: [WF] });
+  const sd = suiteDirsFrom({ listing: PF, workflows: [WF] });
   const tr = new Set(["scripts/x/test/a.test.mjs", "scripts/y/test/b.test.mjs", "scripts/x/other/a.test.mjs", "scripts/x/test/a.test.ts", "scripts/x/testing/a.test.mjs"]);
   const suitePositive =
     sd.slice().sort().join() === "scripts/x/test,scripts/y/test" &&
@@ -335,11 +389,24 @@ const staleKeys = (files, decls) => {
     none({ workflows: [wf("run: node scripts/check-local-build-regressions.mjs --suite ../x/test")] }) &&
     none({ workflows: [wf('run: node scripts/check-local-build-regressions.mjs --suite "scripts/x/test"')] }) &&
     none({ workflows: [wf("run: node scripts/other.mjs --suite scripts/x/test")] }) &&
-    none({ preflight: '  // { name: "s", cmd: ["node", "scripts/check-local-build-regressions.mjs", "--suite", "scripts/x/test"] },' }) &&
-    none({ preflight: '  { name: "s", cmd: ["node", "scripts/check-local-build-regressions.mjs", "--suite", "scripts/x/test", "x"] },' }) &&
-    none({ preflight: '  { name: "s", cmd: ["node", "scripts/check-local-build-regressions.mjs", "--suite", "../etc"] },' }) &&
-    none({ preflight: '  { name: "s", cmd: ["node", "scripts/check-local-build-regressions.mjs", "--suite"] },' }) &&
-    none({ preflight: '  // node scripts/check-local-build-regressions.mjs --suite scripts/x/test' }) &&
+    deadControlsBite &&
+    dirsOfRunner(DEAD.blockComment).length === 0 &&
+    dirsOfRunner(DEAD.template).length === 0 &&
+    dirsOfRunner(DEAD.unusedArray).length === 0 &&
+    dirsOfRunner(runnerSrc([OTHER_STEP, `  // ${SUITE_STEP.trim()}`])).length === 0 &&
+    dirsOfRunner(runnerSrc([OTHER_STEP, '  { name: "s", cmd: ["node", "scripts/check-local-build-regressions.mjs", "--suite", "scripts/x/test", "x"] },'])).length === 0 &&
+    dirsOfRunner(runnerSrc([OTHER_STEP, '  { name: "s", cmd: ["node", "scripts/check-local-build-regressions.mjs", "--suite", "../etc"] },'])).length === 0 &&
+    dirsOfRunner(runnerSrc([OTHER_STEP, '  { name: "s", cmd: ["node", "scripts/check-local-build-regressions.mjs", "--suite"] },'])).length === 0 &&
+    dirsOfRunner(runnerSrc([OTHER_STEP, '  { name: "s", heavy: true, cmd: ["node", "scripts/check-local-build-regressions.mjs", "--suite", "scripts/x/test"] },'])).length === 0 &&
+    dirsOfRunner(runnerSrc([OTHER_STEP, '  { name: "s", needsNativeBuild: true, cmd: ["node", "scripts/check-local-build-regressions.mjs", "--suite", "scripts/x/test"] },'])).length === 0 &&
+    // shape guard: the step is live but the runner has no listing block before its loop
+    dirsOfRunner(runnerSrc([OTHER_STEP, SUITE_STEP], "", "")).length === 0 &&
+    // shape guard: the listing names the step, but the loop then runs a different list
+    dirsOfRunner(runnerSrc([OTHER_STEP, SUITE_STEP], "", LIST_BLOCK_SRC, "STEPS.length = 0;\n")).length === 0 &&
+    // a runner that prints something other than one JSON array of steps
+    dirsOfRunner(runnerSrc([OTHER_STEP, SUITE_STEP], "", LIST_BLOCK_SRC.replace("JSON.stringify(STEPS.map", "String(STEPS.map"))).length === 0 &&
+    suiteDirsFrom({ listing: "not json" }).length === 0 &&
+    suiteDirsFrom({ listing: "[]" }).length === 0 &&
     none({}) &&
     !suiteReaches("scripts/x/test/untracked.test.mjs", sd, tr) &&
     !suiteReaches("scripts/x/other/a.test.mjs", sd, tr) &&
@@ -352,6 +419,8 @@ const staleKeys = (files, decls) => {
     GIT_INDEX_FILE: join(REPO_ROOT, "nonexistent-index"),
     GIT_WORK_TREE: join(REPO_ROOT, "nonexistent-tree"),
   });
+  // the real preflight registration is read from the real runner (not only from the workflow)
+  const suiteLive = suiteDirsFromListing(preflightListing).includes("scripts/mac/local-brain/test");
   const suiteCustody =
     trackedFiles.size > 0 &&
     overridden.size === trackedFiles.size &&
@@ -366,6 +435,7 @@ const staleKeys = (files, decls) => {
     !staleNegative ||
     !suitePositive ||
     !suiteNegative ||
+    !suiteLive ||
     !suiteCustody
   ) {
     console.error(
@@ -373,7 +443,7 @@ const staleKeys = (files, decls) => {
         `testFiles=${testFiles.length} (floor ${FILE_FLOOR}), reachedScripts=${reachedScriptNames.size} ` +
         `(floor ${SCRIPT_FLOOR}), knownReached=${knownReached ?? "(none found)"}, positive=${positive}, ` +
         `negative=${negative}, stalePositive=${stalePositive}, staleNegative=${staleNegative}, ` +
-        `suitePositive=${suitePositive}, suiteNegative=${suiteNegative}, suiteCustody=${suiteCustody}. ` +
+        `suitePositive=${suitePositive}, suiteNegative=${suiteNegative}, suiteLive=${suiteLive}, suiteCustody=${suiteCustody}. ` +
         "The reachability derivation has drifted from how this repo invokes tests; " +
         "a gate that resolves nothing is green about nothing.",
     );

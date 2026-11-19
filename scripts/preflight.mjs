@@ -97,10 +97,6 @@ const STEPS = [
   // gate stays green and the image build dies on `pnpm install`. Reads two text files.
   { name: "Docker carries every install-hook entrypoint", cmd: ["node", "scripts/check-docker-lifecycle-copy.mjs"] },
   { name: "Branch-prune exact-tip regression (real CLI and name-only deletion mutants)", cmd: ["node", "scripts/check-pruner-exact-ref.mjs"] },
-  // Loop-state seam self-test sits in the first Mac slice (#2359, Root selection on #439): the third of four slices
-  // carries Typecheck, Build, Browser E2E and /v1 under concurrency, and run 44440051849 timed out there at the 2400 s
-  // bound with this self-test the last step started (slice 1 took 480 s). Same command, same coverage; its fixture is a
-  // private mkdtemp repository and it reads no build output, so it needs nothing an earlier step produces.
   { name: "Loop-state seam self-test (squash-of-a-merge-tree, whitespace twin and same-name-ahead fixtures can fail)", cmd: ["node", "scripts/loop-state.mjs", "--self-test"] },
   { name: "Invariant review self-test (a default-less switch / stray clock read must fail)", cmd: ["node", "scripts/review-invariants.mjs", "--self-test"] },
   { name: "Invariant review (fail-closed / determinism / Assist / truth)", cmd: ["node", "scripts/review-invariants.mjs"] },

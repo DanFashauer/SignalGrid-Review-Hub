@@ -54,9 +54,11 @@
 // as reached, and a synthetic unreached file must be flagged. A gate that cannot
 // fail proves nothing.
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 import { allowlistRefusal } from "./check-local-build-regressions.mjs";
+import { SCRATCH_GIT_SCRUB } from "./lib/scratch-git.mjs";
 import { SEP, ENV, maskQuoted, runCommands, stripYamlComments } from "./lib/workflow-invocation.mjs";
 
 const ENTRY_FILES = ["scripts/preflight.mjs", "validate-sim-macos.sh"];
@@ -210,13 +212,19 @@ const suiteDirsFromWorkflow = (rawText) => {
 };
 const suiteDirsFrom = ({ preflight = "", workflows = [] }) =>
   [...new Set([...suiteDirsFromPreflight(preflight), ...workflows.flatMap(suiteDirsFromWorkflow)])];
-// The suite runs TRACKED files only (`git ls-files`), so only tracked files are credited: an
-// untracked test on disk is not something the permanent suite would execute. If git cannot answer,
-// nothing is credited through --suite (fail-closed: unknown never means reached).
-const trackedFiles = (() => {
-  const r = spawnSync("git", ["ls-files", "-z"], { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+// The suite runs TRACKED files only, enumerated by the runner's own git(root, args): cwd = the repo
+// root, every SCRATCH_GIT_SCRUB key removed. This checker enumerates under the SAME custody, so an
+// inherited GIT_DIR / GIT_INDEX_FILE / GIT_WORK_TREE cannot credit a file from another repository or
+// index that the real suite would never run. If git cannot answer, nothing is credited through
+// --suite (fail-closed: unknown never means reached).
+const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const trackedFilesIn = (root, baseEnv = process.env) => {
+  const env = { ...baseEnv };
+  for (const k of SCRATCH_GIT_SCRUB) delete env[k];
+  const r = spawnSync("git", ["ls-files", "-z"], { cwd: root, env, shell: false, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
   return r.status === 0 && !r.error ? new Set(r.stdout.split("\0").filter(Boolean)) : new Set();
-})();
+};
+const trackedFiles = trackedFilesIn(REPO_ROOT);
 const suiteReaches = (file, dirs, tracked = trackedFiles) =>
   dirs.some((d) => file.startsWith(`${d}/`)) && allowlistRefusal(file) === null && tracked.has(file);
 const workflowTexts = existsSync(WORKFLOW_DIR)
@@ -337,6 +345,17 @@ const staleKeys = (files, decls) => {
     !suiteReaches("scripts/x/other/a.test.mjs", sd, tr) &&
     !suiteReaches("scripts/x/test/a.test.ts", sd, tr) &&
     !suiteReaches("scripts/x/testing/a.test.mjs", sd, tr);
+  // Same custody as the runner: inherited repository/index overrides change nothing.
+  const overridden = trackedFilesIn(REPO_ROOT, {
+    ...process.env,
+    GIT_DIR: join(REPO_ROOT, "nonexistent-git-dir"),
+    GIT_INDEX_FILE: join(REPO_ROOT, "nonexistent-index"),
+    GIT_WORK_TREE: join(REPO_ROOT, "nonexistent-tree"),
+  });
+  const suiteCustody =
+    trackedFiles.size > 0 &&
+    overridden.size === trackedFiles.size &&
+    [...trackedFiles].every((f) => overridden.has(f));
   if (
     testFiles.length < FILE_FLOOR ||
     reachedScriptNames.size < SCRIPT_FLOOR ||
@@ -346,14 +365,15 @@ const staleKeys = (files, decls) => {
     !stalePositive ||
     !staleNegative ||
     !suitePositive ||
-    !suiteNegative
+    !suiteNegative ||
+    !suiteCustody
   ) {
     console.error(
       "✗ SELF-TEST FAILED — " +
         `testFiles=${testFiles.length} (floor ${FILE_FLOOR}), reachedScripts=${reachedScriptNames.size} ` +
         `(floor ${SCRIPT_FLOOR}), knownReached=${knownReached ?? "(none found)"}, positive=${positive}, ` +
         `negative=${negative}, stalePositive=${stalePositive}, staleNegative=${staleNegative}, ` +
-        `suitePositive=${suitePositive}, suiteNegative=${suiteNegative}. ` +
+        `suitePositive=${suitePositive}, suiteNegative=${suiteNegative}, suiteCustody=${suiteCustody}. ` +
         "The reachability derivation has drifted from how this repo invokes tests; " +
         "a gate that resolves nothing is green about nothing.",
     );

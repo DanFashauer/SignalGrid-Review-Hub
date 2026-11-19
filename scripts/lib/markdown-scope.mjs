@@ -97,17 +97,18 @@ export function fencedLineFlags(lines, { treatUnclosedAsFence = true } = {}) {
   return flags;
 }
 
-// HTML block start conditions (§4.6), tested on a line after its 0–3 space indent, in cmark-gfm 0.29's forms — the
-// grammar this module targets (scanners.re at 0.29.0.gfm.0 and .13): type 1 is pre/script/style only (`textarea`
-// joined in CommonMark 0.30), and the type 6 set has `source` and not `search` (0.31.2 swapped them). Root on #2368.
+// HTML block start conditions (§4.6), tested on a line after its 0–3 space indent, bound to one declared grammar:
+// cmark-gfm tag 0.29.0.gfm.13, src/scanners.re at 587a12bb54d95ac37241377e6ddc93ea0e45439b (Root on #2368). There,
+// type 1 is pre/script/style/textarea, and the type 6 set has `source` and not `search` (CommonMark 0.31.2 swapped
+// them). No claim is made about the renderer GitHub deploys today; this is the version the gates are written against.
 const HTML_TYPE6_TAGS = new Set(
   ("address article aside base basefont blockquote body caption center col colgroup dd details dialog dir div dl dt " +
     "fieldset figcaption figure footer form frame frameset h1 h2 h3 h4 h5 h6 head header hr html iframe legend li " +
     "link main menu menuitem nav noframes ol optgroup option p param section source summary table tbody td tfoot th " +
     "thead title tr track ul").split(" "),
 );
-// Separators inside a block-start tag follow cmark-gfm 0.29's `spacechar` (space, tab, VT, FF; scanners.re), the
-// grammar this module targets: a `<span\vtitle="x">` line opens a type 7 block there, so a route under it is hidden
+// Separators inside a block-start tag follow that scanner's `spacechar` (space, tab, VT, FF; the same at
+// 0.29.0.gfm.0): a `<span\vtitle="x">` line opens a type 7 block there, so a route under it is hidden
 // and must be masked (Root on #2368). After a completed type 7 tag only space, tab and FF may follow (VT may not).
 // `\s` would also accept NBSP and other Unicode spaces and change which block owns a line, so it is never used.
 const SP = String.raw`[ \t\v\f]`;
@@ -355,7 +356,7 @@ function htmlBlockStart(line, inParagraph) {
   if (!m) return null;
   const rest = m[1];
   const col = line.length - rest.length;
-  if (/^<(?:pre|script|style)(?:[ \t\v\f>]|$)/i.test(rest)) return { type: 1, col, end: /<\/(?:pre|script|style)>/i };
+  if (/^<(?:pre|script|style|textarea)(?:[ \t\v\f>]|$)/i.test(rest)) return { type: 1, col, end: /<\/(?:pre|script|style|textarea)>/i };
   if (rest.startsWith("<!--")) return { type: 2, col, end: "-->" };
   if (rest.startsWith("<?")) return { type: 3, col, end: "?>" };
   if (/^<![A-Z]/.test(rest)) return { type: 4, col, end: ">" };
@@ -364,7 +365,7 @@ function htmlBlockStart(line, inParagraph) {
   if (t6 && HTML_TYPE6_TAGS.has(t6[1].toLowerCase())) return { type: 6, col };
   if (!inParagraph) {
     const t7 = TYPE7_OPEN.exec(rest) || TYPE7_CLOSE.exec(rest);
-    if (t7 && !/^(?:pre|script|style)$/i.test(t7[1])) return { type: 7, col };
+    if (t7 && !/^(?:pre|script|style|textarea)$/i.test(t7[1])) return { type: 7, col };
   }
   return null;
 }

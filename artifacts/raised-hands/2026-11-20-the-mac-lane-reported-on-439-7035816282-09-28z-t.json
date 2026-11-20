@@ -7,6 +7,9 @@
   "need": "An owner decision: either wait for the 2026-11-24 reset, or have Root reroute the publisher's independent review through the local router, as the owner's 2026-11-02 rule treats exhausted paid usage as a routing event. Root owns that private routing code.",
   "whoCanUnblock": "owner",
   "domain": "independent-operation",
-  "status": "open",
-  "routedTo": null
+  "status": "resolved",
+  "routedTo": null,
+  "resolvedAt": "2026-11-20T19:19:49.774Z",
+  "resolvedBy": "cloud",
+  "resolution": "Owner decided on #439 (7048460671, relayed by the Mac lane 19:17Z): Add Codex usage. That is an account action on the owner's side; no setting was changed by any lane. When the usage lands, Root confirms whether the installed admission reads it as included capacity or credits."
 }

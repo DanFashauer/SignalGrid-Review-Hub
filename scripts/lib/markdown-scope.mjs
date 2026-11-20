@@ -637,6 +637,10 @@ function blockRanges(lines, treatUnclosedAsFence, judgeDefinitions) {
   // below masks them. It ends at its end marker, a blank line (types 6 and 7), or the item's end (Codex-class
   // case found by differential fuzzing on 41cf68c6).
   let markerLeaf = null;
+  // An item whose marker line holds nothing (`-`, `1.`) and is followed by a blank line ends there: an item can begin
+  // with at most one blank line (§5.2), so a later indented line is not its content (Codex on 0ec39c93: `-`, blank,
+  // then `    <!--` is top-level indented code in markdown-it, not an HTML block inside the item).
+  let emptyMarker = null;
   for (let i = 0; i < lines.length; i += 1) {
     const text0 = expandTabs(content(lines[i]));
     let contentAt = 0; // column after any list markers opened on this line
@@ -693,7 +697,10 @@ function blockRanges(lines, treatUnclosedAsFence, judgeDefinitions) {
         if (pos === 0) items.length = Math.min(items.length, matched);
         items.push(col);
         pos = col;
-        if (empty) break;
+        if (empty) {
+          emptyMarker = { line: i, depth: items.length - 1 };
+          break;
+        }
       }
       contentAt = pos;
       if (pos > 0) {
@@ -710,6 +717,8 @@ function blockRanges(lines, treatUnclosedAsFence, judgeDefinitions) {
         }
       }
     } else {
+      if (emptyMarker && emptyMarker.line === i - 1) items.length = Math.min(items.length, emptyMarker.depth);
+      emptyMarker = null;
       itemCol[i] = items.length ? items[items.length - 1] : 0;
       itemStack[i] = items.slice();
     }
@@ -807,7 +816,9 @@ function blockRanges(lines, treatUnclosedAsFence, judgeDefinitions) {
       // A block quote interrupts a paragraph that is not quoted, so the quoted text starts a new paragraph and its
       // start and containers are read afresh (Codex on 5710c465: `intro`, `> quote`, `===`, `<span>` keeps the
       // quoted paragraph open in markdown-it, so `<span>` is paragraph text, not an HTML block).
-      if (!inParagraph || (opensQuote && !sameQuote)) {
+      // A list item that interrupts the paragraph starts a new one too, inside the new item (Codex on 0ec39c93:
+      // `intro`, `- a`, `===`, `<span>` keeps the item's paragraph open, so `<span>` is lazy text, not HTML).
+      if (!inParagraph || (opensQuote && !sameQuote) || contentAt > 0) {
         paraStart = i;
         paraQuote = opensQuote;
         paraItemCol = items.length ? items[items.length - 1] : 0;

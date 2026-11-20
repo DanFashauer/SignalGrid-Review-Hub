@@ -1748,3 +1748,68 @@ test('container comments end with their container, as markdown-it reads them', a
   }
   assert.equal(checked, (8 * 6 * 3 * 8 * 2 - 8 * 3 * 8) * 2);
 });
+
+// 39. Codex on 0ec39c93 (#2368). (a) A list item that interrupts a paragraph starts a new paragraph inside the item,
+//     so an unindented `===` after it is lazy text, not a setext underline, and a following `<span>` stays paragraph
+//     text. (b) An item whose marker line holds nothing ends at the blank line after it (an item can begin with at
+//     most one blank line, §5.2), so a later indented line is top-level indented code, not item content. Exact
+//     literals first, then a bounded family of each shape judged against markdown-it 14 in both directions; both
+//     fence options; shape checked. The legacy fence limitation (a lone ``` inside an item read by the top-level
+//     fence scan) and top-level indented code, which the preserved contract leaves unmasked, are pinned by count. An
+//     empty marker line followed by content before any blank keeps its item open (controls).
+for (const treatUnclosedAsFence of [true, false]) {
+  test(`Codex 0ec39c93 literal: a list that interrupts a paragraph opens its own paragraph (treatUnclosedAsFence=${treatUnclosedAsFence})`, () => {
+    const input = 'intro\n- a\n===\n<span>\n[V](docs/V.md)\n';
+    const out = maskNonProse(input, { treatUnclosedAsFence });
+    assertShape(input, out);
+    assert.equal(out.includes('[V](docs/V.md)'), true, `visible route masked: ${JSON.stringify(out)}`);
+  });
+  test(`Codex 0ec39c93 literal: an empty item ends at the blank line after it (treatUnclosedAsFence=${treatUnclosedAsFence})`, () => {
+    const input = '-\n\n    <!--\n  [V](docs/V.md)\n';
+    const out = maskNonProse(input, { treatUnclosedAsFence });
+    assertShape(input, out);
+    assert.equal(out.includes('[V](docs/V.md)'), true, `visible route masked: ${JSON.stringify(out)}`);
+  });
+}
+test('a list that interrupts a paragraph, and an empty item before a blank line, agree with markdown-it', async () => {
+  const { default: MarkdownIt } = await import('markdown-it');
+  const md = new MarkdownIt('commonmark');
+  const interrupt = [];
+  for (const pre of ['intro', '> intro', '- intro', 'intro\nmore', '  intro']) for (const mk of ['- a', '* a', '1. a', '- > a', '- - a', '1) a', '  - a']) {
+    for (const u of ['===', '---', '  ===', '   ---', '  a']) for (const op of ['<span>', '<div>', '<!--', '```']) for (const t of ['[R](docs/R.md)', '  [R](docs/R.md)']) interrupt.push(`${pre}\n${mk}\n${u}\n${op}\n${t}\n`);
+  }
+  const empty = [];
+  for (const mk of ['-', '1.', '- -', '-  ', '  -', '> -', '- >', '* ', '1)']) for (const bl of ['\n', '\n\n']) for (const ind of ['    ', '  ', '   ', '     ', '\t', '      ']) {
+    for (const op of ['<!--', '<div>', '```', '<span>']) for (const t of ['  [R](docs/R.md)', '[R](docs/R.md)', '    [R](docs/R.md)']) empty.push(`${mk}\n${bl}${ind}${op}\n${t}\n`);
+  }
+  // Controls: an empty marker line followed by item content (no blank first) keeps that item open across a later
+  // blank line, so the indented opener after it is still inside the item.
+  const continued = [];
+  for (const mk of ['-', '1.', '- -', '  -', '* ']) for (const body of ['  foo', '  foo\n  bar', '   foo']) for (const ind of ['    ', '   ', '  ', '     ']) {
+    for (const op of ['<!--', '<div>']) for (const t of ['  [R](docs/R.md)', '    [R](docs/R.md)']) continued.push(`${mk}\n${body}\n\n${ind}${op}\n${t}\n`);
+  }
+  let checked = 0;
+  let codeKept = 0;
+  let legacyFence = 0;
+  for (const [set, input] of [...interrupt.map((d) => [0, d]), ...empty.map((d) => [1, d]), ...continued.map((d) => [2, d])]) {
+    const html = md.render(input);
+    const links = html.split('href="docs/R.md"').length - 1;
+    for (const treatUnclosedAsFence of [true, false]) {
+      const out = maskNonProse(input, { treatUnclosedAsFence });
+      assertShape(input, out);
+      const kept = out.split('docs/R.md').length - 1;
+      if (kept < links) {
+        assert.ok(set === 1 && treatUnclosedAsFence && /\n {2,3}```\n/.test(input), `rendered route masked (${kept} < ${links}): ${JSON.stringify(input)}`);
+        legacyFence += 1;
+      }
+      if (kept > links) {
+        assert.ok(set > 0 && /<pre><code>[^<]*docs\/R\.md/.test(html), `route kept that markdown-it does not render (${kept} > ${links}): ${JSON.stringify(input)}`);
+        codeKept += 1;
+      }
+      checked += 1;
+    }
+  }
+  assert.equal(checked, (5 * 7 * 5 * 4 * 2 + 9 * 2 * 6 * 4 * 3 + 5 * 3 * 4 * 2 * 2) * 2);
+  assert.equal(legacyFence, 8, 'only the legacy lone-fence-in-an-item reading masks a rendered route');
+  assert.equal(codeKept, 572, 'routes kept beyond the renderer are all in top-level indented code');
+});

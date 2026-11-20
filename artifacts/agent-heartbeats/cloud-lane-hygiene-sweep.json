@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-11-19T09:46:01.189Z",
-  "result": "09:41Z sweep freed ~2.1G: 20 clean worktrees of landed work removed (git worktree remove, no force), 173 day-old scratch files, pnpm store prune 1 package/60 files; 368M -> 2.5G free."
+  "firedAt": "2026-11-20T11:25:26.266Z",
+  "result": "09:40Z sweep, 20h keepalive (held so mainline stayed still during #2423's CI/Mac run): / had 1.3G free of 252G (97% used). pnpm store prune removed 60 files and 1 package; free space unchanged at 1.3G. Removing node_modules from finished scratch worktrees was refused by this session's permission classifier, so it was not done and not retried. No docker daemon is in use. Free space stays above the 1GB escalation bound, so the owner was not escalated."
 }

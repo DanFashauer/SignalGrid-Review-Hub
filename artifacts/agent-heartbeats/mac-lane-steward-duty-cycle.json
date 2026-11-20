@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-11-19T22:26:35.988Z",
-  "result": "22:24Z cycle, 2h keepalive. Mac side: no new or moved origin/mac/* branch since 18:24Z; tick last fired 2026-11-19T21:19:03Z (deferred: host lock held); no mail addressed to cloud; one cloud->mac message unread 2.9d, already superseded. Sim requests: loop passed. Manifest check: no drift. Live evidence last refreshed 2026-11-16 17:14 -0500, just over 3 days: refresh ask DEFERRED this cycle, because a verify:all run would contend for the Mac host lock while #2399 waits on that host; ask goes out once #2399 has run. Owner not escalated."
+  "firedAt": "2026-11-20T22:11:55.369Z",
+  "result": "22:12Z keepalive (last steward heartbeat 20:25Z). Mac side: the stand-in was extended to the later source review at 21:32Z (#439 7051117775), so proof #2443 can run end to end after the 00:00Z reset. #2439 (loop-state self-test concurrency) landed as a284b743. Tick heartbeat last moved 20:47Z. Cloud will hold gated-path landings from 23:55Z until the Mac posts #2443's result. No mail addressed to cloud. Owner not escalated."
 }

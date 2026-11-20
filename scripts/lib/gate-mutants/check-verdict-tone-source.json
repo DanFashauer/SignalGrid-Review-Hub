@@ -706,7 +706,7 @@
  },
  {
   "name": "S4 any other reference admitted",
-  "find": "else if (!(isDecl || isExport || isPropKey || spreadTop || lookup)) out.push(",
+  "find": "else if (!(isDecl || isExport || isPropKey || spreadTop || lookup || guardedRecord)) out.push(",
   "replace": "else if (false) out.push("
  },
  {
@@ -923,5 +923,110 @@
   "name": "S3 chart-mark extra members admitted",
   "find": "            if (bad.length) out.push(",
   "replace": "            if (false) out.push("
+ },
+ {
+  "name": "own-key guard is not admitted by S4",
+  "find": "const guardedRecord = ownGuard?.record === n && topLevelFnName(fn) !== null;",
+  "replace": "const guardedRecord = false;"
+ },
+ {
+  "name": "own-key guard is not admitted by S6",
+  "find": "return ownKeyToners.has(fn) || isRecordLookup(e, P) ||",
+  "replace": "return false || isRecordLookup(e, P) ||"
+ },
+ {
+  "name": "own-key async restriction removed",
+  "find": "fn.asteriskToken || fn.modifiers?.some((m) => m.kind === K.AsyncKeyword)",
+  "replace": "fn.asteriskToken || false"
+ },
+ {
+  "name": "own-key generator restriction removed",
+  "find": "fn.asteriskToken || fn.modifiers?.some((m) => m.kind === K.AsyncKeyword)",
+  "replace": "false || fn.modifiers?.some((m) => m.kind === K.AsyncKeyword)"
+ },
+ {
+  "name": "own-key global Object identity not checked",
+  "find": "callee.expression.text !== \"Object\"",
+  "replace": "false"
+ },
+ {
+  "name": "own-key method identity not checked",
+  "find": "callee.name.text !== \"hasOwn\"",
+  "replace": "false"
+ },
+ {
+  "name": "own-key same Record not checked",
+  "find": "lookupRecord.text !== record.text",
+  "replace": "false"
+ },
+ {
+  "name": "own-key guard key is not bound to the lookup parameter",
+  "find": "    if (!ts.isIdentifier(key) || key.text !== param.name.text || !ts.isElementAccessExpression(lookup) || lookup.questionDotToken) return null;\n    const lookupRecord = unwrap(lookup.expression), lookupKey = lookup.argumentExpression && unwrap(lookup.argumentExpression);\n    if (!ts.isIdentifier(lookupRecord) || lookupRecord.text !== record.text || !lookupKey || !ts.isIdentifier(lookupKey) || lookupKey.text !== key.text) return null;",
+  "replace": "    if (!ts.isIdentifier(key) || !ts.isElementAccessExpression(lookup) || lookup.questionDotToken) return null;\n    const lookupRecord = unwrap(lookup.expression), lookupKey = lookup.argumentExpression && unwrap(lookup.argumentExpression);\n    if (!ts.isIdentifier(lookupRecord) || lookupRecord.text !== record.text || !lookupKey || !ts.isIdentifier(lookupKey)) return null;"
+ },
+ {
+  "name": "own-key literal fallback restriction removed",
+  "find": "!ts.isStringLiteral(fallback) || !/^(?:text|bg|border)-status-(?:restrict|deny)$/.test(fallback.text)",
+  "replace": "false"
+ },
+ {
+  "name": "own-key fallback need not match its Record",
+  "find": "if (![\"restrict\", \"deny\"].some((k) => restrictiveEntry(record.text, k) === fallback.text)) return null;",
+  "replace": "if (false) return null;"
+ },
+ {
+  "name": "own-key declarative module restriction removed",
+  "find": "if (ownKeyToners.size > 0) {",
+  "replace": "if (false) {"
+ },
+ {
+  "name": "own-key module may shadow Object",
+  "find": "name === \"Object\" || bindings.has(name)",
+  "replace": "false || bindings.has(name)"
+ },
+ {
+  "name": "own-key module may duplicate a binding",
+  "find": "name === \"Object\" || bindings.has(name)",
+  "replace": "name === \"Object\" || false"
+ },
+ {
+  "name": "own-key module may use mutable bindings",
+  "find": "safe = !!(st.declarationList.flags & ts.NodeFlags.Const) &&",
+  "replace": "safe = true &&"
+ },
+ {
+  "name": "own-key module may use decorators",
+  "find": "if (!safe || !noDecorators(st)) out.push(",
+  "replace": "if (!safe) out.push("
+ },
+ {
+  "name": "own-key resolver ignores an unresolved later spread",
+  "find": "if (entry === UNKNOWN_ENTRY) return UNKNOWN_ENTRY;",
+  "replace": "if (entry === UNKNOWN_ENTRY) continue;"
+ },
+ {
+  "name": "own-key resolver ignores a known later spread",
+  "find": "if (entry !== undefined) value = entry;",
+  "replace": "if (false) value = entry;"
+ },
+ {
+  "name": "own-key resolver treats an absent spread entry as an override",
+  "find": "if (entry !== undefined) value = entry;",
+  "replace": "if (true) value = entry;"
+ },
+ {
+  "name": "own-key resolver does not recognize literal template entries",
+  "find": "value = ts.isStringLiteral(init) || ts.isNoSubstitutionTemplateLiteral(init) ? init.text : UNKNOWN_ENTRY;",
+  "replace": "value = ts.isStringLiteral(init) ? init.text : UNKNOWN_ENTRY;"
+ },
+ {
+  "name": "own-key resolver treats a nonliteral override as absent",
+  "find": "value = ts.isStringLiteral(init) || ts.isNoSubstitutionTemplateLiteral(init) ? init.text : UNKNOWN_ENTRY;",
+  "replace": "value = ts.isStringLiteral(init) || ts.isNoSubstitutionTemplateLiteral(init) ? init.text : undefined;"
+ },
+ {
+  "name": "own-key resolver treats a cyclic or unknown Record as absent",
+  "find": "if (seen.has(name) || !constRecords.has(name)) return UNKNOWN_ENTRY;",
+  "replace": "if (seen.has(name) || !constRecords.has(name)) return undefined;"
  }
 ]

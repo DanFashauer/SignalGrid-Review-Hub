@@ -1571,3 +1571,37 @@ test('an empty list item opens no paragraph, as markdown-it reads it', async () 
   }
   assert.equal(checked, 12 * 6 * 3 * 2 * 2);
 });
+test('empty-marker controls: trailing space, tab, NBSP as content, nonempty items and in-item continuation keep markdown-it\'s reading', async () => {
+  // Root on b5509d55 (#2368): the empty-item rule must not reach a marker followed by real content. NBSP is content
+  // (it neither ends a marker nor counts as blank), so `- <NBSP>` holds a paragraph and `-<NBSP>` is no marker at all.
+  // A route that markdown-it renders inside a top-level indented code block is left visible by the preserved
+  // contract (indented code is not masked), so only that case may keep more than markdown-it renders; a visible
+  // route is never masked.
+  const { default: MarkdownIt } = await import('markdown-it');
+  const md = new MarkdownIt('commonmark');
+  const NB = ' ';
+  let checked = 0;
+  let codeKept = 0;
+  for (const mk of ['-', '1.', '- -', '1. -', '- 1.', '- >']) for (const tail of ['', ' ', '\t', ' ' + NB, NB, ' a', ' a b']) {
+    for (const second of ['===', 'text', '  x', '   x', '    x', '  ===']) for (const ind of [2, 4]) for (const close of [false, true]) {
+      const sp = ' '.repeat(ind);
+      const input = `${mk}${tail}\n${second}\n${sp}<!--\n${sp}[R](docs/R.md)\n${close ? sp + '-->\n' : ''}`;
+      const html = md.render(input);
+      const links = html.split('href="docs/R.md"').length - 1;
+      const inCode = /<pre><code>[^]*docs\/R\.md/.test(html);
+      for (const treatUnclosedAsFence of [true, false]) {
+        const out = maskNonProse(input, { treatUnclosedAsFence });
+        assertShape(input, out);
+        const kept = out.split('docs/R.md').length - 1;
+        assert.ok(kept >= links, `rendered route masked (${kept} < ${links}): ${JSON.stringify(input)}`);
+        if (kept > links) {
+          assert.ok(inCode, `route kept that markdown-it does not render (${kept} > ${links}): ${JSON.stringify(input)}`);
+          codeKept += 1;
+        }
+        checked += 1;
+      }
+    }
+  }
+  assert.equal(checked, 6 * 7 * 6 * 2 * 2 * 2);
+  assert.equal(codeKept, 8, 'only the eight `-<NBSP>` / `1.<NBSP>` routes inside top-level indented code stay visible');
+});

@@ -283,7 +283,10 @@ function containerRun(lines, interrupted, outer = [], judgeDefinitions = false) 
     for (; matched < stack.length; matched += 1) {
       const c = stack[matched];
       if (c.quote) {
-        const m = /^ {0,3}>/.exec(text.slice(pos));
+        // An open quote continues at a `>` after any indent: markdown-it's blockquote loop tests only the marker once
+        // a quote has started (a NEW quote still needs an indent under four). Independent review of 2f398a6e:
+        // `> [r]: /url`, then `    > [V](docs/V.md)` keeps V visible in the quote.
+        const m = /^ *>/.exec(text.slice(pos));
         if (!m) break;
         pos += m[0].length;
         if (text[pos] === " ") pos += 1;
@@ -349,9 +352,17 @@ function containerRun(lines, interrupted, outer = [], judgeDefinitions = false) 
     // keeps the paragraph open in its container, as markdown-it reads it (independent review of 035ffefd:
     // `> [r]: /url`, lazy `"t"`, `-`, then `    [V]` keeps V in a list after the quote). Any other line after a
     // definition-only paragraph is read fresh (`> [r]: /url`, then lazy `<span>` opens an HTML block outside the quote).
+    // Lines a definition already consumed through a look-ahead are not judged again (`leaf.through`), which keeps a
+    // long lazy title linear (independent review of 2f398a6e).
     let paraOpen = leaf.kind === "para";
     if (paraOpen && leaf.body && allReferenceDefinitions(leaf.body)) {
-      paraOpen = !allMatched && continuesLastDefinition(leaf.body, text.slice(pos), followingContents(k));
+      if (allMatched) paraOpen = false;
+      else if (leaf.through >= k) paraOpen = true;
+      else {
+        const n = continuesLastDefinition(leaf.body, text.slice(pos), followingContents(k));
+        paraOpen = n >= 0;
+        if (n >= 0) leaf.through = k + n;
+      }
     }
     // Open new containers and find the leaf on what remains.
     let depth = matched;
@@ -441,8 +452,11 @@ function containerRun(lines, interrupted, outer = [], judgeDefinitions = false) 
         // (`[r]:`, then `    1.` is the destination).
         const tailIndent = indentColumns(tail);
         if (tailIndent < 4 && LIST_MARKER.test(tail.slice(tailIndent))) leaf.body = null;
-        else if (!allMatched && !definitionsWithin([...leaf.body, tail], followingContents(k))) leaf.body = null;
-        else leaf.body.push(tail);
+        else if (!allMatched && !(leaf.through >= k)) {
+          const n = definitionsWithin([...leaf.body, tail], followingContents(k));
+          if (n < 0) leaf.body = null;
+          else { leaf.through = k + n; leaf.body.push(tail); }
+        } else leaf.body.push(tail);
       }
       out.push(leaf.id);
     } else {
@@ -472,27 +486,38 @@ const SETEXT_UNDERLINE = /^ {0,3}(?:=+|-+)[ \t]*$/;
  * the container (`> [r]: /url`, then lazy `"t"`, or lazy `"a` and `b"`). A lazy line that is a new definition, an
  * unclosed title, or anything else is not continued (independent reviews of 28f3b9b8 and 1ad0b3c7).
  */
+// Only a following line that holds a title closer can complete a definition, so only those prefixes are judged.
+const TITLE_CLOSER = /["')]/;
 function continuesLastDefinition(paraLines, line, following = []) {
   const before = referenceDefinitionSpans(paraLines);
-  if (before.length === 0) return false;
+  if (before.length === 0) return -1;
   const lines = [...paraLines, line];
   for (let n = 0; n <= following.length; n += 1) {
-    if (n > 0) lines.push(following[n - 1]);
+    if (n > 0) {
+      lines.push(following[n - 1]);
+      if (!TITLE_CLOSER.test(following[n - 1])) continue;
+    }
     const after = referenceDefinitionSpans(lines);
-    if (after.length === before.length && after[after.length - 1] === lines.length) return true;
-    if (after.length > before.length) return false;
+    if (after.length === before.length && after[after.length - 1] === lines.length) return n;
+    if (after.length > before.length) return -1;
   }
-  return false;
+  return -1;
 }
 
-/** True when `lines` are all definitions, alone or completed by a prefix of the `following` lines. */
+/**
+ * The number of `following` lines needed for `lines` to be all definitions (0 when they already are), or -1 when no
+ * prefix completes them.
+ */
 function definitionsWithin(lines, following = []) {
   const all = [...lines];
   for (let n = 0; n <= following.length; n += 1) {
-    if (n > 0) all.push(following[n - 1]);
-    if (allReferenceDefinitions(all)) return true;
+    if (n > 0) {
+      all.push(following[n - 1]);
+      if (!TITLE_CLOSER.test(following[n - 1])) continue;
+    }
+    if (allReferenceDefinitions(all)) return n;
   }
-  return false;
+  return -1;
 }
 
 function allReferenceDefinitions(paraLines) {

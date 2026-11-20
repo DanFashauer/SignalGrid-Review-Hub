@@ -2062,6 +2062,13 @@ test('empty list markers and lazy titles after reference definitions keep markdo
     ['> > [r]: /url\n> "a\n> b"\n> -\n>     [V](docs/V.md)\n', 1],
     ['> [r]: /url\n"a\nb"\n<span>\n> -\n>     [V](docs/V.md)\n', 0],
     ['> [r]: /url\n"a\n-\n    [V](docs/V.md)\n', 0],
+    // Fourth review (2f398a6e): markdown-it continues a quote at a `>` indented four or more columns, so that lazy
+    // line stays in the quote rather than opening code.
+    ['> [r]: /url\n    > [V](docs/V.md)\n', 1],
+    ['> [r]: /url\n    > text [V](docs/V.md)\n> -\n', 1],
+    ['- > [r]: /url\n      > [V](docs/V.md)\n', 1],
+    ['> > [r]: /url\n    > > [V](docs/V.md)\n', 1],
+    ['> [r]: /url\n     >    [V](docs/V.md)\n', 1],
   ];
   for (const [input, want] of literals) {
     assert.equal(md.render(input).split('href="docs/V.md"').length - 1, want, `oracle changed: ${JSON.stringify(input)}`);
@@ -2106,4 +2113,20 @@ test('empty list markers and lazy titles after reference definitions keep markdo
   }
   assert.equal(checked, (2 * 3 + 2) * 6 * 3 * 2);
   assert.equal(codeKept, 0, 'routes kept beyond the renderer are all in code');
+});
+
+test('a long lazy title after a reference definition is judged in near-linear time', () => {
+  // Fourth independent review (2f398a6e): the look-ahead re-ran for every lazy line of an open title, so 1,000 lines
+  // took about 21 seconds and 2,000 far longer. Lines a definition already consumed are not judged again. The bound
+  // is loose on purpose (the fixed code takes well under a second) so a slow runner does not make this flaky.
+  for (const [input, want] of [
+    ['> [r]: /url\n"a\n' + 'x\n'.repeat(2000) + 'b"\n-\n    [V](docs/V.md)\n', 1],
+    ['> [r]: /url\n"a\n' + 'x"y\n'.repeat(2000) + '\n[V](docs/V.md)\n', 1],
+  ]) {
+    const started = performance.now();
+    const out = maskNonProse(input);
+    const elapsed = performance.now() - started;
+    assert.ok(elapsed < 5000, `took ${Math.round(elapsed)} ms`);
+    assert.equal(out.split('docs/V.md').length - 1, want);
+  }
 });

@@ -678,6 +678,9 @@ function blockRanges(lines, treatUnclosedAsFence, judgeDefinitions) {
         const rest = text0.slice(pos);
         const ind = indentColumns(rest);
         if (pos + ind - base >= 4 && pos + ind >= base) break;
+        // A thematic break takes precedence over a list item (§4.1): `- ---` is one break, not an item holding one,
+        // so no phantom item makes the next indented line item content (Codex on 4e33f43e).
+        if (THEMATIC_BREAK.test(rest)) break;
         const lm = LIST_MARKER.exec(rest.slice(ind));
         if (!lm) break;
         const after = rest.slice(ind + lm[0].length);
@@ -780,6 +783,9 @@ function blockRanges(lines, treatUnclosedAsFence, judgeDefinitions) {
     // paragraph, so the next unindented line closes that item instead of continuing it lazily (Codex on b5509d55:
     // `-`, `===`, then an indented `<!--` is paragraph text in markdown-it, not an HTML block inside the item).
     const emptyItem = contentAt > 0 && isBlank(inner);
+    // The open paragraph is quoted and this line is still inside its containers: a quote line here continues that
+    // quote rather than opening a new one outside a list item the line has left (`- > a`, then `> <span>`).
+    const sameQuote = paraQuote && !(paraItemCol > 0 && indentColumns(text0) < paraItemCol);
     if (isBlank(text) || emptyItem || ATX_HEADING.test(text) || THEMATIC_BREAK.test(text) || THEMATIC_BREAK.test(inner) || ATX_HEADING.test(inner)) inParagraph = false;
     else if (
       inParagraph &&
@@ -791,13 +797,17 @@ function blockRanges(lines, treatUnclosedAsFence, judgeDefinitions) {
     // Inside a list item the four columns count from its content column (Codex on 35ecaec9: `- # hi` then
     // `    text` is a paragraph two columns into the item, not code).
     else if (!inParagraph && indentColumns(text0) - (inItem ? itemCol[i] : 0) >= 4) inParagraph = false;
+    // A quoted line whose content opens raw HTML or a fence is that leaf, not paragraph text, so the quote holds no
+    // paragraph and an unquoted line after it starts its own, outside the quote (Codex on 4e33f43e: `> <div>`, `a`,
+    // then `2. <!--` cannot interrupt `a`, so the comment is paragraph text in markdown-it, not a list's HTML block).
+    else if (/^ {0,3}>/.test(text0.slice(contentAt)) && (htmlBlockStart(inner, inParagraph && sameQuote) || fenceOpener(inner))) inParagraph = false;
     else {
       // A quote opened after this line's list markers (`- > a`) also holds the paragraph.
       const opensQuote = /^ {0,3}>/.test(text) || /^ {0,3}>/.test(text0.slice(contentAt));
       // A block quote interrupts a paragraph that is not quoted, so the quoted text starts a new paragraph and its
       // start and containers are read afresh (Codex on 5710c465: `intro`, `> quote`, `===`, `<span>` keeps the
       // quoted paragraph open in markdown-it, so `<span>` is paragraph text, not an HTML block).
-      if (!inParagraph || (opensQuote && !paraQuote)) {
+      if (!inParagraph || (opensQuote && !sameQuote)) {
         paraStart = i;
         paraQuote = opensQuote;
         paraItemCol = items.length ? items[items.length - 1] : 0;

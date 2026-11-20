@@ -1643,3 +1643,67 @@ test('a block quote that interrupts a paragraph starts a new paragraph, as markd
   }
   assert.equal(checked, 4 * 5 * 5 * 4 * 2 * 2);
 });
+
+// 37. Codex on 4e33f43e (#2368), two reports. (a) A quoted line whose content opens raw HTML or a fence is that leaf,
+//     not paragraph text, so an unquoted line after it starts its own paragraph outside the quote, and `2.` cannot
+//     interrupt that paragraph; a quote line continues a quoted paragraph only inside its containers. (b) A thematic break takes precedence over a list item (§4.1), so `- ---` opens no
+//     item and a following four-column line is top-level indented code, not item content. Exact literals first, then
+//     a bounded family over both shapes, judged against markdown-it 14 in both directions; both fence options; shape
+//     checked. The only routes kept that markdown-it does not render sit inside top-level indented code, which the
+//     preserved contract leaves unmasked, and the family pins that set.
+for (const treatUnclosedAsFence of [true, false]) {
+  test(`Codex 4e33f43e literal: a quoted HTML leaf holds no paragraph, so 2. cannot interrupt the next line (treatUnclosedAsFence=${treatUnclosedAsFence})`, () => {
+    const input = '> <div>\na\n2. <!--\n   [V](docs/V.md)\n';
+    const out = maskNonProse(input, { treatUnclosedAsFence });
+    assertShape(input, out);
+    assert.equal(out.includes('[V](docs/V.md)'), true, `visible route masked: ${JSON.stringify(out)}`);
+  });
+  test(`Codex 4e33f43e literal: - --- is a thematic break, not a list item, so the next indented line is not item content (treatUnclosedAsFence=${treatUnclosedAsFence})`, () => {
+    const input = '- ---\n    <div>\n  [V](docs/V.md)\n';
+    const out = maskNonProse(input, { treatUnclosedAsFence });
+    assertShape(input, out);
+    assert.equal(out.includes('[V](docs/V.md)'), true, `visible route masked: ${JSON.stringify(out)}`);
+  });
+}
+test('quoted leaves and thematic-break marker lines agree with markdown-it for hidden and visible routes', async () => {
+  const { default: MarkdownIt } = await import('markdown-it');
+  const md = new MarkdownIt('commonmark');
+  const docs = [];
+  for (const q of ['> ', '>', '> > ', '  > ', '- > ']) for (const leaf of ['<div>', '<pre>', '<!-- x -->', '<span>', '```', '~~~', 'text']) {
+    for (const u of ['a', '- a']) for (const intr of ['2. <!--', '- <!--', '1. <!--', '<!--']) for (const tail of ['   [R](docs/R.md)', '[R](docs/R.md)']) {
+      docs.push(`${q}${leaf}\n${u}\n${intr}\n${tail}\n`);
+    }
+  }
+  // A quote line after a quoted paragraph continues it only inside the same containers: `- > a`, then a column-0
+  // `> <span>`, leaves the item, so the second quote is new and `<span>` may open a type 7 block there.
+  for (const first of ['> a', '> > a', 'a', '- > a']) for (const q of ['> <span>', '> <x-y>', '> </span>', '> <span>x', '>  <span>']) {
+    for (const u of ['b', '> b', '- b']) for (const intr of ['2. <!--', '- <!--', '<!--', '1. <!--']) for (const tail of ['   [R](docs/R.md)', '[R](docs/R.md)']) {
+      docs.push(`${first}\n${q}\n${u}\n${intr}\n${tail}\n`);
+    }
+  }
+  for (const m of ['- ---', '* * *', '- * * *', '1. ---', '+ - - -', '- - -', '* ---', '- -', '-  ---', '  - ---']) {
+    for (const b of ['    <div>', '  <div>', '   <!--', '    <!--', '  <span>']) for (const tail of ['  [R](docs/R.md)', '[R](docs/R.md)', '    [R](docs/R.md)']) {
+      docs.push(`${m}\n${b}\n${tail}\n`);
+    }
+  }
+  let checked = 0;
+  let codeKept = 0;
+  for (const input of docs) {
+    const html = md.render(input);
+    const links = html.split('href="docs/R.md"').length - 1;
+    const inCode = /<pre><code>[^]*docs\/R\.md/.test(html) && /\n {4}\[R\]/.test(input);
+    for (const treatUnclosedAsFence of [true, false]) {
+      const out = maskNonProse(input, { treatUnclosedAsFence });
+      assertShape(input, out);
+      const kept = out.split('docs/R.md').length - 1;
+      assert.ok(kept >= links, `rendered route masked (${kept} < ${links}): ${JSON.stringify(input)}`);
+      if (kept > links) {
+        assert.ok(inCode, `route kept that markdown-it does not render (${kept} > ${links}): ${JSON.stringify(input)}`);
+        codeKept += 1;
+      }
+      checked += 1;
+    }
+  }
+  assert.equal(checked, (5 * 7 * 2 * 4 * 2 + 4 * 5 * 3 * 4 * 2 + 10 * 5 * 3) * 2);
+  assert.equal(codeKept, 20, 'only the twenty routes inside top-level indented code after a thematic break stay visible');
+});

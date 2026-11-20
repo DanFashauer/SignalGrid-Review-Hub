@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-11-20T08:34:44.964Z",
-  "result": "08:24Z cycle, 2h keepalive (delivered after #2404 lands so mainline stays still during its Mac run). Mac side: no new or moved origin/mac/* branch (newest 2026-11-19T07:36Z); tick last fired 2026-11-20T07:17:08Z; no mail addressed to cloud; one cloud->mac message unread (3d), already superseded. Live evidence last refreshed 2026-11-16 (over 3 days): refresh ask still DEFERRED while the Mac host carries the #2404/#2368 Mac runs. Owner not escalated."
+  "firedAt": "2026-11-20T19:19:47.951Z",
+  "result": "19:19Z event: cleared the Codex-limit hand after the owner's decision on #439 (7048460671: Add Codex usage, owner-side account action pending). Mac side otherwise unchanged: no new or moved origin/mac/* branch; tick heartbeat landed via #2438-era Mac mail; no mail addressed to cloud. Owner not otherwise escalated."
 }

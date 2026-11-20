@@ -321,7 +321,10 @@ function containerRun(lines, interrupted, outer = [], judgeDefinitions = false) 
     // heading or kept open against a list marker, so the line after it is read as if no paragraph were open (Codex on
     // 0aaee00e: `-`, `[r]: /url`, `-`, then `    [V]` is an empty item holding a paragraph, not code after an
     // underline). Judged only when the caller judges definitions; the interrupted outer paragraph is never judged.
-    const paraOpen = leaf.kind === "para" && !(leaf.body && allReferenceDefinitions(leaf.body));
+    // A lazy line (a container failed to match) is never judged this way: markdown-it keeps it in the open container,
+    // where it may still be the definition's title (independent review of 035ffefd: `> [r]: /url`, lazy `"t"`, `-`,
+    // then `    [V]` keeps V in a list after the quote).
+    const paraOpen = leaf.kind === "para" && !(allMatched && leaf.body && allReferenceDefinitions(leaf.body));
     // Open new containers and find the leaf on what remains.
     let depth = matched;
     let opened = false;
@@ -398,7 +401,16 @@ function containerRun(lines, interrupted, outer = [], judgeDefinitions = false) 
     if (result === null) out.push(null);
     else if (result === "own") out.push(nextId++);
     else if (result === "continue") {
-      if (leaf.body) leaf.body.push(text.slice(pos));
+      // Track the paragraph's lines only while markdown-it's reference block would also consume them. A lazy line
+      // (a container failed to match) or a list marker, empty ones included, ends that block, so from then on the
+      // paragraph is never judged definitions-only and stays open as before (independent review of 035ffefd:
+      // `> [r]:`, `> 1.`, then `    [V]` is one paragraph with a visible V; `> [r]: /url`, lazy `"t"`, `-`, then
+      // `    [V]` keeps V in a list).
+      if (leaf.body) {
+        const tail = text.slice(pos);
+        if (!allMatched || LIST_MARKER.test(tail.slice(indentColumns(tail)))) leaf.body = null;
+        else leaf.body.push(tail);
+      }
       out.push(leaf.id);
     } else {
       stack.length = depth;

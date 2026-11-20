@@ -2031,3 +2031,62 @@ test('reference-definition paragraphs and empty quote lines agree with markdown-
   assert.equal(checked, (5 * 4 * 6 * 6 * 2 + 7 * 4 * 6 * 3) * 2);
   assert.equal(codeKept, 74, 'routes kept beyond the renderer are all in top-level code');
 });
+test('empty list markers and lazy titles after reference definitions keep markdown-it routes', async () => {
+  // Independent review of 035ffefd: a definition-only paragraph is judged only while markdown-it's reference block
+  // would also consume the lines. An empty list marker or a lazy line ends that block, so the paragraph stays open.
+  const { default: MarkdownIt } = await import('markdown-it');
+  const md = new MarkdownIt('commonmark');
+  const literals = [
+    ['> [r]:\n> 1.\n    [V](docs/V.md)\n', 1],
+    ['- [r]:\n  1.\n      [V](docs/V.md)\n', 1],
+    ['- [r]:\n  *\n  <span>\n  [V](docs/V.md)\n', 1],
+    ['- [r]: /url\n  [s]:\n  1.\n      [V](docs/V.md)\n', 1],
+    ['> [r]: /url\n"t"\n-\n    [V](docs/V.md)\n', 1],
+    ['> [r]: /url\n"t"\n===\n    [V](docs/V.md)\n', 1],
+    ['> [r]:\n> 1.\n> ===\n> <span>\n> [V](docs/V.md)\n', 0],
+    ['* [r]: /url "t"\n[r]:\n  1.\n    [V](docs/V.md)\n', 1],
+  ];
+  for (const [input, want] of literals) {
+    assert.equal(md.render(input).split('href="docs/V.md"').length - 1, want, `oracle changed: ${JSON.stringify(input)}`);
+    for (const treatUnclosedAsFence of [true, false]) {
+      const out = maskNonProse(input, { treatUnclosedAsFence });
+      assertShape(input, out);
+      assert.equal(out.split('docs/V.md').length - 1, want, `${treatUnclosedAsFence}: ${JSON.stringify(input)} -> ${JSON.stringify(out)}`);
+    }
+  }
+  const inputs = [];
+  // The family is the regression class (an empty marker or `===` after a bare or trailing label, inside a container).
+  // Lazy titles inside quotes and `- >` nesting have older, unchanged gaps outside this fix, so they are not swept here.
+  const shapes = [];
+  for (const box of ['> ', '> - ']) for (const def of ['[r]:', '[r]: /url\n[s]:', '[r]: /url']) shapes.push([box, def]);
+  for (const def of ['[r]:', '[r]: /url\n[s]:']) shapes.push(['- ', def]);
+  for (const [box, def] of shapes) {
+    const pad = box.replace(/[^ ]/g, ' ');
+    {
+      const d = def.split('\n').map((l) => box + l).join('\n');
+      for (const mid of ['1.', '*', '+', '2.', '-', '===']) for (const last of ['    [V](docs/V.md)', '<span>\n[V](docs/V.md)', '===\n<span>\n[V](docs/V.md)']) {
+        const tail = last.split('\n').map((l) => (box.startsWith('>') ? box : pad) + l).join('\n');
+        inputs.push(`${d}\n${box.startsWith('>') ? box : pad}${mid}\n${tail}\n`);
+      }
+    }
+  }
+  let checked = 0;
+  let codeKept = 0;
+  for (const input of inputs) {
+    const links = md.render(input).split('href="docs/V.md"').length - 1;
+    const topCode = md.parse(input, {}).some((t) => (t.type === 'code_block' || t.type === 'fence') && t.content.includes('docs/V.md'));
+    for (const treatUnclosedAsFence of [true, false]) {
+      const out = maskNonProse(input, { treatUnclosedAsFence });
+      assertShape(input, out);
+      const kept = out.split('docs/V.md').length - 1;
+      assert.ok(kept >= links, `rendered route masked (${kept} < ${links}): ${JSON.stringify(input)}`);
+      if (kept > links) {
+        assert.ok(topCode, `route kept that markdown-it does not render (${kept} > ${links}): ${JSON.stringify(input)}`);
+        codeKept += 1;
+      }
+      checked += 1;
+    }
+  }
+  assert.equal(checked, (2 * 3 + 2) * 6 * 3 * 2);
+  assert.equal(codeKept, 0, 'routes kept beyond the renderer are all in code');
+});

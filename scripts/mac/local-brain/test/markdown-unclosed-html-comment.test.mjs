@@ -1973,3 +1973,61 @@ test('in-item fences the margin scan can open stay inside their item, as markdow
   assert.equal(checked, 4 * 3 * 2 * 3 * 3 * 2 * 2 * 2);
   assert.equal(codeKept, 0, 'every route after the item is rendered and kept');
 });
+
+// 43. Codex on 0aaee00e (#2368). A paragraph made only of link reference definitions holds no content, so in a
+//     container run the line after it is not a setext underline and an empty marker there opens an item (`-`,
+//     `[r]: /url`, `-`, then `    [V]` is a paragraph in the second item). A line that is only block-quote markers
+//     (`>`) holds no paragraph either, so a type 7 tag after it opens an HTML block that hides the lines below it.
+//     Exact literals under both options, then a bounded family of both shapes judged against markdown-it 14 in both
+//     directions: no rendered route lost, and a kept extra route only where markdown-it puts it in top-level code.
+for (const treatUnclosedAsFence of [true, false]) {
+  test(`Codex 0aaee00e literal: reference definitions do not make the next marker an underline (treatUnclosedAsFence=${treatUnclosedAsFence})`, () => {
+    const input = '-\n[r]: /url\n-\n    [V](docs/V.md)\n';
+    const out = maskNonProse(input, { treatUnclosedAsFence });
+    assertShape(input, out);
+    assert.equal(out.includes('[V](docs/V.md)'), true, `visible route masked: ${JSON.stringify(out)}`);
+  });
+  test(`Codex 0aaee00e literal: an empty quote line holds no paragraph (treatUnclosedAsFence=${treatUnclosedAsFence})`, () => {
+    const input = '>\n<span>\n- `\n  ~~~\n> [V](docs/V.md)\n';
+    const out = maskNonProse(input, { treatUnclosedAsFence });
+    assertShape(input, out);
+    assert.equal(out.includes('docs/V.md'), false, `hidden route credited: ${JSON.stringify(out)}`);
+  });
+}
+test('reference-definition paragraphs and empty quote lines agree with markdown-it', async () => {
+  const { default: MarkdownIt } = await import('markdown-it');
+  const md = new MarkdownIt('commonmark');
+  const inputs = [];
+  for (const pre of ['', '-\n', '1.\n', '> -\n', '- a\n\n']) for (const box of ['', '> ', '- ', '  ']) {
+    for (const def of ['[r]: /url', '[r]: /url "t"', '[r]:\n/url', '[r]: /url\n[s]: /v', 'x [r]: /url', '[r]: <a b>']) {
+      for (const mid of ['-', '1.', '===', '---', '- a', '*']) for (const ind of [2, 4]) {
+        const d = def.split('\n').map((l) => box + l).join('\n');
+        inputs.push(`${pre}${d}\n${box}${mid}\n${box}${' '.repeat(ind)}[V](docs/V.md)\n`);
+      }
+    }
+  }
+  for (const q of ['>', '> ', ' >', '>>', '> >', '- >', '>\t']) for (const tag of ['<span>', '<div>', '<x-y a="1">', 'text']) {
+    for (const mid of ['- `', '- ```', '- a', '~~~', '  ~~~', '> b']) for (const last of ['> [V](docs/V.md)', '[V](docs/V.md)', '  [V](docs/V.md)']) {
+      inputs.push(`${q}\n${tag}\n${mid}\n  ~~~\n${last}\n`);
+    }
+  }
+  let checked = 0;
+  let codeKept = 0;
+  for (const input of inputs) {
+    const links = md.render(input).split('href="docs/V.md"').length - 1;
+    const topCode = md.parse(input, {}).some((t) => t.level === 0 && (t.type === 'code_block' || t.type === 'fence') && t.content.includes('docs/V.md'));
+    for (const treatUnclosedAsFence of [true, false]) {
+      const out = maskNonProse(input, { treatUnclosedAsFence });
+      assertShape(input, out);
+      const kept = out.split('docs/V.md').length - 1;
+      assert.ok(kept >= links, `rendered route masked (${kept} < ${links}): ${JSON.stringify(input)}`);
+      if (kept > links) {
+        assert.ok(topCode, `route kept that markdown-it does not render (${kept} > ${links}): ${JSON.stringify(input)}`);
+        codeKept += 1;
+      }
+      checked += 1;
+    }
+  }
+  assert.equal(checked, (5 * 4 * 6 * 6 * 2 + 7 * 4 * 6 * 3) * 2);
+  assert.equal(codeKept, 74, 'routes kept beyond the renderer are all in top-level code');
+});

@@ -265,7 +265,7 @@ const FENCE_OPEN = /^(?:`{3,}(?!.*`)|~{3,})/;
  * raw HTML: masked whole) or a paragraph id, so inline masking pairs nothing across a container or opaque boundary
  * (Root on 2201bb6a and 90e772ce: classification and segmentation share one source of boundaries).
  */
-function containerRun(lines, interrupted, outer = []) {
+function containerRun(lines, interrupted, outer = [], judgeDefinitions = false) {
   const out = [];
   // { quote: true } or { col } (a list item's content column, counted from where its enclosing containers' content
   // starts, so a quote marker indented differently on a later line still finds it; Codex on 35ecaec9: `  > - a`
@@ -317,7 +317,11 @@ function containerRun(lines, interrupted, outer = []) {
       out.push(null);
       continue;
     }
-    const paraOpen = leaf.kind === "para";
+    // A paragraph made only of link reference definitions has no content (§4.7): it cannot be continued as a setext
+    // heading or kept open against a list marker, so the line after it is read as if no paragraph were open (Codex on
+    // 0aaee00e: `-`, `[r]: /url`, `-`, then `    [V]` is an empty item holding a paragraph, not code after an
+    // underline). Judged only when the caller judges definitions; the interrupted outer paragraph is never judged.
+    const paraOpen = leaf.kind === "para" && !(leaf.body && allReferenceDefinitions(leaf.body));
     // Open new containers and find the leaf on what remains.
     let depth = matched;
     let opened = false;
@@ -393,10 +397,12 @@ function containerRun(lines, interrupted, outer = []) {
     }
     if (result === null) out.push(null);
     else if (result === "own") out.push(nextId++);
-    else if (result === "continue") out.push(leaf.id);
-    else {
+    else if (result === "continue") {
+      if (leaf.body) leaf.body.push(text.slice(pos));
+      out.push(leaf.id);
+    } else {
       stack.length = depth;
-      leaf = { kind: "para", depth, id: nextId++ };
+      leaf = { kind: "para", depth, id: nextId++, body: judgeDefinitions ? [text.slice(pos)] : null };
       out.push(leaf.id);
     }
   }
@@ -837,7 +843,9 @@ function blockRanges(lines, treatUnclosedAsFence, judgeDefinitions) {
     // A marker line with nothing after its markers (`-`, `1.`, `- -`, `- >`) holds an empty item or quote, not a
     // paragraph, so the next unindented line closes that item instead of continuing it lazily (Codex on b5509d55:
     // `-`, `===`, then an indented `<!--` is paragraph text in markdown-it, not an HTML block inside the item).
-    const emptyItem = contentAt > 0 && isBlank(inner);
+    // A line that is only block-quote markers (`>`) is blank inside its quote and holds no paragraph either (Codex on
+    // 0aaee00e: `>` then `<span>` opens a type 7 HTML block in markdown-it, not paragraph text).
+    const emptyItem = isBlank(inner);
     // The open paragraph is quoted and this line is still inside its containers: a quote line here continues that
     // quote rather than opening a new one outside a list item the line has left (`- > a`, then `> <span>`).
     const sameQuote = paraQuote && !(paraItemCol > 0 && indentColumns(text0) < paraItemCol);
@@ -971,7 +979,7 @@ export function maskNonProse(text, { treatUnclosedAsFence = true } = {}) {
       if (interrupted || (!inPara && CONTAINER_START.test(text)) || enclosed) {
         let r = i;
         while (r + 1 < lines.length && segment[r + 1] === -1 && !isBlank(content(lines[r + 1]))) r += 1;
-        const ids = containerRun(source.slice(i, r + 1), interrupted, blocks.itemStack[i] ?? []);
+        const ids = containerRun(source.slice(i, r + 1), interrupted, blocks.itemStack[i] ?? [], judgeDefinitions);
         const base = nextSegment;
         let top = -1;
         for (let k = i; k <= r; k += 1) {

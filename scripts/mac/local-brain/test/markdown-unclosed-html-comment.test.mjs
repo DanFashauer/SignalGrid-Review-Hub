@@ -2045,6 +2045,16 @@ test('empty list markers and lazy titles after reference definitions keep markdo
     ['> [r]: /url\n"t"\n===\n    [V](docs/V.md)\n', 1],
     ['> [r]:\n> 1.\n> ===\n> <span>\n> [V](docs/V.md)\n', 0],
     ['* [r]: /url "t"\n[r]:\n  1.\n    [V](docs/V.md)\n', 1],
+    // Second review (28f3b9b8): a lazy line after a definition-only container is read fresh unless the last definition
+    // still consumes it, and a marker indented four or more columns is a continuation, not a list marker.
+    ['> [r]: /url\n<span>\n[V](docs/V.md)\n', 0],
+    ['- [r]: /url\n<span>\n[V](docs/V.md)\n', 0],
+    ['> - [r]: /url\n<span>\n[V](docs/V.md)\n', 0],
+    ['> > [r]: /url\n> <span>\n> [V](docs/V.md)\n', 0],
+    ['> [r]: /url\n    [V](docs/V.md)\n', 0],
+    ['> [r]: /url\n  `\n> [V](docs/V.md)\n-`\n', 1],
+    ['> [r]:\n/v\n<span>\n[V](docs/V.md)\n', 0],
+    ["> [r]: /url't'\n   [r]:\n    1.\n   <span>\n > `\n  [V](docs/V.md)\n", 0],
   ];
   for (const [input, want] of literals) {
     assert.equal(md.render(input).split('href="docs/V.md"').length - 1, want, `oracle changed: ${JSON.stringify(input)}`);

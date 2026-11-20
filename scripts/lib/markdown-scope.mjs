@@ -321,10 +321,14 @@ function containerRun(lines, interrupted, outer = [], judgeDefinitions = false) 
     // heading or kept open against a list marker, so the line after it is read as if no paragraph were open (Codex on
     // 0aaee00e: `-`, `[r]: /url`, `-`, then `    [V]` is an empty item holding a paragraph, not code after an
     // underline). Judged only when the caller judges definitions; the interrupted outer paragraph is never judged.
-    // A lazy line (a container failed to match) is never judged this way: markdown-it keeps it in the open container,
-    // where it may still be the definition's title (independent review of 035ffefd: `> [r]: /url`, lazy `"t"`, `-`,
-    // then `    [V]` keeps V in a list after the quote).
-    const paraOpen = leaf.kind === "para" && !(allMatched && leaf.body && allReferenceDefinitions(leaf.body));
+    // One exception: a lazy line (a container failed to match) that the definition still consumes, such as its title,
+    // keeps the paragraph open in its container, as markdown-it reads it (independent review of 035ffefd:
+    // `> [r]: /url`, lazy `"t"`, `-`, then `    [V]` keeps V in a list after the quote). Any other line after a
+    // definition-only paragraph is read fresh (`> [r]: /url`, then lazy `<span>` opens an HTML block outside the quote).
+    let paraOpen = leaf.kind === "para";
+    if (paraOpen && leaf.body && allReferenceDefinitions(leaf.body)) {
+      paraOpen = !allMatched && continuesLastDefinition(leaf.body, text.slice(pos));
+    }
     // Open new containers and find the leaf on what remains.
     let depth = matched;
     let opened = false;
@@ -401,14 +405,19 @@ function containerRun(lines, interrupted, outer = [], judgeDefinitions = false) 
     if (result === null) out.push(null);
     else if (result === "own") out.push(nextId++);
     else if (result === "continue") {
-      // Track the paragraph's lines only while markdown-it's reference block would also consume them. A lazy line
-      // (a container failed to match) or a list marker, empty ones included, ends that block, so from then on the
+      // Track the paragraph's lines only while markdown-it's reference block would also consume them. A list marker,
+      // empty ones included, ends that block, and so does a lazy line the definitions do not consume (a lazy line that
+      // completes a bare label, `> [r]:` then `/v`, is consumed); from then on the
       // paragraph is never judged definitions-only and stays open as before (independent review of 035ffefd:
       // `> [r]:`, `> 1.`, then `    [V]` is one paragraph with a visible V; `> [r]: /url`, lazy `"t"`, `-`, then
       // `    [V]` keeps V in a list).
       if (leaf.body) {
         const tail = text.slice(pos);
-        if (!allMatched || LIST_MARKER.test(tail.slice(indentColumns(tail)))) leaf.body = null;
+        // A marker indented four or more columns is not a list marker; the reference block reads it as a continuation
+        // (`[r]:`, then `    1.` is the destination).
+        const tailIndent = indentColumns(tail);
+        if (tailIndent < 4 && LIST_MARKER.test(tail.slice(tailIndent))) leaf.body = null;
+        else if (!allMatched && !allReferenceDefinitions([...leaf.body, tail])) leaf.body = null;
         else leaf.body.push(tail);
       }
       out.push(leaf.id);
@@ -432,6 +441,18 @@ const SETEXT_UNDERLINE = /^ {0,3}(?:=+|-+)[ \t]*$/;
  * CR) returns false, and the line stays an underline. That keeps the
  * error on the conservative side: a link masked that a reader could click, never one credited that they cannot.
  */
+/**
+ * True only when `line`, appended to definition-only `paraLines`, is wholly consumed by the LAST definition (its
+ * title or the rest of its destination) rather than starting another one: the case where markdown-it keeps a lazy
+ * line inside the container (`> [r]: /url`, then lazy `"t"`). A lazy line that is a new definition, or anything
+ * else, is not continued (independent review of 28f3b9b8: `- [s]: <a b>`, then lazy `[r]: /url "t"`).
+ */
+function continuesLastDefinition(paraLines, line) {
+  const before = referenceDefinitionSpans(paraLines);
+  const after = referenceDefinitionSpans([...paraLines, line]);
+  return before.length > 0 && after.length === before.length && after[after.length - 1] === paraLines.length + 1;
+}
+
 function allReferenceDefinitions(paraLines) {
   return paraLines.length > 0 && referenceDefinitionLines(paraLines) === paraLines.length;
 }

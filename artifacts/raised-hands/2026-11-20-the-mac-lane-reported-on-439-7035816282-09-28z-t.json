@@ -1,0 +1,12 @@
+{
+  "id": "2026-11-20-the-mac-lane-reported-on-439-7035816282-09-28z-t",
+  "raisedAt": "2026-11-20T11:25:27.649Z",
+  "origin": "cloud",
+  "doing": "Proving independent Mac operation: a fresh ordinary task must auto-build, auto-publish a PR, land under DR-037, and then a later scheduled cycle must run.",
+  "blockedBy": "The Mac lane reported on #439 (7035816282, 09:28Z) that the Codex provider's included usage is exhausted, with 0% left until 2026-11-24T22:55Z. The installed publisher makes its one independent source review through that provider and only admits it while the provider has capacity. So even a build whose coding completes cannot publish a PR before the reset. Ordinary task #2424 also failed before any edit, and Root is diagnosing that.",
+  "need": "An owner decision: either wait for the 2026-11-24 reset, or have Root reroute the publisher's independent review through the local router, as the owner's 2026-11-02 rule treats exhausted paid usage as a routing event. Root owns that private routing code.",
+  "whoCanUnblock": "owner",
+  "domain": "independent-operation",
+  "status": "open",
+  "routedTo": null
+}

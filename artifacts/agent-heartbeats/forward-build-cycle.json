@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-11-20T18:13:57.573Z",
-  "result": "18:10Z fire: quiet. Nothing dispatched; the build wave is held because independent Mac operation is the owner's exclusive critical path. #2423 (head dc01e351) and the #2368 successor 035ffefd still await Root's source review. Independent operation is blocked on the owner's Codex-limit decision (#439 7037608103; Codex usage exhausted until 2026-11-24T22:55Z) and on Root's fresh ordinary task. in flight H/S/O = 0/0/0. sub-brains: signalgrid-mcp has 1 open PR (#17, unchanged), no action. owner queue: Codex decision on #439."
+  "firedAt": "2026-11-20T20:25:18.854Z",
+  "result": "20:11Z fire: no dispatch. The build wave stays held because independent Mac operation is the owner's exclusive critical path, and the Mac asked (#439 7049595945) to hold gated-path landings while fresh proof task #2441 builds. #2423: full chain passed on c37a2d78 (install/preflight/breadth exit 0); mainline then gained #2390, so the merge 7ae41675 is re-running; landing held for #2441. #2368: round-4 findings fixed in candidate 8a228a76 (428/428; 400k fuzz LOST 4631 -> 37), back with the independent reviewer; landing held for #2441. in flight H/S/O = 0/0/0. sub-brains: signalgrid-mcp not re-read this fire (1 open PR, #17, at 18:10Z). owner queue: none new."
 }

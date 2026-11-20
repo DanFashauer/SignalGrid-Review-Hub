@@ -776,14 +776,21 @@ function blockRanges(lines, treatUnclosedAsFence, judgeDefinitions) {
       const io = fenceOpener(text0.slice(itemCol[i]));
       if (io) {
         const c = itemCol[i];
+        // Why the scan stopped decides the line's owner: a line that left the item is not this fence's closer even
+        // when its sliced text looks like one, and is read again under its own container (Root on e33faf2d:
+        // `- a`, a four-space `~~~`, then a margin `~~~~~` opens a top-level fence, not a close of the item's one).
         let k = i + 1;
+        let exited = false;
         while (k < lines.length) {
           const t = expandTabs(content(lines[k]));
-          if (!isBlank(lines[k]) && indentColumns(t) < c) break;
+          if (!isBlank(lines[k]) && indentColumns(t) < c) {
+            exited = true;
+            break;
+          }
           if (closesFence(t.slice(c), io)) break;
           k += 1;
         }
-        if (k < lines.length && closesFence(expandTabs(content(lines[k])).slice(c), io)) {
+        if (k < lines.length && !exited) {
           out.push({ kind: "fence", start: i, end: k, closed: true });
           i = k;
           inParagraph = false;

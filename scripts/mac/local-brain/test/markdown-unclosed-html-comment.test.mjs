@@ -1882,3 +1882,54 @@ test('lazy-line list markers and fences inside items agree with markdown-it', as
   assert.equal(legacyFence, 122, 'only the legacy lone-fence reading masks a rendered route, and only with treatUnclosedAsFence');
   assert.equal(codeKept, 922, 'routes kept beyond the renderer are all in renderer code blocks');
 });
+
+// 41. Root on e33faf2d (#2368). A line that leaves an item ends the item's fence even when its text, sliced at the
+//     item's content column, looks like that fence's closer; it is read again under its own container, so a margin
+//     fence after it is a top-level fence and a route inside that fence stays hidden. Exact literal first, then a
+//     bounded family of long openers, exit lines and real closers at several columns, judged against markdown-it 14 in
+//     both directions; both fence options; shape checked. Routes the masker hides that markdown-it renders all sit
+//     after a fence line the top-level scan can open (the legacy top-level fence pairing, pinned by count); routes it
+//     keeps beyond the renderer are all inside renderer code blocks (pinned by count).
+for (const treatUnclosedAsFence of [true, false]) {
+  test(`Root e33faf2d literal: an item-exit line is not the item fence's closer (treatUnclosedAsFence=${treatUnclosedAsFence})`, () => {
+    const input = '- a\n    ~~~\n    x\n~~~~~\n[H](docs/H.md)\n~~~~~\n';
+    const out = maskNonProse(input, { treatUnclosedAsFence });
+    assertShape(input, out);
+    assert.equal(out.includes('docs/H.md'), false, `hidden route kept: ${JSON.stringify(out)}`);
+  });
+}
+test('item fences against long exit lines and real closers agree with markdown-it', async () => {
+  const { default: MarkdownIt } = await import('markdown-it');
+  const md = new MarkdownIt('commonmark');
+  const sp = (n) => ' '.repeat(n);
+  const docs = [];
+  for (const [item, col] of [['- a', 2], ['1. a', 3], ['  - a', 4]]) for (const extra of [0, 2, 3]) for (const L1 of [3, 4, 5]) for (const ch of ['~', '`']) {
+    for (const ind of [0, 1, col - 1, col, col + 1]) for (const L2 of [3, 4, 5, 6, 7]) for (const ch2 of [ch, ch === '~' ? '`' : '~']) for (const tail of ['', `\n${ch2.repeat(L2)}`]) {
+      docs.push(`${item}\n${sp(col + extra)}${ch.repeat(L1)}\n${sp(col + extra)}x\n${sp(ind)}${ch2.repeat(L2)}\n[R](docs/R.md)${tail}\n`);
+    }
+  }
+  let checked = 0;
+  let codeKept = 0;
+  let fenceHidden = 0;
+  for (const input of docs) {
+    const html = md.render(input);
+    const links = html.split('href="docs/R.md"').length - 1;
+    for (const treatUnclosedAsFence of [true, false]) {
+      const out = maskNonProse(input, { treatUnclosedAsFence });
+      assertShape(input, out);
+      const kept = out.split('docs/R.md').length - 1;
+      if (kept < links) {
+        assert.ok(input.split('\n').some((l) => /^ {0,3}(~{3,}|`{3,})$/.test(l)), `rendered route masked (${kept} < ${links}): ${JSON.stringify(input)}`);
+        fenceHidden += 1;
+      }
+      if (kept > links) {
+        assert.ok(/<pre><code>[^<]*docs\/R\.md/.test(html), `route kept that markdown-it does not render (${kept} > ${links}): ${JSON.stringify(input)}`);
+        codeKept += 1;
+      }
+      checked += 1;
+    }
+  }
+  assert.equal(checked, 3 * 3 * 3 * 2 * 5 * 5 * 2 * 2 * 2);
+  assert.equal(fenceHidden, 468, 'routes hidden only after a top-level-openable fence line (the legacy top-level fence pairing)');
+  assert.equal(codeKept, 1836, 'routes kept beyond the renderer are all in renderer code blocks');
+});

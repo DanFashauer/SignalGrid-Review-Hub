@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-11-19T22:26:35.988Z",
-  "result": "22:24Z cycle, 2h keepalive. Mac side: no new or moved origin/mac/* branch since 18:24Z; tick last fired 2026-11-19T21:19:03Z (deferred: host lock held); no mail addressed to cloud; one cloud->mac message unread 2.9d, already superseded. Sim requests: loop passed. Manifest check: no drift. Live evidence last refreshed 2026-11-16 17:14 -0500, just over 3 days: refresh ask DEFERRED this cycle, because a verify:all run would contend for the Mac host lock while #2399 waits on that host; ask goes out once #2399 has run. Owner not escalated."
+  "firedAt": "2026-11-20T00:25:27.993Z",
+  "result": "00:24Z cycle, 2h keepalive. Mac side: no new or moved origin/mac/* branch; tick last fired 2026-11-19T23:56:10Z; no mail addressed to cloud; one cloud->mac message unread, already superseded. Sim requests: loop passed. Live evidence last refreshed 2026-11-16 17:14 -0500 (over 3 days): refresh ask still DEFERRED because #2399 is now running on the Mac host and a verify:all run would contend for its lock; it goes out once #2399 finishes. Owner not escalated."
 }

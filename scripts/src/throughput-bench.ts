@@ -79,11 +79,13 @@ interface Run {
   samples: Float64Array;
   /** Verdict fingerprint of the scenario set — must not vary with thread count. */
   signature: string;
+  /** process.hrtime.bigint() at the first timed operation, as a decimal string (comparable across threads). */
+  startNs: string;
 }
 
 type WorkerToMain =
   | { type: "ready" }
-  | { type: "done"; ops: number; elapsedMs: number; samples: Float64Array; signature: string };
+  | { type: "done"; ops: number; elapsedMs: number; samples: Float64Array; signature: string; startNs: string };
 
 async function loadWorkload() {
   const [core, workload] = await Promise.all([
@@ -120,14 +122,23 @@ function verdictSignature(core: Core, w: Workload): string {
   }).join("\n");
 }
 
-/** Run the workload flat out for `durationMs`, timing every completion. */
-function measure(core: Core, w: Workload, durationMs: number): Run {
+/**
+ * Fingerprint the verdicts, then warm the loop up. Untimed, and done BEFORE a worker reports ready, so the
+ * barrier below releases warmed workers and each timed window starts following the release, with its skew measured
+ * and reported (the header's contract;
+ * before 2026-11-19 the warm-up ran after the release, so each worker's window started whenever its own
+ * warm-up ended — #2387).
+ */
+function prepare(core: Core, w: Workload): string {
   const signature = verdictSignature(core, w);
-
   for (let i = 0; i < WARMUP_ITERATIONS; i++) {
     core.evaluate(w.BENCH_OPERATOR, w.BENCH_SCENARIOS[i % w.BENCH_SCENARIOS.length]);
   }
+  return signature;
+}
 
+/** Run the prepared workload flat out for `durationMs`, timing every completion. */
+function measure(core: Core, w: Workload, durationMs: number, signature: string): Run {
   const buffer = new Float64Array(MAX_SAMPLES);
   const start = process.hrtime.bigint();
   const deadline = start + BigInt(Math.round(durationMs * 1e6));
@@ -148,20 +159,21 @@ function measure(core: Core, w: Workload, durationMs: number): Run {
     if (now >= deadline) break;
   }
 
-  return { ops, elapsedMs: Number(now - start) / 1e6, samples: buffer.subarray(0, kept), signature };
+  return { ops, elapsedMs: Number(now - start) / 1e6, samples: buffer.subarray(0, kept), signature, startNs: String(start) };
 }
 
 function opsPerSec(run: { ops: number; elapsedMs: number }): number {
   return run.ops / (run.elapsedMs / 1000);
 }
 
-/** Start `count` workers, hold them at a barrier, then release them together. */
-function saturate(count: number, durationMs: number): Promise<Run[]> {
+/** Start `count` workers, hold them at a barrier until each is loaded AND warmed, then release them together. */
+function saturate(count: number, durationMs: number): Promise<{ runs: Run[]; releaseNs: bigint }> {
   const workers: Worker[] = [];
   const runs: Run[] = [];
   let ready = 0;
+  let releaseNs = 0n;
 
-  return new Promise<Run[]>((resolve, reject) => {
+  return new Promise<{ runs: Run[]; releaseNs: bigint }>((resolve, reject) => {
     const failAll = (error: unknown) => {
       for (const worker of workers) void worker.terminate();
       reject(error instanceof Error ? error : new Error(String(error)));
@@ -174,14 +186,17 @@ function saturate(count: number, durationMs: number): Promise<Run[]> {
         if (message.type === "ready") {
           // Release only once every worker is loaded and warm, so the measured
           // window is N threads running at once — not a staggered ramp.
-          if (++ready === count) for (const w of workers) w.postMessage("go");
+          if (++ready === count) {
+            releaseNs = process.hrtime.bigint();
+            for (const w of workers) w.postMessage("go");
+          }
           return;
         }
         runs.push(message);
         // A worker still listening on its port keeps the process alive, so the
         // last result is also the signal to tear the pool down.
         if (runs.length === count) {
-          void Promise.all(workers.map((w) => w.terminate())).then(() => resolve(runs));
+          void Promise.all(workers.map((w) => w.terminate())).then(() => resolve({ runs, releaseNs }));
         }
       });
       worker.on("error", failAll);
@@ -203,14 +218,17 @@ async function runWorker(durationMs: number): Promise<void> {
   const core = workload.SignalGridCore.demo();
   const port = parentPort;
   if (!port) throw new Error("worker started without a parent port");
+  // Warm before reporting ready, so each timed window starts following the release (skew measured), not after a
+  // staggered warm-up.
+  const signature = prepare(core, workload);
 
   port.on("message", (message: string) => {
     if (message !== "go") return;
-    const run = measure(core, workload, durationMs);
+    const run = measure(core, workload, durationMs, signature);
     // Copy out of the subarray so the transferred buffer holds only the samples.
     const samples = Float64Array.from(run.samples);
     port.postMessage(
-      { type: "done", ops: run.ops, elapsedMs: run.elapsedMs, samples, signature: run.signature },
+      { type: "done", ops: run.ops, elapsedMs: run.elapsedMs, samples, signature: run.signature, startNs: run.startNs },
       [samples.buffer],
     );
   });
@@ -244,14 +262,21 @@ async function main(): Promise<void> {
   console.log("");
 
   console.log("Stage 1 — one core, sustained");
-  const single = measure(core, workload, durationMs);
+  const single = measure(core, workload, durationMs, prepare(core, workload));
   const singleRate = opsPerSec(single);
   console.log(`  decisions      ${single.ops.toLocaleString("en-US")} in ${(single.elapsedMs / 1000).toFixed(2)}s`);
   console.log(`  throughput     ${Math.round(singleRate).toLocaleString("en-US")} decisions/sec`);
   console.log("");
 
   console.log(`Stage 2 — ${workerCount} worker${workerCount === 1 ? "" : "s"}, saturated`);
-  const runs = await saturate(workerCount, durationMs);
+  const { runs, releaseNs } = await saturate(workerCount, durationMs);
+  // How far apart the timed windows started, and how late the last one started after the release. Reported,
+  // never asserted: it shows whether stage 2 really measured N threads at once.
+  const starts = runs.map((r) => BigInt(r.startNs));
+  const firstStart = starts.reduce((a, b) => (b < a ? b : a));
+  const lastStart = starts.reduce((a, b) => (b > a ? b : a));
+  const startSkewMs = Number(lastStart - firstStart) / 1e6;
+  const lastStartAfterReleaseMs = Number(lastStart - releaseNs) / 1e6;
   const totalOps = runs.reduce((sum, r) => sum + r.ops, 0);
   const meanWindowMs = runs.reduce((sum, r) => sum + r.elapsedMs, 0) / runs.length;
   const aggregateRate = totalOps / (meanWindowMs / 1000);
@@ -268,6 +293,7 @@ async function main(): Promise<void> {
   console.log(`  throughput     ${Math.round(aggregateRate).toLocaleString("en-US")} decisions/sec aggregate`);
   console.log(`  per worker     ${Math.round(aggregateRate / workerCount).toLocaleString("en-US")} decisions/sec`);
   console.log(`  scaling        ${(aggregateRate / singleRate).toFixed(2)}x on ${workerCount} workers (${efficiency.toFixed(0)}% of linear)`);
+  console.log(`  window starts  ${startSkewMs.toFixed(3)} ms apart; last began ${lastStartAfterReleaseMs.toFixed(3)} ms after the release`);
   console.log("  service time under saturation:");
   console.log(`    p50  ${workload.percentile(merged, 50).toFixed(4)} ms`);
   console.log(`    p95  ${workload.percentile(merged, 95).toFixed(4)} ms`);

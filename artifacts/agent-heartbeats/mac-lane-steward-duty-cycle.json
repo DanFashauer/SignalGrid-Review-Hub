@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-11-20T02:24:05.912Z",
-  "result": "02:25Z cycle, 2h keepalive. Mac side: no new or moved origin/mac/* branch (newest 2026-11-19T07:36Z); tick last fired 2026-11-20T00:48:50Z; no mail addressed to cloud; one cloud->mac message unread (3d), already superseded. Sim requests: loop passed. Live evidence last refreshed 2026-11-16 (over 3 days): refresh ask still DEFERRED while the Mac host carries ordinary proof work (#2414 consumed; next ordinary cycle pending Root's timeout repair) and the #2368 chain. Owner not escalated."
+  "firedAt": "2026-11-20T04:25:07.066Z",
+  "result": "04:24Z cycle, 2h keepalive. Mac side: no new or moved origin/mac/* branch (newest 2026-11-19T07:36Z); tick last fired 2026-11-20T02:57:42Z; no mail addressed to cloud; one cloud->mac message unread (3d), already superseded. Sim requests: loop passed. Live evidence last refreshed 2026-11-16 (over 3 days): refresh ask still DEFERRED while the Mac host carries the #2368 Mac runs and the next ordinary proof is pending #2419. Owner not escalated."
 }

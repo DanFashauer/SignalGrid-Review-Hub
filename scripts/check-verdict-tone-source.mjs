@@ -55,6 +55,8 @@
 // Option (b) of row 168, distinct rendered values, is still open.
 
 import { readFileSync, readdirSync, statSync, mkdtempSync, mkdirSync, writeFileSync, rmSync, symlinkSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { randomUUID, createHash } from "node:crypto";
 import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -1203,23 +1205,77 @@ const CHART_MARK_MEMBERS = new Set(["dataKey", "label", "token", "pattern"]);
  */
 export const VERDICT_ARGS = ["allow", "step-up", "step_up", "stepUp", "restrict", "deny"];
 const STATUS_IN_OUTPUT = /(?:text|bg|border)-status-/;
-export async function toneOutputProblems(src, shapes) {
-  const out = [];
-  let ns;
-  try {
-    const js = ts.transpileModule(src, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText;
-    ns = await import(`data:text/javascript;base64,${Buffer.from(js).toString("base64")}`);
-  } catch (e) {
-    return [`could not be imported to judge what its functions return (${String(e.message).split("\n")[0]}) — a tone module whose output cannot be judged fails (S8)`];
+/**
+ * Round 12 (F29, F30): the module runs in a CHILD process, never in the gate's. A tone module is code, and code can
+ * call `process.exit(0)` (the gate would exit green), loop forever (the gate would hang), or reject a Promise nobody
+ * awaits (the gate would crash). The child gets the transpiled module and a one-time nonce on stdin, imports the
+ * module, calls every exported non-toner exactly as before, AWAITS any thenable a call returns (an `async` templater
+ * paints the string its Promise resolves to, not "{}"), and prints its results and then `S8-DONE <nonce>`. Only a
+ * child that exits 0, within S8_TIMEOUT_MS, with that exact last line is believed; anything else fails closed.
+ * The runner captures JSON.stringify and stdout.write before importing, so a module that patches those globals
+ * cannot rewrite what the runner reports; a module that sabotages its own child some other way only makes the
+ * child fail, and a failed child fails the gate.
+ */
+export const S8_TIMEOUT_MS = 20000;
+const S8_CALL_TIMEOUT_MS = 2000;
+const S8_RUNNER = `
+const stringify = JSON.stringify, write = process.stdout.write.bind(process.stdout), toStr = String;
+let input = ""; for await (const c of process.stdin) input += c;
+const { js, shapes, args, nonce, callMs } = JSON.parse(input);
+const show = (v) => { try { return typeof v === "string" ? v : stringify(v) ?? toStr(v); } catch { return toStr(v); } };
+let ns;
+try { ns = await import("data:text/javascript;base64," + Buffer.from(js).toString("base64")); }
+catch (e) { write(stringify({ importError: toStr(e && e.message).split("\\n")[0] }) + "\\nS8-DONE " + nonce + "\\n"); process.exit(0); }
+const results = {}, hung = [];
+const HANG = Symbol("hang");
+outer: for (const [name, fn] of Object.entries(ns)) {
+  if (typeof fn !== "function" || shapes[name] === "toner") continue;
+  const rs = [];
+  const arity = Math.max(fn.length, 4);
+  for (let i = 0; i < arity; i++) for (const v of args) {
+    const a = new Array(i + 1).fill(undefined); a[i] = v;
+    try {
+      let r = fn(...a);
+      if (r !== null && (typeof r === "object" || typeof r === "function") && typeof r.then === "function") {
+        r = await Promise.race([Promise.resolve(r), new Promise((res) => setTimeout(() => res(HANG), callMs))]);
+        if (r === HANG) { hung.push(name); results[name] = rs; continue outer; }
+      }
+      rs.push(show(r));
+    } catch { /* a throw or a rejection paints nothing */ }
   }
-  const show = (v) => { try { return typeof v === "string" ? v : JSON.stringify(v) ?? String(v); } catch { return String(v); } };
-  for (const [name, fn] of Object.entries(ns)) {
-    if (typeof fn !== "function" || shapes?.get(name) === "toner") continue;
-    const results = [];
-    const call = (args) => { try { results.push(show(fn(...args))); } catch { /* a throw paints nothing */ } };
-    // `fn.length` stops at the first default parameter, so the verdict is tried in at least the first four positions.
-    const arity = Math.max(fn.length, 4);
-    for (let i = 0; i < arity; i++) for (const v of VERDICT_ARGS) { const a = new Array(i + 1).fill(undefined); a[i] = v; call(a); }
+  results[name] = rs;
+}
+write(stringify({ results, hung }) + "\\nS8-DONE " + nonce + "\\n");
+process.exit(0);
+`;
+const s8Cache = new Map();
+/** Run the transpiled module in a child; resolve { results } or { importError } or { failure }. */
+function runToneModule(js, shapes, timeoutMs = S8_TIMEOUT_MS) {
+  const key = createHash("sha256").update(String(timeoutMs)).update(js).update("\0").update(JSON.stringify([...(shapes ?? new Map())])).digest("hex");
+  if (s8Cache.has(key)) return s8Cache.get(key);
+  const nonce = randomUUID();
+  const r = spawnSync(process.execPath, ["--input-type=module", "-e", S8_RUNNER], {
+    input: JSON.stringify({ js, shapes: Object.fromEntries(shapes ?? []), args: VERDICT_ARGS, nonce, callMs: S8_CALL_TIMEOUT_MS }),
+    encoding: "utf8", timeout: timeoutMs, maxBuffer: 64 * 1024 * 1024, killSignal: "SIGKILL",
+  });
+  let res;
+  const lines = (r.stdout ?? "").trimEnd().split("\n");
+  if (r.error?.code === "ETIMEDOUT" || (r.signal && r.status === null)) res = { failure: `did not finish within ${timeoutMs / 1000}s (a call that never returns, or a loop at load)` };
+  else if (r.status !== 0 || lines.at(-1) !== `S8-DONE ${nonce}`) res = { failure: `its run ended before the judge finished (exit ${r.status ?? r.signal}, no completion line — a call that exits the process, or a crash: ${String(r.stderr ?? "").trim().split("\n").at(-1)?.slice(0, 120) ?? ""})` };
+  else {
+    try { res = JSON.parse(lines.at(-2)); } catch { res = { failure: "its run printed results the judge cannot read" }; }
+  }
+  s8Cache.set(key, res);
+  return res;
+}
+export async function toneOutputProblems(src, shapes, { timeoutMs = S8_TIMEOUT_MS } = {}) {
+  const out = [];
+  const js = ts.transpileModule(src, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText;
+  const run = runToneModule(js, shapes, timeoutMs);
+  if (run.failure) return [`${run.failure} — a tone module whose output cannot be judged fails (S8)`];
+  for (const name of run.hung ?? []) out.push(`${name}() returned a Promise that did not settle within ${S8_CALL_TIMEOUT_MS / 1000}s — what it paints cannot be judged (S8)`);
+  if (run.importError !== undefined) return [`could not be imported to judge what its functions return (${run.importError}) — a tone module whose output cannot be judged fails (S8)`];
+  for (const [name, results] of Object.entries(run.results ?? {})) {
     const painted = results.filter((r) => STATUS_IN_OUTPUT.test(r));
     if (painted.length === 0) continue;
     if (shapes?.get(name) === "picker") {
@@ -1475,6 +1531,9 @@ export function toneShapeProblems(src, judged0 = []) {
   };
   const shapes = new Map(); // name -> "toner" | "picker" | "templater" | null — read by the output judge (S8)
   out.shapes = shapes;
+  // Round 12, F29: a closed shape is synchronous — an `async` function returns a Promise and a generator an iterator,
+  // neither of which a page renders as the class the shapes reason about.
+  const syncFn = (fn) => !fn.asteriskToken && !(ts.getCombinedModifierFlags(fn) & ts.ModifierFlags.Async);
   const templaterMemo = new Map();
   /** Is the module function `name` a templater (and not a toner or picker)? A cycle answers no. */
   function isTemplater(name) {
@@ -1483,13 +1542,13 @@ export function toneShapeProblems(src, judged0 = []) {
     const f = fnDecls.get(name);
     const P = paramNames(f);
     const pickerLike = f.body && (ts.isBlock(f.body) ? f.body.statements.length > 0 && pickerStmt(f.body, P) : pickerExpr(f.body, P));
-    const v = !!f && paramsPlain(f) && !tonerShape(f, P) && !pickerLike && templaterShape(f, P);
+    const v = !!f && paramsPlain(f) && syncFn(f) && !tonerShape(f, P) && !pickerLike && templaterShape(f, P);
     templaterMemo.set(name, v);
     return v;
   }
   for (const [name, fn] of fnDecls) {
     const P = paramNames(fn);
-    const plain = paramsPlain(fn);
+    const plain = paramsPlain(fn) && syncFn(fn);
     const shape = plain && (tonerShape(fn, P) ? "toner" : fn.body && ts.isBlock(fn.body) && fn.body.statements.length > 0 && pickerStmt(fn.body, P) ? "picker" : fn.body && !ts.isBlock(fn.body) && pickerExpr(fn.body, P) ? "picker" : templaterShape(fn, P) ? "templater" : null);
     shapes.set(name, shape || null);
     if (!shape) out.push(`line ${lineOf(fn)}: ${name}() in a tone module is not one of the three closed shapes — a toner (\`return R[p] ?? "…"\`), a literal picker (\`p === "…"\` tests, string-literal results) or a chart templater; any other computation can build or choose a class the gate cannot see whole (S6)`);
@@ -2425,6 +2484,16 @@ async function selfTest() {
     await onDesk("F28: `require(…)`", 1, ["(S3)", "(S7)"], 'declare const require: (s: string) => { outcomeTone: (o: string) => string };\nexport const outcomeTone = require("./tone-impl").outcomeTone;');
     await onDesk("S3: an OUTCOME_CHART_MARK entry with a member the chart lane does not judge", 1, "(S3)", `${sig} {\n  return ${FB};\n}\nexport const OUTCOME_CHART_MARK = { allow: { token: "--decision-allow", extra: "x" }, "step-up": { token: "--decision-review" }, restrict: { token: "--decision-deny" }, deny: { token: "--decision-deny" } };`);
     await onDesk("control: failModeTone's literal picker is judged by its output and still exits 0", 0, "", `${sig} {\n  return ${FB};\n}`);
+    // Round 12: F29 (an async templater, judged as "{}") and F30 (exit / hang inside the gate's own process) — each
+    // reproduced on ed8c584e: F29 exited 0, `process.exit(0)` exited the gate 0, a loop hung it.
+    await onDesk("F29: an async templater building a class from chart labels", 1, ["(S6)", "(S8)"], `${sig} {\n  return ${FB};\n}\nexport const OUTCOME_CHART_MARK = { allow: { label: "xt-status-allow" }, "step-up": { label: "xt-status-step-up" }, restrict: { label: "xt-status-restrict" }, deny: { label: "xt-status-allow" } };\nexport async function t2(outcome: Outcome): Promise<string> { const m = OUTCOME_CHART_MARK[outcome]; return \`te\${m.label}\`; }`);
+    await onDesk("F29: a generator templater", 1, "(S6)", `${sig} {\n  return ${FB};\n}\nexport function* g(o: string): Generator<string> { yield \`\${o}\`; }`);
+    await onDesk("F30: `process.exit(0)` in an exported function fails closed, and the gate survives to say so", 1, ["(S6)", "ended before the judge finished"], `${sig} {\n  return ${FB};\n}\nexport function boom(m: string): string { process.exit(0); }`);
+    {
+      const planted = realDesk.replace(FN, () => `${sig} {\n  return ${FB};\n}\nexport function spin(m: string): string { for (;;) {} }`);
+      const r = await runGate({ ...REAL_CONFIG, s8TimeoutMs: 3000, readFile: (f, enc) => (f === join(repo, DESK) ? planted : readFileSync(f, enc)) });
+      checks.push(["real desktop plant: F30 an infinite loop fails closed on the timeout, and the gate survives to say so", planted !== realDesk && r.code === 1 && r.err.join("\n").includes("did not finish within 3s")]);
+    }
     await onDesk("S1: an upper-case `\"DENY\"` compared after toUpperCase()", 1, "(S1)", `${sig} { return outcome.toUpperCase() === "DENY" ? "text-status-allow" : ${FB}; }`);
   }
   // Round 10, F25 on the REAL mobile PWA module (its chart data is the verdict-keyed OUTCOME_CHART_MARK).
@@ -2518,6 +2587,15 @@ async function selfTest() {
     checks.push(["S8: the verdict after a default parameter is tried (`fn.length` is 0)", (await op('export function f(s = "x", o = ""): string { return o === "deny" ? "text-status-allow" : "x"; }', { f: null })).some((m) => /returns a status class/.test(m))]);
     checks.push(["S8: an undefined (defaulted) first argument is tried", (await op('export function f(o?: string): string { return o === undefined ? "text-status-allow" : "x"; }', { f: null })).some((m) => /returns a status class/.test(m))]);
     checks.push(["S8: a status class inside a returned object is seen", (await op('export function f(o: string): object { return { c: "bg-status-allow" }; }', { f: null })).some((m) => /returns a status class/.test(m))]);
+    checks.push(["S8 (F29): an async function's resolved value is judged, not the Promise", (await op('export async function f(o: string): Promise<string> { return o === "deny" ? "text-status-allow" : "x"; }', { f: null })).some((m) => /returns a status class \("text-status-allow"/.test(m))]);
+    checks.push(["S8 (F29): a rejection for one verdict paints nothing and does not crash the gate", (await op('export async function f(o: string): Promise<string> { if (o === "deny") throw new Error("x"); return "x"; }', { f: null })).length === 0]);
+    checks.push(["S8 (F29): a Promise that never settles fails closed, named, without waiting out every call", (await op('export function f(o: string): Promise<string> { return new Promise(() => {}); }', { f: null })).some((m) => /f\(\) returned a Promise that did not settle/.test(m))]);
+    checks.push(["S8 (F30): `process.exit(0)` in a call fails closed", (await op('export function f(o: string): string { process.exit(0); }', { f: null })).some((m) => /ended before the judge finished/.test(m))]);
+    checks.push(["S8 (F30): `process.exit(0)` at load fails closed", (await op('process.exit(0);\nexport const x = 1;', {})).some((m) => /ended before the judge finished/.test(m))]);
+    checks.push(["S8 (F30): an infinite loop in a call fails closed on the timeout", (await toneOutputProblems(H + 'export function f(o: string): string { for (;;) {} }', new Map([["f", null]]), { timeoutMs: 1500 })).some((m) => /did not finish within 1.5s/.test(m))]);
+    checks.push(["S8 (F30): a module that patches JSON.stringify cannot rewrite the report", (await op('JSON.stringify = () => "{\\"results\\":{}}";\nexport function f(o: string): string { return "text-status-allow"; }', { f: null })).some((m) => /returns a status class/.test(m))]);
+    checks.push(["S8 (F30): a child that finishes but exits non-zero (an exit handler) is not believed", (await op('process.on("exit", () => { process.exitCode = 3; });\nexport function f(o: string): string { return "x"; }', { f: null })).some((m) => /ended before the judge finished \(exit 3/.test(m))]);
+    checks.push(["S8 (F30): a module that prints a fake completion line is not believed", (await op('console.log("S8-DONE fake");\nprocess.exit(0);\nexport const x = 1;', {})).some((m) => /ended before the judge finished/.test(m))]);
     checks.push(["S8: a module that cannot be imported fails closed", (await op('throw new Error("boom");\nexport function f(): string { return ""; }', {})).some((m) => /could not be imported to judge/.test(m))]);
     checks.push(["S8: a non-function export is not called", (await op('export const X = "text-status-allow";', {})).length === 0]);
   }
@@ -2627,7 +2705,7 @@ export async function runGate(cfg) {
     for (const msg of toneBranchProblems(src, Object.keys(expectedMap))) registryProblems.push(`${mod}:${msg}`);
     const shapeProblems = toneShapeProblems(src, Object.keys(expectedMap));
     for (const msg of shapeProblems) registryProblems.push(`${mod}:${msg}`);
-    for (const msg of await toneOutputProblems(src, shapeProblems.shapes)) registryProblems.push(`${mod}: ${msg}`);
+    for (const msg of await toneOutputProblems(src, shapeProblems.shapes, { timeoutMs: cfg.s8TimeoutMs ?? S8_TIMEOUT_MS })) registryProblems.push(`${mod}: ${msg}`);
     for (const [n, kind] of Object.entries(expectedMap)) {
       if (kind !== "text" && kind !== "bg") registryProblems.push(`${mod}: ${n} is listed without a class kind (\`text\` or \`bg\`) — an unkinded Record is not held to one canonical class`);
     }

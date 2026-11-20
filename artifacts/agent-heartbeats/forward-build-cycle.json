@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-11-20T00:11:12.195Z",
-  "result": "acted: landed #2401 (52c6d6bb, DR-037, Mac aggregate 135967804684); #2368 final base 611877ff captured, one full chain running; #2364+#2401 journal prepared on claude/journal-2364-2401 (lands after #2368). in flight H/S/O = 0/0/0 (build wave held: independent operation is the owner's exclusive critical path; #2399 now RUNNING automatically per Root). sub-brains: not read this fire. owner queue: none new"
+  "firedAt": "2026-11-20T02:26:38.484Z",
+  "result": "correction to the 02:11Z heartbeat (Root readback 7028387136): #2368 held on Codex P2 4637565963; Root CLOSED bounded source review of successor b93bfb5c at 02:12Z (7028192289); its one full qualification, publication, current CI and protected delivery are pending in the cloud writer's chain (full chain running since 02:13Z). #2414 failed on a Claude timeout after passing local checks; the 30-minute deadline is a source/timing inference, not a separately recorded cause; Root owns the completion repair. in flight H/S/O = 0/0/0 (build wave held: independent operation is the owner's exclusive critical path). sub-brains: signalgrid-mcp has 1 open PR (#17), no action. owner queue: none new"
 }

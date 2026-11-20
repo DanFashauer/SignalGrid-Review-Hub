@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-11-20T08:34:44.964Z",
-  "result": "08:24Z cycle, 2h keepalive (delivered after #2404 lands so mainline stays still during its Mac run). Mac side: no new or moved origin/mac/* branch (newest 2026-11-19T07:36Z); tick last fired 2026-11-20T07:17:08Z; no mail addressed to cloud; one cloud->mac message unread (3d), already superseded. Live evidence last refreshed 2026-11-16 (over 3 days): refresh ask still DEFERRED while the Mac host carries the #2404/#2368 Mac runs. Owner not escalated."
+  "firedAt": "2026-11-20T11:25:26.266Z",
+  "result": "10:25Z cycle, 2h keepalive (held so mainline stayed still while #2423 waited on review). Mac side: no new or moved origin/mac/* branch (newest 2026-11-19T07:36Z); tick last fired 2026-11-20T09:25:47Z; no mail addressed to cloud. Live evidence last refreshed 2026-11-16 (over 3 days); refresh ask still DEFERRED. The Mac lane reported Codex provider usage exhausted until 2026-11-24T22:55Z (#439 7035816282), and the Codex GitHub reviewer hit its usage limit on #2423 at 10:14Z; raised for the owner in this batch. Owner not otherwise escalated."
 }

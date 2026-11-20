@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-11-19T16:25:17.460Z",
-  "result": "keepalive (quiet cycle, last steward heartbeat 13:28Z): Mac tick last fired 2026-11-19T15:52:50Z (deferred: host lock held by a verification chain); live evidence last committed 2026-11-16T22:14Z (~2.8d, under 3d, no refresh ask); no new or moved mac/* branch; no mail addressed to cloud (one cloud->mac message unread, already superseded); owner not escalated"
+  "firedAt": "2026-11-20T18:13:57.573Z",
+  "result": "18:10Z keepalive (last steward heartbeat 16:15Z; the 17:24Z cycle was quiet and within tolerance). Mac side: no new or moved origin/mac/* branch (newest 2026-11-19T07:36Z); tick heartbeat landed via #2436 (17:55Z); no mail addressed to cloud; manifest check clean. Live evidence last refreshed 2026-11-16; refresh ask still DEFERRED so the Mac and mainline stay free for the independent-operation proof. Owner not otherwise escalated."
 }

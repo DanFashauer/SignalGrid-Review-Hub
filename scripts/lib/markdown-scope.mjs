@@ -776,7 +776,11 @@ function blockRanges(lines, treatUnclosedAsFence, judgeDefinitions) {
     // Read past this line's list markers and block-quote markers too: `* ---` and `> ---` hold a thematic break,
     // not paragraph text, so a following line starts a fresh paragraph outside them (differential fuzzing).
     const inner = text0.slice(contentAt).replace(/^(?: {0,3}> ?)+/, "");
-    if (isBlank(text) || ATX_HEADING.test(text) || THEMATIC_BREAK.test(text) || THEMATIC_BREAK.test(inner) || ATX_HEADING.test(inner)) inParagraph = false;
+    // A marker line with nothing after its markers (`-`, `1.`, `- -`, `- >`) holds an empty item or quote, not a
+    // paragraph, so the next unindented line closes that item instead of continuing it lazily (Codex on b5509d55:
+    // `-`, `===`, then an indented `<!--` is paragraph text in markdown-it, not an HTML block inside the item).
+    const emptyItem = contentAt > 0 && isBlank(inner);
+    if (isBlank(text) || emptyItem || ATX_HEADING.test(text) || THEMATIC_BREAK.test(text) || THEMATIC_BREAK.test(inner) || ATX_HEADING.test(inner)) inParagraph = false;
     else if (
       inParagraph &&
       SETEXT_UNDERLINE.test(text) &&

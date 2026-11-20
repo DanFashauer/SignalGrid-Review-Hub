@@ -1532,3 +1532,42 @@ test('a leaf start closes the containers its line did not match, for code and ma
   }
   assert.equal(checked, (3 * 4 * 4 * 3 + 2 * 2 * 3) * 2);
 });
+
+// 35. Codex on b5509d55 (#2368). A list marker with nothing after it holds an empty item, not a paragraph, so the next
+//     unindented line closes the item instead of continuing it lazily; an indented comment opener after that line is
+//     paragraph text, not an HTML block inside the ended item. Exact literal first, then a bounded family of empty
+//     markers (bullet, ordered, nested, inside a quote, an empty quote inside an item, trailing spaces) followed by varied second lines and an
+//     indented comment around a route, judged against markdown-it 14 in both directions; both fence options; shape
+//     checked.
+for (const treatUnclosedAsFence of [true, false]) {
+  test(`Codex b5509d55 literal: an empty list item ends at the next unindented line, so a later indented comment opener is paragraph text (treatUnclosedAsFence=${treatUnclosedAsFence})`, () => {
+    const input = '-\n===\n    <!--\n    [V](docs/V.md)\n';
+    const out = maskNonProse(input, { treatUnclosedAsFence });
+    assertShape(input, out);
+    assert.equal(out.includes('[V](docs/V.md)'), true, `visible route masked: ${JSON.stringify(out)}`);
+  });
+}
+test('an empty list item opens no paragraph, as markdown-it reads it', async () => {
+  const { default: MarkdownIt } = await import('markdown-it');
+  const md = new MarkdownIt('commonmark');
+  const docs = [];
+  for (const mk of ['-', '*', '1.', '10)', '- -', '1. -', '> -', '-   ', '- >', '1. >', '- > >', '>']) for (const second of ['===', 'text', '# h', '***', '  x', ' ===']) {
+    for (const ind of [2, 4, 5]) for (const close of [true, false]) {
+      const sp = ' '.repeat(ind);
+      docs.push(`${mk}\n${second}\n${sp}<!--\n${sp}[R](docs/R.md)\n${close ? sp + '-->\n' : ''}`);
+    }
+  }
+  let checked = 0;
+  for (const input of docs) {
+    const links = md.render(input).split('href="docs/R.md"').length - 1;
+    for (const treatUnclosedAsFence of [true, false]) {
+      const out = maskNonProse(input, { treatUnclosedAsFence });
+      assertShape(input, out);
+      const kept = out.split('docs/R.md').length - 1;
+      assert.ok(kept <= links, `route kept that markdown-it does not render (${kept} > ${links}): ${JSON.stringify(input)}`);
+      assert.ok(kept >= links, `rendered route masked (${kept} < ${links}): ${JSON.stringify(input)}`);
+      checked += 1;
+    }
+  }
+  assert.equal(checked, 12 * 6 * 3 * 2 * 2);
+});

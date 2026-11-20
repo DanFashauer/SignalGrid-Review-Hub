@@ -5800,3 +5800,47 @@ Output, verbatim:
 The merge tree equals the head tree (`08c4e7f5`), and canonical `SignalGrid_Alpha` was identical to `52c6d6bb` at the read. The local, Mac and CI results in the preparation journal are attributed historical receipts, not new executions.
 
 Verdict: holds for the merge, tree, ancestry and receipt claims. #2401 merged from exact head `e467daae` as `52c6d6bb9e65ceb9dfc24b4dc575d275e7a81308`, with parents `56ed086f` and that head, and tree `08c4e7f5` equal to the head's. No cross-head qualification is transferred. No owner-hardware evidence, private completion seal, readiness change or independent-operation proof is asserted. The ordinary task #2399 is a separate, unfinished workflow.
+
+## 2026-11-20 — #2423 (bc97de34) landed under DR-037: check-verdict-tone-source admits bounded own-key tone lookups
+
+Cloud merged #2423 (Root's fix for #2419) under DR-037 at about 23:50Z, with `expectedHeadSha` `ca447d1b2a690dfc6fd0aa13752bf810e7224802`, after re-reading the head. Against canonical, it changes only two files: `scripts/check-verdict-tone-source.mjs` and its gate-mutant fixture `scripts/fixtures/gate-mutants/check-verdict-tone-source.json`. The gate now admits a tone lookup bounded to the component's own key, and every other inline colour choice still fails.
+
+**Preparation journal.** These records were made before the merge and are cited as attributed historical receipts:
+- **Full local qualification on `3027f445eaa32d9ababd5e9a15c1c947551864b5`** (tree `decd27f3`), clean worktree with dirty 0 at start and end, 21:42:13Z–22:21:22Z by the runner's own start and result files:
+  - `pnpm install --frozen-lockfile`: exit 0.
+  - `node scripts/preflight.mjs`: exit 0, `Preflight PASSED — everything it runs is green.`, 447 steps ok. Three named non-passes: `backup-restore` and `db-role-split` self-skipped (`DATABASE_URL` unset), and the mainline red-streaks check was NOT VERIFIED (local Actions API 401).
+  - `pnpm run verify:breadth`: exit 0, 58 breadth proofs.
+  - This local result is dated to `3027f445`. Later heads `a23b7cc6` (#2445) and `ca447d1b` (#2446, #2448) were heartbeat-only catch-ups: the delta `3027f445..ca447d1b` is three heartbeat JSONs.
+- **Self-test on the merged blob:** `node scripts/check-verdict-tone-source.mjs --self-test` prints `self-test passed (652/652)`, and the gate itself exits 0.
+- **Gating check** `Typecheck, build, and proof scaffold` `136643851374` succeeded on `ca447d1b` (completed 23:48:18Z). 0 review threads. The head was not behind canonical `dea84e59`.
+- **Mac aggregate** `136637964009` succeeded on `a23b7cc6` (run 44828707812, attempt 3, all four slices). The Mac slices queued on `ca447d1b` were still running at the merge and are not claimed. Earlier attempts' slice failures (R9-skl-deepen, the throughput bench, a lost runner, runner DNS loss) were outside this diff, with the cause of the R9 and bench failures unknown.
+- **Receipt:** #439 comment 7053548859.
+
+Command: run by the cloud lane against a fresh fetch of canonical, read-only, exactly as follows (`set -e`):
+
+```bash
+date -u +%Y-%m-%dT%H:%M:%SZ
+git log -1 --format='%H parents=%P tree=%T' bc97de347e0d900c05e31d81b25b26068890b250
+git log -1 --format='%H tree=%T' ca447d1b2a690dfc6fd0aa13752bf810e7224802
+git merge-base --is-ancestor bc97de347e0d900c05e31d81b25b26068890b250 origin/SignalGrid_Alpha && echo "bc97de34 is an ancestor of origin/SignalGrid_Alpha"
+git diff --stat dea84e59f37a84fe84206162d3ed69fe911e92cb bc97de347e0d900c05e31d81b25b26068890b250
+git diff --stat 3027f445eaa32d9ababd5e9a15c1c947551864b5 ca447d1b2a690dfc6fd0aa13752bf810e7224802
+```
+
+Output, verbatim:
+
+```
+2026-11-20T23:53:25Z
+bc97de347e0d900c05e31d81b25b26068890b250 parents=dea84e59f37a84fe84206162d3ed69fe911e92cb ca447d1b2a690dfc6fd0aa13752bf810e7224802 tree=13248e55396cf7a781ecfe1c56873304a6c7501d
+ca447d1b2a690dfc6fd0aa13752bf810e7224802 tree=13248e55396cf7a781ecfe1c56873304a6c7501d
+bc97de34 is an ancestor of origin/SignalGrid_Alpha
+ scripts/check-verdict-tone-source.mjs              | 175 +++++++++++++++++++--
+ .../gate-mutants/check-verdict-tone-source.json    | 107 ++++++++++++-
+ 2 files changed, 272 insertions(+), 10 deletions(-)
+ artifacts/agent-heartbeats/forward-build-cycle.json         | 4 ++--
+ artifacts/agent-heartbeats/mac-lane-steward-duty-cycle.json | 4 ++--
+ artifacts/agent-heartbeats/mac-lane-tick.json               | 4 ++--
+ 3 files changed, 6 insertions(+), 6 deletions(-)
+```
+
+Verdict: holds for the merge, tree, ancestry and delta claims. #2423 merged from exact head `ca447d1b` as `bc97de347e0d900c05e31d81b25b26068890b250`, with parents `dea84e59` and that head, and tree `13248e55` equal to the head's. The local and Mac results are attributed receipts on the heads named, not new executions. No owner-hardware evidence, private completion seal, readiness change or independent-operation proof is asserted.

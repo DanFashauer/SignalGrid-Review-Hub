@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-11-19T16:15:47.833Z",
-  "result": "acted: wave held under owner priority (independent Mac operation is the exclusive path); in flight H/S/O = 0/0/0; cloud writer on the critical path: setup receipt c5c6f8ee source-cleared (Root 7014446159), its one full chain running since 16:02:38Z; parser #2368 candidate d73a2ac3 exposed for source review (7014860572); #2374 ordinary build in automatic qualification, no PR yet | sub-brains: none spawned (held) | owner queue: none new"
+  "firedAt": "2026-11-20T18:13:57.573Z",
+  "result": "18:10Z fire: quiet. Nothing dispatched; the build wave is held because independent Mac operation is the owner's exclusive critical path. #2423 (head dc01e351) and the #2368 successor 035ffefd still await Root's source review. Independent operation is blocked on the owner's Codex-limit decision (#439 7037608103; Codex usage exhausted until 2026-11-24T22:55Z) and on Root's fresh ordinary task. in flight H/S/O = 0/0/0. sub-brains: signalgrid-mcp has 1 open PR (#17, unchanged), no action. owner queue: Codex decision on #439."
 }

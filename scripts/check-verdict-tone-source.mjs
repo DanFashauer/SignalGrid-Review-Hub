@@ -1319,6 +1319,66 @@ export function toneShapeProblems(src, judged0 = []) {
     return bad;
   };
 
+  const bodyReturn = (fn) => (fn.body && !ts.isBlock(fn.body) ? fn.body : fn.body && fn.body.statements.length === 1 && ts.isReturnStatement(fn.body.statements[0]) ? fn.body.statements[0].expression : null);
+  const fnDecls = new Map(); // name -> module-scope function
+  const constRecords = new Map(); // name -> module-scope const object literal
+  for (const st of sf.statements) {
+    if (ts.isFunctionDeclaration(st) && st.name) fnDecls.set(st.name.text, st);
+    if (!ts.isVariableStatement(st)) continue;
+    for (const d of st.declarationList.declarations) {
+      if (!ts.isIdentifier(d.name) || !d.initializer) continue;
+      const init = unwrap(d.initializer);
+      if (ts.isArrowFunction(init) || ts.isFunctionExpression(init)) fnDecls.set(d.name.text, init);
+      if ((st.declarationList.flags & ts.NodeFlags.Const) && ts.isObjectLiteralExpression(init)) constRecords.set(d.name.text, init);
+    }
+  }
+  // Resolve only literal restrictive entries, including a top-level spread of another const Record.
+  // Last property wins, exactly as in an object literal; a cycle or computed entry answers unknown.
+  const UNKNOWN_ENTRY = Symbol("unresolved Record entry");
+  const restrictiveEntry = (name, key, seen = new Set()) => {
+    if (seen.has(name) || !constRecords.has(name)) return UNKNOWN_ENTRY;
+    const next = new Set([...seen, name]);
+    let value; // undefined means ABSENT; an unresolved/overridden entry is a different result.
+    for (const pr of constRecords.get(name).properties) {
+      if (ts.isSpreadAssignment(pr)) {
+        const spread = unwrap(pr.expression);
+        if (!ts.isIdentifier(spread)) return UNKNOWN_ENTRY;
+        const entry = restrictiveEntry(spread.text, key, next);
+        if (entry === UNKNOWN_ENTRY) return UNKNOWN_ENTRY;
+        if (entry !== undefined) value = entry;
+      } else if (ts.isPropertyAssignment(pr) && !ts.isComputedPropertyName(pr.name)) {
+        if ((ts.isIdentifier(pr.name) || ts.isStringLiteral(pr.name)) && pr.name.text === key) {
+          const init = unwrap(pr.initializer);
+          value = ts.isStringLiteral(init) || ts.isNoSubstitutionTemplateLiteral(init) ? init.text : UNKNOWN_ENTRY;
+        }
+      } else return UNKNOWN_ENTRY;
+    }
+    return value;
+  };
+  // One new closed TONER form. S4 and S6 share this exact match: the guard and lookup
+  // cannot independently admit different Records/keys. Module purity below protects the builtin.
+  const ownKeyGuard = (fn) => {
+    const r = bodyReturn(fn);
+    if (!r || fn.parameters.length !== 1 || fn.asteriskToken || fn.modifiers?.some((m) => m.kind === K.AsyncKeyword)) return null;
+    const param = fn.parameters[0];
+    if (!ts.isIdentifier(param.name) || param.initializer || param.dotDotDotToken || param.name.text === "Object" || fn.name?.text === "Object" || paramDisturbed(fn, param.name.text)) return null;
+    const e = unwrap(r);
+    if (!ts.isConditionalExpression(e)) return null;
+    const guard = unwrap(e.condition), lookup = unwrap(e.whenTrue), fallback = unwrap(e.whenFalse);
+    if (!ts.isCallExpression(guard) || guard.questionDotToken || guard.arguments.length !== 2 || guard.typeArguments?.length) return null;
+    const callee = guard.expression;
+    if (!ts.isPropertyAccessExpression(callee) || callee.questionDotToken || !ts.isIdentifier(callee.expression) || callee.expression.text !== "Object" || callee.name.text !== "hasOwn") return null;
+    const record = unwrap(guard.arguments[0]), key = unwrap(guard.arguments[1]);
+    if (!ts.isIdentifier(record) || !judged.has(record.text) || !constRecords.has(record.text) || record.text === param.name.text || fn.name?.text === record.text) return null;
+    if (!ts.isIdentifier(key) || key.text !== param.name.text || !ts.isElementAccessExpression(lookup) || lookup.questionDotToken) return null;
+    const lookupRecord = unwrap(lookup.expression), lookupKey = lookup.argumentExpression && unwrap(lookup.argumentExpression);
+    if (!ts.isIdentifier(lookupRecord) || lookupRecord.text !== record.text || !lookupKey || !ts.isIdentifier(lookupKey) || lookupKey.text !== key.text) return null;
+    if (!ts.isStringLiteral(fallback) || !/^(?:text|bg|border)-status-(?:restrict|deny)$/.test(fallback.text)) return null;
+    if (!["restrict", "deny"].some((k) => restrictiveEntry(record.text, k) === fallback.text)) return null;
+    return { record, key, lookup };
+  };
+  const ownKeyToners = new Map([...fnDecls.values()].map((fn) => [fn, ownKeyGuard(fn)]).filter(([, guard]) => guard !== null));
+
   // S3 (imports): a tone module imports types only — a value import could carry a verdict constant in from elsewhere.
   for (const st of sf.statements) {
     if (!ts.isImportDeclaration(st) && !ts.isImportEqualsDeclaration(st)) continue;
@@ -1371,8 +1431,10 @@ export function toneShapeProblems(src, judged0 = []) {
         const param = ts.isIdentifier(k) ? fn.parameters.find((q) => ts.isIdentifier(q.name) && q.name.text === k.text) : undefined;
         if (param && !paramDisturbed(fn, k.text)) { lookup = true; toners.set(topLevelFnName(fn), fn); }
       }
+      const ownGuard = fn && ownKeyToners.get(fn);
+      const guardedRecord = ownGuard?.record === n && topLevelFnName(fn) !== null;
       if (isMember) out.push(`line ${lineOf(n)}: ${refName} is reached as a member of another object — a namespace or alias of a judged Record is a remap (S4)`);
-      else if (!(isDecl || isExport || isPropKey || spreadTop || lookup)) out.push(`line ${lineOf(n)}: ${refName} is used other than as \`${refName}[p]\` by a module-scope function's own unmodified parameter (an alias, a member, a spread or Object.* call in code, a lookup by a member, a destructured or a second key, a write, a nested helper) — the lookup remaps the verdict (S4)`);
+      else if (!(isDecl || isExport || isPropKey || spreadTop || lookup || guardedRecord)) out.push(`line ${lineOf(n)}: ${refName} is used other than as \`${refName}[p]\` by a module-scope function's own unmodified parameter (an alias, a member, a spread or Object.* call in code, a lookup by a member, a destructured or a second key, a write, a nested helper) — the lookup remaps the verdict (S4)`);
     }
     ts.forEachChild(n, visit);
   };
@@ -1390,7 +1452,7 @@ export function toneShapeProblems(src, judged0 = []) {
   refs(sf);
   // S6 (round 9, F23): every module-scope function has one of three CLOSED shapes, so no computation in a tone module
   // can build or choose a class the gate does not see whole:
-  //   TONER     its whole body is `return R[p]` or `return R[p] ?? "<literal>"` (R a Record, p its own parameter);
+  //   TONER     its whole body is `return R[p]`, `return R[p] ?? "<literal>"`, or the exact ownKeyGuard above;
   //   PICKER    only `if`/`return`/`? :` whose tests are `param ===/!== "<literal>"` joined by `!`, `&&`, `||`, and whose
   //             every returned value is a plain string literal (failModeTone) — S1 keeps verdicts out of those
   //             literals, so a picker answers every verdict alike;
@@ -1399,11 +1461,6 @@ export function toneShapeProblems(src, judged0 = []) {
   //             lane imports the module and judges what they paint).
   // Anything else — a `+`, `.concat`, `.join`, a call, a regex, `.length`, a local `let` — is refused.
   const STATUS_TEXT = /status|(?:^|[^a-z])(?:text|bg|border)-/i;
-  const fnDecls = new Map(); // name -> fn
-  for (const st of sf.statements) {
-    if (ts.isFunctionDeclaration(st) && st.name) fnDecls.set(st.name.text, st);
-    if (ts.isVariableStatement(st)) for (const d of st.declarationList.declarations) if (ts.isIdentifier(d.name) && d.initializer && (ts.isArrowFunction(unwrap(d.initializer)) || ts.isFunctionExpression(unwrap(d.initializer)))) fnDecls.set(d.name.text, unwrap(d.initializer));
-  }
   const paramNames = (fn) => new Set(fn.parameters.filter((q) => ts.isIdentifier(q.name)).map((q) => q.name.text));
   const paramsPlain = (fn) => fn.parameters.every((q) => ts.isIdentifier(q.name) && !q.dotDotDotToken && (!q.initializer || ((ts.isStringLiteral(q.initializer) || ts.isNumericLiteral(q.initializer)) && !STATUS_TEXT.test(q.initializer.text ?? ""))));
   const isStr = (e) => ts.isStringLiteral(unwrap(e)) || ts.isNoSubstitutionTemplateLiteral(unwrap(e));
@@ -1427,13 +1484,12 @@ export function toneShapeProblems(src, judged0 = []) {
     if (ts.isIfStatement(st)) return litCompare(st.expression, P) && pickerStmt(st.thenStatement, P) && (!st.elseStatement || pickerStmt(st.elseStatement, P));
     return false;
   };
-  const bodyReturn = (fn) => (fn.body && !ts.isBlock(fn.body) ? fn.body : fn.body && fn.body.statements.length === 1 && ts.isReturnStatement(fn.body.statements[0]) ? fn.body.statements[0].expression : null);
   const isRecordLookup = (e0, P) => { const e = unwrap(e0); if (!ts.isElementAccessExpression(e)) return false; const o = unwrap(e.expression), k = unwrap(e.argumentExpression); return ts.isIdentifier(o) && judged.has(o.text) && ts.isIdentifier(k) && P.has(k.text); };
   const tonerShape = (fn, P) => {
     const r = bodyReturn(fn);
     if (!r) return false;
     const e = unwrap(r);
-    return isRecordLookup(e, P) || (ts.isBinaryExpression(e) && e.operatorToken.kind === K.QuestionQuestionToken && isRecordLookup(e.left, P) && ts.isStringLiteral(unwrap(e.right)));
+    return ownKeyToners.has(fn) || isRecordLookup(e, P) || (ts.isBinaryExpression(e) && e.operatorToken.kind === K.QuestionQuestionToken && isRecordLookup(e.left, P) && ts.isStringLiteral(unwrap(e.right)));
   };
   const templaterShape = (fn, P) => {
     const locals = new Set();
@@ -1525,6 +1581,28 @@ export function toneShapeProblems(src, judged0 = []) {
     if (ts.isObjectLiteralExpression(e)) return e.properties.every((pr) => (ts.isPropertyAssignment(pr) && !ts.isComputedPropertyName(pr.name) && literalValue(pr.initializer, depth + 1)) || (ts.isSpreadAssignment(pr) && depth === 0 && ts.isIdentifier(unwrap(pr.expression)) && judged.has(unwrap(pr.expression).text)));
     return false;
   };
+  // An own-key toner relies on the real Object.hasOwn. Opting into that form also
+  // requires a declarative module: no executable top-level statement, value import,
+  // mutable binding, builtin shadow, getter, class/static block or computed initializer.
+  // Existing S3/S6/S7 still judge the admitted declarations and every function body.
+  if (ownKeyToners.size > 0) {
+    const noDecorators = (n) => !ts.isDecorator(n) && !n.getChildren(sf).some((c) => !noDecorators(c));
+    const bindings = new Set();
+    const unique = (name) => {
+      if (name === "Object" || bindings.has(name)) return false;
+      bindings.add(name); return true;
+    };
+    for (const st of sf.statements) {
+      let safe = ts.isTypeAliasDeclaration(st) || ts.isInterfaceDeclaration(st) || ts.isEmptyStatement(st) || ts.isImportDeclaration(st) || ts.isExportDeclaration(st);
+      if (ts.isFunctionDeclaration(st)) safe = !!st.name && unique(st.name.text) && !st.modifiers?.some((m) => m.kind === K.DeclareKeyword);
+      if (ts.isVariableStatement(st)) safe = !!(st.declarationList.flags & ts.NodeFlags.Const) && !st.modifiers?.some((m) => m.kind === K.DeclareKeyword) && st.declarationList.declarations.every((d) => {
+        if (!ts.isIdentifier(d.name) || !unique(d.name.text) || !d.initializer) return false;
+        const init = unwrap(d.initializer);
+        return ts.isArrowFunction(init) || ts.isFunctionExpression(init) || literalValue(init);
+      });
+      if (!safe || !noDecorators(st)) out.push(`line ${lineOf(st)}: an own-key toner requires an unshadowed Object.hasOwn in a declarative module; executable top-level statements, mutable/duplicate bindings and builtin redefinition are refused (S7)`);
+    }
+  }
   const exportedNames = new Set();
   for (const st of sf.statements) {
     if (ts.isExportDeclaration(st) && !st.moduleSpecifier && st.exportClause && ts.isNamedExports(st.exportClause)) for (const el of st.exportClause.elements) exportedNames.add((el.propertyName ?? el.name).text);
@@ -2358,6 +2436,8 @@ async function selfTest() {
     const FB = 'OUTCOME_TONE[outcome as Outcome] ?? "text-status-restrict"';
     const sig = "export function outcomeTone(outcome: string): string";
     await onDesk("control: the real body, re-planted, exits 0", 0, "", `${sig} {\n  return ${FB};\n}`);
+    await onDesk("own-key: the same Record and untouched key with restrictive fallback exits 0", 0, "", `${sig} { return Object.hasOwn(OUTCOME_TONE, outcome) ? OUTCOME_TONE[outcome as Outcome] : "text-status-restrict"; }`);
+    await onDesk("own-key: a later template spread cannot prove an earlier fallback", 1, "(S6)", `${sig} { return ${FB}; }\nexport function ownTone(o: string): string { return Object.hasOwn(MORE, o) ? MORE[o as Outcome] : "text-status-restrict"; }`, 'const OTHER: Record<Outcome, string> = { allow: `bg-status-allow`, "step-up": `bg-status-step-up`, restrict: `bg-status-restrict`, deny: `bg-status-deny` };\nconst MORE: Record<Outcome, string> = { ...OUTCOME_TONE, ...OTHER };\n');
     await onDesk("control: failModeTone stays legal (a non-verdict test)", 0, "", `${sig} {\n  return ${FB};\n}\nexport function f2(m: string): string { return m === "fail-closed" ? "text-status-allow" : "text-status-deny"; }`);
     // F18: a remap by a literal key or a wrapper.
     await onDesk("F18a: `if deny return OUTCOME_TONE.allow`", 1, "(S2)", `${sig} { if (outcome === "deny") return OUTCOME_TONE.allow; return ${FB}; }`);
@@ -2448,6 +2528,83 @@ async function selfTest() {
     const sp = (code) => toneShapeProblems(`export type Outcome = "allow" | "step-up" | "restrict" | "deny";\n${goodRecord}\n${code}`, ["OUTCOME_TONE"]);
     // A rule "alone": its own tag fires, and nothing fires but it and the closed-shape rules (S6/S7), which any odd body also trips.
     const only = (code, tag) => { const p = sp(code); return p.some((m) => m.includes(`(${tag})`)) && p.every((m) => m.includes(`(${tag})`) || m.includes("(S6)") || m.includes("(S7)")); };
+    const ownExpr = 'Object.hasOwn(OUTCOME_TONE, o) ? OUTCOME_TONE[o as Outcome] : "text-status-restrict"';
+    const ownFn = `export function ownTone(o: string): string { return ${ownExpr}; }`;
+    checks.push(["own-key: exact guard is a toner, not a general conditional exception", sp(ownFn).length === 0 && sp(ownFn).shapes.get("ownTone") === "toner"]);
+    checks.push(["own-key: a const arrow with the exact guard is admitted", sp(`export const ownTone = (o: string): string => ${ownExpr};`).length === 0]);
+    checks.push(["own-key: type assertions and parentheses preserve the exact binding", sp(ownFn.replace('Object.hasOwn(OUTCOME_TONE, o)', 'Object.hasOwn((OUTCOME_TONE), (o as string))')).length === 0]);
+    checks.push(["own-key: a restrictive deny fallback from the same Record is admitted", sp(ownFn.replace('"text-status-restrict"', '"text-status-deny"')).length === 0]);
+    checks.push(["own-key: restrictive entries may come from a const Record spread", sp('export const MORE = { ...OUTCOME_TONE };\n' + ownFn.replaceAll('OUTCOME_TONE', 'MORE')).length === 0]);
+    for (const [label, code] of [
+      ["guard and lookup use different Records", 'export const OTHER = { ...OUTCOME_TONE };\n' + ownFn.replace('hasOwn(OUTCOME_TONE', 'hasOwn(OTHER')],
+      ["guard and lookup use different keys", ownFn.replace('(o: string)', '(o: string, other: string)').replace('hasOwn(OUTCOME_TONE, o)', 'hasOwn(OUTCOME_TONE, other)')],
+      ["guard key is remapped", ownFn.replace('hasOwn(OUTCOME_TONE, o)', 'hasOwn(OUTCOME_TONE, o.toLowerCase())')],
+      ["guard key is a module constant", 'const prior = "x";\n' + ownFn.replace('hasOwn(OUTCOME_TONE, o)', 'hasOwn(OUTCOME_TONE, prior)')],
+      ["lookup key is remapped", ownFn.replace('[o as Outcome]', '[o.toLowerCase() as Outcome]')],
+      ["lookup key is a literal verdict", ownFn.replace('[o as Outcome]', '["allow"]')],
+      ["guard and lookup branches are reversed", ownFn.replace(ownExpr, 'Object.hasOwn(OUTCOME_TONE, o) ? "text-status-restrict" : OUTCOME_TONE[o as Outcome]')],
+      ["guard is negated", ownFn.replace('return Object', 'return !Object')],
+      ["callee is computed", ownFn.replace('Object.hasOwn', 'Object["hasOwn"]')],
+      ["callee is on another global", ownFn.replace('Object.hasOwn', 'Reflect.hasOwn')],
+      ["callee is another Object method", ownFn.replace('Object.hasOwn', 'Object.is')],
+      ["callee uses optional access", ownFn.replace('Object.hasOwn', 'Object?.hasOwn')],
+      ["call is optional", ownFn.replace('Object.hasOwn(', 'Object.hasOwn?.(')],
+      ["call has extra arguments", ownFn.replace('hasOwn(OUTCOME_TONE, o)', 'hasOwn(OUTCOME_TONE, o, true)')],
+      ["callee is an alias", 'const own = Object.hasOwn;\n' + ownFn.replace('Object.hasOwn', 'own')],
+      ["Record is an alias", 'const ALIAS = OUTCOME_TONE;\n' + ownFn.replaceAll('OUTCOME_TONE', 'ALIAS')],
+      ["key is assigned before the return", ownFn.replace('{ return', '{ o = "x"; return')],
+      ["key has a default", ownFn.replace('o: string', 'o: string = "x"')],
+      ["key is destructured", ownFn.replace('o: string', '{ o }: { o: string }')],
+      ["fallback is permissive", ownFn.replace('"text-status-restrict"', '"text-status-allow"')],
+      ["fallback is neutral", ownFn.replace('"text-status-restrict"', '"text-stone-300"')],
+      ["fallback mixes restrictive and permissive classes", ownFn.replace('"text-status-restrict"', '"text-status-restrict text-status-allow"')],
+      ["fallback has the wrong Record class kind", ownFn.replace('"text-status-restrict"', '"bg-status-restrict"')],
+      ["fallback is computed", ownFn.replace('"text-status-restrict"', 'fallback()')],
+      ["fallback is a template", ownFn.replace('"text-status-restrict"', '`text-status-restrict`')],
+      ["function is async", ownFn.replace('export function', 'export async function')],
+      ["function is a generator", ownFn.replace('function ownTone', 'function* ownTone')],
+      ["function-expression name shadows Object", `export const ownTone = function Object(o: string) { return ${ownExpr}; };`],
+      ["function-expression name shadows the Record", `export const ownTone = function OUTCOME_TONE(o: string) { return ${ownExpr}; };`],
+      ["function parameter shadows Object", ownFn.replace('o: string', 'Object: string').replaceAll(', o)', ', Object)').replaceAll('[o as', '[Object as')],
+    ]) checks.push([`own-key refuses: ${label}`, sp(code).length > 0]);
+    // Parse-only plants: never execute a candidate that redefines a builtin in the gate process.
+    for (const [label, prelude] of [
+      ["Object is a module binding", 'const Object = { hasOwn: "fake" };'],
+      ["Object is a module function", 'function Object(o: string) { return "fake"; }'],
+      ["Object is assigned at load", 'Object = globalThis.Object;'],
+      ["hasOwn is reassigned", 'Object.hasOwn = (() => true);'],
+      ["hasOwn is defined through a call", 'Object.defineProperty(Object, "hasOwn", { value: (() => true) });'],
+      ["an indirect builtin mutation runs at load", 'Reflect.set(({}).constructor, "hasOwn", (() => true));'],
+      ["top-level control flow executes", 'if (true) Object.hasOwn = (() => true);'],
+      ["a class static block executes", 'class X { static { Object.hasOwn = (() => true); } }'],
+      ["a namespace executes", 'namespace X { Object.hasOwn = (() => true); }'],
+      ["a mutable module binding is present", 'let changed = false;'],
+      ["a duplicate module binding is present", 'const X = 1; const X = 2;'],
+      ["a computed object initializer executes", 'const X = { [Object.hasOwn = (() => true)]: 1 };'],
+      ["a getter initializer is present", 'const X = { get x() { return "x"; } };'],
+      ["an enum initializer executes", 'enum X { a = (Object.hasOwn = (() => true)) as any }'],
+    ]) checks.push([`own-key module refuses: ${label}`, sp(`${prelude}\n${ownFn}`).some((m) => m.includes("(S7)"))]);
+    checks.push(["own-key: parameter decorators are refused before execution", sp(ownFn.replace('o: string', '@touch o: string')).some((m) => m.includes("(S7)"))]);
+    checks.push(["own-key: the literal restriction is independent of the Record registry", toneShapeProblems(`${goodRecord.replace('restrict: "text-status-restrict"', 'restrict: "text-status-allow"')}\n${ownFn.replace('"text-status-restrict"', '"text-status-allow"')}`, ["OUTCOME_TONE"]).some((m) => m.includes("(S6)"))]);
+    const laterTemplate = 'const OTHER: Record<Outcome, string> = { allow: `bg-status-allow`, "step-up": `bg-status-step-up`, restrict: `bg-status-restrict`, deny: `bg-status-deny` };\nconst MORE: Record<Outcome, string> = { ...OUTCOME_TONE, ...OTHER };\n' + ownFn.replaceAll('OUTCOME_TONE', 'MORE');
+    checks.push(["own-key: the resolver refuses a fallback overridden by a later template spread", sp(laterTemplate).some((m) => m.includes("(S6)"))]);
+    checks.push(["own-key: a later template spread with its matching fallback is admitted", sp(laterTemplate.replace(' : "text-status-restrict"', ' : "bg-status-restrict"')).length === 0]);
+    checks.push(["own-key: a later quoted spread overrides the earlier restrictive entry too", sp(laterTemplate.replaceAll('`', '"')).some((m) => m.includes("(S6)"))]);
+    checks.push(["own-key: a later spread without the key preserves the earlier entry", sp('const OTHER = { extra: "bg-status-restrict" };\nconst MORE = { ...OUTCOME_TONE, ...OTHER };\n' + ownFn.replaceAll('OUTCOME_TONE', 'MORE')).length === 0]);
+    checks.push(["own-key: a later known own property wins after a template spread", sp(laterTemplate.replace('{ ...OUTCOME_TONE, ...OTHER }', '{ ...OTHER, ...OUTCOME_TONE }')).length === 0]);
+    for (const [label, other] of [
+      ["unresolved spread", 'const MORE = { ...OUTCOME_TONE, ...UNKNOWN };'],
+      ["cyclic spread", 'const LOOP = { ...LOOP }; const MORE = { ...OUTCOME_TONE, ...LOOP };'],
+      ["indirect cyclic spread", 'const A = { ...B }; const B = { ...A }; const MORE = { ...OUTCOME_TONE, ...A };'],
+      ["nonliteral override", 'const OTHER = { restrict: unknownValue, deny: unknownValue }; const MORE = { ...OUTCOME_TONE, ...OTHER };'],
+      ["null override", 'const OTHER = { restrict: null, deny: null }; const MORE = { ...OUTCOME_TONE, ...OTHER };'],
+      ["computed property in a spread", 'const OTHER = { [unknownKey]: "bg-status-restrict" }; const MORE = { ...OUTCOME_TONE, ...OTHER };'],
+    ]) checks.push([`own-key resolver refuses: ${label}`, sp(`${other}\n${ownFn.replaceAll('OUTCOME_TONE', 'MORE')}`).some((m) => m.includes("(S6)"))]);
+    const templateRuntime = await import(`data:text/javascript;base64,${Buffer.from(ts.transpileModule(`${goodRecord}\n${laterTemplate}`, { compilerOptions: { module: ts.ModuleKind.ESNext } }).outputText).toString("base64")}`);
+    checks.push(["own-key fixture: JavaScript really uses the later template spread", templateRuntime.ownTone("restrict") === "bg-status-restrict" && templateRuntime.ownTone("deny") === "bg-status-deny" && templateRuntime.ownTone("missing") === "text-status-restrict"]);
+    const ownRuntime = await import(`data:text/javascript;base64,${Buffer.from(ts.transpileModule(`${goodRecord}\n${ownFn}`, { compilerOptions: { module: ts.ModuleKind.ESNext } }).outputText).toString("base64")}`);
+    checks.push(["own-key runtime: every inherited/unknown key returns the restrictive string", ["constructor", "toString", "__proto__", "hasOwnProperty", "valueOf", "missing", ""].every((key) => ownRuntime.ownTone(key) === "text-status-restrict")]);
+    checks.push(["own-key runtime: every own verdict preserves its literal tone", ["allow", "step-up", "restrict", "deny"].every((key) => ownRuntime.ownTone(key) === ownRuntime.OUTCOME_TONE[key])]);
     checks.push(["S1 alone: a verdict literal in a function body", only('export function f(o: string): string { return o === "deny" ? "x" : "y"; }', "S1")]);
     checks.push(["S2 alone: a verdict-named member in a function body", only("export function f(o: { deny: string }): string { return o.deny; }", "S2")]);
     checks.push(["S2 alone: a destructured verdict property", only("export function f(o: { deny: string }): string { const { deny: d } = o; return d; }", "S2")]);

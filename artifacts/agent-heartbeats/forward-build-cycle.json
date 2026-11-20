@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-11-20T00:11:12.195Z",
-  "result": "acted: landed #2401 (52c6d6bb, DR-037, Mac aggregate 135967804684); #2368 final base 611877ff captured, one full chain running; #2364+#2401 journal prepared on claude/journal-2364-2401 (lands after #2368). in flight H/S/O = 0/0/0 (build wave held: independent operation is the owner's exclusive critical path; #2399 now RUNNING automatically per Root). sub-brains: not read this fire. owner queue: none new"
+  "firedAt": "2026-11-20T02:11:04.947Z",
+  "result": "acted: #2368 held on Codex P2 4637565963 (quote interrupting a paragraph lost a visible route); successor b93bfb5c frozen for Root source review, suite 397/397, family 800x0, fuzz 120/120 hReg 0/vReg 0; #2414 automatic build failed 01:58Z on the coding-pass 30-min budget (Root's runtime), watcher armed for the next automatic PR. in flight H/S/O = 0/0/0 (build wave held: independent operation is the owner's exclusive critical path; wave PRs #2388-#2396 untouched). sub-brains: signalgrid-mcp has 1 open PR (#17), no action this fire. owner queue: none new"
 }

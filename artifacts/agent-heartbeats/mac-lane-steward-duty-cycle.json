@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-11-20T19:19:47.951Z",
-  "result": "19:19Z event: cleared the Codex-limit hand after the owner's decision on #439 (7048460671: Add Codex usage, owner-side account action pending). Mac side otherwise unchanged: no new or moved origin/mac/* branch; tick heartbeat landed via #2438-era Mac mail; no mail addressed to cloud. Owner not otherwise escalated."
+  "firedAt": "2026-11-20T20:25:18.854Z",
+  "result": "20:25Z keepalive (last steward heartbeat 19:19Z). Mac side: the publication stand-in was installed at 20:11Z (#439 7049554763) and fresh proof task #2441 was filed at 20:20Z (#439 7049595945). Cloud is holding gated-path landings until the Mac posts that #2441 has published or stopped. No mail addressed to cloud."
 }

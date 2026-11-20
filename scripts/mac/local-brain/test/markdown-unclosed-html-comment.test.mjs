@@ -2055,6 +2055,13 @@ test('empty list markers and lazy titles after reference definitions keep markdo
     ['> [r]: /url\n  `\n> [V](docs/V.md)\n-`\n', 1],
     ['> [r]:\n/v\n<span>\n[V](docs/V.md)\n', 0],
     ["> [r]: /url't'\n   [r]:\n    1.\n   <span>\n > `\n  [V](docs/V.md)\n", 0],
+    // Third review (1ad0b3c7): a title opened on one lazy line and closed on the next is still the definition's;
+    // one that never closes is not.
+    ['> [r]: /url\n"a\nb"\n-\n    [V](docs/V.md)\n', 1],
+    ['> - [r]: /url\n"a\nb"\n-\n    [V](docs/V.md)\n', 1],
+    ['> > [r]: /url\n> "a\n> b"\n> -\n>     [V](docs/V.md)\n', 1],
+    ['> [r]: /url\n"a\nb"\n<span>\n> -\n>     [V](docs/V.md)\n', 0],
+    ['> [r]: /url\n"a\n-\n    [V](docs/V.md)\n', 0],
   ];
   for (const [input, want] of literals) {
     assert.equal(md.render(input).split('href="docs/V.md"').length - 1, want, `oracle changed: ${JSON.stringify(input)}`);

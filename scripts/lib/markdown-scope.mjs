@@ -276,8 +276,8 @@ function containerRun(lines, interrupted, outer = [], judgeDefinitions = false) 
   // When a container interrupts a top-level paragraph, that paragraph is still open (id -1, the caller's segment).
   let leaf = interrupted ? { kind: "para", depth: 0, id: -1 } : { kind: "none" };
   let nextId = 0;
-  for (const raw of lines) {
-    const text = expandTabs(content(raw));
+  // How far `text` matches the open containers: the count matched and where the remaining content starts.
+  const matchStack = (text) => {
     let pos = 0;
     let matched = 0;
     for (; matched < stack.length; matched += 1) {
@@ -293,6 +293,30 @@ function containerRun(lines, interrupted, outer = [], judgeDefinitions = false) 
         pos = need;
       }
     }
+    return { matched, pos };
+  };
+  // The contents of the lines after line `k` that markdown-it's reference block could still read as one definition
+  // continuing: up to a blank line or a line that starts another block (third independent review, 1ad0b3c7: a title
+  // opened on one lazy line and closed on the next).
+  const followingContents = (k) => {
+    const out = [];
+    for (let j = k + 1; j < lines.length; j += 1) {
+      const t = expandTabs(content(lines[j]));
+      const rest = t.slice(matchStack(t).pos);
+      const ind = indentColumns(rest);
+      const body = rest.slice(ind);
+      if (body === "") break;
+      if (ind < 4 && (LIST_MARKER.test(body) || body.startsWith(">") || THEMATIC_BREAK.test(body) || ATX_HEADING.test(body) ||
+        FENCE_OPEN.test(body) || htmlBlockStart(body, true))) break;
+      out.push(rest);
+    }
+    return out;
+  };
+  for (let k = 0; k < lines.length; k += 1) {
+    const raw = lines[k];
+    const text = expandTabs(content(raw));
+    const { matched, pos: matchedPos } = matchStack(text);
+    let pos = matchedPos;
     const allMatched = matched === stack.length;
     // An open leaf continues only when every container matched (a lazy line may continue a paragraph alone).
     if (allMatched && leaf.kind === "fence") {
@@ -327,7 +351,7 @@ function containerRun(lines, interrupted, outer = [], judgeDefinitions = false) 
     // definition-only paragraph is read fresh (`> [r]: /url`, then lazy `<span>` opens an HTML block outside the quote).
     let paraOpen = leaf.kind === "para";
     if (paraOpen && leaf.body && allReferenceDefinitions(leaf.body)) {
-      paraOpen = !allMatched && continuesLastDefinition(leaf.body, text.slice(pos));
+      paraOpen = !allMatched && continuesLastDefinition(leaf.body, text.slice(pos), followingContents(k));
     }
     // Open new containers and find the leaf on what remains.
     let depth = matched;
@@ -417,7 +441,7 @@ function containerRun(lines, interrupted, outer = [], judgeDefinitions = false) 
         // (`[r]:`, then `    1.` is the destination).
         const tailIndent = indentColumns(tail);
         if (tailIndent < 4 && LIST_MARKER.test(tail.slice(tailIndent))) leaf.body = null;
-        else if (!allMatched && !allReferenceDefinitions([...leaf.body, tail])) leaf.body = null;
+        else if (!allMatched && !definitionsWithin([...leaf.body, tail], followingContents(k))) leaf.body = null;
         else leaf.body.push(tail);
       }
       out.push(leaf.id);
@@ -443,14 +467,32 @@ const SETEXT_UNDERLINE = /^ {0,3}(?:=+|-+)[ \t]*$/;
  */
 /**
  * True only when `line`, appended to definition-only `paraLines`, is wholly consumed by the LAST definition (its
- * title or the rest of its destination) rather than starting another one: the case where markdown-it keeps a lazy
- * line inside the container (`> [r]: /url`, then lazy `"t"`). A lazy line that is a new definition, or anything
- * else, is not continued (independent review of 28f3b9b8: `- [s]: <a b>`, then lazy `[r]: /url "t"`).
+ * title or the rest of its destination) rather than starting another one, possibly together with some of the
+ * `following` lines (a title opened on `line` and closed later): the case where markdown-it keeps a lazy line inside
+ * the container (`> [r]: /url`, then lazy `"t"`, or lazy `"a` and `b"`). A lazy line that is a new definition, an
+ * unclosed title, or anything else is not continued (independent reviews of 28f3b9b8 and 1ad0b3c7).
  */
-function continuesLastDefinition(paraLines, line) {
+function continuesLastDefinition(paraLines, line, following = []) {
   const before = referenceDefinitionSpans(paraLines);
-  const after = referenceDefinitionSpans([...paraLines, line]);
-  return before.length > 0 && after.length === before.length && after[after.length - 1] === paraLines.length + 1;
+  if (before.length === 0) return false;
+  const lines = [...paraLines, line];
+  for (let n = 0; n <= following.length; n += 1) {
+    if (n > 0) lines.push(following[n - 1]);
+    const after = referenceDefinitionSpans(lines);
+    if (after.length === before.length && after[after.length - 1] === lines.length) return true;
+    if (after.length > before.length) return false;
+  }
+  return false;
+}
+
+/** True when `lines` are all definitions, alone or completed by a prefix of the `following` lines. */
+function definitionsWithin(lines, following = []) {
+  const all = [...lines];
+  for (let n = 0; n <= following.length; n += 1) {
+    if (n > 0) all.push(following[n - 1]);
+    if (allReferenceDefinitions(all)) return true;
+  }
+  return false;
 }
 
 function allReferenceDefinitions(paraLines) {

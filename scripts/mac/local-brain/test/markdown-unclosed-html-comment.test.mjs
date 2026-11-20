@@ -1810,7 +1810,7 @@ test('a list that interrupts a paragraph, and an empty item before a blank line,
     }
   }
   assert.equal(checked, (5 * 7 * 5 * 4 * 2 + 9 * 2 * 6 * 4 * 3 + 5 * 3 * 4 * 2 * 2) * 2);
-  assert.equal(legacyFence, 8, 'only the legacy lone-fence-in-an-item reading masks a rendered route');
+  assert.equal(legacyFence, 0, 'no rendered route is masked: a fence inside an item ends with the item (was 8 before 7689613e\'s successor)');
   assert.equal(codeKept, 572, 'routes kept beyond the renderer are all in top-level indented code');
 });
 
@@ -1879,8 +1879,8 @@ test('lazy-line list markers and fences inside items agree with markdown-it', as
     }
   }
   assert.equal(checked, (7 * 5 * 4 * 3 * 3 + 5 * 5 * 2 * 3 * 5 * 3 + 3 * 5 * 2 * 3 * 4) * 2);
-  assert.equal(legacyFence, 122, 'only the legacy lone-fence reading masks a rendered route, and only with treatUnclosedAsFence');
-  assert.equal(codeKept, 922, 'routes kept beyond the renderer are all in renderer code blocks');
+  assert.equal(legacyFence, 0, 'no rendered route is masked: a fence inside an item ends with the item (was 122)');
+  assert.equal(codeKept, 868, 'routes kept beyond the renderer are all in renderer code blocks (was 922)');
 });
 
 // 41. Root on e33faf2d (#2368). A line that leaves an item ends the item's fence even when its text, sliced at the
@@ -1930,6 +1930,46 @@ test('item fences against long exit lines and real closers agree with markdown-i
     }
   }
   assert.equal(checked, 3 * 3 * 3 * 2 * 5 * 5 * 2 * 2 * 2);
-  assert.equal(fenceHidden, 468, 'routes hidden only after a top-level-openable fence line (the legacy top-level fence pairing)');
-  assert.equal(codeKept, 1836, 'routes kept beyond the renderer are all in renderer code blocks');
+  assert.equal(fenceHidden, 0, 'no rendered route is masked: a fence inside an item never pairs with a closer beyond it (was 468)');
+  assert.equal(codeKept, 1620, 'routes kept beyond the renderer are all in renderer code blocks (was 1836)');
+});
+
+// 42. Root on 7689613e (#2368). A fence the margin scan can open is still read from its item's content column when it
+//     sits in an item, so it never pairs with a closer beyond the item: with either fence option, a margin route
+//     after the item stays visible. Exact literal under both options, then related item columns and marker lengths,
+//     judged against markdown-it 14 in both directions with no allowed loss.
+for (const treatUnclosedAsFence of [true, false]) {
+  test(`Root 7689613e literal: an in-item fence does not pair with a closer beyond its item (treatUnclosedAsFence=${treatUnclosedAsFence})`, () => {
+    const input = '- a\n  ~~~\n  x\n  ```\n[V](docs/V.md)\n```\n';
+    const out = maskNonProse(input, { treatUnclosedAsFence });
+    assertShape(input, out);
+    assert.equal(out.includes('[V](docs/V.md)'), true, `visible route masked: ${JSON.stringify(out)}`);
+  });
+}
+test('in-item fences the margin scan can open stay inside their item, as markdown-it reads them', async () => {
+  const { default: MarkdownIt } = await import('markdown-it');
+  const md = new MarkdownIt('commonmark');
+  const sp = (n) => ' '.repeat(n);
+  let checked = 0;
+  let codeKept = 0;
+  for (const [item, col] of [['- a', 2], ['1. a', 3], [' - a', 3], ['  - a', 4]]) for (const L1 of [3, 4, 5]) for (const ch of ['~', '`']) {
+    for (const inner of ['x', `${ch === '~' ? '`' : '~'}`.repeat(3), '<!--']) for (const L2 of [3, 4, 6]) for (const ch2 of ['~', '`']) for (const tail of ['', '\nmore']) {
+      const input = `${item}\n${sp(col)}${ch.repeat(L1)}\n${sp(col)}${inner}\n[V](docs/V.md)\n${ch2.repeat(L2)}${tail}\n`;
+      const html = md.render(input);
+      const links = html.split('href="docs/V.md"').length - 1;
+      for (const treatUnclosedAsFence of [true, false]) {
+        const out = maskNonProse(input, { treatUnclosedAsFence });
+        assertShape(input, out);
+        const kept = out.split('docs/V.md').length - 1;
+        assert.ok(kept >= links, `rendered route masked (${kept} < ${links}): ${JSON.stringify(input)}`);
+        if (kept > links) {
+          assert.ok(/<pre><code>[^<]*docs\/V\.md/.test(html), `route kept that markdown-it does not render (${kept} > ${links}): ${JSON.stringify(input)}`);
+          codeKept += 1;
+        }
+        checked += 1;
+      }
+    }
+  }
+  assert.equal(checked, 4 * 3 * 2 * 3 * 3 * 2 * 2 * 2);
+  assert.equal(codeKept, 0, 'every route after the item is rendered and kept');
 });

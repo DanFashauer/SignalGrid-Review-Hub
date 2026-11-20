@@ -770,9 +770,11 @@ function blockRanges(lines, treatUnclosedAsFence, judgeDefinitions) {
       continue;
     }
     let open = fenceOpener(lines[i]);
-    // Inside an item a fence is read from the item's content column too, like an HTML block above, and it ends where
-    // the item does (Codex on a604ed58: `- a`, then a four-space `~~~` fence holding `<!--` is code in the item).
-    if (!open && inItem) {
+    // Inside an item a fence is read from the item's content column, like an HTML block above, and it ends where the
+    // item does (Codex on a604ed58: `- a`, then a four-space `~~~` fence holding `<!--` is code in the item). This holds
+    // for a fence the margin scan would also open: it may not pair with a closer beyond the item (Root on 7689613e:
+    // `- a`, `  ~~~`, `  \`\`\``, then a margin route stays visible).
+    if (inItem) {
       const io = fenceOpener(text0.slice(itemCol[i]));
       if (io) {
         const c = itemCol[i];

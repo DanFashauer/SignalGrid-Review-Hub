@@ -1813,3 +1813,72 @@ test('a list that interrupts a paragraph, and an empty item before a blank line,
   assert.equal(legacyFence, 8, 'only the legacy lone-fence-in-an-item reading masks a rendered route');
   assert.equal(codeKept, 572, 'routes kept beyond the renderer are all in top-level indented code');
 });
+
+// 40. Codex on a604ed58 (#2368). (a) A list marker on a line that only continues an item lazily counts its
+//     indentation from the containers the line matched, so four columns past them is lazy paragraph text, not a new
+//     item holding a comment. (b) Inside an item a fence is read from the item's content column, and it ends where
+//     the item does, so a `<!--` inside it is code. Exact literals first, then a bounded family of each shape judged
+//     against markdown-it 14 in both directions; both fence options; shape checked. The legacy lone-fence reading
+//     (with `treatUnclosedAsFence`, a fence the top-level scan finds unclosed masks to end of input) and routes kept
+//     in renderer code blocks, which the preserved contract leaves unmasked, are pinned by count.
+for (const treatUnclosedAsFence of [true, false]) {
+  test(`Codex a604ed58 literal: a lazy line's list marker counts from its matched containers (treatUnclosedAsFence=${treatUnclosedAsFence})`, () => {
+    const input = '  1. a\n    - <!--\n      [V](docs/V.md)\n';
+    const out = maskNonProse(input, { treatUnclosedAsFence });
+    assertShape(input, out);
+    assert.equal(out.includes('[V](docs/V.md)'), true, `visible route masked: ${JSON.stringify(out)}`);
+  });
+  test(`Codex a604ed58 literal: a fence inside an item is read from the item's column (treatUnclosedAsFence=${treatUnclosedAsFence})`, () => {
+    const input = '- a\n    ~~~\n    <!--\n    ~~~\n  [V](docs/V.md)\n';
+    const out = maskNonProse(input, { treatUnclosedAsFence });
+    assertShape(input, out);
+    assert.equal(out.includes('[V](docs/V.md)'), true, `visible route masked: ${JSON.stringify(out)}`);
+  });
+}
+test('lazy-line list markers and fences inside items agree with markdown-it', async () => {
+  const { default: MarkdownIt } = await import('markdown-it');
+  const md = new MarkdownIt('commonmark');
+  const sp = (n) => ' '.repeat(n);
+  const lazy = [];
+  for (const outer of ['1. a', '  1. a', ' 10. a', '- a', '  - a', '   - a', '1. a\n   b']) for (const ind of [2, 3, 4, 5, 6]) for (const mk of ['- ', '* ', '1. ', '2) ']) {
+    for (const op of ['<!--', '<div>', '```']) for (const t of [sp(ind + 2) + '[R](docs/R.md)', '[R](docs/R.md)', '  [R](docs/R.md)']) lazy.push(`${outer}\n${sp(ind)}${mk}${op}\n${t}\n`);
+  }
+  const fenced = [];
+  for (const [item, col] of [['- a', 2], ['1. a', 3], ['  - a', 4], ['- - a', 4], ['10. a', 4]]) for (const extra of [0, 1, 2, 3, 4]) for (const f of ['~~~', '```']) {
+    for (const inner of ['<!--', '<div>', '[R](docs/R.md)']) for (const close of ['same', 'item', 'outdent', 'none', 'exit']) for (const t of [sp(col) + '[R](docs/R.md)', '[R](docs/R.md)', sp(col + 4) + '[R](docs/R.md)']) {
+      const fi = sp(col + extra);
+      const c = close === 'same' ? `\n${fi}${f}` : close === 'item' ? `\n${sp(col)}${f}` : close === 'outdent' ? `\n${sp(Math.max(0, col - 1))}${f}` : close === 'exit' ? '\nx' : '';
+      fenced.push(`${item}\n${fi}${f}\n${fi}${inner}${c}\n${t}\n`);
+    }
+  }
+  // Controls: a nested item opened inside a matched item keeps its comment through a blank line, and an unclosed
+  // fence inside an item runs to the item's end.
+  const controls = [];
+  for (const outer of ['- a', '1. a', '  - a']) for (const ind of [2, 3, 4, 5, 6]) for (const mk of ['- ', '']) for (const op of ['<!--', '```', '~~~']) {
+    for (const t of ['[R](docs/R.md)', sp(2) + '[R](docs/R.md)', sp(ind + 2) + '[R](docs/R.md)', sp(ind + 4) + '[R](docs/R.md)']) controls.push(`${outer}\n${sp(ind)}${mk}${op}\n\n${t}\n`);
+  }
+  let checked = 0;
+  let codeKept = 0;
+  let legacyFence = 0;
+  for (const [set, input] of [...lazy.map((d) => [0, d]), ...fenced.map((d) => [1, d]), ...controls.map((d) => [2, d])]) {
+    const html = md.render(input);
+    const links = html.split('href="docs/R.md"').length - 1;
+    for (const treatUnclosedAsFence of [true, false]) {
+      const out = maskNonProse(input, { treatUnclosedAsFence });
+      assertShape(input, out);
+      const kept = out.split('docs/R.md').length - 1;
+      if (kept < links) {
+        assert.ok(set > 0 && treatUnclosedAsFence && input.split('\n').some((l) => /^ {0,3}(~~~|```)$/.test(l)), `rendered route masked (${kept} < ${links}): ${JSON.stringify(input)}`);
+        legacyFence += 1;
+      }
+      if (kept > links) {
+        assert.ok(/<pre><code>[^<]*docs\/R\.md/.test(html), `route kept that markdown-it does not render (${kept} > ${links}): ${JSON.stringify(input)}`);
+        codeKept += 1;
+      }
+      checked += 1;
+    }
+  }
+  assert.equal(checked, (7 * 5 * 4 * 3 * 3 + 5 * 5 * 2 * 3 * 5 * 3 + 3 * 5 * 2 * 3 * 4) * 2);
+  assert.equal(legacyFence, 122, 'only the legacy lone-fence reading masks a rendered route, and only with treatUnclosedAsFence');
+  assert.equal(codeKept, 922, 'routes kept beyond the renderer are all in renderer code blocks');
+});

@@ -678,7 +678,10 @@ function blockRanges(lines, treatUnclosedAsFence, judgeDefinitions) {
       // New items opened on this line, outermost first (`- - x` opens two).
       let pos = 0;
       for (;;) {
-        const base = items.length ? items[items.length - 1] : 0;
+        // The first marker's indentation counts from the containers this line actually matched, not from an item it
+        // only continues lazily (Codex on a604ed58: `  1. a`, then `    - <!--` is four columns past the margin,
+        // so it is lazy paragraph text in markdown-it, not a new item holding a comment).
+        const base = pos === 0 ? (matched ? items[matched - 1] : 0) : items.length ? items[items.length - 1] : 0;
         const rest = text0.slice(pos);
         const ind = indentColumns(rest);
         if (pos + ind - base >= 4 && pos + ind >= base) break;
@@ -766,7 +769,41 @@ function blockRanges(lines, treatUnclosedAsFence, judgeDefinitions) {
       inParagraph = false;
       continue;
     }
-    const open = fenceOpener(lines[i]);
+    let open = fenceOpener(lines[i]);
+    // Inside an item a fence is read from the item's content column too, like an HTML block above, and it ends where
+    // the item does (Codex on a604ed58: `- a`, then a four-space `~~~` fence holding `<!--` is code in the item).
+    if (!open && inItem) {
+      const io = fenceOpener(text0.slice(itemCol[i]));
+      if (io) {
+        const c = itemCol[i];
+        let k = i + 1;
+        while (k < lines.length) {
+          const t = expandTabs(content(lines[k]));
+          if (!isBlank(lines[k]) && indentColumns(t) < c) break;
+          if (closesFence(t.slice(c), io)) break;
+          k += 1;
+        }
+        if (k < lines.length && closesFence(expandTabs(content(lines[k])).slice(c), io)) {
+          out.push({ kind: "fence", start: i, end: k, closed: true });
+          i = k;
+          inParagraph = false;
+          continue;
+        }
+        if (k < lines.length) {
+          // The item ended first: the fence is closed by its container, so its lines are code.
+          out.push({ kind: "fence", start: i, end: k - 1, closed: true });
+          i = k - 1;
+          inParagraph = false;
+          continue;
+        }
+        open = io;
+        if (treatUnclosedAsFence) {
+          out.push({ kind: "fence", start: i, end: lines.length - 1, closed: false });
+          break;
+        }
+        open = null;
+      }
+    }
     if (open) {
       let k = i + 1;
       while (k < lines.length && !closesFence(lines[k], open)) k += 1;

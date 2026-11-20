@@ -1002,28 +1002,9 @@ export function maskNonProse(text, { treatUnclosedAsFence = true } = {}) {
     .join("\n")
     .split("\n")
     .map((l) => l.replace(/(`+)[^`\n]*?\1/g, blank));
-  // A comment opened right after list-item or block-quote markers is a type 2 block inside that container.
-  // Containers are not modelled, so it is masked only when it closes, from `<!--` through the first `-->` below
-  // it (blank lines included), as the masking before this helper did. This pass only ever adds masking on top of
-  // the block scan above, which it leaves untouched, so it can hide more than a renderer would, never less
-  // (Codex on #2368: `- <!--\n\n  [hidden](x)\n  -->` must stay hidden).
-  for (let i = 0; i < source.length; i += 1) {
-    const boxed = CONTAINER_COMMENT.exec(content(source[i]));
-    if (!boxed) continue;
-    const col = boxed[1].length + boxed[2].length;
-    if (outLines[i].slice(col, col + 4) !== "<!--") continue;
-    let j = i;
-    let at = endAfter(source[i], "-->", col + 2);
-    while (at < 0 && j + 1 < source.length) {
-      j += 1;
-      at = endAfter(source[j], "-->", 0);
-    }
-    if (at < 0) continue;
-    for (let k = i; k <= j; k += 1) {
-      const from = k === i ? col : 0;
-      const to = k === j ? at : outLines[k].length;
-      outLines[k] = outLines[k].slice(0, from) + blank(outLines[k].slice(from, to)) + outLines[k].slice(to);
-    }
-  }
+  // A comment opened right after list-item or block-quote markers is a type 2 block inside that container, and the
+  // block scan above now masks it there and ends it where the container ends. An extra pass used to mask from such a
+  // `<!--` to the first `-->` anywhere below, past the container's end and into later fences; it hid routes a renderer
+  // shows (Codex on 92defb8e: `- <!--`, `[V](docs/V.md)`, then a fenced `-->` leaves V a link), so it is gone.
   return outLines.join("\n");
 }

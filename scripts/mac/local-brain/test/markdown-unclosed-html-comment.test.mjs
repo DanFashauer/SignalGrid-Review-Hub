@@ -1707,3 +1707,44 @@ test('quoted leaves and thematic-break marker lines agree with markdown-it for h
   assert.equal(checked, (5 * 7 * 2 * 4 * 2 + 4 * 5 * 3 * 4 * 2 + 10 * 5 * 3) * 2);
   assert.equal(codeKept, 20, 'only the twenty routes inside top-level indented code after a thematic break stay visible');
 });
+
+// 38. Codex on 92defb8e (#2368). A comment opened after list-item or block-quote markers is a type 2 block inside
+//     that container and ends where the container ends; a `-->` in a later fenced block does not close it, and the
+//     lines after the container are read again. Exact literal first, then a bounded family of container openers
+//     (bullet, ordered, quote, nested, mixed), middle lines, gaps, closers (in the container, outside it, inside a
+//     later fence, indented code, none) and a route after the container, judged against markdown-it 14 in both
+//     directions; both fence options; shape checked.
+for (const treatUnclosedAsFence of [true, false]) {
+  test(`Codex 92defb8e literal: a container comment ends with its container, not at a fenced closer below (treatUnclosedAsFence=${treatUnclosedAsFence})`, () => {
+    const input = '- <!--\n[V](docs/V.md)\n~~~\n-->\n~~~\n';
+    const out = maskNonProse(input, { treatUnclosedAsFence });
+    assertShape(input, out);
+    assert.equal(out.includes('[V](docs/V.md)'), true, `visible route masked: ${JSON.stringify(out)}`);
+  });
+}
+test('container comments end with their container, as markdown-it reads them', async () => {
+  const { default: MarkdownIt } = await import('markdown-it');
+  const md = new MarkdownIt('commonmark');
+  const docs = [];
+  for (const open of ['- <!--', '> <!--', '> > <!--', '- > <!--', '1. <!--', '>  <!--', '* <!-- x', '> - <!--']) {
+    for (const mid of ['[R](docs/R.md)', '  [R](docs/R.md)', '> [R](docs/R.md)', '   [R](docs/R.md)', '> > [R](docs/R.md)', '']) for (const gap of ['', '\n', '\n>']) {
+      for (const close of ['-->', '  -->', '> -->', '> > -->', '~~~\n-->\n~~~', '```\n-->\n```', '    -->', '']) for (const tail of ['', '\n[R](docs/R.md)']) {
+        if (!mid && !tail) continue;
+        docs.push(`${open}\n${mid}${gap}\n${close}${tail}\n`);
+      }
+    }
+  }
+  let checked = 0;
+  for (const input of docs) {
+    const links = md.render(input).split('href="docs/R.md"').length - 1;
+    for (const treatUnclosedAsFence of [true, false]) {
+      const out = maskNonProse(input, { treatUnclosedAsFence });
+      assertShape(input, out);
+      const kept = out.split('docs/R.md').length - 1;
+      assert.ok(kept <= links, `route kept that markdown-it does not render (${kept} > ${links}): ${JSON.stringify(input)}`);
+      assert.ok(kept >= links, `rendered route masked (${kept} < ${links}): ${JSON.stringify(input)}`);
+      checked += 1;
+    }
+  }
+  assert.equal(checked, (8 * 6 * 3 * 8 * 2 - 8 * 3 * 8) * 2);
+});

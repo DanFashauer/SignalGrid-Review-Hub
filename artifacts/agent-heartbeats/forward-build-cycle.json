@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-11-19T20:13:14.525Z",
-  "result": "20:10Z fire. acted: published proof-count diagnostic as #2401 (full chain passed 25bf37ec, heartbeat catch-up 4c196dce, Root source close rebound); parser 72ba00cd source-closed by Root; bench final base 89321e04 captured, full chain running. Wave: 8 workers idle in flight (H/S/O = 1/6/1), 0 landed, 0 to owner this fire; all 8 PRs (#2388-#2394, #2396) green on the scaffold gate and WAITING-MAC (slices queued/in progress; #2396 slice 1 cancelled). No refill: 8/8 slots held. sub-brains: not read (other repositories not in this session's scope). owner queue: #2396 (auth path, owner merge after Mac)."
+  "firedAt": "2026-11-20T06:12:52.059Z",
+  "result": "06:11Z fire: #2368 published 0ec39c93 is HELD on two confirmed Codex P2s (4638798062 list interrupting a paragraph, 4638798070 empty item before a blank); its Mac run 44680020871.1 closed positive but qualifies only 0ec. Successor 9d1812c1 source-closed by Root (7031459353): suite 410/410, fuzz 120/120 vReg 0 (one documented top-level-code exposure equal to canonical); its one full chain is running. #2419 gate fix is Root's (claim a5e88c60), full-local chain running. in flight H/S/O = 0/0/0 (build wave held: independent operation is the owner's exclusive critical path). sub-brains: signalgrid-mcp has 1 open PR (#17), no action. owner queue: none new"
 }

@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-11-19T18:11:17.337Z",
-  "result": "acted: wave harvest 6 PRs up (#2388 B1 H, #2389 B6 S, #2390 B7 S, #2391 B3 S, #2392 B8 S, #2393 B2 S); Sonnet review LAND x5, FIX x1 (#2390 posted); Opus refute running on the 5 landers; no refill (no slot freed: none landed yet); in flight H/S/O = 0/1/1 building (B4 S, B5 O) + 6 PRs in review; landed 0 this fire; parser #2368 successor 599e27ed in source review; sub-brains: not read this fire (no other-repo API in this session); owner queue: B5 JWT/JWKS PR when it opens"
+  "firedAt": "2026-11-20T18:13:57.573Z",
+  "result": "18:10Z fire: quiet. Nothing dispatched; the build wave is held because independent Mac operation is the owner's exclusive critical path. #2423 (head dc01e351) and the #2368 successor 035ffefd still await Root's source review. Independent operation is blocked on the owner's Codex-limit decision (#439 7037608103; Codex usage exhausted until 2026-11-24T22:55Z) and on Root's fresh ordinary task. in flight H/S/O = 0/0/0. sub-brains: signalgrid-mcp has 1 open PR (#17, unchanged), no action. owner queue: Codex decision on #439."
 }

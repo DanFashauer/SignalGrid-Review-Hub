@@ -792,10 +792,14 @@ function blockRanges(lines, treatUnclosedAsFence, judgeDefinitions) {
     // `    text` is a paragraph two columns into the item, not code).
     else if (!inParagraph && indentColumns(text0) - (inItem ? itemCol[i] : 0) >= 4) inParagraph = false;
     else {
-      if (!inParagraph) {
+      // A quote opened after this line's list markers (`- > a`) also holds the paragraph.
+      const opensQuote = /^ {0,3}>/.test(text) || /^ {0,3}>/.test(text0.slice(contentAt));
+      // A block quote interrupts a paragraph that is not quoted, so the quoted text starts a new paragraph and its
+      // start and containers are read afresh (Codex on 5710c465: `intro`, `> quote`, `===`, `<span>` keeps the
+      // quoted paragraph open in markdown-it, so `<span>` is paragraph text, not an HTML block).
+      if (!inParagraph || (opensQuote && !paraQuote)) {
         paraStart = i;
-        // A quote opened after this line's list markers (`- > a`) also holds the paragraph.
-        paraQuote = /^ {0,3}>/.test(text) || /^ {0,3}>/.test(text0.slice(contentAt));
+        paraQuote = opensQuote;
         paraItemCol = items.length ? items[items.length - 1] : 0;
       }
       inParagraph = true;

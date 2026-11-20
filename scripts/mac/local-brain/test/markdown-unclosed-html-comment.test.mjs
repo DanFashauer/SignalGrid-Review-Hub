@@ -1605,3 +1605,41 @@ test('empty-marker controls: trailing space, tab, NBSP as content, nonempty item
   assert.equal(checked, 6 * 7 * 6 * 2 * 2 * 2);
   assert.equal(codeKept, 8, 'only the eight `-<NBSP>` / `1.<NBSP>` routes inside top-level indented code stay visible');
 });
+
+// 36. Codex on 5710c465 (#2368). A block quote interrupts a paragraph that is not quoted, so the quoted text starts a
+//     new paragraph and its start and containers are read afresh; a setext-looking line after it is then a lazy
+//     continuation of the quoted paragraph, and a following `<span>` is paragraph text, not an HTML block. Exact
+//     literal first, then a bounded family of paragraph leads (plain, bullet, ordered, two lines), quote openers
+//     (spacing, nesting, indent), following lines and raw-HTML openers around a route, judged against markdown-it 14
+//     in both directions; both fence options; shape checked.
+for (const treatUnclosedAsFence of [true, false]) {
+  test(`Codex 5710c465 literal: a block quote interrupting a paragraph starts a new quoted paragraph, so a later <span> is text (treatUnclosedAsFence=${treatUnclosedAsFence})`, () => {
+    const input = 'intro\n> quote\n===\n<span>\n[V](docs/V.md)\n';
+    const out = maskNonProse(input, { treatUnclosedAsFence });
+    assertShape(input, out);
+    assert.equal(out.includes('[V](docs/V.md)'), true, `visible route masked: ${JSON.stringify(out)}`);
+  });
+}
+test('a block quote that interrupts a paragraph starts a new paragraph, as markdown-it reads it', async () => {
+  const { default: MarkdownIt } = await import('markdown-it');
+  const md = new MarkdownIt('commonmark');
+  const docs = [];
+  for (const lead of ['intro', '- intro', '1. intro', 'a\nb']) for (const q of ['> quote', '>quote', '   > quote', '> > quote', '  > quote']) {
+    for (const u of ['===', '---', 'x', '> ===', '  ===']) for (const h of ['<span>', '<div>', '<!--', '<x-y>']) for (const tail of ['[R](docs/R.md)', '> [R](docs/R.md)']) {
+      docs.push(`${lead}\n${q}\n${u}\n${h}\n${tail}\n`);
+    }
+  }
+  let checked = 0;
+  for (const input of docs) {
+    const links = md.render(input).split('href="docs/R.md"').length - 1;
+    for (const treatUnclosedAsFence of [true, false]) {
+      const out = maskNonProse(input, { treatUnclosedAsFence });
+      assertShape(input, out);
+      const kept = out.split('docs/R.md').length - 1;
+      assert.ok(kept <= links, `route kept that markdown-it does not render (${kept} > ${links}): ${JSON.stringify(input)}`);
+      assert.ok(kept >= links, `rendered route masked (${kept} < ${links}): ${JSON.stringify(input)}`);
+      checked += 1;
+    }
+  }
+  assert.equal(checked, 4 * 5 * 5 * 4 * 2 * 2);
+});

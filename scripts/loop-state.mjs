@@ -2281,12 +2281,16 @@ function selfTest() {
   const callerAdvice = process.env.GIT_ADVICE; process.env.GIT_ADVICE = "0";
   process.env.GIT_CONFIG_GLOBAL = emptyGlobalConfig; process.env.GIT_CONFIG_NOSYSTEM = "1"; delete process.env.GIT_SSL_NO_VERIFY;
   // THE HOSTILE-CONFIGURATION RUN STARTS HERE AND IS READ AT R12-hostile-global. It is the whole self-test a second time; run after the first it doubled the wall time of the slowest
-  // preflight step (349 s measured on the Mac, 2026-11-19). It shares nothing with this run but the script file: its own fixture root, its own global configuration. The shell writes the
+  // preflight step (349 s measured on the Mac, 2026-11-19). It shares nothing with this run but the script file: its own fixture root, its own global configuration. A launcher writes the
   // exit status to a file because this function is synchronous and cannot be told of a child's exit any other way; a run that never writes it is a failure at the check, never a pass.
   const hostileRun = process.env.LOOP_STATE_SELFTEST_NESTED === "1" ? null : (() => {
     const cfg = join(root, "r12-hostile-global.cfg"), out = join(root, "r12-hostile.out"), err = join(root, "r12-hostile.err"), rc = join(root, "r12-hostile.rc");
     writeFileSync(cfg, "[fetch]\n\tprune = true\n[http]\n\tsslVerify = false\n[merge]\n\tff = only\n[core]\n\thooksPath = /nonexistent-hooks\n");
-    const child = spawn("/bin/sh", ["-c", '"$1" "$2" --self-test >"$3" 2>"$4"; echo $? >"$5.tmp"; mv "$5.tmp" "$5"', "sh", process.execPath, fileURLToPath(import.meta.url), out, err, rc],
+    // No shell: a small node launcher runs the self-test with its output in files and writes the exit status, so no path is ever read as shell text.
+    const launcher = 'const { spawnSync } = require("node:child_process"), fs = require("node:fs"); const [file, out, err, rc] = process.argv.slice(1); ' +
+      'const r = spawnSync(process.execPath, [file, "--self-test"], { stdio: ["ignore", fs.openSync(out, "w"), fs.openSync(err, "w")], timeout: 900000, killSignal: "SIGKILL" }); ' +
+      'fs.writeFileSync(rc + ".tmp", String(r.status === null ? 1 : r.status)); fs.renameSync(rc + ".tmp", rc);';
+    const child = spawn(process.execPath, ["-e", launcher, fileURLToPath(import.meta.url), out, err, rc],
       { stdio: "ignore", detached: true, env: { ...process.env, GIT_CONFIG_GLOBAL: cfg, LOOP_STATE_SELFTEST_NESTED: "1" } });
     child.on("error", () => {});
     return { pid: child.pid, out, err, rc };

@@ -5693,6 +5693,13 @@ Cloud merged #2364 under DR-037 at 08:17:59Z with `expectedHeadSha` `f9b5e792c48
 
 These limits are unchanged: the 60-minute job limit, 60 s admission, the 2,400 s work bound, four slices, every proof run once, slice records, the aggregate, and lock helper pin `24eff86a`. This entry is the separate record owed for #2364. A mention inside the #2359 record does not count as one.
 
+**Limits #2364 states and keeps.** The 60 s admission, 2,400 s work bound and 60-minute job limit do not mean every custody path is bounded or tested. Its PR body keeps three ownership holds deliberately **unbounded**, because only that process can prove closure:
+- the reap after a failed readiness handshake;
+- the accounting and reap of its own killed inspectors;
+- keeping the reservation when no custodian acknowledges.
+
+Those three depend on the outer job's termination, not on a new wrapper bound. The no-acknowledged-custodian path and the custodian's own inspector accounting are covered by reading, not by a test. The hosted slice-3 overrun (run 44453949390) is not explained by this change.
+
 **Preparation journal.** These records were made before the merge:
 - **Full local qualification on the exact final head** `f9b5e792` (tree `9360b473`), by the Mac lane on its host under ordinary same-inode admission, 07:36:55Z–08:11:44Z (#2364 comment 7003537641):
   - `pnpm install --frozen-lockfile`: exit 0.
@@ -5704,7 +5711,7 @@ These limits are unchanged: the 60-minute job limit, 60 s admission, the 2,400 s
     - `Build (all packages)` and `Browser E2E`: unavailable on that platform.
     - `backup-restore`, `db-role-split` and the mainline red-streaks check: self-skipped without their input.
     - The harness's usual 13 skips.
-- **Focused custody test at the final head:** 13/13. The test was written first in each of four rounds. RED/GREEN per round: 1/4 → 5/5, 4/7 → 11/11, 11/1 → 12/12, 12/1 → 13/13. Receipts are in the PR body.
+- **Focused custody test at the final head:** 13/13. The test was written first in each of four rounds. RED → GREEN per round: 1 pass / 4 fail → 5/5, 4 pass / 7 fail → 11/11, 11 pass / 1 fail → 12/12, 12 pass / 1 fail → 13/13. Round 5 added no new RED case: it replaced an existing assertion after the Codex P2. Receipts are in the PR body.
 - **Root's source reviews.** Root's findings on `4742ec00` (7000936961) were corrected across rounds 2–4: inspector bounds, detached-pid reuse, a two-way readiness acknowledgment, detachment proof, logger I/O and fixture cleanup. Round 5 answered a Codex P2 about a zombie custodian failing a pid probe.
 - **Earlier heads keep their own outcomes:**
   - The obsolete Mac run 44466794964 on `4742ec00` was cancelled by one normal request at Root's selection.
@@ -5756,8 +5763,8 @@ Counts, the floor, the 120000 ms bound, summary acceptance and every exit rule a
   - `pnpm run verify:breadth`: exit 0, 58 breadth proofs.
   - This local result is dated to `25bf37ec`. Later heads `4c196dce`, `9fd614e2` and `e467daae` were catch-ups whose canonical deltas were heartbeat JSONs plus, on `9fd614e2`, the resolved raised-hand ledger input. That ledger file is an input, not a heartbeat, and the gates that read it passed on the merged tree.
 - **Self-test:** 21/21. One case floods both streams at once; it killed surviving mutants M1 and M5.
-- **Source review:** bounded review on #439 (7017214093, final-base rebind 7019524350), and same-head source COMMENTs 5982373344 and 5984901570. A COMMENT is not a vote.
-- **On the exact head `e467daae`:** all 10 strict required contexts succeeded, including gating check `135955035845`. CodeQL `135949960757` and Analyze `135948964935` succeeded, with 0 open code-scanning alerts and 0 review threads. Attributed to the cloud delivery receipt (#439 comment 7025406343); this entry does not re-read the other eight contexts.
+- **Source review:** bounded review on #439 (7017214093, final-base rebind 7019524350), and two source COMMENT reviews on this PR: 5982373344 on `25bf37ec0c5e19f0040749f1f2576b08d5e375ab` (2026-11-19T20:01:35Z) and 5984901570 on the merged head `e467daaee5de1c5c104dbfb66b85fdd916eb057c` (23:11:03Z). A COMMENT is evidence, not a vote.
+- **On the exact head `e467daae`:** all 10 strict required contexts succeeded, including gating check `135955035845`. CodeQL `135949960757` and Analyze `135948964935` succeeded, with 0 open code-scanning alerts on the #2401 PR ref at the recorded pre-merge read (not a repository-wide count) and 0 review threads. Attributed to the cloud delivery receipt (#439 comment 7025406343); this entry does not re-read the other eight contexts.
 - **Real OPEN Mac aggregate `135967804684`** succeeded at 23:42:21Z (run 44634368004, attempt 1; slices `135948966930`, `135948966875`, `135948966919`, `135948966504`). Per the independent audit (#2401 comment 7025438708), it covers 450 owned indices exactly once: 446 ok, two deliberately unavailable on Darwin (Build and Browser E2E) and two DB self-skips. All four non-passes were not run and not passed. All four owned-chain and free-port groups closed normally. The audit records no separate numeric listener-zero measurement, and capture-time limits apply.
 - **Earlier heads keep their own outcomes:**
   - Run 44603579790 on `25bf37ec` was cancelled with no admission.

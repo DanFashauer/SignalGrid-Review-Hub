@@ -5994,3 +5994,42 @@ e9b3e797 is an ancestor of origin/SignalGrid_Alpha
 ```
 
 Verdict: holds for the merge, tree, ancestry and delta claims. The local, CI and review results are attributed receipts on the heads named, not new executions. This is the first protected landing through the hybrid route. It is not the later scheduled ordinary cycle the independence proof still needs. No owner-hardware evidence, private completion seal or readiness change is asserted.
+
+## 2026-11-21 — #2472 (cc86c123) landed under DR-037: second local-brain build, published unattended after a Mac RESULT
+
+The Mac's local brain took issue #2471 (checkpoint-type whitespace), built, froze and qualified the fix, cleared both publication privacy reviews and opened PR #2472 at 11:10:35Z, unattended. Its head was `924a2793fba690c496e7722365a50a243461d811` on base `5bc3966e` (Mac RESULT on #439, comment 7061721830, which also released the hold). Unlike #2465, the generated body carried all five sections `phase-pr-evidence` requires, so no body repair was needed. Main verified the publication (7061752470). Cloud was the final pass under the standing duty.
+
+What the change does: `scripts/mac/local-brain/job-state.mjs` (+4) makes `checkpoint` and `restore` refuse a checkpoint `type` that has surrounding whitespace. The new test `scripts/mac/local-brain/test/job-state-type-whitespace.test.mjs` (+86) has 6 offline cases. The new clauses only add refusals.
+
+Evidence, each on the head named:
+
+- Cloud local, on `924a2793`: `node --test scripts/mac/local-brain/test/job-state-type-whitespace.test.mjs` gave `# tests 6 / # pass 6 / # fail 0`. The full local-brain directory showed the same 23 markdown-it differential failures on base `5bc3966e` and on the head (identical test names, numbering shifted by the 6 new tests). They are pre-existing in that checkout and are neither this change nor passes.
+- The PR body quotes the Mac's local preflight (four slices plus aggregate) and breadth as passed. It names two UNAVAILABLE and three SELF-SKIPPED prerequisites, which remain non-passes. Main recorded these as attributed retained-run observations (#2472 comment 7061832664).
+- Main's source review 6004834028 (COMMENT) found no blocker. There were 0 review threads.
+- On `924a2793`: gating check 136830342436 passed, Mac slices 1–4 passed, Mac aggregate 136832584319 passed, and `phase-pr-evidence` 136827209467 passed.
+
+The merge: `cc86c1237eaa5e1d9071535a16723443d7da0b1c`, with `expectedHeadSha` `924a2793fba690c496e7722365a50a243461d811`, outside any Mac START..RESULT window. Its ordered parents are `5bc3966e` and `924a2793`, and its tree equals the head tree. #2471 was closed as completed. The branch `mac/brain-build-91b7337b07d74d14` is kept.
+
+Command: run by the cloud lane against a fresh fetch of canonical, read-only, exactly as follows (`set -e`):
+
+```bash
+date -u +%Y-%m-%dT%H:%M:%SZ
+git log -1 --format='%H parents=%P tree=%T' cc86c1237eaa5e1d9071535a16723443d7da0b1c
+git log -1 --format='%H tree=%T' 924a2793fba690c496e7722365a50a243461d811
+git merge-base --is-ancestor cc86c1237eaa5e1d9071535a16723443d7da0b1c origin/SignalGrid_Alpha && echo "cc86c123 is an ancestor of origin/SignalGrid_Alpha"
+git diff --stat 5bc3966eed0e86e39f63ac54db9258a80b257a1b cc86c1237eaa5e1d9071535a16723443d7da0b1c
+```
+
+Output, verbatim:
+
+```
+2026-11-21T11:34:49Z
+cc86c1237eaa5e1d9071535a16723443d7da0b1c parents=5bc3966eed0e86e39f63ac54db9258a80b257a1b 924a2793fba690c496e7722365a50a243461d811 tree=7dd5de86955e19b2a0c744b7b4f2a9b03ce28508
+924a2793fba690c496e7722365a50a243461d811 tree=7dd5de86955e19b2a0c744b7b4f2a9b03ce28508
+cc86c123 is an ancestor of origin/SignalGrid_Alpha
+ scripts/mac/local-brain/job-state.mjs              |  4 +
+ .../test/job-state-type-whitespace.test.mjs        | 86 ++++++++++++++++++++++
+ 2 files changed, 90 insertions(+)
+```
+
+Verdict: holds for the merge, tree, ancestry and delta claims. The Mac's local, CI and review results are attributed receipts on the head named, not new executions. This is the second protected landing through the hybrid route and the first with no manual body repair. It was not yet a later scheduled ordinary cycle with no session acting as controller: the Mac posted START and RESULT itself, and the originating-issue reference is still missing from automatic bodies. No owner-hardware evidence, private completion seal or readiness change is asserted.

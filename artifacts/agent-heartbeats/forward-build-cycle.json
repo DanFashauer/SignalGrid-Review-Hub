@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-11-21T02:11:09.201Z",
-  "result": "acted: landed #2368 (2cb9d3df, DR-037; Mac aggregate green on full rerun); #2447 published 9fccfb9b (gating green, Mac slice 2 pending); journal branch for #2364/#2401/#2423/#2368 qualifying; no new workers dispatched (owner priority: independent Mac operation) | in flight H/S/O = 0/0/0 | sub-brains: none spawned | owner: Mac Claude Code sign-in lapsed, blocks proof #2443"
+  "firedAt": "2026-11-21T04:11:06.465Z",
+  "result": "acted: landed #2447 (b74f9a4d, DR-037); journal #2453 qualified (pf/br exit 0 on 6fa8e6f6); cloud merge HOLD active since Mac START 03:36Z for proof #2443 retry (prior build consumed by #2447 merge in the freeze window); no workers dispatched (owner priority: independent Mac operation) | in flight H/S/O = 0/0/0 | sub-brains: none | owner: none"
 }

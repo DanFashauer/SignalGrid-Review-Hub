@@ -102,3 +102,67 @@ export function enumerateGrantSafety<TInput, TVerdict>(
   walk(0);
   return { combos, noneCount, mismatches, firstMismatch };
 }
+
+/** One audit run by `enumerateGrantSafetyAudits`: the evaluate/actionOf/positivelyClean
+ *  half of `GrantSafetyOptions`, judged on its own counters. */
+export type GrantSafetyAudit<TInput, TVerdict> = Omit<GrantSafetyOptions<TInput, TVerdict>, "domains" | "build">;
+
+/**
+ * The same brute force as `enumerateGrantSafety`, but ONE traversal and ONE `build` per
+ * combination feeding SEVERAL independently specified audits. Each audit keeps its own
+ * `combos`/`noneCount`/`mismatches`/`firstMismatch`, exactly as if it had been run alone
+ * with the same domains and build: nothing is shared between audits except the built
+ * input, so an audit's spec, verdict and counters cannot mask another's.
+ *
+ * Exists because a proof that ran two full passes over a nine-million-combination raw
+ * space paid for every normalization twice (device-management-health, 2026-11-21). The
+ * caller still asserts every audit's `mismatches === 0`, its `combos === productOf(domains)`
+ * and its non-vacuity, and `build` must return an input no audit mutates.
+ */
+export function enumerateGrantSafetyAudits<TInput, A extends Record<string, GrantSafetyAudit<TInput, any>>>(options: {
+  domains: Domain;
+  build: (combo: Record<string, unknown>) => TInput;
+  audits: A;
+}): { [K in keyof A]: GrantSafetyResult } {
+  const keys = Object.keys(options.domains);
+  for (const key of keys) {
+    if (options.domains[key].length === 0) {
+      throw new Error(`grant-safety: domain "${key}" is empty — this would zero the enumeration`);
+    }
+  }
+  const names = Object.keys(options.audits) as (keyof A & string)[];
+  if (names.length === 0) throw new Error("grant-safety: no audits given — this would enumerate nothing");
+  const results = Object.fromEntries(names.map((n) => [n, { combos: 0, noneCount: 0, mismatches: 0 } as GrantSafetyResult])) as { [K in keyof A]: GrantSafetyResult };
+  const combo: Record<string, unknown> = {};
+
+  const walk = (depth: number): void => {
+    if (depth === keys.length) {
+      const snapshot = { ...combo };
+      const input = options.build(snapshot);
+      for (const name of names) {
+        const audit = options.audits[name];
+        const r = results[name];
+        r.combos += 1;
+        const verdict = audit.evaluate(input);
+        const isNone = audit.actionOf(verdict) === "none";
+        const expectedClean = audit.positivelyClean(snapshot);
+        if (isNone) r.noneCount += 1;
+        let bad = isNone !== expectedClean;
+        if (isNone && audit.confirmedWhenNone && !audit.confirmedWhenNone(verdict)) bad = true;
+        if (bad) {
+          r.mismatches += 1;
+          if (r.firstMismatch === undefined) r.firstMismatch = JSON.stringify(snapshot);
+        }
+      }
+      return;
+    }
+    const key = keys[depth];
+    for (const value of options.domains[key]) {
+      combo[key] = value;
+      walk(depth + 1);
+    }
+  };
+
+  walk(0);
+  return results;
+}

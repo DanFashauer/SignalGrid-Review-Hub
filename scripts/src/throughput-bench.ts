@@ -24,14 +24,19 @@
  * judge one P window against one S window taken before it, and a hosted Intel
  * macOS VM starved for part of that one window (saturated p99 41–140 ms, max
  * stalls up to 543 ms in the ten decoded failures, against p99 ≈ 4 ms on the
- * 4-vCPU Linux runners) read as collapse. `throughput-judge.ts` holds the rule
+ * 4-vCPU Linux runners) read as collapse. Those numbers fit a starved VM but do
+ * not prove one; the cause of the hosted failures is NOT established here.
+ * `throughput-judge.ts` holds the rule
  * and the fixtures that prove it, and runs them before every measurement.
  *
- * `--inject=lock` (every thread serialised on one fair ticket lock: genuine
- * contention, must FAIL) and `--inject=host-stall:<pair>` (busy threads over
- * one P window: transient host noise, must be attributed, not failed) are
- * demonstration modes and are never on by default. `--self-test` runs the
- * judge's fixtures only.
+ * Demonstration modes, never on by default: `--inject=lock` (every thread
+ * serialised on one fair ticket lock in every window: must FAIL),
+ * `--inject=intermittent-lock:<pair>` (the same lock in one P window only) and
+ * `--inject=host-stall:<pair>` (busy threads over one P window). The last two
+ * give the same kind of mixed result — one pair collapses, the others gain —
+ * from causes inside and outside the process, which is why a mixed result is
+ * reported as MIXED WINDOWS with its cause NOT determined. `--self-test` runs
+ * the self-tests only.
  *
  * WHAT THIS MEASURES, stated plainly so a number from it is never quoted as
  * more than it is: the in-memory decision core only — `SignalGridCore.demo()`
@@ -339,64 +344,79 @@ function release(lock: Int32Array): void {
  * pair 2 and pair 3 measure saturation, not thread startup.
  */
 class Pool {
-  private constructor(
-    private readonly workers: Worker[],
-    private pending: ((m: WorkerToMain & { type: "done" }) => void) | null,
-    private failure: Error | null,
-  ) {}
+  private closing = false;
+  private failure: Error | null = null;
+  /** The window in flight: its result collector and its rejection, so a worker failure settles it. */
+  private active: { collect: (m: Run) => void; reject: (e: Error) => void } | null = null;
 
-  /** `divergeWorker`: the 0-based worker whose timed verdicts flip (`--inject=diverge-after-release`), or -1. */
-  static start(count: number, durationMs: number, lockBuffer: SharedArrayBuffer | null, divergeWorker = -1): Promise<Pool> {
+  private constructor(private readonly workers: Worker[]) {}
+
+  /**
+   * `divergeWorker`: the 0-based worker whose timed verdicts flip (`--inject=diverge-after-release`), or -1.
+   * `failWorker`: the 0-based worker that throws on its first release (the pool self-test), or -1.
+   */
+  static start(count: number, durationMs: number, lockBuffer: SharedArrayBuffer | null, divergeWorker = -1, failWorker = -1): Promise<Pool> {
     const workers: Worker[] = [];
-    const pool = new Pool(workers, null, null);
+    const pool = new Pool(workers);
     return new Promise<Pool>((resolve, reject) => {
       let ready = 0;
+      // A worker failure BEFORE readiness rejects start; AFTER readiness it rejects the window in flight (start has
+      // already settled, so rejecting it there would be lost and the awaited window would hang). Either way every
+      // worker is told to terminate; the caller's finally still awaits close() for the owned teardown.
       const failAll = (error: unknown) => {
-        pool.failure = error instanceof Error ? error : new Error(String(error));
+        if (pool.closing) return;
+        pool.failure ??= error instanceof Error ? error : new Error(String(error));
         for (const worker of workers) void worker.terminate();
         reject(pool.failure);
+        const active = pool.active;
+        pool.active = null;
+        active?.reject(pool.failure);
       };
       for (let i = 0; i < count; i++) {
-        const worker = new Worker(new URL(import.meta.url), { workerData: { durationMs, lockBuffer, divergeAfterRelease: i === divergeWorker, worker: i + 1 } });
+        const worker = new Worker(new URL(import.meta.url), {
+          workerData: { durationMs, lockBuffer, divergeAfterRelease: i === divergeWorker, failOnGo: i === failWorker, worker: i + 1 },
+        });
         workers.push(worker);
         worker.on("message", (message: WorkerToMain) => {
           if (message.type === "ready") {
             if (++ready === count) resolve(pool);
             return;
           }
-          pool.pending?.(message);
+          pool.active?.collect(message);
         });
         worker.on("error", failAll);
-        worker.on("exit", (code) => {
-          if (code !== 0 && !pool.closing) failAll(new Error(`worker exited with code ${code}`));
-        });
+        // Any exit we did not ask for is a failure, code 0 included: a worker gone mid-window never reports.
+        worker.on("exit", (code) => failAll(new Error(`worker ${i + 1} exited with code ${code}`)));
       }
     });
   }
 
-  private closing = false;
-
   /**
    * Release the first `count` workers together for one timed window (all of them by default). `run(1)` is the
    * single-core window: the same kind of thread, isolate and JIT state as the parallel windows, so the two sides
-   * of the comparison differ only in how many threads run.
+   * of the comparison differ only in how many threads run. `locked` serialises every evaluate in this window on
+   * the shared lock (`--inject=lock` / `--inject=intermittent-lock:<pair>`).
    */
-  run(count = this.workers.length): Promise<{ runs: Run[]; releaseNs: bigint }> {
+  run(count = this.workers.length, locked = false): Promise<{ runs: Run[]; releaseNs: bigint }> {
     if (this.failure) return Promise.reject(this.failure);
+    if (this.active) return Promise.reject(new Error("Pool.run: a window is already in flight"));
     const released = this.workers.slice(0, count);
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
       const runs: Run[] = [];
-      this.pending = (message) => {
-        runs.push(message);
-        if (runs.length === released.length) {
-          this.pending = null;
-          resolve({ runs, releaseNs });
-        }
+      const releaseNs = process.hrtime.bigint();
+      this.active = {
+        collect: (message) => {
+          runs.push(message);
+          if (runs.length === released.length) {
+            this.active = null;
+            resolve({ runs, releaseNs });
+          }
+        },
+        reject,
       };
       // Release only once every worker is loaded and warm, so the measured
       // window is N threads running at once — not a staggered ramp.
-      const releaseNs = process.hrtime.bigint();
-      for (const w of released) w.postMessage("go");
+      for (const w of released) w.postMessage(locked ? "go+lock" : "go");
     });
   }
 
@@ -404,6 +424,43 @@ class Pool {
     this.closing = true;
     await Promise.all(this.workers.map((w) => w.terminate()));
   }
+}
+
+/** Reject `promise` if it has not settled after `ms` — a self-test must report a hang, not become one. */
+function within<T>(promise: Promise<T>, ms: number, what: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`${what} did not settle within ${ms} ms`)), ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
+/**
+ * The pool proves its failure path before any run is trusted: a worker that throws AFTER readiness must reject the
+ * window in flight and the pool must still close; a normal one-worker window must resolve and close. ~1-2 s (two
+ * one-worker pools load the core).
+ */
+async function poolSelfTest(): Promise<string[]> {
+  const problems: string[] = [];
+  const failing = await within(Pool.start(1, 30, null, -1, 0), 30_000, "failing pool start");
+  try {
+    await within(failing.run(), 10_000, "a window whose worker failed after readiness");
+    problems.push("a worker that threw after readiness did not reject the window in flight");
+  } catch (error) {
+    if (String(error).includes("did not settle")) problems.push(String(error));
+  } finally {
+    await within(failing.close(), 10_000, "failing pool teardown").catch((e) => problems.push(String(e)));
+  }
+  const normal = await within(Pool.start(1, 30, null), 30_000, "control pool start");
+  try {
+    const { runs } = await within(normal.run(), 10_000, "control window");
+    if (runs.length !== 1 || runs[0].ops < 1) problems.push(`control window returned ${runs.length} run(s)`);
+  } catch (error) {
+    problems.push(`control window failed: ${String(error)}`);
+  } finally {
+    await within(normal.close(), 10_000, "control pool teardown").catch((e) => problems.push(String(e)));
+  }
+  return problems;
 }
 
 /**
@@ -419,7 +476,13 @@ function startHogs(count: number, ms: number): Worker[] {
   return Array.from({ length: count }, () => new Worker(code, { eval: true, workerData: { ms } }));
 }
 
-async function runWorker(durationMs: number, lockBuffer: SharedArrayBuffer | null, divergeAfterRelease: boolean, worker: number): Promise<void> {
+async function runWorker(
+  durationMs: number,
+  lockBuffer: SharedArrayBuffer | null,
+  divergeAfterRelease: boolean,
+  failOnGo: boolean,
+  worker: number,
+): Promise<void> {
   // A worker thread starts without tsx's resolver, so register it before any
   // TypeScript module is imported — otherwise the core's own extensionless
   // relative imports fail to resolve here even though they resolve in the parent.
@@ -439,8 +502,9 @@ async function runWorker(durationMs: number, lockBuffer: SharedArrayBuffer | nul
   const timedCore = divergeAfterRelease ? divergingAfter(core, 100) : core;
 
   port.on("message", (message: string) => {
-    if (message !== "go") return;
-    const run = measure(timedCore, workload, durationMs, print, lock);
+    if (message !== "go" && message !== "go+lock") return;
+    if (failOnGo) throw new Error(`injected failure in worker ${worker} after readiness`);
+    const run = measure(timedCore, workload, durationMs, print, message === "go+lock" ? lock : null);
     // Copy out of the subarray so the transferred buffer holds only the samples.
     const samples = Float64Array.from(run.samples);
     port.postMessage({ type: "done", ...run, samples, worker }, [samples.buffer]);
@@ -480,20 +544,22 @@ function sortedCopy(samples: ArrayLike<number>): number[] {
 async function main(): Promise<void> {
   const judge = await import("./throughput-judge.js");
   const workload = await loadWorkload();
-  // Both gates prove themselves before any measurement is trusted: the collapse judge against recorded contention
-  // (pure, microseconds) and the determinism gate against a core that diverges only inside a timed window (real
-  // measure/gate boundary, ~120 ms). A gate that cannot fail cannot gate anything.
+  // The gates prove themselves before any measurement is trusted: the collapse judge against recorded runs (pure,
+  // microseconds), the determinism gate against a core that diverges only inside a timed window (real measure/gate
+  // boundary, ~120 ms), and the pool's failure path (a worker failing after readiness must reject the window in
+  // flight and still tear down; ~1-2 s). A gate that cannot fail cannot gate anything.
   const selfTestFailures = [
     ...judge.judgeSelfTest().map((f) => `collapse judge: ${f}`),
     // Its own core: the fixture's decisions advance the per-evaluation sequence, and the measured run's
     // fingerprint must come from a FRESH core to match the workers'.
     ...determinismSelfTest(workload.SignalGridCore.demo(), workload).map((f) => `determinism gate: ${f}`),
+    ...(await poolSelfTest()).map((f) => `worker pool: ${f}`),
   ];
   if (process.argv.includes("--self-test")) {
     for (const f of selfTestFailures) console.error(`FAIL: ${f}`);
     console.log(
       selfTestFailures.length === 0
-        ? `Throughput-bench self-test: collapse judge (${judge.JUDGE_FIXTURES.length} fixtures, 5 malformed inputs) and determinism gate (timed-window divergence fails, control passes) classified correctly.`
+        ? `Throughput-bench self-test: collapse judge (${judge.JUDGE_FIXTURES.length} fixtures, 5 malformed inputs) and determinism gate (timed-window divergence fails, control passes) and worker pool (failure after readiness rejects the window and tears down, control resolves) classified correctly.`
         : `Throughput-bench self-test FAILED: ${selfTestFailures.length} problem(s).`,
     );
     process.exitCode = selfTestFailures.length === 0 ? 0 : 1;
@@ -513,17 +579,29 @@ async function main(): Promise<void> {
 
   const inject = stringFlag("inject");
   let lockBuffer: SharedArrayBuffer | null = null;
+  let lockEveryWindow = false;
+  let lockPair = 0;
   let hogPair = 0;
   let divergeWorker = -1;
   if (inject !== undefined) {
     const hog = /^host-stall:(\d+)$/.exec(inject);
-    if (inject === "lock") lockBuffer = new SharedArrayBuffer(8);
+    const intermittent = /^intermittent-lock:(\d+)$/.exec(inject);
+    if (inject === "lock") {
+      lockBuffer = new SharedArrayBuffer(8);
+      lockEveryWindow = true;
+    }
+    // In-code serialisation exercised in ONE parallel window only: a cause inside the process that produces the same
+    // mixed rates a starved host does. The control that keeps the mixed result neutral.
+    else if (intermittent && Number(intermittent[1]) >= 1 && Number(intermittent[1]) <= pairCount) {
+      lockBuffer = new SharedArrayBuffer(8);
+      lockPair = Number(intermittent[1]);
+    }
     // The LAST worker: single-core windows release worker 1 alone, so with more than one worker the divergence is
     // confined to the parallel windows, the condition #2484 says went unchecked.
     else if (inject === "diverge-after-release") divergeWorker = workerCount - 1;
     else if (hog && Number(hog[1]) >= 1 && Number(hog[1]) <= pairCount) hogPair = Number(hog[1]);
     else {
-      console.error(`Invalid --inject=${inject}: expected "lock", "diverge-after-release" or "host-stall:<pair 1..${pairCount}>".`);
+      console.error(`Invalid --inject=${inject}: expected "lock", "diverge-after-release", "intermittent-lock:<pair 1..${pairCount}>" or "host-stall:<pair 1..${pairCount}>".`);
       process.exit(1);
     }
   }
@@ -537,11 +615,13 @@ async function main(): Promise<void> {
   if (inject) {
     console.log(
       `INJECTED: ${
-        lockBuffer
-          ? "every thread serialised on one shared lock (genuine contention)"
+        lockEveryWindow
+          ? "every thread serialised on one shared lock in every window (genuine contention)"
+          : lockPair > 0
+            ? `every thread serialised on one shared lock in P${lockPair} only (intermittent in-code contention)`
           : divergeWorker >= 0
             ? `worker ${divergeWorker + 1}'s verdicts flip from its 100th timed call; its pre-release fingerprint is unchanged`
-            : `${HOG_THREADS_PER_CORE * cores} CPU-hog threads over P${hogPair} only (transient host noise)`
+            : `${HOG_THREADS_PER_CORE * cores} CPU-hog threads over P${hogPair} only (outside load on the host)`
       }` +
         " — a demonstration run, not a measurement of the core.",
     );
@@ -554,12 +634,12 @@ async function main(): Promise<void> {
 
   const singles: Run[] = [];
   const parallels: Array<{ runs: Run[]; releaseNs: bigint; aggregateRate: number; meanWindowMs: number; totalOps: number }> = [];
-  const single = async () => (await pool.run(1)).runs[0];
+  const single = async () => (await pool.run(1, lockEveryWindow)).runs[0];
   try {
     singles.push(await single());
     for (let pair = 1; pair <= pairCount; pair++) {
       const hogs = pair === hogPair ? startHogs(HOG_THREADS_PER_CORE * cores, durationMs + 250) : [];
-      const { runs, releaseNs } = await pool.run();
+      const { runs, releaseNs } = await pool.run(undefined, lockEveryWindow || pair === lockPair);
       await Promise.all(hogs.map((h) => h.terminate()));
       const totalOps = runs.reduce((sum, r) => sum + r.ops, 0);
       const meanWindowMs = runs.reduce((sum, r) => sum + r.elapsedMs, 0) / runs.length;
@@ -639,12 +719,12 @@ async function main(): Promise<void> {
         `; ${verdict.collapsedPairs}/${pairCount} pairs collapsed)`,
     );
   }
-  if (parallelCollapseExercised && verdict.transient) {
+  if (parallelCollapseExercised && verdict.mixed) {
     const lost = verdict.pairs.filter((p) => p.collapsed).map((p) => `P${p.pair} (${p.ratio.toFixed(2)}x)`);
     const gained = verdict.pairs.filter((p) => !p.collapsed).map((p) => `P${p.pair} (${p.ratio.toFixed(2)}x)`);
     console.log(
-      `HOST INTERFERENCE (reported, not hidden): ${lost.join(", ")} collapsed while ${gained.join(", ")} gained on the same code in the same process; pooled ${verdict.pooledRatio.toFixed(2)}x. ` +
-        "Contention drags every pair; a pair outvoted by the others is a property of the host at that moment.",
+      `MIXED WINDOWS (reported, not hidden): ${lost.join(", ")} collapsed while ${gained.join(", ")} gained; pooled ${verdict.pooledRatio.toFixed(2)}x passes the pooled-throughput contract. ` +
+        "Cause not determined: rates alone cannot tell outside load on the host from intermittent contention, allocation or GC in the code.",
     );
   }
   if (parallelCollapseExercised) {
@@ -713,6 +793,12 @@ async function main(): Promise<void> {
 if (isMainThread) {
   await main();
 } else {
-  const data = workerData as { durationMs: number; lockBuffer: SharedArrayBuffer | null; divergeAfterRelease: boolean; worker: number };
-  await runWorker(data.durationMs, data.lockBuffer, data.divergeAfterRelease, data.worker);
+  const data = workerData as {
+    durationMs: number;
+    lockBuffer: SharedArrayBuffer | null;
+    divergeAfterRelease: boolean;
+    failOnGo: boolean;
+    worker: number;
+  };
+  await runWorker(data.durationMs, data.lockBuffer, data.divergeAfterRelease, data.failOnGo, data.worker);
 }

@@ -2,38 +2,44 @@
  * The parallel-collapse judge for `throughput-bench.ts`, kept free of timing so
  * it can be proved against fixtures on every run.
  *
- * WHY PAIRS (BUILD_BACKLOG, "Decision-throughput saturation gate fails ~1 in 7
- * hosted macOS slice-4 jobs", 2026-11-21). The gate used to compare ONE parallel
- * window with ONE single-core window measured before it. On the hosted Intel
- * macOS runners the ten decoded failures had saturated p99 of 41–140 ms and
- * max stalls of 137–543 ms, against p99 near 4 ms and max under 20 ms on the
- * 4-vCPU Linux runners, which scaled 1.91–2.60x in every one of 14 runs. A
- * host that starves the VM for part of the parallel window reads as "no
- * parallel gain", and so does a real lock. One window cannot tell them apart.
+ * WHY PAIRS (BUILD_BACKLOG, "Decision-throughput saturation gate fails about
+ * one in five hosted macOS slice-4 jobs", 2026-11-21). The gate used to compare
+ * ONE parallel window with ONE single-core window measured before it. On the
+ * hosted Intel macOS runners the ten decoded failures had saturated p99 of
+ * 41–140 ms and max stalls of 137–543 ms, against p99 near 4 ms and max under
+ * 20 ms on the 4-vCPU Linux runners, which scaled 1.91–2.60x in every one of
+ * 14 runs. Those numbers fit a VM starved for part of one window; they do not
+ * prove it, and nothing in this module can.
  *
  * The schedule is now S0 P1 S1 P2 S2 … Pk Sk: every parallel window is
  * bracketed by single-core windows taken on either side of it. Pair i judges
- * P_i against the HIGHER of its two brackets. Host noise only ever slows a
- * window, so the higher bracket is the better estimate of what one core
- * really does at that moment, and a stall inside one single-core window can
+ * P_i against the HIGHER of its two brackets, so a slow single-core window can
  * never make a parallel window look better than it is.
  *
- * VERDICT. Real shared-state contention is a property of the code: it shows in
- * every pair. A transient host stall is a property of a moment: it shows in
- * some. The gate FAILS when the POOLED ratio — Σ parallel / Σ bracket, over all
- * pairs — is ≤ 1, i.e. when the parallel windows taken together did not beat
- * one core measured on either side of them. One pair starved by the host is
- * outvoted by pairs that gained; contention cannot be outvoted because it
- * drags every pair. A pair that collapses inside a passing run is reported by
- * name with its numbers as host interference, never hidden.
+ * THE POOLED-THROUGHPUT CONTRACT. The gate FAILS when the pooled ratio
+ * — Σ parallel / Σ bracket, over all pairs — is ≤ 1: the parallel windows taken
+ * together did not beat one core measured on either side of them. It is a
+ * contract on aggregate throughput over the run, and that is ALL it is.
+ *
+ * What it does NOT establish: why a single pair collapsed. A run in which some
+ * pairs collapse and the pooled ratio still passes is reported as MIXED
+ * WINDOWS, by name, with its numbers, and with its cause left undetermined.
+ * This module sees only rates, and outside load on the host, intermittent
+ * in-code serialisation, a periodic allocation or GC burst, or a lock taken in
+ * one window only can all produce the same rates. The recorded fixtures below
+ * include both kinds (`host-stall` and `intermittent-lock`), with the same
+ * expected verdict, for exactly that reason. Contention present in every
+ * window drags every pair down and fails the contract; contention present in
+ * only part of the run is, by this contract, outvoted. That is a stated limit
+ * of the contract, not a claim about the cause.
  *
  * Why pooled and not "fail only when every pair collapses": workers serialised
- * on one lock sit at ≈1.0x, right on the old threshold, so per-pair noise lets
- * one pair "gain" by a few percent (measured: 0.87x / 1.04x / 0.91x). An
- * every-pair rule passed that run; the pooled rule fails it (0.94x). The old
- * single-window rule passed it too. Nothing here is a threshold that was
- * relaxed: the comparison is still "parallel must beat one core" (≤ fails),
- * against the HIGHER of two single-core measurements instead of one.
+ * on one barging mutex sit at ≈1.0x, right on the old threshold, so per-pair
+ * noise lets one pair "gain" by a few percent (measured: 0.87x / 1.04x /
+ * 0.91x). An every-pair rule passed that run; the pooled rule fails it
+ * (0.94x). The old single-window rule passed it too. The comparison is still
+ * "parallel must beat one core" (≤ fails), against the HIGHER of two
+ * single-core measurements instead of one.
  */
 
 export interface PairJudgement {
@@ -56,8 +62,8 @@ export interface CollapseVerdict {
   pooledRatio: number;
   /** pooledRatio ≤ 1: the parallel windows together did not beat one core. The gate fails. */
   fail: boolean;
-  /** The run passes but at least one pair collapsed: reported as host interference. */
-  transient: boolean;
+  /** The run passes the pooled contract but at least one pair collapsed: reported as MIXED WINDOWS, cause undetermined. */
+  mixed: boolean;
   /** What the pre-2026-11-21 rule (P1 against S0 alone) would have said. */
   firstPairOnlyRuleFails: boolean;
 }
@@ -100,7 +106,7 @@ export function judgePairs(singles: readonly number[], parallels: readonly numbe
     collapsedPairs,
     pooledRatio,
     fail,
-    transient: !fail && collapsedPairs > 0,
+    mixed: !fail && collapsedPairs > 0,
     firstPairOnlyRuleFails: parallels[0] <= singles[0],
   };
 }
@@ -110,7 +116,7 @@ interface Fixture {
   singles: number[];
   parallels: number[];
   expectFail: boolean;
-  expectTransient: boolean;
+  expectMixed: boolean;
   expectFirstPairOnlyRuleFails: boolean;
 }
 
@@ -127,7 +133,7 @@ export const JUDGE_FIXTURES: readonly Fixture[] = [
     singles: [1404, 1620, 1143, 1765],
     parallels: [1017, 954, 947],
     expectFail: true,
-    expectTransient: false,
+    expectMixed: false,
     expectFirstPairOnlyRuleFails: true,
   },
   {
@@ -135,23 +141,31 @@ export const JUDGE_FIXTURES: readonly Fixture[] = [
     singles: [1205, 1390, 1073, 1474],
     parallels: [1208, 1440, 1342],
     expectFail: true,
-    expectTransient: false,
+    expectMixed: false,
     expectFirstPairOnlyRuleFails: false,
   },
   {
-    name: "recorded: 16 CPU-hog threads over P1's window only (--inject=host-stall:1) — transient, attributed",
+    name: "recorded: 16 CPU-hog threads over P1's window only (--inject=host-stall:1) — mixed, cause not determined",
     singles: [1717, 1322, 1262, 1231],
     parallels: [947, 4633, 5366],
     expectFail: false,
-    expectTransient: true,
+    expectMixed: true,
     expectFirstPairOnlyRuleFails: true,
+  },
+  {
+    name: "recorded: one shared lock in P2's window only (--inject=intermittent-lock:2) — in-code cause, SAME mixed verdict as host-stall",
+    singles: [1752, 1949, 2011, 1933],
+    parallels: [5946, 1239, 6341],
+    expectFail: false,
+    expectMixed: true,
+    expectFirstPairOnlyRuleFails: false,
   },
   {
     name: "edge: parallel EQUAL to its bracket is collapse (≤, as the old gate)",
     singles: [1000, 1000, 1000],
     parallels: [1000, 1000],
     expectFail: true,
-    expectTransient: false,
+    expectMixed: false,
     expectFirstPairOnlyRuleFails: true,
   },
   {
@@ -159,7 +173,7 @@ export const JUDGE_FIXTURES: readonly Fixture[] = [
     singles: [1500, 300, 1500, 1500],
     parallels: [1400, 1400, 1400],
     expectFail: true,
-    expectTransient: false,
+    expectMixed: false,
     expectFirstPairOnlyRuleFails: true,
   },
   {
@@ -167,7 +181,7 @@ export const JUDGE_FIXTURES: readonly Fixture[] = [
     singles: [1500, 1480, 1510, 1490],
     parallels: [2900, 3000, 2950],
     expectFail: false,
-    expectTransient: false,
+    expectMixed: false,
     expectFirstPairOnlyRuleFails: false,
   },
 ];
@@ -178,7 +192,7 @@ export function judgeSelfTest(): string[] {
   for (const f of JUDGE_FIXTURES) {
     const v = judgePairs(f.singles, f.parallels);
     if (v.fail !== f.expectFail) failures.push(`${f.name}: fail=${v.fail}, expected ${f.expectFail}`);
-    if (v.transient !== f.expectTransient) failures.push(`${f.name}: transient=${v.transient}, expected ${f.expectTransient}`);
+    if (v.mixed !== f.expectMixed) failures.push(`${f.name}: mixed=${v.mixed}, expected ${f.expectMixed}`);
     if (v.firstPairOnlyRuleFails !== f.expectFirstPairOnlyRuleFails) {
       failures.push(`${f.name}: firstPairOnlyRuleFails=${v.firstPairOnlyRuleFails}, expected ${f.expectFirstPairOnlyRuleFails}`);
     }

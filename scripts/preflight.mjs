@@ -793,7 +793,9 @@ const STEPS = [
   // The saturation companion. Its ops/sec figures are hardware-specific and
   // report-only — what it can fail on any machine is a throughput floor derived
   // from the latency gate above, a collapse when cores are added, and a verdict
-  // that changes with thread count. Two-second windows keep it ~5s serial.
+  // that changes with thread count. Seven two-second windows (S0 P1 S1 P2 S2 P3 S3,
+  // bracketed pairs so one starved window on a hosted VM is not read as contention)
+  // keep it under 20 s serial. Its BENCH-RECORD line is echoed after the verdict (see the step loop).
   {
     name: "Decision-throughput saturation gate (bench)",
     cmd: ["pnpm", "run", "bench:decision-throughput", "--", "--seconds=2"],
@@ -943,6 +945,12 @@ for (const step of STEPS) {
     env: { ...process.env, ...portEnv, ...(step.env ?? {}) },
   });
   const combined = `${r.stdout ?? ""}${r.stderr ?? ""}`;
+  // A step may emit public-safe figures as `BENCH-RECORD {json}` lines (the decision-throughput bench does). They
+  // are echoed after the verdict, pass or fail, so the numbers survive in the CI artifacts that keep this log; the
+  // rest of a passing step's output is still dropped. Bounded: at most 4 lines of 4 KB each.
+  const echoRecords = () => {
+    for (const line of combined.split("\n").filter((l) => l.startsWith("BENCH-RECORD ")).slice(0, 4)) console.log(`  ↳ ${line.slice(0, 4096)}`);
+  };
   // Exit 0 is not evidence. A proof that SELF-SKIPS prints one line and exits 0; a report-only
   // check that could not read its input, or found something it does not fail on, exits 0
   // too. Classify each rather than tick it (scripts/lib/preflight-verdict.mjs).
@@ -983,6 +991,7 @@ for (const step of STEPS) {
   }
   if (c.verdict === "ok") {
     console.log("ok");
+    echoRecords();
     results.push({ name: step.name, status: "ok" });
   } else if (r.status === 0) {
     // The declaration and the behaviour disagree: it exited 0 with its input unset and no
@@ -1000,6 +1009,7 @@ for (const step of STEPS) {
     break;
   } else {
     console.log("FAILED");
+    echoRecords();
     // Surface the tail of the failing output so the cause is visible inline.
     const out = combined.trimEnd().split("\n").slice(-25).join("\n");
     console.error(`\n─── ${step.name} output (tail) ───\n${out}\n`);

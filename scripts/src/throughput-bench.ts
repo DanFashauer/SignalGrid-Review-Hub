@@ -9,12 +9,29 @@
  *   2. What happens when every core is busy at once — does the core scale, and
  *      does it still return the SAME verdicts under saturation?
  *
- * Method. Stage 1 runs the shared bench workload in the main thread for a fixed
- * duration and counts completions. Stage 2 starts one worker thread per
- * available core, waits for all of them to finish loading and warming up, then
- * releases them together so the measured window is saturation and not thread
- * startup. Each worker reports its own completions, elapsed time and per-op
- * service times; the aggregate is summed over the mean worker window.
+ * Method. One pool of worker threads is started, loaded and warmed, then held
+ * at a barrier. The schedule is S0 P1 S1 P2 S2 P3 S3 (`--pairs`, default 3):
+ * each S window releases ONE worker alone, each P window releases every
+ * worker together, so the measured window is saturation and not thread
+ * startup, and both sides of the comparison run in the same kind of thread.
+ * Each worker reports its completions, elapsed time and per-op service times;
+ * a P window's aggregate is summed over the mean worker window. Every window
+ * is printed, with the time it lost to stalls (ops slower than 10x the
+ * single-core median).
+ *
+ * Why bracketed pairs (2026-11-21, BUILD_BACKLOG "Decision-throughput
+ * saturation gate fails ~1 in 7 hosted macOS slice-4 jobs"): the gate used to
+ * judge one P window against one S window taken before it, and a hosted Intel
+ * macOS VM starved for part of that one window (saturated p99 41–140 ms, max
+ * stalls up to 543 ms in the ten decoded failures, against p99 ≈ 4 ms on the
+ * 4-vCPU Linux runners) read as collapse. `throughput-judge.ts` holds the rule
+ * and the fixtures that prove it, and runs them before every measurement.
+ *
+ * `--inject=lock` (every thread serialised on one fair ticket lock: genuine
+ * contention, must FAIL) and `--inject=host-stall:<pair>` (busy threads over
+ * one P window: transient host noise, must be attributed, not failed) are
+ * demonstration modes and are never on by default. `--self-test` runs the
+ * judge's fixtures only.
  *
  * WHAT THIS MEASURES, stated plainly so a number from it is never quoted as
  * more than it is: the in-memory decision core only — `SignalGridCore.demo()`
@@ -30,16 +47,17 @@
  *
  * WHAT IS GATED — three things that hold on any hardware:
  *
- *   • A floor derived from the ONE published figure: the launch plan's pilot
+ *   • A floor derived from the ONE published figure (applied to every S window): the launch plan's pilot
  *     gate is p95 < 750 ms per decision, which is 1.33 decisions/sec on a
  *     single core. Sustained single-core throughput below that would mean the
  *     decision loop no longer meets the latency gate it already claims to.
  *     Measured headroom today is several thousand times this floor — the gate
  *     is a collapse detector (a sync network call, an O(n²) blowup), not a
  *     performance target, and it is set where it cannot flake on a busy runner.
- *   • No parallel collapse: N saturated cores must beat one core. Gaining
- *     literally nothing from N cores means contention on shared state, which is
- *     a defect regardless of the machine.
+ *   • No parallel collapse: N saturated cores must beat one core — pooled over
+ *     the bracketed pairs, each P judged against the higher of the S windows on
+ *     either side of it. Gaining literally nothing from N cores means
+ *     contention on shared state, which is a defect regardless of the machine.
  *   • Determinism under concurrency: every worker must produce byte-identical
  *     verdicts to the single-threaded pass. Same input, same output, no matter
  *     how many threads are evaluating at once. This is the assertion worth
@@ -48,7 +66,9 @@
  *
  * Usage:
  *   pnpm run bench:decision-throughput
- *   pnpm run bench:decision-throughput -- --seconds=5 --workers=4
+ *   pnpm run bench:decision-throughput -- --seconds=5 --workers=4 --pairs=3
+ *   pnpm run bench:decision-throughput -- --seconds=2 --inject=lock   # must FAIL
+ *   pnpm run bench:decision-throughput -- --self-test
  *
  * Wired into preflight and into both the per-PR and scheduled workflows at
  * `--seconds=2`, alongside the latency gate. Worker count follows
@@ -65,6 +85,10 @@ import { Worker, isMainThread, parentPort, workerData } from "node:worker_thread
 // the core dynamically, and the worker registers tsx first. See runWorker().
 
 const DEFAULT_SECONDS = 3;
+/** Parallel windows per run, each bracketed by single-core windows: S0 P1 S1 P2 S2 P3 S3. */
+const DEFAULT_PAIRS = 3;
+/** `--inject=host-stall:<pair>` busy threads per core: enough to take most of the CPU from the measured workers. */
+const HOG_THREADS_PER_CORE = 4;
 const WARMUP_ITERATIONS = 200;
 /** Per-thread cap on retained service-time samples; counting continues past it. */
 const MAX_SAMPLES = 250_000;
@@ -138,7 +162,7 @@ function prepare(core: Core, w: Workload): string {
 }
 
 /** Run the prepared workload flat out for `durationMs`, timing every completion. */
-function measure(core: Core, w: Workload, durationMs: number, signature: string): Run {
+function measure(core: Core, w: Workload, durationMs: number, signature: string, lock: Lock = null): Run {
   const buffer = new Float64Array(MAX_SAMPLES);
   const start = process.hrtime.bigint();
   const deadline = start + BigInt(Math.round(durationMs * 1e6));
@@ -151,7 +175,16 @@ function measure(core: Core, w: Workload, durationMs: number, signature: string)
   // the deadline check, so the measurement overhead is charged honestly to the
   // op it belongs to rather than being hidden between iterations.
   while (true) {
-    core.evaluate(w.BENCH_OPERATOR, w.BENCH_SCENARIOS[ops % w.BENCH_SCENARIOS.length]);
+    if (lock) {
+      acquire(lock);
+      try {
+        core.evaluate(w.BENCH_OPERATOR, w.BENCH_SCENARIOS[ops % w.BENCH_SCENARIOS.length]);
+      } finally {
+        release(lock);
+      }
+    } else {
+      core.evaluate(w.BENCH_OPERATOR, w.BENCH_SCENARIOS[ops % w.BENCH_SCENARIOS.length]);
+    }
     now = process.hrtime.bigint();
     if (kept < MAX_SAMPLES) buffer[kept++] = Number(now - previous) / 1e6;
     previous = now;
@@ -166,48 +199,113 @@ function opsPerSec(run: { ops: number; elapsedMs: number }): number {
   return run.ops / (run.elapsedMs / 1000);
 }
 
-/** Start `count` workers, hold them at a barrier until each is loaded AND warmed, then release them together. */
-function saturate(count: number, durationMs: number): Promise<{ runs: Run[]; releaseNs: bigint }> {
-  const workers: Worker[] = [];
-  const runs: Run[] = [];
-  let ready = 0;
-  let releaseNs = 0n;
+/**
+ * Optional FAIR (ticket) lock shared by every thread: `--inject=lock` serialises each evaluate on it, handing the
+ * lock to the next ticket on every release — the shape real shared-state contention takes. Slot 0 is the next
+ * ticket to issue, slot 1 the ticket now served. A barging mutex was tried first and measured at ≈1.0x (the
+ * releasing thread re-takes it), which sits ON the gate's threshold; see BUILD_BACKLOG for the runs.
+ */
+type Lock = Int32Array | null;
 
-  return new Promise<{ runs: Run[]; releaseNs: bigint }>((resolve, reject) => {
-    const failAll = (error: unknown) => {
-      for (const worker of workers) void worker.terminate();
-      reject(error instanceof Error ? error : new Error(String(error)));
-    };
-
-    for (let i = 0; i < count; i++) {
-      const worker = new Worker(new URL(import.meta.url), { workerData: { durationMs } });
-      workers.push(worker);
-      worker.on("message", (message: WorkerToMain) => {
-        if (message.type === "ready") {
-          // Release only once every worker is loaded and warm, so the measured
-          // window is N threads running at once — not a staggered ramp.
-          if (++ready === count) {
-            releaseNs = process.hrtime.bigint();
-            for (const w of workers) w.postMessage("go");
-          }
-          return;
-        }
-        runs.push(message);
-        // A worker still listening on its port keeps the process alive, so the
-        // last result is also the signal to tear the pool down.
-        if (runs.length === count) {
-          void Promise.all(workers.map((w) => w.terminate())).then(() => resolve({ runs, releaseNs }));
-        }
-      });
-      worker.on("error", failAll);
-      worker.on("exit", (code) => {
-        if (code !== 0 && runs.length < count) failAll(new Error(`worker exited with code ${code}`));
-      });
-    }
-  });
+function acquire(lock: Int32Array): void {
+  const ticket = Atomics.add(lock, 0, 1);
+  for (;;) {
+    const serving = Atomics.load(lock, 1);
+    if (serving === ticket) return;
+    Atomics.wait(lock, 1, serving);
+  }
 }
 
-async function runWorker(durationMs: number): Promise<void> {
+function release(lock: Int32Array): void {
+  Atomics.add(lock, 1, 1);
+  Atomics.notify(lock, 1);
+}
+
+/**
+ * A pool of `count` workers, each loaded AND warmed before the first release, reused for every parallel window so
+ * pair 2 and pair 3 measure saturation, not thread startup.
+ */
+class Pool {
+  private constructor(
+    private readonly workers: Worker[],
+    private pending: ((m: WorkerToMain & { type: "done" }) => void) | null,
+    private failure: Error | null,
+  ) {}
+
+  static start(count: number, durationMs: number, lockBuffer: SharedArrayBuffer | null): Promise<Pool> {
+    const workers: Worker[] = [];
+    const pool = new Pool(workers, null, null);
+    return new Promise<Pool>((resolve, reject) => {
+      let ready = 0;
+      const failAll = (error: unknown) => {
+        pool.failure = error instanceof Error ? error : new Error(String(error));
+        for (const worker of workers) void worker.terminate();
+        reject(pool.failure);
+      };
+      for (let i = 0; i < count; i++) {
+        const worker = new Worker(new URL(import.meta.url), { workerData: { durationMs, lockBuffer } });
+        workers.push(worker);
+        worker.on("message", (message: WorkerToMain) => {
+          if (message.type === "ready") {
+            if (++ready === count) resolve(pool);
+            return;
+          }
+          pool.pending?.(message);
+        });
+        worker.on("error", failAll);
+        worker.on("exit", (code) => {
+          if (code !== 0 && !pool.closing) failAll(new Error(`worker exited with code ${code}`));
+        });
+      }
+    });
+  }
+
+  private closing = false;
+
+  /**
+   * Release the first `count` workers together for one timed window (all of them by default). `run(1)` is the
+   * single-core window: the same kind of thread, isolate and JIT state as the parallel windows, so the two sides
+   * of the comparison differ only in how many threads run.
+   */
+  run(count = this.workers.length): Promise<{ runs: Run[]; releaseNs: bigint }> {
+    if (this.failure) return Promise.reject(this.failure);
+    const released = this.workers.slice(0, count);
+    return new Promise((resolve) => {
+      const runs: Run[] = [];
+      this.pending = (message) => {
+        runs.push(message);
+        if (runs.length === released.length) {
+          this.pending = null;
+          resolve({ runs, releaseNs });
+        }
+      };
+      // Release only once every worker is loaded and warm, so the measured
+      // window is N threads running at once — not a staggered ramp.
+      const releaseNs = process.hrtime.bigint();
+      for (const w of released) w.postMessage("go");
+    });
+  }
+
+  async close(): Promise<void> {
+    this.closing = true;
+    await Promise.all(this.workers.map((w) => w.terminate()));
+  }
+}
+
+/**
+ * `--inject=host-stall:<pair>`: hold `count` busy-looping threads for the whole of that pair's parallel window — a
+ * noisy neighbour on demand. The hogs evaluate nothing; they only take CPU from the measured workers, the way a
+ * starved hosted VM does. Demonstration only, never on by default.
+ */
+function startHogs(count: number, ms: number): Worker[] {
+  const code =
+    "const { workerData } = require('node:worker_threads');" +
+    "const end = process.hrtime.bigint() + BigInt(workerData.ms) * 1000000n;" +
+    "let x = 0; while (process.hrtime.bigint() < end) { x = (x + 1) | 0; }";
+  return Array.from({ length: count }, () => new Worker(code, { eval: true, workerData: { ms } }));
+}
+
+async function runWorker(durationMs: number, lockBuffer: SharedArrayBuffer | null): Promise<void> {
   // A worker thread starts without tsx's resolver, so register it before any
   // TypeScript module is imported — otherwise the core's own extensionless
   // relative imports fail to resolve here even though they resolve in the parent.
@@ -218,13 +316,14 @@ async function runWorker(durationMs: number): Promise<void> {
   const core = workload.SignalGridCore.demo();
   const port = parentPort;
   if (!port) throw new Error("worker started without a parent port");
+  const lock: Lock = lockBuffer ? new Int32Array(lockBuffer) : null;
   // Warm before reporting ready, so each timed window starts following the release (skew measured), not after a
   // staggered warm-up.
   const signature = prepare(core, workload);
 
   port.on("message", (message: string) => {
     if (message !== "go") return;
-    const run = measure(core, workload, durationMs, signature);
+    const run = measure(core, workload, durationMs, signature, lock);
     // Copy out of the subarray so the transferred buffer holds only the samples.
     const samples = Float64Array.from(run.samples);
     port.postMessage(
@@ -248,64 +347,148 @@ function numberFlag(name: string, fallback: number): number {
   return value;
 }
 
+function stringFlag(name: string): string | undefined {
+  const prefix = `--${name}=`;
+  return process.argv.slice(2).find((a) => a.startsWith(prefix))?.slice(prefix.length);
+}
+
+/** Time a window spent in operations slower than `thresholdMs` — a stall, not a decision. */
+function stalledMs(samples: ArrayLike<number>, thresholdMs: number): number {
+  let total = 0;
+  for (let i = 0; i < samples.length; i++) if (samples[i] > thresholdMs) total += samples[i];
+  return total;
+}
+
+function sortedCopy(samples: ArrayLike<number>): number[] {
+  return Array.from(samples).sort((a, b) => a - b);
+}
+
 async function main(): Promise<void> {
+  const judge = await import("./throughput-judge.js");
+  // The judge proves itself before any measurement is trusted: if it cannot fail on recorded contention it
+  // cannot gate anything. Pure, no timing — microseconds.
+  const judgeFailures = judge.judgeSelfTest();
+  if (process.argv.includes("--self-test")) {
+    for (const f of judgeFailures) console.error(`FAIL: ${f}`);
+    console.log(
+      judgeFailures.length === 0
+        ? `Collapse-judge self-test: ${judge.JUDGE_FIXTURES.length} fixtures and 5 malformed inputs classified correctly.`
+        : `Collapse-judge self-test FAILED: ${judgeFailures.length} problem(s).`,
+    );
+    process.exitCode = judgeFailures.length === 0 ? 0 : 1;
+    return;
+  }
+  if (judgeFailures.length > 0) {
+    for (const f of judgeFailures) console.error(`FAIL: collapse judge self-test: ${f}`);
+    process.exitCode = 1;
+    return;
+  }
+
   const seconds = numberFlag("seconds", DEFAULT_SECONDS);
+  const pairCount = Math.max(1, Math.round(numberFlag("pairs", DEFAULT_PAIRS)));
   const cores = availableParallelism();
   const workerCount = Math.max(1, Math.round(numberFlag("workers", cores)));
   const durationMs = seconds * 1000;
+
+  const inject = stringFlag("inject");
+  let lockBuffer: SharedArrayBuffer | null = null;
+  let hogPair = 0;
+  if (inject !== undefined) {
+    const hog = /^host-stall:(\d+)$/.exec(inject);
+    if (inject === "lock") lockBuffer = new SharedArrayBuffer(8);
+    else if (hog && Number(hog[1]) >= 1 && Number(hog[1]) <= pairCount) hogPair = Number(hog[1]);
+    else {
+      console.error(`Invalid --inject=${inject}: expected "lock" or "host-stall:<pair 1..${pairCount}>".`);
+      process.exit(1);
+    }
+  }
 
   const workload = await loadWorkload();
   const core = workload.SignalGridCore.demo();
 
   console.log("Decision-throughput benchmark (public-safe, in-memory core, no I/O)");
-  console.log(`Cores available: ${cores} | workers: ${workerCount} | window: ${seconds}s per stage`);
+  console.log(
+    `Cores available: ${cores} | workers: ${workerCount} | window: ${seconds}s | schedule: S0` +
+      Array.from({ length: pairCount }, (_, i) => ` P${i + 1} S${i + 1}`).join("") +
+      ` (${pairCount} pair${pairCount === 1 ? "" : "s"}, each parallel window bracketed by single-core windows)`,
+  );
+  if (inject) {
+    console.log(
+      `INJECTED: ${lockBuffer ? "every thread serialised on one shared lock (genuine contention)" : `${HOG_THREADS_PER_CORE * cores} CPU-hog threads over P${hogPair} only (transient host noise)`}` +
+        " — a demonstration run, not a measurement of the core.",
+    );
+  }
   console.log("");
 
-  console.log("Stage 1 — one core, sustained");
-  const single = measure(core, workload, durationMs, prepare(core, workload));
-  const singleRate = opsPerSec(single);
-  console.log(`  decisions      ${single.ops.toLocaleString("en-US")} in ${(single.elapsedMs / 1000).toFixed(2)}s`);
-  console.log(`  throughput     ${Math.round(singleRate).toLocaleString("en-US")} decisions/sec`);
+  const signature = prepare(core, workload);
+  const pool = await Pool.start(workerCount, durationMs, lockBuffer);
+
+  const singles: Run[] = [];
+  const parallels: Array<{ runs: Run[]; releaseNs: bigint; aggregateRate: number; meanWindowMs: number; totalOps: number }> = [];
+  const single = async () => (await pool.run(1)).runs[0];
+  try {
+    singles.push(await single());
+    for (let pair = 1; pair <= pairCount; pair++) {
+      const hogs = pair === hogPair ? startHogs(HOG_THREADS_PER_CORE * cores, durationMs + 250) : [];
+      const { runs, releaseNs } = await pool.run();
+      await Promise.all(hogs.map((h) => h.terminate()));
+      const totalOps = runs.reduce((sum, r) => sum + r.ops, 0);
+      const meanWindowMs = runs.reduce((sum, r) => sum + r.elapsedMs, 0) / runs.length;
+      parallels.push({ runs, releaseNs, totalOps, meanWindowMs, aggregateRate: totalOps / (meanWindowMs / 1000) });
+      singles.push(await single());
+    }
+  } finally {
+    await pool.close();
+  }
+
+  const singleRates = singles.map(opsPerSec);
+  const verdict = judge.judgePairs(singleRates, parallels.map((p) => p.aggregateRate));
+
+  // A stall is an operation slower than 10x the median single-core service time. Reported, never asserted: it
+  // is how a reader tells a starved host (median near single-core, time lost in long gaps) from contention (every
+  // operation slower). It is NOT used to excuse a pair — the judge alone decides.
+  const singleMedianMs = workload.percentile(sortedCopy(singles.flatMap((s) => Array.from(s.samples))), 50);
+  const stallThresholdMs = 10 * singleMedianMs;
+
+  console.log("Single-core windows (worker 1 alone; the other workers idle at the barrier)");
+  singles.forEach((s, i) => {
+    const stall = stalledMs(s.samples, stallThresholdMs);
+    console.log(
+      `  S${i}  ${s.ops.toLocaleString("en-US").padStart(9)} in ${(s.elapsedMs / 1000).toFixed(2)}s  ${Math.round(singleRates[i]).toLocaleString("en-US").padStart(7)}/sec` +
+        `  stalled ${stall.toFixed(0)} ms (${((stall / s.elapsedMs) * 100).toFixed(1)}%)`,
+    );
+  });
   console.log("");
 
-  console.log(`Stage 2 — ${workerCount} worker${workerCount === 1 ? "" : "s"}, saturated`);
-  const { runs, releaseNs } = await saturate(workerCount, durationMs);
-  // How far apart the timed windows started, and how late the last one started after the release. Reported,
-  // never asserted: it shows whether stage 2 really measured N threads at once.
-  const starts = runs.map((r) => BigInt(r.startNs));
-  const firstStart = starts.reduce((a, b) => (b < a ? b : a));
-  const lastStart = starts.reduce((a, b) => (b > a ? b : a));
-  const startSkewMs = Number(lastStart - firstStart) / 1e6;
-  const lastStartAfterReleaseMs = Number(lastStart - releaseNs) / 1e6;
-  const totalOps = runs.reduce((sum, r) => sum + r.ops, 0);
-  const meanWindowMs = runs.reduce((sum, r) => sum + r.elapsedMs, 0) / runs.length;
-  const aggregateRate = totalOps / (meanWindowMs / 1000);
-  // Perfect scaling is workerCount×; anything less is contention, asymmetric
-  // cores (an Apple-silicon P/E split costs most of it here), SMT, thermal
-  // headroom or other work on the machine. Reported, never asserted.
-  const efficiency = (aggregateRate / (singleRate * workerCount)) * 100;
-
-  const merged: number[] = [];
-  for (const run of runs) for (const sample of run.samples) merged.push(sample);
-  merged.sort((a, b) => a - b);
-
-  console.log(`  decisions      ${totalOps.toLocaleString("en-US")} in ${(meanWindowMs / 1000).toFixed(2)}s (mean window)`);
-  console.log(`  throughput     ${Math.round(aggregateRate).toLocaleString("en-US")} decisions/sec aggregate`);
-  console.log(`  per worker     ${Math.round(aggregateRate / workerCount).toLocaleString("en-US")} decisions/sec`);
-  console.log(`  scaling        ${(aggregateRate / singleRate).toFixed(2)}x on ${workerCount} workers (${efficiency.toFixed(0)}% of linear)`);
-  console.log(`  window starts  ${startSkewMs.toFixed(3)} ms apart; last began ${lastStartAfterReleaseMs.toFixed(3)} ms after the release`);
-  console.log("  service time under saturation:");
-  console.log(`    p50  ${workload.percentile(merged, 50).toFixed(4)} ms`);
-  console.log(`    p95  ${workload.percentile(merged, 95).toFixed(4)} ms`);
-  console.log(`    p99  ${workload.percentile(merged, 99).toFixed(4)} ms`);
-  console.log(`    max  ${(merged[merged.length - 1] ?? 0).toFixed(4)} ms`);
+  console.log(`Parallel windows — ${workerCount} worker${workerCount === 1 ? "" : "s"}, saturated`);
+  parallels.forEach((p, i) => {
+    const j = verdict.pairs[i];
+    const starts = p.runs.map((r) => BigInt(r.startNs));
+    const firstStart = starts.reduce((a, b) => (b < a ? b : a));
+    const lastStart = starts.reduce((a, b) => (b > a ? b : a));
+    const merged = sortedCopy(p.runs.flatMap((r) => Array.from(r.samples)));
+    const stallPerWorker = p.runs.reduce((sum, r) => sum + stalledMs(r.samples, stallThresholdMs), 0) / p.runs.length;
+    console.log(
+      `  P${j.pair}  ${p.totalOps.toLocaleString("en-US").padStart(9)} in ${(p.meanWindowMs / 1000).toFixed(2)}s  ${Math.round(p.aggregateRate).toLocaleString("en-US").padStart(7)}/sec aggregate` +
+        `  vs max(S${i}, S${i + 1}) = ${Math.round(j.reference).toLocaleString("en-US")}/sec  →  ${j.ratio.toFixed(2)}x  ${j.collapsed ? "COLLAPSED" : "gain"}`,
+    );
+    console.log(
+      `      per worker ${Math.round(p.aggregateRate / workerCount).toLocaleString("en-US")}/sec (${((p.aggregateRate / (j.reference * workerCount)) * 100).toFixed(0)}% of linear)` +
+        `  p50 ${workload.percentile(merged, 50).toFixed(4)} ms (single-core p50 ${singleMedianMs.toFixed(4)} ms)` +
+        `  p95 ${workload.percentile(merged, 95).toFixed(4)}  p99 ${workload.percentile(merged, 99).toFixed(4)}  max ${(merged[merged.length - 1] ?? 0).toFixed(4)} ms`,
+    );
+    console.log(
+      `      stalled ${stallPerWorker.toFixed(0)} ms per worker (${((stallPerWorker / p.meanWindowMs) * 100).toFixed(1)}% of the window, ops > ${stallThresholdMs.toFixed(2)} ms)` +
+        `  window starts ${(Number(lastStart - firstStart) / 1e6).toFixed(3)} ms apart; last began ${(Number(lastStart - p.releaseNs) / 1e6).toFixed(3)} ms after the release`,
+    );
+  });
   console.log("");
 
   const failures: string[] = [];
-
-  if (singleRate < FLOOR_OPS_PER_SEC) {
+  const minSingle = Math.min(...singleRates);
+  if (minSingle < FLOOR_OPS_PER_SEC) {
     failures.push(
-      `single-core throughput ${singleRate.toFixed(2)}/sec is below the ${FLOOR_OPS_PER_SEC.toFixed(2)}/sec implied by the ${PILOT_GATE_P95_MS} ms p95 pilot gate`,
+      `single-core throughput ${minSingle.toFixed(2)}/sec (lowest of ${singleRates.length} windows) is below the ${FLOOR_OPS_PER_SEC.toFixed(2)}/sec implied by the ${PILOT_GATE_P95_MS} ms p95 pilot gate`,
     );
   }
   // The parallel-collapse gate is genuinely VACUOUS at one worker — there is no
@@ -314,22 +497,42 @@ async function main(): Promise<void> {
   // printed "no parallel collapse" for a property that had not been exercised. A check
   // that did not run must never be reported as a check that passed.
   const parallelCollapseExercised = workerCount > 1;
-  if (parallelCollapseExercised && aggregateRate <= singleRate) {
+  if (parallelCollapseExercised && verdict.fail) {
     failures.push(
-      `no parallel gain: ${workerCount} workers sustained ${Math.round(aggregateRate)}/sec against ${Math.round(singleRate)}/sec on one core`,
+      `no parallel gain: pooled over ${pairCount} bracketed pair${pairCount === 1 ? "" : "s"} the ${workerCount} workers sustained ${verdict.pooledRatio.toFixed(2)}x one core (` +
+        verdict.pairs.map((p) => `P${p.pair} ${Math.round(p.parallel)}/sec vs ${Math.round(p.reference)}/sec`).join(", ") +
+        `; ${verdict.collapsedPairs}/${pairCount} pairs collapsed)`,
     );
   }
-  const divergent = runs.filter((run) => run.signature !== single.signature).length;
-  if (divergent > 0) {
-    failures.push(
-      `${divergent}/${runs.length} workers returned verdicts that differ from the single-threaded pass`,
+  if (parallelCollapseExercised && verdict.transient) {
+    const lost = verdict.pairs.filter((p) => p.collapsed).map((p) => `P${p.pair} (${p.ratio.toFixed(2)}x)`);
+    const gained = verdict.pairs.filter((p) => !p.collapsed).map((p) => `P${p.pair} (${p.ratio.toFixed(2)}x)`);
+    console.log(
+      `HOST INTERFERENCE (reported, not hidden): ${lost.join(", ")} collapsed while ${gained.join(", ")} gained on the same code in the same process; pooled ${verdict.pooledRatio.toFixed(2)}x. ` +
+        "Contention drags every pair; a pair outvoted by the others is a property of the host at that moment.",
     );
+  }
+  if (parallelCollapseExercised) {
+    console.log(
+      `First-pair-only rule (the gate before 2026-11-21, P1 against S0): ${verdict.firstPairOnlyRuleFails ? "would FAIL" : "would pass"}.`,
+    );
+  }
+  let divergent = 0;
+  let workerRuns = 0;
+  for (const p of parallels) {
+    for (const run of p.runs) {
+      workerRuns++;
+      if (run.signature !== signature) divergent++;
+    }
+  }
+  if (divergent > 0) {
+    failures.push(`${divergent}/${workerRuns} worker windows returned verdicts that differ from the single-threaded pass`);
   }
 
   console.log(
-    "Gates: throughput floor (from the 750 ms p95 pilot gate), " +
+    "Gates: throughput floor (from the 750 ms p95 pilot gate) on every single-core window, " +
       (parallelCollapseExercised
-        ? `no parallel collapse (exercised at ${workerCount} workers)`
+        ? `no parallel collapse (exercised at ${workerCount} workers over ${pairCount} bracketed pair${pairCount === 1 ? "" : "s"}; fails when the pooled ratio is ≤ 1x)`
         : "no parallel collapse: NOT EXERCISED — 1 worker on this machine, so the property was not tested") +
       ", determinism under concurrency.",
   );
@@ -338,11 +541,12 @@ async function main(): Promise<void> {
     process.exitCode = 1;
     return;
   }
+  const best = verdict.pairs.reduce((a, b) => (b.ratio > a.ratio ? b : a));
   console.log(
-    `PASS: ${Math.round(singleRate).toLocaleString("en-US")}/sec on one core (floor ${FLOOR_OPS_PER_SEC.toFixed(2)}/sec), ` +
-      `${(aggregateRate / singleRate).toFixed(2)}x under saturation` +
+    `PASS: ${Math.round(minSingle).toLocaleString("en-US")}–${Math.round(Math.max(...singleRates)).toLocaleString("en-US")}/sec on one core (floor ${FLOOR_OPS_PER_SEC.toFixed(2)}/sec), ` +
+      `${verdict.pooledRatio.toFixed(2)}x pooled under saturation (${verdict.pairs.map((p) => `P${p.pair} ${p.ratio.toFixed(2)}x`).join(", ")}; best P${best.pair})` +
       (parallelCollapseExercised ? "" : " (1 worker — scaling not exercised)") +
-      `, identical verdicts on all ${runs.length} workers.`,
+      `, identical verdicts in all ${workerRuns} worker windows.`,
   );
   console.log("Absolute rates are hardware-specific and report-only; the decision core alone, no HTTP/connector/database.");
 }
@@ -350,5 +554,6 @@ async function main(): Promise<void> {
 if (isMainThread) {
   await main();
 } else {
-  await runWorker((workerData as { durationMs: number }).durationMs);
+  const data = workerData as { durationMs: number; lockBuffer: SharedArrayBuffer | null };
+  await runWorker(data.durationMs, data.lockBuffer);
 }

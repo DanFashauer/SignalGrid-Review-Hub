@@ -793,7 +793,9 @@ const STEPS = [
   // The saturation companion. Its ops/sec figures are hardware-specific and
   // report-only — what it can fail on any machine is a throughput floor derived
   // from the latency gate above, a collapse when cores are added, and a verdict
-  // that changes with thread count. Two-second windows keep it ~5s serial.
+  // that changes with thread count. Seven two-second windows (S0 P1 S1 P2 S2 P3 S3,
+  // bracketed pairs so one starved window on a hosted VM is not read as contention)
+  // keep it under 20 s serial.
   {
     name: "Decision-throughput saturation gate (bench)",
     cmd: ["pnpm", "run", "bench:decision-throughput", "--", "--seconds=2"],

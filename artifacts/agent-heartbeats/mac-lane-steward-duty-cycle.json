@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-11-21T02:25:24.869Z",
-  "result": "02:25Z keepalive (last steward heartbeat 00:25Z). Mac tick heartbeat last fired 01:27Z (the unattended tick is running). Live evidence still dated 2026-11-16; the refresh ask (cloud-live-evidence-is-over-3-days-old-one-refre) is already sent and unread, so no new ask. #2368 landed as 2cb9d3df. #2447 published at 9fccfb9b: gating green, Mac slices 1, 3 and 4 green, slice 2 still running. Journal PR #2453 qualified (pf/br exit 0). No new or moved mac/* branch; no mail addressed to cloud. Mac Claude Code sign-in lapsed: blocks proof #2443, owner-only. Owner not escalated by this cycle."
+  "firedAt": "2026-11-21T04:24:44.372Z",
+  "result": "04:25Z keepalive (last steward heartbeat 02:25Z). Mac tick heartbeat last fired 03:37Z. Mac proof window open since START 03:36Z (#439 7056646520); cloud holds all merges until RESULT, so this heartbeat PR is written but not merged. #2447 landed as b74f9a4d at 03:28Z; its merge consumed the prior proof build inside the publisher freeze (acked 7056649912). Journal #2453 qualified and held. Live-evidence refresh ask already sent. No new or moved mac/* branch. Owner not escalated."
 }

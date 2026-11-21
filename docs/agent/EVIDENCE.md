@@ -5968,4 +5968,29 @@ What happened to #2466: it stopped after qualification with the generic reason "
 
 The duty is corrected either way: Cloud lands only outside a Mac START..RESULT window.
 
+Command: run by the cloud lane against a fresh fetch of canonical, read-only, exactly as follows (`set -e`):
+
+```bash
+date -u +%Y-%m-%dT%H:%M:%SZ
+git log -1 --format='%H parents=%P tree=%T' e9b3e7975d00d5ab35e25c81463d000a5cb10349
+git log -1 --format='%H tree=%T' da54ace16148b94bd35c27deeb6774ea6fa6f190
+git merge-base --is-ancestor e9b3e7975d00d5ab35e25c81463d000a5cb10349 origin/SignalGrid_Alpha && echo "e9b3e797 is an ancestor of origin/SignalGrid_Alpha"
+git diff --stat 9e82265b0a89b6c338bd8c77eff2afd432fa5804 e9b3e7975d00d5ab35e25c81463d000a5cb10349
+git diff --stat a2610033c04de5e03aaf1a16c30532f614e24668 da54ace16148b94bd35c27deeb6774ea6fa6f190
+```
+
+Output, verbatim:
+
+```
+2026-11-21T10:00:35Z
+e9b3e7975d00d5ab35e25c81463d000a5cb10349 parents=9e82265b0a89b6c338bd8c77eff2afd432fa5804 da54ace16148b94bd35c27deeb6774ea6fa6f190 tree=8ed580af9a30a8326f81111fe2eab3614842fc0a
+da54ace16148b94bd35c27deeb6774ea6fa6f190 tree=8ed580af9a30a8326f81111fe2eab3614842fc0a
+e9b3e797 is an ancestor of origin/SignalGrid_Alpha
+ scripts/mac/local-brain/job-state.mjs              |  2 +
+ .../test/job-state-restore-timestamp.test.mjs      | 73 ++++++++++++++++++++++
+ 2 files changed, 75 insertions(+)
+ artifacts/agent-heartbeats/mac-lane-tick.json | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+```
+
 Verdict: holds for the merge, tree, ancestry and delta claims. The local, CI and review results are attributed receipts on the heads named, not new executions. This is the first protected landing through the hybrid route. It is not the later scheduled ordinary cycle the independence proof still needs. No owner-hardware evidence, private completion seal or readiness change is asserted.

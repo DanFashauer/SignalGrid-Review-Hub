@@ -61,8 +61,9 @@
  *     performance target, and it is set where it cannot flake on a busy runner.
  *   • No parallel collapse: N saturated cores must beat one core — pooled over
  *     the bracketed pairs, each P judged against the higher of the S windows on
- *     either side of it. Gaining literally nothing from N cores means
- *     contention on shared state, which is a defect regardless of the machine.
+ *     either side of it. Gaining nothing from N cores is consistent with
+ *     contention on shared state, and it fails on any machine; the rates do not
+ *     establish the cause (see throughput-judge.ts, the pooled contract).
  *   • Determinism under concurrency: every worker must produce byte-identical
  *     verdicts to the single-threaded pass. Same input, same output, no matter
  *     how many threads are evaluating at once. This is the assertion worth
@@ -317,8 +318,9 @@ type Mutation = (r: Decision) => Decision;
 const flipOutcome: Mutation = (r) => ({ ...r, outcome: r.outcome === "deny" ? "allow" : "deny" });
 
 /**
- * One mutation per stable field the projection covers beyond `outcome`, each altering ONLY that field, so every one
- * is a separate negative: the determinism gate must catch each on its own.
+ * Ten single-field negatives, each altering ONLY its field, so the determinism gate must catch each on its own:
+ * outcome, reasonCodes, policyVersion, reviewable, explanation, coreNormalizationVersion and the four matched-rule
+ * fields. `policyId` and `policyVersionId` are compared by `decisionLine` but have no negative of their own.
  */
 const FIELD_MUTATIONS: ReadonlyArray<{ field: string; mutate: Mutation }> = [
   { field: "outcome", mutate: flipOutcome },
@@ -715,9 +717,9 @@ async function main(): Promise<void> {
   const singleRates = singles.map(opsPerSec);
   const verdict = judge.judgePairs(singleRates, parallels.map((p) => p.aggregateRate));
 
-  // A stall is an operation slower than 10x the median single-core service time. Reported, never asserted: it
-  // is how a reader tells a starved host (median near single-core, time lost in long gaps) from contention (every
-  // operation slower). It is NOT used to excuse a pair — the judge alone decides.
+  // A stall is an operation slower than 10x the median single-core service time. Reported only, never asserted and
+  // never used to excuse a pair — the judge alone decides. It describes WHERE time went in a window; it does not tell
+  // outside load on the host from an in-code cause (a lock held across many operations also shows as long gaps).
   const singleMedianMs = workload.percentile(sortedCopy(singles.flatMap((s) => Array.from(s.samples))), 50);
   const stallThresholdMs = 10 * singleMedianMs;
 

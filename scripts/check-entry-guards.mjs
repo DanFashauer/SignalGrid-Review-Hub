@@ -1202,8 +1202,8 @@ const HELPER = "scripts/lib/is-main.mjs";
  * exits non-zero) and which SURVIVED or did not apply. The tally in the PR comes from this command, not from memory.
  */
 export const MUTANTS = [
-  ["argv aliases not followed", GATE, "const argvWord = wordOf([...argvAliases(code), ...names(ARGV_DESTRUCTURE)]);", "const argvWord = null;"],
-  ["realpath anywhere in the term excuses the comparison", GATE, "const realBoth = op !== null && REAL_CALL.test(term.text.slice(0, op.index)) && REAL_CALL.test(term.text.slice(op.index + op.length));", "const realBoth = REAL_CALL.test(term.text);"],
+  ["argv aliases not followed", GATE, "const argvWord = wordOf([...argvAliases(code, argvAny), ...names(ARGV_DESTRUCTURE)]);", "const argvWord = null;"],
+  ["realpath anywhere in the term excuses the comparison", GATE, "const realBoth = op !== null && [term.text.slice(0, op.index), term.text.slice(op.index + op.length)].every((side) => REAL_CALL.test(side) && !hasSequence(side));", "const realBoth = REAL_CALL.test(term.text);"],
   ["$-leading alias names not bounded", GATE, "(?<![\\\\w$])(?:", "\\\\b(?:"],
   ["helper canary not run by the gate", GATE, "const canary = helperCanary(isMainModule);", "const canary = [];"],
   ["helper canary skips the symlink probe", GATE, "if (call(link) !== true) bad.push(", "if (false) bad.push("],
@@ -1218,7 +1218,7 @@ export const MUTANTS = [
   ["a child that exits 143 through its own handler is counted killed (R7-F)", GATE, "const signalled = r.signal || r.status === 130 || r.status === 143;", "const signalled = r.signal || r.status === 130;"],
   ["the child's TMPDIR is not parent-owned (R7-F)", GATE, "env: { ...process.env, TMPDIR: childTmp } });", "env: { ...process.env } });"],
   ["an Object.is with a realpath on each argument is not excused (R7-C)", GATE, "return isArgs !== null && isArgs.length >= 2 && isArgs.slice(0, 2).every(wrapsInRealpath); // each compared argument, whole", "return false; // each compared argument, whole"],
-  ["startsWith is not a suffix-class method (O02)", GATE, "const method = /\\.\\s*(?:endsWith|startsWith|includes)\\s*\\(/.test(term.text);", "const method = /\\.\\s*(?:endsWith|includes)\\s*\\(/.test(term.text);"],
+  ["startsWith is not a suffix-class method (O02)", GATE, "const method = argvHit.indexed && /\\.\\s*(?:endsWith|startsWith|includes)\\s*\\(/.test(term.text);", "const method = argvHit.indexed && /\\.\\s*(?:endsWith|includes)\\s*\\(/.test(term.text);"],
   ["an `isMainModule as x` rebinding is not flagged (O07)", GATE, "if (new RegExp(String.raw`(?<![\\w$])isMainModule\\s+as\\s`).test(clause[2]))", "if (false)"],
   ["only the first isMainModule argument is compared (O08)", GATE, "if (args !== EXACT_ARGS)", 'if (args.split(",")[0] !== "process.argv[1]")'],
   ["the `?` of `?.` is a ternary separator (O13)", GATE, 'else if (c === "&" || c === "|" || c === "," || c === ":" || (c === "?" && d !== ".")) cut(i, i + 1);', 'else if (c === "&" || c === "|" || c === "," || c === ":" || c === "?") cut(i, i + 1);'],
@@ -1255,9 +1255,9 @@ export const MUTANTS = [
   ["new/typeof/void before the exact call is allowed (R8-A/N7-N9)", GATE, "if (/(?<![\\w$])(?:new|typeof|void)\\s+$/.test(before)) {", "if (false) {"],
   ["the runner does not own SIGHUP/SIGQUIT (R8-B)", GATE, "  [\"SIGHUP\", 129],\n  [\"SIGQUIT\", 131],\n", ""],
   ["the runner's handlers are installed after the baseline (R8-E)", GATE, "  for (const [name, h] of handlers) process.on(name, h);\n  try {\n    const baseline = await runSelfTest();\n", "  try {\n    const baseline = await runSelfTest();\n    for (const [name, h] of handlers) process.on(name, h);\n"],
-  ["the realpath excuse reads the whole statement, not the comparison's term (R5-B)", GATE, "const realBoth = op !== null && REAL_CALL.test(term.text.slice(0, op.index)) && REAL_CALL.test(term.text.slice(op.index + op.length));", "const realBoth = op !== null && REAL_CALL.test(whole);"],
-  ["argv reads are only the old argv[1] spellings (R9-A)", GATE, "const argvHit = argvRead(term.text) ?? (argvWord ? argvWord.exec(term.text) : null);", "const argvHit = ARGV1.exec(term.text) ?? (argvWord ? argvWord.exec(term.text) : null);"],
-  ["a term holding both needs an equality or an Object.is to be a finding (R9-A)", GATE, "else if (selfHit && !realBoth) reason = \"reads process.argv", "else if (selfHit && !realBoth && (op || objectIsArgs(term.text, isWord))) reason = \"reads process.argv"],
+  ["the realpath excuse reads the whole statement, not the comparison's term (R5-B)", GATE, "const realBoth = op !== null && [term.text.slice(0, op.index), term.text.slice(op.index + op.length)].every((side) => REAL_CALL.test(side) && !hasSequence(side));", "const realBoth = op !== null && REAL_CALL.test(whole);"],
+  ["argv reads are only the old argv[1] spellings (R9-A)", GATE, "const read = argvRead(term.text, argvAny);", "const read = ARGV1.test(term.text) ? { index: ARGV1.exec(term.text).index, indexed: true } : null;"],
+  ["a term holding both needs an equality or an Object.is to be a finding (R9-A)", GATE, "else if (selfHit && !realBoth) reason = \"holds a process.argv", "else if (selfHit && !realBoth && (op || objectIsArgs(term.text, isWord))) reason = \"holds a process.argv"],
   ["judged at the outermost term, not the smallest holding both (R9-A)", GATE, "if (selfHit && terms.some((t) => t.selfHit && within(t, term))) continue;", "if (false) continue;"],
   ["unmatched brackets are read as group delimiters (R9-A)", GATE, "    if (unmatched.has(i)) {\n      if (depth === 0) cut(i, i + 1);\n    } else if", "    if (false) {\n      if (depth === 0) cut(i, i + 1);\n    } else if"],
   ["a brace inside ( or [ ends the statement (R9-A)", GATE, "(c === \";\" || ((c === \"{\" || c === \"}\") && nest === 0))", "(c === \";\" || c === \"{\" || c === \"}\")"],

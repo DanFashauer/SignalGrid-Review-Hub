@@ -46,7 +46,7 @@ import {
   type NormalizedDeviceManagementHealth,
 } from "@workspace/integrations/device-management-health";
 import { composeDeviceRisk, fromDeviceManagementHealth } from "@workspace/posture-composition";
-import { enumerateGrantSafety, productOf } from "./lib/grant-safety.js";
+import { enumerateGrantSafety, enumerateGrantSafetyAudits, productOf } from "./lib/grant-safety.js";
 import { domains, rawDomains } from "./lib/dmh-domains.js";
 import { checkDefaultTransport, checkLiveGateIsolated } from "./lib/live-gate.js";
 
@@ -389,6 +389,40 @@ const channelsContradictory = (agent: unknown, remediation: unknown): boolean =>
   (agent === "not_applicable" || agent === "never") &&
   (remediation === "healthy" || remediation === "issues_detected" || remediation === "failed");
 
+// The shared traversal (enumerateGrantSafetyAudits, used by passes 2 and 3 below) must be
+// equivalent to separate enumerateGrantSafety runs, audit by audit. A small differential
+// over a synthetic space with DELIBERATELY different failures per audit pins it: separate
+// mismatch counts and first mismatches, a failing confirmedWhenNone, audit order not
+// mattering, and exactly one build per combination (Main review of 8c835bc8, #439).
+{
+  const dd = { a: [0, 1, 2], b: ["x", "y"], c: [true, false] };
+  const same = (x: object, y: object): boolean => JSON.stringify(x) === JSON.stringify(y);
+  let built: string[] = [];
+  const bld = (c: Record<string, unknown>) => { built.push(JSON.stringify([c.a, c.b, c.c])); return { ...c }; };
+  // The full Cartesian set, written out independently of the traversal under test.
+  const expected = dd.a.flatMap((a) => dd.b.flatMap((b) => dd.c.map((c) => JSON.stringify([a, b, c])))).sort();
+  const coversEach = (keys: string[]): boolean => same([...keys].sort(), expected);
+  // A grants only a=1,b=x,c=true but its spec also calls a=2,b=y,c=false clean: one mismatch.
+  const A = { evaluate: (n: Record<string, unknown>) => n, actionOf: (n: Record<string, unknown>) => (n.a === 1 && n.b === "x" && n.c === true ? "none" : "deny"),
+    positivelyClean: (c: Record<string, unknown>) => (c.a === 1 && c.b === "x" && c.c === true) || (c.a === 2 && c.b === "y" && c.c === false) };
+  // B grants every c=true combination, its spec agrees, but confirmedWhenNone fails for a=0: two mismatches.
+  const B = { evaluate: (n: Record<string, unknown>) => n, actionOf: (n: Record<string, unknown>) => (n.c === true ? "none" : "deny"),
+    positivelyClean: (c: Record<string, unknown>) => c.c === true, confirmedWhenNone: (n: Record<string, unknown>) => n.a !== 0 };
+  const soloA = enumerateGrantSafety({ domains: dd, build: (c) => ({ ...c }), ...A });
+  const soloB = enumerateGrantSafety({ domains: dd, build: (c) => ({ ...c }), ...B });
+  built = [];
+  const ab = enumerateGrantSafetyAudits({ domains: dd, build: bld, audits: { A, B } });
+  const builtAB = built;
+  built = [];
+  const ba = enumerateGrantSafetyAudits({ domains: dd, build: bld, audits: { B, A } });
+  check(
+    `shared traversal ≡ separate passes: each audit's combos/noneCount/mismatches/firstMismatch equal its own enumerateGrantSafety run, in either audit order (A ${soloA.mismatches} mismatch, B ${soloB.mismatches} incl. a failing confirmedWhenNone)`,
+    soloA.mismatches === 1 && soloB.mismatches === 2 && soloA.firstMismatch !== soloB.firstMismatch &&
+      same(ab.A, soloA) && same(ab.B, soloB) && same(ba.A, soloA) && same(ba.B, soloB),
+  );
+  check(`shared traversal builds each of the ${expected.length} combinations exactly once, identified by key (${builtAB.length} and ${built.length} builds for ${productOf(dd)} combinations)`, expected.length === productOf(dd) && coversEach(builtAB) && coversEach(built));
+}
+
 const enumRes = enumerateGrantSafety({
   domains,
   build: (c) =>
@@ -487,7 +521,21 @@ const evaluateAndAudit = (n: NormalizedDeviceManagementHealth): ReturnType<typeo
 // spelling makes the report MALFORMED and a malformed report must never grant — so the
 // independent spec below states its parseable wire values explicitly.
 const ROOT_CAUSE_WIRE: readonly unknown[] = [undefined, null, "available", "unavailable", "not_supported", "unknown"];
-const rawEnumRes = enumerateGrantSafety({
+const PARSEABLE_RAW: Record<(typeof DEVICE_MANAGEMENT_HEALTH_REPORT_KEYS)[number], readonly unknown[]> = {
+  mdmCheckInFreshness: [undefined, null, "fresh", "stale", "never", "unknown"],
+  agentCheckInFreshness: [undefined, null, "fresh", "stale", "never", "not_applicable", "unknown"],
+  remediationHealth: [undefined, null, "healthy", "issues_detected", "failed", "not_applicable", "unknown"],
+  policyDrift: [undefined, null, "on_baseline", "drifted", "unknown"],
+  complianceCoverage: [undefined, null, "covered", "uncovered", "unknown"],
+  enrollmentState: [undefined, null, "enrolled", "failed", "retired", "unknown"],
+  managementReachable: [undefined, null, true, false],
+  rootCauseEvidence: ROOT_CAUSE_WIRE,
+};
+// Passes 2 and 3 walk the SAME 9,483,264 raw reports with the SAME build, so they share
+// ONE traversal and ONE normalizeReport call per report (enumerateGrantSafetyAudits). Each
+// audit keeps its own spec, counts and first mismatch, exactly as two separate passes did;
+// only the duplicated normalization (half the work of a 120 s-bounded proof) is gone.
+const rawPasses = enumerateGrantSafetyAudits({
   domains: rawDomains,
   build: (c) => {
     const { __alias, ...wire } = c;
@@ -495,26 +543,42 @@ const rawEnumRes = enumerateGrantSafety({
     if (__alias === "present") raw.policy_drift = "drifted";
     return normalizeReport("enum", raw, "enum");
   },
-  evaluate: evaluateAndAudit,
-  actionOf: (v) => v.recommendedAction,
-  confirmedWhenNone: (v) =>
-    v.managementEffective === true &&
-    v.posture === "managed_healthy" &&
-    v.criticalFindings.length === 0 &&
-    v.unknownSignals.length === 0,
-  // An INDEPENDENT spec: the positive wire contract a bridge must satisfy, stated as
-  // the five exact values, not as the negation of any guard in the implementation. A
-  // guard that silently lost a condition would still fail here.
-  positivelyClean: (c) =>
-    c.__alias !== "present" &&
-    ROOT_CAUSE_WIRE.includes(c.rootCauseEvidence) &&
-    c.mdmCheckInFreshness === "fresh" &&
-    channelsConsistent(c.agentCheckInFreshness, c.remediationHealth) &&
-    c.policyDrift === "on_baseline" &&
-    c.complianceCoverage === "covered" &&
-    c.enrollmentState === "enrolled" &&
-    c.managementReachable === true,
+  audits: {
+    // Pass 2 — grant safety over the raw wire space.
+    grant: {
+      evaluate: evaluateAndAudit,
+      actionOf: (v: ReturnType<typeof evaluateDeviceManagementHealth>) => v.recommendedAction,
+      confirmedWhenNone: (v: ReturnType<typeof evaluateDeviceManagementHealth>) =>
+        v.managementEffective === true &&
+        v.posture === "managed_healthy" &&
+        v.criticalFindings.length === 0 &&
+        v.unknownSignals.length === 0,
+      // An INDEPENDENT spec: the positive wire contract a bridge must satisfy, stated as
+      // the five exact values, not as the negation of any guard in the implementation. A
+      // guard that silently lost a condition would still fail here.
+      positivelyClean: (c: Record<string, unknown>) =>
+        c.__alias !== "present" &&
+        ROOT_CAUSE_WIRE.includes(c.rootCauseEvidence) &&
+        c.mdmCheckInFreshness === "fresh" &&
+        channelsConsistent(c.agentCheckInFreshness, c.remediationHealth) &&
+        c.policyDrift === "on_baseline" &&
+        c.complianceCoverage === "covered" &&
+        c.enrollmentState === "enrolled" &&
+        c.managementReachable === true,
+    },
+    // Pass 3 — parse fidelity (documented below), judged on its own counters.
+    integrity: {
+      // The normalized report IS the verdict for this pass; "none" stands for "clean".
+      evaluate: (n: NormalizedDeviceManagementHealth) => n,
+      actionOf: (n: NormalizedDeviceManagementHealth) => (n.reportIntegrity === "clean" ? "none" : "malformed"),
+      positivelyClean: (c: Record<string, unknown>) =>
+        c.__alias !== "present" &&
+        (Object.keys(PARSEABLE_RAW) as (keyof typeof PARSEABLE_RAW)[]).every((k) => PARSEABLE_RAW[k].includes(c[k])),
+    },
+  },
 });
+const rawEnumRes = rawPasses.grant;
+const integrityRes = rawPasses.integrity;
 check(
   `exhaustive (raw wire): over all ${rawEnumRes.combos} raw reports — including junk enum spellings, JSON nulls, string-quoted booleans, numbers, arrays, objects and an aliased extra key — normalizeReport + evaluate grant ONLY the seven-way confirmation (mismatches=${rawEnumRes.mismatches}${rawEnumRes.firstMismatch ? ", first=" + rawEnumRes.firstMismatch : ""})`,
   rawEnumRes.mismatches === 0 && rawEnumRes.combos === productOf(rawDomains) && rawEnumRes.combos === 9483264,
@@ -572,31 +636,8 @@ check(
 // enumeration stays at 0 mismatches and the condition is load-bearing but unproven.
 // Mutation testing found exactly that hole. This pass closes it by asserting the
 // integrity flag itself against an independent positive allowlist of wire values.
-const PARSEABLE_RAW: Record<(typeof DEVICE_MANAGEMENT_HEALTH_REPORT_KEYS)[number], readonly unknown[]> = {
-  mdmCheckInFreshness: [undefined, null, "fresh", "stale", "never", "unknown"],
-  agentCheckInFreshness: [undefined, null, "fresh", "stale", "never", "not_applicable", "unknown"],
-  remediationHealth: [undefined, null, "healthy", "issues_detected", "failed", "not_applicable", "unknown"],
-  policyDrift: [undefined, null, "on_baseline", "drifted", "unknown"],
-  complianceCoverage: [undefined, null, "covered", "uncovered", "unknown"],
-  enrollmentState: [undefined, null, "enrolled", "failed", "retired", "unknown"],
-  managementReachable: [undefined, null, true, false],
-  rootCauseEvidence: ROOT_CAUSE_WIRE,
-};
-const integrityRes = enumerateGrantSafety({
-  domains: rawDomains,
-  build: (c) => {
-    const { __alias, ...wire } = c;
-    const raw = { ...wire } as DeviceManagementHealthReportRaw;
-    if (__alias === "present") raw.policy_drift = "drifted";
-    return normalizeReport("enum", raw, "enum");
-  },
-  // The normalized report IS the verdict for this pass; "none" stands for "clean".
-  evaluate: (n) => n,
-  actionOf: (n) => (n.reportIntegrity === "clean" ? "none" : "malformed"),
-  positivelyClean: (c) =>
-    c.__alias !== "present" &&
-    (Object.keys(PARSEABLE_RAW) as (keyof typeof PARSEABLE_RAW)[]).every((k) => PARSEABLE_RAW[k].includes(c[k])),
-});
+// `integrityRes` is computed by the SAME traversal as pass 2 (see `rawPasses` above):
+// one normalization per raw report, two independently specified audits.
 check(
   `parse fidelity: over all ${integrityRes.combos} raw reports, reportIntegrity is 'clean' for EXACTLY the reports whose every field carries a parseable wire value and which carry no unrecognized key (mismatches=${integrityRes.mismatches}${integrityRes.firstMismatch ? ", first=" + integrityRes.firstMismatch : ""})`,
   integrityRes.mismatches === 0 && integrityRes.combos === productOf(rawDomains),

@@ -80,7 +80,8 @@
  *     because the sweep was balanced by mutation count while one proof cost 45x the others per
  *     mutation, and shard 3 sat over its 40-minute bound for a week (see mutation-guard.mjs, WHY
  *     THE SHARDS ARE BALANCED BY COST). An unregistered cost is invisible to this gate by
- *     construction; the sweep's own COST DRIFT line is the net for that.
+ *     construction; the sweep's own COST DRIFT line is the net for that (a warning, and above 4x
+ *     registered and 20s over it, a FATAL: costDriftFatal).
  */
 import { execFile, execFileSync, spawn } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -88,6 +89,7 @@ import { symlinkSync, existsSync, chmodSync, closeSync, constants as fsConstants
 import { constants as osConstants, tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { isBuiltin } from "node:module";
+import * as guardNs from "./mutation-guard.mjs";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { parse as parseYaml } from "yaml";
 import { TARGETS, ALLOWED, shardTargets, mutationsFor, MUTATORS, lineMutations, unknownArgs, resolveAllowedLine, allowlistProblem, auditAllowlist, allowlistFailureCount, isAllowed, DEFAULT_RUN_SECONDS, MAX_UNIT_SECONDS, runSecondsOf, mutationTotal, sliceOwns, sliceSize, sliceCount, unitWeight, costDrifted, mutationsByFile, selectSliceMutations, unitName, placementOf, expectedUnitNames, unitAccountingProblems } from "./mutation-guard.mjs";
@@ -245,6 +247,24 @@ check("shardTargets refuses a unit ceiling that is not a positive number (0, -1,
 check("costDrifted flags a proof that outgrew its registration and stays quiet through the runner's own swing (30.5s vs 46.6s baselines of one proof) and a 1s proof that hiccups to 4s",
   costDrifted(12, 1) && costDrifted(100, 45) && !costDrifted(46.6, 45) && !costDrifted(30.5, 45) && !costDrifted(70, 45) && !costDrifted(4.2, 1));
 
+// The FATAL tier, driven by synthetic timings (no sweep). A namespace import, so a guard without the helper
+// reads as a failed check rather than a link error that hides every other check.
+{
+  const fatal = guardNs.costDriftFatal;
+  const planted = { proof: "proof:planted", files: [], runSeconds: 1 };
+  check("costDriftFatal: a planted runSeconds-1 entry on a ~30s proof is fatal, as are 31.9s vs 1 and 25s vs 1 (the 2026-10-09 class)",
+    typeof fatal === "function" && fatal(30, runSecondsOf(planted)) && fatal(31.9, 1) && fatal(25, 1));
+  check("costDriftFatal stays quiet through the runner's swing: 30.5s, 46.6s, 45.9s against 45 registered, 4.2s against 1, and 19s over (24s vs 5) or exactly 4x (80s vs 20)",
+    typeof fatal === "function" && !fatal(30.5, 45) && !fatal(46.6, 45) && !fatal(45.9, 45) && !fatal(4.2, 1) && !fatal(24, 5) && !fatal(80, 20));
+  check("costDriftFatal is a tier ABOVE the warning: whatever it flags the warning flags too, so the line and the failure never disagree",
+    typeof fatal === "function" && [[31.9, 1], [25, 1], [30, 1], [200, 45], [90.1, 10]].every(([m, r]) => !fatal(m, r) || costDrifted(m, r)));
+  const gsrc = stripComments(readFileSync(join(REPO, "scripts/mutation-guard.mjs"), "utf8")).replace(/\s+/g, " ");
+  check("main() records a fatal drift per unit while sweeping, fails the run with process.exitCode = 1 and reports it after the baseline and survivor sections",
+    gsrc.includes("if (costDriftFatal(baselineSeconds, registeredSeconds)) { costDriftFatals.push(")
+    && gsrc.includes("process.exitCode = 1; } } const plan = selectSliceMutations(")
+    && gsrc.indexOf("if (costDriftFatals.length > 0) {") > gsrc.indexOf("if (survivors.length > 0) {")
+    && gsrc.indexOf("if (costDriftFatals.length > 0) {") > gsrc.indexOf("if (baselineFailures.length > 0) {"));
+}
 // A fixture registry built from REAL registered files (mutationsFor reads them), one target
 // registered heavy, one the same size registered nothing, and three ordinary fillers.
 {
@@ -428,9 +448,9 @@ const MAIN_PINS = [PIN_SELECT, PIN_SHARD, PIN_FILES, PIN_ZERO, PIN_PLAN_STOP, PI
 //     held to shortened.
 const FORK_COUNTS = {
   planOnly: 7, "process.argv": 5, "process.env": 1,
-  continue: 2, break: 0, return: 3, throw: 0, try: 2, catch: 2, "process.exit(": 11, "process.exitCode": 4,
+  continue: 2, break: 0, return: 3, throw: 0, try: 2, catch: 2, "process.exit(": 11, "process.exitCode": 6,
   "targets =": 2, targets: 16, TARGETS: 8,
-  if: 29, else: 5, for: 13, while: 0, switch: 0, "?": 11, "&&": 1, "||": 0,
+  if: 31, else: 6, for: 14, while: 0, switch: 0, "?": 11, "&&": 1, "||": 0,
   countedUnits: 3, failedBaselineUnits: 3, expectedUnits: 2, unitProblems: 5,
 };
 const FORK_PATTERNS = {
@@ -467,7 +487,7 @@ const AMBIENT_PATTERNS = {
 };
 // Everything the file does with `process`: these members and no others, and no use of `process` that is not a member access (an alias, an argument, a
 // destructuring would hide the members from the counts). Strings are blanked first: `Date` is 0 although four ALLOWED reasons say `Date.parse(null)`.
-const PROCESS_MEMBERS = { argv: 7, env: 1, exit: 11, exitCode: 4, stdout: 1 };
+const PROCESS_MEMBERS = { argv: 7, env: 1, exit: 11, exitCode: 6, stdout: 1 };
 const IMPORT_LINES = ['import { readFileSync } from "node:fs";', 'import { spawnSync } from "node:child_process";', 'import { dirname, join, resolve } from "node:path";', 'import { fileURLToPath } from "node:url";', 'import { createJournal, privateJournalDir } from "./lib/mutation-restore.mjs";'];
 const IMPORT_SPECIFIERS = ["./lib/mutation-restore.mjs", "node:child_process", "node:fs", "node:path", "node:url"];
 const processReadsOf = (text) => {

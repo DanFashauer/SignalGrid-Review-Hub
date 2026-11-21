@@ -363,6 +363,9 @@ heartbeat() {
     const text = lines[0].slice(prefix.length), observed = JSON.parse(text);
     const keys = refused ? ["version", "kind", "repository", "target", "original_head", "base", "receipt_sha256", "push_result_sha256", "ref_readback_sha256", "remote_ref_state", "remote_oid", "producer_head", "producer_source_sha256", "original_push_exit", "publication_state", "no_replay", "repair_only"] :
       ["version", "repository", "target", "original_head", "receipt_sha256", "pr_number", "base", "pr_head", "created_at", "observed_at", "age_seconds", "merge_state", "check_state", "auto_merge_requested"];
+    // A steward-pending delivery (never self-armed; lane-deliver only emits the key
+    // with positive push evidence) adds exactly one key, and only on a pending line.
+    if (!refused && observed && typeof observed === "object" && Object.prototype.hasOwnProperty.call(observed, "steward_pending")) keys.push("steward_pending");
     const literalKeys = [...text.matchAll(/(?:^|[,{])\s*"([A-Za-z_][A-Za-z_0-9]*)"\s*:/g)].map(match => match[1]);
     if (!observed || typeof observed !== "object" || Array.isArray(observed) ||
         Object.keys(observed).sort().join("\n") !== [...keys].sort().join("\n") ||
@@ -414,7 +417,10 @@ heartbeat() {
         !Number.isFinite(created) || !Number.isFinite(at) || created > at || at > Date.now() || Date.now() - at > 300000 ||
         !Number.isInteger(observed.age_seconds) || observed.age_seconds < 0 || observed.age_seconds !== Math.floor((at - created) / 1000) ||
         !["BEHIND", "BLOCKED", "CLEAN", "DIRTY", "DRAFT", "HAS_HOOKS", "UNKNOWN", "UNSTABLE"].includes(observed.merge_state) ||
-        !["failed", "pending", "success", "unknown"].includes(observed.check_state) || observed.auto_merge_requested !== true) throw Error("pending metadata missing, stale or foreign");
+        !["failed", "pending", "success", "unknown"].includes(observed.check_state) ||
+        ("steward_pending" in observed
+          ? observed.steward_pending !== true || original.steward_pending !== true || observed.auto_merge_requested !== false
+          : observed.auto_merge_requested !== true)) throw Error("pending metadata missing, stale or foreign");
     reason = observed.check_state === "failed" ? "terminal failed check" : observed.age_seconds >= 3600 ? "pending at least one hour" : null;
     }
     if (!reason) { console.log("pending heartbeat metadata is current; no new notification needed"); process.exit(0); }

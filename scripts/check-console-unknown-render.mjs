@@ -84,10 +84,18 @@
 //     compound operators, `({ data: d } = q)`) inherits the origins of its right-hand side. STILL OPEN (over-flag, fail-closed, not built):
 //     pass-13 items (5) a later JSX spread replacing a data prop, (6) a same-file member tag as a plain-prop call site, (7) `cloneElement`
 //     named anything but React's.
-//   Round 32 DECLARED (not built): a nested object map `TONE[group][status]` is judged on its FIRST sub-map only; a later sub-map
-//   with a good class under the same key is not examined, so a good-class entry there stays silent. Resolving every sub-map needs a
-//   per-key product over both lookups; the live tree has no nested map, so the cost is declared, not paid (backlog row filed).
-//   Round 33 DECLARED (Codex pass 13 on 8c74d9cf; not built, 0 instances in the live console tree):
+//   Round 34 landing refute (FIXED): `props.call(v)` / `props.apply(v)` / `props['call'](v)` are plain calls of a callback prop named `call`
+//     / `apply` (both readings are tried and unioned, so the `.call` unwrap cannot shadow them); a defaulted destructuring-assignment target
+//     (`({ data: d = {} } = q)`) is followed like the initializer form; a nested sub-map this cannot resolve (a conditional or call spread,
+//     `a: pick()`, a reassigned `let`) is walked as an unreadable entry of the lookup (fail-closed).
+//   Round 34 STILL SILENT (declared, 0 live instances): the callback is reached through `Function.prototype.call.call(render, null, v)`,
+//     `Reflect.apply(render, null, [v])`, `render.call.call(…)`, `render.bind(null)(v)`, `render.bind(null, v)()`, `(0, render).call(…)` or an
+//     alias (`const r = render; r.call(…)`); a namespace member is written through a helper (`mut(Components)`), an aliased global
+//     (`const O = Object; O.assign(Components, …)`, `globalThis.Object.assign`), a spread argument (`Object.assign(...[Components], …)`) or a
+//     nested holder (`const N = { C: Components }; N.C.Pill = Good`); `ts.createSourceFile` recovers from syntax errors and its parse
+//     diagnostics are never checked, so a malformed component is read as the recovered tree (pre-existing).
+//   (superseded by Round 34 FIXED above) Round 32 DECLARED: a nested object map `TONE[group][status]` is judged on its FIRST sub-map only.
+//   (superseded by Round 34 FIXED above, except the over-flag items) Round 33 DECLARED (Codex pass 13 on 8c74d9cf; 0 instances in the live console tree):
 //     SILENT: a render-prop invoked through `.call`/`.apply` (`render.call(null, v)`) is not followed; `void 0` as an argument is read as an
 //     explicit value, so the parameter default is not walked; a member of a same-file component object reassigned after its literal
 //     (`Components.Pill = Good`) is judged by the literal's member only; a data variable derived by ASSIGNMENT (`let n; n = value`) rather
@@ -575,7 +583,9 @@ function analyzeSourceFile(relPath, text) {
           const origins = originsIn(n.right);
           for (const pp of left.properties) {
             const prop = ts.isShorthandPropertyAssignment(pp) ? pp.name.text : ts.isPropertyAssignment(pp) && pp.name && (ts.isIdentifier(pp.name) || ts.isStringLiteralLike(pp.name)) ? pp.name.text : null;
-            const local = ts.isShorthandPropertyAssignment(pp) ? pp.name.text : ts.isPropertyAssignment(pp) && ts.isIdentifier(pp.initializer) ? pp.initializer.text : undefined;
+            let tgt = ts.isPropertyAssignment(pp) ? pp.initializer : undefined; // `{ data: d }` and the defaulted `{ data: d = {} }`
+            if (tgt && ts.isBinaryExpression(tgt) && tgt.operatorToken.kind === ts.SyntaxKind.EqualsToken) tgt = tgt.left;
+            const local = ts.isShorthandPropertyAssignment(pp) ? pp.name.text : tgt && ts.isIdentifier(tgt) ? tgt.text : undefined;
             if (!prop || !local) continue;
             if (prop === "data") { if (addOrigins(dataVars, local, origins)) changed = true; }
             else if (QUERY_DESTRUCTURE.has(prop) && !dataVars.has(local)) { if (noteStatusLocal(prop, local, origins)) changed = true; }
@@ -1411,25 +1421,27 @@ function analyzeSourceFile(relPath, text) {
       }
     };
     const callCallbacks = (call) => {
-      let callee = unwrapExpr(call.expression);
-      // `render.call(null, v)` / `render.apply(null, [v])` / `props.render.call(null, v)` invoke the render prop too: unwrap to the
-      // callback itself and shift the arguments (`.call` drops the receiver; `.apply` spreads its array). An `.apply` list this cannot
-      // read (`render.apply(null, args)`) is judged as a whole: unguarded data in it taints EVERY parameter (fail-closed).
-      let args = call.arguments, spreadAll = false;
-      const viaMember = memberName(callee);
-      if ((viaMember === "call" || viaMember === "apply") && (ts.isPropertyAccessExpression(callee) || ts.isElementAccessExpression(callee))) {
-        const inner = unwrapExpr(callee.expression);
-        if (ts.isIdentifier(inner) || (memberName(inner) !== null && ts.isIdentifier(inner.expression))) {
-          callee = inner;
-          if (viaMember === "call") args = call.arguments.slice(1);
+      const plain = unwrapExpr(call.expression);
+      // Both readings are tried and their callbacks unioned: `props.call(v)` is a plain call of a prop NAMED `call` (what the callback
+      // registry holds for it) AND, when its receiver is itself a callback, the `.call` form of that callback.
+      callCallbacksAs(call, plain, call.arguments, false);
+      const viaMember0 = memberName(plain);
+      if ((viaMember0 === "call" || viaMember0 === "apply") && (ts.isPropertyAccessExpression(plain) || ts.isElementAccessExpression(plain))) {
+        const inner0 = unwrapExpr(plain.expression);
+        if (ts.isIdentifier(inner0) || (memberName(inner0) !== null && ts.isIdentifier(inner0.expression))) {
+          let args0, spread0 = false;
+          if (viaMember0 === "call") args0 = call.arguments.slice(1);
           else {
             const list = call.arguments[1] && unwrapExpr(call.arguments[1]);
-            if (!list || (ts.isIdentifier(list) && list.text === "undefined") || list.kind === ts.SyntaxKind.NullKeyword) args = [];
-            else if (ts.isArrayLiteralExpression(list) && !list.elements.some((el) => ts.isSpreadElement(el))) args = list.elements;
-            else { args = [list]; spreadAll = true; }
+            if (!list || (ts.isIdentifier(list) && list.text === "undefined") || list.kind === ts.SyntaxKind.NullKeyword) args0 = [];
+            else if (ts.isArrayLiteralExpression(list) && !list.elements.some((el) => ts.isSpreadElement(el))) args0 = list.elements;
+            else { args0 = [list]; spread0 = true; }
           }
+          callCallbacksAs(call, inner0, args0, spread0);
         }
       }
+    };
+    const callCallbacksAs = (call, callee, args, spreadAll) => {
       let fns = null;
       if (ts.isIdentifier(callee)) { const b = bindingOfParam(callee); fns = b && paramIsNearest(callee, b) ? cbBinding.get(b) : null; }
       else if (memberName(callee) !== null && ts.isIdentifier(callee.expression)) { const prm = paramThroughAliases(callee.expression); fns = prm ? cbParamProp.get(prm)?.get(memberName(callee)) : null; }
@@ -1529,6 +1541,7 @@ function analyzeSourceFile(relPath, text) {
   // EVERY object literal an expression can denote (a `[]` = not a resolvable map). A nested key (`T.a`, `T["a"]`) can be held by more than one
   // entry — a duplicate key, a later `...BASE` / `...{ a: … }` spread, a write `T.a = {…}` — and any of those sub-maps may be the one read, so
   // the lookup is judged on the UNION of their entries, never on the first sub-map found (BUILD_BACKLOG: nested object map, first sub-map only).
+  const nestedUnresolved = new Map(); // nested-key expression -> the sub-map values this could not resolve (walked as entries of the lookup)
   const mapObjectsOf = (e, depth = 0) => {
     if (!e || depth > 6) return [];
     e = unwrapExpr(e);
@@ -1540,10 +1553,13 @@ function analyzeSourceFile(relPath, text) {
     const bases = mapObjectsOf(e.expression, depth + 1);
     if (!bases.length) return [];
     const out = [];
+    const unres = [...(nestedUnresolved.get(unwrapExpr(e.expression)) ?? [])]; // unresolved sub-map values on the way down: walked by the lookup
+    nestedUnresolved.set(e, unres);
     const take = (v) => {
       const u = unwrapExpr(v);
       if (ts.isObjectLiteralExpression(u)) { if (!out.includes(u)) out.push(u); }
-      else if (ts.isIdentifier(u)) { const o = mapObject(u); if (o && !out.includes(o)) out.push(o); }
+      else if (ts.isIdentifier(u) && mapObject(u)) { const o = mapObject(u); if (!out.includes(o)) out.push(o); }
+      else if (!readableValue(v)) { escapedMapRefs.add(v); unres.push(v); } // a sub-map this cannot resolve (a call, a conditional, a reassigned `let`) may hold any class: fail-closed
     };
     for (const base of bases) for (const v of mapEntries(base, lit, depth + 1)) take(v);
     // a write `T.a = { … }` / `Object.assign(T, { a: { … } })` adds a sub-map under the key the literal does not show
@@ -1782,7 +1798,7 @@ function analyzeSourceFile(relPath, text) {
     const lit = ts.isPropertyAccessExpression(x) ? x.name.text
       : ka && (ts.isStringLiteralLike(ka) || ts.isNumericLiteral(ka)) ? ka.text : null; // StringLiteralLike covers T[`ok`] too
     const extra = mapMutations(mapNamesOf(x)).filter((m) => lit === null || m.key === null || m.key === lit).map((m) => m.node);
-    return [...objs.flatMap((o) => mapEntries(o, lit)), ...extra];
+    return [...objs.flatMap((o) => mapEntries(o, lit)), ...(nestedUnresolved.get(unwrapExpr(x.expression)) ?? []), ...extra];
   };
   const returnExprs = (fn) => {
     if (!ts.isBlock(fn.body)) return [fn.body];
@@ -3893,6 +3909,11 @@ export function Page() {
   ${Q2}
   return ${guard ? "q.data ? " : ""}<Panel value={q.data${guard ? "" : "?"}.n} render={${cb}} />${guard ? " : null" : ""};
 }`);
+const R34_PROPCB = (call) => wrap2(`function Panel(props) { return <div>{${call}}</div>; }
+export function Page() {
+  ${Q2}
+  return <Panel value={q.data?.n} call={(n) => <span className="text-emerald-400">{n}</span>} apply={(n) => <span className="text-emerald-400">{n}</span>} />;
+}`);
 const R34_NS = (write, call = "<Components.Pill items={items} />") => propsFixture(`${GOOD_C}\nconst Components = { Pill: Bad };\n${write}`, call);
 const R34_MAP = (pre, use) => wrap2(`${pre}
 export function Page() {
@@ -3934,6 +3955,15 @@ export function Page() {
   ["(a) nested map: the emerald sub-map arrives through a later `...BASE` spread", R34_MAP(`const BASE = { a: { ok: "text-emerald-400" } };\nconst T = { a: { ok: "text-red-400" }, ...BASE };`, "T.a[q.data?.s]")],
   ["(a) nested map: two levels deep, T.a.b[s], second sub-map emerald", R34_MAP(`const T = { a: { b: { ok: "text-red-400" }, ...{ b: { ok: "text-emerald-400" } } } };`, "T.a.b[q.data?.s]")],
   ["(a) nested map: T.a = { … } written after the literal, then read by a literal key", R34_MAP(`const T = { a: { ok: "text-red-400" } };\nT.a = { ok: "text-emerald-400" };`, "T.a.ok")],
+  // Landing refute F1: a prop NAMED `call` / `apply` is still a plain callback call; the `.call` unwrap must not shadow it.
+  ["(F1) props.call(props.value): a callback prop named `call` is a plain call", R34_PROPCB("props.call(props.value)")],
+  ["(F1) props.apply(props.value): a callback prop named `apply` is a plain call", R34_PROPCB("props.apply(props.value)")],
+  ["(F1) props['call'](props.value): the string-literal bracket spelling", R34_PROPCB("props['call'](props.value)")],
+  ["(F3) a defaulted destructuring assignment target: ({ data: d = {} } = q)", R34_LET("let d; ({ data: d = {} } = q);", `<span className="text-emerald-400">{d?.n}</span>`)],
+  ["(F3) nested map: an unresolvable conditional spread may hold the emerald sub-map", R34_MAP(`const c = flag;\nconst T = { a: { ok: "text-red-400" }, ...(c ? { a: { ok: "text-emerald-400" } } : {}) };`, "T.a[q.data?.s]")],
+  ["(F3) nested map: a spread of a call result may hold any sub-map", R34_MAP(`const T = { a: { ok: "text-red-400" }, ...getBase() };`, "T.a[q.data?.s]")],
+  ["(F3) nested map: a sub-map produced by a call", R34_MAP(`const T = { a: pick() };`, "T.a[q.data?.s]")],
+  ["(F3) nested map: a sub-map bound to a reassigned let", R34_MAP(`let B = { ok: "text-red-400" }; B = { ok: "text-emerald-400" };\nconst T = { a: B };`, "T.a[q.data?.s]")],
 );
 OK_R6.push(
   ["(1) render.call, call site guarded on the data", R34_ONE("render.call(null, value)", undefined, true)],

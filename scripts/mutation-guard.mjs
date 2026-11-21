@@ -2028,6 +2028,16 @@ export function costDrifted(measuredSeconds, registeredSeconds) {
   return measuredSeconds > registeredSeconds * 1.75 && measuredSeconds - registeredSeconds >= 8;
 }
 
+/** The FATAL tier above the warning: a measured unmutated run more than 4x its registered cost AND at
+ *  least 20s over it. The warning stays advisory because the runner swings 1.5x between draws (DMH
+ *  baselines of 30.5s and 46.6s against 45 registered); a 4x-and-20s band is wider than any swing seen
+ *  and still catches the 2026-10-09 class (device-management-health, 31.9s measured against 1 registered,
+ *  then 25s against 1), which the shard-3 change left reporting only. The 20s floor keeps a 1s proof that
+ *  hiccups to 4.2s quiet; the 4x ratio keeps 46.6s against 45 quiet. Pure of clock and environment. */
+export function costDriftFatal(measuredSeconds, registeredSeconds) {
+  return measuredSeconds > registeredSeconds * 4 && measuredSeconds - registeredSeconds >= 20;
+}
+
 /** Arguments this script understands: `--proof=<name>`, `--shard=<i>/<n>` and `--plan` (print
  *  what would be swept and stop; see main()), and
  *  the bare `--` that `pnpm run guard:mutations -- --proof=...` forwards (ignored). Anything
@@ -2167,6 +2177,7 @@ async function main() {
   const sizeMismatches = [];
   const countedUnits = [];
   const failedBaselineUnits = [];
+  const costDriftFatals = [];
 
   // Registered load of everything this run will sweep, on the pristine tree (the end-of-run
   // line below must not re-count mutations after the loop has been writing to the files).
@@ -2201,6 +2212,13 @@ async function main() {
           `under-weighs it; set runSeconds: ${Math.ceil(baselineSeconds)} on its TARGETS entry (see WHY THE SHARDS ARE BALANCED BY COST)`;
         console.log(`   ⚠ COST DRIFT  ${note}`);
         if (process.env.GITHUB_ACTIONS === "true") console.log(`::warning title=Mutation sweep cost drift::${note}`);
+      }
+      if (costDriftFatal(baselineSeconds, registeredSeconds)) {
+        costDriftFatals.push(
+          `${target.proof}: ${baselineSeconds.toFixed(1)}s measured unmutated against ${registeredSeconds}s registered (over 4x and 20s or more over); set runSeconds: ${Math.ceil(baselineSeconds)} on its registry entry`,
+        );
+        console.error(`   ✗ COST DRIFT (fatal)  ${costDriftFatals[costDriftFatals.length - 1]}`);
+        process.exitCode = 1;
       }
     }
     // WHAT this unit sweeps is chosen by the exported selector, the one the sharding gate proves
@@ -2403,7 +2421,13 @@ async function main() {
     process.exitCode = 1;
     return;
   }
-  console.log("\nMutation guard passed — every registered guard is falsifiable, or documented as inert.");
+  if (costDriftFatals.length > 0) {
+    console.error("\nMutation guard FAILED — a proof costs far more than the cost registered for it, so the sharder is under-weighing it and a shard can be cancelled at its time bound:\n");
+    for (const f of costDriftFatals) console.error(`  ✗ ${f}`);
+    process.exitCode = 1;
+  } else {
+    console.log("\nMutation guard passed — every registered guard is falsifiable, or documented as inert.");
+  }
 
 }
 

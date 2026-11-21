@@ -1854,9 +1854,10 @@ git() {
     ok("CI actual MCP body still runs joint verification after a failed sibling check", mcp.status === 7
       && /mcp-verify\npnpm:run verify:all --require-mcp\nteardown\n$/.test(readFileSync(events, "utf8")), `${mcp.status} ${mcp.stderr}`);
     const pin = "24eff86a940099e0725d474d1d5520bfbc71d368";
-    // runSteps: the PR workflow has the one owning heavy step (run by each slice) and the
-    // aggregate's step, which runs no gate; the nightly workflow still has exactly one.
-    for (const [file, total, admission, work, runSteps] of [["mac-runner-auto.yml", 60, 60, 2400, 2], ["mac-runner-harness.yml", 780, 39600, 5400, 1]]) {
+    // runSteps: the PR workflow has the one owning heavy step (run by each slice), the setup
+    // identity receipt writer and the aggregate's step, neither of which runs a gate; the nightly
+    // workflow still has exactly one.
+    for (const [file, total, admission, work, runSteps] of [["mac-runner-auto.yml", 60, 60, 2400, 3], ["mac-runner-harness.yml", 780, 39600, 5400, 1]]) {
       const workflow = readFileSync(join(HERE, "../../.github/workflows", file), "utf8");
       const owns = (text) => new RegExp(`^    timeout-minutes: ${total}$`, "m").test(text)
         && text.includes(`bash scripts/mac/ci-host-verification.sh ${pin} ${admission} ${work} <<'CI_CHAIN'`)
@@ -1866,6 +1867,12 @@ git() {
         && text.includes("        if: always()") && text.includes("uses: actions/upload-artifact@");
       ok(`CI ${file} puts the complete heavy chain in one owning step with separate admission/work bounds`, owns(workflow)
         && !owns(workflow.replace("bash scripts/mac/ci-host-verification.sh", "bash unguarded.sh")));
+      if (file === "mac-runner-auto.yml") {
+        const receipt = workflow.split(/^      - name: /m).find((step) => step.startsWith("Write the setup identity receipt")) ?? "";
+        ok("CI the setup identity receipt step exists, runs before the owning step and runs no gate, install or host command",
+          receipt !== "" && workflow.indexOf("Write the setup identity receipt") < workflow.indexOf("ci-host-verification.sh ")
+          && !/pnpm (?:install|run|exec)|"(?:install|run|exec)"|preflight\.mjs|verify:breadth|ci-host-verification|free-test-port|timeout-minutes/.test(receipt), receipt.slice(0, 80));
+      }
     }
   });
 

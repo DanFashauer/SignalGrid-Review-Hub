@@ -109,6 +109,79 @@ jobs:
         with:
           node-version: 22
 
+      # EVIDENCE THAT SURVIVES A LOST RUNNER. Jobs 135529234055 and 135575032413 ended with "The
+      # hosted runner lost communication with the server": no log, no record, so which machine ran
+      # them was unknown. This receipt is written and uploaded BEFORE the long step, so a slice that
+      # dies later still leaves its identity. It is PARTIAL and NONQUALIFYING: a setup identity only,
+      # captured at setup time, which is not admission time. It names no gate, no admission, no
+      # cleanup and no cause, and it lives outside the mac-pr-slice-record-* namespace, so the
+      # aggregate below never downloads it and could not accept it (preflight-slice-N.json names and
+      # a versioned slice record only). Named public facts only, each validated; a fact that cannot
+      # be read is null and listed under "unknown". No environment dump, no process arguments.
+      - name: Write the setup identity receipt (partial, nonqualifying)
+        env:
+          RECEIPT_SLICE: ${{ matrix.slice }}
+          RECEIPT_PR_HEAD: ${{ github.event.pull_request.head.sha }}
+          RECEIPT_RUN_ID: ${{ github.run_id }}
+          RECEIPT_RUN_ATTEMPT: ${{ github.run_attempt }}
+          RECEIPT_RUNNER_OS: ${{ runner.os }}
+          RECEIPT_RUNNER_ARCH: ${{ runner.arch }}
+          # Outside the checkout: an untracked file there would change what the gates see.
+          RECEIPT_DIR: ${{ runner.temp }}/mac-pr-setup-receipt
+        run: |
+          mkdir -p "$RECEIPT_DIR"
+          node --input-type=module - <<'SETUP_RECEIPT'
+          import { execFileSync } from "node:child_process";
+          import { writeFileSync } from "node:fs";
+          import { join } from "node:path";
+          const read = (cmd, args) => { try { return execFileSync(cmd, args, { encoding: "utf8", timeout: 10000, stdio: ["ignore", "pipe", "ignore"] }); } catch { return null; } };
+          const sha = (v) => (typeof v === "string" && /^[0-9a-f]{40}$/.test(v.trim()) ? v.trim() : null);
+          const word = (v) => (typeof v === "string" && /^[\x20-\x7e]{1,100}$/.test(v.trim()) ? v.trim() : null);
+          const int = (v) => (typeof v === "string" && /^[1-9][0-9]{0,19}$/.test(v) ? v : null);
+          const e = process.env;
+          const slice = /^[1-4]$/.test(e.RECEIPT_SLICE ?? "") ? Number(e.RECEIPT_SLICE) : null;
+          const facts = {
+            prHead: sha(e.RECEIPT_PR_HEAD),
+            checkout: sha(read("git", ["rev-parse", "HEAD"])),
+            tree: sha(read("git", ["rev-parse", "HEAD^{tree}"])),
+            runId: int(e.RECEIPT_RUN_ID),
+            runAttempt: int(e.RECEIPT_RUN_ATTEMPT),
+            slice,
+            osName: word(e.RECEIPT_RUNNER_OS),
+            osProductVersion: word(read("sw_vers", ["-productVersion"])),
+            osBuildVersion: word(read("sw_vers", ["-buildVersion"])),
+            machineArch: word(read("uname", ["-m"])),
+            runnerArch: word(e.RECEIPT_RUNNER_ARCH),
+            imageOs: word(e.ImageOS),
+            imageVersion: word(e.ImageVersion),
+            runnerVersion: null,
+            nodeVersion: word(read("node", ["--version"])),
+            pnpmVersion: word(read("pnpm", ["--version"])),
+            gitVersion: word(read("git", ["--version"])),
+          };
+          const receipt = {
+            kind: "mac-pr-setup-receipt",
+            receiptVersion: 1,
+            status: "PARTIAL_NONQUALIFYING",
+            qualifying: false,
+            note: "Setup identity only, captured before the verification step. Not a slice record, not admission, not a result.",
+            capturedAt: new Date().toISOString(),
+            ...facts,
+            unknown: Object.keys(facts).filter((k) => facts[k] === null),
+          };
+          writeFileSync(join(e.RECEIPT_DIR, `mac-pr-setup-receipt-slice-${slice ?? "unknown"}.json`), JSON.stringify(receipt, null, 2) + "\n");
+          console.log(`setup receipt: slice ${slice ?? "unknown"}, ${receipt.unknown.length} unknown fact(s): ${receipt.unknown.join(", ") || "none"}`);
+          SETUP_RECEIPT
+
+      - name: Upload the setup identity receipt (partial, nonqualifying)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          # Deliberately outside mac-pr-slice-record-*: the aggregate's download pattern never matches it.
+          name: mac-pr-setup-receipt-${{ github.event.pull_request.number }}-${{ github.run_id }}-${{ github.run_attempt }}-slice-${{ matrix.slice }}
+          path: ${{ runner.temp }}/mac-pr-setup-receipt/mac-pr-setup-receipt-slice-*.json
+          if-no-files-found: warn
+
       - name: Install and verify under the shared host reservation
         # One shell retains FD9 through install, checks and teardown; steps cannot share FDs.
         # Pin the published helper, not the PR worktree. Normal local ticks stay nonblocking.

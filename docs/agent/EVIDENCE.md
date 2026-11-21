@@ -6033,3 +6033,53 @@ cc86c123 is an ancestor of origin/SignalGrid_Alpha
 ```
 
 Verdict: holds for the merge, tree, ancestry and delta claims. The Mac's local, CI and review results are attributed receipts on the head named, not new executions. This is the second protected landing through the hybrid route and the first with no manual body repair. It was not yet a later scheduled ordinary cycle with no session acting as controller: the Mac posted START and RESULT itself, and the originating-issue reference is still missing from automatic bodies. No owner-hardware evidence, private completion seal or readiness change is asserted.
+
+## 2026-11-21 — #2473 (0cd1b2a8) landed under DR-037: lane publications never arm their own auto-merge
+
+The problem: lane mail and heartbeats armed their own auto-merge and could merge inside a Mac START..RESULT window. #2463 did, at 07:10Z, and Main disarmed #2462, #2467 and #2469 by hand. A first repair (b760a6c9) read a shared hold ref before arming. Main showed that this was a race (#439 7061157919): a HOLD published between the read and the arm still let an already-green PR merge.
+
+The landed change:
+- `scripts/lane-deliver.mjs`
+  - Never calls `gh pr merge --auto`. Every new receipt carries `steward_pending: true`, and the Cloud steward lands the PR outside a window.
+  - Readback counts an unarmed OPEN PR as pending only with positive push evidence: the producer binding plus an intact raw `.push` capture bound to receipt, source, head and ref, with exit 0.
+  - Reports the real arming state: true, false for null, null when unknown.
+- `scripts/mac/lane-tick.sh` (`_hb_pending_hand`): the consumer accepts the one new `steward_pending` key only together with the matching receipt flag and an unarmed state.
+- Legacy receipts keep the old rule. These are the three findings of #439 7061217609, closed at source level by Main and the independent reader (7061664893).
+
+Evidence, on the final head `9363a1ed592ac19c052f347447134a10ffa0aac9` unless named:
+
+- Cloud local: `node scripts/preflight.mjs` exit 0 (11:34:28–12:09:46Z, "Preflight PASSED — everything it runs is green."; backup-restore and db-role-split SELF-SKIPPED with `DATABASE_URL` unset, not passes) and `pnpm run verify:breadth` exit 0 (to 12:10:59Z, "Breadth lane PASSED — 58 breadth proofs green").
+- `node scripts/check-lane-delivery.mjs`: `200 passed, 0 failed`. The new controls failed 5 against 4789991's producer and consumer, and 3 with only the consumer reverted. The causal-transition control failed against b760a6c9's script. These are author executions.
+- CI: gating check 136835898299 passed, Mac slices 1–4 passed, Mac aggregate 136838840300 passed. CodeQL 136833604571 reported "No new alerts in code changed by this pull request".
+- CodeQL alerts 280 and 281 (js/bad-code-sanitization) were in the fixture's generated fake `gh` source on a25cce84. They were fixed at b8331f5d by passing the two paths through the environment, and their threads were resolved after the re-scan reported them fixed.
+- Main's COMMENT reviews 6004887423 and 6004937681 found no blocker. Codex had no findings. There were 0 open threads.
+
+The merge: `0cd1b2a8d075d3cc8decd6769dd3d0f3d90c6712`, with `expectedHeadSha` `9363a1ed592ac19c052f347447134a10ffa0aac9`, outside any Mac window. Its ordered parents are `cc86c123` and `9363a1ed`, and its tree equals the head tree. The branch `claude/merge-hold-boundary` is kept.
+
+Command: run by the cloud lane against a fresh fetch of canonical, read-only, exactly as follows (`set -e`):
+
+```bash
+date -u +%Y-%m-%dT%H:%M:%SZ
+git log -1 --format='%H parents=%P tree=%T' 0cd1b2a8d075d3cc8decd6769dd3d0f3d90c6712
+git log -1 --format='%H tree=%T' 9363a1ed592ac19c052f347447134a10ffa0aac9
+git merge-base --is-ancestor 0cd1b2a8d075d3cc8decd6769dd3d0f3d90c6712 origin/SignalGrid_Alpha && echo "0cd1b2a8 is an ancestor of origin/SignalGrid_Alpha"
+git diff --stat cc86c1237eaa5e1d9071535a16723443d7da0b1c 0cd1b2a8d075d3cc8decd6769dd3d0f3d90c6712
+```
+
+Output, verbatim:
+
+```
+2026-11-21T12:12:54Z
+0cd1b2a8d075d3cc8decd6769dd3d0f3d90c6712 parents=cc86c1237eaa5e1d9071535a16723443d7da0b1c 9363a1ed592ac19c052f347447134a10ffa0aac9 tree=b381e17abe56ef1345124b9203b330cca99cede1
+9363a1ed592ac19c052f347447134a10ffa0aac9 tree=b381e17abe56ef1345124b9203b330cca99cede1
+0cd1b2a8 is an ancestor of origin/SignalGrid_Alpha
+ docs/LANE_COORDINATION.md                          |   6 +-
+ scripts/check-lane-delivery.mjs                    | 201 +++++++++++++++++++--
+ scripts/lane-deliver.mjs                           |  77 +++++++-
+ scripts/lib/merge-hold.mjs                         |  19 ++
+ scripts/mac/lane-tick.sh                           |   8 +-
+ .../test-fixtures/lane-push/push_result_fixture.py |   4 +-
+ 6 files changed, 284 insertions(+), 31 deletions(-)
+```
+
+Verdict: holds for the merge, tree, ancestry and delta claims. The local gate results are this lane's executions on the head named; the CI and review results are attributed receipts. Not covered: PRs armed before this landed, and notification publication beyond the tick-owner fence. Lane PRs now wait for the Cloud steward. No independence, owner-hardware, private completion seal or readiness claim is made.

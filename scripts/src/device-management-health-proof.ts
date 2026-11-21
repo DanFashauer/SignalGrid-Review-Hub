@@ -389,6 +389,37 @@ const channelsContradictory = (agent: unknown, remediation: unknown): boolean =>
   (agent === "not_applicable" || agent === "never") &&
   (remediation === "healthy" || remediation === "issues_detected" || remediation === "failed");
 
+// The shared traversal (enumerateGrantSafetyAudits, used by passes 2 and 3 below) must be
+// equivalent to separate enumerateGrantSafety runs, audit by audit. A small differential
+// over a synthetic space with DELIBERATELY different failures per audit pins it: separate
+// mismatch counts and first mismatches, a failing confirmedWhenNone, audit order not
+// mattering, and exactly one build per combination (Main review of 8c835bc8, #439).
+{
+  const dd = { a: [0, 1, 2], b: ["x", "y"], c: [true, false] };
+  let builds = 0;
+  const bld = (c: Record<string, unknown>) => { builds += 1; return { ...c }; };
+  // A grants only a=1,b=x,c=true but its spec also calls a=2,b=y,c=false clean: one mismatch.
+  const A = { evaluate: (n: Record<string, unknown>) => n, actionOf: (n: Record<string, unknown>) => (n.a === 1 && n.b === "x" && n.c === true ? "none" : "deny"),
+    positivelyClean: (c: Record<string, unknown>) => (c.a === 1 && c.b === "x" && c.c === true) || (c.a === 2 && c.b === "y" && c.c === false) };
+  // B grants every c=true combination, its spec agrees, but confirmedWhenNone fails for a=0: two mismatches.
+  const B = { evaluate: (n: Record<string, unknown>) => n, actionOf: (n: Record<string, unknown>) => (n.c === true ? "none" : "deny"),
+    positivelyClean: (c: Record<string, unknown>) => c.c === true, confirmedWhenNone: (n: Record<string, unknown>) => n.a !== 0 };
+  const soloA = enumerateGrantSafety({ domains: dd, build: (c) => ({ ...c }), ...A });
+  const soloB = enumerateGrantSafety({ domains: dd, build: (c) => ({ ...c }), ...B });
+  builds = 0;
+  const ab = enumerateGrantSafetyAudits({ domains: dd, build: bld, audits: { A, B } });
+  const buildsAB = builds;
+  builds = 0;
+  const ba = enumerateGrantSafetyAudits({ domains: dd, build: bld, audits: { B, A } });
+  const same = (x: object, y: object): boolean => JSON.stringify(x) === JSON.stringify(y);
+  check(
+    `shared traversal ≡ separate passes: each audit's combos/noneCount/mismatches/firstMismatch equal its own enumerateGrantSafety run, in either audit order (A ${soloA.mismatches} mismatch, B ${soloB.mismatches} incl. a failing confirmedWhenNone)`,
+    soloA.mismatches === 1 && soloB.mismatches === 2 && soloA.firstMismatch !== soloB.firstMismatch &&
+      same(ab.A, soloA) && same(ab.B, soloB) && same(ba.A, soloA) && same(ba.B, soloB),
+  );
+  check(`shared traversal builds each combination exactly once (${buildsAB} and ${builds} builds for ${productOf(dd)} combinations)`, buildsAB === productOf(dd) && builds === productOf(dd));
+}
+
 const enumRes = enumerateGrantSafety({
   domains,
   build: (c) =>

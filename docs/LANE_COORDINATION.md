@@ -428,7 +428,7 @@ Not yet shown when this note was written: Bonsai authoring a first code pass, th
 The owner, 2026-11-21: build it the way he intended, the fastest way, *"or figure out a hybrid way to make the whole ecosystem work between all the layers"*. On #439 the Mac lane recorded the resulting route (comment 7059967838), the cloud lane acknowledged it (7060050900), and the Mac added branch retention (7060061249). This note is that route, and it amends item 4 of the 2026-11-13 note above.
 
 1. **Local build.** The Mac's local brain takes an ordinary `brain:ready` issue and builds it unattended on a `mac/brain-build-*` branch, then opens the PR itself after its own publication privacy reviews. Which model runs which local pass is the brain's; this note claims none of it.
-2. **The merge hold.** Before it codes, the brain announces a window on `refs/heads/lane/merge-hold`. A tip subject starting `HOLD` means mainline is frozen, and one starting `RELEASE` means it is open; an unreadable tip, or one that is neither, counts as held. The brain also posts START and, at the end, RESULT on #439, and it alone pushes HOLD and RELEASE. Every lane reads the ref with `mergeHoldState` from `scripts/lib/merge-hold.mjs` and re-reads it immediately before each merge call. While it reads HELD, no protected merge lands and no auto-merge is armed. A lane may still push its own PR branch and run CI (Main, #2477 comment 7065108810 and #439 comment 7065269899).
+2. **The merge hold.** Before it codes, the brain announces a window on `refs/heads/lane/merge-hold`. A tip subject starting `HOLD` means mainline is frozen, and one starting `RELEASE` means it is open; an unreadable tip, or one that is neither, counts as held. The brain also posts START and, at the end, RESULT on #439, and it alone pushes HOLD and RELEASE. Every lane reads the ref with `mergeHoldState` from `scripts/lib/merge-hold.mjs` and re-reads it immediately before each merge call. While it reads HELD, no protected merge lands and no auto-merge is armed. Read-only review and CI observation may continue, and a lane may push its OWN PR branch (Main, #2477 comment 7065108810 and #439 comment 7065269899). It writes nothing to a branch another lane or the brain owns beyond what that branch's handoff allows. A protected merge additionally needs an immediate read showing OPEN; the existence of a PR is not evidence that the automatic handoff happened.
 3. **Cloud final pass.** On every duty cycle the cloud lane lists open PRs whose head starts with `mac/brain-build-` and, while the hold reads OPEN, for each one:
    - brings it up to date with mainline;
    - waits for required CI on the new head;
@@ -444,7 +444,7 @@ What does not change: DR-037's five landing conditions, the owner-only surfaces,
 
 Not yet shown when this note was written:
 - Three ordinary tasks did not end in a PR. #2476 failed before coding. #2479 stopped before coding at the hold readback. #2481 built and qualified, but its artifact privacy review refused publication, and no RESULT or RELEASE had followed for it yet.
-- No fresh ordinary task has yet been published and landed through this whole route with its journals.
+- Two earlier automatic builds were genuinely published and landed with public journals (#2465 and #2472). What is still unproved is a fresh, FULLY AUTOMATIC completion of the whole route described here, from issue to landing with journals, with no manual step anywhere.
 - No later scheduled cycle has yet run it without a manual step.
 
 ## Collision log

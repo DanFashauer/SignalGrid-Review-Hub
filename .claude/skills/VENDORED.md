@@ -2,7 +2,7 @@
 
 Third-party work, copied in unmodified. **Not ours.**
 
-> **EIGHTEEN exceptions in this directory — read this before any re-vendor.** These are
+> **NINETEEN exceptions in this directory — read this before any re-vendor.** These are
 > FIRST-PARTY, written in this repository and NOT part of the upstream set. They live
 > here because the harness loads skills from this directory. Everything else below
 > describes the other 101, from FOURTEEN upstreams — 14 from obra/superpowers, `watch/`
@@ -62,6 +62,7 @@ Third-party work, copied in unmodified. **Not ours.**
 > | `landing-under-dr-037/` | 2026-09-12 | DR-037's five merge conditions, the merge-then-regenerate order, and the single evidence re-mint that follows |
 > | `orchestrator-over-workers/` | 2026-09-12 | the spec-write / fan-out / review / land-one-at-a-time build pattern (docs/LANE_COORDINATION.md, 2026-09-12) |
 > | `raised-hands/` | 2026-09-23 | answering every raised hand (DR-054): take, route (roster role or docs/agent/hand-routing.json), act, clear with evidence, fill capability gaps — the procedure the blocker-dispatcher follows |
+> | `blocker-sweep/` | 2026-11-21 | treat anything and everything that stops a goal as a blocker: enumerate, name who clears each, clear what the lane can, raise the rest once with evidence, set a next check (on top of DR-054 and `raised-hands/`) |
 >
 > **This note said "one exception" until 2026-08-24, and it was true when written on
 > 08-20.** The five `signalgrid-*` skills landed on 08-22, after it, and nothing

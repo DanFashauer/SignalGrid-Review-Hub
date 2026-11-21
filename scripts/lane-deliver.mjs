@@ -369,6 +369,26 @@ function originalPushRefusal(path, receipt) {
     producer_head: p.producer_head, producer_source_sha256: p.producer_source_sha256,
     original_push_exit: p.status, publication_state: "KNOWN_REFUSED", no_replay: true, repair_only: true };
 }
+// steward_pending is a NEW permission: an unarmed OPEN PR reads as pending only
+// when the original push is positively evidenced. The receipt must carry its
+// producer binding, and the exact raw push capture must exist, bind this receipt,
+// source, head and ref, and report a clean exit. Absent, partial or mismatched
+// evidence returns false, so the receipt falls through to the legacy
+// "unverified" outcome; nothing is inferred and no receipt is rewritten.
+function stewardEvidence(path, receipt) {
+  const r = receipt.value;
+  if (r.steward_pending !== true) return false;
+  if (!/^[a-f0-9]{40}$/.test(r.producer_head ?? "") || !/^[a-f0-9]{64}$/.test(r.producer_source_sha256 ?? "") || !/^[a-f0-9]{40}$/.test(r.base ?? "")) return false;
+  if (!present(path + ".push.json") || !present(path + ".push.raw.json")) return false;
+  let p;
+  try { p = captureRead(path + ".push").value; } catch { return false; }
+  if (p.version !== 1 || p.kind !== "original-lane-push-terminal" || p.receipt_sha256 !== receipt.sha256 ||
+      ["repository", "base", "head", "target", "producer_head", "producer_source_sha256"].some(key => p[key] !== r[key]) ||
+      JSON.stringify(p.command) !== JSON.stringify(["git", "push", "origin", `HEAD:refs/heads/${r.target}`]) ||
+      p.status !== 0 || p.signal !== null || p.error !== null) return false;
+  const source = gitCapture(["--no-replace-objects", "-c", "core.fsmonitor=false", "show", `${p.producer_head}:scripts/lane-deliver.mjs`]);
+  return source.status === 0 && !source.signal && !source.error && digest(source.stdout) === p.producer_source_sha256;
+}
 function readback(path) {
   try {
     const receipt = receiptRead(path), r = receipt.value;
@@ -397,9 +417,12 @@ function readback(path) {
     if (pr.baseRefName !== MAINLINE || !Number.isInteger(pr.number) || pr.number <= 0) throw Error("PR binding differs");
     if (pr.headRefName !== undefined && pr.headRefName !== null && pr.headRefName !== r.target) throw Error("PR topic binding differs");
     // steward_pending is in every receipt written since publications stopped arming
-    // themselves; an older receipt, or an unarmed PR without it, still falls through
-    // to "unverified".
-    if (pr.state === "OPEN" && (pr.autoMergeRequest || r.steward_pending === true)) {
+    // themselves, and counts only with positive push evidence (stewardEvidence). An
+    // older receipt, or an unarmed PR without that evidence, still falls through to
+    // "unverified". An armed PR is recognised only by a real (non-null) request.
+    const armed = pr.autoMergeRequest !== null && typeof pr.autoMergeRequest === "object" && !Array.isArray(pr.autoMergeRequest);
+    const steward = pr.state === "OPEN" && !armed && stewardEvidence(path, receipt);
+    if (pr.state === "OPEN" && (armed || steward)) {
       const observed = new Date(), createdMs = typeof pr.createdAt === "string" && /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d{3})?Z$/.test(pr.createdAt) ? Date.parse(pr.createdAt) : NaN;
       const knownTime = Number.isFinite(createdMs) && createdMs <= observed.getTime();
       const states = Array.isArray(pr.statusCheckRollup) ? pr.statusCheckRollup.map(check => {
@@ -421,8 +444,8 @@ function readback(path) {
         created_at: knownTime ? pr.createdAt : null, observed_at: observed.toISOString(),
         age_seconds: knownTime ? Math.floor((observed.getTime() - createdMs) / 1000) : null,
         merge_state: mergeState, check_state: checkState,
-        auto_merge_requested: typeof pr.autoMergeRequest === "object" && !Array.isArray(pr.autoMergeRequest) ? true : null,
-        ...(r.steward_pending === true ? { steward_pending: true } : {}) }));
+        auto_merge_requested: armed ? true : pr.autoMergeRequest === null ? false : null,
+        ...(steward ? { steward_pending: true } : {}) }));
       return 4;
     }
     if (pr.state !== "MERGED" || !/^[a-f0-9]{40}$/.test(pr.mergeCommit?.oid ?? "")) throw Error(`PR ${pr.number} is ${pr.state}; canonical delivery remains unverified`);

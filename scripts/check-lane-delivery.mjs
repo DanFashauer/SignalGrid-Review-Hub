@@ -1646,5 +1646,57 @@ for(const [mode,want] of [['absent',true],['present',false],['fail',false]]){
   passed++;console.log('PASS '+label);
  } catch(e){failed++;console.error('FAIL '+label+': '+e.message);}
 }
+// Main/reader (#439, 7061217609) P1: the actual Mac tick consumer must accept what the
+// actual producer now emits. Each case runs the real CLI readback, then feeds its exact
+// stdout through the real `_hb_pending_hand` JS from scripts/mac/lane-tick.sh. A young
+// PR ends "metadata is current"; failed-check and aged PRs pass the schema and binding
+// checks and reach the notification stage (the owner check, which this fixture does not
+// hold). A schema or metadata refusal there is the regression.
+function tickPendingConsumer(){
+ const tick=readFileSync(join(ROOT,"scripts/mac/lane-tick.sh"),"utf8"),a=tick.indexOf("_hb_pending_hand() {");
+ const start=tick.indexOf("<<'JS'\n",a)+"<<'JS'\n".length,end=tick.indexOf("\nJS\n",start);
+ assert.ok(a>=0&&start>a&&end>start,"actual pending consumer block must be present");
+ const body=tick.slice(start,end),swallow="})().catch(() => {";
+ assert.equal(body.split(swallow).length,2,"consumer error handler shape changed");
+ // Test copy only: surface the swallowed error so a refusal cannot pass as a hand.
+ return body.replace(swallow,"})().catch((error) => { console.error(\"CONSUMER_ERROR \" + (error && error.message));");
+}
+const nowIso=(ms)=>new Date(ms).toISOString().replace(/\.\d{3}Z$/,".000Z");
+for(const item of [
+ {name:"young steward-pending",armed:false,ageMs:60000,rollup:[{__typename:"CheckRun",name:"ci",status:"COMPLETED",conclusion:"SUCCESS"}],want:"current"},
+ {name:"failed-check steward-pending",armed:false,ageMs:60000,rollup:[{__typename:"CheckRun",name:"ci",status:"COMPLETED",conclusion:"FAILURE"}],want:"notify"},
+ {name:"aged steward-pending",armed:false,ageMs:7200000,rollup:[{__typename:"CheckRun",name:"ci",status:"IN_PROGRESS",conclusion:null}],want:"notify"},
+ {name:"armed (legacy shape) young",armed:true,ageMs:60000,rollup:[{__typename:"CheckRun",name:"ci",status:"COMPLETED",conclusion:"SUCCESS"}],want:"current"},
+])control(`real producer → real tick consumer: ${item.name}`,{readbackState:"OPEN",readbackObservation:{autoMergeRequest:item.armed?{}:null,createdAt:nowIso(Date.now()-item.ageMs),statusCheckRollup:item.rollup}},f=>{
+ const receipt=join(f.root,"e2e.submission.json"),sent=f.run(["--receipt",receipt]);assert.equal(sent.status,0,sent.stderr);
+ const back=f.readback(receipt);assert.equal(back.status,4,back.stdout+back.stderr);
+ const line=back.stdout.split("\n").find(l=>l.startsWith("pending delivery observation "));const observed=JSON.parse(line.slice("pending delivery observation ".length));
+ assert.equal(observed.auto_merge_requested,item.armed,"auto_merge_requested reports the real arming state, never null-as-armed");
+ assert.equal(observed.steward_pending,item.armed?undefined:true);
+ const records=join(f.root,"records");mkdirSync(records,{recursive:true});
+ const c=spawnSync(process.execPath,["-",receipt,back.stdout,records,"20261121T100000Z-4242","","",String(process.pid)],{cwd:f.repo,input:tickPendingConsumer(),encoding:"utf8",timeout:60000});
+ const out=c.stdout+c.stderr;
+ assert.doesNotMatch(out,/pending scalar schema differs|pending metadata missing, stale or foreign|one original delivery observation required|original binding differs|pending input differs/,"the real consumer refused the real producer: "+out);
+ if(item.want==="current"){assert.equal(c.status,0,out);assert.match(c.stdout,/pending heartbeat metadata is current; no new notification needed/);}
+ else {assert.doesNotMatch(c.stdout,/metadata is current/,"a failed or aged PR must reach the notification stage");
+  const err=(c.stderr.match(/CONSUMER_ERROR (.*)/)||[])[1]??"";console.error("  consumer stopped at: "+err);
+  assert.match(err,/tick token|owner/,"must pass schema, binding and reason checks and stop only at the tick-owner check: "+err);}
+});
+// P3: steward mode needs positive evidence. Absent, partial and mismatched push capture,
+// and a missing producer binding, must not earn pending status for an unarmed OPEN PR.
+for(const [name,damage] of [
+ ["absent push capture",(r)=>{renameSync(r+".push.json",r+".push.json.gone");renameSync(r+".push.raw.json",r+".push.raw.json.gone");}],
+ ["partial push capture (terminal only)",(r)=>renameSync(r+".push.raw.json",r+".push.raw.json.gone")],
+ ["mismatched push capture (other target)",(r)=>{for(const n of [".push.json",".push.raw.json"]){const v=JSON.parse(readFileSync(r+n,"utf8"));v.target="lane/mac-mail-20261121-000000Z-000000000000";writeFileSync(r+n,JSON.stringify(v)+"\n");}}],
+])control(`steward_pending without positive push evidence is not pending: ${name}`,{readbackState:"OPEN",readbackObservation:{autoMergeRequest:null}},f=>{
+ const receipt=join(f.root,"ev.submission.json"),sent=f.run(["--receipt",receipt]);assert.equal(sent.status,0,sent.stderr);
+ assert.equal(JSON.parse(readFileSync(receipt,"utf8")).steward_pending,true);
+ assert.equal(f.readback(receipt).status,4,"control: the intact evidence reads as pending");
+ damage(receipt);
+ const back=f.readback(receipt);
+ assert.notEqual(back.status,4,"unevidenced steward_pending must not read as pending: "+back.stdout);
+ assert.notEqual(back.status,0,"and never as delivered");
+ assert.doesNotMatch(back.stdout,/"steward_pending":true/);
+});
 console.log(`lane-delivery regression: ${passed} passed, ${failed} failed, 0 skipped`);
 process.exitCode = failed ? 1 : 0;

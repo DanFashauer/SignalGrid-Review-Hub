@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-11-21T12:15:25.807Z",
-  "result": "acted 12:20Z: landed #2472 (cc86c123, brain build for #2471) and #2473 (0cd1b2a8, lane publications never self-arm) under DR-037 outside the Mac window; updating #2467 (Mac tick heartbeat) to land; closing superseded cloud heartbeats #2462 and #2469; mailed the Mac about the shared-surface change. Tick heartbeat on mainline firedAt 06:57:52Z (stale only because heartbeat PRs were held during the window; the Mac is active on #439). Live evidence 2026-11-16 (refresh ask already open). Owner not escalated."
+  "firedAt": "2026-11-21T13:25:06.393Z",
+  "result": "acted 13:25Z: landed journal #2470 (b1675afb) and Mac tick heartbeat #2467 (252cff9f) and cloud batch #2474 (569ebe43) under DR-037; no new or moved mac/* branch, no mail to cloud; Mac ACKed Root's combined runtime repair on #439 and holds START until it is installed. Tick heartbeat on mainline firedAt 08:07Z (from #2467). Live evidence 2026-11-16 (refresh ask already open). Owner not escalated."
 }

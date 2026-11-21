@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-11-21T04:24:44.372Z",
-  "result": "04:25Z keepalive (last steward heartbeat 02:25Z). Mac tick heartbeat last fired 03:37Z. Mac proof window open since START 03:36Z (#439 7056646520); cloud holds all merges until RESULT, so this heartbeat PR is written but not merged. #2447 landed as b74f9a4d at 03:28Z; its merge consumed the prior proof build inside the publisher freeze (acked 7056649912). Journal #2453 qualified and held. Live-evidence refresh ask already sent. No new or moved mac/* branch. Owner not escalated."
+  "firedAt": "2026-11-21T09:25:17.121Z",
+  "result": "acted 09:25Z: #2465 LANDED e9b3e797 via Cloud final pass (first local-brain issue-to-merge); Mac hold released 09:18Z; #2462/#2467/#2468 re-armed; #2464 landing on green. tick firedAt 06:57:52Z (fresh); live evidence 2026-11-16 (refresh ask already unread 9h, not resent); owner not escalated"
 }

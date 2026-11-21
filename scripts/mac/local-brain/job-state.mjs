@@ -227,6 +227,8 @@ export class JobState {
       if (!entry || typeof entry !== 'object' || entry.id !== index + 1 ||
           typeof entry.type !== 'string' || !entry.type.trim() ||
           typeof entry.timestamp !== 'string' ||
+          !Number.isFinite(Date.parse(entry.timestamp)) ||
+          new Date(entry.timestamp).toISOString() !== entry.timestamp ||
           typeof entry.workerId !== 'string' ||
           !Object.hasOwn(entry, 'details')) {
         throw new Error(`Invalid saved checkpoint at index ${index}`);

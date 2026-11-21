@@ -1,0 +1,13 @@
+{
+  "id": "pending-heartbeat-55fa1ae2c8b71b128d54b314db9d2701a43a69249251953a588044b94cd90153",
+  "raisedAt": "2026-11-21T17:37:49.906Z",
+  "origin": "mac",
+  "doing": "canonical delivery of a Mac heartbeat",
+  "blockedBy": "Protected heartbeat PR #2486 is pending at least one hour; original topic lane/mac-mail-20261121-162437Z-e825006bb2bd @ 57d7a3360d1f5b44c1f9a0941b29e8477689e335.",
+  "need": "Cloud lane: inspect the current PR checks and source, then repair or land only through the existing protected review/CI route. This hand does not authorize resending, reposting or closing the original attempt.",
+  "whoCanUnblock": "cloud lane",
+  "domain": "lane",
+  "status": "open",
+  "routedTo": null,
+  "where": "https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/2486"
+}

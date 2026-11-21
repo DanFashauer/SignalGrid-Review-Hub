@@ -4,6 +4,7 @@
 # `blocked`, never ship: the file names the agent and why, the DR-037 landing sentence is not written, and the exit code is 2. --prs lists the PRs the wave was GIVEN, so one whose reviewer never started still gets a row.
 # No refute ran is fine ("by routing") only behind a ship whose tier is `autonomous` or `docs only`, compared case-, whitespace-, `-`- and `_`-insensitively (an allowlist: any other or unknown tier text requires a refute). --prs is REQUIRED (exit 64 without it).
 # An agent is a (PR, round, kind): the LATEST round decides, and within a journal key the LAST row wins (started, failed, started, result renders the result).
+# Two journal keys that carry the same label are judged SEPARATELY and combined fail-closed: ANY dead, invalid or blocked key in the (round, kind) blocks it, so a later dead key is never hidden by an earlier key's result. With several good keys the fields are combined as follows: verdict = the most severe; tier = a gated one from ANY key (a refute stays required); merge_tree_clean and body_truthful = true only if ALL keys say so; threads_unresolved = the max; upheld = true only if ALL refute keys uphold; findings and commands are concatenated; every refute key is checked against the combined reviewer verdict. head_verified, gating, summary and prior_round_addressed are shown from the first key with the most severe verdict only.
 import json, sys, re, os
 VERDICTS = ("ship", "fix-needed", "owner-decision")
 KEYS = {"review": {"verdict": str, "head_verified": str, "tier": str, "gating": str, "merge_tree_clean": bool, "threads_unresolved": int, "body_truthful": bool, "prior_round_addressed": str, "findings": list, "commands_run": list, "summary": str, "blocked": bool},
@@ -16,6 +17,26 @@ def judge(kind, a):  # ("ok" | "absent" | "bad", why) for one agent's journal en
     if miss or not isinstance(v, dict): return "bad", "INVALID: missing or mistyped " + ", ".join(miss or ["the whole object"])
     if v["verdict" if kind == "review" else "counter_verdict"] not in VERDICTS: return "bad", "INVALID: verdict is not one of " + "/".join(VERDICTS)
     return ("bad", "BLOCKED: " + str(v.get("blocked_reason") or "no reason given")) if v["blocked"] else ("ok", "")
+SEVERITY = {v: i for i, v in enumerate(VERDICTS)}  # ship < fix-needed < owner-decision
+def agg(kind, ks):  # ("ok" | "absent" | "bad", why, result) over every journal key of one (PR, round, kind); ks is {key: {"failed", "result"}} or None
+    if not ks: return judge(kind, None) + (None, [])
+    outs = [(k, *judge(kind, a)) for k, a in ks.items()]
+    badr = [f"{w}" + (f" [journal key {k}]" if len(ks) > 1 else "") for k, st, w in outs if st != "ok"]
+    if badr: return "bad", "; ".join(badr), None, []
+    vk = "verdict" if kind == "review" else "counter_verdict"
+    goods = [ks[k]["result"] for k, _, _ in outs]  # journal-key order
+    top = max(goods, key=lambda r: SEVERITY[r[vk]])  # the first of the most severe: its prose fields are the ones shown
+    if len(goods) == 1: return "ok", "", top, goods
+    m = dict(top); m[vk] = top[vk]
+    for f in ("commands_run", "findings", "counter_findings"):
+        if f in top: m[f] = [x for r in goods for x in r[f]]
+    if kind == "review":
+        gated = [r["tier"] for r in goods if not tier_free(r["tier"])]
+        m["tier"] = gated[0] if gated else top["tier"]  # any key on a tier that requires a refute keeps that requirement
+        m["merge_tree_clean"] = all(r["merge_tree_clean"] for r in goods); m["body_truthful"] = all(r["body_truthful"] for r in goods)
+        m["threads_unresolved"] = max(r["threads_unresolved"] for r in goods)
+    else: m["upheld"] = all(r["upheld"] for r in goods)
+    return "ok", "", m, goods
 def selftest():
     import subprocess, tempfile
     rv = lambda v="ship", tier="docs only", **kw: {"verdict": v, "head_verified": "h", "tier": tier, "gating": "g", "merge_tree_clean": True, "threads_unresolved": 0, "body_truthful": True, "prior_round_addressed": "n/a", "findings": [], "commands_run": [], "summary": "s", "blocked": False, **kw}
@@ -65,6 +86,20 @@ def selftest():
         ("tier 'autonomous (SAFETY_MACHINERY)', ship, no refute -> blocked (not an allowlist entry)", L + [started("review", 1, "a"), res("a", rv(tier="autonomous (SAFETY_MACHINERY)"))], None, 2, ["verdict: **blocked**"], ["DR-037"]),
         ("retried key: started, failed, started, result -> the result, not BLOCKED", L + [started("review", 1, "a"), {"type": "failed", "key": "a"}, started("review", 1, "a"), res("a", rv("fix-needed"))], None, 0, ["verdict: **fix-needed**"], ["BLOCKED", "blocked"]),
         ("retried key then failed again: started, result, failed -> blocked", L + [started("review", 1, "a"), res("a", rv()), {"type": "failed", "key": "a"}], None, 2, ["verdict: **blocked**", "DEAD"], ["DR-037"]),
+        ("two keys under one label, the later one dead (started, no result) behind the first one's ship -> blocked, naming the key", r1 + [started("review", 1, "a2")], None, 2, ["verdict: **blocked**", "reviewer", "DEAD", "a2"], ["verdict: **ship**", "DR-037"]),
+        ("two keys under one label, the later one FAILED behind the first one's ship -> blocked", r1 + [started("review", 1, "a2"), {"type": "failed", "key": "a2"}], None, 2, ["verdict: **blocked**", "DEAD"], ["DR-037"]),
+        ("two keys under one label, the EARLIER dead and the later one a ship -> blocked (a later result does not cover an earlier dead key)", L + [started("review", 1, "a0")] + r1[1:], None, 2, ["verdict: **blocked**", "DEAD"], ["DR-037"]),
+        ("two good reviewer keys, one ship and one fix-needed -> the most severe verdict, fix-needed", L + [started("review", 1, "a"), res("a", rv()), started("review", 1, "a2"), res("a2", rv("fix-needed")), started("refute", 1, "b"), res("b", rf(False, "fix-needed"))], None, 0, ["verdict: **fix-needed**"], ["DR-037"]),
+        ("a `started` row after a result under the SAME key clears the result (a restarted agent that returned nothing is dead): started, result, started -> blocked", L + [started("review", 1, "a"), res("a", rv()), started("review", 1, "a")], None, 2, ["verdict: **blocked**", "reviewer", "DEAD"], ["verdict: **ship**", "DR-037"]),
+        ("the round compare is an integer: r9 ships, then r10's reviewer started and returned nothing -> blocked, labelled round 10 (a string compare would pick r9)", L + [started("review", 9, "a"), res("a", rv()), started("refute", 9, "b"), res("b", rf()), started("review", 10, "c")], None, 2, ["verdict: **blocked**", "round 10"], ["verdict: **ship**", "round 9", "DR-037"]),
+        ("two good review keys tie on ship, the SECOND on a gated tier, no refute -> blocked (a dropped key must not hide a tier that needs a refute)", L + [started("review", 1, "a"), res("a", rv()), started("review", 1, "a2"), res("a2", rv(tier=SM))], None, 2, ["verdict: **blocked**", "refuter"], ["verdict: **ship**", "DR-037"]),
+        ("the same two keys in the reversed order -> blocked too (the answer does not depend on journal order)", L + [started("review", 1, "a2"), res("a2", rv(tier=SM)), started("review", 1, "a"), res("a", rv())], None, 2, ["verdict: **blocked**", "refuter"], ["verdict: **ship**", "DR-037"]),
+        ("two refute keys, the second upheld=true but its counter-verdict differs from the reviewer's -> blocked (every refute key is checked, not only the one picked)", L + [started("review", 1, "r"), res("r", rv("fix-needed", SM)), started("refute", 1, "b"), res("b", rf(False, "ship")), started("refute", 1, "b2"), res("b2", rf(True, "ship"))], None, 2, ["verdict: **blocked**", "refuter", "INVALID"], ["verdict: **ship**", "DR-037"]),
+        ("two good review keys, the second with merge_tree_clean=false and unresolved threads -> the worst value is rendered, not the first key's", L + [started("review", 1, "a"), res("a", rv()), started("review", 1, "a2"), res("a2", rv(merge_tree_clean=False, threads_unresolved=3))], None, 0, ["CONFLICT", "unresolved threads: 3"], ["merge-tree vs Alpha: clean"]),
+        ("refute keys disagree on upheld: b upheld (counter ship), b2 not upheld (counter fix-needed) -> fix-needed (upheld is combined as ALL, not ANY)", L + [started("review", 1, "a"), res("a", rv(tier=SM)), started("refute", 1, "b"), res("b", rf(True, "ship")), started("refute", 1, "b2"), res("b2", rf(False, "fix-needed"))], None, 0, ["verdict: **fix-needed**"], ["verdict: **ship**", "DR-037"]),
+        ("two reviewer keys, ship then fix-needed, docs only, no refute -> fix-needed (the most severe verdict wins; a refuter must not be the only thing that can raise it)", L + [started("review", 1, "a"), res("a", rv()), started("review", 1, "a2"), res("a2", rv("fix-needed"))], None, 0, ["verdict: **fix-needed**"], ["verdict: **ship**", "DR-037"]),
+        ("the same two reviewer keys in the reversed order -> fix-needed too", L + [started("review", 1, "a2"), res("a2", rv("fix-needed")), started("review", 1, "a"), res("a", rv())], None, 0, ["verdict: **fix-needed**"], ["verdict: **ship**", "DR-037"]),
+        ("two good review keys, the second with body_truthful=false -> body truthful: False is rendered (needs ALL keys)", L + [started("review", 1, "a"), res("a", rv()), started("review", 1, "a2"), res("a2", rv(body_truthful=False))], None, 0, ["body truthful: False"], ["body truthful: True"]),
         ("S8 no --prs -> exit 64 and writes nothing", r1, (), 64, [], ["verdict"]),
     ]
     for name, rows, extra, wantrc, has, hasnt in raw:
@@ -86,13 +121,13 @@ if len(sys.argv) < 3: print("usage: review-wave-verdict.py <journal.jsonl> <wave
 journal, wave = sys.argv[1], sys.argv[2]
 out_dir = sys.argv[3] if len(sys.argv) > 3 else os.path.dirname(os.path.abspath(__file__))
 rows = [json.loads(l) for l in open(journal) if l.strip()]
-res = {}  # pr -> round -> kind -> {"failed", "result"}: an agent is a (PR, round, kind), and its state is its LAST row per journal key
+res = {}  # pr -> round -> kind -> key -> {"failed", "result"}: an agent is a (PR, round, kind) and may span several journal keys; each key's state is its LAST row
 labels = {r["key"]: r.get("label", "") for r in rows if r.get("type") == "started" and r.get("key")}
 for r in rows:
     lab = r.get("label") or labels.get(r.get("key", ""), "") or (r.get("opts") or {}).get("label") or ""
     m = re.match(r"(review|refute):#(\d+) r(\d+)", lab)
     if not m: continue
-    a = res.setdefault(m.group(2), {}).setdefault(int(m.group(3)), {}).setdefault(m.group(1), {"failed": False, "result": None})
+    a = res.setdefault(m.group(2), {}).setdefault(int(m.group(3)), {}).setdefault(m.group(1), {}).setdefault(r.get("key") or "", {"failed": False, "result": None})
     if r.get("type") == "failed": a["failed"] = True; a["result"] = None
     elif "result" in r or "value" in r: a["failed"] = False; a["result"] = r["result"] if "result" in r else r["value"]
     elif r.get("type") == "started": a["failed"] = False; a["result"] = None  # a retry under the same key starts clean; only a later result clears it
@@ -104,11 +139,10 @@ for pr in list(res) + [p for p in expect if p not in res]:
     rounds = res.get(pr, {})
     cur = max(rounds) if rounds else None  # the LATEST round decides: an earlier round's ship never covers a later round's silence
     d = dict(rounds.get(cur, {})); d["round"] = cur if cur is not None else "?"
-    sv, wv = judge("review", d.get("review")); sf, wf = judge("refute", d.get("refute"))
-    rv, rf = (d["review"]["result"] if sv == "ok" else None), (d["refute"]["result"] if sf == "ok" else None)
+    sv, wv, rv, _ = agg("review", d.get("review")); sf, wf, rf, rfs = agg("refute", d.get("refute"))
     bad = ([("reviewer", wv)] if sv != "ok" else []) + ([("refuter", wf)] if sf == "bad" else [])
     if rv and rf is None and sf == "absent" and rv["verdict"] == "ship" and not tier_free(rv["tier"]): bad.append(("refuter", "MISSING: no refute ran, and a ship on tier " + rv["tier"][:60] + " cannot land without one (only an explicit autonomous / docs only tier may skip it)"))
-    if rv and rf and rf["upheld"] and rf["counter_verdict"] != rv["verdict"]: bad.append(("refuter", "INVALID: upheld=true but its counter_verdict differs from the reviewer's"))
+    if rv and any(x["upheld"] and x["counter_verdict"] != rv["verdict"] for x in rfs): bad.append(("refuter", "INVALID: upheld=true but its counter_verdict differs from the reviewer's"))
     if bad:
         out = [f"## Review round {d['round']} — verdict: **blocked**\n", "Not landable: the review wave did not return a complete, unblocked verdict, so nothing here is a ship.\n"]
         out += [f"- **{who}** (`{'review' if who == 'reviewer' else 'refute'}:#{pr} r{d['round']}`) {esc(why)}" for who, why in bad]

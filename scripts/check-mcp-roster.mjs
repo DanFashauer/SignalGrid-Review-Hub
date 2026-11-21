@@ -112,7 +112,8 @@ export const CONTEXT7_INSTALLER = "scripts/install-context7.mjs";
 const CONTEXT7_SPEC_RE = /@upstash\\?\/context7-mcp@([^\s`"'(),;\]]+)/g;
 const specToken = (raw) => raw.replace(/[.:!?]+$/, "");
 // A .json file is first PARSED (JSON.parse) and walked (context7JsonFindings): keys, values and command/args
-// context come from the data. Only unparseable JSON (JSONC) falls back to the line reader below. A YAML value
+// context come from the data: a runner object's context reaches EVERY key except a metadata denylist (`description`,
+// `name`, `title`, `summary`, `notes`, `comment`, `label`, `env`), so an unfamiliar key name never loosens it. Only unparseable JSON (JSONC) falls back to the line reader below. A YAML value
 // that IS a spec and continues onto a more-indented line is REFUSED (yamlSpecContinuations): no YAML parser is
 // a dependency here, so a shape this gate cannot fold fails closed instead of passing.
 // Each line is TOKENIZED the way its reader would see it, then every token
@@ -713,11 +714,12 @@ export function context7JsonFindings(text, pin) {
         // the program under another key (`cmd`, `program`), or a command ARRAY whose first word is the runner
         [node.command?.cmd, node.command?.program, node.path, node.cmd, node.program].some(isRunnerCommand) ||
         (Array.isArray(node.command) && isRunnerCommand(node.command[0]));
-      // the runner context reaches only the keys that carry the program and its arguments; a metadata sibling
-      // (`description`, `name`, …) mentioning the package is not a call
-      const RUNNER_KEYS = /^(?:args|command|path|cmd|program)$/;
+      // the runner context reaches EVERY key except a metadata denylist (fail-closed: an unfamiliar key name such as
+      // `arguments`, `argv` or `options` still carries it); a metadata sibling (`description`, `name`, …) that merely
+      // mentions the package is not a call
+      const METADATA_KEYS = /^(?:description|name|title|summary|notes|comment|label|env)$/i;
       for (const [k, v] of Object.entries(node)) {
-        const here = runner || (RUNNER_KEYS.test(k) ? hereAll : false);
+        const here = runner || (METADATA_KEYS.test(k) ? false : hereAll);
         if (CONTEXT7_KEY_RE.test(k)) {
           // a string, an object's `"."` (npm overrides) or `version` (package-lock's `node_modules/<pkg>`); a non-string
           // scalar (`null`, `true`, `4`) is no pin at all
@@ -2352,10 +2354,17 @@ server.registerTool(
   {
     const plant = `RUN ["npx","--x=[a]","-y","@upstash/context7-mcp@${realPin}>\\t<5"]`;
     checks.push(["[2582] a floating spec in a Docker exec form whose other element holds a bracket is flagged", context7SpecFindings(plant, realPin, "shell").some((f) => f.unpinned)]);
-    checks.push(["[2582] revert mutant: the old bracket-free regex alone MISSES that array (the fixture can fail)", ![...plant.matchAll(/\[[^[\]\n]*\]/g)].some((m) => { try { return JSON.parse(m[0]).some((w) => /context7/.test(w)); } catch { return false; } })]);
+    checks.push(["[2582] the plant's array is found by jsonArrayTexts and parses to the spec word (a reader that skipped it would miss)", jsonArrayTexts(plant).some((a) => { try { return JSON.parse(a).some((w) => /context7/.test(w)); } catch { return false; } })]);
     checks.push(["[2582] a pinned exec form holding a bracketed element is not flagged (no false positive)", !context7SpecFindings(`RUN ["npx","--x=[a]","-y","@upstash/context7-mcp@${realPin}"]`, realPin, "shell").some((f) => f.unpinned || f.stale)]);
     checks.push(["[2582] jsonArrayTexts honours quotes and escapes", jsonArrayTexts('A ["a]","b\\"]"] B').includes('["a]","b\\"]"]')]);
     checks.push(["[2583] a runner object's metadata sibling naming context7 is not a versionless call", context7JsonFindings(`{"command":"npx","args":["other@1.0.0"],"description":"Use ${NAME} for docs"}`, realPin)?.length === 0]);
+    for (const [what, body] of [
+      ["`arguments`", `{"program":"npx","arguments":["-y","${NAME}"]}`],
+      ["`argv`", `{"command":"npx","argv":["-y","${NAME}"]}`],
+      ["`options.args`", `{"command":"npx","options":{"args":["-y","${NAME}"]}}`],
+      ["`commandLine`", `{"command":"npx","commandLine":["-y","${NAME}"]}`],
+    ])
+      checks.push([`[2583] must-flag: a runner object's ${what} carrying the bare name is still named`, (context7JsonFindings(body, realPin) ?? []).length >= 1]);
     checks.push(["[2583] the same runner object with the name in args is still named", (context7JsonFindings(`{"command":"npx","args":["-y","${NAME}"],"description":"d"}`, realPin) ?? []).length >= 1]);
   }
   checks.push(["JSONC (comments, trailing comma) is parsed after stripJsonc", context7JsonFindings(`{ // c\n "a": 1, /* x */ }`, realPin)?.length === 0]);

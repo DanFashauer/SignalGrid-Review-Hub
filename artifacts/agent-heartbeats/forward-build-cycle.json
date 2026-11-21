@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-11-20T22:11:55.369Z",
-  "result": "22:11Z fire: no dispatch. The build wave stays held because independent Mac operation is the owner's exclusive critical path. #2423: required CI was green on f1f1ae1b (gating 136572299354), but 3 of 4 Mac slices failed there (loop-state self-test case R9-skl-deepen; a throughput bench 'no parallel gain'; slice 3 stopped with its main step unfinished and its log returns 404), causes unknown, posted on the PR. #2439 then landed, so the code catch-up 3027f445 is re-running the full local chain. #2368: independent reviewer APPROVED 8a228a76; its full chain passed on 8a380437; it needs the same catch-up (a20aa43b), queued after #2423. Both land under DR-037 before the 23:55Z hold if green, otherwise after Mac proof #2443 reports. in flight H/S/O = 0/0/0. sub-brains: signalgrid-mcp not re-read this fire. owner queue: none new."
+  "firedAt": "2026-11-21T00:11:14.187Z",
+  "result": "acted: landed #2423 (bc97de34, DR-037); #2368 published cae7b8f4, gating green, Mac aggregate pending; no new workers dispatched (owner priority: independent Mac operation is the critical path) | in flight H/S/O = 0/0/0 | sub-brains: none spawned | owner: Mac Claude Code sign-in lapsed, blocks proof #2443"
 }

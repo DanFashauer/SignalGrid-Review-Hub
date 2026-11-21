@@ -5944,3 +5944,24 @@ b74f9a4d is an ancestor of origin/SignalGrid_Alpha
 ```
 
 Verdict: holds for the merge, tree, ancestry and delta claims. #2447 merged from exact head `15c93c51` as `b74f9a4dbaca87ee51fe6c42a555c4b8c1693e62`, with parents `59ab1d17` and that head, and tree `43e49b6f` equal to the head's. The local and Mac results are attributed receipts on the heads named, not new executions. No owner-hardware evidence, private completion seal, readiness change or independent-operation proof is asserted.
+
+## 2026-11-21 — #2465 (e9b3e797) landed under DR-037: first local-brain build from issue to merge
+
+The Mac's local brain took issue #2461 ("Refuse a saved checkpoint whose timestamp is not a real time"), built the fix, cleared both publication privacy reviews and opened PR #2465 at 07:43:57Z with head `a2610033c04de5e03aaf1a16c30532f614e24668`, unattended (Mac RESULT on #439, comment 7059662996). Its own handoff step then stopped on a retained-record bug, which the Mac reports fixed. Under the standing duty the Mac assigned on #439 (7059967838), Cloud was the final pass.
+
+What the change does: `scripts/mac/local-brain/job-state.mjs` (+2) makes `restore` refuse a checkpoint entry whose `timestamp` does not parse or does not round-trip exactly through `new Date(ts).toISOString()`. The new test `scripts/mac/local-brain/test/job-state-restore-timestamp.test.mjs` (+73) has 7 offline cases. The new clauses only add refusals.
+
+Evidence, each on the head named:
+
+- Source review (#2465 comment 7059543474) found no blocker. The new test on the unchanged helper at `91776c00` gave `# pass 2 / # fail 5` (RED); on `a2610033` it gave `# tests 7 / # pass 7 / # fail 0` (GREEN). `node scripts/check-local-build-regressions.mjs --suite scripts/mac/local-brain/test` reported `{"targets":14,"failed":0,"result":"pass"}`.
+- Cloud local, on `a2610033`: `node scripts/preflight.mjs` exit 0 (07:52:16–08:30:19Z, "Preflight PASSED — everything it runs is green.") and `pnpm run verify:breadth` exit 0 (to 08:31:47Z, "Breadth lane PASSED — 58 breadth proofs green").
+- The automatic PR body lacked the five sections `phase-pr-evidence` requires. Cloud repaired the body only and kept every original line and limitation; the check then passed (job 136780784159). The generator defect stays with the Mac writer.
+- On `a2610033`, hosted Mac slice 3 timed out `proof:device-management-health` at the 120000 ms ceiling, and slice 4's throughput bench measured 0.65x. The causes are unproven (comment 7059672771). The same steps passed on #2464 with byte-identical code. These are history, not qualification of the landed head.
+- The branch was updated onto `9e82265b`. The new head is `da54ace16148b94bd35c27deeb6774ea6fa6f190`; its delta from `a2610033` is `artifacts/agent-heartbeats/mac-lane-tick.json` only.
+- On `da54ace1`: gating check 136793365407 passed, Mac slices 1–4 passed, and the Mac aggregate 136795771967 passed. There were 0 review threads.
+
+The merge: `e9b3e7975d00d5ab35e25c81463d000a5cb10349` at 09:03:06Z, with `expectedHeadSha` `da54ace16148b94bd35c27deeb6774ea6fa6f190`. Its ordered parents are `9e82265b` and `da54ace1`, and its tree equals the head tree. #2461 was closed as completed. The branch `mac/brain-build-7c4c27739d4a4056` is kept, as the Mac asked (7060061249).
+
+Consequence, recorded as fact: the Mac said landing was safe after #2466's freeze, but #2465 changes the same `job-state.mjs` input. So #2466 stopped after qualification with "Original typed public source changed", and no PR was opened (Mac RESULT 7060465747). The duty is corrected: Cloud lands only outside a Mac START..RESULT window.
+
+Verdict: holds for the merge, tree, ancestry and delta claims. The local, CI and review results are attributed receipts on the heads named, not new executions. This is the first protected landing through the hybrid route. It is not the later scheduled ordinary cycle the independence proof still needs. No owner-hardware evidence, private completion seal or readiness change is asserted.

@@ -5944,3 +5944,142 @@ b74f9a4d is an ancestor of origin/SignalGrid_Alpha
 ```
 
 Verdict: holds for the merge, tree, ancestry and delta claims. #2447 merged from exact head `15c93c51` as `b74f9a4dbaca87ee51fe6c42a555c4b8c1693e62`, with parents `59ab1d17` and that head, and tree `43e49b6f` equal to the head's. The local and Mac results are attributed receipts on the heads named, not new executions. No owner-hardware evidence, private completion seal, readiness change or independent-operation proof is asserted.
+
+## 2026-11-21 — #2465 (e9b3e797) landed under DR-037: first local-brain build from issue to merge
+
+The Mac's local brain took issue #2461 ("Refuse a saved checkpoint whose timestamp is not a real time"), built the fix, cleared both publication privacy reviews and opened PR #2465 at 07:43:57Z with head `a2610033c04de5e03aaf1a16c30532f614e24668`, unattended (Mac RESULT on #439, comment 7059662996). Its own handoff step then stopped on a retained-record bug, which the Mac reports fixed. Under the standing duty the Mac assigned on #439 (7059967838), Cloud was the final pass.
+
+What the change does: `scripts/mac/local-brain/job-state.mjs` (+2) makes `restore` refuse a checkpoint entry whose `timestamp` does not parse or does not round-trip exactly through `new Date(ts).toISOString()`. The new test `scripts/mac/local-brain/test/job-state-restore-timestamp.test.mjs` (+73) has 7 offline cases. The new clauses only add refusals.
+
+Evidence, each on the head named:
+
+- Source review (#2465 comment 7059543474) found no blocker. The new test on the unchanged helper at `91776c00` gave `# pass 2 / # fail 5` (RED); on `a2610033` it gave `# tests 7 / # pass 7 / # fail 0` (GREEN). `node scripts/check-local-build-regressions.mjs --suite scripts/mac/local-brain/test` reported `{"targets":14,"failed":0,"result":"pass"}`.
+- Cloud local, on `a2610033`: `node scripts/preflight.mjs` exit 0 (07:52:16–08:30:19Z, "Preflight PASSED — everything it runs is green.") and `pnpm run verify:breadth` exit 0 (to 08:31:47Z, "Breadth lane PASSED — 58 breadth proofs green").
+- The automatic PR body lacked the five sections `phase-pr-evidence` requires. Cloud repaired the body only and kept every original line and limitation; the check then passed (job 136780784159). The generator defect stays with the Mac writer.
+- On `a2610033`, hosted Mac slice 3 timed out `proof:device-management-health` at the 120000 ms ceiling, and slice 4's throughput bench measured 0.65x. The causes are unproven (comment 7059672771). The same steps passed on #2464 with byte-identical code. These are history, not qualification of the landed head.
+- The branch was updated onto `9e82265b`. The new head is `da54ace16148b94bd35c27deeb6774ea6fa6f190`; its delta from `a2610033` is `artifacts/agent-heartbeats/mac-lane-tick.json` only.
+- On `da54ace1`: gating check 136793365407 passed, Mac slices 1–4 passed, and the Mac aggregate 136795771967 passed. There were 0 review threads.
+
+The merge: `e9b3e7975d00d5ab35e25c81463d000a5cb10349` at 09:03:06Z, with `expectedHeadSha` `da54ace16148b94bd35c27deeb6774ea6fa6f190`. Its ordered parents are `9e82265b` and `da54ace1`, and its tree equals the head tree. #2461 was closed as completed. The branch `mac/brain-build-7c4c27739d4a4056` is kept, as the Mac asked (7060061249).
+
+What happened to #2466: it stopped after qualification with the generic reason "Original typed public source changed", and no PR was opened. Two causes are on record, and neither is proven to be the only one.
+- The Mac attributed it to #2465 landing inside #2466's window: both change the same required `job-state.mjs` input (Mac RESULT 7060465747).
+- Root then reported (#439, 7060661900) that the typed public-source check also depends on intake being enabled. Root's own temporary intake pause would therefore have refused that boundary alone.
+
+The duty is corrected either way: Cloud lands only outside a Mac START..RESULT window.
+
+Command: run by the cloud lane against a fresh fetch of canonical, read-only, exactly as follows (`set -e`):
+
+```bash
+date -u +%Y-%m-%dT%H:%M:%SZ
+git log -1 --format='%H parents=%P tree=%T' e9b3e7975d00d5ab35e25c81463d000a5cb10349
+git log -1 --format='%H tree=%T' da54ace16148b94bd35c27deeb6774ea6fa6f190
+git merge-base --is-ancestor e9b3e7975d00d5ab35e25c81463d000a5cb10349 origin/SignalGrid_Alpha && echo "e9b3e797 is an ancestor of origin/SignalGrid_Alpha"
+git diff --stat 9e82265b0a89b6c338bd8c77eff2afd432fa5804 e9b3e7975d00d5ab35e25c81463d000a5cb10349
+git diff --stat a2610033c04de5e03aaf1a16c30532f614e24668 da54ace16148b94bd35c27deeb6774ea6fa6f190
+```
+
+Output, verbatim:
+
+```
+2026-11-21T10:00:35Z
+e9b3e7975d00d5ab35e25c81463d000a5cb10349 parents=9e82265b0a89b6c338bd8c77eff2afd432fa5804 da54ace16148b94bd35c27deeb6774ea6fa6f190 tree=8ed580af9a30a8326f81111fe2eab3614842fc0a
+da54ace16148b94bd35c27deeb6774ea6fa6f190 tree=8ed580af9a30a8326f81111fe2eab3614842fc0a
+e9b3e797 is an ancestor of origin/SignalGrid_Alpha
+ scripts/mac/local-brain/job-state.mjs              |  2 +
+ .../test/job-state-restore-timestamp.test.mjs      | 73 ++++++++++++++++++++++
+ 2 files changed, 75 insertions(+)
+ artifacts/agent-heartbeats/mac-lane-tick.json | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+```
+
+Verdict: holds for the merge, tree, ancestry and delta claims. The local, CI and review results are attributed receipts on the heads named, not new executions. This is the first protected landing through the hybrid route. It is not the later scheduled ordinary cycle the independence proof still needs. No owner-hardware evidence, private completion seal or readiness change is asserted.
+
+## 2026-11-21 — #2472 (cc86c123) landed under DR-037: second local-brain build, published unattended; protected landing after Mac RESULT
+
+The Mac's local brain took issue #2471 (checkpoint-type whitespace), built, froze and qualified the fix, cleared both publication privacy reviews and opened PR #2472 at 11:10:35Z, unattended. Its head was `924a2793fba690c496e7722365a50a243461d811` on base `5bc3966e`. The Mac's RESULT on #439 (comment 7061721830, created 11:11:02Z) followed the publication, reported it and released the hold. Unlike #2465, the generated body carried all five sections `phase-pr-evidence` requires, so no body repair was needed. Main verified the publication (7061752470). Cloud was the final pass under the standing duty.
+
+What the change does: `scripts/mac/local-brain/job-state.mjs` (+4) makes `checkpoint` and `restore` refuse a checkpoint `type` that has surrounding whitespace. The new test `scripts/mac/local-brain/test/job-state-type-whitespace.test.mjs` (+86) has 6 offline cases. The new clauses only add refusals.
+
+Evidence, each on the head named:
+
+- Cloud local, on `924a2793`: `node --test scripts/mac/local-brain/test/job-state-type-whitespace.test.mjs` gave `# tests 6 / # pass 6 / # fail 0`. The full local-brain directory showed the same 23 markdown-it differential failures on base `5bc3966e` and on the head (identical test names, numbering shifted by the 6 new tests). They are pre-existing in that checkout and are neither this change nor passes.
+- The PR body quotes the Mac's local preflight (four slices plus aggregate) and breadth as passed. It names two UNAVAILABLE and three SELF-SKIPPED prerequisites, which remain non-passes. Main recorded these as attributed retained-run observations (#2472 comment 7061832664).
+- Main's source review 6004834028 (COMMENT) found no blocker. There were 0 review threads.
+- On `924a2793`: gating check 136830342436 passed, Mac slices 1–4 passed, Mac aggregate 136832584319 passed, and `phase-pr-evidence` 136827209467 passed.
+
+The merge: `cc86c1237eaa5e1d9071535a16723443d7da0b1c` at 11:33:40Z, after the RESULT, with `expectedHeadSha` `924a2793fba690c496e7722365a50a243461d811`, outside any Mac START..RESULT window. Its ordered parents are `5bc3966e` and `924a2793`, and its tree equals the head tree. #2471 was closed as completed. The branch `mac/brain-build-91b7337b07d74d14` is kept.
+
+Command: run by the cloud lane against a fresh fetch of canonical, read-only, exactly as follows (`set -e`):
+
+```bash
+date -u +%Y-%m-%dT%H:%M:%SZ
+git log -1 --format='%H parents=%P tree=%T' cc86c1237eaa5e1d9071535a16723443d7da0b1c
+git log -1 --format='%H tree=%T' 924a2793fba690c496e7722365a50a243461d811
+git merge-base --is-ancestor cc86c1237eaa5e1d9071535a16723443d7da0b1c origin/SignalGrid_Alpha && echo "cc86c123 is an ancestor of origin/SignalGrid_Alpha"
+git diff --stat 5bc3966eed0e86e39f63ac54db9258a80b257a1b cc86c1237eaa5e1d9071535a16723443d7da0b1c
+```
+
+Output, verbatim:
+
+```
+2026-11-21T11:34:49Z
+cc86c1237eaa5e1d9071535a16723443d7da0b1c parents=5bc3966eed0e86e39f63ac54db9258a80b257a1b 924a2793fba690c496e7722365a50a243461d811 tree=7dd5de86955e19b2a0c744b7b4f2a9b03ce28508
+924a2793fba690c496e7722365a50a243461d811 tree=7dd5de86955e19b2a0c744b7b4f2a9b03ce28508
+cc86c123 is an ancestor of origin/SignalGrid_Alpha
+ scripts/mac/local-brain/job-state.mjs              |  4 +
+ .../test/job-state-type-whitespace.test.mjs        | 86 ++++++++++++++++++++++
+ 2 files changed, 90 insertions(+)
+```
+
+Verdict: holds for the merge, tree, ancestry and delta claims. The Mac's local, CI and review results are attributed receipts on the head named, not new executions. This is the second protected landing through the hybrid route and the first with no manual body repair. It was not yet a later scheduled ordinary cycle with no session acting as controller: the Mac posted START and RESULT itself, and the originating-issue reference is still missing from automatic bodies. No owner-hardware evidence, private completion seal or readiness change is asserted.
+
+## 2026-11-21 — #2473 (0cd1b2a8) landed under DR-037: lane publications never arm their own auto-merge
+
+The problem: lane mail and heartbeats armed their own auto-merge and could merge inside a Mac START..RESULT window. #2463 did, at 07:10Z, and Main disarmed #2462, #2467 and #2469 by hand. A first repair (b760a6c9) read a shared hold ref before arming. Main showed that this was a race (#439 7061157919): a HOLD published between the read and the arm still let an already-green PR merge.
+
+The landed change:
+- `scripts/lane-deliver.mjs`
+  - Never calls `gh pr merge --auto`. Every new receipt carries `steward_pending: true`, and the Cloud steward lands the PR outside a window.
+  - Readback counts an unarmed OPEN PR as pending only with positive push evidence: the producer binding plus an intact raw `.push` capture bound to receipt, source, head and ref, with exit 0.
+  - Reports the real arming state: true, false for null, null when unknown.
+- `scripts/mac/lane-tick.sh` (`_hb_pending_hand`): the consumer accepts the one new `steward_pending` key only together with the matching receipt flag and an unarmed state.
+- Legacy receipts keep the old rule. These are the three findings of #439 7061217609, closed at source level by Main and the independent reader (7061664893).
+
+Evidence, on the final head `9363a1ed592ac19c052f347447134a10ffa0aac9` unless named:
+
+- Cloud local: `node scripts/preflight.mjs` exit 0 (11:34:28–12:09:46Z, "Preflight PASSED — everything it runs is green."; backup-restore and db-role-split SELF-SKIPPED with `DATABASE_URL` unset, not passes) and `pnpm run verify:breadth` exit 0 (to 12:10:59Z, "Breadth lane PASSED — 58 breadth proofs green").
+- `node scripts/check-lane-delivery.mjs`: `200 passed, 0 failed`. The new controls failed 5 against 4789991's producer and consumer, and 3 with only the consumer reverted. The causal-transition control failed against b760a6c9's script. These are author executions.
+- CI: gating check 136835898299 passed, Mac slices 1–4 passed, Mac aggregate 136838840300 passed. CodeQL 136833604571 reported "No new alerts in code changed by this pull request".
+- CodeQL alerts 280 and 281 (js/bad-code-sanitization) were in the fixture's generated fake `gh` source on a25cce84. They were fixed at b8331f5d by passing the two paths through the environment, and their threads were resolved after the re-scan reported them fixed.
+- Main's COMMENT reviews 6004887423 and 6004937681 found no blocker. Codex had no findings. There were 0 open threads.
+
+The merge: `0cd1b2a8d075d3cc8decd6769dd3d0f3d90c6712`, with `expectedHeadSha` `9363a1ed592ac19c052f347447134a10ffa0aac9`, outside any Mac window. Its ordered parents are `cc86c123` and `9363a1ed`, and its tree equals the head tree. The branch `claude/merge-hold-boundary` is kept.
+
+Command: run by the cloud lane against a fresh fetch of canonical, read-only, exactly as follows (`set -e`):
+
+```bash
+date -u +%Y-%m-%dT%H:%M:%SZ
+git log -1 --format='%H parents=%P tree=%T' 0cd1b2a8d075d3cc8decd6769dd3d0f3d90c6712
+git log -1 --format='%H tree=%T' 9363a1ed592ac19c052f347447134a10ffa0aac9
+git merge-base --is-ancestor 0cd1b2a8d075d3cc8decd6769dd3d0f3d90c6712 origin/SignalGrid_Alpha && echo "0cd1b2a8 is an ancestor of origin/SignalGrid_Alpha"
+git diff --stat cc86c1237eaa5e1d9071535a16723443d7da0b1c 0cd1b2a8d075d3cc8decd6769dd3d0f3d90c6712
+```
+
+Output, verbatim:
+
+```
+2026-11-21T12:12:54Z
+0cd1b2a8d075d3cc8decd6769dd3d0f3d90c6712 parents=cc86c1237eaa5e1d9071535a16723443d7da0b1c 9363a1ed592ac19c052f347447134a10ffa0aac9 tree=b381e17abe56ef1345124b9203b330cca99cede1
+9363a1ed592ac19c052f347447134a10ffa0aac9 tree=b381e17abe56ef1345124b9203b330cca99cede1
+0cd1b2a8 is an ancestor of origin/SignalGrid_Alpha
+ docs/LANE_COORDINATION.md                          |   6 +-
+ scripts/check-lane-delivery.mjs                    | 201 +++++++++++++++++++--
+ scripts/lane-deliver.mjs                           |  77 +++++++-
+ scripts/lib/merge-hold.mjs                         |  19 ++
+ scripts/mac/lane-tick.sh                           |   8 +-
+ .../test-fixtures/lane-push/push_result_fixture.py |   4 +-
+ 6 files changed, 284 insertions(+), 31 deletions(-)
+```
+
+Verdict: holds for the merge, tree, ancestry and delta claims. The local gate results are this lane's executions on the head named; the CI and review results are attributed receipts. Not covered: PRs armed before this landed, and notification publication beyond the tick-owner fence. Lane PRs now wait for the Cloud steward. No independence, owner-hardware, private completion seal or readiness claim is made.

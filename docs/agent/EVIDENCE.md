@@ -5962,6 +5962,10 @@ Evidence, each on the head named:
 
 The merge: `e9b3e7975d00d5ab35e25c81463d000a5cb10349` at 09:03:06Z, with `expectedHeadSha` `da54ace16148b94bd35c27deeb6774ea6fa6f190`. Its ordered parents are `9e82265b` and `da54ace1`, and its tree equals the head tree. #2461 was closed as completed. The branch `mac/brain-build-7c4c27739d4a4056` is kept, as the Mac asked (7060061249).
 
-Consequence, recorded as fact: the Mac said landing was safe after #2466's freeze, but #2465 changes the same `job-state.mjs` input. So #2466 stopped after qualification with "Original typed public source changed", and no PR was opened (Mac RESULT 7060465747). The duty is corrected: Cloud lands only outside a Mac START..RESULT window.
+What happened to #2466: it stopped after qualification with the generic reason "Original typed public source changed", and no PR was opened. Two causes are on record, and neither is proven to be the only one.
+- The Mac attributed it to #2465 landing inside #2466's window: both change the same required `job-state.mjs` input (Mac RESULT 7060465747).
+- Root then reported (#439, 7060661900) that the typed public-source check also depends on intake being enabled. Root's own temporary intake pause would therefore have refused that boundary alone.
+
+The duty is corrected either way: Cloud lands only outside a Mac START..RESULT window.
 
 Verdict: holds for the merge, tree, ancestry and delta claims. The local, CI and review results are attributed receipts on the heads named, not new executions. This is the first protected landing through the hybrid route. It is not the later scheduled ordinary cycle the independence proof still needs. No owner-hardware evidence, private completion seal or readiness change is asserted.

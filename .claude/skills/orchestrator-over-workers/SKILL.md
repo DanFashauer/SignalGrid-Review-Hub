@@ -311,6 +311,8 @@ A stage is **stalled on a resource** when its own output says it was cut off or 
 Then:
 
 1. **Hand it off; don't wait on it.**
+   - A queued or held stage is still a live original. Re-dispatch only after that original has reached a supported cancellation or terminal state, with its owned children and reservations confirmed closed, or through a genuine exclusive transfer of custody. A stage whose outward result is unknown is read back, never reissued. A privacy or safety reject is never reissued, and no handoff bypasses a typed permission or a per-lineage attempt limit.
+   - Keep the evidence platform. A handoff may move preparation and portable checks (code, Linux preflight, review). It never lets cloud stand in for evidence that must come from the installed Mac, a device, or a specific admitted runner. Prefer the existing qualified session for that platform before creating another. Account, cap and permission changes are separate decisions, never part of a handoff.
    - Re-dispatch the same spec to a fresh cloud session (`create_session`, its own container, so it adds no CPU or disk here), or to the other lane, by mail or a PR comment for the session that owns the branch.
    - A spawn killed by a usage limit resolves UP a tier (DR-047), and is re-issued, never dropped.
    - Never put a second writer on a branch whose worker is alive. The handoff goes to that worker, or waits for it.
@@ -319,7 +321,7 @@ Then:
    - A stalled run is reported as stopped with no verdict. It is never counted as a pass, and never silently restarted under the same name.
 3. **Keep everything else moving.** Work that does not depend on the stalled stage continues in parallel. A shared resource (one container's CPU for timing gates, the merge window, one Mac host lock) gets one heavy user at a time, and the others queue behind it explicitly.
 4. **Make the learning stick.**
-   - When the same cap stalls a second time, fix its cause: a longer timeout, a lighter gate, a combined qualification, or a backlog row with the check that fails without the fix. Then add the lesson here or to the skill that owns the stage, so the next session starts from it.
+   - When the same cap stalls a second time, fix its cause with a source-backed repair: a test or self-test that fails without the fix, then the ordinary exact-head qualification. Numeric floors, coverage, and decision and approval rules stay as they are; an unrelated host or resource error never justifies weakening a gate or raising a threshold. If the repair cannot land now, file a backlog row naming the check that fails without it. Then add the lesson here or to the skill that owns the stage, so the next session starts from it.
    - A cap that only the owner can lift (paid capacity, account limits, a physical machine) goes to the owner in one line, per owner-comms.
 
 What this does not change: every DR-037 landing condition, the exact-head evidence rule, and the rule that a stage you could not run is reported as not run.

@@ -3917,7 +3917,7 @@ done
       hxPlain.ok && hxPlain.stdout.includes(hxSha) && !!hxCalled && hxCalled.trim() !== "", "this filesystem is case-insensitive, so git's own git-remote-https is also git-remote-HTTPS and git runs it before the fixture's helper",
       hxWhole.status === 1 && /✗ Review Hub URL\s+git configuration rewrites the Hub URL .* to HTTPS:\/\/github\.com\//.test(hxWhole.out) && !hxWhole.out.includes("all present on the Review Hub") && !/adds credentials/.test(hxWhole.out) && hxAfter === "");
     // (2) A display prints less: everything before the LAST @ ahead of the next / is userinfo, whatever it holds.
-    const SECRET = "sEcr3t", TAIL = "Z9", leaks = (t) => String(t).includes(SECRET) || String(t).includes(TAIL);
+    const SECRET = "sEcr3tLk7", TAIL = "Q8tailZ9w", leaks = (t) => String(t).includes(SECRET) || String(t).includes(TAIL);
     const pwShapes = [["?", `http://agent:${SECRET}?${TAIL}@127.0.0.1:9`], ["#", `http://agent:${SECRET}#${TAIL}@127.0.0.1:9`], ["backslash", `http://agent:${SECRET}\\${TAIL}@127.0.0.1:9`], ["slash", `http://agent:${SECRET}/${TAIL}@127.0.0.1:9`]];
     check("a credential that holds a raw ?, # or backslash is not printed by the display helpers (noUserinfo with and without all, displayUrl), every URL of a string is scrubbed, a plain user name survives only where it is not asked to go, and an scp-style user:secret@host:path loses its userinfo (R18-display-unit)",
       pwShapes.every(([, u]) => noUserinfo(u, true) === "http://127.0.0.1:9" && noUserinfo(u) === "http://127.0.0.1:9" && displayUrl(u) === "http://127.0.0.1:9") &&

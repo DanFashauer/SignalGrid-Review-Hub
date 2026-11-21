@@ -45,8 +45,16 @@
 //      `isMainModule` reference that is not the named import or an exact direct call (swapped, aliased, nested,
 //      member, `?.(`, `.call`, a wrapper function, `new`/`typeof`/`void` before the call). Read from code through a
 //      lexer (comments, strings and regex literals blanked, template expressions kept); an argv read is followed
-//      through `const x = <argv read>` and `const [, x] = process.argv`; the self path is import.meta.url /
-//      .filename and a `const` bound to fileURLToPath(..), resolve(..) of it or `new URL(import.meta.url).pathname`.
+//      through `const x = <argv read>` and `const [, x] = process.argv`, through a name bound to `process`
+//      (`const p = process`), through `Reflect.get(process, <string>)` and through a name bound to the argv array
+//      (`const { argv[: x] } = process`); the self path is import.meta.url / .filename / .dirname / any string key
+//      on import.meta, a name bound by `const { url|filename|dirname[: x] } = import.meta`, a `const` bound to
+//      fileURLToPath(..), resolve(..) of it or `new URL(import.meta.url).pathname`, and a later plain assignment
+//      `x = <self path>`. A realpath excuse is void when either side holds a sequence (comma) expression or an array
+//      literal (`realpathSync(argv[1]) === (realpathSync("."), self)` compares nothing real). The basename-suffix
+//      wording needs an argv read with an index (`process.argv.includes("--json")` is the array, not argv[1]); a
+//      literal test also covers `?.endsWith(..)` and a pattern `.test(process.argv[1])` / `.exec(..)`. Any other term
+//      holding both is reported as "holds a process.argv read and this module's own path in one expression".
 //      NOT detected, each pinned as a miss in the self-test:
 //      a self path built by a function the detector cannot see; a comparison split across two statements by a
 //      boolean; `let x; x = process.argv[1]`; `const { argv: [, x] } = process`; `import { argv } from
@@ -166,11 +174,17 @@ const RAW_GUARD_PATTERNS = [
 // bracket form reaches the matcher as `process["    "][1]`).
 const ARGV1_SRC = String.raw`process\s*(?:\.\s*argv\s*(?:\?\.)?\s*\[\s*1\s*\]|\.\s*argv\s*\.\s*at\s*\(\s*1\s*\)|\[\s*(?:"\s*"|'\s*'|\x60\s*\x60)\s*\]\s*\[\s*1\s*\])`;
 const ARGV1 = new RegExp(ARGV1_SRC);
-const SELF_PATH = /import\s*\.\s*meta\s*\.\s*(?:url|filename)|\b(?:SELF_FILE|SELF_PATH|SELF|THIS_FILE|__filename)\b/;
+// `import.meta["url"]` reaches the matcher as `import.meta["   "]` (codeOnly blanks the key), so ANY string key on import.meta is
+// read as the module's path: url, filename and dirname are the keys a guard would use (B2129).
+const BLANK_KEY = String.raw`\[\s*(?:"\s*"|'\s*'|\x60\s*\x60)\s*\]`;
+const META = String.raw`import\s*\.\s*meta\s*`;
+const META_PATH = String.raw`${META}(?:\.\s*(?:url|filename|dirname)(?![\w$])|(?:\?\.)?\s*${BLANK_KEY})`;
+const META_URL = String.raw`${META}(?:\.\s*url(?![\w$])|(?:\?\.)?\s*${BLANK_KEY})`;
+const SELF_PATH = new RegExp(String.raw`${META_PATH}|\b(?:SELF_FILE|SELF_PATH|SELF|THIS_FILE|__filename)\b`);
 // A name bound to this module's own path, or to process.argv[1], is the same thing under another name. The name
 // pattern allows `$`, and the lookarounds below (not \b, which never matches before `$`) bound it.
 const NAME = String.raw`([A-Za-z_$][\w$]*)`;
-const SELF_VALUE = String.raw`(?:(?:\w+\.)?(?:resolve|normalize)\s*\(\s*)?(?:(?:\w+\.)?fileURLToPath\s*\(\s*import\s*\.\s*meta\s*\.\s*url\s*\)|import\s*\.\s*meta\s*\.\s*(?:url|filename)|new\s+URL\s*\(\s*import\s*\.\s*meta\s*\.\s*url\s*\)\s*\.\s*pathname)\s*\)?`;
+const SELF_VALUE = String.raw`(?:(?:\w+\.)?(?:resolve|normalize)\s*\(\s*)?(?:(?:\w+\.)?fileURLToPath\s*\(\s*${META_URL}\s*\)|${META_PATH}|new\s+URL\s*\(\s*${META_URL}\s*\)\s*\.\s*pathname)\s*\)?`;
 const SELF_ALIAS = new RegExp(String.raw`\b(?:const|let|var)\s+${NAME}\s*=\s*${SELF_VALUE}\s*[;,\n]`, "g");
 const ARGV_ALIAS = new RegExp(String.raw`\b(?:const|let|var)\s+${NAME}\s*=\s*${ARGV1_SRC}`, "g");
 const ARGV_DESTRUCTURE = new RegExp(String.raw`\b(?:const|let|var)\s*\[[^\],]*,\s*${NAME}[^\]]*\]\s*=\s*process\s*\.\s*argv\b`, "g");
@@ -178,29 +192,68 @@ const ARGV_DESTRUCTURE = new RegExp(String.raw`\b(?:const|let|var)\s*\[[^\],]*,\
 // followed by any accessor. The only reads ruled out are the ones that provably cannot yield argv[1]: an integer index
 // other than 1, `.length`, `.slice(k)` with k >= 2 and `.at(k)` with a non-negative k other than 1.
 const ARGV_ANY = /process\s*(?:(?:\?\.|\.)\s*argv(?![\w$])|\[\s*(?:"\s*"|'\s*'|\x60\s*\x60)\s*\])/g;
+/**
+ * Pure: the argv-read pattern for one file (B2129): `process` and every name bound to it (`const p = process`) read through any
+ * accessor, `Reflect.get(<process>, <string>)`, and every name bound to the argv ARRAY by `const { argv[: x] } = <process>`.
+ * With no aliases it is ARGV_ANY plus the Reflect.get spelling.
+ */
+export function argvAnyFor({ processNames = [], arrayNames = [] } = {}) {
+  const proc = ["process", ...processNames].map((n) => n.replace(/[\\^$.*+?()[\]{}|]/g, "\\$&")).join("|");
+  const parts = [
+    String.raw`(?<![\w$])(?:${proc})\s*(?:(?:\?\.|\.)\s*argv(?![\w$])|${BLANK_KEY})`,
+    String.raw`(?<![\w$])Reflect\s*\.\s*get\s*\(\s*(?:${proc})\s*,\s*(?:"\s*"|'\s*'|\x60\s*\x60)\s*\)`,
+  ];
+  if (arrayNames.length) parts.push(String.raw`(?<![\w$.])(?:${arrayNames.map((n) => n.replace(/[\\^$.*+?()[\]{}|]/g, "\\$&")).join("|")})(?![\w$])(?!\s*(?::|=(?!=)))`);
+  return new RegExp(parts.join("|"), "g");
+}
+const ARGV_ANY_PLAIN = argvAnyFor();
+const PROCESS_ALIAS = /\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*process\s*(?=[;,\n)])/g;
+const PROCESS_DESTRUCTURE = /\b(?:const|let|var)\s*\{([^}]*)\}\s*=\s*(?:process|PROC)\b(?!\s*(?:\.|\[))/g;
+const META_DESTRUCTURE = /\b(?:const|let|var)\s*\{([^}]*)\}\s*=\s*import\s*\.\s*meta\b(?!\s*(?:\.|\[))/g;
+/** Pure: names a `{ ... }` destructure part list binds from the given keys (`{ argv }`, `{ argv: a }`, `{ url, filename: f }`). */
+function destructured(list, keys) {
+  const out = [];
+  for (const part of list.split(",")) {
+    const d = new RegExp(String.raw`^\s*(${keys.join("|")})\s*(?::\s*([A-Za-z_$][\w$]*))?\s*(?:=[^=].*)?$`).exec(part);
+    if (d) out.push(d[2] ?? d[1]);
+  }
+  return out;
+}
+/** Pure: the argv context of one file in code form: names bound to `process`, and names bound to the argv array. */
+export function argvContext(code) {
+  const processNames = [...code.matchAll(PROCESS_ALIAS)].map((m) => m[1]);
+  const procAlt = ["process", ...processNames].join("|");
+  const arrayNames = [];
+  for (const m of code.matchAll(new RegExp(PROCESS_DESTRUCTURE.source.replace("process|PROC", procAlt), "g"))) arrayNames.push(...destructured(m[1], ["argv"]));
+  return { processNames, arrayNames };
+}
 const NOT_ARGV1 = [
   [/^\s*(?:\?\.)?\s*\[\s*(\d+)\s*\]/, (m) => Number(m[1]) !== 1],
   [/^\s*(?:\?\.|\.)\s*length(?![\w$])/, () => true],
   [/^\s*(?:\?\.|\.)\s*slice\s*\(\s*(\d+)\s*[,)]/, (m) => Number(m[1]) >= 2],
   [/^\s*(?:\?\.|\.)\s*at\s*\(\s*(\d+)\s*\)/, (m) => Number(m[1]) !== 1],
 ];
-/** Pure: the first read of process.argv in `text` that may yield argv[1], as { index }; null when there is none. */
-export function argvRead(text) {
-  for (const m of text.matchAll(ARGV_ANY)) {
+/**
+ * Pure: the first read of process.argv in `text` that may yield argv[1], as { index, indexed }; null when there is none.
+ * `indexed` is true when the read is followed by an index or `.at(..)` the detector cannot rule out as not-1 (an argv[1]
+ * candidate), false for the bare array (`process.argv.includes(..)`): only an indexed read can carry the suffix wording.
+ */
+export function argvRead(text, anyRe = ARGV_ANY_PLAIN) {
+  for (const m of text.matchAll(new RegExp(anyRe.source, "g"))) {
     const rest = text.slice(m.index + m[0].length);
     if (NOT_ARGV1.some(([re, rules]) => {
       const r = re.exec(rest);
       return r !== null && rules(r);
     })) continue;
-    return { index: m.index };
+    return { index: m.index, indexed: /^\s*(?:(?:\?\.)?\s*\[|(?:\?\.|\.)\s*at\s*\()/.test(rest) };
   }
   return null;
 }
 /** Pure: names bound by `const|let|var x = <a read of process.argv that may yield argv[1]>`. */
-function argvAliases(code) {
+function argvAliases(code, anyRe = ARGV_ANY_PLAIN) {
   const out = [];
-  for (const m of code.matchAll(/\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(?=process\b)/g)) {
-    const r = argvRead(code.slice(m.index + m[0].length, m.index + m[0].length + 200));
+  for (const m of code.matchAll(/\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(?=[A-Za-z_$])/g)) {
+    const r = argvRead(code.slice(m.index + m[0].length, m.index + m[0].length + 200), anyRe);
     if (r && r.index === 0) out.push(m[1]);
   }
   return out;
@@ -428,6 +481,42 @@ function helperReferences(code) {
 }
 
 /**
+ * Pure: names bound to this module's own path (B2129): `const x = <self value>`, `const { url|filename|dirname[: x] } =
+ * import.meta`, and a plain later assignment `x = <self value or a self name>` (the `let me; me = self` twin of the argv-side
+ * `let x; x = process.argv[1]` miss, which stays a miss: an argv-side alias needs its read at the binding).
+ */
+function selfAliases(code) {
+  const out = [...code.matchAll(SELF_ALIAS)].map((m) => m[1]);
+  for (const m of code.matchAll(META_DESTRUCTURE)) out.push(...destructured(m[1], ["url", "filename", "dirname"]));
+  for (let grew = true; grew; ) {
+    grew = false;
+    const known = out.length ? `|${out.map(escapeRe).join("|")}` : "";
+    const re = new RegExp(String.raw`(?:^|[;{}\n])\s*${NAME}\s*=(?![=>])\s*(?:${SELF_VALUE}(?![\w$])${known ? `|(?<![\w$])(?:${known.slice(1)})(?![\w$])` : ""})\s*[;,\n]`, "g");
+    for (const m of code.matchAll(re)) if (!out.includes(m[1])) {
+      out.push(m[1]);
+      grew = true;
+    }
+  }
+  return out;
+}
+
+/**
+ * Pure: does one side of an equality hold a sequence (comma) expression or an array literal, i.e. a group not opened by a
+ * call or an index whose inside has two items? `realpathSync(a) === (realpathSync("."), self)` is the decoy: a realpath call
+ * sits on each side and nothing real is compared, so such a side voids the realpath excuse (B2129).
+ */
+export function hasSequence(side) {
+  for (let i = 0; i < side.length; i += 1) {
+    if (side[i] !== "(" && side[i] !== "[") continue;
+    const prev = side.slice(0, i).trimEnd().slice(-1);
+    if (/[\w$)\]]/.test(prev)) continue; // a call's argument list or an index
+    const end = closeParenOf(side, i);
+    if (end > 0 && splitArgs(side.slice(i + 1, end - 1)).length > 1) return true;
+  }
+  return false;
+}
+
+/**
  * Pure: the symlink-blind entry guards in one file's text, with line numbers. Not a list of spellings but a SHAPE, read from
  * code (comments, strings and regex literals blanked), judged one COMPARISON at a time (termsOf):
  *   - `process.argv[1]` (spelled .argv[1], ?.[1], .at(1), ["argv"][1], or a name bound to it by `const x = process.argv[1]` or
@@ -444,8 +533,9 @@ function helperReferences(code) {
 export function rawGuards(text, { callsHelperFreely = false } = {}) {
   const code = codeOnly(text);
   const names = (re) => [...code.matchAll(re)].map((m) => m[1]);
-  const argvWord = wordOf([...argvAliases(code), ...names(ARGV_DESTRUCTURE)]);
-  const selfWord = wordOf(names(SELF_ALIAS));
+  const argvAny = argvAnyFor(argvContext(code));
+  const argvWord = wordOf([...argvAliases(code, argvAny), ...names(ARGV_DESTRUCTURE)]);
+  const selfWord = wordOf(selfAliases(code));
   const isWord = wordOf(objectIsAliases(code));
   const out = [];
   const add = (reason, at, from, to, kind = "raw") => {
@@ -463,7 +553,9 @@ export function rawGuards(text, { callsHelperFreely = false } = {}) {
       if (end > 0) whole = whole.slice(0, m.index) + " ".repeat(end - m.index) + whole.slice(end);
     }
     const terms = termsOf(whole).map((term) => {
-      const argvHit = argvRead(term.text) ?? (argvWord ? argvWord.exec(term.text) : null);
+      const read = argvRead(term.text, argvAny);
+      const aliasHit = argvWord ? argvWord.exec(term.text) : null;
+      const argvHit = read ?? (aliasHit ? { index: aliasHit.index, indexed: true } : null);
       const selfHit = argvHit !== null && (SELF_PATH.test(term.text) || (selfWord !== null && selfWord.test(term.text)));
       return { ...term, argvHit, selfHit };
     });
@@ -483,7 +575,7 @@ export function rawGuards(text, { callsHelperFreely = false } = {}) {
       if (!argvHit) continue;
       if (selfHit && excusedIs.some((t) => t === term || within(term, t))) continue; // inside an excused Object.is call
       if (selfHit && terms.some((t) => t.selfHit && within(t, term))) continue; // a smaller term holds both: judged there
-      const method = /\.\s*(?:endsWith|startsWith|includes)\s*\(/.test(term.text);
+      const method = argvHit.indexed && /\.\s*(?:endsWith|startsWith|includes)\s*\(/.test(term.text);
       // depth-0 equality operator of THIS term: the only operator a realpath pair can excuse
       let depth = 0;
       let op = null;
@@ -498,15 +590,18 @@ export function rawGuards(text, { callsHelperFreely = false } = {}) {
       }
       // An equality is excused by a realpath call on each side; an excused Object.is was skipped above (excusedIs). Any
       // other shape holding both is a finding with no excuse.
-      const realBoth = op !== null && REAL_CALL.test(term.text.slice(0, op.index)) && REAL_CALL.test(term.text.slice(op.index + op.length));
+      const realBoth = op !== null && [term.text.slice(0, op.index), term.text.slice(op.index + op.length)].every((side) => REAL_CALL.test(side) && !hasSequence(side));
       let reason = null;
       let kind = "raw";
       if (method && selfHit) {
         reason = "tests process.argv[1] against this module's own path with endsWith/startsWith/includes (the basename-suffix defect)";
         kind = "suffix";
-      } else if (selfHit && !realBoth) reason = "reads process.argv and this module's own path in one expression";
-      else if (new RegExp(`(?:${ARGV1_SRC})\\s*\\)?\\s*\\.\\s*(?:endsWith|startsWith|includes)\\s*\\(`).test(term.text)) {
+      } else if (selfHit && !realBoth) reason = "holds a process.argv read and this module's own path in one expression";
+      else if (new RegExp(`(?:${ARGV1_SRC})\\s*\\)?\\s*(?:\\?\\.|\\.)\\s*(?:endsWith|startsWith|includes)\\s*\\(`).test(term.text)) {
         reason = "tests process.argv[1] against a literal (the basename-suffix defect)";
+        kind = "suffix";
+      } else if (new RegExp(`(?:\\?\\.|\\.)\\s*(?:test|exec)\\s*\\(\\s*(?:${ARGV1_SRC})\\s*\\)`).test(term.text)) {
+        reason = "tests process.argv[1] against a pattern (the basename-suffix defect)";
         kind = "suffix";
       } else if (op && new RegExp(`\\bbasename\\s*\\(\\s*(?:${ARGV1_SRC})\\s*\\)`).test(term.text)) reason = "compares the basename of process.argv[1]";
       if (reason) {
@@ -1021,6 +1116,50 @@ async function selfTest() {
   }
   checks.push(["L2 KNOWN MISS: a self path built by a function the detector cannot see", raw(`const here = getSelf();\nif (resolve(${ARGV}) === here) {}\n`) === 0]);
   checks.push(["L2 KNOWN MISS: a comparison split across two statements by a boolean", raw(`const same = resolve(${ARGV}) === resolve(getSelf());\nif (same) {}\n`) === 0]);
+  // B2129: ten argv/self spellings and two suffix idioms that returned no finding on mainline d74c73ef9, each planted with
+  // `const self = fileURLToPath(import.meta.url)` in scope. Each must be a finding, and the whole set run through scan() must
+  // be a problem per file (the gate's exit 1).
+  {
+    const AV = ["process", ".argv"].join("");
+    const pre = "const self = fileURLToPath(import.meta.url);\n";
+    const plants = [
+      ["B2129-1 `const { argv } = process; argv[1] === self`", `const { argv } = process;\nif (argv[1] === self) run();\n`, "raw"],
+      ["B2129-1b `const { argv: a } = process; a[1] === self`", `const { argv: a } = process;\nif (a[1] === self) run();\n`, "raw"],
+      ["B2129-2 `process.argv[1] === join(import.meta.dirname, '<file>')`", `if (${AV}[1] === join(import.meta.dirname, "x.mjs")) run();\n`, "raw"],
+      ["B2129-3 `const { filename } = import.meta; process.argv[1] === filename`", `const { filename } = import.meta;\nif (${AV}[1] === filename) run();\n`, "raw"],
+      ["B2129-3b `const { url: u } = import.meta; argv[1] === fileURLToPath(u)`", `const { url: u } = import.meta;\nif (${AV}[1] === fileURLToPath(u)) run();\n`, "raw"],
+      ["B2129-1c `const { argv } = process; const entry = argv[1]; entry === self`", `const { argv } = process;\nconst entry = argv[1];\nif (entry === self) run();\n`, "raw"],
+      ["B2129-4 `const p = process; p.argv[1] === self`", `const p = process;\nif (p.argv[1] === self) run();\n`, "raw"],
+      ["B2129-5 `import.meta['url']`", `if (${AV}[1] === fileURLToPath(import.meta["url"])) run();\n`, "raw"],
+      ["B2129-5b `const me = fileURLToPath(import.meta['url'])` is a self alias", `const me = fileURLToPath(import.meta["url"]);\nif (resolve(${AV}[1]) === me) run();\n`, "raw"],
+      ["B2129-6 `Reflect.get(process, 'argv')[1]`", `if (Reflect.get(process, "argv")[1] === self) run();\n`, "raw"],
+      ["B2129-7 `let me; me = self`", `let me;\nme = self;\nif (${AV}[1] === me) run();\n`, "raw"],
+      ["B2129-8 the comma decoy `realpathSync(argv[1]) === (realpathSync('.'), self)`", `if (realpathSync(${AV}[1]) === (realpathSync("."), self)) run();\n`, "raw"],
+      ["B2129-8b the array decoy `realpathSync(argv[1]) === [realpathSync('.'), self][1]`", `if (realpathSync(${AV}[1]) === [realpathSync("."), self][1]) run();\n`, "raw"],
+      ["B2129-9 `process.argv[1]?.endsWith('x.mjs')` is the suffix defect", `if (${AV}[1]?.endsWith("x.mjs")) run();\n`, "suffix"],
+      ["B2129-10 `/x\\.mjs$/.test(process.argv[1])` is the suffix defect", `if (/x\\.mjs$/.test(${AV}[1])) run();\n`, "suffix"],
+    ];
+    for (const [label, body, kind] of plants) {
+      const hits = rawGuards(pre + body);
+      checks.push([`${label} is a finding (kind ${kind})`, hits.length === 1 && hits[0].kind === kind]);
+    }
+    const planted = Object.fromEntries(plants.map(([, body], k) => [`scripts/b2129-${k}.mjs`, pre + body]));
+    const r = scan({ files: Object.keys(planted), readText: (rel) => planted[rel], overlayText: readFileSync(join(repoRoot, FIXTURE_OVERLAY), "utf8") });
+    checks.push(["B2129 every planted spelling is a scan problem (the gate exits 1 on each)", Object.keys(planted).every((rel) => r.problems.some((p) => p.startsWith(`${rel}:`)))]);
+    // the excuses still hold: a real realpath pair is excused, a realpath call with two ARGUMENTS is not a sequence
+    checks.push(["B2129 a plain realpath pair is still excused", rawGuards(`if (realpathSync(${AV}[1]) === realpathSync(self)) run();\n`).length === 0]);
+    checks.push(["B2129 a realpath call with two arguments is not a sequence decoy", rawGuards(`if (realpathSync(${AV}[1], "utf8") === realpathSync(self, "utf8")) run();\n`).length === 0]);
+    // the aliases do not leak: `argv: [, x]` stays the pinned miss, an argv-array alias read at index 2 is not argv[1]
+    checks.push(["B2129 an argv-array alias read at a ruled-out index is not a finding", rawGuards(`const { argv } = process;\nif (argv[2] === self) run();\n`).length === 0]);
+    checks.push(["B2129 `let me; me = <something else>` is not a self alias", rawGuards(`let me;\nme = other;\nif (${AV}[1] === me) run();\n`).length === 0]);
+    // the two harmless shapes: still findings (each holds an argv read and the module path), never with the suffix wording
+    const fp = [
+      rawGuards(`spawnSync(process.execPath, [fileURLToPath(import.meta.url), ${AV}[i + 1]]);\nconsole.log(\`usage: node \${fileURLToPath(import.meta.url)} \${${AV}[i + 1]}\`);\n`),
+      rawGuards(`${pre}run(self, ${AV}.includes("--json"));\n`),
+    ];
+    checks.push(["B2129 a spawnSync argument list holding the self path and argv[i + 1] carries the 'holds' wording, not a suffix claim", fp[0].length >= 1 && fp[0].every((h) => h.kind === "raw" && /^holds a process\.argv read/.test(h.reason))]);
+    checks.push(["B2129 `run(self, process.argv.includes('--json'))` is not called the basename-suffix defect", fp[1].length === 1 && fp[1][0].kind === "raw" && !/suffix/.test(fp[1][0].reason)]);
+  }
   checks.push(["OVERLAY MUTANT: the real overlay with its is-main mount removed is a problem", fixtureOverlayProblems(readFileSync(join(repoRoot, FIXTURE_OVERLAY), "utf8").replace(/^(.*is-main\.mjs.*)$/gm, "")).length >= 1]);
 
   // LIVE: the derivation, and the two gates fixed on 2026-09-06 — a detector that finds
@@ -1063,8 +1202,8 @@ const HELPER = "scripts/lib/is-main.mjs";
  * exits non-zero) and which SURVIVED or did not apply. The tally in the PR comes from this command, not from memory.
  */
 export const MUTANTS = [
-  ["argv aliases not followed", GATE, "const argvWord = wordOf([...argvAliases(code), ...names(ARGV_DESTRUCTURE)]);", "const argvWord = null;"],
-  ["realpath anywhere in the term excuses the comparison", GATE, "const realBoth = op !== null && REAL_CALL.test(term.text.slice(0, op.index)) && REAL_CALL.test(term.text.slice(op.index + op.length));", "const realBoth = REAL_CALL.test(term.text);"],
+  ["argv aliases not followed", GATE, "const argvWord = wordOf([...argvAliases(code, argvAny), ...names(ARGV_DESTRUCTURE)]);", "const argvWord = null;"],
+  ["realpath anywhere in the term excuses the comparison", GATE, "const realBoth = op !== null && [term.text.slice(0, op.index), term.text.slice(op.index + op.length)].every((side) => REAL_CALL.test(side) && !hasSequence(side));", "const realBoth = REAL_CALL.test(term.text);"],
   ["$-leading alias names not bounded", GATE, "(?<![\\\\w$])(?:", "\\\\b(?:"],
   ["helper canary not run by the gate", GATE, "const canary = helperCanary(isMainModule);", "const canary = [];"],
   ["helper canary skips the symlink probe", GATE, "if (call(link) !== true) bad.push(", "if (false) bad.push("],
@@ -1079,7 +1218,7 @@ export const MUTANTS = [
   ["a child that exits 143 through its own handler is counted killed (R7-F)", GATE, "const signalled = r.signal || r.status === 130 || r.status === 143;", "const signalled = r.signal || r.status === 130;"],
   ["the child's TMPDIR is not parent-owned (R7-F)", GATE, "env: { ...process.env, TMPDIR: childTmp } });", "env: { ...process.env } });"],
   ["an Object.is with a realpath on each argument is not excused (R7-C)", GATE, "return isArgs !== null && isArgs.length >= 2 && isArgs.slice(0, 2).every(wrapsInRealpath); // each compared argument, whole", "return false; // each compared argument, whole"],
-  ["startsWith is not a suffix-class method (O02)", GATE, "const method = /\\.\\s*(?:endsWith|startsWith|includes)\\s*\\(/.test(term.text);", "const method = /\\.\\s*(?:endsWith|includes)\\s*\\(/.test(term.text);"],
+  ["startsWith is not a suffix-class method (O02)", GATE, "const method = argvHit.indexed && /\\.\\s*(?:endsWith|startsWith|includes)\\s*\\(/.test(term.text);", "const method = argvHit.indexed && /\\.\\s*(?:endsWith|includes)\\s*\\(/.test(term.text);"],
   ["an `isMainModule as x` rebinding is not flagged (O07)", GATE, "if (new RegExp(String.raw`(?<![\\w$])isMainModule\\s+as\\s`).test(clause[2]))", "if (false)"],
   ["only the first isMainModule argument is compared (O08)", GATE, "if (args !== EXACT_ARGS)", 'if (args.split(",")[0] !== "process.argv[1]")'],
   ["the `?` of `?.` is a ternary separator (O13)", GATE, 'else if (c === "&" || c === "|" || c === "," || c === ":" || (c === "?" && d !== ".")) cut(i, i + 1);', 'else if (c === "&" || c === "|" || c === "," || c === ":" || c === "?") cut(i, i + 1);'],
@@ -1116,9 +1255,9 @@ export const MUTANTS = [
   ["new/typeof/void before the exact call is allowed (R8-A/N7-N9)", GATE, "if (/(?<![\\w$])(?:new|typeof|void)\\s+$/.test(before)) {", "if (false) {"],
   ["the runner does not own SIGHUP/SIGQUIT (R8-B)", GATE, "  [\"SIGHUP\", 129],\n  [\"SIGQUIT\", 131],\n", ""],
   ["the runner's handlers are installed after the baseline (R8-E)", GATE, "  for (const [name, h] of handlers) process.on(name, h);\n  try {\n    const baseline = await runSelfTest();\n", "  try {\n    const baseline = await runSelfTest();\n    for (const [name, h] of handlers) process.on(name, h);\n"],
-  ["the realpath excuse reads the whole statement, not the comparison's term (R5-B)", GATE, "const realBoth = op !== null && REAL_CALL.test(term.text.slice(0, op.index)) && REAL_CALL.test(term.text.slice(op.index + op.length));", "const realBoth = op !== null && REAL_CALL.test(whole);"],
-  ["argv reads are only the old argv[1] spellings (R9-A)", GATE, "const argvHit = argvRead(term.text) ?? (argvWord ? argvWord.exec(term.text) : null);", "const argvHit = ARGV1.exec(term.text) ?? (argvWord ? argvWord.exec(term.text) : null);"],
-  ["a term holding both needs an equality or an Object.is to be a finding (R9-A)", GATE, "else if (selfHit && !realBoth) reason = \"reads process.argv", "else if (selfHit && !realBoth && (op || objectIsArgs(term.text, isWord))) reason = \"reads process.argv"],
+  ["the realpath excuse reads the whole statement, not the comparison's term (R5-B)", GATE, "const realBoth = op !== null && [term.text.slice(0, op.index), term.text.slice(op.index + op.length)].every((side) => REAL_CALL.test(side) && !hasSequence(side));", "const realBoth = op !== null && REAL_CALL.test(whole);"],
+  ["argv reads are only the old argv[1] spellings (R9-A)", GATE, "const read = argvRead(term.text, argvAny);", "const read = ARGV1.test(term.text) ? { index: ARGV1.exec(term.text).index, indexed: true } : null;"],
+  ["a term holding both needs an equality or an Object.is to be a finding (R9-A)", GATE, "else if (selfHit && !realBoth) reason = \"holds a process.argv", "else if (selfHit && !realBoth && (op || objectIsArgs(term.text, isWord))) reason = \"holds a process.argv"],
   ["judged at the outermost term, not the smallest holding both (R9-A)", GATE, "if (selfHit && terms.some((t) => t.selfHit && within(t, term))) continue;", "if (false) continue;"],
   ["unmatched brackets are read as group delimiters (R9-A)", GATE, "    if (unmatched.has(i)) {\n      if (depth === 0) cut(i, i + 1);\n    } else if", "    if (false) {\n      if (depth === 0) cut(i, i + 1);\n    } else if"],
   ["a brace inside ( or [ ends the statement (R9-A)", GATE, "(c === \";\" || ((c === \"{\" || c === \"}\") && nest === 0))", "(c === \";\" || c === \"{\" || c === \"}\")"],
@@ -1127,6 +1266,18 @@ export const MUTANTS = [
   ["argv[k] for k != 1 is read as argv[1] (R9-A)", GATE, "  [/^\\s*(?:\\?\\.)?\\s*\\[\\s*(\\d+)\\s*\\]/, (m) => Number(m[1]) !== 1],\n", ""],
   ["a term inside an excused Object.is call is judged on its own (R9-A)", GATE, "if (selfHit && excusedIs.some((t) => t === term || within(term, t))) continue;", "if (false) continue;"],
   ["a closed miss may linger in the ceiling lists (R9-A)", GATE, "lingering: CLOSED_MISSES.filter(", "lingering: [].filter("],
+  ["B2129-1 a `const { argv } = process` destructure is not read", GATE, 'arrayNames.push(...destructured(m[1], ["argv"]));', "void m;"],
+  ["B2129-1c a scalar alias of an argv-array alias is not followed", GATE, "for (const m of code.matchAll(/\\b(?:const|let|var)\\s+([A-Za-z_$][\\w$]*)\\s*=\\s*(?=[A-Za-z_$])/g)) {", "for (const m of code.matchAll(/\\b(?:const|let|var)\\s+([A-Za-z_$][\\w$]*)\\s*=\\s*(?=process\\b)/g)) {"],
+  ["B2129-2 import.meta.dirname is not a self path", GATE, "(?:\\.\\s*(?:url|filename|dirname)(?![\\w$])|", "(?:\\.\\s*(?:url|filename)(?![\\w$])|"],
+  ["B2129-3 a `const { filename } = import.meta` destructure is not read", GATE, 'for (const m of code.matchAll(META_DESTRUCTURE)) out.push(...destructured(m[1], ["url", "filename", "dirname"]));', ""],
+  ["B2129-4 a `const p = process` alias is not read", GATE, "const processNames = [...code.matchAll(PROCESS_ALIAS)].map((m) => m[1]);", "const processNames = [];"],
+  ["B2129-5 a string key on import.meta is not a self path", GATE, "const META_PATH = String.raw`${META}(?:\\.\\s*(?:url|filename|dirname)(?![\\w$])|(?:\\?\\.)?\\s*${BLANK_KEY})`;", "const META_PATH = String.raw`${META}(?:\\.\\s*(?:url|filename|dirname)(?![\\w$]))`;"],
+  ["B2129-6 Reflect.get(process, 'argv') is not an argv read", GATE, '    String.raw`(?<![\\w$])Reflect\\s*\\.\\s*get\\s*\\(\\s*(?:${proc})\\s*,\\s*(?:"\\s*"|\'\\s*\'|\\x60\\s*\\x60)\\s*\\)`,\n', ""],
+  ["B2129-7 a later `x = <self>` assignment is not a self alias", GATE, "for (let grew = true; grew; ) {", "for (let grew = false; grew; ) {"],
+  ["B2129-8 a sequence or array side keeps the realpath excuse", GATE, "REAL_CALL.test(side) && !hasSequence(side));", "REAL_CALL.test(side));"],
+  ["B2129-9 `argv[1]?.endsWith(..)` is not a literal suffix test", GATE, "(?:${ARGV1_SRC})\\\\s*\\\\)?\\\\s*(?:\\\\?\\\\.|\\\\.)\\\\s*(?:endsWith|startsWith|includes)", "(?:${ARGV1_SRC})\\\\s*\\\\)?\\\\s*\\\\.\\\\s*(?:endsWith|startsWith|includes)"],
+  ["B2129-10 a pattern `.test(argv[1])` is not a suffix test", GATE, "} else if (new RegExp(`(?:\\\\?\\\\.|\\\\.)\\\\s*(?:test|exec)", "} else if (false && new RegExp(`(?:\\\\?\\\\.|\\\\.)\\\\s*(?:test|exec)"],
+  ["B2129-11 the suffix wording does not need an indexed argv read", GATE, "const method = argvHit.indexed && /", "const method = /"],
 ];
 
 /** The signals the mutant runner (and the self-test's scratch cleanup) owns, with the exit code each one ends the run with. */

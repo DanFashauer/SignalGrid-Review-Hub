@@ -5803,7 +5803,7 @@ Verdict: holds for the merge, tree, ancestry and receipt claims. #2401 merged fr
 
 ## 2026-11-20 — #2423 (bc97de34) landed under DR-037: check-verdict-tone-source admits bounded own-key tone lookups
 
-Cloud merged #2423 (Root's fix for #2419) under DR-037 at about 23:50Z, with `expectedHeadSha` `ca447d1b2a690dfc6fd0aa13752bf810e7224802`, after re-reading the head. Against canonical, it changes only two files: `scripts/check-verdict-tone-source.mjs` and its gate-mutant fixture `scripts/fixtures/gate-mutants/check-verdict-tone-source.json`. The gate now admits a tone lookup bounded to the component's own key, and every other inline colour choice still fails.
+Cloud merged #2423 (Root's fix for #2419) under DR-037 at about 23:50Z, with `expectedHeadSha` `ca447d1b2a690dfc6fd0aa13752bf810e7224802`, after re-reading the head. Against canonical, it changes only two files: `scripts/check-verdict-tone-source.mjs` and its gate-mutant fixture `scripts/lib/gate-mutants/check-verdict-tone-source.json`. The gate now admits a tone lookup bounded to the component's own key, and every other inline colour choice still fails.
 
 **Preparation journal.** These records were made before the merge and are cited as attributed historical receipts:
 - **Full local qualification on `3027f445eaa32d9ababd5e9a15c1c947551864b5`** (tree `decd27f3`), clean worktree with dirty 0 at start and end, 21:42:13Z–22:21:22Z by the runner's own start and result files:

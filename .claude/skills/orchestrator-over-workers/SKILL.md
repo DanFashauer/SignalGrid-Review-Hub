@@ -295,3 +295,33 @@ conclusion, and runs no stage at all. Every other stage is dispatched:
   entry's re-runnable commands are local reads pinned to fixed shas — no `origin`, no
   `HEAD`, no network, no host paths — and a tool read that cannot be re-run is marked as
   recorded and bound to its head by a local command.
+
+## When a stage stalls on a resource cap, hand it off and log the blocker
+
+Owner directive, 2026-11-21: *"if something is taking longer time due to resources cap and or tokens please pass it off to cloud or another session and mark it as blocker … to fix and keep system moving that's whole point it learns as it builds the company."*
+
+A stage is **stalled on a resource** when its own output says it was cut off or queued, not when it is merely slow. Examples:
+- a usage or token limit refusal;
+- a background-command time limit that killed a run before it reached a verdict;
+- a full disk;
+- a runner queue that has not started;
+- a host lock held by another chain;
+- a machine whose CPU is taken by a second heavy run, which skews timing gates.
+
+Then:
+
+1. **Hand it off; don't wait on it.**
+   - A queued or held stage is still a live original. Re-dispatch only after that original has reached a supported cancellation or terminal state, with its owned children and reservations confirmed closed, or through a genuine exclusive transfer of custody. A stage whose outward result is unknown is read back, never reissued. A privacy or safety reject is never reissued, and no handoff bypasses a typed permission or a per-lineage attempt limit.
+   - Keep the evidence platform. A handoff may move preparation and portable checks (code, Linux preflight, review). It never lets cloud stand in for evidence that must come from the installed Mac, a device, or a specific admitted runner. Prefer the existing qualified session for that platform before creating another. Account, cap and permission changes are separate decisions, never part of a handoff.
+   - Re-dispatch the same spec to a fresh cloud session (`create_session`, its own container, so it adds no CPU or disk here), or to the other lane, by mail or a PR comment for the session that owns the branch.
+   - A spawn killed by a usage limit resolves UP a tier (DR-047), and is re-issued, never dropped.
+   - Never put a second writer on a branch whose worker is alive. The handoff goes to that worker, or waits for it.
+2. **Mark it as a blocker, with the evidence.**
+   - One line in the PR or on #439: what stalled, the cap's own message or exit, the head it was on, and who has it now.
+   - A stalled run is reported as stopped with no verdict. It is never counted as a pass, and never silently restarted under the same name.
+3. **Keep everything else moving.** Work that does not depend on the stalled stage continues in parallel. A shared resource (one container's CPU for timing gates, the merge window, one Mac host lock) gets one heavy user at a time, and the others queue behind it explicitly.
+4. **Make the learning stick.**
+   - When the same cap stalls a second time, fix its cause with a source-backed repair: a test or self-test that fails without the fix, then the ordinary exact-head qualification. Numeric floors, coverage, and decision and approval rules stay as they are; an unrelated host or resource error never justifies weakening a gate or raising a threshold. If the repair cannot land now, file a backlog row naming the check that fails without it. Then add the lesson here or to the skill that owns the stage, so the next session starts from it.
+   - A cap that only the owner can lift (paid capacity, account limits, a physical machine) goes to the owner in one line, per owner-comms.
+
+What this does not change: every DR-037 landing condition, the exact-head evidence rule, and the rule that a stage you could not run is reported as not run.

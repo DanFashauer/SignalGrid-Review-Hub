@@ -147,22 +147,49 @@ type Core = ReturnType<Workload["SignalGridCore"]["demo"]>;
 type Decision = ReturnType<Core["evaluate"]>;
 
 /**
- * What a caller would ACT on in one decision: compared for EVERY timed verdict. It excludes the per-decision
- * identity and timing fields, which are not expected to repeat from one call to the next on the same core:
- * `decisionId` and `evidenceSnapshotId` (both derived from a per-evaluation sequence number, decision.ts and
- * evidence.ts) and `latencyMs` (a measured duration).
+ * The stable projection of one decision: every field of the public `EvaluateResult` a caller would act on, compared
+ * for EVERY timed verdict, serialised as JSON so no two different results can produce the same string. Matched rules
+ * are compared whole — `ruleId`, `reasonCode`, `outcome` and `severity` (`MatchedRule`, signalgrid-core types.ts) —
+ * and `explanation` is included. Excluded, as per-decision identity or timing that is not expected to repeat from one
+ * call to the next on the same core: `decisionId` and `evidenceSnapshotId` (both derived from a per-evaluation
+ * sequence number, decision.ts and evidence.ts) and `latencyMs` (a measured duration). Any OTHER field fails the
+ * startup check (`unclassifiedFields`), so a field added to the result later cannot go unchecked silently.
  */
+const PROJECTED_FIELDS = [
+  "outcome",
+  "reasonCodes",
+  "policyId",
+  "policyVersion",
+  "policyVersionId",
+  "matchedRules",
+  "reviewable",
+  "explanation",
+  "coreNormalizationVersion",
+] as const;
+const EXCLUDED_FIELDS = ["decisionId", "evidenceSnapshotId", "latencyMs"] as const;
+
 function decisionLine(r: Decision): string {
-  return [
+  return JSON.stringify([
     r.outcome,
-    r.reasonCodes.join("|"),
+    r.reasonCodes,
     r.policyId,
     r.policyVersion,
     r.policyVersionId,
-    r.matchedRules.map((m) => m.ruleId).join("|"),
+    r.matchedRules.map((m) => [m.ruleId, m.reasonCode, m.outcome, m.severity]),
     r.reviewable,
+    r.explanation,
     r.coreNormalizationVersion ?? "unstamped",
-  ].join(" ");
+  ]);
+}
+
+/** Fields of a result (or of one of its matched rules) that are neither projected nor excluded. Fail-closed. */
+function unclassifiedFields(r: Decision): string[] {
+  const known = new Set<string>([...PROJECTED_FIELDS, ...EXCLUDED_FIELDS]);
+  const rule = new Set(["ruleId", "reasonCode", "outcome", "severity"]);
+  return [
+    ...Object.keys(r).filter((k) => !known.has(k)),
+    ...r.matchedRules.flatMap((m) => Object.keys(m).filter((k) => !rule.has(k)).map((k) => `matchedRules[].${k}`)),
+  ];
 }
 
 /**
@@ -178,6 +205,10 @@ interface Fingerprint {
 
 function fingerprint(core: Core, w: Workload): Fingerprint {
   const lines = w.BENCH_SCENARIOS.map((scenario) => core.evaluate(w.BENCH_OPERATOR, scenario));
+  const unknown = [...new Set(lines.flatMap(unclassifiedFields))];
+  if (unknown.length > 0) {
+    throw new Error(`decision result carries field(s) neither compared nor excluded: ${unknown.join(", ")} — classify them in throughput-bench.ts`);
+  }
   return {
     signature: lines.map((r) => `${decisionLine(r)} ${r.evidenceSnapshotId}`).join("\n"),
     expected: lines.map(decisionLine),
@@ -280,8 +311,30 @@ function determinismFailures(reference: string, windows: ReadonlyArray<{ label: 
   return failures;
 }
 
-/** A core whose verdicts flip after `after` calls — divergence that begins inside a timed window. Fixture only. */
-function divergingAfter(core: Core, after: number): Core {
+type Mutation = (r: Decision) => Decision;
+
+/** Flip the verdict outcome. */
+const flipOutcome: Mutation = (r) => ({ ...r, outcome: r.outcome === "deny" ? "allow" : "deny" });
+
+/**
+ * One mutation per stable field the projection covers beyond `outcome`, each altering ONLY that field, so every one
+ * is a separate negative: the determinism gate must catch each on its own.
+ */
+const FIELD_MUTATIONS: ReadonlyArray<{ field: string; mutate: Mutation }> = [
+  { field: "outcome", mutate: flipOutcome },
+  { field: "reasonCodes", mutate: (r) => ({ ...r, reasonCodes: [...r.reasonCodes, "INJECTED"] }) },
+  { field: "policyVersion", mutate: (r) => ({ ...r, policyVersion: r.policyVersion + 1 }) },
+  { field: "reviewable", mutate: (r) => ({ ...r, reviewable: !r.reviewable }) },
+  { field: "explanation", mutate: (r) => ({ ...r, explanation: `${r.explanation} ` }) },
+  { field: "coreNormalizationVersion", mutate: (r) => ({ ...r, coreNormalizationVersion: (r.coreNormalizationVersion ?? 0) + 1 }) },
+  { field: "matchedRules[].ruleId", mutate: (r) => ({ ...r, matchedRules: r.matchedRules.map((m, i) => (i === 0 ? { ...m, ruleId: `${m.ruleId}-x` } : m)) }) },
+  { field: "matchedRules[].reasonCode", mutate: (r) => ({ ...r, matchedRules: r.matchedRules.map((m, i) => (i === 0 ? { ...m, reasonCode: `${m.reasonCode}_X` } : m)) }) },
+  { field: "matchedRules[].outcome", mutate: (r) => ({ ...r, matchedRules: r.matchedRules.map((m, i) => (i === 0 ? { ...m, outcome: m.outcome === "deny" ? "allow" : "deny" } : m)) }) },
+  { field: "matchedRules[].severity", mutate: (r) => ({ ...r, matchedRules: r.matchedRules.map((m, i) => (i === 0 ? { ...m, severity: m.severity === "critical" ? "low" : "critical" } : m)) }) },
+];
+
+/** A core whose results are mutated after `after` calls — divergence that begins inside a timed window. Fixture only. */
+function divergingAfter(core: Core, after: number, mutate: Mutation = flipOutcome): Core {
   let calls = 0;
   const evaluate = core.evaluate.bind(core);
   return new Proxy(core, {
@@ -289,27 +342,36 @@ function divergingAfter(core: Core, after: number): Core {
       if (key !== "evaluate") return Reflect.get(target, key, receiver);
       return (...args: Parameters<Core["evaluate"]>) => {
         const r = evaluate(...args);
-        return ++calls > after ? { ...r, outcome: r.outcome === "deny" ? "allow" : "deny" } : r;
+        return ++calls > after ? mutate(r) : r;
       };
     },
   });
 }
 
 /**
- * The determinism gate proves itself through the REAL measure/gate boundary before any run is trusted: a core whose
- * fingerprint matches at startup but whose verdicts flip only inside the timed window must fail, and the unchanged
- * core must pass. Main thread, ~2 × 60 ms.
+ * The determinism gate proves itself through the REAL measure/gate boundary before any run is trusted: for each
+ * stable field, a core whose fingerprint matches at startup but which alters ONLY that field inside the timed window
+ * must fail; the unchanged core must pass; and a result carrying an unclassified field must be refused at startup.
+ * Main thread, ~(1 + fields) × 30 ms.
  */
 function determinismSelfTest(core: Core, w: Workload): string[] {
   const print = fingerprint(core, w);
   const problems: string[] = [];
   // The fingerprint above came from the real core — exactly what the startup check of a diverging worker sees —
-  // and the diverging core flips from its first timed call.
-  const diverging = divergingAfter(core, 0);
-  const negative = determinismFailures(print.signature, [{ label: "fixture", run: measure(diverging, w, 60, print) }]);
-  if (negative.length === 0) problems.push("a core whose verdicts flip only inside the timed window passed the determinism gate");
+  // and each diverging core alters its field from its first timed call.
+  for (const { field, mutate } of FIELD_MUTATIONS) {
+    const negative = determinismFailures(print.signature, [{ label: field, run: measure(divergingAfter(core, 0, mutate), w, 30, print) }]);
+    if (negative.length === 0) problems.push(`a core that alters only \`${field}\` inside the timed window passed the determinism gate`);
+  }
   const control = determinismFailures(print.signature, [{ label: "control", run: measure(core, w, 60, print) }]);
   if (control.length > 0) problems.push(`the unchanged core failed the determinism gate: ${control.join("; ")}`);
+  let refused = false;
+  try {
+    fingerprint(divergingAfter(core, 0, (r) => ({ ...r, unexpectedField: 1 }) as Decision), w);
+  } catch {
+    refused = true;
+  }
+  if (!refused) problems.push("a result carrying an unclassified field was fingerprinted instead of refused");
   return problems;
 }
 
@@ -559,7 +621,7 @@ async function main(): Promise<void> {
     for (const f of selfTestFailures) console.error(`FAIL: ${f}`);
     console.log(
       selfTestFailures.length === 0
-        ? `Throughput-bench self-test: collapse judge (${judge.JUDGE_FIXTURES.length} fixtures, 5 malformed inputs) and determinism gate (timed-window divergence fails, control passes) and worker pool (failure after readiness rejects the window and tears down, control resolves) classified correctly.`
+        ? `Throughput-bench self-test: collapse judge (${judge.JUDGE_FIXTURES.length} fixtures, 5 malformed inputs) and determinism gate (${FIELD_MUTATIONS.length} single-field timed-window divergences fail, control passes, unclassified field refused) and worker pool (failure after readiness rejects the window and tears down, control resolves) classified correctly.`
         : `Throughput-bench self-test FAILED: ${selfTestFailures.length} problem(s).`,
     );
     process.exitCode = selfTestFailures.length === 0 ? 0 : 1;

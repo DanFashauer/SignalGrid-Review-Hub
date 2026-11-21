@@ -355,7 +355,31 @@ by exactly the command the error messages name.
 Upgrades: migrate first (admin credential), then roll the API image. The
 migration runner applies only versions the database has not recorded.
 
-Rollbacks: rolling the API image back is always safe against the same schema.
+**The write-once privilege change (decisions and evidence snapshots,
+`signalgrid_runtime` holds `SELECT, INSERT` only) has two fail-closed windows,
+neither of which ever answers allow:**
+
+- **Old API pods on a migrated database** — between `db:migrate` and the end
+  of the roll, or after rolling the image back. The old image writes
+  `INSERT … ON CONFLICT DO UPDATE`, which PostgreSQL refuses without `UPDATE`
+  even for a fresh id (`permission denied for table decisions`), and its
+  readiness probe requires `UPDATE`. So those pods answer `500` on every
+  decision write (host apps read non-2xx as deny) and `/readyz` returns `503`.
+  Keep the roll short, and do not roll the image back across this change
+  without also restoring the pre-upgrade database.
+- **New API pods on an unmigrated database** (the reverse order). The runtime
+  role still holds the old `UPDATE` grant, which the new readiness probe treats
+  as forbidden, so `/readyz` returns `503` until `pnpm run db:migrate` re-applies
+  the role split. Decision writes still work there; only readiness refuses.
+
+Either way, `/readyz` stays `503` until the image and the database agree, and
+`pnpm run db:migrate` (admin credential) is the command that closes the second
+window.
+
+Rollbacks: rolling the API image back is safe against the same schema **and the
+same role-split posture**. It is not safe back across the write-once privilege
+change above: an image older than that change cannot write decisions under the
+narrowed runtime grant.
 Rolling back **past a migration** is a restore, not a downgrade — migrations
 have no down path by design, and `db:migrate` refuses a database from the
 future. Use `pnpm run db:restore` with the pre-upgrade backup

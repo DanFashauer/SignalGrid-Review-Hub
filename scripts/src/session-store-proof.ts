@@ -5,7 +5,18 @@
 //
 // Run: pnpm --filter @workspace/scripts run proof:session-store
 
-import { InMemorySessionStore, type Session } from "@workspace/persistence";
+import {
+  InMemorySessionStore,
+  durableDatabaseUrl,
+  getDecisionStore,
+  setDecisionStore,
+  getSessionStore,
+  setSessionStore,
+  PostgresDecisionStore,
+  PostgresSessionStore,
+  type Session,
+} from "@workspace/persistence";
+import { getAuditBackend, setAuditBackend, PostgresAuditBackend, InMemoryAuditBackend } from "@workspace/audit";
 
 let passed = 0;
 const failures: string[] = [];
@@ -100,6 +111,55 @@ async function main() {
 
   // ── missing session ─────────────────────────────────────────────────────────
   check("get on an unknown id returns null", (await store.get("tenant_northwind", "nope", T0)) === null);
+
+  // ── DATABASE_URL reading (BUILD_BACKLOG "Empty/whitespace DATABASE_URL") ────
+  // Unset and "" stay the supported off mode; surrounding whitespace is trimmed;
+  // a set-but-blank value is REFUSED rather than read as "off" (which would let a
+  // durable deployment go ephemeral and report ready). No database is touched:
+  // the selector only constructs a store, it connects lazily.
+  const refuses = (fn: () => unknown) => { try { fn(); return false; } catch { return true; } };
+  check("DATABASE_URL unset → no durable store", durableDatabaseUrl({}) === null);
+  check("DATABASE_URL \"\" → no durable store (unchanged off mode)", durableDatabaseUrl({ DATABASE_URL: "" }) === null);
+  check("DATABASE_URL with surrounding whitespace/newline → the trimmed URL",
+    durableDatabaseUrl({ DATABASE_URL: "  postgres://h/db\n" }) === "postgres://h/db");
+  check("DATABASE_URL whitespace-only → REFUSED, not read as 'off'",
+    refuses(() => durableDatabaseUrl({ DATABASE_URL: " \t\n " })));
+  const saved = process.env.DATABASE_URL;
+  try {
+    process.env.DATABASE_URL = "   ";
+    check("getDecisionStore() refuses a whitespace-only DATABASE_URL (no silent null)", refuses(() => getDecisionStore()));
+    check("…and keeps refusing on the next call (the refusal is not cached as 'off')", refuses(() => getDecisionStore()));
+    check("getSessionStore() refuses a whitespace-only DATABASE_URL (no silent in-memory fallback)", refuses(() => getSessionStore()));
+    check("getAuditBackend() refuses a whitespace-only DATABASE_URL too (all three stores, one reading)", refuses(() => getAuditBackend()));
+
+    // ALL THREE STORES AGREE on a padded URL. When only two trimmed, a leading
+    // space persisted a decision while the ledger failed: a decision with no
+    // audit record. Each selector must build its Postgres form from the SAME
+    // trimmed string. (Nothing listens on port 1; the stores are closed below.)
+    process.env.DATABASE_URL = "  postgres://nobody:nothing@127.0.0.1:1/absent\n";
+    const want = "postgres://nobody:nothing@127.0.0.1:1/absent";
+    const ds = getDecisionStore();
+    const ss = getSessionStore();
+    const ab = getAuditBackend();
+    check("padded DATABASE_URL: decisions, sessions AND the audit ledger all select Postgres",
+      ds instanceof PostgresDecisionStore && ss instanceof PostgresSessionStore && ab instanceof PostgresAuditBackend);
+    check("padded DATABASE_URL: all three were handed the SAME trimmed connection string",
+      [ds, ss, ab].every((x) => (x as unknown as { connectionString?: string })?.connectionString === want));
+    await Promise.allSettled([ds?.close?.(), ss.close?.(), (ab as { close?: () => Promise<void> }).close?.()]);
+    setDecisionStore(null);
+    setSessionStore(new InMemorySessionStore());
+    setAuditBackend(null);
+    // Re-arm the decision selector's cache as "not chosen yet" for the next checks.
+    setDecisionStore(undefined as unknown as null);
+    delete process.env.DATABASE_URL;
+    check("getDecisionStore() with DATABASE_URL unset → null (off mode intact)", getDecisionStore() === null);
+    check("getSessionStore() with DATABASE_URL unset → the in-memory store",
+      getSessionStore() instanceof InMemorySessionStore);
+  } finally {
+    if (saved === undefined) delete process.env.DATABASE_URL; else process.env.DATABASE_URL = saved;
+    setSessionStore(new InMemorySessionStore());
+    setAuditBackend(new InMemoryAuditBackend());
+  }
 
   const total = passed + failures.length;
   console.log(`Session-store proof: ${passed}/${total} assertions passed`);

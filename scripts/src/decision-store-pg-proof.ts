@@ -107,6 +107,79 @@ async function main() {
   check(`concurrency: ${N} parallel saves all persist and are retrievable`,
     after.length === N && after.every((d) => ids.has(d.id)));
 
+  // ── 7. WRITE-ONCE: a re-mint under the same id rewrites NOTHING ────────────
+  // BUILD_BACKLOG "Durable decision write is keyed on `id` alone": with
+  // `ON CONFLICT (id) DO UPDATE` a second save under the same id replaced the
+  // decision's data+outcome AND its evidence snapshot, and verifySnapshot still
+  // returned true over the replacement — a rewritten audit record passing the
+  // tamper check. Each table is probed on its OWN (the other half of the second
+  // save is byte-identical), so restoring DO UPDATE on either one fails that
+  // half alone. The second save carries DIFFERENT values, so an unchanged row is
+  // evidence, not coincidence; the comparison is on the stored `data::text`.
+  await admin.query("TRUNCATE decisions, evidence_snapshots");
+  const first = mint();
+  await store.saveDecision(first.decision, first.snapshot);
+  const rowOf = async (table: "decisions" | "evidence_snapshots", id: string) =>
+    (await admin.query(
+      table === "decisions"
+        ? "SELECT tenant_id, outcome, data::text AS data FROM decisions WHERE id = $1"
+        : "SELECT tenant_id, decision_id, data::text AS data FROM evidence_snapshots WHERE id = $1",
+      [id],
+    )).rows[0] as Record<string, string> | undefined;
+  const decBefore = await rowOf("decisions", first.decision.id);
+  const snapBefore = await rowOf("evidence_snapshots", first.snapshot.id);
+  const refused = async (fn: () => Promise<void>) => {
+    try { await fn(); return false; } catch { return true; }
+  };
+
+  // 7a. decisions half: different outcome + data, the SAME snapshot.
+  const otherOutcome = first.decision.outcome === "deny" ? "allow" : "deny";
+  const rewrittenDecision = {
+    ...first.decision,
+    outcome: otherOutcome as typeof first.decision.outcome,
+    reasonCodes: ["PLANTED_REWRITE"],
+  } as typeof first.decision;
+  const decRefused = await refused(() => store.saveDecision(rewrittenDecision, first.snapshot));
+  const decAfter = await rowOf("decisions", first.decision.id);
+  check("write-once (decisions): a re-mint with a different outcome leaves `outcome` byte-identical",
+    !!decBefore && !!decAfter && decAfter.outcome === decBefore.outcome && decAfter.outcome === first.decision.outcome);
+  check("write-once (decisions): a re-mint with different data leaves `data` byte-identical",
+    !!decBefore && !!decAfter && decAfter.data === decBefore.data);
+  check("write-once (decisions): the conflicting re-mint is REFUSED, not swallowed", decRefused);
+
+  // 7b. evidence_snapshots half: the SAME decision, a different snapshot
+  //     (capturedAt and evidence both moved).
+  const rewrittenSnapshot = {
+    ...first.snapshot,
+    capturedAt: new Date(Date.parse(first.snapshot.capturedAt) + 3_600_000).toISOString(),
+    evidence: { ...(first.snapshot as any).evidence, planted: "rewrite" },
+  } as typeof first.snapshot;
+  const snapRefused = await refused(() => store.saveDecision(first.decision, rewrittenSnapshot));
+  const snapAfter = await rowOf("evidence_snapshots", first.snapshot.id);
+  check("write-once (evidence_snapshots): a re-mint leaves the snapshot `data` byte-identical, capturedAt included",
+    !!snapBefore && !!snapAfter && snapAfter.data === snapBefore.data &&
+      JSON.parse(snapAfter.data).capturedAt === first.snapshot.capturedAt);
+  check("write-once (evidence_snapshots): the conflicting re-mint is REFUSED, not swallowed", snapRefused);
+  const readBack = await store.getSnapshot(tenantId, first.snapshot.id);
+  check("write-once: the stored snapshot still verifies and is the ORIGINAL",
+    !!readBack && verifySnapshot(readBack) === true && readBack.capturedAt === first.snapshot.capturedAt);
+
+  // 7c. a genuine retry (byte-identical on both tables) still succeeds.
+  const retryOk = !(await refused(() => store.saveDecision(first.decision, first.snapshot)));
+  check("write-once: a byte-identical retry is idempotent (accepted, row unchanged)",
+    retryOk && (await rowOf("decisions", first.decision.id))?.data === decBefore?.data);
+
+  // 7d. tenant-aware guard: the same id arriving under ANOTHER tenant is refused
+  //     and the owning tenant's row is untouched.
+  const foreign = { ...first.decision, tenantId: "tenant_atlas" } as typeof first.decision;
+  const foreignSnap = { ...first.snapshot, tenantId: "tenant_atlas" } as typeof first.snapshot;
+  const foreignRefused = await refused(() => store.saveDecision(foreign, foreignSnap));
+  const afterForeign = await rowOf("decisions", first.decision.id);
+  check("write-once: a same-id save under another tenant is REFUSED and the row keeps its tenant",
+    foreignRefused && afterForeign?.tenant_id === tenantId && afterForeign?.data === decBefore?.data);
+  check("write-once: tenant B still cannot read tenant A's decision",
+    (await store.getDecision("tenant_atlas", first.decision.id)) === null);
+
   await admin.query("DROP TABLE IF EXISTS decisions");
   await admin.query("DROP TABLE IF EXISTS evidence_snapshots");
   await admin.end();

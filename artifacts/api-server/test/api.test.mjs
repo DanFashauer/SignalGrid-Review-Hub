@@ -2150,6 +2150,35 @@ async function run() {
     } finally {
       server5.kill("SIGTERM");
     }
+
+    // A SET-BUT-BLANK DATABASE_URL (whitespace only). The selectors refuse it
+    // rather than read it as "no durable store" (durableDatabaseUrl in
+    // @workspace/audit) — so readiness must say NOT READY through its own
+    // contract: 503 + not_ready, never a 500 `internal`, and never a 200 that
+    // reports durableStore:"none" for a deployment that asked for a database.
+    const PORT5b = await freePort();
+    const BASE5b = `http://localhost:${PORT5b}/api`;
+    const server5b = spawn("node", [serverEntry], {
+      env: { ...process.env, PORT: String(PORT5b), NODE_ENV: "production", LOG_LEVEL: "silent", DATABASE_URL: "  \t " },
+      stdio: ["ignore", "ignore", "inherit"],
+    });
+    try {
+      let up = false;
+      const t0 = Date.now();
+      while (Date.now() - t0 < 15000) {
+        try { if ((await fetch(`${BASE5b}/healthz`)).ok) { up = true; break; } } catch { /* not up yet */ }
+        await new Promise((r) => setTimeout(r, 250));
+      }
+      check("blank DATABASE_URL: the process boots and liveness stays green", up === true);
+      const blank = await fetch(`${BASE5b}/readyz`);
+      const blankBody = await blank.json().catch(() => null);
+      check("blank DATABASE_URL: READINESS answers 503 not_ready (not 500 internal, not 200 'none')",
+        blank.status === 503 && blankBody !== null && isEnvelope(blankBody) && blankBody.error === "not_ready");
+      check("blank DATABASE_URL: the not-ready reason names the variable (demo profile is verbose)",
+        typeof blankBody?.message === "string" && blankBody.message.includes("DATABASE_URL"));
+    } finally {
+      server5b.kill("SIGTERM");
+    }
   }
 
   // ── Deprecation/Sunset: the mechanism is served, the registry is empty ────

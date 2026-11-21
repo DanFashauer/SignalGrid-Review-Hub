@@ -4874,7 +4874,7 @@ Auth chain (bearer token to tenant principal):
 Served surface and durable path:
 17. artifacts/api-server/src/routes/v1.ts (1372) — every served /v1 route including evaluate and the release-path re-evaluation; the spec was audited, the implementation was not.
 18. lib/audit/src/backend.ts (345) — the Postgres ledger WRITE path; the audited verify path is provably blind to tail truncation, so append guarantees live only here.
-19. lib/persistence/src/decision-store.ts (288) — durable decision writes.
+19. lib/persistence/src/decision-store.ts (352) — durable decision writes.
 20. lib/persistence/src/session-store.ts (346) — durable session writes and tenant scoping.
 
 Meta-gates (what green means) and launch connectors:

@@ -9,8 +9,8 @@
 //         is append-only BY PRIVILEGE, not just by convention — the hash chain
 //         detects tampering after the fact; the missing UPDATE/DELETE grant
 //         prevents the runtime credential from doing it at all.
-//       - decisions/evidence:    SELECT + INSERT + UPDATE (the stores upsert
-//         via INSERT … ON CONFLICT DO UPDATE).
+//       - decisions/evidence:    SELECT + INSERT only (write-once: INSERT …
+//         ON CONFLICT DO NOTHING plus a read-back; no UPDATE).
 //       - sessions:              SELECT + INSERT + UPDATE (status/heartbeat
 //         transitions are UPDATEs).
 //     No DELETE anywhere, no TRUNCATE, no REFERENCES, no TRIGGER, no DDL.
@@ -368,9 +368,11 @@ export const ROLE_SPLIT_SQL = `
       SELECT * FROM (VALUES
         -- The ledger is append-only BY PRIVILEGE: no UPDATE, no DELETE, no TRUNCATE.
         ('audit_ledger',       'SELECT, INSERT'),
-        -- Upserting stores: UPDATE is required by INSERT … ON CONFLICT DO UPDATE.
-        ('decisions',          'SELECT, INSERT, UPDATE'),
-        ('evidence_snapshots', 'SELECT, INSERT, UPDATE'),
+        -- Write-once records: INSERT … ON CONFLICT DO NOTHING plus a read-back.
+        -- No UPDATE — a decision and its evidence snapshot are immutable, and
+        -- the store's readiness probe treats an UPDATE grant as FORBIDDEN.
+        ('decisions',          'SELECT, INSERT'),
+        ('evidence_snapshots', 'SELECT, INSERT'),
         -- Session lifecycle transitions are UPDATEs.
         ('sessions',           'SELECT, INSERT, UPDATE')
       ) AS t(tbl, grants)

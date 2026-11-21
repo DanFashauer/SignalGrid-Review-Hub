@@ -1,6 +1,7 @@
 import { createHash } from "crypto";
 import { v4 as uuidv4 } from "uuid";
 import { getAuditBackend } from "./backend";
+export { durableDatabaseUrl } from "./database-url";
 import type { AuditEventType, Actor, Target, AuditRecord } from "./types";
 
 // Types live in ./types so the storage backends can share them without a cycle.

@@ -5844,3 +5844,55 @@ bc97de34 is an ancestor of origin/SignalGrid_Alpha
 ```
 
 Verdict: holds for the merge, tree, ancestry and delta claims. #2423 merged from exact head `ca447d1b` as `bc97de347e0d900c05e31d81b25b26068890b250`, with parents `dea84e59` and that head, and tree `13248e55` equal to the head's. The local and Mac results are attributed receipts on the heads named, not new executions. No owner-hardware evidence, private completion seal, readiness change or independent-operation proof is asserted.
+
+## 2026-11-21 — #2368 (2cb9d3df) landed under DR-037: maskNonProse masks an unclosed line-start HTML comment block to end of input
+
+Cloud merged #2368 under DR-037 at about 00:48Z with `expectedHeadSha` `cae7b8f47590ae17b7a30fb534c0906f8b0e7fe1`, after re-reading the head. Against canonical, only two files change:
+- `scripts/lib/markdown-scope.mjs` (blob `8d261d76`). An unclosed line-start comment block is masked to end of input (CommonMark §4.6 type 2, #2355), inside a minimal container model.
+- Its regression suite `scripts/mac/local-brain/test/markdown-unclosed-html-comment.test.mjs` (blob `a9186ecc`, 428 tests).
+
+This is a masking helper for four doc gates, not an HTML sanitizer and not a general Markdown conformance claim. The disclosed exceptions, surviving mutants and the conservative-direction residual are listed in the PR body.
+
+**Preparation journal.** These records were made before the merge and are cited as attributed historical receipts:
+- **Full local qualification on `cff0edfd6ba6b5c457487ae89ebd9a11bd0fedd8`** (tree `763fe6fe`), clean worktree with dirty 0 at start and end, 23:02:09Z–23:41:58Z by the runner's own start and result files:
+  - `pnpm install --frozen-lockfile`: exit 0.
+  - `node scripts/preflight.mjs`: exit 0, 0 failures. Two named non-passes: `backup-restore` and `db-role-split` were self-skipped (`DATABASE_URL` unset).
+  - `pnpm run verify:breadth`: exit 0, 58 breadth proofs.
+  - `cff0edfd` pre-staged #2423's head `a23b7cc6`. The published head `cae7b8f4` merged canonical `bc97de34`, and the delta `cff0edfd..cae7b8f4` is one heartbeat JSON.
+- **Suite:** 428/428 on `cae7b8f4`. The two open Codex threads' exact literals were re-run under both fence options:
+  - 4640405796: markdown-it renders 0 links, and the helper keeps 0/0.
+  - 4640405806: markdown-it renders 1 link, and the helper keeps 1/1.
+  
+  Both were answered (4649035555, 4649035817) and resolved. At the merge, 33 threads, 0 unresolved.
+- **Gating check** `Typecheck, build, and proof scaffold` `136649169556` succeeded on `cae7b8f4`, and so did the required `Analyze (javascript-typescript)` check.
+- **CodeQL** check 136645423727 failed with alert 276 still open, at the intentional type-2 `-->` site (helper line 668). It is dispositioned in #2368 comment 7053600687 and was not dismissed.
+- **Mac aggregate** `136663894169` succeeded on `cae7b8f4` (run 44839640449, attempt 2, all four slices from that attempt). In attempt 1, slice 4 failed at `Decision-throughput saturation gate (bench)` (`no parallel gain`, 0.80×, p99 86.3 ms; #2368 comment 7053885744). Its cause is unknown, and one full rerun was made.
+- **Automated Codex review** of `cae7b8f4` did not run: the bot hit its usage limit (7053526300).
+- **Receipt:** #439 comment 7054492572.
+
+Command: run by the cloud lane against a fresh fetch of canonical, read-only, exactly as follows (`set -e`):
+
+```bash
+date -u +%Y-%m-%dT%H:%M:%SZ
+git log -1 --format='%H parents=%P tree=%T' 2cb9d3dfda0f26c4246d38df24b987741f0e07da
+git log -1 --format='%H tree=%T' cae7b8f47590ae17b7a30fb534c0906f8b0e7fe1
+git merge-base --is-ancestor 2cb9d3dfda0f26c4246d38df24b987741f0e07da origin/SignalGrid_Alpha && echo "2cb9d3df is an ancestor of origin/SignalGrid_Alpha"
+git diff --stat bc97de347e0d900c05e31d81b25b26068890b250 2cb9d3dfda0f26c4246d38df24b987741f0e07da
+git diff --stat cff0edfd6ba6b5c457487ae89ebd9a11bd0fedd8 cae7b8f47590ae17b7a30fb534c0906f8b0e7fe1
+```
+
+Output, verbatim:
+
+```
+2026-11-21T00:49:29Z
+2cb9d3dfda0f26c4246d38df24b987741f0e07da parents=bc97de347e0d900c05e31d81b25b26068890b250 cae7b8f47590ae17b7a30fb534c0906f8b0e7fe1 tree=d49dca2e9606d5a502b1f7ec05de4784ee8035d3
+cae7b8f47590ae17b7a30fb534c0906f8b0e7fe1 tree=d49dca2e9606d5a502b1f7ec05de4784ee8035d3
+2cb9d3df is an ancestor of origin/SignalGrid_Alpha
+ scripts/lib/markdown-scope.mjs                     | 1124 ++++++++++-
+ .../test/markdown-unclosed-html-comment.test.mjs   | 2132 ++++++++++++++++++++
+ 2 files changed, 3239 insertions(+), 17 deletions(-)
+ artifacts/agent-heartbeats/mac-lane-tick.json | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+```
+
+Verdict: holds for the merge, tree, ancestry and delta claims. #2368 merged from exact head `cae7b8f4` as `2cb9d3dfda0f26c4246d38df24b987741f0e07da`, with parents `bc97de34` and that head, and tree `d49dca2e` equal to the head's. The local and Mac results are attributed receipts on the heads named, not new executions. No owner-hardware evidence, private completion seal, readiness change or independent-operation proof is asserted.

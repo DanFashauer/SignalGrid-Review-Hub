@@ -37,3 +37,4 @@ export {
   applyRoleSplit,
   assertRoleSplitProvisionable,
 } from "./role-split";
+export { durableDatabaseUrl } from "./database-url";

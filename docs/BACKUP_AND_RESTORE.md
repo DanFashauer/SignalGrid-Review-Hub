@@ -249,7 +249,7 @@ exactly the statements the stores execute —
 | Table | Grants | Why |
 | --- | --- | --- |
 | `audit_ledger` | `SELECT`, `INSERT` (+ sequence `USAGE`) | Append-only **by privilege**. The hash chain detects tampering after the fact; the missing `UPDATE`/`DELETE` grant prevents the runtime credential from doing it at all. |
-| `decisions`, `evidence_snapshots` | `SELECT`, `INSERT`, `UPDATE` | The stores upsert via `INSERT … ON CONFLICT DO UPDATE`. |
+| `decisions`, `evidence_snapshots` | `SELECT`, `INSERT` | **Write-once.** The store writes `INSERT … ON CONFLICT DO NOTHING` and reads the row back: a byte-identical retry is accepted, any other save under an existing id is refused. With no `UPDATE` grant the runtime cannot rewrite a decision or its evidence snapshot in place, and the decision store's readiness probe treats an `UPDATE` grant on either table (direct, via `PUBLIC`, or column-level) as forbidden. A database provisioned before this change keeps its old `UPDATE` grant until `db:migrate` re-applies the split, and `/readyz` reports not ready until it does. |
 | `sessions` | `SELECT`, `INSERT`, `UPDATE` | Lifecycle transitions are `UPDATE`s. |
 
 No `DELETE` anywhere, no `TRUNCATE`, no DDL, no `CREATE` on the schema. Schema

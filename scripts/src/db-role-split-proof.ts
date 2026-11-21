@@ -285,9 +285,10 @@ async function main() {
     const chain = await verifyLedger();
     check("runtime ledger appends work and the chain verifies (3 records)", chain.ok === true && chain.count === 3);
 
-    // A GENUINE decision + snapshot from the real core, saved twice so the
-    // upsert path (INSERT … ON CONFLICT DO UPDATE) really exercises the UPDATE
-    // grant — same minting approach as decision-store-pg-proof.
+    // A GENUINE decision + snapshot from the real core, saved twice: the
+    // write is INSERT … ON CONFLICT DO NOTHING plus a read-back, so a
+    // byte-identical retry must succeed with NO UPDATE grant at all — same
+    // minting approach as decision-store-pg-proof.
     const core = SignalGridCore.demo();
     const token = core.demoApiKeys().find((k) => k.tenantId === "tenant_northwind" && k.role === "operator")!.token;
     const evalResult = core.evaluate(token, { identityRef: "nurse.compliant", deviceRef: "ipad-ward-01", workflowKey: "clinical-session" });
@@ -295,10 +296,15 @@ async function main() {
     const snapshot = core.getSnapshot(token, decision.evidenceSnapshotId);
     const decisions = new PostgresDecisionStore(runtimeUrl);
     await decisions.saveDecision(decision, snapshot);
-    await decisions.saveDecision(decision, snapshot); // upsert → UPDATE grant exercised
+    await decisions.saveDecision(decision, snapshot); // identical retry → conflict path, no UPDATE needed
     const readBack = await decisions.getDecision("tenant_northwind", decision.id);
-    check("runtime decision upsert works (INSERT … ON CONFLICT DO UPDATE exercised twice)",
+    check("runtime decision write works and an identical retry is accepted (INSERT … ON CONFLICT DO NOTHING, twice)",
       readBack !== null && readBack.id === decision.id);
+    // A conflicting re-mint under the runtime role is refused and rewrites nothing.
+    const rewritten = { ...decision, outcome: decision.outcome === "deny" ? "allow" : "deny" } as typeof decision;
+    check("runtime: a conflicting re-mint under the same id is REFUSED (write-once, not rewritten)",
+      (await failureOf(() => decisions.saveDecision(rewritten, snapshot))) !== "" &&
+        (await decisions.getDecision("tenant_northwind", decision.id))?.outcome === decision.outcome);
 
     const sessions = new PostgresSessionStore(runtimeUrl);
     const now = "2026-08-20T18:00:00Z";
@@ -317,8 +323,14 @@ async function main() {
       (await deniedCode(runtime, "DELETE FROM audit_ledger WHERE seq = 1")) === "42501");
     check("runtime TRUNCATE on the ledger is DENIED (42501)",
       (await deniedCode(runtime, "TRUNCATE audit_ledger")) === "42501");
-    check("runtime DELETE on decisions is DENIED (42501) — upsert needs UPDATE, never DELETE",
+    check("runtime DELETE on decisions is DENIED (42501)",
       (await deniedCode(runtime, "DELETE FROM decisions WHERE id = 'dec-1'")) === "42501");
+    // Write-once BY PRIVILEGE: a decision and its evidence snapshot cannot be
+    // rewritten in place by the runtime, whatever the store's SQL says.
+    check("runtime UPDATE on decisions is DENIED (42501) — a decision is write-once by privilege",
+      (await deniedCode(runtime, `UPDATE public.decisions SET outcome = 'allow' WHERE id = '${decision.id}'`)) === "42501");
+    check("runtime UPDATE on evidence_snapshots is DENIED (42501) — the tamper-check input cannot be replaced",
+      (await deniedCode(runtime, `UPDATE public.evidence_snapshots SET data = '{}'::jsonb WHERE id = '${snapshot.id}'`)) === "42501");
     check("runtime DROP TABLE is DENIED (not the owner)",
       (await deniedCode(runtime, "DROP TABLE audit_ledger")) === "42501");
     check("runtime ALTER TABLE is DENIED (not the owner)",
@@ -353,6 +365,19 @@ async function main() {
     // While the PUBLIC UPDATE wedge stands, readiness must say NO: the
     // append-only boundary is a negative claim, and a probe that only checks
     // required privileges would report 200 over a rewritable ledger.
+    // The decision store's readiness treats UPDATE as forbidden the same way:
+    // stage it via PUBLIC (the widest back door) and the ping must refuse.
+    await admin.query("GRANT UPDATE ON public.decisions TO PUBLIC");
+    const poisonedDecisions = new PostgresDecisionStore(runtimeUrl);
+    check("…and the decision store's ping REFUSES while an UPDATE grant on decisions stands (write-once is a negative claim)",
+      /FORBIDDEN/.test(await failureOf(() => poisonedDecisions.ping())));
+    await poisonedDecisions.close();
+    await admin.query(`GRANT UPDATE (data) ON public.evidence_snapshots TO ${RUNTIME_ROLE}`);
+    await admin.query("REVOKE UPDATE ON public.decisions FROM PUBLIC");
+    const poisonedSnapshots = new PostgresDecisionStore(runtimeUrl);
+    check("…and REFUSES on a column-level UPDATE grant on evidence_snapshots alone",
+      /FORBIDDEN/.test(await failureOf(() => poisonedSnapshots.ping())));
+    await poisonedSnapshots.close();
     const poisonedLedger = new PostgresAuditBackend(runtimeUrl);
     check("…and the audit backend's ping REFUSES while forbidden privileges stand (append-only is a negative claim)",
       /FORBIDDEN/.test(await failureOf(() => poisonedLedger.ping())));

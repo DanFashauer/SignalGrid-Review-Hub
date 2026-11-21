@@ -13,6 +13,7 @@
 // Time is injectable (`nowMs`) so lifecycle/expiry is tested deterministically
 // without sleeping; it defaults to Date.now() at the call site.
 
+import { durableDatabaseUrl } from "./database-url";
 import type { DecisionOutcome } from "@workspace/signalgrid-core";
 
 export type SessionStatus = "active" | "expired" | "ended";
@@ -336,7 +337,8 @@ let store: SessionStore | undefined;
 
 export function getSessionStore(): SessionStore {
   if (store) return store;
-  const url = process.env.DATABASE_URL;
+  // Same reading as the decision store: trimmed, blank-but-set refused.
+  const url = durableDatabaseUrl();
   store = url ? new PostgresSessionStore(url) : new InMemorySessionStore();
   return store;
 }

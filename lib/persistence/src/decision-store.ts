@@ -12,10 +12,12 @@
 // every single-object read is keyed on `(id, tenant_id)` — a decision is never
 // looked up by id alone, mirroring the in-memory store's invariant.
 
+import { durableDatabaseUrl } from "./database-url";
 import type { Decision, EvidenceSnapshot } from "@workspace/signalgrid-core";
 
 export interface DecisionStore {
-  /** Persist a decision and its evidence snapshot (idempotent upsert). */
+  /** Persist a decision and its evidence snapshot, WRITE-ONCE: a byte-identical
+   *  retry is accepted, any other save under an existing id is refused. */
   saveDecision(decision: Decision, snapshot: EvidenceSnapshot): Promise<void>;
   /** A decision by id, ONLY if it belongs to the tenant (else null). */
   getDecision(tenantId: string, id: string): Promise<Decision | null>;
@@ -141,8 +143,9 @@ export class PostgresDecisionStore implements DecisionStore {
   }
 
   /**
-   * The exact per-table privileges the store's statements need (the upsert is
-   * INSERT … ON CONFLICT DO UPDATE, hence UPDATE). Cheap catalog reads — also
+   * The exact per-table privileges the store's statements need — SELECT and
+   * INSERT (the write is INSERT … ON CONFLICT DO NOTHING plus a read-back), and
+   * NOT UPDATE, which is checked as forbidden. Cheap catalog reads — also
    * run on every ping() so /readyz flips if the posture regresses underneath a
    * running process instead of reporting a health it no longer has.
    */
@@ -150,16 +153,27 @@ export class PostgresDecisionStore implements DecisionStore {
     const priv = await this.pool.query(`
       SELECT has_table_privilege('public.decisions', 'SELECT')
          AND has_table_privilege('public.decisions', 'INSERT')
-         AND has_table_privilege('public.decisions', 'UPDATE')
          AND has_table_privilege('public.evidence_snapshots', 'SELECT')
-         AND has_table_privilege('public.evidence_snapshots', 'INSERT')
-         AND has_table_privilege('public.evidence_snapshots', 'UPDATE') AS ok
+         AND has_table_privilege('public.evidence_snapshots', 'INSERT') AS ok,
+             has_any_column_privilege('public.decisions', 'UPDATE')
+          OR has_any_column_privilege('public.evidence_snapshots', 'UPDATE') AS forbidden
     `);
     if (!priv.rows[0]?.ok) {
       throw new Error(
         "this credential is missing table privileges on decisions/evidence_snapshots — " +
           "re-apply the role split with the admin credential (`pnpm run db:migrate`); " +
           "refusing to report ready for work that would fail.",
+      );
+    }
+    // Write-once is a NEGATIVE claim, so readiness checks the forbidden
+    // direction too (as the audit ledger does): an UPDATE grant on either table
+    // — table- or column-level, direct or via PUBLIC — means a decision or its
+    // evidence snapshot could be rewritten in place. Not a ready state.
+    if (priv.rows[0]?.forbidden) {
+      throw new Error(
+        "this credential holds FORBIDDEN privileges on decisions/evidence_snapshots (UPDATE — directly, " +
+          "via PUBLIC, or column-level): decisions would not be write-once. Re-apply the role split with " +
+          "the admin credential (`pnpm run db:migrate`); refusing to report ready.",
       );
     }
   }
@@ -169,24 +183,72 @@ export class PostgresDecisionStore implements DecisionStore {
     const client = await this.pool.connect();
     try {
       await client.query("BEGIN");
-      await client.query(
+      // WRITE-ONCE. A decision and its evidence snapshot are immutable audit
+      // records (engine.ts documents the decision immutable; the snapshot is what
+      // verifySnapshot re-derives over). `DO UPDATE` here used to let a re-mint
+      // under the same id replace both — and because the snapshot was replaced
+      // with a self-consistent one, the tamper check then passed over the
+      // rewrite. So: `DO NOTHING`, and when the row already existed (rowCount 0)
+      // read it back and accept ONLY a byte-for-byte retry from the SAME tenant.
+      // Anything else is a collision and is refused (the transaction rolls back)
+      // rather than swallowed: silently keeping the first row would leave the
+      // caller holding a decision the durable record contradicts. The runtime
+      // role holds no UPDATE on either table (role-split.ts), so this is also
+      // the only shape that can run under it.
+      const dec = await client.query(
         `INSERT INTO public.decisions (id, tenant_id, created_at, outcome, data)
          VALUES ($1,$2,$3,$4,$5)
-         ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data, outcome = EXCLUDED.outcome`,
+         ON CONFLICT (id) DO NOTHING`,
         [decision.id, decision.tenantId, decision.createdAt, decision.outcome, JSON.stringify(decision)],
       );
-      await client.query(
+      if (dec.rowCount !== 1) {
+        await PostgresDecisionStore.assertIdenticalRetry(client, "decisions", decision.id, decision.tenantId, JSON.stringify(decision));
+      }
+      const snap = await client.query(
         `INSERT INTO public.evidence_snapshots (id, tenant_id, decision_id, data)
          VALUES ($1,$2,$3,$4)
-         ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data`,
+         ON CONFLICT (id) DO NOTHING`,
         [snapshot.id, snapshot.tenantId, snapshot.decisionId, JSON.stringify(snapshot)],
       );
+      if (snap.rowCount !== 1) {
+        await PostgresDecisionStore.assertIdenticalRetry(client, "evidence_snapshots", snapshot.id, snapshot.tenantId, JSON.stringify(snapshot));
+      }
       await client.query("COMMIT");
     } catch (err) {
       await client.query("ROLLBACK");
       throw err;
     } finally {
       client.release();
+    }
+  }
+
+  /**
+   * The row under `id` already existed. Pass ONLY if it belongs to the same
+   * tenant and its stored JSONB equals what this save carried (JSONB equality,
+   * so key order is not a difference; any value is). A missing row here — the
+   * INSERT reported nothing inserted yet nothing is there — is not "fine"
+   * either: fail closed.
+   */
+  private static async assertIdenticalRetry(
+    client: { query: (sql: string, params: unknown[]) => Promise<{ rows: any[] }> },
+    table: "decisions" | "evidence_snapshots",
+    id: string,
+    tenantId: string,
+    json: string,
+  ): Promise<void> {
+    const res = await client.query(
+      `SELECT tenant_id, (data = $2::jsonb) AS same FROM public.${table} WHERE id = $1`,
+      [id, json],
+    );
+    const row = res.rows[0];
+    if (!row) {
+      throw new Error(`${table} ${id}: insert reported a conflict but no row exists — refusing to report it saved.`);
+    }
+    if (row.tenant_id !== tenantId) {
+      throw new Error(`${table} ${id}: id already held by another tenant — refusing the write (records are write-once and tenant-owned).`);
+    }
+    if (row.same !== true) {
+      throw new Error(`${table} ${id}: a different record already exists under this id — refusing to rewrite an immutable record.`);
     }
   }
 
@@ -277,7 +339,9 @@ let store: DecisionStore | null | undefined;
  */
 export function getDecisionStore(): DecisionStore | null {
   if (store !== undefined) return store;
-  const url = process.env.DATABASE_URL;
+  // durableDatabaseUrl throws on a set-but-blank value; that is NOT cached, so
+  // every caller (and /readyz) keeps refusing until the config is fixed.
+  const url = durableDatabaseUrl();
   store = url ? new PostgresDecisionStore(url) : null;
   return store;
 }

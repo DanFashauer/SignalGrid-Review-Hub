@@ -30,11 +30,11 @@
 // compose `profiles` and `configs:`; compose `secrets:`; the container's `command`, `entrypoint` and node flags (a
 // volume over the directory an entry file lives in hides it, and a `--import` loader is not read); services merged
 // across ALL tracked compose files rather than per `-f` combination; bind-mount sources read relative to the repo
-// root, not to the compose file's own directory; compose files and Dockerfiles found by filename only
-// (`compose*.yml`/`.yaml`, `Dockerfile*`, `Containerfile*`), so one named otherwise, or one only a script's `docker
+// root, not to the compose file's own directory; compose files and Dockerfiles found by base name only
+// (a base name containing `compose` and ending `.yml`/`.yaml`; a base name containing `dockerfile` or `containerfile`, any case), so one named otherwise, or one only a script's `docker
 // run -v` or `docker build` line names, is not read; a Dockerfile no compose service builds, read with its own
 // directory as the build context; `$VAR`/`$ARG` in a COPY/ADD source, destination or WORKDIR and `..` sources leaving
-// the repo (reported as a "not modelled" note); heredoc COPY (a note); COPY --from an external image (a note); COPY
+// the repo (reported as a "not modelled" note); heredoc COPY (a note); `ONBUILD COPY`/`ADD` (a note: the trigger ships files into a CHILD image) and compose `develop.watch` sync actions (a note: they copy files into the running container); COPY --from an external image (a note); COPY
 // flags other than --from, --chown, --chmod and --link (NOT scanned); ADD of a URL, a git source or a local archive,
 // recognised by extension rather than by content (NOT scanned); `.dockerignore`; files and directories present only
 // in a base image (a destination that only the base image holds as a directory is read as a file path); every
@@ -44,7 +44,7 @@
 // NOT-scanned problems, never a pass: compose `extends`, `volumes_from` and `dockerfile_inline`; `volumes:` that is
 // not a list; a volume or tmpfs target that is not a literal absolute path or holds a `$`; a short volume entry that
 // does not parse; a dynamic import whose argument is not a plain string literal; a specifier written with an escape;
-// a local COPY/ADD source that is no tracked path or a wildcard that matches nothing. A COPY --from source that
+// a JSON-array COPY/ADD holding a non-string element; a local COPY/ADD source that is no tracked path or a wildcard that matches nothing. A COPY --from source that
 // matches nothing in the modelled stage is a note, because a RUN may create it. A shape the model does not read at
 // all is in this list and is a silent pass.
 import { posix } from "node:path";
@@ -147,6 +147,12 @@ export function parseCompose(name, text) {
       if (typeof t !== "string" || !t.startsWith("/") || t.includes("$")) bad(`a tmpfs entry ${JSON.stringify(t)} is not a literal absolute path`);
       else hides.push({ path: cpath(t.split(":")[0]), seq: seq++ });
     }
+    // develop.watch `sync*` actions copy files into the RUNNING container; they are not modelled, so each is reported.
+    const watch = def?.develop?.watch;
+    for (const w of Array.isArray(watch) ? watch : watch === undefined ? [] : [watch]) {
+      if (w && typeof w === "object" && typeof w.action === "string" && !/^rebuild$|^restart$/.test(w.action)) dropped.push(`develop.watch ${w.action} ${w.path}:${w.target ?? "(no target)"}`);
+      else if (!w || typeof w !== "object" || typeof w.action !== "string") dropped.push(`develop.watch entry ${JSON.stringify(w)} is not a mapping with an action`);
+    }
     const b = def?.build;
     if (b && typeof b === "object" && b.dockerfile_inline !== undefined) bad("build.dockerfile_inline is not modelled");
     // No key is defaulted here: an overlay that sets only `target` must not look as if it set `context`.
@@ -156,7 +162,14 @@ export function parseCompose(name, text) {
   return out;
 }
 
-const joinContinuations = (text) => text.replace(/\\[ \t]*\r?\n/g, " ");
+// Comment lines are removed BEFORE continuations are joined, as the builder does: a `# ...` line inside a backslash
+// continuation is not part of the instruction.
+const joinContinuations = (text) =>
+  text
+    .split(/\r?\n/)
+    .filter((l) => !l.trim().startsWith("#"))
+    .join("\n")
+    .replace(/\\[ \t]*\r?\n/g, " ");
 
 // An ADD source that is a URL, a git source or a local archive is fetched or EXTRACTED, not copied as one file.
 const ADD_UNMODELLED = /^(?:https?:|ftp:|git@|ssh:|git:)|\.git(?:#|$)|\.(?:tar|tar\.gz|tgz|tar\.bz2|tbz2|tar\.xz|txz|tar\.zst|tzst)$/i;
@@ -192,6 +205,9 @@ export function parseDockerfile(name, text) {
         cur.workdir = clean(rest.startsWith("/") ? rest : posix.join(cur.workdir, rest));
         cur.ops.push({ kind: "workdir", path: cur.workdir });
       }
+    } else if (ins === "ONBUILD" && /^(?:COPY|ADD)\b/i.test(rest)) {
+      // The trigger runs in a CHILD image's build; which files it ships there is not modelled, so it is reported, not passed silently.
+      cur.dropped.push(`ONBUILD ${rest} (a trigger that ships files into a child image)`);
     } else if (ins === "COPY" || ins === "ADD") {
       let flags = "";
       let args = rest;
@@ -218,6 +234,11 @@ export function parseDockerfile(name, text) {
         cur.dropped.push(`${ins} heredoc ${rest}`);
         continue;
       } else parts = args.split(/\s+/);
+      if (!Array.isArray(parts) || parts.some((p) => typeof p !== "string")) {
+        // A JSON array that holds a number, null, object or nested array is not a form the builder accepts as a path list; never guess.
+        cur.problems.push(`${name} stage ${cur.name ?? cur.index}: ${ins} JSON array holds a non-string element - NOT scanned`);
+        continue;
+      }
       if (parts.length < 2) continue;
       const dest = parts[parts.length - 1];
       const srcs = parts.slice(0, -1);

@@ -62,7 +62,16 @@
  *     verdicts to the single-threaded pass. Same input, same output, no matter
  *     how many threads are evaluating at once. This is the assertion worth
  *     having here — it is the fail-closed/deterministic rule of this repo tested
- *     under the one condition the proof suite never applies to it.
+ *     under the one condition the proof suite never applies to it. Checked
+ *     twice: each window's pre-release fingerprint against the main thread's,
+ *     and EVERY timed verdict against its scenario's line, inside the timed
+ *     loop (#2484 — before 2026-11-21 the timed verdicts were discarded, so a
+ *     thread that diverged only under saturation passed). `--inject=
+ *     diverge-after-release` must FAIL; a fixture through the real measure/gate
+ *     boundary runs before every measurement.
+ *
+ * Every run ends with one `BENCH-RECORD {json}` line of public-safe figures,
+ * which scripts/preflight.mjs echoes into its log so passing runs keep them.
  *
  * Usage:
  *   pnpm run bench:decision-throughput
@@ -101,15 +110,21 @@ interface Run {
   ops: number;
   elapsedMs: number;
   samples: Float64Array;
-  /** Verdict fingerprint of the scenario set — must not vary with thread count. */
+  /** Verdict fingerprint of the scenario set, taken before the release — must not vary with thread count. */
   signature: string;
+  /** Timed operations whose OWN verdict differed from the fingerprint line for its scenario. */
+  divergentOps: number;
+  /** The first such operation, for the failure message. */
+  firstDivergence: string | null;
+  /** 1-based pool worker that produced the window (0 for the main thread). */
+  worker?: number;
   /** process.hrtime.bigint() at the first timed operation, as a decimal string (comparable across threads). */
   startNs: string;
 }
 
 type WorkerToMain =
   | { type: "ready" }
-  | { type: "done"; ops: number; elapsedMs: number; samples: Float64Array; signature: string; startNs: string };
+  | ({ type: "done" } & Run);
 
 async function loadWorkload() {
   const [core, workload] = await Promise.all([
@@ -124,26 +139,44 @@ type Workload = Awaited<ReturnType<typeof loadWorkload>>;
 // and the factory is how every caller obtains one anyway.
 type Core = ReturnType<Workload["SignalGridCore"]["demo"]>;
 
+type Decision = ReturnType<Core["evaluate"]>;
+
 /**
- * The fingerprint deliberately excludes `decisionId` and `latencyMs`: the first
- * is a per-decision identity and the second is a measured duration, so neither
- * is expected to repeat. Everything a caller would ACT on is included.
+ * What a caller would ACT on in one decision: compared for EVERY timed verdict. It excludes the per-decision
+ * identity and timing fields, which are not expected to repeat from one call to the next on the same core:
+ * `decisionId` and `evidenceSnapshotId` (both derived from a per-evaluation sequence number, decision.ts and
+ * evidence.ts) and `latencyMs` (a measured duration).
  */
-function verdictSignature(core: Core, w: Workload): string {
-  return w.BENCH_SCENARIOS.map((scenario) => {
-    const r = core.evaluate(w.BENCH_OPERATOR, scenario);
-    return [
-      r.outcome,
-      r.reasonCodes.join("|"),
-      r.policyId,
-      r.policyVersion,
-      r.policyVersionId,
-      r.evidenceSnapshotId,
-      r.matchedRules.map((m) => m.ruleId).join("|"),
-      r.reviewable,
-      r.coreNormalizationVersion ?? "unstamped",
-    ].join(" ");
-  }).join("\n");
+function decisionLine(r: Decision): string {
+  return [
+    r.outcome,
+    r.reasonCodes.join("|"),
+    r.policyId,
+    r.policyVersion,
+    r.policyVersionId,
+    r.matchedRules.map((m) => m.ruleId).join("|"),
+    r.reviewable,
+    r.coreNormalizationVersion ?? "unstamped",
+  ].join(" ");
+}
+
+/**
+ * The pre-release fingerprint of a FRESH core: each scenario's decision line plus its `evidenceSnapshotId`. The id is
+ * kept here because two fresh cores producing their first decisions must agree on it (cross-core determinism of
+ * ids); it is dropped from the per-call comparison above because the sequence number moves it on every call.
+ */
+interface Fingerprint {
+  signature: string;
+  /** decisionLine per scenario index: what every timed verdict is checked against. */
+  expected: readonly string[];
+}
+
+function fingerprint(core: Core, w: Workload): Fingerprint {
+  const lines = w.BENCH_SCENARIOS.map((scenario) => core.evaluate(w.BENCH_OPERATOR, scenario));
+  return {
+    signature: lines.map((r) => `${decisionLine(r)} ${r.evidenceSnapshotId}`).join("\n"),
+    expected: lines.map(decisionLine),
+  };
 }
 
 /**
@@ -153,37 +186,55 @@ function verdictSignature(core: Core, w: Workload): string {
  * before 2026-11-19 the warm-up ran after the release, so each worker's window started whenever its own
  * warm-up ended — #2387).
  */
-function prepare(core: Core, w: Workload): string {
-  const signature = verdictSignature(core, w);
+function prepare(core: Core, w: Workload): Fingerprint {
+  const print = fingerprint(core, w);
   for (let i = 0; i < WARMUP_ITERATIONS; i++) {
     core.evaluate(w.BENCH_OPERATOR, w.BENCH_SCENARIOS[i % w.BENCH_SCENARIOS.length]);
   }
-  return signature;
+  return print;
 }
 
-/** Run the prepared workload flat out for `durationMs`, timing every completion. */
-function measure(core: Core, w: Workload, durationMs: number, signature: string, lock: Lock = null): Run {
+/**
+ * Run the prepared workload flat out for `durationMs`, timing every completion AND checking every timed verdict
+ * against the pre-release fingerprint line for its scenario (#2484: before 2026-11-21 the timed verdicts were
+ * discarded and only the fingerprint taken before the release was compared, so a thread whose verdicts diverged
+ * only under saturation passed). The check is inside the timed loop, so its cost is charged to the op it belongs
+ * to — and it is charged EQUALLY in single-core and parallel windows, because both are this same function running
+ * in a pool worker (S windows release worker 1 alone, P windows release every worker).
+ */
+function measure(core: Core, w: Workload, durationMs: number, print: Fingerprint, lock: Lock = null): Run {
+  const { signature, expected } = print;
+  const n = w.BENCH_SCENARIOS.length;
   const buffer = new Float64Array(MAX_SAMPLES);
   const start = process.hrtime.bigint();
   const deadline = start + BigInt(Math.round(durationMs * 1e6));
   let previous = start;
   let kept = 0;
   let ops = 0;
+  let divergentOps = 0;
+  let firstDivergence: string | null = null;
   let now = start;
 
   // One hrtime read per iteration serves as both the service-time sample and
   // the deadline check, so the measurement overhead is charged honestly to the
   // op it belongs to rather than being hidden between iterations.
   while (true) {
+    const index = ops % n;
+    let r: Decision;
     if (lock) {
       acquire(lock);
       try {
-        core.evaluate(w.BENCH_OPERATOR, w.BENCH_SCENARIOS[ops % w.BENCH_SCENARIOS.length]);
+        r = core.evaluate(w.BENCH_OPERATOR, w.BENCH_SCENARIOS[index]);
       } finally {
         release(lock);
       }
     } else {
-      core.evaluate(w.BENCH_OPERATOR, w.BENCH_SCENARIOS[ops % w.BENCH_SCENARIOS.length]);
+      r = core.evaluate(w.BENCH_OPERATOR, w.BENCH_SCENARIOS[index]);
+    }
+    const line = decisionLine(r);
+    if (line !== expected[index]) {
+      divergentOps++;
+      firstDivergence ??= `op ${ops} (scenario ${index}): got "${line}", expected "${expected[index]}"`;
     }
     now = process.hrtime.bigint();
     if (kept < MAX_SAMPLES) buffer[kept++] = Number(now - previous) / 1e6;
@@ -192,7 +243,69 @@ function measure(core: Core, w: Workload, durationMs: number, signature: string,
     if (now >= deadline) break;
   }
 
-  return { ops, elapsedMs: Number(now - start) / 1e6, samples: buffer.subarray(0, kept), signature, startNs: String(start) };
+  return {
+    ops,
+    elapsedMs: Number(now - start) / 1e6,
+    samples: buffer.subarray(0, kept),
+    signature,
+    divergentOps,
+    firstDivergence,
+    startNs: String(start),
+  };
+}
+
+/**
+ * The determinism gate: every window's pre-release fingerprint must equal the main thread's, and no timed verdict
+ * in any window may differ from it. Returns failure messages; empty passes.
+ */
+function determinismFailures(reference: string, windows: ReadonlyArray<{ label: string; run: Run }>): string[] {
+  const failures: string[] = [];
+  const startup = windows.filter((x) => x.run.signature !== reference);
+  if (startup.length > 0) {
+    failures.push(`${startup.length}/${windows.length} windows started from verdicts that differ from the single-threaded pass (${startup.map((x) => x.label).join(", ")})`);
+  }
+  const timed = windows.filter((x) => x.run.divergentOps > 0);
+  if (timed.length > 0) {
+    const total = timed.reduce((a, x) => a + x.run.divergentOps, 0);
+    failures.push(
+      `${total} timed verdict${total === 1 ? "" : "s"} in ${timed.length}/${windows.length} windows differed from the single-threaded pass ` +
+        `(first: ${timed[0].label} ${timed[0].run.firstDivergence})`,
+    );
+  }
+  return failures;
+}
+
+/** A core whose verdicts flip after `after` calls — divergence that begins inside a timed window. Fixture only. */
+function divergingAfter(core: Core, after: number): Core {
+  let calls = 0;
+  const evaluate = core.evaluate.bind(core);
+  return new Proxy(core, {
+    get(target, key, receiver) {
+      if (key !== "evaluate") return Reflect.get(target, key, receiver);
+      return (...args: Parameters<Core["evaluate"]>) => {
+        const r = evaluate(...args);
+        return ++calls > after ? { ...r, outcome: r.outcome === "deny" ? "allow" : "deny" } : r;
+      };
+    },
+  });
+}
+
+/**
+ * The determinism gate proves itself through the REAL measure/gate boundary before any run is trusted: a core whose
+ * fingerprint matches at startup but whose verdicts flip only inside the timed window must fail, and the unchanged
+ * core must pass. Main thread, ~2 × 60 ms.
+ */
+function determinismSelfTest(core: Core, w: Workload): string[] {
+  const print = fingerprint(core, w);
+  const problems: string[] = [];
+  // The fingerprint above came from the real core — exactly what the startup check of a diverging worker sees —
+  // and the diverging core flips from its first timed call.
+  const diverging = divergingAfter(core, 0);
+  const negative = determinismFailures(print.signature, [{ label: "fixture", run: measure(diverging, w, 60, print) }]);
+  if (negative.length === 0) problems.push("a core whose verdicts flip only inside the timed window passed the determinism gate");
+  const control = determinismFailures(print.signature, [{ label: "control", run: measure(core, w, 60, print) }]);
+  if (control.length > 0) problems.push(`the unchanged core failed the determinism gate: ${control.join("; ")}`);
+  return problems;
 }
 
 function opsPerSec(run: { ops: number; elapsedMs: number }): number {
@@ -232,7 +345,8 @@ class Pool {
     private failure: Error | null,
   ) {}
 
-  static start(count: number, durationMs: number, lockBuffer: SharedArrayBuffer | null): Promise<Pool> {
+  /** `divergeWorker`: the 0-based worker whose timed verdicts flip (`--inject=diverge-after-release`), or -1. */
+  static start(count: number, durationMs: number, lockBuffer: SharedArrayBuffer | null, divergeWorker = -1): Promise<Pool> {
     const workers: Worker[] = [];
     const pool = new Pool(workers, null, null);
     return new Promise<Pool>((resolve, reject) => {
@@ -243,7 +357,7 @@ class Pool {
         reject(pool.failure);
       };
       for (let i = 0; i < count; i++) {
-        const worker = new Worker(new URL(import.meta.url), { workerData: { durationMs, lockBuffer } });
+        const worker = new Worker(new URL(import.meta.url), { workerData: { durationMs, lockBuffer, divergeAfterRelease: i === divergeWorker, worker: i + 1 } });
         workers.push(worker);
         worker.on("message", (message: WorkerToMain) => {
           if (message.type === "ready") {
@@ -305,7 +419,7 @@ function startHogs(count: number, ms: number): Worker[] {
   return Array.from({ length: count }, () => new Worker(code, { eval: true, workerData: { ms } }));
 }
 
-async function runWorker(durationMs: number, lockBuffer: SharedArrayBuffer | null): Promise<void> {
+async function runWorker(durationMs: number, lockBuffer: SharedArrayBuffer | null, divergeAfterRelease: boolean, worker: number): Promise<void> {
   // A worker thread starts without tsx's resolver, so register it before any
   // TypeScript module is imported — otherwise the core's own extensionless
   // relative imports fail to resolve here even though they resolve in the parent.
@@ -319,17 +433,17 @@ async function runWorker(durationMs: number, lockBuffer: SharedArrayBuffer | nul
   const lock: Lock = lockBuffer ? new Int32Array(lockBuffer) : null;
   // Warm before reporting ready, so each timed window starts following the release (skew measured), not after a
   // staggered warm-up.
-  const signature = prepare(core, workload);
+  const print = prepare(core, workload);
+  // `--inject=diverge-after-release`: this worker's fingerprint above was taken from the real core, so the startup
+  // check matches; its verdicts flip only from the 100th call inside the released windows.
+  const timedCore = divergeAfterRelease ? divergingAfter(core, 100) : core;
 
   port.on("message", (message: string) => {
     if (message !== "go") return;
-    const run = measure(core, workload, durationMs, signature, lock);
+    const run = measure(timedCore, workload, durationMs, print, lock);
     // Copy out of the subarray so the transferred buffer holds only the samples.
     const samples = Float64Array.from(run.samples);
-    port.postMessage(
-      { type: "done", ops: run.ops, elapsedMs: run.elapsedMs, samples, signature: run.signature, startNs: run.startNs },
-      [samples.buffer],
-    );
+    port.postMessage({ type: "done", ...run, samples, worker }, [samples.buffer]);
   });
 
   port.postMessage({ type: "ready" });
@@ -365,21 +479,28 @@ function sortedCopy(samples: ArrayLike<number>): number[] {
 
 async function main(): Promise<void> {
   const judge = await import("./throughput-judge.js");
-  // The judge proves itself before any measurement is trusted: if it cannot fail on recorded contention it
-  // cannot gate anything. Pure, no timing — microseconds.
-  const judgeFailures = judge.judgeSelfTest();
+  const workload = await loadWorkload();
+  // Both gates prove themselves before any measurement is trusted: the collapse judge against recorded contention
+  // (pure, microseconds) and the determinism gate against a core that diverges only inside a timed window (real
+  // measure/gate boundary, ~120 ms). A gate that cannot fail cannot gate anything.
+  const selfTestFailures = [
+    ...judge.judgeSelfTest().map((f) => `collapse judge: ${f}`),
+    // Its own core: the fixture's decisions advance the per-evaluation sequence, and the measured run's
+    // fingerprint must come from a FRESH core to match the workers'.
+    ...determinismSelfTest(workload.SignalGridCore.demo(), workload).map((f) => `determinism gate: ${f}`),
+  ];
   if (process.argv.includes("--self-test")) {
-    for (const f of judgeFailures) console.error(`FAIL: ${f}`);
+    for (const f of selfTestFailures) console.error(`FAIL: ${f}`);
     console.log(
-      judgeFailures.length === 0
-        ? `Collapse-judge self-test: ${judge.JUDGE_FIXTURES.length} fixtures and 5 malformed inputs classified correctly.`
-        : `Collapse-judge self-test FAILED: ${judgeFailures.length} problem(s).`,
+      selfTestFailures.length === 0
+        ? `Throughput-bench self-test: collapse judge (${judge.JUDGE_FIXTURES.length} fixtures, 5 malformed inputs) and determinism gate (timed-window divergence fails, control passes) classified correctly.`
+        : `Throughput-bench self-test FAILED: ${selfTestFailures.length} problem(s).`,
     );
-    process.exitCode = judgeFailures.length === 0 ? 0 : 1;
+    process.exitCode = selfTestFailures.length === 0 ? 0 : 1;
     return;
   }
-  if (judgeFailures.length > 0) {
-    for (const f of judgeFailures) console.error(`FAIL: collapse judge self-test: ${f}`);
+  if (selfTestFailures.length > 0) {
+    for (const f of selfTestFailures) console.error(`FAIL: self-test: ${f}`);
     process.exitCode = 1;
     return;
   }
@@ -393,18 +514,19 @@ async function main(): Promise<void> {
   const inject = stringFlag("inject");
   let lockBuffer: SharedArrayBuffer | null = null;
   let hogPair = 0;
+  let divergeWorker = -1;
   if (inject !== undefined) {
     const hog = /^host-stall:(\d+)$/.exec(inject);
     if (inject === "lock") lockBuffer = new SharedArrayBuffer(8);
+    // The LAST worker: single-core windows release worker 1 alone, so with more than one worker the divergence is
+    // confined to the parallel windows, the condition #2484 says went unchecked.
+    else if (inject === "diverge-after-release") divergeWorker = workerCount - 1;
     else if (hog && Number(hog[1]) >= 1 && Number(hog[1]) <= pairCount) hogPair = Number(hog[1]);
     else {
-      console.error(`Invalid --inject=${inject}: expected "lock" or "host-stall:<pair 1..${pairCount}>".`);
+      console.error(`Invalid --inject=${inject}: expected "lock", "diverge-after-release" or "host-stall:<pair 1..${pairCount}>".`);
       process.exit(1);
     }
   }
-
-  const workload = await loadWorkload();
-  const core = workload.SignalGridCore.demo();
 
   console.log("Decision-throughput benchmark (public-safe, in-memory core, no I/O)");
   console.log(
@@ -414,14 +536,21 @@ async function main(): Promise<void> {
   );
   if (inject) {
     console.log(
-      `INJECTED: ${lockBuffer ? "every thread serialised on one shared lock (genuine contention)" : `${HOG_THREADS_PER_CORE * cores} CPU-hog threads over P${hogPair} only (transient host noise)`}` +
+      `INJECTED: ${
+        lockBuffer
+          ? "every thread serialised on one shared lock (genuine contention)"
+          : divergeWorker >= 0
+            ? `worker ${divergeWorker + 1}'s verdicts flip from its 100th timed call; its pre-release fingerprint is unchanged`
+            : `${HOG_THREADS_PER_CORE * cores} CPU-hog threads over P${hogPair} only (transient host noise)`
+      }` +
         " — a demonstration run, not a measurement of the core.",
     );
   }
   console.log("");
 
-  const signature = prepare(core, workload);
-  const pool = await Pool.start(workerCount, durationMs, lockBuffer);
+  const core = workload.SignalGridCore.demo();
+  const { signature } = prepare(core, workload);
+  const pool = await Pool.start(workerCount, durationMs, lockBuffer, divergeWorker);
 
   const singles: Run[] = [];
   const parallels: Array<{ runs: Run[]; releaseNs: bigint; aggregateRate: number; meanWindowMs: number; totalOps: number }> = [];
@@ -460,6 +589,7 @@ async function main(): Promise<void> {
   });
   console.log("");
 
+  const parallelStats: Array<{ p99Ms: number; maxMs: number; stalledPct: number }> = [];
   console.log(`Parallel windows — ${workerCount} worker${workerCount === 1 ? "" : "s"}, saturated`);
   parallels.forEach((p, i) => {
     const j = verdict.pairs[i];
@@ -468,6 +598,11 @@ async function main(): Promise<void> {
     const lastStart = starts.reduce((a, b) => (b > a ? b : a));
     const merged = sortedCopy(p.runs.flatMap((r) => Array.from(r.samples)));
     const stallPerWorker = p.runs.reduce((sum, r) => sum + stalledMs(r.samples, stallThresholdMs), 0) / p.runs.length;
+    parallelStats.push({
+      p99Ms: workload.percentile(merged, 99),
+      maxMs: merged[merged.length - 1] ?? 0,
+      stalledPct: (stallPerWorker / p.meanWindowMs) * 100,
+    });
     console.log(
       `  P${j.pair}  ${p.totalOps.toLocaleString("en-US").padStart(9)} in ${(p.meanWindowMs / 1000).toFixed(2)}s  ${Math.round(p.aggregateRate).toLocaleString("en-US").padStart(7)}/sec aggregate` +
         `  vs max(S${i}, S${i + 1}) = ${Math.round(j.reference).toLocaleString("en-US")}/sec  →  ${j.ratio.toFixed(2)}x  ${j.collapsed ? "COLLAPSED" : "gain"}`,
@@ -517,17 +652,12 @@ async function main(): Promise<void> {
       `First-pair-only rule (the gate before 2026-11-21, P1 against S0): ${verdict.firstPairOnlyRuleFails ? "would FAIL" : "would pass"}.`,
     );
   }
-  let divergent = 0;
-  let workerRuns = 0;
-  for (const p of parallels) {
-    for (const run of p.runs) {
-      workerRuns++;
-      if (run.signature !== signature) divergent++;
-    }
-  }
-  if (divergent > 0) {
-    failures.push(`${divergent}/${workerRuns} worker windows returned verdicts that differ from the single-threaded pass`);
-  }
+  const windows = [
+    ...singles.map((run, i) => ({ label: `S${i}`, run })),
+    ...parallels.flatMap((p, i) => p.runs.map((run) => ({ label: `P${i + 1}/worker ${run.worker}`, run }))),
+  ];
+  const timedVerdicts = windows.reduce((a, x) => a + x.run.ops, 0);
+  failures.push(...determinismFailures(signature, windows));
 
   console.log(
     "Gates: throughput floor (from the 750 ms p95 pilot gate) on every single-core window, " +
@@ -535,6 +665,35 @@ async function main(): Promise<void> {
         ? `no parallel collapse (exercised at ${workerCount} workers over ${pairCount} bracketed pair${pairCount === 1 ? "" : "s"}; fails when the pooled ratio is ≤ 1x)`
         : "no parallel collapse: NOT EXERCISED — 1 worker on this machine, so the property was not tested") +
       ", determinism under concurrency.",
+  );
+  // One public-safe line of numbers, printed pass or fail. scripts/preflight.mjs echoes `BENCH-RECORD ` lines into
+  // its own log after the step's verdict, so the per-window figures survive in the CI artifacts that keep that log
+  // (a passing step's output was otherwise dropped, which is why passing hosted-macOS rates could not be tabulated).
+  // No file is written: nothing lands in the tree, so sim-result provenance is untouched.
+  const round = (x: number, d = 2) => Number(x.toFixed(d));
+  console.log(
+    "BENCH-RECORD " +
+      JSON.stringify({
+        bench: "decision-throughput",
+        v: 1,
+        cores,
+        workers: workerCount,
+        windowSec: seconds,
+        pairs: pairCount,
+        inject: inject ?? null,
+        singlePerSec: singleRates.map((r) => Math.round(r)),
+        singleStalledPct: singles.map((x) => round((stalledMs(x.samples, stallThresholdMs) / x.elapsedMs) * 100, 1)),
+        singleP50Ms: round(singleMedianMs, 4),
+        parallelPerSec: parallels.map((p) => Math.round(p.aggregateRate)),
+        ratios: verdict.pairs.map((p) => round(p.ratio)),
+        pooled: round(verdict.pooledRatio),
+        p99Ms: parallelStats.map((x) => round(x.p99Ms, 1)),
+        maxMs: parallelStats.map((x) => round(x.maxMs, 1)),
+        parallelStalledPct: parallelStats.map((x) => round(x.stalledPct, 1)),
+        firstPairOnlyRuleFails: verdict.firstPairOnlyRuleFails,
+        divergentTimedVerdicts: windows.reduce((a, x) => a + x.run.divergentOps, 0),
+        verdict: failures.length > 0 ? "fail" : "pass",
+      }),
   );
   if (failures.length > 0) {
     for (const failure of failures) console.error(`FAIL: ${failure}.`);
@@ -546,7 +705,7 @@ async function main(): Promise<void> {
     `PASS: ${Math.round(minSingle).toLocaleString("en-US")}–${Math.round(Math.max(...singleRates)).toLocaleString("en-US")}/sec on one core (floor ${FLOOR_OPS_PER_SEC.toFixed(2)}/sec), ` +
       `${verdict.pooledRatio.toFixed(2)}x pooled under saturation (${verdict.pairs.map((p) => `P${p.pair} ${p.ratio.toFixed(2)}x`).join(", ")}; best P${best.pair})` +
       (parallelCollapseExercised ? "" : " (1 worker — scaling not exercised)") +
-      `, identical verdicts in all ${workerRuns} worker windows.`,
+      `, identical verdicts in all ${windows.length} windows (${timedVerdicts.toLocaleString("en-US")} timed verdicts each checked).`,
   );
   console.log("Absolute rates are hardware-specific and report-only; the decision core alone, no HTTP/connector/database.");
 }
@@ -554,6 +713,6 @@ async function main(): Promise<void> {
 if (isMainThread) {
   await main();
 } else {
-  const data = workerData as { durationMs: number; lockBuffer: SharedArrayBuffer | null };
-  await runWorker(data.durationMs, data.lockBuffer);
+  const data = workerData as { durationMs: number; lockBuffer: SharedArrayBuffer | null; divergeAfterRelease: boolean; worker: number };
+  await runWorker(data.durationMs, data.lockBuffer, data.divergeAfterRelease, data.worker);
 }

@@ -233,7 +233,7 @@ export class JobState {
           typeof entry.timestamp !== 'string' ||
           !Number.isFinite(Date.parse(entry.timestamp)) ||
           new Date(entry.timestamp).toISOString() !== entry.timestamp ||
-          typeof entry.workerId !== 'string' ||
+          typeof entry.workerId !== 'string' || !entry.workerId.trim() ||
           !Object.hasOwn(entry, 'details')) {
         throw new Error(`Invalid saved checkpoint at index ${index}`);
       }

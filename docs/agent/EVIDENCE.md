@@ -5683,3 +5683,264 @@ Output, verbatim:
 **Journal state.** The public journal for #2359 is closed by this entry once it is on `SignalGrid_Alpha`; until then this record is still in delivery. No private `merged_journal_complete` seal is claimed: the private journal stays Root-owned and is not asserted here.
 
 Verdict: #2359 merged from exact head `773491644dc6bd4681ab8234d3b1505262673598` as `6cbf8db328982d834e22f2fa4344a1c6c5791bb1`, with parents `e3a310e9` and that head, and tree `f41319ed` equal to the head's. Both named check runs succeeded on the exact head before the merge. This is one qualified landing. It is not independent operation: a fresh ordinary Mac task's automatic publication, its protected delivery and a later ordinary cycle are still owed. The Mac timeout repair #2364 landed afterwards, at 08:17:59Z, as `d60bc676a33dada4ef4563bc64eb72dd7bcf8f19`. The first fresh proof build after it, for #2370, stopped at 08:37:40Z before tests or publication: the supervisor refused an edit whose source plus test exceeded its 16,000-byte bound.
+
+## 2026-11-19 — #2364 (d60bc676) landed under DR-037: the Mac CI wrapper's bounded cleanup keeps the host reservation; timed step evidence
+
+Cloud merged #2364 under DR-037 at 08:17:59Z with `expectedHeadSha` `f9b5e792c489170f3b8f36f6458dbc819427d3ac`, after re-reading the head. The PR was written by the Mac lane and changes three files:
+- `scripts/mac/ci-host-verification.sh`: cleanup that ends a step without giving up the host reservation.
+- `.github/workflows/mac-runner-auto.yml`: timed evidence inside the existing PR Mac slice step.
+- `scripts/mac/local-brain/test/ci-host-custody.test.mjs`: the regression test.
+
+These limits are unchanged: the 60-minute job limit, 60 s admission, the 2,400 s work bound, four slices, every proof run once, slice records, the aggregate, and lock helper pin `24eff86a`. This entry is the separate record owed for #2364. A mention inside the #2359 record does not count as one.
+
+**Limits #2364 states and keeps.** The 60 s admission, 2,400 s work bound and 60-minute job limit do not mean every custody path is bounded or tested. Its PR body keeps three ownership holds deliberately **unbounded**, because only that process can prove closure:
+- the reap after a failed readiness handshake;
+- the accounting and reap of its own killed inspectors;
+- keeping the reservation when no custodian acknowledges.
+
+Those three depend on the outer job's termination, not on a new wrapper bound. The no-acknowledged-custodian path and the custodian's own inspector accounting are covered by reading, not by a test. The hosted slice-3 overrun (run 44453949390) is not explained by this change.
+
+**Preparation journal.** These records were made before the merge:
+- **Full local qualification on the exact final head** `f9b5e792` (tree `9360b473`), by the Mac lane on its host under ordinary same-inode admission, 07:36:55Z–08:11:44Z (#2364 comment 7003537641):
+  - `pnpm install --frozen-lockfile`: exit 0.
+  - `node scripts/preflight.mjs`: exit 0. 450 step lines, 0 FAILED.
+  - `pnpm run verify:breadth`: exit 0. 58 green.
+  - `./validate-sim-macos.sh`: `150 passed, 0 failed, 13 skipped`.
+  - Head, tree, porcelain and source hashes were identical before and after.
+  - Named non-passes:
+    - `Build (all packages)` and `Browser E2E`: unavailable on that platform.
+    - `backup-restore`, `db-role-split` and the mainline red-streaks check: self-skipped without their input.
+    - The harness's usual 13 skips.
+- **Focused custody test at the final head:** 13/13. The test was written first in each of four rounds. RED → GREEN per round: 1 pass / 4 fail → 5/5, 4 pass / 7 fail → 11/11, 11 pass / 1 fail → 12/12, 12 pass / 1 fail → 13/13. Round 5 added no new RED case: it replaced an existing assertion after the Codex P2. Receipts are in the PR body.
+- **Root's source reviews.** Root's findings on `4742ec00` (7000936961) were corrected across rounds 2–4: inspector bounds, detached-pid reuse, a two-way readiness acknowledgment, detachment proof, logger I/O and fixture cleanup. Round 5 answered a Codex P2 about a zombie custodian failing a pid probe.
+- **Earlier heads keep their own outcomes:**
+  - The obsolete Mac run 44466794964 on `4742ec00` was cancelled by one normal request at Root's selection.
+  - The obsolete run 44479408535 on `1eaf2429` was likewise selected for one normal cancellation.
+  - `a313a04b` passed its own full local run and hosted CI (7002613648). That is dated `a313` evidence, not `f9b5`.
+- **On the final head:** all four PR Mac slices passed, including slice 4's `Decision-throughput saturation gate (bench)`. Codex left no unresolved findings on the final head.
+
+Command: run by the cloud lane, read-only, exactly as follows (one `gh api` per line, `set -e`):
+
+```bash
+date -u +%Y-%m-%dT%H:%M:%SZ
+gh api repos/DanFashauer/SignalGrid-Review-Hub/pulls/2364 --jq '{number,state,merged,merged_at,merge_commit_sha,head:.head.sha,base:.base.ref}'
+gh api repos/DanFashauer/SignalGrid-Review-Hub/git/commits/d60bc676a33dada4ef4563bc64eb72dd7bcf8f19 --jq '{sha,tree:.tree.sha,parents:[.parents[].sha]}'
+gh api repos/DanFashauer/SignalGrid-Review-Hub/git/commits/f9b5e792c489170f3b8f36f6458dbc819427d3ac --jq '{sha,tree:.tree.sha}'
+gh api "repos/DanFashauer/SignalGrid-Review-Hub/compare/d60bc676a33dada4ef4563bc64eb72dd7bcf8f19...52c6d6bb9e65ceb9dfc24b4dc575d275e7a81308?per_page=1" --jq '{status,ahead_by,behind_by,merge_base:.merge_base_commit.sha}'
+gh api repos/DanFashauer/SignalGrid-Review-Hub/check-runs/135418971951 --jq '{id,name,head_sha,status,conclusion,completed_at}'
+gh api repos/DanFashauer/SignalGrid-Review-Hub/check-runs/135430081990 --jq '{id,name,head_sha,status,conclusion,completed_at}'
+```
+
+Output, verbatim:
+
+```
+2026-11-20T00:02:25Z
+{"base":"SignalGrid_Alpha","head":"f9b5e792c489170f3b8f36f6458dbc819427d3ac","merge_commit_sha":"d60bc676a33dada4ef4563bc64eb72dd7bcf8f19","merged":true,"merged_at":"2026-11-19T08:17:59Z","number":2364,"state":"closed"}
+{"parents":["b0d4204cb9e7b5d2f0a009d6eef59e629817f982","f9b5e792c489170f3b8f36f6458dbc819427d3ac"],"sha":"d60bc676a33dada4ef4563bc64eb72dd7bcf8f19","tree":"9360b473e740fb1f8a7e9eced9bf8536f4a018b8"}
+{"sha":"f9b5e792c489170f3b8f36f6458dbc819427d3ac","tree":"9360b473e740fb1f8a7e9eced9bf8536f4a018b8"}
+{"ahead_by":73,"behind_by":0,"merge_base":"d60bc676a33dada4ef4563bc64eb72dd7bcf8f19","status":"ahead"}
+{"completed_at":"2026-11-19T07:51:31Z","conclusion":"success","head_sha":"f9b5e792c489170f3b8f36f6458dbc819427d3ac","id":135418971951,"name":"Typecheck, build, and proof scaffold","status":"completed"}
+{"completed_at":"2026-11-19T08:16:27Z","conclusion":"success","head_sha":"f9b5e792c489170f3b8f36f6458dbc819427d3ac","id":135430081990,"name":"PR — Mac-only checks (full-clone provenance, preflight on macOS)","status":"completed"}
+```
+
+The merge commit's tree equals the head tree (`9360b473`); its ordered parents are canonical `b0d4204c` and head `f9b5e792`. Root's facilitator independently ran equivalent GETs at 23:56Z (#439 comment 7023042736) and got the same values. `d60bc676` is therefore an ancestor of the #2401 merge `52c6d6bb`. The bounded compare page supplies ancestry metadata, not a complete file-diff audit. The local, Mac and CI results above are attributed historical results on `f9b5e792`, not new executions, and no result transfers to a later head. This records public CI custody and wall-time work. It supplies no owner-hardware evidence, new live-evidence mint, readiness change, private completion seal or independent-operation proof.
+
+Verdict: holds for the merge and ancestry claim. #2364 merged at exact `f9b5e792` as `d60bc676a33dada4ef4563bc64eb72dd7bcf8f19`, and that merge is an ancestor of `52c6d6bb`. No private merged_journal_complete seal is claimed. Independent operation remains unverified.
+
+## 2026-11-19 — #2401 (52c6d6bb) landed under DR-037: check-proof-counts names the failing child without hiding either stream
+
+Cloud merged #2401 under DR-037 at 23:42:52Z with `expectedHeadSha` `e467daaee5de1c5c104dbfb66b85fdd916eb057c`, after re-reading the head. Only `scripts/check-proof-counts.mjs` changes (blob `4e5f4f6c027de9f48756b1e990bfa473fa005ade`):
+- a proof that prints no summary line is now described;
+- stdout and stderr are tailed separately, so one stream cannot erase the other;
+- a failed run ends with a bounded fault recap.
+
+Counts, the floor, the 120000 ms bound, summary acceptance and every exit rule are unchanged. A failing proof still fails.
+
+**Preparation journal.** These records were made before the merge and are cited as attributed historical receipts:
+- **Full local qualification on `25bf37ec0c5e19f0040749f1f2576b08d5e375ab`** (tree `4ee4915e`), clean checkout with dirty 0 at start and end, 19:10:09Z–19:56:02Z:
+  - `pnpm install --frozen-lockfile`: exit 0.
+  - `node scripts/preflight.mjs`: exit 0, 447 steps ok. Three named non-passes: `backup-restore` and `db-role-split` self-skipped (`DATABASE_URL` unset), and the mainline red-streaks check was NOT VERIFIED (local Actions API 401).
+  - `pnpm run verify:breadth`: exit 0, 58 breadth proofs.
+  - This local result is dated to `25bf37ec`. Later heads `4c196dce`, `9fd614e2` and `e467daae` were catch-ups whose canonical deltas were heartbeat JSONs plus, on `9fd614e2`, the resolved raised-hand ledger input. That ledger file is an input, not a heartbeat, and the gates that read it passed on the merged tree.
+- **Self-test:** 21/21. One case floods both streams at once; it killed surviving mutants M1 and M5.
+- **Source review:** bounded review on #439 (7017214093, final-base rebind 7019524350), and two source COMMENT reviews on this PR: 5982373344 on `25bf37ec0c5e19f0040749f1f2576b08d5e375ab` (2026-11-19T20:01:35Z) and 5984901570 on the merged head `e467daaee5de1c5c104dbfb66b85fdd916eb057c` (23:11:03Z). A COMMENT is evidence, not a vote.
+- **On the exact head `e467daae`:** all 10 strict required contexts succeeded, including gating check `135955035845`. CodeQL `135949960757` and Analyze `135948964935` succeeded, with 0 open code-scanning alerts on the #2401 PR ref at the recorded pre-merge read (not a repository-wide count) and 0 review threads. Attributed to the cloud delivery receipt (#439 comment 7025406343); this entry does not re-read the other eight contexts.
+- **Real OPEN Mac aggregate `135967804684`** succeeded at 23:42:21Z (run 44634368004, attempt 1; slices `135948966930`, `135948966875`, `135948966919`, `135948966504`). Per the independent audit (#2401 comment 7025438708), it covers 450 owned indices exactly once: 446 ok, two deliberately unavailable on Darwin (Build and Browser E2E) and two DB self-skips. All four non-passes were not run and not passed. All four owned-chain and free-port groups closed normally. The audit records no separate numeric listener-zero measurement, and capture-time limits apply.
+- **Earlier heads keep their own outcomes:**
+  - Run 44603579790 on `25bf37ec` was cancelled with no admission.
+  - Aggregate 135941844036 on `4c196dce` succeeded (#2401 comment 7024511827).
+  - Run 44632600968 on `9fd614e2` admitted zero work. Its four slice jobs were cancelled and its aggregate failed when the `e467daae` push superseded it (7024820238).
+  - The automated Codex summary is dated to `9fd614e2`.
+- **Hold.** The cloud's heartbeat PR #2409 merged during the hold window although auto-merge had been armed before it; that was corrected on #439 (7024690164). The Mac lane released its heartbeat hold at 23:42:58Z when its watcher read the merge, with zero deferred and nothing to restore (7025421234).
+
+Command: run by the cloud lane, read-only, exactly as follows (one `gh api` per line, `set -e`):
+
+```bash
+date -u +%Y-%m-%dT%H:%M:%SZ
+gh api repos/DanFashauer/SignalGrid-Review-Hub/pulls/2401 --jq '{number,state,merged,merged_at,merge_commit_sha,head:.head.sha,base:.base.ref}'
+gh api repos/DanFashauer/SignalGrid-Review-Hub/git/commits/52c6d6bb9e65ceb9dfc24b4dc575d275e7a81308 --jq '{sha,tree:.tree.sha,parents:[.parents[].sha]}'
+gh api repos/DanFashauer/SignalGrid-Review-Hub/git/commits/e467daaee5de1c5c104dbfb66b85fdd916eb057c --jq '{sha,tree:.tree.sha}'
+gh api "repos/DanFashauer/SignalGrid-Review-Hub/compare/52c6d6bb9e65ceb9dfc24b4dc575d275e7a81308...SignalGrid_Alpha?per_page=1" --jq '{status,ahead_by,behind_by,merge_base:.merge_base_commit.sha}'
+gh api repos/DanFashauer/SignalGrid-Review-Hub/check-runs/135955035845 --jq '{id,name,head_sha,status,conclusion,completed_at}'
+gh api repos/DanFashauer/SignalGrid-Review-Hub/check-runs/135967804684 --jq '{id,name,head_sha,status,conclusion,completed_at}'
+```
+
+Output, verbatim:
+
+```
+2026-11-20T00:01:50Z
+{"base":"SignalGrid_Alpha","head":"e467daaee5de1c5c104dbfb66b85fdd916eb057c","merge_commit_sha":"52c6d6bb9e65ceb9dfc24b4dc575d275e7a81308","merged":true,"merged_at":"2026-11-19T23:42:52Z","number":2401,"state":"closed"}
+{"parents":["56ed086f8b9b5f9bad6f86952481bdc12aad379a","e467daaee5de1c5c104dbfb66b85fdd916eb057c"],"sha":"52c6d6bb9e65ceb9dfc24b4dc575d275e7a81308","tree":"08c4e7f52333f663f4ebb4684144d3fd4a75e088"}
+{"sha":"e467daaee5de1c5c104dbfb66b85fdd916eb057c","tree":"08c4e7f52333f663f4ebb4684144d3fd4a75e088"}
+{"ahead_by":0,"behind_by":0,"merge_base":"52c6d6bb9e65ceb9dfc24b4dc575d275e7a81308","status":"identical"}
+{"completed_at":"2026-11-19T23:15:58Z","conclusion":"success","head_sha":"e467daaee5de1c5c104dbfb66b85fdd916eb057c","id":135955035845,"name":"Typecheck, build, and proof scaffold","status":"completed"}
+{"completed_at":"2026-11-19T23:42:21Z","conclusion":"success","head_sha":"e467daaee5de1c5c104dbfb66b85fdd916eb057c","id":135967804684,"name":"PR — Mac-only checks (full-clone provenance, preflight on macOS)","status":"completed"}
+```
+
+The merge tree equals the head tree (`08c4e7f5`), and canonical `SignalGrid_Alpha` was identical to `52c6d6bb` at the read. The local, Mac and CI results in the preparation journal are attributed historical receipts, not new executions.
+
+Verdict: holds for the merge, tree, ancestry and receipt claims. #2401 merged from exact head `e467daae` as `52c6d6bb9e65ceb9dfc24b4dc575d275e7a81308`, with parents `56ed086f` and that head, and tree `08c4e7f5` equal to the head's. No cross-head qualification is transferred. No owner-hardware evidence, private completion seal, readiness change or independent-operation proof is asserted. The ordinary task #2399 is a separate, unfinished workflow.
+
+## 2026-11-20 — #2423 (bc97de34) landed under DR-037: check-verdict-tone-source admits bounded own-key tone lookups
+
+Cloud merged #2423 (Root's fix for #2419) under DR-037 at about 23:50Z, with `expectedHeadSha` `ca447d1b2a690dfc6fd0aa13752bf810e7224802`, after re-reading the head. Against canonical, it changes only two files: `scripts/check-verdict-tone-source.mjs` and its gate-mutant fixture `scripts/lib/gate-mutants/check-verdict-tone-source.json`. The gate now admits a tone lookup bounded to the component's own key, and every other inline colour choice still fails.
+
+**Preparation journal.** These records were made before the merge and are cited as attributed historical receipts:
+- **Full local qualification on `3027f445eaa32d9ababd5e9a15c1c947551864b5`** (tree `decd27f3`), clean worktree with dirty 0 at start and end, 21:42:13Z–22:21:22Z by the runner's own start and result files:
+  - `pnpm install --frozen-lockfile`: exit 0.
+  - `node scripts/preflight.mjs`: exit 0, `Preflight PASSED — everything it runs is green.`, 447 steps ok. Three named non-passes: `backup-restore` and `db-role-split` self-skipped (`DATABASE_URL` unset), and the mainline red-streaks check was NOT VERIFIED (local Actions API 401).
+  - `pnpm run verify:breadth`: exit 0, 58 breadth proofs.
+  - This local result is dated to `3027f445`. Later heads `a23b7cc6` (#2445) and `ca447d1b` (#2446, #2448) were heartbeat-only catch-ups: the delta `3027f445..ca447d1b` is three heartbeat JSONs.
+- **Self-test on the merged blob:** `node scripts/check-verdict-tone-source.mjs --self-test` prints `self-test passed (652/652)`, and the gate itself exits 0.
+- **Gating check** `Typecheck, build, and proof scaffold` `136643851374` succeeded on `ca447d1b` (completed 23:48:18Z). 0 review threads. The head was not behind canonical `dea84e59`.
+- **Mac aggregate** `136637964009` succeeded on `a23b7cc6` (run 44828707812, attempt 3, all four slices). The Mac slices queued on `ca447d1b` were still running at the merge and are not claimed. Earlier attempts' slice failures (R9-skl-deepen, the throughput bench, a lost runner, runner DNS loss) were outside this diff, with the cause of the R9 and bench failures unknown.
+- **Receipt:** #439 comment 7053548859.
+
+Command: run by the cloud lane against a fresh fetch of canonical, read-only, exactly as follows (`set -e`):
+
+```bash
+date -u +%Y-%m-%dT%H:%M:%SZ
+git log -1 --format='%H parents=%P tree=%T' bc97de347e0d900c05e31d81b25b26068890b250
+git log -1 --format='%H tree=%T' ca447d1b2a690dfc6fd0aa13752bf810e7224802
+git merge-base --is-ancestor bc97de347e0d900c05e31d81b25b26068890b250 origin/SignalGrid_Alpha && echo "bc97de34 is an ancestor of origin/SignalGrid_Alpha"
+git diff --stat dea84e59f37a84fe84206162d3ed69fe911e92cb bc97de347e0d900c05e31d81b25b26068890b250
+git diff --stat 3027f445eaa32d9ababd5e9a15c1c947551864b5 ca447d1b2a690dfc6fd0aa13752bf810e7224802
+```
+
+Output, verbatim:
+
+```
+2026-11-20T23:53:25Z
+bc97de347e0d900c05e31d81b25b26068890b250 parents=dea84e59f37a84fe84206162d3ed69fe911e92cb ca447d1b2a690dfc6fd0aa13752bf810e7224802 tree=13248e55396cf7a781ecfe1c56873304a6c7501d
+ca447d1b2a690dfc6fd0aa13752bf810e7224802 tree=13248e55396cf7a781ecfe1c56873304a6c7501d
+bc97de34 is an ancestor of origin/SignalGrid_Alpha
+ scripts/check-verdict-tone-source.mjs              | 175 +++++++++++++++++++--
+ .../gate-mutants/check-verdict-tone-source.json    | 107 ++++++++++++-
+ 2 files changed, 272 insertions(+), 10 deletions(-)
+ artifacts/agent-heartbeats/forward-build-cycle.json         | 4 ++--
+ artifacts/agent-heartbeats/mac-lane-steward-duty-cycle.json | 4 ++--
+ artifacts/agent-heartbeats/mac-lane-tick.json               | 4 ++--
+ 3 files changed, 6 insertions(+), 6 deletions(-)
+```
+
+Verdict: holds for the merge, tree, ancestry and delta claims. #2423 merged from exact head `ca447d1b` as `bc97de347e0d900c05e31d81b25b26068890b250`, with parents `dea84e59` and that head, and tree `13248e55` equal to the head's. The local and Mac results are attributed receipts on the heads named, not new executions. No owner-hardware evidence, private completion seal, readiness change or independent-operation proof is asserted.
+
+## 2026-11-21 — #2368 (2cb9d3df) landed under DR-037: maskNonProse masks an unclosed line-start HTML comment block to end of input
+
+Cloud merged #2368 under DR-037 at about 00:48Z with `expectedHeadSha` `cae7b8f47590ae17b7a30fb534c0906f8b0e7fe1`, after re-reading the head. Against canonical, only two files change:
+- `scripts/lib/markdown-scope.mjs` (blob `8d261d76`). An unclosed line-start comment block is masked to end of input (CommonMark §4.6 type 2, #2355), inside a minimal container model.
+- Its regression suite `scripts/mac/local-brain/test/markdown-unclosed-html-comment.test.mjs` (blob `a9186ecc`, 428 tests).
+
+This is a masking helper for four doc gates, not an HTML sanitizer and not a general Markdown conformance claim. The disclosed exceptions, surviving mutants and the conservative-direction residual are listed in the PR body.
+
+**Preparation journal.** These records were made before the merge and are cited as attributed historical receipts:
+- **Full local qualification on `cff0edfd6ba6b5c457487ae89ebd9a11bd0fedd8`** (tree `763fe6fe`), clean worktree with dirty 0 at start and end, 23:02:09Z–23:41:58Z by the runner's own start and result files:
+  - `pnpm install --frozen-lockfile`: exit 0.
+  - `node scripts/preflight.mjs`: exit 0, 0 failures. Two named non-passes: `backup-restore` and `db-role-split` were self-skipped (`DATABASE_URL` unset).
+  - `pnpm run verify:breadth`: exit 0, 58 breadth proofs.
+  - `cff0edfd` pre-staged #2423's head `a23b7cc6`. The published head `cae7b8f4` merged canonical `bc97de34`, and the delta `cff0edfd..cae7b8f4` is one heartbeat JSON.
+- **Suite:** 428/428 on `cae7b8f4`. The two open Codex threads' exact literals were re-run under both fence options:
+  - 4640405796: markdown-it renders 0 links, and the helper keeps 0/0.
+  - 4640405806: markdown-it renders 1 link, and the helper keeps 1/1.
+  
+  Both were answered (4649035555, 4649035817) and resolved. At the merge, 33 threads, 0 unresolved.
+- **Gating check** `Typecheck, build, and proof scaffold` `136649169556` succeeded on `cae7b8f4`, and so did the required `Analyze (javascript-typescript)` check.
+- **CodeQL** check 136645423727 failed with alert 276 still open, at the intentional type-2 `-->` site (helper line 668). It is dispositioned in #2368 comment 7053600687 and was not dismissed.
+- **Mac aggregate** `136663894169` succeeded on `cae7b8f4` (run 44839640449, attempt 2, all four slices from that attempt). In attempt 1, slice 4 failed at `Decision-throughput saturation gate (bench)` (`no parallel gain`, 0.80×, p99 86.3 ms; #2368 comment 7053885744). Its cause is unknown, and one full rerun was made.
+- **Automated Codex review** of `cae7b8f4` did not run: the bot hit its usage limit (7053526300).
+- **Receipt:** #439 comment 7054492572.
+
+Command: run by the cloud lane against a fresh fetch of canonical, read-only, exactly as follows (`set -e`):
+
+```bash
+date -u +%Y-%m-%dT%H:%M:%SZ
+git log -1 --format='%H parents=%P tree=%T' 2cb9d3dfda0f26c4246d38df24b987741f0e07da
+git log -1 --format='%H tree=%T' cae7b8f47590ae17b7a30fb534c0906f8b0e7fe1
+git merge-base --is-ancestor 2cb9d3dfda0f26c4246d38df24b987741f0e07da origin/SignalGrid_Alpha && echo "2cb9d3df is an ancestor of origin/SignalGrid_Alpha"
+git diff --stat bc97de347e0d900c05e31d81b25b26068890b250 2cb9d3dfda0f26c4246d38df24b987741f0e07da
+git diff --stat cff0edfd6ba6b5c457487ae89ebd9a11bd0fedd8 cae7b8f47590ae17b7a30fb534c0906f8b0e7fe1
+```
+
+Output, verbatim:
+
+```
+2026-11-21T00:49:29Z
+2cb9d3dfda0f26c4246d38df24b987741f0e07da parents=bc97de347e0d900c05e31d81b25b26068890b250 cae7b8f47590ae17b7a30fb534c0906f8b0e7fe1 tree=d49dca2e9606d5a502b1f7ec05de4784ee8035d3
+cae7b8f47590ae17b7a30fb534c0906f8b0e7fe1 tree=d49dca2e9606d5a502b1f7ec05de4784ee8035d3
+2cb9d3df is an ancestor of origin/SignalGrid_Alpha
+ scripts/lib/markdown-scope.mjs                     | 1124 ++++++++++-
+ .../test/markdown-unclosed-html-comment.test.mjs   | 2132 ++++++++++++++++++++
+ 2 files changed, 3239 insertions(+), 17 deletions(-)
+ artifacts/agent-heartbeats/mac-lane-tick.json | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+```
+
+Verdict: holds for the merge, tree, ancestry and delta claims. #2368 merged from exact head `cae7b8f4` as `2cb9d3dfda0f26c4246d38df24b987741f0e07da`, with parents `bc97de34` and that head, and tree `d49dca2e` equal to the head's. The local and Mac results are attributed receipts on the heads named, not new executions. No owner-hardware evidence, private completion seal, readiness change or independent-operation proof is asserted.
+
+## 2026-11-21 — #2447 (b74f9a4d) landed under DR-037: loop-state self-test leak markers that cannot occur in a temp path
+
+Cloud merged #2447 under DR-037 at about 03:28Z with `expectedHeadSha` `15c93c51db6863891cd6bbbe8348f9607e5971ee`, after re-reading the head. Against canonical, one line of `scripts/loop-state.mjs` changes, in the self-test only. The planted leak markers `sEcr3t` and `Z9` become `sEcr3tLk7` and `Q8tailZ9w`, so a temp path that happens to contain `Z9` no longer reads as a credential leak. No production path changes.
+
+**Preparation journal.** These records were made before the merge and are cited as attributed historical receipts:
+- **RED/GREEN:**
+  - On mainline `a284b743`, with `TMPDIR` pointing at a directory whose path contains `Z9`, `node scripts/loop-state.mjs --self-test` printed `self-test FAILED (316/319)` (`R18-display-rows`, `R19-display-bare`, `R12-hostile-global`).
+  - With the fix it printed `self-test passed (319/319)`, both with that `TMPDIR` and with the default one, and again on `15c93c51`.
+- **Full local qualification on `007b79a9c3e4f60a59cbea9c2ed63b9bda737702`** (tree `7d1c1f68`), clean worktree with dirty 0 at start and end, 00:49:19Z–01:28:42Z by the runner's own start and result files:
+  - `pnpm install --frozen-lockfile`: exit 0.
+  - `node scripts/preflight.mjs`: exit 0, `Preflight PASSED — everything it runs is green.`, 447 steps ok. Three named non-passes: `backup-restore` and `db-role-split` self-skipped (`DATABASE_URL` unset), and the mainline red-streaks check was NOT VERIFIED (local Actions API 401).
+  - `pnpm run verify:breadth`: exit 0, 58 breadth proofs.
+  - The delta `007b79a9..15c93c51` is three heartbeat JSONs and one lane message (catch-ups `9fccfb9b`, `1a9e037a`, `15c93c51`).
+- **Gating check** `Typecheck, build, and proof scaffold` `136713253014` succeeded on `15c93c51`. 0 review threads. The head was not behind canonical `59ab1d17`.
+- **Mac aggregate** `136709744293` succeeded on `1a9e037a` (run 44856676835, all four slices from that attempt). `15c93c51` differs from it only by `mac-lane-steward-duty-cycle.json`.
+- **Earlier Mac attempts are not counted:**
+  - On `85933ef4`, slice 3 failed because the runner's git could not create its own temp file (#2447 comment 7053422528).
+  - On `9fccfb9b`, slice 2 stalled for 64 minutes in its main step and was cancelled when the catch-up superseded the run (7056039410). The cause is unknown.
+
+Command: run by the cloud lane against a fresh fetch of canonical, read-only, exactly as follows (`set -e`):
+
+```bash
+date -u +%Y-%m-%dT%H:%M:%SZ
+git log -1 --format='%H parents=%P tree=%T' b74f9a4dbaca87ee51fe6c42a555c4b8c1693e62
+git log -1 --format='%H tree=%T' 15c93c51db6863891cd6bbbe8348f9607e5971ee
+git merge-base --is-ancestor b74f9a4dbaca87ee51fe6c42a555c4b8c1693e62 origin/SignalGrid_Alpha && echo "b74f9a4d is an ancestor of origin/SignalGrid_Alpha"
+git diff --stat 59ab1d1710ed381652b87c9884238e3361483485 b74f9a4dbaca87ee51fe6c42a555c4b8c1693e62
+git diff --stat 007b79a9c3e4f60a59cbea9c2ed63b9bda737702 15c93c51db6863891cd6bbbe8348f9607e5971ee
+```
+
+Output, verbatim:
+
+```
+2026-11-21T03:28:50Z
+b74f9a4dbaca87ee51fe6c42a555c4b8c1693e62 parents=59ab1d1710ed381652b87c9884238e3361483485 15c93c51db6863891cd6bbbe8348f9607e5971ee tree=43e49b6f495592cf94f35920780f0176aff7f79f
+15c93c51db6863891cd6bbbe8348f9607e5971ee tree=43e49b6f495592cf94f35920780f0176aff7f79f
+b74f9a4d is an ancestor of origin/SignalGrid_Alpha
+ scripts/loop-state.mjs | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+ artifacts/agent-heartbeats/forward-build-cycle.json              | 4 ++--
+ artifacts/agent-heartbeats/mac-lane-steward-duty-cycle.json      | 4 ++--
+ artifacts/agent-heartbeats/mac-lane-tick.json                    | 4 ++--
+ .../cloud-live-evidence-is-over-3-days-old-one-refre.json        | 9 +++++++++
+ 4 files changed, 15 insertions(+), 6 deletions(-)
+```
+
+Verdict: holds for the merge, tree, ancestry and delta claims. #2447 merged from exact head `15c93c51` as `b74f9a4dbaca87ee51fe6c42a555c4b8c1693e62`, with parents `59ab1d17` and that head, and tree `43e49b6f` equal to the head's. The local and Mac results are attributed receipts on the heads named, not new executions. No owner-hardware evidence, private completion seal, readiness change or independent-operation proof is asserted.

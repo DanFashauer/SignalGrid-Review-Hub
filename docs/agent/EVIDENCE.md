@@ -5995,9 +5995,9 @@ e9b3e797 is an ancestor of origin/SignalGrid_Alpha
 
 Verdict: holds for the merge, tree, ancestry and delta claims. The local, CI and review results are attributed receipts on the heads named, not new executions. This is the first protected landing through the hybrid route. It is not the later scheduled ordinary cycle the independence proof still needs. No owner-hardware evidence, private completion seal or readiness change is asserted.
 
-## 2026-11-21 — #2472 (cc86c123) landed under DR-037: second local-brain build, published unattended after a Mac RESULT
+## 2026-11-21 — #2472 (cc86c123) landed under DR-037: second local-brain build, published unattended; protected landing after Mac RESULT
 
-The Mac's local brain took issue #2471 (checkpoint-type whitespace), built, froze and qualified the fix, cleared both publication privacy reviews and opened PR #2472 at 11:10:35Z, unattended. Its head was `924a2793fba690c496e7722365a50a243461d811` on base `5bc3966e` (Mac RESULT on #439, comment 7061721830, which also released the hold). Unlike #2465, the generated body carried all five sections `phase-pr-evidence` requires, so no body repair was needed. Main verified the publication (7061752470). Cloud was the final pass under the standing duty.
+The Mac's local brain took issue #2471 (checkpoint-type whitespace), built, froze and qualified the fix, cleared both publication privacy reviews and opened PR #2472 at 11:10:35Z, unattended. Its head was `924a2793fba690c496e7722365a50a243461d811` on base `5bc3966e`. The Mac's RESULT on #439 (comment 7061721830, created 11:11:02Z) followed the publication, reported it and released the hold. Unlike #2465, the generated body carried all five sections `phase-pr-evidence` requires, so no body repair was needed. Main verified the publication (7061752470). Cloud was the final pass under the standing duty.
 
 What the change does: `scripts/mac/local-brain/job-state.mjs` (+4) makes `checkpoint` and `restore` refuse a checkpoint `type` that has surrounding whitespace. The new test `scripts/mac/local-brain/test/job-state-type-whitespace.test.mjs` (+86) has 6 offline cases. The new clauses only add refusals.
 
@@ -6008,7 +6008,7 @@ Evidence, each on the head named:
 - Main's source review 6004834028 (COMMENT) found no blocker. There were 0 review threads.
 - On `924a2793`: gating check 136830342436 passed, Mac slices 1–4 passed, Mac aggregate 136832584319 passed, and `phase-pr-evidence` 136827209467 passed.
 
-The merge: `cc86c1237eaa5e1d9071535a16723443d7da0b1c`, with `expectedHeadSha` `924a2793fba690c496e7722365a50a243461d811`, outside any Mac START..RESULT window. Its ordered parents are `5bc3966e` and `924a2793`, and its tree equals the head tree. #2471 was closed as completed. The branch `mac/brain-build-91b7337b07d74d14` is kept.
+The merge: `cc86c1237eaa5e1d9071535a16723443d7da0b1c` at 11:33:40Z, after the RESULT, with `expectedHeadSha` `924a2793fba690c496e7722365a50a243461d811`, outside any Mac START..RESULT window. Its ordered parents are `5bc3966e` and `924a2793`, and its tree equals the head tree. #2471 was closed as completed. The branch `mac/brain-build-91b7337b07d74d14` is kept.
 
 Command: run by the cloud lane against a fresh fetch of canonical, read-only, exactly as follows (`set -e`):
 

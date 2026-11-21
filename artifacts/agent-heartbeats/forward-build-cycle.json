@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-11-21T04:11:06.465Z",
-  "result": "acted: landed #2447 (b74f9a4d, DR-037); journal #2453 qualified (pf/br exit 0 on 6fa8e6f6); cloud merge HOLD active since Mac START 03:36Z for proof #2443 retry (prior build consumed by #2447 merge in the freeze window); no workers dispatched (owner priority: independent Mac operation) | in flight H/S/O = 0/0/0 | sub-brains: none | owner: none"
+  "firedAt": "2026-11-21T06:23:23.900Z",
+  "result": "06:11Z fire: no dispatch; the build wave stays held because independent Mac operation is the owner's exclusive critical path. Mac proof #2459 reached the privacy review and was refused at 05:35Z: the publication commit carried the account's global email (brain-proposal-pr.mjs line 1073 sets no identity; diagnosis posted on #439 as 7058074000). With the owner's go, the Mac now stamps local-brain commits with the GitHub no-reply identity. Next proof #2461 starts after the 00:00Z reset; cloud holds merges 00:00-00:30Z. Released the held heartbeats #2457 and #2458 (both merged); journal #2453 lands under DR-037 when its gating check is green. In flight H/S/O = 0/0/0. Sub-brains: none spawned. Owner queue: none new."
 }

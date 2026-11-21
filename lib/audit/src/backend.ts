@@ -13,6 +13,7 @@
 // DATABASE_URL is set (a real production deploy). `pg` is imported lazily so it
 // is never loaded on the default path.
 
+import { durableDatabaseUrl } from "./database-url";
 import type { AuditRecord } from "./types";
 
 export interface AuditBackend {
@@ -334,7 +335,9 @@ let backend: AuditBackend | null = null;
  */
 export function getAuditBackend(): AuditBackend {
   if (backend) return backend;
-  const url = process.env.DATABASE_URL;
+  // Same reading as the decision and session stores (database-url.ts): trimmed,
+  // and a set-but-blank value refused (not cached) rather than read as "off".
+  const url = durableDatabaseUrl();
   backend = url ? new PostgresAuditBackend(url) : new InMemoryAuditBackend();
   return backend;
 }

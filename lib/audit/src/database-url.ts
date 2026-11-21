@@ -1,4 +1,8 @@
-// The ONE reading of DATABASE_URL for the durable stores (decisions, sessions).
+// The ONE reading of DATABASE_URL for every durable store: the audit ledger
+// (backend.ts), decisions and sessions (@workspace/persistence, which imports it
+// from here — persistence depends on audit, never the reverse). Three readers
+// that disagreed meant a padded URL persisted a decision while the ledger
+// failed: a decision with no audit record.
 //
 // BUILD_BACKLOG "Empty/whitespace DATABASE_URL", trim half only:
 //   · unset or ""            → null: durable persistence is OFF (the supported,

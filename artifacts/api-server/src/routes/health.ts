@@ -119,7 +119,17 @@ router.get("/readyz", async (req: Request, res: Response) => {
       return;
     }
   }
-  const store = getDecisionStore();
+  // The selector REFUSES a set-but-blank DATABASE_URL (durableDatabaseUrl in
+  // @workspace/audit) instead of reading it as "off". That refusal is a
+  // configuration fault, so it answers through the route's own not-ready
+  // contract (503 + reason) rather than escaping as a 500 `internal`.
+  let store: ReturnType<typeof getDecisionStore>;
+  try {
+    store = getDecisionStore();
+  } catch (err) {
+    notReady(`Durable store configuration is invalid: ${(err as Error)?.message ?? String(err)}`);
+    return;
+  }
   if (store === null) {
     res.json(verbose ? { status: "ready", durableStore: "none" } : { status: "ready" });
     return;

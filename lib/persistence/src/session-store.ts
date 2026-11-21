@@ -13,7 +13,7 @@
 // Time is injectable (`nowMs`) so lifecycle/expiry is tested deterministically
 // without sleeping; it defaults to Date.now() at the call site.
 
-import { durableDatabaseUrl } from "./database-url";
+import { durableDatabaseUrl } from "@workspace/audit";
 import type { DecisionOutcome } from "@workspace/signalgrid-core";
 
 export type SessionStatus = "active" | "expired" | "ended";

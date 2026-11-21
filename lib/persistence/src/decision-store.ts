@@ -12,7 +12,7 @@
 // every single-object read is keyed on `(id, tenant_id)` — a decision is never
 // looked up by id alone, mirroring the in-memory store's invariant.
 
-import { durableDatabaseUrl } from "./database-url";
+import { durableDatabaseUrl } from "@workspace/audit";
 import type { Decision, EvidenceSnapshot } from "@workspace/signalgrid-core";
 
 export interface DecisionStore {

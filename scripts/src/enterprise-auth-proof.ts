@@ -349,6 +349,173 @@ for (const [label, header] of [
   check("after the cooldown lapses, exactly ONE more refetch is allowed", fetches === beforeForged + 1);
 }
 
+// ── A PRESENT BUT NON-NUMERIC nbf / iat IS REFUSED, NOT SKIPPED ──────────────
+//
+// `nbf` and `iat` used to be checked only when `typeof ... === "number"`, so a
+// correctly signed token carrying `nbf: "1893456000"` (a string) skipped the
+// not-before check and authenticated before the time its issuer set. An
+// unparseable claim must tighten the answer (golden rule 2). Absent stays allowed:
+// RFC 7519 makes both claims optional. `exp` must also be FINITE — JSON.parse
+// turns `1e999` into Infinity, which would otherwise never expire.
+{
+  const withClaims = (patch: Record<string, unknown>, drop: string[] = []): string => {
+    const p: Record<string, unknown> = { ...validParts().payload, ...patch };
+    for (const k of drop) delete p[k];
+    return signRs256({ header: validParts().header, payload: p });
+  };
+  const signedRaw = (payloadJson: string): string => {
+    const signingInput = `${b64url(JSON.stringify(validParts().header))}.${b64url(payloadJson)}`;
+    const sig = cryptoSign("RSA-SHA256", Buffer.from(signingInput, "ascii"), privateKey);
+    return `${signingInput}.${b64url(sig)}`;
+  };
+  for (const [label, patch] of [
+    ['nbf: "1893456000" (numeric string)', { nbf: "1893456000" }],
+    ["nbf: null", { nbf: null }],
+    ['iat: "0" (numeric string)', { iat: "0" }],
+    ["iat: {}", { iat: {} }],
+    ["nbf: true", { nbf: true }],
+    ["iat: []", { iat: [] }],
+  ] as const) {
+    refuses(`correctly signed token with ${label}`, () => verifyJwtRs256(withClaims(patch), verifyOpts));
+  }
+  const p = { ...validParts().payload } as Record<string, unknown>;
+  refuses("correctly signed token with exp: 1e999 (parses to Infinity)", () =>
+    verifyJwtRs256(signedRaw(JSON.stringify(p).replace(/"exp":\d+/, '"exp":1e999')), verifyOpts),
+  );
+  refuses("correctly signed token with nbf: -1e999 (parses to -Infinity)", () =>
+    verifyJwtRs256(signedRaw(JSON.stringify(p).replace(/"nbf":\d+/, '"nbf":-1e999')), verifyOpts),
+  );
+  let absentOk = false;
+  try {
+    absentOk = verifyJwtRs256(withClaims({}, ["nbf", "iat"]), verifyOpts).ok === true;
+  } catch {
+    // a throw is a failed check
+  }
+  check("correctly signed token with nbf AND iat both absent is accepted", absentOk);
+}
+
+// ── JWKS: SINGLE-FLIGHT, FAILURE BACKOFF, GENERATION GUARD ───────────────────
+//
+// The cooldown above applied only while the cache was FRESH and there was no
+// shared in-flight fetch, so a cold or stale cache turned every bearer request
+// into its own IdP request — for as long as the IdP stayed down, since a failed
+// fetch recorded nothing. Overlapping fetches were last-resolved-wins, so a slow
+// response carrying an older keyset could replace a newer one for a full TTL.
+// The clock is injected; deferred stub fetches make the ordering explicit.
+{
+  const keysetOf = (...kids: string[]) => ({
+    keys: kids.map((kid) => ({ kty: "RSA", kid, n: "x", e: "AQAB", alg: "RS256", use: "sig" })),
+  });
+  interface Deferred { resolve: (r: Awaited<ReturnType<JwksFetch>>) => void; reject: (e: unknown) => void; }
+  const okRes = (body: unknown) => ({ ok: true, status: 200, json: async () => body });
+  const tick = () => new Promise<void>((r) => setImmediate(r));
+  const T = 5_000_000;
+
+  // (1) 50 concurrent get() on a cold cache -> exactly one fetch.
+  {
+    let fetches = 0;
+    const pending: Deferred[] = [];
+    const cache = createJwksCache("https://idp.example/jwks", () => {
+      fetches += 1;
+      return new Promise((resolve, reject) => pending.push({ resolve, reject }));
+    });
+    const all = Promise.allSettled(Array.from({ length: 50 }, (_, i) => cache.get(T + i, "k1")));
+    await tick();
+    const during = fetches;
+    for (const d of pending) d.resolve(okRes(keysetOf("k1")));
+    const results = await all;
+    check(
+      `50 concurrent get() on a COLD cache make exactly 1 IdP fetch (made ${during})`,
+      during === 1 && fetches === 1,
+    );
+    check(
+      "every one of the 50 joined callers receives the fetched keyset",
+      results.every((r) => r.status === "fulfilled" && r.value.keys.some((k) => k.kid === "k1")),
+    );
+  }
+
+  // (2) after a rejected fetch, a second get() inside the backoff makes 0 fetches,
+  // and it REFUSES (throws) rather than serving anything — still fail-closed.
+  {
+    let fetches = 0;
+    let failNext = true;
+    const cache = createJwksCache("https://idp.example/jwks", async () => {
+      fetches += 1;
+      if (failNext) throw new Error("IdP down");
+      return okRes(keysetOf("k1"));
+    });
+    let firstRefused = false;
+    try { await cache.get(T, "k1"); } catch { firstRefused = true; }
+    let secondRefused = false;
+    try { await cache.get(T + 1_000, "k1"); } catch { secondRefused = true; }
+    check(
+      `after a rejected fetch, a get() inside the backoff makes 0 fetches (made ${fetches - 1}) and refuses`,
+      firstRefused && secondRefused && fetches === 1,
+    );
+    let httpRefused = false;
+    const httpCache = createJwksCache("https://idp.example/jwks", async () => {
+      fetches += 1;
+      return { ok: false, status: 503, json: async () => ({}) };
+    });
+    const before = fetches;
+    try { await httpCache.get(T, "k1"); } catch { /* expected */ }
+    try { await httpCache.get(T + 1_000, "k1"); } catch { httpRefused = true; }
+    check("an HTTP-error fetch also starts the backoff (0 fetches, refused)", httpRefused && fetches === before + 1);
+    failNext = false;
+    let recovered = false;
+    try { recovered = (await cache.get(T + 120_000, "k1")).keys.some((k) => k.kid === "k1"); } catch { /* reported */ }
+    check("once the backoff lapses a fetch is retried and its keyset is served", recovered && fetches === before + 2);
+  }
+
+  // (2b) a fetchImpl that throws SYNCHRONOUSLY still refuses, still arms the
+  // backoff, and leaves no wedged in-flight entry behind.
+  {
+    let fetches = 0;
+    const cache = createJwksCache("https://idp.example/jwks", ((): never => {
+      fetches += 1;
+      throw new Error("sync boom");
+    }) as unknown as JwksFetch);
+    let r1 = false;
+    let r2 = false;
+    try { await cache.get(T, "k1"); } catch { r1 = true; }
+    try { await cache.get(T + 1_000, "k1"); } catch { r2 = true; }
+    let r3 = false;
+    try { await cache.get(T + 120_000, "k1"); } catch { r3 = true; }
+    check("a synchronously-throwing fetch refuses, backs off, then retries after the window", r1 && r2 && r3 && fetches === 2);
+  }
+
+  // (3) two overlapping fetches resolving OUT OF ORDER leave the newer keyset.
+  // A hung in-flight fetch must not wedge authentication forever, so a fetch in
+  // flight past the in-flight limit is abandoned and the next get() starts a new
+  // one; that is how two fetches overlap. The older one resolving last must lose.
+  {
+    const pending: Deferred[] = [];
+    let fetches = 0;
+    const cache = createJwksCache("https://idp.example/jwks", () => {
+      fetches += 1;
+      return new Promise((resolve, reject) => pending.push({ resolve, reject }));
+    });
+    const older = cache.get(T, "k-new");
+    await tick();
+    const newer = cache.get(T + 30_000, "k-new");
+    await tick();
+    const overlapped = fetches === 2;
+    pending[1]?.resolve(okRes(keysetOf("k-old", "k-new")));
+    await newer;
+    pending[0]?.resolve(okRes(keysetOf("k-old")));
+    const olderResult = await older.catch(() => null);
+    const after = await cache.get(T + 31_000, "k-new");
+    check(
+      "two overlapping fetches resolving out of order leave the NEWER keyset cached",
+      overlapped && after.keys.some((k) => k.kid === "k-new") && fetches === 2,
+    );
+    check(
+      "the caller of the superseded (older) fetch is handed the newer keyset, not the stale one",
+      olderResult !== null && olderResult.keys.some((k) => k.kid === "k-new"),
+    );
+  }
+}
+
 // ── A BLANK OIDC_ISSUER IS "OFF" ONLY WHEN EVERY OIDC SETTING IS BLANK ───────
 // Owner decision 2026-11-06 ("Refuse to start"): a blank or whitespace-only
 // OIDC_ISSUER while ANY other OIDC variable the loader reads is non-blank is a

@@ -196,6 +196,21 @@ export function verifyJwtRs256(token: string, opts: VerifyOptions): VerifyResult
   const tolMs = Math.max(0, (opts.clockToleranceSec ?? 60)) * 1000;
   const now = opts.nowMs;
 
+  // RFC 7519 NumericDate: a FINITE JSON number. `nbf`/`iat` are optional, but a
+  // PRESENT one that is not a finite number (a numeric string, null, an object,
+  // or `1e999`, which JSON.parse turns into Infinity) refuses the token. Checking
+  // them only when `typeof === "number"` let a malformed claim SKIP the time
+  // check — an unparseable input loosening the answer (golden rule 2).
+  const rawClaims = claims as Record<string, unknown>;
+  if (!isNumericDate(rawClaims.exp)) {
+    return fail(rawClaims.exp === undefined ? "missing exp claim" : "exp claim is not a finite NumericDate");
+  }
+  if (rawClaims.nbf !== undefined && !isNumericDate(rawClaims.nbf)) {
+    return fail("nbf claim is present but not a finite NumericDate");
+  }
+  if (rawClaims.iat !== undefined && !isNumericDate(rawClaims.iat)) {
+    return fail("iat claim is present but not a finite NumericDate");
+  }
   if (typeof claims.exp !== "number") {
     return fail("missing exp claim");
   }
@@ -235,6 +250,10 @@ function selectKey(jwks: Jwks, kid: string | undefined): JwkKey | null {
   }
   // No kid in the header: only safe when the JWKS has exactly one usable key.
   return usable.length === 1 ? usable[0] : null;
+}
+
+function isNumericDate(v: unknown): v is number {
+  return typeof v === "number" && Number.isFinite(v);
 }
 
 function audienceMatches(aud: string | string[] | undefined, expected: string): boolean {

@@ -23,7 +23,7 @@ let passed = 0;
 let failed = 0;
 
 function fixture({ lane = "mac", reject = false, loseResponse = false, failBeforePush = false, gateFails = false,
-  firstHeartbeat = null, readbackCanonicalRace = false, fixedClock = false, readbackState = "MERGED", readbackObservation = null, denyCleanup = false, ghAuthFails = false, ghCreateFails = false, ghAutoFails = false, wakeMailbox = false, hand = false, tick = false, omitReceipt = false, ...tickOptions } = {}) {
+  firstHeartbeat = null, readbackCanonicalRace = false, fixedClock = false, readbackState = "MERGED", readbackObservation = null, denyCleanup = false, ghAuthFails = false, ghCreateFails = false, ghAutoFails = false, autoMergesImmediately = false, createPublishesHold = false, wakeMailbox = false, hand = false, tick = false, omitReceipt = false, ...tickOptions } = {}) {
   if (tick) return heartbeatFixture(tickOptions);
   const root = mkdtempSync(join(tmpdir(), "sg-delivery-test-"));
   const repo = join(root, "repo"), remote = join(root, "remote.git"), bin = join(root, "bin");
@@ -31,7 +31,9 @@ function fixture({ lane = "mac", reject = false, loseResponse = false, failBefor
   mkdirSync(repo); mkdirSync(bin);
   const env = { PATH: `${bin}:${dirname(process.execPath)}:${dirname(GIT)}:/usr/bin:/bin`, HOME: process.env.HOME,
     TMPDIR: root, LANG: "C", GIT_CONFIG_NOSYSTEM: "1", GIT_CONFIG_GLOBAL: "/dev/null",
-    GIT_TERMINAL_PROMPT: "0", SIGNALGRID_LANE: lane };
+    GIT_TERMINAL_PROMPT: "0", SIGNALGRID_LANE: lane,
+    // Read by the fake gh at run time, never pasted into its source.
+    ...(createPublishesHold ? { FIXTURE_HOLD_GIT: GIT, FIXTURE_HOLD_REMOTE: remote } : {}) };
   if (denyCleanup) {
     // The owned-worktree cleanup fails the same way for every uid (root included): the
     // fs.rmSync the CLI calls is made to throw EACCES for its own sg-lane-deliver-* worktree.
@@ -57,7 +59,7 @@ require("node:module").syncBuiltinESMExports();\n`);
   git(["config", "user.name", "Delivery fixture"]); git(["config", "user.email", "fixture@example.invalid"]);
   file(join(repo, "scripts/lane-deliver.mjs"), readFileSync(join(ROOT, "scripts/lane-deliver.mjs")));
   file(join(repo, "scripts/lib/lane-identity.mjs"), readFileSync(join(ROOT, "scripts/lib/lane-identity.mjs")));
-  for (const name of ["lane-attempt-store.mjs", "lane-readback.mjs"])
+  for (const name of ["lane-attempt-store.mjs", "lane-readback.mjs", "merge-hold.mjs"])
     file(join(repo, "scripts/lib", name), readFileSync(join(ROOT, "scripts/lib", name)));
   file(join(repo, "scripts/check-lane-messages.mjs"), `process.exit(${gateFails ? 9 : 0});\n`);
   file(join(repo, "scripts/check-scheduled-routines.mjs"), "process.exit(0);\n");
@@ -123,11 +125,11 @@ require("node:module").syncBuiltinESMExports();\n`);
  const head=spawnSync(${JSON.stringify(GIT)},['--git-dir',${JSON.stringify(remote)},'rev-parse','refs/heads/'+a[2]],{encoding:'utf8'}).stdout.trim();
  console.log(JSON.stringify({number:7,state:${JSON.stringify(readbackState)},baseRefName:${JSON.stringify(BASE)},headRefName:a[2],headRefOid:/^[a-f0-9]{40}$/.test(head)?head:null,mergeCommit:m?{oid:m}:null,autoMergeRequest:${readbackState === "OPEN" ? "{}" : "null"},createdAt:new Date(Date.now()-60000).toISOString(),mergeStateStatus:'CLEAN',statusCheckRollup:[{__typename:'CheckRun',name:'fixture-ci',status:'COMPLETED',conclusion:'SUCCESS'}],...${JSON.stringify(readbackObservation ?? {})}}));
 }
-else if(a[0]==='auth'&&a[1]==='status'){${ghAuthFails ? "process.exit(1)" : "process.exit(0)"}}\nelse if(a[0]==='pr'&&a[1]==='create'){${ghCreateFails ? "console.error('fixture creation response lost or unauthenticated');process.exit(1)" : "console.log('https://github.com/fixture/route/pull/7')"}}\nelse if(a[0]==='pr'&&a[1]==='merge'&&a.includes('--auto')){${ghAutoFails ? "console.error('fixture auto-merge response lost');process.exit(1)" : `console.log('fixture auto-merge request')`}}\nelse process.exit(2);\n`);
+else if(a[0]==='auth'&&a[1]==='status'){${ghAuthFails ? "process.exit(1)" : "process.exit(0)"}}\nelse if(a[0]==='pr'&&a[1]==='create'){${ghCreateFails ? "console.error('fixture creation response lost or unauthenticated');process.exit(1)" : `${createPublishesHold ? `{const g=(...x)=>spawnSync(process.env.FIXTURE_HOLD_GIT,['-c','user.name=Hold fixture','-c','user.email=hold@example.invalid','--git-dir',process.env.FIXTURE_HOLD_REMOTE,...x],{encoding:'utf8'}).stdout.trim();const b=g('rev-parse','refs/heads/${BASE}');g('update-ref','refs/heads/lane/merge-hold',g('commit-tree',g('rev-parse',b+'^{tree}'),'-p',b,'-m','HOLD Mac START published after the delivery read the hold'))}` : ""}console.log('https://github.com/fixture/route/pull/7')`}}\nelse if(a[0]==='pr'&&a[1]==='merge'&&a.includes('--auto')){${ghAutoFails ? "console.error('fixture auto-merge response lost');process.exit(1)" : autoMergesImmediately ? `const t=a[a.length-1];const h=spawnSync(${JSON.stringify(GIT)},['--git-dir',${JSON.stringify(remote)},'rev-parse','refs/heads/'+t],{encoding:'utf8'}).stdout.trim();spawnSync(${JSON.stringify(GIT)},['--git-dir',${JSON.stringify(remote)},'update-ref','refs/heads/${BASE}',h]);console.log('fixture auto-merge merged at once')` : `console.log('fixture auto-merge request')`}}\nelse process.exit(2);\n`);
   chmodSync(gh, 0o755);
   const records = (p) => { try { return readFileSync(p, "utf8").trim().split("\n").filter(Boolean).map(JSON.parse); } catch (error) { if (error.code === "ENOENT") return []; throw error; } };
   let runNumber = 0;
-  return { root, repo, base, git, run(extra = []) {
+  return { root, repo, base, git, env, run(extra = []) {
     if (lane === "mac" && !omitReceipt && !extra.includes("--receipt")) {
       const receipt = join(root, `fixture-${++runNumber}.submission.json`);
       writeFileSync(receipt + ".attempt.json", JSON.stringify({state:"one fixture attempt",receipt}) + "\n", {flag:"wx",mode:0o600,flush:true});
@@ -242,14 +244,127 @@ for (const lane of ["mac", "cloud"]) control(`${lane} delivery uses a PR topic w
   assert.equal(f.pushes().length, 1);
   assert.match(f.pushes()[0].at(-1), new RegExp(`^HEAD:refs/heads/lane/${lane}-mail-`));
   assert.ok(f.ghCalls().some((a) => a[0] === "pr" && a[1] === "create"));
-  const merge = f.ghCalls().find((a) => a[0] === "pr" && a[1] === "merge" && a.includes("--auto"));
-  assert.ok(merge);
+  assert.equal(f.ghCalls().some((a) => a[0] === "pr" && a[1] === "merge"), false, "a publication never arms its own merge");
   const topic = f.pushes()[0].at(-1).slice("HEAD:".length);
-  const published = f.git(["rev-parse", topic], join(f.root, "remote.git"));
-  assert.match(published, /^[0-9a-f]{40}$/);
-  assert.ok(merge.includes("--match-head-commit"), "auto-merge must bind the exact published head");
-  assert.equal(merge[merge.indexOf("--match-head-commit") + 1], published);
+  assert.match(f.git(["rev-parse", topic], join(f.root, "remote.git")), /^[0-9a-f]{40}$/);
+  assert.match(r.stdout, /auto-merge {2}not armed — the Cloud steward lands this PR outside a Mac window \(merge hold now: open — no refs\/heads\/lane\/merge-hold on origin\)/);
 });
+// THE SHARED MERGE HOLD (scripts/lib/merge-hold.mjs). Heartbeat #2463 merged at
+// 07:10Z 2026-11-21 inside a Mac START/RESULT window because this CLI armed
+// auto-merge unconditionally. Reading lane/merge-hold and arming only when open
+// still raced (Main 7061157919): HOLD published between the read and the arm let
+// an already-green PR merge inside the window. So a publication never arms
+// itself; every receipt is steward_pending and the Cloud steward lands the PR.
+// The hold is still read, for the operator's line only.
+function holdTip(f, subject) {
+  const remote = join(f.root, "remote.git");
+  const tree = f.git(["rev-parse", `${f.base}^{tree}`], remote);
+  const commit = f.git(["commit-tree", tree, "-p", f.base, "-m", subject], remote);
+  f.git(["update-ref", "refs/heads/lane/merge-hold", commit], remote);
+  return commit;
+}
+const autoArmed = (f) => f.ghCalls().some((a) => a[0] === "pr" && a[1] === "merge" && a.includes("--auto"));
+for (const lane of ["mac", "cloud"]) control(`${lane} delivery under a HOLD tip opens the PR and does not arm auto-merge`, { lane }, (f) => {
+  holdTip(f, "HOLD Mac proof #2466 START");
+  const r = f.run(); assert.equal(r.status, 0, r.stderr);
+  assert.ok(f.ghCalls().some((a) => a[0] === "pr" && a[1] === "create"), "the PR is still opened");
+  assert.equal(autoArmed(f), false, "auto-merge must not be armed while lane/merge-hold holds");
+  assert.match(r.stdout, /merge hold now: HELD — refs\/heads\/lane\/merge-hold @ [0-9a-f]{8} holds mainline: HOLD Mac proof #2466 START/);
+  assert.equal(f.git(["rev-parse", `refs/heads/${BASE}`], join(f.root, "remote.git")), f.base, "canonical unchanged");
+});
+// Codex 7059996748: readback treated every OPEN PR without autoMergeRequest as
+// unverified, so a held (intentionally unarmed) delivery would have been held as lost.
+control("a held Mac delivery records steward_pending and its unarmed OPEN PR reads back as pending (exit 4)",
+  { readbackState: "OPEN", readbackObservation: { autoMergeRequest: null } }, (f) => {
+  holdTip(f, "HOLD Mac proof window");
+  const r = f.run(); assert.equal(r.status, 0, r.stderr);
+  const receipt = join(f.root, "fixture-1.submission.json");
+  assert.equal(JSON.parse(readFileSync(receipt, "utf8")).steward_pending, true, "the receipt must say the PR waits for the steward");
+  const back = f.readback(receipt);
+  assert.equal(back.status, 4, back.stdout + back.stderr);
+  assert.match(back.stdout, /"steward_pending":true/);
+  assert.equal(f.pushes().length, 1, "readback never republishes");
+});
+control("an unheld delivery is steward_pending too, and its unarmed OPEN PR reads back as pending (exit 4)",
+  { readbackState: "OPEN", readbackObservation: { autoMergeRequest: null } }, (f) => {
+  const r = f.run(); assert.equal(r.status, 0, r.stderr);
+  const receipt = join(f.root, "fixture-1.submission.json");
+  assert.equal(JSON.parse(readFileSync(receipt, "utf8")).steward_pending, true, "no read of the hold may decide whether the steward owns the merge");
+  const back = f.readback(receipt);
+  assert.equal(back.status, 4, back.stdout + back.stderr);
+  assert.match(back.stdout, /"steward_pending":true/);
+});
+// Main (#439, 7060216728): a pre-check alone is not a boundary unless an IMMEDIATELY
+// mergeable PR cannot advance canonical. The fixture's gh merges the instant auto-merge
+// is armed (an already-green PR). Under HOLD canonical must not move; the unheld
+// control proves the simulation really does move it.
+control("immediate-merge falsification: under HOLD an instantly-green PR cannot advance canonical",
+  { lane: "cloud", autoMergesImmediately: true }, (f) => {
+  holdTip(f, "HOLD Mac proof window");
+  const r = f.run(); assert.equal(r.status, 0, r.stderr);
+  assert.equal(f.git(["rev-parse", `refs/heads/${BASE}`], join(f.root, "remote.git")), f.base, "canonical advanced during a HOLD");
+});
+control("immediate-merge control: the same instantly-green PR, merged by the steward's call, DOES advance canonical",
+  { lane: "cloud", autoMergesImmediately: true }, (f) => {
+  const r = f.run(); assert.equal(r.status, 0, r.stderr);
+  const topic = f.pushes()[0].at(-1).slice("HEAD:".length), remote = join(f.root, "remote.git");
+  assert.equal(f.git(["rev-parse", `refs/heads/${BASE}`], remote), f.base, "the delivery itself never advances canonical, held or not");
+  const steward = spawnSync("gh", ["pr", "merge", "--auto", "--merge", topic.replace(/^refs\/heads\//, "")], { cwd: f.repo, env: f.env, encoding: "utf8" });
+  assert.equal(steward.status, 0, steward.stderr);
+  assert.equal(f.git(["rev-parse", `refs/heads/${BASE}`], remote), f.git(["rev-parse", topic], remote), "the simulation did not merge, so the HOLD cases prove nothing");
+});
+// Main (#439, 7061157919): the static-HOLD case installs HOLD before the whole call.
+// The race is a HOLD published AFTER the delivery read the hold and BEFORE any arm.
+// The fake PR-create publishes HOLD at exactly that point; the instant-merge fake
+// is live. Red on b760a6c9 (it armed from its cached "open" read and canonical moved).
+control("causal transition: HOLD published after the hold read, during PR create, cannot let canonical advance",
+  { lane: "cloud", autoMergesImmediately: true, createPublishesHold: true }, (f) => {
+  const remote = join(f.root, "remote.git");
+  assert.equal(scratchGit(remote, ["rev-parse", "--verify", "-q", "refs/heads/lane/merge-hold"]).status === 0, false, "starts with no hold");
+  const r = f.run(); assert.equal(r.status, 0, r.stderr);
+  assert.match(f.git(["log", "-1", "--format=%s", "refs/heads/lane/merge-hold"], remote), /^HOLD Mac START published after/, "the fake must really publish HOLD mid-call");
+  assert.equal(autoArmed(f), false, "nothing may arm after HOLD was published");
+  assert.equal(f.git(["rev-parse", `refs/heads/${BASE}`], remote), f.base, "canonical advanced inside a HOLD published mid-delivery");
+});
+control("a RELEASE tip on top of a HOLD reports open and still does not self-arm", { lane: "cloud" }, (f) => {
+  holdTip(f, "HOLD window"); 
+  const remote = join(f.root, "remote.git"), held = f.git(["rev-parse", "refs/heads/lane/merge-hold"], remote);
+  const tree = f.git(["rev-parse", `${held}^{tree}`], remote);
+  f.git(["update-ref", "refs/heads/lane/merge-hold", f.git(["commit-tree", tree, "-p", held, "-m", "RELEASE Mac RESULT posted"], remote)], remote);
+  const r = f.run(); assert.equal(r.status, 0, r.stderr);
+  assert.equal(autoArmed(f), false, "the steward lands it; RELEASE is not a licence to self-arm");
+  assert.match(r.stdout, /merge hold now: open — refs\/heads\/lane\/merge-hold @ [0-9a-f]{8} is released: RELEASE Mac RESULT posted/);
+});
+control("a tip that is neither HOLD nor RELEASE counts as held (fail-closed)", { lane: "cloud" }, (f) => {
+  holdTip(f, "wip something");
+  const r = f.run(); assert.equal(r.status, 0, r.stderr);
+  assert.equal(autoArmed(f), false);
+  assert.match(r.stdout, /neither HOLD nor RELEASE/);
+});
+control("SIGNALGRID_MERGE_HOLD=1 holds without any ref", { lane: "cloud" }, (f) => {
+  const r = spawnSync(process.execPath, [join(f.repo, "scripts/lane-deliver.mjs"), "heartbeat", "mac-lane-tick", "acted: fixture", "--no-wake"],
+    { cwd: f.repo, env: { ...f.env, SIGNALGRID_MERGE_HOLD: "1" }, encoding: "utf8", timeout: 90000 });
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(autoArmed(f), false);
+  assert.match(r.stdout, /SIGNALGRID_MERGE_HOLD=1/);
+});
+{
+  const name = "mergeHoldState: every unreadable answer is HELD, only absent or RELEASE opens";
+  try {
+    const { mergeHoldState } = await import("./lib/merge-hold.mjs");
+    const S = "a".repeat(40), st = (lsRemote, subject = null, env = {}) => mergeHoldState({ env, lsRemote, subjectOf: () => subject }).held;
+    assert.equal(st({ code: 0, out: "" }), false, "no ref → open");
+    assert.equal(st({ code: 128, out: "" }), true, "ls-remote failure → held");
+    assert.equal(st({ code: 0, out: "zz\trefs/heads/lane/merge-hold\n" }), true, "bad sha → held");
+    assert.equal(st({ code: 0, out: `${S}\trefs/heads/lane/merge-hold\n` }, null), true, "unfetchable tip → held");
+    assert.equal(st({ code: 0, out: `${S}\tx\n` }, "RELEASE ok"), false);
+    assert.equal(st({ code: 0, out: `${S}\tx\n` }, "HOLD ok"), true);
+    assert.equal(st({ code: 0, out: `${S}\tx\n` }, "RELEASED-ish? no"), true, "RELEASEDish is not the word RELEASE");
+    assert.equal(st({ code: 0, out: `${S}\tx\n` }, "holding"), true, "unknown subject → held");
+    assert.equal(st({ code: 0, out: "" }, null, { SIGNALGRID_MERGE_HOLD: "1" }), true, "env holds");
+    passed++; console.log(`PASS ${name}`);
+  } catch (e) { failed++; console.error(`FAIL ${name}: ${e.message}`); }
+}
 control("Mac --via-pr remains compatible", {}, (f) => {
   const r = f.run(["--via-pr"]); assert.equal(r.status, 0, r.stderr);
   assert.match(f.pushes()[0].at(-1), /^HEAD:refs\/heads\/lane\/mac-mail-/);
@@ -281,11 +396,15 @@ control("a failed push that did not land cannot open a PR", { lane: "cloud", fai
   assert.equal(f.pushes().length, 1); assert.equal(f.refs().length, 1);
   assert.equal(f.ghCalls().filter((a) => a[0] === "pr").length, 0);
 });
-for (const failure of ["ghCreateFails", "ghAutoFails"]) control(`${failure} is unconfirmed, never a submitted heartbeat`, { [failure]: true }, (f) => {
+control("ghCreateFails is unconfirmed, never a submitted heartbeat", { ghCreateFails: true }, (f) => {
   const r = f.run(); assert.equal(r.status, 3, r.stderr);
   assert.equal(f.pushes().length, 1);
-  assert.equal(f.ghCalls().filter((a) => a[0] === "pr" && a[1] === (failure === "ghCreateFails" ? "create" : "merge")).length, 1);
+  assert.equal(f.ghCalls().filter((a) => a[0] === "pr" && a[1] === "create").length, 1);
   assert.match(r.stderr, /readback|unconfirmed/i);
+});
+control("a failing auto-merge endpoint cannot fail a delivery that never calls it", { ghAutoFails: true }, (f) => {
+  const r = f.run(); assert.equal(r.status, 0, r.stderr);
+  assert.equal(f.ghCalls().filter((a) => a[0] === "pr" && a[1] === "merge").length, 0);
 });
 
 for (const damaged of ["missing", "malformed"]) control(`a ${damaged} independent terminal with a child receipt cannot admit new work`, {tick:true,age:130,priorAttempt:"interrupted",result:"changed fixture"},f=>{
@@ -546,7 +665,7 @@ for(const kind of ["malformed","directory"])control(`unusable optional wake meta
  const r=f.run();
  assert.equal(f.pushes().length,1);
  assert.equal(f.ghCalls().filter(a=>a[0]==="pr"&&a[1]==="create").length,1);
- assert.equal(f.ghCalls().filter(a=>a[0]==="pr"&&a[1]==="merge").length,1);
+ assert.equal(f.ghCalls().filter(a=>a[0]==="pr"&&a[1]==="merge").length,0);
  assert.equal(r.status,0,"already accepted PR submission is pending, never a prepublication refusal: "+r.stderr);
  assert.equal(f.ghCalls().filter(a=>a[0]==="pr"&&a[1]==="comment").length,0);
  assert.match(r.stdout,/wake.*(unavailable|no usable)/);
@@ -564,7 +683,7 @@ control("a refreshed merge with changed original payload is refused",{},f=>{
 });
 control("actual cleanup permission failure after accepted publication stays readback-only",{denyCleanup:true},f=>{
  const r=f.run();
- assert.equal(f.pushes().length,1);assert.equal(f.ghCalls().filter(a=>a[0]==="pr"&&a[1]==="create").length,1);assert.equal(f.ghCalls().filter(a=>a[0]==="pr"&&a[1]==="merge").length,1);
+ assert.equal(f.pushes().length,1);assert.equal(f.ghCalls().filter(a=>a[0]==="pr"&&a[1]==="create").length,1);assert.equal(f.ghCalls().filter(a=>a[0]==="pr"&&a[1]==="merge").length,0);
  assert.equal(r.status,3,"an unexpected error after accepted mutation must never be exit1 prepublication refusal: "+r.stderr);assert.match(r.stderr,/readback only/i);
 });
 control("successful unchanged ticks defer remote readback until a due observation",{tick:true,age:130},f=>{
@@ -1529,5 +1648,57 @@ for(const [mode,want] of [['absent',true],['present',false],['fail',false]]){
   passed++;console.log('PASS '+label);
  } catch(e){failed++;console.error('FAIL '+label+': '+e.message);}
 }
+// Main/reader (#439, 7061217609) P1: the actual Mac tick consumer must accept what the
+// actual producer now emits. Each case runs the real CLI readback, then feeds its exact
+// stdout through the real `_hb_pending_hand` JS from scripts/mac/lane-tick.sh. A young
+// PR ends "metadata is current"; failed-check and aged PRs pass the schema and binding
+// checks and reach the notification stage (the owner check, which this fixture does not
+// hold). A schema or metadata refusal there is the regression.
+function tickPendingConsumer(){
+ const tick=readFileSync(join(ROOT,"scripts/mac/lane-tick.sh"),"utf8"),a=tick.indexOf("_hb_pending_hand() {");
+ const start=tick.indexOf("<<'JS'\n",a)+"<<'JS'\n".length,end=tick.indexOf("\nJS\n",start);
+ assert.ok(a>=0&&start>a&&end>start,"actual pending consumer block must be present");
+ const body=tick.slice(start,end),swallow="})().catch(() => {";
+ assert.equal(body.split(swallow).length,2,"consumer error handler shape changed");
+ // Test copy only: surface the swallowed error so a refusal cannot pass as a hand.
+ return body.replace(swallow,"})().catch((error) => { console.error(\"CONSUMER_ERROR \" + (error && error.message));");
+}
+const nowIso=(ms)=>new Date(ms).toISOString().replace(/\.\d{3}Z$/,".000Z");
+for(const item of [
+ {name:"young steward-pending",armed:false,ageMs:60000,rollup:[{__typename:"CheckRun",name:"ci",status:"COMPLETED",conclusion:"SUCCESS"}],want:"current"},
+ {name:"failed-check steward-pending",armed:false,ageMs:60000,rollup:[{__typename:"CheckRun",name:"ci",status:"COMPLETED",conclusion:"FAILURE"}],want:"notify"},
+ {name:"aged steward-pending",armed:false,ageMs:7200000,rollup:[{__typename:"CheckRun",name:"ci",status:"IN_PROGRESS",conclusion:null}],want:"notify"},
+ {name:"armed (legacy shape) young",armed:true,ageMs:60000,rollup:[{__typename:"CheckRun",name:"ci",status:"COMPLETED",conclusion:"SUCCESS"}],want:"current"},
+])control(`real producer → real tick consumer: ${item.name}`,{readbackState:"OPEN",readbackObservation:{autoMergeRequest:item.armed?{}:null,createdAt:nowIso(Date.now()-item.ageMs),statusCheckRollup:item.rollup}},f=>{
+ const receipt=join(f.root,"e2e.submission.json"),sent=f.run(["--receipt",receipt]);assert.equal(sent.status,0,sent.stderr);
+ const back=f.readback(receipt);assert.equal(back.status,4,back.stdout+back.stderr);
+ const line=back.stdout.split("\n").find(l=>l.startsWith("pending delivery observation "));const observed=JSON.parse(line.slice("pending delivery observation ".length));
+ assert.equal(observed.auto_merge_requested,item.armed,"auto_merge_requested reports the real arming state, never null-as-armed");
+ assert.equal(observed.steward_pending,item.armed?undefined:true);
+ const records=join(f.root,"records");mkdirSync(records,{recursive:true});
+ const c=spawnSync(process.execPath,["-",receipt,back.stdout,records,"20261121T100000Z-4242","","",String(process.pid)],{cwd:f.repo,input:tickPendingConsumer(),encoding:"utf8",timeout:60000});
+ const out=c.stdout+c.stderr;
+ assert.doesNotMatch(out,/pending scalar schema differs|pending metadata missing, stale or foreign|one original delivery observation required|original binding differs|pending input differs/,"the real consumer refused the real producer: "+out);
+ if(item.want==="current"){assert.equal(c.status,0,out);assert.match(c.stdout,/pending heartbeat metadata is current; no new notification needed/);}
+ else {assert.doesNotMatch(c.stdout,/metadata is current/,"a failed or aged PR must reach the notification stage");
+  const err=(c.stderr.match(/CONSUMER_ERROR (.*)/)||[])[1]??"";console.error("  consumer stopped at: "+err);
+  assert.match(err,/tick token|owner/,"must pass schema, binding and reason checks and stop only at the tick-owner check: "+err);}
+});
+// P3: steward mode needs positive evidence. Absent, partial and mismatched push capture,
+// and a missing producer binding, must not earn pending status for an unarmed OPEN PR.
+for(const [name,damage] of [
+ ["absent push capture",(r)=>{renameSync(r+".push.json",r+".push.json.gone");renameSync(r+".push.raw.json",r+".push.raw.json.gone");}],
+ ["partial push capture (terminal only)",(r)=>renameSync(r+".push.raw.json",r+".push.raw.json.gone")],
+ ["mismatched push capture (other target)",(r)=>{for(const n of [".push.json",".push.raw.json"]){const v=JSON.parse(readFileSync(r+n,"utf8"));v.target="lane/mac-mail-20261121-000000Z-000000000000";writeFileSync(r+n,JSON.stringify(v)+"\n");}}],
+])control(`steward_pending without positive push evidence is not pending: ${name}`,{readbackState:"OPEN",readbackObservation:{autoMergeRequest:null}},f=>{
+ const receipt=join(f.root,"ev.submission.json"),sent=f.run(["--receipt",receipt]);assert.equal(sent.status,0,sent.stderr);
+ assert.equal(JSON.parse(readFileSync(receipt,"utf8")).steward_pending,true);
+ assert.equal(f.readback(receipt).status,4,"control: the intact evidence reads as pending");
+ damage(receipt);
+ const back=f.readback(receipt);
+ assert.notEqual(back.status,4,"unevidenced steward_pending must not read as pending: "+back.stdout);
+ assert.notEqual(back.status,0,"and never as delivered");
+ assert.doesNotMatch(back.stdout,/"steward_pending":true/);
+});
 console.log(`lane-delivery regression: ${passed} passed, ${failed} failed, 0 skipped`);
 process.exitCode = failed ? 1 : 0;

@@ -125,6 +125,9 @@ export class JobState {
       throw new TypeError('Checkpoint must be an object');
     }
     const type = nonEmptyString(data.type, 'Checkpoint type');
+    if (type !== type.trim()) {
+      throw new TypeError('Checkpoint type must not have surrounding whitespace');
+    }
     if (!Object.hasOwn(data, 'details')) {
       throw new TypeError('Checkpoint details are required');
     }
@@ -226,7 +229,10 @@ export class JobState {
     for (const [index, entry] of saved.checkpoints.entries()) {
       if (!entry || typeof entry !== 'object' || entry.id !== index + 1 ||
           typeof entry.type !== 'string' || !entry.type.trim() ||
+          entry.type !== entry.type.trim() ||
           typeof entry.timestamp !== 'string' ||
+          !Number.isFinite(Date.parse(entry.timestamp)) ||
+          new Date(entry.timestamp).toISOString() !== entry.timestamp ||
           typeof entry.workerId !== 'string' ||
           !Object.hasOwn(entry, 'details')) {
         throw new Error(`Invalid saved checkpoint at index ${index}`);

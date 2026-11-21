@@ -150,7 +150,7 @@ What changed, and what each lane does now:
 
 | | Mac lane | Cloud lane |
 | --- | --- | --- |
-| Write + deliver mail, an ack, a heartbeat | `pnpm run lane:deliver send\|ack\|heartbeat …` — published to **`lane/mac-mail-<stamp>-<nonce>`** from a throwaway worktree, then PR + auto-merge request using authenticated `gh`; your checkout is untouched. Required checks and landing conditions remain. Publication is pending until the PR merges; never direct-push canonical or resend a refused/uncertain push. | same protected PR route using **`lane/cloud-mail-<stamp>-<nonce>`**. Never the code branch. |
+| Write + deliver mail, an ack, a heartbeat | `pnpm run lane:deliver send\|ack\|heartbeat …` — published to **`lane/mac-mail-<stamp>-<nonce>`** from a throwaway worktree, then a PR opened with authenticated `gh`, never self-armed (the serial Cloud steward lands it outside a Mac window); your checkout is untouched. Required checks and landing conditions remain. Publication is pending until the PR merges; never direct-push canonical or resend a refused/uncertain push. | same protected PR route using **`lane/cloud-mail-<stamp>-<nonce>`**. Never the code branch. |
 | Wake the other lane now | after a delivery, `lane:deliver` comments on the **mailbox PR** (`docs/agent/lane-mailbox.json`, PR #439) if `gh` is on PATH, else prints its URL — one comment there, from any device, wakes the cloud session | subscribed to the mailbox PR every session start and every cycle |
 | A topic branch pushed for review | push `mac/<name>`; `lane:inbox` lists your branches mainline does not carry yet | **hourly** cycle opens a DRAFT PR for every unmerged `mac/*` branch at once (CI starts before the review), subscribes to it, reviews, lands or comments the blocker |
 | How long has this waited | `lane:inbox` shows it per message; `check-lane-messages` names it on every run; unread beyond 24h is STALE (reported, never fatal) — for EVERY message: a message with no `sentAt` ages by the commit that delivered it (since 2026-09-06; before that it could never be stale) | same |
@@ -536,8 +536,8 @@ canonical ancestry with every recorded payload blob unchanged. An estate/steward
 refresh may advance the PR head without changing that original commit or payload.
 Concurrent FETCH_HEAD changes, replacement refs and grafts are not proof.
 
-Exit 0 verifies that delivery; exit 4 means its open PR still has auto-merge
-pending; exit 3 means held. A due or changed heartbeat observation checks its
+Exit 0 verifies that delivery; exit 4 means its open PR is still pending
+(auto-merge armed, or a steward_pending receipt waiting for the Cloud steward); exit 3 means held. A due or changed heartbeat observation checks its
 original submission first; identical observations inside the keepalive window
 remain quiet. A verified canonical merge permits a new observation. Objective
 and build warnings identify their original consumed attempt; they are local

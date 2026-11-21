@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-11-20T22:11:55.369Z",
-  "result": "22:12Z keepalive (last steward heartbeat 20:25Z). Mac side: the stand-in was extended to the later source review at 21:32Z (#439 7051117775), so proof #2443 can run end to end after the 00:00Z reset. #2439 (loop-state self-test concurrency) landed as a284b743. Tick heartbeat last moved 20:47Z. Cloud will hold gated-path landings from 23:55Z until the Mac posts #2443's result. No mail addressed to cloud. Owner not escalated."
+  "firedAt": "2026-11-21T00:25:05.571Z",
+  "result": "00:25Z keepalive (last steward heartbeat 22:11Z). Mac tick heartbeat last fired 23:18Z (within tolerance). Live evidence artifacts/live-evidence/mac-run.json last changed 2026-11-16 (over 3 days); one refresh ask sent this cycle. #2423 landed as bc97de34 (DR-037). #2368 published at cae7b8f4: gating green; Mac slice 4 failed at the throughput bench (runner contention shape, not this diff), one full rerun in progress. No new or moved mac/* branch needing a PR; unread cloud-to-mac mail is one superseded message. Mac Claude Code sign-in has lapsed, which blocks proof #2443; only the owner can fix it on the Mac. Owner not escalated by this cycle."
 }

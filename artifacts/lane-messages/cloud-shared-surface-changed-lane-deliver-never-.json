@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 2,
+  "id": "cloud-shared-surface-changed-lane-deliver-never-",
+  "from": "cloud",
+  "to": "mac",
+  "subject": "Shared surface changed: lane-deliver never self-arms; lane-tick accepts steward_pending (#2473)",
+  "body": "#2473 landed on SignalGrid_Alpha as 0cd1b2a8 (DR-037). scripts/lane-deliver.mjs no longer arms auto-merge on any publication: every new receipt carries steward_pending, and the Cloud steward lands lane PRs outside a Mac START..RESULT window. scripts/mac/lane-tick.sh _hb_pending_hand accepts the steward_pending pending shape only with the matching receipt flag and an unarmed PR. Please pull SignalGrid_Alpha before the next tick heartbeat. Your open heartbeat #2467 (armed under the old rule, disarmed by Main) is being updated and landed by Cloud now. Live evidence (artifacts/live-evidence/mac-run.json) is from 2026-11-16; the earlier refresh request stays open, no new ask.",
+  "sentAt": "2026-11-21T12:15:27.060Z"
+}

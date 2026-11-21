@@ -423,6 +423,30 @@ Every pass retrieves the second brain's approved context (roster role, skills, a
 
 Not yet shown when this note was written: Bonsai authoring a first code pass, the brain's default route on Bonsai, restart persistence, recovered disk and memory, a measured concurrency cap, and one fresh job carried through all four passes with its receipts. The dispatcher and router are Root's; the Mac host work is the Mac lane's.
 
+### Operating notes, 2026-11-21 (the hybrid route as it runs today)
+
+The owner, 2026-11-21: build it the way he intended, the fastest way, *"or figure out a hybrid way to make the whole ecosystem work between all the layers"*. On #439 the Mac lane recorded the resulting route (comment 7059967838), the cloud lane acknowledged it (7060050900), and the Mac added branch retention (7060061249). This note is that route, and it amends item 4 of the 2026-11-13 note above.
+
+1. **Local build.** The Mac's local brain takes an ordinary `brain:ready` issue and builds it unattended on a `mac/brain-build-*` branch, then opens the PR itself after its own publication privacy reviews. Which model runs which local pass is the brain's; this note claims none of it.
+2. **The merge hold.** Before it codes, the brain announces a window on `refs/heads/lane/merge-hold`. A tip subject starting `HOLD` means mainline is frozen, and one starting `RELEASE` means it is open; an unreadable tip, or one that is neither, counts as held. The brain also posts START and, at the end, RESULT on #439, and it alone pushes HOLD and RELEASE. Every lane reads the ref with `mergeHoldState` from `scripts/lib/merge-hold.mjs` and re-reads it immediately before each merge call. While it reads HELD, no protected merge lands and no auto-merge is armed. A lane may still push its own PR branch and run CI (Main, #2477 comment 7065108810 and #439 comment 7065269899).
+3. **Cloud final pass.** On every duty cycle the cloud lane lists open PRs whose head starts with `mac/brain-build-` and, while the hold reads OPEN, for each one:
+   - brings it up to date with mainline;
+   - waits for required CI on the new head;
+   - reviews it like any Mac PR;
+   - resolves threads;
+   - lands it under DR-037, with the gating check and the Mac-only aggregate green on that exact head, passing the full 40-character `expectedHeadSha`.
+
+   It then closes the linked `brain:ready` issue and posts one line on #439. A defect is reported on the PR, and the PR stays open. The cloud lane has no Mac access, and it pushes nothing to a `mac/brain-build-*` branch beyond a base merge.
+4. **Branch retention.** A landed `mac/brain-build-*` branch is never deleted; the brain reads it for its own bookkeeping. The Mac lane will say on #439 when cleanup is safe.
+5. **Lane PRs never self-arm** (#2473). `scripts/lane-deliver.mjs` opens every `lane/*-mail-*` PR without auto-merge and records the receipt as steward-pending. The cloud steward lands lane PRs one at a time when the gating check is green on the exact head and the hold reads OPEN.
+
+What does not change: DR-037's five landing conditions, the owner-only surfaces, no force-push and no branch deletion. A declared routine is not evidence that it fired; `docs/agent/scheduled-routines.json` declares the hourly steward cycle, but only a cycle's own recorded output proves a run.
+
+Not yet shown when this note was written:
+- Three ordinary tasks did not end in a PR. #2476 failed before coding. #2479 stopped before coding at the hold readback. #2481 built and qualified, but its artifact privacy review refused publication, and no RESULT or RELEASE had followed for it yet.
+- No fresh ordinary task has yet been published and landed through this whole route with its journals.
+- No later scheduled cycle has yet run it without a manual step.
+
 ## Collision log
 
 Kept because the protocol above is only as persuasive as the evidence that it is

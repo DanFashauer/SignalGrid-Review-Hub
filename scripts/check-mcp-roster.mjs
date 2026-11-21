@@ -541,6 +541,23 @@ export function joinContinuations(entries, cont, modes, skip = null) {
   return out;
 }
 
+/** Pure: every bracketed span on a line, outer and nested, matching `[`/`]` only OUTSIDE double-quoted strings (escapes honoured). */
+export function jsonArrayTexts(line) {
+  const out = [];
+  const stack = [];
+  let inStr = false;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (inStr) {
+      if (c === "\\") i++;
+      else if (c === '"') inStr = false;
+    } else if (c === '"') inStr = true;
+    else if (c === "[") stack.push(i);
+    else if (c === "]" && stack.length) out.push(line.slice(stack.pop(), i + 1));
+  }
+  return out;
+}
+
 /** Pure: findings for one (logical) line's Context7 install references, read as the units its file kind defines. */
 export function context7SpecFindings(line, pin, kind = "shell", before = "", after = "") {
   const out = [];
@@ -561,10 +578,12 @@ export function context7SpecFindings(line, pin, kind = "shell", before = "", aft
     if (/[\s|,]/.test(m[2]) && !out.some((f) => f.unpinned || f.stale)) out.push({ unpinned: m[2].slice(0, 24) }); // once per line
   // a JSON array on the line (Docker's exec form, a compact list) is decoded as JSON first: Docker hands npx the decoded
   // word, so `\t`, `\u000b` or `\"` inside it are whitespace and quotes, not a backslash and a letter
-  for (const arr of line.matchAll(/\[[^[\]\n]*\]/g)) {
+  // (string-aware: a `[`/`]` INSIDE a string element — `"--x=[a]"` — is text and must not split the array; the old
+  // bracket-free regex is kept as a union so this reader can only add arrays, never lose one)
+  for (const arr of [...jsonArrayTexts(line), ...Array.from(line.matchAll(/\[[^[\]\n]*\]/g), (m) => m[0])]) {
     let words;
     try {
-      words = JSON.parse(arr[0]);
+      words = JSON.parse(arr);
     } catch {
       continue;
     }
@@ -689,12 +708,16 @@ export function context7JsonFindings(text, pin) {
     } else if (node && typeof node === "object") {
       // `command` as a string, or an object `{ path, args }` (Zed): read from the parent so `args` BESIDE it inherit the
       // runner, and from the object itself (its own `path`) for `args` inside it
-      const here = runner || isRunnerCommand(node.command) ||
+      const hereAll = runner || isRunnerCommand(node.command) ||
         isRunnerCommand(node.command?.path) ||
         // the program under another key (`cmd`, `program`), or a command ARRAY whose first word is the runner
         [node.command?.cmd, node.command?.program, node.path, node.cmd, node.program].some(isRunnerCommand) ||
         (Array.isArray(node.command) && isRunnerCommand(node.command[0]));
+      // the runner context reaches only the keys that carry the program and its arguments; a metadata sibling
+      // (`description`, `name`, …) mentioning the package is not a call
+      const RUNNER_KEYS = /^(?:args|command|path|cmd|program)$/;
       for (const [k, v] of Object.entries(node)) {
+        const here = runner || (RUNNER_KEYS.test(k) ? hereAll : false);
         if (CONTEXT7_KEY_RE.test(k)) {
           // a string, an object's `"."` (npm overrides) or `version` (package-lock's `node_modules/<pkg>`); a non-string
           // scalar (`null`, `true`, `4`) is no pin at all
@@ -2324,6 +2347,16 @@ server.registerTool(
   ]) {
     const got = context7JsonFindings(body, realPin);
     checks.push([`[json parsed] ${what} → ${want ? "named" : "no finding"}`, got !== null && (want ? got.length >= 1 : got.length === 0)]);
+  }
+  // rows 2582/2583: a bracket inside a string element must not hide a floating spec; metadata beside a runner is no call
+  {
+    const plant = `RUN ["npx","--x=[a]","-y","@upstash/context7-mcp@${realPin}>\\t<5"]`;
+    checks.push(["[2582] a floating spec in a Docker exec form whose other element holds a bracket is flagged", context7SpecFindings(plant, realPin, "shell").some((f) => f.unpinned)]);
+    checks.push(["[2582] revert mutant: the old bracket-free regex alone MISSES that array (the fixture can fail)", ![...plant.matchAll(/\[[^[\]\n]*\]/g)].some((m) => { try { return JSON.parse(m[0]).some((w) => /context7/.test(w)); } catch { return false; } })]);
+    checks.push(["[2582] a pinned exec form holding a bracketed element is not flagged (no false positive)", !context7SpecFindings(`RUN ["npx","--x=[a]","-y","@upstash/context7-mcp@${realPin}"]`, realPin, "shell").some((f) => f.unpinned || f.stale)]);
+    checks.push(["[2582] jsonArrayTexts honours quotes and escapes", jsonArrayTexts('A ["a]","b\\"]"] B').includes('["a]","b\\"]"]')]);
+    checks.push(["[2583] a runner object's metadata sibling naming context7 is not a versionless call", context7JsonFindings(`{"command":"npx","args":["other@1.0.0"],"description":"Use ${NAME} for docs"}`, realPin)?.length === 0]);
+    checks.push(["[2583] the same runner object with the name in args is still named", (context7JsonFindings(`{"command":"npx","args":["-y","${NAME}"],"description":"d"}`, realPin) ?? []).length >= 1]);
   }
   checks.push(["JSONC (comments, trailing comma) is parsed after stripJsonc", context7JsonFindings(`{ // c\n "a": 1, /* x */ }`, realPin)?.length === 0]);
   checks.push([

@@ -90,6 +90,8 @@
  * `availableParallelism()`, so a 2-core runner saturates two cores — measured
  * there at 1.94x, well clear of the 1.0x collapse threshold.
  */
+import { readFileSync } from "node:fs";
+import * as nodeModule from "node:module";
 import { availableParallelism } from "node:os";
 import { Worker, isMainThread, parentPort, workerData } from "node:worker_threads";
 
@@ -413,7 +415,13 @@ class Pool {
   /** The window in flight: its result collector and its rejection, so a worker failure settles it. */
   private active: { collect: (m: Run) => void; reject: (e: Error) => void } | null = null;
 
-  private constructor(private readonly workers: Worker[]) {}
+  // Declared and assigned explicitly, not as a constructor parameter property: a worker loads this same file,
+  // and Node's strip-only TypeScript loader rejects parameter properties (ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX).
+  private readonly workers: Worker[];
+
+  private constructor(workers: Worker[]) {
+    this.workers = workers;
+  }
 
   /**
    * `divergeWorker`: the 0-based worker whose timed verdicts flip (`--inject=diverge-after-release`), or -1.
@@ -605,6 +613,27 @@ function sortedCopy(samples: ArrayLike<number>): number[] {
   return Array.from(samples).sort((a, b) => a - b);
 }
 
+/**
+ * The pool loads THIS file as a worker entry, and a worker may parse it with Node's strip-only TypeScript loader
+ * before tsx is registered. Strip-only rejects TypeScript-only runtime syntax (parameter properties, enums,
+ * namespaces) with ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX, so the file must strip cleanly. Unverifiable counts as a failure.
+ */
+function workerEntrySelfTest(): string[] {
+  const strip = (nodeModule as { stripTypeScriptTypes?: (code: string) => string }).stripTypeScriptTypes;
+  if (typeof strip !== "function") return ["cannot verify strip-only parsing: node:module has no stripTypeScriptTypes on this Node"];
+  const failures: string[] = [];
+  try {
+    strip("class Control { constructor(private readonly x: number) {} }");
+    failures.push("control: a parameter property stripped without error, so this check cannot detect one");
+  } catch { /* expected: the control must be rejected */ }
+  try {
+    strip(readFileSync(new URL(import.meta.url), "utf8"));
+  } catch (e) {
+    failures.push(`this worker entry does not strip cleanly: ${(e as { code?: string }).code ?? String(e)}`);
+  }
+  return failures;
+}
+
 async function main(): Promise<void> {
   const judge = await import("./throughput-judge.js");
   const workload = await loadWorkload();
@@ -618,12 +647,13 @@ async function main(): Promise<void> {
     // fingerprint must come from a FRESH core to match the workers'.
     ...determinismSelfTest(workload.SignalGridCore.demo(), workload).map((f) => `determinism gate: ${f}`),
     ...(await poolSelfTest()).map((f) => `worker pool: ${f}`),
+    ...workerEntrySelfTest().map((f) => `worker entry: ${f}`),
   ];
   if (process.argv.includes("--self-test")) {
     for (const f of selfTestFailures) console.error(`FAIL: ${f}`);
     console.log(
       selfTestFailures.length === 0
-        ? `Throughput-bench self-test: collapse judge (${judge.JUDGE_FIXTURES.length} fixtures, 5 malformed inputs) and determinism gate (${FIELD_MUTATIONS.length} single-field timed-window divergences fail, control passes, unclassified field refused) and worker pool (failure after readiness rejects the window and tears down, control resolves) classified correctly.`
+        ? `Throughput-bench self-test: collapse judge (${judge.JUDGE_FIXTURES.length} fixtures, 5 malformed inputs) and determinism gate (${FIELD_MUTATIONS.length} single-field timed-window divergences fail, control passes, unclassified field refused) and worker pool (failure after readiness rejects the window and tears down, control resolves) and worker entry (strips cleanly under strip-only, parameter-property control rejected) classified correctly.`
         : `Throughput-bench self-test FAILED: ${selfTestFailures.length} problem(s).`,
     );
     process.exitCode = selfTestFailures.length === 0 ? 0 : 1;

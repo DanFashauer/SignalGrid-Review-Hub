@@ -23,7 +23,7 @@ let passed = 0;
 let failed = 0;
 
 function fixture({ lane = "mac", reject = false, loseResponse = false, failBeforePush = false, gateFails = false,
-  firstHeartbeat = null, readbackCanonicalRace = false, fixedClock = false, readbackState = "MERGED", readbackObservation = null, denyCleanup = false, ghAuthFails = false, ghCreateFails = false, ghAutoFails = false, wakeMailbox = false, hand = false, tick = false, omitReceipt = false, ...tickOptions } = {}) {
+  firstHeartbeat = null, readbackCanonicalRace = false, fixedClock = false, readbackState = "MERGED", readbackObservation = null, denyCleanup = false, ghAuthFails = false, ghCreateFails = false, ghAutoFails = false, autoMergesImmediately = false, wakeMailbox = false, hand = false, tick = false, omitReceipt = false, ...tickOptions } = {}) {
   if (tick) return heartbeatFixture(tickOptions);
   const root = mkdtempSync(join(tmpdir(), "sg-delivery-test-"));
   const repo = join(root, "repo"), remote = join(root, "remote.git"), bin = join(root, "bin");
@@ -123,7 +123,7 @@ require("node:module").syncBuiltinESMExports();\n`);
  const head=spawnSync(${JSON.stringify(GIT)},['--git-dir',${JSON.stringify(remote)},'rev-parse','refs/heads/'+a[2]],{encoding:'utf8'}).stdout.trim();
  console.log(JSON.stringify({number:7,state:${JSON.stringify(readbackState)},baseRefName:${JSON.stringify(BASE)},headRefName:a[2],headRefOid:/^[a-f0-9]{40}$/.test(head)?head:null,mergeCommit:m?{oid:m}:null,autoMergeRequest:${readbackState === "OPEN" ? "{}" : "null"},createdAt:new Date(Date.now()-60000).toISOString(),mergeStateStatus:'CLEAN',statusCheckRollup:[{__typename:'CheckRun',name:'fixture-ci',status:'COMPLETED',conclusion:'SUCCESS'}],...${JSON.stringify(readbackObservation ?? {})}}));
 }
-else if(a[0]==='auth'&&a[1]==='status'){${ghAuthFails ? "process.exit(1)" : "process.exit(0)"}}\nelse if(a[0]==='pr'&&a[1]==='create'){${ghCreateFails ? "console.error('fixture creation response lost or unauthenticated');process.exit(1)" : "console.log('https://github.com/fixture/route/pull/7')"}}\nelse if(a[0]==='pr'&&a[1]==='merge'&&a.includes('--auto')){${ghAutoFails ? "console.error('fixture auto-merge response lost');process.exit(1)" : `console.log('fixture auto-merge request')`}}\nelse process.exit(2);\n`);
+else if(a[0]==='auth'&&a[1]==='status'){${ghAuthFails ? "process.exit(1)" : "process.exit(0)"}}\nelse if(a[0]==='pr'&&a[1]==='create'){${ghCreateFails ? "console.error('fixture creation response lost or unauthenticated');process.exit(1)" : "console.log('https://github.com/fixture/route/pull/7')"}}\nelse if(a[0]==='pr'&&a[1]==='merge'&&a.includes('--auto')){${ghAutoFails ? "console.error('fixture auto-merge response lost');process.exit(1)" : autoMergesImmediately ? `const t=a[a.length-1];const h=spawnSync(${JSON.stringify(GIT)},['--git-dir',${JSON.stringify(remote)},'rev-parse','refs/heads/'+t],{encoding:'utf8'}).stdout.trim();spawnSync(${JSON.stringify(GIT)},['--git-dir',${JSON.stringify(remote)},'update-ref','refs/heads/${BASE}',h]);console.log('fixture auto-merge merged at once')` : `console.log('fixture auto-merge request')`}}\nelse process.exit(2);\n`);
   chmodSync(gh, 0o755);
   const records = (p) => { try { return readFileSync(p, "utf8").trim().split("\n").filter(Boolean).map(JSON.parse); } catch (error) { if (error.code === "ENOENT") return []; throw error; } };
   let runNumber = 0;
@@ -291,6 +291,22 @@ control("an unheld receipt keeps the old rule: an unarmed OPEN PR is NOT pending
   const back = f.readback(receipt);
   assert.notEqual(back.status, 4, "an unarmed PR without a steward_pending receipt must not read as pending");
   assert.notEqual(back.status, 0);
+});
+// Main (#439, 7060216728): a pre-check alone is not a boundary unless an IMMEDIATELY
+// mergeable PR cannot advance canonical. The fixture's gh merges the instant auto-merge
+// is armed (an already-green PR). Under HOLD canonical must not move; the unheld
+// control proves the simulation really does move it.
+control("immediate-merge falsification: under HOLD an instantly-green PR cannot advance canonical",
+  { lane: "cloud", autoMergesImmediately: true }, (f) => {
+  holdTip(f, "HOLD Mac proof window");
+  const r = f.run(); assert.equal(r.status, 0, r.stderr);
+  assert.equal(f.git(["rev-parse", `refs/heads/${BASE}`], join(f.root, "remote.git")), f.base, "canonical advanced during a HOLD");
+});
+control("immediate-merge control: without a hold the same instantly-green PR DOES advance canonical",
+  { lane: "cloud", autoMergesImmediately: true }, (f) => {
+  const r = f.run(); assert.equal(r.status, 0, r.stderr);
+  const topic = f.pushes()[0].at(-1).slice("HEAD:".length), remote = join(f.root, "remote.git");
+  assert.equal(f.git(["rev-parse", `refs/heads/${BASE}`], remote), f.git(["rev-parse", topic], remote), "the simulation did not merge, so the HOLD case proves nothing");
 });
 control("a RELEASE tip on top of a HOLD arms auto-merge again", { lane: "cloud" }, (f) => {
   holdTip(f, "HOLD window"); 

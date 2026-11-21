@@ -42,7 +42,14 @@ import type { LinkUsabilityVerdict } from "@workspace/integrations/link-usabilit
 // Type-only, via the "./task-exception" subpath export (wired in the same change
 // that adds this adapter). Erased at compile time.
 import type * as taskException from "@workspace/integrations/task-exception";
-import type { GraphPostureSignal } from "@workspace/integrations/graph";
+import type {
+  DeviceComplianceState,
+  DeviceManagementState,
+  DeviceRegistrationState,
+  GraphPostureSignal,
+  IdentityStatus,
+  UserRisk,
+} from "@workspace/integrations/graph";
 import type { Detection } from "@workspace/event-contract";
 import { ACTION_RANK } from "./compose";
 import type { ComposableSignal, UnifiedAction } from "./types";
@@ -548,6 +555,27 @@ export function fromDetection(d: Detection): ComposableSignal {
 const DEVICE_POSTURE_STALE_AFTER_MS = 7 * 24 * 60 * 60 * 1000;
 
 /**
+ * Each Graph field's declared domain, as an exhaustive `Record<Union, true>` (the
+ * FRESHNESS_SEVERITY pattern) so a union member added without being listed here is a
+ * compile error. A value OUTSIDE the domain — a new Graph enum member, case drift, a
+ * missing field — reads as that field's `unknown`. Before this, every rule below was a
+ * `=== known-bad | "unknown"` test, so an out-of-domain value matched nothing and fell
+ * through to COMPLIANT_MANAGED. `Object.hasOwn`, not `in`: "constructor" and
+ * "__proto__" are not known values.
+ */
+const IDENTITY_STATUS_DOMAIN: Record<IdentityStatus, true> = { enabled: true, disabled: true, unknown: true };
+const USER_RISK_DOMAIN: Record<UserRisk, true> = { none: true, low: true, medium: true, high: true, unknown: true };
+const COMPLIANCE_STATE_DOMAIN: Record<DeviceComplianceState, true> = {
+  compliant: true, non_compliant: true, in_grace_period: true, missing: true, unknown: true,
+};
+const MANAGEMENT_STATE_DOMAIN: Record<DeviceManagementState, true> = { managed: true, unmanaged: true, retire_pending: true, unknown: true };
+const REGISTRATION_STATE_DOMAIN: Record<DeviceRegistrationState, true> = { registered: true, not_registered: true, unknown: true };
+
+function inDomain<T extends string>(domain: Record<T, true>, value: unknown): T | "unknown" {
+  return typeof value === "string" && Object.hasOwn(domain, value) ? (value as T) : "unknown";
+}
+
+/**
  * Device posture (Graph/MDM) → unified action. Fail-safe and ORDER-PROOF: every
  * matching condition contributes a candidate action, and the STRONGEST (highest
  * rank on the unified ladder) wins — so a severe concern is never diluted by a
@@ -591,7 +619,15 @@ const DEVICE_POSTURE_STALE_AFTER_MS = 7 * 24 * 60 * 60 * 1000;
  * pure and deterministic. `deriveFreshness` is the shared body, so a sighting dated
  * AFTER the read resolves to `unknown` (which raises) rather than to maximally fresh.
  */
-export function fromDevicePosture(s: GraphPostureSignal): ComposableSignal {
+export function fromDevicePosture(raw: GraphPostureSignal): ComposableSignal {
+  const s = {
+    ...raw,
+    identityStatus: inDomain(IDENTITY_STATUS_DOMAIN, raw.identityStatus),
+    userRisk: inDomain(USER_RISK_DOMAIN, raw.userRisk),
+    deviceComplianceState: inDomain(COMPLIANCE_STATE_DOMAIN, raw.deviceComplianceState),
+    deviceManagementState: inDomain(MANAGEMENT_STATE_DOMAIN, raw.deviceManagementState),
+    deviceRegistrationState: inDomain(REGISTRATION_STATE_DOMAIN, raw.deviceRegistrationState),
+  };
   const candidates: Array<{ action: UnifiedAction; reason: string }> = [];
 
   // AFFIRMATIVE CONCERNS — a known-bad fact was reported.

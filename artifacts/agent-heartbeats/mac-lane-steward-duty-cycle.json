@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-11-21T00:25:05.571Z",
-  "result": "00:25Z keepalive (last steward heartbeat 22:11Z). Mac tick heartbeat last fired 23:18Z (within tolerance). Live evidence artifacts/live-evidence/mac-run.json last changed 2026-11-16 (over 3 days); one refresh ask sent this cycle. #2423 landed as bc97de34 (DR-037). #2368 published at cae7b8f4: gating green; Mac slice 4 failed at the throughput bench (runner contention shape, not this diff), one full rerun in progress. No new or moved mac/* branch needing a PR; unread cloud-to-mac mail is one superseded message. Mac Claude Code sign-in has lapsed, which blocks proof #2443; only the owner can fix it on the Mac. Owner not escalated by this cycle."
+  "firedAt": "2026-11-21T02:25:24.869Z",
+  "result": "02:25Z keepalive (last steward heartbeat 00:25Z). Mac tick heartbeat last fired 01:27Z (the unattended tick is running). Live evidence still dated 2026-11-16; the refresh ask (cloud-live-evidence-is-over-3-days-old-one-refre) is already sent and unread, so no new ask. #2368 landed as 2cb9d3df. #2447 published at 9fccfb9b: gating green, Mac slices 1, 3 and 4 green, slice 2 still running. Journal PR #2453 qualified (pf/br exit 0). No new or moved mac/* branch; no mail addressed to cloud. Mac Claude Code sign-in lapsed: blocks proof #2443, owner-only. Owner not escalated by this cycle."
 }

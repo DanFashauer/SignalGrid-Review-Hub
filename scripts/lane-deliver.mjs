@@ -53,6 +53,7 @@
 // heartbeat) BEFORE the commit exists. A rejected push is reported with the
 // branch it tried, never retried into a different ref. The clock stamps artifact
 // instants, branch names and readback observations; it never authorizes replay.
+import { MERGE_HOLD_REF, mergeHoldState } from "./lib/merge-hold.mjs";
 import { spawnSync } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
 import { closeSync, constants, existsSync, fstatSync, ftruncateSync, lstatSync, mkdirSync, mkdtempSync, openSync, readFileSync, rmSync, writeFileSync, writeSync } from "node:fs";
@@ -147,6 +148,18 @@ function gitCapture(args, cwd = repo) {
     stdout: Buffer.from(r.stdout ?? ""), stderr: Buffer.from(r.stderr ?? "") };
 }
 const digest = raw => createHash("sha256").update(raw).digest("hex");
+function mergeHold(cwd) {
+  return mergeHoldState({
+    env: process.env,
+    lsRemote: git(["ls-remote", "origin", MERGE_HOLD_REF], cwd),
+    subjectOf: (sha) => {
+      const f = git(["fetch", "--quiet", "--no-tags", "origin", MERGE_HOLD_REF], cwd);
+      if (f.code !== 0) return null;
+      const s = git(["log", "-1", "--format=%s", sha], cwd);
+      return s.code === 0 ? s.out.trim() : null;
+    },
+  });
+}
 function exactText(raw) {
   const text = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(raw);
   if (!Buffer.from(text).equals(raw)) throw Error("Git output is not exact UTF-8");
@@ -663,9 +676,18 @@ console.log(`  worktree    ${wt} @ ${base} (origin/${MAINLINE})`);
   const pr = run("gh", ["pr", "create", "--repo", repoSlug, "--base", MAINLINE, "--head", target, "--title", title, "--body", bodyLines.join("\n")], { cwd: wt });
   if (pr.code !== 0) die(`PR creation for ${target} @ ${sha} is unconfirmed; readback only, never repost:\n${pr.err || pr.out}`, 3);
   console.log(`  pr          ${pr.out.trim().split("\n").pop()}`);
-  const am = run("gh", ["pr", "merge", "--repo", repoSlug, "--auto", "--merge", "--match-head-commit", sha, target], { cwd: wt });
-  if (am.code !== 0) die(`auto-merge request for ${target} @ ${sha} is unconfirmed; readback only, never repeat:\n${am.err || am.out}`, 3);
-  console.log("  auto-merge  enabled; canonical delivery remains pending");
+  // A Mac proof window freezes mainline. Mail and heartbeats used to arm auto-merge
+  // straight through it (#2463 merged at 07:10Z 2026-11-21 inside a START/RESULT
+  // hold; #2467 and #2468 had to be disarmed by hand). The PR is still opened, so
+  // nothing is lost; only the automatic merge waits for the hold to be released.
+  const hold = mergeHold(wt);
+  if (hold.held) {
+    console.log(`  auto-merge  HELD — ${hold.why}; the PR stays open and is merged after the hold is released`);
+  } else {
+    const am = run("gh", ["pr", "merge", "--repo", repoSlug, "--auto", "--merge", "--match-head-commit", sha, target], { cwd: wt });
+    if (am.code !== 0) die(`auto-merge request for ${target} @ ${sha} is unconfirmed; readback only, never repeat:\n${am.err || am.out}`, 3);
+    console.log("  auto-merge  enabled; canonical delivery remains pending");
+  }
 
   // ── 7. wake the other lane: a comment on the standing mailbox PR ────────────
   if (!flags.noWake) {

@@ -57,7 +57,7 @@ require("node:module").syncBuiltinESMExports();\n`);
   git(["config", "user.name", "Delivery fixture"]); git(["config", "user.email", "fixture@example.invalid"]);
   file(join(repo, "scripts/lane-deliver.mjs"), readFileSync(join(ROOT, "scripts/lane-deliver.mjs")));
   file(join(repo, "scripts/lib/lane-identity.mjs"), readFileSync(join(ROOT, "scripts/lib/lane-identity.mjs")));
-  for (const name of ["lane-attempt-store.mjs", "lane-readback.mjs"])
+  for (const name of ["lane-attempt-store.mjs", "lane-readback.mjs", "merge-hold.mjs"])
     file(join(repo, "scripts/lib", name), readFileSync(join(ROOT, "scripts/lib", name)));
   file(join(repo, "scripts/check-lane-messages.mjs"), `process.exit(${gateFails ? 9 : 0});\n`);
   file(join(repo, "scripts/check-scheduled-routines.mjs"), "process.exit(0);\n");
@@ -127,7 +127,7 @@ else if(a[0]==='auth'&&a[1]==='status'){${ghAuthFails ? "process.exit(1)" : "pro
   chmodSync(gh, 0o755);
   const records = (p) => { try { return readFileSync(p, "utf8").trim().split("\n").filter(Boolean).map(JSON.parse); } catch (error) { if (error.code === "ENOENT") return []; throw error; } };
   let runNumber = 0;
-  return { root, repo, base, git, run(extra = []) {
+  return { root, repo, base, git, env, run(extra = []) {
     if (lane === "mac" && !omitReceipt && !extra.includes("--receipt")) {
       const receipt = join(root, `fixture-${++runNumber}.submission.json`);
       writeFileSync(receipt + ".attempt.json", JSON.stringify({state:"one fixture attempt",receipt}) + "\n", {flag:"wx",mode:0o600,flush:true});
@@ -250,6 +250,64 @@ for (const lane of ["mac", "cloud"]) control(`${lane} delivery uses a PR topic w
   assert.ok(merge.includes("--match-head-commit"), "auto-merge must bind the exact published head");
   assert.equal(merge[merge.indexOf("--match-head-commit") + 1], published);
 });
+// THE SHARED MERGE HOLD (scripts/lib/merge-hold.mjs). Heartbeat #2463 merged at
+// 07:10Z 2026-11-21 inside a Mac START/RESULT window because this CLI armed
+// auto-merge unconditionally. A HOLD tip on lane/merge-hold must open the PR and
+// skip ONLY the auto-merge; RELEASE (or no ref) arms it as before.
+function holdTip(f, subject) {
+  const remote = join(f.root, "remote.git");
+  const tree = f.git(["rev-parse", `${f.base}^{tree}`], remote);
+  const commit = f.git(["commit-tree", tree, "-p", f.base, "-m", subject], remote);
+  f.git(["update-ref", "refs/heads/lane/merge-hold", commit], remote);
+  return commit;
+}
+const autoArmed = (f) => f.ghCalls().some((a) => a[0] === "pr" && a[1] === "merge" && a.includes("--auto"));
+for (const lane of ["mac", "cloud"]) control(`${lane} delivery under a HOLD tip opens the PR and does not arm auto-merge`, { lane }, (f) => {
+  holdTip(f, "HOLD Mac proof #2466 START");
+  const r = f.run(); assert.equal(r.status, 0, r.stderr);
+  assert.ok(f.ghCalls().some((a) => a[0] === "pr" && a[1] === "create"), "the PR is still opened");
+  assert.equal(autoArmed(f), false, "auto-merge must not be armed while lane/merge-hold holds");
+  assert.match(r.stdout, /auto-merge {2}HELD — refs\/heads\/lane\/merge-hold @ [0-9a-f]{8} holds mainline: HOLD Mac proof #2466 START/);
+  assert.equal(f.git(["rev-parse", `refs/heads/${BASE}`], join(f.root, "remote.git")), f.base, "canonical unchanged");
+});
+control("a RELEASE tip on top of a HOLD arms auto-merge again", { lane: "cloud" }, (f) => {
+  holdTip(f, "HOLD window"); 
+  const remote = join(f.root, "remote.git"), held = f.git(["rev-parse", "refs/heads/lane/merge-hold"], remote);
+  const tree = f.git(["rev-parse", `${held}^{tree}`], remote);
+  f.git(["update-ref", "refs/heads/lane/merge-hold", f.git(["commit-tree", tree, "-p", held, "-m", "RELEASE Mac RESULT posted"], remote)], remote);
+  const r = f.run(); assert.equal(r.status, 0, r.stderr);
+  assert.equal(autoArmed(f), true, "a released hold must not keep blocking delivery");
+});
+control("a tip that is neither HOLD nor RELEASE counts as held (fail-closed)", { lane: "cloud" }, (f) => {
+  holdTip(f, "wip something");
+  const r = f.run(); assert.equal(r.status, 0, r.stderr);
+  assert.equal(autoArmed(f), false);
+  assert.match(r.stdout, /neither HOLD nor RELEASE/);
+});
+control("SIGNALGRID_MERGE_HOLD=1 holds without any ref", { lane: "cloud" }, (f) => {
+  const r = spawnSync(process.execPath, [join(f.repo, "scripts/lane-deliver.mjs"), "heartbeat", "mac-lane-tick", "acted: fixture", "--no-wake"],
+    { cwd: f.repo, env: { ...f.env, SIGNALGRID_MERGE_HOLD: "1" }, encoding: "utf8", timeout: 90000 });
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(autoArmed(f), false);
+  assert.match(r.stdout, /SIGNALGRID_MERGE_HOLD=1/);
+});
+{
+  const name = "mergeHoldState: every unreadable answer is HELD, only absent or RELEASE opens";
+  try {
+    const { mergeHoldState } = await import("./lib/merge-hold.mjs");
+    const S = "a".repeat(40), st = (lsRemote, subject = null, env = {}) => mergeHoldState({ env, lsRemote, subjectOf: () => subject }).held;
+    assert.equal(st({ code: 0, out: "" }), false, "no ref → open");
+    assert.equal(st({ code: 128, out: "" }), true, "ls-remote failure → held");
+    assert.equal(st({ code: 0, out: "zz\trefs/heads/lane/merge-hold\n" }), true, "bad sha → held");
+    assert.equal(st({ code: 0, out: `${S}\trefs/heads/lane/merge-hold\n` }, null), true, "unfetchable tip → held");
+    assert.equal(st({ code: 0, out: `${S}\tx\n` }, "RELEASE ok"), false);
+    assert.equal(st({ code: 0, out: `${S}\tx\n` }, "HOLD ok"), true);
+    assert.equal(st({ code: 0, out: `${S}\tx\n` }, "RELEASED-ish? no"), true, "RELEASEDish is not the word RELEASE");
+    assert.equal(st({ code: 0, out: `${S}\tx\n` }, "holding"), true, "unknown subject → held");
+    assert.equal(st({ code: 0, out: "" }, null, { SIGNALGRID_MERGE_HOLD: "1" }), true, "env holds");
+    passed++; console.log(`PASS ${name}`);
+  } catch (e) { failed++; console.error(`FAIL ${name}: ${e.message}`); }
+}
 control("Mac --via-pr remains compatible", {}, (f) => {
   const r = f.run(["--via-pr"]); assert.equal(r.status, 0, r.stderr);
   assert.match(f.pushes()[0].at(-1), /^HEAD:refs\/heads\/lane\/mac-mail-/);

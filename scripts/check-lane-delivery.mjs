@@ -270,6 +270,28 @@ for (const lane of ["mac", "cloud"]) control(`${lane} delivery under a HOLD tip 
   assert.match(r.stdout, /auto-merge {2}HELD — refs\/heads\/lane\/merge-hold @ [0-9a-f]{8} holds mainline: HOLD Mac proof #2466 START/);
   assert.equal(f.git(["rev-parse", `refs/heads/${BASE}`], join(f.root, "remote.git")), f.base, "canonical unchanged");
 });
+// Codex 7059996748: readback treated every OPEN PR without autoMergeRequest as
+// unverified, so a held (intentionally unarmed) delivery would have been held as lost.
+control("a held Mac delivery records steward_pending and its unarmed OPEN PR reads back as pending (exit 4)",
+  { readbackState: "OPEN", readbackObservation: { autoMergeRequest: null } }, (f) => {
+  holdTip(f, "HOLD Mac proof window");
+  const r = f.run(); assert.equal(r.status, 0, r.stderr);
+  const receipt = join(f.root, "fixture-1.submission.json");
+  assert.equal(JSON.parse(readFileSync(receipt, "utf8")).steward_pending, true, "the receipt must say the PR waits for the steward");
+  const back = f.readback(receipt);
+  assert.equal(back.status, 4, back.stdout + back.stderr);
+  assert.match(back.stdout, /"steward_pending":true/);
+  assert.equal(f.pushes().length, 1, "readback never republishes");
+});
+control("an unheld receipt keeps the old rule: an unarmed OPEN PR is NOT pending",
+  { readbackState: "OPEN", readbackObservation: { autoMergeRequest: null } }, (f) => {
+  const r = f.run(); assert.equal(r.status, 0, r.stderr);
+  const receipt = join(f.root, "fixture-1.submission.json");
+  assert.equal(JSON.parse(readFileSync(receipt, "utf8")).steward_pending, undefined);
+  const back = f.readback(receipt);
+  assert.notEqual(back.status, 4, "an unarmed PR without a steward_pending receipt must not read as pending");
+  assert.notEqual(back.status, 0);
+});
 control("a RELEASE tip on top of a HOLD arms auto-merge again", { lane: "cloud" }, (f) => {
   holdTip(f, "HOLD window"); 
   const remote = join(f.root, "remote.git"), held = f.git(["rev-parse", "refs/heads/lane/merge-hold"], remote);

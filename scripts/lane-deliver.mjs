@@ -390,7 +390,9 @@ function readback(path) {
     const pr = JSON.parse(exactText(query.stdout)); // exact raw and actual terminal are durable before interpretation
     if (pr.baseRefName !== MAINLINE || !Number.isInteger(pr.number) || pr.number <= 0) throw Error("PR binding differs");
     if (pr.headRefName !== undefined && pr.headRefName !== null && pr.headRefName !== r.target) throw Error("PR topic binding differs");
-    if (pr.state === "OPEN" && pr.autoMergeRequest) {
+    // steward_pending exists only in receipts written under a merge hold; an older
+    // receipt, or an unarmed PR without it, still falls through to "unverified".
+    if (pr.state === "OPEN" && (pr.autoMergeRequest || r.steward_pending === true)) {
       const observed = new Date(), createdMs = typeof pr.createdAt === "string" && /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d{3})?Z$/.test(pr.createdAt) ? Date.parse(pr.createdAt) : NaN;
       const knownTime = Number.isFinite(createdMs) && createdMs <= observed.getTime();
       const states = Array.isArray(pr.statusCheckRollup) ? pr.statusCheckRollup.map(check => {
@@ -412,7 +414,8 @@ function readback(path) {
         created_at: knownTime ? pr.createdAt : null, observed_at: observed.toISOString(),
         age_seconds: knownTime ? Math.floor((observed.getTime() - createdMs) / 1000) : null,
         merge_state: mergeState, check_state: checkState,
-        auto_merge_requested: typeof pr.autoMergeRequest === "object" && !Array.isArray(pr.autoMergeRequest) ? true : null }));
+        auto_merge_requested: typeof pr.autoMergeRequest === "object" && !Array.isArray(pr.autoMergeRequest) ? true : null,
+        ...(r.steward_pending === true ? { steward_pending: true } : {}) }));
       return 4;
     }
     if (pr.state !== "MERGED" || !/^[a-f0-9]{40}$/.test(pr.mergeCommit?.oid ?? "")) throw Error(`PR ${pr.number} is ${pr.state}; canonical delivery remains unverified`);
@@ -647,8 +650,11 @@ console.log(`  worktree    ${wt} @ ${base} (origin/${MAINLINE})`);
     if (!/^[a-f0-9]{40}$/.test(head) || blob.status !== 0 || blob.signal || blob.error || !blob.stdout.equals(source)) die("exact committed producing source unavailable; no push attempted", 1);
     producer = { producer_head: head, producer_source_sha256: digest(source) };
   }
+  // Decided once, BEFORE the receipt is written, so a held delivery is recorded as
+  // steward-pending and its readback treats the unarmed OPEN PR as pending, not lost.
+  const hold = mergeHold(wt);
   if (flags.receipt) receiptWrite(flags.receipt, { version: 1, at: now.toISOString(), repository: repoSlug,
-    base, head: sha, target, ...producer, blobs: staged.map(path => ({ path, oid: mustGit(["rev-parse", `${sha}:${path}`], wt, "binding the submission blob") })) });
+    base, head: sha, target, ...producer, ...(hold.held ? { steward_pending: true } : {}), blobs: staged.map(path => ({ path, oid: mustGit(["rev-parse", `${sha}:${path}`], wt, "binding the submission blob") })) });
   const receiptSha = flags.receipt ? receiptRead(flags.receipt).sha256 : null;
   publicationAttempted = true;
   const args = ["push", "origin", `HEAD:refs/heads/${target}`], actualPush = gitCapture(args, wt);
@@ -680,7 +686,6 @@ console.log(`  worktree    ${wt} @ ${base} (origin/${MAINLINE})`);
   // straight through it (#2463 merged at 07:10Z 2026-11-21 inside a START/RESULT
   // hold; #2467 and #2468 had to be disarmed by hand). The PR is still opened, so
   // nothing is lost; only the automatic merge waits for the hold to be released.
-  const hold = mergeHold(wt);
   if (hold.held) {
     console.log(`  auto-merge  HELD — ${hold.why}; the PR stays open and is merged after the hold is released`);
   } else {

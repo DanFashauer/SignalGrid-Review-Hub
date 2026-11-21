@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-11-21T12:15:25.807Z",
-  "result": "acted 12:20Z: landed #2472 and #2473 under DR-037; no new wave dispatched this fire because the Mac repair window and its deliveries (#2470 journal, #2467) take the CI runners first; in flight H/S/O = 0/0/0; B4 PR #2394 green draft awaiting review; sub-brains: not run this fire; owner queue: none new."
+  "firedAt": "2026-11-21T14:13:09.002Z",
+  "result": "acted 14:15Z: dispatched B1 mutation-guard fatal cost drift (S), B2 console-unknown-render limits (S), B3 preflight-CI parity breadth wiring (S); in flight H/S/O = 0/4/0 (B1-B3 plus B4 #2394); landed this window #2472 #2473 #2467 #2474 #2470 #2475; reviewed #2394 twice (F1-F3 fixed by B4, two test pins asked); opened #2477 (device-management-health proof one traversal, 39.8 s -> 24 s); sub-brains: signalgrid-mcp #17 open since 10-27, no new activity, no worker; owner queue: none."
 }

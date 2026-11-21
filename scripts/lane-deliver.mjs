@@ -35,16 +35,17 @@
 // until the task finished. So this script does the whole delivery itself, from a
 // throwaway worktree at origin/SignalGrid_Alpha:
 //
-//   Both lanes → push lane/<lane>-mail-<stamp>, open a PR and request auto-merge
-//                when gh is available. Canonical branch rules apply equally to
+//   Both lanes → push lane/<lane>-mail-<stamp> and open a PR when gh is
+//                available. The PR never arms its own auto-merge: the serial
+//                Cloud steward lands it outside a Mac window. Canonical branch rules apply equally to
 //                Mac and cloud credentials. A published branch is still pending
 //                until its PR passes the required checks and actually merges.
 //
 // The caller's checkout is never modified: no branch switch, no stash, no
 // commit on the branch the caller is working on.
 //
-// Exit 0 means the PR and its auto-merge request were accepted, still pending
-// canonical merge. Exit 3 requires readback of an unconfirmed mutation. A cloud
+// Exit 0 means the PR was opened, steward-pending, still pending canonical
+// merge. Exit 3 requires readback of an unconfirmed mutation. A cloud
 // session without gh can publish the topic and receives exit 4 for its PR-tool
 // handoff. An unattended Mac requires gh before it pushes anything.
 //
@@ -53,6 +54,7 @@
 // heartbeat) BEFORE the commit exists. A rejected push is reported with the
 // branch it tried, never retried into a different ref. The clock stamps artifact
 // instants, branch names and readback observations; it never authorizes replay.
+import { MERGE_HOLD_REF, mergeHoldState } from "./lib/merge-hold.mjs";
 import { spawnSync } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
 import { closeSync, constants, existsSync, fstatSync, ftruncateSync, lstatSync, mkdirSync, mkdtempSync, openSync, readFileSync, rmSync, writeFileSync, writeSync } from "node:fs";
@@ -147,6 +149,23 @@ function gitCapture(args, cwd = repo) {
     stdout: Buffer.from(r.stdout ?? ""), stderr: Buffer.from(r.stderr ?? "") };
 }
 const digest = raw => createHash("sha256").update(raw).digest("hex");
+function mergeHold(cwd) {
+  return mergeHoldState({
+    env: process.env,
+    lsRemote: git(["ls-remote", "origin", MERGE_HOLD_REF], cwd),
+    // The subject is read for the EXACT tip ls-remote observed. If the ref moved
+    // between the two reads, FETCH_HEAD differs and the answer is unknown (held),
+    // never the old tip's subject reported as the current state.
+    subjectOf: (sha) => {
+      const f = git(["fetch", "--quiet", "--no-tags", "origin", MERGE_HOLD_REF], cwd);
+      if (f.code !== 0) return null;
+      const fetched = git(["rev-parse", "FETCH_HEAD"], cwd);
+      if (fetched.code !== 0 || fetched.out.trim() !== sha) return null;
+      const s = git(["log", "-1", "--format=%s", sha], cwd);
+      return s.code === 0 ? s.out.trim() : null;
+    },
+  });
+}
 function exactText(raw) {
   const text = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(raw);
   if (!Buffer.from(text).equals(raw)) throw Error("Git output is not exact UTF-8");
@@ -350,6 +369,26 @@ function originalPushRefusal(path, receipt) {
     producer_head: p.producer_head, producer_source_sha256: p.producer_source_sha256,
     original_push_exit: p.status, publication_state: "KNOWN_REFUSED", no_replay: true, repair_only: true };
 }
+// steward_pending is a NEW permission: an unarmed OPEN PR reads as pending only
+// when the original push is positively evidenced. The receipt must carry its
+// producer binding, and the exact raw push capture must exist, bind this receipt,
+// source, head and ref, and report a clean exit. Absent, partial or mismatched
+// evidence returns false, so the receipt falls through to the legacy
+// "unverified" outcome; nothing is inferred and no receipt is rewritten.
+function stewardEvidence(path, receipt) {
+  const r = receipt.value;
+  if (r.steward_pending !== true) return false;
+  if (!/^[a-f0-9]{40}$/.test(r.producer_head ?? "") || !/^[a-f0-9]{64}$/.test(r.producer_source_sha256 ?? "") || !/^[a-f0-9]{40}$/.test(r.base ?? "")) return false;
+  if (!present(path + ".push.json") || !present(path + ".push.raw.json")) return false;
+  let p;
+  try { p = captureRead(path + ".push").value; } catch { return false; }
+  if (p.version !== 1 || p.kind !== "original-lane-push-terminal" || p.receipt_sha256 !== receipt.sha256 ||
+      ["repository", "base", "head", "target", "producer_head", "producer_source_sha256"].some(key => p[key] !== r[key]) ||
+      JSON.stringify(p.command) !== JSON.stringify(["git", "push", "origin", `HEAD:refs/heads/${r.target}`]) ||
+      p.status !== 0 || p.signal !== null || p.error !== null) return false;
+  const source = gitCapture(["--no-replace-objects", "-c", "core.fsmonitor=false", "show", `${p.producer_head}:scripts/lane-deliver.mjs`]);
+  return source.status === 0 && !source.signal && !source.error && digest(source.stdout) === p.producer_source_sha256;
+}
 function readback(path) {
   try {
     const receipt = receiptRead(path), r = receipt.value;
@@ -377,7 +416,13 @@ function readback(path) {
     const pr = JSON.parse(exactText(query.stdout)); // exact raw and actual terminal are durable before interpretation
     if (pr.baseRefName !== MAINLINE || !Number.isInteger(pr.number) || pr.number <= 0) throw Error("PR binding differs");
     if (pr.headRefName !== undefined && pr.headRefName !== null && pr.headRefName !== r.target) throw Error("PR topic binding differs");
-    if (pr.state === "OPEN" && pr.autoMergeRequest) {
+    // steward_pending is in every receipt written since publications stopped arming
+    // themselves, and counts only with positive push evidence (stewardEvidence). An
+    // older receipt, or an unarmed PR without that evidence, still falls through to
+    // "unverified". An armed PR is recognised only by a real (non-null) request.
+    const armed = pr.autoMergeRequest !== null && typeof pr.autoMergeRequest === "object" && !Array.isArray(pr.autoMergeRequest);
+    const steward = pr.state === "OPEN" && !armed && stewardEvidence(path, receipt);
+    if (pr.state === "OPEN" && (armed || steward)) {
       const observed = new Date(), createdMs = typeof pr.createdAt === "string" && /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d{3})?Z$/.test(pr.createdAt) ? Date.parse(pr.createdAt) : NaN;
       const knownTime = Number.isFinite(createdMs) && createdMs <= observed.getTime();
       const states = Array.isArray(pr.statusCheckRollup) ? pr.statusCheckRollup.map(check => {
@@ -399,7 +444,8 @@ function readback(path) {
         created_at: knownTime ? pr.createdAt : null, observed_at: observed.toISOString(),
         age_seconds: knownTime ? Math.floor((observed.getTime() - createdMs) / 1000) : null,
         merge_state: mergeState, check_state: checkState,
-        auto_merge_requested: typeof pr.autoMergeRequest === "object" && !Array.isArray(pr.autoMergeRequest) ? true : null }));
+        auto_merge_requested: armed ? true : pr.autoMergeRequest === null ? false : null,
+        ...(steward ? { steward_pending: true } : {}) }));
       return 4;
     }
     if (pr.state !== "MERGED" || !/^[a-f0-9]{40}$/.test(pr.mergeCommit?.oid ?? "")) throw Error(`PR ${pr.number} is ${pr.state}; canonical delivery remains unverified`);
@@ -634,8 +680,11 @@ console.log(`  worktree    ${wt} @ ${base} (origin/${MAINLINE})`);
     if (!/^[a-f0-9]{40}$/.test(head) || blob.status !== 0 || blob.signal || blob.error || !blob.stdout.equals(source)) die("exact committed producing source unavailable; no push attempted", 1);
     producer = { producer_head: head, producer_source_sha256: digest(source) };
   }
+  // Every new publication is steward-pending: it never arms its own auto-merge
+  // (see step 6), so its readback must treat the unarmed OPEN PR as pending, not
+  // lost. Receipts written before this rule carry no field and keep the old rule.
   if (flags.receipt) receiptWrite(flags.receipt, { version: 1, at: now.toISOString(), repository: repoSlug,
-    base, head: sha, target, ...producer, blobs: staged.map(path => ({ path, oid: mustGit(["rev-parse", `${sha}:${path}`], wt, "binding the submission blob") })) });
+    base, head: sha, target, ...producer, steward_pending: true, blobs: staged.map(path => ({ path, oid: mustGit(["rev-parse", `${sha}:${path}`], wt, "binding the submission blob") })) });
   const receiptSha = flags.receipt ? receiptRead(flags.receipt).sha256 : null;
   publicationAttempted = true;
   const args = ["push", "origin", `HEAD:refs/heads/${target}`], actualPush = gitCapture(args, wt);
@@ -663,9 +712,17 @@ console.log(`  worktree    ${wt} @ ${base} (origin/${MAINLINE})`);
   const pr = run("gh", ["pr", "create", "--repo", repoSlug, "--base", MAINLINE, "--head", target, "--title", title, "--body", bodyLines.join("\n")], { cwd: wt });
   if (pr.code !== 0) die(`PR creation for ${target} @ ${sha} is unconfirmed; readback only, never repost:\n${pr.err || pr.out}`, 3);
   console.log(`  pr          ${pr.out.trim().split("\n").pop()}`);
-  const am = run("gh", ["pr", "merge", "--repo", repoSlug, "--auto", "--merge", "--match-head-commit", sha, target], { cwd: wt });
-  if (am.code !== 0) die(`auto-merge request for ${target} @ ${sha} is unconfirmed; readback only, never repeat:\n${am.err || am.out}`, 3);
-  console.log("  auto-merge  enabled; canonical delivery remains pending");
+  // A Mac proof window freezes mainline. Mail and heartbeats used to arm auto-merge
+  // straight through it (#2463 merged at 07:10Z 2026-11-21 inside a START/RESULT
+  // hold; #2467 and #2468 had to be disarmed by hand). Reading lane/merge-hold
+  // first and arming when it was open still raced: HOLD could be published after
+  // the read and before the arm, and an already-green PR then merged inside the
+  // window (Main review 7061157919). No read-then-arm sequence is atomic, so a
+  // publication never arms itself: the PR is opened, the receipt says
+  // steward_pending, and the one serial Cloud steward lands it outside a window.
+  // The hold is still read, for the operator's line only; it decides nothing.
+  const hold = mergeHold(wt);
+  console.log(`  auto-merge  not armed — the Cloud steward lands this PR outside a Mac window (merge hold now: ${hold.held ? "HELD" : "open"} — ${hold.why})`);
 
   // ── 7. wake the other lane: a comment on the standing mailbox PR ────────────
   if (!flags.noWake) {

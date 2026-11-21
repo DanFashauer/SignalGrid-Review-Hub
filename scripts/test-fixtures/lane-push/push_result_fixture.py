@@ -152,10 +152,10 @@ const a=process.argv.slice(2);fs.appendFileSync({json.dumps(str(self.git_log))},
 if(a[0]==='remote'&&a[1]==='get-url'&&a[2]==='origin'){{console.log('https://github.com/fixture/route.git');process.exit(0)}}
 if(a[0]==='push'){{const p=process.env.FIXTURE_EXPECT_RECEIPT;fs.appendFileSync({json.dumps(str(self.before_push))},JSON.stringify({{path:p??null,receipt:p&&fs.existsSync(p)?fs.readFileSync(p,'utf8'):null}})+'\\n')}}
 let r;const override={json.dumps(str(self.root / 'ref-response-override.json'))};
-if(a[0]==='ls-remote'&&fs.existsSync(override)){{const v=JSON.parse(fs.readFileSync(override,'utf8'));r={{status:v.status,signal:null,error:null,stdout:Buffer.from(v.stdout??''),stderr:Buffer.from(v.stderr??'')}}}}
+if(a[0]==='ls-remote'&&!a.includes('refs/heads/lane/merge-hold')&&fs.existsSync(override)){{const v=JSON.parse(fs.readFileSync(override,'utf8'));r={{status:v.status,signal:null,error:null,stdout:Buffer.from(v.stdout??''),stderr:Buffer.from(v.stderr??'')}}}}
 else r=spawnSync({json.dumps(GIT)},a,{{encoding:null,maxBuffer:16*1024*1024}});
 if(a[0]==='push')fs.appendFileSync({json.dumps(str(self.push_observed))},JSON.stringify({{args:a,status:r.status,signal:r.signal??null,error:r.error?.code??null,stdout:(r.stdout??Buffer.alloc(0)).toString('base64'),stderr:(r.stderr??Buffer.alloc(0)).toString('base64')}})+'\\n');
-if(a[0]==='ls-remote')fs.appendFileSync({json.dumps(str(self.ref_observed))},JSON.stringify({{args:a,status:r.status,signal:r.signal??null,error:r.error?.code??null,stdout:(r.stdout??Buffer.alloc(0)).toString('base64'),stderr:(r.stderr??Buffer.alloc(0)).toString('base64')}})+'\\n');
+if(a[0]==='ls-remote'&&!a.includes('refs/heads/lane/merge-hold'))fs.appendFileSync({json.dumps(str(self.ref_observed))},JSON.stringify({{args:a,status:r.status,signal:r.signal??null,error:r.error?.code??null,stdout:(r.stdout??Buffer.alloc(0)).toString('base64'),stderr:(r.stderr??Buffer.alloc(0)).toString('base64')}})+'\\n');
 if(r.stdout)process.stdout.write(r.stdout);if(r.stderr)process.stderr.write(r.stderr);process.exit(r.status??1);
 '''
         gh = f'''#!{NODE}

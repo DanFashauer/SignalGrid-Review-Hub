@@ -87,7 +87,9 @@
 //   Round 34 landing refute (FIXED): `props.call(v)` / `props.apply(v)` / `props['call'](v)` are plain calls of a callback prop named `call`
 //     / `apply` (both readings are tried and unioned, so the `.call` unwrap cannot shadow them); a defaulted destructuring-assignment target
 //     (`({ data: d = {} } = q)`) is followed like the initializer form; a nested sub-map this cannot resolve (a conditional or call spread,
-//     `a: pick()`, a reassigned `let`) is walked as an unreadable entry of the lookup (fail-closed).
+//     `a: pick()`, a reassigned `let`) is walked as an unreadable entry of the lookup (fail-closed) UNDER A LITERAL FIRST KEY (`T.a[s]`).
+//     Under a DYNAMIC first key (`T[g][s]`, `T[q.data?.g][s]`) a call-valued sibling entry (`{ a: {…}, b: pick() }`) is still silent: `mapObjectsOf`
+//     returns early when the first key is not a literal (declared, not a regression: silent on base too; the conditional and `...getBase()` spreads do flag).
 //   Round 34 STILL SILENT (declared, 0 live instances): the callback is reached through `Function.prototype.call.call(render, null, v)`,
 //     `Reflect.apply(render, null, [v])`, `render.call.call(…)`, `render.bind(null)(v)`, `render.bind(null, v)()`, `(0, render).call(…)` or an
 //     alias (`const r = render; r.call(…)`); a namespace member is written through a helper (`mut(Components)`), an aliased global

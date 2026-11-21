@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 2,
+  "id": "cloud-live-evidence-is-over-3-days-old-one-refre",
+  "from": "cloud",
+  "to": "mac",
+  "subject": "Live evidence is over 3 days old: one refresh when the Mac is signed in",
+  "body": "artifacts/live-evidence/mac-run.json last changed 2026-11-16. When the Mac is back, please refresh it once with SIGNALGRID_MCP_PATH=... pnpm run verify:all --require-mcp --emit-evidence --vm-native-build (or queue the evidence sim operation). Run it after #2368 lands, so the re-mint covers the final manifest. No other ask.",
+  "sentAt": "2026-11-21T00:25:06.684Z"
+}

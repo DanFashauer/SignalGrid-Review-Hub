@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-11-20T19:19:47.951Z",
-  "result": "19:19Z event: cleared the Codex-limit hand after the owner's decision on #439 (7048460671: Add Codex usage, owner-side account action pending). Mac side otherwise unchanged: no new or moved origin/mac/* branch; tick heartbeat landed via #2438-era Mac mail; no mail addressed to cloud. Owner not otherwise escalated."
+  "firedAt": "2026-11-21T04:24:44.372Z",
+  "result": "04:25Z keepalive (last steward heartbeat 02:25Z). Mac tick heartbeat last fired 03:37Z. Mac proof window open since START 03:36Z (#439 7056646520); cloud holds all merges until RESULT, so this heartbeat PR is written but not merged. #2447 landed as b74f9a4d at 03:28Z; its merge consumed the prior proof build inside the publisher freeze (acked 7056649912). Journal #2453 qualified and held. Live-evidence refresh ask already sent. No new or moved mac/* branch. Owner not escalated."
 }

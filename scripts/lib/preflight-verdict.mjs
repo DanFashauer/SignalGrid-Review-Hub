@@ -17,14 +17,45 @@
 // line from a fake-fetch case, and calling that step unverified would be a false entry in
 // the block whose job is to be trusted.
 //
-// Returns { verdict: "ok" | "skipped-env" | "unverified" | "reported" | "failed", line? }.
-// `line` is the matching output line (trimmed) for `unverified` and `reported`.
+// A fourth way, closed here: a `--self-test` step that exits 0 WITHOUT printing its pass line
+// (a module that skips its own body — the symlinked-start defect, a broken guard helper — exits 0
+// with no output). Every `--self-test` step now carries an `expect`: a regex the output must
+// contain, defaulting to SELF_TEST_EXPECT, overridable per script. No match ⇒ `failed`.
+// The SAME function (expectFor) is what scripts/lib/expect-output.mjs applies to the CI step, so
+// preflight and CI cannot disagree about what a passing self-test looks like.
+//
+// Returns { verdict: "ok" | "skipped-env" | "unverified" | "reported" | "failed", line?, reason? }.
+// `line` is the matching output line (trimmed) for `unverified` and `reported`;
+// `reason` is "missing-expect" when a step exited 0 without the output it must print.
 
 const UNREAD = /^REPORTED — could not read/;
 
-export function classifyStep({ status, combined, selfSkipsWithout, envSet, surface }) {
+// The pass line a self-test prints. Self-tests are not uniform ("self-test passed (N/N)", "PASS  self-test",
+// "N/N passed", "OK: N/N self-test cases …"), so this is the union of those shapes, measured against all
+// 148 `--self-test` steps on 2026-11-19. It is deliberately a pass-SHAPED line, not any mention of
+// "self-test": a line that only names the self-test (a banner, a usage string) does not satisfy it.
+export const SELF_TEST_EXPECT =
+  /self-?test[^\n]*(?:pass|green|\bok\b|✓|\d+\/\d+)|(?:pass|green|✓)[^\n]*self-?test|\d+\/\d+ (?:[\w-]+ )*(?:passed|self-?test)|PASS\s+\d+\/\d+|self-?test:\s*\d+\/\d+/i;
+
+// Per-script overrides, for a self-test whose pass line has another shape. Empty today: the default
+// covers every current step. Add a row here (script path -> RegExp), never loosen the default.
+export const SELF_TEST_EXPECT_OVERRIDES = new Map();
+
+/** The regex a finished step's output must contain, or null when the step declares none.
+ *  `cmd` is the argv ([bin, script, ...args]); an explicit `declared` regex wins. A `--self-test`
+ *  command always has one, so adopting it is not opt-in. */
+export function expectFor(cmd, declared) {
+  if (declared instanceof RegExp) return declared;
+  if (!Array.isArray(cmd) || !cmd.includes("--self-test")) return null;
+  const script = cmd.find((a, i) => i > 0 && /\.(?:mjs|sh|py)$/.test(a));
+  return (script && SELF_TEST_EXPECT_OVERRIDES.get(script)) || SELF_TEST_EXPECT;
+}
+
+export function classifyStep({ status, combined, selfSkipsWithout, envSet, surface, expect }) {
   if (status !== 0) return { verdict: "failed" };
   if (selfSkipsWithout && !envSet) return { verdict: /\bSKIPPED\b/.test(combined) ? "skipped-env" : "failed" };
+  // search(), not test(): an expect with the g/y flag would carry lastIndex between calls.
+  if (expect && combined.search(expect) === -1) return { verdict: "failed", reason: "missing-expect" };
   if (!surface) return { verdict: "ok" };
   const lines = combined.split("\n");
   const unread = lines.find((l) => UNREAD.test(l));

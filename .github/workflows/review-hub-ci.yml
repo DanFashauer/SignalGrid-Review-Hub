@@ -100,7 +100,7 @@ jobs:
         run: node scripts/check-pruner-exact-ref.mjs
 
       - name: Shared build-regression runner self-test (hash, case-count, counter-forgery, symlink and discovery defects must fail)
-        run: node scripts/check-local-build-regressions.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-local-build-regressions.mjs --self-test
 
       - name: Changed regression targets vs canonical (shared runner; empty diff is not a build's proof)
         env:
@@ -118,14 +118,14 @@ jobs:
         run: node scripts/check-local-build-regressions.mjs --suite scripts/mac/local-brain/test
 
       - name: Invariant review self-test (a default-less switch / stray clock read must fail)
-        run: node scripts/review-invariants.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/review-invariants.mjs --self-test
       - name: Invariant review (fail-closed / determinism / Assist / truth)
         run: pnpm run review:invariants
       - name: Clock-spelling matcher mutation guard (every listed mutant of the shared matcher must fail its self-test)
         run: node scripts/clock-spellings-mutants.mjs
 
       - name: Lib-build heal self-test (an orphaned tsbuildinfo with no dist must be flagged)
-        run: node scripts/ensure-lib-build.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/ensure-lib-build.mjs --self-test
       - name: Typecheck
         run: pnpm run typecheck
 
@@ -152,7 +152,7 @@ jobs:
         run: node scripts/check-remediation-allow-conformance.mjs
 
       - name: Remediation-allow conformance self-test (the gate can fail)
-        run: node scripts/check-remediation-allow-conformance.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-remediation-allow-conformance.mjs --self-test
 
       - name: Posture-allow proof (an unknown or illegible posture must not buy the allow the engine offers on its presence)
         run: pnpm run proof:posture-allow
@@ -163,7 +163,7 @@ jobs:
         run: node scripts/check-posture-allow-conformance.mjs
 
       - name: Posture-allow conformance self-test (the gate can fail)
-        run: node scripts/check-posture-allow-conformance.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-posture-allow-conformance.mjs --self-test
 
       - name: SignalGrid grid proof
         run: pnpm run proof:signalgrid-grid
@@ -277,7 +277,7 @@ jobs:
       - name: "Decision-path purity (a verdict may not be fetched, spawned, or sampled from a model)"
         run: node scripts/check-decision-path-purity.mjs
       - name: "Decision-path purity self-test (the gate must be able to fail)"
-        run: node scripts/check-decision-path-purity.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-decision-path-purity.mjs --self-test
       - name: Guard-registry drift check
         run: node scripts/check-guard-registries.mjs
       # Runs in the fast source-reading job on purpose: it guards the Docker build
@@ -294,7 +294,7 @@ jobs:
       - name: "Image build hardening (retried corepack fetch, cache strip kept, grype can fail)"
         run: node scripts/check-image-build-hardening.mjs
       - name: "Image build hardening self-test (the gate must be able to fail)"
-        run: node scripts/check-image-build-hardening.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-image-build-hardening.mjs --self-test
       - name: "Publication boundary (public repo — nothing arrives unclassified)"
         run: node scripts/check-publication-boundary.mjs
       - name: API collection (a committed request must name a served route)
@@ -303,7 +303,7 @@ jobs:
       - name: Deployment runbook (the documented path must be the real one)
         run: node scripts/check-deployment-runbook.mjs
       - name: Scheduled routines self-test (the gate must be able to fail)
-        run: node scripts/check-scheduled-routines.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-scheduled-routines.mjs --self-test
       - name: Scheduled routines (every always-on lane declared, authorized, scoped, evidenced)
         run: node scripts/check-scheduled-routines.mjs
       - name: Lane heartbeat mismatch (real uncertainty route, no refusal authority)
@@ -317,43 +317,43 @@ jobs:
       - name: Lane heartbeat self-refresh (own behind PR only, pinned head, verified)
         run: node scripts/check-lane-heartbeat-refresh.mjs
       - name: iOS dynamic type self-test (the gate must be able to fail)
-        run: node scripts/check-ios-dynamic-type.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-ios-dynamic-type.mjs --self-test
       - name: iOS dynamic type (no raw system font outside DesignSystem.swift)
         run: node scripts/check-ios-dynamic-type.mjs
       - name: iOS dead stored properties self-test (the gate must be able to fail)
-        run: node scripts/check-ios-dead-stored-properties.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-ios-dead-stored-properties.mjs --self-test
       - name: iOS dead stored properties (a field nothing assigns makes every read of it dead)
         run: node scripts/check-ios-dead-stored-properties.mjs
       - name: iOS policy defaults self-test (the gate must be able to fail)
-        run: node scripts/check-ios-policy-defaults.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-ios-policy-defaults.mjs --self-test
       - name: iOS policy defaults (no managed-config default derived from the absence of policy)
         run: node scripts/check-ios-policy-defaults.mjs
       - name: Override parity self-test (the gate must be able to fail)
-        run: node scripts/check-override-parity.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-override-parity.mjs --self-test
       - name: Override parity (a package.json version that the workspace override overrides is dead text)
         run: node scripts/check-override-parity.mjs
       - name: Console unknown-render self-test (the gate must be able to fail)
-        run: node scripts/check-console-unknown-render.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-console-unknown-render.mjs --self-test
       - name: Console unknown-render (no good-state render on unguarded query data)
         run: node scripts/check-console-unknown-render.mjs
       - name: iOS restriction defaults self-test (the gate must be able to fail)
-        run: node scripts/check-ios-restriction-defaults.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-ios-restriction-defaults.mjs --self-test
       - name: iOS restriction defaults (a DLP restriction may not default to permitted on an unknown session)
         run: node scripts/check-ios-restriction-defaults.mjs
       - name: Shell backend paths self-test (the gate must be able to fail)
-        run: node scripts/check-shell-backend-paths.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-shell-backend-paths.mjs --self-test
       - name: Shell backend paths (every shell control-plane path is a declared /v1 path)
         run: node scripts/check-shell-backend-paths.mjs
       - name: Screen inventory self-test (the gate must be able to fail)
-        run: node scripts/check-screen-inventory.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-screen-inventory.mjs --self-test
       - name: Screen inventory (every page file listed; every stated launch status is launch-profile.mjs's)
         run: node scripts/check-screen-inventory.mjs
       - name: Sim-script self-check self-test (the gate must be able to fail)
-        run: node scripts/check-sim-scripts-selfcheck.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-sim-scripts-selfcheck.mjs --self-test
       - name: Sim-request runner self-test (awaiting-landing classifier, both directions)
-        run: node scripts/mac/run-requests.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/mac/run-requests.mjs --self-test
       - name: Brain proposal-PR route self-test (review build only; governance, decision-path and non-applying patches refused; publish idempotent)
-        run: node scripts/mac/brain-proposal-pr.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/mac/brain-proposal-pr.mjs --self-test
       - name: "Local-brain guard repairs self-test (stripped synthetic brain: --check fails, --apply restores and re-pins, drift refused; needs python3, FAILS without it)"
         run: python3 scripts/mac/local-brain/repairs/guards.py --self-test
       - name: Lane status line self-test (open hands and unread mail counted from a fixture tree; an unreadable part is left out, never zeroed)
@@ -364,83 +364,83 @@ jobs:
       # were all plain text matching. This moves that class of failure to the
       # front of the run without needing a Swift toolchain.
       - name: Swift serious violations self-test (the gate must be able to fail)
-        run: node scripts/check-swift-serious.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-swift-serious.mjs --self-test
       - name: Swift serious violations (the error-severity swiftlint rules, without a Swift toolchain)
         run: node scripts/check-swift-serious.mjs
       - name: iOS demo flags (every simulator flag the shell reads is documented, and vice versa)
         run: node scripts/check-demo-flags-documented.mjs
       - name: Lab registry self-test (the gate must be able to fail)
-        run: node scripts/check-lab-registry.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-lab-registry.mjs --self-test
       - name: Lab source collections (declared, openable, read-only, parseable)
         run: node scripts/check-lab-collections.mjs
       - name: Lab source collections self-test (the gate must be able to fail)
-        run: node scripts/check-lab-collections.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-lab-collections.mjs --self-test
       - name: Lab registry (both halves agree; every deployment claim cites evidence on disk)
         run: node scripts/check-lab-registry.mjs
       - name: Evidence sources self-test (the gate can fail)
-        run: node scripts/check-evidence-sources.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-evidence-sources.mjs --self-test
       - name: Evidence sources (the contract's vocabulary matches what exists)
         run: node scripts/check-evidence-sources.mjs
       - name: Assist wire self-test (the gate must be able to fail)
-        run: node scripts/check-assist-wire-served.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-assist-wire-served.mjs --self-test
       - name: Assist wire served-ness (a bound wire is served or a declared gap)
         run: node scripts/check-assist-wire-served.mjs
       - name: Decision palette self-test (the gate must be able to fail)
-        run: node scripts/check-decision-palette.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-decision-palette.mjs --self-test
       - name: Verdict tone source (a verdict may not pick its own colour inline)
         run: node scripts/check-verdict-tone-source.mjs
       - name: Verdict tone source self-test (the gate can fail)
-        run: node scripts/check-verdict-tone-source.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-verdict-tone-source.mjs --self-test
       - name: PWA fixture labels (control-plane data on the PWA says it is a fixture)
         run: node scripts/check-pwa-fixture-labels.mjs
       - name: PWA fixture labels self-test (the gate can fail)
-        run: node scripts/check-pwa-fixture-labels.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-pwa-fixture-labels.mjs --self-test
       - name: Decision palette (one palette, every tree, AA everywhere)
         run: node scripts/check-decision-palette.mjs
       - name: Web a11y basics self-test (the gate must be able to fail)
-        run: node scripts/check-web-a11y-basics.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-web-a11y-basics.mjs --self-test
       - name: Web a11y basics (live regions on polling views, labelled icon buttons, reduced motion)
         run: node scripts/check-web-a11y-basics.mjs
       - name: Reason codes self-test (the gate must be able to fail)
-        run: node scripts/check-reason-codes.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-reason-codes.mjs --self-test
       - name: Reason codes (the engine's vocabulary is the catalog's and the contract's)
         run: node scripts/check-reason-codes.mjs
       - name: Retention claims self-test (the gate must be able to fail)
-        run: node scripts/check-retention-claims.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-retention-claims.mjs --self-test
       - name: Retention claims (no surface sells a duration nothing implements)
         run: node scripts/check-retention-claims.mjs
       - name: "Connector discipline (gated + proven, no device actuators)"
         run: node scripts/check-connector-discipline.mjs
       - name: Ungated-fetch self-test (the gate must be able to fail)
-        run: node scripts/check-ungated-fetch.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-ungated-fetch.mjs --self-test
       - name: "Ungated fetch (the live boundary covers every outbound path)"
         run: node scripts/check-ungated-fetch.mjs
       - name: Connector-emulator evidence self-test (a planted fetch, GUID or typed claim must fail)
-        run: node scripts/check-connector-emulator-evidence.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-connector-emulator-evidence.mjs --self-test
       - name: "Connector-emulator evidence (the manifest asserts only what a step measured)"
         run: node scripts/check-connector-emulator-evidence.mjs
       - name: Scheduled-verification scope self-test (a hand-picked nightly gate must fail)
-        run: node scripts/check-scheduled-verification-scope.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-scheduled-verification-scope.mjs --self-test
       - name: "Scheduled-verification scope (the daily rot check runs preflight whole)"
         run: node scripts/check-scheduled-verification-scope.mjs
       # Sibling of the gate above: that one asks whether the call was allowed and whether
       # it is bounded, this one asks whether it went out SIGNED.
       - name: Signing-unconditional self-test (the gate must be able to fail)
-        run: node scripts/check-signing-unconditional.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-signing-unconditional.mjs --self-test
       - name: "Signing unconditional (a missing secret refuses; it never sends unsigned)"
         run: node scripts/check-signing-unconditional.mjs
       # Third question at the same boundary: ungated-fetch asks whether the call was
       # ALLOWED, signing-unconditional whether it went out SIGNED, this asks WHAT WAS
       # IN IT. The emit gate decides whether anything may leave, not what it looks like.
       - name: "Emit-payload-discipline self-test (the gate must be able to fail)"
-        run: node scripts/check-emit-payload-discipline.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-emit-payload-discipline.mjs --self-test
       - name: "Emit payload discipline (every field crossing to a vendor is named)"
         run: node scripts/check-emit-payload-discipline.mjs
       # Fourth question at the same boundary: ungated-fetch asks whether the call was
       # ALLOWED and BOUNDED, signing-unconditional whether it went out SIGNED,
       # emit-payload-discipline WHAT WAS IN IT — this one asks about the WIRE.
       - name: "Emitter-wire-discipline self-test (the gate must be able to fail)"
-        run: node scripts/check-emitter-wire-discipline.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-emitter-wire-discipline.mjs --self-test
       - name: "Emitter wire discipline (validated target, one signature scheme, checked vendor values)"
         run: node scripts/check-emitter-wire-discipline.mjs
       # Sibling of the gate above: that one asks whether the call was allowed to happen,
@@ -448,7 +448,7 @@ jobs:
       - name: "Fabricated status (a connector may not report a status it never observed)"
         run: node scripts/check-fabricated-status.mjs
       - name: "Fabricated status self-test (the gate can actually fail)"
-        run: node scripts/check-fabricated-status.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-fabricated-status.mjs --self-test
       # decision:read was enforced in memory and skipped on the durable path — the branch
       # returned before listDecisions/getDecision/getSnapshot ever authorized. The core proof
       # covers the new authorizedContext method; this covers the ROUTES calling it.
@@ -481,11 +481,11 @@ jobs:
       - name: Launch claims (nothing deferred presented as current)
         run: node scripts/check-launch-claims.mjs
       - name: Repo links self-test (a blob/main link must be caught)
-        run: node scripts/check-repo-links.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-repo-links.mjs --self-test
       - name: Repo links (every link into this repository names the default branch and a tracked path)
         run: node scripts/check-repo-links.mjs
       - name: Site figures self-test (a stale count must be caught)
-        run: node scripts/check-site-figures.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-site-figures.mjs --self-test
       - name: Site figures (a number on the site is bound to the artifact it counts)
         run: node scripts/check-site-figures.mjs
       - name: Permission enforcement (DR-002 — no scope granted that no surface demands)
@@ -500,7 +500,7 @@ jobs:
       # surfaces had ever been read. Self-test first, so a drifted derivation
       # cannot report green about a surface set it no longer computes.
       - name: Surface-read-coverage self-test (the gate must be able to fail)
-        run: node scripts/check-surface-review-coverage.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-surface-review-coverage.mjs --self-test
       - name: Surface read coverage (an unread surface is named, never silent)
         run: node scripts/check-surface-review-coverage.mjs
       - name: Accuracy doctrine (DR-015 — unsourced citations, bare external statistics)
@@ -508,15 +508,15 @@ jobs:
       - name: Agent roster (DR-016 — tier, charter, disjoint write boundary)
         run: node scripts/check-agent-roster.mjs
       - name: Skill-plane conformance self-test (the gate must be able to fail)
-        run: node scripts/check-skill-plane-conformance.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-skill-plane-conformance.mjs --self-test
       - name: Skill-plane conformance (every skill/agent carries the name+description the harness selects it by)
         run: node scripts/check-skill-plane-conformance.mjs
       - name: Agent raise-your-hand self-test (the gate must be able to fail)
-        run: node scripts/check-agent-raise-hand.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-agent-raise-hand.mjs --self-test
       - name: Agent raise-your-hand (every subagent definition carries the surface-when-stuck contract)
         run: node scripts/check-agent-raise-hand.mjs
       - name: Gate self-tests run self-test (a gate's --self-test that no step runs is run by a gate)
-        run: node scripts/check-gate-self-tests-run.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-gate-self-tests-run.mjs --self-test
       - name: Gate self-tests run (a flag-less gate names a control; an unregistered --self-test is spawned)
         run: node scripts/check-gate-self-tests-run.mjs
       - name: Positioning trace (every ratified claim resolves by id in the launch profile)
@@ -524,23 +524,23 @@ jobs:
       - name: Module init order (a const read before it is initialised)
         run: node scripts/check-module-init-order.mjs
       - name: Walker-floor self-test (a floorless roots-array walk must fail)
-        run: node scripts/check-walker-floors.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-walker-floors.mjs --self-test
       - name: Walker floors (every ROOTS/roots-array walk declares a non-vacuity floor)
         run: node scripts/check-walker-floors.mjs
       - name: NaN fail-open (an unparseable expiry must read as EXPIRED)
         run: node scripts/check-nan-fail-open.mjs
       - name: Native-build attestation self-test (a VM-run step is recorded only when bound to this exact tree)
-        run: node scripts/lib/native-build-attestation.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/lib/native-build-attestation.mjs --self-test
       - name: Posed-bound self-test (the gate must be able to fail)
-        run: node scripts/check-posed-bounds.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-posed-bounds.mjs --self-test
       - name: Posed bounds (a caller-posed numeric bound is never read with ??)
         run: node scripts/check-posed-bounds.mjs
       - name: Workspace-cycles self-test (the gate must be able to fail)
-        run: node scripts/check-workspace-cycles.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-workspace-cycles.mjs --self-test
       - name: Workspace cycles (no workspace package depends on itself through any chain)
         run: node scripts/check-workspace-cycles.mjs
       - name: Freshness-divergence self-test (the gate must be able to fail)
-        run: node scripts/check-freshness-divergence.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-freshness-divergence.mjs --self-test
       - name: Freshness divergence (one future/age rule, one body; exemptions REPORTED)
         run: node scripts/check-freshness-divergence.mjs
       - name: CI liveness (a sweep that stops running must fail a build)
@@ -553,7 +553,7 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         run: node scripts/check-ci-liveness.mjs
       - name: Scheduled-workflow liveness self-test (the gate must be able to fail)
-        run: node scripts/check-scheduled-workflow-liveness.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-scheduled-workflow-liveness.mjs --self-test
       - name: Scheduled-workflow liveness (every scheduled workflow names its watcher or a dated exemption)
         run: node scripts/check-scheduled-workflow-liveness.mjs
       - name: CI job timeouts (an unbounded job is an unbounded outage)
@@ -577,7 +577,7 @@ jobs:
       # it (readiness dimension (b) divides by that set). No proof, a phantom, an
       # unregistered or a self-skipping proof is a hollow claim — fatal.
       - name: "Launch-proof bindings self-test (the gate must be able to fail)"
-        run: node scripts/check-launch-proof-bindings.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-launch-proof-bindings.mjs --self-test
       - name: "Launch-proof bindings (every launch item names real, per-push proofs)"
         run: node scripts/check-launch-proof-bindings.mjs
       - name: Proof — launch profile (Limited GA scope is coherent; figures published)
@@ -599,77 +599,77 @@ jobs:
       - name: Simulation request loop (results bind to requests; pending reported)
         run: node scripts/check-sim-requests.mjs
       - name: Simulation request loop self-test (the gate can fail)
-        run: node scripts/check-sim-requests.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-sim-requests.mjs --self-test
       - name: Resource-scan binding (an intake row citing a scan file is backed by it)
         run: node scripts/check-resource-scan-binding.mjs
       - name: Resource-scan binding self-test (the gate can fail)
-        run: node scripts/check-resource-scan-binding.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-resource-scan-binding.mjs --self-test
       - name: Known-false claims (a claim proven false once is not made twice)
         run: node scripts/check-known-false-claims.mjs
       - name: Known-false-claim self-test (the gate can fail)
-        run: node scripts/check-known-false-claims.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-known-false-claims.mjs --self-test
       - name: Memory freshness (an aging "as of" claim is named; registry rot is fatal)
         run: node scripts/check-memory-freshness.mjs
       - name: Memory freshness self-test (the gate can fail)
-        run: node scripts/check-memory-freshness.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-memory-freshness.mjs --self-test
       - name: Action pinning (third-party actions must be immutable commits)
         run: node scripts/check-action-pinning.mjs
       - name: Action pinning self-test (the gate can fail)
-        run: node scripts/check-action-pinning.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-action-pinning.mjs --self-test
       - name: Org roster (unactivated roles are named, never silent)
         run: node scripts/check-org-roster.mjs
       - name: Org roster self-test (the gate can fail)
-        run: node scripts/check-org-roster.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-org-roster.mjs --self-test
       - name: Task routing (each task kind routes to a model, effort, lane, role and validators)
         run: node scripts/check-task-routing.mjs
       - name: Task routing self-test (the gate can fail)
-        run: node scripts/check-task-routing.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-task-routing.mjs --self-test
       - name: Backlog ownership (work left in a row names the role that owns it)
         run: node scripts/check-backlog-ownership.mjs
       - name: Backlog ownership self-test (the gate can fail)
-        run: node scripts/check-backlog-ownership.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-backlog-ownership.mjs --self-test
       - name: Raised-hands monitor self-test (DR-054 routing + gap detection must work)
-        run: node scripts/check-raised-hands.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-raised-hands.mjs --self-test
       - name: Raised hands schema (every hand file has its fields, a valid status/unblocker, id == filename)
         run: node scripts/check-raised-hands.mjs
       - name: Backlog evidence (a row that says DONE says how you'd check)
         run: node scripts/check-backlog-evidence.mjs
       - name: Backlog evidence self-test (the gate can fail)
-        run: node scripts/check-backlog-evidence.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-backlog-evidence.mjs --self-test
       # REPORTED, never fatal. This checkout is shallow, so the real-tree run prints
       # NOT MEASURED here; the self-test builds its own full repository and is real.
       - name: Row status drift (open rows reading FIX PROPOSED for a merged PR; reported)
         run: node scripts/check-row-status-drift.mjs
       - name: Row status drift self-test (a planted stale row must be flagged)
-        run: node scripts/check-row-status-drift.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-row-status-drift.mjs --self-test
       - name: Surface-ownership self-test (the gate must be able to fail)
-        run: node scripts/check-surface-ownership.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-surface-ownership.mjs --self-test
       - name: Surface ownership (every file is somebody's)
         run: node scripts/check-surface-ownership.mjs
       - name: Role coverage (has each role read what it owns; ratcheted)
         run: node scripts/check-role-coverage.mjs
       - name: Role-coverage self-test (the gate can fail)
-        run: node scripts/check-role-coverage.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-role-coverage.mjs --self-test
       - name: Owner-gated surfaces manifest (autonomous-merge escalation line is non-empty)
         run: node scripts/check-owner-gated-surfaces.mjs
       - name: Owner-gated surfaces self-test (classify routes owner-gated diffs to the owner)
-        run: node scripts/check-owner-gated-surfaces.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-owner-gated-surfaces.mjs --self-test
       - name: PR gate-falsification (a green suite proves nothing if no gate can fail on the changed lines)
         run: node scripts/check-pr-gate-falsification.mjs
       - name: PR gate-falsification self-test (every fail-closed arm, both directions)
-        run: node scripts/check-pr-gate-falsification.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-pr-gate-falsification.mjs --self-test
       - name: Brain-cycle merge authorizer (affirmative-green allowlist)
         run: node scripts/brain-cycle-merge-decide.mjs
       - name: Merge-authorizer self-test (every conjunct falsified both directions)
-        run: node scripts/brain-cycle-merge-decide.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/brain-cycle-merge-decide.mjs --self-test
       - name: Cited commands (documents may not promise a command that is gone)
         run: node scripts/check-cited-commands.mjs
       - name: Cited-command self-test (the gate can fail)
-        run: node scripts/check-cited-commands.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-cited-commands.mjs --self-test
       - name: Review coverage (printed beside every green suite)
         run: node scripts/check-review-coverage.mjs
       - name: Review-coverage self-test (the gate can fail)
-        run: node scripts/check-review-coverage.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-review-coverage.mjs --self-test
       # MOVED HERE 2026-08-19 because it was path-filtered away from half its own
       # subject. This gate asserts that EVERY Assist client consumes the shared
       # wire vectors, and it discovers two — native/android/core (Kotlin) and
@@ -683,20 +683,20 @@ jobs:
       - name: Assist conformance (every client bound to the shared wire vectors)
         run: node scripts/check-assist-conformance.mjs
       - name: Assist-conformance self-test (the gate can fail)
-        run: node scripts/check-assist-conformance.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-assist-conformance.mjs --self-test
       - name: Proof — lane messages (identity derived; no lane acknowledges its own mail)
         run: pnpm run proof:lane-messages
       - name: Lane messages (unread mail is named on every run, never silent)
         run: node scripts/check-lane-messages.mjs
       - name: Lane message self-test (the gate can fail)
-        run: node scripts/check-lane-messages.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-lane-messages.mjs --self-test
       - name: Raised hands self-test (the gate can fail)
-        run: node scripts/raised-hands.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/raised-hands.mjs --self-test
       # DR-056 §5: the shared objective state is gated where the raised-hands register is.
       - name: Objective loop state (well-formed, derived against the declared objective, nothing stalls silently)
         run: node scripts/objective-loop.mjs --check
       - name: Objective loop self-test (every clause driven from the failing side)
-        run: node scripts/objective-loop.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/objective-loop.mjs --self-test
       - name: Proof — operating method (the handbook is a gate, not a memory)
         run: pnpm run proof:operating-method
 
@@ -722,16 +722,16 @@ jobs:
       - name: "Doc orphans (a new doc must be reachable from an index)"
         run: node scripts/check-doc-orphans.mjs
       - name: "Doc-orphan self-test (a prose mention is not a route)"
-        run: node scripts/check-doc-orphans.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-doc-orphans.mjs --self-test
       # DR-060 rule 2: the lessons ledger — every incident a cycle hits has evidence and a landing.
       - name: "Lessons ledger self-test (each malformed row shape must fail)"
-        run: node scripts/check-lessons.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-lessons.mjs --self-test
       - name: "Lessons ledger (every incident has evidence and a landing)"
         run: node scripts/check-lessons.mjs
       # DR-060 rule 2 / lesson L2: the land-branch saved workflow pushes only on the
       # script-side gate; a missing, non-zero or stale sentinel must refuse the push.
       - name: "Land-branch push gate self-test (a missing, non-zero or stale sentinel must refuse the push)"
-        run: node scripts/lib/land-branch-gate.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/lib/land-branch-gate.mjs --self-test
       - name: "Local worker job-state proofs"
         run: node scripts/mac/local-brain/test/job-state.test.mjs
       - name: "Local worker task-selector proofs"
@@ -757,23 +757,23 @@ jobs:
       - name: "Sanitizer line continuation: a backslash-LF inside a literal keeps its newline at the same offset"
         run: node scripts/mac/local-brain/test/sanitize-line-continuation.test.mjs
       - name: "E2E port allocator self-test (distinct free ports; an explicit or busy port is never reused)"
-        run: node scripts/lib/e2e-ports.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/lib/e2e-ports.mjs --self-test
       # DR-060 rule 3, first slice: docs/agent/mcp-roster.json names which lane or
       # first-party skill may call which MCP server, with signalgrid-mcp's tool count
       # DERIVED from artifacts/mcp-server/src/index.ts, never hand-typed.
       - name: "MCP roster self-test (a drifted tool count, a ghost grant and an ungranted mcp__ call must fail)"
-        run: node scripts/check-mcp-roster.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-mcp-roster.mjs --self-test
       - name: "MCP roster (per-lane and per-skill grants; signalgrid-mcp tool count derived from the server source)"
         run: node scripts/check-mcp-roster.mjs
       # `pnpm run scan:estate` itself stays out of preflight and CI (CI has one checkout); only
       # its locator and tally are proved here, with disk and git injected, so the proof is the
       # same on a Mac with siblings and on a runner with none.
       - name: "Estate scan self-test (an unreachable or misidentified sibling must read NOT SCANNED; only an archived repo's breaks are report-only)"
-        run: node scripts/scan-estate-citations.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/scan-estate-citations.mjs --self-test
       # Row 17's live-check ledger: every live check, its dimensions and the code it verified;
       # the coverage counts are derived here, and check-derived-doc-figures holds the plan to them.
       - name: "Wire-truth ledger self-test (an unknown dimension, an undeclared bound symbol and an uncited live record must fail)"
-        run: node scripts/check-wire-truth-ledger.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-wire-truth-ledger.mjs --self-test
       - name: "Wire-truth ledger (live checks bound to real dimensions, tracked evidence and declared symbols; coverage counts derived)"
         run: node scripts/check-wire-truth-ledger.mjs
       # One level up from doc-orphans: that one asks whether a reader can REACH a
@@ -782,7 +782,7 @@ jobs:
       # counted by running this gate against `git show HEAD:docs/INDEX.md`, not from
       # memory; see the FIXTURE note in the script header for the reproduction.
       - name: "Index\u2194banner parity self-test (the gate must be able to fail)"
-        run: node scripts/check-index-banner-parity.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-index-banner-parity.mjs --self-test
       - name: "Index\u2194banner parity (a bannered doc is not described alive in INDEX.md)"
         run: node scripts/check-index-banner-parity.mjs
       # One level wider again: the index is not the only page that routes a reader to a
@@ -790,26 +790,26 @@ jobs:
       # from this file" documents in the present tense while docs/INDEX.md announced all
       # three honestly, so the index gate was green over it.
       - name: "Cross-doc banner parity self-test (the gate must be able to fail)"
-        run: node scripts/check-cross-doc-banner-parity.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-cross-doc-banner-parity.mjs --self-test
       - name: "Cross-doc banner parity (no live doc cites a bannered doc as live)"
         run: node scripts/check-cross-doc-banner-parity.mjs
       # Two published demo pages and the architecture page carried no deferred/Limited-GA
       # scope statement while the other five published pages did (twenty-third round).
       # Scope is derived from the cp lines in pages.yml, so a new published page joins by itself.
       - name: "Published-page scope banner self-test (the gate must be able to fail)"
-        run: node scripts/check-published-page-scope-banner.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-published-page-scope-banner.mjs --self-test
       - name: "Published-page scope banner (every page pages.yml publishes states its deferred scope)"
         run: node scripts/check-published-page-scope-banner.mjs
       # REPORTED, not gated. Exits 0 on whatever it finds and 1 only when its own
       # derivation breaks: docs/PURPOSE.md section 2 owns the product sentence (DR-020),
       # and a fatal version would gate the whole corpus on prose taste.
       - name: "Product-sentence drift self-test (the detector must find the planted sentences)"
-        run: node scripts/check-product-sentence-drift.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-product-sentence-drift.mjs --self-test
       - name: "Product-sentence drift REPORT (never fatal on findings)"
         run: node scripts/check-product-sentence-drift.mjs
       # Readiness figure (DR-036): the derived number that gates outreach. REPORT only.
       - name: "Readiness figure self-test (the derivation must be able to fail)"
-        run: node scripts/check-readiness-figure.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-readiness-figure.mjs --self-test
       - name: "Readiness figure REPORT (never fatal on the number)"
         run: node scripts/check-readiness-figure.mjs
       # The #336 self-check tooling, wired 2026-08-31 after its fail-closed
@@ -818,30 +818,30 @@ jobs:
       - name: "Gate census (every gate runs somewhere)"
         run: node scripts/check-gate-census.mjs
       - name: "Gate census self-test (the guard can actually fail)"
-        run: node scripts/check-gate-census.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-gate-census.mjs --self-test
       - name: "Failure-diagnosis registry audit (evidence paths still exist)"
         run: node scripts/classify-failure.mjs --audit
       - name: "Failure classifier self-test (exit contract + evidence parser)"
-        run: node scripts/classify-failure.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/classify-failure.mjs --self-test
       - name: "Gap scan (blocking findings fail; a degraded scan is blocking)"
         run: node scripts/scan-gaps.mjs
       - name: "Gap scan self-test (a dying scan command must surface)"
-        run: node scripts/scan-gaps.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/scan-gaps.mjs --self-test
       # One name for the decision transaction. Blocks new nouns; never forces a
       # breaking rename of generated or published contracts.
       - name: "Decision vocabulary (one name for the decision transaction)"
         run: node scripts/check-decision-vocabulary.mjs
       - name: "Decision-vocabulary gate self-test (the gate can actually fail)"
-        run: node scripts/check-decision-vocabulary.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-decision-vocabulary.mjs --self-test
       - name: "Product framing (current-truth surfaces reference PURPOSE.md)"
         run: node scripts/check-product-framing.mjs
       - name: "Product-framing gate self-test (the gate can actually fail)"
-        run: node scripts/check-product-framing.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-product-framing.mjs --self-test
       # The docs↔proof figure guard reads markdown, and only inside a section that
       # names its proof. `docs/architecture.html` contradicted SIGNAL_CATEGORIES by
       # five for months in a format no gate read.
       - name: "Docs-HTML figure guard self-test (the gate can actually fail)"
-        run: node scripts/check-doc-html-figures.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-doc-html-figures.mjs --self-test
       - name: "Docs-HTML figures (no rendered page contradicts a derived figure)"
         run: node scripts/check-doc-html-figures.mjs
       # Markdown figures no proof publishes, so the docs↔proof guard cannot see them:
@@ -849,19 +849,19 @@ jobs:
       # request/folder counts, the proof-script count. Derived from the artifacts
       # themselves — no server is booted, only committed files are read.
       - name: "Derived-doc-figure self-test (a planted drift in each live document must fail)"
-        run: node scripts/check-derived-doc-figures.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-derived-doc-figures.mjs --self-test
       - name: "Derived doc figures (a stated count equals the artifact it describes)"
         run: node scripts/check-derived-doc-figures.mjs
       # DR-043 rule 4 (Puck 5): the hardware tally (Rh/Ch/Ph) in docs/agent/DISCOVERY_LOG.md's
       # Running tally is derived from row marks, never typed by hand.
       - name: "Discovery-log self-test (a planted hardware-tally drift must fail; a hardware-tagged row must move the count)"
-        run: node scripts/check-discovery-log.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-discovery-log.mjs --self-test
       - name: "Discovery-log hardware tally (the typed Rh/Ch/Ph sentence matches the Running tally's marks)"
         run: node scripts/check-discovery-log.mjs
       # The `path (N)` line counts in the build plan's tier lists were measured
       # once and quoted forever — 20 of 29 were wrong on 2026-09-05.
       - name: "Doc line-count self-test (a planted drift must fail; the real tree must be clean)"
-        run: node scripts/check-doc-line-counts.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-doc-line-counts.mjs --self-test
       - name: "Doc line counts (every path (N) figure is within max(25 lines, 5%) of the file it names)"
         run: node scripts/check-doc-line-counts.mjs
       # BUILD_BACKLOG.md: "Vendor-doc drift is unwatched". Decided: a
@@ -870,7 +870,7 @@ jobs:
       # (docs/agent/VENDOR_DOC_MANIFEST.json), no network call. REPORT-ONLY:
       # the check itself always exits 0; only the self-test can fail this job.
       - name: "Vendor-doc drift watch self-test (the comparison logic must actually work)"
-        run: node scripts/check-vendor-doc-drift.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-vendor-doc-drift.mjs --self-test
       - name: "Vendor-doc drift watch (report-only — informational, never fails on a stale or unverified URL)"
         run: node scripts/check-vendor-doc-drift.mjs
       # Lesson L8 (DR-060): the Pages branch build was red on every mainline push for 34 days
@@ -878,7 +878,7 @@ jobs:
       # exit 1 on its own errors (unclassified workflow file, HTTP error, unresolved workflow,
       # or no token here). Needs only actions: read, already granted at the top of this file.
       - name: "Mainline workflow red streaks self-test (the verdict and its own-error paths must be able to fail)"
-        run: node scripts/check-mainline-workflow-streaks.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-mainline-workflow-streaks.mjs --self-test
       - name: "Mainline workflow red streaks (report-only — names every non-gating workflow red 3+ runs in a row)"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -887,13 +887,13 @@ jobs:
       # them. COMPANY_BUILD_PLAN.md carried the superseded 5,128 for twelve days while
       # every figure gate stayed green, because none of them reads a bare 240 or 585.
       - name: "Performance-figure self-test (a drifted or undated restatement must fail)"
-        run: node scripts/check-performance-figures.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-performance-figures.mjs --self-test
       - name: "Performance figures (every restatement matches RELIABILITY_SLO.md and carries its date)"
         run: node scripts/check-performance-figures.mjs
       # A sim result is an attestation and provenance.commit is the only thing tying it
       # to code; one stamped a sha git cat-file -e could not resolve on Alpha.
       - name: "Sim-result provenance self-test (the gate can actually fail)"
-        run: node scripts/check-sim-result-provenance.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-sim-result-provenance.mjs --self-test
       # Owning runner for commit ancestry: THIS job, on a deepened checkout. The checkout above is
       # depth 1, where every result sha is unresolvable and the plain gate can only report it; the
       # unshallow below makes history full, and --require-history then makes an unresolvable or
@@ -919,29 +919,29 @@ jobs:
         run: node scripts/raised-hands.mjs --check --warn
       # A generated input validator nobody parses reads exactly like coverage.
       - name: "api-zod wiring self-test (an orphan schema and a stale declaration must fail)"
-        run: node scripts/check-api-zod-wiring.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-api-zod-wiring.mjs --self-test
       - name: "api-zod wiring (every generated input schema is invoked or declared client/type-only)"
         run: node scripts/check-api-zod-wiring.mjs
       # The /api document against the fixtures it serves.
       - name: "/api fixture-contract self-test (each of the four rules must be able to fail)"
-        run: node scripts/check-api-fixture-contract.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-api-fixture-contract.mjs --self-test
       - name: "/api fixture contract (the document describes what the fixtures answer)"
         run: node scripts/check-api-fixture-contract.mjs
       # The /v1 document against the refusals the served source returns.
       - name: "/v1 refusal-coverage self-test (a missing 401/429/400/404 must fail)"
-        run: node scripts/check-v1-refusal-coverage.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-v1-refusal-coverage.mjs --self-test
       - name: "/v1 refusal coverage (every refusal the server returns is documented)"
         run: node scripts/check-v1-refusal-coverage.mjs
       # The review compose had no healthcheck on any service; "Up" meant the
       # process existed, not that the server answered.
       - name: "Compose healthcheck self-test (a planted port without a healthcheck must fail)"
-        run: node scripts/check-compose-healthchecks.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-compose-healthchecks.mjs --self-test
       - name: "Compose healthchecks (every published port has a service that says whether it answers)"
         run: node scripts/check-compose-healthchecks.mjs
       # Two documents stated the four tier branches as live after all four were
       # pruned, while BRANCH_HYGIENE.md recorded the opposite. Offline by design.
       - name: "Documented-branch self-test (the gate can actually fail)"
-        run: node scripts/check-documented-branches.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-documented-branches.mjs --self-test
       - name: "Documented branches (a doc may not state a pruned branch as existing)"
         run: node scripts/check-documented-branches.mjs
       # Orphans ask whether a reader can REACH a doc; this asks whether the doc points
@@ -950,84 +950,84 @@ jobs:
       - name: "Cited paths (a doc may not cite a file that does not exist)"
         run: node scripts/check-cited-paths.mjs
       - name: "Cited-path self-test (the gate can actually fail)"
-        run: node scripts/check-cited-paths.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-cited-paths.mjs --self-test
       # check-cited-paths only sees BACKTICKED paths; a re-measured stamp (dated 2026-10-08
       # on) citing one in plain text passes it unchecked.
       - name: "Stamp citations (a re-measured stamp must backtick the repo paths it cites)"
         run: node scripts/check-stamp-citations.mjs
       - name: "Stamp-citation self-test (the gate can actually fail)"
-        run: node scripts/check-stamp-citations.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-stamp-citations.mjs --self-test
       # A document that instructs `SIGNALGRID_X=…` names a control; if nothing reads X
       # the control does not exist. SIGNALGRID_SANITIZE_OUTPUT was "required" in two
       # documents and read by nothing.
       - name: "Env-doc readers (an instructed SIGNALGRID_* variable must be read by something)"
         run: node scripts/check-env-doc-readers.mjs
       - name: "Env-doc-reader self-test (the gate can actually fail)"
-        run: node scripts/check-env-doc-readers.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-env-doc-readers.mjs --self-test
       # A browser follows `](FOO.md)` from the document's own directory and nowhere
       # else; 35 relocation fossils were dead links for four weeks.
       - name: "Markdown links (a relative link resolves from its own document to a tracked file)"
         run: node scripts/check-markdown-links.mjs
       - name: "Markdown-link self-test (the gate can actually fail)"
-        run: node scripts/check-markdown-links.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-markdown-links.mjs --self-test
       # The Graph permission page told an administrator to grant two scopes while
       # the connector read three. Tables ⇔ connector reads, both directions.
       - name: "Graph permission boundary (the page names exactly what the connector reads)"
         run: node scripts/check-graph-permission-boundary.mjs
       - name: "Graph-permission-boundary self-test (the gate can actually fail)"
-        run: node scripts/check-graph-permission-boundary.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-graph-permission-boundary.mjs --self-test
       # A `Subject:` line is a template; a template is claim-scanned or bannered.
       - name: "Send-copy banner (a send template is claim-scanned or bannered do-not-send)"
         run: node scripts/check-send-copy-banner.mjs
       - name: "Send-copy-banner self-test (the gate can actually fail)"
-        run: node scripts/check-send-copy-banner.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-send-copy-banner.mjs --self-test
       # The positioning SVG drew five outcomes with restrict missing; no gate read .svg.
       - name: "SVG outcome ladder (a rendered decision ladder is allow · step_up · restrict · deny)"
         run: node scripts/check-svg-outcome-ladder.mjs
       - name: "SVG-outcome-ladder self-test (the gate can actually fail)"
-        run: node scripts/check-svg-outcome-ladder.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-svg-outcome-ladder.mjs --self-test
       # .swiftlint.yml's force_unwrap regex matched force casts and never an unwrap.
       - name: "SwiftLint custom rules (each regex fires on a planted positive, not on a planted negative)"
         run: node scripts/check-swiftlint-rules.mjs
       - name: "SwiftLint-rules self-test (the gate can actually fail)"
-        run: node scripts/check-swiftlint-rules.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-swiftlint-rules.mjs --self-test
       # Two role-catalog headings read "(engaged)" over tables saying nobody is.
       - name: "Role headings carry no status word (status lives in the entry's table)"
         run: node scripts/check-role-heading-status.mjs
       - name: "Role-heading-status self-test (the gate can actually fail)"
-        run: node scripts/check-role-heading-status.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-role-heading-status.mjs --self-test
       # The Postman spec check was one-directional and path-only.
       - name: "Postman coverage self-test (a planted orphan request must be reported)"
-        run: node scripts/build-postman.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/build-postman.mjs --self-test
       # The MCP-ecosystem source-independence map: every externally-sourced connector
       # family must carry a row in docs/research/MCP_ECOSYSTEM_SIGNAL_SOURCES.md (an
       # MCP server or an explicit gap marker), and the map may not name a family the
       # tree does not have. Derived from the family directories under
       # lib/integrations/src/integrations, self-tested both directions (DR-028).
       - name: "MCP-ecosystem-map self-test (the gate can fail both directions)"
-        run: node scripts/check-mcp-ecosystem-map.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-mcp-ecosystem-map.mjs --self-test
       - name: "MCP-ecosystem map (every externally-sourced family has an ecosystem row or a stated gap)"
         run: node scripts/check-mcp-ecosystem-map.mjs
       - name: "Absence-check self-test (a word in a disclaimer is not the thing existing)"
-        run: node scripts/agent/absence-check.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/agent/absence-check.mjs --self-test
       - name: "Untracked-ignore self-test (verify-all: an untracked lockfile is source, scratch stays ignored)"
-        run: node scripts/check-untracked-ignore.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-untracked-ignore.mjs --self-test
       # Brain cycle (DR-032). The live origin-diff is the cycle's STEP 0, not a per-push
       # gate (a feature branch legitimately differs from origin); CI runs only the
       # self-tests, which prove each piece can fail in both directions.
       - name: "Brain-freshness self-test (empty derivation + drift must fail; identical is clean)"
-        run: node scripts/check-brain-freshness.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-brain-freshness.mjs --self-test
       - name: "Brain-cycle decision self-test (ran:false=HARD NO, veto/owner-gated open nothing, consensus floor)"
-        run: node scripts/brain-cycle-decide.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/brain-cycle-decide.mjs --self-test
       - name: "Brain-cycle spine self-test (readBoard+decide integrate; malformed lens = ran:false)"
-        run: node scripts/brain-cycle.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/brain-cycle.mjs --self-test
       # The same shape one level down: doc-orphans asks whether a reader can reach a
       # document, this asks whether a shipped artifact can reach a library. Both catch
       # the failure mode that never announces itself — everything green, nothing
       # arrives. Added after a design pass found `lib/dual-control` had zero shipped
       # consumers AFTER the work to wire it had already been scoped.
       - name: "Package reachability self-test (a comment naming a package is not an import)"
-        run: node scripts/check-package-reachability.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-package-reachability.mjs --self-test
       - name: "Package reachability (a library nobody ships is a library nobody runs)"
         run: node scripts/check-package-reachability.mjs
       # The provenance stamp is GENERATED, so the gate is "regenerate and compare
@@ -1042,73 +1042,73 @@ jobs:
       - name: "Claim-inventory drift (the derived Markdown matches its JSON source)"
         run: node scripts/gen-claim-inventory-md.mjs --check
       - name: "Claim-inventory self-test (the drift check can actually fail)"
-        run: node scripts/gen-claim-inventory-md.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/gen-claim-inventory-md.mjs --self-test
       # The inventory's quotations were never checked against their surfaces.
       - name: "Claim-inventory anchors (a quoted claim is still a quotation; absent is ratcheted)"
         run: node scripts/check-claim-inventory-anchors.mjs
       - name: "Claim-inventory anchors self-test (the check can actually fail)"
-        run: node scripts/check-claim-inventory-anchors.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-claim-inventory-anchors.mjs --self-test
       # check-cited-paths proves a cited PATH exists and stops; three documents passed it
       # on 2026-09-06 while naming symbols the cited file no longer held.
       - name: "Cited symbols (a symbol named beside a code citation must still be in that file; missing is ratcheted)"
         run: node scripts/check-cited-symbols.mjs
       - name: "Cited symbols self-test (the check can actually fail)"
-        run: node scripts/check-cited-symbols.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-cited-symbols.mjs --self-test
       - name: "Inspiration catalog structure (a stated total, a row-wise URL claim, a constant column and a duplicate product, re-derived from the rows)"
         run: node scripts/check-inspiration-catalog-structure.mjs
       - name: "Inspiration catalog structure self-test (the check can actually fail)"
-        run: node scripts/check-inspiration-catalog-structure.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-inspiration-catalog-structure.mjs --self-test
       - name: "Entry guards (a module gate body runs only when it IS the entry, never on a filename match)"
         run: node scripts/check-entry-guards.mjs
       - name: "Entry-guard self-test (the suffix form is flagged, the exact form is not)"
-        run: node scripts/check-entry-guards.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-entry-guards.mjs --self-test
       - name: "Container shipped-import model (every script a container ships alone has its relative imports shipped beside it)"
         run: node scripts/check-shipped-imports.mjs
       - name: "Shipped-import model self-test (an import the container does not ship is flagged)"
-        run: node scripts/check-shipped-imports.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-shipped-imports.mjs --self-test
       - name: "Plugin manifest (the signalgrid plugin's agent list equals the tracked agent files; skills and commands present)"
         run: node scripts/check-plugin-manifest.mjs
       - name: "Plugin-manifest self-test (a manifest missing or inventing an agent is flagged)"
-        run: node scripts/check-plugin-manifest.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-plugin-manifest.mjs --self-test
       # Two preview PNGs shipped a struck category label for five days after their HTML sources
       # were corrected (2026-09-06): no gate read image content. The manifest pins each
       # render to the sha256 of its source; the renderer (Chromium) is NOT run in CI.
       - name: "Rendered assets (a committed PNG must be a render of the committed HTML; unpinned PNGs reported)"
         run: node scripts/check-rendered-assets.mjs
       - name: "Rendered assets self-test (the check can actually fail)"
-        run: node scripts/check-rendered-assets.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-rendered-assets.mjs --self-test
       - name: "Skill instruction conflicts self-test (the check can actually fail)"
-        run: node scripts/check-skill-instruction-conflicts.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-skill-instruction-conflicts.mjs --self-test
       - name: "Gitignore producers (every path a vendored skill writes into the tree is ignored by the TRACKED ignore files)"
         run: node scripts/check-gitignore-producers.mjs
       - name: "Gitignore producers self-test (the check can actually fail)"
-        run: node scripts/check-gitignore-producers.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-gitignore-producers.mjs --self-test
       # The console rendered a settled control-plane error as "Loading…" at nine sites,
       # bucketed integration health by three literals of a four-member enum, and
       # registered two routes nothing linked to (2026-09-06).
       - name: "Console error states (a settled query error may never render as a pending word)"
         run: node scripts/check-console-error-states.mjs
       - name: "Console error states self-test (the check can actually fail)"
-        run: node scripts/check-console-error-states.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-console-error-states.mjs --self-test
       - name: "Console enum coverage (every IntegrationHealthStatus member is bucketed and badged)"
         run: node scripts/check-console-enum-coverage.mjs
       - name: "Console enum coverage self-test (the check can actually fail)"
-        run: node scripts/check-console-enum-coverage.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-console-enum-coverage.mjs --self-test
       - name: "Console routes reachable (every registered route is linked; every non-launch route is preview-wrapped)"
         run: node scripts/check-console-routes-reachable.mjs
       - name: "Console routes reachable self-test (the check can actually fail)"
-        run: node scripts/check-console-routes-reachable.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-console-routes-reachable.mjs --self-test
       - name: "Console launch families (LAUNCH_FAMILIES equals the launch connector families, both directions)"
         run: node scripts/check-console-launch-families.mjs
       - name: "Console launch families self-test (the check can actually fail)"
-        run: node scripts/check-console-launch-families.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-console-launch-families.mjs --self-test
       # Three company documents said "No cost or billing figure appears in this repository"
       # while Pricing.tsx and COST_MODEL.md printed dollars; the 2026-08-21 lens review asked
       # for this gate (ROLE_LENS_REVIEW:516) and it was never built until 2026-09-06.
       - name: "Cost figures (every currency amount resolves to docs/COST_MODEL.md's register; no owner-only billing figure is published as our own spend)"
         run: node scripts/check-cost-figures.mjs
       - name: "Cost figures self-test (the check can actually fail)"
-        run: node scripts/check-cost-figures.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-cost-figures.mjs --self-test
       - name: "Proof — dual control"
         run: pnpm run proof:dual-control
       - name: "Pagination-truncation guard (a capped read must not look complete)"
@@ -1122,17 +1122,17 @@ jobs:
       - name: "Backlog row citations name rows that exist"
         run: node scripts/check-row-citations.mjs
       - name: "Row-citation gate self-test (it can actually fail)"
-        run: node scripts/check-row-citations.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-row-citations.mjs --self-test
       - name: "IT-layer model (every refusal has an owner; nothing routes to a phantom)"
         run: node scripts/check-it-layer-model.mjs
       - name: "IT-layer model self-test (the gate can actually fail)"
-        run: node scripts/check-it-layer-model.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-it-layer-model.mjs --self-test
       - name: "Port parity (DecisionEngine + AppWorkflows vs their TS originals; SignalGridMobile mock vs the core vocabulary)"
         run: node scripts/check-decision-port-parity.mjs
       - name: "Read-error swallowing (a failed lookup must not report nothing-found)"
         run: node scripts/check-read-error-swallowing.mjs
       - name: "Read-error swallowing self-test (detector + floors)"
-        run: node scripts/check-read-error-swallowing.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-read-error-swallowing.mjs --self-test
       # Every other gate here checks what the text MEANS. This one checks the text is
       # what it appears to be — no bidirectional control or invisible character may
       # make a tracked file render differently from how it executes (CVE-2021-42574).
@@ -1148,11 +1148,13 @@ jobs:
         run: node scripts/check-merge-markers.mjs
       - name: "Proof — mcp-server (published plugin path boots + serves declared tools)"
         run: pnpm run proof:mcp-server
+      - name: Expect-output wrapper self-test (exit 0 without the pass line must fail the CI step, as it fails preflight)
+        run: node scripts/lib/expect-output.mjs --self-test
       # And the ratchet for the ratchets: fails if a future preflight gate is added
       # without being wired into a workflow. It has to run HERE, not only in
       # preflight, or it would be the very thing it exists to prevent.
       - name: "Preflight↔CI parity self-test (a comment mention is not a run)"
-        run: node scripts/check-preflight-ci-parity.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-preflight-ci-parity.mjs --self-test
       - name: "Preflight↔CI parity (a gate that runs only locally is not a gate)"
         run: node scripts/check-preflight-ci-parity.mjs
 
@@ -1164,16 +1166,16 @@ jobs:
       - name: Live-sync manifest drift (Mac MCP + iOS instructions current)
         run: node scripts/check-live-sync.mjs
       - name: "Live-sync evidence-kind self-test (unreadable is not hardware)"
-        run: node scripts/check-live-sync.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-live-sync.mjs --self-test
       - name: MCP surface self-test (coverage + resource parity can fail)
-        run: node scripts/check-mcp-surface.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-mcp-surface.mjs --self-test
       - name: MCP surface drift gate (server = docs = ready message = manifest = resources = exercised)
         run: node scripts/check-mcp-surface.mjs
 
       - name: DMH domains exhaustive-by-construction self-test (a new field/member/raw key must fail tsc)
         run: node scripts/check-dmh-domains-exhaustive.mjs
       - name: Figure-guard self-test (the baseline-age report must be able to fail)
-        run: node scripts/check-proof-figures.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-proof-figures.mjs --self-test
 
       - name: PIM activation decision proof
         run: pnpm run proof:pim-activation
@@ -1184,7 +1186,7 @@ jobs:
       # Documented proof check-counts are evidence; evidence that silently drifts is
       # worse than none. Fails if any "(N checks)" in docs/ disagrees with the proof.
       - name: Proof-count self-test (a zeroed claim scan fails via the floor)
-        run: node scripts/check-proof-counts.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-proof-counts.mjs --self-test
 
       - name: Posture-composition (unified signal fusion) proof
         run: pnpm run proof:posture-composition
@@ -1220,11 +1222,11 @@ jobs:
       - name: MCP server unit tests (tool/resource contract + annotations)
         run: pnpm --filter @workspace/mcp-server run test
       - name: Console routes self-test (the gate must be able to fail)
-        run: node scripts/check-console-routes.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-console-routes.mjs --self-test
       - name: Console routes (every console fetch target maps to a served route)
         run: node scripts/check-console-routes.mjs
       - name: Dead nav self-test (the gate must be able to fail)
-        run: node scripts/check-dead-nav.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-dead-nav.mjs --self-test
       - name: Dead nav (a *_NAV/*_GROUPS array rendered nowhere is dead code)
         run: node scripts/check-dead-nav.mjs
 
@@ -1355,7 +1357,7 @@ jobs:
         run: node scripts/check-hook-denylist.mjs
 
       - name: Bash deny-list gate self-test (a hung hook self-test must fail closed within the timeout and reap its descendant)
-        run: node scripts/check-hook-denylist.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-hook-denylist.mjs --self-test
 
       - name: Evidence Coverage page is committed in sync
         run: |
@@ -1381,9 +1383,9 @@ jobs:
       - name: STATUS.md figures still describe the repo
         run: node scripts/check-status-figures.mjs
       - name: STATUS.md figure gate self-test (the gate can actually fail)
-        run: node scripts/check-status-figures.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-status-figures.mjs --self-test
       - name: STATUS.md "would run here now" self-test (an unarmed lane answers no first)
-        run: node scripts/status-summary.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/status-summary.mjs --self-test
 
       - name: Decision-latency pilot gate
         run: pnpm run bench:decision-latency
@@ -1442,7 +1444,7 @@ jobs:
       - name: Sim-script self-check (a queued Mac operation must name a script that runs)
         run: node scripts/check-sim-scripts-selfcheck.mjs
       - name: "Staged Mac worker self-test (triage, review, limits and transport)"
-        run: node scripts/mac/build-tick-stages.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/mac/build-tick-stages.mjs --self-test
 
   # Shard 3/3 of the proof scaffold: the loop-state seam self-test, the skill
   # instruction-conflict gate, the scratch-git hygiene self-test, the docs/proof
@@ -1477,7 +1479,7 @@ jobs:
       - name: Build
         run: PORT=3000 BASE_PATH=/ pnpm run build
       - name: Loop-state seam self-test
-        run: node scripts/loop-state.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/loop-state.mjs --self-test
       - name: Deepen the checkout (sim-result provenance needs full history)
         run: |
           if [ "$(git rev-parse --is-shallow-repository)" = "true" ]; then
@@ -1489,7 +1491,7 @@ jobs:
       - name: "Skill instruction conflicts (no skill may prescribe a command the Bash deny-list hook refuses, unless VENDORED.md Overrides names the site)"
         run: node scripts/check-skill-instruction-conflicts.mjs
       - name: "Scratch-git hygiene self-test (it can actually fail)"
-        run: node scripts/check-scratch-git-hygiene.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/check-scratch-git-hygiene.mjs --self-test
       - name: Docs↔proof figure guard
         run: node scripts/check-proof-figures.mjs
       - name: Proof-count sync (docs match their proofs)
@@ -1621,7 +1623,7 @@ jobs:
       - name: Breadth lane (47 deferred-family gates + 8 doctrine-doc proofs)
         run: pnpm run verify:breadth
       - name: Breadth-lane membership self-test (the deferred half can actually fail)
-        run: node scripts/verify-breadth.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/verify-breadth.mjs --self-test
 
   docs-sanity:
     timeout-minutes: 15
@@ -1638,7 +1640,7 @@ jobs:
         run: node scripts/check-ci-preflight-sync.mjs
 
       - name: Docs-sanity self-test (a planted over-claim fails; empty scan roots fail via the floor)
-        run: node scripts/docs-sanity.mjs --self-test
+        run: node scripts/lib/expect-output.mjs node scripts/docs-sanity.mjs --self-test
       - name: Docs sanity (required docs + unsafe-claim scan)
         run: node scripts/docs-sanity.mjs
 

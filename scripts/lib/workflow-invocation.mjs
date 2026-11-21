@@ -239,6 +239,10 @@ export function maskQuoted(cmd) {
 
 export const SEP = String.raw`(?:^[ \t]*|(?:&&|\|\||[;|&(])[ \t]*)`; // line start, or right after a command separator
 export const ENV = String.raw`(?:[A-Za-z_][A-Za-z0-9_]*=(?:"[^"\n]*"|'[^'\n]*'|\S*)[ \t]+)*`; // FOO=1 BAR="x y" prefixes
+// The CI twin of preflight's per-step `expect`: `node scripts/lib/expect-output.mjs <command>` runs the
+// command and fails when it exits 0 without its pass line. It is a command prefix, not a different
+// gate, so the wrapped invocation still counts as running the gate. Only this exact wrapper path.
+const EXPECT_WRAP = String.raw`(?:node[ \t]+scripts/lib/expect-output\.mjs[ \t]+)?`;
 // Runner flags are limited to e u x v f: `-n` (parse only), `-c` (the next word is a command
 // string) and the rest do not run the script as a script.
 const SHELL_RUNNER = String.raw`(?:(?:bash|sh|source|\.)[ \t]+(?:-[euxvf]+[ \t]+)*)?(?:\./)?`;
@@ -251,7 +255,7 @@ export function invokes(head, wantsSelfTest, commands) {
   const test = (re) => new RegExp(re, "m").test(text);
   if (head.includes("/")) {
     const base = head.endsWith(".mjs")
-      ? String.raw`${SEP}${ENV}node[ \t]+${g}` // node scripts/x.mjs
+      ? String.raw`${SEP}${ENV}${EXPECT_WRAP}node[ \t]+${g}` // node scripts/x.mjs (optionally behind the expect wrapper)
       : String.raw`${SEP}${ENV}${SHELL_RUNNER}${g}`; // bash scripts/x.sh, or the path run directly
     if (wantsSelfTest) return test(`${base}(?:[ \\t]+--?[\\w=-]+)*[ \\t]+--self-test(?![\\w-])`);
     return test(`${base}(?![ \\t]+--self-test)(?![\\w./-])`);

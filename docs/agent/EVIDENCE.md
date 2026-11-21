@@ -5896,3 +5896,51 @@ cae7b8f47590ae17b7a30fb534c0906f8b0e7fe1 tree=d49dca2e9606d5a502b1f7ec05de4784ee
 ```
 
 Verdict: holds for the merge, tree, ancestry and delta claims. #2368 merged from exact head `cae7b8f4` as `2cb9d3dfda0f26c4246d38df24b987741f0e07da`, with parents `bc97de34` and that head, and tree `d49dca2e` equal to the head's. The local and Mac results are attributed receipts on the heads named, not new executions. No owner-hardware evidence, private completion seal, readiness change or independent-operation proof is asserted.
+
+## 2026-11-21 — #2447 (b74f9a4d) landed under DR-037: loop-state self-test leak markers that cannot occur in a temp path
+
+Cloud merged #2447 under DR-037 at about 03:28Z with `expectedHeadSha` `15c93c51db6863891cd6bbbe8348f9607e5971ee`, after re-reading the head. Against canonical, one line of `scripts/loop-state.mjs` changes, in the self-test only. The planted leak markers `sEcr3t` and `Z9` become `sEcr3tLk7` and `Q8tailZ9w`, so a temp path that happens to contain `Z9` no longer reads as a credential leak. No production path changes.
+
+**Preparation journal.** These records were made before the merge and are cited as attributed historical receipts:
+- **RED/GREEN:**
+  - On mainline `a284b743`, with `TMPDIR` pointing at a directory whose path contains `Z9`, `node scripts/loop-state.mjs --self-test` printed `self-test FAILED (316/319)` (`R18-display-rows`, `R19-display-bare`, `R12-hostile-global`).
+  - With the fix it printed `self-test passed (319/319)`, both with that `TMPDIR` and with the default one, and again on `15c93c51`.
+- **Full local qualification on `007b79a9c3e4f60a59cbea9c2ed63b9bda737702`** (tree `7d1c1f68`), clean worktree with dirty 0 at start and end, 00:49:19Z–01:28:42Z by the runner's own start and result files:
+  - `pnpm install --frozen-lockfile`: exit 0.
+  - `node scripts/preflight.mjs`: exit 0, `Preflight PASSED — everything it runs is green.`, 447 steps ok. Three named non-passes: `backup-restore` and `db-role-split` self-skipped (`DATABASE_URL` unset), and the mainline red-streaks check was NOT VERIFIED (local Actions API 401).
+  - `pnpm run verify:breadth`: exit 0, 58 breadth proofs.
+  - The delta `007b79a9..15c93c51` is three heartbeat JSONs and one lane message (catch-ups `9fccfb9b`, `1a9e037a`, `15c93c51`).
+- **Gating check** `Typecheck, build, and proof scaffold` `136713253014` succeeded on `15c93c51`. 0 review threads. The head was not behind canonical `59ab1d17`.
+- **Mac aggregate** `136709744293` succeeded on `1a9e037a` (run 44856676835, all four slices from that attempt). `15c93c51` differs from it only by `mac-lane-steward-duty-cycle.json`.
+- **Earlier Mac attempts are not counted:**
+  - On `85933ef4`, slice 3 failed because the runner's git could not create its own temp file (#2447 comment 7053422528).
+  - On `9fccfb9b`, slice 2 stalled for 64 minutes in its main step and was cancelled when the catch-up superseded the run (7056039410). The cause is unknown.
+
+Command: run by the cloud lane against a fresh fetch of canonical, read-only, exactly as follows (`set -e`):
+
+```bash
+date -u +%Y-%m-%dT%H:%M:%SZ
+git log -1 --format='%H parents=%P tree=%T' b74f9a4dbaca87ee51fe6c42a555c4b8c1693e62
+git log -1 --format='%H tree=%T' 15c93c51db6863891cd6bbbe8348f9607e5971ee
+git merge-base --is-ancestor b74f9a4dbaca87ee51fe6c42a555c4b8c1693e62 origin/SignalGrid_Alpha && echo "b74f9a4d is an ancestor of origin/SignalGrid_Alpha"
+git diff --stat 59ab1d1710ed381652b87c9884238e3361483485 b74f9a4dbaca87ee51fe6c42a555c4b8c1693e62
+git diff --stat 007b79a9c3e4f60a59cbea9c2ed63b9bda737702 15c93c51db6863891cd6bbbe8348f9607e5971ee
+```
+
+Output, verbatim:
+
+```
+2026-11-21T03:28:50Z
+b74f9a4dbaca87ee51fe6c42a555c4b8c1693e62 parents=59ab1d1710ed381652b87c9884238e3361483485 15c93c51db6863891cd6bbbe8348f9607e5971ee tree=43e49b6f495592cf94f35920780f0176aff7f79f
+15c93c51db6863891cd6bbbe8348f9607e5971ee tree=43e49b6f495592cf94f35920780f0176aff7f79f
+b74f9a4d is an ancestor of origin/SignalGrid_Alpha
+ scripts/loop-state.mjs | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+ artifacts/agent-heartbeats/forward-build-cycle.json              | 4 ++--
+ artifacts/agent-heartbeats/mac-lane-steward-duty-cycle.json      | 4 ++--
+ artifacts/agent-heartbeats/mac-lane-tick.json                    | 4 ++--
+ .../cloud-live-evidence-is-over-3-days-old-one-refre.json        | 9 +++++++++
+ 4 files changed, 15 insertions(+), 6 deletions(-)
+```
+
+Verdict: holds for the merge, tree, ancestry and delta claims. #2447 merged from exact head `15c93c51` as `b74f9a4dbaca87ee51fe6c42a555c4b8c1693e62`, with parents `59ab1d17` and that head, and tree `43e49b6f` equal to the head's. The local and Mac results are attributed receipts on the heads named, not new executions. No owner-hardware evidence, private completion seal, readiness change or independent-operation proof is asserted.
